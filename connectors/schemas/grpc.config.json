@@ -1,9 +1,170 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/grpc.config.json",
-  "title": "gRPC instance config (placeholder)",
-  "description": "Placeholder for a gRPC instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "gRPC connector instance config (loams.flow/v1)",
+  "description": "One gRPC instance's settings, read by the native protocols family (`loams_connector_protocols::grpc`, CN2 Task 21): a dynamic client over gRPC's HTTP/2 protocol (R21.2) with messages built from `descriptor_set` or the server's reflection service. `jwt` and `tls.*` hold secret **names** (D189), exactly the manifest's `secrets`. A sink's answers are reply events on `reply_topic` (R-CN2-3).",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "url"
+  ],
+  "properties": {
+    "url": {
+      "description": "`http://host:port` (h2c) or `https://host:port` (TLS, ALPN h2).",
+      "type": "string",
+      "minLength": 1
+    },
+    "descriptor_set": {
+      "description": "A `FileDescriptorSet`, base64 (`protoc --include_imports --descriptor_set_out=…`); without it set `reflection: true`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "reflection": {
+      "description": "Ask the server's `grpc.reflection.v1` service (falling back to `v1alpha`) for the services and their imports.",
+      "type": "boolean",
+      "default": false
+    },
+    "tls": {
+      "description": "TLS material, as secret names (PEM).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "client_cert": {
+          "description": "The client certificate chain (mTLS); goes with `client_key`. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "client_key": {
+          "description": "The client private key (mTLS). The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "ca": {
+          "description": "A CA bundle replacing the web PKI roots. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        }
+      }
+    },
+    "jwt": {
+      "description": "A bearer JWT (`Authorization: Bearer`). The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "metadata": {
+      "description": "Fixed, non-secret request metadata.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "source": {
+      "description": "A server-streaming call: one split per method, each streamed message one `message` event.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "description": "The method, `package.Service/Method`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "request": {
+          "description": "The request message, as proto3 JSON.",
+          "type": "object",
+          "default": {}
+        },
+        "cursor": {
+          "description": "Makes the source resumable: a restart re-opens the call with `request_field` set to the last message's value at `response_pointer`.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "request_field": {
+              "description": "The request field set to the cursor (a field name or a pointer).",
+              "type": "string",
+              "minLength": 1
+            },
+            "response_pointer": {
+              "description": "Where the cursor is in each message's proto3 JSON (a JSON pointer).",
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "required": [
+            "request_field",
+            "response_pointer"
+          ]
+        },
+        "reconnect_ms": {
+          "description": "Re-open the call this long after the server ended it; without it the source finishes.",
+          "type": "integer",
+          "minimum": 0
+        },
+        "linger_ms": {
+          "description": "How long a read waits for more messages once it has one.",
+          "type": "integer",
+          "minimum": 0,
+          "default": 200
+        }
+      },
+      "required": [
+        "method"
+      ]
+    },
+    "sink": {
+      "description": "Unary calls, one per event; the answer is the reply.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "method": {
+          "description": "The method, `package.Service/Method`.",
+          "type": "string",
+          "minLength": 1
+        },
+        "request_pointer": {
+          "description": "Where the request is in the event's data (a JSON pointer); the whole data when omitted.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "method"
+      ]
+    },
+    "reply_topic": {
+      "description": "Where replies go: one reply event per input, `io.loams.dev.flow.grpc.reply.v1` with id `<input id>/reply`, keeping the input's subject and carrying `loamsinreplyto`/`loamsinreplytosource` (OR-19, R21.6). Without it no replies are sent.",
+      "type": "string",
+      "minLength": 1
+    },
+    "request_timeout_ms": {
+      "description": "Per-request timeout, in milliseconds.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 30000
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  },
+  "anyOf": [
+    {
+      "required": [
+        "descriptor_set"
+      ]
+    },
+    {
+      "required": [
+        "reflection"
+      ],
+      "properties": {
+        "reflection": {
+          "const": true
+        }
+      }
+    }
+  ]
 }

@@ -11,7 +11,17 @@
 //!   `--reflection`;
 //! - the **upcall listener** (`--pg-upcall-listen`): the routes Neon's
 //!   components call ([`UpcallServer`]), never on the API listener;
-//! - the **reconciler** of projects and branches ([`Reconciler`]);
+//! - the **reconciler** of projects, branches and endpoints
+//!   ([`Reconciler`]); with `--runtime compose` it drives computes through
+//!   the compose runtime ([`ComputesConfig`], Task 11), or through a
+//!   compute runner that holds the container runtime's socket instead of
+//!   this process (`--compute-runner`, [`PgRunner`], R-REL.1), or with
+//!   `--runtime kubernetes` as Pods and Services (Task 13), each compute
+//!   running the pinned image of its project's Postgres major, and
+//!   suspends the computes that sit idle for their endpoint's suspend
+//!   timeout (Task 12; no PgDog fronts them until PG2c, so their activity
+//!   is `compute_ctl`'s alone), its lifecycle events counted by the default
+//!   observer;
 //! - **upkeep** on a timer: the idempotency ledger's expired entries and
 //!   finished operations past their retention are removed.
 //!
@@ -29,7 +39,7 @@
 
 use std::collections::BTreeMap;
 use std::fmt;
-use std::net::SocketAddr;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -41,12 +51,19 @@ use loams_pg_control::authz::{
     GrantsAuthorizer, KeysFile,
 };
 use loams_pg_control::neon::NeonClients;
+use loams_pg_control::reconcile::endpoint::{Computes, HttpComputeCtl};
 use loams_pg_control::reconcile::{Reconciler, ReconcilerConfig};
+use loams_pg_control::runtime::compose::{
+    ComposeBin, ComposeConfig, ComposeRuntime, CtlReach, TokioCommandRunner,
+};
+use loams_pg_control::runtime::remote::RemoteRuntime;
+use loams_pg_control::runtime::runner::{RunnerPolicy, RunnerServer};
+use loams_pg_control::runtime::{ComputeRuntime, images};
 use loams_pg_control::secrets::{FileSecretStore, KeySource, Secret, SecretRef, SecretStore};
 use loams_pg_control::service::operations::OPERATION_RETENTION;
 use loams_pg_control::service::{Clock, PgService, ServiceConfig};
 use loams_pg_control::upcall::{
-    ComputeCtlConfigurer, ComputeKeys, SIGNING_KEY_REF, UpcallConfig, UpcallServer,
+    ComputeCtlConfigurer, ComputeKeys, SIGNING_KEY_REF, SpecSources, UpcallConfig, UpcallServer,
     load_or_create_signing_key,
 };
 use loams_pg_control::{KvControlStore, StoreOptions};
@@ -90,14 +107,88 @@ impl fmt::Debug for PgStore {
     }
 }
 
-/// Where computes run (`--runtime`). Until Task 10 it decides only the
-/// secret store.
+/// Where computes run (`--runtime`), and so where secrets live.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PgRuntime {
-    /// compose: secrets in the age-encrypted file under the data directory.
+    /// compose: computes are compose services ([`ComputesConfig`]);
+    /// secrets in the age-encrypted file under the data directory.
     Compose,
-    /// Kubernetes: secrets as Secrets in `namespace`.
+    /// Kubernetes: secrets as Secrets in `namespace`; computes as Pods in
+    /// `loams-pg-<ns>` (feature `postgres-kubernetes`, Task 13).
     Kubernetes { namespace: String },
+}
+
+/// How the compose runtime runs computes (Task 11, R10.8).
+#[derive(Clone, Debug)]
+pub struct ComputesConfig {
+    /// The compose command; `None`: the first of `docker compose`, `podman
+    /// compose` and `docker-compose` on `PATH`.
+    pub compose_bin: Option<ComposeBin>,
+    /// Where the compose files live; `None`: `<data_dir>/compose`.
+    pub compose_dir: Option<PathBuf>,
+    /// The storage stack's network the computes join
+    /// (`loams-neon_default` for `deploy/loams-postgres-dev`).
+    pub network: Option<String>,
+    /// The upcall listener as the computes reach it; `None`:
+    /// `http://host.docker.internal:<upcall port>` (Docker, with
+    /// `host.docker.internal:host-gateway` added to `extra_hosts`) or
+    /// `http://host.containers.internal:<upcall port>` (Podman).
+    pub control_plane_uri: Option<String>,
+    pub extra_hosts: Vec<String>,
+    /// Where endpoints' ports are published (loopback by default).
+    pub publish_ip: IpAddr,
+    /// How `pg-control` reaches each compute's `compute_ctl`.
+    pub ctl_reach: CtlReach,
+    /// Compute images by Postgres major, over the pin file's
+    /// ([`images::pinned`]).
+    pub image_overrides: BTreeMap<u32, String>,
+    /// A compute runner to drive computes through, instead of a compose
+    /// command here (R-REL.1). The compose settings above are then the
+    /// runner's, and unused.
+    pub runner: Option<RunnerClient>,
+    /// With `--runtime kubernetes`: the Pods' `runtimeClassName`.
+    pub runtime_class: Option<String>,
+    /// With `--runtime kubernetes`: the cluster's DNS domain
+    /// (`cluster.local` when unset).
+    pub cluster_domain: Option<String>,
+    /// Warm computes per (namespace, major, image) (Task 14); `None`: the
+    /// runtime's default, 2 on Kubernetes. Compose has no warm pool
+    /// (R14.2), and refuses any size but 0.
+    pub warm_pool_size: Option<u32>,
+}
+
+/// A compute runner, as `pg-control` reaches it (`--compute-runner`).
+#[derive(Clone)]
+pub struct RunnerClient {
+    pub url: Url,
+    pub token: Secret<String>,
+}
+
+impl fmt::Debug for RunnerClient {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("RunnerClient")
+            .field("url", &self.url.as_str())
+            .finish_non_exhaustive()
+    }
+}
+
+impl Default for ComputesConfig {
+    fn default() -> Self {
+        ComputesConfig {
+            compose_bin: None,
+            compose_dir: None,
+            network: None,
+            control_plane_uri: None,
+            extra_hosts: Vec::new(),
+            publish_ip: IpAddr::V4(Ipv4Addr::LOCALHOST),
+            ctl_reach: CtlReach::Host,
+            image_overrides: BTreeMap::new(),
+            runner: None,
+            runtime_class: None,
+            cluster_domain: None,
+            warm_pool_size: None,
+        }
+    }
 }
 
 /// Who may call (`--pg-authz`).
@@ -146,6 +237,9 @@ pub struct PgControlConfig {
     pub upkeep_every: Duration,
     /// How long a finished operation stays readable.
     pub operation_retention: Duration,
+    /// With `--runtime compose`: how computes run. `None`: endpoints are
+    /// recorded but no compute starts (tests of the API alone).
+    pub computes: Option<ComputesConfig>,
 }
 
 impl fmt::Debug for PgControlConfig {
@@ -192,6 +286,7 @@ impl PgControlConfig {
             audit: Arc::new(LogAuditSink),
             upkeep_every: Duration::from_secs(600),
             operation_retention: OPERATION_RETENTION,
+            computes: Some(ComputesConfig::default()),
         }
     }
 }
@@ -213,6 +308,8 @@ pub enum PgControlError {
     Neon(#[from] loams_postgres::NeonError),
     #[error("the upcall listener: {0}")]
     Upcall(#[from] loams_pg_control::upcall::UpcallError),
+    #[error("the compute runtime: {0}")]
+    Runtime(String),
     #[error("binding the API listener {addr}: {source}")]
     Bind {
         addr: SocketAddr,
@@ -298,6 +395,151 @@ async fn open_secrets(config: &PgControlConfig) -> Result<Arc<dyn SecretStore>, 
     }
 }
 
+/// The compute images by Postgres major: the pin file's, with `overrides`.
+fn compute_images(
+    overrides: &BTreeMap<u32, String>,
+) -> Result<BTreeMap<u32, String>, PgControlError> {
+    let runtime_error = |e: &dyn fmt::Display| PgControlError::Runtime(e.to_string());
+    let mut images = images::pinned().map_err(|e| runtime_error(&e))?;
+    for (major, image) in overrides {
+        images::check_image(image).map_err(|e| runtime_error(&e))?;
+        images.insert(*major, image.clone());
+    }
+    Ok(images)
+}
+
+/// The compose runtime of `settings`, run here. Without a control-plane
+/// URI, the computes reach `upcall_addr`'s port on the host.
+fn compose_runtime(
+    settings: &ComputesConfig,
+    default_dir: PathBuf,
+    upcall_addr: SocketAddr,
+) -> Result<ComposeRuntime, PgControlError> {
+    let runtime_error = |e: &dyn fmt::Display| PgControlError::Runtime(e.to_string());
+    let bin = match &settings.compose_bin {
+        Some(b) => b.clone(),
+        None => ComposeBin::from_path().ok_or_else(|| {
+            PgControlError::Runtime(
+                "--runtime compose needs docker compose, podman compose or docker-compose on \
+                 PATH"
+                    .into(),
+            )
+        })?,
+    };
+    let podman = bin
+        .program
+        .file_name()
+        .is_some_and(|n| n.to_string_lossy().contains("podman"));
+    let mut extra_hosts = settings.extra_hosts.clone();
+    let control_plane_uri = match &settings.control_plane_uri {
+        Some(uri) => uri.clone(),
+        None if podman => format!("http://host.containers.internal:{}", upcall_addr.port()),
+        None => {
+            if !extra_hosts
+                .iter()
+                .any(|h| h.starts_with("host.docker.internal:"))
+            {
+                extra_hosts.push("host.docker.internal:host-gateway".into());
+            }
+            format!("http://host.docker.internal:{}", upcall_addr.port())
+        }
+    };
+    let mut compose = ComposeConfig::new(
+        bin,
+        settings.compose_dir.clone().unwrap_or(default_dir),
+        control_plane_uri,
+    );
+    compose.network = settings.network.clone();
+    compose.extra_hosts = extra_hosts;
+    compose.publish_ip = settings.publish_ip;
+    compose.ctl_reach = settings.ctl_reach;
+    ComposeRuntime::open(compose, Arc::new(TokioCommandRunner)).map_err(|e| runtime_error(&e))
+}
+
+/// The compute runtime (the compose runtime here, or a compute runner) and
+/// what the reconciler drives computes with.
+/// The compose runtime here, or a compute runner (`--runtime compose`).
+fn compose_or_runner(
+    config: &PgControlConfig,
+    settings: &ComputesConfig,
+    upcall_addr: SocketAddr,
+) -> Result<Arc<dyn ComputeRuntime>, PgControlError> {
+    Ok(match &settings.runner {
+        Some(runner) => Arc::new(
+            RemoteRuntime::new(runner.url.clone(), runner.token.clone())
+                .map_err(|e| PgControlError::Runtime(e.to_string()))?,
+        ),
+        None => Arc::new(compose_runtime(
+            settings,
+            config.data_dir.join("compose"),
+            upcall_addr,
+        )?),
+    })
+}
+
+/// The Kubernetes runtime (`--runtime kubernetes`, Task 13): Pods and
+/// Services in `loams-pg-<ns>`, each compute with a certificate from the
+/// compute CA in the secret store (R10.7).
+#[cfg(feature = "postgres-kubernetes")]
+async fn kube_runtime(
+    settings: &ComputesConfig,
+    secrets: &dyn SecretStore,
+) -> Result<Arc<loams_pg_control::runtime::kubernetes::KubeRuntime>, PgControlError> {
+    use loams_pg_control::runtime::kubernetes::{KubeConfig, KubeRuntime};
+    let runtime_error = |e: &dyn fmt::Display| PgControlError::Runtime(e.to_string());
+    let Some(uri) = &settings.control_plane_uri else {
+        return Err(PgControlError::Config(
+            "--runtime kubernetes needs --compute-control-plane-uri: the upcall Service as the \
+             computes reach it"
+                .into(),
+        ));
+    };
+    let mut kube = KubeConfig::new(uri.clone());
+    kube.runtime_class.clone_from(&settings.runtime_class);
+    if let Some(domain) = &settings.cluster_domain {
+        kube.cluster_domain.clone_from(domain);
+    }
+    let ca =
+        loams_pg_control::runtime::certs::load_or_create_ca(secrets, std::time::SystemTime::now())
+            .await
+            .map_err(|e| runtime_error(&e))?;
+    Ok(Arc::new(
+        KubeRuntime::from_environment(kube, Some(ca))
+            .await
+            .map_err(|e| runtime_error(&e))?,
+    ))
+}
+
+/// What the reconciler drives computes with, through `runtime`.
+fn computes(
+    config: &PgControlConfig,
+    settings: &ComputesConfig,
+    runtime: Arc<dyn ComputeRuntime>,
+    keys: &Arc<ComputeKeys>,
+    clock: &Clock,
+    upcall_addr: SocketAddr,
+) -> Result<Computes, PgControlError> {
+    if upcall_addr.ip().is_loopback() {
+        tracing::warn!(
+            %upcall_addr,
+            "computes run in containers and cannot reach a loopback upcall listener; \
+             listen where they reach it (--pg-upcall-listen 0.0.0.0:7690)"
+        );
+    }
+    let images = compute_images(&settings.image_overrides)?;
+    Ok(Computes::new(
+        runtime,
+        Arc::new(HttpComputeCtl::new(keys.clone(), clock.clone())),
+        keys.clone(),
+        images,
+        SpecSources {
+            pageservers: config.pageservers.clone(),
+            default_pageserver: config.default_pageserver,
+            wal_pools: config.wal_pools.clone(),
+        },
+    ))
+}
+
 /// The API listener's routes: every RPC path its own route, so any other
 /// path is axum's 404 (an upcall path among them).
 fn api_routes(service: PgService<NeonClients>, gate: Arc<Gate>, reflection: bool) -> AxumRouter {
@@ -378,6 +620,54 @@ impl PgControl {
         )
         .await?;
         let upcall_addr = upcall.local_addr();
+        let computes = match (&config.runtime, &config.computes) {
+            (PgRuntime::Compose, Some(settings)) => {
+                if settings.warm_pool_size.is_some_and(|n| n > 0) {
+                    return Err(PgControlError::Config(
+                        "the compose runtime has no warm pool: an unbound compute has no port \
+                         to publish (R14.2)"
+                            .into(),
+                    ));
+                }
+                let runtime = compose_or_runner(&config, settings, upcall_addr)?;
+                Some(computes(
+                    &config,
+                    settings,
+                    runtime,
+                    &keys,
+                    &clock,
+                    upcall_addr,
+                )?)
+            }
+            #[cfg(feature = "postgres-kubernetes")]
+            (PgRuntime::Kubernetes { .. }, Some(settings)) => {
+                use loams_pg_control::autoscale::{Combined, CtlMetrics, Policy, Scaling};
+                let kube = kube_runtime(settings, secrets.as_ref()).await?;
+                let mut computes =
+                    computes(&config, settings, kube.clone(), &keys, &clock, upcall_addr)?;
+                // The autoscaler (Task 15): CPU from the metrics API, the file
+                // cache from compute_ctl. Compose cannot resize (R10.4).
+                computes.scaling = Some(Arc::new(Scaling::new(
+                    Arc::new(Combined {
+                        cpu: kube,
+                        cache: Arc::new(CtlMetrics(computes.ctl.clone())),
+                    }),
+                    Policy::default(),
+                )));
+                // Kept at size 0 too, so a pool left from a larger size drains.
+                let size = settings
+                    .warm_pool_size
+                    .unwrap_or(loams_pg_control::pool::DEFAULT_POOL_SIZE);
+                computes.pool = Some(Arc::new(loams_pg_control::pool::WarmPool::new(
+                    loams_pg_control::pool::PoolConfig::new(size),
+                )));
+                Some(computes)
+            }
+            // Without the feature, open_secrets refused the runtime already.
+            #[cfg(not(feature = "postgres-kubernetes"))]
+            (PgRuntime::Kubernetes { .. }, Some(_)) => None,
+            (_, None) => None,
+        };
 
         let gate = Arc::new(Gate {
             authenticator,
@@ -403,12 +693,11 @@ impl PgControl {
             upcall.serve(async move { token.cancelled().await }).await;
         }));
         let holder = format!("pg-control-{}", ulid::Ulid::generate());
-        let reconciler = Arc::new(Reconciler::new(
-            store,
-            neon,
-            secrets,
-            ReconcilerConfig::new(holder),
-        ));
+        let mut reconciler = Reconciler::new(store, neon, secrets, ReconcilerConfig::new(holder));
+        if let Some(computes) = computes {
+            reconciler = reconciler.with_computes(computes);
+        }
+        let reconciler = Arc::new(reconciler);
         let token = stop.clone();
         tasks.push(tokio::spawn(async move {
             if let Err(e) = reconciler.run(async move { token.cancelled().await }).await {
@@ -504,4 +793,103 @@ pub fn read_token(path: &Path) -> Result<Secret<String>, String> {
         return Err(format!("{} is empty", path.display()));
     }
     Ok(Secret::new(token.to_owned()))
+}
+
+/// How the compute runner runs (`loams pg-runner`, R-REL.1).
+#[derive(Clone, Debug)]
+pub struct PgRunnerConfig {
+    /// Where pg-control calls it.
+    pub listen: SocketAddr,
+    /// The token pg-control presents.
+    pub token: Secret<String>,
+    /// The compose runtime it runs computes with. `control_plane_uri` must
+    /// be set: the runner does not know where pg-control's upcall listener
+    /// is. `compose_dir` defaults to `<data_dir>/compose`.
+    pub computes: ComputesConfig,
+    pub data_dir: PathBuf,
+}
+
+/// A running compute runner.
+#[derive(Debug)]
+pub struct PgRunner {
+    addr: SocketAddr,
+    images: Vec<String>,
+    stop: CancellationToken,
+    task: JoinHandle<()>,
+}
+
+impl PgRunner {
+    /// Opens the compose runtime and binds the runner's listener. Its
+    /// policy runs the pin file's compute images, with the overrides.
+    ///
+    /// # Errors
+    ///
+    /// [`PgControlError::Config`] without a control-plane URI;
+    /// [`PgControlError::Runtime`] when the compose runtime or the images
+    /// are unusable; [`PgControlError::Bind`].
+    pub async fn start(config: PgRunnerConfig) -> Result<Self, PgControlError> {
+        let settings = &config.computes;
+        if settings.control_plane_uri.is_none() {
+            return Err(PgControlError::Config(
+                "loams pg-runner needs --compute-control-plane-uri: pg-control's upcall listener \
+                 as the computes reach it"
+                    .into(),
+            ));
+        }
+        std::fs::create_dir_all(&config.data_dir).map_err(|e| {
+            PgControlError::Config(format!("--data-dir {}: {e}", config.data_dir.display()))
+        })?;
+        let images = compute_images(&settings.image_overrides)?;
+        let policy = RunnerPolicy::new(images.into_values())
+            .map_err(|e| PgControlError::Runtime(e.to_string()))?;
+        // The upcall address only names a default URI, which is set.
+        let runtime = compose_runtime(
+            settings,
+            config.data_dir.join("compose"),
+            SocketAddr::from(([127, 0, 0, 1], 0)),
+        )?;
+        let server = RunnerServer::bind(
+            config.listen,
+            Arc::new(runtime),
+            policy.clone(),
+            config.token,
+        )
+        .await
+        .map_err(|source| PgControlError::Bind {
+            addr: config.listen,
+            source,
+        })?;
+        let addr = server.local_addr();
+        let stop = CancellationToken::new();
+        let token = stop.clone();
+        let task = tokio::spawn(server.serve(async move { token.cancelled().await }));
+        let images: Vec<String> = policy.images().map(str::to_owned).collect();
+        tracing::info!(%addr, ?images, "compute runner started");
+        Ok(PgRunner {
+            addr,
+            images,
+            stop,
+            task,
+        })
+    }
+
+    /// The bound address.
+    pub fn addr(&self) -> SocketAddr {
+        self.addr
+    }
+
+    /// The images computes may run.
+    pub fn images(&self) -> &[String] {
+        &self.images
+    }
+
+    /// Stops the listener once the calls in flight finish.
+    pub async fn shutdown(self) {
+        self.stop.cancel();
+        if let Err(e) = self.task.await
+            && e.is_panic()
+        {
+            tracing::error!(error = %e, "the compute runner panicked");
+        }
+    }
 }

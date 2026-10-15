@@ -1,0 +1,41 @@
+{
+  "recorded_from": "Segment",
+  "synthetic": true,
+  "docs": [
+    "https://segment.com/docs/connections/destinations/catalog/webhooks/"
+  ],
+  "scenario": {
+    "direction": "webhook",
+    "scheme": "segment",
+    "header": "X-Signature",
+    "secret": "synthetic-segment-shared-secret",
+    "url": "https://hooks.loams.test/fabric/segment/events",
+    "now": 1759320000
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/fabric/segment/events",
+        "headers": {
+          "content-type": "application/json",
+          "x-signature": "b9808dc7dd7b68707f710aa8f557a4df0168b881"
+        },
+        "body": {
+          "text": "{\"type\":\"track\",\"event\":\"Signed Up\",\"userId\":\"u-1\",\"messageId\":\"m-1\"}"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "ok": true
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,8 +1,9 @@
-name: Monorepo CI
+name: Web and mobile
 
 # Do not event-filter paths: branch protection always receives the summary check.
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main, dev]
   workflow_dispatch:
@@ -12,7 +13,8 @@ permissions:
 
 concurrency:
   group: monorepo-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
+  # A newer dev head supersedes an older one; main runs to completion.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CI: 'true'
@@ -23,12 +25,15 @@ env:
 
 jobs:
   changes:
-    name: monorepo changed paths
+    name: Changed paths
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
+      # 'true' on a pull request into main or a push to main: the full tier.
+      full: ${{ github.base_ref == 'main' || github.ref == 'refs/heads/main' }}
       web: ${{ steps.filter.outputs.web }}
       plugins: ${{ steps.filter.outputs.plugins }}
+      npm-licences: ${{ steps.filter.outputs.npm-licences }}
       android: ${{ steps.filter.outputs.android }}
       ios: ${{ steps.filter.outputs.ios }}
       mock: ${{ steps.filter.outputs.mock }}
@@ -74,6 +79,14 @@ jobs:
               - 'api/console/**'
               - 'proto/**'
               - 'buf*.yaml'
+              - 'scripts/studio/**'
+            npm-licences:
+              - '**/package.json'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'deny.toml'
+              - 'scripts/ci/npm-licences*'
+              - '.github/workflows/monorepo.yml'
             plugins:
               - *workspace
               - 'plugins/**'
@@ -117,7 +130,7 @@ jobs:
               - 'apps/mobile/.github/workflows/mobile-protos.yml'
 
   web:
-    name: monorepo web build, typecheck and tests
+    name: "Web: build, typecheck and tests"
     needs: changes
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.web == 'true'
     runs-on: ubuntu-24.04
@@ -146,9 +159,42 @@ jobs:
         run: pnpm nx run @loams/console:test --outputStyle=static
       - name: Other web tests, including UI where a test target exists
         run: pnpm nx run-many --projects='@loams/*' --exclude='@loams/console' --targets=test --parallel=2 --outputStyle=static
+      # Design §53 §9 (D912, D913): the T3 Code vendoring tool and every vendored file's
+      # header and provenance row. The tool never downloads anything in CI.
+      - name: Studio vendoring tool tests and provenance check
+        run: |
+          node --test scripts/studio/vendor.test.mjs
+          node scripts/studio/vendor.mjs check
+          node scripts/studio/vendor.mjs check --package web/packages/ui
+
+  npm-licences:
+    name: monorepo npm licence gate
+    needs: changes
+    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.npm-licences == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.0
+        with:
+          version: 11.27.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # Design §53 §9.3 (D914): CONTRIBUTING rule 3 for the console, the desktop and
+      # @loams/studio-ui; no Tiptap Pro, no copyleft.
+      - name: Licence gate tests
+        run: node --test scripts/ci/npm-licences.test.mjs
+      - name: Licence gate on the production dependency tree
+        run: node scripts/ci/npm-licences.mjs
 
   plugins:
-    name: monorepo plugin build and tests
+    name: "Plugins: build and tests"
     needs: changes
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.plugins == 'true'
     runs-on: ubuntu-24.04
@@ -172,9 +218,9 @@ jobs:
       - run: pnpm nx run plugins-dashboard-ui:build --outputStyle=static
 
   mobile-mock:
-    name: monorepo mobile mock vet, test and build (Linux)
+    name: "Mobile: mock"
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.mock == 'true'
+    if: github.event_name == 'workflow_dispatch' || (needs.changes.outputs.full == 'true' && needs.changes.outputs.mock == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
@@ -199,9 +245,9 @@ jobs:
       - run: pnpm nx run mobile-mock:build --outputStyle=static
 
   mobile-android:
-    name: monorepo mobile Android build, test and lint (Linux)
+    name: "Mobile: Android"
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.android == 'true'
+    if: github.event_name == 'workflow_dispatch' || (needs.changes.outputs.full == 'true' && needs.changes.outputs.android == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 40
     steps:
@@ -238,9 +284,9 @@ jobs:
       - run: pnpm nx run mobile-android:lint --outputStyle=static
 
   mobile-conformance:
-    name: monorepo mobile mock-backed conformance (Linux)
+    name: "Mobile: conformance"
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.conformance == 'true'
+    if: github.event_name == 'workflow_dispatch' || (needs.changes.outputs.full == 'true' && needs.changes.outputs.conformance == 'true')
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
@@ -290,9 +336,10 @@ jobs:
           retention-days: 7
 
   mobile-ios:
-    name: monorepo mobile iOS simulator tests (macOS)
+    name: "Mobile: iOS"
     needs: changes
-    if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.ios == 'true'
+    # macOS: a draft pull request waits until it is ready for review (or labelled ci:full).
+    if: github.event_name == 'workflow_dispatch' || (needs.changes.outputs.full == 'true' && needs.changes.outputs.ios == 'true' && (github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full')))
     runs-on: macos-latest
     timeout-minutes: 45
     steps:
@@ -317,7 +364,7 @@ jobs:
       - run: pnpm nx run mobile-ios:test --outputStyle=static
 
   mobile-contracts:
-    name: monorepo mobile proto lock and generated-code drift (Linux)
+    name: "Mobile: proto contracts"
     needs: changes
     if: github.event_name == 'workflow_dispatch' || needs.changes.outputs.contracts == 'true'
     runs-on: ubuntu-24.04
@@ -344,15 +391,17 @@ jobs:
       - run: pnpm nx run mobile-contracts:drift --outputStyle=static
 
   summary:
-    name: monorepo CI summary
+    name: Web and mobile required
     if: always()
-    needs: [changes, web, plugins, mobile-mock, mobile-android, mobile-conformance, mobile-ios, mobile-contracts]
+    needs: [changes, web, plugins, npm-licences, mobile-mock, mobile-android, mobile-conformance, mobile-ios, mobile-contracts]
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - name: Require selected jobs to pass
         env:
           NEEDS_JSON: ${{ toJSON(needs) }}
+          # A draft without ci:full skips the macOS job on purpose.
+          DRAFT_LIGHT: ${{ github.event.pull_request.draft == true && !contains(github.event.pull_request.labels.*.name, 'ci:full') }}
         run: |
           python3 - <<'PY'
           import json
@@ -362,7 +411,7 @@ jobs:
           jobs = json.loads(os.environ['NEEDS_JSON'])
           filters = jobs['changes']['outputs']
           selections = {
-              'web': 'web', 'plugins': 'plugins',
+              'web': 'web', 'plugins': 'plugins', 'npm-licences': 'npm-licences',
               'mobile-mock': 'mock', 'mobile-android': 'android',
               'mobile-conformance': 'conformance', 'mobile-ios': 'ios',
               'mobile-contracts': 'contracts',
@@ -375,10 +424,15 @@ jobs:
                   result = job['result']
                   report.write(f'| {name} | {result} |\n')
                   selected = name == 'changes' or manual or filters.get(selections[name]) == 'true'
+                  if name == 'mobile-ios' and os.environ['DRAFT_LIGHT'] == 'true':
+                      selected = False
+                  # The mobile builds are the full tier (pull requests into main).
+                  if name in ('mobile-mock', 'mobile-android', 'mobile-conformance', 'mobile-ios') and filters.get('full') != 'true':
+                      selected = selected and manual
                   if result not in ('success', 'skipped') or (selected and result != 'success'):
                       failed.append(f'{name}: {result}')
           if failed:
-              print('Monorepo CI failed: ' + ', '.join(failed), file=sys.stderr)
+              print('Web and mobile failed: ' + ', '.join(failed), file=sys.stderr)
               sys.exit(1)
           print('All selected monorepo checks passed; unrelated jobs were skipped.')
           PY

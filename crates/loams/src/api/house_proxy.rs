@@ -7,8 +7,19 @@
 //! `--house-endpoint`) instead of serving the package itself:
 //!
 //! - the request goes through as it came: method, path and query, every
-//!   end-to-end header **including the caller's `Authorization`** (the front
-//!   authenticates; this port does not), and the body, streamed as it arrives;
+//!   end-to-end header, and the body, streamed as it arrives. Without a link
+//!   key the caller's `Authorization` goes through too and the front
+//!   authenticates it. With one (`--house-key-file`, HS1 Task 20) this port has
+//!   authenticated the caller already (its auth layer wraps this one), and the
+//!   front is signed in to with the key instead: the caller's credentials
+//!   (`Authorization`, `Cookie`, `X-ClickHouse-User`/`-Key`) never leave this
+//!   process, and the principal this port authenticated is named in
+//!   `X-Loams-Principal` (and `X-Loams-Principal-Email`), which the House maps
+//!   to its scopes and tables. A caller's own `X-Loams-Principal*` headers are
+//!   never forwarded;
+//! - an `https` front (HS1 Task 20) is reached over TLS, trusting the PEM roots
+//!   of `--house-ca` (a single-node House's own certificate) or the platform's;
+//!   a plaintext front must be on loopback;
 //! - the answer comes back the same way, streamed as the front produces it, so
 //!   a server-streaming `ExecuteQuery` is never buffered whole here;
 //! - hop-by-hop headers (RFC 9110 §7.6.1) stay on their hop.
@@ -29,6 +40,7 @@
 //! The front speaks HTTP/1.1 (HS1 R3.8), so the Connect protocol and gRPC-Web
 //! go through; gRPC proper needs HTTP/2 end to end and does not.
 
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -66,12 +78,18 @@ pub const HEALTH_TIMEOUT: Duration = Duration::from_secs(2);
 /// `[house]`: where the House front is (design §49 §18.1).
 #[derive(Clone, Debug)]
 pub struct HouseProxyConfig {
-    /// The front's base URL, such as `http://127.0.0.1:8123`: `http` only, as
-    /// the engine's HTTP client has no TLS (HS1 Task 20 adds it). `None` (the
-    /// default): `loams.house.v1` answers `house_not_configured`.
+    /// The front's base URL: `https://house:8443`, or `http://127.0.0.1:8123`
+    /// on loopback. `None` (the default): `loams.house.v1` answers
+    /// `house_not_configured`.
     pub endpoint: Option<Url>,
     /// How often the front's health is checked. Default 5 s.
     pub health_interval: Duration,
+    /// The PEM roots an `https` front is trusted by (`--house-ca`); `None`:
+    /// the platform's (HS1 Task 20).
+    pub ca: Option<PathBuf>,
+    /// The file holding the key this port signs in to the front with
+    /// (`--house-key-file`), read when first needed (HS1 Task 20).
+    pub key_file: Option<PathBuf>,
 }
 
 impl Default for HouseProxyConfig {
@@ -79,16 +97,118 @@ impl Default for HouseProxyConfig {
         Self {
             endpoint: None,
             health_interval: Duration::from_secs(5),
+            ca: None,
+            key_file: None,
         }
     }
 }
 
-/// The forwarding half: the endpoint, a client, and the last health answer.
-#[derive(Debug)]
+/// Why the link to the front could not be set up.
+#[derive(Debug, thiserror::Error)]
+pub enum LinkError {
+    /// The HTTP client.
+    #[error("the House link's HTTP client: {0}")]
+    Client(#[from] reqwest::Error),
+    /// `--house-ca`.
+    #[error("--house-ca {path}: {why}")]
+    Ca {
+        /// The file.
+        path: PathBuf,
+        /// What was wrong.
+        why: String,
+    },
+}
+
+/// The forwarding half: the endpoint, a client, the link key and the last
+/// health answer.
 pub struct HouseProxy {
     endpoint: Url,
     client: reqwest::Client,
     healthy: AtomicBool,
+    key_file: Option<PathBuf>,
+    /// The link key, once read. Never printed.
+    key: std::sync::Mutex<Option<HeaderValue>>,
+}
+
+impl std::fmt::Debug for HouseProxy {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("HouseProxy")
+            .field("endpoint", &self.endpoint)
+            .field("healthy", &self.healthy)
+            .field("key_file", &self.key_file)
+            .field("key", &"[redacted]")
+            .finish_non_exhaustive()
+    }
+}
+
+/// The caller's credentials, which a keyed link never forwards.
+const CALLER_CREDENTIALS: [&str; 4] = [
+    "authorization",
+    "cookie",
+    "x-clickhouse-user",
+    "x-clickhouse-key",
+];
+
+/// The headers that name the Loams principal a keyed link acts for (HS1 Task
+/// 20): set by this port from the caller it authenticated, never taken from
+/// the caller.
+const PRINCIPAL_HEADER: &str = "x-loams-principal";
+const PRINCIPAL_EMAIL_HEADER: &str = "x-loams-principal-email";
+
+/// The principal's name on the link: its subject, prefixed by its kind
+/// unless the subject names it already (`apikey:<id>`, `tailscale:<login>`).
+fn principal_name(principal: &crate::auth::Principal) -> String {
+    use crate::auth::PrincipalKind;
+    match principal.kind {
+        PrincipalKind::User => format!("user:{}", principal.subject),
+        PrincipalKind::Session => format!("session:{}", principal.subject),
+        PrincipalKind::DevLoopback => "dev-loopback".to_string(),
+        PrincipalKind::ApiKey | PrincipalKind::Tailscale => principal.subject.clone(),
+    }
+}
+
+/// The HTTP client for `endpoint`: TLS with the ring provider, trusting `ca`'s
+/// roots when given.
+fn client(endpoint: &Url, ca: Option<&Path>) -> Result<reqwest::Client, LinkError> {
+    let mut builder = reqwest::Client::builder().connect_timeout(CONNECT_TIMEOUT);
+    if endpoint.scheme() == "https" {
+        let provider = Arc::new(rustls::crypto::ring::default_provider());
+        match ca {
+            Some(path) => {
+                use rustls::pki_types::CertificateDer;
+                use rustls::pki_types::pem::PemObject as _;
+                let bad = |why: String| LinkError::Ca {
+                    path: path.to_path_buf(),
+                    why,
+                };
+                let mut roots = rustls::RootCertStore::empty();
+                let certs = CertificateDer::pem_file_iter(path).map_err(|e| bad(e.to_string()))?;
+                for cert in certs {
+                    roots
+                        .add(cert.map_err(|e| bad(e.to_string()))?)
+                        .map_err(|e| bad(e.to_string()))?;
+                }
+                if roots.is_empty() {
+                    return Err(bad("holds no certificate".to_string()));
+                }
+                let tls = rustls::ClientConfig::builder_with_provider(provider)
+                    .with_safe_default_protocol_versions()
+                    .map_err(|e| bad(e.to_string()))?
+                    .with_root_certificates(roots)
+                    .with_no_client_auth();
+                builder = builder.use_preconfigured_tls(tls);
+            }
+            None => {
+                // The platform's roots, with the process's provider (ring when
+                // none was installed).
+                let _ = rustls::crypto::CryptoProvider::install_default(
+                    rustls::crypto::ring::default_provider(),
+                );
+                builder = builder.https_only(true);
+            }
+        }
+    }
+    Ok(builder.build()?)
 }
 
 impl HouseProxy {
@@ -97,17 +217,17 @@ impl HouseProxy {
     /// check stops when the last reference is dropped. Must be called inside a
     /// tokio runtime. Fails when the HTTP client cannot be built, so a server
     /// with a House endpoint never starts with a proxy that cannot proxy.
-    pub fn start(config: &HouseProxyConfig) -> Result<Option<Arc<Self>>, reqwest::Error> {
+    pub fn start(config: &HouseProxyConfig) -> Result<Option<Arc<Self>>, LinkError> {
         let Some(endpoint) = config.endpoint.clone() else {
             return Ok(None);
         };
-        let client = reqwest::Client::builder()
-            .connect_timeout(CONNECT_TIMEOUT)
-            .build()?;
+        let client = client(&endpoint, config.ca.as_deref())?;
         let proxy = Arc::new(Self {
             endpoint,
             client,
             healthy: AtomicBool::new(false),
+            key_file: config.key_file.clone(),
+            key: std::sync::Mutex::new(None),
         });
         let weak = Arc::downgrade(&proxy);
         let every = config.health_interval.max(Duration::from_millis(10));
@@ -146,6 +266,37 @@ impl HouseProxy {
         format!("{base}{path_and_query}")
     }
 
+    /// `Bearer <key>` for the link, read from the key file the first time it
+    /// is there (a House makes its key on first start, perhaps after this port
+    /// started). `Ok(None)` without a key file.
+    fn link_authorization(&self) -> Result<Option<HeaderValue>, ConnectError> {
+        let Some(path) = &self.key_file else {
+            return Ok(None);
+        };
+        let mut key = self.key.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(value) = key.as_ref() {
+            return Ok(Some(value.clone()));
+        }
+        let unavailable = |why: &str| {
+            refuse(
+                ErrorCode::Unavailable,
+                "unavailable",
+                format!("the House link's key is {why}"),
+                &[],
+            )
+        };
+        let text = std::fs::read_to_string(path).map_err(|_| unavailable("not there yet"))?;
+        let text = text.trim();
+        if text.is_empty() {
+            return Err(unavailable("empty"));
+        }
+        let mut value = HeaderValue::from_str(&format!("Bearer {text}"))
+            .map_err(|_| unavailable("not a header value"))?;
+        value.set_sensitive(true);
+        *key = Some(value.clone());
+        Ok(Some(value))
+    }
+
     /// Forwards one request and streams the answer back.
     async fn forward(&self, request: Request) -> Response {
         let (parts, body) = request.into_parts();
@@ -154,12 +305,36 @@ impl HouseProxy {
             .path_and_query()
             .map_or(parts.uri.path(), |p| p.as_str());
         let protocol = Protocol::detect(&parts.headers);
+        let link = match self.link_authorization() {
+            Ok(link) => link,
+            Err(error) => return refusal(protocol, &error),
+        };
+        let principal = parts.extensions.get::<crate::auth::Principal>().cloned();
         let mut upstream = self
             .client
             .request(parts.method.clone(), self.target(path_and_query))
             .body(reqwest::Body::wrap(SyncBody(SyncWrapper::new(body))));
         for (name, value) in end_to_end(&parts.headers) {
+            if link.is_some() && CALLER_CREDENTIALS.contains(&name.as_str()) {
+                continue;
+            }
+            if name.as_str() == PRINCIPAL_HEADER || name.as_str() == PRINCIPAL_EMAIL_HEADER {
+                continue;
+            }
             upstream = upstream.header(name, value);
+        }
+        if let Some(value) = link {
+            upstream = upstream.header(header::AUTHORIZATION, value);
+            // The House maps this principal to its scopes and tables; without
+            // one (no auth on this port) the House refuses the link request.
+            if let Some(principal) = &principal {
+                if let Ok(value) = HeaderValue::from_str(&principal_name(principal)) {
+                    upstream = upstream.header(PRINCIPAL_HEADER, value);
+                }
+                if let Some(Ok(value)) = principal.email.as_deref().map(HeaderValue::from_str) {
+                    upstream = upstream.header(PRINCIPAL_EMAIL_HEADER, value);
+                }
+            }
         }
         match upstream.send().await {
             Ok(answer) => {
@@ -486,6 +661,8 @@ mod tests {
             endpoint: endpoint.parse().expect("url"),
             client: reqwest::Client::new(),
             healthy: AtomicBool::new(false),
+            key_file: None,
+            key: std::sync::Mutex::new(None),
         };
         assert_eq!(
             proxy("http://127.0.0.1:8123").target("/loams.house.v1.HouseService/X?a=1"),

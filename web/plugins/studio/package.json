@@ -1,0 +1,92 @@
+{
+  "name": "@loams/plugin-studio",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Loams Studio, the agentic development environment in the console (design §53, SD1): its layout, projects and settings, backed by loams-agentd.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.tsx",
+      "default": "./src/index.tsx"
+    },
+    "./package.json": "./package.json"
+  },
+  "loams": {
+    "plugin": {
+      "kind": "console",
+      "entry": ".",
+      "tier": "first-party",
+      "modes": [
+        "studio"
+      ],
+      "inject": [
+        "router",
+        "slots",
+        "mode",
+        "platform",
+        "flags",
+        "agentd",
+        "desktop"
+      ],
+      "provides": [],
+      "slots": [
+        "console.page",
+        "shell.nav.section",
+        "shell.header.server",
+        "palette.command"
+      ],
+      "permissions": [
+        "agentd:use",
+        "agentd:git-write"
+      ],
+      "requires": {
+        "console": "^0.1.0",
+        "api": []
+      },
+      "editions": [
+        "oss",
+        "desktop",
+        "cloud"
+      ]
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "2.16.0",
+    "@connectrpc/connect": "2.2.0",
+    "@connectrpc/connect-query": "catalog:",
+    "@dnd-kit/core": "catalog:",
+    "@dnd-kit/sortable": "catalog:",
+    "@dnd-kit/utilities": "catalog:",
+    "@loams/agentd-client": "workspace:*",
+    "@loams/console-host": "workspace:*",
+    "@loams/cordis": "workspace:*",
+    "@loams/proto": "workspace:*",
+    "@loams/slots": "workspace:*",
+    "@loams/studio-ui": "workspace:*",
+    "@loams/ui": "workspace:*",
+    "@tanstack/react-query": "catalog:",
+    "lucide-react": "catalog:"
+  },
+  "peerDependencies": {
+    "react": ">=19"
+  },
+  "devDependencies": {
+    "@loams/desktop": "workspace:*",
+    "@loams/platform-electron": "workspace:*",
+    "@loams/plugin-desktop-agentd": "workspace:*",
+    "@testing-library/react": "16.3.3",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "jsdom": "30.1.1",
+    "react": "catalog:",
+    "react-dom": "catalog:",
+    "typescript": "5.9.3",
+    "vitest": "5.0.3"
+  }
+}

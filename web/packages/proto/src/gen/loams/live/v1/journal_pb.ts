@@ -14,11 +14,13 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file loams/live/v1/journal.proto.
  */
 export const file_loams_live_v1_journal: GenFile = /*@__PURE__*/
-  fileDesc("Chtsb2Ftcy9saXZlL3YxL2pvdXJuYWwucHJvdG8SDWxvYW1zLmxpdmUudjEieAoMSm91cm5hbEVudHJ5EhYKDmNvbW1pdF9oaW50X21zGAEgASgEEioKBndyaXRlcxgCIAMoCzIaLmxvYW1zLmxpdmUudjEuV3JpdGVSZWNvcmQSEAoIZnVuY3Rpb24YAyABKAkSEgoKcmVxdWVzdF9pZBgEIAEoCSKNAQoLV3JpdGVSZWNvcmQSEAoIdGFibGVfaWQYASABKA0SDgoGZG9jX2lkGAIgASgMEiYKBGtpbmQYAyABKA4yGC5sb2Ftcy5saXZlLnYxLldyaXRlS2luZBIaChJpbmRleF9rZXlzX3JlbW92ZWQYBCADKAwSGAoQaW5kZXhfa2V5c19hZGRlZBgFIAMoDCptCglXcml0ZUtpbmQSGgoWV1JJVEVfS0lORF9VTlNQRUNJRklFRBAAEhUKEVdSSVRFX0tJTkRfSU5TRVJUEAESFgoSV1JJVEVfS0lORF9SRVBMQUNFEAISFQoRV1JJVEVfS0lORF9ERUxFVEUQA2IGcHJvdG8z");
+  fileDesc("Chtsb2Ftcy9saXZlL3YxL2pvdXJuYWwucHJvdG8SDWxvYW1zLmxpdmUudjEipwEKDEpvdXJuYWxFbnRyeRIWCg5jb21taXRfaGludF9tcxgBIAEoBBIqCgZ3cml0ZXMYAiADKAsyGi5sb2Ftcy5saXZlLnYxLldyaXRlUmVjb3JkEhAKCGZ1bmN0aW9uGAMgASgJEhIKCnJlcXVlc3RfaWQYBCABKAkSLQoHY2F0YWxvZxgFIAMoCzIcLmxvYW1zLmxpdmUudjEuQ2F0YWxvZ0NoYW5nZSKNAQoLV3JpdGVSZWNvcmQSEAoIdGFibGVfaWQYASABKA0SDgoGZG9jX2lkGAIgASgMEiYKBGtpbmQYAyABKA4yGC5sb2Ftcy5saXZlLnYxLldyaXRlS2luZBIaChJpbmRleF9rZXlzX3JlbW92ZWQYBCADKAwSGAoQaW5kZXhfa2V5c19hZGRlZBgFIAMoDCJ3Cg1DYXRhbG9nQ2hhbmdlEi4KBGtpbmQYASABKA4yIC5sb2Ftcy5saXZlLnYxLkNhdGFsb2dDaGFuZ2VLaW5kEhUKCHRhYmxlX2lkGAIgASgNSACIAQESEgoKZGVwbG95bWVudBgDIAEoCUILCglfdGFibGVfaWQqbQoJV3JpdGVLaW5kEhoKFldSSVRFX0tJTkRfVU5TUEVDSUZJRUQQABIVChFXUklURV9LSU5EX0lOU0VSVBABEhYKEldSSVRFX0tJTkRfUkVQTEFDRRACEhUKEVdSSVRFX0tJTkRfREVMRVRFEAMq9wEKEUNhdGFsb2dDaGFuZ2VLaW5kEiMKH0NBVEFMT0dfQ0hBTkdFX0tJTkRfVU5TUEVDSUZJRUQQABIlCiFDQVRBTE9HX0NIQU5HRV9LSU5EX1RBQkxFX0NSRUFURUQQARIfChtDQVRBTE9HX0NIQU5HRV9LSU5EX0lOREVYRVMQAhIhCh1DQVRBTE9HX0NIQU5HRV9LSU5EX1ZBTElEQVRPUhADEiwKKENBVEFMT0dfQ0hBTkdFX0tJTkRfREVQTE9ZTUVOVF9BQ1RJVkFURUQQBBIkCiBDQVRBTE9HX0NIQU5HRV9LSU5EX0FQUF9TRVRUSU5HUxAFYgZwcm90bzM");
 
 /**
- * One mutation's changes, written at `seq = head + 1` of one journal shard in
- * the mutation's own transaction.
+ * One transaction's changes, written at `seq = head + 1` of one journal shard
+ * in the transaction's own commit: a mutation's writes, or a catalog change
+ * (LV1 plan Task 11), or both (a mutation that created a table). An entry has
+ * at least one write or one catalog change.
  *
  * @generated from message loams.live.v1.JournalEntry
  */
@@ -37,7 +39,8 @@ export type JournalEntry = Message<"loams.live.v1.JournalEntry"> & {
   writes: WriteRecord[];
 
   /**
-   * The mutation's function path ("module:export" or "_system:insert").
+   * The mutation's function path ("module:export" or "_system:insert"), or
+   * the catalog operation for an entry with no writes ("live.deploy", ...).
    *
    * @generated from field: string function = 3;
    */
@@ -49,6 +52,15 @@ export type JournalEntry = Message<"loams.live.v1.JournalEntry"> & {
    * @generated from field: string request_id = 4;
    */
   requestId: string;
+
+  /**
+   * The catalog changes the transaction committed (LV1 plan Task 11). Every
+   * node's tailer sees them at the tick that contains them and reloads what
+   * they change before it matches that tick's writes.
+   *
+   * @generated from field: repeated loams.live.v1.CatalogChange catalog = 5;
+   */
+  catalog: CatalogChange[];
 };
 
 /**
@@ -102,6 +114,39 @@ export const WriteRecordSchema: GenMessage<WriteRecord> = /*@__PURE__*/
   messageDesc(file_loams_live_v1_journal, 1);
 
 /**
+ * One change to an app's catalog (LV1 plan Task 11).
+ *
+ * @generated from message loams.live.v1.CatalogChange
+ */
+export type CatalogChange = Message<"loams.live.v1.CatalogChange"> & {
+  /**
+   * @generated from field: loams.live.v1.CatalogChangeKind kind = 1;
+   */
+  kind: CatalogChangeKind;
+
+  /**
+   * The table a table, index or validator change is about.
+   *
+   * @generated from field: optional uint32 table_id = 2;
+   */
+  tableId?: number | undefined;
+
+  /**
+   * The deployment an activation made active (its ULID text).
+   *
+   * @generated from field: string deployment = 3;
+   */
+  deployment: string;
+};
+
+/**
+ * Describes the message loams.live.v1.CatalogChange.
+ * Use `create(CatalogChangeSchema)` to create a new message.
+ */
+export const CatalogChangeSchema: GenMessage<CatalogChange> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_journal, 2);
+
+/**
  * The kind of a write. A patch is a replace of the merged document.
  *
  * @generated from enum loams.live.v1.WriteKind
@@ -133,4 +178,57 @@ export enum WriteKind {
  */
 export const WriteKindSchema: GenEnum<WriteKind> = /*@__PURE__*/
   enumDesc(file_loams_live_v1_journal, 0);
+
+/**
+ * What a catalog change changed.
+ *
+ * @generated from enum loams.live.v1.CatalogChangeKind
+ */
+export enum CatalogChangeKind {
+  /**
+   * @generated from enum value: CATALOG_CHANGE_KIND_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * A table was created (by a deployed schema or a first insert).
+   *
+   * @generated from enum value: CATALOG_CHANGE_KIND_TABLE_CREATED = 1;
+   */
+  TABLE_CREATED = 1,
+
+  /**
+   * A table's indexes changed: one was added, changed state or was removed.
+   *
+   * @generated from enum value: CATALOG_CHANGE_KIND_INDEXES = 2;
+   */
+  INDEXES = 2,
+
+  /**
+   * A table's validators changed.
+   *
+   * @generated from enum value: CATALOG_CHANGE_KIND_VALIDATOR = 3;
+   */
+  VALIDATOR = 3,
+
+  /**
+   * A deployment became active (a deploy or an activation, LV1 Tasks 6-7).
+   *
+   * @generated from enum value: CATALOG_CHANGE_KIND_DEPLOYMENT_ACTIVATED = 4;
+   */
+  DEPLOYMENT_ACTIVATED = 4,
+
+  /**
+   * The app's settings changed (its journal shard count).
+   *
+   * @generated from enum value: CATALOG_CHANGE_KIND_APP_SETTINGS = 5;
+   */
+  APP_SETTINGS = 5,
+}
+
+/**
+ * Describes the enum loams.live.v1.CatalogChangeKind.
+ */
+export const CatalogChangeKindSchema: GenEnum<CatalogChangeKind> = /*@__PURE__*/
+  enumDesc(file_loams_live_v1_journal, 1);
 

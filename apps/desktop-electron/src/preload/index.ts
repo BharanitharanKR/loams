@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import {
 	CH,
 	type LoamsDesktopApi,
+	PREVIEW_CH,
 	type StackId,
 	type StackState,
 } from "../shared/contracts";
@@ -58,7 +59,18 @@ const api: LoamsDesktopApi = {
 		clipboardWrite: (text) => invoke(CH.shellClipboard, text),
 		onNavigate: (cb) => subscribe(CH.shellNavigate, cb),
 		takePendingNavigation: () => invoke(CH.shellPendingNav),
+		pickFolder: (title) => invoke(CH.shellPickFolder, title),
 		setBadge: (count) => invoke(CH.shellBadge, count),
+		onCommand: (cb) => subscribe(CH.shellCommand, cb),
+	},
+	// SD1 Task 28: Studio's editor hand-off and notification choices; main builds every
+	// editor URL or argv itself.
+	studio: {
+		openInEditor: (path, at) => invoke(CH.studioOpenInEditor, path, at),
+		editor: () => invoke(CH.studioEditorGet),
+		setEditor: (editor) => invoke(CH.studioEditorSet, editor),
+		chooseEditorCommand: () => invoke(CH.studioEditorChooseCommand),
+		setNotifications: (prefs) => invoke(CH.studioNotifySet, prefs),
 	},
 	update: {
 		state: () => invoke(CH.updateState),
@@ -128,6 +140,14 @@ const api: LoamsDesktopApi = {
 			get: () => invoke(CH.agentdBackgroundGet),
 			set: (v) => invoke(CH.agentdBackgroundSet, v),
 		},
+	},
+	preview: {
+		show: (url, rect) => invoke(PREVIEW_CH.show, url, rect),
+		hide: () => invoke(PREVIEW_CH.hide),
+		reload: () => invoke(PREVIEW_CH.reload),
+		back: () => invoke(PREVIEW_CH.back),
+		forward: () => invoke(PREVIEW_CH.forward),
+		onState: (cb) => subscribe(PREVIEW_CH.state, cb),
 	},
 };
 

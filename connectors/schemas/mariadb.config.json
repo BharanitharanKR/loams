@@ -1,9 +1,209 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/mariadb.config.json",
-  "title": "MariaDB instance config (placeholder)",
-  "description": "Placeholder for a MariaDB instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "MariaDB connector instance config (loams.flow/v1)",
+  "description": "One MariaDB instance's settings, read by the native MySQL family (`loams_connector_mysql::MysqlFactory`, CN2 Task 11) on mysql_common 0.37.3 under the target profile `mariadb`. The keys are the guide's table (docs/guides/connectors/mysql.md); CN1's keys keep their meaning (R11.9). `password` holds secret **names** (D189), exactly the manifest's `secrets`. Naming `table` makes the instance a sink.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "host",
+    "database"
+  ],
+  "properties": {
+    "host": {
+      "description": "The server.",
+      "type": "string",
+      "minLength": 1
+    },
+    "port": {
+      "description": "The port.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 3306,
+      "maximum": 65535
+    },
+    "database": {
+      "description": "The database; it qualifies unqualified table names.",
+      "type": "string",
+      "minLength": 1
+    },
+    "user": {
+      "description": "The account.",
+      "type": "string",
+      "minLength": 1
+    },
+    "password": {
+      "description": "The account's password (`auth: basic`). The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "auth": {
+      "description": "`basic`: `user` and `password`.",
+      "enum": [
+        "basic"
+      ],
+      "default": "basic"
+    },
+    "tls": {
+      "description": "TLS (rustls, ring); on and verifying by default with IAM. No client certificates.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "enabled": {
+          "description": "Use TLS.",
+          "type": "boolean",
+          "default": false
+        },
+        "verify_full": {
+          "description": "Verify the certificate and host name; `false` encrypts without verifying.",
+          "type": "boolean",
+          "default": true
+        },
+        "ca_pem": {
+          "description": "Extra trusted roots, as PEM (not a secret); the RDS bundle for Aurora.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "mode": {
+      "description": "Sources: `batch` reads each table in key order inside one consistent snapshot (`rows`, Arrow); `cdc` reads the row binlog as a replica (`change`, `schema-change`).",
+      "enum": [
+        "batch",
+        "cdc"
+      ],
+      "default": "batch"
+    },
+    "tables": {
+      "description": "Sources: the tables to read or capture, `db.table` or `table`; CDC captures every base table of `database` when omitted.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ]
+    },
+    "key": {
+      "description": "Batch reads: the columns to page by. Sink: the upsert key, INSERT … ON DUPLICATE KEY UPDATE (a list, or CN1's comma-separated string). Defaults to the primary key. Declared because the manifest declares capabilities.sink.upsert: true.",
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1
+        },
+        {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
+      ]
+    },
+    "chunk_size": {
+      "description": "Rows per chunked SELECT (batch reads and the CDC snapshot), capped by the pipeline's batch rows.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 8192,
+      "maximum": 1048576
+    },
+    "server_id": {
+      "description": "CDC: the replica's server id; derived from the instance in [2^24, 2^32) when omitted.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 4294967295
+    },
+    "snapshot": {
+      "description": "CDC: `initial` or `never`, or `{mode, locking}` where `locking` is `watermark` (DBLog, no lock) or `global-read-lock` (needs RELOAD).",
+      "oneOf": [
+        {
+          "enum": [
+            "initial",
+            "never"
+          ]
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "mode": {
+              "enum": [
+                "initial",
+                "never"
+              ],
+              "default": "initial"
+            },
+            "locking": {
+              "enum": [
+                "watermark",
+                "global-read-lock"
+              ],
+              "default": "watermark"
+            }
+          }
+        }
+      ],
+      "default": "initial"
+    },
+    "watermark_table": {
+      "description": "CDC: the DBLog watermark table.",
+      "type": "string",
+      "minLength": 1,
+      "default": "_loams_watermarks"
+    },
+    "heartbeat_ms": {
+      "description": "CDC: the server's heartbeat on an idle binlog.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 10000
+    },
+    "table": {
+      "description": "Sinks: the target table. Naming it makes the instance a sink.",
+      "type": "string",
+      "minLength": 1
+    },
+    "transactional": {
+      "description": "Sinks: exactly once, each batch in one transaction with the instance's row in `_loams_checkpoints`, fenced by the lease epoch.",
+      "type": "boolean",
+      "default": true
+    },
+    "checkpoint_database": {
+      "description": "Sinks: where `_loams_checkpoints` lives; `database` when omitted.",
+      "type": "string",
+      "minLength": 1
+    },
+    "apply_deletes": {
+      "description": "Sinks: apply loamsop = d.",
+      "type": "boolean",
+      "default": true
+    },
+    "evolution": {
+      "description": "The schema evolution policy (see the schema-mapping guide).",
+      "enum": [
+        "additive",
+        "widen",
+        "pause"
+      ],
+      "default": "additive"
+    },
+    "lossy": {
+      "description": "Conversions allowed to lose information, by path (`db.table.column`), for example a `datetime` column read as UTC.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }

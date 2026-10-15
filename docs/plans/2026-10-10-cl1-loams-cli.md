@@ -87,7 +87,7 @@ The exit is the checklist under "Exit criteria for production", with the owning 
   A product response that carries a password is converted to `Secret` in the generated-to-view mapping, before any rendering code sees it.
 - **Loopback only for local stacks** (D111). Remote endpoints must be `https://`, except `http://127.0.0.1`, `http://[::1]` and `http://localhost`. A credential is never sent over plaintext to a non-loopback host (`insecure_endpoint`, exit 3).
 - **No destructive action without `--yes`** or a typed TTY confirmation. Deleting a project, database, graph, branch, endpoint or role, restoring over a live branch or table, rotating a password, and activating an older Live deployment are all destructive. Without a TTY and without `--yes`, they exit 3 with `confirmation_required`.
-- **No billing names** (D548, D550). `scripts/ci/no-metering.sh` covers `crates/loams-cli` (Task 26). No CLI field, flag or output key is named `plan`, `price`, `invoice`, `credit`, `meter`, `billable` or `usage`. House's `system.*` usage tables are rendered under the server's own column names and never renamed.
+- **No billing names** (D548, D550). No CLI field, flag or output key is named `plan`, `price`, `invoice`, `credit`, `meter`, `billable` or `usage`. House's `system.*` usage tables are rendered under the server's own column names and never renamed.
 - **Pins.** Exact versions for every new crate and image, images by digest. A new dependency must be at least 14 days old (`cargo info` or the registry date). Record each pin in the task's commit message.
 - **Hermetic tests** (CLI1). Unit tests use `Context::for_test(tempdir)` and fake services built from `loams-proto`'s generated service traits (`tests/fakes/<product>.rs`). End-to-end tests set `LOAMS_HOME` under the shared target's `tmp` (never `/tmp`), set `LOAMS_NO_UPDATE_CHECK=1`, and take port bases from `crates/loams/tests/cli/ports.rs`.
 
@@ -149,7 +149,6 @@ release/variants.toml                                Task 24 (CLI2 Task 2's file
 docs/snippets/{native,qdrant,es,pg-wire,live,postgres,sql,graph,house}/{python,typescript,shell}/*.*   Task 22
 docs/guides/cli.md  docs/guides/cli/{live,postgres,sql,graph,house,auth}.md                   Tasks 12–19, 27
 scripts/snippets/run.sh                              Task 22
-scripts/ci/no-metering.sh                            Task 26 (covers crates/loams-cli)
 .github/workflows/cli.yml                            Tasks 1, 26 (tree guard, schemas, cli-nvme, snippets, products-e2e)
 docs/design/30-loams-cli.md  docs/design/13-decision-log.md  docs/plans/README.md   Tasks 0, 27
 ```
@@ -935,12 +934,11 @@ Commit `feat(cli): doctor and version skew`.
 
 ### Task 26: The end-to-end matrix and the production gates
 
-**Files:** `.github/workflows/cli.yml` (the jobs `cli-unit`, `cli-schemas`, `cli-tree-guard`, `cli-nvme`, `snippets`, `products-e2e` and `cli-variant`), `scripts/ci/no-metering.sh`, `crates/loams/tests/cli/*.rs`.
+**Files:** `.github/workflows/cli.yml` (the jobs `cli-unit`, `cli-schemas`, `cli-tree-guard`, `cli-nvme`, `snippets`, `products-e2e` and `cli-variant`), `crates/loams/tests/cli/*.rs`.
 
 **Interfaces:**
 - `products-e2e` runs every `#[ignore]` product e2e whose dependency has merged, one at a time, on the compose runner. It is marked required per product once that product's dependency merges.
 - `cli-variant` builds the `cli` variant and runs the fake-service product suites against it.
-- `no-metering.sh` covers `crates/loams-cli`.
 - **The performance budgets** (measured on the CI runner, recorded in the PR):
   - `loams --help` under 50 ms;
   - `loams instance describe` against a local stack under 150 ms;

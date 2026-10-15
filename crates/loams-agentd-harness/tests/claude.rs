@@ -4,6 +4,8 @@
 
 #![cfg(unix)]
 
+mod approvals_support;
+
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -60,6 +62,7 @@ fn controls(
     let (steer_tx, steer_rx) = mpsc::channel(8);
     let token = CancellationToken::new();
     let controls = RunControls {
+        request_approval: None,
         execution_lease: None,
         request_input: Box::new(move |questions| {
             let (tx, rx) = oneshot::channel();
@@ -203,9 +206,12 @@ async fn happy_path_normalizes_events_and_tags_subagents() {
     // Informational rate-limit frames stay quiet.
     assert!(!events.iter().any(|e| matches!(e, AgentEvent::Error { .. })));
 
+    // The CLI's own cost rides along; no cache counts in this result (SD1 Task 14).
     assert!(events.contains(&AgentEvent::Usage {
         input_tokens: 10,
-        output_tokens: 20
+        output_tokens: 20,
+        cache_tokens: None,
+        cost_usd: Some(0.01),
     }));
     assert_eq!(
         events.last(),
@@ -291,6 +297,7 @@ async fn ask_user_question_round_trips_through_the_control_channel() {
     let token = CancellationToken::new();
     let seen = asked.clone();
     let controls = RunControls {
+        request_approval: None,
         execution_lease: None,
         request_input: Box::new(move |questions| {
             seen.lock().unwrap().extend(questions.iter().cloned());
@@ -930,4 +937,61 @@ async fn an_unreplayed_steer_releases_the_turn_end() {
     assert_eq!(done, DoneStatus::Completed);
     assert_eq!(steered, 1);
     assert!(started.elapsed() >= std::time::Duration::from_secs(4));
+}
+
+// ---------------------------------------------------------------------------
+// Supervised approvals (plan SD1 Task 13)
+// ---------------------------------------------------------------------------
+
+/// In a supervised thread `can_use_tool` becomes an approval: the CLI runs
+/// with its permissions on (never bypassed, whatever `autoApprove` says), the
+/// tool waits until the person answers, and the answer reaches the CLI.
+#[tokio::test]
+async fn claude_supervised_waits_for_resolve() {
+    use loams_agentd_proto::approvals::{ApprovalDecision, ToolRisk};
+
+    for (decision, result) in [
+        (ApprovalDecision::Once, "ran"),
+        (ApprovalDecision::Deny, "denied"),
+    ] {
+        let (mut controls, _steer, _token) = controls("A");
+        let (bridge, mut asks) = approvals_support::bridge();
+        controls.request_approval = Some(bridge);
+        // `autoApprove` (true in `request`) must not open a supervised
+        // thread's permissions.
+        let mut stream = harness()
+            .run(request("scenario:supervised"), controls)
+            .await
+            .expect("run starts");
+        let (ask, answer) = approvals_support::next_ask(&mut asks).await;
+        assert_eq!(ask.call_id, "toolu_rm");
+        assert_eq!(ask.tool, "Bash");
+        assert_eq!(ask.args["command"], "rm -rf build");
+        assert_eq!(ask.risk, ToolRisk::Destructive);
+
+        // Nothing ends while the approval waits.
+        let early = tokio::time::timeout(Duration::from_millis(400), async {
+            while let Some(event) = stream.next().await {
+                if matches!(event, Ok(AgentEvent::Done { .. })) {
+                    return true;
+                }
+            }
+            false
+        })
+        .await;
+        assert!(early.is_err(), "the turn must wait for the decision");
+
+        answer.send(decision).expect("the driver waits");
+        let done = tokio::time::timeout(Duration::from_secs(10), async {
+            while let Some(event) = stream.next().await {
+                if let Ok(AgentEvent::Done { result, .. }) = event {
+                    return result;
+                }
+            }
+            None
+        })
+        .await
+        .expect("the turn ends");
+        assert_eq!(done.as_deref(), Some(result), "{decision:?}");
+    }
 }

@@ -15,7 +15,10 @@ pub mod queue;
 pub mod rebuild;
 pub mod registry;
 pub mod schema;
-pub mod transcript_delta;
+/// Moved to `loams_agentd_proto::transcript` (plan DD1 Task 9); re-exported here.
+pub mod transcript_delta {
+    pub use loams_agentd_proto::transcript::*;
+}
 pub mod workspace;
 
 pub use commands::*;

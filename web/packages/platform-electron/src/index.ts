@@ -3,13 +3,22 @@
 // process proxies `/v1`, `/api` etc. to the active server, so the base URL is
 // this page's origin. The three side effects go over IPC (`window.loamsDesktop`).
 
-import type { Interceptor } from '@connectrpc/connect';
+import type { Interceptor, Transport } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
-import type { PlatformService, PluginModule } from '@loams/console-host';
+import { createAgentdTransport } from '@loams/agentd-client/connect';
+import {
+  type AgentdReach,
+  type AgentdService,
+  MODE_HOME,
+  type ModeService,
+  type PlatformService,
+  type PluginModule,
+  SHELL_COMMAND_EVENT,
+} from '@loams/console-host';
 import type { Context } from '@loams/cordis';
-import type { LoamsDesktopApi } from '@loams/desktop/contracts';
+import type { AgentdStatus, LoamsDesktopApi, ShellCommand } from '@loams/desktop/contracts';
 
-export type { LoamsDesktopApi };
+export type { LoamsDesktopApi, ShellCommand };
 
 declare module '@loams/console-host' {
   interface Services {
@@ -108,7 +117,64 @@ export function createElectronPlatform(api: LoamsDesktopApi): PluginModule {
         }),
       );
       ctx.provide('desktop', api);
+      // loams-agentd through Electron main's route (SD1 Tasks 5–6); only
+      // @loams/plugin-rpc reads it, and turns it into `agentd` and `rpc.agentd.*`.
+      ctx.provide('agentd.endpoint', desktopAgentdEndpoint(api));
     },
+  };
+}
+
+function reachOf(s: AgentdStatus): AgentdReach {
+  if (s.state === 'running') return { state: 'ready' };
+  if (s.state === 'stopped') return { state: 'stopped' };
+  return { state: 'unavailable', reason: s.reason };
+}
+
+/**
+ * The desktop's agentd: its reach follows the daemon status Electron main reports,
+ * and its transport is `loams-app://console/`, whose `/loams.agentd.v1.` route
+ * main forwards to the daemon with the token only main holds.
+ */
+export function desktopAgentdEndpoint(
+  api: Pick<LoamsDesktopApi, 'agentd'>,
+  transport: Transport = createAgentdTransport({ kind: 'desktop' }),
+): AgentdService {
+  let reach: AgentdReach = { state: 'checking' };
+  const listeners = new Set<() => void>();
+  const set = (next: AgentdReach) => {
+    if (next.state === reach.state && JSON.stringify(next) === JSON.stringify(reach)) return;
+    reach = next;
+    for (const listener of [...listeners]) listener();
+  };
+  let watching = false;
+  const watch = () => {
+    if (watching) return;
+    watching = true;
+    api.agentd.onStatus((s) => set(reachOf(s)));
+    api.agentd
+      .status()
+      .then((s) => set(reachOf(s)))
+      .catch(() => set({ state: 'unavailable', reason: 'no_bridge' }));
+  };
+  return {
+    kind: 'desktop',
+    reach() {
+      watch();
+      return reach;
+    },
+    subscribe(listener) {
+      watch();
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    transport: () => (reach.state === 'ready' ? transport : undefined),
+    async start() {
+      const result = await api.agentd.start();
+      if (!result.ok) throw new Error(result.message);
+      // The status event follows; read it now so the page does not wait.
+      set(reachOf(await api.agentd.status()));
+    },
+    host: () => undefined,
   };
 }
 
@@ -128,4 +194,41 @@ export async function wireDeepLinks(
   const pending = await api.shell.takePendingNavigation();
   if (pending) navigate(pending);
   return off;
+}
+
+/**
+ * The application menu's commands (SD1 Task 28, §53 §4.2). Studio, Console and Switch
+ * mode go to the `mode` service. "New thread" is offered to the mounted mode as a
+ * `SHELL_COMMAND_EVENT` (Studio runs its `chat.new`); when nothing takes it (Console
+ * mode, or Studio still loading), Studio's home opens, where a project is chosen.
+ */
+export function wireShellCommands(
+  api: LoamsDesktopApi,
+  mode: ModeService,
+  target: EventTarget = globalThis,
+): () => void {
+  return api.shell.onCommand((command: ShellCommand) => {
+    switch (command) {
+      case 'mode.studio':
+        mode.set('studio');
+        return;
+      case 'mode.console':
+        mode.set('console');
+        return;
+      case 'mode.toggle': {
+        const next = mode.available.find((m) => m !== mode.current);
+        if (next) mode.set(next);
+        return;
+      }
+      case 'chat.new': {
+        const event = new CustomEvent(SHELL_COMMAND_EVENT, {
+          detail: command,
+          cancelable: true,
+        });
+        target.dispatchEvent(event);
+        if (!event.defaultPrevented) mode.set('studio', { navigate: MODE_HOME.studio });
+        return;
+      }
+    }
+  });
 }

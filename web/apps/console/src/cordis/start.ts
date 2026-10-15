@@ -8,6 +8,7 @@ import {
   type CatalogPatch,
   type ConsoleHandle,
   composeCatalog,
+  type Mode,
   type Permission,
   type PluginManifest,
   type PluginModule,
@@ -28,7 +29,15 @@ export interface StartOptions {
   base?: string;
   /** The permissions granted to a sandboxed plugin; default: none. */
   grant?: (manifest: PluginManifest) => Permission[];
+  /**
+   * Modes that need an instance feature. Default: Studio needs `studio` in the
+   * browser edition until SD1 Task 32 (Global Constraints); the desktop passes `{}`.
+   */
+  modeFlags?: Partial<Record<Mode, string>>;
 }
+
+/** The browser edition's mode gate (SD1 Task 15). */
+export const WEB_MODE_FLAGS: Partial<Record<Mode, string>> = { studio: 'studio' };
 
 export function startConsole(options: StartOptions): Promise<ConsoleHandle> {
   const base = options.base ?? import.meta.env.BASE_URL;
@@ -44,5 +53,6 @@ export function startConsole(options: StartOptions): Promise<ConsoleHandle> {
     // plugin declares, so the sample can show the bridge.
     grant: options.grant ?? (() => []),
     root: options.root,
+    modeFlags: options.modeFlags ?? WEB_MODE_FLAGS,
   });
 }

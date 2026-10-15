@@ -363,7 +363,7 @@ mod tests {
                 .takes_idempotency_key()
         );
         assert!(
-            !crate::binding::binding_of("tables", "deploy")
+            !crate::binding::binding_of("live.admin", "deploy")
                 .expect("generated")
                 .takes_idempotency_key()
         );

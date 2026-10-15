@@ -376,6 +376,11 @@ fn reasons_are_snake_case_and_unique() {
         "feature_not_in_variant",
         // HS1 Task 7's: `loams.house.v1` with no House front configured.
         "house_not_configured",
+        // API2 Tasks 6 and 7: the auth layer's and the admin API's.
+        "token_missing",
+        "token_revoked",
+        "role_required",
+        "setup_required",
         // The code-to-class mapping every RPC error goes through (D611).
         "invalid_argument",
         "not_found",
@@ -418,6 +423,8 @@ mod house {
     #[derive(Debug, Default)]
     struct Seen {
         authorization: Option<String>,
+        cookie: Option<String>,
+        principal: Option<String>,
         path_and_query: String,
         body: Vec<u8>,
         hop_by_hop: Vec<String>,
@@ -448,6 +455,14 @@ mod house {
             let mut seen = front.seen.lock().expect("seen");
             seen.authorization = headers
                 .get("authorization")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
+            seen.cookie = headers
+                .get("cookie")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_owned);
+            seen.principal = headers
+                .get("x-loams-principal")
                 .and_then(|v| v.to_str().ok())
                 .map(str::to_owned);
             seen.path_and_query = request
@@ -745,6 +760,136 @@ mod house {
         assert!(trailers.contains("grpc-status: 12\r\n"), "{trailers}");
         assert!(trailers.contains("grpc-status-details-bin: "), "{trailers}");
 
+        running.server.shutdown().await.expect("shutdown");
+    }
+
+    /// The stand-in front over TLS with a certificate for `localhost` made
+    /// here; answers the front, its `https` endpoint and the certificate file.
+    async fn tls_front(dir: &std::path::Path) -> (Arc<Front>, String, std::path::PathBuf) {
+        use hyper_util::rt::{TokioExecutor, TokioIo};
+        use hyper_util::server::conn::auto;
+        use hyper_util::service::TowerToHyperService;
+        use rustls::pki_types::pem::PemObject as _;
+        use rustls::pki_types::{CertificateDer, PrivateKeyDer};
+
+        let made = rcgen::generate_simple_self_signed(vec!["localhost".to_string()])
+            .expect("a certificate");
+        let cert_path = dir.join("house.crt");
+        std::fs::write(&cert_path, made.cert.pem()).expect("write");
+        let chain = vec![CertificateDer::from_pem_slice(made.cert.pem().as_bytes()).expect("pem")];
+        let key = PrivateKeyDer::from_pem_slice(made.signing_key.serialize_pem().as_bytes())
+            .expect("key");
+        let config = rustls::ServerConfig::builder_with_provider(Arc::new(
+            rustls::crypto::ring::default_provider(),
+        ))
+        .with_safe_default_protocol_versions()
+        .expect("versions")
+        .with_no_client_auth()
+        .with_single_cert(chain, key)
+        .expect("config");
+        let acceptor = tokio_rustls::TlsAcceptor::from(Arc::new(config));
+        let front = Arc::new(Front {
+            healthy: AtomicBool::new(true),
+            seen: Mutex::new(Seen::default()),
+            first_chunk: Mutex::new(None),
+            release: Mutex::new(None),
+        });
+        let app = Router::new()
+            .route("/ping", get(ping))
+            .route("/{*rest}", any(rpc))
+            .with_state(front.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
+            .await
+            .expect("bind");
+        let port = listener.local_addr().expect("addr").port();
+        tokio::spawn(async move {
+            loop {
+                let Ok((stream, _)) = listener.accept().await else {
+                    return;
+                };
+                let (acceptor, app) = (acceptor.clone(), app.clone());
+                tokio::spawn(async move {
+                    if let Ok(tls) = acceptor.accept(stream).await {
+                        let _ = auto::Builder::new(TokioExecutor::new())
+                            .serve_connection(TokioIo::new(tls), TowerToHyperService::new(app))
+                            .await;
+                    }
+                });
+            }
+        });
+        (front, format!("https://localhost:{port}"), cert_path)
+    }
+
+    async fn with_link(
+        endpoint: &str,
+        ca: Option<std::path::PathBuf>,
+        key: std::path::PathBuf,
+    ) -> Running {
+        let endpoint = endpoint.parse::<url::Url>().expect("a URL");
+        Running::start_with(move |config| {
+            config.house.endpoint = Some(endpoint);
+            config.house.health_interval = Duration::from_millis(50);
+            config.house.ca = ca;
+            config.house.key_file = Some(key);
+        })
+        .await
+    }
+
+    /// HS1 Task 20: the link to an `https` front trusts the House's own
+    /// certificate (`--house-ca`) and signs in with the link key, never with
+    /// the caller's credentials; a front it does not trust is unreachable, and
+    /// a key not yet there answers `unavailable`.
+    #[tokio::test]
+    async fn house_link_uses_tls_and_its_key_not_the_callers() {
+        let dir = tempfile::tempdir().expect("dir");
+        let (front, endpoint, cert) = tls_front(dir.path()).await;
+        let key = dir.path().join("house.key");
+        std::fs::write(&key, "link-secret\n").expect("key");
+        let running = with_link(&endpoint, Some(cert.clone()), key.clone()).await;
+        assert!(
+            becomes(&running, (true, true)).await,
+            "the TLS front is healthy"
+        );
+
+        let response = reqwest::Client::new()
+            .post(format!("{}{EXECUTE}", running.base))
+            .header("content-type", "application/connect+json")
+            .header("authorization", "Bearer caller-token")
+            .header("cookie", "session=caller")
+            .header("x-clickhouse-key", "caller-key")
+            .header("x-loams-principal", "spoofed")
+            .body("{\"sql\":\"SELECT 1\"}")
+            .send()
+            .await
+            .expect("the proxied call");
+        assert_eq!(response.status(), reqwest::StatusCode::OK);
+        let _ = response.bytes().await;
+        let seen = std::mem::take(&mut *front.seen.lock().expect("seen"));
+        assert_eq!(seen.authorization.as_deref(), Some("Bearer link-secret"));
+        assert_eq!(seen.cookie, None, "the caller's cookie stays here");
+        // The principal this port authenticated (no auth here: the loopback
+        // developer), never the one the caller wrote.
+        assert_eq!(seen.principal.as_deref(), Some("dev-loopback"));
+        assert_eq!(seen.body, b"{\"sql\":\"SELECT 1\"}");
+        running.server.shutdown().await.expect("shutdown");
+
+        // A certificate the link does not trust: the front is unreachable.
+        let other = tempfile::tempdir().expect("dir");
+        let (_, _, other_cert) = tls_front(other.path()).await;
+        let running = with_link(&endpoint, Some(other_cert), key).await;
+        let (status, error) = running.connect(EXECUTE, "{}").await;
+        assert_eq!(status, reqwest::StatusCode::SERVICE_UNAVAILABLE, "{error}");
+        assert_eq!(reason_of(&error).reason, "unavailable");
+        running.server.shutdown().await.expect("shutdown");
+
+        // The key file is not there yet (the House makes it on first start).
+        let running = with_link(&endpoint, Some(cert), dir.path().join("missing.key")).await;
+        let (status, error) = running.connect(EXECUTE, "{}").await;
+        assert_eq!(status, reqwest::StatusCode::SERVICE_UNAVAILABLE, "{error}");
+        assert!(
+            error["message"].as_str().is_some_and(|m| m.contains("key")),
+            "{error}"
+        );
         running.server.shutdown().await.expect("shutdown");
     }
 }

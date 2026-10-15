@@ -325,6 +325,46 @@ impl CheckoutDiffSync {
         .await
         .map_err(|error| EngineError::Other(format!("discard task failed: {error}")))?
     }
+
+    /// The canonical root of a checkout this device tracks, by its id.
+    pub fn checkout_root(&self, checkout_id: &str) -> Option<PathBuf> {
+        lock(&self.inner.entries)
+            .get(checkout_id)
+            .map(|entry| entry.identity.root.clone())
+    }
+
+    /// Discard some paths of a tracked checkout ([`discard_paths`]), under
+    /// the same per-checkout lock as [`Self::discard_working_tree`], and
+    /// publish the result at once (SD1 Task 9, G21).
+    pub async fn discard_paths(
+        &self,
+        checkout_id: &str,
+        paths: Vec<String>,
+        expected_checksum: &str,
+    ) -> Result<DiffSnapshot, EngineError> {
+        let entry = lock(&self.inner.entries)
+            .get(checkout_id)
+            .cloned()
+            .ok_or_else(|| EngineError::Other("checkout is no longer available".into()))?;
+        let inner = self.inner.clone();
+        let expected_checksum = expected_checksum.to_owned();
+        // Its own task, as `discard_working_tree`: a started discard finishes.
+        tokio::spawn(async move {
+            let _guard = entry.discard_lock.lock().await;
+            let result = discard_paths(
+                &inner.repos,
+                &entry.identity.root,
+                &paths,
+                &expected_checksum,
+            )
+            .await;
+            sync_entry(&inner, &entry).await;
+            let _ = entry.kick_tx.send(());
+            result
+        })
+        .await
+        .map_err(|error| EngineError::Other(format!("discard task failed: {error}")))?
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -1547,6 +1587,111 @@ pub async fn discard_working_tree(
     Ok(final_snapshot)
 }
 
+/// `git status` of only `paths` (literal pathspecs), split as
+/// [`status_paths`] splits it.
+async fn status_of(
+    root: &Path,
+    paths: &[String],
+) -> Result<(Vec<Vec<u8>>, Vec<Vec<u8>>), EngineError> {
+    let mut args = vec![
+        "--no-optional-locks",
+        "--literal-pathspecs",
+        "status",
+        "--porcelain=v1",
+        "-z",
+        "--untracked-files=all",
+        "--",
+    ];
+    args.extend(paths.iter().map(String::as_str));
+    let status = capture_git(root, &args, 2 * 1024 * 1024).await?;
+    if status.truncated {
+        return Err(EngineError::Other(
+            "cannot safely discard a truncated working-tree status".into(),
+        ));
+    }
+    Ok(status_paths(&status.stdout))
+}
+
+/// Discard `paths` (relative to the checkout) and nothing else (SD1 Task 9,
+/// G21): tracked paths are restored to HEAD in the index and the working
+/// tree, untracked ones are removed. Refused unless the checkout's diff
+/// checksum is still `expected_checksum` (`stale_diff`), and with the same
+/// safety rules as [`discard_working_tree`] (no partial snapshot, no nested
+/// repository, no submodule).
+pub async fn discard_paths(
+    repos: &Repos,
+    root: &Path,
+    paths: &[String],
+    expected_checksum: &str,
+) -> Result<DiffSnapshot, EngineError> {
+    if paths.is_empty() {
+        return Err(EngineError::Other("name at least one path".into()));
+    }
+    for path in paths {
+        crate::git_write::checkout_relative(path)
+            .map_err(|error| EngineError::Other(error.to_string()))?;
+    }
+    let snapshot = capture_diff(repos, root).await?;
+    let head = snapshot.head_sha.as_deref().ok_or_else(|| {
+        EngineError::Other("cannot discard changes before the first commit".into())
+    })?;
+    if snapshot.truncated {
+        return Err(EngineError::Other(
+            "cannot safely discard a partial diff snapshot".into(),
+        ));
+    }
+    if snapshot.checksum != expected_checksum {
+        return Err(EngineError::Other(format!(
+            "{}: working tree changed since the confirmation was opened",
+            loams_agentd_proto::git_write::STALE_DIFF
+        )));
+    }
+
+    let (tracked, untracked) = status_of(root, paths).await?;
+    let is_directory = |path: &Vec<u8>| {
+        std::fs::symlink_metadata(root.join(PathBuf::from(path_argument(path))))
+            .is_ok_and(|metadata| metadata.is_dir())
+    };
+    if untracked.iter().any(is_directory) {
+        return Err(EngineError::Other(
+            "cannot discard an untracked nested repository safely".into(),
+        ));
+    }
+    if tracked.iter().any(is_directory) {
+        return Err(EngineError::Other(
+            "cannot discard submodule or directory changes safely".into(),
+        ));
+    }
+
+    let restore_args = [
+        OsString::from("restore"),
+        OsString::from(format!("--source={head}")),
+        OsString::from("--staged"),
+        OsString::from("--worktree"),
+    ];
+    run_git_for_paths(root, &restore_args, &tracked).await?;
+    let clean_args = [OsString::from("clean"), OsString::from("-fd")];
+    run_git_for_paths(root, &clean_args, &untracked).await?;
+    for path in &untracked {
+        let full = root.join(PathBuf::from(path_argument(path)));
+        let mut parent = full.parent();
+        while let Some(directory) = parent {
+            if directory == root || std::fs::remove_dir(directory).is_err() {
+                break;
+            }
+            parent = directory.parent();
+        }
+    }
+
+    let (tracked, untracked) = status_of(root, paths).await?;
+    if !tracked.is_empty() || !untracked.is_empty() {
+        return Err(EngineError::Other(
+            "some changes could not be discarded safely".into(),
+        ));
+    }
+    capture_diff(repos, root).await
+}
+
 /// Snapshot of one COMMIT's changes: first-parent (or the empty tree for a
 /// root commit) diffed against the commit itself — the History pane's
 /// per-commit tab. Commit-to-commit only: no working tree, no untracked
@@ -1791,6 +1936,83 @@ pub async fn capture_turn_diff(
     Ok(DiffSnapshot {
         branch,
         head_sha: (!head.is_empty()).then_some(head),
+        git_status: None,
+        patch,
+        files,
+        additions,
+        deletions,
+        truncated,
+        checksum,
+    })
+}
+
+/// A tree-to-tree diff, run in `root` (any worktree of the repository whose
+/// object store holds both): a run group's pair diff (SD1 Task 12), where
+/// `from` and `to` are [`snapshot_tree`]s of two worktrees or the group's base
+/// commit. `path`, when set, limits it to that one literal path. Nothing is
+/// committed and no index is touched.
+pub async fn capture_tree_diff(
+    repos: &Repos,
+    root: &Path,
+    from: &str,
+    to: &str,
+    path: Option<&str>,
+) -> Result<DiffSnapshot, EngineError> {
+    let pathspec = path.map(|path| format!(":(literal){path}"));
+    let with_path = |args: &[&'static str]| -> Vec<String> {
+        let mut all: Vec<String> = args.iter().map(|arg| (*arg).to_string()).collect();
+        all.push(from.to_string());
+        all.push(to.to_string());
+        all.push("--".into());
+        all.extend(pathspec.clone());
+        all
+    };
+    let names = with_path(&["diff", "--name-status", "-z", "--find-renames"]);
+    let nums = with_path(&["diff", "--numstat", "-z", "--find-renames"]);
+    let patch_args = with_path(&[
+        "diff",
+        "--no-ext-diff",
+        "--no-color",
+        "--find-renames",
+        "--unified=3",
+    ]);
+    fn as_refs(args: &[String]) -> Vec<&str> {
+        args.iter().map(String::as_str).collect()
+    }
+    let names = capture_git(root, &as_refs(&names), 2 * 1024 * 1024).await?;
+    let nums = capture_git(root, &as_refs(&nums), 2 * 1024 * 1024).await?;
+    let tracked = capture_git(root, &as_refs(&patch_args), MAX_PATCH_BYTES).await?;
+    let branch = repos
+        .current_branch(root)
+        .await
+        .unwrap_or_else(|_| "HEAD".into());
+
+    let mut files = parse_name_status(&names.stdout);
+    apply_numstat(&mut files, &nums.stdout);
+    let mut patch = String::from_utf8_lossy(&tracked.stdout).to_string();
+    let truncated = tracked.truncated || names.truncated || nums.truncated;
+    if tracked.truncated {
+        let boundary = patch.rfind('\n').unwrap_or(0);
+        patch.truncate(boundary);
+        patch.push_str("\n# Loams Desktop diff truncated\n");
+    }
+    let additions: u32 = files.iter().map(|f| f.additions).sum();
+    let deletions: u32 = files.iter().map(|f| f.deletions).sum();
+    let files_json = serde_json::to_string(&files)
+        .map_err(|e| EngineError::Other(format!("diff files serialize: {e}")))?;
+    let mut hasher = Sha256::new();
+    hasher.update(from.as_bytes());
+    hasher.update([0u8]);
+    hasher.update(to.as_bytes());
+    hasher.update([0u8]);
+    hasher.update(patch.as_bytes());
+    hasher.update([0u8]);
+    hasher.update(files_json.as_bytes());
+    hasher.update(if truncated { b"1" } else { b"0" });
+    let checksum = crate::repos::hex(&hasher.finalize());
+    Ok(DiffSnapshot {
+        branch,
+        head_sha: None,
         git_status: None,
         patch,
         files,

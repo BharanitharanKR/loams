@@ -216,6 +216,24 @@ impl MetaState {
             Command::PruneIdempotencyKeys { fence, now_ms } => {
                 self.prune_idempotency_keys(fence, now_ms)
             }
+            Command::CommitWalFenced {
+                object,
+                created_at_ms,
+                chunks,
+                fences,
+            } => self.commit_wal_fenced(object, created_at_ms, chunks, &fences),
+            Command::EnsureGraphStream { namespace, graph } => {
+                self.ensure_graph_stream(namespace, &graph)
+            }
+            Command::DropGraphStream {
+                namespace,
+                graph,
+                fence,
+                now_ms,
+            } => self.drop_graph_stream(namespace, &graph, fence, now_ms),
+            Command::EnsureSystemStream { namespace, name } => {
+                self.ensure_system_stream(namespace, &name)
+            }
         }
     }
 

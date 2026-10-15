@@ -1,0 +1,43 @@
+[package]
+name = "loams-house-cache"
+description = "house-cache: the Loams House front's S3 read proxy for its chDB workers, over loams-cache's RangeCache, scoped to each worker's namespace, signing upstream with credentials that never leave the front (HS1 Task 9, design §49 §7, D766)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[features]
+# `RangeCache`'s raw-block hook (`loams-cache/test-hooks`), for the tests of
+# this crate and of the worker; dev-dependencies only.
+test-hooks = ["loams-cache/test-hooks"]
+
+[dependencies]
+# The read-through RAM (+ NVMe) block cache, crc32c-checked on every hit, and
+# the object store under it (engine workspace, HS1 R0.3).
+loams-cache = { path = "../../../crates/loams-cache" }
+loams-store = { path = "../../../crates/loams-store" }
+# `ForwardTarget`, through which the front's forwarders hand this server each
+# worker's connections (HS1 R6.8).
+loams-house = { path = "../loams-house" }
+bytes.workspace = true
+futures.workspace = true
+http.workspace = true
+http-body.workspace = true
+http-body-util.workspace = true
+hyper.workspace = true
+hyper-util.workspace = true
+# `Last-Modified` in HTTP's date format; already in the graph through hyper.
+# MIT OR Apache-2.0.
+httpdate = "1"
+thiserror.workspace = true
+tokio = { workspace = true, features = ["io-util", "net", "rt", "sync", "time"] }
+
+[dev-dependencies]
+loams-cache = { path = "../../../crates/loams-cache", features = ["test-hooks"] }
+tokio = { workspace = true, features = ["io-util", "net", "rt", "rt-multi-thread", "sync", "time", "macros"] }
+tempfile.workspace = true
+
+[lints]
+workspace = true

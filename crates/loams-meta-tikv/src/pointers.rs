@@ -16,7 +16,7 @@ use loams_tikv::{Tikv, Txn, TxnError};
 use crate::catalog::{load_collection, namespace_exists, validate_key};
 use crate::keys::{self, ObjectRef};
 use crate::leases::check_fence;
-use crate::{TikvMeta, load};
+use crate::{Reader, TikvMeta, decode_all, load};
 
 /// A `collection/<id>` pointer may only be set while that collection exists
 /// in `ns` (M1.1 Ruling 14). Locks the collection record.
@@ -136,6 +136,33 @@ impl TikvMeta {
         self.read(move |snap| {
             let key = key.clone();
             Box::pin(async move { Ok(Ok(load(snap, "pointer", &key).await?)) })
+        })
+        .await
+    }
+
+    /// Every pointer of `ns` whose key starts with `prefix`, in key order,
+    /// from one snapshot (UP1 Task 2).
+    pub(crate) async fn pointers_with_prefix_impl(
+        &self,
+        ns: NamespaceId,
+        prefix: &str,
+    ) -> MetaResult<Vec<(String, Pointer)>> {
+        let scan = keys::pointer(ns, prefix);
+        let strip = keys::pointer(ns, "").len();
+        self.read(move |snap| {
+            let scan = scan.clone();
+            Box::pin(async move {
+                let pairs = snap.scan_prefix(&scan).await?;
+                let pointers: Vec<Pointer> = decode_all("pointer", &pairs)?;
+                Ok(Ok(pairs
+                    .into_iter()
+                    .zip(pointers)
+                    .filter_map(|((key, _), pointer)| {
+                        let key = String::from_utf8(key[strip..].to_vec()).ok()?;
+                        Some((key, pointer))
+                    })
+                    .collect()))
+            })
         })
         .await
     }

@@ -1,6 +1,6 @@
 # The `ErrorInfo.reason` registry
 
-Status: **API1 Task 2** (2026-10-03): Task 1's registry plus `not_found`'s metadata, which `loams.collection.v1` fills from `ServiceError::NotFound`'s `kind` and `name` (`crates/loams/src/api/errors.rs` rule 3). Design [§44](../design/44-unified-api-and-sdks.md) §7.4, decision **D611**; plan [API1](../plans/2026-10-02-api1-unified-connect.md).
+Status: **API1 Task 2** (2026-10-03), with later services' rows appended as they land (latest: Loams Git, GT1 Task 12, 2026-10-12): Task 1's registry plus `not_found`'s metadata, which `loams.collection.v1` fills from `ServiceError::NotFound`'s `kind` and `name` (`crates/loams/src/api/errors.rs` rule 3). Design [§44](../design/44-unified-api-and-sdks.md) §7.4, decision **D611**; plan [API1](../plans/2026-10-02-api1-unified-connect.md).
 
 `loams.collection.v1` adds **no** row: every RPC it serves reuses the `error`
 code the REST surface already raises as its `reason` (API1 plan ruling 1.6),
@@ -61,12 +61,51 @@ The rules, in the order they bite:
 | `lsn_out_of_retention` | failed_precondition | CreateBranch, RestoreBranch | `oldest_lsn`, `history_retention` |
 | `endpoint_exists_for_branch` | already_exists | CreateEndpoint (a second read-write endpoint) | `endpoint` |
 | `compute_start_failed` | unavailable | StartEndpoint, RestartEndpoint (the Operation's error) | `compute` |
-| `quota_exceeded` | resource_exhausted | any `loams.postgres.v1` create or resize past a limit (§46 §14) | `quota`, `limit` |
+| `quota_exceeded` | resource_exhausted | any `loams.postgres.v1` create or resize past a limit (§46 §14); any `loams.repos.v1` create past a limit (GT1 Task 75) | `quota`, `limit` |
 | `storage_unavailable` | unavailable | any `loams.postgres.v1` RPC that needs the pageserver, `loams-wal` or the storage controller while it is down | `component` |
-| `secret_already_issued` | failed_precondition | CreateRole, ResetRolePassword, IssueConnectCredential replayed with the same `idempotency_key`: the secret is answered once, and the idempotency ledger keeps only that it was issued, never the secret | `role`; `hint`: ResetRolePassword for a new password, or IssueConnectCredential with a new key for a new credential |
+| `secret_already_issued` | failed_precondition | CreateRole, ResetRolePassword, IssueConnectCredential (`loams.postgres.v1`) and `loams.admin.v1` CreateKey (API2 Task 7) replayed with the same `idempotency_key`: the secret is answered once, and the idempotency ledger keeps only that it was issued, never the secret | `role` (postgres); `hint`: ResetRolePassword for a new password, IssueConnectCredential or CreateKey with a new key for a new credential |
+| `repo_not_found` | not_found | every `loams.repos.v1` RPC that names a repository, and `ForkRepo`'s `source`; also a name in another namespace than the credential's (D182) | `repo` |
+| `repo_already_exists` | already_exists | CreateRepo, ForkRepo: the name is taken, by a repository created under another `idempotency_key` (a retry with the same key and request answers the first repository) | `repo` |
+| `repo_deleting` | failed_precondition | any `loams.repos.v1` RPC but GetRepo on a repository that was deleted and is waiting to be purged, and CreateRepo or ForkRepo of its name until the purge is done; the purge waits while a fork of it lives (GT1 Task 13) | `repo` |
+| `ref_stale` | aborted | a ref write (UpdateRepoConfig's commit, PushWorkspace, the API's ref writes) whose expected old value no longer holds: another write won | `ref` |
+| `ref_protected` | failed_precondition | a ref write a protection rule refuses (a delete under `deny_delete`, a force update under `deny_force`) | `ref` |
+| `out_of_scope` | permission_denied | a write outside the credential's branch prefixes or cones (GT1 Task 16, D397) | `ref` or `path` |
+| `object_format_unsupported` | unimplemented | CreateRepo with `OBJECT_FORMAT_SHA256`: SHA-1 only for now (Q388) | `object_format` |
+| `fork_too_deep` | failed_precondition | ForkRepo of a repository that is already 8 forks deep (`MAX_FORK_DEPTH`) | `max` |
+| `sequencer_unavailable` | unavailable | a `loams.repos.v1` write whose repository sequencer is shutting down, lost its lease, or could not learn whether the write committed: retry with the same `idempotency_key`, which answers the first outcome if it did | `repo` |
+| `idempotency_key_reused` | failed_precondition | a `loams.repos.v1` mutation whose `idempotency_key` was used inside its window for a different request | |
+| `workspace_not_found` | not_found | every `WorkspaceService` RPC that names a workspace (GT1 Task 25, §36 §19.10) | `workspace` |
+| `workspace_fenced` | aborted | SaveSnapshot, ApplyEdits: another writer appended snapshot `n` first (§19.4.3); the caller reads the new head, merges or salvages | `workspace`, `n` |
+| `workspace_read_only` | failed_precondition | a write to a workspace mounted or opened read-only, or to a past snapshot | `workspace` |
+| `workspace_name_taken` | already_exists | CreateWorkspace, ForkWorkspace: the owner already has a workspace of that name | `workspace` |
+| `object_missing` | failed_precondition | SaveSnapshot, PushWorkspace, PutWorkspacePack: a snapshot or push names an object that is neither uploaded nor in the repository (§19.5.2) | `oid` |
+| `secret_detected` | failed_precondition | ApplyEdits, PushWorkspace, receive-pack: the leak scanner found a credential outside `env/` (§19.13.9) | `path`, `rule` |
+| `env_unsealed` | invalid_argument | ApplyEdits, PushWorkspace, receive-pack: an `env/` file holds a plaintext value (§19.13.2) | `path` |
+| `env_access_denied` | permission_denied | `EnvService` Open, GetLiveSet, Seal: the credential has no grant for the environment (§19.13.7) | `environment` |
+| `env_foreign_reference` | permission_denied | ApplyEdits, PushWorkspace, receive-pack: a sealed `env/` reference names a secret of another repository or path (§19.13.4) | `path` |
 | `live_bad_cursor` | invalid_argument | `loams.live.v1` Query, Mutate and the session's queries: a function's `paginate` got a cursor that is malformed, altered, or from another app, table or index (LV1 Task 4) | |
 | `live_worker_crashed` | internal | `loams.live.v1` Query, Mutate and the session's queries: the isolated worker process running the function crashed or was killed; the call's transaction never committed, and a mutation is not retried (LV1 Task 5, design §45 §3.1). Live's own wire code is `ERROR_CODE_FUNCTION_ERROR`; `internal` is provisional until Task 19 maps Live errors to Connect codes | |
 | `live_deploy_conflict` | failed_precondition | `loams.live.v1` Deploy (LiveAdminService's Deploy and ActivateDeployment from LV1 Task 10): the deploy's `expected_active` is not the app's active deployment, because another deploy activated in between; the message names both. The deployment's record is `failed` (LV1 Task 6, design §45 §3.3) | |
+| `live_schema_violation` | invalid_argument | `loams.live.v1` Mutate (and every write a function makes, `_system:*` included): the document does not match its table's validator, or a stricter validator a deploy is checking; the message names the table and the field paths, never the values (LV1 Task 8, design §45 §4.1) | `field_violations` (path, description) |
+| `live_index_not_ready` | failed_precondition | `loams.live.v1` Query, Mutate and the session's queries: the function read an index a deploy is still backfilling; it becomes readable when that deploy activates (LV1 Task 9, design §45 §4.2). The message names the index and the table | |
+| `role_required` | permission_denied | every `loams.admin.v1` RPC whose caller's org role is below the one it needs (reads `member`, mutations `admin`, inviting or removing an owner `owner`), or who is not in the org (API2 Task 7, `member_cannot_create_key`); every `loams.repos.v1.RepoService` RPC likewise (reads `member`; create, fork, delete, configure and compact `admin`; GT1 Task 16) | `role` (the role needed) |
+| `setup_required` | failed_precondition | every `loams.admin.v1` RPC, and every `loams.repos.v1.RepoService` RPC of a caller who is not the operator (GT1 Task 16), before first-run setup (`AuthService/CompleteSetup`) has created the org | |
+| `token_missing` | unauthenticated | any main-port RPC outside `PUBLIC_RPCS` called without a credential (the auth layer, API2 Task 6) | |
+| `token_malformed` | unauthenticated | a credential that is neither an API key, a session token nor a JWT, or more than one `Authorization` header | |
+| `token_revoked` | unauthenticated | a revoked API key (`KeyService/RevokeKey`), or a console session that was signed out or whose person left the org | |
+| `token_not_yet_valid` | unauthenticated | an OIDC token whose `nbf` is in the future | |
+| `token_bad_signature` | unauthenticated | an OIDC token whose signature does not verify | |
+| `token_wrong_audience` | unauthenticated | an OIDC token for another audience | |
+| `token_wrong_issuer` | unauthenticated | an OIDC token from an issuer this engine does not trust | |
+| `token_unknown_key` | unauthenticated | an OIDC token signed with a key its issuer's JWKS does not have | |
+| `token_algorithm_not_allowed` | unauthenticated | an OIDC token signed with an algorithm other than RS256 or EdDSA | |
+| `api_key_invalid` | unauthenticated | an API key no key file or metastore record admits | |
+| `credential_not_accepted` | unauthenticated | a credential kind this engine's `LOAMS_AUTH_MODE` does not take | |
+| `credential_in_query_string` | unauthenticated | any request with `access_token`, `token`, `api_key`, `apikey` or `api-key` in its query string (D608) | |
+| `csrf_token_invalid` | permission_denied | a call authenticated by the `loams_session` cookie that is not a `GET` (nor `GetSession`) without the session's `X-CSRF-Token` | |
+| `principal_not_allowed` | permission_denied | a valid OIDC or tailnet identity that is not on the engine's allowlist | |
+| `cors_origin_not_allowed` | permission_denied | a browser call from an origin outside `LOAMS_CORS_ORIGINS` | |
+| `auth_unavailable` | unavailable | a credential that cannot be checked now (the issuer's JWKS or the principal store is unreachable) | |
 | `invalid_argument` | invalid_argument | any RPC: a malformed field, an unparseable value | `field` |
 | `not_found` | not_found | any RPC: the named resource does not exist | `kind`, `name` |
 | `already_exists` | already_exists | any RPC that creates a named resource | |
@@ -82,7 +121,9 @@ The rules, in the order they bite:
 
 The `loams.postgres.v1` rows (`project_not_found` to `secret_already_issued`) are design §46 §4.1's, registered by PG2 Task 1 before `pg-control` raises them (PG2 Task 9); `reasons_registered` (`crates/loams-proto/tests/postgres.rs`) fails if one §46 §4.1 names is missing. A replayed create under a taken name with another key answers the generic `already_exists`, and a `RestartEndpoint` with `promote` while the branch's read-write endpoint runs the generic `failed_precondition` (PG2 Task 1 ruling R1.8).
 
-`live_bad_cursor` is LV1 Task 4's, `live_worker_crashed` LV1 Task 5's and `live_deploy_conflict` LV1 Task 6's: `loams_live::LiveError::reason` names them, and they reach the wire when Live moves onto the main Connect port (LV1 Task 12) and their errors are mapped there (Task 19).
+The `loams.repos.v1` rows (`repo_not_found` to `env_foreign_reference`) are Loams Git's (design §36 §19.10, plan GT1's "Public API" contract), registered by GT1 Task 12 before any RPC raises them; `reasons_registered` (`crates/loams-proto/tests/repos.rs`) fails if one the proto or §19.10 names is missing. `quota_exceeded` is shared with `loams.postgres.v1`.
+
+`live_bad_cursor` is LV1 Task 4's, `live_worker_crashed` LV1 Task 5's, `live_deploy_conflict` LV1 Task 6's, `live_schema_violation` LV1 Task 8's and `live_index_not_ready` LV1 Task 9's: `loams_live::LiveError::reason` names them, and they reach the wire when Live moves onto the main Connect port (LV1 Task 12) and their errors are mapped there (Task 19).
 
 The generic rows (`invalid_argument` and below) are the code-to-class mapping of D611's error hierarchy: they are what an SDK turns into its own `InvalidArgument`, `NotFound`, ... types. They carry no Loams-specific semantics, so they were already the native REST API's `error` values (`crates/loams/src/api/errors.rs`) and become the RPC `reason` unchanged. The rows above them are the specific causes AP0 registered; the specific causes API1 Tasks 2–8 add are appended as their services land, and `unavailable_service_reports_reason` covers the variant case.
 
@@ -90,6 +131,42 @@ The generic rows (`invalid_argument` and below) are the code-to-class mapping of
 
 - **`cursor_expired`** is not an error: a watch stream whose cursor the server no longer has resets with a fresh snapshot instead (§37 §8.3).
 - A **`Deprecated`** RPC (a removed REST route behind `--legacy-rest`, §44 §5.3) answers `308`/`410` with `{"error":"moved","rpc":…}`, not an `ErrorInfo`.
+
+## agentd reasons (daemon-only)
+
+`loams.agentd.v1` (design §53 §6.1, plan SD1 Task 4) is served by `loams-agentd`, the per-user daemon, and never by the Loams server or an SDK (Q816). Its errors carry the same `loams.errors.v1.ErrorInfo`, whose `reason` is the daemon's ndjson `{err}` prefix (`loams_agentd_proto::rpc::ERROR_REASONS`) or one of SD1's additions, under the Connect code below (`crates/loams-agentd-connect/src/error.rs`). An error without a known prefix answers `unknown` with no `ErrorInfo`.
+
+These are **not registry rows**: the names are written without backticks, so neither `reasons_are_snake_case_and_unique` nor the SDK generator reads them, and no SDK grows a type for a daemon it cannot call. `unauthenticated`, `not_found` and `limit_exceeded` mean what the rows above mean.
+
+| Reason | Connect code | When |
+|---|---|---|
+| unauthenticated | unauthenticated | No token, or a wrong one, on a listener |
+| forbidden_role | permission_denied | The caller's role may not call the method (§50 §7); also the remote `studio` role (SD1 Task 7) |
+| protocol_mismatch | failed_precondition | ndjson only: a `Hello` with another protocol |
+| agentd_draining | unavailable | The daemon is draining before a stop or an upgrade |
+| unknown_method | unimplemented | ndjson only |
+| bad_params | invalid_argument | A request the daemon cannot parse or map (an unset required field, an unknown enum value) |
+| key_required | failed_precondition | A harness needs a key first |
+| unknown_provider | invalid_argument | |
+| invalid_url | invalid_argument | |
+| tool_unavailable_remote_server | failed_precondition | |
+| not_found | not_found | |
+| engine_not_ready | unavailable | The sessions engine is still starting |
+| keyring_unavailable | unavailable | The OS keyring cannot be reached |
+| limit_exceeded | resource_exhausted | Too many streams on one connection |
+| harness_unsupported | failed_precondition | A harness this daemon does not ship |
+| not_implemented | unimplemented | A §53 §6.5 gap (G1–G23) before its SD1 task lands |
+| stale_diff | failed_precondition | A checksum does not match (commit, discard, restore; SD1 Tasks 9, 10) |
+| merge_conflict | aborted | `MergeBranch` stopped on conflicts (SD1 Task 9) |
+| nothing_to_commit | failed_precondition | SD1 Task 9 |
+| push_rejected | failed_precondition | A non-fast-forward or a lease failure (SD1 Task 9) |
+| provider_not_configured | failed_precondition | No Forgejo or GitHub credential for `CreateChangeRequest` (SD1 Task 9) |
+| checkpoint_missing | not_found | SD1 Task 10 |
+| group_not_ready | failed_precondition | `ResolveRunGroup` while members still run (SD1 Task 12) |
+| approval_not_pending | failed_precondition | SD1 Task 13 |
+| origin_not_allowed | permission_denied | The remote listener, for an origin it was not given (SD1 Task 7) |
+
+The desktop's protocol proxy answers two codes of its own as a JSON body, not as an `ErrorInfo`: `forbidden_method` (403, a method the renderer may not call) and `agentd_unavailable` (503, no daemon running).
 
 ## Adding one
 

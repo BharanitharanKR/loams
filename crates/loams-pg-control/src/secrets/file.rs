@@ -191,9 +191,18 @@ fn load(path: &Path, identity: &Identity) -> Result<Plain, SecretError> {
         ))
     })?);
     match plain.split_first() {
-        Some((&FILE_FORMAT, body)) => postcard::from_bytes(body)
-            .map(Plain)
-            .map_err(|e| SecretError::Corrupt(format!("{} does not decode: {e}", path.display()))),
+        // The registry's readable range (UP1 Task 1), not only FILE_FORMAT.
+        Some((&format, body))
+            if loams_common::formats::check(
+                loams_common::formats::PG_CONTROL_SECRETS_FILE,
+                u16::from(format),
+            )
+            .is_ok() =>
+        {
+            postcard::from_bytes(body).map(Plain).map_err(|e| {
+                SecretError::Corrupt(format!("{} does not decode: {e}", path.display()))
+            })
+        }
         _ => Err(SecretError::Corrupt(format!(
             "{} has an unknown format",
             path.display()
@@ -331,5 +340,54 @@ fn key_from_keyring(service: &str, account: &str) -> Result<Identity, SecretErro
             Ok(identity)
         }
         Err(e) => Err(unavailable(e)),
+    }
+}
+
+/// UP1 Task 1: the secrets file reader checks the registry's readable range.
+#[cfg(test)]
+mod format_tests {
+    use loams_common::formats::{self, FormatSpec};
+
+    use super::*;
+
+    /// A secrets file at `path` whose plaintext format byte is `format`.
+    fn write_at(path: &Path, identity: &Identity, format: u8) {
+        save(path, identity, &Plain::default()).unwrap();
+        let sealed = fs::read(path).unwrap();
+        let mut plain = age::decrypt(identity, &sealed).unwrap();
+        plain[0] = format;
+        fs::write(path, age::encrypt(&identity.to_public(), &plain).unwrap()).unwrap();
+    }
+
+    #[test]
+    fn format_constants_match_registry() {
+        let current = formats::spec_of(formats::PG_CONTROL_SECRETS_FILE).current;
+        assert_eq!(u16::from(FILE_FORMAT), current);
+    }
+
+    #[test]
+    fn reader_accepts_previous_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("secrets.age");
+        let identity = Identity::generate();
+        write_at(&path, &identity, FILE_FORMAT - 1);
+        assert!(load(&path, &identity).is_err());
+        let spec = formats::spec_of(formats::PG_CONTROL_SECRETS_FILE);
+        let spec = FormatSpec {
+            min_read: spec.current - 1,
+            ..spec
+        };
+        formats::with_override(spec, || {
+            load(&path, &identity).expect("N-1 opens once min_read allows it");
+        });
+    }
+
+    #[test]
+    fn reader_refuses_next_version() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("secrets.age");
+        let identity = Identity::generate();
+        write_at(&path, &identity, FILE_FORMAT + 1);
+        assert!(load(&path, &identity).is_err());
     }
 }

@@ -60,6 +60,7 @@ pub enum Op {
     Promote,
     Prewarm,
     PrewarmState,
+    AutoscalingMetrics,
 }
 
 /// A failed call: the HTTP status (0 when the component could not be

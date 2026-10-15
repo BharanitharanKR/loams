@@ -1,0 +1,78 @@
+# syntax=docker/dockerfile:1.7
+# The Loams Postgres control-plane image (ghcr.io/ostrium-labs/loams-pg-control),
+# built by build.sh from the repository root. One image, two roles in the
+# release stack (`--profile postgres-control`, PG2 ruling R-REL.1):
+#
+#   loams pg-control   the control plane: no container runtime socket, drives
+#                      computes through the runner (--compute-runner)
+#   loams pg-runner    the compute runner: the only container given the Docker
+#                      or Podman socket; starts only the pinned compute images
+#
+# The build stage compiles `loams` with the features `postgres,tikv`. The
+# runtime stage is debian-slim with the binary, the standalone docker-compose
+# CLI (which the runner drives the socket with; pinned by version and
+# checksum), curl for the healthcheck and tini as PID 1, run as an
+# unprivileged user.
+ARG RUST_IMAGE=docker.io/library/rust:1.97.1-slim-trixie
+ARG RUNTIME_IMAGE=docker.io/library/debian:trixie-slim
+
+FROM ${RUST_IMAGE} AS build
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends \
+      protobuf-compiler libprotobuf-dev pkg-config libssl-dev clang g++ make cmake perl git \
+ && rm -rf /var/lib/apt/lists/*
+ENV RUSTUP_TOOLCHAIN=1.97.1 \
+    CARGO_TERM_COLOR=never
+WORKDIR /src
+COPY . .
+ARG FEATURES=postgres,tikv
+ARG CARGO_BUILD_JOBS=
+RUN --mount=type=cache,id=loams-cargo-registry,target=/usr/local/cargo/registry \
+    --mount=type=cache,id=loams-target-pg-control,target=/src/target \
+    if [ -n "$CARGO_BUILD_JOBS" ]; then export CARGO_BUILD_JOBS; else unset CARGO_BUILD_JOBS; fi \
+ && cargo build --locked --release -p loams --bin loams --features "$FEATURES" \
+ && install -D -m 0755 target/release/loams /out/loams
+
+# docker-compose v5.5.1 (2026-09-03), the standalone CLI from
+# github.com/docker/compose/releases, checked against the release's
+# checksums.txt.
+FROM ${RUNTIME_IMAGE} AS compose
+ARG TARGETARCH
+ARG COMPOSE_VERSION=v5.5.1
+ARG COMPOSE_SHA256_AMD64=db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576
+ARG COMPOSE_SHA256_ARM64=732e3a84c1a0f67256ce80bc2598a24546b10ca05f9faa97efceb1171ece2ef7
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && case "${TARGETARCH:-amd64}" in \
+      amd64) arch=x86_64; sum="$COMPOSE_SHA256_AMD64" ;; \
+      arm64) arch=aarch64; sum="$COMPOSE_SHA256_ARM64" ;; \
+      *) echo "no docker-compose pin for $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL -o /docker-compose \
+      "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-${arch}" \
+ && echo "${sum}  /docker-compose" | sha256sum -c - \
+ && chmod 0755 /docker-compose
+
+FROM ${RUNTIME_IMAGE}
+ARG VERSION=dev
+ARG REVISION=unknown
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl tini \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 10001 loams \
+ && useradd --system --uid 10001 --gid loams --home-dir /var/lib/loams-pg-control --shell /usr/sbin/nologin loams \
+ && install -d -o loams -g loams -m 0700 /var/lib/loams-pg-control /var/lib/loams-pg-runner /run/pg-runner
+COPY --from=build /out/loams /usr/local/bin/loams
+COPY --from=compose /docker-compose /usr/local/bin/docker-compose
+LABEL org.opencontainers.image.title="loams-pg-control" \
+      org.opencontainers.image.description="Loams Postgres control plane and compute runner (preview)" \
+      org.opencontainers.image.source="https://github.com/ostrium-labs/loams" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.licenses="Apache-2.0"
+USER 10001:10001
+WORKDIR /var/lib/loams-pg-control
+EXPOSE 7680 7690 7691
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/loams"]
+CMD ["pg-control", "--help"]

@@ -1,57 +1,82 @@
-# MySQL — ★ connector 3 of §33 §8; CN1 plan Task 7.
-# Runtime: native Rust, loams_flow::connectors::mysql (design §33 §5, D354).
-# Same shape as postgresql.yaml — the same plan task, the same bulk and
-# delivery rules — with MySQL's chunked key-range read and its
-# INSERT … ON DUPLICATE KEY UPDATE sink (CN1 Task 7).
+# MySQL — ★ connector 3 of §33 §8; CN1 plan Task 7, built by CN2 Task 11.
+# Runtime: native Rust, the MySQL family `loams_connector_mysql` (CN2 OR-6, OR-9;
+# plan ruling R11.9): the wire protocol, binlog events and row images from
+# `mysql_common` 0.37.3 over the family's own connection layer, so every
+# connection passes the SDK's egress check after DNS (R0.8, R11.1). One
+# `MysqlFactory` serves this manifest and the target profiles `mariadb` and
+# `aurora-mysql` (CN1's loams_flow::connectors::mysql was never built).
+# The source is a batch read (key-ordered chunks inside one consistent snapshot,
+# Arrow batches) or, with `mode: cdc`, the row binlog read as a replica with a
+# lock-free DBLog snapshot and GTID positions. The sink upserts and is exactly
+# once: each batch commits in one transaction with the instance's row in
+# `_loams_checkpoints`, fenced by the lease epoch. Debezium Server's MySQL
+# connector stays the declared, opt-in CDC fallback (also the `debezium-mysql`
+# manifest). Status stays `preview` (★) until the family's suites are green in
+# CI (OR-23). Minor bump: the runtime moved and capabilities widened.
 apiVersion: loams.flow/v1
 kind: Connector
 id: mysql
 name: MySQL
-specVersion: 1.0.0
+specVersion: 1.2.0
 category: relational
 priority: P1
 starred: true
 status: preview
 runtime:
   kind: native
-  ref: loams_flow::connectors::mysql
-  version: "mysql_async 0.37"
+  ref: loams_connector_mysql::MysqlFactory
+  version: "mysql_common 0.37.3"
+  fallback:
+    kind: debezium
+    ref: io.debezium.connector.mysql.MySqlConnector
+    directions: [source]
+    replaced_by: CN2 Task 11
 licence:
   component: Apache-2.0
   dependencies:
-    mysql_async: MIT
+    mysql_common: Apache-2.0              # MIT OR Apache-2.0 (its Cargo.toml)
 capabilities:
   source:
-    streaming: false              # §33 §8: "source (batch)"
+    streaming: true               # mode: cdc, the row binlog
     batch: true
-    cdc: false                    # external MySQL CDC is Debezium's job (D357)
+    cdc: true                     # needs log_bin, binlog_format = ROW, binlog_row_image = FULL
     webhook: false
     resumable: true
-    position: the last chunked key or the cursor_column value
-    # §33 §6's as-of position for a MySQL batch read is the key the chunked
-    # SELECT … WHERE pk > ? ORDER BY pk LIMIT n finished at, or the
-    # cursor_column high-water mark in incremental mode (CN1 Task 7).
+    position: the GTID set of every transaction delivered (or the binlog file and offset after the last whole transaction with GTIDs off), with the schema history, for CDC; the last key delivered per table for batch reads
   sink:
-    streaming: false
+    streaming: true
     batch: true
-    transactional: true           # a batch of ON DUPLICATE KEY UPDATE rows is one transaction
-    upsert: true                  # INSERT … ON DUPLICATE KEY UPDATE; `key` is in the config schema
-    delete: true                  # deletes for loamsop = d (§33 §6)
-    idempotent: true              # the upsert by the declared key dedupes a redelivered batch
-  delivery: { source: at_least_once, sink: at_least_once }
-  ordering: per_key               # chunks are read in primary-key order (CN1 Task 7)
+    transactional: true           # one transaction per batch with the checkpoint row in _loams_checkpoints
+    upsert: true                  # INSERT … ON DUPLICATE KEY UPDATE by `key`
+    delete: true                  # loamsop = d deletes by key
+    idempotent: true              # the upsert by key dedupes a redelivered batch
+  delivery: { source: at_least_once, sink: exactly_once }
+    # Source: a crash re-reads the current snapshot chunk, so at least once
+    # (R11.9). Sink: exactly once with `transactional: true` (the default).
+  ordering: per_key               # CDC changes in binlog order; batch reads in key order
   formats: [cloudevents-binary, cloudevents-structured, json, arrow]
+    # Arrow for the batch reads and the snapshot; JSON for CDC changes.
   schema: { registry: none, evolution: backward }
+    # `evolution: additive` by default: ADD COLUMN emits a schema-change event
+    # and later rows carry the column; anything the policy refuses pauses.
   bulk: { arrow: true, max_batch_rows: 65536 }
   backpressure: pull
-auth: [basic, mtls, iam]          # §33 Appendix A.2
+auth: [basic, iam]
+    # basic: a password by secret name; iam: RDS IAM tokens minted per connection
+    # (Aurora MySQL, over TLS). Client certificates (mtls) are not built: TLS is
+    # server-side only, with `tls.ca_pem` for extra roots.
 config:
   $ref: schemas/mysql.config.json
-secrets: [password, tls.key_pem]
+secrets: [password, aws.access_key_id, aws.secret_access_key, aws.session_token]
 envelope:
   emits: io.loams.dev.flow.mysql.rows.v1
   consumes: "*"
   passthrough: false
+  stable_ids: true                # CDC ids <transaction>/<ordinal>
 limits: { batch_rows: 65536, batch_bytes: 8388608 }   # Ruling 3's defaults
-conformance: [contract, roundtrip, kill-restart, dup-check, bulk]
+conformance: [contract, roundtrip, kill-restart, dup-check, exactly-once, cdc, bulk, schema-evolution, backpressure, auth]
 docs: docs/guides/connectors/mysql.md
+notes:
+  - "events: batch reads emit `rows` (Arrow); CDC emits `change` (JSON, and the snapshot as Arrow with loamsop = r) and `schema-change`, with ids <transaction>/<ordinal> (the GTID, or <file>:<offset> with GTIDs off) that ingest deduplicates (CN2 Task 11)"
+  - "cdc: the account needs REPLICATION SLAVE, REPLICATION CLIENT and SELECT, and the DBLog snapshot writes the watermark table; `snapshot: {locking: global-read-lock}` needs RELOAD instead. Purged binlogs stop the instance with PositionLost"
+  - "refused by name: partial row images, PARTIAL_JSON updates, MariaDB's compressed events, and the client_ed25519 and parsec auth plugins"

@@ -1,0 +1,5 @@
+{
+  "client": "electron-main",
+  "clientVersion": "0.2.1",
+  "protocol": 1
+}

@@ -1,4 +1,4 @@
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 
 /** The selected environment, as slot props carry it. */
 export interface EnvironmentRef {
@@ -34,6 +34,46 @@ export interface SlotMap {
   'shell.dock.right': { kind: 'single'; props: Record<string, never> };
   /** The server switcher, in the header. */
   'shell.header.server': { kind: 'list'; props: Record<string, never> };
+  /**
+   * The sidebar's context above the nav: the project switcher and the open project's
+   * pages (API2 Task 10). While it has an entry, it replaces the environment switcher.
+   */
+  'shell.nav.context': { kind: 'list'; props: Record<string, never> };
+  /**
+   * Commands for the shell's palette (§53 §4.5, §5.10; SD1 Task 24). An entry renders
+   * nothing: while the palette is open it is mounted with the query and calls `publish`
+   * with its commands (again whenever they change). Its mode is its `meta.mode`, else
+   * its plugin's; the shell lists the current mode's commands first.
+   */
+  'palette.command': {
+    kind: 'list';
+    props: { query: string; publish: (commands: readonly PaletteCommand[]) => void };
+  };
+}
+
+/** One row of the shell's command palette, as a `palette.command` entry publishes it. */
+export interface PaletteCommand {
+  /** Unique within its entry. */
+  id: string;
+  title: string;
+  /** The heading it is listed under ("Threads", "Git"). */
+  group?: string;
+  /** Secondary text at the end of the row (a path, a project). */
+  detail?: string;
+  /** More words the query matches, after the title, in order of importance. */
+  keywords?: string[];
+  icon?: ReactNode;
+  /** Its keyboard shortcut's keys, for example ['Ctrl', 'D']. */
+  shortcut?: string[];
+  /** When its subject last changed (threads); breaks ties between title matches. */
+  recency?: number;
+  /** Sorts after the other matches of its group. */
+  secondary?: boolean;
+  disabled?: boolean;
+  /** Keep the palette open after running it. */
+  keepOpen?: boolean;
+  /** Runs the command. A thrown error or a rejection is shown as a toast. */
+  run(): void | Promise<void>;
 }
 
 export type SlotName = keyof SlotMap;
@@ -55,6 +95,11 @@ export interface SlotMeta {
   id?: string;
   /** An icon name the shell knows ("postgres", "live"); unknown names get a plain dot. */
   icon?: string;
+  /**
+   * The console mode a nav entry shows in (§53 §4.1, D901), for a plugin in both
+   * modes. Without it the entry shows in each of its plugin's modes.
+   */
+  mode?: 'console' | 'studio';
 }
 
 export interface SlotSpec<N extends SlotName> {

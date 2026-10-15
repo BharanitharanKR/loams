@@ -10,10 +10,12 @@
 //!   transport the Claude Agent SDK's `query()` drives, and was re-validated
 //!   live against 2.1.228: `can_use_tool` control requests arrive and
 //!   allow/deny responses are honored). The alternative channel — an MCP
-//!   permission tool — needs a server process and was rejected. Tool calls
-//!   auto-allow (loams-desktop sessions run unattended, parity with the ACP
-//!   harness's preferred-allow behavior); `AskUserQuestion` round-trips
-//!   through [`RunControls::request_input`].
+//!   permission tool — needs a server process and was rejected. In a
+//!   full-access thread tool calls auto-allow (unattended, parity with the
+//!   ACP harness's preferred-allow behavior); in a supervised one (SD1 Task
+//!   13, `RunControls::request_approval`) the CLI keeps its permissions on
+//!   and each call waits for the person's decision. `AskUserQuestion`
+//!   round-trips through [`RunControls::request_input`] in both.
 //! - DONE is the CLI's own `result` frame, eagerly: background work (a
 //!   spawned subagent) never holds the turn. The CLI natively runs a second
 //!   wake turn when a background task finishes — a fresh `init` (same
@@ -31,6 +33,7 @@
 //! - Interrupt: cancelling [`RunControls::interrupt`] sends the protocol-level
 //!   interrupt control request, then escalates to SIGTERM and SIGKILL.
 
+mod approvals;
 pub mod catalog;
 mod discovery;
 mod normalize;
@@ -384,6 +387,10 @@ fn parse_initialize_commands(response: &Value) -> Vec<SlashCommand> {
 
 #[async_trait]
 impl Harness for ClaudeHarness {
+    fn supports_approvals(&self) -> bool {
+        true
+    }
+
     fn id(&self) -> HarnessId {
         HarnessId::ClaudeCode
     }
@@ -532,6 +539,12 @@ impl ClaudeHarness {
         title_only: bool,
     ) -> Result<BoxStream<'static, Result<AgentEvent, HarnessError>>, HarnessError> {
         let exe = self.resolve_executable()?;
+        let mut request = request;
+        // A supervised thread never bypasses the CLI's permissions, whatever
+        // the request's `autoApprove` says (SD1 Task 13).
+        if controls.request_approval.is_some() {
+            request.auto_approve = false;
+        }
         let mut cmd = self.build_command(&exe, &request);
         // Removed when the session ends.
         let mut mcp_config = None;
@@ -777,10 +790,12 @@ async fn run_session(session: Session) {
     let RunControls {
         execution_lease: _execution_lease,
         request_input,
+        request_approval,
         mut steering,
         interrupt,
     } = controls;
     let request_input = Arc::new(request_input);
+    let request_approval = request_approval.map(Arc::new);
 
     let mut pending_steers = std::collections::VecDeque::new();
     // Top-level tool calls in flight: a steer must not abort them (see
@@ -827,7 +842,12 @@ async fn run_session(session: Session) {
                             }));
                             let _ = stdin_tx.send(StdinMsg::Line(line));
                         } else {
-                            handle_control_request(req, &request_input, &stdin_tx);
+                            handle_control_request(
+                                req,
+                                &request_input,
+                                request_approval.as_ref(),
+                                &stdin_tx,
+                            );
                         }
                         continue;
                     }
@@ -995,9 +1015,11 @@ type RequestInputFn = Box<
         + Sync,
 >;
 
-/// Serve one `can_use_tool` control request. Every tool is auto-approved
-/// (unattended parity — the CLI still blocks until SOME response arrives, so
-/// every request must be answered); `AskUserQuestion` is intercepted —
+/// Serve one `can_use_tool` control request. In a full-access thread every
+/// tool is auto-approved (unattended parity — the CLI still blocks until SOME
+/// response arrives, so every request must be answered); in a supervised one
+/// it waits for the person's decision through the approval bridge (a dropped
+/// bridge denies). `AskUserQuestion` is intercepted in both —
 /// surface the questions through the engine's input bridge (which owns the
 /// `InputRequested`/`InputResolved` lifecycle), wait for the user's answers
 /// (in a subtask so the frame loop keeps flowing), and hand them back keyed
@@ -1005,6 +1027,7 @@ type RequestInputFn = Box<
 fn handle_control_request(
     req: ControlRequestFrame,
     request_input: &Arc<RequestInputFn>,
+    request_approval: Option<&Arc<crate::RequestApproval>>,
     stdin_tx: &mpsc::UnboundedSender<StdinMsg>,
 ) {
     if req.request.subtype != "can_use_tool" {
@@ -1015,8 +1038,24 @@ fn handle_control_request(
         return;
     }
     if req.request.tool_name != "AskUserQuestion" {
-        let line = control_response_line(&req.request_id, allow_response(req.request.input));
-        let _ = stdin_tx.send(StdinMsg::Line(line));
+        let Some(request_approval) = request_approval else {
+            let line = control_response_line(&req.request_id, allow_response(req.request.input));
+            let _ = stdin_tx.send(StdinMsg::Line(line));
+            return;
+        };
+        // Supervised: ask, and answer the CLI once the person decides (in a
+        // subtask, so the frame loop keeps flowing).
+        let answer = request_approval(approvals::ask(&req));
+        let stdin_tx = stdin_tx.clone();
+        tokio::spawn(async move {
+            let response = if crate::approval_allows(answer).await {
+                allow_response(req.request.input)
+            } else {
+                approvals::deny_response()
+            };
+            let line = control_response_line(&req.request_id, response);
+            let _ = stdin_tx.send(StdinMsg::Line(line));
+        });
         return;
     }
     let request_input = Arc::clone(request_input);

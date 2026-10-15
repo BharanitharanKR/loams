@@ -9,6 +9,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex, PoisonError, RwLock, Weak};
 use std::time::Duration;
 
+use loams_common::formats;
 use loams_common::meta::{ApplyError, Consistency, MetaError, MetaStore};
 use tokio::task::JoinHandle;
 use ulid::Ulid;
@@ -30,10 +31,15 @@ pub struct Roles {
     pub query: bool,
     pub worker: bool,
     pub gateway: bool,
+    /// Owns Loams Graph graphs (GR1 Task 12, D741): only nodes with this role
+    /// take a graph's owner lease and open its engine.
+    pub graph: bool,
 }
 
 impl Roles {
-    /// Every role.
+    /// Every role but `graph`, which a node runs only when asked for by name
+    /// (it needs a build with the `graph` feature, and before MT1 a loopback
+    /// listener; GR1 R5.2).
     pub fn all() -> Self {
         Self {
             meta: true,
@@ -41,34 +47,54 @@ impl Roles {
             query: true,
             worker: true,
             gateway: true,
+            graph: false,
         }
     }
 
-    /// A comma-separated subset of `meta,log,query,worker,gateway`, in any
-    /// order; empty or unknown names are an error.
+    /// The flag of role `name`, if it is one.
+    fn flag(&mut self, name: &str) -> Option<&mut bool> {
+        Some(match name {
+            "meta" => &mut self.meta,
+            "log" => &mut self.log,
+            "query" => &mut self.query,
+            "worker" => &mut self.worker,
+            "gateway" => &mut self.gateway,
+            "graph" => &mut self.graph,
+            _ => return None,
+        })
+    }
+
+    /// A comma-separated subset of `meta,log,query,worker,gateway,graph`, in
+    /// any order; empty or unknown names are an error.
     pub fn parse(s: &str) -> Result<Self, TierError> {
+        const EXPECTED: &str = "expected meta, log, query, worker, gateway or graph";
         let mut roles = Roles::default();
         for name in s.split(',').map(str::trim) {
-            let role = match name {
-                "meta" => &mut roles.meta,
-                "log" => &mut roles.log,
-                "query" => &mut roles.query,
-                "worker" => &mut roles.worker,
-                "gateway" => &mut roles.gateway,
-                "" => {
-                    return Err(TierError::Other(format!(
-                        "empty role in {s:?} (expected meta, log, query, worker or gateway)"
-                    )));
-                }
-                other => {
-                    return Err(TierError::Other(format!(
-                        "unknown role {other:?} (expected meta, log, query, worker or gateway)"
-                    )));
-                }
-            };
+            if name.is_empty() {
+                return Err(TierError::Other(format!(
+                    "empty role in {s:?} ({EXPECTED})"
+                )));
+            }
+            let role = roles
+                .flag(name)
+                .ok_or_else(|| TierError::Other(format!("unknown role {name:?} ({EXPECTED})")))?;
             *role = true;
         }
         Ok(roles)
+    }
+
+    /// A peer's roles as its descriptor lists them: names this node does not
+    /// know (a role a newer release added) are skipped, so a mixed-version
+    /// cluster still sees every node (GR1 Task 12, R0.16). Empty names are
+    /// skipped too.
+    pub fn parse_lenient(s: &str) -> Self {
+        let mut roles = Roles::default();
+        for name in s.split(',').map(str::trim) {
+            if let Some(role) = roles.flag(name) {
+                *role = true;
+            }
+        }
+        roles
     }
 
     /// Whether no role is set.
@@ -85,6 +111,7 @@ impl fmt::Display for Roles {
             (self.query, "query"),
             (self.worker, "worker"),
             (self.gateway, "gateway"),
+            (self.graph, "graph"),
         ];
         let set: Vec<&str> = names
             .iter()
@@ -143,13 +170,17 @@ impl NodeDescriptor {
         ) else {
             return Err(malformed("expected 5 fields"));
         };
-        if version != "v1" {
+        let readable = version
+            .strip_prefix('v')
+            .and_then(|v| v.parse::<u16>().ok())
+            .is_some_and(|v| formats::check(formats::HOT_OWNER, v).is_ok());
+        if !readable {
             return Err(malformed("unknown version"));
         }
         let incarnation =
             Ulid::from_string(incarnation).map_err(|_| malformed("bad incarnation"))?;
         let addr = addr.parse().map_err(|_| malformed("bad address"))?;
-        let roles = Roles::parse(roles).map_err(|_| malformed("bad roles"))?;
+        let roles = Roles::parse_lenient(roles);
         Ok(Self {
             node_id,
             incarnation,

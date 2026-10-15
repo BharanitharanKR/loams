@@ -1,0 +1,50 @@
+{
+  "name": "@loams/agentd-client",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The wire types, method table and session and transcript reducers of loams-agentd, generated from crates/loams-agentd-proto with ts-rs (design §50 §8, D789; plan DD1 Task 9). The Node client for Electron main follows in DD1 Task 10. SD1 adds its Connect surface loams.agentd.v1 for the console (`./connect`, `./methods`; Task 6), the web transport to a remote agentd (`./transport-remote`) and the host registry (`./hosts`; Task 7).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    },
+    "./types": {
+      "types": "./src/types.ts",
+      "default": "./src/types.ts"
+    },
+    "./methods": {
+      "types": "./src/methods.gen.ts",
+      "default": "./src/methods.gen.ts"
+    },
+    "./connect": {
+      "types": "./src/connect.ts",
+      "default": "./src/connect.ts"
+    },
+    "./transport-remote": {
+      "types": "./src/transport-remote.ts",
+      "default": "./src/transport-remote.ts"
+    },
+    "./hosts": {
+      "types": "./src/hosts.ts",
+      "default": "./src/hosts.ts"
+    }
+  },
+  "dependencies": {
+    "@bufbuild/protobuf": "2.16.0",
+    "@connectrpc/connect": "2.2.0",
+    "@connectrpc/connect-web": "2.2.0",
+    "@loams/proto": "workspace:*"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "24.13.6",
+    "typescript": "5.9.3",
+    "vitest": "5.0.3"
+  }
+}

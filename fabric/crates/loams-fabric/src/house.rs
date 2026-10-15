@@ -9,17 +9,24 @@
 //!
 //! # What is refused at start, and what is only named
 //!
-//! * A plaintext listener off loopback is refused with FL2's message (D111): the
-//!   House serves loopback only until TLS and the verifier (HS1 Task 20). That
+//! * A plaintext listener off loopback is refused with FL2's message (D111). That
 //!   holds for the native and admin listeners too, though they are not served yet.
-//! * A TLS listener is refused: there is no TLS until HS1 Task 20, and serving
-//!   plaintext where TLS was asked for would be worse than not serving.
+//! * The TLS listener (`--house-tls-listen`, HS1 Task 20) may face other hosts.
+//!   It needs a certificate and key (`--house-tls-cert`, `--house-tls-key` or
+//!   `[house.tls]`); with `--single-node` and neither, a self-signed pair is
+//!   made under `<data-dir>/tls/` on first start. Off loopback, no user may have
+//!   an empty password. The native TLS listener waits for the native protocol
+//!   (HS1 Task 31) and is refused.
 //! * `--sandbox=none` needs `--unsafe-no-sandbox` (HS1 R1.10, R6.8), except on a
 //!   system with no L3 (macOS) in `--single-node` mode, and is logged either way.
 //! * `--workers=inproc` needs `--single-node` and a build with `inproc-worker`.
-//! * The native listener (Task 31), admin (Task 23), the catalog (Task 10) and
-//!   the store (Tasks 9 and 12) are resolved and validated now, and [`start`]
-//!   says on stderr that they are not served yet.
+//! * The native listener (Task 31) and admin (Task 23) are resolved and
+//!   validated now, and [`start`] says on stderr that they are not served yet.
+//!   The store is read through `house-cache` by process workers (Task 9) and
+//!   written by the front (Task 12).
+//! * `--catalog` (HS1 Task 10) needs `--store`: the catalog of lake tables writes
+//!   their metadata there (local) or places them there (REST, whose URL names the
+//!   warehouse: `rest:<url>?warehouse=<name>`).
 
 use std::io::{self, Write as _};
 use std::net::SocketAddr;
@@ -27,12 +34,17 @@ use std::os::unix::fs::OpenOptionsExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use loams_cache::RangeCacheConfig;
+use loams_house::catalog::{
+    HouseCatalog, Lake, LakeRoot, LocalCatalog, PrefixGrants, RestCatalog, RestOptions,
+};
 use loams_house::config::{DEFAULT_ADMIN_LISTEN, DEFAULT_LISTEN, DEFAULT_NATIVE_LISTEN};
 use loams_house::{
     CatalogSpec, CgroupLimits, ChError, HouseConfig, HouseError, HouseFile, HouseHandle, Launcher,
     PoolConfig, ProcessLauncher, SandboxMode, UserMap, WorkerCgroups, WorkerPool, WorkersMode,
     config, sandbox,
 };
+use loams_house_cache::{HouseCache, OneStore, StoreOptions, Upstream};
 
 use crate::cli::HouseArgs;
 
@@ -46,6 +58,9 @@ pub const WORKER_BINARY: &str = "loams-house-worker";
 /// "generated local key"; HS1 Task 20 replaces it with the local engine's tokens
 /// where the desktop runs one).
 pub const LOCAL_USER: &str = "default";
+
+/// The engine's link user (HS1 Task 20): it acts for `--principals`.
+pub const LINK_USER: &str = "engine";
 
 /// The namespace a single node's local user queries in.
 pub const LOCAL_NAMESPACE: u64 = 1;
@@ -89,6 +104,30 @@ pub struct HouseSettings {
     /// With `--single-node` and no configured user: the file holding the local
     /// user's password, created on first start.
     pub local_key: Option<PathBuf>,
+    /// The TLS listener (HS1 Task 20).
+    pub tls: Option<TlsSettings>,
+    /// The Loams principals the engine's link acts for (HS1 Task 20).
+    pub principals: Vec<loams_house::identity::PrincipalMap>,
+    /// With `--single-node`: the engine's link key's file, created on first
+    /// start.
+    pub link_key: Option<PathBuf>,
+    /// With `--single-node`: unlisted principals act as the local user.
+    pub dev_unmapped_principals: bool,
+    /// Where the audit is appended.
+    pub audit_log: Option<PathBuf>,
+}
+
+/// The TLS listener's settings (HS1 Task 20).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TlsSettings {
+    /// Where it listens.
+    pub listen: SocketAddr,
+    /// The certificate chain (PEM).
+    pub cert: PathBuf,
+    /// The private key (PEM).
+    pub key: PathBuf,
+    /// Make a self-signed pair there when neither file exists (`--single-node`).
+    pub make: bool,
 }
 
 /// Turns the flags and the file into settings, refusing what must not start.
@@ -101,15 +140,9 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
         .or(house.listen)
         .unwrap_or_else(|| addr(DEFAULT_LISTEN));
     config::check_listen(listen)?;
-    if let Some(tls) = args
-        .house_tls_listen
-        .or(house.tls_listen)
-        .or(args.native_tls_listen)
-        .or(house.native_tls_listen)
-    {
+    if let Some(tls) = args.native_tls_listen.or(house.native_tls_listen) {
         return Err(bad(format!(
-            "TLS listener {tls}: TLS arrives with HS1 Task 20; until then the House serves \
-             loopback plaintext only (D111)"
+            "native TLS listener {tls}: the native protocol is served from HS1 Task 31"
         )));
     }
     let native_listen = args
@@ -204,7 +237,80 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
         Some(path) => path,
         None => beside_this_binary(WORKER_BINARY)?,
     };
-    let local_key = (single_node && http.users.is_empty()).then(|| data_dir.join(LOCAL_KEY_FILE));
+    let local_key = (single_node && http.users.is_empty()).then(|| {
+        args.local_key_file
+            .clone()
+            .unwrap_or_else(|| data_dir.join(LOCAL_KEY_FILE))
+    });
+    // The Loams principals the engine's link may act for (HS1 Task 20).
+    let mut principals = Vec::new();
+    for entry in &house.principals {
+        principals.push(
+            entry
+                .to_map()
+                .map_err(|why| bad(format!("principal {:?}: {why}", entry.principal)))?,
+        );
+    }
+    let listed = args
+        .principals
+        .clone()
+        .or_else(|| std::env::var("LOAMS_HOUSE_PRINCIPALS").ok())
+        .filter(|list| !list.trim().is_empty());
+    if let Some(list) = listed {
+        if !single_node {
+            return Err(bad(
+                "--principals names principals in the single node's namespace: with \
+                 --single-node only (elsewhere, [[house.principals]] in --config)"
+                    .to_string(),
+            ));
+        }
+        for entry in list.split(';').map(str::trim).filter(|e| !e.is_empty()) {
+            principals.push(
+                loams_house::identity::PrincipalMap::parse(entry, LOCAL_NAMESPACE)
+                    .map_err(|why| bad(format!("--principals: {why}")))?,
+            );
+        }
+    }
+    for (flag, set) in [
+        ("--link-key-file", args.link_key_file.is_some()),
+        ("--dev-unmapped-principals", args.dev_unmapped_principals),
+    ] {
+        if set && !single_node {
+            return Err(bad(format!("{flag} is for --single-node only")));
+        }
+    }
+    let audit_log = args
+        .audit_log
+        .clone()
+        .or(house.audit_log)
+        .or_else(|| single_node.then(|| data_dir.join("audit.log")));
+    let tls = match args.house_tls_listen.or(house.tls_listen) {
+        None => None,
+        Some(listen) => {
+            let cert = args.house_tls_cert.clone().or(house.tls.cert);
+            let key = args.house_tls_key.clone().or(house.tls.key);
+            match (cert, key) {
+                (Some(cert), Some(key)) => Some(TlsSettings {
+                    listen,
+                    cert,
+                    key,
+                    make: single_node,
+                }),
+                (None, None) if single_node => Some(TlsSettings {
+                    listen,
+                    cert: data_dir.join("tls").join("house.crt"),
+                    key: data_dir.join("tls").join("house.key"),
+                    make: true,
+                }),
+                _ => {
+                    return Err(bad(format!(
+                        "TLS listener {listen}: needs --house-tls-cert and --house-tls-key \
+                         (or [house.tls] cert and key)"
+                    )));
+                }
+            }
+        }
+    };
 
     Ok(HouseSettings {
         http,
@@ -221,6 +327,11 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
         worker_memory_limit: house.pool.worker_memory_limit,
         cgroup_root: args.cgroup_root.clone().or(house.pool.cgroup_root),
         local_key,
+        tls,
+        principals,
+        link_key: args.link_key_file.clone(),
+        dev_unmapped_principals: args.dev_unmapped_principals,
+        audit_log,
     })
 }
 
@@ -235,6 +346,11 @@ impl Running {
     /// Where the HTTP interface listens.
     pub fn local_addr(&self) -> SocketAddr {
         self.handle.local_addr()
+    }
+
+    /// Where the TLS listener listens, when there is one (HS1 Task 20).
+    pub fn tls_addr(&self) -> Option<SocketAddr> {
+        self.handle.tls_addr()
     }
 
     /// The worker pool.
@@ -263,9 +379,46 @@ pub async fn start(mut settings: HouseSettings) -> Result<Running, HouseError> {
             .users
             .push(UserMap::dev(LOCAL_USER, &password, LOCAL_NAMESPACE, false));
     }
-    let launcher = launcher(&settings)?;
+    // The engine's link and the principals it acts for (HS1 Task 20).
+    if let Some(path) = &settings.link_key {
+        let key = local_key(path)?;
+        settings.http.users.push(UserMap::link(LINK_USER, &key));
+    }
+    settings.http.principals = settings.principals.clone();
+    if settings.dev_unmapped_principals {
+        settings.http.unmapped_principals = settings
+            .http
+            .users
+            .iter()
+            .find(|u| u.user == LOCAL_USER)
+            .cloned();
+    }
+    if let Some(path) = &settings.audit_log {
+        let sink = loams_house::audit::JsonLines::open(path)
+            .map_err(|err| bad(format!("the audit log {}: {err}", path.display())))?;
+        settings.http.audit = Some(Arc::new(sink));
+    }
+    if let Some(tls) = &settings.tls {
+        if tls.make {
+            let names: Vec<String> = loams_house::tls::DEFAULT_NAMES
+                .iter()
+                .map(|n| n.to_string())
+                .collect();
+            loams_house::tls::ensure_self_signed(&tls.cert, &tls.key, &names)?;
+        }
+        settings.http.tls = Some(loams_house::TlsListener {
+            listen: tls.listen,
+            config: loams_house::tls::server_config(&tls.cert, &tls.key)?,
+        });
+    }
+    let cache = house_cache(&settings).await?;
+    let lake = lake(&settings, cache.as_ref()).await?;
+    let launcher = launcher(&settings, cache)?;
     let pool = WorkerPool::start(settings.pool.clone(), launcher).await?;
-    let handle = loams_house::serve(settings.http, pool.clone()).await?;
+    let handle = match lake {
+        Some(lake) => loams_house::serve_with_lake(settings.http, pool.clone(), lake).await?,
+        None => loams_house::serve(settings.http, pool.clone()).await?,
+    };
     Ok(Running { handle, pool })
 }
 
@@ -281,16 +434,111 @@ pub fn not_served_yet(settings: &HouseSettings) -> Vec<String> {
         "admin and metrics {}: not served until HS1 Task 23",
         settings.admin_listen
     ));
-    if let Some(catalog) = &settings.catalog {
-        out.push(format!("catalog {catalog}: not used until HS1 Task 10"));
-    }
     if let Some(store) = &settings.store {
-        out.push(format!("store {store}: not used until HS1 Tasks 9 and 12"));
+        out.push(match settings.workers {
+            WorkersMode::Process => {
+                format!("store {store}: read through house-cache, written by the front")
+            }
+            WorkersMode::Inproc => format!(
+                "store {store}: not read by in-process workers (they have no forwarder); \
+                 written by the front"
+            ),
+        });
     }
     out
 }
 
-fn launcher(settings: &HouseSettings) -> Result<Arc<dyn Launcher>, HouseError> {
+/// The catalog of lake tables (HS1 Task 10): `--catalog` over `--store`, with
+/// external tables' locations vouched to `house-cache`. A REST catalog names its
+/// warehouse in the URL's query, `rest:http://lakekeeper:8181/catalog?warehouse=house`.
+async fn lake(
+    settings: &HouseSettings,
+    cache: Option<&HouseCache>,
+) -> Result<Option<Arc<Lake>>, HouseError> {
+    let Some(spec) = &settings.catalog else {
+        return Ok(None);
+    };
+    let Some(store_url) = &settings.store else {
+        return Err(bad(format!(
+            "--catalog {spec}: needs --store, where the House keeps its tables"
+        )));
+    };
+    let root = LakeRoot::from_store_url(store_url).map_err(bad)?;
+    let catalog: Arc<dyn HouseCatalog> = match spec {
+        CatalogSpec::Local(path) => {
+            if let Some(dir) = store_url.strip_prefix("file://") {
+                std::fs::create_dir_all(dir)
+                    .map_err(|err| bad(format!("--store {store_url:?}: {err}")))?;
+            }
+            let store = loams_store::Store::from_url(store_url, Vec::<(String, String)>::new())
+                .map_err(|err| bad(format!("--store {store_url:?}: {err}")))?;
+            Arc::new(
+                LocalCatalog::open(path, store, root.clone())
+                    .map_err(|err| bad(format!("--catalog {spec}: {err}")))?,
+            )
+        }
+        CatalogSpec::Rest(url) => {
+            let (uri, warehouse) = rest_warehouse(url)?;
+            Arc::new(
+                RestCatalog::connect(RestOptions {
+                    uri,
+                    warehouse,
+                    token: None,
+                })
+                .await
+                .map_err(|err| bad(format!("--catalog {spec}: {err}")))?,
+            )
+        }
+    };
+    // The front reads manifests (`system.parts`, `FINAL` views; HS1 Task 11)
+    // from the same store.
+    let files = loams_store::Store::from_url(store_url, Vec::<(String, String)>::new())
+        .map_err(|err| bad(format!("--store {store_url:?}: {err}")))?;
+    let mut lake = Lake::new(catalog, root).with_store(files);
+    if let Some(cache) = cache {
+        lake = lake.with_grants(Arc::new(cache.clone()) as Arc<dyn PrefixGrants>);
+    }
+    Ok(Some(Arc::new(lake)))
+}
+
+/// A REST catalog URL and its `?warehouse=` name.
+pub fn rest_warehouse(url: &str) -> Result<(String, String), HouseError> {
+    let missing = || {
+        bad(format!(
+            "--catalog rest:{url}: name the warehouse, as rest:<url>?warehouse=<name>"
+        ))
+    };
+    let (base, query) = url.split_once('?').ok_or_else(missing)?;
+    let warehouse = query
+        .split('&')
+        .find_map(|pair| pair.strip_prefix("warehouse="))
+        .filter(|w| !w.is_empty())
+        .ok_or_else(missing)?;
+    Ok((base.to_string(), warehouse.to_string()))
+}
+
+/// `house-cache` over `--store` (HS1 Task 9): the only way process workers
+/// reach the bucket. RAM only for now; its size and NVMe tier are Task 21's and
+/// Task 26's.
+async fn house_cache(settings: &HouseSettings) -> Result<Option<HouseCache>, HouseError> {
+    let Some(url) = &settings.store else {
+        return Ok(None);
+    };
+    if settings.workers != WorkersMode::Process {
+        return Ok(None);
+    }
+    let upstream = Upstream::open(url, StoreOptions::default(), RangeCacheConfig::default())
+        .await
+        .map_err(|err| bad(format!("--store {url:?}: {err}")))?;
+    Ok(Some(HouseCache::new(Arc::new(OneStore(Arc::new(
+        upstream,
+    ))))))
+}
+
+fn launcher(
+    settings: &HouseSettings,
+    cache: Option<HouseCache>,
+) -> Result<Arc<dyn Launcher>, HouseError> {
     let workers_dir = settings.data_dir.join("workers");
     if settings.workers == WorkersMode::Inproc {
         return inproc(&workers_dir);
@@ -323,6 +571,9 @@ fn launcher(settings: &HouseSettings) -> Result<Arc<dyn Launcher>, HouseError> {
             root,
             CgroupLimits::for_worker(bytes),
         )?);
+    }
+    if let Some(cache) = cache {
+        launcher = launcher.with_forward_target(Arc::new(cache));
     }
     Ok(Arc::new(launcher))
 }

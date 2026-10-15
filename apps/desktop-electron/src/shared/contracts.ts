@@ -174,7 +174,11 @@ export interface LoamsDesktopApi {
 		onNavigate(cb: (path: string) => void): () => void; // deep links
 		/** Call once after subscribing with onNavigate; returns a link received before the page was ready. */
 		takePendingNavigation(): Promise<string | null>;
+		/** The OS folder picker (Studio's Add project, §53 §5.2); null when cancelled. */
+		pickFolder(title?: string): Promise<string | null>;
 		setBadge(count: number): Promise<void>; // pending approvals in tray
+		/** The application menu's renderer commands (SD1 Task 28): mode switches and a new thread. */
+		onCommand(cb: (command: ShellCommand) => void): () => void;
 	};
 	update: {
 		state(): Promise<{
@@ -299,6 +303,7 @@ export const CH = {
 	shellNavigate: "shell:navigate",
 	shellPendingNav: "shell:pending-nav",
 	shellBadge: "shell:badge",
+	shellCommand: "shell:command",
 	updateState: "update:state",
 	updateCheck: "update:check",
 	updateDownload: "update:download",
@@ -344,6 +349,12 @@ export const CH = {
 	agentdStop: "agentd:stop",
 	agentdBackgroundGet: "agentd:background-get",
 	agentdBackgroundSet: "agentd:background-set",
+	shellPickFolder: "shell:pick-folder",
+	studioOpenInEditor: "studio:open-in-editor",
+	studioEditorGet: "studio:editor-get",
+	studioEditorSet: "studio:editor-set",
+	studioEditorChooseCommand: "studio:editor-choose-command",
+	studioNotifySet: "studio:notify-set",
 } as const;
 
 // ---- D675: the agent panel ----
@@ -584,5 +595,95 @@ export interface LoamsDesktopApi {
 			/** The consent dialog's answer, or a later change in Settings. */
 			set(v: "on" | "off"): Promise<IpcResult<void>>;
 		};
+	};
+}
+
+// ---- SD1 Task 28: Loams Studio on the desktop ----
+
+/**
+ * What the application menu asks the renderer to do (`shell.onCommand`): switch to a
+ * mode, toggle between them, or start a thread (Studio's `chat.new`).
+ */
+export type ShellCommand =
+	| "mode.studio"
+	| "mode.console"
+	| "mode.toggle"
+	| "chat.new";
+
+/** "Open in editor" (Q810): an editor's URL scheme, or the program the person picked. */
+export type StudioEditorId = "vscode" | "zed" | "cursor" | "command";
+export interface StudioEditor {
+	editor: StudioEditorId;
+	/** The picked program's file name, for display; set once one was chosen. */
+	commandName?: string;
+}
+/** The OS notifications the person wants (Settings › Studio, `loams.studio.settings`). */
+export interface StudioNotifyPrefs {
+	/** A turn finished or failed, or a run group or a check finished. */
+	turnDone: boolean;
+	/** An approval or a question is waiting. */
+	approval: boolean;
+}
+
+export interface LoamsDesktopApi {
+	studio: {
+		/**
+		 * Opens a thread's checkout (an absolute path on this machine), or a file in it,
+		 * in the chosen editor. Main builds the editor's URL or argv itself, never a
+		 * shell string.
+		 */
+		openInEditor(
+			path: string,
+			at?: { line?: number; column?: number },
+		): Promise<IpcResult<void>>;
+		editor(): Promise<StudioEditor>;
+		/** Picks a URL-scheme editor; `command` is chosen with `chooseEditorCommand`. */
+		setEditor(
+			editor: Exclude<StudioEditorId, "command">,
+		): Promise<IpcResult<void>>;
+		/** The OS file picker for the editor program; `cancelled` when none was picked. */
+		chooseEditorCommand(): Promise<IpcResult<StudioEditor>>;
+		/** Which daemon notifications main shows as OS notifications. */
+		setNotifications(prefs: StudioNotifyPrefs): Promise<IpcResult<void>>;
+	};
+}
+
+// ---- SD1 Task 26: Studio's preview view (design §53 §5.8, D678) ----
+
+/** What the preview view shows, pushed to the console after each change. */
+export interface PreviewViewState {
+	/** The page's URL, or "" before the first load. */
+	url: string;
+	canGoBack: boolean;
+	canGoForward: boolean;
+	loading: boolean;
+	/** The last main-frame load failure, until the next successful load. */
+	error?: { code: number; description: string; url: string };
+}
+
+/** The preview view's IPC channels (kept apart from CH, so tasks add without conflict). */
+export const PREVIEW_CH = {
+	show: "preview:show",
+	hide: "preview:hide",
+	reload: "preview:reload",
+	back: "preview:back",
+	forward: "preview:forward",
+	state: "preview:state",
+} as const;
+
+export interface LoamsDesktopApi {
+	/**
+	 * Studio's Preview tab: one WebContentsView placed by main over `rect` (CSS px in
+	 * the console window), in its own partition, with no preload and sandboxed. Only
+	 * http(s) URLs on this machine load (`bad_request` otherwise). Optional: an older
+	 * desktop build has none, and Studio opens the URL in the browser instead.
+	 */
+	preview?: {
+		show(url: string, rect: EmbedRect): Promise<IpcResult<void>>;
+		hide(): Promise<void>;
+		reload(): Promise<void>;
+		back(): Promise<void>;
+		forward(): Promise<void>;
+		onState(cb: (s: PreviewViewState) => void): () => void;
 	};
 }

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import cordisMain from '../src/cordis/main.tsx?raw';
-import classicMain from '../src/main.tsx?raw';
 
 // The console tsconfig carries no Node types, and vitest returns '' for CSS
 // `?raw` imports, so read the two stylesheets through node:fs by a variable
@@ -15,9 +14,16 @@ const tailwind = css('../src/tailwind.css');
 
 const code = tailwind.replace(/\/\*[\s\S]*?\*\//g, '');
 
-/** The `--op-*` colour tokens: every name declared in the light block. */
+/**
+ * The `--op-*` colour tokens: every name declared in the light block. The terminal
+ * palette (`--op-term-*`, SD1 Task 22) is left out: xterm reads it from the computed
+ * style for its own theme (studio-ui `terminalThemeFromTokens`), and no utility should
+ * paint UI with ANSI colours.
+ */
 const lightBlock = tokens.slice(tokens.indexOf(':root'), tokens.indexOf('.dark'));
-const colorTokens = [...lightBlock.matchAll(/^\s*(--op-[a-z-]+):\s*#/gm)].map((m) => m[1]);
+const colorTokens = [...lightBlock.matchAll(/^\s*(--op-[a-z-]+):\s*#/gm)]
+  .map((m) => m[1])
+  .filter((name) => !name?.startsWith('--op-term-'));
 
 describe('console tailwind theme (utilities over @loams/ui tokens)', () => {
   it('finds the colour tokens', () => {
@@ -44,8 +50,7 @@ describe('console tailwind theme (utilities over @loams/ui tokens)', () => {
     expect(code).not.toMatch(/#[0-9a-f]{3,8}\b/i);
   });
 
-  it('is imported by both entries', () => {
+  it('is imported by the console entry', () => {
     expect(cordisMain).toContain("import '../tailwind.css'");
-    expect(classicMain).toContain("import './tailwind.css'");
   });
 });

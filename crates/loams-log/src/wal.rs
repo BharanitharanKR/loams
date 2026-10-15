@@ -17,6 +17,7 @@ use std::collections::BTreeMap;
 
 use bytes::{Bytes, BytesMut};
 use loams_common::StreamId;
+use loams_common::formats;
 use loams_common::meta::WalClass;
 use serde::{Deserialize, Serialize};
 use ulid::Ulid;
@@ -186,9 +187,9 @@ fn parse_header(bytes: &[u8]) -> Result<WalHeader, LogError> {
         return Err(corrupt("not a WAL object"));
     }
     let version = le_u16(bytes, 8);
-    if version != VERSION {
-        return Err(corrupt(format!("unsupported WAL format version {version}")));
-    }
+    // The registry's readable range (UP1 Task 1), not only VERSION.
+    formats::check(formats::LOG_WAL, version)
+        .map_err(|e| corrupt(format!("unsupported WAL format version {version} ({e})")))?;
     let class = class_from_byte(bytes[10])?;
     if bytes[11] != 0 {
         return Err(corrupt("WAL header reserved byte is not zero"));

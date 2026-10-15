@@ -25,22 +25,33 @@ namespace Loams.Live.V1 {
       byte[] descriptorData = global::System.Convert.FromBase64String(
           string.Concat(
             "Chtsb2Ftcy9saXZlL3YxL2pvdXJuYWwucHJvdG8SDWxvYW1zLmxpdmUudjEi",
-            "owEKDEpvdXJuYWxFbnRyeRIkCg5jb21taXRfaGludF9tcxgBIAEoBFIMY29t",
+            "2wEKDEpvdXJuYWxFbnRyeRIkCg5jb21taXRfaGludF9tcxgBIAEoBFIMY29t",
             "bWl0SGludE1zEjIKBndyaXRlcxgCIAMoCzIaLmxvYW1zLmxpdmUudjEuV3Jp",
             "dGVSZWNvcmRSBndyaXRlcxIaCghmdW5jdGlvbhgDIAEoCVIIZnVuY3Rpb24S",
-            "HQoKcmVxdWVzdF9pZBgEIAEoCVIJcmVxdWVzdElkIsUBCgtXcml0ZVJlY29y",
-            "ZBIZCgh0YWJsZV9pZBgBIAEoDVIHdGFibGVJZBIVCgZkb2NfaWQYAiABKAxS",
-            "BWRvY0lkEiwKBGtpbmQYAyABKA4yGC5sb2Ftcy5saXZlLnYxLldyaXRlS2lu",
-            "ZFIEa2luZBIsChJpbmRleF9rZXlzX3JlbW92ZWQYBCADKAxSEGluZGV4S2V5",
-            "c1JlbW92ZWQSKAoQaW5kZXhfa2V5c19hZGRlZBgFIAMoDFIOaW5kZXhLZXlz",
-            "QWRkZWQqbQoJV3JpdGVLaW5kEhoKFldSSVRFX0tJTkRfVU5TUEVDSUZJRUQQ",
-            "ABIVChFXUklURV9LSU5EX0lOU0VSVBABEhYKEldSSVRFX0tJTkRfUkVQTEFD",
-            "RRACEhUKEVdSSVRFX0tJTkRfREVMRVRFEANiBnByb3RvMw=="));
+            "HQoKcmVxdWVzdF9pZBgEIAEoCVIJcmVxdWVzdElkEjYKB2NhdGFsb2cYBSAD",
+            "KAsyHC5sb2Ftcy5saXZlLnYxLkNhdGFsb2dDaGFuZ2VSB2NhdGFsb2cixQEK",
+            "C1dyaXRlUmVjb3JkEhkKCHRhYmxlX2lkGAEgASgNUgd0YWJsZUlkEhUKBmRv",
+            "Y19pZBgCIAEoDFIFZG9jSWQSLAoEa2luZBgDIAEoDjIYLmxvYW1zLmxpdmUu",
+            "djEuV3JpdGVLaW5kUgRraW5kEiwKEmluZGV4X2tleXNfcmVtb3ZlZBgEIAMo",
+            "DFIQaW5kZXhLZXlzUmVtb3ZlZBIoChBpbmRleF9rZXlzX2FkZGVkGAUgAygM",
+            "Ug5pbmRleEtleXNBZGRlZCKSAQoNQ2F0YWxvZ0NoYW5nZRI0CgRraW5kGAEg",
+            "ASgOMiAubG9hbXMubGl2ZS52MS5DYXRhbG9nQ2hhbmdlS2luZFIEa2luZBIe",
+            "Cgh0YWJsZV9pZBgCIAEoDUgAUgd0YWJsZUlkiAEBEh4KCmRlcGxveW1lbnQY",
+            "AyABKAlSCmRlcGxveW1lbnRCCwoJX3RhYmxlX2lkKm0KCVdyaXRlS2luZBIa",
+            "ChZXUklURV9LSU5EX1VOU1BFQ0lGSUVEEAASFQoRV1JJVEVfS0lORF9JTlNF",
+            "UlQQARIWChJXUklURV9LSU5EX1JFUExBQ0UQAhIVChFXUklURV9LSU5EX0RF",
+            "TEVURRADKvcBChFDYXRhbG9nQ2hhbmdlS2luZBIjCh9DQVRBTE9HX0NIQU5H",
+            "RV9LSU5EX1VOU1BFQ0lGSUVEEAASJQohQ0FUQUxPR19DSEFOR0VfS0lORF9U",
+            "QUJMRV9DUkVBVEVEEAESHwobQ0FUQUxPR19DSEFOR0VfS0lORF9JTkRFWEVT",
+            "EAISIQodQ0FUQUxPR19DSEFOR0VfS0lORF9WQUxJREFUT1IQAxIsCihDQVRB",
+            "TE9HX0NIQU5HRV9LSU5EX0RFUExPWU1FTlRfQUNUSVZBVEVEEAQSJAogQ0FU",
+            "QUxPR19DSEFOR0VfS0lORF9BUFBfU0VUVElOR1MQBWIGcHJvdG8z"));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { },
-          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Loams.Live.V1.WriteKind), }, null, new pbr::GeneratedClrTypeInfo[] {
-            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.JournalEntry), global::Loams.Live.V1.JournalEntry.Parser, new[]{ "CommitHintMs", "Writes", "Function", "RequestId" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.WriteRecord), global::Loams.Live.V1.WriteRecord.Parser, new[]{ "TableId", "DocId", "Kind", "IndexKeysRemoved", "IndexKeysAdded" }, null, null, null, null)
+          new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Loams.Live.V1.WriteKind), typeof(global::Loams.Live.V1.CatalogChangeKind), }, null, new pbr::GeneratedClrTypeInfo[] {
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.JournalEntry), global::Loams.Live.V1.JournalEntry.Parser, new[]{ "CommitHintMs", "Writes", "Function", "RequestId", "Catalog" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.WriteRecord), global::Loams.Live.V1.WriteRecord.Parser, new[]{ "TableId", "DocId", "Kind", "IndexKeysRemoved", "IndexKeysAdded" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.CatalogChange), global::Loams.Live.V1.CatalogChange.Parser, new[]{ "Kind", "TableId", "Deployment" }, new[]{ "TableId" }, null, null, null)
           }));
     }
     #endregion
@@ -57,12 +68,41 @@ namespace Loams.Live.V1 {
     [pbr::OriginalName("WRITE_KIND_DELETE")] Delete = 3,
   }
 
+  /// <summary>
+  /// What a catalog change changed.
+  /// </summary>
+  public enum CatalogChangeKind {
+    [pbr::OriginalName("CATALOG_CHANGE_KIND_UNSPECIFIED")] Unspecified = 0,
+    /// <summary>
+    /// A table was created (by a deployed schema or a first insert).
+    /// </summary>
+    [pbr::OriginalName("CATALOG_CHANGE_KIND_TABLE_CREATED")] TableCreated = 1,
+    /// <summary>
+    /// A table's indexes changed: one was added, changed state or was removed.
+    /// </summary>
+    [pbr::OriginalName("CATALOG_CHANGE_KIND_INDEXES")] Indexes = 2,
+    /// <summary>
+    /// A table's validators changed.
+    /// </summary>
+    [pbr::OriginalName("CATALOG_CHANGE_KIND_VALIDATOR")] Validator = 3,
+    /// <summary>
+    /// A deployment became active (a deploy or an activation, LV1 Tasks 6-7).
+    /// </summary>
+    [pbr::OriginalName("CATALOG_CHANGE_KIND_DEPLOYMENT_ACTIVATED")] DeploymentActivated = 4,
+    /// <summary>
+    /// The app's settings changed (its journal shard count).
+    /// </summary>
+    [pbr::OriginalName("CATALOG_CHANGE_KIND_APP_SETTINGS")] AppSettings = 5,
+  }
+
   #endregion
 
   #region Messages
   /// <summary>
-  /// One mutation's changes, written at `seq = head + 1` of one journal shard in
-  /// the mutation's own transaction.
+  /// One transaction's changes, written at `seq = head + 1` of one journal shard
+  /// in the transaction's own commit: a mutation's writes, or a catalog change
+  /// (LV1 plan Task 11), or both (a mutation that created a table). An entry has
+  /// at least one write or one catalog change.
   /// </summary>
   [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
   public sealed partial class JournalEntry : pb::IMessage<JournalEntry>
@@ -103,6 +143,7 @@ namespace Loams.Live.V1 {
       writes_ = other.writes_.Clone();
       function_ = other.function_;
       requestId_ = other.requestId_;
+      catalog_ = other.catalog_.Clone();
       _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
     }
 
@@ -143,7 +184,8 @@ namespace Loams.Live.V1 {
     public const int FunctionFieldNumber = 3;
     private string function_ = "";
     /// <summary>
-    /// The mutation's function path ("module:export" or "_system:insert").
+    /// The mutation's function path ("module:export" or "_system:insert"), or
+    /// the catalog operation for an entry with no writes ("live.deploy", ...).
     /// </summary>
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
@@ -169,6 +211,22 @@ namespace Loams.Live.V1 {
       }
     }
 
+    /// <summary>Field number for the "catalog" field.</summary>
+    public const int CatalogFieldNumber = 5;
+    private static readonly pb::FieldCodec<global::Loams.Live.V1.CatalogChange> _repeated_catalog_codec
+        = pb::FieldCodec.ForMessage(42, global::Loams.Live.V1.CatalogChange.Parser);
+    private readonly pbc::RepeatedField<global::Loams.Live.V1.CatalogChange> catalog_ = new pbc::RepeatedField<global::Loams.Live.V1.CatalogChange>();
+    /// <summary>
+    /// The catalog changes the transaction committed (LV1 plan Task 11). Every
+    /// node's tailer sees them at the tick that contains them and reloads what
+    /// they change before it matches that tick's writes.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public pbc::RepeatedField<global::Loams.Live.V1.CatalogChange> Catalog {
+      get { return catalog_; }
+    }
+
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
     [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
     public override bool Equals(object other) {
@@ -188,6 +246,7 @@ namespace Loams.Live.V1 {
       if(!writes_.Equals(other.writes_)) return false;
       if (Function != other.Function) return false;
       if (RequestId != other.RequestId) return false;
+      if(!catalog_.Equals(other.catalog_)) return false;
       return Equals(_unknownFields, other._unknownFields);
     }
 
@@ -199,6 +258,7 @@ namespace Loams.Live.V1 {
       hash ^= writes_.GetHashCode();
       if (Function.Length != 0) hash ^= Function.GetHashCode();
       if (RequestId.Length != 0) hash ^= RequestId.GetHashCode();
+      hash ^= catalog_.GetHashCode();
       if (_unknownFields != null) {
         hash ^= _unknownFields.GetHashCode();
       }
@@ -230,6 +290,7 @@ namespace Loams.Live.V1 {
         output.WriteRawTag(34);
         output.WriteString(RequestId);
       }
+      catalog_.WriteTo(output, _repeated_catalog_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(output);
       }
@@ -253,6 +314,7 @@ namespace Loams.Live.V1 {
         output.WriteRawTag(34);
         output.WriteString(RequestId);
       }
+      catalog_.WriteTo(ref output, _repeated_catalog_codec);
       if (_unknownFields != null) {
         _unknownFields.WriteTo(ref output);
       }
@@ -273,6 +335,7 @@ namespace Loams.Live.V1 {
       if (RequestId.Length != 0) {
         size += 1 + pb::CodedOutputStream.ComputeStringSize(RequestId);
       }
+      size += catalog_.CalculateSize(_repeated_catalog_codec);
       if (_unknownFields != null) {
         size += _unknownFields.CalculateSize();
       }
@@ -295,6 +358,7 @@ namespace Loams.Live.V1 {
       if (other.RequestId.Length != 0) {
         RequestId = other.RequestId;
       }
+      catalog_.Add(other.catalog_);
       _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
     }
 
@@ -330,6 +394,10 @@ namespace Loams.Live.V1 {
             RequestId = input.ReadString();
             break;
           }
+          case 42: {
+            catalog_.AddEntriesFrom(input, _repeated_catalog_codec);
+            break;
+          }
         }
       }
     #endif
@@ -363,6 +431,10 @@ namespace Loams.Live.V1 {
           }
           case 34: {
             RequestId = input.ReadString();
+            break;
+          }
+          case 42: {
+            catalog_.AddEntriesFrom(ref input, _repeated_catalog_codec);
             break;
           }
         }
@@ -695,6 +767,304 @@ namespace Loams.Live.V1 {
           }
           case 42: {
             indexKeysAdded_.AddEntriesFrom(ref input, _repeated_indexKeysAdded_codec);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// One change to an app's catalog (LV1 plan Task 11).
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class CatalogChange : pb::IMessage<CatalogChange>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<CatalogChange> _parser = new pb::MessageParser<CatalogChange>(() => new CatalogChange());
+    private pb::UnknownFieldSet _unknownFields;
+    private int _hasBits0;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<CatalogChange> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Loams.Live.V1.JournalReflection.Descriptor.MessageTypes[2]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public CatalogChange() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public CatalogChange(CatalogChange other) : this() {
+      _hasBits0 = other._hasBits0;
+      kind_ = other.kind_;
+      tableId_ = other.tableId_;
+      deployment_ = other.deployment_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public CatalogChange Clone() {
+      return new CatalogChange(this);
+    }
+
+    /// <summary>Field number for the "kind" field.</summary>
+    public const int KindFieldNumber = 1;
+    private global::Loams.Live.V1.CatalogChangeKind kind_ = global::Loams.Live.V1.CatalogChangeKind.Unspecified;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Loams.Live.V1.CatalogChangeKind Kind {
+      get { return kind_; }
+      set {
+        kind_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "table_id" field.</summary>
+    public const int TableIdFieldNumber = 2;
+    private readonly static uint TableIdDefaultValue = 0;
+
+    private uint tableId_;
+    /// <summary>
+    /// The table a table, index or validator change is about.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint TableId {
+      get { if ((_hasBits0 & 1) != 0) { return tableId_; } else { return TableIdDefaultValue; } }
+      set {
+        _hasBits0 |= 1;
+        tableId_ = value;
+      }
+    }
+    /// <summary>Gets whether the "table_id" field is set</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool HasTableId {
+      get { return (_hasBits0 & 1) != 0; }
+    }
+    /// <summary>Clears the value of the "table_id" field</summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void ClearTableId() {
+      _hasBits0 &= ~1;
+    }
+
+    /// <summary>Field number for the "deployment" field.</summary>
+    public const int DeploymentFieldNumber = 3;
+    private string deployment_ = "";
+    /// <summary>
+    /// The deployment an activation made active (its ULID text).
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Deployment {
+      get { return deployment_; }
+      set {
+        deployment_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as CatalogChange);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(CatalogChange other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Kind != other.Kind) return false;
+      if (TableId != other.TableId) return false;
+      if (Deployment != other.Deployment) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Kind != global::Loams.Live.V1.CatalogChangeKind.Unspecified) hash ^= Kind.GetHashCode();
+      if (HasTableId) hash ^= TableId.GetHashCode();
+      if (Deployment.Length != 0) hash ^= Deployment.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Kind != global::Loams.Live.V1.CatalogChangeKind.Unspecified) {
+        output.WriteRawTag(8);
+        output.WriteEnum((int) Kind);
+      }
+      if (HasTableId) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(TableId);
+      }
+      if (Deployment.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(Deployment);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Kind != global::Loams.Live.V1.CatalogChangeKind.Unspecified) {
+        output.WriteRawTag(8);
+        output.WriteEnum((int) Kind);
+      }
+      if (HasTableId) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(TableId);
+      }
+      if (Deployment.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(Deployment);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Kind != global::Loams.Live.V1.CatalogChangeKind.Unspecified) {
+        size += 1 + pb::CodedOutputStream.ComputeEnumSize((int) Kind);
+      }
+      if (HasTableId) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(TableId);
+      }
+      if (Deployment.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Deployment);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(CatalogChange other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Kind != global::Loams.Live.V1.CatalogChangeKind.Unspecified) {
+        Kind = other.Kind;
+      }
+      if (other.HasTableId) {
+        TableId = other.TableId;
+      }
+      if (other.Deployment.Length != 0) {
+        Deployment = other.Deployment;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Kind = (global::Loams.Live.V1.CatalogChangeKind) input.ReadEnum();
+            break;
+          }
+          case 16: {
+            TableId = input.ReadUInt32();
+            break;
+          }
+          case 26: {
+            Deployment = input.ReadString();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Kind = (global::Loams.Live.V1.CatalogChangeKind) input.ReadEnum();
+            break;
+          }
+          case 16: {
+            TableId = input.ReadUInt32();
+            break;
+          }
+          case 26: {
+            Deployment = input.ReadString();
             break;
           }
         }

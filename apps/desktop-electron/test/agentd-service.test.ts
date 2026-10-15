@@ -140,4 +140,9 @@ describe("agentd service", () => {
 		expect(seen.at(-1)).toBe(0);
 		expect(seen).toContain(1);
 	});
+
+	it("has no repository bridge: Studio's projects go through ProjectService (T6-9)", () => {
+		const { svc } = setup({ running: true });
+		for (const gone of ["repos", "addRepo", "cloneRepo"]) expect(svc).not.toHaveProperty(gone);
+	});
 });

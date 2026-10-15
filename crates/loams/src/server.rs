@@ -281,6 +281,10 @@ pub struct ServerConfig {
     /// the `graph` role in Task 12).
     #[cfg(feature = "graph")]
     pub graph: GraphConfig,
+    /// Loams Git (GT1 Task 13, design §36; feature `git`): `RepoService` on the main port of a
+    /// `gateway` node, over the bucket, and the purge of deleted repositories.
+    #[cfg(feature = "git")]
+    pub git: GitConfig,
     /// `[house]`: the Loams House front the main port proxies
     /// `/loams.house.v1.*` to (HS1 Task 7, design §49 §18.1). No endpoint (the
     /// default) answers `house_not_configured`.
@@ -290,6 +294,44 @@ pub struct ServerConfig {
     /// `dev` and `standalone` only: a cluster node refuses any other mode
     /// until MT1.
     pub auth: crate::auth::AuthConfig,
+}
+
+/// Loams Git's server settings (GT1 Task 13).
+#[cfg(feature = "git")]
+#[derive(Clone, Debug)]
+pub struct GitConfig {
+    /// Serve `loams.repos.v1` at all (on a `gateway` node).
+    pub enabled: bool,
+    /// How long a `WatchRepo` stream stays quiet before it sends a heartbeat (AP0: 15 s).
+    pub watch_heartbeat: Duration,
+    /// How often deleted repositories are looked at for purging (default 1 min).
+    pub purge_every: Duration,
+    /// How long a deleted repository is kept before it is purged (`GC_GRACE`, 1 h).
+    pub purge_grace: Duration,
+    /// The git listener stock git authenticates against with git tokens (`--git-listen`, GT1
+    /// Task 16); loopback only until MT1 (D111). `None`: not served.
+    pub listen: Option<SocketAddr>,
+    /// The git token file (`--git-tokens`): SHA-256 hashes and their grants. Needed with
+    /// `listen`.
+    pub tokens: Option<PathBuf>,
+    /// How often the `_git` mirror is repaired: whatever a crash left unmirrored is published
+    /// (GT1 Task 15; default 1 h).
+    pub mirror_repair_every: Duration,
+}
+
+#[cfg(feature = "git")]
+impl Default for GitConfig {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            watch_heartbeat: Duration::from_secs(15),
+            purge_every: Duration::from_secs(60),
+            purge_grace: loams_git::limits::GC_GRACE,
+            listen: None,
+            tokens: None,
+            mirror_repair_every: Duration::from_secs(3600),
+        }
+    }
 }
 
 /// The largest engine statement time limit (§48 §13.1's maximum statement timeout).
@@ -316,6 +358,18 @@ pub struct GraphConfig {
     /// How often the purge and the catalog sweep run (config only, no flag; default 10 min;
     /// must be greater than zero).
     pub maintenance_every: Duration,
+    /// When graphs are snapshotted and how long their history is kept (config only; GR1 Task
+    /// 13): a native snapshot every 15 minutes or 64 MiB of log, a portable one weekly, a PITR
+    /// window of 7 days (at least 24 hours).
+    pub checkpoint: loams_graph::snapshot::CheckpointPolicy,
+    /// How often this node checks its graphs for a due snapshot, and for graphs to evict
+    /// (config only; default 1 min; must be greater than zero).
+    pub checkpoint_every: Duration,
+    /// When open graphs are evicted (config only; GR1 Task 14): after an hour with no
+    /// statement (`idle_after`, `graph.idle_evict_after`; must be greater than zero), and,
+    /// least recently used first, while their memory is over `node_memory` (none until Task
+    /// 26 sets it). An evicted graph is checkpointed first and reopens on its next statement.
+    pub evict: loams_graph::evict::EvictPolicy,
     /// The cap on graph statements running at once in this process (`--graph-statement-slots`;
     /// default twice the cores, at most 32). Past it a statement is refused with
     /// `RESOURCE_EXHAUSTED`. It also sizes the statement pool (GR1 Task 6).
@@ -334,6 +388,10 @@ pub struct GraphConfig {
     /// largest deadline a request may ask for (R0.8 (a), GR1 Task 6); Loams's own deadline
     /// answers the client at the request's limit either way.
     pub query_timeout: Duration,
+    /// How long an `at_least` read waits for the replica serving it to apply its token (config
+    /// only; §48 §7.2's `consistency_wait_ms`, default 5 s; GR1 Task 15). Past it the read is
+    /// `UNAVAILABLE`/`consistency_wait_timeout`.
+    pub consistency_wait: Duration,
     /// How long the shutdown phase `graph` waits for running statements (config only; default
     /// 10 s), and again for a maintenance pass in progress. A statement still running then is
     /// detached: its graph stays open until it ends or the process exits (it runs on a
@@ -352,10 +410,14 @@ impl GraphConfig {
             retention_hold: loams_graph::service::admin::DEFAULT_RETENTION_HOLD,
             sweep_grace: loams_graph::catalog::DOCUMENT_GRACE,
             maintenance_every: Duration::from_secs(600),
+            checkpoint: loams_graph::snapshot::CheckpointPolicy::default(),
+            checkpoint_every: Duration::from_secs(60),
+            evict: loams_graph::evict::EvictPolicy::default(),
             statement_slots: loams_graph::service::admin::default_statement_slots(),
             namespace_statements: loams_graph::limits::DEFAULT_NAMESPACE_STATEMENTS,
             limits: loams_graph::limits::StatementLimits::DEFAULT,
             query_timeout: loams_graph::engine::DEFAULT_QUERY_TIMEOUT,
+            consistency_wait: loams_graph::consistency::DEFAULT_CONSISTENCY_WAIT,
             shutdown_wait: loams_graph::service::admin::DEFAULT_SHUTDOWN_WAIT,
         }
     }
@@ -411,6 +473,8 @@ impl ServerConfig {
             live: None,
             #[cfg(feature = "graph")]
             graph: GraphConfig::under(data_dir_for_graph),
+            #[cfg(feature = "git")]
+            git: GitConfig::default(),
             house: crate::api::house_proxy::HouseProxyConfig::default(),
             auth: crate::auth::AuthConfig::off(),
         }
@@ -443,6 +507,29 @@ impl ServerConfig {
         self.validate_auth()?;
         #[cfg(feature = "graph")]
         self.validate_graph()?;
+        #[cfg(feature = "git")]
+        if self.git.purge_every.is_zero()
+            || self.git.watch_heartbeat.is_zero()
+            || self.git.mirror_repair_every.is_zero()
+        {
+            return Err(ServerError::Config(
+                "git.purge_every, git.watch_heartbeat and git.mirror_repair_every must be greater \
+                 than zero"
+                    .to_string(),
+            ));
+        }
+        #[cfg(feature = "git")]
+        if let Some(addr) = self.git.listen {
+            if !addr.ip().is_loopback() {
+                return Err(ServerError::GitListenNotLoopback { addr });
+            }
+            if self.git.tokens.is_none() {
+                return Err(ServerError::Config(
+                    "--git-listen needs --git-tokens: the git listener admits git tokens only"
+                        .to_string(),
+                ));
+            }
+        }
         #[cfg(feature = "live")]
         if let Some(live) = &self.live {
             if self.cluster.is_some() {
@@ -538,13 +625,18 @@ impl ServerConfig {
             .map_err(ServerError::Config)
     }
 
-    /// Whether this server serves Loams Graph (GR1 Task 5): unless `--no-graph`, and not on a
-    /// cluster node, which gets the `graph` role in Task 12 (R5.2). Otherwise every graph RPC
-    /// answers `feature_not_in_variant`.
+    /// Whether this server serves Loams Graph (GR1 Task 5): unless `--no-graph`; on a cluster
+    /// node only with the `graph` role, which owns graphs and forwards calls for graphs another
+    /// graph node owns (GR1 Task 12, R5.2). Otherwise every graph RPC answers
+    /// `feature_not_in_variant`.
     #[cfg(feature = "graph")]
     #[must_use]
     pub fn serves_graph(&self) -> bool {
-        self.graph.enabled && self.cluster.is_none()
+        self.graph.enabled
+            && self
+                .cluster
+                .as_ref()
+                .is_none_or(|cluster| cluster.effective_roles().graph)
     }
 
     /// Loams Graph (GR1 Task 5): graphs need a data directory unless they are explicitly
@@ -567,6 +659,16 @@ impl ServerConfig {
         if self.graph.maintenance_every.is_zero() {
             return Err(ServerError::Config(
                 "graph.maintenance_every must be greater than zero".to_string(),
+            ));
+        }
+        if self.graph.checkpoint_every.is_zero() {
+            return Err(ServerError::Config(
+                "graph.checkpoint_every must be greater than zero".to_string(),
+            ));
+        }
+        if self.graph.evict.idle_after.is_zero() {
+            return Err(ServerError::Config(
+                "graph.evict.idle_after must be greater than zero".to_string(),
             ));
         }
         let max_slots = loams_graph::service::admin::MAX_STATEMENT_SLOTS;
@@ -649,6 +751,18 @@ pub enum ServerError {
          unified auth plan (D750, MT1); listen on a loopback address or pass --no-graph"
     )]
     GraphListenNotLoopback { addr: SocketAddr },
+    /// `--git-listen` is not a loopback address (GT1 Task 16, D111): the git listener's tokens
+    /// are a development file until MT1.
+    #[cfg(feature = "git")]
+    #[error(
+        "git listen on {addr}: only loopback addresses are served until the unified auth plan \
+         (D111)"
+    )]
+    GitListenNotLoopback { addr: SocketAddr },
+    /// The git listener could not be bound, or its token file read (GT1 Task 16).
+    #[cfg(feature = "git")]
+    #[error("the git listener on {addr}: {reason}")]
+    GitListen { addr: SocketAddr, reason: String },
     /// `--live-listen` is not a loopback address (D111, design §20 §7.1):
     /// the Live API has no authentication in R1.
     #[cfg(feature = "live")]
@@ -847,6 +961,9 @@ pub struct Server {
     /// Loams Graph, when served (GR1 Task 5).
     #[cfg(feature = "graph")]
     graph: Option<GraphRuntime>,
+    /// Loams Git, when served (GT1 Task 13).
+    #[cfg(feature = "git")]
+    git: Option<GitRuntimeHandle>,
     /// The metastore as the trait object every component holds.
     meta_store: Arc<dyn MetaStore>,
     writer: LogWriter,
@@ -989,12 +1106,15 @@ impl LiveRuntime {
     /// `loams-live-js`, in process or, with `isolation = "isolated"`, in
     /// `loams live-worker` processes of this binary (LV1 plan Task 6).
     /// With `own_gc`, a cluster GC loop on Live's handle too (the openraft
-    /// metastore, or a TiKV metastore on another cluster).
+    /// metastore, or a TiKV metastore on another cluster). The listener
+    /// sits behind `auth`, the engine's authentication layer (LV1 plan Task
+    /// 10), which names the caller for the admin service.
     #[cfg_attr(not(feature = "live-tikv"), allow(unused_variables))]
     async fn start(
         config: loams_live::LiveConfig,
         bundles: Store,
         own_gc: bool,
+        auth: Arc<crate::auth::Auth>,
     ) -> Result<Self, ServerError> {
         let loader = loams_live_js::JsLoader::new(loams_live_js::JsConfig {
             isolation: config.isolation,
@@ -1005,14 +1125,21 @@ impl LiveRuntime {
             bundles,
             loader: Arc::new(loader),
         };
-        let handle = loams_live::LiveServer::start_with(config, runtime, CancellationToken::new())
-            .await
-            .map_err(|err| match err {
-                loams_live::LiveError::NotLoopback(addr) => {
-                    ServerError::LiveListenNotLoopback { addr }
-                }
-                err => ServerError::Live(err),
-            })?;
+        let layer = crate::auth::AuthLayerState::new(auth, &[]);
+        let guard: loams_live::service::Guard = Arc::new(move |router: axum::Router| {
+            layer.wrap(router.layer(axum::middleware::from_fn(crate::api::live::caller)))
+        });
+        let handle = loams_live::LiveServer::start_guarded(
+            config,
+            runtime,
+            Some(guard),
+            CancellationToken::new(),
+        )
+        .await
+        .map_err(|err| match err {
+            loams_live::LiveError::NotLoopback(addr) => ServerError::LiveListenNotLoopback { addr },
+            err => ServerError::Live(err),
+        })?;
         // Only a TiKV store needs the cluster GC loop.
         #[cfg(feature = "live-tikv")]
         let gc = match handle.store().as_tikv().cloned() {
@@ -1039,6 +1166,28 @@ impl LiveRuntime {
             gc.stop().await;
         }
     }
+}
+
+/// The main port's state without Loams Live when `listen` is not loopback
+/// (`None`: serve `state` as it is). Until LV1 Task 18 brings TLS and the
+/// non-loopback rule, Live is served on a loopback main port and on the
+/// `tailscale serve` target only (itself loopback, reached over the tailnet
+/// with the tailnet's TLS); elsewhere the main port answers
+/// `feature_not_in_variant` for it, and the start says so once.
+#[cfg(feature = "live")]
+fn without_live_beyond_loopback(state: &AppState, listen: SocketAddr) -> Option<AppState> {
+    if state.live.is_none() || listen.ip().is_loopback() {
+        return None;
+    }
+    tracing::warn!(
+        %listen,
+        "Loams Live is not served on --listen {listen}: until it has TLS (LV1 Task 18) it is \
+         served on a loopback --listen and over the tailnet (LOAMS_TAILSCALE_LISTEN) only"
+    );
+    Some(AppState {
+        live: None,
+        ..state.clone()
+    })
 }
 
 /// Whether two PD endpoint lists name one cluster (the same endpoints, in
@@ -1080,6 +1229,20 @@ struct NodeSetup {
     forward_stats: Arc<ForwardStats>,
     extra_sources: Vec<Arc<dyn TaskSource>>,
     node_info: Option<Arc<dyn NodeInfo>>,
+    /// What the start built before the node (Loams Live, and the
+    /// authentication its listener shares with the node's surfaces).
+    pre: Prebuilt,
+}
+
+/// What `start_with_live` builds before the node: the authentication (LV1
+/// plan Task 10), so Live's listener and the node's surfaces share it, built
+/// from the config when `None`; and Live's services for the main port (LV1
+/// plan Task 12).
+#[derive(Debug, Default)]
+struct Prebuilt {
+    auth: Option<Arc<crate::auth::Auth>>,
+    #[cfg(feature = "live")]
+    live: Option<loams_live::LiveRoutes>,
 }
 
 /// Everything [`Server::assemble`] started, and the node's router.
@@ -1111,10 +1274,13 @@ struct Assembled {
     es: Option<Es>,
     #[cfg(feature = "graph")]
     graph: Option<GraphRuntime>,
+    #[cfg(feature = "git")]
+    git: Option<GitRuntimeHandle>,
 }
 
 /// Loams Graph as the server runs it (GR1 Task 5): the admin service (catalog and engine) and
-/// the maintenance task that purges deleted graphs and sweeps catalog documents.
+/// the maintenance task that purges deleted graphs, sweeps catalog documents and snapshot
+/// objects, takes the snapshots that are due (GR1 Task 13) and evicts idle graphs (GR1 Task 14).
 #[cfg(feature = "graph")]
 #[derive(Debug)]
 struct GraphRuntime {
@@ -1128,6 +1294,10 @@ struct GraphRuntime {
     shutdown_wait: Duration,
     /// Catalog sweeps the maintenance task has completed.
     sweeps: Arc<std::sync::atomic::AtomicU64>,
+    /// Graphs the maintenance task has checkpointed (GR1 Task 13).
+    checkpoints: Arc<std::sync::atomic::AtomicU64>,
+    /// Graphs the maintenance task has evicted (GR1 Task 14).
+    evictions: Arc<std::sync::atomic::AtomicU64>,
 }
 
 #[cfg(feature = "graph")]
@@ -1140,6 +1310,7 @@ impl GraphRuntime {
         store: Store,
         reader: LogReader,
         log_node: u64,
+        registry: Option<Arc<NodeRegistry>>,
     ) -> Result<Self, ServerError> {
         use loams_graph::Engine;
         use loams_graph::catalog::GraphCatalog;
@@ -1158,41 +1329,88 @@ impl GraphRuntime {
             reader,
             tokio::runtime::Handle::current(),
         );
-        let admin = Arc::new(
-            GraphAdmin::new(Arc::new(engine), GraphCatalog::new(meta, store))
-                .with_log(graph_log)
-                .with_retention_hold(config.retention_hold)
-                .with_statement_slots(config.statement_slots)
-                .with_namespace_statements(config.namespace_statements)
-                .with_limits(config.limits),
-        );
+        let mut admin = GraphAdmin::new(Arc::new(engine), GraphCatalog::new(meta.clone(), store))
+            .with_log(graph_log)
+            .with_retention_hold(config.retention_hold)
+            .with_statement_slots(config.statement_slots)
+            .with_namespace_statements(config.namespace_statements)
+            .with_limits(config.limits)
+            .with_checkpoint_policy(config.checkpoint)
+            .with_evict_policy(config.evict)
+            .with_consistency_wait(config.consistency_wait);
+        // A cluster's graph nodes own graphs by lease and forward to each other (GR1 Task 12);
+        // a single node owns every graph and still fences its appends.
+        if let Some(registry) = registry {
+            let forwarder = crate::api::graph::HttpForwarder::new().map_err(|err| {
+                ServerError::Config(format!("the graph forwarder's HTTP client: {err}"))
+            })?;
+            admin = admin.with_ownership(loams_graph::owner::Ownership::new(
+                meta,
+                Arc::new(crate::api::graph::RegistryMembership::new(registry)),
+                Some(Arc::new(forwarder)),
+                loams_graph::owner::OwnerConfig::default(),
+            ));
+        }
+        let admin = Arc::new(admin);
         let stop = CancellationToken::new();
         let sweeps = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let checkpoints = Arc::new(std::sync::atomic::AtomicU64::new(0));
+        let evictions = Arc::new(std::sync::atomic::AtomicU64::new(0));
         let maintenance = {
-            let (admin, stop, sweeps) = (admin.clone(), stop.clone(), sweeps.clone());
-            let (every, hold, grace) = (
+            let (admin, stop, sweeps, checkpoints, evictions) = (
+                admin.clone(),
+                stop.clone(),
+                sweeps.clone(),
+                checkpoints.clone(),
+                evictions.clone(),
+            );
+            let (every, hold, grace, checkpoint_every) = (
                 config.maintenance_every,
                 config.retention_hold,
                 config.sweep_grace,
+                config.checkpoint_every,
             );
             tokio::spawn(async move {
                 let mut tick = tokio::time::interval(every);
                 tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                let mut checkpoint = tokio::time::interval(checkpoint_every);
+                checkpoint.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
                 loop {
                     tokio::select! {
                         () = stop.cancelled() => return,
                         _ = tick.tick() => {}
+                        _ = checkpoint.tick() => {
+                            // Snapshots of the graphs this node owns that are due (GR1 Task 13).
+                            let done = admin.checkpoint_due().await;
+                            if done > 0 {
+                                tracing::debug!(graphs = done, "checkpointed graphs");
+                                checkpoints.fetch_add(
+                                    done as u64,
+                                    std::sync::atomic::Ordering::Relaxed,
+                                );
+                            }
+                            // Then idle graphs, and deleted graphs' caches (GR1 Task 14).
+                            let evicted = admin.evict_due().await;
+                            if !evicted.is_empty() {
+                                tracing::debug!(graphs = evicted.len(), "evicted graphs");
+                                evictions.fetch_add(
+                                    evicted.len() as u64,
+                                    std::sync::atomic::Ordering::Relaxed,
+                                );
+                            }
+                            continue;
+                        }
                     }
-                    match admin.purge_expired(hold).await {
-                        Ok(0) => {}
-                        Ok(n) => tracing::info!(purged = n, "purged deleted graphs"),
-                        Err(err) => tracing::warn!(%err, "purging deleted graphs failed"),
-                    }
-                    match admin.sweep_documents(grace).await {
-                        Ok(_) => {
+                    // This node's caches, then (on one node of the cluster at a time, under the
+                    // maintenance lease) the purge and the catalog sweep (GR1 Task 12).
+                    match admin.maintain(hold, grace).await {
+                        Ok(purged) => {
+                            if purged > 0 {
+                                tracing::info!(purged, "purged deleted graphs");
+                            }
                             sweeps.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                         }
-                        Err(err) => tracing::warn!(%err, "sweeping graph catalog documents failed"),
+                        Err(err) => tracing::warn!(%err, "graph maintenance failed"),
                     }
                 }
             })
@@ -1205,6 +1423,8 @@ impl GraphRuntime {
             maintenance,
             shutdown_wait: config.shutdown_wait,
             sweeps,
+            checkpoints,
+            evictions,
         })
     }
 
@@ -1226,6 +1446,170 @@ impl GraphRuntime {
         // After the graphs: a write still in its lane is answered before its log goes.
         if let Err(err) = self.log.shutdown().await {
             tracing::warn!(%err, "stopping the graph log writer");
+        }
+    }
+}
+
+/// Loams Git as the server runs it (GT1 Task 13): the catalog and sequencers `RepoService`
+/// shares, and the task that purges deleted repositories.
+#[cfg(feature = "git")]
+#[derive(Debug)]
+struct GitRuntimeHandle {
+    runtime: Arc<crate::api::repos::GitRuntime>,
+    stop: CancellationToken,
+    purge: JoinHandle<()>,
+    /// The git listener (GT1 Task 16): its address and its serving task.
+    listener: Option<(SocketAddr, JoinHandle<()>)>,
+    /// The `_git` repair loop (GT1 Task 15).
+    repair: (CancellationToken, JoinHandle<()>),
+}
+
+#[cfg(feature = "git")]
+impl GitRuntimeHandle {
+    /// `cluster` places each repository's sequencer on one gateway node under its lease and
+    /// forwards commits there (GT1 Task 14); without it (dev, standalone) every sequencer runs
+    /// here.
+    fn start(
+        config: &GitConfig,
+        meta: Arc<dyn MetaStore>,
+        store: Store,
+        sink: Arc<api::git_events::StreamSink>,
+        cluster: Option<loams_git::Cluster>,
+        listener: Option<(
+            tokio::net::TcpListener,
+            Arc<api::git_auth::LoopbackDevAuthorizer>,
+        )>,
+    ) -> Self {
+        let catalog = loams_git::BucketRepoCatalog::new(store.clone());
+        let meta_for_listener = meta.clone();
+        let clock: Arc<dyn loams_git::Clock> = Arc::new(loams_git::SystemClock);
+        let sequencers = match cluster {
+            Some(cluster) => loams_git::RepoSequencers::clustered(store.clone(), clock, cluster),
+            None => loams_git::RepoSequencers::new(store.clone(), clock),
+        }
+        .with_mirror(sink.clone());
+        // The `_git` repair (GT1 Task 15): every `mirror_repair_every`, what a crash left
+        // unmirrored is published; the stream's dedup ledger drops any repeat.
+        let repair = {
+            let (meta, store, every) = (meta.clone(), store.clone(), config.mirror_repair_every);
+            let stop = CancellationToken::new();
+            let task_stop = stop.clone();
+            let task = tokio::spawn(async move {
+                let mut tick = tokio::time::interval(every);
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                loop {
+                    tokio::select! {
+                        () = task_stop.cancelled() => return,
+                        _ = tick.tick() => {}
+                    }
+                    api::git_events::repair_all(meta.as_ref(), &store, sink.as_ref()).await;
+                }
+            });
+            (stop, task)
+        };
+        let runtime = Arc::new(crate::api::repos::GitRuntime {
+            catalog: catalog.clone(),
+            sequencers: Arc::new(sequencers),
+            watch_heartbeat: config.watch_heartbeat,
+        });
+        let stop = CancellationToken::new();
+        let purge = {
+            let (stop, every, grace) = (stop.clone(), config.purge_every, config.purge_grace);
+            tokio::spawn(async move {
+                let mut tick = tokio::time::interval(every);
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                loop {
+                    tokio::select! {
+                        () = stop.cancelled() => return,
+                        _ = tick.tick() => {}
+                    }
+                    purge_deleted_repos(meta.as_ref(), &catalog, grace).await;
+                }
+            })
+        };
+        let listener = listener.map(|(listener, authorizer)| {
+            let addr = listener.local_addr().unwrap_or_else(|_| {
+                config
+                    .listen
+                    .unwrap_or_else(|| SocketAddr::from(([127, 0, 0, 1], 0)))
+            });
+            let state = api::git_auth::GitHttp {
+                authorizer,
+                meta: meta_for_listener,
+                runtime: runtime.clone(),
+            };
+            let task = api::git_auth::serve_git_listener(listener, state, stop.clone());
+            tracing::info!(%addr, "serving the git listener");
+            (addr, task)
+        });
+        Self {
+            runtime,
+            stop,
+            purge,
+            listener,
+            repair,
+        }
+    }
+
+    /// The git listener's address, when it is served.
+    fn listen_addr(&self) -> Option<SocketAddr> {
+        self.listener.as_ref().map(|(addr, _)| *addr)
+    }
+
+    /// Stops the purge (abandoning a pass that outlasts `PURGE_STOP_WAIT`), then every
+    /// sequencer.
+    async fn stop(self) {
+        const PURGE_STOP_WAIT: Duration = Duration::from_secs(5);
+        self.stop.cancel();
+        self.repair.0.cancel();
+        self.repair.1.abort();
+        let mut purge = self.purge;
+        if tokio::time::timeout(PURGE_STOP_WAIT, &mut purge)
+            .await
+            .is_err()
+        {
+            tracing::warn!("a repository purge pass outlasted the shutdown wait; abandoned");
+            purge.abort();
+        }
+        if let Some((_, listener)) = self.listener
+            && tokio::time::timeout(PURGE_STOP_WAIT, listener)
+                .await
+                .is_err()
+        {
+            tracing::warn!("the git listener outlasted the shutdown wait; abandoned");
+        }
+        self.runtime.sequencers.shutdown().await;
+    }
+}
+
+/// One pass of the purge of deleted repositories over every namespace (GT1 Task 13); a
+/// failure is logged and the next pass tries again.
+#[cfg(feature = "git")]
+async fn purge_deleted_repos(
+    meta: &dyn MetaStore,
+    catalog: &loams_git::BucketRepoCatalog,
+    grace: Duration,
+) {
+    let namespaces = match meta
+        .namespaces(loams_common::meta::Consistency::Local)
+        .await
+    {
+        Ok(namespaces) => namespaces,
+        Err(err) => {
+            tracing::warn!(%err, "listing namespaces for the repository purge failed");
+            return;
+        }
+    };
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX));
+    for ns in namespaces {
+        match catalog.purge_deleted(ns.id, now, grace).await {
+            Ok(report) if report.purged > 0 => {
+                tracing::info!(ns = %ns.id, purged = report.purged, "purged deleted repositories");
+            }
+            Ok(_) => {}
+            Err(err) => tracing::warn!(ns = %ns.id, %err, "purging deleted repositories failed"),
         }
     }
 }
@@ -1437,7 +1821,7 @@ impl Server {
         #[cfg(feature = "live")]
         let started = Self::start_with_live(config).await;
         #[cfg(not(feature = "live"))]
-        let started = Self::start_single(config, no_sweep()).await;
+        let started = Self::start_single(config, no_sweep(), Prebuilt::default()).await;
         started
     }
 
@@ -1447,6 +1831,9 @@ impl Server {
     #[cfg(feature = "live")]
     async fn start_with_live(config: ServerConfig) -> Result<Self, ServerError> {
         {
+            // Built once, before anything is bound: Live's listener and the
+            // node's surfaces share it (LV1 plan Task 10).
+            let auth = crate::auth::Auth::from_config(&config.auth).map_err(ServerError::Config)?;
             let live = match config.live.clone() {
                 Some(live) => {
                     #[cfg(feature = "live-tikv")]
@@ -1461,7 +1848,7 @@ impl Server {
                     let covered = false;
                     let bundles =
                         Store::from_url(&bucket_url(&config)?, Vec::<(String, String)>::new())?;
-                    Some(LiveRuntime::start(live, bundles, !covered).await?)
+                    Some(LiveRuntime::start(live, bundles, !covered, auth.clone()).await?)
                 }
                 None => None,
             };
@@ -1473,7 +1860,11 @@ impl Server {
                 .collect();
             #[cfg(not(feature = "live-tikv"))]
             let sweep = no_sweep();
-            match Self::start_single(config, sweep).await {
+            let pre = Prebuilt {
+                auth: Some(auth),
+                live: live.as_ref().map(|live| live.handle.routes()),
+            };
+            match Self::start_single(config, sweep, pre).await {
                 Ok(mut server) => {
                     server.live = live;
                     Ok(server)
@@ -1489,18 +1880,22 @@ impl Server {
     }
 
     /// `dev` or `standalone`: the metastore, then every role.
-    async fn start_single(config: ServerConfig, sweep: Sweep) -> Result<Self, ServerError> {
+    async fn start_single(
+        config: ServerConfig,
+        sweep: Sweep,
+        pre: Prebuilt,
+    ) -> Result<Self, ServerError> {
         let store = Store::from_url(&bucket_url(&config)?, Vec::<(String, String)>::new())?;
         #[cfg(feature = "tikv")]
         if let MetaBackend::Tikv(tikv) = &config.meta {
-            return Self::start_on_tikv(tikv.clone(), store, config, sweep).await;
+            return Self::start_on_tikv(tikv.clone(), store, config, sweep, pre).await;
         }
         #[cfg(not(feature = "tikv"))]
         let Sweep = sweep;
         let mut meta_config = MetaConfig::new(NODE_ID, config.data_dir.join("meta"), store.clone());
         meta_config.snapshot_every = config.snapshot_every;
         let node = MetaNode::start(meta_config, &Router::new()).await?;
-        match Self::start_on(node.clone(), store, config).await {
+        match Self::start_on(node.clone(), store, config, pre).await {
             Ok(server) => Ok(server),
             Err(err) => {
                 if let Err(shutdown) = node.shutdown().await {
@@ -1516,6 +1911,7 @@ impl Server {
         node: MetaNode,
         store: Store,
         config: ServerConfig,
+        pre: Prebuilt,
     ) -> Result<Self, ServerError> {
         // A no-op once the node is initialized, so restarts keep their state.
         node.initialize([NODE_ID]).await?;
@@ -1527,7 +1923,7 @@ impl Server {
             MetaClientConfig::default(),
         );
         let meta_store: Arc<dyn MetaStore> = meta.clone().into();
-        let mut server = Self::serve_single(meta_store, store, config).await?;
+        let mut server = Self::serve_single(meta_store, store, config, pre).await?;
         server.node = Some(node);
         server.meta = Some(meta);
         Ok(server)
@@ -1542,11 +1938,12 @@ impl Server {
         store: Store,
         config: ServerConfig,
         sweep: Sweep,
+        pre: Prebuilt,
     ) -> Result<Self, ServerError> {
         let meta = loams_meta_tikv::TikvMeta::open(tikv).await?;
         let gc = TikvGc::start(&meta, sweep)?;
         let meta_store: Arc<dyn MetaStore> = Arc::new(meta);
-        match Self::serve_single(meta_store, store, config).await {
+        match Self::serve_single(meta_store, store, config, pre).await {
             Ok(mut server) => {
                 server.tikv_gc = Some(gc);
                 Ok(server)
@@ -1564,6 +1961,7 @@ impl Server {
         meta_store: Arc<dyn MetaStore>,
         store: Store,
         mut config: ServerConfig,
+        pre: Prebuilt,
     ) -> Result<Self, ServerError> {
         let (listener, local_addr) = bind(config.listen).await?;
         // After the leader, before the collection service (row T0-6).
@@ -1577,6 +1975,7 @@ impl Server {
             forward_stats: Arc::new(ForwardStats::default()),
             extra_sources: Vec::new(),
             node_info: None,
+            pre,
         };
         let parts = match Self::assemble(&mut config, store, setup).await {
             Ok(parts) => parts,
@@ -1636,6 +2035,8 @@ impl Server {
             es: parts.es,
             #[cfg(feature = "graph")]
             graph: parts.graph,
+            #[cfg(feature = "git")]
+            git: parts.git,
             cluster: None,
         };
         // The runtime after the collection service, before the listener
@@ -1739,6 +2140,8 @@ impl Server {
                     es: parts.es,
                     #[cfg(feature = "graph")]
                     graph: parts.graph,
+                    #[cfg(feature = "git")]
+                    git: parts.git,
                     cluster: Some(ClusterRuntime {
                         node_id,
                         roles,
@@ -1904,6 +2307,7 @@ impl Server {
                 node: node.clone(),
                 join_changed,
             })),
+            pre: Prebuilt::default(),
         };
         // After the leader, before the collection service (row T0-6).
         let durable = match Durable::start(config, node_id).await {
@@ -1944,14 +2348,23 @@ impl Server {
             forward_stats,
             extra_sources,
             node_info,
+            pre,
         } = setup;
         // Built before anything is bound: a bad key file or OIDC setting
         // stops the start with nothing to undo. A cluster node is not
         // guarded (validate_auth keeps it off).
-        let auth = match config.cluster {
-            None => crate::auth::Auth::from_config(&config.auth).map_err(ServerError::Config)?,
-            Some(_) => crate::auth::Auth::off(),
+        #[cfg(feature = "live")]
+        let live = pre.live;
+        let auth = match (pre.auth, &config.cluster) {
+            (Some(auth), None) => auth,
+            (None, None) => {
+                crate::auth::Auth::from_config(&config.auth).map_err(ServerError::Config)?
+            }
+            (_, Some(_)) => crate::auth::Auth::off(),
         };
+        // The principal store (API2 Tasks 6 and 7): its sessions and API
+        // keys authenticate through `auth` from here on.
+        let principals = crate::auth::Principals::attach(&auth, meta_store.clone(), store.clone());
         let guard = crate::auth::AuthLayerState::new(auth.clone(), &[]);
         let main_guard =
             crate::auth::AuthLayerState::new(auth.clone(), crate::auth::layer::MAIN_PUBLIC_PATHS);
@@ -2114,6 +2527,42 @@ impl Server {
             None => None,
         };
 
+        // Loams Git's listener (GT1 Task 16): bound, and its token file read, here, where a
+        // failure still has nothing to undo but the cache; served once the git runtime starts.
+        #[cfg(feature = "git")]
+        let git_listener = match config
+            .git
+            .listen
+            .filter(|_| roles.gateway && config.git.enabled)
+        {
+            Some(addr) => {
+                let bound = async {
+                    let tokens = config
+                        .git
+                        .tokens
+                        .as_deref()
+                        .ok_or_else(|| "--git-tokens is required".to_string())?;
+                    let authorizer =
+                        api::git_auth::LoopbackDevAuthorizer::load(tokens, meta_store.clone())?;
+                    let listener = tokio::net::TcpListener::bind(addr)
+                        .await
+                        .map_err(|err| err.to_string())?;
+                    Ok::<_, String>((listener, Arc::new(authorizer)))
+                }
+                .await;
+                match bound {
+                    Ok(bound) => Some(bound),
+                    Err(reason) => {
+                        if let Err(err) = cache.close().await {
+                            tracing::warn!(%err, "closing the cache after a failed start");
+                        }
+                        return Err(ServerError::GitListen { addr, reason });
+                    }
+                }
+            }
+            None => None,
+        };
+
         // Validated above, so this cannot fail. A node without the `log`
         // role still holds a writer (the service needs one), but serves no
         // write route, so it never appends.
@@ -2246,6 +2695,14 @@ impl Server {
         if let Some(tier) = &hot {
             collections.set_hot_tier(Arc::new(tier.clone()));
         }
+        // The node registry, for Loams Graph's ownership on a cluster node (GR1 Task 12).
+        #[cfg(feature = "graph")]
+        let node_registry = routing
+            .as_ref()
+            .map(|(placement, _)| placement.registry().clone());
+        // The placement, for Loams Git's sequencer owners on a cluster node (GT1 Task 14).
+        #[cfg(feature = "git")]
+        let git_placement = routing.as_ref().map(|(placement, _)| placement.clone());
         if let Some((placement, remote)) = routing {
             collections.set_placement(placement, remote);
         }
@@ -2321,15 +2778,51 @@ impl Server {
                 store.clone(),
                 reader.clone(),
                 config.log.node_id,
+                node_registry,
             )?),
             false => None,
         };
         let house = match roles.gateway {
-            true => crate::api::house_proxy::HouseProxy::start(&config.house).map_err(|err| {
-                ServerError::Config(format!("the House proxy's HTTP client: {err}"))
-            })?,
+            true => crate::api::house_proxy::HouseProxy::start(&config.house)
+                .map_err(|err| ServerError::Config(format!("the House proxy: {err}")))?,
             false => None,
         };
+        // Loams Git on every gateway node (GT1 Task 13), after the last fallible step so its
+        // purge task never outlives a failed start. On a cluster node each repository's
+        // sequencer runs on its rendezvous owner under the `task/git-seq/<ns>/<repo>` lease, and
+        // other nodes forward commits there (GT1 Task 14); fencing by the bucket keeps any
+        // second writer safe.
+        #[cfg(feature = "git")]
+        let git = (roles.gateway && config.git.enabled).then(|| {
+            let cluster = git_placement.as_ref().map(|placement| {
+                let me = placement.registry().me();
+                loams_git::Cluster {
+                    placement: Arc::new(api::git_internal::RegistryPlacement::new(
+                        placement.clone(),
+                    )),
+                    leases: Arc::new(api::git_internal::MetaLeases::new(
+                        meta_store.clone(),
+                        format!("v1;{};{};{}", me.node_id, me.incarnation, me.addr),
+                    )),
+                    forwarder: Arc::new(api::git_internal::HttpSeqForwarder::new(internal.clone())),
+                    config: loams_git::OwnerConfig::default(),
+                }
+            });
+            let sink = Arc::new(api::git_events::StreamSink::new(
+                meta_store.clone(),
+                writer.clone(),
+                config.cloudevents,
+                node_id,
+            ));
+            GitRuntimeHandle::start(
+                &config.git,
+                meta_store.clone(),
+                store.clone(),
+                sink,
+                cluster,
+                git_listener,
+            )
+        });
         let state = AppState {
             meta: meta_store.clone(),
             writer: writer.clone(),
@@ -2355,16 +2848,30 @@ impl Server {
             #[cfg(feature = "graph")]
             graph: graph.as_ref().map(|g| g.admin.clone()),
             house,
+            #[cfg(feature = "git")]
+            git: git.as_ref().map(|g| g.runtime.clone()),
+            principals,
+            #[cfg(feature = "live")]
+            live,
         };
         let (app, tailscale) = match (roles.gateway, config.cluster.is_some()) {
             (true, false) => {
+                #[cfg(feature = "live")]
+                let main_state = without_live_beyond_loopback(&state, config.listen);
                 let router = api::router(state);
+                #[cfg(feature = "live")]
+                let main_router = match main_state {
+                    Some(main_state) => api::router(main_state),
+                    None => router.clone(),
+                };
+                #[cfg(not(feature = "live"))]
+                let main_router = router.clone();
                 // The same API behind the layer that honours Tailscale
                 // identity headers; the main port strips them.
                 let tailscale = tailscale_listener.map(|(listener, addr)| {
-                    TailscaleTarget::start(listener, addr, tailscale_guard.wrap(router.clone()))
+                    TailscaleTarget::start(listener, addr, tailscale_guard.wrap(router))
                 });
-                (main_guard.wrap(router), tailscale)
+                (main_guard.wrap(main_router), tailscale)
             }
             (true, true) => (api::router(state), None),
             (false, _) => (api::internal_router(state), None),
@@ -2424,12 +2931,20 @@ impl Server {
             es,
             #[cfg(feature = "graph")]
             graph,
+            #[cfg(feature = "git")]
+            git,
         })
     }
 
     /// The address the HTTP API listens on.
     pub fn local_addr(&self) -> SocketAddr {
         self.local_addr
+    }
+
+    /// The git listener's address (`--git-listen`, GT1 Task 16), when it is served.
+    #[cfg(feature = "git")]
+    pub fn git_listen_addr(&self) -> Option<SocketAddr> {
+        self.git.as_ref().and_then(GitRuntimeHandle::listen_addr)
     }
 
     /// How many scheduled graph catalog sweeps have completed, when Loams Graph is served
@@ -2440,6 +2955,26 @@ impl Server {
         self.graph
             .as_ref()
             .map(|g| g.sweeps.load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    /// How many graph checkpoints the maintenance task has taken, when Loams Graph is served
+    /// (GR1 Task 13).
+    #[cfg(feature = "graph")]
+    #[must_use]
+    pub fn graph_checkpoints(&self) -> Option<u64> {
+        self.graph
+            .as_ref()
+            .map(|g| g.checkpoints.load(std::sync::atomic::Ordering::Relaxed))
+    }
+
+    /// How many graphs the maintenance task has evicted, when Loams Graph is served (GR1 Task
+    /// 14).
+    #[cfg(feature = "graph")]
+    #[must_use]
+    pub fn graph_evictions(&self) -> Option<u64> {
+        self.graph
+            .as_ref()
+            .map(|g| g.evictions.load(std::sync::atomic::Ordering::Relaxed))
     }
 
     /// The graph data directory, when Loams Graph is served with one (GR1 Task 5).
@@ -2668,6 +3203,12 @@ impl Server {
         if let Some(graph) = self.graph {
             shutdown_phase("graph");
             graph.stop().await;
+        }
+        // Loams Git's sequencers answer what they hold and write their last hints.
+        #[cfg(feature = "git")]
+        if let Some(git) = self.git {
+            shutdown_phase("git");
+            git.stop().await;
         }
         shutdown_phase("collections");
         self.collections.shutdown().await;

@@ -1,0 +1,8 @@
+{
+  "drives": [
+    {
+      "name": "Home",
+      "path": "/home/dev"
+    }
+  ]
+}

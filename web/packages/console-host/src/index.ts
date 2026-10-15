@@ -18,6 +18,18 @@ export {
   type Risk,
 } from './actions.js';
 export {
+  AGENTD_SERVICES,
+  type AgentdHost,
+  type AgentdReach,
+  type AgentdRpcServices,
+  type AgentdService,
+  gateGitWrites,
+  gateTransport,
+  isAgentdService,
+  isGitWrite,
+  noAgentdHost,
+} from './agentd.js';
+export {
   type BootOptions,
   boot,
   type ConsoleHandle,
@@ -45,15 +57,31 @@ export {
   parseCatalog,
   parsePatch,
 } from './catalog.js';
-export { GuardError, guard } from './guard.js';
+export { GuardError, type GuardPolicy, guard, injectsAgentd } from './guard.js';
 export {
   type Edition,
+  MANIFEST_KEYS,
   ManifestError,
   type PluginManifest,
   pluginId,
   type Tier,
   validateManifest,
 } from './manifest.js';
+export {
+  chooseBootMode,
+  defaultMode,
+  isMode,
+  MODE_HOME,
+  MODE_KEY,
+  MODES,
+  type Mode,
+  ModeController,
+  type ModeService,
+  type ModeStorage,
+  modeOfPath,
+  readStoredMode,
+  SHELL_COMMAND_EVENT,
+} from './mode.js';
 export {
   decideCall,
   isPermission,
@@ -71,6 +99,7 @@ export {
   sandboxScriptId,
 } from './sandbox.js';
 export {
+  type ConsoleAccount,
   type FlagsService,
   type Location,
   type PageProps,
@@ -80,6 +109,7 @@ export {
   type RpcServices,
   type ServiceName,
   type Services,
+  type SessionGate,
   type SessionService,
   service,
   watch,

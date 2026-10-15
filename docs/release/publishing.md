@@ -137,7 +137,7 @@ job ends.
    release, it is on the release branch at the workspace version, the crate list
    matches the manifests, and every crate packages and compiles the way crates.io
    will compile it. **Nothing is uploaded by this step.**
-3. Dispatch `Release (crates.io)` with `tag: vX.Y.Z` and `publish: true`. The
+3. Dispatch `Release crates` with `tag: vX.Y.Z` and `publish: true`. The
    same guard and verify run again, the `crates-io` environment asks for a
    reviewer's approval, and the crates upload in dependency order.
 4. A failure part way through is safe to repeat: cargo refuses a version that is
@@ -167,7 +167,5 @@ job ends.
   marketplace, not publishing Loams itself.
 - D292 (cargo-dist for binaries and GitHub Releases), D294 (`cargo install
   loams`), D298 (the CLI track) and D400 (the `loams` package namespace).
-- D220 and D552 (the open-core boundary and the `scripts/ci/no-metering.sh`
-  guard). A publish path may not add a billing-grade name or a private package
-  to anything it uploads; the guard runs over the workflows themselves, because
-  they are tracked files.
+- D220 and D552 (the open-core boundary). A publish path may not add a
+  billing-grade name or a private package to anything it uploads.

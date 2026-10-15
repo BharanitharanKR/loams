@@ -1,0 +1,46 @@
+syntax = "proto3";
+
+// Notifications (design §53 §6.5 G19; plan SD1 Task 4): turn ends, approvals,
+// questions, errors and group events, in the app on the web and as OS
+// notifications on the desktop. Served since SD1 Task 14 (ndjson
+// `WatchNotifications`). See studio.proto for the package's rules.
+package loams.agentd.v1;
+
+import "loams/options/v1/options.proto";
+
+service NotificationService {
+  option (loams.options.v1.module) = {
+    name: "agentd.notifications"
+    summary: "Loams Studio's notifications from the daemon."
+    unstable: true
+  };
+
+  // G19: one notification per message: first the last 200 the daemon holds,
+  // oldest first, then each new one as it happens.
+  rpc WatchNotifications(WatchNotificationsRequest) returns (stream WatchNotificationsResponse);
+}
+
+enum NotificationKind {
+  NOTIFICATION_KIND_UNSPECIFIED = 0;
+  NOTIFICATION_KIND_TURN_DONE = 1;
+  NOTIFICATION_KIND_APPROVAL = 2;
+  NOTIFICATION_KIND_QUESTION = 3;
+  NOTIFICATION_KIND_ERROR = 4;
+  NOTIFICATION_KIND_GROUP_READY = 5;
+  NOTIFICATION_KIND_CHECK_FAILED = 6;
+}
+
+message Notification {
+  string id = 1;
+  NotificationKind kind = 2;
+  optional string chat_id = 3;
+  optional string group_id = 4;
+  string title = 5;
+  int64 created_at_ms = 6;
+}
+
+message WatchNotificationsRequest {}
+
+message WatchNotificationsResponse {
+  Notification notification = 1;
+}

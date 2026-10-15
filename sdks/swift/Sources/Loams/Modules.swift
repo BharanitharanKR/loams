@@ -110,6 +110,117 @@ public struct LiveModule: Sendable {
         stream.policy = resume
         return stream
     }
+
+    /// `loams.live.admin` — deploys, rollbacks, index status and function logs.
+    ///
+    /// A separate service in the same package (`LiveAdminService`), served on the
+    /// engine's main port behind its authentication (LV1 Task 12).
+    public var admin: LiveAdminModule { LiveAdminModule(invoker: invoker) }
+}
+
+/// `loams.live.admin` — Live administration: deploy, roll back, index status and
+/// function logs (`loams.live.v1.LiveAdminService`, LV1 Task 10).
+///
+/// Its package is unstable, so its wire contract may still change (§44 §10.3).
+/// It is the TypeScript and Rust SDKs' `live.admin` module, call for call. The
+/// engine serves it on its main Connect port behind the same authentication as
+/// every other service, so a client with authentication on needs a credential.
+public struct LiveAdminModule: Sendable {
+    let invoker: CallInvoker
+
+    public init(invoker: CallInvoker) {
+        self.invoker = invoker
+    }
+
+    /// Deploys an app bundle and its schema (`DeployRequest`: `bundle`, `schema`,
+    /// `expected_active`, `message`, `dry_run`).
+    ///
+    /// Its request has **no** `idempotency_key` field, so R3 leaves it alone and it
+    /// is never retried. Keying it would invent a field the schema does not have.
+    /// A deploy that races another answers `live_deploy_conflict`.
+    public func deploy(_ request: DynamicMessage, options: CallOptions = .init()) async throws -> DynamicMessage {
+        let binding = try loamsRequireBinding(module: "live.admin", call: "Deploy")
+        return try await invoker.unary(binding: binding, request: request, overrides: options)
+    }
+
+    /// One page of an app's deployments, newest first (AIP-158).
+    ///
+    /// Retry-safe. ``listAllDeployments(_:options:)`` follows the tokens for you.
+    public func listDeployments(
+        _ request: DynamicMessage,
+        options: CallOptions = .init()
+    ) async throws -> DynamicMessage {
+        let binding = try loamsRequireBinding(module: "live.admin", call: "ListDeployments")
+        return try await invoker.unary(binding: binding, request: request, overrides: options)
+    }
+
+    /// Every deployment, across every page, as the `deployments` items.
+    public func listAllDeployments(
+        _ request: DynamicMessage,
+        options: CallOptions = .init()
+    ) -> AsyncThrowingStream<JSONValue, any Error> {
+        let invoker = self.invoker
+        let binding = loamsBinding(module: "live.admin", call: "ListDeployments")
+            ?? CallBinding(
+                module: "live.admin", name: "ListDeployments", protoName: "listDeployments",
+                method: "ListDeployments", rpc: LoamsService.liveAdmin + "/ListDeployments",
+                service: LoamsService.liveAdmin, package: "loams.live.v1",
+                idempotency: .none, retry: .safe, streaming: .unary
+            )
+        let field = binding.pagination?.itemsField ?? "deployments"
+        return loamsPaginate(
+            binding: binding,
+            fetch: { (page: DynamicMessage, options: CallOptions) async throws -> DynamicMessage in
+                try await invoker.unary(binding: binding, request: page, overrides: options)
+            },
+            request: request,
+            items: { loamsItems($0, field: field) },
+            options: options
+        )
+    }
+
+    /// One deployment by id. Retry-safe.
+    public func getDeployment(
+        _ request: DynamicMessage,
+        options: CallOptions = .init()
+    ) async throws -> DynamicMessage {
+        let binding = try loamsRequireBinding(module: "live.admin", call: "GetDeployment")
+        return try await invoker.unary(binding: binding, request: request, overrides: options)
+    }
+
+    /// Makes a deployment the active one: a rollback, or a roll forward.
+    ///
+    /// A mutation with no idempotency key, so it is never retried.
+    public func activateDeployment(
+        _ request: DynamicMessage,
+        options: CallOptions = .init()
+    ) async throws -> DynamicMessage {
+        let binding = try loamsRequireBinding(module: "live.admin", call: "ActivateDeployment")
+        return try await invoker.unary(binding: binding, request: request, overrides: options)
+    }
+
+    /// Where each index's backfill is. Retry-safe.
+    public func getIndexStatus(
+        _ request: DynamicMessage,
+        options: CallOptions = .init()
+    ) async throws -> DynamicMessage {
+        let binding = try loamsRequireBinding(module: "live.admin", call: "GetIndexStatus")
+        return try await invoker.unary(binding: binding, request: request, overrides: options)
+    }
+
+    /// Tails the app's function logs over a server stream (R7).
+    public func tailLogs(
+        _ request: DynamicMessage,
+        resume: StreamResume<DynamicMessage, DynamicMessage>? = nil
+    ) async throws -> ResumableServerStream<DynamicMessage, DynamicMessage> {
+        let binding = try loamsRequireBinding(module: "live.admin", call: "TailLogs")
+        var stream: ResumableServerStream<DynamicMessage, DynamicMessage> = try await invoker.serverStream(
+            binding: binding,
+            request: request
+        )
+        stream.policy = resume
+        return stream
+    }
 }
 
 /// `loams.tables` — the table half of `loams.live.v1` (design §44 §7.2).
@@ -145,12 +256,14 @@ public struct TablesModule: Sendable {
         )
     }
 
-    /// Deploys the live tables.
+    /// Deploys the live tables. **Moved:** this is `live.admin.deploy` now.
     ///
-    /// Its request has **no** `idempotency_key` field, so R3 leaves it alone and it
-    /// is never retried. Keying it would invent a field the schema does not have.
+    /// LV1 Task 10 moved `Deploy` to `loams.live.v1.LiveAdminService` and the
+    /// engine no longer serves `LiveService/Deploy`, so this forwards there. It is
+    /// kept so code written against earlier previews keeps working; the TypeScript
+    /// and Rust SDKs dropped it.
+    @available(*, deprecated, renamed: "LiveAdminModule.deploy", message: "use client.live.admin.deploy")
     public func deploy(_ request: DynamicMessage, options: CallOptions = .init()) async throws -> DynamicMessage {
-        let binding = try loamsRequireBinding(module: "tables", call: "Deploy")
-        return try await invoker.unary(binding: binding, request: request, overrides: options)
+        try await LiveAdminModule(invoker: invoker).deploy(request, options: options)
     }
 }

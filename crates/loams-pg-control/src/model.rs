@@ -46,6 +46,14 @@ use crate::store::StoreError;
 /// The format byte in front of every stored record.
 pub const FORMAT: u8 = 1;
 
+/// Whether this release reads a record of format byte `format`: the
+/// registry's range for `pg_control.record` (UP1 Task 1), not only
+/// [`FORMAT`].
+pub fn format_readable(format: u8) -> bool {
+    loams_common::formats::check(loams_common::formats::PG_CONTROL_RECORD, u16::from(format))
+        .is_ok()
+}
+
 /// The tags of `pg-control`'s keys (§46 §6.2, plus Task 5's operations `O`,
 /// their indexes `Q` and the idempotency ledger `I`).
 pub const TAGS: [u8; 9] = *b"xXECRDOQI";
@@ -140,10 +148,14 @@ pub fn project_lease(project_id: &str) -> String {
 pub struct Cu(pub u16);
 
 /// A pool mode of PgDog (§46 §8).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum PoolMode {
+    #[default]
     Transaction,
     Session,
+    /// Added by Task 11 (the proto's `POOL_MODE_STATEMENT`); last, so the
+    /// postcard indexes of the others do not move.
+    Statement,
 }
 
 /// Which WAL service a project's branches write to (§46 §9: `loams-wal`
@@ -431,8 +443,9 @@ impl Record for BranchGuardRec {
 // ---- Endpoint ----
 
 /// `read_write` (one per branch) or `read_only`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum EndpointType {
+    #[default]
     ReadWrite,
     ReadOnly,
 }
@@ -476,6 +489,73 @@ pub struct EndpointRec {
     pub backend_addr: Option<String>,
     /// Why the endpoint is `Failed`.
     pub failure: Option<String>,
+    /// When the API created it, and when the API or a reconciler last
+    /// wrote it (Task 11).
+    #[serde(default)]
+    pub created_at_ms: u64,
+    #[serde(default)]
+    pub updated_at_ms: u64,
+    /// When its computes crashed, within the last
+    /// [`CRASH_WINDOW_MS`]: the third puts the endpoint in `Failed`
+    /// (§46 §7.1). `StartEndpoint` clears it.
+    #[serde(default)]
+    pub crashes: Vec<u64>,
+    /// `RestartEndpoint`: replace the current compute with a new one behind
+    /// the same address (§46 §7.1: replace, never restart).
+    #[serde(default)]
+    pub replace_compute: bool,
+    /// Bumped by every `UpdateEndpoint` that changes what the compute spec
+    /// holds (`pg_settings`, `suspend_timeout`), so the spec's inputs differ
+    /// even when a setting goes back to an earlier value (Task 11's push of
+    /// a changed spec).
+    #[serde(default)]
+    pub settings_version: u64,
+    /// The operations on this endpoint the reconciler has not finished
+    /// (Task 11): the API appends, the reconciler removes, both in the
+    /// batch that writes the endpoint. At most [`MAX_OPEN_ENDPOINT_OPS`].
+    #[serde(default)]
+    pub open_ops: Vec<String>,
+}
+
+/// How long a compute crash counts toward `Failed` (§46 §7.1: three
+/// crashes within 10 minutes).
+pub const CRASH_WINDOW_MS: u64 = 10 * 60 * 1000;
+
+/// The most operations an endpoint has open at once; one more is refused
+/// (`aborted`) until the reconciler finishes some.
+pub const MAX_OPEN_ENDPOINT_OPS: usize = 16;
+
+impl EndpointRec {
+    /// A new endpoint at rest: `Idle`, desired `Suspended`, no compute.
+    pub fn new(
+        project_id: impl Into<String>,
+        id: impl Into<String>,
+        branch_id: impl Into<String>,
+        kind: EndpointType,
+    ) -> Self {
+        EndpointRec {
+            project_id: project_id.into(),
+            id: id.into(),
+            branch_id: branch_id.into(),
+            kind,
+            min_cu: Cu(1),
+            max_cu: Cu(1),
+            suspend_timeout_s: 300,
+            pool_mode: PoolMode::Transaction,
+            pg_settings: BTreeMap::new(),
+            desired: DesiredState::Suspended,
+            state: EndpointState::Idle,
+            compute_id: None,
+            backend_addr: None,
+            failure: None,
+            created_at_ms: 0,
+            updated_at_ms: 0,
+            crashes: Vec::new(),
+            replace_compute: false,
+            settings_version: 0,
+            open_ops: Vec::new(),
+        }
+    }
 }
 
 /// `(project_id, endpoint_id)`.
@@ -534,17 +614,35 @@ pub struct ComputeBinding {
     pub endpoint_id: String,
 }
 
+/// The warm pool a compute was started for (§46 §7.3; PG2 Task 14): its
+/// Loams namespace (a Kubernetes Pod serves only Services of its own
+/// namespace, `loams-pg-<ns>`), the Postgres major and the image, pinned
+/// by digest. The region is the deployment's: one `pg-control` serves one.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+pub struct PoolKey {
+    pub namespace: String,
+    pub pg_version: u32,
+    pub image: String,
+}
+
 /// One compute process (§46 §3; §28 §5.3).
 ///
 /// Task 8 replaced `project_id` and `endpoint_id` with `binding` (a
 /// warm-pool compute serves no project until it is bound, Task 14) and
-/// added `ctl_url`. `FORMAT` stays 1: no compute record exists outside
-/// tests (R5.11's precedent).
+/// added `ctl_url`; Task 14 added `pool` and `bound_at_ms`. `FORMAT`
+/// stays 1: no compute record exists outside tests (R5.11's precedent;
+/// no release has shipped endpoints yet, R14.3).
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ComputeRec {
     pub id: String,
     /// `None`: unbound (the spec upcall answers `empty`).
     pub binding: Option<ComputeBinding>,
+    /// The warm pool it was started for (Task 14); kept once it is bound.
+    /// `None`: started for its endpoint.
+    pub pool: Option<PoolKey>,
+    /// When a warm-pool compute was bound to its endpoint: its start
+    /// timeout counts from here, not from its creation.
+    pub bound_at_ms: Option<u64>,
     pub spec_version: u64,
     pub status: ComputeStatus,
     /// The id of the key its upcall JWT was signed with (never the key):
@@ -699,6 +797,12 @@ pub enum OperationKind {
     ProjectDelete,
     BranchCreate,
     BranchDelete,
+    /// Task 11's endpoint operations, after Task 5's so their postcard
+    /// indexes do not move.
+    EndpointStart,
+    EndpointSuspend,
+    EndpointRestart,
+    EndpointDelete,
 }
 
 impl OperationKind {
@@ -709,6 +813,10 @@ impl OperationKind {
             OperationKind::ProjectDelete => "postgres.project.delete",
             OperationKind::BranchCreate => "postgres.branch.create",
             OperationKind::BranchDelete => "postgres.branch.delete",
+            OperationKind::EndpointStart => "postgres.endpoint.start",
+            OperationKind::EndpointSuspend => "postgres.endpoint.suspend",
+            OperationKind::EndpointRestart => "postgres.endpoint.restart",
+            OperationKind::EndpointDelete => "postgres.endpoint.delete",
         }
     }
 }
@@ -763,6 +871,10 @@ pub struct OperationRec {
     /// R5.11's fields (no operation exists outside tests).
     #[serde(default)]
     pub progress: Option<OperationProgress>,
+    /// The endpoint an endpoint operation acts on (Task 11; the target's
+    /// `endpoint`). `FORMAT` stays 1, as for `progress`.
+    #[serde(default)]
+    pub endpoint_id: Option<String>,
 }
 
 /// `(project_id, operation_id)`.

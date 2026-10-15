@@ -109,6 +109,31 @@ impl MetaStore for TikvMeta {
         self.stream_state_impl(id).await
     }
 
+    async fn ensure_graph_stream(
+        &self,
+        namespace: NamespaceId,
+        graph: &str,
+    ) -> MetaResult<StreamId> {
+        self.ensure_graph_stream_impl(namespace, graph).await
+    }
+
+    async fn ensure_system_stream(
+        &self,
+        namespace: NamespaceId,
+        name: &str,
+    ) -> MetaResult<StreamId> {
+        self.ensure_system_stream_impl(namespace, name).await
+    }
+
+    async fn drop_graph_stream(
+        &self,
+        namespace: NamespaceId,
+        graph: &str,
+        fence: Option<Fence>,
+    ) -> MetaResult<Option<StreamId>> {
+        self.drop_graph_stream_impl(namespace, graph, fence).await
+    }
+
     async fn create_link(
         &self,
         namespace: NamespaceId,
@@ -234,6 +259,15 @@ impl MetaStore for TikvMeta {
         key: &str,
     ) -> MetaResult<Option<Pointer>> {
         self.pointer_impl(namespace, key).await
+    }
+
+    async fn pointers_with_prefix(
+        &self,
+        _consistency: Consistency,
+        namespace: NamespaceId,
+        prefix: &str,
+    ) -> MetaResult<Vec<(String, Pointer)>> {
+        self.pointers_with_prefix_impl(namespace, prefix).await
     }
 
     // ----- Collections -----

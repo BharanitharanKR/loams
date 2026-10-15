@@ -26,7 +26,16 @@
 //! `ListConnectors` and `DescribeConnector` — and its client behind the
 //! `client` feature, exactly as `loams-live-proto` does for `LiveService`; that
 //! is where the `connectrpc` dependency and the `client` feature's body arrive.
+//!
+//! With the `graph` feature the crate also carries `loams.graph.v1` (Grafeo's
+//! Connect API) and its imports `loams.errors.v1`, `loams.operations.v1` and
+//! `loams.options.v1`, generated from the repository root's `proto/` tree (CN2
+//! owner ruling OR-20): `loams_flow_proto::loams::graph::v1`. These are a
+//! second copy of the types `loams-house-proto` generates for the three shared
+//! packages; nothing links both crates, so the two copies never meet (spike
+//! §8).
 
+#[allow(missing_debug_implementations, missing_docs, unreachable_pub)]
 mod generated {
     include!(concat!(env!("OUT_DIR"), "/_connectrpc.rs"));
 }

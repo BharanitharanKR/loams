@@ -18,6 +18,7 @@ use futures::stream::BoxStream;
 use tokio::sync::{mpsc, oneshot};
 pub use tokio_util::sync::CancellationToken;
 
+use loams_agentd_proto::approvals::{ApprovalDecision, ToolRisk};
 use loams_agentd_proto::{
     AgentEvent, HarnessId, Model, ReasoningLevel, RunRequest, SlashCommand, SteeringMode,
     UserInputAnswer, UserInputQuestion,
@@ -46,6 +47,29 @@ pub struct SteerMessage {
     pub message_id: Option<String>,
 }
 
+/// A supervised run's tool permission request (design §53 §8.1; plan SD1
+/// Task 13). The driver names the call, the tool and its arguments as the
+/// agent sent them; the engine redacts them before they are stored or shown.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ApprovalAsk {
+    /// The tool call's id as the agent names it (unique within the run).
+    pub call_id: String,
+    /// The agent's tool name (`Bash`, `commandExecution`, `edit`, …).
+    pub tool: String,
+    pub args: serde_json::Value,
+    pub risk: ToolRisk,
+}
+
+/// The approval bridge: ask, then wait for the person's decision. A dropped
+/// sender is a denial; a driver never treats it as an allow.
+pub type RequestApproval =
+    Box<dyn Fn(ApprovalAsk) -> oneshot::Receiver<ApprovalDecision> + Send + Sync>;
+
+/// Wait for an approval's answer: anything but an explicit allow denies.
+pub async fn approval_allows(answer: oneshot::Receiver<ApprovalDecision>) -> bool {
+    answer.await.is_ok_and(ApprovalDecision::allows)
+}
+
 /// Host-side controls handed to a run: input-request bridge + steering mailbox.
 pub struct RunControls {
     /// Shared execution gate held until the harness has shut down and reaped
@@ -57,6 +81,11 @@ pub struct RunControls {
     pub request_input: Box<
         dyn Fn(Vec<UserInputQuestion>) -> oneshot::Receiver<Vec<UserInputAnswer>> + Send + Sync,
     >,
+    /// The approval bridge of a `supervised` thread (SD1 Task 13). `Some`:
+    /// every tool permission the agent asks for waits for the person's
+    /// decision through it, and the driver never auto-approves. `None`
+    /// (`full-access`): the driver answers permissions itself, as before.
+    pub request_approval: Option<RequestApproval>,
     /// Steer prompts consumed at step/turn boundaries.
     pub steering: mpsc::Receiver<SteerMessage>,
     /// Cancel to interrupt the live run: the harness sends its protocol-level
@@ -69,6 +98,7 @@ impl std::fmt::Debug for RunControls {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("RunControls")
             .field("execution_lease", &self.execution_lease)
+            .field("supervised", &self.request_approval.is_some())
             .field("interrupt", &self.interrupt)
             .finish_non_exhaustive()
     }
@@ -113,6 +143,13 @@ pub trait Harness: Send + Sync {
     /// directly return true, and the engine retires its quiesce watchdogs
     /// for them; adapter-mediated ACP agents keep the watchdog backstop.
     fn deterministic_turn_end(&self) -> bool {
+        false
+    }
+    /// Whether the driver can supervise its agent's tool calls through
+    /// [`RunControls::request_approval`] (SD1 Task 13). The engine refuses
+    /// to run a supervised thread on a harness that cannot, rather than let
+    /// it run unsupervised.
+    fn supports_approvals(&self) -> bool {
         false
     }
     /// Whether a user-prompted turn has an authoritative completion signal.
@@ -178,6 +215,7 @@ pub trait Harness: Send + Sync {
 
 pub mod acp;
 pub(crate) mod adapter_install;
+pub mod approvals;
 pub mod archive_install;
 mod catalog;
 mod catalog_failure;

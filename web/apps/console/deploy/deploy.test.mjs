@@ -11,7 +11,7 @@ import {
   offeredModes,
   parseRuntimeConfig,
 } from '../src/runtime-config.ts';
-import { hostedConfig } from './config.mjs';
+import { agentdOrigins, hostedConfig } from './config.mjs';
 import { assetUrls, isJavaScript, smoke } from './smoke.mjs';
 import {
   checkBase,
@@ -335,6 +335,81 @@ describe('stage', () => {
       hosted: true,
       authMode: 'tailscale',
     });
+  });
+
+  // SD1 Task 30, ruling T26-9: Studio on the web calls the remote agentd hosts and frames
+  // their previews, which a CSP of `connect-src`/`frame-src 'self'` blocked.
+  test('LOAMS_AGENTD_ORIGINS joins connect-src and frame-src, origins only', () => {
+    const dist = fakeDist(join(tmp, 'agentd-dist'));
+    const out = join(tmp, 'agentd-out');
+    stage({
+      dist,
+      out,
+      env: {
+        ...AUTH,
+        LOAMS_AGENTD_ORIGINS: 'https://dev-box.example.com:8443, https://vm.example.com/',
+      },
+    });
+    const root = readFileSync(join(out, 'index.html'), 'utf8');
+    assert.match(
+      root,
+      /connect-src 'self' https:\/\/\*\.ts\.net https:\/\/auth\.loams\.dev https:\/\/dev-box\.example\.com:8443 https:\/\/vm\.example\.com;/,
+    );
+    assert.match(
+      root,
+      /frame-src 'self' https:\/\/dev-box\.example\.com:8443 https:\/\/vm\.example\.com;/,
+    );
+    assert.deepEqual(agentdOrigins({}), []);
+    for (const bad of [
+      'https://*.example.com',
+      'http://dev-box.example.com',
+      'https://dev-box.example.com/agentd',
+      'https://user@dev-box.example.com',
+      'javascript:alert(1)',
+      'dev-box.example.com',
+    ]) {
+      assert.throws(
+        () => agentdOrigins({ LOAMS_AGENTD_ORIGINS: bad }),
+        /LOAMS_AGENTD_ORIGINS/,
+        bad,
+      );
+    }
+    assert.deepEqual(agentdOrigins({ LOAMS_AGENTD_ORIGINS: 'http://localhost:8443' }), [
+      'http://localhost:8443',
+    ]);
+    // Vercel's static CSP must name them too.
+    assert.throws(
+      () =>
+        stage({
+          dist,
+          out: join(tmp, 'agentd-vercel'),
+          env: { ...AUTH, LOAMS_AGENTD_ORIGINS: 'https://dev-box.example.com:8443' },
+          target: 'vercel',
+          vercelJson: vercel,
+        }),
+      /connect-src lacks https:\/\/dev-box\.example\.com:8443/,
+    );
+    assert.throws(
+      () =>
+        checkVercelCsp(
+          {
+            headers: [
+              {
+                source: '/(.*)',
+                headers: [
+                  {
+                    key: 'Content-Security-Policy',
+                    value: "connect-src 'self' https://a.example; frame-src 'self'",
+                  },
+                ],
+              },
+            ],
+          },
+          ["'self'", 'https://a.example'],
+          ['https://a.example'],
+        ),
+      /frame-src lacks https:\/\/a\.example/,
+    );
   });
 
   test('stages for Vercel without Cloudflare files or source maps', () => {

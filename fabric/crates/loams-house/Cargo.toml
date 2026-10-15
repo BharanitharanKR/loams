@@ -71,6 +71,19 @@ arrow-array.workspace = true
 arrow-ipc.workspace = true
 # The `JSON_ROWS` header lines and `DESCRIBE`'s answer.
 serde_json.workspace = true
+# The catalog and DDL for lake tables (HS1 Task 10): Iceberg metadata through
+# `loams-house-lake` (iceberg 0.10's arrow 58 stays there, R0.3), metadata files
+# written to the House's store (`loams-store`, engine workspace, R0.3), the local
+# catalog's SQLite file, the REST catalog's HTTP client, and `HouseCatalog`'s
+# `dyn` async methods.
+loams-house-lake = { path = "../loams-house-lake" }
+loams-store = { path = "../../../crates/loams-store" }
+rusqlite.workspace = true
+reqwest.workspace = true
+async-trait.workspace = true
+rustls.workspace = true
+tokio-rustls.workspace = true
+rcgen.workspace = true
 
 # Only with `inproc-worker`: the worker's serve loop, and the `links = "chdb"`
 # package whose `DEP_CHDB_LIB_DIR` this package's `build.rs` turns into an rpath.

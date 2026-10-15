@@ -55,6 +55,7 @@ async fn main() -> anyhow::Result<()> {
         resume: None,
     };
     let controls = RunControls {
+        request_approval: None,
         execution_lease: None,
         steering,
         interrupt: interrupt.clone(),

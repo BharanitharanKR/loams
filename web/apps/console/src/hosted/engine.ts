@@ -148,8 +148,12 @@ export async function checkHealth(
 
 export type Identity = { ok: true; user: string } | { ok: false; message: string };
 
+/** `AuthService/GetSession` as a Connect GET (API2 Task 10): a simple request, no preflight. */
+export const GET_SESSION =
+  '/loams.auth.v1.AuthService/GetSession?connect=v1&encoding=json&message=%7B%7D';
+
 /**
- * `GET <engine>/api/v1/session` with no credentials, for LOAMS_AUTH_MODE=tailscale: the
+ * `AuthService/GetSession` with no credentials, for LOAMS_AUTH_MODE=tailscale: the
  * engine identifies the caller from the tailnet (Tailscale's WhoIs on the connection),
  * not from anything the browser sends, and answers with that user.
  */
@@ -161,7 +165,7 @@ export async function fetchIdentity(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const res = await fetcher(`${origin}/api/v1/session`, {
+    const res = await fetcher(`${origin}${GET_SESSION}`, {
       method: 'GET',
       mode: 'cors',
       credentials: 'omit',
@@ -175,20 +179,22 @@ export async function fetchIdentity(
         message:
           res.status === 401
             ? 'The engine did not identify you from the tailnet.'
-            : `The engine answered ${res.status} on /api/v1/session.`,
+            : `The engine answered ${res.status} on GetSession.`,
       };
     }
-    const body = (await res.json()) as { user?: { email?: unknown; name?: unknown } } | null;
+    const body = (await res.json()) as {
+      session?: { user?: { email?: unknown; name?: unknown } };
+    } | null;
     const pick = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
-    const user = pick(body?.user?.email) ?? pick(body?.user?.name);
+    const user = pick(body?.session?.user?.email) ?? pick(body?.session?.user?.name);
     return user
       ? { ok: true, user }
-      : { ok: false, message: 'The engine answered /api/v1/session without a user.' };
+      : { ok: false, message: 'The engine answered GetSession without a user.' };
   } catch (e) {
     return {
       ok: false,
       message: controller.signal.aborted
-        ? `No answer from /api/v1/session within ${Math.round(timeoutMs / 1000)} s.`
+        ? `No answer from GetSession within ${Math.round(timeoutMs / 1000)} s.`
         : e instanceof Error
           ? e.message
           : String(e),

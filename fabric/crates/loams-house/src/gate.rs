@@ -8,10 +8,17 @@ use std::collections::HashSet;
 
 use loams_house_ipc::QueryClass;
 
-use crate::admission::{WorkerLease, WorkerPool};
-use crate::classify::{Expect, Stmt, decide};
+use async_trait::async_trait;
+use loams_house_ipc::{Execute, Limits, Output};
+
+use crate::admission::{Outcome, WorkerLease, WorkerPool};
+use crate::catalog::Lake;
+use crate::classify::{Classified, Expect, Stmt, decide};
+use crate::config::UserMap;
+use crate::ddl::{self, ChColumn, Described, Kind, Oracle};
 use crate::deny;
 use crate::errors::{ChError, HouseError};
+use crate::read::{ReadContext, ReadPlan};
 use crate::session::SessionGuard;
 
 /// The text chDB runs for a statement: the host functions answer the House's
@@ -57,23 +64,85 @@ pub fn admit(
     decide(classification, expect, readonly, unparsed)
 }
 
+/// The scopes a statement needs (HS1 Task 20, §49 §14).
+pub fn required(stmt: &Stmt) -> &'static [crate::identity::Scope] {
+    use crate::identity::Scope::{Ddl, Read, Write};
+    match stmt {
+        Stmt::Query { .. }
+        | Stmt::Show { .. }
+        | Stmt::Describe { .. }
+        | Stmt::Exists { .. }
+        | Stmt::Explain { .. }
+        | Stmt::Use(_)
+        | Stmt::Set(_)
+        | Stmt::CreateTemporaryTable { .. }
+        | Stmt::KillQuery(_)
+        | Stmt::Unsupported { .. } => &[Read],
+        Stmt::Drop(drop) if drop.temporary => &[Read],
+        Stmt::Insert(_) | Stmt::Optimize { .. } => &[Write],
+        Stmt::CreateTableAs { .. } => &[Ddl, Write],
+        Stmt::CreateDatabase { .. }
+        | Stmt::CreateTable { .. }
+        | Stmt::CreatePipe { .. }
+        | Stmt::CreateMaterializedView { .. }
+        | Stmt::Drop(_)
+        | Stmt::Truncate { .. }
+        | Stmt::AlterAddColumns { .. }
+        | Stmt::Rename { .. }
+        | Stmt::Undrop { .. } => &[Ddl],
+    }
+}
+
+/// `497` unless the identity holds every scope the statement needs (HS1 Task
+/// 20). A statement only ClickHouse's parser can read is a query here (it is
+/// held to reads further on).
+pub fn authorize(user: &UserMap, classified: &Classified) -> Result<(), HouseError> {
+    let (needed, what): (&[crate::identity::Scope], String) = match classified {
+        Classified::Known { stmt, .. } => (required(stmt), stmt.kind().to_string()),
+        Classified::Unparsed { .. } => (&[crate::identity::Scope::Read], "Query".to_string()),
+    };
+    match needed.iter().find(|scope| !user.scopes.has(**scope)) {
+        Some(scope) => Err(crate::identity::lacks(user, *scope, &what)),
+        None => Ok(()),
+    }
+}
+
 /// The task that will serve an owned statement this front does not yet (`48`).
+/// The catalog's statements reach here only when the House has no catalog
+/// ([`catalog_answer`] takes them otherwise).
 fn later(stmt: &Stmt) -> Option<String> {
+    if catalog_kind(stmt).is_some_and(|kind| kind.needs_catalog()) {
+        return Some(
+            "This House has no catalog (start it with --catalog or --single-node), so it holds \
+             no lake tables"
+                .to_string(),
+        );
+    }
     let (what, task) = match stmt {
-        Stmt::CreateDatabase { .. } => ("CREATE DATABASE", "HS1 Task 10"),
-        Stmt::CreateTable { .. } => ("CREATE TABLE (a lake table)", "HS1 Task 10"),
-        Stmt::CreateTableAs { .. } => ("CREATE TABLE … AS SELECT", "HS1 Task 12"),
+        Stmt::CreateTableAs { .. } => {
+            return Some(
+                "CREATE TABLE … AS SELECT makes a lake table, and this House has no catalog \
+                 (start it with --catalog or --single-node)"
+                    .to_string(),
+            );
+        }
         Stmt::CreatePipe { .. } => (
             "A pipe (LoamsStream, IggyTopic, S3Queue)",
             "HS1 Tasks 16 and 18",
         ),
         Stmt::CreateMaterializedView { .. } => ("CREATE MATERIALIZED VIEW", "HS1 Task 17"),
-        Stmt::Drop(drop) if !drop.temporary => ("DROP (a lake object)", "HS1 Task 10"),
-        Stmt::Truncate { .. } => ("TRUNCATE", "HS1 Task 12"),
-        Stmt::AlterAddColumns { .. } => ("ALTER TABLE … ADD COLUMN", "HS1 Task 10"),
-        Stmt::Rename { .. } => ("RENAME TABLE", "HS1 Task 10"),
-        Stmt::Undrop { .. } => ("UNDROP TABLE", "HS1 Task 15"),
-        Stmt::Optimize { .. } => ("OPTIMIZE TABLE", "HS1 Task 13"),
+        Stmt::Truncate { .. } => {
+            return Some(
+                "TRUNCATE serves the catalog's lake tables only (not temporary tables)".to_string(),
+            );
+        }
+        Stmt::Optimize { .. } => {
+            return Some(
+                "OPTIMIZE TABLE compacts lake tables, and this House has no catalog (start it \
+                 with --catalog or --single-node)"
+                    .to_string(),
+            );
+        }
         Stmt::KillQuery(_) => ("KILL QUERY", "HS1 Task 21"),
         Stmt::Unsupported { kind } => {
             return Some(format!("{kind} is not on the House's ClickHouse surface"));
@@ -150,4 +219,433 @@ pub async fn acquire_for(
         return Ok(lease);
     }
     pool.acquire(namespace).await
+}
+
+/// The catalog statement a [`Stmt`] is (HS1 Task 10), if any.
+pub fn catalog_kind(stmt: &Stmt) -> Option<Kind> {
+    Some(match stmt {
+        Stmt::CreateDatabase { .. } => Kind::CreateDatabase,
+        Stmt::CreateTable { .. } => Kind::CreateTable,
+        Stmt::Drop(drop) if !drop.temporary => Kind::Drop,
+        Stmt::Undrop { .. } => Kind::Undrop,
+        Stmt::Rename { .. } => Kind::Rename,
+        Stmt::AlterAddColumns { .. } => Kind::AlterAdd,
+        Stmt::Describe { .. } => Kind::Describe,
+        Stmt::Show { .. } => Kind::Show,
+        Stmt::Exists { .. } => Kind::Exists,
+        Stmt::Insert(_) => Kind::Insert,
+        _ => return None,
+    })
+}
+
+impl Kind {
+    /// Whether the statement means nothing without a catalog (`48` then); the
+    /// others fall through to chDB.
+    pub fn needs_catalog(self) -> bool {
+        !matches!(
+            self,
+            Kind::Describe | Kind::Show | Kind::Exists | Kind::Insert
+        )
+    }
+}
+
+/// What the catalog made of a statement.
+#[derive(Debug, Clone, PartialEq)]
+pub enum CatalogOutcome {
+    /// Done: an empty success.
+    Done,
+    /// Answer with this query's rows (a `SELECT` over constants).
+    Rows(String),
+    /// An `INSERT` into a lake table, for [`crate::insert::run`] (HS1 Task 12).
+    Insert(Box<crate::insert::Target>),
+    /// `CREATE TABLE … AS SELECT` of a lake table, for
+    /// [`crate::insert::create_as`] (HS1 Task 12).
+    CreateAs(Box<crate::insert::CreateAs>),
+    /// `OPTIMIZE TABLE` of a lake table, for [`crate::compact::optimize`]
+    /// (HS1 Task 13).
+    Optimize(Box<crate::compact::OptimizePlan>),
+    /// Not the catalog's: on to [`front_answer`] and chDB.
+    NotOurs,
+}
+
+/// The catalog's answer to a statement (HS1 Task 10): DDL, `USE`, and
+/// `DESCRIBE`/`SHOW CREATE`/`EXISTS`/`INSERT` naming a catalog table. `text` is
+/// the statement without its `FORMAT`; `current` the request's database.
+#[allow(clippy::too_many_arguments)]
+pub async fn catalog_answer(
+    lake: Option<&Lake>,
+    pool: &WorkerPool,
+    user: &UserMap,
+    current: &str,
+    stmt: &Stmt,
+    text: &str,
+    session: Option<&SessionGuard>,
+    query_id: &str,
+) -> Result<CatalogOutcome, HouseError> {
+    let namespace = user.namespace;
+    let Some(lake) = lake else {
+        return Ok(CatalogOutcome::NotOurs);
+    };
+    if let Stmt::Use(database) = stmt {
+        lake.require_database(namespace, database).await?;
+        if let Some(guard) = session {
+            guard.state().database = database.clone();
+        }
+        return Ok(CatalogOutcome::Done);
+    }
+    if let Stmt::Optimize { .. } = stmt {
+        let plan = crate::compact::OptimizePlan::parse(text, current)?;
+        if !crate::identity::granted(user, &plan.database, &plan.name) {
+            return Err(crate::identity::not_granted(
+                user,
+                &plan.database,
+                &plan.name,
+            ));
+        }
+        // A table the catalog lacks is `60`, an external one `497`, as for DDL.
+        lake.lake_table(namespace, &plan.database, &plan.name, "OPTIMIZE TABLE")
+            .await?;
+        return Ok(CatalogOutcome::Optimize(Box::new(plan)));
+    }
+    if let Stmt::CreateTableAs { .. } = stmt {
+        let plan = crate::insert::CreateAs::parse(text, current)?;
+        if !crate::identity::granted(user, &plan.database, &plan.name) {
+            return Err(crate::identity::not_granted(
+                user,
+                &plan.database,
+                &plan.name,
+            ));
+        }
+        return Ok(CatalogOutcome::CreateAs(Box::new(plan)));
+    }
+    if let Stmt::Truncate { .. } = stmt
+        && let Some(((db, name), if_exists)) = crate::ddl::parse_truncate(text)
+    {
+        let database = db.unwrap_or_else(|| current.to_string());
+        if !crate::identity::granted(user, &database, &name) {
+            return Err(crate::identity::not_granted(user, &database, &name));
+        }
+        let table = if lake.database_exists(namespace, &database).await? {
+            lake.load(namespace, &database, &name).await?
+        } else {
+            None
+        };
+        return match table {
+            None if if_exists => Ok(CatalogOutcome::Done),
+            // A temporary table, or no table: as before (chDB, or `48`).
+            None => Ok(CatalogOutcome::NotOurs),
+            Some(table) => {
+                if crate::ddl::class_of(&table.metadata) == crate::ddl::TableClass::External {
+                    return Err(HouseError::from(ChError::access_denied(format!(
+                        "TRUNCATE {database}.{name}: the table belongs to another writer (an \
+                         external table), so the House reads it and never changes it"
+                    ))));
+                }
+                let committer = lake.committer();
+                crate::commit::truncate(committer.io(), &table.ident).await?;
+                Ok(CatalogOutcome::Done)
+            }
+        };
+    }
+    if let Stmt::Insert(insert) = stmt {
+        return Ok(
+            match crate::insert::target(lake, user, current, insert).await? {
+                Some(target) => CatalogOutcome::Insert(Box::new(target)),
+                None => CatalogOutcome::NotOurs,
+            },
+        );
+    }
+    let Some(kind) = catalog_kind(stmt) else {
+        return Ok(CatalogOutcome::NotOurs);
+    };
+    // The identity's grants (HS1 Task 20): DDL on a table or database outside
+    // them is `497`; a table outside them is as unknown to `DESCRIBE`, `SHOW
+    // CREATE` and `EXISTS` as a missing one.
+    for object in ddl::touched(kind, text, current) {
+        let allowed = match &object {
+            ddl::Object::Table((db, name)) => {
+                crate::identity::granted(user, db.as_deref().unwrap_or(current), name)
+            }
+            ddl::Object::Database(database) => crate::identity::granted_database(user, database),
+        };
+        if allowed {
+            continue;
+        }
+        return match (kind, object) {
+            (Kind::Exists, _) => Ok(CatalogOutcome::Rows(
+                "SELECT toUInt8(0) AS result".to_string(),
+            )),
+            (Kind::Describe | Kind::Show, ddl::Object::Table((db, name))) => {
+                Err(HouseError::from(ChError::unknown_table(format!(
+                    "Table {}.{name} does not exist",
+                    db.as_deref().unwrap_or(current)
+                ))))
+            }
+            (_, ddl::Object::Table((db, name))) => Err(crate::identity::not_granted(
+                user,
+                db.as_deref().unwrap_or(current),
+                &name,
+            )),
+            (_, ddl::Object::Database(database)) => {
+                Err(crate::identity::not_granted(user, &database, "*"))
+            }
+        };
+    }
+    let mut oracle = WorkerOracle::new(pool, namespace, query_id);
+    let answer = ddl::execute(lake, namespace, current, kind, text, &mut oracle).await;
+    oracle.finish();
+    Ok(match answer? {
+        ddl::Answer::Done => CatalogOutcome::Done,
+        ddl::Answer::Rows(query) => CatalogOutcome::Rows(query),
+        ddl::Answer::PassThrough => CatalogOutcome::NotOurs,
+    })
+}
+
+/// The deny list over a catalog statement's syntax tree (HS1 Tasks 5 and 10):
+/// one statement that ClickHouse can parse, nothing denied anywhere in it.
+pub fn admit_ddl(analysis: &loams_house_ipc::Analysis, sql: &str) -> Result<(), HouseError> {
+    let classification = analysis.classification;
+    if classification.statements > 1 {
+        return Err(HouseError::from(ChError::syntax_error(
+            "Multi-statements are not allowed: send one statement per request",
+        )));
+    }
+    if classification.class == QueryClass::Unknown {
+        return Err(HouseError::from(ChError::syntax_error(format!(
+            "ClickHouse's parser cannot parse this statement: {}",
+            crate::classify::OUTSIDE_SURFACE
+        ))));
+    }
+    let tree = deny::QueryTree::from_explain(&analysis.ast, analysis.query_tree.as_deref())
+        .shared_create(crate::classify::creates_shared_object(sql))
+        .statement(sql);
+    deny::check(&tree).map_err(HouseError::from)
+}
+
+/// [`Oracle`] on a worker of the namespace, taken at the first question and
+/// given back by [`WorkerOracle::finish`] (or when dropped).
+struct WorkerOracle<'a> {
+    pool: &'a WorkerPool,
+    namespace: String,
+    query_id: String,
+    lease: Option<WorkerLease>,
+}
+
+impl<'a> WorkerOracle<'a> {
+    fn new(pool: &'a WorkerPool, namespace: u64, query_id: &str) -> Self {
+        Self {
+            pool,
+            namespace: namespace.to_string(),
+            query_id: query_id.to_string(),
+            lease: None,
+        }
+    }
+
+    async fn lease(&mut self) -> Result<&mut WorkerLease, HouseError> {
+        if self.lease.is_none() {
+            self.lease = Some(self.pool.acquire(&self.namespace).await?);
+        }
+        self.lease
+            .as_mut()
+            .ok_or_else(|| HouseError::from(ChError::network_error("no worker")))
+    }
+
+    fn finish(&mut self) {
+        if let Some(lease) = self.lease.take() {
+            self.pool.release(lease, Outcome::Completed);
+        }
+    }
+
+    /// Runs an internal read and answers its `JSONCompactEachRow` lines.
+    async fn rows(
+        &mut self,
+        sql: &str,
+        params: Vec<(String, String)>,
+        settings: Vec<(String, String)>,
+    ) -> Result<Vec<Vec<String>>, HouseError> {
+        let execute = Execute {
+            query_id: format!("{}-ddl", self.query_id),
+            session: None,
+            settings,
+            views: Vec::new(),
+            sql: sql.to_string(),
+            format: "JSONCompactEachRow".to_string(),
+            params,
+            limits: Limits::default(),
+            input: None,
+            output: Output::Blocks,
+            database: None,
+        };
+        let collected = self.lease().await?.run(execute).await?;
+        let text = String::from_utf8_lossy(&collected.bytes);
+        text.lines()
+            .filter(|line| !line.trim().is_empty())
+            .map(|line| {
+                serde_json::from_str::<Vec<serde_json::Value>>(line)
+                    .map(|values| {
+                        values
+                            .into_iter()
+                            .map(|v| match v {
+                                serde_json::Value::String(s) => s,
+                                other => other.to_string(),
+                            })
+                            .collect()
+                    })
+                    .map_err(|err| {
+                        HouseError::from(ChError::network_error(format!(
+                            "the worker's answer is unreadable: {err}"
+                        )))
+                    })
+            })
+            .collect()
+    }
+}
+
+impl Drop for WorkerOracle<'_> {
+    fn drop(&mut self) {
+        self.finish();
+    }
+}
+
+impl std::fmt::Debug for WorkerOracle<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("WorkerOracle")
+            .field("namespace", &self.namespace)
+            .finish_non_exhaustive()
+    }
+}
+
+/// `Array(String)` as a query parameter's text.
+fn string_array(values: &[String]) -> String {
+    let quoted: Vec<String> = values
+        .iter()
+        .map(|v| format!("'{}'", v.replace('\\', "\\\\").replace('\'', "\\'")))
+        .collect();
+    format!("[{}]", quoted.join(","))
+}
+
+#[async_trait]
+impl Oracle for WorkerOracle<'_> {
+    async fn check(&mut self, sql: &str) -> Result<(), HouseError> {
+        let analysis = self
+            .lease()
+            .await?
+            .analyze(sql, &[])
+            .await
+            .map_err(deny::as_setting_refusal)?;
+        admit_ddl(&analysis, sql)
+    }
+
+    async fn describe(&mut self, columns: &str) -> Result<Vec<Described>, HouseError> {
+        // `flatten_nested = 0`: a `Nested` column stays one column, which the type
+        // table refuses, rather than arrays under dotted names.
+        let rows = self
+            .rows(
+                "DESCRIBE TABLE null({columns:String})",
+                vec![("columns".to_string(), columns.to_string())],
+                vec![("flatten_nested".to_string(), "0".to_string())],
+            )
+            .await?;
+        rows.into_iter()
+            .map(|row| {
+                let get = |i: usize| row.get(i).cloned().unwrap_or_default();
+                if row.len() < 7 {
+                    return Err(HouseError::from(ChError::network_error(
+                        "the worker's DESCRIBE answered too few columns",
+                    )));
+                }
+                Ok(Described {
+                    column: ChColumn {
+                        name: get(0),
+                        ch_type: get(1),
+                        default_kind: get(2),
+                        default_expression: get(3),
+                        comment: get(4),
+                        codec: get(5),
+                    },
+                    ttl: get(6),
+                })
+            })
+            .collect()
+    }
+
+    async fn merge_tree_settings(&mut self, names: &[String]) -> Result<Vec<String>, HouseError> {
+        let rows = self
+            .rows(
+                "SELECT name FROM system.merge_tree_settings WHERE name IN {names:Array(String)}",
+                vec![("names".to_string(), string_array(names))],
+                Vec::new(),
+            )
+            .await?;
+        Ok(rows
+            .into_iter()
+            .filter_map(|r| r.into_iter().next())
+            .collect())
+    }
+}
+
+/// `SHOW TABLES`, `SHOW DATABASES` and `SHOW PROCESSLIST` as the `SELECT`
+/// ClickHouse rewrites them into, over the `system` tables the House replaces
+/// (HS1 Task 11): `Some(text)` to run instead. `SHOW TABLES FROM d` of a
+/// database the namespace lacks is `81`, as in ClickHouse.
+pub async fn show_answer(
+    lake: Option<&Lake>,
+    namespace: u64,
+    current: &str,
+    stmt: &Stmt,
+) -> Result<Option<String>, HouseError> {
+    let Stmt::Show { text } = stmt else {
+        return Ok(None);
+    };
+    let Some(answer) = crate::system::show_query(text, current) else {
+        return Ok(None);
+    };
+    let (query, database) = answer?;
+    if let Some(database) = database
+        && !matches!(
+            database.as_str(),
+            "system" | "information_schema" | "INFORMATION_SCHEMA"
+        )
+    {
+        match lake {
+            Some(lake) => lake.require_database(namespace, &database).await?,
+            None if database == "default" => {}
+            None => {
+                return Err(HouseError::from(ChError::unknown_database(format!(
+                    "Database {database} does not exist"
+                ))));
+            }
+        }
+    }
+    Ok(Some(query))
+}
+
+/// What an admitted statement reads, pinned, and the views its worker makes
+/// first (HS1 Task 11, [`crate::read::plan`]). `settings` are the session's and
+/// the request's, Loams's own included.
+#[allow(clippy::too_many_arguments)]
+pub async fn read_plan(
+    lake: Option<&Lake>,
+    namespace: u64,
+    database: &str,
+    user: &UserMap,
+    lease: &mut WorkerLease,
+    analysis: &loams_house_ipc::Analysis,
+    sql: &str,
+    settings: &[(String, String)],
+) -> Result<ReadPlan, HouseError> {
+    crate::read::plan(
+        ReadContext {
+            lake,
+            namespace,
+            database,
+            user: &user.user,
+            grants: user.grants.as_ref(),
+        },
+        lease,
+        analysis,
+        sql,
+        settings,
+    )
+    .await
 }

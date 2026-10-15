@@ -41,6 +41,15 @@
 //!   result of the old deployment. While an activation of the engine is in
 //!   flight, ticks are held: the tick's timestamp is taken first, so a tick
 //!   that sees no activation in flight reads before any later one commits.
+//! - **Catalog entries** (LV1 plan Task 11). A tick whose journal batch
+//!   holds another node's activation (`DEPLOYMENT_ACTIVATED`, for a
+//!   deployment this node does not serve) refreshes the engine at the tick
+//!   ([`AppEngine::refresh_at`]) and does not acknowledge the batch: the
+//!   next tick adopts the deployment as above, reading the batch again,
+//!   before it matches that batch's writes. So every node switches at the
+//!   activation's tick, not at its janitor's next refresh. A tick whose
+//!   batch holds a table, index or validator change reruns every
+//!   subscription once (publishing the ones that changed).
 
 use std::collections::{HashMap, HashSet};
 use std::fmt;
@@ -56,10 +65,10 @@ use tokio_util::sync::CancellationToken;
 use ulid::Ulid;
 
 use crate::deploy::{AppEngine, Serving};
-use crate::journal::Tailer;
+use crate::journal::{self, Tailer};
 use crate::readset::{ReadSetIndex, SubId};
 use crate::txn::Queried;
-use crate::{FnKind, Function, LiveError, LiveValue, ReadSet, Runner};
+use crate::{FnKind, Function, LiveError, LiveValue, ReadSet, Runner, pb};
 
 /// Ticks the [`Subscriptions::updates`] channel buffers per receiver; a
 /// receiver that falls further behind gets `Lagged` and must resubscribe.
@@ -284,15 +293,21 @@ impl Subscriptions {
     /// engine serves (LV1 plan Task 7; the module documentation has the
     /// rules), until `shutdown` is cancelled or the handle drops.
     pub fn spawn_for(app: &AppEngine, config: SubsConfig, shutdown: CancellationToken) -> Self {
-        Self::start(app.runner().clone(), config, Some(app.serving()), shutdown)
+        Self::start(
+            app.runner().clone(),
+            config,
+            Some((app.serving(), app.clone())),
+            shutdown,
+        )
     }
 
     fn start(
         runner: Runner,
         config: SubsConfig,
-        follow: Option<watch::Receiver<Serving>>,
+        follow: Option<(watch::Receiver<Serving>, AppEngine)>,
         shutdown: CancellationToken,
     ) -> Self {
+        let (follow, engine) = follow.unzip();
         let follows = follow.is_some();
         let serving = follow
             .as_ref()
@@ -305,6 +320,8 @@ impl Subscriptions {
         let manager = Manager {
             commits: runner.commits(),
             follow,
+            engine,
+            refreshed: HashSet::new(),
             follow_open: follows,
             serving,
             index: ReadSetIndex::new(runner.app().clone()),
@@ -501,6 +518,12 @@ struct Manager {
     commits: watch::Receiver<u64>,
     /// What the app's engine serves, when following one.
     follow: Option<watch::Receiver<Serving>>,
+    /// The engine followed: refreshed at another node's activation.
+    engine: Option<AppEngine>,
+    /// The activation entries (shard, sequence) this manager refreshed the
+    /// engine for, until the tailer acknowledges past them: a batch read
+    /// again after a refresh does not refresh again.
+    refreshed: HashSet<(u16, u64)>,
     /// The engine is still there to follow.
     follow_open: bool,
     /// The deployment adopted: it runs every deployed subscription.
@@ -913,8 +936,9 @@ impl Manager {
             return Ok(false);
         };
         let mut moved = adopt.is_some();
+        let mut catalog = false;
         loop {
-            let Some(tailer) = self.tailer.as_mut() else {
+            let Some(tailer) = self.tailer.as_ref() else {
                 return Err(LiveError::Internal("the tailer is gone".into()));
             };
             let batch = match tailer.tick(at).await {
@@ -934,10 +958,23 @@ impl Manager {
                 }
                 Err(e) => return Err(e),
             };
+            // What this tick serves: the deployment it adopts, else the adopted one.
+            let serving = adopt
+                .as_ref()
+                .map_or_else(|| self.serving.deployment(), Serving::deployment);
+            if self.refresh_for(&batch, at, serving).await {
+                // Not acknowledged: the next tick adopts what the refresh
+                // serves and reads this batch again.
+                return Ok(true);
+            }
             if !batch.is_empty() {
                 moved = true;
                 self.valid = false;
             }
+            catalog |= batch
+                .entries
+                .iter()
+                .any(|(_, _, entry)| entry.catalog.iter().any(reruns_all));
             self.shared
                 .counters
                 .entries
@@ -956,19 +993,30 @@ impl Manager {
                     }
                 }
             }
+            let Some(tailer) = self.tailer.as_mut() else {
+                return Err(LiveError::Internal("the tailer is gone".into()));
+            };
             tailer.ack(&batch)?;
+            let positions = tailer.positions().to_vec();
+            self.refreshed.retain(|(shard, seq)| {
+                positions
+                    .get(usize::from(*shard))
+                    .is_some_and(|position| seq > position)
+            });
             if batch.complete {
                 break;
             }
         }
         // An activation reruns every subscription once, on the new
-        // deployment, and publishes them all.
+        // deployment, and publishes them all; another catalog change reruns
+        // them all once too.
         let force = adopt.is_some();
         let mut ids: Vec<SubId> = match adopt {
             Some(serving) => {
                 self.adopt(serving);
                 self.subs.keys().copied().collect()
             }
+            None if catalog => self.subs.keys().copied().collect(),
             None => self
                 .subs
                 .iter()
@@ -992,6 +1040,35 @@ impl Manager {
         }
         self.finish(at, changed, false).await;
         Ok(moved)
+    }
+
+    /// Refreshes the engine at `at` when `batch` holds an activation of a
+    /// deployment other than `serving` (what this tick runs), that this manager has not refreshed for
+    /// yet (LV1 plan Task 11); returns whether it did. A refresh that fails
+    /// logs its error (the janitor's refresh retries) and counts as done, so
+    /// a bundle that does not load never holds the ticks.
+    async fn refresh_for(&mut self, batch: &journal::Batch, at: Ts, serving: Option<Ulid>) -> bool {
+        let Some(engine) = &self.engine else {
+            return false;
+        };
+        let serving = serving.map(|d| d.to_string());
+        let mut found = false;
+        for (shard, seq, entry) in &batch.entries {
+            let activation = entry.catalog.iter().any(|c| {
+                c.kind == pb::CatalogChangeKind::CATALOG_CHANGE_KIND_DEPLOYMENT_ACTIVATED
+                    && serving.as_deref() != Some(c.deployment.as_str())
+            });
+            if activation && self.refreshed.insert((*shard, *seq)) {
+                found = true;
+            }
+        }
+        if !found {
+            return false;
+        }
+        if let Err(error) = engine.refresh_at(at).await {
+            tracing::warn!(%error, "refreshing the engine at another node's activation failed");
+        }
+        true
     }
 
     /// Starts (or restarts, after a trimmed journal) the tailer at a fresh
@@ -1205,7 +1282,9 @@ async fn follow_changed(
     }
 }
 
-/// A query at `at`, retried on storage failures.
+/// A query at `at`, retried on storage failures. What its final attempt
+/// wrote goes to the app's log ring (LV1 plan Task 10), under a request id
+/// of its own.
 async fn evaluate_one(
     runner: &Runner,
     f: &dyn Function,
@@ -1213,15 +1292,24 @@ async fn evaluate_one(
     at: &Ts,
 ) -> Result<Queried, LiveError> {
     let mut attempt = 1;
-    loop {
+    let evaluated = loop {
         match runner.query(f, args.clone(), *at).await {
             Err(LiveError::Txn(e)) if attempt < EVAL_ATTEMPTS && transient(&e) => {
                 attempt += 1;
                 tokio::time::sleep(Duration::from_millis(10 * u64::from(attempt))).await;
             }
-            other => return other,
+            other => break other,
         }
-    }
+    };
+    let call = crate::logs::CallInfo {
+        request_id: None,
+        function: f.name(),
+        deployment: f.deployment(),
+    };
+    runner
+        .logs()
+        .record(&call, evaluated.as_ref().map(|q| &q.output));
+    evaluated
 }
 
 fn transient(e: &TxnError) -> bool {
@@ -1234,6 +1322,20 @@ fn split(evaluated: Result<Queried, LiveError>) -> (Result<LiveValue, LiveError>
         Ok(q) => (Ok(q.result), q.read_set, false),
         Err(e) => (Err(e), ReadSet::default(), true),
     }
+}
+
+/// Whether a catalog change reruns every subscription (LV1 plan Task 11): a
+/// table, index or validator change. An activation reruns them through the
+/// engine it switches; app settings change nothing a query reads.
+fn reruns_all(change: &pb::CatalogChange) -> bool {
+    use pb::CatalogChangeKind as K;
+    [
+        K::CATALOG_CHANGE_KIND_TABLE_CREATED,
+        K::CATALOG_CHANGE_KIND_INDEXES,
+        K::CATALOG_CHANGE_KIND_VALIDATOR,
+    ]
+    .into_iter()
+    .any(|k| change.kind == k)
 }
 
 #[cfg(test)]

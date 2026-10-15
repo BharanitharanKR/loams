@@ -1,0 +1,76 @@
+{
+  "recorded_from": "Kestra",
+  "synthetic": true,
+  "docs": [
+    "https://kestra.io/docs/api-reference/open-source"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "executions",
+    "config": {
+      "server_url": "{proxy}",
+      "namespace": "loams",
+      "flow_id": "import"
+    },
+    "secrets": {
+      "username": "synthetic-kestra-user",
+      "password": "synthetic-kestra-password"
+    },
+    "expect": 2
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/api/v1/main/executions/search?namespace=loams&page=1&size=100&sort=state.startDate%3Aasc",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "results": [
+              {
+                "id": "5K1mqPDbVRrzM0oC7Tf6sE",
+                "namespace": "loams",
+                "flowId": "import",
+                "flowRevision": 1,
+                "state": {
+                  "current": "CREATED",
+                  "histories": [
+                    {
+                      "state": "CREATED",
+                      "date": "2026-10-01T12:00:00Z"
+                    }
+                  ]
+                },
+                "trigger": {
+                  "id": "webhook",
+                  "type": "io.kestra.plugin.core.trigger.Webhook"
+                }
+              },
+              {
+                "id": "5K1mqPDbVRrzM0oC7Tf6sF",
+                "namespace": "loams",
+                "flowId": "import",
+                "flowRevision": 1,
+                "state": {
+                  "current": "SUCCESS"
+                },
+                "trigger": {
+                  "id": "webhook",
+                  "type": "io.kestra.plugin.core.trigger.Webhook"
+                }
+              }
+            ],
+            "total": 2
+          }
+        }
+      }
+    }
+  ]
+}

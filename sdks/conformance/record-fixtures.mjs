@@ -16,7 +16,11 @@
 // ## The two servers, and why both are needed
 //
 // `loams dev` is the **primary** target (D617). It answers a successful unary
-// call and both structured-reason refusals, in every encoding.
+// call and both structured-reason refusals, in every encoding. It is run with
+// `--no-live`: the unavailable-service cases are `loams.live.v1` refusing with
+// `feature_not_in_variant`, which is what that package answers while Live is not
+// running. With Live on (the default since LV1 Task 12) the same RPCs reach the
+// running Live server instead and answer `not_found`.
 //
 // It cannot answer a paged list, an idempotency-keyed mutation or a resumable
 // stream, because `loams.collection.v1` has not landed and the app packages are
@@ -109,9 +113,10 @@ const RPCS = [
     name: 'live_query',
     path: '/loams.live.v1.LiveService/Query',
     about:
-      'The unavailable-service path on a unary RPC: `loams.live.v1` is a ' +
-      '`full`-variant engine, so every one of its RPCs answers `unimplemented` ' +
-      'with reason `feature_not_in_variant` and the variant in `metadata`.',
+      'The unavailable-service path on a unary RPC: the corpus is recorded from ' +
+      '`loams dev --no-live`, so `loams.live.v1` is not running and every one of ' +
+      'its RPCs answers `unimplemented` with reason `feature_not_in_variant` and ' +
+      'the variant in `metadata`.',
     reason: 'feature_not_in_variant',
     pinnedBy: ['R5', 'R8'],
   },
@@ -1927,6 +1932,158 @@ const UNPRODUCIBLE_REASONS = [
     standIn: null,
   },
   {
+    reason: 'repo_not_found',
+    code: 'not_found',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'repo_already_exists',
+    code: 'already_exists',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'repo_deleting',
+    code: 'failed_precondition',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'ref_stale',
+    code: 'aborted',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'ref_protected',
+    code: 'failed_precondition',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'out_of_scope',
+    code: 'permission_denied',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'object_format_unsupported',
+    code: 'unimplemented',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'fork_too_deep',
+    code: 'failed_precondition',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'sequencer_unavailable',
+    code: 'unavailable',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'idempotency_key_reused',
+    code: 'failed_precondition',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'workspace_not_found',
+    code: 'not_found',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'workspace_fenced',
+    code: 'aborted',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'workspace_read_only',
+    code: 'failed_precondition',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'workspace_name_taken',
+    code: 'already_exists',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'object_missing',
+    code: 'failed_precondition',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'secret_detected',
+    code: 'failed_precondition',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'env_unsealed',
+    code: 'invalid_argument',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'env_access_denied',
+    code: 'permission_denied',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
+    reason: 'env_foreign_reference',
+    code: 'permission_denied',
+    why:
+      "Loams Git's loams.repos.v1 services are not part of the recorded " +
+      'corpus yet; the recorder runs no git runtime (GT1 Task 12).',
+    standIn: null,
+  },
+  {
     reason: 'live_bad_cursor',
     code: 'invalid_argument',
     why:
@@ -1948,6 +2105,166 @@ const UNPRODUCIBLE_REASONS = [
     why:
       'Needs two deploys racing on one app\'s `expected_active`; the recorder ' +
       'deploys nothing (LV1 Task 6).',
+    standIn: null,
+  },
+  {
+    reason: 'live_schema_violation',
+    code: 'invalid_argument',
+    why:
+      'Needs a deployed Live table with a validator; the recorder deploys ' +
+      'no bundle (LV1 Task 8).',
+    standIn: null,
+  },
+  {
+    reason: 'live_index_not_ready',
+    code: 'failed_precondition',
+    why:
+      'Needs a deploy still backfilling an index that a function reads; the ' +
+      'recorder deploys nothing (LV1 Task 9).',
+    standIn: null,
+  },
+  {
+    reason: 'role_required',
+    code: 'permission_denied',
+    why:
+      'Raised by `loams.admin.v1` (API2 Task 7); ' +
+      'the recorder\'s servers do not serve the admin RPCs it guards, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'setup_required',
+    code: 'failed_precondition',
+    why:
+      'Raised by `loams.admin.v1` (API2 Task 7); ' +
+      'the recorder\'s servers do not serve the admin RPCs it guards, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'token_missing',
+    code: 'unauthenticated',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'token_malformed',
+    code: 'unauthenticated',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'token_revoked',
+    code: 'unauthenticated',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'token_not_yet_valid',
+    code: 'unauthenticated',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'token_bad_signature',
+    code: 'unauthenticated',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'token_wrong_audience',
+    code: 'unauthenticated',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'token_wrong_issuer',
+    code: 'unauthenticated',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'token_unknown_key',
+    code: 'unauthenticated',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'token_algorithm_not_allowed',
+    code: 'unauthenticated',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'api_key_invalid',
+    code: 'unauthenticated',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'credential_not_accepted',
+    code: 'unauthenticated',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'credential_in_query_string',
+    code: 'unauthenticated',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'csrf_token_invalid',
+    code: 'permission_denied',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'principal_not_allowed',
+    code: 'permission_denied',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'cors_origin_not_allowed',
+    code: 'permission_denied',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
+    standIn: null,
+  },
+  {
+    reason: 'auth_unavailable',
+    code: 'unavailable',
+    why:
+      'Raised by the main port\'s auth layer (API2 Task 6); ' +
+      'both recorder servers run without authentication, so no recording carries it.',
     standIn: null,
   },
 ];
@@ -2084,8 +2401,8 @@ async function main() {
     const base = process.env.LOAMS_TEST_ENDPOINT;
     if (!base) {
       throw new Error(
-        'LOAMS_TEST_ENDPOINT is not set; `loams dev` must be running to record the primary ' +
-          'half of the corpus (see sdks/conformance/run.sh)',
+        'LOAMS_TEST_ENDPOINT is not set; `loams dev --no-live` must be running to record the ' +
+          'primary half of the corpus (see sdks/conformance/run.sh)',
       );
     }
     const outDir = join(fixturesDir, 'recorded');

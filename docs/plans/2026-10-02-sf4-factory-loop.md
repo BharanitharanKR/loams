@@ -22,7 +22,7 @@
 
 **Spec:**
 - [`docs/design/39-software-factory-and-loams-bot.md`](../design/39-software-factory-and-loams-bot.md): §8, §10, §11, §12, §14; D-SF-13–D-SF-16.
-- [`docs/design/21-durable-execution.md`](../design/21-durable-execution.md) §3.5, §6.3 (sagas), §6.5 (approval gates), §6.6, §6.7 (idempotency), §8; [`19-console-identity-and-agents.md`](../design/19-console-identity-and-agents.md) §5.4 (revocation); [`20-reactive-database-on-tikv.md`](../design/20-reactive-database-on-tikv.md) (Live tables); [`22-showcase-suite.md`](../design/22-showcase-suite.md) §7.3 (provisioning sagas); [`38-knative-authentik-gitops.md`](../design/38-knative-authentik-gitops.md) (GitOps and rollout events); [`docs/open-core.md`](../open-core.md).
+- [`docs/design/21-durable-execution.md`](../design/21-durable-execution.md) §3.5, §6.3 (sagas), §6.5 (approval gates), §6.6, §6.7 (idempotency), §8; [`19-console-identity-and-agents.md`](../design/19-console-identity-and-agents.md) §5.4 (revocation); [`20-reactive-database-on-tikv.md`](../design/20-reactive-database-on-tikv.md) (Live tables); [`22-showcase-suite.md`](../design/22-showcase-suite.md) §7.3 (provisioning sagas); [`38-knative-authentik-gitops.md`](../design/38-knative-authentik-gitops.md) (GitOps and rollout events).
 - SF2's cards and skills; SF3's approvals relay.
 
 ## Global Constraints

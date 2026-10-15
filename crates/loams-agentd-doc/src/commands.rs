@@ -10,18 +10,9 @@
 
 use serde::{Deserialize, Serialize};
 
-use loams_agentd_proto::{RunRequest, UserInputAnswer};
-
 use crate::constants::COMMAND_DEFAULT_TTL_MS;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub enum SessionCommandKind {
-    Run,
-    Steer,
-    Interrupt,
-    RespondInput,
-}
+pub use loams_agentd_proto::chat::{SessionCommandKind, SessionCommandPayload};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -32,41 +23,6 @@ pub enum SessionCommandStatus {
     Expired,
     Superseded,
     Cancelled,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(tag = "kind", rename_all = "camelCase")]
-// `Run` is the common command; a command is built once per user action, so its size is moot.
-#[allow(clippy::large_enum_variant)]
-pub enum SessionCommandPayload {
-    #[serde(rename_all = "camelCase")]
-    Run {
-        request: RunRequest,
-        /// Client-minted message id for the optimistic user entry (dedup key).
-        message_id: String,
-    },
-    #[serde(rename_all = "camelCase")]
-    Steer {
-        prompt: String,
-        message_id: Option<String>,
-    },
-    Interrupt {},
-    #[serde(rename_all = "camelCase")]
-    RespondInput {
-        request_id: String,
-        answers: Vec<UserInputAnswer>,
-    },
-}
-
-impl SessionCommandPayload {
-    pub fn kind(&self) -> SessionCommandKind {
-        match self {
-            SessionCommandPayload::Run { .. } => SessionCommandKind::Run,
-            SessionCommandPayload::Steer { .. } => SessionCommandKind::Steer,
-            SessionCommandPayload::Interrupt {} => SessionCommandKind::Interrupt,
-            SessionCommandPayload::RespondInput { .. } => SessionCommandKind::RespondInput,
-        }
-    }
 }
 
 #[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
@@ -187,6 +143,7 @@ pub fn evaluate_command(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use loams_agentd_proto::RunRequest;
 
     fn entry(id: &str, payload: SessionCommandPayload, issued_at: i64) -> SessionCommandEntry {
         SessionCommandEntry {

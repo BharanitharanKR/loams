@@ -22,6 +22,8 @@ loams-agentd-proto.workspace = true
 loams-agentd-rpc.workspace = true
 loams-agentd-mcp.workspace = true
 loams-agentd-link.workspace = true
+# loams.agentd.v1, the Connect listener beside the ndjson one (SD1 Task 5).
+loams-agentd-connect.workspace = true
 tokio.workspace = true
 clap.workspace = true
 anyhow.workspace = true
@@ -33,6 +35,10 @@ thiserror.workspace = true
 toml.workspace = true
 # Names the offending key of an invalid config.toml (already in the lock).
 serde_path_to_error = "0.1"
+# install-runtime: SHA256SUMS and version ordering (both already in the lock).
+sha2.workspace = true
+hex.workspace = true
+semver = "1.0"
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
@@ -42,10 +48,12 @@ tracing-subscriber.workspace = true
 mimalloc.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Console", "Win32_System_Threading"] }
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Security_Authorization", "Win32_System_Console", "Win32_System_JobObjects", "Win32_System_Registry", "Win32_System_Threading"] }
 
 [dev-dependencies]
 tempfile.workspace = true
+sha2.workspace = true
+hex.workspace = true
 futures.workspace = true
 
 # The workspace policy, except `unsafe_code` is `deny` rather than `forbid`: this crate

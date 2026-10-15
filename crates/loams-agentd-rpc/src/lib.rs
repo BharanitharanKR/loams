@@ -16,6 +16,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use futures::stream::BoxStream;
+use loams_agentd_proto::rpc::{Method, WireAs};
 use serde::{Deserialize, Serialize};
 
 pub mod auth;
@@ -38,155 +39,9 @@ pub use server::{Connections, WsServer, serve_connection};
 /// (DD1 Task 7). A more specific directive wins over a global level.
 pub const SECRET_SAFE_LOG_DIRECTIVES: &[&str] = &["tungstenite::handshake=off"];
 
-/// RPC method names — single source of truth for both ends.
-/// Full surface: docs/research/feature-inventory.md §2.
-pub mod methods {
-    /// The handshake, the first call on a connection (design §50 §5.4).
-    /// `loams_agentd_proto::rpc::Hello` → `HelloReply`. Another protocol is
-    /// answered `protocol_mismatch: …` and the connection closes.
-    /// `loams-agentd` serves it; the engine's service does not.
-    pub const HELLO: &str = "Hello";
-    pub const WATCH_PREVIEWS: &str = "WatchPreviews";
-    pub const LIST_HARNESSES: &str = "ListHarnesses";
-    pub const CANCEL_INSTALL: &str = "CancelInstall";
-    pub const INSTALL_HARNESS: &str = "InstallHarness";
-    /// Flip a harness's enablement on the target device (Settings → Providers);
-    /// replies with the device's fresh `ListHarnesses` catalog.
-    pub const GET_TITLE_SETTINGS: &str = "GetTitleSettings";
-    pub const SET_TITLE_SETTINGS: &str = "SetTitleSettings";
-    pub const SET_HARNESS_ENABLED: &str = "SetHarnessEnabled";
-    pub const LIST_MODELS: &str = "ListModels";
-    pub const LIST_SKILLS: &str = "ListSkills";
-    pub const LIST_COMMANDS: &str = "ListCommands";
-    pub const QUEUE_COMMAND: &str = "QueueCommand";
-    /// User-driven retry of a chat's failed sends: re-sends every dead
-    /// Run/Steer attempt (Rejected, Expired, or consumed with no result)
-    /// under a new id, then drains. Params `{chatId}`; IPC-only.
-    pub const RETRY_DELIVERY: &str = "RetryDelivery";
-    pub const TAKE_PROJECT_ACTION_SETUP: &str = "TakeProjectActionSetup";
-    pub const FORK_SIDE_CHAT: &str = "ForkSideChat";
-    pub const WATCH_DOC_MESSAGES: &str = "WatchDocMessages";
-    /// Messages typed while the agent was busy, held on the chat doc so every
-    /// device sees the same queue. `{ chatId }` → `{ items: QueuedMessage[] }`.
-    pub const WATCH_QUEUE: &str = "WatchQueue";
-    /// Append to the queue. `{ chatId, text, attachments?, holdForTurnEnd? }` → `{ id }`.
-    pub const QUEUE_MESSAGE: &str = "QueueMessage";
-    /// Retype a queued message; empty text deletes it.
-    /// `{ chatId, id, text }` → `{ changed }`.
-    pub const UPDATE_QUEUED_MESSAGE: &str = "UpdateQueuedMessage";
-    /// Acquire a host-authoritative edit lease for one queued row.
-    pub const BEGIN_QUEUED_MESSAGE_EDIT: &str = "BeginQueuedMessageEdit";
-    /// Renew an acquired queue edit lease.
-    pub const RENEW_QUEUED_MESSAGE_EDIT: &str = "RenewQueuedMessageEdit";
-    /// Commit, cancel, discard, or explicitly release an acquired edit.
-    pub const FINISH_QUEUED_MESSAGE_EDIT: &str = "FinishQueuedMessageEdit";
-    /// Reorder. `{ chatId, id, toIndex }` → `{ changed }`.
-    pub const MOVE_QUEUED_MESSAGE: &str = "MoveQueuedMessage";
-    pub const REMOVE_QUEUED_MESSAGE: &str = "RemoveQueuedMessage";
-    /// Interrupt whatever is running and send this one. `{ chatId, id }` → `{ sent }`.
-    pub const SEND_QUEUED_MESSAGE_NOW: &str = "SendQueuedMessageNow";
-    /// Steer this row into the live turn without interrupting it.
-    /// `{ chatId, id }` → `{ sent }`.
-    pub const STEER_QUEUED_MESSAGE_NOW: &str = "SteerQueuedMessageNow";
-    pub const WATCH_CHATS: &str = "WatchChats";
-    pub const WATCH_SIDEBAR_PREFERENCES: &str = "WatchSidebarPreferences";
-    pub const WATCH_SESSIONS: &str = "WatchSessions";
-    /// Spaces registry (device+folder pairs) from the workspace doc.
-    pub const WATCH_SPACES: &str = "WatchSpaces";
-    /// Entity mutations against the workspace doc (feature-inventory §2 DataRpc).
-    /// Params are tagged `{op: createChat|createSpace|renameSpace|deleteSpace|
-    /// renameChat|setChatArchived|deleteChat|renameDevice|markChatSeen, …}`.
-    pub const MUTATE: &str = "Mutate";
-    /// This engine's identity → `{deviceId}`.
-    pub const LOCAL_DEVICE: &str = "LocalDevice";
-    /// This engine runtime's fixed device and workspace identity.
-    pub const ENGINE_INFO: &str = "EngineInfo";
-    /// Readiness barrier for the engine runtime. The call completes once stores
-    /// and journals are assembled, or fails with the assembly error.
-    pub const ENGINE_READY: &str = "EngineReady";
-    /// Ask a headless IPC owner to drain its runtime and exit successfully.
-    /// Headed IPC owners do not implement this method: closing another app's
-    /// engine behind its windows would leave that process unusable.
-    pub const STOP_ENGINE: &str = "StopEngine";
-    // Repos / worktrees / folders (ControlRpc).
-    pub const LIST_REPOS: &str = "ListRepos";
-    pub const ADD_REPO: &str = "AddRepo";
-    pub const CLONE_REPO: &str = "CloneRepo";
-    pub const CREATE_REPO: &str = "CreateRepo";
-    pub const LIST_BRANCHES: &str = "ListBranches";
-    pub const LIST_REFS: &str = "ListRefs";
-    pub const LIST_GIT_HISTORY: &str = "ListGitHistory";
-    /// Fuzzy commit-subject / SHA search over the complete public history.
-    pub const SEARCH_GIT_HISTORY: &str = "SearchGitHistory";
-    /// Resolve hosted profile images for a page of Git commit authors.
-    pub const RESOLVE_GIT_AVATARS: &str = "ResolveGitAvatars";
-    /// Update remote-tracking refs without changing HEAD, the index, or files.
-    pub const FETCH_ALL: &str = "FetchAll";
-    pub const SWITCH_REF: &str = "SwitchRef";
-    pub const LIST_FOLDERS: &str = "ListFolders";
-    /// The device's browse roots: home plus mounted drives/volumes.
-    pub const LIST_DRIVES: &str = "ListDrives";
-    /// Fuzzy relative-path search rooted in a known chat or space checkout.
-    pub const SEARCH_FILES: &str = "SearchFiles";
-    // Workspace filesystem operations. WatchWorkspaceFiles is the only
-    // streaming method in this group.
-    pub const LIST_WORKSPACE_DIRECTORY: &str = "ListWorkspaceDirectory";
-    pub const SEARCH_WORKSPACE_FILES: &str = "SearchWorkspaceFiles";
-    pub const READ_WORKSPACE_IMAGE: &str = "ReadWorkspaceImage";
-    pub const READ_WORKSPACE_FILE: &str = "ReadWorkspaceFile";
-    pub const MOVE_WORKSPACE_ENTRY: &str = "MoveWorkspaceEntry";
-    pub const DELETE_WORKSPACE_ENTRY: &str = "DeleteWorkspaceEntry";
-    pub const WRITE_WORKSPACE_FILE: &str = "WriteWorkspaceFile";
-    pub const WATCH_WORKSPACE_FILES: &str = "WatchWorkspaceFiles";
-    pub const CREATE_WORKTREE: &str = "CreateWorktree";
-    pub const DELETE_WORKTREE: &str = "DeleteWorktree";
-    // Project Actions are private state on the device that owns the project.
-    pub const LIST_PROJECT_ACTIONS: &str = "ListProjectActions";
-    pub const UPSERT_PROJECT_ACTION: &str = "UpsertProjectAction";
-    pub const DELETE_PROJECT_ACTION: &str = "DeleteProjectAction";
-    pub const RUN_PROJECT_ACTION: &str = "RunProjectAction";
-    // Terminals (ControlRpc; SubscribeTerminal streams).
-    pub const OPEN_TERMINAL: &str = "OpenTerminal";
-    pub const SUBSCRIBE_TERMINAL: &str = "SubscribeTerminal";
-    pub const WRITE_TERMINAL: &str = "WriteTerminal";
-    pub const RESIZE_TERMINAL: &str = "ResizeTerminal";
-    pub const CLOSE_TERMINAL: &str = "CloseTerminal";
-    /// Checkout-diff stream for this device's chats (DataRpc).
-    pub const WATCH_CHECKOUT_DIFFS: &str = "WatchCheckoutDiffs";
-    pub const WATCH_WORKSPACE_GIT_STATUS: &str = "WatchWorkspaceGitStatus";
-    /// Current pull request for one checkout.
-    pub const WATCH_CHECKOUT_CHANGE_REQUEST: &str = "WatchCheckoutChangeRequest";
-    pub const GET_CHECKOUT_DIFF: &str = "GetCheckoutDiff";
-    /// Permanently restore one chat-owned checkout to its current HEAD and
-    /// remove only its untracked, non-ignored paths.
-    pub const DISCARD_WORKING_TREE: &str = "DiscardWorkingTree";
-    pub const GET_CHECKOUT_FILE_DIFF_TEXT: &str = "GetCheckoutFileDiffText";
-    // Agent accounts (ControlRpc; CLI logins are per-device).
-    pub const LIST_AGENT_ACCOUNTS: &str = "ListAgentAccounts";
-    pub const ACTIVATE_AGENT_ACCOUNT: &str = "ActivateAgentAccount";
-    pub const FORGET_AGENT_ACCOUNT: &str = "ForgetAgentAccount";
-    pub const START_AGENT_LOGIN: &str = "StartAgentLogin";
-    pub const COMPLETE_AGENT_LOGIN: &str = "CompleteAgentLogin";
-    pub const POLL_AGENT_LOGIN: &str = "PollAgentLogin";
-    pub const CANCEL_AGENT_LOGIN: &str = "CancelAgentLogin";
-    // Uploads / attachments (ControlRpc).
-    pub const UPLOAD_CHUNK: &str = "UploadChunk";
-    pub const UPLOAD_COMMIT: &str = "UploadCommit";
-    pub const READ_ATTACHMENT_CHUNK: &str = "ReadAttachmentChunk";
-    /// Lazy full-tool-output fetch by doc-resident ref, read from the daemon's
-    /// local tool-output store (plan DD1 rulings T0-16, T2-13), one page at a
-    /// time: `{blobRef, offset?, len?}` → `{text, offset, len, total,
-    /// truncated, eof}`.
-    pub const FETCH_TOOL_BLOB: &str = "FetchToolBlob";
-    /// Device-local agent CLI update lifecycle, on request only: nothing is
-    /// checked or installed until a client calls Check or Apply (DD1 Task 3). The stream emits the complete
-    /// ordered status list initially and after every transition.
-    pub const WATCH_HARNESS_UPDATES: &str = "WatchHarnessUpdates";
-    pub const CHECK_HARNESS_UPDATES: &str = "CheckHarnessUpdates";
-    pub const APPLY_HARNESS_UPDATE: &str = "ApplyHarnessUpdate";
-    pub const CANCEL_HARNESS_UPDATE: &str = "CancelHarnessUpdate";
-    pub const DISMISS_HARNESS_UPDATE: &str = "DismissHarnessUpdate";
-}
+/// RPC method names, generated from the method table
+/// (`loams_agentd_proto::rpc::METHODS`, plan DD1 Task 9).
+pub use loams_agentd_proto::rpc::methods;
 
 #[derive(Debug, thiserror::Error)]
 pub enum RpcError {
@@ -269,6 +124,33 @@ pub fn parse_params<T: serde::de::DeserializeOwned>(
     params: serde_json::Value,
 ) -> Result<T, RpcError> {
     serde_json::from_value(params).map_err(|e| RpcError::BadParams(e.to_string()))
+}
+
+/// Parse a call's params into the type its method-table row names.
+pub fn params_of<M: Method>(params: serde_json::Value) -> Result<M::Params, RpcError> {
+    parse_params(params)
+}
+
+/// A unary reply of the type the method's row names (or its wire
+/// equivalent, such as the `Vec` behind a list newtype).
+pub fn reply<M: Method, T: Serialize + WireAs<M::Result>>(value: &T) -> Result<RpcReply, RpcError> {
+    RpcReply::value(value)
+}
+
+/// A stream reply whose items are the type the method's row names. An item
+/// that fails to serialize is dropped.
+pub fn stream_reply<M, T, S>(items: S) -> RpcReply
+where
+    M: Method,
+    T: Serialize + WireAs<M::Result>,
+    S: futures::Stream<Item = T> + Send + 'static,
+{
+    use futures::StreamExt;
+    RpcReply::Stream(
+        items
+            .filter_map(|item| std::future::ready(serde_json::to_value(item).ok()))
+            .boxed(),
+    )
 }
 
 /// Spawn an in-memory server for `service` and return a connected client.

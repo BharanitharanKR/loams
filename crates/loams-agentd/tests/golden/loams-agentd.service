@@ -1,0 +1,17 @@
+# Written by `loams-agentd service install`; it is rewritten on every install.
+[Unit]
+Description=Loams Desktop agent daemon
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=exec
+ExecStart="/home/r&d 50%% $$x/.config/Loams Desktop/agentd/runtime/current/loams-agentd" run --service --config "/home/r&d 50%% $$x/.config/Loams Desktop/agentd/config.toml"
+Restart=on-failure
+RestartSec=2
+RestartPreventExitStatus=3 4
+KillMode=mixed
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

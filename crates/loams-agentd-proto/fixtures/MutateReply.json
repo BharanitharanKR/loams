@@ -1,0 +1,21 @@
+{
+  "ok": true,
+  "sidebarPreferences": {
+    "initialized": true,
+    "pinnedSessionIds": [
+      "chat-1"
+    ],
+    "revision": 3,
+    "sections": [
+      {
+        "collapsed": false,
+        "id": "section-1",
+        "name": "Work",
+        "session_ids": [
+          "chat-2"
+        ]
+      }
+    ],
+    "synced": false
+  }
+}

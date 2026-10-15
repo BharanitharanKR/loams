@@ -736,7 +736,7 @@ final class FacadeContractTests: XCTestCase {
     /// guard on either must cover the other.
     func testDerivedModulesShareOnePackage() {
         XCTAssertEqual(
-            loamsModulesForPackage("loams.live.v1").sorted(), ["live", "tables"],
+            loamsModulesForPackage("loams.live.v1").sorted(), ["live", "live.admin", "tables"],
             "both names for loams.live.v1 must be listed, or a guard on one misses the other"
         )
         let tables = loamsModule("tables")
@@ -755,7 +755,7 @@ final class FacadeContractTests: XCTestCase {
         XCTAssertEqual(mutate.retry, .manual, "a mutation does not retry on its own")
         XCTAssertTrue(mutate.takesIdempotencyKey, "MutateRequest declares idempotency_key")
 
-        let deploy = try loamsRequireBinding(module: "tables", call: "Deploy")
+        let deploy = try loamsRequireBinding(module: "live.admin", call: "Deploy")
         XCTAssertEqual(deploy.retry, .manual)
         XCTAssertFalse(
             deploy.takesIdempotencyKey,

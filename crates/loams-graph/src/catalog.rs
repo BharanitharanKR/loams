@@ -258,6 +258,9 @@ pub struct GraphCatalog {
     /// The last document read per namespace, keyed by the pointer version it was read at
     /// (review I4): a load whose pointer has not moved does not GET the document again.
     cache: Arc<std::sync::Mutex<std::collections::HashMap<NamespaceId, (u64, Document)>>>,
+    /// The namespace ids read so far by name: with `cache`, what [`GraphCatalog::last_read`]
+    /// answers while the metastore is unavailable (GR1 Task 16).
+    names: Arc<std::sync::Mutex<std::collections::HashMap<String, NamespaceId>>>,
     #[cfg(feature = "test-hooks")]
     ack_hook: Arc<std::sync::Mutex<Option<AckHook>>>,
 }
@@ -322,6 +325,7 @@ impl GraphCatalog {
             store,
             counters: Arc::default(),
             cache: Arc::default(),
+            names: Arc::default(),
             #[cfg(feature = "test-hooks")]
             ack_hook: Arc::default(),
         }
@@ -349,6 +353,18 @@ impl GraphCatalog {
     #[must_use]
     pub fn counters(&self) -> &Counters {
         &self.counters
+    }
+
+    /// The metastore the catalog commits through.
+    #[must_use]
+    pub fn meta(&self) -> &Arc<dyn MetaStore> {
+        &self.meta
+    }
+
+    /// The bucket the catalog documents (and the graphs' snapshots, GR1 Task 13) live in.
+    #[must_use]
+    pub fn store(&self) -> &Store {
+        &self.store
     }
 
     /// The metastore clock, in milliseconds.
@@ -457,8 +473,9 @@ impl GraphCatalog {
         .await
     }
 
-    /// Graph `meta`'s implicit stream, `graph.<gr_id>`, created when absent (GR1 Task 11).
-    /// Creating it again answers the same stream, so a retry is safe.
+    /// Graph `meta`'s implicit stream, `_graph.<gr_id>`, created when absent (GR1 Task 11), or
+    /// renamed from GR1 Task 11's `graph.<gr_id>` in place (GR1 Task 12). Creating it again
+    /// answers the same stream, so a retry is safe.
     ///
     /// # Errors
     ///
@@ -470,6 +487,28 @@ impl GraphCatalog {
         let namespace = self.ensure_namespace(&meta.namespace).await?;
         crate::durable::GraphLog::ensure_stream(&self.meta, namespace, &meta.id)
             .await
+            .map_err(unavailable)
+    }
+
+    /// Drops graph `meta`'s implicit stream, while `fence` holds (a deleted graph's purge, GR1
+    /// Task 12): its records become unreadable and its objects are retired for garbage
+    /// collection. Answers whether there was one; a retry finds none.
+    ///
+    /// # Errors
+    ///
+    /// [`CatalogError::Unavailable`], also when the fence is broken (nothing changes).
+    pub async fn drop_stream(
+        &self,
+        meta: &GraphMeta,
+        fence: Option<loams_common::meta::Fence>,
+    ) -> Result<bool, CatalogError> {
+        let Some(namespace) = self.namespace_id(&meta.namespace).await? else {
+            return Ok(false);
+        };
+        self.meta
+            .drop_graph_stream(namespace, &meta.id, fence)
+            .await
+            .map(|dropped| dropped.is_some())
             .map_err(unavailable)
     }
 
@@ -532,6 +571,23 @@ impl GraphCatalog {
             .filter(|g| !g.is_deleting())
             .cloned()
             .ok_or_else(|| not_found(namespace, name))
+    }
+
+    /// Graph `namespace`/`name` as this process last read it, without the metastore: possibly
+    /// stale, and `None` when it was never read here or was being deleted then. Only for a read
+    /// that may be served stale (`eventual`, by a follower) while the metastore is unavailable
+    /// (GR1 Task 16's `metastore_unavailable_stops_writes_not_reads`).
+    #[must_use]
+    pub fn last_read(&self, namespace: &str, name: &str) -> Option<GraphMeta> {
+        let id = *self.names.lock().ok()?.get(namespace)?;
+        let cache = self.cache.lock().ok()?;
+        cache
+            .get(&id)?
+            .1
+            .graphs
+            .get(name)
+            .filter(|g| !g.is_deleting())
+            .cloned()
     }
 
     /// The graph with id `id` in `namespace`, deleting ones included.
@@ -786,16 +842,28 @@ impl GraphCatalog {
             .map(|(_, doc)| doc.clone())
     }
 
-    async fn namespace_id(&self, namespace: &str) -> Result<Option<NamespaceId>, CatalogError> {
-        Ok(self
+    pub(crate) async fn namespace_id(
+        &self,
+        namespace: &str,
+    ) -> Result<Option<NamespaceId>, CatalogError> {
+        let id = self
             .meta
             .namespace_by_name(Consistency::Linearizable, namespace)
             .await
             .map_err(unavailable)?
-            .map(|ns| ns.id))
+            .map(|ns| ns.id);
+        if let (Some(id), Ok(mut names)) = (id, self.names.lock()) {
+            names.insert(namespace.to_string(), id);
+        }
+        Ok(id)
     }
 
     async fn ensure_namespace(&self, namespace: &str) -> Result<NamespaceId, CatalogError> {
+        if loams_common::meta::is_reserved_namespace(namespace) {
+            return Err(CatalogError::Invalid(format!(
+                "namespace_reserved: namespace {namespace:?} is reserved for Loams"
+            )));
+        }
         if let Some(id) = self.namespace_id(namespace).await? {
             return Ok(id);
         }

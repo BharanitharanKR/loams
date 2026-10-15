@@ -116,7 +116,7 @@ type TablesModule interface {
 	// and reused on every retry, so a retried mutation is one write (R3). Pass
 	// `WithIdempotencyKey` to supply your own.
 	Mutate(ctx context.Context, request *MutateRequest, options ...CallOption) (*MutateResponse, error)
-	// Deploy is `loams.live.v1.LiveService/Deploy`, retried: manual. Admin:
+	// Deploy is `loams.live.v1.LiveAdminService/Deploy`, retried: manual. Admin:
 	// deploys a function bundle and a schema.
 	Deploy(ctx context.Context, request *DeployRequest, options ...CallOption) (*DeployResponse, error)
 }
@@ -239,7 +239,7 @@ func (m *tablesModule) Deploy(ctx context.Context, request *DeployRequest, optio
 	if err != nil {
 		return nil, err
 	}
-	client, err := clientOf[livev1connect.LiveServiceClient](m.invoker, binding.Service)
+	client, err := clientOf[livev1connect.LiveAdminServiceClient](m.invoker, binding.Service)
 	if err != nil {
 		return nil, err
 	}

@@ -64,4 +64,60 @@ public interface TableSchemaOrBuilder extends
    */
   dev.loams.gen.loams.live.v1.IndexSchemaOrBuilder getIndexesOrBuilder(
       int index);
+
+  /**
+   * <pre>
+   * The validator every write to the table must match (design §45 §4.1,
+   * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+   * own fields (not `_id` or `_creationTime`). Absent: any document.
+   * </pre>
+   *
+   * <code>.loams.live.v1.Validator validator = 3 [json_name = "validator"];</code>
+   * @return Whether the validator field is set.
+   */
+  boolean hasValidator();
+  /**
+   * <pre>
+   * The validator every write to the table must match (design §45 §4.1,
+   * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+   * own fields (not `_id` or `_creationTime`). Absent: any document.
+   * </pre>
+   *
+   * <code>.loams.live.v1.Validator validator = 3 [json_name = "validator"];</code>
+   * @return The validator.
+   */
+  dev.loams.gen.loams.live.v1.Validator getValidator();
+  /**
+   * <pre>
+   * The validator every write to the table must match (design §45 §4.1,
+   * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+   * own fields (not `_id` or `_creationTime`). Absent: any document.
+   * </pre>
+   *
+   * <code>.loams.live.v1.Validator validator = 3 [json_name = "validator"];</code>
+   */
+  dev.loams.gen.loams.live.v1.ValidatorOrBuilder getValidatorOrBuilder();
+
+  /**
+   * <pre>
+   * Whether a deploy that makes the validator stricter checks the table's
+   * existing documents first (absent: true). With `false` the new validator
+   * applies at once to new writes only, as Convex's `schemaValidation`.
+   * </pre>
+   *
+   * <code>optional bool schema_validation = 4 [json_name = "schemaValidation"];</code>
+   * @return Whether the schemaValidation field is set.
+   */
+  boolean hasSchemaValidation();
+  /**
+   * <pre>
+   * Whether a deploy that makes the validator stricter checks the table's
+   * existing documents first (absent: true). With `false` the new validator
+   * applies at once to new writes only, as Convex's `schemaValidation`.
+   * </pre>
+   *
+   * <code>optional bool schema_validation = 4 [json_name = "schemaValidation"];</code>
+   * @return The schemaValidation.
+   */
+  boolean getSchemaValidation();
 }

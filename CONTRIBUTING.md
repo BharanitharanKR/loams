@@ -15,7 +15,8 @@ The crates are `loams-*` and the binary is `loams`. Packages will publish as `lo
 
 1. **Discuss before large changes.** Anything that changes a storage format, a wire protocol, or a decision in the [decision log](docs/design/13-decision-log.md) needs an issue or a design PR first.
 2. **Tests come with behavior.** New behavior comes with tests. Storage, log and metastore code also needs deterministic-simulation or fault-injection coverage (see the testing strategy in [the roadmap](docs/design/12-roadmap-testing-risks.md)).
-3. **Dependency licenses.** Only Apache-2.0, MIT, BSD, ISC, Zlib, Unicode, MPL-2.0 (unmodified, as a separate crate) or compatible licenses. **No AGPL, GPL, LGPL, BSL (Business Source), SSPL, ELv2 or proprietary code.** CI enforces this with `cargo-deny` ([`deny.toml`](deny.toml)).
+3. **Dependency licenses.** Only Apache-2.0, MIT, BSD (including 0BSD), ISC, Zlib, Unicode, MPL-2.0 (unmodified, as a separate crate) or compatible licenses. **No AGPL, GPL, LGPL, BSL (Business Source), SSPL, ELv2 or proprietary code.** CI enforces this with `cargo-deny` ([`deny.toml`](deny.toml)).
+   - For npm, `node scripts/ci/npm-licences.mjs` checks the production dependencies of the console, the desktop and `@loams/studio-ui` against the same list, refuses Tiptap Pro and Cloud packages, and takes exact, approved exceptions from `scripts/ci/npm-licences.exceptions.json`.
 4. **Attribute derived code.** Code taken from other projects (for example Quickwit, Tantivy or Qdrant) keeps its original copyright header, gets a line in [NOTICE](NOTICE), and is called out in the PR description.
 5. **Keep PRs small.** One focused change per PR, with a description of what changed and why.
 
@@ -26,13 +27,7 @@ enforcement are open source. Billing-grade metering, billing and commercial APIs
 belong in the private `loams-platform` repository. **Integrity** is the rule:
 "could a charge depend on this value, and could a tenant or an agent profit from
 forging it?" If so, its producer and validator belong in the private platform.
-
-Run `scripts/ci/no-metering.sh` before submitting changes. The guard scans tracked
-files and Cargo manifests/lockfiles; only the historical boundary documents named
-in [MT4 Task 8](docs/plans/2026-10-02-mt4-byoc-control-plane.md) may mention the
-private protocol's identifiers. New exceptions require a boundary review. The
-open engine never depends on a private platform package. See
-[open-core.md](docs/open-core.md) for the full boundary.
+The open engine never depends on a private platform package.
 
 ## Development setup
 

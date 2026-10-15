@@ -210,6 +210,17 @@ mod tests {
     use loams_common::{NamespaceId, StreamId};
 
     use super::*;
+
+    /// UP1 Task 1: the snapshot decoder's window is the registry's
+    /// (`meta.raft_snapshot` reads 5..=8, a `WIDER_READ` entry).
+    #[test]
+    fn format_constants_match_registry() {
+        use loams_common::formats;
+        let spec = formats::spec_of(formats::META_RAFT_SNAPSHOT);
+        assert_eq!(u32::from(spec.current), SNAPSHOT_FORMAT_VERSION);
+        assert_eq!(u32::from(spec.min_read), BASE_FORMAT_VERSION);
+        assert!(formats::WIDER_READ.contains(&formats::META_RAFT_SNAPSHOT));
+    }
     use crate::command::Command;
 
     fn collection(name: &str) -> Command {

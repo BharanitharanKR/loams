@@ -20,12 +20,13 @@
 use std::collections::BTreeMap;
 
 use bytes::Bytes;
+use loams_common::formats::{self, FormatId};
 use serde::{Deserialize, Serialize};
 
 use crate::error::CollectionError;
 
 /// The first byte of every PK index value.
-const VALUE_VERSION: u8 = 0x01;
+pub(crate) const VALUE_VERSION: u8 = 0x01;
 
 /// The manifest a PK index reflects: its version and its `applied` offsets.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
@@ -56,7 +57,11 @@ impl PkWatermark {
     pub fn decode(bytes: &[u8]) -> Result<Self, CollectionError> {
         let corrupt = |why: String| CollectionError::Corrupt(format!("pk watermark: {why}"));
         let body = match bytes.split_first() {
-            Some((&VALUE_VERSION, body)) => body,
+            Some((&version, body))
+                if formats::check(formats::COLLECTION_PK_VALUE, u16::from(version)).is_ok() =>
+            {
+                body
+            }
             Some((version, _)) => return Err(corrupt(format!("unknown version {version}"))),
             None => return Err(corrupt("empty value".to_string())),
         };
@@ -101,7 +106,7 @@ pub const PK_DELTA_MAGIC: &[u8; 4] = b"OPPD";
 /// One key of a PK delta: its canonical bytes and its new row id (`None`:
 /// the key was deleted).
 pub type PkDeltaEntry = (Vec<u8>, Option<u64>);
-const PK_DELTA_VERSION: u16 = 1;
+pub(crate) const PK_DELTA_VERSION: u16 = 1;
 const HEADER_LEN: usize = 6;
 const CRC_LEN: usize = 4;
 
@@ -119,7 +124,8 @@ pub fn encode_pk_delta(entries: &[PkDeltaEntry]) -> Bytes {
 /// malformed body or keys that are not strictly ascending is `Corrupt`.
 pub fn decode_pk_delta(bytes: &[u8]) -> Result<Vec<PkDeltaEntry>, CollectionError> {
     let corrupt = |why: String| CollectionError::Corrupt(format!("pk delta: {why}"));
-    let body = open_envelope(PK_DELTA_MAGIC, PK_DELTA_VERSION, bytes).map_err(corrupt)?;
+    let body =
+        open_envelope(PK_DELTA_MAGIC, formats::COLLECTION_PK_DELTA, bytes).map_err(corrupt)?;
     let (entries, rest): (Vec<PkDeltaEntry>, _) =
         postcard::take_from_bytes(body).map_err(|err| corrupt(err.to_string()))?;
     if !rest.is_empty() {
@@ -132,10 +138,10 @@ pub fn decode_pk_delta(bytes: &[u8]) -> Result<Vec<PkDeltaEntry>, CollectionErro
 }
 
 /// The body of a Loams envelope (`magic ‖ u16 LE version ‖ body ‖ crc32c
-/// LE`), or why it is not one.
+/// LE`) whose version `format` reads, or why it is not one.
 pub(crate) fn open_envelope<'a>(
     magic: &[u8; 4],
-    version: u16,
+    format: FormatId,
     bytes: &'a [u8],
 ) -> Result<&'a [u8], String> {
     if bytes.len() < HEADER_LEN + CRC_LEN {
@@ -149,9 +155,8 @@ pub(crate) fn open_envelope<'a>(
         return Err("crc mismatch".to_string());
     }
     let found = u16::from_le_bytes([framed[4], framed[5]]);
-    if found != version {
-        return Err(format!("unknown format version {found}"));
-    }
+    // The registry's readable range (UP1 Task 1), not only the current one.
+    formats::check(format, found).map_err(|e| format!("unknown format version {found} ({e})"))?;
     Ok(&framed[HEADER_LEN..])
 }
 

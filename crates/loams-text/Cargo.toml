@@ -14,6 +14,7 @@ bytes.workspace = true
 crc32c.workspace = true
 futures.workspace = true
 loams-cache.workspace = true
+loams-common.workspace = true
 loams-quickwit.workspace = true
 loams-store.workspace = true
 roaring.workspace = true
@@ -25,7 +26,6 @@ unicode-segmentation.workspace = true
 
 [dev-dependencies]
 object_store.workspace = true
-loams-common.workspace = true
 proptest.workspace = true
 
 [lints]

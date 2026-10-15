@@ -15,8 +15,8 @@ use axum::extract::{Request, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::response::{IntoResponse, Response};
 use loams_postgres::compute_ctl::{
-    ComputeCtlClient, ComputeCtlConfig, ComputeStatus, ControlPlaneComputeStatus,
-    ControlPlaneConfigResponse, TerminateMode,
+    ComputeCtlClient, ComputeCtlConfig, ComputeStatus, ComputeStatusResponse,
+    ControlPlaneComputeStatus, ControlPlaneConfigResponse, TerminateMode,
 };
 use loams_postgres::pageserver::{NeonClient, NeonEndpoints, TenantConfig, TimelineCreate};
 use loams_postgres::spec::{ComputeMode, ComputeSpecBuilder, DatabaseRec, RoleRec, Setting};
@@ -610,6 +610,7 @@ async fn compute_ctl_calls() {
     let st = ctl.status().await.unwrap();
     assert_eq!(st.status, ComputeStatus::Running);
     assert_eq!(st.tenant.as_deref(), Some(T));
+    assert_eq!(st.last_active_ms().unwrap(), None, "no activity yet");
     let seen = fake.last();
     assert_eq!(
         (seen.method.as_str(), seen.path_and_query.as_str()),
@@ -702,6 +703,25 @@ async fn compute_ctl_calls() {
         r#"{"error":"Multiple requests for prewarm are not allowed"}"#,
     );
     assert_eq!(ctl.prewarm(None).await.unwrap_err().reason(), "aborted");
+
+    // The file cache, as the autoscaler reads it (PG2 Task 15): the
+    // exposition of pgxn/neon/communicator's lfc_metrics.rs.
+    fake.answer(200, &fixture("src_autoscaling_metrics.txt"));
+    let fc = ctl.autoscaling_metrics().await.unwrap();
+    assert_eq!(fc.size_bytes, Some(3_221_225_472));
+    assert_eq!(fc.working_set_bytes, Some(3000 * 8192));
+    let seen = fake.last();
+    assert_eq!(
+        (seen.method.as_str(), seen.path_and_query.as_str()),
+        ("GET", "/autoscaling_metrics")
+    );
+    assert_eq!(
+        loams_postgres::compute_ctl::FileCacheMetrics::parse("lfc_hits 3\n"),
+        loams_postgres::compute_ctl::FileCacheMetrics::default(),
+        "a series it does not read leaves both unknown"
+    );
+    fake.answer(500, "communicator socket gone");
+    assert_eq!(ctl.autoscaling_metrics().await.unwrap_err().status, 500);
 }
 
 /// A failover target prewarms from endpoint storage: the spec carries its
@@ -751,6 +771,39 @@ fn golden_builder() -> ComputeSpecBuilder {
         .max_cluster_size_mb(10_240)
         .suspend_timeout_seconds(300)
         .mode(ComputeMode::Primary)
+}
+
+/// `last_active` as `compute_ctl` writes it: chrono's `to_rfc3339` of a UTC
+/// time (`compute_api/src/responses.rs` `rfc3339_serialize`), an offset
+/// rather than `Z`, nanoseconds when it has them. Anything else is an error,
+/// never a time (PG2 Task 12 reads it for idle detection).
+#[test]
+fn compute_status_last_active_parses() {
+    let status = |last_active: &str| -> ComputeStatusResponse {
+        serde_json::from_str(&format!(
+            r#"{{"start_time":"2026-10-09T12:10:07.218557023+00:00","tenant":null,"timeline":null,"status":"running","last_active":{last_active},"error":null}}"#
+        ))
+        .unwrap()
+    };
+    assert_eq!(
+        status(r#""2026-10-09T12:10:07.218557023+00:00""#)
+            .last_active_ms()
+            .unwrap(),
+        Some(1_791_547_807_218)
+    );
+    assert_eq!(
+        status(r#""2026-10-09T12:10:07+00:00""#)
+            .last_active_ms()
+            .unwrap(),
+        Some(1_791_547_807_000)
+    );
+    assert_eq!(status("null").last_active_ms().unwrap(), None);
+    assert!(status(r#""yesterday""#).last_active_ms().is_err());
+    // An answer without the field (an older compute_ctl) has no activity.
+    let bare: ComputeStatusResponse =
+        serde_json::from_str(r#"{"status":"running","tenant":null,"timeline":null,"error":null}"#)
+            .unwrap();
+    assert_eq!(bare.last_active_ms().unwrap(), None);
 }
 
 /// One record set produces `tests/fixtures/spec_main.json` (the fork's

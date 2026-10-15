@@ -2,7 +2,9 @@
 //!
 //! Headless only (D782): `run` serves the sessions engine and its harnesses on
 //! a loopback RPC port, `mcp` is the stdio MCP shim injected into harness
-//! runs, `status` reports a running daemon, and `version` prints the build.
+//! runs, `status` reports a running daemon, `service` manages the per-user
+//! service and linger, `install-runtime` installs the versioned binaries, and
+//! `version` prints the build.
 //! Two hidden entry points serve harnesses: `loams bot-acp` (Loams Bot over
 //! ACP) and `--noop-browser` (browser suppression for Antigravity sign-in).
 
@@ -14,7 +16,7 @@ mod status;
 use std::process::ExitCode;
 
 use clap::Parser;
-use cli::{Cli, Command, LoamsCommand, RunArgs};
+use cli::{Cli, Command, LoamsCommand, RunArgs, ServeArgs, ServiceCommand};
 use loams_agentd::config::Config;
 use loams_agentd::paths::Paths;
 use loams_agentd::server::{ServeOptions, serve};
@@ -70,7 +72,8 @@ fn main() -> ExitCode {
     attach_parent_console();
     let cli = Cli::parse();
     match cli.command {
-        Command::Run(args) => run(&args),
+        Command::Run(args) => run(&args, None),
+        Command::Serve(args) => serve_remote(&args),
         Command::Mcp(config) => {
             // `mcp` owns stdout for the protocol: a single log line on it
             // would corrupt the JSON-RPC stream, so diagnostics go to stderr.
@@ -100,6 +103,30 @@ fn main() -> ExitCode {
                 return ExitCode::from(2);
             };
             report(status::status(&config))
+        }
+        Command::Service { command } => {
+            init_stderr_tracing("warn");
+            service(command)
+        }
+        Command::InstallRuntime(args) => {
+            init_stderr_tracing("warn");
+            match loams_agentd::runtime_install::install(&args.from, &args.to) {
+                Ok(installed) => {
+                    println!(
+                        "Installed {} in {}.",
+                        installed.version,
+                        installed.dir.display()
+                    );
+                    for version in installed.kept_in_use {
+                        eprintln!("loams-agentd: {version} is in use and was kept");
+                    }
+                    ExitCode::SUCCESS
+                }
+                Err(error) => {
+                    eprintln!("loams-agentd: {error}");
+                    ExitCode::FAILURE
+                }
+            }
         }
         Command::Version => {
             println!("loams-agentd {}", hello::VERSION);
@@ -134,9 +161,72 @@ fn report(result: anyhow::Result<()>) -> ExitCode {
     }
 }
 
+/// `service …`: what it did on stdout; on failure the error on stderr and
+/// exit 1, or 4 for an invalid config.
+fn service(command: ServiceCommand) -> ExitCode {
+    use loams_agentd::service::{self, Action, ServiceError, linger};
+    let (action, config) = match command {
+        ServiceCommand::Install(config) => (Action::Install, config),
+        ServiceCommand::Uninstall(config) => (Action::Uninstall, config),
+        ServiceCommand::Start(config) => (Action::Start, config),
+        ServiceCommand::Stop(config) => (Action::Stop, config),
+        ServiceCommand::Status(config) => (Action::Status, config),
+        ServiceCommand::EnableLinger => return service_result(linger::set(true)),
+        ServiceCommand::DisableLinger => return service_result(linger::set(false)),
+    };
+    let Some(config) = config.resolve() else {
+        eprintln!(
+            "loams-agentd: service needs --config <path> (or {})",
+            cli::CONFIG_ENV
+        );
+        return ExitCode::from(EXIT_INVALID_CONFIG);
+    };
+    let result = service::run(action, &config);
+    if let Err(ServiceError::Config(error)) = &result {
+        eprintln!("loams-agentd: {error}");
+        return ExitCode::from(EXIT_INVALID_CONFIG);
+    }
+    service_result(result)
+}
+
+fn service_result(result: Result<String, loams_agentd::service::ServiceError>) -> ExitCode {
+    match result {
+        Ok(text) => {
+            println!("{text}");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            eprintln!("loams-agentd: {error}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// `serve --remote …`: every flag is checked first (a missing one exits 4
+/// and names it), then it runs as `run` with the remote listener on
+/// (plan SD1 Task 7).
+fn serve_remote(args: &ServeArgs) -> ExitCode {
+    let flags = args.flags();
+    if let Err(error) = flags.settings() {
+        eprintln!("loams-agentd: {error}");
+        return ExitCode::from(EXIT_INVALID_CONFIG);
+    }
+    if args.run.config.resolve().is_none() {
+        eprintln!(
+            "loams-agentd: serve --remote needs --config (or {})",
+            cli::CONFIG_ENV
+        );
+        return ExitCode::from(EXIT_INVALID_CONFIG);
+    }
+    run(&args.run, Some(&flags))
+}
+
 /// `run`: config (exit 4), directory, lock (exit 3), then the server; any
-/// other failure exits 70 (design §50 §5.1).
-fn run(args: &RunArgs) -> ExitCode {
+/// other failure exits 70 (design §50 §5.1). On Windows `run --service` is
+/// the parent that runs `run --worker` and restarts it. `remote` holds
+/// `serve --remote`'s flags; without them `[remote]` decides, and it is off
+/// by default.
+fn run(args: &RunArgs, remote: Option<&loams_agentd::remote::RemoteFlags>) -> ExitCode {
     let Some(config_path) = args.config.resolve() else {
         eprintln!(
             "loams-agentd: run needs --config <path> (or {})",
@@ -144,6 +234,10 @@ fn run(args: &RunArgs) -> ExitCode {
         );
         return ExitCode::from(EXIT_INVALID_CONFIG);
     };
+    #[cfg(windows)]
+    if args.service {
+        return ExitCode::from(loams_agentd::service::windows::supervise(&config_path));
+    }
     let config = match Config::load(&config_path) {
         Ok(config) => config,
         Err(error) => {
@@ -152,6 +246,24 @@ fn run(args: &RunArgs) -> ExitCode {
         }
     };
     let mode = args.mode().unwrap_or(config.daemon.mode);
+    // The remote listener's TLS files and issuer are checked before the
+    // lock: a bad one is a config error (exit 4), like a bad config.toml.
+    let remote = match loams_agentd::remote::resolve(remote, &config.remote).and_then(|settings| {
+        settings
+            .map(|settings| {
+                loams_agentd::remote::options(
+                    &settings,
+                    loams_agentd_rpc::Limits::default().auth_failure_delay,
+                )
+            })
+            .transpose()
+    }) {
+        Ok(remote) => remote,
+        Err(error) => {
+            eprintln!("loams-agentd: {error}");
+            return ExitCode::from(EXIT_INVALID_CONFIG);
+        }
+    };
     let paths = match Paths::for_config(&config_path) {
         Ok(paths) => paths,
         Err(error) => {
@@ -200,6 +312,7 @@ fn run(args: &RunArgs) -> ExitCode {
                 config,
                 mode,
                 default_harness: harness_from_env(),
+                remote,
             }))
         });
     drop(lock);

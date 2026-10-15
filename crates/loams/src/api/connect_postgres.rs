@@ -21,9 +21,10 @@
 //! 4. **audit**: every mutation, and every refusal before the service, is
 //!    one [`AuditEvent`] (D221). Reads that succeed are not audited.
 //!
-//! The RPCs whose behaviour later PG2 tasks build (endpoints, restore,
-//! upgrade, connecting, the watch) answer `unimplemented` with the reason
+//! The RPCs whose behaviour later PG2 tasks build (restore, upgrade,
+//! connecting, promotion) answer `unimplemented` with the reason
 //! `not_implemented`, after the same checks, and are audited the same way.
+//! The endpoint RPCs and `WatchProject` are Task 11's.
 
 use std::future::Future;
 use std::sync::Arc;
@@ -32,6 +33,7 @@ use buffa::MessageField;
 use connectrpc::{
     ConnectError, ErrorCode, RequestContext, Response, ServiceRequest, ServiceResult, ServiceStream,
 };
+use futures::StreamExt;
 use loams_pg_control::audit::{AuditEvent, AuditOutcome, AuditSink};
 use loams_pg_control::authz::{
     self, Authenticator, Authorizer, Object, Principal, Relation, Scope, authorize,
@@ -41,8 +43,12 @@ use loams_pg_control::service::branches::{
     BranchPoint, CreateBranch, DeleteBranch, SetDefaultBranch, UpdateBranch,
 };
 use loams_pg_control::service::databases::{CreateDatabase, DeleteDatabase};
+use loams_pg_control::service::endpoints::{
+    CreateEndpoint, DeleteEndpoint, EndpointAction, UpdateEndpoint,
+};
 use loams_pg_control::service::projects::{CreateProject, DeleteProject, UpdateProject};
 use loams_pg_control::service::roles::{CreateRole, DeleteRole, ResetRolePassword};
+use loams_pg_control::service::watch::WatchOptions;
 use loams_pg_control::service::{Caller, Clock, PgService, Reason, ServiceError};
 use loams_proto::loams::operations::v1 as ops;
 use loams_proto::loams::operations::v1::{OperationsService, OperationsServiceExt};
@@ -779,14 +785,38 @@ impl PostgresService for Postgres {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::CreateEndpointRequest>,
     ) -> ServiceResult<pb::CreateEndpointResponse> {
-        let call = Call::new("CreateEndpoint", request.namespace)
-            .project(request.project_id)
-            .key(request.idempotency_key);
-        self.gate
-            .mutate(&ctx, call, |_| async {
-                Err(Failure::NotBuilt("PG2 Task 11"))
+        let r = request.to_owned_message();
+        let call = Call::new("CreateEndpoint", &r.namespace)
+            .project(&r.project_id)
+            .target("branch_id", &r.branch_id)
+            .key(&r.idempotency_key);
+        let view = self
+            .gate
+            .mutate(&ctx, call, |caller| async move {
+                let suspend_timeout_s = r
+                    .suspend_timeout
+                    .as_option()
+                    .map(|d| msg::suspend_timeout(d, "suspend_timeout"))
+                    .transpose()?;
+                let req = CreateEndpoint {
+                    namespace: r.namespace,
+                    project_id: r.project_id,
+                    branch_id: r.branch_id,
+                    kind: msg::endpoint_type(r.r#type, "type")?,
+                    min_cu: msg::cu(r.min_cu, "min_cu")?,
+                    max_cu: msg::cu(r.max_cu, "max_cu")?,
+                    suspend_timeout_s,
+                    pool_mode: msg::pool_mode(r.pool_mode, "pool_mode")?,
+                    pg_settings: r.pg_settings.into_iter().collect(),
+                    idempotency_key: r.idempotency_key,
+                };
+                plain(self.service.create_endpoint(&caller, req).await)
             })
-            .await
+            .await?;
+        Response::ok(pb::CreateEndpointResponse {
+            endpoint: MessageField::some(msg::endpoint(&view)),
+            ..Default::default()
+        })
     }
 
     async fn get_endpoint(
@@ -794,12 +824,22 @@ impl PostgresService for Postgres {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::GetEndpointRequest>,
     ) -> ServiceResult<pb::GetEndpointResponse> {
-        let call = Call::new("GetEndpoint", request.namespace).project(request.project_id);
-        self.gate
+        let call = Call::new("GetEndpoint", request.namespace)
+            .project(request.project_id)
+            .target("endpoint_id", request.endpoint_id);
+        let view = self
+            .gate
             .read(&ctx, call, || async {
-                Err(Failure::NotBuilt("PG2 Task 11"))
+                Ok(self
+                    .service
+                    .get_endpoint(request.namespace, request.project_id, request.endpoint_id)
+                    .await?)
             })
-            .await
+            .await?;
+        Response::ok(pb::GetEndpointResponse {
+            endpoint: MessageField::some(msg::endpoint(&view)),
+            ..Default::default()
+        })
     }
 
     async fn list_endpoints(
@@ -807,12 +847,29 @@ impl PostgresService for Postgres {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::ListEndpointsRequest>,
     ) -> ServiceResult<pb::ListEndpointsResponse> {
-        let call = Call::new("ListEndpoints", request.namespace).project(request.project_id);
-        self.gate
+        let call = Call::new("ListEndpoints", request.namespace)
+            .project(request.project_id)
+            .target("branch_id", request.branch_id);
+        let (endpoints, next) = self
+            .gate
             .read(&ctx, call, || async {
-                Err(Failure::NotBuilt("PG2 Task 11"))
+                Ok(self
+                    .service
+                    .list_endpoints(
+                        request.namespace,
+                        request.project_id,
+                        request.branch_id,
+                        request.page_size,
+                        request.page_token,
+                    )
+                    .await?)
             })
-            .await
+            .await?;
+        Response::ok(pb::ListEndpointsResponse {
+            endpoints: endpoints.iter().map(msg::endpoint).collect(),
+            next_page_token: next,
+            ..Default::default()
+        })
     }
 
     async fn update_endpoint(
@@ -820,14 +877,65 @@ impl PostgresService for Postgres {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::UpdateEndpointRequest>,
     ) -> ServiceResult<pb::UpdateEndpointResponse> {
-        let call = Call::new("UpdateEndpoint", request.namespace)
-            .project(request.project_id)
-            .key(request.idempotency_key);
-        self.gate
-            .mutate(&ctx, call, |_| async {
-                Err(Failure::NotBuilt("PG2 Task 11"))
+        let r = request.to_owned_message();
+        let endpoint = r.endpoint.as_option().cloned().unwrap_or_default();
+        let call = Call::new("UpdateEndpoint", &r.namespace)
+            .project(&r.project_id)
+            .target("endpoint_id", &endpoint.id)
+            .key(&r.idempotency_key);
+        let view = self
+            .gate
+            .mutate(&ctx, call, |caller| async move {
+                let paths = msg::mask(
+                    r.update_mask.as_option(),
+                    &[
+                        "min_cu",
+                        "max_cu",
+                        "suspend_timeout",
+                        "pool_mode",
+                        "pg_settings",
+                    ],
+                )?;
+                let has = |p: &str| paths.contains(&p);
+                let suspend_timeout_s = if has("suspend_timeout") {
+                    Some(endpoint.suspend_timeout.as_option().map_or(Ok(0), |d| {
+                        msg::suspend_timeout(d, "endpoint.suspend_timeout")
+                    })?)
+                } else {
+                    None
+                };
+                let req = UpdateEndpoint {
+                    namespace: r.namespace,
+                    project_id: r.project_id,
+                    endpoint_id: endpoint.id,
+                    min_cu: if has("min_cu") {
+                        msg::cu(endpoint.min_cu, "endpoint.min_cu")?
+                    } else {
+                        None
+                    },
+                    max_cu: if has("max_cu") {
+                        msg::cu(endpoint.max_cu, "endpoint.max_cu")?
+                    } else {
+                        None
+                    },
+                    suspend_timeout_s,
+                    pool_mode: if has("pool_mode") {
+                        msg::pool_mode(endpoint.pool_mode, "endpoint.pool_mode")?
+                    } else {
+                        None
+                    },
+                    pg_settings: has("pg_settings")
+                        .then(|| endpoint.pg_settings.into_iter().collect()),
+                    expected_version: r.expected_version,
+                    idempotency_key: r.idempotency_key,
+                };
+                plain(self.service.update_endpoint(&caller, req).await)
             })
-            .await
+            .await?;
+        Response::ok(pb::UpdateEndpointResponse {
+            endpoint: MessageField::some(msg::endpoint(&view)),
+            ..Default::default()
+        })
     }
 
     async fn start_endpoint(
@@ -835,15 +943,29 @@ impl PostgresService for Postgres {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::StartEndpointRequest>,
     ) -> ServiceResult<pb::StartEndpointResponse> {
-        let call = Call::new("StartEndpoint", request.namespace)
-            .project(request.project_id)
-            .target("endpoint_id", request.endpoint_id)
-            .key(request.idempotency_key);
-        self.gate
-            .mutate(&ctx, call, |_| async {
-                Err(Failure::NotBuilt("PG2 Task 11"))
+        let r = request.to_owned_message();
+        let call = Call::new("StartEndpoint", &r.namespace)
+            .project(&r.project_id)
+            .target("endpoint_id", &r.endpoint_id)
+            .key(&r.idempotency_key);
+        let op = self
+            .gate
+            .mutate(&ctx, call, |caller| async move {
+                let action = EndpointAction {
+                    namespace: r.namespace,
+                    project_id: r.project_id,
+                    endpoint_id: r.endpoint_id,
+                    idempotency_key: r.idempotency_key,
+                };
+                let op = self.service.start_endpoint(&caller, action).await?;
+                let made = Made::operation(&op.id);
+                Ok((op, made))
             })
-            .await
+            .await?;
+        Response::ok(pb::StartEndpointResponse {
+            operation: MessageField::some(msg::operation(&op)),
+            ..Default::default()
+        })
     }
 
     async fn suspend_endpoint(
@@ -851,15 +973,29 @@ impl PostgresService for Postgres {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::SuspendEndpointRequest>,
     ) -> ServiceResult<pb::SuspendEndpointResponse> {
-        let call = Call::new("SuspendEndpoint", request.namespace)
-            .project(request.project_id)
-            .target("endpoint_id", request.endpoint_id)
-            .key(request.idempotency_key);
-        self.gate
-            .mutate(&ctx, call, |_| async {
-                Err(Failure::NotBuilt("PG2 Task 11"))
+        let r = request.to_owned_message();
+        let call = Call::new("SuspendEndpoint", &r.namespace)
+            .project(&r.project_id)
+            .target("endpoint_id", &r.endpoint_id)
+            .key(&r.idempotency_key);
+        let op = self
+            .gate
+            .mutate(&ctx, call, |caller| async move {
+                let action = EndpointAction {
+                    namespace: r.namespace,
+                    project_id: r.project_id,
+                    endpoint_id: r.endpoint_id,
+                    idempotency_key: r.idempotency_key,
+                };
+                let op = self.service.suspend_endpoint(&caller, action).await?;
+                let made = Made::operation(&op.id);
+                Ok((op, made))
             })
-            .await
+            .await?;
+        Response::ok(pb::SuspendEndpointResponse {
+            operation: MessageField::some(msg::operation(&op)),
+            ..Default::default()
+        })
     }
 
     async fn restart_endpoint(
@@ -867,15 +1003,32 @@ impl PostgresService for Postgres {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::RestartEndpointRequest>,
     ) -> ServiceResult<pb::RestartEndpointResponse> {
-        let call = Call::new("RestartEndpoint", request.namespace)
-            .project(request.project_id)
-            .target("endpoint_id", request.endpoint_id)
-            .key(request.idempotency_key);
-        self.gate
-            .mutate(&ctx, call, |_| async {
-                Err(Failure::NotBuilt("PG2 Task 11"))
+        let r = request.to_owned_message();
+        let call = Call::new("RestartEndpoint", &r.namespace)
+            .project(&r.project_id)
+            .target("endpoint_id", &r.endpoint_id)
+            .key(&r.idempotency_key);
+        let op = self
+            .gate
+            .mutate(&ctx, call, |caller| async move {
+                if r.promote {
+                    return Err(Failure::NotBuilt("PG2 Task 16"));
+                }
+                let action = EndpointAction {
+                    namespace: r.namespace,
+                    project_id: r.project_id,
+                    endpoint_id: r.endpoint_id,
+                    idempotency_key: r.idempotency_key,
+                };
+                let op = self.service.restart_endpoint(&caller, action).await?;
+                let made = Made::operation(&op.id);
+                Ok((op, made))
             })
-            .await
+            .await?;
+        Response::ok(pb::RestartEndpointResponse {
+            operation: MessageField::some(msg::operation(&op)),
+            ..Default::default()
+        })
     }
 
     async fn delete_endpoint(
@@ -883,15 +1036,30 @@ impl PostgresService for Postgres {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::DeleteEndpointRequest>,
     ) -> ServiceResult<pb::DeleteEndpointResponse> {
-        let call = Call::new("DeleteEndpoint", request.namespace)
-            .project(request.project_id)
-            .target("endpoint_id", request.endpoint_id)
-            .key(request.idempotency_key);
-        self.gate
-            .mutate(&ctx, call, |_| async {
-                Err(Failure::NotBuilt("PG2 Task 11"))
+        let r = request.to_owned_message();
+        let call = Call::new("DeleteEndpoint", &r.namespace)
+            .project(&r.project_id)
+            .target("endpoint_id", &r.endpoint_id)
+            .key(&r.idempotency_key);
+        let op = self
+            .gate
+            .mutate(&ctx, call, |caller| async move {
+                let req = DeleteEndpoint {
+                    namespace: r.namespace,
+                    project_id: r.project_id,
+                    endpoint_id: r.endpoint_id,
+                    expected_version: r.expected_version,
+                    idempotency_key: r.idempotency_key,
+                };
+                let op = self.service.delete_endpoint(&caller, req).await?;
+                let made = Made::operation(&op.id);
+                Ok((op, made))
             })
-            .await
+            .await?;
+        Response::ok(pb::DeleteEndpointResponse {
+            operation: MessageField::some(msg::operation(&op)),
+            ..Default::default()
+        })
     }
 
     async fn create_role(
@@ -1164,11 +1332,26 @@ impl PostgresService for Postgres {
         request: ServiceRequest<'_, pb::WatchProjectRequest>,
     ) -> ServiceResult<ServiceStream<pb::WatchProjectResponse>> {
         let call = Call::new("WatchProject", request.namespace).project(request.project_id);
-        self.gate
+        let items = self
+            .gate
             .read(&ctx, call, || async {
-                Err(Failure::NotBuilt("a later PG2 task"))
+                Ok(self
+                    .service
+                    .watch_project(
+                        request.namespace,
+                        request.project_id,
+                        request.resume_cursor,
+                        WatchOptions::default(),
+                    )
+                    .await?)
             })
-            .await
+            .await?;
+        let stream: ServiceStream<pb::WatchProjectResponse> =
+            Box::pin(items.map(|item| match item {
+                Ok(item) => Ok(msg::watch_item(&item)),
+                Err(e) => Err(refused(&e)),
+            }));
+        Response::ok(stream)
     }
 }
 

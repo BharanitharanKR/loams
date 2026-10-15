@@ -1,0 +1,102 @@
+{
+  "recorded_from": "HubSpot",
+  "synthetic": true,
+  "docs": [
+    "https://developers.hubspot.com/docs/api-reference/crm-contacts-v3/guide"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "contacts",
+    "config": {
+      "base_url": "{proxy}"
+    },
+    "secrets": {
+      "token": "synthetic-hubspot-token"
+    },
+    "expect": 3
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "GET",
+        "path": "/crm/v3/objects/contacts?archived=false&limit=100",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "results": [
+              {
+                "id": "101",
+                "properties": {
+                  "email": "ada@example.test",
+                  "firstname": "Ada",
+                  "lastmodifieddate": "2026-09-01T10:00:00.000Z",
+                  "hs_object_id": "101"
+                },
+                "createdAt": "2026-09-01T09:00:00.000Z",
+                "updatedAt": "2026-09-01T10:00:00.000Z",
+                "archived": false
+              },
+              {
+                "id": "102",
+                "properties": {
+                  "email": "grace@example.test",
+                  "firstname": "Grace",
+                  "lastmodifieddate": "2026-09-02T10:00:00.000Z",
+                  "hs_object_id": "102"
+                },
+                "createdAt": "2026-09-02T09:00:00.000Z",
+                "updatedAt": "2026-09-02T10:00:00.000Z",
+                "archived": false
+              }
+            ],
+            "paging": {
+              "next": {
+                "after": "103",
+                "link": "https://api.hubapi.com/crm/v3/objects/contacts?after=103"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/crm/v3/objects/contacts?after=103&archived=false&limit=100",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "results": [
+              {
+                "id": "103",
+                "properties": {
+                  "email": "katherine@example.test",
+                  "firstname": "Katherine",
+                  "lastmodifieddate": "2026-09-03T10:00:00.000Z",
+                  "hs_object_id": "103"
+                },
+                "createdAt": "2026-09-03T09:00:00.000Z",
+                "updatedAt": "2026-09-03T10:00:00.000Z",
+                "archived": false
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

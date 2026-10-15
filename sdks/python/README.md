@@ -1,11 +1,15 @@
-![Loams — Your data. Your bucket.](../../docs/assets/loams-banner.svg)
+![Loams — Your data. Your bucket.](https://raw.githubusercontent.com/ostrium-labs/loams/dev/docs/assets/loams-banner.svg)
 
 # Loams SDK for Python
+
+> **Preview.** `0.1.0a*` releases track the Loams preview server and may change
+> between previews. pip skips prereleases unless asked: `pip install --pre loams`,
+> or pin the exact version (`loams==0.1.0a2`).
 
 One `Loams` object over one Loams instance, speaking the unified Connect API.
 The module surface is generated from `proto/` by `scripts/sdk/gen.sh python`;
 the runtime below it is hand-written and obeys the contract in
-[`docs/sdk/runtime-contract.md`](../../docs/sdk/runtime-contract.md).
+[`docs/sdk/runtime-contract.md`](https://github.com/ostrium-labs/loams/blob/dev/docs/sdk/runtime-contract.md).
 
 ## Install
 
@@ -21,9 +25,10 @@ checkout:
 uv sync --all-extras --dev     # from sdks/python
 ```
 
-The runtime dependency is [`connect-python`](https://pypi.org/project/connect-python/),
-which provides the `connectrpc` import name. That is not a typo — the
-distribution and the module it installs have different names.
+The runtime dependency is [`connectrpc`](https://pypi.org/project/connectrpc/)
+0.12.1 (connectrpc/connect-py), pinned in `scripts/sdk/pins.lock`. Up to 0.9.0
+the same project was published as `connect-python`; the import name has always
+been `connectrpc`.
 
 ## Use
 

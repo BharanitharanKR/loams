@@ -1,0 +1,4 @@
+{
+  "command": "cargo test",
+  "kind": "exec"
+}

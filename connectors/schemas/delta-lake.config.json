@@ -1,9 +1,141 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/delta-lake.config.json",
-  "title": "Delta Lake instance config (placeholder)",
-  "description": "Placeholder for a Delta Lake instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "Delta Lake connector instance config (loams.flow/v1)",
+  "description": "One Delta table's settings, read by the native lakehouse family (`loams_connector_lakehouse::delta`, CN2 Task 17) on deltalake 1.1.0 without datafusion (R17.6). `storage.auth.*` hold secret **names** (D189), exactly the manifest's `secrets`; a local `file://` table needs none.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "table_uri"
+  ],
+  "properties": {
+    "table_uri": {
+      "description": "`s3://bucket/path`, `file:///path` or `memory:///path`.",
+      "type": "string",
+      "minLength": 1
+    },
+    "storage": {
+      "description": "Where the table's storage is and how to reach it (S3 and its targets: RustFS, MinIO, R2).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": {
+          "description": "An S3-compatible endpoint; AWS when absent. It must support conditional writes (`If-None-Match: *`, R17.5).",
+          "type": "string",
+          "minLength": 1
+        },
+        "region": {
+          "description": "The bucket's region.",
+          "type": "string",
+          "minLength": 1
+        },
+        "allow_http": {
+          "description": "Allow plain `http://` endpoints (a local RustFS): development and CI only.",
+          "type": "boolean",
+          "default": false
+        },
+        "virtual_hosted_style": {
+          "description": "Address the bucket virtual-hosted style rather than by path.",
+          "type": "boolean",
+          "default": false
+        },
+        "auth": {
+          "description": "S3 credentials, as secret names; the default credential chain when absent.",
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "access_key_id": {
+              "description": "The access key id. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+              "type": "string",
+              "minLength": 1,
+              "writeOnly": true
+            },
+            "secret_access_key": {
+              "description": "The secret access key. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+              "type": "string",
+              "minLength": 1,
+              "writeOnly": true
+            },
+            "session_token": {
+              "description": "A session token, for temporary credentials. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+              "type": "string",
+              "minLength": 1,
+              "writeOnly": true
+            }
+          }
+        }
+      }
+    },
+    "sink": {
+      "description": "The exactly-once sink: one Delta commit per batch with the `txn` action and the Fabric checkpoint in `commitInfo`.",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "description": "`append`, the only mode built: `merge` needs deltalake's datafusion feature and is refused (R17.6).",
+          "enum": [
+            "append"
+          ],
+          "default": "append"
+        },
+        "partition_by": {
+          "description": "Partition columns of a table the sink creates.",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "create": {
+          "description": "Create the table from the first batch's schema when it does not exist.",
+          "type": "boolean",
+          "default": true
+        },
+        "target_file_size": {
+          "description": "Roll data files at this size, in bytes; one file per partition per commit when unset.",
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "source": {
+      "description": "The source: the table's versions or its change data feed, read from the JSON log (R17.6).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "mode": {
+          "description": "`versions`: the rows each version adds (`rows`). `cdf`: the change data feed (`change`, with `_change_type`, `_commit_version`, `_commit_timestamp`).",
+          "enum": [
+            "versions",
+            "cdf"
+          ],
+          "default": "versions"
+        },
+        "start": {
+          "description": "`snapshot`: the latest snapshot, then every later version. `earliest`: every version from 0 (fails once the log is cleaned up).",
+          "enum": [
+            "snapshot",
+            "earliest"
+          ],
+          "default": "snapshot"
+        },
+        "poll_interval_ms": {
+          "description": "How often a caught-up source looks for a new version.",
+          "type": "integer",
+          "minimum": 1,
+          "default": 5000
+        },
+        "max_file_bytes": {
+          "description": "A data file larger than this stops the instance (it is read whole).",
+          "type": "integer",
+          "minimum": 1,
+          "default": 536870912
+        }
+      }
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }

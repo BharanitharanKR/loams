@@ -1,5 +1,5 @@
 // DEV ONLY: an in-browser fake of the Electron preload's `LoamsDesktopApi`,
-// so the desktop edition can be previewed at `/ui/cordis.html?desktop`
+// so the desktop edition can be previewed at `<base>?desktop`
 // (main.tsx loads this behind `import.meta.env.DEV`; it must never reach a
 // production bundle, and main.test.ts checks the guard).
 //
@@ -33,6 +33,7 @@ import type {
 } from '@loams/desktop/contracts';
 import { validateConfig } from '@loams/desktop/validate';
 import { createMockAgentdApi } from '@loams/plugin-desktop-agentd';
+import { installFakeAgentd } from './fake-agentd.js';
 
 // The generated connector catalog (apps/desktop-electron/scripts/connectors-catalog.mjs), the same
 // JSON the desktop app serves. Loaded lazily and only here, so it never reaches a production bundle.
@@ -50,7 +51,10 @@ function previewCatalog() {
   const load = Object.values(catalogFiles)[0];
   if (!load) {
     return Promise.reject(
-      new Error('connectors.json is missing: run `pnpm --filter @loams/desktop catalog`.'),
+      new Error(
+        'The connector catalog is not built in this preview. The dev server builds it on ' +
+          'start; if that failed, run `pnpm --filter @loams/desktop catalog` and reload.',
+      ),
     );
   }
   catalogJson ??= load();
@@ -167,11 +171,13 @@ const PREVIEW_URLS: Partial<Record<FactoryAppId, string>> = {
   forgejo: 'https://git.demo.invalid',
   glitchtip: 'https://errors.demo.invalid',
   matomo: 'https://stats.demo.invalid',
+  plane: 'https://plan.demo.invalid',
 };
 
 /** Non-secret values the preview keeps in memory, by app. */
 const PREVIEW_FIELDS: Partial<Record<FactoryAppId, Record<string, string>>> = {
   matomo: { idSite: '1' },
+  plane: { projectKey: 'DEMO' },
 };
 
 const day = (n: number) => new Date(Date.now() - n * 86_400_000).toISOString();
@@ -207,10 +213,35 @@ const PREVIEW_DATA: Record<string, unknown> = {
   ],
   'forgejo.version': { version: '11.0.0-demo' },
   'forgejo.issues:pulls': [
-    { id: '#14', title: 'Add demo factory panels', state: 'open', updatedAt: day(0) },
-    { id: '#12', title: 'Bump demo dependencies', state: 'open', updatedAt: day(1) },
-    { id: '#9', title: 'Fix demo flaky test', state: 'open', updatedAt: day(4) },
+    {
+      id: '#14',
+      title: 'Add demo factory panels',
+      state: 'open',
+      updatedAt: day(0),
+      head: 'demo-factory-panels',
+    },
+    {
+      id: '#12',
+      title: 'Bump demo dependencies',
+      state: 'open',
+      updatedAt: day(1),
+      head: 'demo-deps',
+    },
+    {
+      id: '#9',
+      title: 'Fix demo flaky test',
+      state: 'open',
+      updatedAt: day(4),
+      head: 'demo-flaky',
+    },
   ],
+  // Studio's "Fix this error" (SD1 Task 27): the latest event of a GlitchTip issue.
+  'glitchtip.latestEvent': {
+    release: 'demo@0.4.1',
+    culprit: 'demo/cart.ts in total',
+    stack:
+      'TypeError: demo is undefined\n  at total (demo/cart.ts:41)\n  at render (demo/app.ts:12)',
+  },
   'forgejo.issues': [
     {
       id: '#15',
@@ -220,6 +251,17 @@ const PREVIEW_DATA: Record<string, unknown> = {
     },
     { id: '#11', title: 'Demo: document the sample data', state: 'open', updatedAt: day(3) },
   ],
+  'plane.stats': { open_issues: 3, in_progress: 1, done: 8 },
+  'plane.issues': [
+    {
+      id: 'DEMO-42',
+      title: 'Demo: fix the login redirect',
+      priority: 'high',
+      updatedAt: day(0),
+    },
+    { id: 'DEMO-40', title: 'Demo: add a dark logo', priority: 'low', updatedAt: day(2) },
+    { id: 'DEMO-37', title: 'Demo: export to CSV', priority: 'medium', updatedAt: day(5) },
+  ],
   'glitchtip.organizations': [{ slug: 'demo-org', name: 'Demo Org' }],
   'glitchtip.issues': [
     {
@@ -228,6 +270,7 @@ const PREVIEW_DATA: Record<string, unknown> = {
       level: 'error',
       count: '38',
       lastSeen: day(0),
+      permalink: 'https://errors.demo.invalid/demo-org/issues/101',
     },
     { id: '102', title: 'Demo request timed out', level: 'warning', count: '12', lastSeen: day(1) },
     {
@@ -302,6 +345,8 @@ function previewInfo({ fields, ...a }: (typeof PREVIEW_FACTORY_APPS)[number]): F
 }
 
 export function createFakeDesktop(): LoamsDesktopApi {
+  // Studio's daemon: a fake Connect agentd behind the desktop's agentd route (SD1 Task 17).
+  installFakeAgentd();
   const data = load();
   let engine: EngineState = readyState();
   // Ruling T23-8: the preview's TiKV stack never really runs, so choosing it
@@ -319,7 +364,7 @@ export function createFakeDesktop(): LoamsDesktopApi {
   const later = (ms: number, fn: () => void) => globalThis.setTimeout(fn, ms);
 
   return {
-    version: '0.1.0-preview',
+    version: '0.1.0-preview.1',
     platform: 'linux',
     servers: {
       list: async () => ({ servers: [...data.servers], activeId: data.activeId }),
@@ -431,7 +476,27 @@ export function createFakeDesktop(): LoamsDesktopApi {
       },
       onNavigate: () => () => undefined,
       takePendingNavigation: async () => null,
+      // No OS dialog in a browser preview: a prompt stands in for the folder picker.
+      pickFolder: async (title) => globalThis.prompt(title ?? 'Folder path', '~/src/new-project'),
       setBadge: async () => undefined,
+      // No application menu in a browser preview.
+      onCommand: () => () => undefined,
+    },
+    // Studio's editor hand-off (SD1 Task 28): a browser preview cannot start an editor.
+    studio: {
+      openInEditor: async () => ({
+        ok: false,
+        code: 'preview',
+        message: 'Editors open from the desktop app, not from the preview.',
+      }),
+      editor: async () => ({ editor: 'vscode' }),
+      setEditor: async () => ok,
+      chooseEditorCommand: async () => ({
+        ok: false,
+        code: 'preview',
+        message: 'The preview cannot pick a program.',
+      }),
+      setNotifications: async () => ok,
     },
     connectors: {
       catalog: async () => (await previewCatalog()).connectors,

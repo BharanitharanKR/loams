@@ -911,6 +911,61 @@ impl MetaClient {
         }
     }
 
+    /// Creates, renames or finds graph `graph`'s implicit stream
+    /// ([`Command::EnsureGraphStream`], GR1 Task 12); returns it.
+    pub async fn ensure_graph_stream(
+        &self,
+        namespace: NamespaceId,
+        graph: &str,
+    ) -> Result<StreamId, MetaError> {
+        let command = Command::EnsureGraphStream {
+            namespace,
+            graph: graph.to_string(),
+        };
+        match self.write(command).await? {
+            Reply::StreamCreated(id) => Ok(id),
+            other => Err(MetaError::UnexpectedReply(format!("{other:?}"))),
+        }
+    }
+
+    /// Creates or finds reserved system stream `name` ([`Command::EnsureSystemStream`], GT1
+    /// Task 15); returns it.
+    pub async fn ensure_system_stream(
+        &self,
+        namespace: NamespaceId,
+        name: &str,
+    ) -> Result<StreamId, MetaError> {
+        let command = Command::EnsureSystemStream {
+            namespace,
+            name: name.to_string(),
+        };
+        match self.write(command).await? {
+            Reply::StreamCreated(id) => Ok(id),
+            other => Err(MetaError::UnexpectedReply(format!("{other:?}"))),
+        }
+    }
+
+    /// Drops graph `graph`'s implicit stream while `fence` holds
+    /// ([`Command::DropGraphStream`], GR1 Task 12), stamped with the client's
+    /// clock; returns it, or `None` if there was none.
+    pub async fn drop_graph_stream(
+        &self,
+        namespace: NamespaceId,
+        graph: &str,
+        fence: Option<Fence>,
+    ) -> Result<Option<StreamId>, MetaError> {
+        let command = Command::DropGraphStream {
+            namespace,
+            graph: graph.to_string(),
+            fence,
+            now_ms: self.now_ms(),
+        };
+        match self.write(command).await? {
+            Reply::GraphStreamDropped(id) => Ok(id),
+            other => Err(MetaError::UnexpectedReply(format!("{other:?}"))),
+        }
+    }
+
     /// Replaces a collection's schema at `expected_version` with an additive
     /// extension ([`Command::UpdateCollectionSchema`]); returns the new version.
     pub async fn update_collection_schema(

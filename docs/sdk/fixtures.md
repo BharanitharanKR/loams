@@ -50,9 +50,14 @@ so an idempotency replay and a stream resume mean something.
 Both are recorded by one script:
 
 ```sh
-loams dev --listen 127.0.0.1:8080 --data-dir "$(mktemp -d)" &
+loams dev --listen 127.0.0.1:8080 --data-dir "$(mktemp -d)" --no-live &
 LOAMS_TEST_ENDPOINT=http://127.0.0.1:8080 node sdks/conformance/record-fixtures.mjs
 ```
+
+`--no-live` matters: the unavailable-service cases are `loams.live.v1` refusing
+with `feature_not_in_variant`, which is what it answers while Live is not running.
+With Live on (the default since LV1 Task 12) `loams dev` serves the package on its
+main port, and `LiveService/Query` answers `not_found` instead.
 
 `--source loams-dev` records only the primary half; `--source apps-mock` only the
 second. The mock is started per scenario by

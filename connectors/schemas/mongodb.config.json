@@ -1,9 +1,261 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/mongodb.config.json",
-  "title": "MongoDB instance config (placeholder)",
-  "description": "Placeholder for a MongoDB instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "MongoDB connector instance config (loams.flow/v1)",
+  "description": "One MongoDB instance's settings, read by the native MongoDB family (`loams_connector_mongodb::mongodb`, CN2 Task 16) over its own wire-protocol client (R16.1). The keys are the guide's table (docs/guides/connectors/mongodb.md). Hosts are names, never a connection URI (a URI could carry credentials). `password`, `tls.cert` and `tls.key` hold secret **names** (D189), exactly the manifest's `secrets`. Naming `collection` makes the instance a sink.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "database"
+  ],
+  "anyOf": [
+    {
+      "required": [
+        "hosts"
+      ]
+    },
+    {
+      "required": [
+        "host"
+      ]
+    }
+  ],
+  "properties": {
+    "hosts": {
+      "description": "The seed list, as `host` or `host:port` (port 27017 when omitted).",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "host": {
+      "description": "One seed, `host` or `host:port`; `hosts` is the list form.",
+      "type": "string",
+      "minLength": 1
+    },
+    "port": {
+      "description": "The port of `host`.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 65535,
+      "default": 27017
+    },
+    "replica_set": {
+      "description": "Fail unless the server is a member of this replica set.",
+      "type": "string",
+      "minLength": 1
+    },
+    "database": {
+      "description": "The database to read or write.",
+      "type": "string",
+      "minLength": 1
+    },
+    "username": {
+      "description": "SCRAM-SHA-256's user (`basic`).",
+      "type": "string",
+      "minLength": 1
+    },
+    "password": {
+      "description": "SCRAM-SHA-256's password. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "auth_source": {
+      "description": "The database that holds the user (`$external` for MONGODB-X509).",
+      "type": "string",
+      "minLength": 1,
+      "default": "admin"
+    },
+    "auth_mechanism": {
+      "description": "`SCRAM-SHA-256` (`basic`; the default when `username` is set) or `MONGODB-X509` (`mtls`, with `tls.cert` and `tls.key`).",
+      "enum": [
+        "SCRAM-SHA-256",
+        "MONGODB-X509"
+      ]
+    },
+    "tls": {
+      "description": "`true` for TLS with the webpki roots, or an object. `cert` and `key` go together.",
+      "type": [
+        "boolean",
+        "object"
+      ],
+      "additionalProperties": false,
+      "default": false,
+      "properties": {
+        "ca_pem": {
+          "description": "Extra CA roots, as PEM (not a secret).",
+          "type": "string",
+          "minLength": 1
+        },
+        "cert": {
+          "description": "The client certificate chain (PEM), for MONGODB-X509. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "key": {
+          "description": "The client private key (PEM), for MONGODB-X509. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+          "type": "string",
+          "minLength": 1,
+          "writeOnly": true
+        },
+        "server_name": {
+          "description": "The name the server certificate is checked against, when not the host's.",
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    },
+    "connect_timeout_ms": {
+      "description": "Connect timeout, in milliseconds.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 10000
+    },
+    "request_timeout_ms": {
+      "description": "Request timeout, in milliseconds.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 60000
+    },
+    "mode": {
+      "description": "Sources: `batch` reads each collection once at one cluster time (`document`, Arrow); `cdc` takes a snapshot, then follows a change stream (`change`, `schema-change`).",
+      "enum": [
+        "batch",
+        "cdc"
+      ],
+      "default": "batch"
+    },
+    "collections": {
+      "description": "Sources: the collections to read; every collection in `database` when omitted.",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "max_splits": {
+      "description": "Batch: up to this many `_id` ranges per collection.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 1024,
+      "default": 8
+    },
+    "split_rows": {
+      "description": "Batch: one range per this many documents.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 1000000
+    },
+    "snapshot": {
+      "description": "CDC: `initial` reads every collection at the stream's start time first; `never` starts with the stream.",
+      "enum": [
+        "initial",
+        "never"
+      ],
+      "default": "initial"
+    },
+    "full_document": {
+      "description": "CDC: the change stream's fullDocument option.",
+      "enum": [
+        "update_lookup",
+        "when_available",
+        "required",
+        "off"
+      ],
+      "default": "update_lookup"
+    },
+    "before_change": {
+      "description": "CDC: pre-images (MongoDB 6.0+, with changeStreamPreAndPostImages on the collection).",
+      "enum": [
+        "off",
+        "when_available",
+        "required"
+      ],
+      "default": "off"
+    },
+    "heartbeat_ms": {
+      "description": "CDC: how often an idle stream checkpoints its token.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 10000
+    },
+    "await_ms": {
+      "description": "CDC: how long a getMore waits, in milliseconds.",
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 60000,
+      "default": 1000
+    },
+    "window_ms": {
+      "description": "CDC: how often the oplog window is sampled.",
+      "type": "integer",
+      "minimum": 0,
+      "default": 30000
+    },
+    "collection": {
+      "description": "Sinks: the target collection. Naming it makes the instance a sink.",
+      "type": "string",
+      "minLength": 1
+    },
+    "write": {
+      "description": "Sinks: `upsert` replaces the document matching `key` (and deletes on loamsop = d), `insert` inserts.",
+      "enum": [
+        "upsert",
+        "insert"
+      ],
+      "default": "upsert"
+    },
+    "key": {
+      "description": "Sinks: the upsert key, the fields a document is matched on (dotted paths allowed). Declared because the manifest declares capabilities.sink.upsert: true.",
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      },
+      "default": [
+        "_id"
+      ]
+    },
+    "apply_deletes": {
+      "description": "Sinks: apply loamsop = d.",
+      "type": "boolean",
+      "default": true
+    },
+    "transactional": {
+      "description": "Sinks: exactly once, each batch in one multi-document transaction with the instance's document in `checkpoint_collection` (replica sets; a standalone server writes the batch, then the checkpoint).",
+      "type": "boolean",
+      "default": true
+    },
+    "checkpoint_collection": {
+      "description": "Sinks: where the checkpoint lives, in `database`.",
+      "type": "string",
+      "minLength": 1,
+      "default": "_loams_checkpoints"
+    },
+    "evolution": {
+      "description": "The schema evolution policy (see the schema-mapping guide).",
+      "enum": [
+        "additive",
+        "widen",
+        "pause"
+      ],
+      "default": "additive"
+    },
+    "lossy": {
+      "description": "Conversions allowed to lose information, by path (for example Arrow `Timestamp(ns)` written as a BSON date).",
+      "type": "array",
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }

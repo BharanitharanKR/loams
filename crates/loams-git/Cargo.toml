@@ -1,6 +1,6 @@
 [package]
 name = "loams-git"
-description = "Loams Git's portable core (design §36, §19): identifiers, object paths, limits, and the bucket WAL formats."
+description = "Loams Git's portable core (design §36, §19): identifiers, paths, limits, the bucket WAL formats, the blob store, the WAL, the repository state machine, the pack-cache object database, the bucket ref log, checkpoints, forks and segment GC."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,20 +8,38 @@ license.workspace = true
 authors.workspace = true
 
 [dependencies]
+async-trait.workspace = true
 bytes.workspace = true
 # Segment and checkpoint trailers (§36 §4.3).
 crc32c.workspace = true
+futures.workspace = true
 # The gitoxide 0.88 train, pinned exactly in the workspace (plan GT1 R0.8).
 gix-hash.workspace = true
+# Object parsing and pack reading for the pack-cache object database (Task 9).
+gix-object.workspace = true
+gix-pack.workspace = true
+gix-zlib.workspace = true
 gix-validate.workspace = true
 # The protobuf format only: `record` would pull in loams-log (R0.4, T0-7).
-loams-cloudevents = { path = "../loams-cloudevents", version = "0.1.0-preview.1", default-features = false, features = ["protobuf"] }
+loams-cloudevents = { path = "../loams-cloudevents", version = "0.1.0-preview.2", default-features = false, features = ["protobuf"] }
 loams-common.workspace = true
+# Spill files for large blob uploads (§36 §5.3, §17).
+loams-fs.workspace = true
+loams-store.workspace = true
+# The body of a commit forwarded to the sequencer's owner (Ruling 27).
+postcard.workspace = true
 # The loams.git.v1 on-disk messages (R0.5).
 prost.workspace = true
+# Retry jitter.
+rand.workspace = true
+# The `head` hint is a small JSON object (§36 §4.1).
+serde.workspace = true
+serde_json.workspace = true
 # `derived_blame` names hash the path.
 sha2.workspace = true
 thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
+tracing.workspace = true
 # Generated ids (`r`, `w`, `m`, `s` + a lowercase ULID).
 ulid.workspace = true
 
@@ -29,8 +47,14 @@ ulid.workspace = true
 prost-build.workspace = true
 
 [dev-dependencies]
+# The linearizability checker (plan GT1 Task 10).
+loams-meta-conformance.workspace = true
+# `FaultyStore` wraps an `ObjectStore`.
+object_store.workspace = true
 proptest.workspace = true
 tempfile.workspace = true
+# `test-util`: paused time for the fault proptests.
+tokio = { workspace = true, features = ["test-util"] }
 
 [lints]
 workspace = true

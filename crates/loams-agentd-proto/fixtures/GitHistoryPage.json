@@ -1,0 +1,30 @@
+{
+  "branchTips": [],
+  "commits": [
+    {
+      "authorEmail": "dev@example.com",
+      "authorName": "Dev",
+      "authoredAt": "2026-10-12T09:30:00Z",
+      "parentShas": [
+        "fedc9876"
+      ],
+      "refs": [
+        {
+          "kind": "branch",
+          "label": "main"
+        }
+      ],
+      "sha": "0123abcd",
+      "subject": "Fix the build"
+    }
+  ],
+  "comparison": {
+    "ahead": 1,
+    "base": "origin/main",
+    "behind": 0
+  },
+  "headCommitCount": 240,
+  "headSha": "0123abcd",
+  "nextCursor": 100,
+  "totalCount": 240
+}

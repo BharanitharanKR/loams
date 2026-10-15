@@ -351,6 +351,31 @@ case "$turnline" in
   emit '{"method":"turn/completed","params":{"turn":{"id":"t-1"}}}'
   ;;
 
+*scenario:supervised*)
+  # SD1 Task 13: a supervised thread asks on request, in the thread's own
+  # sandbox (never the forced danger-full-access).
+  has "$thread_line" '"approvalPolicy":"on-request"' ||
+    { fail_turn "$tid" "thread approvalPolicy should be on-request"; exit 0; }
+  has "$thread_line" '"sandbox":"workspace-write"' ||
+    { fail_turn "$tid" "thread sandbox should be the thread's"; exit 0; }
+  has "$turnline" '"approvalPolicy":"on-request"' ||
+    { fail_turn "$tid" "turn approvalPolicy should be on-request"; exit 0; }
+  has "$turnline" '"sandboxPolicy":{"networkAccess":true,"type":"workspaceWrite"}' ||
+  has "$turnline" '"sandboxPolicy":{"type":"workspaceWrite","networkAccess":true}' ||
+    { fail_turn "$tid" "turn sandboxPolicy should be the thread's"; exit 0; }
+  emit "{\"id\":$tid,\"result\":{\"turn\":{\"id\":\"t-1\"}}}"
+  emit '{"method":"turn/started","params":{"turn":{"id":"t-1"}}}'
+  emit '{"id":301,"method":"item/commandExecution/requestApproval","params":{"itemId":"c1","command":"git reset --hard HEAD~3","cwd":"/tmp"}}'
+  read -r a1 || exit 1
+  if has "$a1" '"id":301' && has "$a1" '"decision":"accept"'; then
+    emit '{"method":"turn/completed","params":{"turn":{"id":"t-1"}}}'
+  elif has "$a1" '"id":301' && has "$a1" '"decision":"decline"'; then
+    emit '{"method":"turn/failed","params":{"turn":{"id":"t-1","error":{"message":"declined by the person"}}}}'
+  else
+    emit '{"method":"turn/failed","params":{"turn":{"id":"t-1","error":{"message":"no decision"}}}}'
+  fi
+  ;;
+
 *scenario:decline*)
   emit "{\"id\":$tid,\"result\":{\"turn\":{\"id\":\"t-1\"}}}"
   emit '{"method":"turn/started","params":{"turn":{"id":"t-1"}}}'

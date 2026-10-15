@@ -29,7 +29,7 @@ use loams_live::subs::{SubsConfig, Subscriptions};
 use loams_live::system::{INSERT, TABLES};
 use loams_live::testing::TestStore;
 use loams_live::{
-    Function, IndexSpec, LiveError, LiveServer, LiveValue, Runner, SubKey, live_test, pb,
+    Function, IndexSpec, LiveError, LiveServer, LiveValue, Runner, SubKey, catalog, live_test, pb,
 };
 use loams_live_js::{JsConfig, JsLoader};
 use tokio::sync::watch;
@@ -61,6 +61,7 @@ fn notes_schema() -> Schema {
                 name: "by_body".into(),
                 fields: vec!["body".into()],
             }],
+            ..TableSchema::default()
         }],
     }
 }
@@ -459,6 +460,7 @@ async fn invalid_bundle_fails_without_pointer_change(store: TestStore) {
             tables: vec![TableSchema {
                 name: "1bad".into(),
                 indexes: Vec::new(),
+                ..TableSchema::default()
             }],
         },
         Schema {
@@ -466,10 +468,12 @@ async fn invalid_bundle_fails_without_pointer_change(store: TestStore) {
                 TableSchema {
                     name: "twice".into(),
                     indexes: Vec::new(),
+                    ..TableSchema::default()
                 },
                 TableSchema {
                     name: "twice".into(),
                     indexes: Vec::new(),
+                    ..TableSchema::default()
                 },
             ],
         },
@@ -497,24 +501,39 @@ async fn invalid_bundle_fails_without_pointer_change(store: TestStore) {
     assert_eq!(all[0].state, DeploymentState::Active);
     assert_eq!(objects(&bundles).await.len(), 1);
 
-    // A schema the catalog refuses (an index change on an existing table
-    // waits for online index changes, LV1 plan Task 9) fails at step 4:
-    // its record says why, and the pointer stays.
+    // A schema the catalog refuses fails at step 4: its record says why,
+    // and the pointer stays. Here a new index (LV1 plan Task 9) whose
+    // entry for an existing document would pass `max_index_key_bytes`.
+    let insert = deploy::resolve(&app, INSERT).expect("_system:insert");
+    app.runner()
+        .mutate(
+            insert,
+            args(&[
+                ("table", LiveValue::Str("notes".into())),
+                (
+                    "fields",
+                    args(&[("big", LiveValue::Str("x".repeat(5_000)))]),
+                ),
+            ]),
+            None,
+        )
+        .await
+        .expect("an unindexed large field");
+    let mut too_large = notes_schema();
+    too_large.tables[0].indexes.push(IndexSpec {
+        name: "by_big".into(),
+        fields: vec!["big".into()],
+    });
     let err = deploy::deploy(
         &app,
         DeployRequest {
-            schema: Schema {
-                tables: vec![TableSchema {
-                    name: "notes".into(),
-                    indexes: Vec::new(),
-                }],
-            },
+            schema: too_large,
             ..request(bundle(2), Some(v1.record.id))
         },
         "a",
     )
     .await
-    .expect_err("an index change");
+    .expect_err("an index that cannot hold a document");
     assert!(matches!(err, LiveError::FailedPrecondition(_)), "{err}");
     assert!(err.to_string().contains("notes"), "{err}");
     assert_eq!(app.active(), Some(v1.record.id));
@@ -668,6 +687,7 @@ async fn system_functions_survive_any_deploy(store: TestStore) {
                 tables: vec![TableSchema {
                     name: "notes".into(),
                     indexes: Vec::new(),
+                    ..TableSchema::default()
                 }],
             },
             ..request(bundle(1), None)
@@ -738,6 +758,7 @@ async fn schema_creates_tables_additively(store: TestStore) {
             TableSchema {
                 name: "notes".into(),
                 indexes: Vec::new(),
+                ..TableSchema::default()
             },
             TableSchema {
                 name: "tags".into(),
@@ -745,6 +766,7 @@ async fn schema_creates_tables_additively(store: TestStore) {
                     name: "by_name".into(),
                     fields: vec!["name".into()],
                 }],
+                ..TableSchema::default()
             },
         ],
     };
@@ -898,9 +920,9 @@ impl Function for SevenFn {
     }
 }
 
-/// The server deploys over `LiveService.Deploy` and runs the deployment's
-/// functions for `Mutate` and `Query`; a server without a function runtime
-/// refuses the deploy.
+/// The server deploys over `LiveAdminService.Deploy` (LV1 Task 10) and runs
+/// the deployment's functions for `Mutate` and `Query`; a server without a
+/// function runtime refuses the deploy.
 async fn live_service_deploys_and_serves_functions(store: TestStore) {
     let mut config = store.live_config(APP);
     config.listen = "127.0.0.1:0".parse().expect("an address");
@@ -914,9 +936,10 @@ async fn live_service_deploys_and_serves_functions(store: TestStore) {
     )
     .await
     .expect("the server starts");
-    let uri = format!("http://{}", handle.addr).parse().expect("a uri");
-    let c = pb::LiveServiceClient::new(HttpClient::plaintext(), ClientConfig::new(uri));
-    let deployed = c
+    let uri: axum::http::Uri = format!("http://{}", handle.addr).parse().expect("a uri");
+    let c = pb::LiveServiceClient::new(HttpClient::plaintext(), ClientConfig::new(uri.clone()));
+    let admin = pb::LiveAdminServiceClient::new(HttpClient::plaintext(), ClientConfig::new(uri));
+    let deployed = admin
         .deploy(pb::DeployRequest {
             bundle: bundle(1),
             schema: MessageField::some(notes_schema().to_proto()),
@@ -925,7 +948,13 @@ async fn live_service_deploys_and_serves_functions(store: TestStore) {
         .await
         .expect("Deploy")
         .into_owned();
-    let id: Ulid = deployed.deployment_id.parse().expect("a ULID");
+    let id: Ulid = deployed
+        .deployment
+        .as_option()
+        .expect("a deployment")
+        .id
+        .parse()
+        .expect("a ULID");
     let mutated = c
         .mutate(pb::MutateRequest {
             function: "notes:add".into(),
@@ -949,26 +978,29 @@ async fn live_service_deploys_and_serves_functions(store: TestStore) {
         LiveValue::from_proto(counted.result.into_option().expect("a result")).expect("a value"),
         LiveValue::F64(1.0)
     );
-    // A second deploy replaces the first (the service deploys against the
-    // active deployment).
-    let again = c
+    // A second deploy replaces the first, against it.
+    let again = admin
         .deploy(pb::DeployRequest {
             bundle: bundle(2),
             schema: MessageField::some(notes_schema().to_proto()),
+            expected_active: Some(id.to_string()),
             ..Default::default()
         })
         .await
         .expect("a second Deploy")
         .into_owned();
-    assert_ne!(again.deployment_id, id.to_string());
+    assert_ne!(
+        again.deployment.as_option().expect("a deployment").id,
+        id.to_string()
+    );
     handle.stop().await;
 
     let bare = LiveServer::start(config, CancellationToken::new())
         .await
         .expect("a server without a runtime");
     let uri = format!("http://{}", bare.addr).parse().expect("a uri");
-    let c = pb::LiveServiceClient::new(HttpClient::plaintext(), ClientConfig::new(uri));
-    let e = c
+    let admin = pb::LiveAdminServiceClient::new(HttpClient::plaintext(), ClientConfig::new(uri));
+    let e = admin
         .deploy(pb::DeployRequest {
             bundle: bundle(3),
             ..Default::default()
@@ -1111,10 +1143,7 @@ async fn rollback_reapplies_previous_schema(store: TestStore) {
     assert!(!format!("{tables:?}").contains("by_len"), "{tables:?}");
     assert!(format!("{tables:?}").contains("by_body"), "{tables:?}");
 }
-live_test!(
-    #[ignore = "an index change on an existing table needs LV1 plan Task 9 (online index changes), which removes this ignore"]
-    rollback_reapplies_previous_schema
-);
+live_test!(rollback_reapplies_previous_schema);
 
 /// Version `n` of the app for the subscription tests: every query's result
 /// names `n`.
@@ -1509,6 +1538,7 @@ async fn janitor_fails_abandoned_pending_deploys(store: TestStore) {
         message: String::new(),
         parent: Some(v1.record.id),
         state: DeploymentState::Pending,
+        functions: Vec::new(),
     };
     app.runner()
         .store()
@@ -1573,3 +1603,312 @@ async fn janitor_fails_abandoned_pending_deploys(store: TestStore) {
     );
 }
 live_test!(janitor_fails_abandoned_pending_deploys);
+
+// ---- LV1 plan Task 11: catalog journal entries ----
+
+/// `notes` without the `by_body` index.
+fn bare_schema() -> Schema {
+    Schema {
+        tables: vec![TableSchema {
+            name: "notes".into(),
+            ..TableSchema::default()
+        }],
+    }
+}
+
+/// The journal entries of `app` with catalog changes, as `(function,
+/// [(kind, table_id, deployment)])`: with `writes`, mutations' entries (on
+/// any shard); without, the catalog's own entries, in commit order (they
+/// all go to `catalog::CATALOG_SHARD`).
+async fn catalog_entries(
+    app: &AppEngine,
+    writes: bool,
+) -> Vec<(String, Vec<(i32, Option<u32>, String)>)> {
+    let journal = app.runner().journal().await.expect("the journal");
+    let kv = app.runner().store();
+    let mut snap = kv
+        .snapshot(kv.now().await.expect("now"))
+        .await
+        .expect("a snapshot");
+    let heads = journal.heads(&mut snap).await.expect("heads");
+    let from = vec![0; heads.len()];
+    let mut entries = journal
+        .read(&mut snap, &from, &heads)
+        .await
+        .expect("the entries");
+    entries.sort_by_key(|(shard, seq, _)| (*shard, *seq));
+    entries
+        .into_iter()
+        .filter(|(_, _, e)| !e.catalog.is_empty() && e.writes.is_empty() != writes)
+        .map(|(_, _, e)| {
+            let changes = e
+                .catalog
+                .iter()
+                .map(|c| (c.kind.to_i32(), c.table_id, c.deployment.clone()))
+                .collect();
+            (e.function, changes)
+        })
+        .collect()
+}
+
+fn kind(k: pb::CatalogChangeKind) -> i32 {
+    k as i32
+}
+
+/// Every catalog change appends a `catalog` journal entry in its own
+/// transaction: a table created by a first insert, a table created by a
+/// deployed schema, a deployment activated (deploy and rollback), an index
+/// added and a validator changed.
+async fn catalog_entry_written_with_each_catalog_change(store: TestStore) {
+    use pb::CatalogChangeKind as K;
+    let bundles = loams_store::Store::in_memory();
+    let app = node(&store, &bundles, js()).await;
+    assert!(catalog_entries(&app, false).await.is_empty(), "a fresh app");
+
+    // A first insert creates its table (no schema deployed yet).
+    let insert = deploy::resolve(&app, INSERT).expect("_system:insert");
+    app.runner()
+        .mutate(
+            insert,
+            args(&[
+                ("table", LiveValue::Str("scratch".into())),
+                ("fields", args(&[("x", LiveValue::I64(1))])),
+            ]),
+            None,
+        )
+        .await
+        .expect("an insert");
+    // The mutation's own entry carries it, beside its write.
+    assert!(catalog_entries(&app, false).await.is_empty());
+    let entries = catalog_entries(&app, true).await;
+    assert_eq!(entries.len(), 1, "{entries:?}");
+    assert_eq!(entries[0].0, INSERT);
+    assert_eq!(
+        entries[0].1,
+        vec![(
+            kind(K::CATALOG_CHANGE_KIND_TABLE_CREATED),
+            Some(1),
+            String::new()
+        )]
+    );
+
+    // A deploy whose schema creates `notes`: the table, then the activation.
+    let mut first = request(bundle(1), None);
+    first.schema = bare_schema();
+    let v1 = deploy::deploy(&app, first, "a").await.expect("v1");
+    let entries = catalog_entries(&app, false).await;
+    assert_eq!(entries.len(), 2, "{entries:?}");
+    assert_eq!(entries[0].0, catalog::TABLE_CHANGE);
+    assert_eq!(
+        entries[0].1,
+        vec![(
+            kind(K::CATALOG_CHANGE_KIND_TABLE_CREATED),
+            Some(2),
+            String::new()
+        )]
+    );
+    assert_eq!(entries[1].0, deploy::ACTIVATION);
+    assert_eq!(
+        entries[1].1,
+        vec![(
+            kind(K::CATALOG_CHANGE_KIND_DEPLOYMENT_ACTIVATED),
+            None,
+            v1.record.id.to_string()
+        )]
+    );
+
+    // v2 adds an index (on an empty table) and a validator.
+    let mut second = request(bundle(2), Some(v1.record.id));
+    second.schema = notes_schema();
+    second.schema.tables[0].validator = Some(loams_live::validate::Validator::Object(
+        [("body".to_string(), loams_live::validate::Validator::String)]
+            .into_iter()
+            .collect(),
+    ));
+    let v2 = deploy::deploy(&app, second, "a").await.expect("v2");
+    let kinds: Vec<(i32, Option<u32>)> = catalog_entries(&app, false).await[2..]
+        .iter()
+        .flat_map(|(_, changes)| changes.iter().map(|(k, t, _)| (*k, *t)))
+        .collect();
+    assert!(
+        kinds.contains(&(kind(K::CATALOG_CHANGE_KIND_INDEXES), Some(2))),
+        "{kinds:?}"
+    );
+    assert!(
+        kinds.contains(&(kind(K::CATALOG_CHANGE_KIND_VALIDATOR), Some(2))),
+        "{kinds:?}"
+    );
+    assert_eq!(
+        kinds.last(),
+        Some(&(kind(K::CATALOG_CHANGE_KIND_DEPLOYMENT_ACTIVATED), None))
+    );
+
+    // A rollback is an activation too.
+    let before = catalog_entries(&app, false).await.len();
+    deploy::activate(&app, v1.record.id, Some(v2.record.id), "a")
+        .await
+        .expect("the rollback");
+    // (The background drop of v2's index may append after it.)
+    let entries = catalog_entries(&app, false).await;
+    assert!(
+        entries[before..].iter().any(|(_, changes)| changes
+            == &vec![(
+                kind(K::CATALOG_CHANGE_KIND_DEPLOYMENT_ACTIVATED),
+                None,
+                v1.record.id.to_string()
+            )]),
+        "{entries:?}"
+    );
+}
+live_test!(catalog_entry_written_with_each_catalog_change);
+
+/// Another node's subscriptions switch at the activation's tick: node B
+/// runs no janitor (whose refresh used to be the only way it learned of A's
+/// deploy, within 60 s), yet its sessions move to v2 and back to v1 (a
+/// rollback on A) through the journal's catalog entries, with no
+/// Transition mixing two deployments.
+async fn tailer_reloads_catalog_at_the_tick(store: TestStore) {
+    let bundles = loams_store::Store::in_memory();
+    let a = node(&store, &bundles, js()).await;
+    let v1 = deploy::deploy(&a, request(watched(1), None), "a")
+        .await
+        .expect("v1");
+    let b = node(&store, &bundles, js()).await;
+    assert_eq!(b.active(), Some(v1.record.id));
+    let w = watching(&b);
+    let queries = vec![
+        spec(1, "notes:version", args(&[])),
+        spec(2, "notes:count", args(&[])),
+    ];
+    let session = w
+        .sessions
+        .open(Start::Initial(pb::QuerySet {
+            version: 1,
+            queries: queries.clone(),
+            ..Default::default()
+        }))
+        .expect("a session");
+    let seen = client(session);
+    let at = |n: i64| {
+        let seen = &seen;
+        move || all_at(&latest(seen), 2, n)
+    };
+    until("node B at v1", at(1)).await;
+
+    let started = Instant::now();
+    let v2 = deploy::deploy(&a, request(watched(2), Some(v1.record.id)), "a")
+        .await
+        .expect("v2 on node A");
+    until("node B at v2", at(2)).await;
+    assert!(
+        started.elapsed() < Duration::from_secs(10),
+        "node B switched by the journal, not a janitor"
+    );
+    assert_eq!(b.active(), Some(v2.record.id));
+
+    deploy::activate(&a, v1.record.id, Some(v2.record.id), "a")
+        .await
+        .expect("the rollback on node A");
+    until("node B back at v1", at(1)).await;
+    assert_eq!(b.active(), Some(v1.record.id));
+    assert!(seen.lock().expect("unpoisoned").mixed.is_empty());
+}
+live_test!(tailer_reloads_catalog_at_the_tick);
+
+/// A deploy on node A adds an index to a non-empty table, and a write lands
+/// right after its activation: node B's subscription to v2's indexed query
+/// reruns at the activation's tick on the new catalog, and the write that
+/// follows (whose index keys A computed with the new index) reaches it, so
+/// it ends equal to a fresh evaluation.
+async fn data_write_after_index_change_in_same_tick_uses_new_catalog(store: TestStore) {
+    let bundles = loams_store::Store::in_memory();
+    let a = node(&store, &bundles, js()).await;
+    let mut first = request(watched(1), None);
+    first.schema = bare_schema();
+    let v1 = deploy::deploy(&a, first, "a").await.expect("v1");
+    let add = |app: &AppEngine, body: &str| {
+        let f = deploy::resolve(app, "notes:add").expect("notes:add");
+        let app = app.clone();
+        let body = body.to_string();
+        async move {
+            app.runner()
+                .mutate(f, args(&[("body", LiveValue::Str(body))]), None)
+                .await
+                .expect("notes:add");
+        }
+    };
+    add(&a, "a").await;
+    add(&a, "a").await;
+    add(&a, "b").await;
+
+    let b = node(&store, &bundles, js()).await;
+    let w = watching(&b);
+    let session = w
+        .sessions
+        .open(Start::Initial(pb::QuerySet {
+            version: 1,
+            queries: vec![spec(
+                1,
+                "notes:byBody",
+                args(&[("body", LiveValue::Str("a".into()))]),
+            )],
+            ..Default::default()
+        }))
+        .expect("a session");
+    let seen = client(session);
+    // `n` is a JavaScript `.length`: a float64.
+    let count = |n: f64| {
+        let seen = &seen;
+        move || {
+            latest(seen).get(&1).is_some_and(|r| {
+                matches!(r, QueryResult::Value(LiveValue::Object(f))
+                    if f.get("v") == Some(&LiveValue::I64(2)) && f.get("n") == Some(&LiveValue::F64(n)))
+            })
+        }
+    };
+
+    // v2 declares `by_body`: backfilled over the three notes, then active.
+    deploy::deploy(&a, request(watched(2), Some(v1.record.id)), "a")
+        .await
+        .expect("v2 on node A");
+    add(&a, "a").await;
+    let give_up = Instant::now() + Duration::from_secs(30);
+    while !count(3.0)() {
+        assert!(
+            Instant::now() < give_up,
+            "node B's indexed query never saw the write after the change: {:?} (B serves {:?})",
+            latest(&seen),
+            b.active()
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    let fresh = query_args(
+        &b,
+        "notes:byBody",
+        args(&[("body", LiveValue::Str("a".into()))]),
+    )
+    .await;
+    assert_eq!(
+        fresh,
+        LiveValue::Object(
+            [
+                ("v".to_string(), LiveValue::I64(2)),
+                ("n".to_string(), LiveValue::F64(3.0)),
+            ]
+            .into_iter()
+            .collect()
+        )
+    );
+}
+live_test!(data_write_after_index_change_in_same_tick_uses_new_catalog);
+
+/// Runs query `name` of `app` with `args`, at now.
+async fn query_args(app: &AppEngine, name: &str, args: LiveValue) -> LiveValue {
+    let f = deploy::resolve(app, name).expect("the query");
+    let at = app.runner().store().now().await.expect("now");
+    app.runner()
+        .query(&*f, args, at)
+        .await
+        .expect("a fresh evaluation")
+        .result
+}

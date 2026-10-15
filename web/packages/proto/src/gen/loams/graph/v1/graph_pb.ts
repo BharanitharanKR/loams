@@ -15,7 +15,9 @@
 // - **Reads are `NO_SIDE_EFFECTS`**, so a Connect client may send them as an
 //   HTTP GET. `Execute` is not marked: a statement may write.
 // - **Every mutation takes an `idempotency_key`.** `ExecuteRequest` takes one
-//   too, and it is required when the statement writes (§48 §7.3).
+//   too (§48 §7.3). In preview it is optional: a write without one runs, and a
+//   retry of it may run twice. It becomes required for a writing statement
+//   from GR1 Task 24 (R11.9).
 // - **No client-chosen path or URL.** No field names a file, a directory or a
 //   URL. Import and export take an object key (prefix) under the namespace's
 //   own import/export prefix; the server resolves it. The test
@@ -1002,7 +1004,9 @@ export type ExecuteRequest = Message<"loams.graph.v1.ExecuteRequest"> & {
   maxRows: number;
 
   /**
-   * Required when the statement writes.
+   * Answers an earlier run of this key instead of running again (24 hours).
+   * Optional in preview; required when the statement writes from GR1 Task 24
+   * (R11.9).
    *
    * @generated from field: string idempotency_key = 10;
    */

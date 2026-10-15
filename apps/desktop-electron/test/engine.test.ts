@@ -10,10 +10,11 @@ import {
 	engineArgs,
 	findEngineBinary,
 	helpSupportsLive,
+	liveOnMainPortFromHelp,
 	liveSupportFromHelp,
 } from "../src/main/engine/binary";
 import { RotatingLog } from "../src/main/engine/log-rotate";
-import { reservePorts } from "../src/main/engine/ports";
+import { portFree, reservePorts } from "../src/main/engine/ports";
 import { EngineSupervisor } from "../src/main/engine/supervisor";
 
 const FAKE = fileURLToPath(
@@ -165,6 +166,38 @@ describe("engine", () => {
 		expect(
 			liveSupportFromHelp("--live-listen <A>\n --live-store <S>\n --no-live"),
 		).toBe("embedded");
+		// An engine that serves Live on --listen leaves out --live-listen (T12-4).
+		expect(
+			engineArgs({
+				dataDir: "/d",
+				ports,
+				live: { supported: true, embedded: true, defaultListener: true },
+			}),
+		).toEqual(base);
+		expect(
+			engineArgs({
+				dataDir: "/d",
+				ports,
+				live: {
+					supported: true,
+					embedded: true,
+					pd: "pd:2379",
+					defaultListener: true,
+				},
+			}),
+		).toEqual([...base, "--live-store", "tikv://pd:2379"]);
+		expect(
+			liveOnMainPortFromHelp(
+				[
+					"      --live-listen <LIVE_LISTEN>",
+					"          Deprecated: Live is served on --listen (D688). Address of Live's own",
+					"          listener, which serves the same API (default 127.0.0.1:7710)",
+					"      --no-live",
+				].join("\n"),
+			),
+		).toBe(true);
+		expect(liveOnMainPortFromHelp(help("`embedded`"))).toBe(false);
+		expect(liveOnMainPortFromHelp("--no-durable")).toBe(false);
 		expect(findEngineBinary(["/a", "/b"], (p) => p === "/b")).toBe("/b");
 		expect(findEngineBinary(["/a"], () => false)).toBeNull();
 	});
@@ -222,6 +255,62 @@ describe("engine", () => {
 		c.start();
 		await until(() => c.state().phase === "ready");
 		expect(seen[2]?.join(" ")).not.toMatch(/live/);
+	});
+
+	it("live_on_the_main_port_without_live_listen", async () => {
+		const seen: string[][] = [];
+		const mk = (free: boolean, onMain = true) =>
+			new EngineSupervisor(
+				deps({
+					spawn: asSpawn((_c: string, a: string[]) => {
+						seen.push(a);
+						return new FakeChild();
+					}),
+					fetch: (async () => ({ ok: true })) as unknown as typeof fetch,
+					liveSupported: async () => "embedded" as const,
+					liveOnMainPort: async () => onMain,
+					liveDefaultPortFree: async () => free,
+				}),
+			);
+		// An engine that serves Live on --listen: no --live-listen, so no
+		// deprecation line, and /loams.live.v1. goes to the main port.
+		const a = mk(true);
+		a.start();
+		await until(() => a.state().phase === "ready");
+		const s = a.state();
+		if (s.phase !== "ready") throw new Error("not ready");
+		expect(s.liveUrl).toBe(s.url);
+		expect(seen[0]?.join(" ")).not.toMatch(/--live-listen|--no-live/);
+		await a.stop();
+		// 7710 is taken (another engine): Live's own listener moves to a free
+		// port so this engine still starts; Live still goes to the main port.
+		const b = mk(false);
+		b.start();
+		await until(() => b.state().phase === "ready");
+		const t = b.state();
+		if (t.phase !== "ready") throw new Error("not ready");
+		expect(seen[1]).toContain("--live-listen");
+		expect(t.liveUrl).toBe(t.url);
+		await b.stop();
+		// An older engine: Live only on its own listener, as before.
+		const c = mk(true, false);
+		c.start();
+		await until(() => c.state().phase === "ready");
+		const u = c.state();
+		if (u.phase !== "ready") throw new Error("not ready");
+		expect(seen[2]).toContain("--live-listen");
+		expect(u.liveUrl).not.toBe(u.url);
+		await c.stop();
+	});
+
+	it("port_free_sees_a_held_port", async () => {
+		const [port] = await reservePorts(1);
+		const { createServer } = await import("node:net");
+		const held = createServer();
+		await new Promise<void>((r) => held.listen(port, "127.0.0.1", () => r()));
+		expect(await portFree(port as number)).toBe(false);
+		await new Promise<void>((r) => held.close(() => r()));
+		expect(await portFree(port as number)).toBe(true);
 	});
 
 	it("an_engine_without_live_tikv_ignores_the_pd_with_a_notice", async () => {

@@ -1,9 +1,76 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://loams.dev/schemas/anthropic.config.json",
-  "title": "Anthropic instance config (placeholder)",
-  "description": "Placeholder for a Anthropic instance's settings. It is filled in when this connector's runtime is chosen: CN2 for the P2 rows, through the stock Apache Camel components in loams-connect or Iggy's plugins, and CN3 for the P3 long tail, through OpenAPI-generated native connectors (design §33 D354, §5). Until then it declares no field and requires none, and additionalProperties is true so an operator can already pass settings for an unimplemented connector; nothing reads them until the connector ships (design §33 D353; CN1 Task 2).",
+  "title": "Anthropic connector instance config (loams.flow/v1)",
+  "description": "One Anthropic request-reply sink's settings, read by the native protocols family (`loams_connector_protocols::anthropic`, CN2 Task 21): one call per event, the answer a reply event on `reply_topic` (R-CN2-3, OR-19). `api_key` holds a secret **name** (D189), exactly the manifest's `secrets`; a reply never carries it.",
   "type": "object",
-  "additionalProperties": true,
-  "x-loams-generated-by": "scripts/connectors/gen_registry.py — a CN1 Task 2 placeholder; replace this file when the connector's runtime is chosen"
+  "additionalProperties": false,
+  "required": [
+    "model",
+    "api_key",
+    "prompt",
+    "max_tokens"
+  ],
+  "properties": {
+    "model": {
+      "description": "The model; there is no default.",
+      "type": "string",
+      "minLength": 1
+    },
+    "api_key": {
+      "description": "The API key, sent as `x-api-key`. The **name** of a secret in the namespace's store (D189), resolved when the connector connects; never the value.",
+      "type": "string",
+      "minLength": 1,
+      "writeOnly": true
+    },
+    "prompt": {
+      "description": "Templates filled from the event (`{{/pointer}}`, `{{data}}`, `{{subject}}`, `{{id}}`, `{{type}}`, `{{source}}`); a placeholder with nothing to fill is Poison (R21.10).",
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "system": {
+          "description": "The system prompt.",
+          "type": "string",
+          "minLength": 1
+        },
+        "user": {
+          "description": "The user message.",
+          "type": "string",
+          "minLength": 1
+        }
+      },
+      "required": [
+        "user"
+      ]
+    },
+    "max_tokens": {
+      "description": "The answer's token limit (required).",
+      "type": "integer",
+      "minimum": 1
+    },
+    "params": {
+      "description": "Fixed request fields merged into every body; they may not set model, messages, system, max_tokens, max_completion_tokens or stream.",
+      "type": "object"
+    },
+    "base_url": {
+      "description": "The API root, for a gateway or a fixture; `https://api.anthropic.com` when omitted.",
+      "type": "string",
+      "minLength": 1
+    },
+    "reply_topic": {
+      "description": "Where replies go: one reply event per input, `io.loams.dev.flow.anthropic.reply.v1` with id `<input id>/reply`, keeping the input's subject and carrying `loamsinreplyto`/`loamsinreplytosource` (OR-19, R21.6). Without it no replies are sent.",
+      "type": "string",
+      "minLength": 1
+    },
+    "request_timeout_ms": {
+      "description": "Per-request timeout, in milliseconds.",
+      "type": "integer",
+      "minimum": 1,
+      "default": 120000
+    },
+    "pipeline": {
+      "description": "The connector SDK's pipeline overrides (`pipeline.*`).",
+      "type": "object"
+    }
+  }
 }

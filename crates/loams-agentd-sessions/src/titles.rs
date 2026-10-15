@@ -283,6 +283,7 @@ async fn collect_text(
     let interrupt = CancellationToken::new();
     let _cancel_on_drop = interrupt.clone().drop_guard();
     let controls = RunControls {
+        request_approval: None,
         execution_lease,
         request_input: Box::new(|_questions: Vec<UserInputQuestion>| {
             let (tx, rx) = tokio::sync::oneshot::channel::<Vec<UserInputAnswer>>();

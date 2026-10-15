@@ -72,3 +72,63 @@ fn inproc_worker_feature_is_where_libchdb_comes_in() {
         "the check must see libchdb when it is there"
     );
 }
+
+/// iceberg 0.10 brings arrow 58 while the workspace is on arrow 59 (HS1 R0.3): no
+/// crate of this workspace may depend on an arrow 58 crate itself, except
+/// `loams-house-lake`, which writes data files with iceberg's writers (HS1 Task
+/// 12, R12.1) and names no Arrow type in its signatures. So arrow 58 types never
+/// meet arrow 59 ones in a Loams signature.
+#[test]
+fn arrow_58_stays_in_the_lake() {
+    let cargo = std::env::var("CARGO").unwrap_or_else(|_| "cargo".to_string());
+    let output = Command::new(cargo)
+        .current_dir(workspace())
+        .args([
+            "tree",
+            "--offline",
+            "--locked",
+            "--workspace",
+            "-e",
+            "normal",
+        ])
+        .args(["--prefix", "depth", "--format", "{p}"])
+        .output()
+        .expect("cargo tree runs");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let text = String::from_utf8_lossy(&output.stdout);
+    // `<depth><name> v<version> …`, one package per line.
+    let lines: Vec<(usize, String, String)> = text
+        .lines()
+        .filter_map(|line| {
+            let digits = line.chars().take_while(char::is_ascii_digit).count();
+            let depth = line[..digits].parse().ok()?;
+            let mut parts = line[digits..].split_whitespace();
+            Some((depth, parts.next()?.to_string(), parts.next()?.to_string()))
+        })
+        .collect();
+    let mut seen_lake = false;
+    for (at, (depth, name, _)) in lines.iter().enumerate() {
+        if !name.starts_with("loams-") {
+            continue;
+        }
+        seen_lake |= name == "loams-house-lake";
+        let children = lines[at + 1..]
+            .iter()
+            .take_while(|(d, _, _)| d > depth)
+            .filter(|(d, _, _)| *d == depth + 1);
+        if name == "loams-house-lake" {
+            continue;
+        }
+        for (_, child, version) in children {
+            assert!(
+                !(child.starts_with("arrow") || child == "parquet") || !version.starts_with("v58"),
+                "{name} depends on {child} {version} itself: arrow 58 must stay inside iceberg (R0.3)"
+            );
+        }
+    }
+    assert!(seen_lake, "the check saw loams-house-lake");
+}

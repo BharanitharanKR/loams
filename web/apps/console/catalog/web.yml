@@ -13,10 +13,8 @@
     - id: live
       name: '@loams/plugin-live'
       # No desktop bridge in a browser: the Live page then explains the stack in words.
+      # Its Deployments page talks to the engine's LiveAdminService (main port, LV1 Task 12).
       inject: [platform, router, slots, transport]
-      config:
-        # LiveAdminService is not served yet; its page is sample data.
-        deployments: false
     - id: graph
       name: '@loams/plugin-graph'
     - id: house

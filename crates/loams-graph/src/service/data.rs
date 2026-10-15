@@ -240,12 +240,25 @@ pub fn execute_on(
 ) -> Result<pb::ExecuteResponse, ConnectError> {
     let max_rows = limits.rows_for(req.max_rows) as usize;
     let result = run_statement(graph, &req, limits, Some(max_rows))?;
-    to_pb_response(
+    let mut response = to_pb_response(
         &result,
         &mut ByteBudget::new(limits.max_result_bytes),
         result.wrote,
     )
-    .map_err(map_engine)
+    .map_err(map_engine)?;
+    state_token(graph, &mut response.consistency_token);
+    Ok(response)
+}
+
+/// A read's token (GR1 Task 15): the state of the replica that served it, read after the
+/// statement, so it is never older than what the statement saw. Left alone when a write already
+/// set its own; a graph that is not durable has none.
+pub(crate) fn state_token(graph: &crate::engine::Graph, token: &mut String) {
+    if token.is_empty()
+        && let Some(state) = graph.consistency_token()
+    {
+        *token = state.to_string();
+    }
 }
 
 /// Checks and runs one statement of an `ExecuteRequest`, keeping at most `max_rows` rows: what
@@ -349,7 +362,7 @@ pub fn execute_batch_on(
         let mut budget = ByteBudget::new(limits.max_result_bytes);
         // A batch that wrote has committed: none of its answers may fail it now (I3).
         let committed = results.iter().any(|result| result.wrote);
-        Ok(pb::ExecuteBatchResponse {
+        let mut response = pb::ExecuteBatchResponse {
             results: results
                 .iter()
                 .map(|result| to_pb_response(result, &mut budget, committed))
@@ -360,7 +373,9 @@ pub fn execute_batch_on(
             consistency_token: commit.map(|c| c.token.to_string()).unwrap_or_default(),
             commit_epoch: commit.map_or(0, |c| c.commit_epoch),
             ..Default::default()
-        })
+        };
+        state_token(graph, &mut response.consistency_token);
+        Ok(response)
     } else {
         // Each statement is its own transaction, with its parameters bound; a failure stops the
         // batch and leaves its predecessors committed. On a durable graph each one that writes
@@ -405,6 +420,7 @@ pub fn execute_batch_on(
                 }
             }
         }
+        state_token(graph, &mut token);
         Ok(pb::ExecuteBatchResponse {
             committed_through: u32::try_from(results.len()).unwrap_or(u32::MAX),
             results,

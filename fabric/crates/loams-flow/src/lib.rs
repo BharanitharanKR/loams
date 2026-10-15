@@ -7,8 +7,23 @@
 //! * [`validate`] — `connectors/schema/connector.schema.json`, CN1 Task 1's six
 //!   semantic rules, §33 §4 rule 1's refusal ([`validate::check_use`]) and D359's
 //!   licence gate.
+//! * [`profile`] — CN2 Task 7's target and HTTP-API profiles under
+//!   `connectors/profiles/`, their schema, R-CN2-2's module rule and a target's
+//!   effective capabilities.
 //! * [`registry`] — every manifest under `connectors/registry/`, indexed by id and by
 //!   category, with [`registry::Filter`] for the catalog page's queries.
+//! * [`metrics`] — connector metrics in the Prometheus text format, fed by the
+//!   connector SDK's observer hook and by fallback runtimes' scrapes (CN2 Task 24).
+//! * [`activity`] — the Q359 activity observer: plain per-window structs, no
+//!   wire format and no persistence (D548–D552).
+//! * [`egress`] — CN2 Task 25's egress guard: [`egress::EgressPolicy`] at validation and,
+//!   through the SDK's hook, after DNS at connect; the NetworkPolicy for fallback pods.
+//! * [`secrets`] — the `SecretStore`s (file for dev, Kubernetes for production), the
+//!   fallback pods' secret mounts and the fallback log filter (CN2 Task 25).
+//! * [`overlay`] — refusal of executable or file-reading content in fallback overlays.
+//! * [`runtime`] — the connector fleet on Kubernetes: fenced instance and split
+//!   leases, the `flow` Deployment's scale and the fallback pods `KubeRuntime`
+//!   renders (CN2 Task 26).
 //!
 //! The YAML is the source and the protobuf form mirrors it key for key, so
 //! [`manifest::ConnectorSpec::to_proto`] and [`manifest::ConnectorSpec::from_proto`]
@@ -35,19 +50,31 @@
 //! Names: Loams, `loams-flow`, `loams.flow.v1`, `io.loams.dev.*` (owner rulings,
 //! 2026-10-01).
 
+pub mod activity;
+pub mod egress;
 pub mod manifest;
+pub mod metrics;
+pub mod overlay;
+pub mod profile;
 pub mod registry;
+pub mod runtime;
+pub mod secrets;
 pub mod validate;
 
 pub use manifest::{
-    API_VERSION, AuthMethod, Backpressure, BulkCaps, Capabilities, Category, ConfigRef,
-    ConnectorSpec, Delivery, DeliveryCaps, EnvelopeDecl, Evolution, Format, KIND, Licence, Limits,
-    ManifestError, ManifestErrors, Ordering, Priority, ProtoError, RegistryRequirement,
-    RuntimeKind, RuntimeSpec, SchemaCaps, SinkCaps, SourceCaps, Status, Suite, load_manifest,
-    load_manifest_value, load_manifest_with_schema, pb,
+    API_VERSION, AuthMethod, Backpressure, BulkCaps, Capabilities, Category, Choice, ConfigRef,
+    ConnectorSpec, Delivery, DeliveryCaps, EnvelopeDecl, Evolution, FallbackSpec, Format, KIND,
+    Licence, Limits, ManifestError, ManifestErrors, Ordering, Priority, ProtoError,
+    RegistryRequirement, RuntimeKind, RuntimeOverride, RuntimeSpec, SchemaCaps, SinkCaps,
+    SourceCaps, Status, Suite, load_manifest, load_manifest_value, load_manifest_with_schema, pb,
+};
+pub use profile::{
+    FAMILY_MODULES, Profile, ProfileError, ProfileKind, check_manifest_profile,
+    effective_capabilities, load_profiles,
 };
 pub use registry::{Filter, Registry, RegistryError};
 pub use validate::{
-    CapabilityError, Direction, LicenceError, LicenceGate, ManifestSchema, Mode, SchemaError,
-    SinkRequirement, Uses, check_use, validate_manifest, validate_manifest_with_config_schema,
+    CapabilityError, Direction, LicenceError, LicenceGate, ManifestSchema, Mode,
+    NATIVE_FIRST_ENFORCED, SchemaError, SinkRequirement, Uses, check_use, semantic_warnings,
+    validate_manifest, validate_manifest_with_config_schema,
 };

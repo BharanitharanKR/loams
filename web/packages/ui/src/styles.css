@@ -277,16 +277,20 @@
   font-weight: 540;
 }
 
-.loams-empty p {
+.loams-empty-body {
   margin: 0;
   max-width: 42ch;
   font-size: 0.86rem;
   color: var(--op-muted);
 }
 
+.loams-empty-body p {
+  margin: 0;
+}
+
 .loams-empty .loams-grain {
   opacity: 0.45;
-  mask-image: radial-gradient(ellipse at center, transparent 30%, #000 85%);
+  mask-image: radial-gradient(ellipse at center, transparent 30%, var(--op-ink) 85%);
 }
 
 .loams-empty-actions {
@@ -497,9 +501,13 @@ textarea.loams-input {
   font-weight: 560;
 }
 
-.loams-notice p {
+.loams-notice-body {
   margin: 2px 0 0;
   color: var(--op-muted);
+}
+
+.loams-notice-body p {
+  margin: 0;
 }
 
 .loams-notice-warn {
@@ -533,8 +541,9 @@ textarea.loams-input {
 .loams-snippet code {
   flex: 1;
   min-width: 0;
-  overflow-x: auto;
-  white-space: pre;
+  /* Long lines wrap rather than hide behind a scrollbar-less overflow. */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .loams-snippet-prompt {
@@ -611,22 +620,40 @@ textarea.loams-input {
 
 /* Dialog ---------------------------------------------------------------------------------- */
 
+.loams-dialog-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 70;
+  background: var(--op-scrim);
+}
+
 .loams-dialog {
+  position: fixed;
+  z-index: 71;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
   width: min(520px, calc(100vw - 32px));
   max-height: calc(100dvh - 64px);
   padding: 0;
   border: 1px solid var(--op-rule);
   color: var(--op-ink);
   background: var(--op-bg);
-  box-shadow: 0 32px 64px -24px rgb(0 0 0 / 0.5);
+  box-shadow: var(--op-shadow-modal);
 }
 
-.loams-dialog::backdrop {
-  background: rgb(10 8 6 / 0.55);
+.loams-dialog[data-open] {
+  animation: loams-dialog-rise 240ms var(--op-ease) both;
 }
 
-.loams-dialog[open] {
-  animation: loams-rise 240ms var(--op-ease) both;
+@keyframes loams-dialog-rise {
+  from {
+    opacity: 0;
+    transform: translate(-50%, calc(-50% + 8px));
+  }
 }
 
 .loams-dialog-head {
@@ -669,7 +696,24 @@ textarea.loams-input {
 @media (prefers-reduced-motion: reduce) {
   .loams-status-progress::before,
   .loams-meter > span[aria-hidden],
-  .loams-dialog[open] {
+  .loams-dialog[data-open] {
     animation: none;
   }
+}
+
+/* A sortable column header (DataTable). */
+.loams-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  border: 0;
+  font: inherit;
+  color: inherit;
+  background: none;
+  cursor: pointer;
+}
+
+.loams-sort:hover {
+  color: var(--op-ink);
 }

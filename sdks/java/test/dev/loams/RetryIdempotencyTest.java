@@ -40,8 +40,11 @@ public class RetryIdempotencyTest {
     /** The RPC whose {@code Mutate} is the only keyed mutation in the API today. */
     private static final String MUTATE_RPC = "loams.live.v1.LiveService/Mutate";
 
-    /** The RPC whose {@code Deploy} has <em>no</em> {@code idempotency_key} field. */
-    private static final String DEPLOY_RPC = "loams.live.v1.LiveService/Deploy";
+    /**
+     * The RPC whose {@code Deploy} has <em>no</em> {@code idempotency_key} field. LV1 Task 10 moved
+     * it to {@code LiveAdminService}; the engine no longer serves {@code LiveService/Deploy}.
+     */
+    private static final String DEPLOY_RPC = "loams.live.v1.LiveAdminService/Deploy";
 
     /**
      * SDK2 Task 6's {@code java_retry_reuses_idempotency_key}.
@@ -159,6 +162,7 @@ public class RetryIdempotencyTest {
     @Test
     public void aRequestWithNoKeyFieldIsLeftAlone() {
         CallBinding deploy = Client.binding("tables", "Deploy");
+        assertEquals("tables.Deploy is routed to LiveAdminService", DEPLOY_RPC, deploy.rpc());
         assertFalse(
                 "the binding says Deploy takes a key, which the generated schema contradicts",
                 deploy.takesIdempotencyKey());

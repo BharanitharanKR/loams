@@ -57,7 +57,8 @@ std::vector<MethodBinding> Build() {
   add("loams.live.v1.LiveService/Query", RetryClass::kSafe, "");
   add("loams.live.v1.LiveService/Mutate", RetryClass::kManual, "idempotency_key");
   add("loams.live.v1.LiveService/ModifyQuerySet", RetryClass::kManual, "idempotency_key");
-  add("loams.live.v1.LiveService/Deploy", RetryClass::kManual, "");
+  // Deploy moved to LiveAdminService (LV1 Task 10); `tables` keeps the call.
+  add("loams.live.v1.LiveAdminService/Deploy", RetryClass::kManual, "");
 
   // `loams.approvals.v1`. `ListApprovals` **declares** both AIP-158 fields and
   // honours neither, which is why R6's end-to-end half runs against a stub: the

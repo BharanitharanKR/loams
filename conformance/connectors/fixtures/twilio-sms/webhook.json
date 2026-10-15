@@ -1,0 +1,41 @@
+{
+  "recorded_from": "Twilio",
+  "synthetic": true,
+  "docs": [
+    "https://www.twilio.com/docs/usage/webhooks/webhooks-security"
+  ],
+  "scenario": {
+    "direction": "webhook",
+    "scheme": "twilio",
+    "header": "X-Twilio-Signature",
+    "secret": "synthetic-twilio-auth-token",
+    "url": "https://hooks.loams.test/fabric/twilio/status?account=1",
+    "now": 1759320000
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/fabric/twilio/status?account=1",
+        "headers": {
+          "content-type": "application/x-www-form-urlencoded",
+          "x-twilio-signature": "0Az0EqzDd9esq85qUhkNKyZUytA="
+        },
+        "body": {
+          "text": "MessageSid=SM00000000000000000000000000000004&MessageStatus=delivered&AccountSid=AC00000000000000000000000000000000&From=%2B15005550006&To=%2B15005550009"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "ok": true
+          }
+        }
+      }
+    }
+  ]
+}

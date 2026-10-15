@@ -1,0 +1,95 @@
+{
+  "recorded_from": "Keycloak",
+  "synthetic": true,
+  "docs": [
+    "https://www.keycloak.org/docs-api/latest/rest-api/index.html",
+    "https://www.keycloak.org/docs/latest/server_admin/index.html#auditing-admin-events"
+  ],
+  "scenario": {
+    "direction": "source",
+    "resource": "admin_events",
+    "config": {
+      "server_url": "{proxy}",
+      "realm": "loams"
+    },
+    "secrets": {
+      "client_id": "synthetic-kc-client",
+      "client_secret": "synthetic-kc-secret"
+    },
+    "expect": 2
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/realms/master/protocol/openid-connect/token",
+        "headers": {},
+        "body": {
+          "text": "grant_type=client_credentials&client_id=<redacted>&client_secret=<redacted>"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "access_token": "<scrubbed>",
+            "expires_in": 60,
+            "refresh_expires_in": 0,
+            "token_type": "Bearer",
+            "not-before-policy": 0,
+            "scope": "profile email"
+          }
+        }
+      }
+    },
+    {
+      "request": {
+        "method": "GET",
+        "path": "/admin/realms/loams/admin-events?first=0&max=100",
+        "headers": {},
+        "body": "empty"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": [
+            {
+              "id": "0f2b6c1e-6d5a-4c39-9a51-8d1f0c7b2a02",
+              "time": 1759319902000,
+              "realmId": "4b2d6e5f-1111-4c22-9a33-0123456789ab",
+              "authDetails": {
+                "realmId": "4b2d6e5f-0000-4c22-9a33-0123456789ab",
+                "clientId": "c1d2e3f4-0000-4a5b-8c9d-0123456789ab",
+                "userId": "a1b2c3d4-0000-4e5f-8a9b-0123456789ab",
+                "ipAddress": "192.0.2.10"
+              },
+              "operationType": "CREATE",
+              "resourceType": "USER",
+              "resourcePath": "users/5e6f7a8b-0000-4c1d-9e2f-0123456789ab"
+            },
+            {
+              "id": "0f2b6c1e-6d5a-4c39-9a51-8d1f0c7b2a01",
+              "time": 1759319901000,
+              "realmId": "4b2d6e5f-1111-4c22-9a33-0123456789ab",
+              "authDetails": {
+                "realmId": "4b2d6e5f-0000-4c22-9a33-0123456789ab",
+                "clientId": "c1d2e3f4-0000-4a5b-8c9d-0123456789ab",
+                "userId": "a1b2c3d4-0000-4e5f-8a9b-0123456789ab",
+                "ipAddress": "192.0.2.10"
+              },
+              "operationType": "UPDATE",
+              "resourceType": "GROUP",
+              "resourcePath": "groups/7a8b9c0d-0000-4e1f-8a2b-0123456789ab"
+            }
+          ]
+        }
+      }
+    }
+  ]
+}

@@ -6,22 +6,29 @@ import {
 	app,
 	BrowserWindow,
 	crashReporter,
+	Notification,
 	safeStorage,
 	screen,
 	session,
 	shell,
 } from "electron";
-import type { EngineState } from "../shared/contracts";
+import { CH, type EngineState } from "../shared/contracts";
 import { VERSION_ARG } from "../shared/version";
 import { registerChatIpc } from "./agent/ipc.electron";
-import { registerAgentdIpc } from "./agentd/ipc.electron";
-import { createAgentdService } from "./agentd/setup";
 import type { ChatService } from "./agent/service";
 import { registerTools } from "./agent/tools";
+import { agentdDir, readAgentdTarget } from "./agentd/discover";
+import { registerAgentdIpc } from "./agentd/ipc.electron";
+import { createAgentdService } from "./agentd/setup";
+import { type StudioWatch, watchStudio } from "./agentd/studio-watch";
 import { appPaths } from "./app-paths";
 import { ConnectorCatalog, catalogPath } from "./connectors/catalog";
 import { registerConnectorsIpc } from "./connectors/ipc.electron";
-import { findEngineBinary, probeLiveSupport } from "./engine/binary";
+import {
+	findEngineBinary,
+	probeLiveOnMainPort,
+	probeLiveSupport,
+} from "./engine/binary";
 import { registerEngineIpc } from "./engine/ipc.electron";
 import { EngineSupervisor } from "./engine/supervisor";
 import { FactoryEmbed } from "./factory/embed.electron";
@@ -30,6 +37,8 @@ import { FactoryHost } from "./factory/host";
 import { registerFactoryIpc } from "./factory/ipc.electron";
 import { Vault } from "./factory/vault";
 import { FactoryViews } from "./factory/views.electron";
+import { registerPreviewIpc } from "./preview/ipc.electron";
+import { StudioPreviewView } from "./preview/view.electron";
 import {
 	installAppProtocol,
 	registerAppScheme,
@@ -41,16 +50,25 @@ import { ServerRegistry } from "./servers/registry";
 import {
 	LIVE_STORE_KEY,
 	readLiveStore,
+	readNotifyPrefs,
 	readSetting,
 	writeSetting,
 } from "./settings";
 import { getMainWindow, setMainWindow } from "./shell/main-window";
 import { installAppMenu } from "./shell/menu.electron";
-import { DOCS_URL } from "./shell/menu-model";
+import { DOCS_URL, menuCommand } from "./shell/menu-model";
 import { quitSequence } from "./shell/quit";
 import { reveal } from "./shell/reveal";
 import { registerShellIpc } from "./shell/shell-ipc.electron";
 import { initSingleInstance } from "./shell/single-instance.electron";
+import {
+	EMPTY_STUDIO,
+	notificationContent,
+	notificationRoute,
+	type StudioSnapshot,
+	shouldNotify,
+	studioTrayRoute,
+} from "./shell/studio-tray-model";
 import { createTray, type TrayHandle } from "./shell/tray.electron";
 import { closeAction, TRAY_ROUTES } from "./shell/tray-model";
 import {
@@ -64,6 +82,7 @@ import { createSqlServices, registerSqlIpc } from "./sql/ipc.electron";
 import { sqlAgentTools } from "./sql/tools";
 import { createStackManager, registerStacksIpc } from "./stacks/ipc.electron";
 import { bindLiveToTikv } from "./stacks/stacks";
+import { registerStudioIpc } from "./studio/ipc.electron";
 import { startUpdater, type UpdaterHandle } from "./update/updater.electron";
 
 // Test hook (unpackaged builds only): the e2e smoke runs against a scratch profile, which
@@ -81,8 +100,11 @@ let updater: UpdaterHandle | undefined;
 let factory: FactoryHost | undefined;
 let factoryViews: FactoryViews | undefined;
 let factoryEmbed: FactoryEmbed | undefined;
+let studioPreview: StudioPreviewView | undefined;
 let chat: ChatService | undefined;
 let tray: TrayHandle | undefined;
+let studioWatch: StudioWatch | undefined;
+let studio: StudioSnapshot = EMPTY_STUDIO;
 let isQuitting = false;
 const settingsFile = (): string =>
 	join(app.getPath("userData"), "settings.json");
@@ -173,7 +195,7 @@ function createWindow(): BrowserWindow {
 		}
 	});
 	win.once("ready-to-show", () => win.show());
-	void win.loadURL("loams-app://console/ui/cordis.html");
+	void win.loadURL("loams-app://console/ui/");
 	return win;
 }
 
@@ -223,6 +245,9 @@ const singleInstance = initSingleInstance({
 			factoryViews = views;
 			factoryEmbed = new FactoryEmbed(factory, hardening, (a) => views.open(a));
 			registerFactoryIpc(factory, views, factoryEmbed);
+			// Studio's Preview tab (SD1 Task 26): one sandboxed view placed by main.
+			studioPreview = new StudioPreviewView();
+			registerPreviewIpc(studioPreview);
 			const paths = await appPaths();
 			const logFile = join(paths.logs, "engine.log");
 			engine = new EngineSupervisor({
@@ -234,6 +259,7 @@ const singleInstance = initSingleInstance({
 				now: Date.now,
 				sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
 				liveSupported: probeLiveSupport,
+				liveOnMainPort: probeLiveOnMainPort,
 			});
 			engine.on("state", (st: EngineState) => {
 				registry.setLocalUrl(st.phase === "ready" ? st.url : "");
@@ -273,6 +299,8 @@ const singleInstance = initSingleInstance({
 			});
 			registerAgentdIpc(agentd);
 			void agentd.attach();
+			// SD1 Task 28: Studio's editor hand-off and notification choices.
+			registerStudioIpc({ settingsFile: settingsFile() });
 			// With the TiKV stack chosen, a stack left running from last time starts the engine
 			// with Live on it directly, but a slow or absent runtime must not hold the engine
 			// back for long.
@@ -289,6 +317,8 @@ const singleInstance = initSingleInstance({
 					{ version: app.getVersion(), username: userInfo().username },
 					() => registry.active().kind,
 				),
+				// SD1 Task 5: the daemon's loams.agentd.v1 listener; main alone reads its token.
+				agentd: () => readAgentdTarget(agentdDir(app.getPath("userData"))),
 			});
 			const open = (): BrowserWindow => {
 				const w = createWindow();
@@ -319,7 +349,12 @@ const singleInstance = initSingleInstance({
 			installAppMenu({
 				dev: !app.isPackaged,
 				onAction: (id) => {
-					if (id === "quit") app.quit();
+					// Mode switches and New thread are the renderer's (SD1 Task 28).
+					const command = menuCommand(id);
+					if (command) {
+						showMainWindow(open);
+						getMainWindow()?.webContents.send(CH.shellCommand, command);
+					} else if (id === "quit") app.quit();
 					else if (id === "docs") void shell.openExternal(DOCS_URL);
 					else if (id === "logs") openLogs();
 					else if (id === "about") app.showAboutPanel();
@@ -329,8 +364,13 @@ const singleInstance = initSingleInstance({
 			tray = createTray({
 				getEngine: () => eng.state(),
 				getServer: () => registry.active(),
+				getStudio: () => studio,
 				onAction: (id) => {
-					if (id === "open") showMainWindow(open);
+					const studioRoute = studioTrayRoute(id);
+					if (studioRoute) {
+						showMainWindow(open);
+						singleInstance.navigate(studioRoute);
+					} else if (id === "open") showMainWindow(open);
 					else if (id === "engine")
 						void (eng.state().phase === "ready" ? eng.stop() : eng.start());
 					else if (id === "approvals") {
@@ -340,6 +380,33 @@ const singleInstance = initSingleInstance({
 						showMainWindow(open);
 						singleInstance.navigate(TRAY_ROUTES.servers);
 					} else if (id === "quit") app.quit();
+				},
+			});
+			// SD1 Task 28 (§53 §7, §50 §5.5): the daemon's threads and approvals in the tray,
+			// its notifications as OS notifications that open Studio links.
+			studioWatch = watchStudio({
+				target: () => readAgentdTarget(agentdDir(app.getPath("userData"))),
+				now: Date.now,
+				retryMs: 5_000,
+				onSnapshot: (s) => {
+					studio = s;
+					tray?.refresh();
+				},
+				onNotice: (n) => {
+					const focused = getMainWindow()?.isFocused() === true;
+					const prefs = readNotifyPrefs(settingsFile());
+					if (
+						!Notification.isSupported() ||
+						!shouldNotify(n, prefs, { focused, since: 0 })
+					)
+						return;
+					const note = new Notification(notificationContent(n));
+					const route = notificationRoute(n);
+					note.on("click", () => {
+						showMainWindow(open);
+						singleInstance.navigate(route);
+					});
+					note.show();
 				},
 			});
 			open();
@@ -353,9 +420,11 @@ const singleInstance = initSingleInstance({
 			e.preventDefault();
 			if (quitting) return;
 			quitting = true;
+			studioWatch?.stop();
 			tray?.destroy();
 			factoryEmbed?.closeAll();
 			factoryViews?.closeAll();
+			studioPreview?.destroy();
 			// State first (agent turns stopped, chat files written), then the quit-time install of
 			// a hash-verified download (D661; it stops the engine itself) or a plain engine stop.
 			void quitSequence({

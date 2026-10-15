@@ -17,7 +17,7 @@
         "R5",
         "R8"
       ],
-      "about": "The unavailable-service path on a unary RPC: `loams.live.v1` is a `full`-variant engine, so every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (gRPC-Web, the framing a browser sends. One length-prefixed frame: flag 0 and a zero-length message.)"
+      "about": "The unavailable-service path on a unary RPC: the corpus is recorded from `loams dev --no-live`, so `loams.live.v1` is not running and every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (gRPC-Web, the framing a browser sends. One length-prefixed frame: flag 0 and a zero-length message.)"
     },
     {
       "reason": null,
@@ -35,7 +35,7 @@
         "R5",
         "R8"
       ],
-      "about": "The unavailable-service path on a unary RPC: `loams.live.v1` is a `full`-variant engine, so every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (gRPC-Web carrying the proto3 JSON mapping, which a browser SDK can ask for.)"
+      "about": "The unavailable-service path on a unary RPC: the corpus is recorded from `loams dev --no-live`, so `loams.live.v1` is not running and every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (gRPC-Web carrying the proto3 JSON mapping, which a browser SDK can ask for.)"
     },
     {
       "reason": null,
@@ -53,7 +53,7 @@
         "R5",
         "R8"
       ],
-      "about": "The unavailable-service path on a unary RPC: `loams.live.v1` is a `full`-variant engine, so every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (The proto3 JSON mapping, which is what `curl` sends (design §44 §4).)"
+      "about": "The unavailable-service path on a unary RPC: the corpus is recorded from `loams dev --no-live`, so `loams.live.v1` is not running and every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (The proto3 JSON mapping, which is what `curl` sends (design §44 §4).)"
     },
     {
       "reason": null,
@@ -71,7 +71,7 @@
         "R5",
         "R8"
       ],
-      "about": "The unavailable-service path on a unary RPC: `loams.live.v1` is a `full`-variant engine, so every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (The binary encoding, which is what an SDK sends by default.)"
+      "about": "The unavailable-service path on a unary RPC: the corpus is recorded from `loams dev --no-live`, so `loams.live.v1` is not running and every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (The binary encoding, which is what an SDK sends by default.)"
     },
     {
       "reason": null,
@@ -556,6 +556,120 @@
       "standIn": null
     },
     {
+      "reason": "repo_not_found",
+      "code": "not_found",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "repo_already_exists",
+      "code": "already_exists",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "repo_deleting",
+      "code": "failed_precondition",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "ref_stale",
+      "code": "aborted",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "ref_protected",
+      "code": "failed_precondition",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "out_of_scope",
+      "code": "permission_denied",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "object_format_unsupported",
+      "code": "unimplemented",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "fork_too_deep",
+      "code": "failed_precondition",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "sequencer_unavailable",
+      "code": "unavailable",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "idempotency_key_reused",
+      "code": "failed_precondition",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "workspace_not_found",
+      "code": "not_found",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "workspace_fenced",
+      "code": "aborted",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "workspace_read_only",
+      "code": "failed_precondition",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "workspace_name_taken",
+      "code": "already_exists",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "object_missing",
+      "code": "failed_precondition",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "secret_detected",
+      "code": "failed_precondition",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "env_unsealed",
+      "code": "invalid_argument",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "env_access_denied",
+      "code": "permission_denied",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
+      "reason": "env_foreign_reference",
+      "code": "permission_denied",
+      "why": "Loams Git's loams.repos.v1 services are not part of the recorded corpus yet; the recorder runs no git runtime (GT1 Task 12).",
+      "standIn": null
+    },
+    {
       "reason": "live_bad_cursor",
       "code": "invalid_argument",
       "why": "Needs a deployed Live function that paginates; the recorder deploys no bundle, so no `paginate` call runs (LV1 Task 4).",
@@ -571,6 +685,126 @@
       "reason": "live_deploy_conflict",
       "code": "failed_precondition",
       "why": "Needs two deploys racing on one app's `expected_active`; the recorder deploys nothing (LV1 Task 6).",
+      "standIn": null
+    },
+    {
+      "reason": "live_schema_violation",
+      "code": "invalid_argument",
+      "why": "Needs a deployed Live table with a validator; the recorder deploys no bundle (LV1 Task 8).",
+      "standIn": null
+    },
+    {
+      "reason": "live_index_not_ready",
+      "code": "failed_precondition",
+      "why": "Needs a deploy still backfilling an index that a function reads; the recorder deploys nothing (LV1 Task 9).",
+      "standIn": null
+    },
+    {
+      "reason": "role_required",
+      "code": "permission_denied",
+      "why": "Raised by `loams.admin.v1` (API2 Task 7); the recorder's servers do not serve the admin RPCs it guards, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "setup_required",
+      "code": "failed_precondition",
+      "why": "Raised by `loams.admin.v1` (API2 Task 7); the recorder's servers do not serve the admin RPCs it guards, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_missing",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_malformed",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_revoked",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_not_yet_valid",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_bad_signature",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_wrong_audience",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_wrong_issuer",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_unknown_key",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "token_algorithm_not_allowed",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "api_key_invalid",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "credential_not_accepted",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "credential_in_query_string",
+      "code": "unauthenticated",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "csrf_token_invalid",
+      "code": "permission_denied",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "principal_not_allowed",
+      "code": "permission_denied",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "cors_origin_not_allowed",
+      "code": "permission_denied",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
+      "standIn": null
+    },
+    {
+      "reason": "auth_unavailable",
+      "code": "unavailable",
+      "why": "Raised by the main port's auth layer (API2 Task 6); both recorder servers run without authentication, so no recording carries it.",
       "standIn": null
     }
   ]

@@ -1,7 +1,15 @@
-name: Desktop (Electron) packaging
+name: Desktop
 
-# Builds the unsigned Loams Desktop installers for each platform (plan AP1e Task 15).
-# Signing is a separate release step (SignPath for Windows, Apple credentials for macOS: D676, D677).
+# Builds the unsigned Loams Desktop installers for each platform (plan AP1e Task 15): Linux x64 and
+# arm64, Windows x64, macOS arm64 and x64. Every platform that runs must pass; none is best-effort.
+# Signing is a separate release step (SignPath for Windows, Apple credentials for macOS: D676, D677);
+# the macOS builds here carry only an ad-hoc signature, which Apple Silicon needs to run the app.
+#
+# What runs (two tiers, owner, 2026-10-13; the org has about 20 concurrent jobs, about 5 macOS):
+# - pull request into dev (fast tier): Linux x64 only, with the Playwright smoke test.
+# - pull request into main (the dev -> main release gate), push to main, a dispatch, and the
+#   nightly run on dev (nightly.yml dispatches this workflow): all five platforms.
+# - a release: desktop-electron-release.yml builds all five itself.
 on:
   pull_request:
     paths:
@@ -11,15 +19,19 @@ on:
       - 'plugins/packages/**'
       # The stacks (neon, wesql, tikv) are packaged from deploy/.
       - 'deploy/**'
-      - '.github/workflows/desktop-electron.yml'
+      - 'scripts/release/**'
+      - '.github/workflows/desktop-*.yml'
+  push:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
   contents: read
 
 concurrency:
-  group: desktop-electron-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  group: desktop-${{ github.event.pull_request.number || github.ref }}
+  # A newer push supersedes an older one; main runs to completion.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CI: 'true'
@@ -28,34 +40,72 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  # Which platforms this run builds: Linux x64 alone on a pull request into dev, all five otherwise.
+  platforms:
+    name: Platforms
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.platforms.outputs.matrix }}
+    steps:
+      - name: platforms
+        id: platforms
+        env:
+          ALL: ${{ github.event_name != 'pull_request' || github.base_ref == 'main' }}
+          # The runners are repository variables so either pool can be swapped when GitHub's macOS
+          # capacity runs short (on 2026-10-13 the arm64 pool queued jobs for hours). A build whose
+          # runner is the other architecture is cross-compiled: MACOS_X64_RUNNER=macos-15 builds x64
+          # on Apple Silicon (smoke-tested under Rosetta); MACOS_ARM64_RUNNER=macos-15-intel builds
+          # arm64 on Intel (not executable there). The Intel engine build takes 90+ minutes.
+          MAC_ARM64: ${{ vars.MACOS_ARM64_RUNNER || 'macos-15' }}
+          MAC_X64: ${{ vars.MACOS_X64_RUNNER || 'macos-15-intel' }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+          linux_x64 = {"name": "linux-x64", "area": "Linux", "arch": "x64", "runner": "ubuntu-24.04", "target": "package-linux"}
+          rest = [
+              {"name": "linux-arm64", "area": "Linux", "arch": "arm64", "runner": "ubuntu-24.04-arm", "target": "package-linux"},
+              {"name": "windows-x64", "area": "Windows", "arch": "x64", "runner": "windows-2025", "target": "package-windows"},
+              {"name": "macos-arm64", "area": "macOS", "arch": "arm64", "runner": os.environ["MAC_ARM64"], "target": "package-macos", "mac_arch": "arm64"},
+              {"name": "macos-x64", "area": "macOS", "arch": "x64", "runner": os.environ["MAC_X64"], "target": "package-macos", "mac_arch": "x64"},
+          ]
+          include = [linux_x64] + (rest if os.environ["ALL"] == "true" else [])
+          print("matrix=" + json.dumps({"include": include}))
+          PY
+          grep '^matrix=' "$GITHUB_OUTPUT" | tail -1
+
   package:
-    name: package (${{ matrix.name }})
+    name: "${{ matrix.area }}: package (${{ matrix.arch }})"
+    needs: platforms
     runs-on: ${{ matrix.runner }}
-    # macOS and Windows installers are best-effort until their signing is set up.
-    continue-on-error: ${{ matrix.experimental }}
-    timeout-minutes: 90
+    # A cold Windows or macOS engine build takes about an hour on a GitHub-hosted runner.
+    timeout-minutes: 150
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - { name: linux-x64, runner: ubuntu-24.04, target: package-linux, experimental: false }
-          - { name: linux-arm64, runner: ubuntu-24.04-arm, target: package-linux, experimental: false }
-          - { name: windows-x64, runner: windows-2025, target: package-windows, experimental: true }
-          - { name: macos-arm64, runner: macos-15, target: package-macos, experimental: true }
-          - { name: macos-x64, runner: macos-15-intel, target: package-macos, experimental: true }
+      matrix: ${{ fromJSON(needs.platforms.outputs.matrix) }}
+    env:
+      LOAMS_DESKTOP_MAC_ARCH: ${{ matrix.mac_arch }}
+      # electron-builder skips all macOS signing on a pull request unless told otherwise. This
+      # workflow holds no signing secrets, so this only enables the ad-hoc signature ("-") that
+      # Apple Silicon needs to run the app at all.
+      CSC_FOR_PULL_REQUEST: 'true'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.0
-      - uses: actions/setup-node@v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: 22
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
 
+      # The same tests run on every other platform; the slow Intel runner only made them flaky
+      # (a 5 s vitest timeout in run 38339687116).
       - name: unit tests and typecheck
+        if: matrix.name != 'macos-x64'
         run: pnpm nx run-many -t test typecheck -p loams-desktop-electron @loams/console plugins --outputStyle=static
 
       # The engine build.rs scripts need protoc (see release-package.yml).
@@ -65,17 +115,10 @@ jobs:
       - name: protoc (macos)
         if: runner.os == 'macOS'
         run: brew install protobuf
+      # protoc from its GitHub release (not Chocolatey, whose outages exit 0) and NASM.
       - name: protoc and NASM (windows)
         if: runner.os == 'Windows'
-        shell: pwsh
-        run: |
-          # Chocolatey's package is `protoc` (there is no `protobuf`), and pwsh
-          # does not stop on a native command's failure, so check each one.
-          choco install --no-progress -y protoc
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          choco install --no-progress -y nasm
-          if ($LASTEXITCODE) { exit $LASTEXITCODE }
-          "$env:ChocolateyInstall\bin" | Out-File -Append -Encoding utf8 $env:GITHUB_PATH
+        uses: ./.github/actions/windows-build-tools
 
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
@@ -83,11 +126,58 @@ jobs:
 
       # The desktop engine needs durable, live-tikv (Live on the TiKV stack, ruling T23-7) and
       # graph (the Graph page, GR1 Task 8); the default build has live (the embedded store) only.
+      # A cross build goes to target/<triple>/release; LOAMS_BIN points fetch-engine.mjs at it.
       - name: engine
-        run: cargo build --release -p loams --features live,durable,live-tikv,graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          features=live,durable,live-tikv,graph
+          # A macOS build whose runner is the other architecture is a cross build (see the matrix).
+          if [ "$RUNNER_OS" = macOS ]; then
+            want=arm64; target=aarch64-apple-darwin
+            [ "$LOAMS_DESKTOP_MAC_ARCH" = x64 ] && { want=x86_64; target=x86_64-apple-darwin; }
+            [ "$(uname -m)" = "$want" ] || RUST_TARGET=$target
+            echo "RUST_TARGET=${RUST_TARGET:-}" >> "$GITHUB_ENV"
+          fi
+          if [ -n "${RUST_TARGET:-}" ]; then
+            rustup target add "$RUST_TARGET"
+            cargo build --release -p loams --features "$features" --target "$RUST_TARGET"
+            echo "LOAMS_BIN=$PWD/target/$RUST_TARGET/release/loams" >> "$GITHUB_ENV"
+          else
+            cargo build --release -p loams --features "$features"
+          fi
 
-      - name: package (unsigned)
+      - name: engine smoke test
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin="${LOAMS_BIN:-target/release/loams}"
+          [ "$RUNNER_OS" = Windows ] && bin=target/release/loams.exe
+          file "$bin" || true
+          if [ "${RUST_TARGET:-}" = x86_64-apple-darwin ]; then
+            # Cross-built on Apple Silicon: run it under Rosetta, which the image may lack.
+            arch -x86_64 /usr/bin/true 2>/dev/null || sudo softwareupdate --install-rosetta --agree-to-license
+            arch -x86_64 "$bin" --version
+          elif [ "${RUST_TARGET:-}" = aarch64-apple-darwin ]; then
+            # Cross-built on Intel, which cannot run it: check the architecture only.
+            echo "::notice::arm64 engine cross-built on an Intel runner; not executed here"
+            [ "$(lipo -archs "$bin")" = arm64 ]
+          else
+            "$bin" --version
+          fi
+
+      - name: package
         run: pnpm nx run loams-desktop-electron:${{ matrix.target }} --outputStyle=static
+
+      - name: macOS signature
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          apps=(apps/desktop-electron/dist/mac*/*.app); app="${apps[0]}"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          codesign -dv "$app" 2>&1 | grep -E 'Signature|Identifier|Format'
+          lipo -archs "$app/Contents/MacOS/Loams Desktop"
+          lipo -archs "$app/Contents/Resources/bin/loams"
 
       - name: smoke test (Playwright, Task 16)
         if: runner.os == 'Linux' && hashFiles('apps/desktop-electron/playwright.config.ts') != ''

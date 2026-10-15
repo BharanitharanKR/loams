@@ -22,16 +22,48 @@ cargo run -p loams-agentd -- run --child --config .agentd-dev/config.toml
 `config.toml` has the keys listed in the plan's Shared contracts; every key is optional, so an empty file works. The daemon keeps its other files in the config's directory, so give it a directory of its own:
 - `agentd.lock`, the single-instance lock;
 - `agentd.token`, the RPC token (0600, new at every start);
-- `agentd.json`, the discovery file (protocol, version, pid, port, start time and mode; removed on a clean exit);
+- `agentd.json`, the discovery file (protocol, version, pid, port, start time, mode and `connectPort`; removed on a clean exit);
 - `store/`, the sessions engine's data;
 - `adapters/`, the harnesses' managed ACP adapter installs;
+- `runtime/`, the installed binaries (see below);
 - `logs/agentd.log`, the daemon's own log (a supervisor's capture of stdout and stderr goes to `logs/agentd.stdout.log`).
 
 The RPC listens on `127.0.0.1` on an ephemeral port, which `agentd.json` names. `--child` (Loams Desktop starts and stops the daemon) or `--service` (the per-user service) sets the mode that `Hello` reports; without either flag, `[daemon] mode` in the config decides. `LOAMS_AGENTD_CONFIG` overrides `--config`.
 
 Every WebSocket upgrade must carry `Authorization: Bearer <agentd.token>` and no `Origin`, with `Host: 127.0.0.1:<port>`; anything else is refused (401 or 403) before the RPC is served, and `Hello` must be the first call on a connection (design §50 §7).
 
+Beside it, a second loopback listener serves `loams.agentd.v1`, the Connect surface Loams Studio reads (design §53 §6.1–§6.2, plan SD1 Task 5; crate `loams-agentd-connect`), on the port `agentd.json` names as `connectPort`. It keeps the same rules: the main token (`Authorization: Bearer <agentd.token>`; the MCP shim's run tokens are not accepted), `Host: 127.0.0.1:<connectPort>`, and a 403 for any `Origin`. Its handlers call the same engine dispatch as the ndjson methods, which stay as they are; `Shutdown` is not on it. Loams Desktop's renderer reaches it only through Electron main's protocol proxy (`loams-app://console/loams.agentd.v1.*`), which adds the token and lets through only the methods whose ndjson twin is `renderer: true`. `Hello` and `StudioService.GetHost` list the feature `studio.v1`.
+
+A third listener is off unless asked for: `serve --remote --listen <addr:port> --tls-cert <pem> --tls-key <pem> --issuer <url> --audience loams-agentd --subject <sub> --allow-origin <origin> [--allow-origin …] --config <path>`, or `[remote] enabled = true` in `config.toml` with the same keys (design §53 §6.3, D909; plan SD1 Task 7). It serves `loams.agentd.v1` to one person's browser console over TLS (HTTP/1.1 and HTTP/2): an OIDC access token from `--issuer` (its JWKS from discovery, cached, refetched for an unknown key at most once a minute), whose `aud` holds `--audience` and whose `sub` is `--subject`, from no `Origin` or one of the `--allow-origin`s (CORS for those only, never with credentials), in the role `studio`, which has every Studio method except the harness installers and the account logins (Q808). It never serves the ndjson wire, `Hello` or `Shutdown`. It also forwards dev-server previews under `/preview/…` to the local preview proxy, behind the same checks, with per-preview tickets for the console's frames (SD1 Task 26). Every flag but `--allow-origin` is required, and a missing one exits 4 naming it (`loams-agentd: serve --remote needs --tls-cert`); so does a certificate or key that cannot be used. The guide is [`docs/guides/studio/remote-agentd.md`](../../docs/guides/studio/remote-agentd.md).
+
+### What Loams Studio adds
+
+SD1 added these to the engine, on both wires (ndjson methods with role `owner` and `renderer: true`, none in the `mcp` role; and `loams.agentd.v1`). `Hello` and `StudioService.GetHost` list each as a feature when it is served:
+- `git.write`: worktree listing, commit, push (never a plain force; force-with-lease only), change requests on Forgejo and GitHub, merge and rebase in a temporary worktree, and discarding paths. Each write checks the caller's diff checksum, refuses while an agent runs in the checkout, and runs one at a time.
+- `checkpoints`: a hidden commit of the chat's checkout at each turn's start and end, under `refs/loams/checkpoints/<chatId>/turn/<n>/{pre,post}`, and restore to a turn's start.
+- `review`: review comments stored per checkout, sent to the thread as one turn, or posted to the pull request. `content-search`: a content search over a checkout.
+- `run-groups`: one prompt to several chats, each in its own worktree, with a comparison, a check per member and a resolve. Concurrency comes from `config.toml`: `[groups] max_running_per_group = 4` and `max_running = 8`.
+- `notifications`: the last 200 in memory, replayed to each watcher. `usage`: per-turn token counts, and cost only when the harness reports one, in the `turn_usage` table.
+- `approvals.supervised`: per-thread approval modes and the approval list (below).
+
+`CloneRepo` accepts only remote git URLs: `https`, `ssh`, `git` and `user@host:path`, never a local path, `file:`, `ext::` or a leading `-`. Worktrees live under `~/.loams-desktop/worktrees` on `loams-desktop/<name>` branches (`LOAMS_DESKTOP_WORKTREES_DIR` moves them). The user guides are in [`docs/guides/studio`](../../docs/guides/studio/index.md).
+
+For tests only, the Mock harness edits files and, in a supervised thread, asks for approval first: `LOAMS_DESKTOP_HARNESS=mock`, `LOAMS_DESKTOP_MOCK_EDIT=<relative path>[,<path>…]` and `LOAMS_DESKTOP_MOCK_APPROVE`. `LOAMS_AGENTD_TEST_ISSUER` (a JWKS file for the remote listener) is honoured in debug builds only.
+
+Each thread has an approval mode (design §53 §8.1, D911; plan SD1 Task 13). In `full-access` the harness drivers answer their agents' tool permissions themselves; in `supervised` every permission waits for the person, who answers it with `ResolveApproval` (the owner token, or the remote listener's `studio` role; never a run's `mcp` token). A thread's mode is set with `SetThreadApprovalMode`; a side chat takes its parent's; any other thread takes `[approvals] default_mode`, which is `full-access`, or `supervised` when the remote listener is on. An approval nobody answers is denied after `[approvals] timeout_secs` (1800). Pending approvals are kept in the store, so they are listed again after a restart; "always" is remembered per thread and tool. A harness that cannot ask (Pi) does not run a supervised thread.
+
 Exit codes: 0 stopped, 3 already running (a second `run` on the same directory prints `already running (pid …)`), 4 invalid config (the message names the key), 70 internal error.
+
+## The per-user service and the runtime directory
+
+A service never runs the binary from the app bundle. `install-runtime --from <resources/bin> --to <agentd>/runtime` copies `loams-agentd` and `loams` into `runtime/<VERSION>/`, checks each copy against the bundle's `SHA256SUMS`, switches `runtime/current` to it (a symlink; `current.txt` on Windows) and keeps the newest two versions. A failed check leaves `current` where it was.
+
+`service install|uninstall|start|stop|status --config <file>` manages the service that runs `runtime/current/loams-agentd run --service --config <file>`:
+- Linux: the systemd user unit `loams-agentd.service` (in `$XDG_CONFIG_HOME/systemd/user`), `daemon-reload`, then `enable --now`;
+- macOS: the LaunchAgent `dev.loams.agentd` (`~/Library/LaunchAgents`), with `launchctl bootstrap gui/<uid>`; launchd writes the daemon's stdout and stderr to `logs/agentd.stdout.log`;
+- Windows: the Run value `LoamsAgentd` under `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`. There `run --service` is a parent that runs `run --worker` in a Job Object and restarts it after a crash (not after exit 0, 3 or 4), with a backoff of 1 to 30 s and at most 5 restarts in 10 minutes.
+
+No unit captures the environment; the daemon resolves the login shell's `PATH` when it starts. `service enable-linger` and `disable-linger` run `loginctl enable-linger|disable-linger "$USER"` on Linux (linger is off by default, and the daemon never turns it on itself) and answer `unsupported` elsewhere.
 
 The other subcommands are `-- status --config <file>`, `-- version` and `-- mcp`. The `mcp` subcommand is the stdio shim; the daemon injects it into each harness run with a token scoped to that run (`LOAMS_AGENTD_RUN_TOKEN`, `LOAMS_AGENTD_PORT`, `LOAMS_AGENTD_SESSION_ID`), so it is not useful on its own.
 
@@ -83,5 +115,6 @@ Only the `new` rows may name a crate that does not exist yet. A crate added to t
 | `loams-agentd-tools` | Apache-2.0 | new | Loams and SQL tools (DD1 Tasks 20, 21) |
 | `loams-agentd-factory` | Apache-2.0 | new | Factory ops (DD1 Task 23) |
 | `loams-agentd-supervisor` | Apache-2.0 | new | The engine and stack supervisor (DD1 Tasks 14, 15) |
+| `loams-agentd-connect` | Apache-2.0 | new | `loams.agentd.v1`, the Connect surface for Loams Studio: the loopback listener beside the ndjson one, and the remote TLS listener (SD1 Tasks 4, 5, 7) |
 
 Changes that the Loams Authors make to the MIT crates are released under those crates' MIT licence.

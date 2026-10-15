@@ -71,4 +71,36 @@ public interface IndexDefOrBuilder extends
    */
   com.google.protobuf.ByteString
       getFieldsBytes(int index);
+
+  /**
+   * <pre>
+   * Where the index is in its life (LV1 plan Task 9). Unspecified: ready
+   * (an index defined before Task 9).
+   * </pre>
+   *
+   * <code>.loams.live.v1.IndexState state = 4 [json_name = "state"];</code>
+   * @return The enum numeric value on the wire for state.
+   */
+  int getStateValue();
+  /**
+   * <pre>
+   * Where the index is in its life (LV1 plan Task 9). Unspecified: ready
+   * (an index defined before Task 9).
+   * </pre>
+   *
+   * <code>.loams.live.v1.IndexState state = 4 [json_name = "state"];</code>
+   * @return The state.
+   */
+  dev.loams.gen.loams.live.v1.IndexState getState();
+
+  /**
+   * <pre>
+   * The deployment whose deploy is backfilling it (16 bytes), while
+   * `state` is `INDEX_STATE_BACKFILLING`.
+   * </pre>
+   *
+   * <code>bytes deployment = 5 [json_name = "deployment"];</code>
+   * @return The deployment.
+   */
+  com.google.protobuf.ByteString getDeployment();
 }

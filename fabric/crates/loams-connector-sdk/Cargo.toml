@@ -1,0 +1,65 @@
+[package]
+name = "loams-connector-sdk"
+description = "The Loams connector SDK (CN2 Task 4, OR-5): source and sink traits, splits, fenced checkpoints, delivery modes, backpressure budgets, retries by error class, rate limiting, the CloudEvents envelope builder, and the secret, egress and observer hooks every native connector family builds on."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+# `EventBatch::Arrow`, the bulk path of design §33 D356. Only the array and
+# schema crates of the workspace's arrow 59 line. Apache-2.0.
+arrow-array.workspace = true
+arrow-schema.workspace = true
+# The codecs of CN2 Task 5 (D356): CSV and NDJSON decode straight to a
+# `RecordBatch` and encode from one; `arrow-buffer` builds the offsets and
+# validity of nested Protobuf columns. Same 59 line. Apache-2.0.
+arrow-buffer.workspace = true
+arrow-csv.workspace = true
+arrow-json.workspace = true
+# The connector traits are async traits used as trait objects
+# (`Box<dyn Source>`); 0.1.92 is already in fabric/Cargo.lock. MIT OR Apache-2.0.
+async-trait = "0.1.89"
+# `data_base64` of structured-mode CloudEvents on pass-through.
+base64.workspace = true
+bytes.workspace = true
+# `sdk::http::client`: HTTP/1.1 over a connection `sdk::net::connect` opened
+# after the egress check. hyper, hyper-util and http-body-util are the
+# workspace's pins; their `client` features add no crate to the graph. MIT.
+http.workspace = true
+http-body-util.workspace = true
+hyper = { workspace = true, features = ["client", "http1"] }
+hyper-util = { workspace = true, features = ["tokio"] }
+# TLS for `sdk::net::connect_tls` and `sdk::http::client`. rustls 0.23 with
+# `ring` and webpki-roots 1.0 are already in fabric/Cargo.lock (through ureq);
+# tokio-rustls 0.26.4 (2025-09) is the one new crate, MIT OR Apache-2.0, taken
+# without its default aws-lc-rs backend so the graph keeps ring only.
+rustls = { version = "0.23.27", default-features = false, features = ["ring", "std", "tls12", "logging"] }
+tokio-rustls = { version = "0.26.4", default-features = false, features = ["ring", "tls12", "logging"] }
+webpki-roots = "1"
+# The Protobuf codec (CN2 Task 5, OR-12): dynamic messages over a
+# user-supplied `FileDescriptorSet`, with no generated code and no protoc.
+# 0.16.5 (2026-07-09) is MIT OR Apache-2.0 and is taken without features, so
+# it brings only prost and prost-types 0.14.4 (2026-06-07, Apache-2.0) and
+# prost-derive; their own dependencies were already in fabric/Cargo.lock.
+prost-reflect = { version = "=0.16.5", default-features = false }
+serde.workspace = true
+serde_json.workspace = true
+# The batch-read run id of design §33 §6: the first 16 hex digits of SHA-256.
+sha2.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "io-util"] }
+tracing.workspace = true
+# `Secret` (CN1 Task 3's zeroizing type; OR-5 moves it here). 1.9.0 is already
+# in fabric/Cargo.lock. MIT OR Apache-2.0.
+zeroize = "1.8"
+
+[dev-dependencies]
+# Paused-clock tests for retries, backoff and Retry-After.
+tokio = { workspace = true, features = ["macros", "rt", "rt-multi-thread", "sync", "time", "net", "io-util", "test-util"] }
+hyper = { workspace = true, features = ["client", "server", "http1"] }
+
+[lints]
+workspace = true

@@ -52,15 +52,56 @@ Primitives
   that share one focus ring and error styling.
 - `Logo`, `Mark`, `Wordmark` — the Loams mark, the bare glyph and the
   glyph-with-name lockup.
-- `Avatar`, `Dialog`, `Meter`, `Notice`, `NoticeTone`, `Snippet`, `Stat`,
-  `Stats` — the remaining console pieces.
+- `Avatar`, `Meter`, `Notice`, `NoticeTone`, `Snippet`, `Stat`, `Stats` — the
+  remaining console pieces.
 - `Badge`, `Status`, `StatusTag` — status pills; `Status` is the state a pill
   renders.
 - `Table`, `Column` — a data table; a `Column` names its `key`, its `header`,
   a `cell` renderer, and optionally `numeric` (right-aligned, tabular figures)
   and `width`.
+- `DataTable`, `SortableColumn` — `Table` with sortable columns (TanStack
+  Table); `VirtualList` — a long list that renders only what is in view
+  (TanStack Virtual).
 - `Grain`, `GrainKind` — the texture overlays.
 - `cx` — joins class names, dropping falsy ones.
+
+Overlays and composite controls (Base UI, styled with Tailwind token utilities;
+see [docs/design/console-ui-stack.md](../../../docs/design/console-ui-stack.md))
+
+- `Dialog` — a modal: focus moves in and is trapped, Escape and the scrim
+  close it unless `dismissible` is false.
+- `Menu`, `MenuItem`, `MenuLabel`, `MenuSeparator` — an action menu on a trigger.
+- `Popover` — non-modal content anchored to a trigger.
+- `SelectMenu`, `Option` — a styled select; `Combobox` — a filtering text input.
+- `Tabs`, `Tab` — tabs with arrow-key movement, with or without panels.
+- `Tooltip`, `TooltipProvider` — a short hover or focus label.
+- `ToastProvider`, `Toaster`, `useToast` — transient messages.
+- `AlertDialog` — a confirmation (role `alertdialog`) with a confirm and a
+  cancel button; `Sheet` — a modal panel from the left, right or bottom edge.
+
+Plugins import these from `@loams/ui`, never from `@base-ui/react` directly.
+
+Studio's primitives, adapted from T3 Code's `components/ui` (MIT; see
+`NOTICE`, `LICENSE.t3code` and `provenance.json`)
+
+- `CommandPalette`, `CommandItem`, `matchCommand`, `Shortcut` — the palette:
+  a dialog around an always-open autocomplete; arrows move, Enter runs, long
+  lists are virtualised.
+- `Sidebar` and `SidebarHeader`, `SidebarContent`, `SidebarFooter`,
+  `SidebarGroup`, `SidebarMenu`, `SidebarMenuItem`, `SidebarMenuButton`,
+  `SidebarMenuSub` — a resizable sidebar and its rows; `ResizeHandle` — the
+  keyboard-operable splitter it uses, for panels and drawers too.
+- `Kbd`, `KbdGroup` — keys and chords.
+- `Toggle`, `ToggleGroup` — toggle buttons, one or several pressed
+  (`Segmented` stays the exactly-one pill row).
+- `InputGroup`, `InputGroupAddon`, `InputGroupInput` — an input with a glyph,
+  a hint or a button attached.
+- `MiddleTruncate`, `splitForMiddleTruncate` — an ellipsis in the middle, for
+  branches and paths.
+- `ScrollArea` — thin overlay scrollbars and edge fades.
+- `Switch` — an on/off setting that applies at once.
+- `Collapsible`, `CollapsibleTrigger`, `CollapsiblePanel` — a disclosure.
+- `Spinner`, `Skeleton` — loading states.
 
 Formatters
 
@@ -75,8 +116,9 @@ Canvas helpers
   CSS custom properties are not available.
 - `fit` — sizes a canvas to its box at the device pixel ratio (capped at 2x)
   and returns its 2d context, or `null` when the browser has none.
-- `rgba` — turns a `#rgb` or `#rrggbb` string into `rgba(…, a)`, so a token
-  read from the DOM can be used at a chosen alpha.
+- `rgba` — turns a `#rgb` or `#rrggbb` token into `rgba(…, a)` (any other CSS
+  colour through `color-mix()`), so a token read from the DOM can be used at a
+  chosen alpha.
 - `rng` — a seeded generator, so a grain texture is the same on every render.
 - `onThemeChange`, `prefersReducedMotion` — the two environment checks the
   components make.

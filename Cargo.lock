@@ -1503,6 +1503,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6bb31b46c14244e20ee9984b11bf5c992b91fb6939fea616e3512c8baecdbe5f"
 dependencies = [
  "memchr",
+ "regex-automata",
  "serde_core",
 ]
 
@@ -3718,7 +3719,7 @@ dependencies = [
  "libc",
  "option-ext",
  "redox_users",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4035,7 +4036,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -4744,7 +4745,7 @@ dependencies = [
  "libc",
  "log",
  "rustversion",
- "windows-link 0.2.1",
+ "windows-link 0.1.3",
  "windows-result 0.4.1",
 ]
 
@@ -4914,6 +4915,52 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e629b9b98ef3dd8afe6ca2bd0f89306cec16d43d907889945bc5d6687f2f13c7"
 
 [[package]]
+name = "git-wal-bench"
+version = "0.1.0-preview.2"
+dependencies = [
+ "async-trait",
+ "bytes",
+ "clap",
+ "loams-git",
+ "loams-store",
+ "rand 0.9.5",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
+name = "gix-actor"
+version = "0.43.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8e046e9a929e8e1f40f9a34f736408c4c079f9cf004429f3e718d270e847be96"
+dependencies = [
+ "bstr",
+ "gix-date",
+ "gix-error",
+]
+
+[[package]]
+name = "gix-chunk"
+version = "0.9.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "25303d07ce2b8f98aab48ce4251317d785a3208b7ed65698928e4a2f31889936"
+dependencies = [
+ "gix-error",
+]
+
+[[package]]
+name = "gix-date"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb8beceb16a77fb222923592864b94beb4ad4c2b175a7055c2cac6815ee0370a"
+dependencies = [
+ "bstr",
+ "gix-error",
+ "itoa",
+ "jiff",
+]
+
+[[package]]
 name = "gix-error"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4928,6 +4975,7 @@ version = "0.50.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bb3a430dbc02d6c5e30a9f92083459593495ea22a476e837d248b22d800eed80"
 dependencies = [
+ "crc32fast",
  "gix-trace",
  "libc",
  "prodash",
@@ -4946,10 +4994,80 @@ dependencies = [
 ]
 
 [[package]]
+name = "gix-hashtable"
+version = "0.17.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c55bff2f32f6f5a95bdd43e5e5e01b0656250cffbc48eda19db0afa3d73adf2f"
+dependencies = [
+ "gix-hash",
+ "hashbrown 0.17.1",
+ "parking_lot",
+]
+
+[[package]]
+name = "gix-object"
+version = "0.65.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a72909eeeed845721a143ef3dbeb4d6cd5df79c839fe7eefc138cb4f982eba3e"
+dependencies = [
+ "bstr",
+ "gix-actor",
+ "gix-date",
+ "gix-error",
+ "gix-features",
+ "gix-hash",
+ "gix-hashtable",
+ "gix-utils",
+ "gix-validate",
+ "itoa",
+ "smallvec",
+]
+
+[[package]]
+name = "gix-pack"
+version = "0.75.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0451a48faef8e0e7a8f6d903c8329c7d18a793b3030907ca841f889dc695d1df"
+dependencies = [
+ "gix-chunk",
+ "gix-error",
+ "gix-features",
+ "gix-hash",
+ "gix-object",
+ "gix-path",
+ "gix-zlib",
+ "memmap2",
+ "smallvec",
+]
+
+[[package]]
+name = "gix-path"
+version = "0.13.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "fd051ac60c5dbce2228daabf25b6a76408ac732d416c678cfa0a4914d13f60b8"
+dependencies = [
+ "bstr",
+ "gix-error",
+ "gix-trace",
+ "gix-validate",
+]
+
+[[package]]
 name = "gix-trace"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "df45b2cf6052d9e52681130c17d67505b023e8933ad974f94a2be0b0d24f636a"
+
+[[package]]
+name = "gix-utils"
+version = "0.4.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "70525766f53426ca4cd2ea4d58b0b31488dfedb416b3254e2efdd9dc184cc880"
+dependencies = [
+ "fastrand",
+ "getrandom 0.4.3",
+ "unicode-normalization",
+]
 
 [[package]]
 name = "gix-validate"
@@ -4959,6 +5077,16 @@ checksum = "30574f81fc41b2ca3582ece2bdf8696bdfe9c170aa7e8bcafb81199c86b1ceea"
 dependencies = [
  "bstr",
  "gix-error",
+]
+
+[[package]]
+name = "gix-zlib"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "44a1a9c82ec5b712082566cbef8f5782472a0d3973132911e5a83380a5298fe2"
+dependencies = [
+ "gix-error",
+ "zlib-rs",
 ]
 
 [[package]]
@@ -5029,8 +5157,7 @@ dependencies = [
 [[package]]
 name = "grafeo"
 version = "0.5.43"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9834e6ed00539e3f67d23861af10ce0f41d7ee6b199fda6fb2d0421950186f20"
+source = "git+https://github.com/ostrium-labs/grafeo?rev=92bc59a28ed8b38dbb43659b4a90271770c58956#92bc59a28ed8b38dbb43659b4a90271770c58956"
 dependencies = [
  "grafeo-adapters",
  "grafeo-common",
@@ -5041,8 +5168,7 @@ dependencies = [
 [[package]]
 name = "grafeo-adapters"
 version = "0.5.43"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d3e717712f262de22f59a1fe6e03bef1a493b0e8a91c51f9b235be0736934f83"
+source = "git+https://github.com/ostrium-labs/grafeo?rev=92bc59a28ed8b38dbb43659b4a90271770c58956#92bc59a28ed8b38dbb43659b4a90271770c58956"
 dependencies = [
  "bincode 2.0.1",
  "grafeo-common",
@@ -5059,8 +5185,7 @@ dependencies = [
 [[package]]
 name = "grafeo-common"
 version = "0.5.43"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "780d7fb460139e5ba9d6062d679893b24c724129a174710bd62fd45dc51157d4"
+source = "git+https://github.com/ostrium-labs/grafeo?rev=92bc59a28ed8b38dbb43659b4a90271770c58956#92bc59a28ed8b38dbb43659b4a90271770c58956"
 dependencies = [
  "arcstr",
  "bincode 2.0.1",
@@ -5081,8 +5206,7 @@ dependencies = [
 [[package]]
 name = "grafeo-core"
 version = "0.5.43"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2c746c01145ab3c1a3a368c15012e1fdfc608c5d6cd27e158330c12d1f2d730e"
+source = "git+https://github.com/ostrium-labs/grafeo?rev=92bc59a28ed8b38dbb43659b4a90271770c58956#92bc59a28ed8b38dbb43659b4a90271770c58956"
 dependencies = [
  "arcstr",
  "bincode 2.0.1",
@@ -5107,8 +5231,7 @@ dependencies = [
 [[package]]
 name = "grafeo-engine"
 version = "0.5.43"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6beb48085a410e875eb52dec6c7a18ad6e5e1e650ea21c457ccf40624120ca5"
+source = "git+https://github.com/ostrium-labs/grafeo?rev=92bc59a28ed8b38dbb43659b4a90271770c58956#92bc59a28ed8b38dbb43659b4a90271770c58956"
 dependencies = [
  "arcstr",
  "bincode 2.0.1",
@@ -5133,8 +5256,7 @@ dependencies = [
 [[package]]
 name = "grafeo-storage"
 version = "0.5.43"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aeaee4cd4659faeaee114c138f56176d3e4c56dbfe3e3ece27b93fbaa4ff4232"
+source = "git+https://github.com/ostrium-labs/grafeo?rev=92bc59a28ed8b38dbb43659b4a90271770c58956#92bc59a28ed8b38dbb43659b4a90271770c58956"
 dependencies = [
  "bincode 2.0.1",
  "byteorder",
@@ -5589,7 +5711,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -7432,7 +7554,7 @@ checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
 
 [[package]]
 name = "loams"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "argon2",
  "arrow-array",
@@ -7452,15 +7574,19 @@ dependencies = [
  "fail 0.5.1",
  "futures",
  "getrandom 0.3.4",
+ "hex",
  "http",
  "http-body",
+ "hyper-util",
  "jsonwebtoken",
+ "loams-apps-mock",
  "loams-cache",
  "loams-cloudevents",
  "loams-collection",
  "loams-common",
  "loams-durable",
  "loams-es",
+ "loams-git",
  "loams-graph",
  "loams-hnsw",
  "loams-hot",
@@ -7486,8 +7612,10 @@ dependencies = [
  "proptest",
  "prost 0.14.4",
  "prost-types",
+ "rcgen",
  "reqwest 0.13.5",
  "ring",
+ "rustls",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -7498,8 +7626,10 @@ dependencies = [
  "time",
  "tokio",
  "tokio-postgres",
+ "tokio-rustls",
  "tokio-stream",
  "tokio-util",
+ "toml 0.8.23",
  "tonic 0.14.6",
  "tower 0.5.3",
  "tracing",
@@ -7510,13 +7640,15 @@ dependencies = [
 
 [[package]]
 name = "loams-agentd"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "anyhow",
  "async-trait",
  "clap",
  "futures",
+ "hex",
  "libc",
+ "loams-agentd-connect",
  "loams-agentd-doc",
  "loams-agentd-harness",
  "loams-agentd-link",
@@ -7525,9 +7657,11 @@ dependencies = [
  "loams-agentd-rpc",
  "loams-agentd-sessions",
  "mimalloc",
+ "semver",
  "serde",
  "serde_json",
  "serde_path_to_error",
+ "sha2 0.11.0",
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
@@ -7538,8 +7672,45 @@ dependencies = [
 ]
 
 [[package]]
+name = "loams-agentd-connect"
+version = "0.1.0-preview.2"
+dependencies = [
+ "async-trait",
+ "axum 0.8.9",
+ "base64 0.23.1",
+ "buffa",
+ "buffa-descriptor",
+ "buffa-types",
+ "chrono",
+ "connectrpc",
+ "connectrpc-build",
+ "futures",
+ "http",
+ "hyper",
+ "hyper-util",
+ "jsonwebtoken",
+ "loams-agentd-proto",
+ "loams-agentd-rpc",
+ "loams-agentd-sessions",
+ "rcgen",
+ "reqwest 0.12.28",
+ "reqwest 0.13.5",
+ "ring",
+ "rustls",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "tower 0.5.3",
+ "tracing",
+ "url",
+]
+
+[[package]]
 name = "loams-agentd-doc"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "chrono",
  "loams-agentd-proto",
@@ -7553,7 +7724,7 @@ dependencies = [
 
 [[package]]
 name = "loams-agentd-harness"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7580,7 +7751,7 @@ dependencies = [
 
 [[package]]
 name = "loams-agentd-link"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7607,7 +7778,7 @@ dependencies = [
 
 [[package]]
 name = "loams-agentd-mcp"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7625,7 +7796,7 @@ dependencies = [
 
 [[package]]
 name = "loams-agentd-preview"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7652,18 +7823,20 @@ dependencies = [
 
 [[package]]
 name = "loams-agentd-proto"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "chrono",
  "pulldown-cmark 0.12.2",
  "serde",
  "serde_json",
+ "thiserror 2.0.21",
+ "ts-rs",
  "uuid",
 ]
 
 [[package]]
 name = "loams-agentd-rpc"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -7683,15 +7856,17 @@ dependencies = [
 
 [[package]]
 name = "loams-agentd-sessions"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "anyhow",
  "async-trait",
+ "axum 0.8.9",
  "base64 0.22.1",
  "chrono",
  "futures",
  "gethostname",
  "ignore",
+ "keyring",
  "libc",
  "loams-agentd-doc",
  "loams-agentd-harness",
@@ -7703,6 +7878,7 @@ dependencies = [
  "notify",
  "nucleo-matcher",
  "portable-pty",
+ "regex",
  "reqwest 0.12.28",
  "rusqlite",
  "serde",
@@ -7722,7 +7898,7 @@ dependencies = [
 
 [[package]]
 name = "loams-agentd-store"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "chrono",
  "loams-agentd-doc",
@@ -7737,7 +7913,7 @@ dependencies = [
 
 [[package]]
 name = "loams-apps-mock"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -7765,7 +7941,7 @@ dependencies = [
 
 [[package]]
 name = "loams-cache"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "bytes",
@@ -7782,7 +7958,7 @@ dependencies = [
 
 [[package]]
 name = "loams-cloudevents"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "base64 0.23.1",
  "bytes",
@@ -7801,7 +7977,7 @@ dependencies = [
 
 [[package]]
 name = "loams-collection"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "arrow-array",
  "arrow-schema",
@@ -7849,7 +8025,7 @@ dependencies = [
 
 [[package]]
 name = "loams-common"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "postcard",
@@ -7860,7 +8036,7 @@ dependencies = [
 
 [[package]]
 name = "loams-compat"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -7879,7 +8055,7 @@ dependencies = [
 
 [[package]]
 name = "loams-console-mock"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "anyhow",
  "httpmock",
@@ -7891,7 +8067,7 @@ dependencies = [
 
 [[package]]
 name = "loams-durable"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "loams-tikv",
@@ -7919,7 +8095,7 @@ dependencies = [
 
 [[package]]
 name = "loams-es"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "axum 0.8.9",
  "base64 0.23.1",
@@ -7940,14 +8116,14 @@ dependencies = [
 
 [[package]]
 name = "loams-facade-gen"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "loams-fs"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "bytes",
@@ -7961,32 +8137,67 @@ dependencies = [
 
 [[package]]
 name = "loams-git"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
+ "async-trait",
  "bytes",
  "crc32c",
+ "futures",
  "gix-hash",
+ "gix-object",
+ "gix-pack",
  "gix-validate",
+ "gix-zlib",
  "loams-cloudevents",
  "loams-common",
+ "loams-fs",
+ "loams-meta-conformance",
+ "loams-store",
+ "object_store 0.14.2",
+ "postcard",
  "proptest",
  "prost 0.14.4",
  "prost-build",
+ "rand 0.9.5",
+ "serde",
+ "serde_json",
  "sha2 0.11.0",
  "tempfile",
  "thiserror 2.0.21",
+ "tokio",
+ "tracing",
+ "ulid 3.0.0",
+]
+
+[[package]]
+name = "loams-git-remote"
+version = "0.1.0-preview.2"
+dependencies = [
+ "bytes",
+ "futures",
+ "hex",
+ "loams-git",
+ "loams-store",
+ "rand 0.9.5",
+ "sha2 0.11.0",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
  "ulid 3.0.0",
 ]
 
 [[package]]
 name = "loams-graph"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
+ "arrow-array",
+ "arrow-schema",
  "base64 0.23.1",
  "buffa",
  "buffa-types",
  "bytes",
  "connectrpc",
+ "crc32c",
  "fail 0.5.1",
  "futures",
  "grafeo",
@@ -8000,7 +8211,9 @@ dependencies = [
  "loams-log",
  "loams-meta",
  "loams-proto",
+ "loams-sim",
  "loams-store",
+ "parquet",
  "proptest",
  "prost 0.14.4",
  "prost-types",
@@ -8017,7 +8230,7 @@ dependencies = [
 
 [[package]]
 name = "loams-hnsw"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "crc32c",
  "loams-common",
@@ -8034,7 +8247,7 @@ dependencies = [
 
 [[package]]
 name = "loams-hot"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "arrow-array",
  "async-trait",
@@ -8079,7 +8292,7 @@ dependencies = [
 
 [[package]]
 name = "loams-kv"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "futures",
  "loams-kv",
@@ -8095,7 +8308,7 @@ dependencies = [
 
 [[package]]
 name = "loams-link"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "bytes",
@@ -8121,16 +8334,18 @@ dependencies = [
 
 [[package]]
 name = "loams-live"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "axum 0.8.9",
  "buffa",
  "bytes",
  "connectrpc",
+ "connectrpc-reflection",
  "crc",
  "data-encoding",
  "futures",
  "hmac 0.13.0",
+ "loams-common",
  "loams-kv",
  "loams-live",
  "loams-live-js",
@@ -8150,7 +8365,7 @@ dependencies = [
 
 [[package]]
 name = "loams-live-js"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "buffa",
  "futures",
@@ -8175,14 +8390,14 @@ dependencies = [
 
 [[package]]
 name = "loams-live-js-alloc"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "rquickjs",
 ]
 
 [[package]]
 name = "loams-live-proto"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "buffa",
  "connectrpc",
@@ -8193,7 +8408,7 @@ dependencies = [
 
 [[package]]
 name = "loams-log"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "bytes",
@@ -8221,7 +8436,7 @@ dependencies = [
 
 [[package]]
 name = "loams-meta"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "axum 0.8.9",
@@ -8250,7 +8465,7 @@ dependencies = [
 
 [[package]]
 name = "loams-meta-conformance"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "loams-common",
@@ -8261,7 +8476,7 @@ dependencies = [
 
 [[package]]
 name = "loams-meta-tikv"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "fail 0.4.0",
@@ -8276,8 +8491,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "loams-migrate"
+version = "0.1.0-preview.2"
+dependencies = [
+ "base64 0.23.1",
+ "loams-common",
+ "loams-meta",
+ "loams-store",
+ "postcard",
+ "serde",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+]
+
+[[package]]
 name = "loams-pg-control"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "age",
  "async-trait",
@@ -8291,12 +8521,14 @@ dependencies = [
  "k8s-openapi",
  "keyring",
  "kube",
+ "loams-common",
  "loams-kv",
  "loams-pg-control",
  "loams-postgres",
  "postcard",
  "proptest",
  "rand 0.9.5",
+ "rcgen",
  "reqwest 0.13.5",
  "ring",
  "serde",
@@ -8307,17 +8539,20 @@ dependencies = [
  "thiserror 2.0.21",
  "time",
  "tokio",
+ "tokio-postgres",
+ "toml 0.8.23",
  "tower 0.5.3",
  "tracing",
  "tracing-subscriber",
  "ulid 3.0.0",
  "url",
+ "x509-parser",
  "zeroize",
 ]
 
 [[package]]
 name = "loams-pk"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "bytes",
@@ -8331,7 +8566,7 @@ dependencies = [
 
 [[package]]
 name = "loams-postgres"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "axum 0.8.9",
  "hex",
@@ -8348,7 +8583,7 @@ dependencies = [
 
 [[package]]
 name = "loams-proto"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "buffa",
  "buffa-types",
@@ -8361,7 +8596,7 @@ dependencies = [
 
 [[package]]
 name = "loams-qdrant"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "axum 0.8.9",
  "bytes",
@@ -8391,7 +8626,7 @@ dependencies = [
 
 [[package]]
 name = "loams-query"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "anyhow",
  "arrow-flight",
@@ -8443,7 +8678,7 @@ dependencies = [
 
 [[package]]
 name = "loams-quickwit"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8456,6 +8691,7 @@ dependencies = [
  "hex",
  "humantime",
  "itertools 0.15.0",
+ "loams-common",
  "postcard",
  "proptest",
  "rand 0.9.5",
@@ -8479,7 +8715,7 @@ dependencies = [
 
 [[package]]
 name = "loams-safekeeper"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "axum 0.8.9",
@@ -8510,7 +8746,7 @@ dependencies = [
 
 [[package]]
 name = "loams-sidebar-browser"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "base64 0.23.1",
  "futures",
@@ -8526,7 +8762,7 @@ dependencies = [
 
 [[package]]
 name = "loams-sim"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "bytes",
  "loams-cache",
@@ -8550,7 +8786,7 @@ dependencies = [
 
 [[package]]
 name = "loams-specview"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "anyhow",
  "axum 0.8.9",
@@ -8571,7 +8807,7 @@ dependencies = [
 
 [[package]]
 name = "loams-sqldb"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "loams-sqlrouter",
@@ -8588,7 +8824,7 @@ dependencies = [
 
 [[package]]
 name = "loams-sqlgate"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "argon2",
  "async-trait",
@@ -8611,7 +8847,7 @@ dependencies = [
 
 [[package]]
 name = "loams-sqlrouter"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "des",
  "hex",
@@ -8628,7 +8864,7 @@ dependencies = [
 
 [[package]]
 name = "loams-store"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "bytes",
@@ -8645,7 +8881,7 @@ dependencies = [
 
 [[package]]
 name = "loams-stream-grpc"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "bytes",
@@ -8665,7 +8901,7 @@ dependencies = [
 
 [[package]]
 name = "loams-text"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -8688,7 +8924,7 @@ dependencies = [
 
 [[package]]
 name = "loams-tikv"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "axum 0.8.9",
  "fail 0.4.0",
@@ -8709,14 +8945,14 @@ dependencies = [
 
 [[package]]
 name = "loams-tuple"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "thiserror 2.0.21",
 ]
 
 [[package]]
 name = "loams-web-bridge"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "base64 0.23.1",
@@ -8737,7 +8973,7 @@ dependencies = [
 
 [[package]]
 name = "loams-worker"
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 dependencies = [
  "async-trait",
  "loams-common",
@@ -9520,7 +9756,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -11163,7 +11399,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash 2.1.3",
  "rustls",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "thiserror 2.0.21",
  "tokio",
  "tracing",
@@ -11202,9 +11438,9 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.5",
+ "socket2 0.5.10",
  "tracing",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -12227,14 +12463,14 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
 name = "rustls"
-version = "0.23.45"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "aws-lc-rs",
  "log",
@@ -12295,7 +12531,7 @@ dependencies = [
  "security-framework",
  "security-framework-sys",
  "webpki-root-certs",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -14101,10 +14337,10 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32497e9a4c7b38532efcdebeef879707aa9f794296a4f0244f6f69e9bc8574bd"
 dependencies = [
  "fastrand",
- "getrandom 0.4.3",
+ "getrandom 0.3.4",
  "once_cell",
  "rustix 1.1.5",
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -14817,6 +15053,31 @@ name = "try-lock"
 version = "0.2.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
+
+[[package]]
+name = "ts-rs"
+version = "12.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "756050066659291d47a554a9f558125db17428b073c5ffce1daf5dcb0f7231d8"
+dependencies = [
+ "chrono",
+ "serde_json",
+ "thiserror 2.0.21",
+ "ts-rs-macros",
+ "uuid",
+]
+
+[[package]]
+name = "ts-rs-macros"
+version = "12.0.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "38d90eea51bc7988ef9e674bf80a85ba6804739e535e9cab48e4bb34a8b652aa"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 2.0.119",
+ "termcolor",
+]
 
 [[package]]
 name = "tungstenite"
@@ -15575,7 +15836,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.48.0",
 ]
 
 [[package]]

@@ -189,9 +189,20 @@ test("electron smoke", async () => {
 			BrowserWindow.getAllWindows()[0]?.getTitle(),
 		);
 		expect(title).toBe("Loams Desktop");
-		expect(page.url()).toContain("loams-app://console/ui/cordis.html");
+		expect(page.url()).toContain("loams-app://console/ui/");
 
-		// 2. The server switcher shows Local with a ready engine.
+		// 2. The desktop opens in Loams Studio on first run (SD1 Task 3, Q801); the
+		// switcher goes to Console, whose header has the server switcher.
+		await expect.poll(() => hash(page), { timeout: 60_000 }).toBe("#/studio");
+		const modes = page.getByRole("group", { name: "Mode" });
+		await expect(modes.getByRole("button", { name: "Studio" })).toHaveAttribute(
+			"aria-pressed",
+			"true",
+		);
+		await modes.getByRole("button", { name: "Console" }).click();
+		await expect.poll(() => hash(page)).toBe("#/");
+
+		// The server switcher shows Local with a ready engine.
 		const switcher = page.locator(".lc-server-switch");
 		await expect(switcher).toContainText("Local", { timeout: 60_000 });
 		await expect(switcher.getByRole("img", { name: /ready/i })).toBeVisible({
@@ -315,7 +326,7 @@ test("electron smoke", async () => {
 					page.getByRole("heading", { name: /^movies/ }),
 				).toBeVisible();
 				await page.getByLabel("Statement").fill("MATCH (n) RETURN count(n)");
-				await page.getByRole("button", { name: "Run" }).click();
+				await page.getByRole("button", { name: "Run", exact: true }).click();
 				const table = page.getByRole("table");
 				await expect(table).toBeVisible();
 				// A header row and one data row.
@@ -324,10 +335,12 @@ test("electron smoke", async () => {
 			});
 		}
 
-		// 4. Software Factory: all eight apps start unconfigured.
+		// 4. Software Factory: all eight apps start unconfigured. The old path redirects
+		// into Studio (SD1 Task 27, D916).
 		await ev(page, () => {
 			(globalThis as unknown as PageGlobal).location.hash = "#/factory";
 		});
+		await expect.poll(() => hash(page)).toBe("#/studio/factory");
 		const tiles = page.locator("article", { hasText: "Not configured" });
 		await expect(tiles).toHaveCount(8);
 

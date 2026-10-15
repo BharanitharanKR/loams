@@ -7,8 +7,10 @@ package dev.loams.gen.loams.live.v1;
 
 /**
  * <pre>
- * One mutation's changes, written at `seq = head + 1` of one journal shard in
- * the mutation's own transaction.
+ * One transaction's changes, written at `seq = head + 1` of one journal shard
+ * in the transaction's own commit: a mutation's writes, or a catalog change
+ * (LV1 plan Task 11), or both (a mutation that created a table). An entry has
+ * at least one write or one catalog change.
  * </pre>
  *
  * Protobuf type {@code loams.live.v1.JournalEntry}
@@ -35,6 +37,7 @@ private static final long serialVersionUID = 0L;
     writes_ = java.util.Collections.emptyList();
     function_ = "";
     requestId_ = "";
+    catalog_ = java.util.Collections.emptyList();
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -112,7 +115,8 @@ private static final long serialVersionUID = 0L;
   private volatile java.lang.Object function_ = "";
   /**
    * <pre>
-   * The mutation's function path ("module:export" or "_system:insert").
+   * The mutation's function path ("module:export" or "_system:insert"), or
+   * the catalog operation for an entry with no writes ("live.deploy", ...).
    * </pre>
    *
    * <code>string function = 3 [json_name = "function"];</code>
@@ -133,7 +137,8 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * The mutation's function path ("module:export" or "_system:insert").
+   * The mutation's function path ("module:export" or "_system:insert"), or
+   * the catalog operation for an entry with no writes ("live.deploy", ...).
    * </pre>
    *
    * <code>string function = 3 [json_name = "function"];</code>
@@ -201,6 +206,77 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int CATALOG_FIELD_NUMBER = 5;
+  @SuppressWarnings("serial")
+  private java.util.List<dev.loams.gen.loams.live.v1.CatalogChange> catalog_;
+  /**
+   * <pre>
+   * The catalog changes the transaction committed (LV1 plan Task 11). Every
+   * node's tailer sees them at the tick that contains them and reloads what
+   * they change before it matches that tick's writes.
+   * </pre>
+   *
+   * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<dev.loams.gen.loams.live.v1.CatalogChange> getCatalogList() {
+    return catalog_;
+  }
+  /**
+   * <pre>
+   * The catalog changes the transaction committed (LV1 plan Task 11). Every
+   * node's tailer sees them at the tick that contains them and reloads what
+   * they change before it matches that tick's writes.
+   * </pre>
+   *
+   * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+   */
+  @java.lang.Override
+  public java.util.List<? extends dev.loams.gen.loams.live.v1.CatalogChangeOrBuilder> 
+      getCatalogOrBuilderList() {
+    return catalog_;
+  }
+  /**
+   * <pre>
+   * The catalog changes the transaction committed (LV1 plan Task 11). Every
+   * node's tailer sees them at the tick that contains them and reloads what
+   * they change before it matches that tick's writes.
+   * </pre>
+   *
+   * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+   */
+  @java.lang.Override
+  public int getCatalogCount() {
+    return catalog_.size();
+  }
+  /**
+   * <pre>
+   * The catalog changes the transaction committed (LV1 plan Task 11). Every
+   * node's tailer sees them at the tick that contains them and reloads what
+   * they change before it matches that tick's writes.
+   * </pre>
+   *
+   * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+   */
+  @java.lang.Override
+  public dev.loams.gen.loams.live.v1.CatalogChange getCatalog(int index) {
+    return catalog_.get(index);
+  }
+  /**
+   * <pre>
+   * The catalog changes the transaction committed (LV1 plan Task 11). Every
+   * node's tailer sees them at the tick that contains them and reloads what
+   * they change before it matches that tick's writes.
+   * </pre>
+   *
+   * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+   */
+  @java.lang.Override
+  public dev.loams.gen.loams.live.v1.CatalogChangeOrBuilder getCatalogOrBuilder(
+      int index) {
+    return catalog_.get(index);
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -227,6 +303,9 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(requestId_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 4, requestId_);
     }
+    for (int i = 0; i < catalog_.size(); i++) {
+      output.writeMessage(5, catalog_.get(i));
+    }
     getUnknownFields().writeTo(output);
   }
 
@@ -249,6 +328,10 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(requestId_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(4, requestId_);
+    }
+    for (int i = 0; i < catalog_.size(); i++) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(5, catalog_.get(i));
     }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
@@ -273,6 +356,8 @@ private static final long serialVersionUID = 0L;
         .equals(other.getFunction())) return false;
     if (!getRequestId()
         .equals(other.getRequestId())) return false;
+    if (!getCatalogList()
+        .equals(other.getCatalogList())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -295,6 +380,10 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getFunction().hashCode();
     hash = (37 * hash) + REQUEST_ID_FIELD_NUMBER;
     hash = (53 * hash) + getRequestId().hashCode();
+    if (getCatalogCount() > 0) {
+      hash = (37 * hash) + CATALOG_FIELD_NUMBER;
+      hash = (53 * hash) + getCatalogList().hashCode();
+    }
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -394,8 +483,10 @@ private static final long serialVersionUID = 0L;
   }
   /**
    * <pre>
-   * One mutation's changes, written at `seq = head + 1` of one journal shard in
-   * the mutation's own transaction.
+   * One transaction's changes, written at `seq = head + 1` of one journal shard
+   * in the transaction's own commit: a mutation's writes, or a catalog change
+   * (LV1 plan Task 11), or both (a mutation that created a table). An entry has
+   * at least one write or one catalog change.
    * </pre>
    *
    * Protobuf type {@code loams.live.v1.JournalEntry}
@@ -441,6 +532,13 @@ private static final long serialVersionUID = 0L;
       bitField0_ = (bitField0_ & ~0x00000002);
       function_ = "";
       requestId_ = "";
+      if (catalogBuilder_ == null) {
+        catalog_ = java.util.Collections.emptyList();
+      } else {
+        catalog_ = null;
+        catalogBuilder_.clear();
+      }
+      bitField0_ = (bitField0_ & ~0x00000010);
       return this;
     }
 
@@ -482,6 +580,15 @@ private static final long serialVersionUID = 0L;
         result.writes_ = writes_;
       } else {
         result.writes_ = writesBuilder_.build();
+      }
+      if (catalogBuilder_ == null) {
+        if (((bitField0_ & 0x00000010) != 0)) {
+          catalog_ = java.util.Collections.unmodifiableList(catalog_);
+          bitField0_ = (bitField0_ & ~0x00000010);
+        }
+        result.catalog_ = catalog_;
+      } else {
+        result.catalog_ = catalogBuilder_.build();
       }
     }
 
@@ -549,6 +656,32 @@ private static final long serialVersionUID = 0L;
         bitField0_ |= 0x00000008;
         onChanged();
       }
+      if (catalogBuilder_ == null) {
+        if (!other.catalog_.isEmpty()) {
+          if (catalog_.isEmpty()) {
+            catalog_ = other.catalog_;
+            bitField0_ = (bitField0_ & ~0x00000010);
+          } else {
+            ensureCatalogIsMutable();
+            catalog_.addAll(other.catalog_);
+          }
+          onChanged();
+        }
+      } else {
+        if (!other.catalog_.isEmpty()) {
+          if (catalogBuilder_.isEmpty()) {
+            catalogBuilder_.dispose();
+            catalogBuilder_ = null;
+            catalog_ = other.catalog_;
+            bitField0_ = (bitField0_ & ~0x00000010);
+            catalogBuilder_ = 
+              com.google.protobuf.GeneratedMessage.alwaysUseFieldBuilders ?
+                 getCatalogFieldBuilder() : null;
+          } else {
+            catalogBuilder_.addAllMessages(other.catalog_);
+          }
+        }
+      }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
       return this;
@@ -603,6 +736,19 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000008;
               break;
             } // case 34
+            case 42: {
+              dev.loams.gen.loams.live.v1.CatalogChange m =
+                  input.readMessage(
+                      dev.loams.gen.loams.live.v1.CatalogChange.parser(),
+                      extensionRegistry);
+              if (catalogBuilder_ == null) {
+                ensureCatalogIsMutable();
+                catalog_.add(m);
+              } else {
+                catalogBuilder_.addMessage(m);
+              }
+              break;
+            } // case 42
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -910,7 +1056,8 @@ private static final long serialVersionUID = 0L;
     private java.lang.Object function_ = "";
     /**
      * <pre>
-     * The mutation's function path ("module:export" or "_system:insert").
+     * The mutation's function path ("module:export" or "_system:insert"), or
+     * the catalog operation for an entry with no writes ("live.deploy", ...).
      * </pre>
      *
      * <code>string function = 3 [json_name = "function"];</code>
@@ -930,7 +1077,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The mutation's function path ("module:export" or "_system:insert").
+     * The mutation's function path ("module:export" or "_system:insert"), or
+     * the catalog operation for an entry with no writes ("live.deploy", ...).
      * </pre>
      *
      * <code>string function = 3 [json_name = "function"];</code>
@@ -951,7 +1099,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The mutation's function path ("module:export" or "_system:insert").
+     * The mutation's function path ("module:export" or "_system:insert"), or
+     * the catalog operation for an entry with no writes ("live.deploy", ...).
      * </pre>
      *
      * <code>string function = 3 [json_name = "function"];</code>
@@ -968,7 +1117,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The mutation's function path ("module:export" or "_system:insert").
+     * The mutation's function path ("module:export" or "_system:insert"), or
+     * the catalog operation for an entry with no writes ("live.deploy", ...).
      * </pre>
      *
      * <code>string function = 3 [json_name = "function"];</code>
@@ -982,7 +1132,8 @@ private static final long serialVersionUID = 0L;
     }
     /**
      * <pre>
-     * The mutation's function path ("module:export" or "_system:insert").
+     * The mutation's function path ("module:export" or "_system:insert"), or
+     * the catalog operation for an entry with no writes ("live.deploy", ...).
      * </pre>
      *
      * <code>string function = 3 [json_name = "function"];</code>
@@ -1089,6 +1240,354 @@ private static final long serialVersionUID = 0L;
       bitField0_ |= 0x00000008;
       onChanged();
       return this;
+    }
+
+    private java.util.List<dev.loams.gen.loams.live.v1.CatalogChange> catalog_ =
+      java.util.Collections.emptyList();
+    private void ensureCatalogIsMutable() {
+      if (!((bitField0_ & 0x00000010) != 0)) {
+        catalog_ = new java.util.ArrayList<dev.loams.gen.loams.live.v1.CatalogChange>(catalog_);
+        bitField0_ |= 0x00000010;
+       }
+    }
+
+    private com.google.protobuf.RepeatedFieldBuilder<
+        dev.loams.gen.loams.live.v1.CatalogChange, dev.loams.gen.loams.live.v1.CatalogChange.Builder, dev.loams.gen.loams.live.v1.CatalogChangeOrBuilder> catalogBuilder_;
+
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public java.util.List<dev.loams.gen.loams.live.v1.CatalogChange> getCatalogList() {
+      if (catalogBuilder_ == null) {
+        return java.util.Collections.unmodifiableList(catalog_);
+      } else {
+        return catalogBuilder_.getMessageList();
+      }
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public int getCatalogCount() {
+      if (catalogBuilder_ == null) {
+        return catalog_.size();
+      } else {
+        return catalogBuilder_.getCount();
+      }
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public dev.loams.gen.loams.live.v1.CatalogChange getCatalog(int index) {
+      if (catalogBuilder_ == null) {
+        return catalog_.get(index);
+      } else {
+        return catalogBuilder_.getMessage(index);
+      }
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public Builder setCatalog(
+        int index, dev.loams.gen.loams.live.v1.CatalogChange value) {
+      if (catalogBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        ensureCatalogIsMutable();
+        catalog_.set(index, value);
+        onChanged();
+      } else {
+        catalogBuilder_.setMessage(index, value);
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public Builder setCatalog(
+        int index, dev.loams.gen.loams.live.v1.CatalogChange.Builder builderForValue) {
+      if (catalogBuilder_ == null) {
+        ensureCatalogIsMutable();
+        catalog_.set(index, builderForValue.build());
+        onChanged();
+      } else {
+        catalogBuilder_.setMessage(index, builderForValue.build());
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public Builder addCatalog(dev.loams.gen.loams.live.v1.CatalogChange value) {
+      if (catalogBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        ensureCatalogIsMutable();
+        catalog_.add(value);
+        onChanged();
+      } else {
+        catalogBuilder_.addMessage(value);
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public Builder addCatalog(
+        int index, dev.loams.gen.loams.live.v1.CatalogChange value) {
+      if (catalogBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        ensureCatalogIsMutable();
+        catalog_.add(index, value);
+        onChanged();
+      } else {
+        catalogBuilder_.addMessage(index, value);
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public Builder addCatalog(
+        dev.loams.gen.loams.live.v1.CatalogChange.Builder builderForValue) {
+      if (catalogBuilder_ == null) {
+        ensureCatalogIsMutable();
+        catalog_.add(builderForValue.build());
+        onChanged();
+      } else {
+        catalogBuilder_.addMessage(builderForValue.build());
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public Builder addCatalog(
+        int index, dev.loams.gen.loams.live.v1.CatalogChange.Builder builderForValue) {
+      if (catalogBuilder_ == null) {
+        ensureCatalogIsMutable();
+        catalog_.add(index, builderForValue.build());
+        onChanged();
+      } else {
+        catalogBuilder_.addMessage(index, builderForValue.build());
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public Builder addAllCatalog(
+        java.lang.Iterable<? extends dev.loams.gen.loams.live.v1.CatalogChange> values) {
+      if (catalogBuilder_ == null) {
+        ensureCatalogIsMutable();
+        com.google.protobuf.AbstractMessageLite.Builder.addAll(
+            values, catalog_);
+        onChanged();
+      } else {
+        catalogBuilder_.addAllMessages(values);
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public Builder clearCatalog() {
+      if (catalogBuilder_ == null) {
+        catalog_ = java.util.Collections.emptyList();
+        bitField0_ = (bitField0_ & ~0x00000010);
+        onChanged();
+      } else {
+        catalogBuilder_.clear();
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public Builder removeCatalog(int index) {
+      if (catalogBuilder_ == null) {
+        ensureCatalogIsMutable();
+        catalog_.remove(index);
+        onChanged();
+      } else {
+        catalogBuilder_.remove(index);
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public dev.loams.gen.loams.live.v1.CatalogChange.Builder getCatalogBuilder(
+        int index) {
+      return getCatalogFieldBuilder().getBuilder(index);
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public dev.loams.gen.loams.live.v1.CatalogChangeOrBuilder getCatalogOrBuilder(
+        int index) {
+      if (catalogBuilder_ == null) {
+        return catalog_.get(index);  } else {
+        return catalogBuilder_.getMessageOrBuilder(index);
+      }
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public java.util.List<? extends dev.loams.gen.loams.live.v1.CatalogChangeOrBuilder> 
+         getCatalogOrBuilderList() {
+      if (catalogBuilder_ != null) {
+        return catalogBuilder_.getMessageOrBuilderList();
+      } else {
+        return java.util.Collections.unmodifiableList(catalog_);
+      }
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public dev.loams.gen.loams.live.v1.CatalogChange.Builder addCatalogBuilder() {
+      return getCatalogFieldBuilder().addBuilder(
+          dev.loams.gen.loams.live.v1.CatalogChange.getDefaultInstance());
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public dev.loams.gen.loams.live.v1.CatalogChange.Builder addCatalogBuilder(
+        int index) {
+      return getCatalogFieldBuilder().addBuilder(
+          index, dev.loams.gen.loams.live.v1.CatalogChange.getDefaultInstance());
+    }
+    /**
+     * <pre>
+     * The catalog changes the transaction committed (LV1 plan Task 11). Every
+     * node's tailer sees them at the tick that contains them and reloads what
+     * they change before it matches that tick's writes.
+     * </pre>
+     *
+     * <code>repeated .loams.live.v1.CatalogChange catalog = 5 [json_name = "catalog"];</code>
+     */
+    public java.util.List<dev.loams.gen.loams.live.v1.CatalogChange.Builder> 
+         getCatalogBuilderList() {
+      return getCatalogFieldBuilder().getBuilderList();
+    }
+    private com.google.protobuf.RepeatedFieldBuilder<
+        dev.loams.gen.loams.live.v1.CatalogChange, dev.loams.gen.loams.live.v1.CatalogChange.Builder, dev.loams.gen.loams.live.v1.CatalogChangeOrBuilder> 
+        getCatalogFieldBuilder() {
+      if (catalogBuilder_ == null) {
+        catalogBuilder_ = new com.google.protobuf.RepeatedFieldBuilder<
+            dev.loams.gen.loams.live.v1.CatalogChange, dev.loams.gen.loams.live.v1.CatalogChange.Builder, dev.loams.gen.loams.live.v1.CatalogChangeOrBuilder>(
+                catalog_,
+                ((bitField0_ & 0x00000010) != 0),
+                getParentForChildren(),
+                isClean());
+        catalog_ = null;
+      }
+      return catalogBuilder_;
     }
 
     // @@protoc_insertion_point(builder_scope:loams.live.v1.JournalEntry)

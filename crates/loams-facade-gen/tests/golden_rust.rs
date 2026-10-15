@@ -37,6 +37,8 @@ const PACKAGE_PARAMETERS: &[&str] = &[
     // once per workspace (API1 plan ruling 1.2). The map has to say so, which
     // is what `the_package_map_matches_the_buf_template` below checks.
     "loams.live.v1=loams_live_proto::loams::live::v1",
+    "loams.auth.v1=loams_proto::loams::auth::v1",
+    "loams.admin.v1=loams_proto::loams::admin::v1",
 ];
 
 /// SDK1 Task 3's `golden_rust`.

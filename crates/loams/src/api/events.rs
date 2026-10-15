@@ -390,6 +390,7 @@ pub(super) async fn produce_events(
     body: Result<Bytes, BytesRejection>,
 ) -> ApiResult {
     let (Path((ns, stream)), Query(query), body) = (path?, query?, body?);
+    super::streams::refuse_system_stream(&stream)?;
     let partition = query
         .get("partition")
         .map(|p| parse_partition(p))
@@ -562,6 +563,8 @@ impl loams_stream_grpc::EventProducer for NativeEventProducer {
             config: &self.config,
             node_id: self.node_id,
         };
+        super::streams::refuse_system_stream(stream)
+            .map_err(|err| super::streams::service_error(err, stream))?;
         let report = ingest(&ctx, ns, stream, partition, &events)
             .await
             .map_err(|err| super::streams::service_error(err, stream))?;

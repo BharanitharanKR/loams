@@ -375,7 +375,7 @@
       "reason": null,
       "steps": 1,
       "volatile": [],
-      "about": "The unavailable-service path on a unary RPC: `loams.live.v1` is a `full`-variant engine, so every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (gRPC-Web, the framing a browser sends. One length-prefixed frame: flag 0 and a zero-length message.)"
+      "about": "The unavailable-service path on a unary RPC: the corpus is recorded from `loams dev --no-live`, so `loams.live.v1` is not running and every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (gRPC-Web, the framing a browser sends. One length-prefixed frame: flag 0 and a zero-length message.)"
     },
     {
       "name": "live_query_grpc_web_json",
@@ -392,7 +392,7 @@
       "reason": null,
       "steps": 1,
       "volatile": [],
-      "about": "The unavailable-service path on a unary RPC: `loams.live.v1` is a `full`-variant engine, so every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (gRPC-Web carrying the proto3 JSON mapping, which a browser SDK can ask for.)"
+      "about": "The unavailable-service path on a unary RPC: the corpus is recorded from `loams dev --no-live`, so `loams.live.v1` is not running and every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (gRPC-Web carrying the proto3 JSON mapping, which a browser SDK can ask for.)"
     },
     {
       "name": "live_query_json",
@@ -409,7 +409,7 @@
       "reason": null,
       "steps": 1,
       "volatile": [],
-      "about": "The unavailable-service path on a unary RPC: `loams.live.v1` is a `full`-variant engine, so every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (The proto3 JSON mapping, which is what `curl` sends (design §44 §4).)"
+      "about": "The unavailable-service path on a unary RPC: the corpus is recorded from `loams dev --no-live`, so `loams.live.v1` is not running and every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (The proto3 JSON mapping, which is what `curl` sends (design §44 §4).)"
     },
     {
       "name": "live_query_proto",
@@ -426,7 +426,7 @@
       "reason": null,
       "steps": 1,
       "volatile": [],
-      "about": "The unavailable-service path on a unary RPC: `loams.live.v1` is a `full`-variant engine, so every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (The binary encoding, which is what an SDK sends by default.)"
+      "about": "The unavailable-service path on a unary RPC: the corpus is recorded from `loams dev --no-live`, so `loams.live.v1` is not running and every one of its RPCs answers `unimplemented` with reason `feature_not_in_variant` and the variant in `metadata`. (The binary encoding, which is what an SDK sends by default.)"
     },
     {
       "name": "live_watch",

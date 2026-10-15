@@ -260,6 +260,16 @@ pub const MAX_NAME_LEN: usize = 255;
 pub const MAX_PARTITIONS: u32 = 10_000;
 /// Longest object path, lease key or pointer key, in bytes.
 pub const MAX_KEY_LEN: usize = 1024;
+
+/// The namespace Loams keeps its own records in: the auth principal
+/// directory and the upgrade ledger (design §54 §6.2, UP1 Task 2). The
+/// metastore accepts it (Loams creates it); the APIs refuse it to callers.
+pub const SYSTEM_NAMESPACE: &str = "_system";
+
+/// Whether `name` is a namespace callers may not create or address.
+pub fn is_reserved_namespace(name: &str) -> bool {
+    name == SYSTEM_NAMESPACE
+}
 /// Longest lease a holder may take or renew for: one hour.
 pub const MAX_LEASE_TTL_MS: u64 = 3_600_000;
 
@@ -367,6 +377,52 @@ impl AliasTargets {
 /// `_collection.<name>.<id>`.
 pub fn implicit_name(collection: &str, id: CollectionId) -> String {
     format!("_collection.{collection}.{id}")
+}
+
+/// The prefix of a Loams Graph graph's implicit stream (GR1 Task 12).
+pub const GRAPH_STREAM_PREFIX: &str = "_graph.";
+
+/// The namespace stream Loams Git mirrors every committed repository transaction into (GT1 Task
+/// 15, design §36 §4.8): reserved, created only by
+/// [`ensure_system_stream`](super::MetaStore::ensure_system_stream), keyed by repository id.
+pub const GIT_STREAM: &str = "_git";
+
+/// The reserved system streams a namespace may hold, with their partition counts: each is
+/// created (class `Standard`, no retention) only by
+/// [`ensure_system_stream`](super::MetaStore::ensure_system_stream).
+pub const SYSTEM_STREAMS: &[(&str, u32)] = &[(GIT_STREAM, 8)];
+
+/// The partitions of system stream `name`, or `None` when `name` is not one.
+pub fn system_stream_partitions(name: &str) -> Option<u32> {
+    SYSTEM_STREAMS
+        .iter()
+        .find(|(reserved, _)| *reserved == name)
+        .map(|(_, partitions)| *partitions)
+}
+
+/// The name of Loams Graph graph `graph`'s implicit stream: `_graph.<gr_id>`
+/// (GR1 Task 12). Reserved: only
+/// [`ensure_graph_stream`](super::MetaStore::ensure_graph_stream) creates it.
+pub fn graph_stream_name(graph: &str) -> String {
+    format!("{GRAPH_STREAM_PREFIX}{graph}")
+}
+
+/// The name GR1 Task 11 gave a graph's stream before the reserved name
+/// existed: `graph.<gr_id>`, an ordinary stream name.
+/// [`ensure_graph_stream`](super::MetaStore::ensure_graph_stream) renames such
+/// a stream to [`graph_stream_name`].
+pub fn legacy_graph_stream_name(graph: &str) -> String {
+    format!("graph.{graph}")
+}
+
+/// Whether `graph` is a Loams Graph id: `gr_` and a ULID in Crockford
+/// base32, upper case (`gr_01J…`, 29 bytes).
+pub fn is_graph_id(graph: &str) -> bool {
+    const CROCKFORD: &[u8] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+    let Some(ulid) = graph.strip_prefix("gr_") else {
+        return false;
+    };
+    ulid.len() == 26 && ulid.as_bytes()[0] <= b'7' && ulid.bytes().all(|b| CROCKFORD.contains(&b))
 }
 
 /// Pointer keys under this prefix belong to collections.

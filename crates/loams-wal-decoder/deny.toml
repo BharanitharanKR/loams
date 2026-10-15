@@ -24,6 +24,9 @@ allow = [
     "BSL-1.0",
     # libbz2-rs-sys, via datafusion-datasource
     "bzip2-1.0.6",
+    # BSD Zero Clause (tslib, via echarts in the console). Owner, 2026-10-13
+    # (SD1 ruling T2-6): allowed everywhere, for crates and npm alike.
+    "0BSD",
 ]
 confidence-threshold = 0.9
 unused-allowed-license = "allow"
@@ -39,8 +42,8 @@ license-files = [{ path = "LICENSE", hash = 0x0fb72a18 }]
 multiple-versions = "allow"
 wildcards = "deny"
 allow-wildcard-paths = true
-# Prefix variants are rejected by scripts/ci/no-metering.sh; cargo-deny package
-# selectors are exact names (https://embarkstudios.github.io/cargo-deny/checks/cfg.html).
+# cargo-deny package selectors are exact names, so prefix variants are not
+# matched here (https://embarkstudios.github.io/cargo-deny/checks/cfg.html).
 deny = [{ name = "loam-platform", reason = "The OSS engine cannot depend on the private platform (D551)" }]
 
 [advisories]
@@ -66,6 +69,7 @@ unknown-git = "deny"
 allow-git = [
     "https://github.com/ostrium-labs/client-rust",
     "https://github.com/ostrium-labs/resonate",
+    "https://github.com/ostrium-labs/grafeo",
     "https://github.com/ostrium-labs/loams-postgres",
     "https://github.com/ostrium-labs/rust-postgres",
 ]

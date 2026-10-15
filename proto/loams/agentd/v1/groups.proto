@@ -1,0 +1,237 @@
+syntax = "proto3";
+
+// Run groups (design §53 §5.5, §6.5 G12–G16, Ruling 5; plan SD1 Tasks 4 and
+// 12): one prompt run by several harnesses in parallel worktrees, compared
+// side by side, and the chosen result merged. A group is a daemon record (the
+// SQLite table `run_groups`), so it survives the window closing and a daemon
+// restart. See studio.proto for the package's rules.
+package loams.agentd.v1;
+
+import "google/protobuf/struct.proto";
+import "loams/agentd/v1/approvals.proto";
+import "loams/agentd/v1/diff.proto";
+import "loams/agentd/v1/git.proto";
+import "loams/agentd/v1/studio.proto";
+import "loams/options/v1/options.proto";
+
+service RunGroupService {
+  option (loams.options.v1.module) = {
+    name: "agentd.groups"
+    summary: "Loams Studio's run groups: parallel runs, compared and merged."
+    unstable: true
+  };
+
+  // G12: one chat and one worktree per variant, and the same run queued in
+  // each, within the daemon's concurrency limits.
+  rpc CreateRunGroup(CreateRunGroupRequest) returns (CreateRunGroupResponse);
+  // G13: the groups, then the list again on each change.
+  rpc WatchRunGroups(WatchRunGroupsRequest) returns (stream WatchRunGroupsResponse);
+  // G14: the diff matrix, and a pair's diff.
+  rpc GetRunGroupComparison(GetRunGroupComparisonRequest) returns (GetRunGroupComparisonResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // G15: runs the check action in each member's worktree.
+  rpc RunGroupCheck(RunGroupCheckRequest) returns (RunGroupCheckResponse);
+  // G16: picks the winner and merges it, opens a pull request, or keeps it;
+  // `group_not_ready` while members still run.
+  rpc ResolveRunGroup(ResolveRunGroupRequest) returns (ResolveRunGroupResponse);
+}
+
+message RunVariant {
+  HarnessId harness = 1;
+  optional string model = 2;
+  optional ReasoningLevel reasoning = 3;
+  map<string, google.protobuf.Value> model_options = 4;
+}
+
+enum RunGroupState {
+  RUN_GROUP_STATE_UNSPECIFIED = 0;
+  // A member is queued, running or waiting for input.
+  RUN_GROUP_STATE_RUNNING = 1;
+  // Every member has finished; the group can be resolved.
+  RUN_GROUP_STATE_READY = 2;
+  RUN_GROUP_STATE_RESOLVED = 3;
+}
+
+// One member's run, as the group sees it.
+enum RunMemberStatus {
+  RUN_MEMBER_STATUS_UNSPECIFIED = 0;
+  // Over the concurrency limits: its run waits to be sent.
+  RUN_MEMBER_STATUS_QUEUED = 1;
+  RUN_MEMBER_STATUS_RUNNING = 2;
+  RUN_MEMBER_STATUS_AWAITING_INPUT = 3;
+  RUN_MEMBER_STATUS_DONE = 4;
+  RUN_MEMBER_STATUS_ERRORED = 5;
+  // Never sent: the group was resolved with `force` first.
+  RUN_MEMBER_STATUS_CANCELLED = 6;
+}
+
+enum CheckState {
+  CHECK_STATE_UNSPECIFIED = 0;
+  CHECK_STATE_PENDING = 1;
+  CHECK_STATE_RUNNING = 2;
+  CHECK_STATE_PASSED = 3;
+  CHECK_STATE_FAILED = 4;
+}
+
+message MemberCheck {
+  CheckState state = 1;
+  optional int32 exit_code = 2;
+  // The check's terminal (`TerminalService.SubscribeTerminal`).
+  optional string terminal_id = 3;
+  // The output's last 200 lines, as text.
+  repeated string log_tail = 4;
+}
+
+message RunGroupMember {
+  string chat_id = 1;
+  HarnessId harness = 2;
+  optional string model = 3;
+  RunMemberStatus status = 4;
+  uint32 files_changed = 5;
+  uint32 additions = 6;
+  uint32 deletions = 7;
+  // The running time so far, or of the whole run once it ended.
+  int64 elapsed_ms = 8;
+  // Unset until the harness reports usage.
+  optional uint64 tokens = 9;
+  // Unset until a check runs.
+  MemberCheck check = 10;
+  // The member's own worktree and its branch.
+  string cwd = 11;
+  string branch = 12;
+  // When the run started, for a live elapsed time.
+  optional int64 started_at_ms = 13;
+  // Resolved with `keep`: an ordinary thread now.
+  bool detached = 14;
+  bool archived = 15;
+}
+
+enum ResolveAction {
+  RESOLVE_ACTION_UNSPECIFIED = 0;
+  RESOLVE_ACTION_MERGE = 1;
+  RESOLVE_ACTION_CHANGE_REQUEST = 2;
+  RESOLVE_ACTION_KEEP = 3;
+}
+
+message RunGroupResolution {
+  ResolveAction action = 1;
+  string winner_chat_id = 2;
+  // What happened, in a sentence.
+  string result = 3;
+  // The target's new head (merge).
+  optional string sha = 4;
+  // The change request (pull request).
+  optional string url = 5;
+  int64 resolved_at_ms = 6;
+}
+
+message RunGroup {
+  string id = 1;
+  string prompt = 2;
+  // The ref the members' worktrees were made from.
+  string base = 3;
+  int64 created_at_ms = 4;
+  RunGroupState state = 5;
+  repeated RunGroupMember members = 6;
+  RunGroupResolution resolution = 7;
+  optional string space_id = 8;
+  string repo_path = 9;
+  // `base`'s commit when the group was created; the comparison's base.
+  string base_sha = 10;
+  optional string check_action_id = 11;
+  ApprovalMode approval_mode = 12;
+}
+
+message CreateRunGroupRequest {
+  // The project. Required with a check action (actions are a project's);
+  // unset for a repository that is not a project.
+  optional string space_id = 1;
+  string repo_path = 2;
+  string base = 3;
+  string prompt = 4;
+  repeated string attachments = 5;
+  repeated RunVariant variants = 6;
+  optional string check_action_id = 7;
+  ApprovalMode approval_mode = 8;
+}
+
+message CreateRunGroupResponse {
+  string group_id = 1;
+  repeated string chat_ids = 2;
+}
+
+message WatchRunGroupsRequest {
+  optional string space_id = 1;
+}
+
+message WatchRunGroupsResponse {
+  repeated RunGroup groups = 1;
+}
+
+message MemberDelta {
+  string chat_id = 1;
+  uint32 additions = 2;
+  uint32 deletions = 3;
+}
+
+// One path, and the members that changed it against the group's base.
+message ComparisonRow {
+  string path = 1;
+  repeated MemberDelta per_member = 2;
+}
+
+message GetRunGroupComparisonRequest {
+  string group_id = 1;
+  string a = 2;
+  // Unset compares `a` with the group's base.
+  optional string b = 3;
+  optional string path = 4;
+}
+
+message GetRunGroupComparisonResponse {
+  repeated ComparisonRow matrix = 1;
+  // From `a`'s result to `b`'s (or from the base to `a`'s); nothing is
+  // committed to compute it.
+  CheckoutDiff pair_diff = 2;
+}
+
+message CheckRun {
+  string chat_id = 1;
+  string terminal_id = 2;
+}
+
+message RunGroupCheckRequest {
+  string group_id = 1;
+  optional string chat_id = 2;
+}
+
+message RunGroupCheckResponse {
+  repeated CheckRun runs = 1;
+}
+
+message ResolveRunGroupRequest {
+  string group_id = 1;
+  string winner_chat_id = 2;
+  ResolveAction action = 3;
+  // With RESOLVE_ACTION_MERGE: Task 9's `MergeBranch`, whose source must be
+  // the winner's branch.
+  MergeBranchRequest merge = 4;
+  // With RESOLVE_ACTION_CHANGE_REQUEST: Task 9's `CreateChangeRequest`, after
+  // the winner's branch is pushed.
+  CreateChangeRequestRequest change_request = 5;
+  bool archive_others = 6;
+  bool remove_other_worktrees = 7;
+  // Resolve while members still run.
+  bool force = 8;
+  // The winner's checkout diff checksum the person confirmed. Required when
+  // the winner's worktree has uncommitted changes, which are committed first
+  // through Task 9's `CommitWorktree`.
+  optional string expected_checksum = 9;
+}
+
+message ResolveRunGroupResponse {
+  string result = 1;
+  optional string sha = 2;
+  optional string url = 3;
+}

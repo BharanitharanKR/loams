@@ -1,13 +1,14 @@
 [workspace]
 resolver = "3"
-members = ["crates/*"]
+# bench/git-wal: the bucket WAL benchmark (GT1 Task 11).
+members = ["crates/*", "bench/git-wal"]
 # loams-wal-decoder is a workspace of its own: it links the Neon fork's
 # crates, whose dependency tree stays out of this lockfile and licence check
 # (PG2 ruling R31.3, owner ruling 2026-10-08).
 exclude = ["crates/loams-wal-decoder"]
 
 [workspace.package]
-version = "0.1.0-preview.1"
+version = "0.1.0-preview.2"
 edition = "2024"
 rust-version = "1.97"
 license = "Apache-2.0"
@@ -66,10 +67,15 @@ fnv = "1"
 foyer = "0.22"
 futures = "0.3"
 # Loams Graph's embedded engine (design §48, D741, D759; GR1 Task 0 rulings
-# R0.2 and R0.3). Pinned exactly to 0.5.43, which every Task 0 probe ran
-# against; it is 14 days old on 2026-10-11, so the commit adding it does not
-# merge before then (Q-T0-1). Apache-2.0, all six crates (connectors/licences.toml,
-# root NOTICE). `default-features = false`: grafeo's default `embedded` set
+# R0.2 and R0.3): Grafeo 0.5.43, which every Task 0 probe ran against, built
+# from Loams' fork https://github.com/ostrium-labs/grafeo (owner, 2026-10-12)
+# and pinned by rev to its release tag v0.5.43-loams.1: upstream v0.5.43 plus
+# the patch queue in the fork's PATCHES.md (LG-0001 commit listener, LG-0002
+# timeout on parameterised statements, LG-0003 ORDER BY relationships, LG-0004
+# DETACH DELETE, LG-0006 epoch continuity). The other two of the six crates,
+# grafeo-core and grafeo-storage, come from the same rev through these. A new
+# tag is a new rev here, all four lines at once. Apache-2.0, all six crates
+# (connectors/licences.toml, root NOTICE). `default-features = false`: grafeo's default `embedded` set
 # brings `ai` and `arrow-export`, i.e. arrow 60 beside the workspace's 58.
 # The features are the narrowest set that keeps LPG, GQL, WAL, CDC, spill,
 # algorithms, metrics and tracing (R0.2):
@@ -80,22 +86,25 @@ futures = "0.3"
 # NEVER enable `jemalloc` or `mimalloc-allocator`: each installs a
 # `#[global_allocator]` in grafeo's lib.rs and would replace the allocator of
 # the whole `loams` binary (R0.2).
-grafeo = { version = "=0.5.43", default-features = false, features = ["gql", "wal", "grafeo-file", "spill", "cdc", "algos", "metrics", "tracing", "parallel", "regex"] }
+grafeo = { version = "=0.5.43", git = "https://github.com/ostrium-labs/grafeo", rev = "92bc59a28ed8b38dbb43659b4a90271770c58956", default-features = false, features = ["gql", "wal", "grafeo-file", "spill", "cdc", "algos", "metrics", "tracing", "parallel", "regex"] }
 # Named directly for its `lpg` feature: grafeo's own `lpg` also turns on
 # `cypher`, `gremlin` and `sql-pgq` (R0.2). Task 33's `graph-cypher` feature
 # adds `cypher` here; it costs code size and no package.
-grafeo-engine = { version = "=0.5.43", default-features = false, features = ["lpg"] }
+grafeo-engine = { version = "=0.5.43", git = "https://github.com/ostrium-labs/grafeo", rev = "92bc59a28ed8b38dbb43659b4a90271770c58956", default-features = false, features = ["lpg"] }
 # `PropertyKey` and the value types the facade does not re-export.
-grafeo-common = { version = "=0.5.43", default-features = false }
+grafeo-common = { version = "=0.5.43", git = "https://github.com/ostrium-labs/grafeo", rev = "92bc59a28ed8b38dbb43659b4a90271770c58956", default-features = false }
 # Named for the GQL AST's `SessionCommand`, which `translate_full` returns and
 # statement classification matches on (GR1 Task 3, R0.10). Already in the tree
 # under grafeo-engine with the features above; this adds none.
-grafeo-adapters = { version = "=0.5.43", default-features = false }
+grafeo-adapters = { version = "=0.5.43", git = "https://github.com/ostrium-labs/grafeo", rev = "92bc59a28ed8b38dbb43659b4a90271770c58956", default-features = false }
 # Loams Git (GT1): the gitoxide 0.88 train of 2026-09-25, pinned exactly
 # (R0.8, T0-21), SHA-1 only (Ruling 8). A move to 0.89 is its own PR after
 # 2026-10-22. MIT OR Apache-2.0.
 gix-hash = { version = "=0.27.0", default-features = false, features = ["sha1"] }
 gix-validate = { version = "=0.12.0", default-features = false }
+gix-object = { version = "=0.65.0", default-features = false, features = ["sha1"] }
+gix-pack = { version = "=0.75.0", default-features = false, features = ["sha1"] }
+gix-zlib = { version = "=0.2.0", default-features = false }
 hex = "0.4"
 # Live pagination cursors are HMAC-SHA256 tagged with the app's key (LV1
 # Task 4); 0.13 is the line on sha2 0.11's digest.
@@ -249,58 +258,60 @@ uuid = { version = "1", features = ["v4"] }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 zeroize = "=1.9.0"
 zstd = "0.14"
-loams-cache = { path = "crates/loams-cache", version = "0.1.0-preview.1" }
-loams-collection = { path = "crates/loams-collection", version = "0.1.0-preview.1" }
-loams-cloudevents = { path = "crates/loams-cloudevents", version = "0.1.0-preview.1" }
-loams-common = { path = "crates/loams-common", version = "0.1.0-preview.1" }
-loams-durable = { path = "crates/loams-durable", version = "0.1.0-preview.1" }
-loams-es = { path = "crates/loams-es", version = "0.1.0-preview.1" }
+loams-cache = { path = "crates/loams-cache", version = "0.1.0-preview.2" }
+loams-collection = { path = "crates/loams-collection", version = "0.1.0-preview.2" }
+loams-cloudevents = { path = "crates/loams-cloudevents", version = "0.1.0-preview.2" }
+loams-common = { path = "crates/loams-common", version = "0.1.0-preview.2" }
+loams-durable = { path = "crates/loams-durable", version = "0.1.0-preview.2" }
+loams-es = { path = "crates/loams-es", version = "0.1.0-preview.2" }
 # The Fs trait for warm, rebuildable state and scratch (design §36 §17, GT1 Task 2).
-loams-fs = { path = "crates/loams-fs", version = "0.1.0-preview.1" }
+loams-fs = { path = "crates/loams-fs", version = "0.1.0-preview.2" }
 # Loams Git's portable core (design §36, §19; GT1 Tasks 4 onwards).
-loams-git = { path = "crates/loams-git", version = "0.1.0-preview.1" }
-loams-graph = { path = "crates/loams-graph", version = "0.1.0-preview.1" }
-loams-hnsw = { path = "crates/loams-hnsw", version = "0.1.0-preview.1" }
-loams-hot = { path = "crates/loams-hot", version = "0.1.0-preview.1" }
-loams-link = { path = "crates/loams-link", version = "0.1.0-preview.1" }
-loams-kv = { path = "crates/loams-kv", version = "0.1.0-preview.1" }
-loams-live = { path = "crates/loams-live", version = "0.1.0-preview.1" }
-loams-live-js = { path = "crates/loams-live-js", version = "0.1.0-preview.1" }
-loams-live-js-alloc = { path = "crates/loams-live-js-alloc", version = "0.1.0-preview.1" }
-loams-live-proto = { path = "crates/loams-live-proto", version = "0.1.0-preview.1" }
+loams-git = { path = "crates/loams-git", version = "0.1.0-preview.2" }
+loams-graph = { path = "crates/loams-graph", version = "0.1.0-preview.2" }
+loams-hnsw = { path = "crates/loams-hnsw", version = "0.1.0-preview.2" }
+loams-hot = { path = "crates/loams-hot", version = "0.1.0-preview.2" }
+loams-link = { path = "crates/loams-link", version = "0.1.0-preview.2" }
+loams-kv = { path = "crates/loams-kv", version = "0.1.0-preview.2" }
+loams-live = { path = "crates/loams-live", version = "0.1.0-preview.2" }
+loams-live-js = { path = "crates/loams-live-js", version = "0.1.0-preview.2" }
+loams-live-js-alloc = { path = "crates/loams-live-js-alloc", version = "0.1.0-preview.2" }
+loams-live-proto = { path = "crates/loams-live-proto", version = "0.1.0-preview.2" }
 # The public `loams.*.v1` packages of the unified Connect API and their
 # descriptor set for reflection (design §44, API1 Task 1).
-loams-postgres = { path = "crates/loams-postgres", version = "0.1.0-preview.1" }
-loams-proto = { path = "crates/loams-proto", version = "0.1.0-preview.1" }
-loams-log = { path = "crates/loams-log", version = "0.1.0-preview.1" }
-loams-meta = { path = "crates/loams-meta", version = "0.1.0-preview.1" }
-loams-meta-conformance = { path = "crates/loams-meta-conformance", version = "0.1.0-preview.1" }
-loams-meta-tikv = { path = "crates/loams-meta-tikv", version = "0.1.0-preview.1" }
-loams-stream-grpc = { path = "crates/loams-stream-grpc", version = "0.1.0-preview.1" }
-loams-pk = { path = "crates/loams-pk", version = "0.1.0-preview.1" }
-loams-qdrant = { path = "crates/loams-qdrant", version = "0.1.0-preview.1" }
-loams-query = { path = "crates/loams-query", version = "0.1.0-preview.1" }
-loams-quickwit = { path = "crates/loams-quickwit", version = "0.1.0-preview.1" }
-loams-store = { path = "crates/loams-store", version = "0.1.0-preview.1" }
-loams-text = { path = "crates/loams-text", version = "0.1.0-preview.1" }
-loams-tikv = { path = "crates/loams-tikv", version = "0.1.0-preview.1" }
-loams-tuple = { path = "crates/loams-tuple", version = "0.1.0-preview.1" }
-loams-web-bridge = { path = "crates/loams-web-bridge", version = "0.1.0-preview.1" }
-loams-worker = { path = "crates/loams-worker", version = "0.1.0-preview.1" }
+loams-postgres = { path = "crates/loams-postgres", version = "0.1.0-preview.2" }
+loams-proto = { path = "crates/loams-proto", version = "0.1.0-preview.2" }
+loams-log = { path = "crates/loams-log", version = "0.1.0-preview.2" }
+loams-meta = { path = "crates/loams-meta", version = "0.1.0-preview.2" }
+loams-meta-conformance = { path = "crates/loams-meta-conformance", version = "0.1.0-preview.2" }
+loams-meta-tikv = { path = "crates/loams-meta-tikv", version = "0.1.0-preview.2" }
+loams-migrate = { path = "crates/loams-migrate", version = "0.1.0-preview.2" }
+loams-stream-grpc = { path = "crates/loams-stream-grpc", version = "0.1.0-preview.2" }
+loams-pk = { path = "crates/loams-pk", version = "0.1.0-preview.2" }
+loams-qdrant = { path = "crates/loams-qdrant", version = "0.1.0-preview.2" }
+loams-query = { path = "crates/loams-query", version = "0.1.0-preview.2" }
+loams-quickwit = { path = "crates/loams-quickwit", version = "0.1.0-preview.2" }
+loams-store = { path = "crates/loams-store", version = "0.1.0-preview.2" }
+loams-text = { path = "crates/loams-text", version = "0.1.0-preview.2" }
+loams-tikv = { path = "crates/loams-tikv", version = "0.1.0-preview.2" }
+loams-tuple = { path = "crates/loams-tuple", version = "0.1.0-preview.2" }
+loams-web-bridge = { path = "crates/loams-web-bridge", version = "0.1.0-preview.2" }
+loams-worker = { path = "crates/loams-worker", version = "0.1.0-preview.2" }
 
 # loams-agentd: the per-user desktop daemon, moved from the zeron fork
 # (design §50, D783, plan DD1 Task 1). Versions follow the fork's lockfile
 # (DD1 T0-4). The fork pins reqwest 0.12 and sha2 0.10, which differ from the
 # workspace keys above, so its crates name those two directly.
-loams-agentd-doc = { path = "crates/loams-agentd-doc", version = "0.1.0-preview.1" }
-loams-agentd-harness = { path = "crates/loams-agentd-harness", version = "0.1.0-preview.1" }
-loams-agentd-link = { path = "crates/loams-agentd-link", version = "0.1.0-preview.1" }
-loams-agentd-mcp = { path = "crates/loams-agentd-mcp", version = "0.1.0-preview.1" }
-loams-agentd-preview = { path = "crates/loams-agentd-preview", version = "0.1.0-preview.1" }
-loams-agentd-proto = { path = "crates/loams-agentd-proto", version = "0.1.0-preview.1" }
-loams-agentd-rpc = { path = "crates/loams-agentd-rpc", version = "0.1.0-preview.1" }
-loams-agentd-sessions = { path = "crates/loams-agentd-sessions", version = "0.1.0-preview.1" }
-loams-agentd-store = { path = "crates/loams-agentd-store", version = "0.1.0-preview.1" }
+loams-agentd-connect = { path = "crates/loams-agentd-connect", version = "0.1.0-preview.2" }
+loams-agentd-doc = { path = "crates/loams-agentd-doc", version = "0.1.0-preview.2" }
+loams-agentd-harness = { path = "crates/loams-agentd-harness", version = "0.1.0-preview.2" }
+loams-agentd-link = { path = "crates/loams-agentd-link", version = "0.1.0-preview.2" }
+loams-agentd-mcp = { path = "crates/loams-agentd-mcp", version = "0.1.0-preview.2" }
+loams-agentd-preview = { path = "crates/loams-agentd-preview", version = "0.1.0-preview.2" }
+loams-agentd-proto = { path = "crates/loams-agentd-proto", version = "0.1.0-preview.2" }
+loams-agentd-rpc = { path = "crates/loams-agentd-rpc", version = "0.1.0-preview.2" }
+loams-agentd-sessions = { path = "crates/loams-agentd-sessions", version = "0.1.0-preview.2" }
+loams-agentd-store = { path = "crates/loams-agentd-store", version = "0.1.0-preview.2" }
 chrono = { version = "0.4", features = ["serde"] }
 deser-hjson = "2.2"
 gethostname = "1"
@@ -313,6 +324,11 @@ nucleo-matcher = "0.3"
 portable-pty = "0.8"
 rusqlite = { version = "0.32", features = ["bundled"] }
 similar = "2"
+# Generates the TypeScript wire types of `@loams/agentd-client` (design §50 §8,
+# D789; plan DD1 T0-4 picked 12.0.1 and its features). `no-serde-warnings`
+# silences notes on deserialize-only attributes (`alias`, `other`); the
+# fixture `satisfies` checks in TypeScript catch any real mismatch.
+ts-rs = { version = "12.0.1", features = ["serde-compat", "serde-json-impl", "uuid-impl", "chrono-impl", "no-serde-warnings"] }
 zip = { version = "7.2", default-features = false, features = ["deflate-flate2-zlib-rs"] }
 
 [profile.dev]

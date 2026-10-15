@@ -14,7 +14,8 @@
 //! §8's `Query` — and `page_token` on `ScrollDocumentsRequest`. Tasks 5–8
 //! append `loams.sql.v1`, `loams.link.v1`, `loams.admin.v1`, `loams.auth.v1`
 //! and `loams.internal.v1`. GR1 Task 1 adds `loams.graph.v1` (design §48),
-//! and PG2 Task 1 `loams.postgres.v1` (design §46 §4).
+//! PG2 Task 1 `loams.postgres.v1` (design §46 §4), and GT1 Task 12
+//! `loams.repos.v1` (design §36 §19.10).
 //!
 //! `loams.live.v1` is **not** here: R1's `loams-live-proto` already
 //! generates it, and a proto package's Rust types are generated exactly
@@ -42,6 +43,24 @@ const FILES: &[&str] = &[
     // service is served by `pg-control` behind the `loams` feature
     // `postgres` (PG2 Task 9), so the default server does not register it.
     "loams/postgres/v1/postgres.proto",
+    // Loams Git (design §36 §19.10, GT1 Task 12, ruling T0-10): the types are
+    // always generated; `RepoService` is served by the `loams` feature `git`.
+    // `workspaces`, `objects` and `env` are empty stubs that GT1 Tasks 25, 18
+    // and 61 fill in, so the package is registered here once.
+    "loams/repos/v1/repos.proto",
+    "loams/repos/v1/workspaces.proto",
+    "loams/repos/v1/objects.proto",
+    "loams/repos/v1/env.proto",
+    // The console API (API2 Tasks 6 and 7): the types and clients the Rust
+    // SDK's facade binds. The server registers neither package yet; its
+    // `connect_admin.rs` and `connect_auth.rs` are the tasks' server half.
+    "loams/admin/v1/common.proto",
+    "loams/admin/v1/org.proto",
+    "loams/admin/v1/project.proto",
+    "loams/admin/v1/agent.proto",
+    "loams/admin/v1/key.proto",
+    "loams/admin/v1/audit.proto",
+    "loams/auth/v1/auth.proto",
 ];
 
 fn main() {
@@ -50,7 +69,15 @@ fn main() {
     // compile time would point into whichever worktree compiled it first.
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR")
         .expect("cargo sets CARGO_MANIFEST_DIR for build scripts");
-    let root = format!("{manifest_dir}/../../proto");
+    // `proto/` inside the crate: a symlink to the workspace's `proto/` in this
+    // repository, real files in the published crate. A checkout without symlink
+    // support (Windows with `core.symlinks=false`) falls back to the workspace.
+    let packaged = format!("{manifest_dir}/proto");
+    let root = if std::path::Path::new(&packaged).join("loams").is_dir() {
+        packaged
+    } else {
+        format!("{manifest_dir}/../../proto")
+    };
     let files: Vec<String> = FILES.iter().map(|f| format!("{root}/{f}")).collect();
     for file in &files {
         println!("cargo:rerun-if-changed={file}");

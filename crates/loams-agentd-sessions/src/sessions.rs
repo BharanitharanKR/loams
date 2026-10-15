@@ -112,10 +112,13 @@ struct RuntimeConfig {
     sandbox: loams_agentd_proto::SandboxLevel,
     auto_approve: bool,
     worktree: Option<loams_agentd_proto::WorktreeSpec>,
+    /// The run has an approval bridge (a supervised thread, SD1 Task 13): a
+    /// change of mode needs a new runtime, as a changed sandbox does.
+    supervised: bool,
 }
 
 impl RuntimeConfig {
-    fn from_request(harness_id: HarnessId, request: &RunRequest) -> Self {
+    fn from_request(harness_id: HarnessId, request: &RunRequest, supervised: bool) -> Self {
         Self {
             harness_id,
             model: request.model.clone(),
@@ -125,11 +128,13 @@ impl RuntimeConfig {
             sandbox: request.sandbox,
             auto_approve: request.auto_approve,
             worktree: request.worktree.clone(),
+            supervised,
         }
     }
 
-    fn can_route(&self, harness_id: HarnessId, request: &RunRequest) -> bool {
-        request.attachments.is_empty() && self == &Self::from_request(harness_id, request)
+    fn can_route(&self, harness_id: HarnessId, request: &RunRequest, supervised: bool) -> bool {
+        request.attachments.is_empty()
+            && self == &Self::from_request(harness_id, request, supervised)
     }
 }
 
@@ -200,10 +205,47 @@ struct Inner {
     /// dispatch or accepted steer) — the diff sync snapshots the checkout tree
     /// for the Changes pane's "Latest turn" scope. Absent in bare tests.
     turn_listener: OnceLock<TurnListener>,
+    /// Per-turn checkpoints (SD1 Task 10): awaited before a turn reaches the
+    /// harness, told when it ends. Absent in bare tests.
+    turn_checkpoints: OnceLock<Arc<dyn TurnCheckpoints>>,
+    /// Turn observers (SD1 Task 14: notifications and per-turn usage).
+    turn_observers: Mutex<Vec<Arc<dyn TurnObserver>>>,
+    /// Supervised approvals (SD1 Task 13). Absent in bare tests: every
+    /// thread is then full access.
+    approvals: OnceLock<crate::approvals::Approvals>,
+}
+
+/// What happens in a chat's turns, for the notifications and the per-turn
+/// usage (SD1 Task 14). Every method is called inline and must not block.
+pub trait TurnObserver: Send + Sync {
+    /// A user message (`message_id`) starts a turn of `chat_id`, or steers
+    /// the running one (a steer is a turn of its own).
+    fn turn_start(&self, chat_id: &str, message_id: &str);
+    /// An event of the chat's run, as it is published.
+    fn event(&self, chat_id: &str, event: &AgentEvent);
+    /// The chat's turn in progress has ended (it settled Idle or Errored).
+    fn turn_end(&self, chat_id: &str);
 }
 
 /// Turn-start hook: called with `(chat_id, cwd)`.
 pub type TurnListener = Arc<dyn Fn(&str, &str) + Send + Sync>;
+
+/// The checkpoint hook (SD1 Task 10, `crate::checkpoints::Checkpoints`).
+///
+/// `turn_start` runs before the turn's prompt reaches the harness and is
+/// awaited, so the `pre` checkpoint holds the checkout as the agent found
+/// it. `turn_end` must not block: it is called from the status transition.
+pub trait TurnCheckpoints: Send + Sync {
+    /// A user message (`message_id`) starts a turn of `chat_id` in `cwd`.
+    fn turn_start<'a>(
+        &'a self,
+        chat_id: &'a str,
+        cwd: &'a str,
+        message_id: &'a str,
+    ) -> futures::future::BoxFuture<'a, ()>;
+    /// The chat's turn in progress has ended (it settled Idle or Errored).
+    fn turn_end(&self, chat_id: &str);
+}
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
@@ -243,6 +285,9 @@ impl SessionsEngine {
                 titles: OnceLock::new(),
                 generated_images: OnceLock::new(),
                 turn_listener: OnceLock::new(),
+                turn_checkpoints: OnceLock::new(),
+                turn_observers: Mutex::new(Vec::new()),
+                approvals: OnceLock::new(),
             }),
         }
     }
@@ -290,6 +335,21 @@ impl SessionsEngine {
     /// Wire the turn-start listener (called once at engine assembly).
     pub fn set_turn_listener(&self, listener: TurnListener) {
         let _ = self.inner.turn_listener.set(listener);
+    }
+
+    /// Wire the checkpoint hook (called once at engine assembly).
+    pub fn set_turn_checkpoints(&self, checkpoints: Arc<dyn TurnCheckpoints>) {
+        let _ = self.inner.turn_checkpoints.set(checkpoints);
+    }
+
+    /// Wire the approvals (called once at engine assembly; SD1 Task 13).
+    pub fn set_approvals(&self, approvals: crate::approvals::Approvals) {
+        let _ = self.inner.approvals.set(approvals);
+    }
+
+    /// Add a turn observer (called at engine assembly; SD1 Task 14).
+    pub fn add_turn_observer(&self, observer: Arc<dyn TurnObserver>) {
+        lock(&self.inner.turn_observers).push(observer);
     }
 
     fn note_turn_start(&self, chat_id: &str, cwd: &str) {
@@ -358,10 +418,18 @@ impl SessionsEngine {
         if !self.turn_in_flight(chat_id) {
             return false;
         }
+        let request = request.map(|(id, r)| {
+            let mut r = r.clone();
+            let supervised = self.inner.apply_approval_mode(chat_id, &mut r);
+            (id, r, supervised)
+        });
         let live = lock(&self.inner.runs).get(chat_id).map(|h| {
             (
                 h.runtime_config.harness_id,
-                h.steerable && request.is_none_or(|(id, r)| h.runtime_config.can_route(id, r)),
+                h.steerable
+                    && request.as_ref().is_none_or(|(id, r, supervised)| {
+                        h.runtime_config.can_route(*id, r, *supervised)
+                    }),
             )
         });
         live.is_some_and(|(harness, routable)| routable && !self.steers_mid_turn(harness))
@@ -461,11 +529,14 @@ impl SessionsEngine {
         // cross-harness delivery before recording or routing the user turn.
         loams_agentd_proto::invocation::validate_harness_invocations(&request.prompt, harness_id)
             .map_err(EngineError::Other)?;
+        // The thread's approval mode (SD1 Task 13) decides `autoApprove` and
+        // whether the run gets an approval bridge.
+        let supervised = self.inner.apply_approval_mode(chat_id, &mut request);
         let routed = lock(&self.inner.runs).get(chat_id).map(|h| {
             (
                 h.run_id.clone(),
                 h.steerable,
-                h.runtime_config.can_route(harness_id, &request),
+                h.runtime_config.can_route(harness_id, &request, supervised),
                 h.steer_tx.clone(),
                 h.routed_steers.clone(),
                 h.fork_history_sent.clone(),
@@ -475,6 +546,10 @@ impl SessionsEngine {
             let user_id = message_id.clone().unwrap_or_else(new_id);
             let mut bootstrap = None;
             let accepted = if steerable && same_runtime {
+                // The `pre` checkpoint before the mailbox can deliver it.
+                self.inner
+                    .checkpoint_turn_start(chat_id, &request.cwd, &user_id)
+                    .await;
                 bootstrap =
                     self.warm_fork_history(chat_id, harness_id, &request.prompt, &history_sent);
                 let delivered = bootstrap.as_deref().unwrap_or(&request.prompt);
@@ -560,6 +635,14 @@ impl SessionsEngine {
         }
 
         let harness = self.inner.registry.resolve(harness_id)?;
+        // A supervised thread never runs unsupervised: a harness that cannot
+        // ask is refused, and Studio says so (§53 §8.2).
+        if supervised && !harness.supports_approvals() {
+            return Err(EngineError::Other(format!(
+                "{} cannot ask for approvals: set this thread to full access to run it",
+                harness.display_name()
+            )));
+        }
         let handle = self.doc_handle(chat_id)?;
         let user_id = message_id.unwrap_or_else(new_id);
         handle.write_user_message(&user_id, &request.prompt, now_ms())?;
@@ -615,9 +698,20 @@ impl SessionsEngine {
         };
         let interrupt_token = CancellationToken::new();
         let fork_history_sent = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        // A supervised thread's approval bridge (SD1 Task 13): its asks and
+        // answers ride this run's event pipeline, like questions.
+        let request_approval = if supervised {
+            self.inner
+                .approvals
+                .get()
+                .map(|approvals| approvals.bridge(chat_id, engine_tx.clone()))
+        } else {
+            None
+        };
         let controls = RunControls {
             execution_lease: None,
             request_input,
+            request_approval,
             steering: steer_rx,
             interrupt: interrupt_token.clone(),
         };
@@ -627,7 +721,7 @@ impl SessionsEngine {
             RunHandle {
                 run_id: run_id.clone(),
                 steerable: harness.supports_steering(),
-                runtime_config: RuntimeConfig::from_request(harness_id, &request),
+                runtime_config: RuntimeConfig::from_request(harness_id, &request, supervised),
                 steer_tx,
                 interrupt_token,
                 cancel: cancel_tx,
@@ -736,6 +830,12 @@ impl SessionsEngine {
         loams_agentd_proto::invocation::validate_harness_invocations(prompt, harness_id)
             .map_err(EngineError::Other)?;
         let user_id = message_id.unwrap_or_else(new_id);
+        // A routed steer is a turn too: its `pre` checkpoint before delivery.
+        if let Some(request) = self.last_request(chat_id) {
+            self.inner
+                .checkpoint_turn_start(chat_id, &request.cwd, &user_id)
+                .await;
+        }
         let bootstrap = self.warm_fork_history(chat_id, harness_id, prompt, &history_sent);
         let delivered = bootstrap.as_deref().unwrap_or(prompt);
         let message = SteerMessage {
@@ -818,10 +918,14 @@ impl SessionsEngine {
         // EOF after token.cancel() can beat this watch notification and be
         // classified as an error instead of an interrupted turn.
         let _ = cancel.send(true);
-        // Unpark questions before harness teardown, which can await them.
+        // Unpark questions and approvals before harness teardown, which can
+        // await them.
         let parked: Vec<_> = lock(&pending).drain().map(|(_, tx)| tx).collect();
         for tx in parked {
             let _ = tx.send(Vec::new());
+        }
+        if let Some(approvals) = self.inner.approvals.get() {
+            approvals.deny_chat(chat_id);
         }
         // Harness-level interrupt (protocol + child teardown) …
         token.cancel();
@@ -1099,7 +1203,38 @@ impl Inner {
             .collect()
     }
 
+    /// Apply `chat_id`'s approval mode to a run of it (SD1 Task 13): a
+    /// supervised thread's run is never auto-approved and gets a bridge; an
+    /// explicit full-access thread's run is auto-approved; a thread on the
+    /// daemon's full-access default keeps its request's `autoApprove`.
+    /// Answers whether the run is supervised.
+    fn apply_approval_mode(&self, chat_id: &str, request: &mut RunRequest) -> bool {
+        let Some(approvals) = self.approvals.get() else {
+            return false;
+        };
+        match approvals.resolved_mode(chat_id) {
+            (loams_agentd_proto::approvals::ApprovalMode::Supervised, _) => {
+                request.auto_approve = false;
+                true
+            }
+            (loams_agentd_proto::approvals::ApprovalMode::FullAccess, explicit) => {
+                if explicit {
+                    request.auto_approve = true;
+                }
+                false
+            }
+        }
+    }
+
+    /// The turn observers, copied out so none is called under the lock.
+    fn turn_observers(&self) -> Vec<Arc<dyn TurnObserver>> {
+        lock(&self.turn_observers).clone()
+    }
+
     fn publish(&self, chat_id: &str, event: &AgentEvent) -> u64 {
+        for observer in self.turn_observers() {
+            observer.event(chat_id, event);
+        }
         let seq = match self.journal.append(chat_id, event) {
             Ok(seq) => seq,
             Err(err) => {
@@ -1168,6 +1303,7 @@ impl Inner {
         completed_turn: Option<String>,
     ) {
         let now = Utc::now();
+        let mut turn_ended = false;
         let session = {
             let mut statuses = lock(&self.statuses);
             let entry = statuses
@@ -1202,6 +1338,7 @@ impl Inner {
                 SessionStatus::Working | SessionStatus::AwaitingInput => {}
                 SessionStatus::Idle | SessionStatus::Errored => {
                     entry.started_at = None;
+                    turn_ended = was_active;
                 }
             }
             let session = entry.clone();
@@ -1212,10 +1349,29 @@ impl Inner {
             self.sessions_tx.send_replace(list);
             session
         };
+        // The turn's `post` checkpoint (SD1 Task 10); the hook never blocks.
+        if turn_ended && let Some(checkpoints) = self.turn_checkpoints.get() {
+            checkpoints.turn_end(chat_id);
+        }
+        if turn_ended {
+            for observer in self.turn_observers() {
+                observer.turn_end(chat_id);
+            }
+        }
         // Mirror the transition into the workspace doc's session-status row so
         // remote devices' sidebars show this run (staleness-checked client-side).
         if let Some(ws) = self.workspace() {
             ws.record_session(&session);
+        }
+    }
+
+    /// Await the turn's `pre` checkpoint, when the hook is wired.
+    async fn checkpoint_turn_start(&self, chat_id: &str, cwd: &str, message_id: &str) {
+        for observer in self.turn_observers() {
+            observer.turn_start(chat_id, message_id);
+        }
+        if let Some(checkpoints) = self.turn_checkpoints.get() {
+            checkpoints.turn_start(chat_id, cwd, message_id).await;
         }
     }
 
@@ -1846,6 +2002,9 @@ async fn drive_run(
     let started = if let Some(lease) = lease {
         _execution_lease = Some(lease.clone());
         controls.execution_lease = Some(lease);
+        inner
+            .checkpoint_turn_start(&chat_id, &request.cwd, &resume_state.user_message_id)
+            .await;
         if let Some(listener) = inner.turn_listener.get() {
             listener(&chat_id, &request.cwd);
         }
@@ -2442,6 +2601,22 @@ async fn drive_run(
                 continue;
             }
         }
+        // The same rule for approvals (SD1 Task 13): only the engine's bridge
+        // announces one, after it is pending.
+        if let AgentEvent::ApprovalRequested { call_id, .. } = &event {
+            let known = inner
+                .approvals
+                .get()
+                .is_some_and(|approvals| approvals.is_waiting(&chat_id, call_id));
+            if !known {
+                tracing::warn!(
+                    chat = %chat_id,
+                    call = %call_id,
+                    "dropping an ApprovalRequested no approval bridge announced"
+                );
+                continue;
+            }
+        }
         // Capacity/occupancy can settle after Done; updating it must not reopen a turn.
         if let AgentEvent::ContextUsage { tokens, window } = &event {
             if let Err(err) = doc_ref.update_context_usage(*tokens, *window) {
@@ -2524,6 +2699,15 @@ async fn drive_run(
                     // A stale answer settling after its turn already closed:
                     // nothing is running — stay parked.
                     AgentEvent::InputResolved { .. } => continue,
+                    // An approval with no turn behind it is denied, as a
+                    // question is answered empty (SD1 Task 13).
+                    AgentEvent::ApprovalRequested { call_id, .. } => {
+                        if let Some(approvals) = inner.approvals.get() {
+                            approvals.deny(&chat_id, call_id);
+                        }
+                        tracing::debug!(chat = %chat_id, "parked session: post-turn approval request denied");
+                        continue;
+                    }
                     _ => continue,
                 }
             }
@@ -2694,6 +2878,13 @@ async fn drive_run(
                 inner.set_status(&chat_id, SessionStatus::AwaitingInput, false);
             }
             AgentEvent::InputResolved { .. } => {
+                inner.set_status(&chat_id, SessionStatus::Working, false);
+            }
+            // A supervised tool call waits for the person, as a question does.
+            AgentEvent::ApprovalRequested { .. } => {
+                inner.set_status(&chat_id, SessionStatus::AwaitingInput, false);
+            }
+            AgentEvent::ApprovalResolved { .. } => {
                 inner.set_status(&chat_id, SessionStatus::Working, false);
             }
             _ => {}
@@ -2994,23 +3185,23 @@ mod tests {
     #[test]
     fn live_routing_requires_the_same_runtime_configuration() {
         let initial = request();
-        let config = RuntimeConfig::from_request(HarnessId::Grok, &initial);
+        let config = RuntimeConfig::from_request(HarnessId::Grok, &initial, false);
 
         let mut follow_up = initial.clone();
         follow_up.prompt = "second".into();
         follow_up.resume = Some("session-1".into());
-        assert!(config.can_route(HarnessId::Grok, &follow_up));
+        assert!(config.can_route(HarnessId::Grok, &follow_up, false));
 
         follow_up.model = Some("grok-4.5".into());
-        assert!(!config.can_route(HarnessId::Grok, &follow_up));
+        assert!(!config.can_route(HarnessId::Grok, &follow_up, false));
         follow_up.model = initial.model.clone();
 
         follow_up.reasoning = Some(loams_agentd_proto::ReasoningLevel::Medium);
-        assert!(!config.can_route(HarnessId::Grok, &follow_up));
+        assert!(!config.can_route(HarnessId::Grok, &follow_up, false));
         follow_up.reasoning = initial.reasoning;
 
         follow_up.attachments.push("/tmp/image.png".into());
-        assert!(!config.can_route(HarnessId::Grok, &follow_up));
+        assert!(!config.can_route(HarnessId::Grok, &follow_up, false));
     }
 
     #[test]

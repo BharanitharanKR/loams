@@ -1,17 +1,21 @@
 //! EngineRpc — the engine-side `RpcService`: sessions + docs + the workspace-doc
 //! entity surface.
 //!
+//! Every arm parses and answers with the types of its row in the method
+//! table (`loams_agentd_proto::rpc::METHODS`, through `params_of`, `reply`,
+//! `stream_reply` and `watch_stream`), the source of the TypeScript client.
+//!
 //! Methods (feature-inventory §2):
 //! - `ListHarnesses` → `[HarnessDescriptor]`
 //! - `ListModels {harness}` → `[Model]`
 //! - `QueueCommand {chatId, command}` → `{commandId}` (durable doc command)
-//! - `WatchDocMessages {chatId}` → stream of joined `SessionMessageEntry[]`,
-//!   re-emitted on every doc change
+//! - `WatchDocMessages {chatId, openingTail?}` → stream of `TranscriptUpdate`:
+//!   a `reset` frame, then deltas on every doc change
 //! - `WatchChats` → stream of the workspace doc's chat rows
 //! - `WatchSessions` → stream of `Session[]`: this engine's live statuses merged with
 //!   remote devices' workspace session rows
 //! - `Mutate {op, …}` → `{ok}` — workspace entity mutations (createChat, renameChat,
-//!   setChatArchived, deleteChat, renameDevice, markChatSeen)
+//!   setChatArchived, deleteChat, markChatSeen, …)
 //! - `EngineInfo` → `{deviceId, workspaceScope}` — this runtime's fixed identity
 //!   and data boundary
 //! - `LocalDevice` → `{deviceId}` — legacy engine identity
@@ -43,22 +47,31 @@ use async_trait::async_trait;
 use base64::Engine as _;
 use futures::StreamExt;
 use futures::stream::BoxStream;
-use serde::Deserialize;
 use std::collections::HashSet;
 use std::time::Duration;
 use tokio::sync::watch;
 
-use loams_agentd_doc::{MessagePart, SessionCommandPayload};
-use loams_agentd_proto::{
-    ChatConfig, CreateWorktreeOutcome, EngineInfo, HarnessId, ProjectActionDraft, Space, ToolCall,
-    WorkspaceScope,
+use loams_agentd_doc::MessagePart;
+use loams_agentd_proto::params::{
+    ApplyHarnessUpdateReply, CancelledReply, ChangedReply, DiscardWorkingTreeReply, Empty,
+    EngineReadyReply, IdReply, LocalDeviceReply, MutateParams, MutateReply, OkReply,
+    ProjectActionSetup, QueueCommandReply, QueueSnapshot, RemovedReply, SearchFilesParams,
+    SentReply, SwitchRefReply, UploadCommitReply,
 };
-use loams_agentd_rpc::{RpcError, RpcReply, RpcService, methods, parse_params};
+use loams_agentd_proto::rpc::{Method, WireAs, calls};
+use loams_agentd_proto::transcript::TranscriptUpdate;
+use loams_agentd_proto::{
+    CreateWorktreeOutcome, EngineInfo, HarnessId, Space, ToolCall, WorkspaceScope,
+};
+use loams_agentd_rpc::{RpcError, RpcReply, RpcService, methods, params_of, reply, stream_reply};
 
 use crate::agent_accounts::AgentAccounts;
+use crate::change_request_create::ChangeRequestCreator;
 use crate::change_requests::CheckoutChangeRequests;
+use crate::checkpoints::Checkpoints;
 use crate::diff_sync::CheckoutDiffSync;
 use crate::doc_host::DocHost;
+use crate::git_write::GitWriteError;
 use crate::project_actions::ProjectActionsStore;
 use crate::registry::HarnessRegistry;
 use crate::repos::{Repos, session_home_dir};
@@ -67,29 +80,10 @@ use crate::terminals::Terminals;
 use crate::uploads::Uploads;
 use crate::workspace_host::WorkspaceHost;
 
+mod groups_rpc;
+
 const FILE_SEARCH_RPC_TIMEOUT: Duration = Duration::from_secs(6);
 const FILE_SEARCH_FEATURED_PATHS: usize = 32;
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ChatParams {
-    chat_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ListModelsParams {
-    harness: HarnessId,
-    #[serde(default)]
-    force: bool,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SetHarnessEnabledParams {
-    harness: HarnessId,
-    enabled: bool,
-}
 
 async fn update_harness_enabled(
     registry: &HarnessRegistry,
@@ -99,206 +93,6 @@ async fn update_harness_enabled(
     registry
         .set_enabled(harness, enabled)
         .map_err(RpcError::Failed)
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct HarnessUpdateParams {
-    #[serde(default)]
-    harness: Option<HarnessId>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DismissHarnessUpdateParams {
-    harness: HarnessId,
-    #[serde(default)]
-    version: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct QueueCommandParams {
-    chat_id: String,
-    command: SessionCommandPayload,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct TakeProjectActionSetupParams {
-    chat_id: String,
-    command_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct QueueMessageParams {
-    chat_id: String,
-    text: String,
-    #[serde(default)]
-    attachments: Vec<String>,
-    /// Keep this row visible during the current turn even when the harness
-    /// supports mid-turn steering.
-    #[serde(default)]
-    hold_for_turn_end: bool,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct QueuedMessageParams {
-    chat_id: String,
-    id: String,
-    /// Present for UpdateQueuedMessage only; empty text deletes the row.
-    #[serde(default)]
-    text: String,
-    /// Present for MoveQueuedMessage only.
-    #[serde(default)]
-    to_index: usize,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct BeginQueuedMessageEditParams {
-    chat_id: String,
-    id: String,
-    editor_device_id: String,
-    editor_instance_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RenewQueuedMessageEditParams {
-    chat_id: String,
-    id: String,
-    lease_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-enum FinishQueuedMessageEditAction {
-    Commit,
-    Cancel,
-    Discard,
-    ReleaseUnchanged,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct FinishQueuedMessageEditParams {
-    chat_id: String,
-    id: String,
-    lease_id: String,
-    action: FinishQueuedMessageEditAction,
-    #[serde(default)]
-    text: Option<String>,
-    #[serde(default)]
-    expected_text_hash: Option<String>,
-    #[serde(default)]
-    attachments: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RepoPathParams {
-    /// `repoPath` per §3.5 (the §2.1 shorthand `repo` is accepted as an alias).
-    #[serde(alias = "repo")]
-    repo_path: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CheckoutChangeRequestParams {
-    cwd: String,
-    #[serde(default)]
-    branch: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SwitchRefParams {
-    /// The checkout to switch — a session's cwd (main folder or worktree).
-    repo_path: String,
-    ref_name: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CreateWorktreeParams {
-    #[serde(alias = "repo")]
-    repo_path: String,
-    branch: String,
-    #[serde(default)]
-    space_id: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DeleteWorktreeParams {
-    #[serde(alias = "repo")]
-    repo_path: String,
-    #[serde(alias = "path")]
-    worktree_path: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DiscardWorkingTreeParams {
-    chat_id: String,
-    checkout_id: String,
-    expected_checksum: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ListProjectActionsParams {
-    space_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct UpsertProjectActionParams {
-    space_id: String,
-    #[serde(default)]
-    action_id: Option<String>,
-    action: ProjectActionDraft,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct DeleteProjectActionParams {
-    space_id: String,
-    action_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct RunProjectActionParams {
-    space_id: String,
-    chat_id: String,
-    action_id: String,
-    cols: u16,
-    rows: u16,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ListFoldersParams {
-    #[serde(default)]
-    path: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct FileSearchParams {
-    query: String,
-    #[serde(default)]
-    chat_id: Option<String>,
-    #[serde(default)]
-    space_id: Option<String>,
-    /// Existing linked worktree selected for a new chat. The engine accepts it
-    /// only after verifying it against the space repository's worktree list.
-    #[serde(default)]
-    path: Option<String>,
 }
 
 fn tool_file_path(call: &ToolCall) -> Option<&str> {
@@ -315,19 +109,6 @@ fn tool_file_path(call: &ToolCall) -> Option<&str> {
         | ToolCall::Mcp { .. }
         | ToolCall::Unknown { .. } => None,
     }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct OpenTerminalParams {
-    chat_id: String,
-    cols: u16,
-    rows: u16,
-    /// Explicit working directory (new-chat canvas: the selected project
-    /// folder, or `~`). When omitted, the chat row's cwd is used, then the
-    /// space named by a `space-canvas:{spaceId}` chat id.
-    #[serde(default)]
-    cwd: Option<String>,
 }
 
 /// Matches the UI canvas panel key (`AppState::panel_session_key`).
@@ -365,216 +146,6 @@ fn resolve_open_terminal_cwd(
     crate::repos::expand_home(&raw)
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct TerminalIdParams {
-    terminal_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct SubscribeTerminalParams {
-    terminal_id: String,
-    #[serde(default)]
-    after_seq: Option<u64>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct WriteTerminalParams {
-    terminal_id: String,
-    /// Base64 input bytes (plain UTF-8 accepted leniently).
-    data: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ResizeTerminalParams {
-    terminal_id: String,
-    cols: u16,
-    rows: u16,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ListAgentAccountsParams {
-    #[serde(default)]
-    force_usage: Option<bool>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AgentAccountParams {
-    harness: HarnessId,
-    account_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct StartAgentLoginParams {
-    harness: HarnessId,
-    /// For agents that keep a login per model provider (OpenCode, Pi,
-    /// Hermes): which provider to sign in to; `None` = the agent's default.
-    #[serde(default)]
-    provider: Option<String>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct LoginIdParams {
-    login_id: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct CompleteAgentLoginParams {
-    login_id: String,
-    code: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct UploadChunkParams {
-    upload_id: String,
-    /// Base64 payload chunk.
-    data: String,
-    #[serde(default)]
-    seq: Option<u64>,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct UploadCommitParams {
-    upload_id: String,
-    file_name: String,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct ReadAttachmentChunkParams {
-    path: String,
-    #[serde(default)]
-    offset: u64,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct FetchToolBlobParams {
-    /// Doc-resident sidecar ref (`{chatId}/{partId}` or `…​.diff`).
-    blob_ref: String,
-    /// Body offset of the page.
-    #[serde(default)]
-    offset: u64,
-    /// Page length; at most (and by default) the max frame.
-    #[serde(default)]
-    len: Option<u64>,
-}
-
-/// The Mutate surface (feature-inventory §2 DataRpc), tagged by `op`.
-#[derive(Debug, Deserialize)]
-#[serde(tag = "op", rename_all = "camelCase")]
-enum MutateParams {
-    #[serde(rename_all = "camelCase")]
-    CreateChat {
-        chat_id: String,
-        /// The project the chat is created in — fixes host device + base cwd.
-        /// `None` mints a project-less chat: `deviceId` picks the host and the
-        /// cwd defaults to `~` (expanded on the host at run time).
-        #[serde(default)]
-        space_id: Option<String>,
-        /// Host device for a project-less chat; ignored when `spaceId` is set.
-        #[serde(default)]
-        device_id: Option<String>,
-        #[serde(default)]
-        config: Option<ChatConfig>,
-        /// The picked ref, named on the row from the first frame (the footer
-        /// read "Select ref" until the diff reconciler stamped it).
-        #[serde(default)]
-        branch: Option<String>,
-        /// Cwd override (isolated-worktree path); default = the space's folder.
-        #[serde(default)]
-        cwd: Option<String>,
-        /// The chat whose agent is creating this one (Loams Desktop MCP); recorded
-        /// on the row as `parentChatId` for orchestration trees.
-        #[serde(default)]
-        parent_chat_id: Option<String>,
-    },
-    /// Create a space (device + folder pair). Idempotent by id; a live
-    /// duplicate `(deviceId, path)` no-ops. `gitDetected` is seeded from the
-    /// picker's FolderEntry — the owning device's SpacesSync re-verifies.
-    #[serde(rename_all = "camelCase")]
-    CreateSpace {
-        space_id: String,
-        device_id: String,
-        path: String,
-        #[serde(default)]
-        name: Option<String>,
-        #[serde(default)]
-        git_detected: bool,
-    },
-    /// LWW display-name set; `name: None` clears back to basename(path).
-    #[serde(rename_all = "camelCase")]
-    RenameSpace {
-        space_id: String,
-        #[serde(default)]
-        name: Option<String>,
-    },
-    /// Hard delete: cascades to every chat (and session row) in the space.
-    /// Live runs hosted here are interrupted best-effort.
-    #[serde(rename_all = "camelCase")]
-    DeleteSpace { space_id: String },
-    #[serde(rename_all = "camelCase")]
-    RenameChat { chat_id: String, title: String },
-    /// Set the chat's checkout branch label — the sidebar's
-    /// "project · branch" sub-line.
-    #[serde(rename_all = "camelCase")]
-    SetChatBranch { chat_id: String, branch: String },
-    /// Retarget a chat onto another folder — mid-session switch to an
-    /// EXISTING worktree (the picked ref's checkout). Next run starts a
-    /// fresh harness conversation there (resume is cwd-scoped).
-    #[serde(rename_all = "camelCase")]
-    SetChatCwd { chat_id: String, cwd: String },
-    /// Backdate a chat's activity timestamps (epoch ms) — the sidebar's
-    /// relative-time column. Used by tooling/seeds; the doc fold sets these on
-    /// real message traffic.
-    #[serde(rename_all = "camelCase")]
-    SetChatActivity {
-        chat_id: String,
-        #[serde(default)]
-        last_message_at: Option<i64>,
-        #[serde(default)]
-        created_at: Option<i64>,
-    },
-    /// Re-home a chat to another device (tooling/seeds; device migration later).
-    #[serde(rename_all = "camelCase")]
-    SetChatHost { chat_id: String, device_id: String },
-    #[serde(rename_all = "camelCase")]
-    SetChatArchived { chat_id: String, archived: bool },
-    /// Change one pin without replacing another device's edits.
-    #[serde(rename_all = "camelCase")]
-    ChangeSidebarPin {
-        change: loams_agentd_proto::SidebarPinChange,
-    },
-    /// Full-config replace on the chat row (loams-desktop `SetChatConfig`): the
-    /// composer's mid-session model / reasoning / options changes, LWW-synced
-    /// so they survive restarts and reach every device.
-    #[serde(rename_all = "camelCase")]
-    SetChatConfig { chat_id: String, config: ChatConfig },
-    /// Tombstone: removes the chats-map row; the session doc remains.
-    #[serde(rename_all = "camelCase")]
-    DeleteChat { chat_id: String },
-    #[serde(rename_all = "camelCase")]
-    RenameDevice { device_id: String, name: String },
-    /// Synced seen marker (LWW + monotonic guard): clears the "completed"
-    /// badge on every device. `at` is epoch ms; default = now.
-    #[serde(rename_all = "camelCase")]
-    MarkChatSeen {
-        chat_id: String,
-        #[serde(default)]
-        at: Option<i64>,
-    },
-}
-
 pub struct EngineRpc {
     sessions: SessionsEngine,
     doc_host: DocHost,
@@ -590,7 +161,50 @@ pub struct EngineRpc {
     uploads: Uploads,
     agent_accounts: AgentAccounts,
     harness_updates: Option<crate::harness_updates::HarnessUpdateCoordinator>,
+    checkpoints: Option<Checkpoints>,
+    /// Parallel run groups (SD1 Task 12; `rpc/groups_rpc.rs`).
+    run_groups: Option<crate::groups::RunGroups>,
+    /// Studio's notifications (SD1 Task 14, G19).
+    notifications: Option<crate::notify::Notifications>,
+    /// Per-turn usage (SD1 Task 14, G20).
+    usage: Option<crate::usage::ThreadUsageLog>,
+    /// Supervised approvals (SD1 Task 13, G17, G18, G22).
+    approvals: Option<crate::approvals::Approvals>,
     engine_info: EngineInfo,
+    /// Opens pull requests (G4) with the daemon's forge credentials.
+    change_request_creator: ChangeRequestCreator,
+    /// Serializes the git writes of SD1 Task 9 (G2, G3, G5, G21): one
+    /// checksum check and its write at a time.
+    git_writes: std::sync::Arc<tokio::sync::Mutex<()>>,
+    /// Studio's review comments (SD1 Task 11, G8-G11), in the engine's store.
+    review: crate::review::ReviewComments,
+}
+
+/// A git write's failure as the RPC's.
+fn git_write_error(error: GitWriteError) -> RpcError {
+    match error {
+        GitWriteError::BadParams(text) => RpcError::BadParams(text),
+        GitWriteError::Failed(text) => RpcError::Failed(text),
+    }
+}
+
+/// A review-comment call's failure as the RPC's (`not_found: …` for a
+/// comment the checkout doesn't have).
+fn review_error(error: crate::review::ReviewError) -> RpcError {
+    match error {
+        crate::review::ReviewError::BadParams(text) => RpcError::BadParams(text),
+        other => RpcError::Failed(other.to_string()),
+    }
+}
+
+/// Where a fork of a chat's transcript ends.
+#[derive(Debug, Clone, Copy)]
+enum ForkAt<'a> {
+    /// After the last complete assistant response (`ForkSideChat`).
+    LastResponse,
+    /// Just before the entry of this id: a checkpoint's turn
+    /// (`RestoreCheckpoint` with `worktree+transcript`).
+    BeforeTurn(&'a str),
 }
 
 impl std::fmt::Debug for EngineRpc {
@@ -616,6 +230,7 @@ impl EngineRpc {
         agent_accounts: AgentAccounts,
         workspace_scope: WorkspaceScope,
     ) -> Self {
+        let review = crate::review::ReviewComments::new(doc_host.store());
         let engine_info = EngineInfo {
             device_id: doc_host.device_id().to_string(),
             workspace_scope,
@@ -636,8 +251,313 @@ impl EngineRpc {
             uploads,
             agent_accounts,
             harness_updates: None,
+            checkpoints: None,
+            run_groups: None,
+            notifications: None,
+            usage: None,
+            approvals: None,
             engine_info,
+            change_request_creator: ChangeRequestCreator::from_keyring(),
+            git_writes: std::sync::Arc::new(tokio::sync::Mutex::new(())),
+            review,
         }
+    }
+
+    pub fn with_notifications(mut self, notifications: crate::notify::Notifications) -> Self {
+        self.notifications = Some(notifications);
+        self
+    }
+
+    pub fn with_approvals(mut self, approvals: crate::approvals::Approvals) -> Self {
+        self.approvals = Some(approvals);
+        self
+    }
+
+    /// The approvals, or a failure when the engine has none.
+    pub(crate) fn approvals(&self) -> Result<&crate::approvals::Approvals, RpcError> {
+        self.approvals
+            .as_ref()
+            .ok_or_else(|| RpcError::Failed("approvals unavailable".into()))
+    }
+
+    pub fn with_usage(mut self, usage: crate::usage::ThreadUsageLog) -> Self {
+        self.usage = Some(usage);
+        self
+    }
+
+    pub fn with_checkpoints(mut self, checkpoints: Checkpoints) -> Self {
+        self.checkpoints = Some(checkpoints);
+        self
+    }
+
+    pub fn with_run_groups(mut self, run_groups: crate::groups::RunGroups) -> Self {
+        self.run_groups = Some(run_groups);
+        self
+    }
+
+    fn checkpoints(&self) -> Result<&Checkpoints, RpcError> {
+        self.checkpoints
+            .as_ref()
+            .ok_or_else(|| RpcError::Failed("checkpoints unavailable".into()))
+    }
+
+    /// The git checkout a chat runs in, from the chat's own row (or, for a
+    /// chat with no row yet, its last run), never from the caller. `None`
+    /// when that directory is not a checkout.
+    async fn chat_checkout_root(
+        &self,
+        chat_id: &str,
+    ) -> Result<Option<std::path::PathBuf>, RpcError> {
+        let failed = |e: crate::EngineError| RpcError::Failed(e.to_string());
+        let cwd = match self.workspace.chat(chat_id).map_err(failed)? {
+            Some(chat) => {
+                if chat.device_id != self.doc_host.device_id() {
+                    return Err(RpcError::Failed(
+                        "Checkpoints live on the chat's own device".into(),
+                    ));
+                }
+                chat.cwd
+            }
+            None => self.sessions.last_request(chat_id).map(|r| r.cwd),
+        }
+        .ok_or_else(|| RpcError::Failed(format!("not_found: chat {chat_id}")))?;
+        let cwd = crate::repos::expand_home(&cwd).map_err(|e| RpcError::Failed(e.to_owned()))?;
+        Ok(self
+            .checkpoints()?
+            .checkout_root(std::path::Path::new(&cwd))
+            .await)
+    }
+
+    /// Where a fork of `source_chat_id` at `at` ends (exclusive).
+    fn fork_end(&self, source_chat_id: &str, at: ForkAt<'_>) -> Result<usize, RpcError> {
+        let failed = |e: crate::EngineError| RpcError::Failed(e.to_string());
+        let entries = self
+            .doc_host
+            .open(source_chat_id)
+            .map_err(failed)?
+            .doc()
+            .read_entries()
+            .map_err(|e| RpcError::Failed(e.to_string()))?;
+        match at {
+            ForkAt::LastResponse => entries
+                .iter()
+                .rposition(|entry| {
+                    entry.role == loams_agentd_doc::MessageRole::Assistant
+                        && entry.status == Some(loams_agentd_doc::MessageStatus::Complete)
+                })
+                .map(|boundary| boundary + 1)
+                .ok_or_else(|| {
+                    RpcError::Failed(
+                        "Wait for a completed response before starting a side chat".into(),
+                    )
+                }),
+            ForkAt::BeforeTurn(turn_id) => entries
+                .iter()
+                .position(|entry| entry.id == turn_id)
+                .ok_or_else(|| {
+                    RpcError::Failed(format!(
+                        "{}: turn {turn_id:?} is not in the transcript",
+                        loams_agentd_proto::checkpoints::CHECKPOINT_MISSING
+                    ))
+                }),
+        }
+    }
+
+    /// The source chat of a fork, checked to live on this device.
+    fn fork_source(&self, source_chat_id: &str) -> Result<loams_agentd_proto::Chat, RpcError> {
+        let failed = |e: crate::EngineError| RpcError::Failed(e.to_string());
+        let source = self
+            .workspace
+            .chat(source_chat_id)
+            .map_err(failed)?
+            .ok_or_else(|| RpcError::Failed("Source chat no longer exists".into()))?;
+        if source.device_id != self.doc_host.device_id() {
+            return Err(RpcError::Failed(
+                "Fork must be created on the source device".into(),
+            ));
+        }
+        Ok(source)
+    }
+
+    /// Copy `source_chat_id`'s transcript up to `at` into a new chat
+    /// `chat_id` hung under `parent_chat_id` (default: the source). The
+    /// source is never changed.
+    fn fork_chat(
+        &self,
+        source_chat_id: &str,
+        chat_id: String,
+        parent_chat_id: Option<String>,
+        at: ForkAt<'_>,
+    ) -> Result<loams_agentd_proto::Chat, RpcError> {
+        let parent_chat_id = parent_chat_id
+            .filter(|id| !id.trim().is_empty())
+            .unwrap_or_else(|| source_chat_id.to_owned());
+        let failed = |e: crate::EngineError| RpcError::Failed(e.to_string());
+        let source = self.fork_source(source_chat_id)?;
+        if let Some(existing) = self.workspace.chat(&chat_id).map_err(failed)? {
+            if existing.parent_chat_id.as_deref() == Some(parent_chat_id.as_str()) {
+                return Ok(existing);
+            }
+            return Err(RpcError::Failed("Chat id already exists".into()));
+        }
+        let end = self.fork_end(source_chat_id, at)?;
+        let source_doc = self.doc_host.open(source_chat_id).map_err(failed)?;
+        let entries = source_doc
+            .doc()
+            .read_entries()
+            .map_err(|e| RpcError::Failed(e.to_string()))?;
+        let end = end.min(entries.len());
+        let mut chat = source.clone();
+        chat.id = chat_id;
+        chat.parent_chat_id = Some(parent_chat_id);
+        chat.title = None; // First side-chat turn receives its own generated title.
+        chat.archived = false;
+        chat.created_at = chrono::Utc::now();
+        chat.last_message_at = None;
+        chat.last_message_preview = None;
+        chat.last_seen_at = None;
+        chat.harness_session_id = None;
+        chat.harness_session_cwd = None;
+        chat.room_gen = Some(2);
+        // Missing rows open on chat2. Persist history before publishing
+        // the registry row so a crash cannot leave a discoverable empty fork.
+        let target = self.doc_host.open(&chat.id).map_err(failed)?;
+        let existing = target
+            .doc()
+            .read_entries()
+            .map_err(|e| RpcError::Failed(e.to_string()))?;
+        for entry in entries[..end]
+            .iter()
+            .filter(|entry| !existing.iter().any(|e| e.id == entry.id))
+        {
+            let mut entry = entry.clone();
+            // Historical approvals belong to the source runtime; they
+            // must never block or send answers from the new composer.
+            for part in &mut entry.parts {
+                if let loams_agentd_doc::MessagePart::Input { resolved, .. } = part {
+                    *resolved = true;
+                }
+            }
+            target
+                .doc()
+                .push_message(&entry)
+                .map_err(|e| RpcError::Failed(e.to_string()))?;
+        }
+        // The seam: everything above came from the source. Its own
+        // entry (system role, complete) so the copied history and the
+        // fork's first turn never share a row.
+        let marker_id = format!("fork:{}", chat.id);
+        if !existing.iter().any(|e| e.id == marker_id) {
+            let source_title = source
+                .title
+                .clone()
+                .or_else(|| source.last_message_preview.clone())
+                .unwrap_or_else(|| "New session".into());
+            target
+                .doc()
+                .push_message(&loams_agentd_doc::SessionMessageEntry {
+                    duration_ms: None,
+                    id: marker_id.clone(),
+                    role: loams_agentd_doc::MessageRole::System,
+                    parts: vec![loams_agentd_doc::MessagePart::Fork {
+                        id: marker_id,
+                        source_chat_id: source.id.clone(),
+                        source_title,
+                    }],
+                    created_at: chrono::Utc::now().timestamp_millis(),
+                    device_id: self.doc_host.device_id().to_owned(),
+                    status: Some(loams_agentd_doc::MessageStatus::Complete),
+                    continuation_of: None,
+                })
+                .map_err(|e| RpcError::Failed(e.to_string()))?;
+        }
+        self.doc_host.persist_fork(&target).map_err(failed)?;
+        // A fork keeps its source's approval mode whatever parent it hangs
+        // under: a supervised thread's fork is never quietly full access
+        // (SD1 Task 30). Recorded before the row is published, so no run of
+        // the fork sees another mode.
+        if let Some(approvals) = &self.approvals {
+            let (mode, set) = approvals.resolved_mode(source_chat_id);
+            if set {
+                approvals.set_mode(&chat.id, mode).map_err(failed)?;
+            }
+        }
+        self.workspace.import_chat_row(&chat).map_err(failed)?;
+        Ok(chat)
+    }
+
+    /// `RestoreCheckpoint` (SD1 Task 10, G7). The restore is confirmed by
+    /// the checkout's diff checksum the caller saw (a stale one is
+    /// `stale_diff`), runs only in the chat's own checkout, never while the
+    /// chat's turn is running, and a transcript restore forks the thread:
+    /// nothing is deleted from its history.
+    async fn restore_checkpoint(
+        &self,
+        p: loams_agentd_proto::checkpoints::RestoreCheckpointParams,
+    ) -> Result<RpcReply, RpcError> {
+        use loams_agentd_proto::SessionStatus;
+        use loams_agentd_proto::checkpoints::{CHECKPOINT_MISSING, CheckpointScope};
+        let checkpoints = self.checkpoints()?;
+        if p.expected_checksum.trim().is_empty() {
+            return Err(RpcError::BadParams(
+                "expectedChecksum is required: a restore discards the checkout's current state"
+                    .into(),
+            ));
+        }
+        if self
+            .sessions
+            .session_status(&p.chat_id)
+            .is_some_and(|session| {
+                matches!(
+                    session.status,
+                    SessionStatus::Working | SessionStatus::AwaitingInput
+                )
+            })
+        {
+            return Err(RpcError::Failed(
+                "The thread is running; interrupt it before restoring a checkpoint".into(),
+            ));
+        }
+        let root = self.chat_checkout_root(&p.chat_id).await?.ok_or_else(|| {
+            RpcError::Failed(format!(
+                "{CHECKPOINT_MISSING}: chat {:?} has no git checkout",
+                p.chat_id
+            ))
+        })?;
+        let fork = p.scope == CheckpointScope::WorktreeAndTranscript;
+        if fork {
+            // Check the fork can be made before the checkout changes.
+            self.fork_source(&p.chat_id)?;
+            self.fork_end(&p.chat_id, ForkAt::BeforeTurn(&p.turn_id))?;
+        }
+        let restored_to = checkpoints
+            .restore_worktree(&p.chat_id, &root, &p.turn_id, &p.expected_checksum)
+            .await
+            .map_err(|e| RpcError::Failed(e.to_string()))?;
+        self.diff_sync.sync_all();
+        let forked_chat_id = if fork {
+            let chat = self.fork_chat(
+                &p.chat_id,
+                crate::new_id(),
+                None,
+                ForkAt::BeforeTurn(&p.turn_id),
+            )?;
+            Some(chat.id)
+        } else {
+            None
+        };
+        reply::<calls::RestoreCheckpoint, _>(
+            &loams_agentd_proto::checkpoints::RestoreCheckpointReply {
+                restored_to,
+                forked_chat_id,
+            },
+        )
+    }
+
+    /// Open change requests with `creator` (tests: a fake Forgejo or `gh`).
+    pub fn with_change_request_creator(mut self, creator: ChangeRequestCreator) -> Self {
+        self.change_request_creator = creator;
+        self
     }
 
     pub fn with_previews(mut self, previews: loams_agentd_preview::PreviewService) -> Self {
@@ -661,6 +581,51 @@ impl EngineRpc {
             .ok_or_else(|| RpcError::Failed("agent updates unavailable".into()))
     }
 
+    /// The chats (and their cwds) a `deleteChat` or `deleteSpace` removes,
+    /// read before the mutation so their checkpoints can follow them.
+    fn chats_deleted_by(&self, params: &MutateParams) -> Vec<(String, Option<String>)> {
+        if self.checkpoints.is_none() {
+            return Vec::new();
+        }
+        match params {
+            MutateParams::DeleteChat { chat_id } => {
+                let cwd = self
+                    .workspace
+                    .chat(chat_id)
+                    .ok()
+                    .flatten()
+                    .and_then(|c| c.cwd);
+                vec![(chat_id.clone(), cwd)]
+            }
+            MutateParams::DeleteSpace { space_id } => self
+                .workspace
+                .read_chats()
+                .unwrap_or_default()
+                .into_iter()
+                .filter(|chat| chat.space_id.as_deref() == Some(space_id.as_str()))
+                .map(|chat| (chat.id, chat.cwd))
+                .collect(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// Delete the checkpoint refs of deleted chats (best-effort: the
+    /// deletion itself already succeeded).
+    async fn delete_checkpoints(&self, chats: Vec<(String, Option<String>)>) {
+        let Some(checkpoints) = &self.checkpoints else {
+            return;
+        };
+        for (chat_id, cwd) in chats {
+            let cwd = cwd.and_then(|cwd| crate::repos::expand_home(&cwd).ok());
+            if let Err(error) = checkpoints
+                .delete_chat(&chat_id, cwd.as_deref().map(std::path::Path::new))
+                .await
+            {
+                tracing::warn!(chat = %chat_id, %error, "checkpoint refs not deleted");
+            }
+        }
+    }
+
     fn local_project_action_space(&self, space_id: &str) -> Result<Space, RpcError> {
         let space = self
             .workspace
@@ -678,7 +643,10 @@ impl EngineRpc {
     /// Resolve a mention-search root from synced workspace rows. A client may
     /// name an existing linked worktree for a new chat, but it is verified
     /// against the space repository before any filesystem walk begins.
-    async fn file_search_root(&self, p: &FileSearchParams) -> Result<std::path::PathBuf, RpcError> {
+    async fn file_search_root(
+        &self,
+        p: &SearchFilesParams,
+    ) -> Result<std::path::PathBuf, RpcError> {
         let target = loams_agentd_proto::WorkspaceTarget {
             chat_id: p.chat_id.clone(),
             space_id: p.space_id.clone(),
@@ -694,7 +662,7 @@ impl EngineRpc {
     /// Catalogs also serve projectless sessions, which have no workspace space.
     /// Keep workspace validation for project targets and use only a known local
     /// chat's persisted cwd (or home) for a projectless conversation.
-    async fn catalog_root(&self, p: &FileSearchParams) -> Result<std::path::PathBuf, RpcError> {
+    async fn catalog_root(&self, p: &SearchFilesParams) -> Result<std::path::PathBuf, RpcError> {
         if p.space_id.is_none() && p.path.is_none() {
             let Some(chat_id) = &p.chat_id else {
                 return session_home_dir().map_err(|error| RpcError::Failed(error.to_string()));
@@ -760,6 +728,145 @@ impl EngineRpc {
         Err(RpcError::BadParams(
             "cwd is not a known checkout on this device".into(),
         ))
+    }
+
+    /// The identity of a checkout this device knows (a local chat's cwd, a
+    /// local project's or a registered repository's root, or one of their
+    /// worktrees): the jail of the git writes that name a `cwd`.
+    async fn known_checkout(&self, cwd: &str) -> Result<crate::repos::CheckoutIdentity, RpcError> {
+        let mut root = None;
+        for repo in self.repos.list().await {
+            if let Some(checkout) = self
+                .repos
+                .workspace_checkout(std::path::Path::new(&repo.path), std::path::Path::new(cwd))
+                .await
+            {
+                root = Some(checkout);
+                break;
+            }
+        }
+        let root = match root {
+            Some(root) => root,
+            None => self.change_request_root(cwd).await?,
+        };
+        self.repos
+            .checkout_identity(&root)
+            .await
+            .map_err(|e| RpcError::Failed(e.to_string()))
+    }
+
+    /// A repository this device knows: a known checkout (as
+    /// [`Self::known_checkout`]) or a registered repository (`AddRepo`).
+    async fn known_repo(&self, repo_path: &str) -> Result<std::path::PathBuf, RpcError> {
+        let unknown =
+            || RpcError::BadParams("repoPath is not a known repository on this device".into());
+        let canonical = std::fs::canonicalize(repo_path).map_err(|_| unknown())?;
+        for repo in self.repos.list().await {
+            if std::fs::canonicalize(&repo.path).is_ok_and(|path| path == canonical) {
+                return Ok(canonical);
+            }
+        }
+        self.change_request_root(repo_path)
+            .await
+            .map_err(|_| unknown())
+    }
+
+    /// Refuse a write to a checkout while any local chat on it has a live
+    /// run: a git write never interrupts an agent as a side effect.
+    async fn ensure_no_live_run(
+        &self,
+        identity: &crate::repos::CheckoutIdentity,
+    ) -> Result<(), RpcError> {
+        let chats = self.workspace.watch_chats().borrow().clone();
+        for candidate in chats {
+            if candidate.device_id != self.doc_host.device_id() {
+                continue;
+            }
+            let same_checkout = if candidate.checkout_id.as_deref() == Some(identity.id.as_str()) {
+                true
+            } else if let Some(candidate_cwd) = candidate.cwd.as_deref() {
+                self.repos
+                    .checkout_identity(std::path::Path::new(candidate_cwd))
+                    .await
+                    .is_ok_and(|candidate_identity| candidate_identity.id == identity.id)
+            } else {
+                false
+            };
+            if same_checkout
+                && self
+                    .sessions
+                    .session_status(&candidate.id)
+                    .is_some_and(|session| {
+                        matches!(
+                            session.status,
+                            loams_agentd_proto::SessionStatus::Working
+                                | loams_agentd_proto::SessionStatus::AwaitingInput
+                        )
+                    })
+            {
+                return Err(RpcError::Failed(
+                    "an agent is active in this working tree".into(),
+                ));
+            }
+        }
+        Ok(())
+    }
+
+    /// The root of the checkout `checkout_id` names, if it is one this
+    /// device knows: a checkout the diff sync tracks (one with a chat), or a
+    /// worktree of a registered repository or a local project. The jail of
+    /// the review comments (SD1 Task 11).
+    async fn review_checkout_root(
+        &self,
+        checkout_id: &str,
+    ) -> Result<std::path::PathBuf, RpcError> {
+        if let Some(root) = self.diff_sync.checkout_root(checkout_id) {
+            return Ok(root);
+        }
+        let mut repos: Vec<std::path::PathBuf> = self
+            .repos
+            .list()
+            .await
+            .into_iter()
+            .map(|repo| std::path::PathBuf::from(repo.path))
+            .collect();
+        let device = self.doc_host.device_id().to_owned();
+        let spaces: Vec<std::path::PathBuf> = self
+            .workspace
+            .watch_spaces()
+            .borrow()
+            .iter()
+            .filter(|space| space.device_id == device)
+            .map(|space| std::path::PathBuf::from(&space.path))
+            .collect();
+        repos.extend(spaces);
+        for repo in repos {
+            let Ok(stanzas) = crate::git_write::worktrees(&repo).await else {
+                continue;
+            };
+            for stanza in stanzas {
+                if let Ok(identity) = self.repos.checkout_identity(&stanza.path).await
+                    && identity.id == checkout_id
+                {
+                    return Ok(identity.root);
+                }
+            }
+        }
+        Err(RpcError::BadParams(
+            "checkoutId is not a known checkout on this device".into(),
+        ))
+    }
+
+    /// This device's chats.
+    fn local_chats(&self) -> Vec<loams_agentd_proto::Chat> {
+        let device = self.doc_host.device_id();
+        self.workspace
+            .watch_chats()
+            .borrow()
+            .iter()
+            .filter(|chat| chat.device_id == device)
+            .cloned()
+            .collect()
     }
 
     /// Most-recent-first paths the current chat actually touched, followed by
@@ -932,13 +1039,14 @@ impl EngineRpc {
             MutateParams::DeleteChat { chat_id } => {
                 self.workspace.delete_chat(&chat_id).map_err(failed)?;
                 self.doc_host.purge_chat(&chat_id);
+                if let Some(usage) = &self.usage {
+                    usage.forget(&chat_id);
+                }
+                if let Some(approvals) = &self.approvals {
+                    approvals.forget_chat(&chat_id);
+                }
                 Ok(())
             }
-            MutateParams::RenameDevice { device_id, name } => self
-                .workspace
-                .rename_device(&device_id, &name)
-                .map_err(failed)
-                .map(drop),
             MutateParams::MarkChatSeen { chat_id, at } => {
                 let at = at
                     .and_then(chrono::DateTime::<chrono::Utc>::from_timestamp_millis)
@@ -1031,22 +1139,26 @@ where
     Ok(registry.descriptors())
 }
 
-/// A watch receiver as a stream: current value first, then every change.
-fn watch_stream<T>(rx: watch::Receiver<T>) -> BoxStream<'static, serde_json::Value>
+/// A watch receiver as method `M`'s stream: current value first, then every
+/// change. Each value is serialized straight from the watch (no copy).
+fn watch_stream<M, T>(rx: watch::Receiver<T>) -> RpcReply
 where
-    T: serde::Serialize + Clone + Send + Sync + 'static,
+    M: Method,
+    T: serde::Serialize + WireAs<M::Result> + Send + Sync + 'static,
 {
-    futures::stream::unfold((rx, false), |(mut rx, emitted)| async move {
-        if emitted {
-            rx.changed().await.ok()?;
-        }
-        let value = {
-            let borrowed = rx.borrow_and_update();
-            serde_json::to_value(&*borrowed).ok()?
-        };
-        Some((value, (rx, true)))
-    })
-    .boxed()
+    RpcReply::Stream(
+        futures::stream::unfold((rx, false), |(mut rx, emitted)| async move {
+            if emitted {
+                rx.changed().await.ok()?;
+            }
+            let value = {
+                let borrowed = rx.borrow_and_update();
+                serde_json::to_value(&*borrowed).ok()?
+            };
+            Some((value, (rx, true)))
+        })
+        .boxed(),
+    )
 }
 
 /// The transcript watch as delta frames (`loams_agentd_doc::transcript_delta`): a
@@ -1055,7 +1167,7 @@ where
 fn doc_messages_stream(
     rx: watch::Receiver<crate::doc_host::TranscriptSnapshot>,
     doc: std::sync::Arc<loams_agentd_doc::SessionDoc>,
-) -> BoxStream<'static, serde_json::Value> {
+) -> BoxStream<'static, TranscriptUpdate> {
     use loams_agentd_doc::transcript_delta::{TranscriptFrame, diff_transcript};
     futures::stream::unfold(
         (
@@ -1114,13 +1226,13 @@ fn doc_messages_stream(
                     continue;
                 }
                 previous_usage = usage;
-                let value = serde_json::to_value(loams_agentd_doc::TranscriptUpdate {
+                let update = TranscriptUpdate {
                     frame,
                     context_usage: usage,
                     replay_baseline,
-                })
-                .ok()?;
-                return Some((value, (rx, prev, doc, previous_usage, opening_baseline)));
+                    history_pending: false,
+                };
+                return Some((update, (rx, prev, doc, previous_usage, opening_baseline)));
             }
         },
     )
@@ -1132,17 +1244,16 @@ fn doc_messages_stream(
 async fn opening_doc_messages_stream(
     host: crate::doc_host::DocHost,
     chat_id: String,
-) -> Result<BoxStream<'static, serde_json::Value>, RpcError> {
+) -> Result<BoxStream<'static, TranscriptUpdate>, RpcError> {
     let (handle, preview) = tokio::task::spawn_blocking(move || {
         let handle = host.open(&chat_id)?;
         let entries = handle.doc().read_opening_tail(128)?;
-        let mut preview = serde_json::to_value(loams_agentd_doc::TranscriptUpdate {
+        let preview = TranscriptUpdate {
             frame: loams_agentd_doc::TranscriptFrame::reset(&entries),
             context_usage: handle.doc().context_usage(),
             replay_baseline: Some(loams_agentd_doc::TranscriptBaseline::capture(&entries)),
-        })
-        .map_err(|e| crate::EngineError::Other(e.to_string()))?;
-        preview["historyPending"] = serde_json::Value::Bool(true);
+            history_pending: true,
+        };
         Ok::<_, crate::EngineError>((handle, preview))
     })
     .await
@@ -1171,43 +1282,49 @@ async fn opening_doc_messages_stream(
 impl RpcService for EngineRpc {
     async fn handle(&self, method: &str, params: serde_json::Value) -> Result<RpcReply, RpcError> {
         match method {
-            methods::ENGINE_INFO => RpcReply::value(&self.engine_info),
-            methods::ENGINE_READY => RpcReply::value(&serde_json::json!({ "ready": true })),
-            methods::LIST_HARNESSES => RpcReply::value(&self.registry.descriptors()),
+            methods::ENGINE_INFO => reply::<calls::EngineInfo, _>(&self.engine_info),
+            methods::ENGINE_READY => {
+                reply::<calls::EngineReady, _>(&EngineReadyReply { ready: true })
+            }
+            methods::LIST_HARNESSES => {
+                reply::<calls::ListHarnesses, _>(&self.registry.descriptors())
+            }
             methods::INSTALL_HARNESS => {
-                let p: ListModelsParams = parse_params(params)?;
+                let p = params_of::<calls::InstallHarness>(params)?;
                 let installing = self.registry.installs.begin(p.harness)?;
                 let descriptors = install_harness_with(&self.registry, p.harness, || {
                     run_requested_install(p.harness, installing.cancel.clone())
                 })
                 .await?;
-                RpcReply::value(&descriptors)
+                reply::<calls::InstallHarness, _>(&descriptors)
             }
             methods::CANCEL_INSTALL => {
-                let p: ListModelsParams = parse_params(params)?;
+                let p = params_of::<calls::CancelInstall>(params)?;
                 self.registry.installs.cancel(p.harness);
-                RpcReply::value(&serde_json::json!({}))
+                reply::<calls::CancelInstall, _>(&Empty {})
             }
-            methods::GET_TITLE_SETTINGS => RpcReply::value(&self.registry.title_settings()),
+            methods::GET_TITLE_SETTINGS => {
+                reply::<calls::GetTitleSettings, _>(&self.registry.title_settings())
+            }
             methods::SET_TITLE_SETTINGS => {
-                let p: crate::registry::TitleSettings = parse_params(params)?;
+                let p = params_of::<calls::SetTitleSettings>(params)?;
                 self.registry
                     .set_title_settings(p)
                     .map_err(RpcError::Failed)?;
-                RpcReply::value(&self.registry.title_settings())
+                reply::<calls::SetTitleSettings, _>(&self.registry.title_settings())
             }
             methods::SET_HARNESS_ENABLED => {
-                let p: SetHarnessEnabledParams = parse_params(params)?;
+                let p = params_of::<calls::SetHarnessEnabled>(params)?;
                 update_harness_enabled(&self.registry, p.harness, p.enabled).await?;
                 if let Some(coordinator) = &self.harness_updates {
                     coordinator.refresh_enabled();
                 }
                 // Fresh catalog in the reply: the page repaints from it in one
                 // round trip, and a refused/raced toggle self-corrects.
-                RpcReply::value(&self.registry.descriptors())
+                reply::<calls::SetHarnessEnabled, _>(&self.registry.descriptors())
             }
             methods::LIST_MODELS => {
-                let p: ListModelsParams = parse_params(params)?;
+                let p = params_of::<calls::ListModels>(params)?;
                 let lease = std::sync::Arc::new(self.registry.execution_lease(p.harness).await);
                 let harness = self
                     .registry
@@ -1221,23 +1338,12 @@ impl RpcService for EngineRpc {
                 )
                 .await
                 .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&models)
+                reply::<calls::ListModels, _>(&models)
             }
             methods::LIST_SKILLS => {
-                #[derive(Deserialize)]
-                #[serde(rename_all = "camelCase")]
-                struct Params {
-                    harness: HarnessId,
-                    #[serde(default)]
-                    chat_id: Option<String>,
-                    #[serde(default)]
-                    space_id: Option<String>,
-                    #[serde(default)]
-                    path: Option<String>,
-                }
-                let p: Params = parse_params(params)?;
+                let p = params_of::<calls::ListSkills>(params)?;
                 let root = self
-                    .catalog_root(&FileSearchParams {
+                    .catalog_root(&SearchFilesParams {
                         query: String::new(),
                         chat_id: p.chat_id,
                         space_id: p.space_id,
@@ -1249,23 +1355,12 @@ impl RpcService for EngineRpc {
                     .discover_skills(p.harness, &root)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&skills)
+                reply::<calls::ListSkills, _>(&skills)
             }
             methods::LIST_COMMANDS => {
-                #[derive(Deserialize)]
-                #[serde(rename_all = "camelCase")]
-                struct Params {
-                    harness: HarnessId,
-                    #[serde(default)]
-                    chat_id: Option<String>,
-                    #[serde(default)]
-                    space_id: Option<String>,
-                    #[serde(default)]
-                    path: Option<String>,
-                }
-                let p: Params = parse_params(params)?;
+                let p = params_of::<calls::ListCommands>(params)?;
                 let root = self
-                    .catalog_root(&FileSearchParams {
+                    .catalog_root(&SearchFilesParams {
                         query: String::new(),
                         chat_id: p.chat_id,
                         space_id: p.space_id,
@@ -1277,165 +1372,125 @@ impl RpcService for EngineRpc {
                     .discover_commands(p.harness, &root)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&commands)
+                reply::<calls::ListCommands, _>(&commands)
             }
             methods::QUEUE_COMMAND => {
-                let p: QueueCommandParams = parse_params(params)?;
+                let p = params_of::<calls::QueueCommand>(params)?;
                 let command_id = self
                     .doc_host
                     .queue_command(&p.chat_id, p.command)
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&serde_json::json!({ "commandId": command_id }))
+                reply::<calls::QueueCommand, _>(&QueueCommandReply { command_id })
             }
             methods::TAKE_PROJECT_ACTION_SETUP => {
-                let p: TakeProjectActionSetupParams = parse_params(params)?;
+                let p = params_of::<calls::TakeProjectActionSetup>(params)?;
                 let outcome = self
                     .project_actions
                     .take_setup_handoff(&p.command_id, &p.chat_id);
                 match outcome {
-                    Some(outcome) => RpcReply::value(&serde_json::json!({
-                        "ready": true,
-                        "setupAction": outcome.setup_action,
-                        "setupError": outcome.setup_error,
-                    })),
-                    None => RpcReply::value(&serde_json::json!({ "ready": false })),
+                    Some(outcome) => {
+                        reply::<calls::TakeProjectActionSetup, _>(&ProjectActionSetup {
+                            ready: true,
+                            setup_action: outcome.setup_action,
+                            setup_error: outcome.setup_error,
+                        })
+                    }
+                    None => reply::<calls::TakeProjectActionSetup, _>(&ProjectActionSetup {
+                        ready: false,
+                        setup_action: None,
+                        setup_error: None,
+                    }),
                 }
             }
             methods::RETRY_DELIVERY => {
-                let p: ChatParams = parse_params(params)?;
+                let p = params_of::<calls::RetryDelivery>(params)?;
                 self.doc_host
                     .retry_delivery(&p.chat_id)
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&serde_json::json!({}))
+                reply::<calls::RetryDelivery, _>(&Empty {})
             }
             methods::FORK_SIDE_CHAT => {
-                #[derive(Deserialize)]
-                #[serde(rename_all = "camelCase")]
-                struct ForkParams {
-                    chat_id: String,
-                    source_chat_id: String,
-                    /// Where the fork hangs in the tree. Defaults to the
-                    /// source; a side chat's own fork button passes the
-                    /// side chat's parent so the copy lists as a sibling.
-                    #[serde(default)]
-                    parent_chat_id: Option<String>,
+                let p = params_of::<calls::ForkSideChat>(params)?;
+                let chat = self.fork_chat(
+                    &p.source_chat_id,
+                    p.chat_id,
+                    p.parent_chat_id,
+                    ForkAt::LastResponse,
+                )?;
+                reply::<calls::ForkSideChat, _>(&chat)
+            }
+            methods::LIST_CHECKPOINTS => {
+                let p = params_of::<calls::ListCheckpoints>(params)?;
+                let list = match self.chat_checkout_root(&p.chat_id).await? {
+                    Some(root) => self
+                        .checkpoints()?
+                        .list(&p.chat_id, &root)
+                        .await
+                        .map_err(|e| RpcError::Failed(e.to_string()))?,
+                    None => Default::default(),
+                };
+                reply::<calls::ListCheckpoints, _>(&list)
+            }
+            methods::RESTORE_CHECKPOINT => {
+                let p = params_of::<calls::RestoreCheckpoint>(params)?;
+                self.restore_checkpoint(p).await
+            }
+            methods::GET_THREAD_USAGE => {
+                let p = params_of::<calls::GetThreadUsage>(params)?;
+                let usage = match &self.usage {
+                    Some(usage) => usage
+                        .thread(&p.chat_id)
+                        .map_err(|e| RpcError::Failed(e.to_string()))?,
+                    None => Default::default(),
+                };
+                reply::<calls::GetThreadUsage, _>(&usage)
+            }
+            methods::WATCH_NOTIFICATIONS => {
+                params_of::<calls::WatchNotifications>(params)?;
+                let notifications = self
+                    .notifications
+                    .as_ref()
+                    .ok_or_else(|| RpcError::Failed("notifications unavailable".into()))?;
+                Ok(stream_reply::<calls::WatchNotifications, _, _>(
+                    notifications.watch(),
+                ))
+            }
+            methods::WATCH_APPROVALS => {
+                let p = params_of::<calls::WatchApprovals>(params)?;
+                Ok(stream_reply::<calls::WatchApprovals, _, _>(
+                    self.approvals()?.watch(p.chat_id),
+                ))
+            }
+            methods::RESOLVE_APPROVAL => {
+                let p = params_of::<calls::ResolveApproval>(params)?;
+                if p.call_id.is_empty() {
+                    return Err(RpcError::BadParams("callId is required".into()));
                 }
-                let p: ForkParams = parse_params(params)?;
-                let parent_chat_id = p
-                    .parent_chat_id
-                    .clone()
-                    .filter(|id| !id.trim().is_empty())
-                    .unwrap_or_else(|| p.source_chat_id.clone());
-                let failed = |e: crate::EngineError| RpcError::Failed(e.to_string());
-                let source = self
-                    .workspace
-                    .chat(&p.source_chat_id)
-                    .map_err(failed)?
-                    .ok_or_else(|| RpcError::Failed("Source chat no longer exists".into()))?;
-                if source.device_id != self.doc_host.device_id() {
-                    return Err(RpcError::Failed(
-                        "Fork must be created on the source device".into(),
-                    ));
-                }
-                if let Some(existing) = self.workspace.chat(&p.chat_id).map_err(failed)? {
-                    if existing.parent_chat_id.as_deref() == Some(parent_chat_id.as_str()) {
-                        return RpcReply::value(&existing);
-                    }
-                    return Err(RpcError::Failed("Chat id already exists".into()));
-                }
-                let source_doc = self.doc_host.open(&p.source_chat_id).map_err(failed)?;
-                let entries = source_doc
-                    .doc()
-                    .read_entries()
-                    .map_err(|e| RpcError::Failed(e.to_string()))?;
-                let boundary = entries
-                    .iter()
-                    .rposition(|entry| {
-                        entry.role == loams_agentd_doc::MessageRole::Assistant
-                            && entry.status == Some(loams_agentd_doc::MessageStatus::Complete)
-                    })
-                    .ok_or_else(|| {
-                        RpcError::Failed(
-                            "Wait for a completed response before starting a side chat".into(),
-                        )
-                    })?;
-                let mut chat = source.clone();
-                chat.id = p.chat_id;
-                chat.parent_chat_id = Some(parent_chat_id);
-                chat.title = None; // First side-chat turn receives its own generated title.
-                chat.archived = false;
-                chat.created_at = chrono::Utc::now();
-                chat.last_message_at = None;
-                chat.last_message_preview = None;
-                chat.last_seen_at = None;
-                chat.harness_session_id = None;
-                chat.harness_session_cwd = None;
-                chat.room_gen = Some(2);
-                // Missing rows open on chat2. Persist history before publishing
-                // the registry row so a crash cannot leave a discoverable empty fork.
-                let target = self.doc_host.open(&chat.id).map_err(failed)?;
-                let existing = target
-                    .doc()
-                    .read_entries()
-                    .map_err(|e| RpcError::Failed(e.to_string()))?;
-                for entry in entries[..=boundary]
-                    .iter()
-                    .filter(|entry| !existing.iter().any(|e| e.id == entry.id))
-                {
-                    let mut entry = entry.clone();
-                    // Historical approvals belong to the source runtime; they
-                    // must never block or send answers from the new composer.
-                    for part in &mut entry.parts {
-                        if let loams_agentd_doc::MessagePart::Input { resolved, .. } = part {
-                            *resolved = true;
+                self.approvals()?
+                    .resolve(p.chat_id.as_deref(), &p.call_id, p.decision)
+                    .map_err(|error| match error {
+                        crate::approvals::ResolveError::Ambiguous(_) => {
+                            RpcError::BadParams(error.to_string())
                         }
-                    }
-                    target
-                        .doc()
-                        .push_message(&entry)
-                        .map_err(|e| RpcError::Failed(e.to_string()))?;
+                        other => RpcError::Failed(other.to_string()),
+                    })?;
+                reply::<calls::ResolveApproval, _>(&OkReply::OK)
+            }
+            methods::SET_THREAD_APPROVAL_MODE => {
+                let p = params_of::<calls::SetThreadApprovalMode>(params)?;
+                if p.chat_id.is_empty() {
+                    return Err(RpcError::BadParams("chatId is required".into()));
                 }
-                // The seam: everything above came from the source. Its own
-                // entry (system role, complete) so the copied history and the
-                // fork's first turn never share a row.
-                let marker_id = format!("fork:{}", chat.id);
-                if !existing.iter().any(|e| e.id == marker_id) {
-                    let source_title = source
-                        .title
-                        .clone()
-                        .or_else(|| source.last_message_preview.clone())
-                        .unwrap_or_else(|| "New session".into());
-                    target
-                        .doc()
-                        .push_message(&loams_agentd_doc::SessionMessageEntry {
-                            duration_ms: None,
-                            id: marker_id.clone(),
-                            role: loams_agentd_doc::MessageRole::System,
-                            parts: vec![loams_agentd_doc::MessagePart::Fork {
-                                id: marker_id,
-                                source_chat_id: source.id.clone(),
-                                source_title,
-                            }],
-                            created_at: chrono::Utc::now().timestamp_millis(),
-                            device_id: self.doc_host.device_id().to_owned(),
-                            status: Some(loams_agentd_doc::MessageStatus::Complete),
-                            continuation_of: None,
-                        })
-                        .map_err(|e| RpcError::Failed(e.to_string()))?;
-                }
-                self.doc_host.persist_fork(&target).map_err(failed)?;
-                self.workspace.import_chat_row(&chat).map_err(failed)?;
-                RpcReply::value(&chat)
+                self.approvals()?
+                    .set_mode(&p.chat_id, p.mode)
+                    .map_err(|e| RpcError::Failed(e.to_string()))?;
+                reply::<calls::SetThreadApprovalMode, _>(&OkReply::OK)
             }
             methods::WATCH_DOC_MESSAGES => {
+                let p = params_of::<calls::WatchDocMessages>(params)?;
                 // Opt-in: older viewports retain the full-reset contract.
-                let opening_tail = params
-                    .get("openingTail")
-                    .and_then(|v| v.as_bool())
-                    .unwrap_or(false);
-                let p: ChatParams = parse_params(params)?;
-                if opening_tail {
-                    return Ok(RpcReply::Stream(
+                if p.opening_tail {
+                    return Ok(stream_reply::<calls::WatchDocMessages, _, _>(
                         opening_doc_messages_stream(self.doc_host.clone(), p.chat_id).await?,
                     ));
                 }
@@ -1443,32 +1498,29 @@ impl RpcService for EngineRpc {
                     .doc_host
                     .open(&p.chat_id)
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                Ok(RpcReply::Stream(doc_messages_stream(
-                    handle.watch_messages(),
-                    handle.doc_arc(),
-                )))
+                Ok(stream_reply::<calls::WatchDocMessages, _, _>(
+                    doc_messages_stream(handle.watch_messages(), handle.doc_arc()),
+                ))
             }
             methods::WATCH_QUEUE => {
-                let p: ChatParams = parse_params(params)?;
+                let p = params_of::<calls::WatchQueue>(params)?;
                 let handle = self
                     .doc_host
                     .open(&p.chat_id)
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
                 let rx = handle.watch_queue();
-                Ok(RpcReply::Stream(
+                Ok(stream_reply::<calls::WatchQueue, _, _>(
                     futures::stream::unfold((rx, true), |(mut rx, first)| async move {
                         if !first {
                             rx.changed().await.ok()?;
                         }
                         let items = rx.borrow_and_update().clone();
-                        let value = serde_json::json!({ "items": items });
-                        Some((value, (rx, false)))
-                    })
-                    .boxed(),
+                        Some((QueueSnapshot { items }, (rx, false)))
+                    }),
                 ))
             }
             methods::QUEUE_MESSAGE => {
-                let p: QueueMessageParams = parse_params(params)?;
+                let p = params_of::<calls::QueueMessage>(params)?;
                 let id = self
                     .doc_host
                     .queue_message_with_behavior(
@@ -1478,18 +1530,18 @@ impl RpcService for EngineRpc {
                         p.hold_for_turn_end,
                     )
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&serde_json::json!({ "id": id }))
+                reply::<calls::QueueMessage, _>(&IdReply { id })
             }
             methods::UPDATE_QUEUED_MESSAGE => {
-                let p: QueuedMessageParams = parse_params(params)?;
+                let p = params_of::<calls::UpdateQueuedMessage>(params)?;
                 let changed = self
                     .doc_host
                     .update_queued_message(&p.chat_id, &p.id, &p.text)
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&serde_json::json!({ "changed": changed }))
+                reply::<calls::UpdateQueuedMessage, _>(&ChangedReply { changed })
             }
             methods::BEGIN_QUEUED_MESSAGE_EDIT => {
-                let p: BeginQueuedMessageEditParams = parse_params(params)?;
+                let p = params_of::<calls::BeginQueuedMessageEdit>(params)?;
                 let outcome = self
                     .doc_host
                     .begin_queued_message_edit(
@@ -1500,91 +1552,71 @@ impl RpcService for EngineRpc {
                     )
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(
-                    &serde_json::to_value(outcome).map_err(|e| RpcError::Failed(e.to_string()))?,
-                )
+                reply::<calls::BeginQueuedMessageEdit, _>(&outcome)
             }
             methods::RENEW_QUEUED_MESSAGE_EDIT => {
-                let p: RenewQueuedMessageEditParams = parse_params(params)?;
+                let p = params_of::<calls::RenewQueuedMessageEdit>(params)?;
                 let outcome = self
                     .doc_host
                     .renew_queued_message_edit(&p.chat_id, &p.id, &p.lease_id)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(
-                    &serde_json::to_value(outcome).map_err(|e| RpcError::Failed(e.to_string()))?,
-                )
+                reply::<calls::RenewQueuedMessageEdit, _>(&outcome)
             }
             methods::FINISH_QUEUED_MESSAGE_EDIT => {
-                let p: FinishQueuedMessageEditParams = parse_params(params)?;
-                let action = match p.action {
-                    FinishQueuedMessageEditAction::Commit => {
-                        crate::doc_host::FinishQueueEditAction::Commit
-                    }
-                    FinishQueuedMessageEditAction::Cancel => {
-                        crate::doc_host::FinishQueueEditAction::Cancel
-                    }
-                    FinishQueuedMessageEditAction::Discard => {
-                        crate::doc_host::FinishQueueEditAction::Discard
-                    }
-                    FinishQueuedMessageEditAction::ReleaseUnchanged => {
-                        crate::doc_host::FinishQueueEditAction::ReleaseUnchanged
-                    }
-                };
+                let p = params_of::<calls::FinishQueuedMessageEdit>(params)?;
                 let outcome = self
                     .doc_host
                     .finish_queued_message_edit_with_attachments(
                         &p.chat_id,
                         &p.id,
                         &p.lease_id,
-                        action,
+                        p.action,
                         p.text.as_deref(),
                         p.expected_text_hash.as_deref(),
                         p.attachments.as_deref(),
                     )
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(
-                    &serde_json::to_value(outcome).map_err(|e| RpcError::Failed(e.to_string()))?,
-                )
+                reply::<calls::FinishQueuedMessageEdit, _>(&outcome)
             }
             methods::MOVE_QUEUED_MESSAGE => {
-                let p: QueuedMessageParams = parse_params(params)?;
+                let p = params_of::<calls::MoveQueuedMessage>(params)?;
                 let changed = self
                     .doc_host
                     .move_queued_message(&p.chat_id, &p.id, p.to_index)
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&serde_json::json!({ "changed": changed }))
+                reply::<calls::MoveQueuedMessage, _>(&ChangedReply { changed })
             }
             methods::REMOVE_QUEUED_MESSAGE => {
-                let p: QueuedMessageParams = parse_params(params)?;
+                let p = params_of::<calls::RemoveQueuedMessage>(params)?;
                 let removed = self
                     .doc_host
                     .remove_queued_message(&p.chat_id, &p.id)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&serde_json::json!({ "removed": removed }))
+                reply::<calls::RemoveQueuedMessage, _>(&RemovedReply { removed })
             }
             methods::SEND_QUEUED_MESSAGE_NOW => {
-                let p: QueuedMessageParams = parse_params(params)?;
+                let p = params_of::<calls::SendQueuedMessageNow>(params)?;
                 let sent = self
                     .doc_host
                     .send_queued_now(&p.chat_id, &p.id)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&serde_json::json!({ "sent": sent }))
+                reply::<calls::SendQueuedMessageNow, _>(&SentReply { sent })
             }
             methods::STEER_QUEUED_MESSAGE_NOW => {
-                let p: QueuedMessageParams = parse_params(params)?;
+                let p = params_of::<calls::SteerQueuedMessageNow>(params)?;
                 let sent = self
                     .doc_host
                     .steer_queued_now(&p.chat_id, &p.id)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&serde_json::json!({ "sent": sent }))
+                reply::<calls::SteerQueuedMessageNow, _>(&SentReply { sent })
             }
             methods::WATCH_PREVIEWS => {
-                let p: loams_agentd_proto::WatchPreviewsParams = parse_params(params)?;
+                let p = params_of::<calls::WatchPreviews>(params)?;
                 if self
                     .workspace
                     .chat(&p.chat_id)
@@ -1633,36 +1665,37 @@ impl RpcService for EngineRpc {
                                     cwd == std::path::Path::new(&service.project_cwd)
                                 })
                         });
-                        let value = serde_json::to_value(snapshot).ok()?;
-                        Some((value, (changes, chats, false, workspace, chat_id)))
+                        Some((snapshot, (changes, chats, false, workspace, chat_id)))
                     },
                 );
-                Ok(RpcReply::Stream(Box::pin(stream)))
+                Ok(stream_reply::<calls::WatchPreviews, _, _>(stream))
             }
-            methods::WATCH_CHATS => {
-                Ok(RpcReply::Stream(watch_stream(self.workspace.watch_chats())))
+            methods::WATCH_CHATS => Ok(watch_stream::<calls::WatchChats, _>(
+                self.workspace.watch_chats(),
+            )),
+            methods::WATCH_SIDEBAR_PREFERENCES => {
+                Ok(watch_stream::<calls::WatchSidebarPreferences, _>(
+                    self.workspace.watch_sidebar_preferences(),
+                ))
             }
-            methods::WATCH_SIDEBAR_PREFERENCES => Ok(RpcReply::Stream(watch_stream(
-                self.workspace.watch_sidebar_preferences(),
-            ))),
-            methods::WATCH_SPACES => Ok(RpcReply::Stream(watch_stream(
+            methods::WATCH_SPACES => Ok(watch_stream::<calls::WatchSpaces, _>(
                 self.workspace.watch_spaces(),
-            ))),
+            )),
             methods::WATCH_SESSIONS => {
                 // Local live statuses merged with remote devices' workspace rows.
                 let merged = self
                     .workspace
                     .merged_sessions_watch(self.sessions.watch_sessions());
-                Ok(RpcReply::Stream(watch_stream(merged)))
+                Ok(watch_stream::<calls::WatchSessions, _>(merged))
             }
-            methods::LOCAL_DEVICE => {
-                RpcReply::value(&serde_json::json!({ "deviceId": self.doc_host.device_id() }))
-            }
-            methods::WATCH_HARNESS_UPDATES => Ok(RpcReply::Stream(watch_stream(
+            methods::LOCAL_DEVICE => reply::<calls::LocalDevice, _>(&LocalDeviceReply {
+                device_id: self.doc_host.device_id().to_owned(),
+            }),
+            methods::WATCH_HARNESS_UPDATES => Ok(watch_stream::<calls::WatchHarnessUpdates, _>(
                 self.harness_updates()?.watch(),
-            ))),
+            )),
             methods::CHECK_HARNESS_UPDATES => {
-                let p: HarnessUpdateParams = parse_params(params)?;
+                let p = params_of::<calls::CheckHarnessUpdates>(params)?;
                 let coordinator = self.harness_updates()?.clone();
                 // Provider checks are engine-owned once accepted. If a
                 // Settings view closes or a relay drops, the request future
@@ -1681,49 +1714,54 @@ impl RpcService for EngineRpc {
                     RpcError::Failed(format!("agent update check task failed: {error}"))
                 })?
                 .map_err(RpcError::Failed)?;
-                RpcReply::value(&statuses)
+                reply::<calls::CheckHarnessUpdates, _>(&statuses)
             }
             methods::APPLY_HARNESS_UPDATE => {
-                let p: HarnessUpdateParams = parse_params(params)?;
-                let harness = p
-                    .harness
-                    .ok_or_else(|| RpcError::BadParams("harness is required".into()))?;
+                let p = params_of::<calls::ApplyHarnessUpdate>(params)?;
                 let version = self
                     .harness_updates()?
-                    .apply(harness)
+                    .apply(p.harness)
                     .await
                     .map_err(RpcError::Failed)?;
-                RpcReply::value(&serde_json::json!({ "ok": true, "version": version }))
+                reply::<calls::ApplyHarnessUpdate, _>(&ApplyHarnessUpdateReply {
+                    ok: true,
+                    version,
+                })
             }
             methods::CANCEL_HARNESS_UPDATE => {
-                let p: HarnessUpdateParams = parse_params(params)?;
-                let harness = p
-                    .harness
-                    .ok_or_else(|| RpcError::BadParams("harness is required".into()))?;
-                RpcReply::value(&serde_json::json!({
-                    "cancelled": self.harness_updates()?.cancel(harness),
-                }))
+                let p = params_of::<calls::CancelHarnessUpdate>(params)?;
+                reply::<calls::CancelHarnessUpdate, _>(&CancelledReply {
+                    cancelled: self.harness_updates()?.cancel(p.harness),
+                })
             }
             methods::DISMISS_HARNESS_UPDATE => {
-                let p: DismissHarnessUpdateParams = parse_params(params)?;
-                RpcReply::value(&self.harness_updates()?.dismiss(p.harness, p.version))
+                let p = params_of::<calls::DismissHarnessUpdate>(params)?;
+                reply::<calls::DismissHarnessUpdate, _>(
+                    &self.harness_updates()?.dismiss(p.harness, p.version),
+                )
             }
             methods::MUTATE => {
-                let p: MutateParams = parse_params(params)?;
+                let p = params_of::<calls::Mutate>(params)?;
                 let sidebar_pins = matches!(&p, MutateParams::ChangeSidebarPin { .. });
+                let deleted_chats = self.chats_deleted_by(&p);
                 self.mutate(p)?;
+                self.delete_checkpoints(deleted_chats).await;
                 if sidebar_pins {
-                    return RpcReply::value(&serde_json::json!({
-                        "ok": true, "sidebarPreferences": self.workspace.sidebar_preferences_snapshot(),
-                    }));
+                    return reply::<calls::Mutate, _>(&MutateReply {
+                        ok: true,
+                        sidebar_preferences: Some(self.workspace.sidebar_preferences_snapshot()),
+                    });
                 }
-                RpcReply::value(&serde_json::json!({ "ok": true }))
+                reply::<calls::Mutate, _>(&MutateReply {
+                    ok: true,
+                    sidebar_preferences: None,
+                })
             }
-            methods::WATCH_CHECKOUT_DIFFS => {
-                Ok(RpcReply::Stream(watch_stream(self.diff_sync.watch_diffs())))
-            }
+            methods::WATCH_CHECKOUT_DIFFS => Ok(watch_stream::<calls::WatchCheckoutDiffs, _>(
+                self.diff_sync.watch_diffs(),
+            )),
             methods::WATCH_WORKSPACE_GIT_STATUS => {
-                let request: loams_agentd_proto::WatchWorkspaceFilesRequest = parse_params(params)?;
+                let request = params_of::<calls::WatchWorkspaceGitStatus>(params)?;
                 let workspace = self.workspace_files.resolve_target(&request.target).await?;
                 let rx = self.diff_sync.watch_git_statuses();
                 // Only this authorized checkout crosses the connection. None means
@@ -1743,27 +1781,26 @@ impl RpcService for EngineRpc {
                             if !emitted || previous != next {
                                 emitted = true;
                                 previous = next.clone();
-                                let value = serde_json::to_value(
-                                    loams_agentd_proto::WorkspaceGitStatusFrame { status: next },
-                                )
-                                .ok()?;
-                                return Some((value, (rx, checkout_id, previous, emitted)));
+                                let frame =
+                                    loams_agentd_proto::WorkspaceGitStatusFrame { status: next };
+                                return Some((frame, (rx, checkout_id, previous, emitted)));
                             }
                         }
                     },
                 );
-                Ok(RpcReply::Stream(stream.boxed()))
+                Ok(stream_reply::<calls::WatchWorkspaceGitStatus, _, _>(stream))
             }
             methods::WATCH_CHECKOUT_CHANGE_REQUEST => {
-                let p: CheckoutChangeRequestParams = parse_params(params)?;
+                let p = params_of::<calls::WatchCheckoutChangeRequest>(params)?;
                 let cwd = self.change_request_root(&p.cwd).await?;
                 let stream = self
                     .change_requests
                     .watch_for_branch(&cwd, p.branch.as_deref())
                     .await
-                    .map_err(|error| RpcError::Failed(error.to_string()))?
-                    .filter_map(|status| async move { serde_json::to_value(status).ok() });
-                Ok(RpcReply::Stream(stream.boxed()))
+                    .map_err(|error| RpcError::Failed(error.to_string()))?;
+                Ok(stream_reply::<calls::WatchCheckoutChangeRequest, _, _>(
+                    stream,
+                ))
             }
             // One-shot scoped capture for the Changes pane: `branch` diffs the
             // working tree against merge-base(baseRef, HEAD); `turn` diffs the
@@ -1773,17 +1810,7 @@ impl RpcService for EngineRpc {
                 // Keep the scoped-diff future off the dispatcher's stack. The
                 // per-commit path adds another nested git-capture future.
                 Box::pin(async move {
-                    #[derive(Deserialize)]
-                    #[serde(rename_all = "camelCase")]
-                    struct P {
-                        cwd: String,
-                        #[serde(default)]
-                        mode: String,
-                        base_ref: Option<String>,
-                        chat_id: Option<String>,
-                        commit_sha: Option<String>,
-                    }
-                    let p: P = parse_params(params)?;
+                    let p = params_of::<calls::GetCheckoutDiff>(params)?;
                     let identity = self
                         .repos
                         .checkout_identity(std::path::Path::new(&p.cwd))
@@ -1827,7 +1854,7 @@ impl RpcService for EngineRpc {
                         _ => crate::diff_sync::capture_diff(&self.repos, root).await,
                     }
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                    RpcReply::value(&loams_agentd_proto::CheckoutDiff {
+                    reply::<calls::GetCheckoutDiff, _>(&loams_agentd_proto::CheckoutDiff {
                         checkout_id: identity.id,
                         device_id: self.doc_host.device_id().to_string(),
                         cwd: identity.root.to_string_lossy().to_string(),
@@ -1847,7 +1874,7 @@ impl RpcService for EngineRpc {
                 // futures. Box it so unrelated RPC calls do not inherit that
                 // state in the already-large dispatcher stack frame.
                 Box::pin(async move {
-                    let p: DiscardWorkingTreeParams = parse_params(params)?;
+                    let p = params_of::<calls::DiscardWorkingTree>(params)?;
                     let chat = self
                         .workspace
                         .chat(&p.chat_id)
@@ -1874,51 +1901,339 @@ impl RpcService for EngineRpc {
                     // Refuse the mutation when any local chat on this exact
                     // checkout has a live run. We never interrupt an agent as a
                     // side effect of discarding files.
-                    let chats = self.workspace.watch_chats().borrow().clone();
-                    for candidate in chats {
-                        if candidate.device_id != self.doc_host.device_id() {
-                            continue;
-                        }
-                        let same_checkout =
-                            if candidate.checkout_id.as_deref() == Some(identity.id.as_str()) {
-                                true
-                            } else if let Some(candidate_cwd) = candidate.cwd.as_deref() {
-                                self.repos
-                                    .checkout_identity(std::path::Path::new(candidate_cwd))
-                                    .await
-                                    .is_ok_and(|candidate_identity| {
-                                        candidate_identity.id == identity.id
-                                    })
-                            } else {
-                                false
-                            };
-                        if same_checkout
-                            && self
-                                .sessions
-                                .session_status(&candidate.id)
-                                .is_some_and(|session| {
-                                    matches!(
-                                        session.status,
-                                        loams_agentd_proto::SessionStatus::Working
-                                            | loams_agentd_proto::SessionStatus::AwaitingInput
-                                    )
-                                })
-                        {
-                            return Err(RpcError::Failed(
-                                "an agent is active in this working tree".into(),
-                            ));
-                        }
-                    }
+                    self.ensure_no_live_run(&identity).await?;
 
                     let snapshot = self
                         .diff_sync
                         .discard_working_tree(&identity.id, &p.expected_checksum)
                         .await
                         .map_err(|e| RpcError::Failed(e.to_string()))?;
-                    RpcReply::value(&serde_json::json!({
-                        "ok": true,
-                        "checksum": snapshot.checksum,
-                    }))
+                    reply::<calls::DiscardWorkingTree, _>(&DiscardWorkingTreeReply {
+                        ok: true,
+                        checksum: snapshot.checksum,
+                    })
+                })
+                .await
+            }
+            // SD1 Task 9 (§53 §6.5 G1–G5, G21). Each git write names a
+            // checkout or repository this device knows, refuses while an
+            // agent runs there, and runs under `git_writes`.
+            methods::DISCARD_PATHS => {
+                Box::pin(async move {
+                    let p = params_of::<calls::DiscardPaths>(params)?;
+                    for path in &p.paths {
+                        crate::git_write::checkout_relative(path).map_err(git_write_error)?;
+                    }
+                    let root = self
+                        .diff_sync
+                        .checkout_root(&p.checkout_id)
+                        .ok_or_else(|| {
+                            RpcError::Failed("checkout is no longer available".into())
+                        })?;
+                    let identity = self
+                        .repos
+                        .checkout_identity(&root)
+                        .await
+                        .map_err(|e| RpcError::Failed(e.to_string()))?;
+                    self.ensure_no_live_run(&identity).await?;
+                    let _write = self.git_writes.lock().await;
+                    self.diff_sync
+                        .discard_paths(&p.checkout_id, p.paths, &p.expected_checksum)
+                        .await
+                        .map_err(|e| RpcError::Failed(e.to_string()))?;
+                    reply::<calls::DiscardPaths, _>(&Empty {})
+                })
+                .await
+            }
+            methods::LIST_WORKTREES => {
+                Box::pin(async move {
+                    let p = params_of::<calls::ListWorktrees>(params)?;
+                    let repo = self.known_repo(&p.repo_path).await?;
+                    let chats = self.local_chats();
+                    let worktrees =
+                        crate::worktree_list::list_worktrees(&self.repos, &repo, &chats)
+                            .await
+                            .map_err(git_write_error)?;
+                    reply::<calls::ListWorktrees, _>(&worktrees)
+                })
+                .await
+            }
+            methods::COMMIT_WORKTREE => {
+                Box::pin(async move {
+                    let p = params_of::<calls::CommitWorktree>(params)?;
+                    let identity = self.known_checkout(&p.cwd).await?;
+                    if identity.id != p.checkout_id {
+                        return Err(RpcError::Failed(format!(
+                            "{}: the checkout changed since the commit was confirmed",
+                            loams_agentd_proto::git_write::STALE_DIFF
+                        )));
+                    }
+                    self.ensure_no_live_run(&identity).await?;
+                    let _write = self.git_writes.lock().await;
+                    let committed = crate::git_write::commit(&self.repos, &identity.root, &p)
+                        .await
+                        .map_err(git_write_error)?;
+                    self.diff_sync.sync_all();
+                    reply::<calls::CommitWorktree, _>(&committed)
+                })
+                .await
+            }
+            methods::PUSH_BRANCH => {
+                Box::pin(async move {
+                    let p = params_of::<calls::PushBranch>(params)?;
+                    let identity = self.known_checkout(&p.cwd).await?;
+                    let _write = self.git_writes.lock().await;
+                    let pushed = crate::git_write::push(&identity.root, &p)
+                        .await
+                        .map_err(git_write_error)?;
+                    // Remote-tracking refs moved; publish fresh snapshots.
+                    self.diff_sync.sync_all();
+                    reply::<calls::PushBranch, _>(&pushed)
+                })
+                .await
+            }
+            methods::CREATE_CHANGE_REQUEST => {
+                Box::pin(async move {
+                    let p = params_of::<calls::CreateChangeRequest>(params)?;
+                    let identity = self.known_checkout(&p.cwd).await?;
+                    let created = self
+                        .change_request_creator
+                        .create(&identity.root, &p)
+                        .await
+                        .map_err(git_write_error)?;
+                    reply::<calls::CreateChangeRequest, _>(&created)
+                })
+                .await
+            }
+            methods::MERGE_BRANCH => {
+                Box::pin(async move {
+                    let p = params_of::<calls::MergeBranch>(params)?;
+                    let repo = self.known_repo(&p.repo_path).await?;
+                    // Neither the target's checkout nor a source worktree
+                    // about to be removed may have an agent running in it.
+                    for stanza in crate::git_write::worktrees(&repo)
+                        .await
+                        .map_err(git_write_error)?
+                    {
+                        let involved = stanza.branch.as_deref() == Some(p.target.as_str())
+                            || (p.remove_worktree
+                                && stanza.branch.as_deref() == Some(p.source.as_str()));
+                        if involved
+                            && let Ok(identity) = self.repos.checkout_identity(&stanza.path).await
+                        {
+                            self.ensure_no_live_run(&identity).await?;
+                        }
+                    }
+                    let _write = self.git_writes.lock().await;
+                    let merged = crate::git_write::merge(&self.repos, &repo, &p)
+                        .await
+                        .map_err(git_write_error)?;
+                    self.diff_sync.sync_all();
+                    reply::<calls::MergeBranch, _>(&merged)
+                })
+                .await
+            }
+            // SD1 Task 11 (§53 §6.5 G8–G11): review comments, keyed by a
+            // checkout this device knows.
+            methods::WATCH_REVIEW_COMMENTS => {
+                Box::pin(async move {
+                    let p = params_of::<calls::WatchReviewComments>(params)?;
+                    let root = self.review_checkout_root(&p.checkout_id).await?;
+                    let source = crate::review::DiffSource {
+                        diffs: self.diff_sync.watch_diffs(),
+                        repos: self.repos.clone(),
+                        root,
+                    };
+                    Ok(stream_reply::<calls::WatchReviewComments, _, _>(
+                        crate::review::watch(self.review.clone(), p.checkout_id, source),
+                    ))
+                })
+                .await
+            }
+            methods::UPSERT_REVIEW_COMMENT => {
+                Box::pin(async move {
+                    let comment = params_of::<calls::UpsertReviewComment>(params)?;
+                    self.review_checkout_root(&comment.checkout_id).await?;
+                    let id = self.review.upsert(comment).await.map_err(review_error)?;
+                    reply::<calls::UpsertReviewComment, _>(&IdReply { id })
+                })
+                .await
+            }
+            methods::DELETE_REVIEW_COMMENT => {
+                Box::pin(async move {
+                    let p = params_of::<calls::DeleteReviewComment>(params)?;
+                    self.review
+                        .delete(&p.checkout_id, &p.id)
+                        .await
+                        .map_err(review_error)?;
+                    reply::<calls::DeleteReviewComment, _>(&IdReply { id: p.id })
+                })
+                .await
+            }
+            methods::RESOLVE_REVIEW_COMMENT => {
+                Box::pin(async move {
+                    let p = params_of::<calls::ResolveReviewComment>(params)?;
+                    self.review
+                        .resolve(&p.checkout_id, &p.id, p.resolved)
+                        .await
+                        .map_err(review_error)?;
+                    reply::<calls::ResolveReviewComment, _>(&IdReply { id: p.id })
+                })
+                .await
+            }
+            methods::SEND_REVIEW_TO_THREAD => {
+                Box::pin(async move {
+                    let p = params_of::<calls::SendReviewToThread>(params)?;
+                    let not_found = || RpcError::Failed(format!("not_found: chat {}", p.chat_id));
+                    let chat = self
+                        .workspace
+                        .chat(&p.chat_id)
+                        .map_err(|e| RpcError::Failed(e.to_string()))?
+                        .ok_or_else(not_found)?;
+                    if chat.device_id != self.doc_host.device_id() {
+                        return Err(RpcError::BadParams("chat belongs to another device".into()));
+                    }
+                    // The comments must be on the thread's own checkout.
+                    let from_cwd = match chat.cwd.as_deref() {
+                        Some(cwd) => self
+                            .repos
+                            .checkout_identity(std::path::Path::new(cwd))
+                            .await
+                            .ok()
+                            .map(|identity| identity.id),
+                        None => None,
+                    };
+                    let checkout_id = from_cwd
+                        .or(chat.checkout_id.clone())
+                        .ok_or_else(|| RpcError::BadParams("the thread has no checkout".into()))?;
+                    let comments = self
+                        .review
+                        .select(&checkout_id, &p.comment_ids)
+                        .await
+                        .map_err(review_error)?;
+                    let prompt = crate::review::prompt(&comments);
+                    let request = self
+                        .doc_host
+                        .request_from_chat_row(&p.chat_id, &prompt)
+                        .ok_or_else(not_found)?;
+                    let command_id = self
+                        .doc_host
+                        .queue_command(
+                            &p.chat_id,
+                            loams_agentd_proto::SessionCommandPayload::Run {
+                                request,
+                                message_id: crate::new_id(),
+                            },
+                        )
+                        .map_err(|e| RpcError::Failed(e.to_string()))?;
+                    reply::<calls::SendReviewToThread, _>(&QueueCommandReply { command_id })
+                })
+                .await
+            }
+            methods::POST_REVIEW_TO_CHANGE_REQUEST => {
+                Box::pin(async move {
+                    let p = params_of::<calls::PostReviewToChangeRequest>(params)?;
+                    let root = self.review_checkout_root(&p.checkout_id).await?;
+                    let mut comments = self
+                        .review
+                        .select(&p.checkout_id, &p.comment_ids)
+                        .await
+                        .map_err(review_error)?;
+                    // An outdated anchor would land on the wrong line; a
+                    // diff that can't be read refuses (SD1 Task 30).
+                    let current = crate::diff_sync::capture_diff(&self.repos, &root)
+                        .await
+                        .map(|snapshot| crate::review::CurrentDiff {
+                            checksum: snapshot.checksum,
+                            patch: snapshot.patch,
+                            truncated: snapshot.truncated,
+                        })
+                        .map_err(|error| error.to_string());
+                    match crate::review::refuse_outdated(&mut comments, current) {
+                        Ok(()) => {}
+                        Err(crate::review::NotPostable::DiffUnreadable(error)) => {
+                            return Err(RpcError::Failed(format!(
+                                "the checkout's diff can't be read, so outdated comments \
+                                 can't be ruled out: {error}"
+                            )));
+                        }
+                        Err(crate::review::NotPostable::Outdated(outdated)) => {
+                            return Err(RpcError::BadParams(format!(
+                                "outdated comments can't be posted: {outdated:?}"
+                            )));
+                        }
+                    }
+                    let url = crate::review::post_review(
+                        &self.change_request_creator,
+                        &root,
+                        &comments,
+                        p.event,
+                    )
+                    .await
+                    .map_err(git_write_error)?;
+                    reply::<calls::PostReviewToChangeRequest, _>(
+                        &loams_agentd_proto::PostReviewToChangeRequestReply { url },
+                    )
+                })
+                .await
+            }
+            // G23: content search in a workspace target's root.
+            methods::SEARCH_WORKSPACE_CONTENT => {
+                Box::pin(async move {
+                    let p = params_of::<calls::SearchWorkspaceContent>(params)?;
+                    let query = crate::content_search::ContentQuery::new(&p)
+                        .map_err(|e| RpcError::BadParams(e.to_string()))?;
+                    let workspace = self
+                        .workspace_files
+                        .resolve_target(&loams_agentd_proto::WorkspaceTarget {
+                            chat_id: p.chat_id,
+                            space_id: p.space_id,
+                            checkout_path: None,
+                        })
+                        .await
+                        .map_err(RpcError::from)?;
+                    Ok(stream_reply::<calls::SearchWorkspaceContent, _, _>(
+                        crate::content_search::search(workspace.root, query),
+                    ))
+                })
+                .await
+            }
+            // SD1 Task 12 (§53 §6.5 G12–G16): run groups, in `rpc/groups_rpc.rs`.
+            methods::CREATE_RUN_GROUP => {
+                Box::pin(async move {
+                    let p = params_of::<calls::CreateRunGroup>(params)?;
+                    let created = self.create_run_group(p).await?;
+                    reply::<calls::CreateRunGroup, _>(&created)
+                })
+                .await
+            }
+            methods::WATCH_RUN_GROUPS => {
+                let p = params_of::<calls::WatchRunGroups>(params)?;
+                Ok(stream_reply::<calls::WatchRunGroups, _, _>(
+                    self.watch_run_groups(p)?,
+                ))
+            }
+            methods::GET_RUN_GROUP_COMPARISON => {
+                Box::pin(async move {
+                    let p = params_of::<calls::GetRunGroupComparison>(params)?;
+                    let comparison = self.run_group_comparison(p).await?;
+                    reply::<calls::GetRunGroupComparison, _>(&comparison)
+                })
+                .await
+            }
+            methods::RUN_GROUP_CHECK => {
+                Box::pin(async move {
+                    let p = params_of::<calls::RunGroupCheck>(params)?;
+                    let runs = self.run_group_check(p).await?;
+                    reply::<calls::RunGroupCheck, _>(&runs)
+                })
+                .await
+            }
+            methods::RESOLVE_RUN_GROUP => {
+                Box::pin(async move {
+                    let p = params_of::<calls::ResolveRunGroup>(params)?;
+                    let resolved = self.resolve_run_group(p).await?;
+                    reply::<calls::ResolveRunGroup, _>(&resolved)
                 })
                 .await
             }
@@ -1927,8 +2242,7 @@ impl RpcService for EngineRpc {
                 // behind an allocation so every unrelated RPC does not carry that
                 // state in `EngineRpc::handle`'s stack frame.
                 Box::pin(async move {
-                    let p: loams_agentd_proto::GetCheckoutFileDiffTextRequest =
-                        parse_params(params)?;
+                    let p = params_of::<calls::GetCheckoutFileDiffText>(params)?;
                     let identity =
                         Box::pin(self.repos.checkout_identity(std::path::Path::new(&p.cwd)))
                             .await
@@ -2012,7 +2326,7 @@ impl RpcService for EngineRpc {
                         stale: true,
                     };
                     if snapshot.checksum != p.diff_checksum {
-                        return RpcReply::value(&stale());
+                        return reply::<calls::GetCheckoutFileDiffText, _>(&stale());
                     }
                     let file = snapshot
                         .files
@@ -2062,142 +2376,89 @@ impl RpcService for EngineRpc {
                     }
                     .map_err(|error| RpcError::Failed(error.to_string()))?;
                     if current.checksum != p.diff_checksum {
-                        return RpcReply::value(&stale());
+                        return reply::<calls::GetCheckoutFileDiffText, _>(&stale());
                     }
-                    RpcReply::value(&loams_agentd_proto::CheckoutFileDiffText {
-                        diff_checksum: p.diff_checksum,
-                        old_text: pair.old_text,
-                        new_text: pair.new_text,
-                        old_content_hash: pair.old_content_hash,
-                        new_content_hash: pair.new_content_hash,
-                        binary: pair.binary,
-                        truncated: pair.truncated,
-                        stale: false,
-                    })
+                    reply::<calls::GetCheckoutFileDiffText, _>(
+                        &loams_agentd_proto::CheckoutFileDiffText {
+                            diff_checksum: p.diff_checksum,
+                            old_text: pair.old_text,
+                            new_text: pair.new_text,
+                            old_content_hash: pair.old_content_hash,
+                            new_content_hash: pair.new_content_hash,
+                            binary: pair.binary,
+                            truncated: pair.truncated,
+                            stale: false,
+                        },
+                    )
                 })
                 .await
             }
-            methods::LIST_REPOS => RpcReply::value(&self.repos.list().await),
+            methods::LIST_REPOS => reply::<calls::ListRepos, _>(&self.repos.list().await),
             methods::ADD_REPO => {
-                #[derive(Deserialize)]
-                struct P {
-                    path: String,
-                }
-                let p: P = parse_params(params)?;
+                let p = params_of::<calls::AddRepo>(params)?;
                 let repo = self
                     .repos
                     .add(&p.path)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&repo)
+                reply::<calls::AddRepo, _>(&repo)
             }
             methods::CLONE_REPO => {
-                #[derive(Deserialize)]
-                struct P {
-                    url: String,
-                }
-                let p: P = parse_params(params)?;
+                let p = params_of::<calls::CloneRepo>(params)?;
                 let repo = self
                     .repos
                     .clone_repo(&p.url)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&repo)
+                reply::<calls::CloneRepo, _>(&repo)
             }
             methods::CREATE_REPO => {
-                #[derive(Deserialize)]
-                struct P {
-                    name: String,
-                }
-                let p: P = parse_params(params)?;
+                let p = params_of::<calls::CreateRepo>(params)?;
                 let repo = self
                     .repos
                     .create(&p.name)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&repo)
+                reply::<calls::CreateRepo, _>(&repo)
             }
             methods::LIST_BRANCHES => {
-                let p: RepoPathParams = parse_params(params)?;
+                let p = params_of::<calls::ListBranches>(params)?;
                 let branches = self
                     .repos
                     .branches(std::path::Path::new(&p.repo_path))
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&branches)
+                reply::<calls::ListBranches, _>(&branches)
             }
             methods::LIST_REFS => {
-                let p: RepoPathParams = parse_params(params)?;
+                let p = params_of::<calls::ListRefs>(params)?;
                 let refs = self
                     .repos
                     .refs(std::path::Path::new(&p.repo_path))
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&refs)
+                reply::<calls::ListRefs, _>(&refs)
             }
             methods::LIST_GIT_HISTORY => {
-                #[derive(Deserialize)]
-                #[serde(rename_all = "camelCase")]
-                struct P {
-                    cwd: String,
-                    #[serde(default)]
-                    cursor: usize,
-                    #[serde(default = "default_git_history_limit")]
-                    limit: usize,
-                }
-                fn default_git_history_limit() -> usize {
-                    crate::repos::GIT_HISTORY_DEFAULT_LIMIT
-                }
-                let p: P = parse_params(params)?;
+                let p = params_of::<calls::ListGitHistory>(params)?;
                 let history = self
                     .repos
                     .history(std::path::Path::new(&p.cwd), p.cursor, p.limit)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&history)
+                reply::<calls::ListGitHistory, _>(&history)
             }
             methods::SEARCH_GIT_HISTORY => {
-                #[derive(Deserialize)]
-                #[serde(rename_all = "camelCase")]
-                struct P {
-                    cwd: String,
-                    query: String,
-                    #[serde(default)]
-                    cursor: usize,
-                    #[serde(default = "default_git_history_search_limit")]
-                    limit: usize,
-                }
-                fn default_git_history_search_limit() -> usize {
-                    crate::repos::GIT_HISTORY_DEFAULT_LIMIT
-                }
-                let p: P = parse_params(params)?;
+                let p = params_of::<calls::SearchGitHistory>(params)?;
                 let history = self
                     .repos
                     .search_history(std::path::Path::new(&p.cwd), &p.query, p.cursor, p.limit)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&history)
+                reply::<calls::SearchGitHistory, _>(&history)
             }
             methods::RESOLVE_GIT_AVATARS => {
-                #[derive(Deserialize)]
-                #[serde(rename_all = "camelCase")]
-                struct P {
-                    cwd: String,
-                    authors: Vec<GitAvatarAuthor>,
-                    #[serde(default)]
-                    cursor: usize,
-                    #[serde(default = "default_git_avatar_limit")]
-                    limit: usize,
-                }
-                #[derive(Deserialize)]
-                struct GitAvatarAuthor {
-                    sha: String,
-                    email: String,
-                }
-                fn default_git_avatar_limit() -> usize {
-                    crate::repos::GIT_HISTORY_DEFAULT_LIMIT
-                }
-                let p: P = parse_params(params)?;
+                let p = params_of::<calls::ResolveGitAvatars>(params)?;
                 let authors: Vec<_> = p
                     .authors
                     .into_iter()
@@ -2218,10 +2479,10 @@ impl RpcService for EngineRpc {
                         );
                     }
                 }
-                RpcReply::value(&avatars)
+                reply::<calls::ResolveGitAvatars, _>(&avatars)
             }
             methods::FETCH_ALL => {
-                let p: RepoPathParams = parse_params(params)?;
+                let p = params_of::<calls::FetchAll>(params)?;
                 self.repos
                     .fetch_all(std::path::Path::new(&p.repo_path))
                     .await
@@ -2230,25 +2491,25 @@ impl RpcService for EngineRpc {
                 // watchers to publish a fresh snapshot instead of waiting for
                 // the repair tick (some platforms do not report packed-refs).
                 self.diff_sync.sync_all();
-                RpcReply::value(&serde_json::json!({ "ok": true }))
+                reply::<calls::FetchAll, _>(&OkReply::OK)
             }
             methods::SWITCH_REF => {
-                let p: SwitchRefParams = parse_params(params)?;
+                let p = params_of::<calls::SwitchRef>(params)?;
                 let branch = self
                     .repos
                     .switch_ref(std::path::Path::new(&p.repo_path), &p.ref_name)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&serde_json::json!({ "branch": branch }))
+                reply::<calls::SwitchRef, _>(&SwitchRefReply { branch })
             }
             methods::LIST_FOLDERS => {
-                let p: ListFoldersParams = parse_params(params)?;
+                let p = params_of::<calls::ListFolders>(params)?;
                 let listing = self
                     .repos
                     .list_folders(p.path)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&listing)
+                reply::<calls::ListFolders, _>(&listing)
             }
             methods::LIST_DRIVES => {
                 let drives = self
@@ -2256,10 +2517,10 @@ impl RpcService for EngineRpc {
                     .list_drives()
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&loams_agentd_proto::DriveListing { drives })
+                reply::<calls::ListDrives, _>(&loams_agentd_proto::DriveListing { drives })
             }
             methods::SEARCH_FILES => {
-                let p: FileSearchParams = parse_params(params)?;
+                let p = params_of::<calls::SearchFiles>(params)?;
                 if p.query.chars().count() > 256 {
                     return Err(RpcError::BadParams(
                         "SearchFiles query must not exceed 256 characters".into(),
@@ -2280,11 +2541,10 @@ impl RpcService for EngineRpc {
                 })
                 .await
                 .map_err(|_| RpcError::Failed("file search timed out".into()))??;
-                RpcReply::value(&matches)
+                reply::<calls::SearchFiles, _>(&matches)
             }
             methods::LIST_WORKSPACE_DIRECTORY => {
-                let request: loams_agentd_proto::ListWorkspaceDirectoryRequest =
-                    parse_params(params)?;
+                let request = params_of::<calls::ListWorkspaceDirectory>(params)?;
                 let page = tokio::time::timeout(
                     crate::workspace_files::WORKSPACE_FILE_RPC_TIMEOUT,
                     self.workspace_files.list_directory(request),
@@ -2292,11 +2552,10 @@ impl RpcService for EngineRpc {
                 .await
                 .map_err(|_| RpcError::Failed("workspace directory listing timed out".into()))?
                 .map_err(RpcError::from)?;
-                RpcReply::value(&page)
+                reply::<calls::ListWorkspaceDirectory, _>(&page)
             }
             methods::SEARCH_WORKSPACE_FILES => {
-                let request: loams_agentd_proto::SearchWorkspaceFilesRequest =
-                    parse_params(params)?;
+                let request = params_of::<calls::SearchWorkspaceFiles>(params)?;
                 let matches = tokio::time::timeout(
                     crate::workspace_files::WORKSPACE_FILE_RPC_TIMEOUT,
                     self.workspace_files.search(request),
@@ -2304,10 +2563,10 @@ impl RpcService for EngineRpc {
                 .await
                 .map_err(|_| RpcError::Failed("workspace file search timed out".into()))?
                 .map_err(RpcError::from)?;
-                RpcReply::value(&matches)
+                reply::<calls::SearchWorkspaceFiles, _>(&matches)
             }
             methods::READ_WORKSPACE_IMAGE => {
-                let request: loams_agentd_proto::ReadWorkspaceImageRequest = parse_params(params)?;
+                let request = params_of::<calls::ReadWorkspaceImage>(params)?;
                 let chunk = tokio::time::timeout(
                     crate::workspace_files::WORKSPACE_FILE_RPC_TIMEOUT,
                     self.workspace_files.read_image(request),
@@ -2315,10 +2574,10 @@ impl RpcService for EngineRpc {
                 .await
                 .map_err(|_| RpcError::Failed("Workspace image read timed out".into()))?
                 .map_err(RpcError::from)?;
-                RpcReply::value(&chunk)
+                reply::<calls::ReadWorkspaceImage, _>(&chunk)
             }
             methods::READ_WORKSPACE_FILE => {
-                let request: loams_agentd_proto::ReadWorkspaceFileRequest = parse_params(params)?;
+                let request = params_of::<calls::ReadWorkspaceFile>(params)?;
                 let file = tokio::time::timeout(
                     crate::workspace_files::WORKSPACE_FILE_RPC_TIMEOUT,
                     self.workspace_files.read_file(request),
@@ -2326,29 +2585,28 @@ impl RpcService for EngineRpc {
                 .await
                 .map_err(|_| RpcError::Failed("workspace file read timed out".into()))?
                 .map_err(RpcError::from)?;
-                RpcReply::value(&file)
+                reply::<calls::ReadWorkspaceFile, _>(&file)
             }
             methods::DELETE_WORKSPACE_ENTRY => {
-                let request: loams_agentd_proto::DeleteWorkspaceEntryRequest =
-                    parse_params(params)?;
+                let request = params_of::<calls::DeleteWorkspaceEntry>(params)?;
                 let outcome = self
                     .workspace_files
                     .delete_entry(request)
                     .await
                     .map_err(RpcError::from)?;
-                RpcReply::value(&outcome)
+                reply::<calls::DeleteWorkspaceEntry, _>(&outcome)
             }
             methods::MOVE_WORKSPACE_ENTRY => {
-                let request: loams_agentd_proto::MoveWorkspaceEntryRequest = parse_params(params)?;
+                let request = params_of::<calls::MoveWorkspaceEntry>(params)?;
                 let outcome = self
                     .workspace_files
                     .move_entry(request)
                     .await
                     .map_err(RpcError::from)?;
-                RpcReply::value(&outcome)
+                reply::<calls::MoveWorkspaceEntry, _>(&outcome)
             }
             methods::WRITE_WORKSPACE_FILE => {
-                let request: loams_agentd_proto::WriteWorkspaceFileRequest = parse_params(params)?;
+                let request = params_of::<calls::WriteWorkspaceFile>(params)?;
                 let outcome = tokio::time::timeout(
                     crate::workspace_files::WORKSPACE_FILE_RPC_TIMEOUT,
                     self.workspace_files.write_file(request),
@@ -2356,10 +2614,10 @@ impl RpcService for EngineRpc {
                 .await
                 .map_err(|_| RpcError::Failed("workspace file write timed out".into()))?
                 .map_err(RpcError::from)?;
-                RpcReply::value(&outcome)
+                reply::<calls::WriteWorkspaceFile, _>(&outcome)
             }
             methods::WATCH_WORKSPACE_FILES => {
-                let request: loams_agentd_proto::WatchWorkspaceFilesRequest = parse_params(params)?;
+                let request = params_of::<calls::WatchWorkspaceFiles>(params)?;
                 let subscription = self
                     .workspace_files
                     .watch_files(request)
@@ -2367,13 +2625,12 @@ impl RpcService for EngineRpc {
                     .map_err(RpcError::from)?;
                 let stream = futures::stream::unfold(subscription, |mut subscription| async move {
                     let changes = subscription.recv().await?;
-                    let value = serde_json::to_value(changes).ok()?;
-                    Some((value, subscription))
+                    Some((changes, subscription))
                 });
-                Ok(RpcReply::Stream(stream.boxed()))
+                Ok(stream_reply::<calls::WatchWorkspaceFiles, _, _>(stream))
             }
             methods::CREATE_WORKTREE => {
-                let p: CreateWorktreeParams = parse_params(params)?;
+                let p = params_of::<calls::CreateWorktree>(params)?;
                 let setup_space = match p.space_id.as_deref() {
                     Some(space_id) => {
                         let space = self.local_project_action_space(space_id)?;
@@ -2440,10 +2697,10 @@ impl RpcService for EngineRpc {
                         }
                     }
                 }
-                RpcReply::value(&outcome)
+                reply::<calls::CreateWorktree, _>(&outcome)
             }
             methods::DELETE_WORKTREE => {
-                let p: DeleteWorktreeParams = parse_params(params)?;
+                let p = params_of::<calls::DeleteWorktree>(params)?;
                 self.repos
                     .delete_worktree(
                         std::path::Path::new(&p.repo_path),
@@ -2451,10 +2708,10 @@ impl RpcService for EngineRpc {
                     )
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&serde_json::json!({ "ok": true }))
+                reply::<calls::DeleteWorktree, _>(&OkReply::OK)
             }
             methods::LIST_PROJECT_ACTIONS => {
-                let p: ListProjectActionsParams = parse_params(params)?;
+                let p = params_of::<calls::ListProjectActions>(params)?;
                 let space = self.local_project_action_space(&p.space_id)?;
                 let actions = self.project_actions.clone();
                 // Snapshots discover repository files; keep all filesystem work
@@ -2465,10 +2722,10 @@ impl RpcService for EngineRpc {
                 .await
                 .map_err(|err| RpcError::Failed(err.to_string()))?
                 .map_err(|err| RpcError::Failed(err.to_string()))?;
-                RpcReply::value(&snapshot)
+                reply::<calls::ListProjectActions, _>(&snapshot)
             }
             methods::UPSERT_PROJECT_ACTION => {
-                let p: UpsertProjectActionParams = parse_params(params)?;
+                let p = params_of::<calls::UpsertProjectAction>(params)?;
                 let space = self.local_project_action_space(&p.space_id)?;
                 let actions = self.project_actions.clone();
                 let snapshot = tokio::task::spawn_blocking(move || {
@@ -2482,10 +2739,10 @@ impl RpcService for EngineRpc {
                 .await
                 .map_err(|err| RpcError::Failed(err.to_string()))?
                 .map_err(|err| RpcError::Failed(err.to_string()))?;
-                RpcReply::value(&snapshot)
+                reply::<calls::UpsertProjectAction, _>(&snapshot)
             }
             methods::DELETE_PROJECT_ACTION => {
-                let p: DeleteProjectActionParams = parse_params(params)?;
+                let p = params_of::<calls::DeleteProjectAction>(params)?;
                 let space = self.local_project_action_space(&p.space_id)?;
                 let actions = self.project_actions.clone();
                 let snapshot = tokio::task::spawn_blocking(move || {
@@ -2494,10 +2751,10 @@ impl RpcService for EngineRpc {
                 .await
                 .map_err(|err| RpcError::Failed(err.to_string()))?
                 .map_err(|err| RpcError::Failed(err.to_string()))?;
-                RpcReply::value(&snapshot)
+                reply::<calls::DeleteProjectAction, _>(&snapshot)
             }
             methods::RUN_PROJECT_ACTION => {
-                let p: RunProjectActionParams = parse_params(params)?;
+                let p = params_of::<calls::RunProjectAction>(params)?;
                 let space = self.local_project_action_space(&p.space_id)?;
                 let chat = self
                     .workspace
@@ -2541,10 +2798,10 @@ impl RpcService for EngineRpc {
                     p.rows,
                 )
                 .map_err(|err| RpcError::Failed(err.to_string()))?;
-                RpcReply::value(&run)
+                reply::<calls::RunProjectAction, _>(&run)
             }
             methods::OPEN_TERMINAL => {
-                let p: OpenTerminalParams = parse_params(params)?;
+                let p = params_of::<calls::OpenTerminal>(params)?;
                 // Prefer an explicit real path (new-chat canvas has no row
                 // yet). `space-canvas:{spaceId}` names the selected project
                 // so a missing/tilde cwd still lands in that folder.
@@ -2567,110 +2824,109 @@ impl RpcService for EngineRpc {
                     .terminals
                     .open(&cwd, p.cols, p.rows)
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&session)
+                reply::<calls::OpenTerminal, _>(&session)
             }
             methods::SUBSCRIBE_TERMINAL => {
-                let p: SubscribeTerminalParams = parse_params(params)?;
+                let p = params_of::<calls::SubscribeTerminal>(params)?;
                 let rx = self
                     .terminals
                     .subscribe(&p.terminal_id, p.after_seq)
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
                 let stream = futures::stream::unfold(rx, |mut rx| async move {
                     let event = rx.recv().await?;
-                    let value = serde_json::to_value(&event).ok()?;
-                    Some((value, rx))
+                    Some((event, rx))
                 });
-                Ok(RpcReply::Stream(stream.boxed()))
+                Ok(stream_reply::<calls::SubscribeTerminal, _, _>(stream))
             }
             methods::WRITE_TERMINAL => {
-                let p: WriteTerminalParams = parse_params(params)?;
+                let p = params_of::<calls::WriteTerminal>(params)?;
                 self.terminals
                     .write(&p.terminal_id, &p.data)
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&serde_json::json!({ "ok": true }))
+                reply::<calls::WriteTerminal, _>(&OkReply::OK)
             }
             methods::RESIZE_TERMINAL => {
-                let p: ResizeTerminalParams = parse_params(params)?;
+                let p = params_of::<calls::ResizeTerminal>(params)?;
                 self.terminals
                     .resize(&p.terminal_id, p.cols, p.rows)
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&serde_json::json!({ "ok": true }))
+                reply::<calls::ResizeTerminal, _>(&OkReply::OK)
             }
             methods::CLOSE_TERMINAL => {
-                let p: TerminalIdParams = parse_params(params)?;
+                let p = params_of::<calls::CloseTerminal>(params)?;
                 self.terminals
                     .close(&p.terminal_id)
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&serde_json::json!({ "ok": true }))
+                reply::<calls::CloseTerminal, _>(&OkReply::OK)
             }
             methods::LIST_AGENT_ACCOUNTS => {
-                let p: ListAgentAccountsParams = parse_params(params)?;
+                let p = params_of::<calls::ListAgentAccounts>(params)?;
                 let snapshot = self
                     .agent_accounts
                     .list(p.force_usage.unwrap_or(false))
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&snapshot)
+                reply::<calls::ListAgentAccounts, _>(&snapshot)
             }
             methods::ACTIVATE_AGENT_ACCOUNT => {
-                let p: AgentAccountParams = parse_params(params)?;
+                let p = params_of::<calls::ActivateAgentAccount>(params)?;
                 let snapshot = self
                     .agent_accounts
                     .activate(p.harness, &p.account_id)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&snapshot)
+                reply::<calls::ActivateAgentAccount, _>(&snapshot)
             }
             methods::FORGET_AGENT_ACCOUNT => {
-                let p: AgentAccountParams = parse_params(params)?;
+                let p = params_of::<calls::ForgetAgentAccount>(params)?;
                 let snapshot = self
                     .agent_accounts
                     .forget(p.harness, &p.account_id)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&snapshot)
+                reply::<calls::ForgetAgentAccount, _>(&snapshot)
             }
             methods::START_AGENT_LOGIN => {
-                let p: StartAgentLoginParams = parse_params(params)?;
+                let p = params_of::<calls::StartAgentLogin>(params)?;
                 let start = self
                     .agent_accounts
                     .start_login_with(p.harness, p.provider.as_deref())
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&start)
+                reply::<calls::StartAgentLogin, _>(&start)
             }
             methods::COMPLETE_AGENT_LOGIN => {
-                let p: CompleteAgentLoginParams = parse_params(params)?;
+                let p = params_of::<calls::CompleteAgentLogin>(params)?;
                 let snapshot = self
                     .agent_accounts
                     .complete_login(&p.login_id, &p.code)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&snapshot)
+                reply::<calls::CompleteAgentLogin, _>(&snapshot)
             }
             methods::POLL_AGENT_LOGIN => {
-                let p: LoginIdParams = parse_params(params)?;
+                let p = params_of::<calls::PollAgentLogin>(params)?;
                 let poll = self
                     .agent_accounts
                     .poll_login(&p.login_id)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&poll)
+                reply::<calls::PollAgentLogin, _>(&poll)
             }
             methods::CANCEL_AGENT_LOGIN => {
-                let p: LoginIdParams = parse_params(params)?;
+                let p = params_of::<calls::CancelAgentLogin>(params)?;
                 self.agent_accounts.cancel_login(&p.login_id);
-                RpcReply::value(&serde_json::json!({ "ok": true }))
+                reply::<calls::CancelAgentLogin, _>(&OkReply::OK)
             }
             methods::UPLOAD_CHUNK => {
-                let p: UploadChunkParams = parse_params(params)?;
+                let p = params_of::<calls::UploadChunk>(params)?;
                 self.uploads
                     .append(&p.upload_id, &p.data, p.seq)
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&serde_json::json!({ "ok": true }))
+                reply::<calls::UploadChunk, _>(&OkReply::OK)
             }
             methods::UPLOAD_COMMIT => {
-                let p: UploadCommitParams = parse_params(params)?;
+                let p = params_of::<calls::UploadCommit>(params)?;
                 let path = self
                     .uploads
                     .commit(&p.upload_id, &p.file_name)
@@ -2678,10 +2934,10 @@ impl RpcService for EngineRpc {
                 // Bytes just landed on this device: any command deferred on
                 // them (queued-attachment refs) is executable NOW.
                 self.doc_host.kick_drains();
-                RpcReply::value(&serde_json::json!({ "path": path }))
+                reply::<calls::UploadCommit, _>(&UploadCommitReply { path })
             }
             methods::READ_ATTACHMENT_CHUNK => {
-                let p: ReadAttachmentChunkParams = parse_params(params)?;
+                let p = params_of::<calls::ReadAttachmentChunk>(params)?;
                 // Path jail: the uploads dir plus every workspace-known chat cwd.
                 let roots: Vec<std::path::PathBuf> = self
                     .workspace
@@ -2695,16 +2951,16 @@ impl RpcService for EngineRpc {
                     .uploads
                     .read_chunk(&p.path, p.offset, &roots)
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&chunk)
+                reply::<calls::ReadAttachmentChunk, _>(&chunk)
             }
             methods::FETCH_TOOL_BLOB => {
-                let p: FetchToolBlobParams = parse_params(params)?;
+                let p = params_of::<calls::FetchToolBlob>(params)?;
                 let chunk = self
                     .doc_host
                     .fetch_tool_blob(&p.blob_ref, p.offset, p.len)
                     .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
-                RpcReply::value(&chunk)
+                reply::<calls::FetchToolBlob, _>(&chunk)
             }
             other => Err(RpcError::UnknownMethod(other.to_string())),
         }
@@ -3027,7 +3283,8 @@ mod tests {
         blocker.join().unwrap();
         let mut stream = opening
             .expect("first paint must not wait for publication")
-            .unwrap();
+            .unwrap()
+            .map(|update| serde_json::to_value(update).unwrap());
         let preview = stream.next().await.unwrap();
         assert_eq!(preview["historyPending"], true);
         assert_eq!(preview["reset"][0]["parts"].as_array().unwrap().len(), 128);
@@ -3079,6 +3336,7 @@ mod tests {
     /// `targetDeviceId`); the extra fields must be tolerated, `accountId` wins.
     #[test]
     fn list_models_force_is_optional_and_backward_compatible() {
+        use loams_agentd_proto::params::ListModelsParams;
         let old: ListModelsParams =
             serde_json::from_value(serde_json::json!({"harness":"codex"})).unwrap();
         assert!(!old.force);
@@ -3089,7 +3347,8 @@ mod tests {
 
     #[test]
     fn agent_account_params_accept_ui_shape() {
-        let p: AgentAccountParams = parse_params(serde_json::json!({
+        use loams_agentd_proto::params::AgentAccountParams;
+        let p: AgentAccountParams = loams_agentd_rpc::parse_params(serde_json::json!({
             "id": "acct-1",
             "accountId": "acct-1",
             "harness": "claude-code",
@@ -3102,7 +3361,7 @@ mod tests {
 
     #[test]
     fn sidebar_preferences_mutation_accepts_desktop_wire_shape() {
-        let p: MutateParams = parse_params(serde_json::json!({
+        let p: MutateParams = loams_agentd_rpc::parse_params(serde_json::json!({
             "op": "changeSidebarPin",
             "change": {"action":"move","sessionId":"chat-b","before":"chat-a","after":null},
         }))
@@ -3193,7 +3452,8 @@ mod context_usage_tests {
             .import(&host.export_snapshot().unwrap())
             .unwrap();
         let (tx, rx) = watch::channel(crate::doc_host::TranscriptSnapshot::default());
-        let mut stream = doc_messages_stream(rx, remote.clone());
+        let json = |update: TranscriptUpdate| serde_json::to_value(update).unwrap();
+        let mut stream = doc_messages_stream(rx, remote.clone()).map(json);
         let first = stream.next().await.unwrap();
         assert_eq!(first["contextUsage"]["tokens"], 42000);
         assert!(first.get("reset").is_some());
@@ -3215,7 +3475,7 @@ mod context_usage_tests {
             .unwrap();
         assert_eq!(update["contextUsage"]["tokens"], 0);
         assert_eq!(update["contextUsage"]["window"], 200000);
-        let mut reconnect = doc_messages_stream(tx.subscribe(), remote.clone());
+        let mut reconnect = doc_messages_stream(tx.subscribe(), remote.clone()).map(json);
         assert_eq!(
             reconnect.next().await.unwrap()["contextUsage"],
             update["contextUsage"]

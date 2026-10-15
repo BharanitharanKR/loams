@@ -76,6 +76,16 @@ connectrpc = { workspace = true, features = ["client"] }
 buffa = "0.9.2"
 base64.workspace = true
 http.workspace = true
+# `cache.rs` (HS1 Task 9): sealed workers reading through `house-cache`.
+loams-house-cache = { path = "../loams-house-cache" }
+loams-cache = { path = "../../../crates/loams-cache" }
+# `lake.rs` (HS1 Task 10): the catalog's Iceberg metadata, read back.
+loams-house-lake = { path = "../loams-house-lake" }
+# `read.rs` (HS1 Task 11): data files written to a `file://` bucket that the
+# catalog and `house-cache` share.
+loams-store = { path = "../../../crates/loams-store" }
+# `insert.rs` (HS1 Task 12): a catalog whose commits fail on demand.
+async-trait.workspace = true
 
 [lints]
 workspace = true

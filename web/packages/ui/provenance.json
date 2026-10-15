@@ -1,0 +1,126 @@
+{
+  "upstream": "https://github.com/pingdotgg/t3code",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2026 T3 Tools Inc.",
+  "archives": [
+    {
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "url": "https://github.com/pingdotgg/t3code/archive/6524a8d43795dc543f7cfb572388cdea3662ad48.zip",
+      "sha256": "4d13a8e39bee303cc33797742187abe15c70c70c3879d2d4e4bc8a51b3bb14a3"
+    }
+  ],
+  "files": [
+    {
+      "path": "src/collapsible.tsx",
+      "upstreamPath": "apps/web/src/components/ui/collapsible.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "e24da748c19f55b881d389f991573d5a7f868b60981c2d49510cdb8dd3b0fc82",
+      "localSha256": "8ffda4289c742c04043db885b48bd33afe7ff46dd57a810a5f621ea2f2a4dc3f",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/command-rank.ts",
+      "upstreamPath": "apps/web/src/components/CommandPalette.logic.ts",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "2741456cbbae272e4538611ad32e8b3bca1c6d9a2a50f67ff1634fb5b9e8bb69",
+      "localSha256": "34d21f95133fd8ed88f131980cf8fc6a351af27dc9eb32d65236e4c368289d7e",
+      "verdict": "adapt",
+      "group": "h",
+      "note": "the ranking half (normalizeSearchText from lib/utils.ts, rankSearchFieldMatch, rankCommandPaletteItemMatch, filterCommandPaletteGroups); the item builders went to @loams/studio-ui src/palette/logic.ts"
+    },
+    {
+      "path": "src/command.tsx",
+      "upstreamPath": "apps/web/src/components/ui/command.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "b295fcfed11b65ad8cb156bd6458cafa59d626b7f55949098045a9f831ad700f",
+      "localSha256": "50cf3deb048d3438deb7b62554238d72f01380dbd4d5d6c3730af2e974eaa9fe",
+      "verdict": "adapt",
+      "group": "k",
+      "note": "merges apps/web/src/components/ui/autocomplete.tsx and dialog-styles.ts; @legendapp/list replaced by TanStack Virtual"
+    },
+    {
+      "path": "src/input-group.tsx",
+      "upstreamPath": "apps/web/src/components/ui/input-group.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "6e7d282125b31e26fb9893553b79851886c8d38f1647ba98b2b7b0fc3b63f3a7",
+      "localSha256": "2b9837bef13f04095569f513a290e66f02b516447b97c9b9425224e41d283b98",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/kbd.tsx",
+      "upstreamPath": "apps/web/src/components/ui/kbd.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "f0589fe3e38a2cb59e8f7e2d38298f50b6f5996d40725368410ba68aa933d690",
+      "localSha256": "5c874af17487c81339e078c92bd231db7d7f8e1f3f0afe56348ee02943bc580f",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/middle-truncate.tsx",
+      "upstreamPath": "apps/web/src/components/ui/middle-truncate.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "0c1f8dcab7a2105410d1dcca6cda6843e506af44054535e4d81842b654e2b714",
+      "localSha256": "43d412279f41c692821cdc2b54c326bb87733b2788204d8a4eed46ee7a372175",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/scroll-area.tsx",
+      "upstreamPath": "apps/web/src/components/ui/scroll-area.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "601ca408d3a58588baab3724f8df96ecfeb433aac487a2710a6f664cf6ada348",
+      "localSha256": "0f46d23b40f341f27fed47b1df768e826cc5046d0bbc7729b882f5d66e6984df",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/sidebar.tsx",
+      "upstreamPath": "apps/web/src/components/ui/sidebar.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "227405b712e3277c7326c738f1596ff3fd9bc564578c5408cb9933ea9e60a92d",
+      "localSha256": "b8638b0b4ce54817cc2402c13221c54c29276a81947181412e8e58100c346024",
+      "verdict": "adapt",
+      "group": "k",
+      "note": "controlled width and open state; the provider, cookie and Effect Schema storage are dropped; the rail is a keyboard window splitter (ResizeHandle)"
+    },
+    {
+      "path": "src/skeleton.tsx",
+      "upstreamPath": "apps/web/src/components/ui/skeleton.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "440eba8016a91a4d5767cdeff17ea4683f6cff38202f5b57697c1ac92527b3cf",
+      "localSha256": "3e7bd57f1c6f186bd23151d1c1aac0712b1d830660e19bef1cb01b363603a759",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/spinner.tsx",
+      "upstreamPath": "apps/web/src/components/ui/spinner.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "3998104c2839197c5246bc3a54adeec985fb827eb02a5e6fd1504dcacbe0087c",
+      "localSha256": "3f4c584416fe0fcd03fd1101b918f6b00fd3cf6488653991b0b2369b4a56f72e",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/switch.tsx",
+      "upstreamPath": "apps/web/src/components/ui/switch.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "b6a76d03b50e878a3659e67fac13d5d2e1e27d5857400e33499a5e46604b0274",
+      "localSha256": "10909c688b314247e0c8469548ac104c7d25ceea5195d37fade9f0edc9dc9e96",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/toggle-group.tsx",
+      "upstreamPath": "apps/web/src/components/ui/toggle-group.tsx",
+      "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
+      "upstreamSha256": "16e44dfc8ba962fb59adacbaef21489bd938b4500a2e35344e53ef509120b6fe",
+      "localSha256": "e8822d8d86a15b88d51ec44cb8317f2539c36cd5deff07f187715e66a16ebdf0",
+      "verdict": "adapt",
+      "group": "k",
+      "note": "merges apps/web/src/components/ui/toggle.tsx; its segmented variant stays Segmented (segmented.tsx)"
+    }
+  ]
+}

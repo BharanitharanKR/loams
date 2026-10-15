@@ -64,6 +64,27 @@ impl Fixture {
             GraphCatalog::new(self.meta.clone(), self.store.clone()),
         )
     }
+
+    /// [`Fixture::admin`] whose statements may run up to the maximum deadline (300 s), for a
+    /// test whose [`LONG`] statement must run to its end: a loaded runner can take longer than
+    /// the default 30 s over its million rows.
+    fn patient_admin(&self) -> GraphAdmin {
+        GraphAdmin::new(
+            Arc::new(
+                Engine::with_data_dir(self.data_dir.path())
+                    .with_query_timeout(Some(StatementLimits::MAXIMUM.timeout)),
+            ),
+            GraphCatalog::new(self.meta.clone(), self.store.clone()),
+        )
+    }
+}
+
+/// [`LONG`] with the maximum deadline, for a statement that must end, not time out.
+fn long_to_its_end(ns: &str, graph: &str) -> pb::ExecuteRequest {
+    pb::ExecuteRequest {
+        timeout_ms: u32::try_from(StatementLimits::MAXIMUM.timeout.as_millis()).expect("small"),
+        ..execute(ns, graph, LONG)
+    }
 }
 
 fn info(err: &ConnectError) -> ErrorInfo {
@@ -835,7 +856,7 @@ async fn one_namespace_cannot_take_every_process_slot() {
     );
     let admin = Arc::new(
         fixture
-            .admin()
+            .patient_admin()
             .with_statement_slots(4)
             .with_namespace_statements(64),
     );
@@ -848,7 +869,7 @@ async fn one_namespace_cannot_take_every_process_slot() {
         .into_iter()
         .map(|g| {
             let admin = admin.clone();
-            tokio::spawn(async move { admin.execute(execute("acme", g, LONG)).await })
+            tokio::spawn(async move { admin.execute(long_to_its_end("acme", g)).await })
         })
         .collect();
     until("three running", || admin.statements_in_flight() == 3).await;
@@ -915,7 +936,7 @@ async fn detached_statements_across_graphs_hit_the_namespace_cap() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn in_flight_statements_count_against_max_detached() {
     let fixture = Fixture::start().await;
-    let admin = Arc::new(fixture.admin());
+    let admin = Arc::new(fixture.patient_admin());
     graph_with_nodes(&admin, 100).await;
     // Nothing detached: two at once, and a third, are all admitted.
     let quick = "MATCH (n:T) RETURN count(n)";
@@ -940,7 +961,7 @@ async fn in_flight_statements_count_against_max_detached() {
     // One more in flight: 1 detached + 1 running = 2, the limit.
     let running = {
         let admin = admin.clone();
-        tokio::spawn(async move { admin.execute(execute("acme", "kg", LONG)).await })
+        tokio::spawn(async move { admin.execute(long_to_its_end("acme", "kg")).await })
     };
     until("two in flight", || admin.statements_in_flight() == 2).await;
     let err = admin

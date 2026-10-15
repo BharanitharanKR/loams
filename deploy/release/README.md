@@ -32,13 +32,14 @@ healthcheck.
 | Image | Contains |
 |---|---|
 | `loams` | the engine, features `live,live-tikv,durable,graph,tikv,pgwire,mysql-wire,stream-grpc` |
-| `loams-fabric` | `loams-fabric house` and `loams-house-worker`, with the digest-pinned libchdb |
+| `loams-fabric` | `loams-fabric house` and `loams-house-worker`, with the digest-pinned libchdb; workers sealed with `--sandbox pods` by default |
 | `loams-agentd` | the agent daemon (optional) |
+| `loams-pg-control` | `loams` with features `postgres,tikv` and the standalone `docker-compose` CLI: `pg-control` and `pg-runner` (`--profile postgres-control`; from the release after 0.1.0-preview.2) |
 
 ```sh
 deploy/release/build.sh loams                        # both platforms, local manifest list
 deploy/release/build.sh --platforms linux/amd64 loams
-deploy/release/build.sh --version 0.1.0-preview.1 --push   # CI on a tag
+deploy/release/build.sh --version 0.1.0-preview.2 --push   # CI on a tag
 ```
 
 ## On this machine
@@ -52,10 +53,88 @@ docker compose logs tailscale            # the node name, or a login URL
 ```
 
 Set the console's `LOAMS_ENGINE_URL` to `https://loams.<tailnet>.ts.net`.
-Profiles add `headscale` (coming soon, unsupported in 0.1.0-preview.1), `console` (the console from `LOAMS_CONSOLE_DIR`, with
+Profiles add `headscale` (coming soon, unsupported in 0.1.0-preview.2), `console` (the console from `LOAMS_CONSOLE_DIR`, with
 `/config.json` built from `LOAMS_ENGINE_URL`, `LOAMS_AUTH_ISSUER` and
-`LOAMS_AUTH_CLIENT_ID`), `agentd` and `house` (see Known gaps). Stop with `docker compose --profile '*'
+`LOAMS_AUTH_CLIENT_ID`), `agentd` and `house` (below). Stop with `docker compose --profile '*'
 down`; add `--volumes` to delete the data.
+
+### House
+
+```sh
+echo 'LOAMS_HOUSE_ENDPOINT=https://house:8443' >> .env          # wire the engine to it
+echo 'HOUSE_PRINCIPALS=tailscale:you@example.com=read+write+ddl' >> .env   # who may use it
+docker compose --profile house up -d house house-tailscale loams
+docker compose exec house cat /var/lib/loams-house/house.key   # user `default`'s password
+curl -u "default:$PASSWORD" https://loams-house.<tailnet>.ts.net/ --data-binary 'SELECT 1'
+```
+
+The House's plaintext listener is on its loopback only; `house-tailscale`, in its
+network namespace, serves it on the tailnet as `HOUSE_TS_HOSTNAME`
+(`loams-house`), with `HOUSE_TS_AUTHKEY` (or a reusable `TS_AUTHKEY`). Its TLS
+listener (8443, HS1 Task 20) is the engine's link: on `house-link`, a network
+only the engine and the House join, with a certificate the House makes on first
+start. The engine trusts that certificate alone and signs in with the link key,
+both in the `house-link` volume, after its own auth has let the caller in, and
+names that caller's Loams principal. The House gives each principal the scopes
+(`read`, `write`, `ddl`, `admin`) `HOUSE_PRINCIPALS` lists; a principal not
+listed has no House access, and every statement is recorded with its principal
+in `/var/lib/loams-house/audit.log`. With `LOAMS_HOUSE_ENDPOINT` set,
+`loams.house.v1` and the console's House page reach the House. The link needs `loams` and `loams-fabric` images built after
+0.1.0-preview.2. The House is also on the `house` network, which nothing else
+joins. Workers run sealed: `HOUSE_SANDBOX=pods` (default;
+Landlock with TCP rules on Linux 6.7 or later, and seccomp) or `netns` (adds a
+user and network namespace per worker; needs unprivileged user namespaces in the
+container, as Podman allows). chDB's access control (R-ACL.1) and the statement
+checks are always on.
+
+### Postgres control plane
+
+`--profile postgres-control` adds Loams Postgres's control plane: `pg-control`
+serves `loams.postgres.v1` on `127.0.0.1:7680` and provisions projects,
+branches, endpoints and their computes on the Postgres stack (which must be
+included), suspending computes that sit idle.
+
+```sh
+# .env: CONTAINER_SOCKET and CONTAINER_SOCKET_GID (below)
+echo '{"keys": []}' > secrets/pg-api-keys.json
+out=$(docker compose run --rm --no-deps pg-control pg-api-key \
+        --subject you@example.com --grant admin:namespace:default)
+jq '{keys: [.entry]}' <<<"$out" > secrets/pg-api-keys.json
+jq -r .api_key <<<"$out"        # shown only this once
+docker compose --profile postgres-control up -d pg-control pg-runner
+curl -sS -H "authorization: Bearer $KEY" -H 'content-type: application/json' \
+  -d '{"namespace": "default", "name": "app", "idempotency_key": "1"}' \
+  http://127.0.0.1:7680/loams.postgres.v1.PostgresService/CreateProject
+```
+
+**The container runtime's socket goes to `pg-runner` alone.** Whatever holds a
+Docker or Podman socket can do anything its owner can, so neither the engine
+nor `pg-control` gets it. `pg-runner`, the compute runner, holds it and serves
+`pg-control` only:
+
+- its network, `pg-runner`, is internal (no route out) and only `pg-control`
+  joins it; every call needs the token it writes into the `pg-runner-token`
+  volume, which `pg-control` mounts read-only;
+- it starts only the compute images pinned in
+  [`deploy/pins/loams-postgres-images.toml`](../pins/loams-postgres-images.toml),
+  never a `neon-archive` copy, from compose files it renders itself: no mounts,
+  no privileges, no host network, the compose project `loams-pg-<namespace>`,
+  on `PG_COMPUTE_NETWORK` (`loams_default`), each endpoint's port (55500 to
+  55999) published on `PG_ENDPOINT_BIND` (`127.0.0.1`);
+- it runs as uid 10001 with every capability dropped, and the socket's group
+  (`CONTAINER_SOCKET_GID`).
+
+Prefer **rootless Podman's** socket: then the runner can do at most what your
+user can. `systemctl --user enable --now podman.socket`, then in `.env`
+`CONTAINER_SOCKET=$XDG_RUNTIME_DIR/podman/podman.sock` (written out) and
+`CONTAINER_SOCKET_GID=0`. With rootful Docker, `CONTAINER_SOCKET` is
+`/var/run/docker.sock` (root on this machine) and `CONTAINER_SOCKET_GID` is the
+docker group's id (`stat -c %g /var/run/docker.sock`). Under SELinux, add
+`security_opt: [label=disable]` to `pg-runner` (a socket cannot be relabelled).
+
+The computes belong to their own compose projects: before `docker compose down`
+of the stack, suspend or delete the endpoints (or `docker compose -p
+loams-pg-<namespace> down`), or the stack's network stays in use.
 
 ### Auth
 
@@ -70,9 +149,9 @@ audience `LOAMS_OIDC_AUDIENCE`; `apikey` checks hashed keys in
 `LOAMS_API_KEYS_FILE`, which compose points at `secrets/api-keys`. See
 `.env.example`.
 
-### Headscale (coming soon, unsupported in 0.1.0-preview.1)
+### Headscale (coming soon, unsupported in 0.1.0-preview.2)
 
-0.1.0-preview.1 supports one setup: your own Tailscale tailnet and the hosted
+0.1.0-preview.2 supports one setup: your own Tailscale tailnet and the hosted
 console. Headscale issues no `ts.net` HTTPS certificates, so the hosted console
 (served over HTTPS) cannot reach an engine on a Headscale tailnet. The profile
 stays in the bundle for a later release; the steps below are unsupported.
@@ -107,16 +186,26 @@ needs SSH and outbound internet only.
 
 ## Known gaps in the preview
 
-- The engine does not reach the House yet. The House serves loopback plaintext
-  only until TLS (D111, HS1 Task 20) and may not share the engine's network
-  namespace, so `loams.house.v1` answers `house_not_configured`;
-  `--profile house` runs it on its own.
-
-- House workers run without the netns sandbox (`--sandbox none`): it needs
-  `CAP_SYS_ADMIN` in a container. The container is their boundary.
-- Live (7710), durable (8001), and the MySQL and Postgres wire listeners of the
-  engine are loopback only and are not forwarded over the tailnet.
+- With 0.1.0-preview.2 images the engine does not reach the House: its TLS link
+  (HS1 Task 20) needs later images, so `loams.house.v1` answers
+  `house_not_configured`; use the House's own tailnet URL (`--profile house`).
+- `HOUSE_SANDBOX=netns` fails under Docker's default seccomp profile (no
+  unprivileged user namespaces) and the House does not start; keep `pods` there.
+- With 0.1.0-preview.2 images the House takes no `INSERT` into its tables (HS1 Task 12 is
+  in later images). On a kernel without Landlock TCP rules (before 6.7) the workers refuse
+  to boot.
+- Live's own listener (7710), durable (8001), and the MySQL and Postgres wire
+  listeners of the engine are loopback only and are not forwarded over the
+  tailnet. Live itself (`loams.live.v1`, with `LiveAdminService`) is served on
+  the engine's main port too, so it is reachable over the tailnet behind the
+  engine's auth like every other service.
 - TiDB starts with a passwordless root and the Postgres stack with default
   credentials; neither is forwarded over the tailnet by default.
 - `compute1` needs `TENANT_ID` and `TIMELINE_ID` (see
   [`../loams-postgres-dev/README.md`](../loams-postgres-dev/README.md)).
+- `pg-control` (`--profile postgres-control`) keeps its records in a local file
+  (one node) and reaches the Postgres stack, its computes and `pg-runner` in
+  plain text on the compose networks; no PgDog fronts the computes yet (PG2c),
+  so clients connect to an endpoint's published port. Its image ships from
+  the release after 0.1.0-preview.2; until then build it with
+  `build.sh loams-pg-control`.

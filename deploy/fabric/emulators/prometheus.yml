@@ -1,0 +1,18 @@
+# Prometheus for the `prometheus` connector's suites (CN2 Task 21, ruling
+# R21.7): it scrapes itself every 5 s and remote-writes everything to the
+# connector's receiver, which the test `prometheus_real_sender_and_receiver`
+# serves on the CI runner's port 19091 (`host.docker.internal`, mapped to the
+# host gateway in compose.yaml). Its own receiver is on with
+# --web.enable-remote-write-receiver, so it is also the sink's target.
+global:
+  scrape_interval: 5s
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]
+
+remote_write:
+  - url: http://host.docker.internal:19091/v1/namespaces/7/fabric/prometheus/test/write
+    queue_config:
+      batch_send_deadline: 2s

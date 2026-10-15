@@ -1,0 +1,106 @@
+{
+  "append": [
+    {
+      "entry": "msg-1",
+      "len": 19,
+      "part": "t0",
+      "text": " Done."
+    }
+  ],
+  "contextUsage": null,
+  "count": 2,
+  "remove": [
+    "msg-0"
+  ],
+  "upsert": [
+    {
+      "after": "msg-u1",
+      "entry": {
+        "createdAt": 1791797400001,
+        "deviceId": "device-1",
+        "durationMs": 4200,
+        "id": "msg-1",
+        "parts": [
+          {
+            "id": "t0",
+            "kind": "text",
+            "text": "Building now."
+          },
+          {
+            "id": "img-1",
+            "kind": "image",
+            "mimeType": "image/png",
+            "name": "shot.png",
+            "path": "/home/dev/.uploads/shot.png"
+          },
+          {
+            "id": "r1",
+            "kind": "reasoning",
+            "text": "The linker flag is missing."
+          },
+          {
+            "call": {
+              "kind": "unknown",
+              "name": "Agent: review"
+            },
+            "diff": {
+              "newText": "fn main() {\n    run();\n}\n",
+              "oldText": "fn main() {}\n",
+              "path": "src/main.rs"
+            },
+            "diffRef": "chat-1/call-1.diff",
+            "diffStats": [
+              {
+                "additions": 2,
+                "deletions": 1,
+                "path": "src/main.rs"
+              }
+            ],
+            "id": "call-1",
+            "isError": false,
+            "kind": "tool",
+            "output": "ok",
+            "outputBytes": 2048,
+            "outputRef": "chat-1/call-1",
+            "resolved": true,
+            "subagentRef": "chat-1:sub-1",
+            "subagentStatus": "running",
+            "subagentTail": "Reading files"
+          },
+          {
+            "id": "in-req-1",
+            "kind": "input",
+            "questions": [
+              {
+                "header": "Branch",
+                "id": "q-1",
+                "multiSelect": false,
+                "multiline": false,
+                "options": [
+                  "main",
+                  "dev"
+                ],
+                "question": "Which branch?"
+              }
+            ],
+            "requestId": "req-1",
+            "resolved": false
+          },
+          {
+            "id": "e5",
+            "kind": "error",
+            "message": "rate limited"
+          },
+          {
+            "id": "fork:chat-2",
+            "kind": "fork",
+            "sourceChatId": "chat-1",
+            "sourceTitle": "Fix the build"
+          }
+        ],
+        "role": "assistant",
+        "status": "complete"
+      }
+    }
+  ]
+}

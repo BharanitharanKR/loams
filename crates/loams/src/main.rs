@@ -221,6 +221,14 @@ enum HotSwitch {
 /// `cluster`.
 #[derive(Debug, clap::Args)]
 struct Native {
+    /// Loams Git's listener for stock git with git tokens (feature `git`, GT1 Task 16):
+    /// loopback only (127.0.0.0/8, ::1) until the unified auth plan (D111). Needs --git-tokens.
+    #[arg(long)]
+    git_listen: Option<SocketAddr>,
+    /// The git token file (feature `git`): TOML `[[tokens]]` entries of a token's SHA-256 and
+    /// its grant (namespace, repositories, access, branch prefixes).
+    #[arg(long)]
+    git_tokens: Option<PathBuf>,
     /// Loams Graph's data directory (feature `graph`): graphs live under
     /// <DIR>/graphs/<graph_id>/ [default: <data-dir>/graph for dev; required
     /// for standalone unless --graph-ephemeral or --no-graph].
@@ -251,10 +259,19 @@ struct Native {
     #[arg(long)]
     no_flight_sql: bool,
     /// The Loams House front (`loams-fabric house`) this port proxies
-    /// `/loams.house.v1.*` to, such as http://127.0.0.1:8123 (design §49
-    /// §18.1). Without it, loams.house.v1 answers house_not_configured.
+    /// `/loams.house.v1.*` to: https://house:8443, or http:// on loopback
+    /// (design §49 §18.1, HS1 Task 20). Without it (or LOAMS_HOUSE_ENDPOINT),
+    /// loams.house.v1 answers house_not_configured.
     #[arg(long, value_parser = parse_house_endpoint)]
     house_endpoint: Option<url::Url>,
+    /// The PEM roots an https House front is trusted by, such as a single-node
+    /// House's own certificate (or LOAMS_HOUSE_CA) [default: the platform's].
+    #[arg(long)]
+    house_ca: Option<PathBuf>,
+    /// The file holding the key this port signs in to the House front with,
+    /// in place of the caller's credentials (or LOAMS_HOUSE_KEY_FILE).
+    #[arg(long)]
+    house_key_file: Option<PathBuf>,
     /// MySQL wire listener for collection queries (loopback only).
     #[cfg(feature = "mysql-wire")]
     #[arg(long)]
@@ -509,23 +526,35 @@ fn parse_durable_listen(text: &str) -> Result<SocketAddr, String> {
     text.parse().map_err(|err| format!("{err}"))
 }
 
-/// `--house-endpoint`: an `http` URL with a host. `https` is refused by name:
-/// the engine's HTTP client has no TLS until HS1 Task 20, and accepting it would
-/// only turn into "unreachable" on every call.
+/// `--house-endpoint`: an `https` URL with a host, or `http` on loopback (HS1
+/// Task 20, D111: a plaintext link stays on this host).
 fn parse_house_endpoint(text: &str) -> Result<url::Url, String> {
     let url = url::Url::parse(text).map_err(|err| format!("--house-endpoint {text:?}: {err}"))?;
-    if url.scheme() == "https" {
-        return Err(format!(
-            "--house-endpoint {text:?}: https is not supported yet (this build has no TLS \
-             client; HS1 Task 20); use http:// on loopback or a private network"
-        ));
+    let loopback = match url.host() {
+        Some(url::Host::Domain(name)) => name.eq_ignore_ascii_case("localhost"),
+        Some(url::Host::Ipv4(ip)) => ip.is_loopback(),
+        Some(url::Host::Ipv6(ip)) => ip.is_loopback(),
+        None => false,
+    };
+    match url.scheme() {
+        _ if url.host().is_none() => Err(format!(
+            "--house-endpoint {text:?}: expected https://host:port"
+        )),
+        "https" => Ok(url),
+        "http" if loopback => Ok(url),
+        "http" => Err(format!(
+            "--house-endpoint {text:?}: a plaintext House front must be on loopback; use \
+             https:// (the House's --house-tls-listen)"
+        )),
+        _ => Err(format!(
+            "--house-endpoint {text:?}: expected https://host:port"
+        )),
     }
-    if url.scheme() != "http" || url.host().is_none() {
-        return Err(format!(
-            "--house-endpoint {text:?}: expected http://host:port"
-        ));
-    }
-    Ok(url)
+}
+
+/// A non-empty environment variable.
+fn env_value(name: &str) -> Option<String> {
+    std::env::var(name).ok().filter(|v| !v.trim().is_empty())
 }
 
 /// `--durable-set key=value`.
@@ -542,6 +571,22 @@ impl Native {
     /// Loams Graph's settings (GR1 Task 5). `dev` keeps graphs under `<data-dir>/graph` by
     /// default; `standalone` and `cluster` need `--graph-data-dir` (or `--graph-ephemeral`, or
     /// `--no-graph`), and the server refuses to start without one.
+    /// Loams Git's listener and token file (GT1 Task 16).
+    fn apply_git(&self, config: &mut ServerConfig) {
+        #[cfg(feature = "git")]
+        {
+            config.git.listen = self.git_listen;
+            config.git.tokens = self.git_tokens.clone();
+        }
+        #[cfg(not(feature = "git"))]
+        {
+            let _ = config;
+            if self.git_listen.is_some() || self.git_tokens.is_some() {
+                tracing::warn!("this build has no Loams Git (the git feature is off)");
+            }
+        }
+    }
+
     fn apply_graph(&self, config: &mut ServerConfig, dev: bool) {
         #[cfg(feature = "graph")]
         {
@@ -573,7 +618,25 @@ impl Native {
     }
 
     fn apply(&self, config: &mut ServerConfig, default_flight: SocketAddr) {
-        config.house.endpoint = self.house_endpoint.clone();
+        // The flags, else the environment (the release compose stack sets
+        // LOAMS_HOUSE_* when the House runs, HS1 Task 20).
+        config.house.endpoint = self.house_endpoint.clone().or_else(|| {
+            env_value("LOAMS_HOUSE_ENDPOINT").and_then(|text| match parse_house_endpoint(&text) {
+                Ok(url) => Some(url),
+                Err(err) => {
+                    tracing::warn!("LOAMS_HOUSE_ENDPOINT is ignored: {err}");
+                    None
+                }
+            })
+        });
+        config.house.ca = self
+            .house_ca
+            .clone()
+            .or_else(|| env_value("LOAMS_HOUSE_CA").map(PathBuf::from));
+        config.house.key_file = self
+            .house_key_file
+            .clone()
+            .or_else(|| env_value("LOAMS_HOUSE_KEY_FILE").map(PathBuf::from));
         config.flight_sql = if self.no_flight_sql {
             None
         } else {
@@ -763,11 +826,11 @@ impl Native {
 #[cfg(feature = "live")]
 #[derive(Debug, clap::Args)]
 struct LiveArgs {
-    /// Address of the Loams Live sync API; loopback only (127.0.0.0/8,
-    /// ::1, localhost), since the Live API has no authentication in R1
-    /// (D111).
-    #[arg(long, default_value = "127.0.0.1:7710", value_parser = parse_live_listen)]
-    live_listen: SocketAddr,
+    /// Deprecated: Live is served on --listen (D688). Address of Live's own
+    /// listener, which serves the same API (default 127.0.0.1:7710); loopback
+    /// only (127.0.0.0/8, ::1, localhost).
+    #[arg(long, value_parser = parse_live_listen)]
+    live_listen: Option<SocketAddr>,
     // The help names `tikv://` only in a build that has it: the desktop app
     // reads `dev --help` to tell the two apart (row T23-9).
     #[cfg_attr(
@@ -855,6 +918,11 @@ enum LiveStore {
     },
 }
 
+/// Live's own listener without `--live-listen` (R1 plan Task 12).
+#[cfg(feature = "live")]
+const LIVE_LISTEN_DEFAULT: SocketAddr =
+    SocketAddr::new(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST), 7710);
+
 /// The PD the deprecated `--live-keyspace` alone implies: the dev
 /// playground's.
 #[cfg(feature = "live-tikv")]
@@ -935,7 +1003,14 @@ impl LiveArgs {
         }
         let store = self.store(&config.data_dir);
         let mut live = loams_live::LiveConfig::with_store(&self.live_app, store);
-        live.listen = self.live_listen;
+        // Live's own listener stays on its default address (the desktop's
+        // proxy reaches Live there); naming it is deprecated (LV1 Task 12).
+        if self.live_listen.is_some() {
+            eprintln!(
+                "loams: warning: --live-listen is deprecated; Live is served on --listen (D688)"
+            );
+        }
+        live.listen = self.live_listen.unwrap_or(LIVE_LISTEN_DEFAULT);
         live.subs.tick_read_lag = Duration::from_millis(self.live_tick_read_lag_ms);
         live.isolation = match self.live_isolation {
             LiveIsolation::InProcess => loams_live::Isolation::InProcess,
@@ -1146,6 +1221,11 @@ enum Command {
     /// key (shown only this once) and the entry to add to the keys file.
     #[cfg(feature = "postgres")]
     PgApiKey(pg_control_cli::PgApiKeyArgs),
+    /// The compute runner (`pg-control --compute-runner`): the one process
+    /// that holds the container runtime's socket, starting only the pinned
+    /// compute images.
+    #[cfg(feature = "postgres")]
+    PgRunner(pg_control_cli::PgRunnerArgs),
 }
 
 /// `loams auth …`: commands that start no server.
@@ -1270,6 +1350,7 @@ fn config(command: Command) -> ServerConfig {
             // After `cluster`: a cluster node has no default durable store.
             native.apply(&mut config, STANDALONE_FLIGHT_SQL);
             native.apply_graph(&mut config, false);
+            native.apply_git(&mut config);
             tuning.apply(&mut config);
             config
         }
@@ -1279,7 +1360,7 @@ fn config(command: Command) -> ServerConfig {
         #[cfg(feature = "live")]
         Command::LiveWorker => unreachable!("loams live-worker starts no server"),
         #[cfg(feature = "postgres")]
-        Command::PgControl(_) | Command::PgApiKey(_) => {
+        Command::PgControl(_) | Command::PgApiKey(_) | Command::PgRunner(_) => {
             unreachable!("loams pg-control starts no engine server")
         }
         Command::Dev {
@@ -1304,6 +1385,7 @@ fn config(command: Command) -> ServerConfig {
             let dev_plaintext = native.sqlgate_plaintext.is_none();
             native.apply(&mut config, DEV_FLIGHT_SQL);
             native.apply_graph(&mut config, true);
+            native.apply_git(&mut config);
             tuning.apply(&mut config);
             // The desktop's gate takes plaintext from loopback peers unless
             // told otherwise; a gateway never does (fix round 1, M6).
@@ -1334,6 +1416,7 @@ fn config(command: Command) -> ServerConfig {
             config.bucket = Some(bucket);
             native.apply(&mut config, STANDALONE_FLIGHT_SQL);
             native.apply_graph(&mut config, false);
+            native.apply_git(&mut config);
             config
         }
     }
@@ -1501,6 +1584,7 @@ async fn serve(cli: Cli) -> ExitCode {
     let cli = match cli.command {
         Command::PgControl(args) => return pg_control_cli::run(*args).await,
         Command::PgApiKey(args) => return pg_control_cli::mint(&args),
+        Command::PgRunner(args) => return pg_control_cli::run_runner(args).await,
         command => Cli { command },
     };
     if let Err(err) = arm_failpoints() {
@@ -1652,8 +1736,8 @@ mod tests {
         );
     }
 
-    /// HS1 Task 7: `--house-endpoint` is `[house] endpoint`; without it the
-    /// House is not configured, and only an http URL with a host is taken.
+    /// HS1 Tasks 7 and 20: `--house-endpoint` is `[house] endpoint`; without it
+    /// the House is not configured. https with a host, or http on loopback.
     #[test]
     fn house_endpoint_is_the_house_proxy_target() {
         assert_eq!(dev_config(&[]).house.endpoint, None);
@@ -1662,11 +1746,35 @@ mod tests {
             config.house.endpoint.as_ref().map(url::Url::as_str),
             Some("http://127.0.0.1:8123/")
         );
+        let config = dev_config(&[
+            "--house-endpoint",
+            "https://house:8443",
+            "--house-ca",
+            "/link/house.crt",
+            "--house-key-file",
+            "/link/house.key",
+        ]);
+        assert_eq!(
+            config.house.endpoint.as_ref().map(url::Url::as_str),
+            Some("https://house:8443/")
+        );
+        assert_eq!(config.house.ca, Some(PathBuf::from("/link/house.crt")));
+        assert_eq!(
+            config.house.key_file,
+            Some(PathBuf::from("/link/house.key"))
+        );
+        for good in ["http://localhost:8123", "http://[::1]:8123"] {
+            assert!(
+                Cli::try_parse_from(["loams", "dev", "--house-endpoint", good]).is_ok(),
+                "{good}"
+            );
+        }
         for bad in [
             "127.0.0.1:8123",
             "unix:///run/house.sock",
             "http://",
-            "https://house:8443",
+            "http://house:8123",
+            "http://10.0.0.1:8123",
         ] {
             assert!(
                 Cli::try_parse_from(["loams", "dev", "--house-endpoint", bad]).is_err(),

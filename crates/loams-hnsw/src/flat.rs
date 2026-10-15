@@ -187,11 +187,9 @@ fn decode(spec: &BuildSpec, bytes: &[u8]) -> Result<FlatIndex, HnswError> {
         return Err(corrupt("wrong magic".into()));
     }
     let version = u16::from_le_bytes([body[4], body[5]]);
-    if version != FLAT_VERSION {
-        return Err(corrupt(format!(
-            "version {version}, expected {FLAT_VERSION}"
-        )));
-    }
+    // The registry's readable range (UP1 Task 1), not only FLAT_VERSION.
+    loams_common::formats::check(loams_common::formats::HNSW_FLAT, version)
+        .map_err(|e| corrupt(format!("version {version}, expected {FLAT_VERSION} ({e})")))?;
     let dim = u32::from_le_bytes([body[6], body[7], body[8], body[9]]);
     if dim != spec.dim {
         return Err(corrupt(format!("dim {dim}, expected {}", spec.dim)));
@@ -327,5 +325,52 @@ impl AppendableHnsw for AppendableFlat {
 
     fn optimize(&self) -> Result<(), HnswError> {
         Ok(())
+    }
+}
+
+/// UP1 Task 1: the flat index reader checks the registry's readable range.
+#[cfg(test)]
+mod format_tests {
+    use loams_common::formats::{self, FormatSpec};
+
+    use super::*;
+
+    fn object(spec: &BuildSpec, version: u16) -> Vec<u8> {
+        let points = BTreeMap::from([(1u64, vec![1.0f32, 0.0]), (2, vec![0.0, 1.0])]);
+        let bytes = encode(spec, &points);
+        let mut out = bytes[..bytes.len() - 4].to_vec();
+        out[4..6].copy_from_slice(&version.to_le_bytes());
+        let crc = crc32c::crc32c(&out);
+        out.extend_from_slice(&crc.to_le_bytes());
+        out
+    }
+
+    #[test]
+    fn format_constants_match_registry() {
+        assert_eq!(FLAT_VERSION, formats::spec_of(formats::HNSW_FLAT).current);
+    }
+
+    #[test]
+    fn reader_accepts_previous_version() {
+        let spec = BuildSpec::new(2, Distance::Cosine);
+        let older = object(&spec, FLAT_VERSION - 1);
+        assert!(decode(&spec, &older).is_err());
+        let registry = formats::spec_of(formats::HNSW_FLAT);
+        let registry = FormatSpec {
+            min_read: registry.current - 1,
+            ..registry
+        };
+        formats::with_override(registry, || {
+            decode(&spec, &older).expect("N-1 opens once min_read allows it");
+        });
+    }
+
+    #[test]
+    fn reader_refuses_next_version() {
+        let spec = BuildSpec::new(2, Distance::Cosine);
+        let Err(err) = decode(&spec, &object(&spec, FLAT_VERSION + 1)) else {
+            panic!("N+1 opened");
+        };
+        assert!(err.to_string().contains("format_unreadable"), "{err}");
     }
 }

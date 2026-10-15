@@ -1,0 +1,53 @@
+# Keycloak — an HTTP-API profile (CN2 OR-11, Task 20): admin events as a
+# source, users and groups as sinks. Written from Keycloak's public Admin REST
+# API reference (26.x):
+#   https://www.keycloak.org/docs-api/latest/rest-api/index.html
+#   (GET /admin/realms/{realm}/admin-events with first/max; POST
+#   /admin/realms/{realm}/users and /groups, 409 on a duplicate)
+#   Client-credentials grant (service-account client):
+#     https://www.keycloak.org/docs/latest/server_admin/index.html#_service_accounts
+#   Admin events must be enabled on the realm:
+#     https://www.keycloak.org/docs/latest/server_admin/index.html#auditing-admin-events
+# Keycloak is self-hosted, so `server_url` is required; `auth_realm` is the
+# realm the service-account client lives in (default master). Admin events
+# list newest first and page by offset: a page re-read after new events
+# arrive repeats items, which their content ids let `ingest` drop. The admin
+# API has no upsert by name, so `users` and `groups` create and treat 409 as
+# already present: effectively once by `username` / `name`, and an existing
+# entry is left unchanged (R20.7).
+apiVersion: loams.flow/v1
+kind: Profile
+id: keycloak
+profile_kind: http-api
+module: http
+system:
+  name: Keycloak
+  service: { compose: keycloak }
+defaults:
+  auth_realm: master
+narrows: []
+http:
+  base_url: "{config.server_url}"
+  auth:
+    scheme: oauth2
+    token_url: "{config.server_url}/realms/{config.auth_realm}/protocol/openid-connect/token"
+  headers: { Accept: application/json }
+  resources:
+    admin_events:
+      list:
+        method: GET
+        path: "/admin/realms/{config.realm}/admin-events"
+        offset: { param: first, limit_param: max, limit: 100 }
+        key: "/id"
+    users:
+      create:
+        method: POST
+        path: "/admin/realms/{config.realm}/users"
+        key: "/username"
+        conflict_ok: true
+    groups:
+      create:
+        method: POST
+        path: "/admin/realms/{config.realm}/groups"
+        key: "/name"
+        conflict_ok: true

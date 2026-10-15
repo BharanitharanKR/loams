@@ -14,8 +14,8 @@
 //! lies under the session's or a project's; a run cannot answer its own
 //! session's questions.
 //!
-//! The method set is written out here until Task 9 generates the method
-//! table (`METHODS`) with a role per method.
+//! Which methods role `mcp` may call is the `role` column of the method
+//! table (`loams_agentd_proto::rpc::METHODS`, plan DD1 Task 9).
 
 use std::sync::Arc;
 
@@ -24,24 +24,14 @@ use std::path::{Component, Path};
 use async_trait::async_trait;
 use loams_agentd_doc::SessionCommandPayload;
 use loams_agentd_proto::SandboxLevel;
-use loams_agentd_proto::rpc::{FORBIDDEN_ROLE, Role};
+use loams_agentd_proto::rpc::{FORBIDDEN_ROLE, Role, method_spec};
 use loams_agentd_rpc::{Identity, Policy, RpcError, RunScope, methods};
 use loams_agentd_sessions::WorkspaceHost;
 
-/// The methods role `mcp` may call: the MCP shim's.
-pub const MCP_METHODS: &[&str] = &[
-    methods::LOCAL_DEVICE,
-    methods::ENGINE_INFO,
-    methods::LIST_HARNESSES,
-    methods::LIST_MODELS,
-    methods::WATCH_SPACES,
-    methods::WATCH_CHATS,
-    methods::WATCH_SESSIONS,
-    methods::WATCH_DOC_MESSAGES,
-    methods::QUEUE_COMMAND,
-    methods::QUEUE_MESSAGE,
-    methods::MUTATE,
-];
+/// Whether role `mcp` may call `method`: its row in the method table says so.
+fn mcp_may_call(method: &str) -> bool {
+    method_spec(method).is_some_and(|spec| spec.role == Role::Mcp)
+}
 
 /// Methods that act on one session, named by `sessionId` or the fork's `chatId`.
 const SESSION_METHODS: &[&str] = &[
@@ -252,7 +242,7 @@ impl DaemonPolicy {
         method: &str,
         params: &serde_json::Value,
     ) -> Result<(), RpcError> {
-        if !MCP_METHODS.contains(&method) {
+        if !mcp_may_call(method) {
             return Err(forbidden(format!("{method} needs role owner")));
         }
         let outside = || forbidden(format!("{method} on a session outside this run's"));
@@ -402,8 +392,110 @@ mod tests {
 
     #[tokio::test]
     async fn owner_may_call_anything() {
-        for method in ["ResolveApproval", "StopEngine", "Mutate", "AnythingAtAll"] {
+        for method in ["ResolveApproval", "Shutdown", "Mutate", "AnythingAtAll"] {
             assert!(allowed(&Identity::owner(), method, json!({"op": "deleteChat"})).await);
+        }
+    }
+
+    /// SD1 Task 9: an agent can never commit, push, merge, open a change
+    /// request or discard through the MCP shim (§53 §8.1).
+    #[tokio::test]
+    async fn git_writes_not_in_mcp_role() {
+        let run = mcp("main");
+        for method in [
+            methods::LIST_WORKTREES,
+            methods::COMMIT_WORKTREE,
+            methods::PUSH_BRANCH,
+            methods::CREATE_CHANGE_REQUEST,
+            methods::MERGE_BRANCH,
+            methods::DISCARD_PATHS,
+            methods::DISCARD_WORKING_TREE,
+            methods::DELETE_WORKTREE,
+        ] {
+            assert!(
+                !allowed(&run, method, json!({"chatId": "main", "cwd": "/work/main"})).await,
+                "{method}"
+            );
+            assert!(
+                allowed(&Identity::owner(), method, json!({})).await,
+                "{method}"
+            );
+        }
+    }
+
+    /// SD1 Task 11: an agent can never read, write or post review comments,
+    /// queue a review turn or search contents through the MCP shim.
+    #[tokio::test]
+    async fn review_and_search_not_in_mcp_role() {
+        let run = mcp("main");
+        for method in [
+            methods::WATCH_REVIEW_COMMENTS,
+            methods::UPSERT_REVIEW_COMMENT,
+            methods::DELETE_REVIEW_COMMENT,
+            methods::RESOLVE_REVIEW_COMMENT,
+            methods::SEND_REVIEW_TO_THREAD,
+            methods::POST_REVIEW_TO_CHANGE_REQUEST,
+            methods::SEARCH_WORKSPACE_CONTENT,
+        ] {
+            assert!(
+                !allowed(&run, method, json!({"chatId": "main", "checkoutId": "c"})).await,
+                "{method}"
+            );
+            assert!(
+                allowed(&Identity::owner(), method, json!({})).await,
+                "{method}"
+            );
+        }
+    }
+
+    /// SD1 Task 12: an agent can never create, check or resolve a run group
+    /// through the MCP shim; a resolve merges or pushes (§53 §8.1).
+    #[tokio::test]
+    async fn run_groups_not_in_mcp_role() {
+        let run = mcp("main");
+        for method in [
+            methods::CREATE_RUN_GROUP,
+            methods::WATCH_RUN_GROUPS,
+            methods::GET_RUN_GROUP_COMPARISON,
+            methods::RUN_GROUP_CHECK,
+            methods::RESOLVE_RUN_GROUP,
+        ] {
+            assert!(
+                !allowed(&run, method, json!({"chatId": "main", "groupId": "g"})).await,
+                "{method}"
+            );
+            assert!(
+                allowed(&Identity::owner(), method, json!({})).await,
+                "{method}"
+            );
+        }
+    }
+
+    /// SD1 Task 13 (DD1 Ruling 8): an agent can never answer an approval,
+    /// switch its thread to full access, or watch what waits for the person,
+    /// not even for its own session; only the owner can.
+    #[tokio::test]
+    async fn mcp_role_cannot_resolve() {
+        let run = mcp("main");
+        for (method, params) in [
+            (
+                methods::RESOLVE_APPROVAL,
+                json!({"callId": "call-1", "chatId": "main", "decision": "always"}),
+            ),
+            (
+                methods::SET_THREAD_APPROVAL_MODE,
+                json!({"chatId": "main", "mode": "full-access"}),
+            ),
+            (methods::WATCH_APPROVALS, json!({"chatId": "main"})),
+        ] {
+            assert!(!allowed(&run, method, params.clone()).await, "{method}");
+            assert!(
+                allowed(&Identity::owner(), method, params).await,
+                "{method}"
+            );
+            let spec = loams_agentd_proto::rpc::method_spec(method).expect("in the table");
+            assert_eq!(spec.role, Role::Owner, "{method} must never be open to mcp");
+            assert!(spec.renderer, "{method} is a Studio method");
         }
     }
 
@@ -412,7 +504,7 @@ mod tests {
         let run = mcp("main");
         for method in [
             "ResolveApproval",
-            methods::STOP_ENGINE,
+            methods::SHUTDOWN,
             methods::WRITE_WORKSPACE_FILE,
             methods::OPEN_TERMINAL,
             methods::INSTALL_HARNESS,

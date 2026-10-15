@@ -1,0 +1,6 @@
+{
+  "callbackPort": 1455,
+  "loginId": "login-1",
+  "mode": "browser",
+  "url": "https://auth.example.com/authorize"
+}

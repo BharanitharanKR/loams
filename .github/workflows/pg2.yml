@@ -20,7 +20,7 @@
 # pg-control-role (Task 9): the `loams pg-control` role (feature `postgres`):
 # authorization, audit, the API and upcall listeners, served-only
 # reflection, and that the default build links none of it.
-name: PG2
+name: Postgres
 
 on:
   workflow_dispatch:
@@ -36,6 +36,8 @@ on:
       - "crates/loams-wal-decoder/**"
       - "crates/loams-postgres/**"
       - "crates/loams-pg-control/**"
+      # compiled into loams-pg-control (runtime::images)
+      - "deploy/pins/loams-postgres-images.toml"
       - "crates/loams/Cargo.toml"
       - "crates/loams/src/lib.rs"
       - "crates/loams/src/main.rs"
@@ -46,8 +48,6 @@ on:
       - "crates/loams/src/api/connect_postgres.rs"
       - "crates/loams/src/api/postgres_messages.rs"
       - "crates/loams/tests/pg_control.rs"
-      - "scripts/ci/no-metering.py"
-      - "scripts/ci/test-no-metering.py"
       - "crates/loams-kv/**"
       - "scripts/pg2/**"
       - "proto/**"
@@ -67,6 +67,8 @@ on:
       - "crates/loams-wal-decoder/**"
       - "crates/loams-postgres/**"
       - "crates/loams-pg-control/**"
+      # compiled into loams-pg-control (runtime::images)
+      - "deploy/pins/loams-postgres-images.toml"
       - "crates/loams/Cargo.toml"
       - "crates/loams/src/lib.rs"
       - "crates/loams/src/main.rs"
@@ -77,8 +79,6 @@ on:
       - "crates/loams/src/api/connect_postgres.rs"
       - "crates/loams/src/api/postgres_messages.rs"
       - "crates/loams/tests/pg_control.rs"
-      - "scripts/ci/no-metering.py"
-      - "scripts/ci/test-no-metering.py"
       - "crates/loams-kv/**"
       - "scripts/pg2/**"
       - "proto/**"
@@ -88,6 +88,12 @@ on:
       - "docs/api/route-map.md"
       - "docs/design/46-loams-postgres-production.md"
       - ".github/workflows/pg2.yml"
+
+# A newer push to the same pull request or branch supersedes the older run
+# (the runner pool is shared by every workflow); main runs to completion.
+concurrency:
+  group: pg2-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -102,7 +108,7 @@ env:
 
 jobs:
   postgres-protos:
-    name: loams.postgres.v1 (buf lint, buf breaking against dev, descriptor tests)
+    name: Protos
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -133,7 +139,7 @@ jobs:
         run: cargo test -p loams-proto --test postgres --locked
 
   neon-client:
-    name: loams-postgres (fixture tests)
+    name: Client fixtures
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -150,7 +156,9 @@ jobs:
         run: cargo clippy -p loams-postgres --all-targets --locked -- -D warnings
 
   wal-decoder:
-    name: loams-wal-decoder (golden tests against the fork's sender)
+    # Full tier: a pull request into main, a dispatch (the nightly), not dev.
+    if: github.event_name == 'workflow_dispatch' || github.base_ref == 'main'
+    name: WAL decoder
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -203,7 +211,9 @@ jobs:
           cargo build --locked --bin loams-wal-interpreted --features tikv
 
   pg-control:
-    name: loams-pg-control (local store, clippy default, tikv, kubernetes and keyring)
+    # Full tier: a pull request into main, a dispatch (the nightly), not dev.
+    if: github.event_name == 'workflow_dispatch' || github.base_ref == 'main'
+    name: pg-control
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -223,12 +233,14 @@ jobs:
       - name: clippy (tikv)
         run: cargo clippy -p loams-pg-control --all-targets --features tikv --locked -- -D warnings
       - name: test (the Kubernetes secret store, against a stand-in API)
-        run: cargo test -p loams-pg-control --features kubernetes --test secrets_kube --locked
+        run: cargo test -p loams-pg-control --features kubernetes --test secrets_kube --test runtime_kube --locked
       - name: clippy (kubernetes, keyring)
         run: cargo clippy -p loams-pg-control --all-targets --features kubernetes,keyring --locked -- -D warnings
 
   pg-control-role:
-    name: loams pg-control (feature postgres, and the default build without it)
+    # Full tier: a pull request into main, a dispatch (the nightly), not dev.
+    if: github.event_name == 'workflow_dispatch' || github.base_ref == 'main'
+    name: Engine with pg-control
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -244,5 +256,3 @@ jobs:
         run: cargo test -p loams --locked --test pg_control
       - name: clippy (postgres, postgres-kubernetes)
         run: cargo clippy -p loams --all-targets --features postgres-kubernetes --locked -- -D warnings
-      - name: the no-metering guard's own tests
-        run: python3 scripts/ci/test-no-metering.py

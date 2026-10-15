@@ -8,13 +8,15 @@ Build, understand, and contribute to Loams: hybrid retrieval on object storage, 
 
 | You want to… | Read |
 |---|---|
-| Run your first query | [Repository quickstart](../README.md#quick-start) |
+| Run your first query | [Engine quick start](engine-quickstart.md) |
+| Find your way around the repository | [Project layout](project-layout.md) |
 | Build on Windows or macOS | [Build from source](build-from-source/README.md) |
 | Understand the architecture | [Design overview](design/README.md), [architecture](design/01-architecture.md), and [decision log](design/13-decision-log.md) |
 | Work across engine, apps, and plugins | [Monorepo guide](monorepo.md) |
 | Integrate an API or SDK | [Route map](api/route-map.md), [error reasons](api/reasons.md), and [SDK runtime contract](sdk/runtime-contract.md) |
 | Contribute a change | [Contributing](../CONTRIBUTING.md), [implementation plans](plans/README.md), and [wiki](wiki/Home.md) |
 | Run the preview | [Running the preview](release/preview.md): Docker Compose, a tailnet, the hosted or self-deployed console |
+| Use Loams Studio, the agentic development environment | [Studio guides](guides/studio/index.md), including [a remote agentd](guides/studio/remote-agentd.md) for the browser |
 | Package or release Loams | [Packaging](release/packaging.md), [publishing](release/publishing.md), and [signing](release/signing.md) |
 | Build a plugin | [Plugin documentation](../plugins/docs/README.md) and [marketplace publishing](marketplace/publishing.md) |
 
@@ -31,11 +33,11 @@ Build, understand, and contribute to Loams: hybrid retrieval on object storage, 
 | [ecosystem/](ecosystem/) | Deploy buttons and ecosystem integrations |
 | [wiki/](wiki/README.md) | Contributor and maintainer guides |
 
-Additional references: [open-core boundaries](open-core.md), [remote browser provider](remote-browser-provider.md), [architecture review](architecture-review-and-recommendations.md), and [backlog analysis](open-issues-analysis.md).
+Additional references: [remote browser provider](remote-browser-provider.md), [architecture review](architecture-review-and-recommendations.md), and [backlog analysis](open-issues-analysis.md).
 
 ## Read status in context
 
-The code and [root README](../README.md#features) describe current implementation. Design documents explain intended behavior; plans and reviews are dated snapshots and may describe work that has since landed. A proposal is not a shipped feature. Loams has no stable release; verify flags with the binary from your checkout and keep the selected source ref with any deployment instructions.
+The code and [feature status table](release/preview.md#feature-status) describe current implementation. Design documents explain intended behavior; plans and reviews are dated snapshots and may describe work that has since landed. A proposal is not a shipped feature. Loams has no stable release; verify flags with the binary from your checkout and keep the selected source ref with any deployment instructions.
 
 The public site at [loams.dev/docs](https://loams.dev/docs) combines reader guides with generated copies of `docs/design`. Update design originals here; the website syncs them with `LOAMS_REPO`, `LOAMS_REF`, or `LOAMS_DESIGN_DIR`.
 

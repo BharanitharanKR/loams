@@ -216,7 +216,7 @@ public enum ErrorCode
   }
   public static final com.google.protobuf.Descriptors.EnumDescriptor
       getDescriptor() {
-    return dev.loams.gen.loams.live.v1.LiveProto.getDescriptor().getEnumTypes().get(0);
+    return dev.loams.gen.loams.live.v1.LiveProto.getDescriptor().getEnumTypes().get(1);
   }
 
   private static final ErrorCode[] VALUES = values();

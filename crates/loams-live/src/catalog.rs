@@ -4,17 +4,29 @@
 //! A table is created on its first insert unless a schema is deployed
 //! ([`table_for_insert`]); [`define_table`] creates a table or changes its
 //! indexes, and refuses an index change on a non-empty table (R1 plan
-//! Ruling 5). Table ids come from the catalog counter, from 1; index ids from
-//! the table's `next_index_id`, from 2, and are never reused.
+//! Ruling 5; a deploy changes the indexes of a non-empty table online, LV1
+//! plan Task 9, through [`IndexState`]). Table ids come from the catalog
+//! counter, from 1; index ids from the table's `next_index_id`, from 2, and
+//! are never reused. A table's
+//! [`TableValidation`] (LV1 plan Task 8) rides in its record, so every write
+//! that loads the table has its validators.
+//!
+//! Every catalog change also appends a `catalog` journal entry in its own
+//! transaction (LV1 plan Task 11, [`record_changes`]): a table created, a
+//! table's indexes or validators changed (`put_table` compares the record
+//! with the stored one), a deployment activated. Every node's subscription
+//! manager sees it at the tick that contains it.
 
-use buffa::Message;
+use buffa::{Message, MessageField};
 use loams_kv::Txn;
+use ulid::Ulid;
 
 use crate::cursor::CursorKey;
 use crate::docs::Reads;
 use crate::ids::{IndexId, TableId};
-use crate::journal::MAX_SHARDS;
+use crate::journal::{Journal, MAX_SHARDS};
 use crate::keys::AppKeys;
+use crate::validate::Validator;
 use crate::{Limits, LiveError, pb};
 
 /// The longest table or index name, in bytes.
@@ -37,6 +49,37 @@ pub struct TableDef {
     pub indexes: Vec<IndexDef>,
     /// The id the next user index gets.
     pub next_index_id: u32,
+    /// The validators its writes must match (LV1 plan Task 8).
+    pub validation: TableValidation,
+}
+
+/// A table's validators (design §45 §4.1; LV1 plan Task 8): the one every
+/// write must match, as the active deployment's schema declares it, and a
+/// stricter one a deploy is checking the table's documents against, which
+/// writes must match too until that deploy activates or fails.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct TableValidation {
+    pub validator: Option<Validator>,
+    pub enforcing: Option<Enforcing>,
+}
+
+/// A validator enforced ahead of its deploy, which is checking it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Enforcing {
+    pub validator: Validator,
+    pub deployment: Ulid,
+}
+
+impl TableValidation {
+    /// The validators a write must match, with the deployment checking the
+    /// second one.
+    pub fn validators(&self) -> impl Iterator<Item = (&Validator, Option<Ulid>)> {
+        self.validator.iter().map(|v| (v, None)).chain(
+            self.enforcing
+                .iter()
+                .map(|e| (&e.validator, Some(e.deployment))),
+        )
+    }
 }
 
 /// A user index: up to 16 top-level fields, then `_creationTime` and `_id`.
@@ -45,6 +88,44 @@ pub struct IndexDef {
     pub id: IndexId,
     pub name: String,
     pub fields: Vec<String>,
+    pub state: IndexState,
+}
+
+/// Where a user index is in its life (LV1 plan Task 9, design §45 §4.2;
+/// row T9-2). A table may hold a ready index and a backfilling one of the
+/// same name (a deploy that changes the index's fields); a name resolves
+/// to the ready one ([`TableDef::index_named`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum IndexState {
+    /// Every write maintains it, and `deployment`'s backfill job writes the
+    /// entries of the documents already there; a query on it is
+    /// [`LiveError::IndexNotReady`]. The swap of `deployment` makes it
+    /// ready.
+    Backfilling { deployment: Ulid },
+    /// Queries read it; every write maintains it.
+    Ready,
+    /// No write maintains it and no query finds it; its entries are being
+    /// deleted, then the definition goes
+    /// ([`drop_indexes`](crate::backfill::drop_indexes)).
+    Dropping,
+}
+
+impl IndexState {
+    /// The name in messages and statuses.
+    pub fn name(self) -> &'static str {
+        match self {
+            IndexState::Backfilling { .. } => "backfilling",
+            IndexState::Ready => "ready",
+            IndexState::Dropping => "dropping",
+        }
+    }
+}
+
+impl IndexDef {
+    /// Whether writes maintain its entries (it is not being dropped).
+    pub fn maintained(&self) -> bool {
+        self.state != IndexState::Dropping
+    }
 }
 
 /// A user index as a schema declares it: a name and its fields.
@@ -55,54 +136,125 @@ pub struct IndexSpec {
 }
 
 impl TableDef {
-    /// The index of this id: `None` for `by_id` (it has no entries) and for
-    /// an unknown id; the built-in `by_creation_time` has no fields.
+    /// The fields of the index of this id: `None` for `by_id` (it has no
+    /// entries), for an unknown id and for an index being dropped; the
+    /// built-in `by_creation_time` has no fields. A query reads the index
+    /// only once it is ready ([`TableDef::readable`]).
     pub fn index_fields(&self, id: IndexId) -> Option<&[String]> {
         if id == IndexId::BY_CREATION_TIME {
             return Some(&[]);
         }
         self.indexes
             .iter()
-            .find(|i| i.id == id)
+            .find(|i| i.id == id && i.maintained())
             .map(|i| i.fields.as_slice())
     }
 
-    /// The id of the index named `name`, built-ins included.
+    /// Refuses a read of index `id` unless it is ready (or built in): a
+    /// backfilling index is [`LiveError::IndexNotReady`], one being dropped
+    /// or unknown [`LiveError::NotFound`].
+    pub fn readable(&self, id: IndexId) -> Result<(), LiveError> {
+        if id == IndexId::BY_ID || id == IndexId::BY_CREATION_TIME {
+            return Ok(());
+        }
+        match self.indexes.iter().find(|i| i.id == id) {
+            Some(i) if i.state == IndexState::Ready => Ok(()),
+            Some(i) if i.maintained() => Err(LiveError::IndexNotReady(format!(
+                "index '{}' of table '{}' is still backfilling; query it once the deploy that \
+                 adds it is active",
+                i.name, self.name
+            ))),
+            _ => Err(LiveError::NotFound(format!(
+                "index {} of table '{}'",
+                id.0, self.name
+            ))),
+        }
+    }
+
+    /// The user index a query naming `name` reads: the ready one of that
+    /// name, else a backfilling one (whose read is then refused); never one
+    /// being dropped.
+    pub fn index_named(&self, name: &str) -> Option<&IndexDef> {
+        let named = || self.indexes.iter().filter(|i| i.name == name);
+        named()
+            .find(|i| i.state == IndexState::Ready)
+            .or_else(|| named().find(|i| i.maintained()))
+    }
+
+    /// The ready user indexes, in definition order (what the active
+    /// deployment's schema declares).
+    pub fn ready_indexes(&self) -> impl Iterator<Item = &IndexDef> {
+        self.indexes.iter().filter(|i| i.state == IndexState::Ready)
+    }
+
+    /// The id of the index named `name`, built-ins included
+    /// ([`index_named`](Self::index_named)).
     pub fn index_id(&self, name: &str) -> Option<IndexId> {
         match name {
             BY_ID => Some(IndexId::BY_ID),
             BY_CREATION_TIME => Some(IndexId::BY_CREATION_TIME),
-            _ => self.indexes.iter().find(|i| i.name == name).map(|i| i.id),
+            _ => self.index_named(name).map(|i| i.id),
         }
     }
 
     /// The catalog record.
     pub fn to_proto(&self) -> pb::TableDef {
         pb::TableDef {
-            format: 1,
+            format: crate::RECORD_FORMAT,
             id: self.id.0,
             name: self.name.clone(),
             indexes: self
                 .indexes
                 .iter()
-                .map(|i| pb::IndexDef {
-                    id: i.id.0,
-                    name: i.name.clone(),
-                    fields: i.fields.clone(),
-                    ..Default::default()
+                .map(|i| {
+                    let (state, deployment) = match i.state {
+                        IndexState::Backfilling { deployment } => (
+                            pb::IndexState::INDEX_STATE_BACKFILLING,
+                            deployment.to_bytes().to_vec(),
+                        ),
+                        IndexState::Ready => (pb::IndexState::INDEX_STATE_READY, Vec::new()),
+                        IndexState::Dropping => (pb::IndexState::INDEX_STATE_DROPPING, Vec::new()),
+                    };
+                    pb::IndexDef {
+                        id: i.id.0,
+                        name: i.name.clone(),
+                        fields: i.fields.clone(),
+                        state: state.into(),
+                        deployment,
+                        ..Default::default()
+                    }
                 })
                 .collect(),
             next_index_id: self.next_index_id,
+            validator: self
+                .validation
+                .validator
+                .as_ref()
+                .map(|v| MessageField::some(v.to_proto()))
+                .unwrap_or_default(),
+            enforcing: self
+                .validation
+                .enforcing
+                .as_ref()
+                .map(|e| {
+                    MessageField::some(pb::EnforcingValidator {
+                        validator: MessageField::some(e.validator.to_proto()),
+                        deployment: e.deployment.to_bytes().to_vec(),
+                        ..Default::default()
+                    })
+                })
+                .unwrap_or_default(),
             ..Default::default()
         }
     }
 
     /// The table of a catalog record.
     pub fn from_proto(p: pb::TableDef) -> Result<Self, LiveError> {
-        if p.format != 1 {
+        if !crate::record_format_readable(p.format) {
             return Err(LiveError::Corrupt(format!(
-                "table record format {} (expected 1)",
-                p.format
+                "table record format {} (this release reads {})",
+                p.format,
+                crate::record_format_range()
             )));
         }
         Ok(TableDef {
@@ -111,13 +263,68 @@ impl TableDef {
             indexes: p
                 .indexes
                 .into_iter()
-                .map(|i| IndexDef {
-                    id: IndexId(i.id),
-                    name: i.name,
-                    fields: i.fields,
+                .map(|i| {
+                    let state = match i.state.as_known() {
+                        Some(
+                            pb::IndexState::INDEX_STATE_UNSPECIFIED
+                            | pb::IndexState::INDEX_STATE_READY,
+                        ) => IndexState::Ready,
+                        Some(pb::IndexState::INDEX_STATE_DROPPING) => IndexState::Dropping,
+                        Some(pb::IndexState::INDEX_STATE_BACKFILLING) => {
+                            let deployment: [u8; 16] =
+                                i.deployment.as_slice().try_into().map_err(|_| {
+                                    LiveError::Corrupt(format!(
+                                        "table record: index '{}' backfills for a {}-byte \
+                                         deployment",
+                                        i.name,
+                                        i.deployment.len()
+                                    ))
+                                })?;
+                            IndexState::Backfilling {
+                                deployment: Ulid::from_bytes(deployment),
+                            }
+                        }
+                        None => {
+                            return Err(LiveError::Corrupt(format!(
+                                "table record: index '{}' in an unknown state {:?}",
+                                i.name, i.state
+                            )));
+                        }
+                    };
+                    Ok(IndexDef {
+                        id: IndexId(i.id),
+                        name: i.name,
+                        fields: i.fields,
+                        state,
+                    })
                 })
-                .collect(),
+                .collect::<Result<_, LiveError>>()?,
             next_index_id: p.next_index_id,
+            validation: TableValidation {
+                validator: p.validator.as_option().map(stored_validator).transpose()?,
+                enforcing: p
+                    .enforcing
+                    .as_option()
+                    .map(|e| {
+                        let validator = e.validator.as_option().ok_or_else(|| {
+                            LiveError::Corrupt(
+                                "table record: an enforcing entry with no validator".into(),
+                            )
+                        })?;
+                        let deployment: [u8; 16] =
+                            e.deployment.as_slice().try_into().map_err(|_| {
+                                LiveError::Corrupt(format!(
+                                    "table record: a {}-byte enforcing deployment",
+                                    e.deployment.len()
+                                ))
+                            })?;
+                        Ok::<_, LiveError>(Enforcing {
+                            validator: stored_validator(validator)?,
+                            deployment: Ulid::from_bytes(deployment),
+                        })
+                    })
+                    .transpose()?,
+            },
         })
     }
 
@@ -126,6 +333,11 @@ impl TableDef {
             .map_err(|e| LiveError::Corrupt(format!("table record: {e}")))?;
         TableDef::from_proto(p)
     }
+}
+
+/// A validator read from a stored record.
+fn stored_validator(p: &pb::Validator) -> Result<Validator, LiveError> {
+    Validator::from_proto(p).map_err(|e| LiveError::Corrupt(format!("table record: {e}")))
 }
 
 /// Checks a table or index name: 1 to 64 bytes of ASCII letters, digits and
@@ -187,23 +399,31 @@ pub async fn list_tables(r: &mut impl Reads, app: &AppKeys) -> Result<Vec<TableD
 
 /// The table an insert into `name` writes to: the existing table, or a new
 /// one without user indexes when no schema is deployed (§20 §4.1). With a
-/// deployed schema, a missing table is [`LiveError::NotFound`].
+/// deployed schema, a missing table is [`LiveError::NotFound`]. A new
+/// table's `TABLE_CREATED` change is returned, not recorded: the mutation
+/// records it in its own journal entry (LV1 plan Task 11).
 pub async fn table_for_insert(
     txn: &mut Txn,
     app: &AppKeys,
     name: &str,
     limits: &Limits,
-) -> Result<TableDef, LiveError> {
+) -> Result<(TableDef, Option<pb::CatalogChange>), LiveError> {
     check_name("table", name)?;
     if let Some(table) = load_table(txn, app, name).await? {
-        return Ok(table);
+        return Ok((table, None));
     }
     if txn.get(&app.schema()).await?.is_some() {
         return Err(LiveError::NotFound(format!(
             "table '{name}' is not in the deployed schema"
         )));
     }
-    create_table(txn, app, name, &[], limits).await
+    let table = create_table(txn, app, name, &[], limits).await?;
+    let created = change(
+        pb::CatalogChangeKind::CATALOG_CHANGE_KIND_TABLE_CREATED,
+        Some(table.id),
+        None,
+    );
+    Ok((table, Some(created)))
 }
 
 /// Creates the table `name` with `indexes`, or changes an existing table's
@@ -221,8 +441,20 @@ pub async fn define_table(
     check_name("table", name)?;
     check_indexes(indexes, limits)?;
     let Some(mut table) = load_table(txn, app, name).await? else {
-        return create_table(txn, app, name, indexes, limits).await;
+        let table = create_table(txn, app, name, indexes, limits).await?;
+        let created = change(
+            pb::CatalogChangeKind::CATALOG_CHANGE_KIND_TABLE_CREATED,
+            Some(table.id),
+            None,
+        );
+        record_changes(txn, app, TABLE_CHANGE, vec![created]).await?;
+        return Ok(table);
     };
+    if table.indexes.iter().any(|i| i.state != IndexState::Ready) {
+        return Err(LiveError::FailedPrecondition(format!(
+            "table '{name}' has an index change in progress (a deploy's backfill or drop)"
+        )));
+    }
     let same = table.indexes.len() == indexes.len()
         && table
             .indexes
@@ -260,15 +492,16 @@ pub async fn define_table(
             id,
             name: spec.name.clone(),
             fields: spec.fields.clone(),
+            state: IndexState::Ready,
         });
     }
     table.indexes = defs;
     table.next_index_id = next;
-    txn.put(&app.table(table.id), table.to_proto().encode_to_vec())
-        .await?;
+    put_table(txn, app, &table).await?;
     Ok(table)
 }
 
+/// Creates the table `name`; its caller records the change.
 async fn create_table(
     txn: &mut Txn,
     app: &AppKeys,
@@ -297,10 +530,12 @@ async fn create_table(
                     id: IndexId(index_id - 1),
                     name: spec.name.clone(),
                     fields: spec.fields.clone(),
+                    state: IndexState::Ready,
                 }
             })
             .collect(),
         next_index_id: index_id,
+        validation: TableValidation::default(),
     };
     txn.put(&counter, next.to_be_bytes().to_vec()).await?;
     txn.put(&app.table_name(name), id.to_be_bytes().to_vec())
@@ -391,10 +626,11 @@ pub async fn load_journal_shards(
     };
     let def = pb::AppDef::decode_from_slice(&bytes)
         .map_err(|e| LiveError::Corrupt(format!("app record: {e}")))?;
-    if def.format != 1 {
+    if !crate::record_format_readable(def.format) {
         return Err(LiveError::Corrupt(format!(
-            "app record format {} (expected 1)",
-            def.format
+            "app record format {} (this release reads {})",
+            def.format,
+            crate::record_format_range()
         )));
     }
     let shards = u16::try_from(def.journal_shards)
@@ -491,11 +727,102 @@ fn check_shards(shards: u16) -> Result<(), LiveError> {
 
 fn app_def(shards: u16) -> Vec<u8> {
     pb::AppDef {
-        format: 1,
+        format: crate::RECORD_FORMAT,
         journal_shards: u32::from(shards),
         ..Default::default()
     }
     .encode_to_vec()
+}
+
+/// Writes `table`'s record in `txn`, and records what changed from the
+/// stored record (LV1 plan Task 11): `TABLE_CREATED` for a new table,
+/// `INDEXES` and `VALIDATOR` for an existing one. Rewriting a record
+/// unchanged records nothing.
+pub(crate) async fn put_table(
+    txn: &mut Txn,
+    app: &AppKeys,
+    table: &TableDef,
+) -> Result<(), LiveError> {
+    let before = load_table_by_id(txn, app, table.id).await?;
+    txn.put(&app.table(table.id), table.to_proto().encode_to_vec())
+        .await?;
+    record_changes(
+        txn,
+        app,
+        TABLE_CHANGE,
+        table_changes(before.as_ref(), table),
+    )
+    .await
+}
+
+/// The catalog changes from `before` (`None`: no table) to `after`.
+fn table_changes(before: Option<&TableDef>, after: &TableDef) -> Vec<pb::CatalogChange> {
+    let kinds = match before {
+        None => vec![pb::CatalogChangeKind::CATALOG_CHANGE_KIND_TABLE_CREATED],
+        Some(before) => {
+            let mut kinds = Vec::new();
+            if before.indexes != after.indexes || before.next_index_id != after.next_index_id {
+                kinds.push(pb::CatalogChangeKind::CATALOG_CHANGE_KIND_INDEXES);
+            }
+            if before.validation != after.validation {
+                kinds.push(pb::CatalogChangeKind::CATALOG_CHANGE_KIND_VALIDATOR);
+            }
+            kinds
+        }
+    };
+    kinds
+        .into_iter()
+        .map(|kind| change(kind, Some(after.id), None))
+        .collect()
+}
+
+/// The `function` of a journal entry that records table changes.
+pub const TABLE_CHANGE: &str = "live.catalog.table";
+
+/// The journal shard catalog entries go to. One shard, so a transaction
+/// that changes several records writes one more journal head, not several.
+pub const CATALOG_SHARD: u16 = 0;
+
+/// A catalog change of `kind`, about `table` or `deployment`.
+pub fn change(
+    kind: pb::CatalogChangeKind,
+    table: Option<TableId>,
+    deployment: Option<Ulid>,
+) -> pb::CatalogChange {
+    pb::CatalogChange {
+        kind: kind.into(),
+        table_id: table.map(|t| t.0),
+        deployment: deployment.map(|d| d.to_string()).unwrap_or_default(),
+        ..Default::default()
+    }
+}
+
+/// Appends `changes` to the app's journal in `txn`, as one entry whose
+/// function is `function` (LV1 plan Task 11), on [`CATALOG_SHARD`]. It
+/// commits with the change, so every tailer sees the change at the tick
+/// whose snapshot first contains it. Nothing is recorded before the app's
+/// runner first opened (no journal yet, so no tailer either).
+pub async fn record_changes(
+    txn: &mut Txn,
+    app: &AppKeys,
+    function: &str,
+    changes: Vec<pb::CatalogChange>,
+) -> Result<(), LiveError> {
+    if changes.is_empty() {
+        return Ok(());
+    }
+    let Some(shards) = load_journal_shards(txn, app).await? else {
+        return Ok(());
+    };
+    let entry = pb::JournalEntry {
+        function: function.to_string(),
+        catalog: changes,
+        ..Default::default()
+    };
+    Journal::new(app.clone(), shards)?
+        .append_to(txn, CATALOG_SHARD, entry)
+        .await?;
+    Ok(())
 }
 
 fn decode_u32(bytes: &[u8], what: &str) -> Result<u32, LiveError> {

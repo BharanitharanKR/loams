@@ -12,6 +12,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use bytes::Bytes;
+use loams_common::formats;
 use loams_quickwit::directories::{
     CachingDirectory, HotDirectory, StorageDirectory, write_hotcache,
 };
@@ -98,6 +99,9 @@ pub fn build_split_from(
 /// Quickwit's footer trailer: the footer's start (u64 LE), the trailer
 /// version (u32 LE) and the magic (`bundle_storage.rs`).
 const TRAILER_LEN: usize = 16;
+/// The version the trailer's writer (`loams-quickwit`) puts there; readers
+/// check the registry's range instead.
+#[cfg(test)]
 const TRAILER_VERSION: u32 = 1;
 const TRAILER_MAGIC: &[u8; 4] = b"QWFT";
 /// The two u32 LE lengths of the footer: bundle metadata and hotcache.
@@ -105,6 +109,12 @@ const LEN_FIELD: usize = 4;
 
 fn corrupt(split_path: &str, message: impl std::fmt::Display) -> TextError {
     TextError::Corrupt(format!("split {split_path}: {message}"))
+}
+
+/// Whether the registry's readable range holds a trailer version (UP1
+/// Task 1).
+fn trailer_version_readable(version: usize) -> bool {
+    formats::check_wide(formats::TEXT_SPLIT_TRAILER, version as u64).is_ok()
 }
 
 fn u32_at(bytes: &[u8], at: usize) -> usize {
@@ -132,7 +142,7 @@ fn check_footer(
     let trailer = &footer[len - TRAILER_LEN..];
     let mut start = [0; 8];
     start.copy_from_slice(&trailer[..8]);
-    if &trailer[12..] != TRAILER_MAGIC || u32_at(trailer, 8) != TRAILER_VERSION as usize {
+    if &trailer[12..] != TRAILER_MAGIC || !trailer_version_readable(u32_at(trailer, 8)) {
         return Err(corrupt(
             split_path,
             "no footer trailer at the end of footer_range",
@@ -252,4 +262,53 @@ pub async fn warm_up_all(index: &Index) -> Result<Searcher, TextError> {
         .reload_policy(ReloadPolicy::Manual)
         .try_into()?;
     Ok(reader.searcher())
+}
+
+/// UP1 Task 1: the trailer reader checks the registry's readable range.
+#[cfg(test)]
+mod format_tests {
+    use loams_common::formats::{self, FormatSpec};
+
+    use super::*;
+
+    /// The smallest footer: no metadata, no hotcache, then the trailer at
+    /// `version`, starting at 100.
+    fn footer(version: u32) -> (Range<u64>, Vec<u8>) {
+        let mut out = vec![0; 8];
+        out.extend_from_slice(&100u64.to_le_bytes());
+        out.extend_from_slice(&version.to_le_bytes());
+        out.extend_from_slice(TRAILER_MAGIC);
+        (100..100 + out.len() as u64, out)
+    }
+
+    fn trailer_refused(version: u32) -> bool {
+        let (range, bytes) = footer(version);
+        match check_footer("s", &range, &bytes) {
+            Ok(()) => false,
+            Err(e) => e.to_string().contains("no footer trailer"),
+        }
+    }
+
+    #[test]
+    fn format_constants_match_registry() {
+        let current = formats::spec_of(formats::TEXT_SPLIT_TRAILER).current;
+        assert_eq!(TRAILER_VERSION, u32::from(current));
+    }
+
+    #[test]
+    fn reader_accepts_previous_version() {
+        assert!(!trailer_refused(TRAILER_VERSION));
+        assert!(trailer_refused(TRAILER_VERSION - 1));
+        let spec = formats::spec_of(formats::TEXT_SPLIT_TRAILER);
+        let spec = FormatSpec {
+            min_read: spec.current - 1,
+            ..spec
+        };
+        formats::with_override(spec, || assert!(!trailer_refused(TRAILER_VERSION - 1)));
+    }
+
+    #[test]
+    fn reader_refuses_next_version() {
+        assert!(trailer_refused(TRAILER_VERSION + 1));
+    }
 }

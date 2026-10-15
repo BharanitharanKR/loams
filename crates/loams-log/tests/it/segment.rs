@@ -186,3 +186,48 @@ proptest! {
         let _ = segment::parse(&framed);
     }
 }
+
+/// UP1 Task 1: the segment reader checks the registry's readable range.
+mod formats {
+    use loams_common::formats::{self, FormatSpec, LOG_SEGMENT};
+    use loams_log::segment;
+
+    /// A segment with its header's version set to `version` and the header
+    /// checksum fixed up.
+    fn at_version(version: u16) -> Vec<u8> {
+        let (bytes, _, _) = super::build(&[2]);
+        let mut changed = bytes.to_vec();
+        changed[8..10].copy_from_slice(&version.to_le_bytes());
+        let crc = crc32c::crc32c(&changed[..segment::HEADER_LEN as usize]);
+        let at = changed.len() - 20;
+        changed[at..at + 4].copy_from_slice(&crc.to_le_bytes());
+        changed
+    }
+
+    #[test]
+    fn format_constants_match_registry() {
+        assert_eq!(segment::VERSION, formats::spec_of(LOG_SEGMENT).current);
+    }
+
+    #[test]
+    fn reader_accepts_previous_version() {
+        let older = at_version(segment::VERSION - 1);
+        assert!(
+            segment::parse(&older).is_err(),
+            "N-1 refused while min_read is N"
+        );
+        let spec = FormatSpec {
+            min_read: segment::VERSION - 1,
+            ..formats::spec_of(LOG_SEGMENT)
+        };
+        formats::with_override(spec, || {
+            segment::parse(&older).expect("N-1 opens once min_read allows it");
+        });
+    }
+
+    #[test]
+    fn reader_refuses_next_version() {
+        let err = segment::parse(&at_version(segment::VERSION + 1)).unwrap_err();
+        assert!(err.to_string().contains("format_unreadable"), "{err}");
+    }
+}

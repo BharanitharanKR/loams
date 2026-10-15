@@ -473,7 +473,7 @@ impl Authenticator for OidcAuthenticator {
     async fn authenticate(&self, credential: &Credential) -> Option<Result<Principal, AuthError>> {
         match credential {
             Credential::Jwt(token) => Some(self.verify(token).await),
-            Credential::ApiKey(_) => None,
+            Credential::ApiKey(_) | Credential::Session(_) => None,
         }
     }
 }

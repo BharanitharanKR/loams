@@ -3,6 +3,7 @@ mod budget;
 mod build;
 mod common;
 mod differential;
+mod formats;
 mod placement;
 mod registry;
 mod remote;

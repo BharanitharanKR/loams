@@ -75,15 +75,17 @@ use hyper::server::conn::http1;
 use hyper::service::service_fn;
 use hyper_util::rt::{TokioIo, TokioTimer};
 use loams_house_ipc::{Execute, Limits, Output, Progress};
+use sha2::{Digest, Sha256};
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt, ReadBuf};
-use tokio::net::{TcpListener, TcpStream};
+use tokio::net::TcpListener;
 use tokio::sync::{Semaphore, mpsc};
 use tokio::task::JoinHandle;
 use tokio::time::Sleep;
 
 use crate::admission::{Event, Outcome, WorkerLease, WorkerPool};
-use crate::api::{ApiCatalog, FixtureCatalog, HouseApi};
+use crate::api::{ApiCatalog, FixtureCatalog, HouseApi, LakeCatalog};
 use crate::auth;
+use crate::catalog::Lake;
 use crate::classify::{Classified, Expect, Stmt, check_text, classify, readonly_error};
 use crate::compress::{self, Decoder, Encoder, Encoding};
 use crate::config::{self, BUFFER_SIZE_RANGE, DISPLAY_NAME, HouseConfig, SPOOL_IN_MEMORY, UserMap};
@@ -114,7 +116,10 @@ const LINGER: Duration = Duration::from_secs(2);
 #[derive(Debug)]
 pub struct HouseHandle {
     addr: SocketAddr,
+    tls_addr: Option<SocketAddr>,
     accept: JoinHandle<()>,
+    tls_accept: Option<JoinHandle<()>>,
+    compaction: Option<JoinHandle<()>>,
 }
 
 impl HouseHandle {
@@ -123,15 +128,30 @@ impl HouseHandle {
         self.addr
     }
 
+    /// The TLS listener's address, when it has one (HS1 Task 20).
+    pub fn tls_addr(&self) -> Option<SocketAddr> {
+        self.tls_addr
+    }
+
     /// Stops accepting connections.
     pub fn shutdown(self) {
+        self.abort();
+    }
+
+    fn abort(&self) {
         self.accept.abort();
+        if let Some(tls) = &self.tls_accept {
+            tls.abort();
+        }
+        if let Some(compaction) = &self.compaction {
+            compaction.abort();
+        }
     }
 }
 
 impl Drop for HouseHandle {
     fn drop(&mut self) {
-        self.accept.abort();
+        self.abort();
     }
 }
 
@@ -142,6 +162,8 @@ struct Shared {
     spool: Arc<SpoolBudget>,
     sessions: Arc<SessionTable>,
     api: ApiService,
+    /// The catalog of lake tables (HS1 Task 10), when the House has one.
+    lake: Option<Arc<Lake>>,
 }
 
 /// connect-rust's service for `loams.house.v1`, which has no `Debug` of its own.
@@ -156,17 +178,38 @@ impl std::fmt::Debug for ApiService {
 
 /// Serves the ClickHouse HTTP interface and `loams.house.v1` on `config.listen`,
 /// running statements on `pool`. A non-loopback address is refused (D111). The
-/// API's browsing RPCs read what this House has before HS1 Task 10's catalog
+/// API's browsing RPCs read what a House with no catalog has
 /// ([`FixtureCatalog::empty`]).
 pub async fn serve(config: HouseConfig, pool: WorkerPool) -> Result<HouseHandle, HouseError> {
     serve_with_catalog(config, pool, Arc::new(FixtureCatalog::empty())).await
 }
 
-/// [`serve`], with the API's metadata read from `catalog`.
+/// [`serve`], with the API's metadata read from `catalog` (fixtures, in tests).
 pub async fn serve_with_catalog(
     config: HouseConfig,
     pool: WorkerPool,
     catalog: Arc<dyn ApiCatalog>,
+) -> Result<HouseHandle, HouseError> {
+    serve_all(config, pool, catalog, None).await
+}
+
+/// [`serve`] with a catalog of lake tables (HS1 Task 10): DDL, `USE`, `DESCRIBE`,
+/// `SHOW CREATE` and `EXISTS` of its tables are answered from it, and so are the
+/// API's browsing RPCs.
+pub async fn serve_with_lake(
+    config: HouseConfig,
+    pool: WorkerPool,
+    lake: Arc<Lake>,
+) -> Result<HouseHandle, HouseError> {
+    let catalog = Arc::new(LakeCatalog(Arc::clone(&lake)));
+    serve_all(config, pool, catalog, Some(lake)).await
+}
+
+async fn serve_all(
+    config: HouseConfig,
+    pool: WorkerPool,
+    catalog: Arc<dyn ApiCatalog>,
+    lake: Option<Arc<Lake>>,
 ) -> Result<HouseHandle, HouseError> {
     config::check_listen(config.listen)?;
     let listen = config.listen;
@@ -182,7 +225,23 @@ pub async fn serve_with_catalog(
     let addr = listener
         .local_addr()
         .map_err(|err| network("address", err))?;
+    // The TLS listener (HS1 Task 20): any address, never plaintext.
+    let (tls, tls_addr) = match &config.tls {
+        Some(tls) => {
+            config::check_tls_users(tls.listen, &config.users)?;
+            let listener = TcpListener::bind(tls.listen)
+                .await
+                .map_err(|err| network("bind the TLS listener", err))?;
+            let bound = listener
+                .local_addr()
+                .map_err(|err| network("the TLS listener's address", err))?;
+            let acceptor = tokio_rustls::TlsAcceptor::from(Arc::clone(&tls.config));
+            (Some((listener, acceptor)), Some(bound))
+        }
+        None => (None, None),
+    };
     let permits = Arc::new(Semaphore::new(config.max_connections.max(1)));
+    let tls_permits = Arc::clone(&permits);
     let unpin_pool = pool.clone();
     let sessions = SessionTable::new(
         config.max_live_sessions,
@@ -202,7 +261,7 @@ pub async fn serve_with_catalog(
         }
     });
     let api = ApiService(ConnectRpcService::new(
-        HouseApi::new(config.clone(), pool.clone(), catalog).router(),
+        HouseApi::new(config.clone(), pool.clone(), catalog, lake.clone()).router(),
     ));
     let shared = Arc::new(Shared {
         spool: Arc::new(SpoolBudget::new(config.spool_budget_bytes)),
@@ -210,7 +269,21 @@ pub async fn serve_with_catalog(
         pool,
         sessions,
         api,
+        lake,
     });
+    let tls_shared = Arc::clone(&shared);
+    // Background compaction of the lake's tables (HS1 Task 13).
+    let compaction = match (&shared.lake, shared.config.compaction_interval) {
+        (Some(lake), every) if !every.is_zero() => Some(
+            crate::compact::Scheduler::new(
+                Arc::clone(lake),
+                shared.pool.clone(),
+                shared.config.clone(),
+            )
+            .spawn(every),
+        ),
+        _ => None,
+    };
     let accept = tokio::spawn(async move {
         loop {
             let Ok(permit) = Arc::clone(&permits).acquire_owned().await else {
@@ -218,6 +291,7 @@ pub async fn serve_with_catalog(
             };
             match listener.accept().await {
                 Ok((stream, _)) => {
+                    let _ = stream.set_nodelay(true);
                     let shared = Arc::clone(&shared);
                     tokio::spawn(async move {
                         connection(stream, shared).await;
@@ -228,11 +302,54 @@ pub async fn serve_with_catalog(
             }
         }
     });
-    Ok(HouseHandle { addr, accept })
+    let tls_accept = match tls {
+        Some((listener, acceptor)) => {
+            let shared = Arc::clone(&tls_shared);
+            let permits = Arc::clone(&tls_permits);
+            Some(tokio::spawn(async move {
+                loop {
+                    let Ok(permit) = Arc::clone(&permits).acquire_owned().await else {
+                        return;
+                    };
+                    match listener.accept().await {
+                        Ok((stream, _)) => {
+                            let _ = stream.set_nodelay(true);
+                            let shared = Arc::clone(&shared);
+                            let acceptor = acceptor.clone();
+                            tokio::spawn(async move {
+                                // A handshake gets what a request body's frame
+                                // gets: `receive_timeout`.
+                                let handshake = tokio::time::timeout(
+                                    shared.config.receive_timeout,
+                                    acceptor.accept(stream),
+                                )
+                                .await;
+                                if let Ok(Ok(stream)) = handshake {
+                                    connection(stream, shared).await;
+                                }
+                                drop(permit);
+                            });
+                        }
+                        Err(_) => tokio::time::sleep(Duration::from_millis(10)).await,
+                    }
+                }
+            }))
+        }
+        None => None,
+    };
+    Ok(HouseHandle {
+        addr,
+        tls_addr,
+        accept,
+        tls_accept,
+        compaction,
+    })
 }
 
-async fn connection(stream: TcpStream, shared: Arc<Shared>) {
-    let _ = stream.set_nodelay(true);
+async fn connection<S>(stream: S, shared: Arc<Shared>)
+where
+    S: AsyncRead + AsyncWrite + Unpin + Send + 'static,
+{
     let config = &shared.config;
     let io = TokioIo::new(IdleIo::new(stream, config.send_timeout));
     let mut builder = http1::Builder::new();
@@ -293,14 +410,14 @@ fn head_timeout(config: &HouseConfig) -> Duration {
 /// `receive_timeout`) and each head and idle gap (hyper's header timer,
 /// `keep_alive`).
 #[derive(Debug)]
-struct IdleIo {
-    stream: TcpStream,
+struct IdleIo<S> {
+    stream: S,
     write_idle: Duration,
     write_deadline: Option<Pin<Box<Sleep>>>,
 }
 
-impl IdleIo {
-    fn new(stream: TcpStream, write_idle: Duration) -> Self {
+impl<S> IdleIo<S> {
+    fn new(stream: S, write_idle: Duration) -> Self {
         Self {
             stream,
             write_idle,
@@ -324,7 +441,7 @@ impl IdleIo {
     }
 }
 
-impl AsyncRead for IdleIo {
+impl<S: AsyncRead + Unpin> AsyncRead for IdleIo<S> {
     fn poll_read(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -334,7 +451,7 @@ impl AsyncRead for IdleIo {
     }
 }
 
-impl AsyncWrite for IdleIo {
+impl<S: AsyncWrite + Unpin> AsyncWrite for IdleIo<S> {
     fn poll_write(
         self: Pin<&mut Self>,
         cx: &mut Context<'_>,
@@ -623,6 +740,46 @@ struct Meta {
     affinity: Option<String>,
     /// `X-Loams-Worker`, once a worker ran the statement (Shared contracts).
     worker: Option<String>,
+    /// `X-Loams-Snapshot-Id` after a lake write (`table=id`, HS1 Task 12).
+    snapshot: Option<String>,
+    /// The statement's audit record (HS1 Task 20), written once, when the
+    /// response's head is built.
+    audit: Option<Arc<Audit>>,
+}
+
+/// A statement's audit record on its way to the sink.
+#[derive(Debug)]
+struct Audit {
+    sink: Arc<dyn crate::audit::AuditSink>,
+    event: std::sync::Mutex<Option<crate::audit::AuditEvent>>,
+}
+
+impl Audit {
+    fn new(sink: &Arc<dyn crate::audit::AuditSink>, query_id: &str) -> Self {
+        Self {
+            sink: Arc::clone(sink),
+            event: std::sync::Mutex::new(Some(crate::audit::AuditEvent::now("http", query_id))),
+        }
+    }
+
+    fn update(&self, change: impl FnOnce(&mut crate::audit::AuditEvent)) {
+        if let Some(event) = self
+            .event
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .as_mut()
+        {
+            change(event);
+        }
+    }
+
+    fn finish(&self, code: i32) {
+        let taken = self.event.lock().unwrap_or_else(|e| e.into_inner()).take();
+        if let Some(mut event) = taken {
+            event.code = code;
+            self.sink.record(&event);
+        }
+    }
 }
 
 impl Meta {
@@ -636,6 +793,9 @@ impl Meta {
         last: &Progress,
         close: bool,
     ) -> http::response::Builder {
+        if let Some(audit) = &self.audit {
+            audit.finish(code.unwrap_or(0));
+        }
         let mut builder = Response::builder()
             .status(status)
             .header("Content-Type", content_type)
@@ -655,6 +815,9 @@ impl Meta {
         }
         if let Some(worker) = &self.worker {
             builder = builder.header("X-Loams-Worker", header_value(worker));
+        }
+        if let Some(snapshot) = &self.snapshot {
+            builder = builder.header("X-Loams-Snapshot-Id", header_value(snapshot));
         }
         if close {
             builder = builder.header("Connection", "close");
@@ -696,6 +859,19 @@ impl Meta {
         .body(HouseBody::full(body))
         .unwrap_or_else(|_| fallback())
     }
+}
+
+/// An empty success (`SET`, `USE`, DDL).
+fn empty_ok(meta: &Meta) -> Response<HouseBody> {
+    meta.head(
+        StatusCode::OK,
+        content_type(&meta.format),
+        None,
+        &Progress::default(),
+        false,
+    )
+    .body(HouseBody::full(Vec::new()))
+    .unwrap_or_else(|_| fallback())
 }
 
 fn fallback() -> Response<HouseBody> {
@@ -750,6 +926,8 @@ async fn handle(shared: Arc<Shared>, request: Request<Incoming>) -> Response<Hou
                 send_progress: false,
                 affinity: None,
                 worker: None,
+                snapshot: None,
+                audit: None,
             };
             return meta.error(&err, &Progress::default(), true);
         }
@@ -819,7 +997,33 @@ async fn run(
         send_progress: get("send_progress_in_http_headers") == Some("1"),
         affinity: None,
         worker: None,
+        snapshot: None,
+        audit: None,
     };
+    // Every statement's audit record (HS1 Task 20): the claimed user and
+    // principal now, the signed-in identity once known.
+    if let Some(sink) = &config.audit {
+        let audit = Audit::new(sink, &meta.query_id);
+        let pairs: Vec<(String, String)> = parts
+            .headers
+            .iter()
+            .filter_map(|(k, v)| {
+                v.to_str()
+                    .ok()
+                    .map(|v| (k.as_str().to_string(), v.to_string()))
+            })
+            .collect();
+        audit.update(|event| {
+            event.user = auth::credentials(&pairs, &params)
+                .map(|c| c.user)
+                .unwrap_or_default();
+            event.principal = pairs
+                .iter()
+                .find(|(k, _)| k.eq_ignore_ascii_case(crate::identity::PRINCIPAL_HEADER))
+                .map(|(_, v)| v.clone());
+        });
+        meta.audit = Some(Arc::new(audit));
+    }
     let mut body = RequestBody::new(body, config.receive_timeout);
 
     // Everything before a worker: who, what, and how.
@@ -831,6 +1035,8 @@ async fn run(
         &mut body,
         parts.method == Method::POST,
         &known,
+        shared.lake.is_some(),
+        meta.audit.as_deref(),
     )
     .await;
     let prepared = match prepared {
@@ -887,6 +1093,125 @@ async fn run(
     };
     meta.affinity = session.as_ref().map(SessionGuard::affinity_key);
 
+    // The catalog's statements (HS1 Task 10): DDL and `USE` are answered here;
+    // `DESCRIBE`, `SHOW CREATE` and `EXISTS` of a catalog table become a read of
+    // their rows; everything else goes on.
+    let current_database = get("database")
+        .map(str::to_string)
+        .or_else(|| session.as_ref().map(|g| g.state().database.clone()))
+        .unwrap_or_else(|| "default".to_string());
+    // `SHOW TABLES`, `SHOW DATABASES`, `SHOW PROCESSLIST`: ClickHouse's own
+    // `SELECT` over the House's `system` tables (HS1 Task 11).
+    let shown = match &classified {
+        Classified::Known { stmt, format } => gate::show_answer(
+            shared.lake.as_deref(),
+            user.namespace,
+            &current_database,
+            stmt,
+        )
+        .await
+        .map(|query| query.map(|q| (q, format.clone()))),
+        Classified::Unparsed { .. } => Ok(None),
+    };
+    let (classified, sql) = match shown {
+        Ok(Some((query, format))) => (
+            Classified::Known {
+                stmt: Stmt::Query {
+                    text: query.clone(),
+                },
+                format,
+            },
+            query,
+        ),
+        Ok(None) => (classified, sql),
+        Err(err) => {
+            let close = !body.drain().await;
+            return meta.error(&err, &Progress::default(), close);
+        }
+    };
+    let (classified, sql) = if let Classified::Known { stmt, format } = &classified {
+        let answered = match &shared.lake {
+            Some(lake) if get("database").is_some() => lake
+                .require_database(user.namespace, &current_database)
+                .await
+                .map(|()| Some(lake)),
+            lake => Ok(lake.as_ref()),
+        };
+        let outcome = match answered {
+            Ok(lake) => {
+                gate::catalog_answer(
+                    lake.map(Arc::as_ref),
+                    &shared.pool,
+                    &user,
+                    &current_database,
+                    stmt,
+                    &sql,
+                    session.as_ref(),
+                    &meta.query_id,
+                )
+                .await
+            }
+            Err(err) => Err(err),
+        };
+        match outcome {
+            Ok(gate::CatalogOutcome::Done) => {
+                drop(session);
+                return empty_ok(&meta);
+            }
+            Ok(gate::CatalogOutcome::Rows(query)) => (
+                Classified::Known {
+                    stmt: Stmt::Query {
+                        text: query.clone(),
+                    },
+                    format: format.clone(),
+                },
+                query,
+            ),
+            Ok(gate::CatalogOutcome::NotOurs) => (classified, sql),
+            Ok(
+                outcome @ (gate::CatalogOutcome::Insert(_)
+                | gate::CatalogOutcome::CreateAs(_)
+                | gate::CatalogOutcome::Optimize(_)),
+            ) => {
+                let mut all: Vec<(String, String)> = session
+                    .as_ref()
+                    .map(|guard| guard.state().settings.pairs().to_vec())
+                    .unwrap_or_default();
+                all.extend(settings.iter().cloned());
+                let job = match outcome {
+                    gate::CatalogOutcome::Insert(target) => LakeJob::Insert(target),
+                    gate::CatalogOutcome::CreateAs(plan) => LakeJob::CreateAs(plan),
+                    gate::CatalogOutcome::Optimize(plan) => LakeJob::Optimize(plan),
+                    _ => unreachable!("matched above"),
+                };
+                let write = LakeWrite {
+                    job,
+                    database: current_database,
+                    params: query_params,
+                    settings: all,
+                };
+                let response = lake_insert(
+                    shared,
+                    &mut meta,
+                    &user,
+                    write,
+                    &mut body,
+                    &mut decoder,
+                    first_data,
+                )
+                .await;
+                drop(session);
+                return response;
+            }
+            Err(err) => {
+                let close = !body.drain().await;
+                return meta.error(&err, &Progress::default(), close);
+            }
+        }
+    } else {
+        (classified, sql)
+    };
+
     // What the front answers itself, and what runs. Every statement chDB gets is
     // gated by ClickHouse's class below (`expect`, and sqlparser's message for a
     // form it could not parse).
@@ -895,16 +1220,7 @@ async fn run(
             match gate::front_answer(&stmt, session.as_ref(), &config.session_limits, &known) {
                 Some(Ok(())) => {
                     drop(session);
-                    return meta
-                        .head(
-                            StatusCode::OK,
-                            content_type(&meta.format),
-                            None,
-                            &Progress::default(),
-                            false,
-                        )
-                        .body(HouseBody::full(Vec::new()))
-                        .unwrap_or_else(|_| fallback());
+                    return empty_ok(&meta);
                 }
                 Some(Err(err)) => {
                     let close = !body.drain().await;
@@ -964,14 +1280,18 @@ async fn run(
             expect,
             readonly,
             unparsed.as_deref(),
-        ),
+        )
+        .map(|()| analysis),
         Err(err) => Err(deny::as_setting_refusal(err)),
     };
-    if let Err(err) = decided {
-        pool.release(lease, Outcome::Completed);
-        let close = !body.drain().await;
-        return meta.error(&err, &Progress::default(), close);
-    }
+    let analysis = match decided {
+        Ok(analysis) => analysis,
+        Err(err) => {
+            pool.release(lease, Outcome::Completed);
+            let close = !body.drain().await;
+            return meta.error(&err, &Progress::default(), close);
+        }
+    };
 
     // Settings: the session's, then the request's (which win); Loams's own stay here.
     let mut settings = Vec::new();
@@ -987,15 +1307,51 @@ async fn run(
         params
             .iter()
             .filter(|(k, _)| !k.starts_with("param_") && !NON_SETTINGS.contains(&k.as_str()))
-            .filter(|(k, _)| !crate::settings::is_loams(k))
+            .filter(|(k, _)| !crate::settings::is_front_only(k))
             .cloned(),
     );
+    // What it reads (HS1 Task 11): its lake tables pinned and viewed, its
+    // `system` tables the House's. Loams's own settings choose the snapshot.
+    let streams_input = input.is_some();
+    let (views, sql) = if input.is_some() {
+        (Vec::new(), String::new())
+    } else {
+        let mut all: Vec<(String, String)> = session
+            .as_ref()
+            .map(|guard| guard.state().settings.pairs().to_vec())
+            .unwrap_or_default();
+        all.extend(
+            params
+                .iter()
+                .filter(|(k, _)| !k.starts_with("param_") && !NON_SETTINGS.contains(&k.as_str()))
+                .cloned(),
+        );
+        match gate::read_plan(
+            shared.lake.as_deref(),
+            user.namespace,
+            &current_database,
+            &user,
+            &mut lease,
+            &analysis,
+            &sql,
+            &all,
+        )
+        .await
+        {
+            Ok(plan) => (plan.views, plan.sql),
+            Err(err) => {
+                pool.release(lease, Outcome::Completed);
+                let close = !body.drain().await;
+                return meta.error(&err, &Progress::default(), close);
+            }
+        }
+    };
     let execute = Execute {
         query_id: meta.query_id.clone(),
         session: worker_session,
         settings,
-        views: Vec::new(),
-        sql: if input.is_some() { String::new() } else { sql },
+        views,
+        sql,
         format: meta.format.clone(),
         params: query_params,
         limits: Limits::default(),
@@ -1005,6 +1361,10 @@ async fn run(
         output: Output::Document {
             max_buffered_bytes: config.wait_end_of_query_max_bytes,
         },
+        // An `INSERT` whose data streams reads no table (its target is a
+        // temporary table or chDB refuses it), and its worker makes no view
+        // databases for it: the connection's database stays.
+        database: (!streams_input).then_some(current_database),
     };
     let has_input = execute.input.is_some();
     if let Err(err) = lease.start(execute).await {
@@ -1013,7 +1373,7 @@ async fn run(
         return meta.error(&err, &Progress::default(), close);
     }
     if has_input
-        && let Err(err) = stream_input(&mut lease, &mut body, &mut decoder, first_data).await
+        && let Err(err) = stream_input(&mut lease, &mut body, &mut decoder, first_data, None).await
     {
         // The worker is mid-`INSERT`: ending its input would commit a body that did
         // not arrive whole (review I5), so it is killed instead.
@@ -1037,6 +1397,7 @@ struct Prepared {
     first_data: Vec<u8>,
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn prepare(
     config: &HouseConfig,
     headers: &http::HeaderMap,
@@ -1044,6 +1405,8 @@ async fn prepare(
     body: &mut RequestBody,
     post: bool,
     known: &std::collections::HashSet<String>,
+    has_lake: bool,
+    audit: Option<&Audit>,
 ) -> Result<Prepared, HouseError> {
     let get = |name: &str| {
         params
@@ -1059,8 +1422,7 @@ async fn prepare(
                 .map(|v| (k.as_str().to_string(), v.to_string()))
         })
         .collect();
-    let credentials = auth::credentials(&header_pairs, params)?;
-    let user = auth::authenticate(&config.users, &credentials)?.clone();
+    let user = auth::identify(config, &header_pairs, params)?;
     for name in ["compress", "decompress"] {
         if get(name) == Some("1") {
             return Err(HouseError::from(ChError::not_implemented(format!(
@@ -1069,7 +1431,9 @@ async fn prepare(
             ))));
         }
     }
-    if let Some(database) = get("database").filter(|d| *d != "default") {
+    // Without a catalog only `default` exists; with one, `run` asks it (HS1 Task
+    // 10).
+    if !has_lake && let Some(database) = get("database").filter(|d| *d != "default") {
         return Err(HouseError::from(ChError::unknown_database(format!(
             "Database {database} does not exist"
         ))));
@@ -1125,9 +1489,24 @@ async fn prepare(
         }
         None => classify(&plan.sql)?,
     };
+    // Audited with what it is before GET's and a read-only user's rule
+    // (`164`, as ClickHouse) and the identity's scopes (`497`, HS1 Task 20)
+    // decide.
+    if let Some(audit) = audit {
+        audit.update(|event| {
+            event.user = user.user.clone();
+            event.principal = user.principal.clone();
+            event.namespace = Some(user.namespace);
+            event.statement = Some(match &classified {
+                Classified::Known { stmt, .. } => stmt.kind().to_string(),
+                Classified::Unparsed { .. } => "Unparsed".to_string(),
+            });
+        });
+    }
     if readonly && matches!(&classified, Classified::Known { stmt, .. } if !stmt.is_read()) {
         return Err(readonly_error());
     }
+    gate::authorize(&user, &classified)?;
     let format = match &classified {
         Classified::Known { format, .. } | Classified::Unparsed { format, .. } => {
             format.clone().or(plan.format)
@@ -1204,13 +1583,20 @@ async fn stream_input(
     body: &mut RequestBody,
     decoder: &mut Decoder,
     first: Vec<u8>,
+    mut hash: Option<&mut Sha256>,
 ) -> Result<(), HouseError> {
+    let mut send = async |lease: &mut WorkerLease, piece: Vec<u8>| {
+        if let Some(hash) = hash.as_deref_mut() {
+            hash.update(&piece);
+        }
+        lease.send_input(Bytes::from(piece)).await
+    };
     if !first.is_empty() {
-        lease.send_input(Bytes::from(first)).await?;
+        send(lease, first).await?;
     }
     loop {
         while let Some(piece) = decoder.next_piece().map_err(undecodable)? {
-            lease.send_input(Bytes::from(piece)).await?;
+            send(lease, piece).await?;
         }
         match body.next().await? {
             Some(piece) => decoder.push(&piece),
@@ -1219,9 +1605,128 @@ async fn stream_input(
     }
     decoder.end();
     while let Some(piece) = decoder.next_piece().map_err(undecodable)? {
-        lease.send_input(Bytes::from(piece)).await?;
+        send(lease, piece).await?;
     }
     lease.end_input().await
+}
+
+/// A write to a lake table (HS1 Task 12).
+enum LakeJob {
+    Insert(Box<crate::insert::Target>),
+    CreateAs(Box<crate::insert::CreateAs>),
+    Optimize(Box<crate::compact::OptimizePlan>),
+}
+
+/// A write to a lake table and what it runs with (HS1 Task 12).
+struct LakeWrite {
+    job: LakeJob,
+    database: String,
+    params: Vec<(String, String)>,
+    settings: Vec<(String, String)>,
+}
+
+/// The request body as an `INSERT`'s data.
+struct BodyFeed<'a> {
+    body: &'a mut RequestBody,
+    decoder: &'a mut Decoder,
+    first: Vec<u8>,
+}
+
+#[async_trait::async_trait]
+impl crate::insert::Feed for BodyFeed<'_> {
+    async fn feed(&mut self, lease: &mut WorkerLease, hash: &mut Sha256) -> Result<(), HouseError> {
+        let first = std::mem::take(&mut self.first);
+        stream_input(lease, self.body, self.decoder, first, Some(hash)).await
+    }
+}
+
+/// Runs an `INSERT` into a lake table (HS1 Task 12) and answers it: an empty
+/// `200` after the commit, `X-ClickHouse-Summary` with what was written and
+/// `X-Loams-Snapshot-Id`.
+async fn lake_insert(
+    shared: &Arc<Shared>,
+    meta: &mut Meta,
+    user: &UserMap,
+    write: LakeWrite,
+    body: &mut RequestBody,
+    decoder: &mut Decoder,
+    first_data: Vec<u8>,
+) -> Response<HouseBody> {
+    let Some(lake) = shared.lake.as_deref() else {
+        let close = !body.drain().await;
+        let err = HouseError::from(ChError::not_implemented("this House has no catalog"));
+        return meta.error(&err, &Progress::default(), close);
+    };
+    let streams = matches!(
+        &write.job,
+        LakeJob::Insert(target) if matches!(target.source, crate::insert::Source::Stream { .. })
+    );
+    // As for any INSERT: a worker only once its data has started (review I1).
+    if streams && first_data.is_empty() {
+        match body.next().await {
+            Ok(Some(piece)) => decoder.push(&piece),
+            Ok(None) => decoder.end(),
+            Err(err) => return meta.error(&err, &Progress::default(), true),
+        }
+    }
+    let lease = match shared.pool.acquire(&user.namespace.to_string()).await {
+        Ok(lease) => lease,
+        Err(err) => {
+            let close = !body.drain().await;
+            return meta.error(&err, &Progress::default(), close);
+        }
+    };
+    meta.worker = Some(lease.worker_id().to_string());
+    let known = shared.pool.known_settings();
+    let ctx = crate::insert::InsertContext {
+        lake,
+        pool: &shared.pool,
+        namespace: user.namespace,
+        database: &write.database,
+        user,
+        query_id: &meta.query_id,
+        params: &write.params,
+        settings: &write.settings,
+        limits: &shared.config.session_limits,
+        known: &known,
+        max_insert_bytes: shared.config.lake_insert_max_bytes,
+    };
+    let mut feed = BodyFeed {
+        body,
+        decoder,
+        first: first_data,
+    };
+    let feed: Option<&mut dyn crate::insert::Feed> = if streams { Some(&mut feed) } else { None };
+    let inserted = match write.job {
+        LakeJob::Insert(target) => crate::insert::run(&ctx, lease, *target, feed).await,
+        LakeJob::CreateAs(plan) => crate::insert::create_as(&ctx, lease, *plan).await,
+        LakeJob::Optimize(plan) => {
+            // Compaction takes its own workers.
+            shared
+                .pool
+                .release(lease, crate::admission::Outcome::Completed);
+            crate::compact::optimize(&ctx, &plan).await
+        }
+    };
+    match inserted {
+        Ok(inserted) => {
+            meta.snapshot = inserted.snapshot_header();
+            meta.head(
+                StatusCode::OK,
+                content_type(&meta.format),
+                None,
+                &inserted.progress(),
+                false,
+            )
+            .body(HouseBody::full(Vec::new()))
+            .unwrap_or_else(|_| fallback())
+        }
+        Err(err) => {
+            // A body not read to its end leaves the connection out of step.
+            let close = streams;
+            meta.error(&err, &Progress::default(), close)
+        }
+    }
 }
 
 /// Runs the statement's events into a response: held until `buffer_size` or the

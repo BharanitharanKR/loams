@@ -1,6 +1,6 @@
 # 42 — Cloudflare's Birthday Week 2026 Betas: Open Adapters for Loams
 
-Status: **Proposed** · 2026-10-02. The owner's direction of 2026-10-02: "search the latest beta features in the Cloudflare blog and use them." This note folds the betas into the **open** side of Loams only. Hosted-service choices (Containers, Dynamic Workers, the Monetization Gateway, the Data Platform as a hosted analytics backend) are in the private `loams-platform` repository, docs 03 to 07, and follow [open-core.md](../open-core.md). Decisions **D560–D578** and questions **Q560–Q572** (the ranges D560–D579 and Q560–Q579 are reserved; IDs not listed are unused) are recorded in the [decision log](13-decision-log.md).
+Status: **Proposed** · 2026-10-02. The owner's direction of 2026-10-02: "search the latest beta features in the Cloudflare blog and use them." This note folds the betas into the **open** side of Loams only. Hosted-service choices (Containers, Dynamic Workers, the Monetization Gateway, the Data Platform as a hosted analytics backend) are in the private `loams-platform` repository, docs 03 to 07, and follow the open-core boundary (§41). Decisions **D560–D578** and questions **Q560–Q572** (the ranges D560–D579 and Q560–Q579 are reserved; IDs not listed are unused) are recorded in the [decision log](13-decision-log.md).
 
 Rule for this note: nothing below is relied on until its status, limits, pricing and licence were read on Cloudflare's own blog or documentation. Every fact carries the date it was read (**verified 2026-10-02**); a fact a primary page did not state is marked **(unverified)**. Cloudflare's betas change fast: re-check the row before an adapter ships.
 
@@ -126,7 +126,7 @@ Basin Catalog (formerly R2 Data Catalog; generally available since 2026-10-01) i
 - **§39 SF4 (D574).** A factory run's coding workspace is a **pause and resume** unit. On the self-hosted Knative target, a workspace is a branch plus a volume snapshot. On Cloudflare Containers, it is `snapshotContainer` and `start({ containerSnapshot })` (beta). SF4 gets a `WorkspaceSnapshot` seam so the provider is chosen by deployment; the Cloudflare one is private.
 - **The deprecated classes (D575).** A search of docs 00 to 41 on 2026-10-02 found no Loams design that names Cloudflare's `Container` or `Sandbox` classes (§36 uses a Durable Object for the sequencer). The private docs 03 and 04 are updated to `this.ctx.container`.
 - **D576, Emscripten.** §36 and CF1 (private) already plan Rust on Workers. The 2026-09-28 post makes the Emscripten target an experimental preview with Tokio available through two paths; CF1 must treat Tokio on Workers as **experimental** and pin the patch set.
-- **D577, Monetization Gateway.** Private. Charging agents per call for commercial Loams APIs is billing, and billing is not open (open-core.md). The open side exposes only the existing usage hooks (§27).
+- **D577, Monetization Gateway.** Private. Charging agents per call for commercial Loams APIs is billing, and billing is not open (§41). The open side exposes only the existing usage hooks (§27).
 - **D578, Dynamic Workers and Facets.** The Cloudflare-target tier for untrusted agent code (§24) and the Factory's generated apps; private (loams-platform doc 03). The open tier is workerd under gVisor.
 
 ## 8. Implementation plans

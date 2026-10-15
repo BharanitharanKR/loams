@@ -1,0 +1,29 @@
+{
+  "accounts": [
+    {
+      "active": true,
+      "authKind": "oauth",
+      "displayName": "Dev",
+      "email": "dev@example.com",
+      "harness": "codex",
+      "id": "account-1",
+      "planLabel": "Pro",
+      "savedAt": 1791797400000,
+      "switchable": true,
+      "usageFetchedAt": 1791797400000,
+      "usageWindows": [
+        {
+          "label": "5h",
+          "resetsAt": "2026-10-12T09:30:00Z",
+          "usedFraction": 0.5
+        }
+      ]
+    }
+  ],
+  "warnings": [
+    {
+      "harness": "pi",
+      "message": "Pi is not signed in"
+    }
+  ]
+}

@@ -34,6 +34,9 @@ pub fn ref_txn() -> pb::RefTransaction {
         principal: "alice@example.com".into(),
         push_options: vec!["ci.skip".into()],
         object_format: pb::ObjectFormat::Sha1 as i32,
+        // Empty, so the golden segment written before the field existed
+        // (Task 8, T8.1) keeps its bytes.
+        request_digest: Vec::new(),
     }
 }
 
@@ -93,6 +96,8 @@ pub fn golden_batch(seq: Seq) -> WalBatch {
                     deny_delete: true,
                     deny_force: true,
                 }],
+                // Added by GT1 Task 13 (T13.2); empty, so the golden bytes do not change.
+                request_digest: Vec::new(),
             }),
             false,
         ),

@@ -36,6 +36,10 @@ inputs:
       - proto/loams/operations/v1
       - proto/loams/notifications/v1
       - proto/loams/live/v1
+      # The console API (API2 Tasks 6 and 7), which the facade's `loams.auth`
+      # and `loams.admin.*` modules bind.
+      - proto/loams/auth/v1
+      - proto/loams/admin/v1
 plugins:
   # `protoc --python_out`: the messages and service descriptors. It writes
   # `loams/<package path>/<file>_pb2.py`.
@@ -43,9 +47,11 @@ plugins:
     out: sdks/python/src
   # `protoc --connectrpc_out`: the Connect clients and server base classes.
   # connectrpc/connect-py 0.12.1, Apache-2.0. The distribution is
-  # `protoc-gen-connectrpc`; the PyPI *runtime* package is `connectrpc`, not
-  # `connect-python` — see the ruling in
-  # docs/plans/2026-10-02-sdk1-generation-pipeline.md.
+  # `protoc-gen-connectrpc`; the PyPI *runtime* package is `connectrpc` (named
+  # `connect-python` up to 0.9.0) — see the ruling in
+  # docs/plans/2026-10-02-sdk1-generation-pipeline.md. The BSR plugin moved with
+  # the rename: `buf.build/connectrpc/python` stops at v0.10.1 and v0.11.0 on is
+  # `buf.build/connectrpc/py`.
   #
   # **`protobuf=google` is load-bearing, and was found by running both plugins.**
   # connectrpc's generator defaults to `protobuf-py`, its own pure-Python
@@ -58,7 +64,7 @@ plugins:
   # maintained `protobuf` distribution. Verified by running both plugins over
   # `proto/` and importing the result against connectrpc 0.12.1 and protobuf
   # 7.36.2.
-  - remote: buf.build/connectrpc/python:v0.9.0
+  - remote: buf.build/connectrpc/py:v0.12.1
     out: sdks/python/src
     opt:
       - protobuf=google

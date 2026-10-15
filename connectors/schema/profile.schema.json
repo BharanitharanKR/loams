@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://loams.dev/schemas/profile.schema.json",
+  "title": "Loams connector profile (loams.flow/v1 Profile)",
+  "description": "A target or HTTP-API profile at connectors/profiles/<id>.yaml (CN2 plan Task 7, Shared contracts 'Profiles'). A target profile lets one native family implementation serve a protocol-compatible system with its own manifest, narrowing and suite (OR-2); an HTTP-API profile describes a REST API declaratively, run by the http family's profile engine (OR-11). A manifest names one with runtime.profile (R-CN2-2). A profile never holds a credential: auth says how to authenticate, and the instance config names the secrets, which the runtime resolves (Review Focus 8).",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["apiVersion", "kind", "id", "profile_kind", "module", "system"],
+  "properties": {
+    "apiVersion": { "const": "loams.flow/v1" },
+    "kind": { "const": "Profile" },
+    "id": {
+      "description": "The profile's id, unique under connectors/profiles/ and its file name (<id>.yaml); the registry id pattern, so runtime.profile can never be a path.",
+      "type": "string",
+      "pattern": "^[a-z0-9-]{1,48}$"
+    },
+    "profile_kind": {
+      "description": "target: a protocol-compatible system on a native family (Redpanda on kafka). http-api: a REST API run by the http family's profile engine.",
+      "enum": ["target", "http-api"]
+    },
+    "module": {
+      "description": "The family module the profile runs on: one of the loams-connector-<family> crates (OR-6). An http-api profile's module is http.",
+      "enum": [
+        "http", "kafka", "postgres", "mysql", "sqlserver", "objects", "kv", "search",
+        "mongodb", "analytics", "lakehouse", "brokers", "cloud", "protocols"
+      ]
+    },
+    "system": {
+      "description": "The real system the profile's suite runs against (OR-2): a compose service, a fixture recorded from the real system, or the credentials of a nightly real account.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "service"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "service": {
+          "oneOf": [
+            {
+              "type": "object", "additionalProperties": false, "required": ["compose"],
+              "properties": { "compose": { "type": "string", "pattern": "^[a-z0-9][a-z0-9-]*$" } }
+            },
+            {
+              "type": "object", "additionalProperties": false, "required": ["fixture"],
+              "properties": { "fixture": { "type": "string", "pattern": "^conformance/connectors/fixtures/[a-z0-9-]+$" } }
+            },
+            {
+              "type": "object", "additionalProperties": false, "required": ["nightly"],
+              "properties": {
+                "nightly": {
+                  "type": "array", "minItems": 1,
+                  "items": { "type": "string", "pattern": "^LOAMS_[A-Z0-9_]+$" }
+                }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "defaults": {
+      "description": "Instance-config defaults merged under the user's config. Never a credential.",
+      "type": "object"
+    },
+    "narrows": {
+      "description": "Capability paths, relative to the manifest's capabilities, that the target does NOT have: a direction (source, sink), one of its booleans (sink.transactional), bulk.arrow, or formats.<slug>. Each is explained by a 'narrows: <path> …' note on the manifest that uses the profile; a narrowing found by a suite is added here with its note, never silently skipped.",
+      "type": "array",
+      "uniqueItems": true,
+      "items": { "type": "string", "pattern": "^[a-z]+(\\.[a-z0-9_-]+)?$" }
+    },
+    "http": { "$ref": "#/$defs/http" }
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "profile_kind": { "const": "http-api" } }, "required": ["profile_kind"] },
+      "then": { "required": ["http"], "properties": { "module": { "const": "http" } } },
+      "else": { "not": { "required": ["http"] } }
+    }
+  ],
+  "$defs": {
+    "pointer": {
+      "description": "A JSON pointer (RFC 6901) into a JSON document.",
+      "type": "string",
+      "pattern": "^(/[^/]*)*$"
+    },
+    "method": { "enum": ["GET", "POST", "PUT", "PATCH", "DELETE"] },
+    "path": {
+      "description": "A path joined to base_url; may carry a query string, {id} where a job id goes, {config.<key>} (an instance config value), {auth.<field>} (a secret the instance names, such as Kestra's webhook key) and, in a write's path, {item:<pointer>} (a value of the item).",
+      "type": "string",
+      "pattern": "^/"
+    },
+    "http": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["base_url", "auth", "resources"],
+      "properties": {
+        "base_url": {
+          "description": "Scheme, host and optional path prefix; never with credentials in it. {config.<key>} is replaced by the instance config's value (a Zendesk subdomain, a self-hosted server's URL; CN2 Task 20).",
+          "type": "string",
+          "pattern": "^(https?://[^/@\\s]+|\\{config\\.[a-z0-9_]+\\})(/[^@\\s]*)?$"
+        },
+        "auth": {
+          "description": "How requests authenticate. Credentials are secret references in the instance config: auth.token (bearer), auth.username and auth.password (basic), auth.api_key (header), auth.client_id, auth.client_secret and auth.refresh_token (oauth2), auth.access_key_id, auth.secret_access_key and auth.session_token (aws-sigv4).",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scheme"],
+          "properties": {
+            "scheme": { "enum": ["oauth2", "bearer", "basic", "header", "aws-sigv4"] },
+            "header": { "type": "string", "pattern": "^[A-Za-z0-9-]+$" },
+            "prefix": { "type": "string" },
+            "token_url": { "type": "string", "pattern": "^(https?://|\\{config\\.[a-z0-9_]+\\})[^@\\s]+$" },
+            "scopes": { "type": "array", "items": { "type": "string" } },
+            "service": { "type": "string", "pattern": "^[a-z0-9-]+$" },
+            "region": { "type": "string", "pattern": "^([a-z0-9-]+|\\{config\\.[a-z0-9_]+\\})$" }
+          },
+          "allOf": [
+            { "if": { "properties": { "scheme": { "const": "oauth2" } } }, "then": { "required": ["token_url"] } },
+            { "if": { "properties": { "scheme": { "const": "header" } } }, "then": { "required": ["header"] } },
+            { "if": { "properties": { "scheme": { "const": "aws-sigv4" } } }, "then": { "required": ["service"] } }
+          ]
+        },
+        "headers": {
+          "description": "Fixed, non-secret request headers (an API version, Accept).",
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "resources": {
+          "type": "object",
+          "minProperties": 1,
+          "propertyNames": { "pattern": "^[a-z0-9_-]+$" },
+          "additionalProperties": { "$ref": "#/$defs/resource" }
+        },
+        "rate_limit": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["requests", "per_seconds"],
+          "properties": {
+            "requests": { "type": "integer", "minimum": 1 },
+            "per_seconds": { "type": "integer", "minimum": 1 },
+            "honour_headers": { "type": "array", "items": { "type": "string", "pattern": "^[A-Za-z0-9-]+$" } }
+          }
+        },
+        "webhook": {
+          "description": "Webhooks the API sends, handled by the webhooks source with this signature scheme.",
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["scheme", "header"],
+          "properties": {
+            "scheme": {
+              "description": "The signature scheme (loams-connector-http's webhook::SCHEMES, CN2 Task 20).",
+              "enum": [
+                "hmac-sha256", "stripe", "github", "slack", "shopify", "hubspot-v3",
+                "zendesk", "twilio", "segment", "sendgrid", "token"
+              ]
+            },
+            "header": { "type": "string", "pattern": "^[A-Za-z0-9-]+$" }
+          }
+        },
+        "ok": {
+          "description": "JSON pointer to a boolean every JSON response carries as true; false is an error (Slack's ok; CN2 Task 20).",
+          "$ref": "#/$defs/pointer"
+        }
+      }
+    },
+    "resource": {
+      "type": "object",
+      "additionalProperties": false,
+      "minProperties": 1,
+      "properties": {
+        "list": { "$ref": "#/$defs/list" },
+        "upsert": { "$ref": "#/$defs/write" },
+        "create": { "$ref": "#/$defs/write" },
+        "async_job": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": ["create", "id", "poll", "results"],
+              "properties": {
+                "create": {
+                  "type": "object", "additionalProperties": false, "required": ["method", "path"],
+                  "properties": { "method": { "$ref": "#/$defs/method" }, "path": { "$ref": "#/$defs/path" }, "body": {} }
+                },
+                "id": { "$ref": "#/$defs/pointer" },
+                "poll": {
+                  "type": "object", "additionalProperties": false,
+                  "required": ["method", "path", "state", "done"],
+                  "properties": {
+                    "method": { "$ref": "#/$defs/method" },
+                    "path": { "$ref": "#/$defs/path" },
+                    "state": { "$ref": "#/$defs/pointer" },
+                    "done": { "type": "array", "minItems": 1, "items": { "type": "string" } },
+                    "failed": { "type": "array", "items": { "type": "string" } },
+                    "interval_ms": { "type": "integer", "minimum": 1 }
+                  }
+                },
+                "results": { "$ref": "#/$defs/list" }
+              }
+            }
+          ]
+        }
+      }
+    },
+    "list": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "path"],
+      "properties": {
+        "method": { "$ref": "#/$defs/method" },
+        "path": { "$ref": "#/$defs/path" },
+        "items": { "$ref": "#/$defs/pointer" },
+        "cursor": {
+          "type": "object", "additionalProperties": false, "required": ["next", "param"],
+          "properties": {
+            "next": { "description": "A JSON pointer (from body or last_item) or a header name (from header).", "type": "string", "minLength": 1 },
+            "param": { "type": "string", "minLength": 1 },
+            "from": { "enum": ["body", "last_item", "header"] },
+            "more": { "$ref": "#/$defs/pointer" }
+          }
+        },
+        "key": { "$ref": "#/$defs/pointer" },
+        "query": { "type": "object", "additionalProperties": { "type": "string" } },
+        "next_url": { "description": "JSON pointer to the next page's URL in the body: on base_url's origin, or relative to it.", "$ref": "#/$defs/pointer" },
+        "offset": {
+          "type": "object", "additionalProperties": false, "required": ["param", "limit"],
+          "properties": {
+            "param": { "type": "string", "minLength": 1 },
+            "limit_param": { "type": "string", "minLength": 1 },
+            "limit": { "type": "integer", "minimum": 1 },
+            "pages": { "type": "boolean" }
+          }
+        },
+        "format": { "enum": ["json", "csv", "ndjson"] },
+        "event": { "description": "The event name of an item (default item).", "type": "string", "pattern": "^[a-z][a-z0-9-]*$" }
+      }
+    },
+    "write": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["method", "path"],
+      "properties": {
+        "method": { "$ref": "#/$defs/method" },
+        "path": { "$ref": "#/$defs/path" },
+        "batch": { "type": "integer", "minimum": 1 },
+        "key": { "$ref": "#/$defs/pointer" },
+        "body": { "$ref": "#/$defs/pointer" },
+        "idempotency_key": { "type": "boolean" },
+        "encoding": { "enum": ["json", "ndjson", "form"] },
+        "select": { "$ref": "#/$defs/pointer" },
+        "wrap": { "$ref": "#/$defs/pointer" },
+        "envelope": {
+          "description": "A fixed JSON body the item or batch goes into at body; string leaves may be {config.<key>} or {auth.<field>} (a secret the instance names).",
+          "type": "object"
+        },
+        "conflict_ok": { "type": "boolean" },
+        "ack": {
+          "type": "object", "additionalProperties": false,
+          "required": ["path", "id", "request", "status", "channel_header"],
+          "properties": {
+            "path": { "$ref": "#/$defs/path" },
+            "id": { "$ref": "#/$defs/pointer" },
+            "request": { "$ref": "#/$defs/pointer" },
+            "status": { "$ref": "#/$defs/pointer" },
+            "channel_header": { "type": "string", "pattern": "^[A-Za-z0-9-]+$" },
+            "interval_ms": { "type": "integer", "minimum": 1 },
+            "timeout_ms": { "type": "integer", "minimum": 1 }
+          }
+        }
+      }
+    }
+  }
+}

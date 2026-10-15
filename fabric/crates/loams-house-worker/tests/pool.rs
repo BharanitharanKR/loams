@@ -92,7 +92,6 @@ async fn kill_is_the_cancel() {
     let pool = pool("cancel", small(2)).await;
     let mut lease = pool.acquire("ns-cancel").await.expect("a worker");
     let pid = lease.pid();
-    let spawned_before = pool.stats().spawned_total;
 
     lease
         .start(statement("SELECT count() FROM numbers(1e12)", "TSV"))
@@ -133,17 +132,12 @@ async fn kill_is_the_cancel() {
         "{:?}",
         pool.stats()
     );
+    // The warm pool keeps `min_idle_workers` idle or starting: the worker
+    // that replaces this one may have started when it was leased, before the
+    // kill, so what holds is an idle worker that is not the killed one.
     assert!(
         eventually(Duration::from_secs(20), || pool.stats().idle_unbound >= 1).await,
         "the pool is replenished: {:?}",
-        pool.stats()
-    );
-    assert!(
-        eventually(Duration::from_secs(20), || {
-            pool.stats().spawned_total > spawned_before
-        })
-        .await,
-        "a worker was started after the kill: {:?}",
         pool.stats()
     );
     let mut next = pool.acquire("ns-cancel").await.expect("another worker");
@@ -948,11 +942,11 @@ async fn user_caused_errors_do_not_poison_the_worker() {
     );
 }
 
-/// HS1 Task 2 review M4: `READ ON S3` is scoped to the worker's endpoint, and the
-/// regex's escaping survives the SQL literal it is written in: `127a0a0a1` would
-/// match `127.0.0.1` if `\.` had turned into `.`.
+/// HS1 R-ACL.1 (replacing Task 2 review M4's scoped `READ ON S3`): no grant
+/// names the worker's endpoint any more, so a statement cannot read it, nor any
+/// other S3 address; only the read views the control connection makes can.
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn s3_grant_is_scoped_to_the_endpoint() {
+async fn no_s3_grant_even_for_the_endpoint() {
     let launcher = ProcessLauncher::new(common::WORKER, tmp_root("s3-grant"))
         .with_s3_endpoint("http://127.0.0.1:9/");
     let pool = loams_house::WorkerPool::start(small(1), std::sync::Arc::new(launcher))
@@ -960,28 +954,15 @@ async fn s3_grant_is_scoped_to_the_endpoint() {
         .expect("pool");
     let mut lease = pool.acquire("ns").await.expect("worker");
     for url in [
+        "http://127.0.0.1:9/bkt/x.csv",
         "http://127.0.0.1:10/bkt/x.csv",
         "http://127a0a0a1:9/bkt/x.csv",
         "http://10.0.0.1:9/bkt/x.csv",
     ] {
         let sql = format!("SELECT * FROM s3('{url}', 'CSV', 'a String')");
         let err = lease.run(statement(&sql, "TSV")).await.expect_err(&sql);
-        assert_eq!(err.code(), 497, "{url} is outside the grant: {err}");
+        assert_eq!(err.code(), 497, "{url}: {err}");
     }
-    // Inside the grant the access check passes; nothing listens on port 9, so it
-    // fails later, and differently.
-    let mut inside = statement(
-        "SELECT * FROM s3('http://127.0.0.1:9/bkt/x.csv', 'CSV', 'a String')",
-        "TSV",
-    );
-    // chDB's S3 client retries a refused connection for minutes by default.
-    inside.settings = vec![("s3_retry_attempts".to_string(), "0".to_string())];
-    inside.limits.max_execution_time_ms = Some(10_000);
-    let inside = tokio::time::timeout(Duration::from_secs(30), lease.run(inside))
-        .await
-        .expect("bounded")
-        .expect_err("nothing listens");
-    assert_ne!(inside.code(), 497, "inside the grant: {inside}");
     pool.release(lease, Outcome::Completed);
 }
 
@@ -1226,8 +1207,12 @@ async fn worker_sessions_expire_cap_close_and_do_not_keep_url_settings() {
 async fn a_set_inside_the_statement_survives_its_url_setting() {
     let pool = pool("set-survives", small(1)).await;
     let mut lease = pool.acquire("ns").await.expect("worker");
-    let mut set = in_session("SET max_threads = 5", "k", 60_000, false);
-    set.settings = vec![("max_threads".to_string(), "3".to_string())];
+    // Two values under the worker's `max_threads` cap (the node's cores; a
+    // 4-core runner refuses 5 with 452 SETTING_CONSTRAINT_VIOLATION).
+    let own = loams_house_worker::settings::max_threads_cap().min(5);
+    assert!(own >= 2, "the test needs two cores");
+    let mut set = in_session(&format!("SET max_threads = {own}"), "k", 60_000, false);
+    set.settings = vec![("max_threads".to_string(), (own - 1).to_string())];
     lease
         .run(set)
         .await
@@ -1241,7 +1226,11 @@ async fn a_set_inside_the_statement_survives_its_url_setting() {
         ))
         .await
         .expect("read");
-    assert_eq!(after.bytes, b"5\n", "the statement's SET stays");
+    assert_eq!(
+        &after.bytes[..],
+        format!("{own}\n").as_bytes(),
+        "the statement's SET stays"
+    );
 
     // And a URL setting the statement did not touch is still put back.
     let mut url_only = in_session("SELECT getSetting('max_block_size')", "k", 60_000, false);
@@ -1446,4 +1435,58 @@ async fn pinned_workers_are_reserved_capped_and_lost_on_death() {
         "lost"
     );
     assert_eq!(pool.stats().pinned, 1);
+}
+
+/// HS1 R11.11: the control connection is not read-only, so the worker runs on
+/// it only the House's own view DDL — one statement, ClickHouse's parser says
+/// so, that makes a `Memory` database, makes or replaces a view, or drops a
+/// table — whatever the front sends. Anything else is refused before it runs.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn control_connection_runs_only_view_ddl() {
+    let pool = pool("control-ddl", small(1)).await;
+    let mut lease = pool.acquire("ns").await.expect("worker");
+    let pid = lease.pid();
+
+    let mut good = statement("SELECT a FROM d.v", "TSV");
+    good.views = vec![
+        "CREATE DATABASE IF NOT EXISTS d ENGINE = Memory".to_string(),
+        "CREATE OR REPLACE VIEW d.v AS\nSELECT 1 AS a".to_string(),
+        "DROP TABLE IF EXISTS d.gone".to_string(),
+    ];
+    assert_eq!(lease.run(good).await.expect("view DDL runs").bytes, b"1\n");
+
+    for ddl in [
+        "CREATE OR REPLACE VIEW d.v AS\nSELECT 1 AS a; CREATE DATABASE loams_injected ENGINE = Memory",
+        "CREATE DATABASE IF NOT EXISTS loams_injected ENGINE = Memory; SELECT 1",
+        "CREATE DATABASE IF NOT EXISTS loams_injected ENGINE = Atomic",
+        "CREATE DATABASE IF NOT EXISTS loams_injected ENGINE = Memory COMMENT 'x'",
+        "CREATE TABLE default.loams_injected (a UInt8) ENGINE = Memory",
+        "INSERT INTO d.v VALUES (1)",
+        "DROP DATABASE d",
+        "DROP TABLE IF EXISTS d.v; DROP DATABASE d",
+        "SELECT 1",
+    ] {
+        let mut bad = statement("SELECT 1", "TSV");
+        bad.views = vec![ddl.to_string()];
+        let err = lease.run(bad).await.expect_err(ddl);
+        assert_eq!(err.code(), 497, "{ddl}: {err}");
+    }
+    // A batch with one refused entry is refused whole, before any entry runs.
+    let mut mixed = statement("SELECT 1", "TSV");
+    mixed.views = vec![
+        "CREATE DATABASE IF NOT EXISTS loams_injected_mixed ENGINE = Memory".to_string(),
+        "CREATE DATABASE IF NOT EXISTS loams_injected ENGINE = Atomic".to_string(),
+    ];
+    assert_eq!(lease.run(mixed).await.expect_err("mixed").code(), 497);
+    let databases = lease
+        .run(statement(
+            "SELECT name FROM system.databases WHERE name LIKE 'loams_injected%' \
+             UNION ALL SELECT name FROM system.tables WHERE name LIKE 'loams_injected%'",
+            "TSV",
+        ))
+        .await
+        .expect("listed");
+    assert_eq!(databases.bytes, b"", "nothing the refused DDL named exists");
+    assert_eq!(lease.pid(), pid, "the worker stays");
+    pool.release(lease, Outcome::Completed);
 }

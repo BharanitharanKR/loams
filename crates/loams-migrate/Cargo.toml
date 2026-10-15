@@ -1,0 +1,25 @@
+[package]
+name = "loams-migrate"
+description = "Loams upgrades, server side: the format registry, the stack record, the migration ledger and runner, snapshots and restores (design §54, UP1)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+base64.workspace = true
+loams-common.workspace = true
+postcard.workspace = true
+serde.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+loams-meta.workspace = true
+loams-store.workspace = true
+tempfile.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

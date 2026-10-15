@@ -63,6 +63,18 @@ struct Fabric(Child);
 
 impl Fabric {
     fn start(flags: &[&str]) -> (Self, SocketAddr) {
+        let (fabric, line) = Self::start_line(flags);
+        let addr = line
+            .split("http://")
+            .nth(1)
+            .and_then(|rest| rest.split_whitespace().next())
+            .and_then(|addr| addr.parse().ok())
+            .unwrap_or_else(|| panic!("no address in {line:?}"));
+        (fabric, addr)
+    }
+
+    /// Starts it and answers its stdout line.
+    fn start_line(flags: &[&str]) -> (Self, String) {
         let mut child = Command::new(FABRIC)
             .arg("house")
             .args(flags)
@@ -77,13 +89,7 @@ impl Fabric {
         BufReader::new(stdout)
             .read_line(&mut line)
             .expect("the address line");
-        let addr = line
-            .split("http://")
-            .nth(1)
-            .and_then(|rest| rest.split_whitespace().next())
-            .and_then(|addr| addr.parse().ok())
-            .unwrap_or_else(|| panic!("no address in {line:?}"));
-        (Self(child), addr)
+        (Self(child), line)
     }
 }
 
@@ -156,6 +162,68 @@ fn house_role_starts_and_serves_ping() {
          X-ClickHouse-Key: wrong\r\nConnection: close\r\n\r\n",
     );
     assert!(!refused.starts_with("HTTP/1.1 200"), "{refused}");
+    drop(fabric);
+}
+
+/// `--single-node`'s local catalog (HS1 Task 10): a table made over HTTP is in
+/// the SQLite file, its metadata in the bucket under `ns/1/house/`, and it is
+/// still there after a restart.
+#[test]
+fn single_node_keeps_lake_tables() {
+    let dir = scratch("lake");
+    let worker = worker_binary();
+    let flags = [
+        "--single-node",
+        "--house-listen",
+        "127.0.0.1:0",
+        "--data-dir",
+        dir.to_str().expect("utf-8"),
+        "--worker-binary",
+        worker.to_str().expect("utf-8"),
+    ];
+    let post = |addr: SocketAddr, sql: &str| {
+        let key = std::fs::read_to_string(dir.join(house::LOCAL_KEY_FILE)).expect("key");
+        http(
+            addr,
+            &format!(
+                "POST / HTTP/1.1\r\nHost: house\r\nX-ClickHouse-User: {}\r\n\
+                 X-ClickHouse-Key: {}\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{sql}",
+                house::LOCAL_USER,
+                key.trim(),
+                sql.len()
+            ),
+        )
+    };
+    let (fabric, addr) = Fabric::start(&flags);
+    let created = post(
+        addr,
+        "CREATE TABLE t (a UInt64, b String) ENGINE = MergeTree ORDER BY a",
+    );
+    assert!(created.starts_with("HTTP/1.1 200"), "{created}");
+    drop(fabric);
+    assert!(dir.join("catalog.sqlite").is_file());
+    let tables = dir.join("bucket/ns/1/house/default");
+    let entries: Vec<_> = std::fs::read_dir(&tables)
+        .expect("table directory")
+        .collect();
+    assert_eq!(
+        entries.len(),
+        1,
+        "one table directory under {}",
+        tables.display()
+    );
+
+    let (fabric, addr) = Fabric::start(&flags);
+    let exists = post(addr, "EXISTS TABLE t");
+    assert!(
+        exists.ends_with("\r\n\r\n1\n") || exists.ends_with("\r\n1\n"),
+        "{exists}"
+    );
+    let shown = post(addr, "SHOW CREATE TABLE t FORMAT TSVRaw");
+    assert!(
+        shown.contains("CREATE TABLE t (a UInt64, b String)"),
+        "{shown}"
+    );
     drop(fabric);
 }
 
@@ -282,12 +350,34 @@ fn non_loopback_plaintext_refused() {
     let refused = resolve(&["--data-dir", data], "[house]\nlisten = \"0.0.0.0:8123\"")
         .expect_err("from the file too");
     assert_eq!(refused, loopback_message("0.0.0.0:8123"));
+    // TLS may face other hosts, with a certificate (HS1 Task 20); the native
+    // protocol's TLS waits for the native protocol.
     let refused = resolve(
         &["--house-tls-listen", "0.0.0.0:8443", "--data-dir", data],
         "",
     )
-    .expect_err("no TLS yet");
-    assert!(refused.contains("HS1 Task 20"), "{refused}");
+    .expect_err("no certificate");
+    assert!(refused.contains("--house-tls-cert"), "{refused}");
+    let refused = resolve(
+        &["--native-tls-listen", "0.0.0.0:9440", "--data-dir", data],
+        "",
+    )
+    .expect_err("no native protocol");
+    assert!(refused.contains("HS1 Task 31"), "{refused}");
+    let tls = resolve(
+        &[
+            "--single-node",
+            "--house-tls-listen",
+            "0.0.0.0:8443",
+            "--data-dir",
+            data,
+        ],
+        "",
+    )
+    .expect("single node makes its own")
+    .tls
+    .expect("tls");
+    assert!(tls.make && tls.cert.starts_with(data), "{tls:?}");
 
     // The binary refuses before it starts any worker, and says why.
     let output = Command::new(FABRIC)
@@ -347,5 +437,190 @@ fn front_binary_needs_no_libchdb() {
             .iter()
             .any(|lib| lib == "libchdb.so"),
         "the check must see libchdb where it is"
+    );
+}
+
+/// One HTTPS request to the House's TLS listener, trusting only `ca`; the
+/// response as text, or the TLS error.
+fn https(addr: SocketAddr, ca: &Path, request: &str) -> Result<String, String> {
+    use rustls::pki_types::pem::PemObject as _;
+    use rustls::pki_types::{CertificateDer, ServerName};
+    let mut roots = rustls::RootCertStore::empty();
+    for cert in CertificateDer::pem_file_iter(ca).expect("the certificate") {
+        roots.add(cert.expect("a certificate")).expect("a root");
+    }
+    let config = rustls::ClientConfig::builder_with_provider(std::sync::Arc::new(
+        rustls::crypto::ring::default_provider(),
+    ))
+    .with_safe_default_protocol_versions()
+    .expect("versions")
+    .with_root_certificates(roots)
+    .with_no_client_auth();
+    let name = ServerName::try_from("localhost").expect("name");
+    let connection = rustls::ClientConnection::new(std::sync::Arc::new(config), name)
+        .map_err(|err| err.to_string())?;
+    let tcp = TcpStream::connect(addr).map_err(|err| err.to_string())?;
+    tcp.set_read_timeout(Some(Duration::from_secs(60)))
+        .expect("timeout");
+    let mut stream = rustls::StreamOwned::new(connection, tcp);
+    stream
+        .write_all(request.as_bytes())
+        .map_err(|err| err.to_string())?;
+    let mut response = String::new();
+    match stream.read_to_string(&mut response) {
+        Ok(_) => Ok(response),
+        // A server that closes without close_notify still answered.
+        Err(_) if !response.is_empty() => Ok(response),
+        Err(err) => Err(err.to_string()),
+    }
+}
+
+/// HS1 Task 20: `--single-node` with `--house-tls-listen` makes its own
+/// certificate and serves HTTPS beside the loopback plaintext listener; the
+/// local key works as `Authorization: Bearer`, which is how the engine's link
+/// signs in.
+#[test]
+fn tls_listener_serves_with_its_certificate() {
+    let dir = scratch("tls");
+    let worker = worker_binary();
+    let data = dir.to_str().expect("utf-8");
+    let (_fabric, line) = Fabric::start_line(&[
+        "--single-node",
+        "--house-listen",
+        "127.0.0.1:0",
+        "--house-tls-listen",
+        "127.0.0.1:0",
+        "--data-dir",
+        data,
+        "--worker-binary",
+        worker.to_str().expect("utf-8"),
+    ]);
+    let tls: SocketAddr = line
+        .split("https://")
+        .nth(1)
+        .and_then(|rest| rest.split_whitespace().next())
+        .and_then(|addr| addr.parse().ok())
+        .unwrap_or_else(|| panic!("no TLS address in {line:?}"));
+    let ca = dir.join("tls").join("house.crt");
+    let key = std::fs::read_to_string(dir.join("house.key")).expect("the local key");
+    let query = |auth: &str| {
+        format!(
+            "GET /?query=SELECT%201 HTTP/1.1\r\nHost: localhost\r\n{auth}Connection: close\r\n\r\n"
+        )
+    };
+
+    let ok = https(
+        tls,
+        &ca,
+        &query(&format!("Authorization: Bearer {}\r\n", key.trim())),
+    )
+    .expect("https");
+    assert!(ok.starts_with("HTTP/1.1 200"), "{ok}");
+    assert!(ok.ends_with("\r\n\r\n1\n"), "{ok}");
+    let wrong = https(tls, &ca, &query("Authorization: Bearer not-the-key\r\n")).expect("https");
+    assert!(
+        wrong
+            .to_ascii_lowercase()
+            .contains("x-clickhouse-exception-code: 516"),
+        "{wrong}"
+    );
+    let none = https(tls, &ca, &query("")).expect("https");
+    assert!(
+        none.to_ascii_lowercase()
+            .contains("x-clickhouse-exception-code: 516"),
+        "{none}"
+    );
+
+    // Plaintext on the TLS port gets no HTTP answer.
+    let mut plain = TcpStream::connect(tls).expect("connect");
+    plain
+        .set_read_timeout(Some(Duration::from_secs(10)))
+        .expect("timeout");
+    let _ = plain.write_all(query("").as_bytes());
+    let mut answer = Vec::new();
+    let _ = plain.read_to_end(&mut answer);
+    assert!(
+        !answer.starts_with(b"HTTP/1.1"),
+        "{}",
+        String::from_utf8_lossy(&answer)
+    );
+
+    // A client that does not trust this House's certificate is refused.
+    let other = scratch("tls-other");
+    let (other_cert, other_key) = (other.join("c.pem"), other.join("k.pem"));
+    loams_house::tls::ensure_self_signed(&other_cert, &other_key, &["localhost".to_string()])
+        .expect("another certificate");
+    assert!(https(tls, &other_cert, &query("")).is_err());
+}
+
+/// HS1 Task 20 (R20.5): `--principals` maps the link's principals in the
+/// single node's namespace; elsewhere they come from `[[house.principals]]`.
+/// The link key, dev mode and the audit log are single-node settings.
+#[test]
+fn principals_link_key_and_audit_resolve() {
+    let dir = scratch("principals");
+    let data = dir.to_str().expect("utf-8");
+    let settings = resolve(
+        &[
+            "--single-node",
+            "--data-dir",
+            data,
+            "--link-key-file",
+            &format!("{data}/link/link.key"),
+            "--principals",
+            "tailscale:alice@x.com=read+write; apikey:ci=read",
+        ],
+        "",
+    )
+    .expect("resolves");
+    assert_eq!(settings.principals.len(), 2);
+    assert_eq!(settings.principals[0].principal, "tailscale:alice@x.com");
+    assert!(settings.principals[0].scopes.write && !settings.principals[0].scopes.ddl);
+    assert_eq!(settings.principals[1].namespace, house::LOCAL_NAMESPACE);
+    assert!(!settings.dev_unmapped_principals);
+    assert_eq!(settings.audit_log, Some(dir.join("audit.log")));
+
+    for (flags, want) in [
+        (vec!["--principals", "x=read"], "single-node"),
+        (vec!["--link-key-file", "/k"], "single-node"),
+        (vec!["--dev-unmapped-principals"], "single-node"),
+    ] {
+        let mut all = vec!["--data-dir", data];
+        all.extend(flags.iter());
+        let err = resolve(&all, "").expect_err("refused");
+        assert!(err.contains(want) || err.contains("--single-node"), "{err}");
+    }
+    let err = resolve(
+        &[
+            "--single-node",
+            "--data-dir",
+            data,
+            "--principals",
+            "x=root",
+        ],
+        "",
+    )
+    .expect_err("bad scope");
+    assert!(err.contains("unknown scope"), "{err}");
+
+    // The file: a principal with tables, in any namespace.
+    let settings = resolve(
+        &["--data-dir", data],
+        "[[house.principals]]\nprincipal = \"apikey:etl\"\nnamespace = 7\nscopes = [\"read\", \"write\"]\ntables = [\"sales.*\"]\n",
+    )
+    .expect("from the file");
+    assert_eq!(settings.principals[0].namespace, 7);
+    assert!(
+        settings.principals[0]
+            .grants
+            .as_ref()
+            .is_some_and(|g| g.allows("sales", "x") && !g.allows("web", "x"))
+    );
+    assert!(
+        resolve(
+            &["--data-dir", data],
+            "[[house.principals]]\nprincipal = \"p\"\nnamespace = 1\nscopes = [\"read\"]\ntables = [\"nodot\"]\n",
+        )
+        .is_err()
     );
 }

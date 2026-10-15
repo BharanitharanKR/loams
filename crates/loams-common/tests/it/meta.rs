@@ -281,6 +281,20 @@ mod dyn_compatible {
         ) -> MetaResult<Option<StreamState>> {
             unimplemented!()
         }
+        async fn ensure_graph_stream(&self, _: NamespaceId, _: &str) -> MetaResult<StreamId> {
+            unimplemented!()
+        }
+        async fn ensure_system_stream(&self, _: NamespaceId, _: &str) -> MetaResult<StreamId> {
+            unimplemented!()
+        }
+        async fn drop_graph_stream(
+            &self,
+            _: NamespaceId,
+            _: &str,
+            _: Option<Fence>,
+        ) -> MetaResult<Option<StreamId>> {
+            unimplemented!()
+        }
         async fn create_link(
             &self,
             _: NamespaceId,
@@ -377,6 +391,14 @@ mod dyn_compatible {
             _: NamespaceId,
             _: &str,
         ) -> MetaResult<Option<Pointer>> {
+            unimplemented!()
+        }
+        async fn pointers_with_prefix(
+            &self,
+            _: Consistency,
+            _: NamespaceId,
+            _: &str,
+        ) -> MetaResult<Vec<(String, Pointer)>> {
             unimplemented!()
         }
         async fn create_collection(

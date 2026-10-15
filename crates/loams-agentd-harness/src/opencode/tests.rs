@@ -68,6 +68,7 @@ impl TurnWire {
             overrides,
             command_failure,
             None,
+            None,
         )
         .await
     }
@@ -82,8 +83,39 @@ impl TurnWire {
             json!({}),
             false,
             Some(reply),
+            None,
         )
         .await
+    }
+
+    /// A supervised run (SD1 Task 13) on the 1.x wire: its asks arrive on
+    /// the returned receiver with their answers' senders.
+    async fn start_supervised() -> (
+        Self,
+        mpsc::UnboundedReceiver<(
+            crate::ApprovalAsk,
+            tokio::sync::oneshot::Sender<loams_agentd_proto::approvals::ApprovalDecision>,
+        )>,
+    ) {
+        let (tx, asks) = mpsc::unbounded_channel();
+        let bridge: crate::RequestApproval = Box::new(move |ask| {
+            let (answer_tx, answer_rx) = tokio::sync::oneshot::channel();
+            let _ = tx.send((ask, answer_tx));
+            answer_rx
+        });
+        let wire = Self::start_fixture(
+            false,
+            false,
+            true,
+            None,
+            "2.0.3",
+            json!({}),
+            false,
+            None,
+            Some(bridge),
+        )
+        .await;
+        (wire, asks)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -96,6 +128,7 @@ impl TurnWire {
         overrides: Value,
         command_failure: bool,
         native_command_reply: Option<NativeCommandReply>,
+        request_approval: Option<crate::RequestApproval>,
     ) -> Self {
         use tokio::io::{AsyncReadExt, AsyncWriteExt};
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -256,6 +289,7 @@ impl TurnWire {
             server: Server::attached(base),
             event_tx,
             controls: RunControls {
+                request_approval,
                 execution_lease: None,
                 request_input: Box::new(move |questions| {
                     let answer = answer.expect("fixture must not ask for input");
@@ -641,8 +675,10 @@ async fn v2_wire_streams_text_and_settles_on_execution_success() {
                     AgentEvent::Usage {
                         input_tokens,
                         output_tokens,
+                        cache_tokens,
+                        cost_usd,
                     } => {
-                        usage = Some((input_tokens, output_tokens));
+                        usage = Some((input_tokens, output_tokens, cache_tokens, cost_usd));
                     }
                     AgentEvent::ContextUsage { tokens, window } => {
                         context_usage.push((tokens, window));
@@ -658,7 +694,8 @@ async fn v2_wire_streams_text_and_settles_on_execution_success() {
         .unwrap();
     assert_eq!(status, DoneStatus::Completed);
     assert_eq!(text, "PONG");
-    assert_eq!(usage, Some((4, 1)));
+    // OpenCode's own cache counts ride along (SD1 Task 14); this message reports no cost.
+    assert_eq!(usage, Some((4, 1, Some(0), None)));
     assert_eq!(
         context_usage,
         vec![
@@ -1735,6 +1772,56 @@ async fn permissions_always_approve_without_user_input() {
                 assert_eq!(body, json!({key: "once"}));
             }
         }
+    }
+}
+
+/// SD1 Task 13: in a supervised thread opencode's permission event becomes
+/// an approval; nothing is answered until the person decides, and the
+/// decision is the reply (`always` is the daemon's to remember, so opencode
+/// is told `once`).
+#[tokio::test]
+async fn opencode_supervised_forwards_permission() {
+    use loams_agentd_proto::approvals::{ApprovalDecision, ToolRisk};
+
+    let (mut wire, mut asks) = TurnWire::start_supervised().await;
+    wire.request("/prompt_async").await;
+    for (id, decision, reply) in [
+        ("perm-1", ApprovalDecision::Once, "once"),
+        ("perm-2", ApprovalDecision::Always, "once"),
+        ("perm-3", ApprovalDecision::Deny, "reject"),
+    ] {
+        wire.bus
+            .send(json!({"type": "permission.asked", "properties": {
+                "id": id, "sessionID": "fixture", "permission": "bash",
+                "patterns": ["git push --force origin main"],
+                "metadata": {"command": "git push --force origin main"},
+                "tool": {"messageID": "m1", "callID": format!("call-{id}")}
+            }}))
+            .unwrap();
+        let (ask, answer) = tokio::time::timeout(Duration::from_secs(5), asks.recv())
+            .await
+            .expect("asked in time")
+            .expect("bridge open");
+        assert_eq!(ask.call_id, format!("call-{id}"));
+        assert_eq!(ask.tool, "bash");
+        assert_eq!(
+            ask.args["metadata"]["command"],
+            "git push --force origin main"
+        );
+        assert_eq!(ask.risk, ToolRisk::Destructive);
+        tokio::time::sleep(Duration::from_millis(200)).await;
+        assert!(
+            !wire
+                .posts
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(path, _)| path.contains(&format!("/permission/{id}"))),
+            "{id} was answered before the person decided"
+        );
+        answer.send(decision).unwrap();
+        let body = wire.posted(&format!("/permission/{id}/reply")).await;
+        assert_eq!(body, json!({"reply": reply}), "{id}");
     }
 }
 

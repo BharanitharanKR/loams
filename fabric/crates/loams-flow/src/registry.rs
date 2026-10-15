@@ -22,10 +22,12 @@ use std::path::Path;
 use indexmap::IndexMap;
 
 use crate::manifest::{
-    Category, ConnectorSpec, ManifestError, ManifestErrors, Priority, RuntimeKind, Status,
+    Category, Choice, ConnectorSpec, ManifestError, ManifestErrors, Priority, RuntimeKind, Status,
     load_manifest_with_schema,
 };
-use crate::validate::{ManifestSchema, SchemaError, render_manifest_errors};
+use crate::validate::{
+    Direction, ManifestSchema, SchemaError, render_manifest_errors, semantic_warnings,
+};
 
 /// Every manifest under one registry directory, indexed by id and by category.
 ///
@@ -35,6 +37,7 @@ use crate::validate::{ManifestSchema, SchemaError, render_manifest_errors};
 pub struct Registry {
     by_id: IndexMap<String, ConnectorSpec>,
     by_category: IndexMap<Category, Vec<String>>,
+    warnings: Vec<ManifestErrors>,
 }
 
 impl Registry {
@@ -75,6 +78,7 @@ impl Registry {
 
         let mut by_id: IndexMap<String, ConnectorSpec> = IndexMap::with_capacity(files.len());
         let mut failures: Vec<ManifestErrors> = Vec::new();
+        let mut warnings: Vec<ManifestErrors> = Vec::new();
         for path in &files {
             let file = path
                 .file_name()
@@ -87,6 +91,18 @@ impl Registry {
                         runtime = %spec.runtime.kind,
                         "loaded a connector manifest"
                     );
+                    let found = semantic_warnings(&spec);
+                    if !found.is_empty() {
+                        tracing::debug!(
+                            connector = %spec.id,
+                            warnings = found.len(),
+                            "a manifest loaded with warnings"
+                        );
+                        warnings.push(ManifestErrors {
+                            file: file.clone(),
+                            errors: found,
+                        });
+                    }
                     if by_id.insert(spec.id.clone(), spec).is_some() {
                         failures.push(ManifestErrors {
                             file,
@@ -119,7 +135,18 @@ impl Registry {
                 .or_default()
                 .push(spec.id.clone());
         }
-        Ok(Self { by_id, by_category })
+        Ok(Self {
+            by_id,
+            by_category,
+            warnings,
+        })
+    }
+
+    /// The warnings the load found, one entry per manifest that has any, sorted by
+    /// file name: the rules that report rather than refuse. Empty since CN2 Task 2
+    /// made R-CN2-6 an error ([`crate::validate::NATIVE_FIRST_ENFORCED`]).
+    pub fn warnings(&self) -> &[ManifestErrors] {
+        &self.warnings
     }
 
     /// The manifest with this id.
@@ -184,8 +211,15 @@ pub struct Filter {
     pub status: Option<Status>,
     /// Whether it is one of the 21 ★ connectors.
     pub starred: Option<bool>,
-    /// Which runtime runs it (§33 §5).
+    /// Which runtime runs it (§33 §5): the top-level `runtime.kind`.
     pub runtime_kind: Option<RuntimeKind>,
+    /// A direction and the runtime it runs on by default (CN2 OR-10): matches a
+    /// manifest that declares the direction and whose
+    /// [`crate::manifest::RuntimeSpec::for_direction`] with [`Choice::Default`]
+    /// is that kind. The fallback is never consulted.
+    pub runtime_for_direction: Option<(Direction, RuntimeKind)>,
+    /// Whether the manifest declares a `runtime.fallback` (CN2 OR-4).
+    pub has_fallback: Option<bool>,
     /// A free-text needle, matched case-insensitively against the id, the display
     /// name and the `docs` path, which is what the catalog page's search box wants.
     pub query: Option<String>,
@@ -216,6 +250,24 @@ impl Filter {
         }
         if let Some(runtime_kind) = self.runtime_kind
             && spec.runtime.kind != runtime_kind
+        {
+            return false;
+        }
+        if let Some((direction, kind)) = self.runtime_for_direction {
+            let declared = match direction {
+                Direction::Source => spec.capabilities.source.is_some(),
+                Direction::Sink => spec.capabilities.sink.is_some(),
+            };
+            let runs_on = spec
+                .runtime
+                .for_direction(direction, Choice::Default)
+                .map(|(runs_on, _)| runs_on);
+            if !declared || runs_on != Some(kind) {
+                return false;
+            }
+        }
+        if let Some(has_fallback) = self.has_fallback
+            && spec.runtime.fallback.is_some() != has_fallback
         {
             return false;
         }

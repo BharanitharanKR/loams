@@ -412,7 +412,16 @@ pub(crate) fn encode<T: Serialize>(value: &T) -> Vec<u8> {
 /// Decodes a record written by [`encode`].
 pub(crate) fn decode<T: DeserializeOwned>(what: &str, bytes: &[u8]) -> Result<T, MetaError> {
     match bytes.split_first() {
-        Some((&FORMAT, body)) => postcard::from_bytes(body).map_err(|e| corrupt(what, e)),
+        // The registry's readable range (UP1 Task 1), not only FORMAT.
+        Some((&format, body))
+            if loams_common::formats::check(
+                loams_common::formats::META_TIKV_RECORD,
+                u16::from(format),
+            )
+            .is_ok() =>
+        {
+            postcard::from_bytes(body).map_err(|e| corrupt(what, e))
+        }
         Some((format, _)) => Err(corrupt(what, format!("unknown format {format}"))),
         None => Err(corrupt(what, "empty value")),
     }
@@ -455,7 +464,41 @@ pub(crate) const IDEMPOTENCY: &[u8] = b"q/";
 
 #[cfg(test)]
 mod tests {
+    use loams_common::formats::{self, FormatSpec};
+
     use super::*;
+
+    fn record_at(format: u8) -> Vec<u8> {
+        let mut bytes = encode(&(7u64, "seven".to_string()));
+        bytes[0] = format;
+        bytes
+    }
+
+    #[test]
+    fn format_constants_match_registry() {
+        let current = formats::spec_of(formats::META_TIKV_RECORD).current;
+        assert_eq!(u16::from(FORMAT), current);
+    }
+
+    #[test]
+    fn reader_accepts_previous_version() {
+        let older = record_at(FORMAT - 1);
+        assert!(decode::<(u64, String)>("test", &older).is_err());
+        let spec = formats::spec_of(formats::META_TIKV_RECORD);
+        let spec = FormatSpec {
+            min_read: spec.current - 1,
+            ..spec
+        };
+        formats::with_override(spec, || {
+            let value: (u64, String) = decode("test", &older).expect("N-1 opens");
+            assert_eq!(value.0, 7);
+        });
+    }
+
+    #[test]
+    fn reader_refuses_next_version() {
+        assert!(decode::<(u64, String)>("test", &record_at(FORMAT + 1)).is_err());
+    }
 
     #[test]
     fn id_order_is_key_order() {

@@ -189,6 +189,9 @@ struct Started {
     running: RunningGuard,
     deadline: Option<Deadline>,
     started: Instant,
+    /// What an `INSERT` into a lake table wrote, which the front ran to its
+    /// commit before answering (HS1 Task 12).
+    inserted: Option<crate::insert::Inserted>,
 }
 
 pub(super) fn sorted<'a>(
@@ -206,6 +209,7 @@ pub(super) fn sorted<'a>(
 fn execute(
     st: &Statement,
     settings: &[(String, String)],
+    views: &[String],
     sql: String,
     format: &str,
     limits: Limits,
@@ -214,13 +218,18 @@ fn execute(
         query_id: st.query_id.clone(),
         session: None,
         settings: settings.to_vec(),
-        views: Vec::new(),
+        views: views.to_vec(),
         sql,
         format: format.to_string(),
         params: st.params.clone(),
         limits,
         input: None,
         output: loams_house_ipc::Output::Blocks,
+        database: Some(if st.database.is_empty() {
+            "default".to_string()
+        } else {
+            st.database.clone()
+        }),
     }
 }
 
@@ -262,8 +271,45 @@ async fn header_step(
 }
 
 impl HouseApi {
-    /// Checks a statement, takes a worker, analyses it, and starts it.
+    /// [`HouseApi::start_checked`], with the statement's audit record (HS1
+    /// Task 20): its identity, kind and how its start ended.
     async fn start(&self, user: &UserMap, st: Statement) -> Result<Started, ConnectError> {
+        let audit = self.config.audit.as_ref().map(|sink| {
+            let mut event = crate::audit::AuditEvent::now("api", &st.query_id);
+            event.user = user.user.clone();
+            event.principal = user.principal.clone();
+            event.namespace = Some(user.namespace);
+            event.statement = Some(
+                match classify(&request::plan(st.sql.as_bytes(), false).sql) {
+                    Ok(Classified::Known { stmt, .. }) => stmt.kind().to_string(),
+                    Ok(Classified::Unparsed { .. }) | Err(_) => "Unparsed".to_string(),
+                },
+            );
+            (sink, event)
+        });
+        let started = self.start_checked(user, st).await;
+        if let Some((sink, mut event)) = audit {
+            event.code = match &started {
+                Ok(_) => 0,
+                // The Connect code's ClickHouse counterpart (`reason_for`'s
+                // inverse, coarsely).
+                Err(err) => match err.code {
+                    ErrorCode::Unauthenticated => 516,
+                    ErrorCode::PermissionDenied => 497,
+                    ErrorCode::NotFound => 60,
+                    ErrorCode::InvalidArgument => 36,
+                    ErrorCode::Unimplemented => 48,
+                    ErrorCode::Unavailable => 210,
+                    _ => 1,
+                },
+            };
+            sink.record(&event);
+        }
+        started
+    }
+
+    /// Checks a statement, takes a worker, analyses it, and starts it.
+    async fn start_checked(&self, user: &UserMap, st: Statement) -> Result<Started, ConnectError> {
         let config = &self.config;
         if st.sql.trim().is_empty() {
             return Err(invalid("sql", "sql is empty"));
@@ -276,10 +322,22 @@ impl HouseApi {
                 ),
             ))));
         }
-        if !st.database.is_empty() && st.database != "default" {
-            return Err(to_connect(&HouseError::from(ChError::unknown_database(
-                format!("Database {} does not exist", st.database),
-            ))));
+        let database = if st.database.is_empty() {
+            "default"
+        } else {
+            st.database.as_str()
+        };
+        match &self.lake {
+            Some(lake) => lake
+                .require_database(user.namespace, database)
+                .await
+                .map_err(|err| to_connect(&err))?,
+            None if database != "default" => {
+                return Err(to_connect(&HouseError::from(ChError::unknown_database(
+                    format!("Database {database} does not exist"),
+                ))));
+            }
+            None => {}
         }
         let known = self.pool.known_settings();
         for (name, value) in &st.settings {
@@ -296,8 +354,8 @@ impl HouseApi {
         };
 
         // What the statement is (the HTTP interface's `prepare`, without a body).
-        let plan = request::plan(st.sql.as_bytes(), false);
-        let classified = match &plan.input {
+        let mut plan = request::plan(st.sql.as_bytes(), false);
+        let mut classified = match &plan.input {
             Some(spec) => {
                 check_text(&spec.insert).map_err(|err| to_connect(&err))?;
                 Classified::Known {
@@ -311,6 +369,12 @@ impl HouseApi {
             }
             None => classify(&plan.sql).map_err(|err| to_connect(&err))?,
         };
+        // A read-only request first (`house_read_only`), then the caller's
+        // scopes (HS1 Task 20).
+        if read_only && matches!(&classified, Classified::Known { stmt, .. } if !stmt.is_read()) {
+            return Err(refuse_write());
+        }
+        gate::authorize(user, &classified).map_err(|err| to_connect(&err))?;
         let trailing_format = match &classified {
             Classified::Known { format, .. } | Classified::Unparsed { format, .. } => {
                 format.is_some()
@@ -321,6 +385,125 @@ impl HouseApi {
                 "sql",
                 "the result format is the request's `format`: drop the FORMAT clause",
             ));
+        }
+        // `SHOW TABLES`, `SHOW DATABASES`, `SHOW PROCESSLIST`: ClickHouse's own
+        // `SELECT` over the House's `system` tables (HS1 Task 11).
+        if let Classified::Known { stmt, .. } = &classified
+            && let Some(query) =
+                gate::show_answer(self.lake.as_deref(), user.namespace, database, stmt)
+                    .await
+                    .map_err(|err| to_connect(&err))?
+        {
+            plan.sql = query.clone();
+            classified = Classified::Known {
+                stmt: Stmt::Query { text: query },
+                format: None,
+            };
+        }
+        // The catalog's statements (HS1 Task 10), as over HTTP: DDL and `USE`
+        // answer here, `DESCRIBE`/`SHOW CREATE`/`EXISTS` of a catalog table read
+        // their rows.
+        if st.explain.is_none()
+            && let Classified::Known { stmt, .. } = &classified
+        {
+            if read_only && !stmt.is_read() {
+                return Err(refuse_write());
+            }
+            let outcome = gate::catalog_answer(
+                self.lake.as_deref(),
+                &self.pool,
+                user,
+                database,
+                stmt,
+                &plan.sql,
+                None,
+                &st.query_id,
+            )
+            .await
+            .map_err(|err| to_connect(&err))?;
+            match outcome {
+                gate::CatalogOutcome::Done => {
+                    let running = self.running.register(&st.query_id, user)?;
+                    return Ok(Started {
+                        lease: None,
+                        header: Some(Vec::new()),
+                        framer: Framer::Json(JsonFramer::new(st.caps, false)),
+                        running,
+                        deadline: None,
+                        started: Instant::now(),
+                        inserted: None,
+                    });
+                }
+                gate::CatalogOutcome::Rows(query) => {
+                    plan.sql = query.clone();
+                    classified = Classified::Known {
+                        stmt: Stmt::Query { text: query },
+                        format: None,
+                    };
+                }
+                gate::CatalogOutcome::NotOurs => {}
+                outcome @ (gate::CatalogOutcome::Insert(_)
+                | gate::CatalogOutcome::CreateAs(_)
+                | gate::CatalogOutcome::Optimize(_)) => {
+                    // An `INSERT` into a lake table (HS1 Task 12): run to its
+                    // commit, then answered with what it wrote.
+                    let Some(lake) = self.lake.as_deref() else {
+                        return Err(to_connect(&HouseError::from(ChError::not_implemented(
+                            "this House has no catalog",
+                        ))));
+                    };
+                    let running = self.running.register(&st.query_id, user)?;
+                    let started = Instant::now();
+                    let lease = self
+                        .pool
+                        .acquire(&user.namespace.to_string())
+                        .await
+                        .map_err(|err| to_connect(&err))?;
+                    let known = self.pool.known_settings();
+                    let ctx = crate::insert::InsertContext {
+                        lake,
+                        pool: &self.pool,
+                        namespace: user.namespace,
+                        database,
+                        user,
+                        query_id: &st.query_id,
+                        params: &st.params,
+                        settings: &st.settings,
+                        limits: &config.session_limits,
+                        known: &known,
+                        max_insert_bytes: config.lake_insert_max_bytes,
+                    };
+                    let inserted = match outcome {
+                        gate::CatalogOutcome::Insert(target) => {
+                            let streams =
+                                matches!(target.source, crate::insert::Source::Stream { .. });
+                            let mut feed =
+                                crate::insert::BytesFeed(std::mem::take(&mut plan.first_data));
+                            let feed: Option<&mut dyn crate::insert::Feed> =
+                                if streams { Some(&mut feed) } else { None };
+                            crate::insert::run(&ctx, lease, *target, feed).await
+                        }
+                        gate::CatalogOutcome::CreateAs(create) => {
+                            crate::insert::create_as(&ctx, lease, *create).await
+                        }
+                        gate::CatalogOutcome::Optimize(plan) => {
+                            self.pool.release(lease, Outcome::Completed);
+                            crate::compact::optimize(&ctx, &plan).await
+                        }
+                        _ => unreachable!("matched above"),
+                    }
+                    .map_err(|err| to_connect(&err))?;
+                    return Ok(Started {
+                        lease: None,
+                        header: Some(Vec::new()),
+                        framer: Framer::Json(JsonFramer::new(st.caps, false)),
+                        running,
+                        deadline: None,
+                        started,
+                        inserted: Some(inserted),
+                    });
+                }
+            }
         }
         let (expect, unparsed, is_read, is_query) = match &classified {
             Classified::Known { stmt, .. } => {
@@ -345,6 +528,7 @@ impl HouseApi {
                             running,
                             deadline: None,
                             started: Instant::now(),
+                            inserted: None,
                         });
                     }
                     Some(Err(err)) => return Err(to_connect(&err)),
@@ -407,6 +591,35 @@ impl HouseApi {
             self.pool.release(lease, Outcome::Completed);
             return Err(err);
         }
+        // What it reads (HS1 Task 11): lake tables pinned, `system` tables the
+        // House's, chosen by the request's settings (Loams's own included).
+        let reads = if input.is_some() {
+            crate::read::ReadPlan::default()
+        } else {
+            match gate::read_plan(
+                self.lake.as_deref(),
+                user.namespace,
+                database,
+                user,
+                &mut lease,
+                &analysis,
+                &sql,
+                &st.settings,
+            )
+            .await
+            {
+                Ok(reads) => reads,
+                Err(err) => {
+                    self.pool.release(lease, Outcome::Completed);
+                    return Err(to_connect(&err));
+                }
+            }
+        };
+        let sql = if input.is_some() {
+            sql
+        } else {
+            reads.sql.clone()
+        };
         if running.cancelled() {
             self.pool.release(lease, Outcome::Completed);
             return Err(to_connect(&cancelled_error(&st.query_id)));
@@ -422,7 +635,7 @@ impl HouseApi {
         let mut settings: Vec<(String, String)> = st
             .settings
             .iter()
-            .filter(|(k, _)| !crate::settings::is_loams(k))
+            .filter(|(k, _)| !crate::settings::is_front_only(k))
             .cloned()
             .collect();
         let limits = Limits {
@@ -442,6 +655,7 @@ impl HouseApi {
                 execute(
                     &st,
                     &settings,
+                    &reads.views,
                     format!("DESCRIBE TABLE (\n{sql}\n) SETTINGS describe_compact_output = 1"),
                     "JSONCompactEachRow",
                     Limits {
@@ -453,6 +667,7 @@ impl HouseApi {
                 execute(
                     &st,
                     &settings,
+                    &reads.views,
                     sql.clone(),
                     "JSONCompactEachRowWithNamesAndTypes",
                     Limits {
@@ -504,10 +719,15 @@ impl HouseApi {
         let mut main = execute(
             &st,
             &settings,
+            &reads.views,
             if input.is_some() { String::new() } else { text },
             format,
             limits,
         );
+        if input.is_some() {
+            // As over HTTP: a streamed `INSERT` gets no views, so no database.
+            main.database = None;
+        }
         main.input = input;
         let has_input = main.input.is_some();
         if let Err(err) = lease.start(main).await {
@@ -541,6 +761,7 @@ impl HouseApi {
             running,
             deadline,
             started,
+            inserted: None,
         })
     }
 
@@ -663,6 +884,8 @@ struct Run {
     block_start: bool,
     failed: Option<ConnectError>,
     done: bool,
+    /// An `INSERT` into a lake table the front ran (HS1 Task 12).
+    inserted: Option<crate::insert::Inserted>,
     _running: RunningGuard,
     _deadline: Option<Deadline>,
 }
@@ -676,6 +899,7 @@ impl Run {
             running,
             deadline,
             started,
+            inserted,
         } = started;
         let front_only = lease.is_none();
         let mut run = Self {
@@ -696,6 +920,7 @@ impl Run {
             block_start: true,
             failed: None,
             done: false,
+            inserted,
             _running: running,
             _deadline: deadline,
         };
@@ -776,10 +1001,19 @@ impl Run {
             result_bytes: self.framer.bytes(),
             read_rows: self.last.rows_read,
             read_bytes: self.last.bytes_read,
-            written_rows: self.last.written_rows,
+            written_rows: self
+                .inserted
+                .as_ref()
+                .map_or(self.last.written_rows, |i| i.written_rows),
             elapsed_ms: u64::try_from(self.started.elapsed().as_millis()).unwrap_or(u64::MAX),
             truncated: self.framer.truncated(),
             query_id: self.query_id.clone(),
+            snapshot_ids: self
+                .inserted
+                .as_ref()
+                .and_then(|i| i.snapshot_id.map(|id| (i.table.clone(), id)))
+                .into_iter()
+                .collect(),
             ..Default::default()
         }));
         self.done = true;

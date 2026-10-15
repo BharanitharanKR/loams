@@ -1,5 +1,5 @@
 // loams:// deep links. Pure parser; the result is a console hash-route path
-// (the cordis console uses a HashRouter, so `/servers` is `cordis.html#/servers`).
+// (the console routes by hash, so `/servers` is `/ui/#/servers`).
 
 /** Console hash routes shared by the tray and deep links, so they cannot drift. */
 export const TRAY_ROUTES = {
@@ -31,9 +31,23 @@ export function parseDeepLink(raw: string): { path: string } | null {
 		case "data":
 			return { path: `/data${rest.map((s) => `/${s}`).join("")}` };
 		case "factory":
+			// The factory lives in Studio (SD1 Task 27, D916): open it there directly.
 			return rest.length <= 1
-				? { path: `/factory${rest.map((s) => `/${s}`).join("")}` }
+				? { path: `/studio/factory${rest.map((s) => `/${s}`).join("")}` }
 				: null;
+		case "studio": {
+			// Loams Studio's thread and run-group links (§53 §4.4): `studio/t/<id>`, `studio/g/<id>`.
+			const [kind, id, ...extra] = rest;
+			return (kind === "t" || kind === "g") && id && extra.length === 0
+				? { path: `/studio/${kind}/${id}` }
+				: null;
+		}
+		case "agent": {
+			// DD1's agent links (`loams://open/agent/<id>`) name a thread: Studio shows it
+			// (SD1 Task 28, ruling T3-11).
+			const [id, ...extra] = rest;
+			return id && extra.length === 0 ? { path: `/studio/t/${id}` } : null;
+		}
 		case "servers":
 			// The console has no per-server route (only /settings/:section): open the list.
 			return { path: TRAY_ROUTES.servers };

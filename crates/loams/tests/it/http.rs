@@ -1006,6 +1006,8 @@ async fn the_link_endpoint_shows_version_and_applied_for_collections() {
         hot_pin_all: false,
         #[cfg(feature = "graph")]
         graph: None,
+        #[cfg(feature = "git")]
+        git: None,
         roles: loams_hot::Roles::all(),
         forwarded: None,
         forward_stats: Arc::default(),
@@ -1013,6 +1015,12 @@ async fn the_link_endpoint_shows_version_and_applied_for_collections() {
         cloudevents: Default::default(),
         reflection: false,
         house: None,
+        principals: loams::auth::Principals::new(
+            loams::auth::directory::Directory::new(meta.clone().into(), store.clone()),
+            loams::auth::SetupGate::Open,
+        ),
+        #[cfg(feature = "live")]
+        live: None,
     });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let base = format!("http://{}", listener.local_addr().unwrap());

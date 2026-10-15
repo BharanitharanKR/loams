@@ -191,6 +191,31 @@ impl MetaStore for MetaClient {
         .await
     }
 
+    async fn ensure_graph_stream(
+        &self,
+        namespace: NamespaceId,
+        graph: &str,
+    ) -> MetaResult<StreamId> {
+        MetaClient::ensure_graph_stream(self, namespace, graph).await
+    }
+
+    async fn ensure_system_stream(
+        &self,
+        namespace: NamespaceId,
+        name: &str,
+    ) -> MetaResult<StreamId> {
+        MetaClient::ensure_system_stream(self, namespace, name).await
+    }
+
+    async fn drop_graph_stream(
+        &self,
+        namespace: NamespaceId,
+        graph: &str,
+        fence: Option<Fence>,
+    ) -> MetaResult<Option<StreamId>> {
+        MetaClient::drop_graph_stream(self, namespace, graph, fence).await
+    }
+
     async fn create_link(
         &self,
         namespace: NamespaceId,
@@ -243,10 +268,21 @@ impl MetaStore for MetaClient {
     // ----- Sequencer and offset index -----
 
     async fn commit_wal(&self, commit: WalCommit) -> Tracked<Vec<u64>> {
-        let command = Command::CommitWal {
-            object: commit.object,
-            created_at_ms: commit.created_at_ms,
-            chunks: commit.chunks,
+        // An unfenced commit keeps `CommitWal`'s encoding, so its log entries
+        // stay readable by a node from before `CommitWalFenced`.
+        let command = if commit.fences.is_empty() {
+            Command::CommitWal {
+                object: commit.object,
+                created_at_ms: commit.created_at_ms,
+                chunks: commit.chunks,
+            }
+        } else {
+            Command::CommitWalFenced {
+                object: commit.object,
+                created_at_ms: commit.created_at_ms,
+                chunks: commit.chunks,
+                fences: commit.fences,
+            }
         };
         tracked(self.write_tracked(command).await, |reply| match reply {
             Reply::WalCommitted { base_offsets } => Ok(base_offsets),
@@ -388,6 +424,20 @@ impl MetaStore for MetaClient {
     ) -> MetaResult<Option<Pointer>> {
         self.read(consistency, |s| s.pointer(namespace, key).cloned())
             .await
+    }
+
+    async fn pointers_with_prefix(
+        &self,
+        consistency: Consistency,
+        namespace: NamespaceId,
+        prefix: &str,
+    ) -> MetaResult<Vec<(String, Pointer)>> {
+        self.read(consistency, |s| {
+            s.pointers_with_prefix(namespace, prefix)
+                .map(|(key, pointer)| (key.to_string(), pointer.clone()))
+                .collect()
+        })
+        .await
     }
 
     // ----- Collections -----

@@ -180,6 +180,123 @@ public enum Reason
     /// <summary>Another Live deploy activated first, so <c>expected_active</c> no longer matches.</summary>
     LiveDeployConflict = 52,
 
+    /// <summary>A write did not match its Live table's validator; the message names the table and field paths.</summary>
+    LiveSchemaViolation = 53,
+
+    /// <summary>A Live function read an index a deploy is still backfilling.</summary>
+    LiveIndexNotReady = 54,
+
+    /// <summary>The named Loams Git repository does not exist.</summary>
+    RepoNotFound = 55,
+
+    /// <summary>A Loams Git repository of that name already exists.</summary>
+    RepoAlreadyExists = 56,
+
+    /// <summary>The repository was deleted and is waiting to be purged.</summary>
+    RepoDeleting = 57,
+
+    /// <summary>A ref write's expected old value no longer holds.</summary>
+    RefStale = 58,
+
+    /// <summary>A protection rule refuses the ref write.</summary>
+    RefProtected = 59,
+
+    /// <summary>The write is outside the credential's branch prefixes or cones.</summary>
+    OutOfScope = 60,
+
+    /// <summary>The repository's object format is not supported (SHA-1 only for now).</summary>
+    ObjectFormatUnsupported = 61,
+
+    /// <summary>The source repository is already as many forks deep as allowed.</summary>
+    ForkTooDeep = 62,
+
+    /// <summary>The repository's sequencer is shutting down, lost its lease, or could not open.</summary>
+    SequencerUnavailable = 63,
+
+    /// <summary>The idempotency key was used inside its window for a different request.</summary>
+    IdempotencyKeyReused = 64,
+
+    /// <summary>The named workspace does not exist.</summary>
+    WorkspaceNotFound = 65,
+
+    /// <summary>Another writer appended the workspace snapshot first.</summary>
+    WorkspaceFenced = 66,
+
+    /// <summary>The workspace or snapshot is read-only.</summary>
+    WorkspaceReadOnly = 67,
+
+    /// <summary>The owner already has a workspace of that name.</summary>
+    WorkspaceNameTaken = 68,
+
+    /// <summary>A snapshot or push names an object the repository does not have.</summary>
+    ObjectMissing = 69,
+
+    /// <summary>The leak scanner found a credential outside <c>env/</c>.</summary>
+    SecretDetected = 70,
+
+    /// <summary>An <c>env/</c> file holds a plaintext value.</summary>
+    EnvUnsealed = 71,
+
+    /// <summary>The credential has no grant for the environment.</summary>
+    EnvAccessDenied = 72,
+
+    /// <summary>A sealed <c>env/</c> reference names another repository's secret.</summary>
+    EnvForeignReference = 73,
+
+    /// <summary>The caller's org role is below the one the admin RPC needs, or the caller is not in the org.</summary>
+    RoleRequired = 74,
+
+    /// <summary>First-run setup has not created the org yet.</summary>
+    SetupRequired = 75,
+
+    /// <summary>The call carried no credential.</summary>
+    TokenMissing = 76,
+
+    /// <summary>The credential is not an API key, a session token or a JWT, or more than one Authorization header was sent.</summary>
+    TokenMalformed = 77,
+
+    /// <summary>The API key was revoked, or the console session was signed out or its person left the org.</summary>
+    TokenRevoked = 78,
+
+    /// <summary>The OIDC token's nbf is in the future.</summary>
+    TokenNotYetValid = 79,
+
+    /// <summary>The OIDC token's signature does not verify.</summary>
+    TokenBadSignature = 80,
+
+    /// <summary>The OIDC token is for another audience.</summary>
+    TokenWrongAudience = 81,
+
+    /// <summary>The OIDC token is from an issuer this engine does not trust.</summary>
+    TokenWrongIssuer = 82,
+
+    /// <summary>The OIDC token is signed with a key its issuer's JWKS does not have.</summary>
+    TokenUnknownKey = 83,
+
+    /// <summary>The OIDC token is signed with an algorithm other than RS256 or EdDSA.</summary>
+    TokenAlgorithmNotAllowed = 84,
+
+    /// <summary>No key file or metastore record admits the API key.</summary>
+    ApiKeyInvalid = 85,
+
+    /// <summary>This engine's auth mode does not take this kind of credential.</summary>
+    CredentialNotAccepted = 86,
+
+    /// <summary>A credential was sent in the query string.</summary>
+    CredentialInQueryString = 87,
+
+    /// <summary>A cookie-authenticated call that is not a GET lacked the session's CSRF token.</summary>
+    CsrfTokenInvalid = 88,
+
+    /// <summary>A valid OIDC or tailnet identity that is not on the engine's allowlist.</summary>
+    PrincipalNotAllowed = 89,
+
+    /// <summary>A browser call from an origin the engine's CORS allowlist does not have.</summary>
+    CorsOriginNotAllowed = 90,
+
+    /// <summary>The credential cannot be checked now: the issuer's JWKS or the principal store is unreachable.</summary>
+    AuthUnavailable = 91,
+
     /// <summary>A malformed field or an unparseable value.</summary>
     InvalidArgument = 15,
 
@@ -283,9 +400,48 @@ public static class ReasonRegistry
         Reason.QuotaExceeded,
         Reason.StorageUnavailable,
         Reason.SecretAlreadyIssued,
+        Reason.RepoNotFound,
+        Reason.RepoAlreadyExists,
+        Reason.RepoDeleting,
+        Reason.RefStale,
+        Reason.RefProtected,
+        Reason.OutOfScope,
+        Reason.ObjectFormatUnsupported,
+        Reason.ForkTooDeep,
+        Reason.SequencerUnavailable,
+        Reason.IdempotencyKeyReused,
+        Reason.WorkspaceNotFound,
+        Reason.WorkspaceFenced,
+        Reason.WorkspaceReadOnly,
+        Reason.WorkspaceNameTaken,
+        Reason.ObjectMissing,
+        Reason.SecretDetected,
+        Reason.EnvUnsealed,
+        Reason.EnvAccessDenied,
+        Reason.EnvForeignReference,
         Reason.LiveBadCursor,
         Reason.LiveWorkerCrashed,
         Reason.LiveDeployConflict,
+        Reason.LiveSchemaViolation,
+        Reason.LiveIndexNotReady,
+        Reason.RoleRequired,
+        Reason.SetupRequired,
+        Reason.TokenMissing,
+        Reason.TokenMalformed,
+        Reason.TokenRevoked,
+        Reason.TokenNotYetValid,
+        Reason.TokenBadSignature,
+        Reason.TokenWrongAudience,
+        Reason.TokenWrongIssuer,
+        Reason.TokenUnknownKey,
+        Reason.TokenAlgorithmNotAllowed,
+        Reason.ApiKeyInvalid,
+        Reason.CredentialNotAccepted,
+        Reason.CredentialInQueryString,
+        Reason.CsrfTokenInvalid,
+        Reason.PrincipalNotAllowed,
+        Reason.CorsOriginNotAllowed,
+        Reason.AuthUnavailable,
         Reason.InvalidArgument,
         Reason.NotFound,
         Reason.AlreadyExists,
@@ -340,9 +496,48 @@ public static class ReasonRegistry
             [Reason.QuotaExceeded] = "quota_exceeded",
             [Reason.StorageUnavailable] = "storage_unavailable",
             [Reason.SecretAlreadyIssued] = "secret_already_issued",
+            [Reason.RepoNotFound] = "repo_not_found",
+            [Reason.RepoAlreadyExists] = "repo_already_exists",
+            [Reason.RepoDeleting] = "repo_deleting",
+            [Reason.RefStale] = "ref_stale",
+            [Reason.RefProtected] = "ref_protected",
+            [Reason.OutOfScope] = "out_of_scope",
+            [Reason.ObjectFormatUnsupported] = "object_format_unsupported",
+            [Reason.ForkTooDeep] = "fork_too_deep",
+            [Reason.SequencerUnavailable] = "sequencer_unavailable",
+            [Reason.IdempotencyKeyReused] = "idempotency_key_reused",
+            [Reason.WorkspaceNotFound] = "workspace_not_found",
+            [Reason.WorkspaceFenced] = "workspace_fenced",
+            [Reason.WorkspaceReadOnly] = "workspace_read_only",
+            [Reason.WorkspaceNameTaken] = "workspace_name_taken",
+            [Reason.ObjectMissing] = "object_missing",
+            [Reason.SecretDetected] = "secret_detected",
+            [Reason.EnvUnsealed] = "env_unsealed",
+            [Reason.EnvAccessDenied] = "env_access_denied",
+            [Reason.EnvForeignReference] = "env_foreign_reference",
             [Reason.LiveBadCursor] = "live_bad_cursor",
             [Reason.LiveWorkerCrashed] = "live_worker_crashed",
             [Reason.LiveDeployConflict] = "live_deploy_conflict",
+            [Reason.LiveSchemaViolation] = "live_schema_violation",
+            [Reason.LiveIndexNotReady] = "live_index_not_ready",
+            [Reason.RoleRequired] = "role_required",
+            [Reason.SetupRequired] = "setup_required",
+            [Reason.TokenMissing] = "token_missing",
+            [Reason.TokenMalformed] = "token_malformed",
+            [Reason.TokenRevoked] = "token_revoked",
+            [Reason.TokenNotYetValid] = "token_not_yet_valid",
+            [Reason.TokenBadSignature] = "token_bad_signature",
+            [Reason.TokenWrongAudience] = "token_wrong_audience",
+            [Reason.TokenWrongIssuer] = "token_wrong_issuer",
+            [Reason.TokenUnknownKey] = "token_unknown_key",
+            [Reason.TokenAlgorithmNotAllowed] = "token_algorithm_not_allowed",
+            [Reason.ApiKeyInvalid] = "api_key_invalid",
+            [Reason.CredentialNotAccepted] = "credential_not_accepted",
+            [Reason.CredentialInQueryString] = "credential_in_query_string",
+            [Reason.CsrfTokenInvalid] = "csrf_token_invalid",
+            [Reason.PrincipalNotAllowed] = "principal_not_allowed",
+            [Reason.CorsOriginNotAllowed] = "cors_origin_not_allowed",
+            [Reason.AuthUnavailable] = "auth_unavailable",
             [Reason.InvalidArgument] = "invalid_argument",
             [Reason.NotFound] = "not_found",
             [Reason.AlreadyExists] = "already_exists",
@@ -422,9 +617,48 @@ public static class ReasonRegistry
             [Reason.QuotaExceeded] = Code.ResourceExhausted,
             [Reason.StorageUnavailable] = Code.Unavailable,
             [Reason.SecretAlreadyIssued] = Code.FailedPrecondition,
+            [Reason.RepoNotFound] = Code.NotFound,
+            [Reason.RepoAlreadyExists] = Code.AlreadyExists,
+            [Reason.RepoDeleting] = Code.FailedPrecondition,
+            [Reason.RefStale] = Code.Aborted,
+            [Reason.RefProtected] = Code.FailedPrecondition,
+            [Reason.OutOfScope] = Code.PermissionDenied,
+            [Reason.ObjectFormatUnsupported] = Code.Unimplemented,
+            [Reason.ForkTooDeep] = Code.FailedPrecondition,
+            [Reason.SequencerUnavailable] = Code.Unavailable,
+            [Reason.IdempotencyKeyReused] = Code.FailedPrecondition,
+            [Reason.WorkspaceNotFound] = Code.NotFound,
+            [Reason.WorkspaceFenced] = Code.Aborted,
+            [Reason.WorkspaceReadOnly] = Code.FailedPrecondition,
+            [Reason.WorkspaceNameTaken] = Code.AlreadyExists,
+            [Reason.ObjectMissing] = Code.FailedPrecondition,
+            [Reason.SecretDetected] = Code.FailedPrecondition,
+            [Reason.EnvUnsealed] = Code.InvalidArgument,
+            [Reason.EnvAccessDenied] = Code.PermissionDenied,
+            [Reason.EnvForeignReference] = Code.PermissionDenied,
             [Reason.LiveBadCursor] = Code.InvalidArgument,
             [Reason.LiveWorkerCrashed] = Code.Internal,
             [Reason.LiveDeployConflict] = Code.FailedPrecondition,
+            [Reason.LiveSchemaViolation] = Code.InvalidArgument,
+            [Reason.LiveIndexNotReady] = Code.FailedPrecondition,
+            [Reason.RoleRequired] = Code.PermissionDenied,
+            [Reason.SetupRequired] = Code.FailedPrecondition,
+            [Reason.TokenMissing] = Code.Unauthenticated,
+            [Reason.TokenMalformed] = Code.Unauthenticated,
+            [Reason.TokenRevoked] = Code.Unauthenticated,
+            [Reason.TokenNotYetValid] = Code.Unauthenticated,
+            [Reason.TokenBadSignature] = Code.Unauthenticated,
+            [Reason.TokenWrongAudience] = Code.Unauthenticated,
+            [Reason.TokenWrongIssuer] = Code.Unauthenticated,
+            [Reason.TokenUnknownKey] = Code.Unauthenticated,
+            [Reason.TokenAlgorithmNotAllowed] = Code.Unauthenticated,
+            [Reason.ApiKeyInvalid] = Code.Unauthenticated,
+            [Reason.CredentialNotAccepted] = Code.Unauthenticated,
+            [Reason.CredentialInQueryString] = Code.Unauthenticated,
+            [Reason.CsrfTokenInvalid] = Code.PermissionDenied,
+            [Reason.PrincipalNotAllowed] = Code.PermissionDenied,
+            [Reason.CorsOriginNotAllowed] = Code.PermissionDenied,
+            [Reason.AuthUnavailable] = Code.Unavailable,
             [Reason.InvalidArgument] = Code.InvalidArgument,
             [Reason.NotFound] = Code.NotFound,
             [Reason.AlreadyExists] = Code.AlreadyExists,

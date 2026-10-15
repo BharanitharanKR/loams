@@ -254,7 +254,7 @@ export function CollectionsPage({
   return (
     <div className="lc-page ds-page">
       <PageHead
-        title="Data"
+        title="Data explorer"
         subtitle="Browse, query and load the collections of a namespace."
         actions={
           <>

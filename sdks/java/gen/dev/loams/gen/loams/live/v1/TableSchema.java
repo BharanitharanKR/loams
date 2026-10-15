@@ -44,6 +44,7 @@ private static final long serialVersionUID = 0L;
             dev.loams.gen.loams.live.v1.TableSchema.class, dev.loams.gen.loams.live.v1.TableSchema.Builder.class);
   }
 
+  private int bitField0_;
   public static final int NAME_FIELD_NUMBER = 1;
   @SuppressWarnings("serial")
   private volatile java.lang.Object name_ = "";
@@ -144,6 +145,81 @@ private static final long serialVersionUID = 0L;
     return indexes_.get(index);
   }
 
+  public static final int VALIDATOR_FIELD_NUMBER = 3;
+  private dev.loams.gen.loams.live.v1.Validator validator_;
+  /**
+   * <pre>
+   * The validator every write to the table must match (design §45 §4.1,
+   * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+   * own fields (not `_id` or `_creationTime`). Absent: any document.
+   * </pre>
+   *
+   * <code>.loams.live.v1.Validator validator = 3 [json_name = "validator"];</code>
+   * @return Whether the validator field is set.
+   */
+  @java.lang.Override
+  public boolean hasValidator() {
+    return ((bitField0_ & 0x00000001) != 0);
+  }
+  /**
+   * <pre>
+   * The validator every write to the table must match (design §45 §4.1,
+   * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+   * own fields (not `_id` or `_creationTime`). Absent: any document.
+   * </pre>
+   *
+   * <code>.loams.live.v1.Validator validator = 3 [json_name = "validator"];</code>
+   * @return The validator.
+   */
+  @java.lang.Override
+  public dev.loams.gen.loams.live.v1.Validator getValidator() {
+    return validator_ == null ? dev.loams.gen.loams.live.v1.Validator.getDefaultInstance() : validator_;
+  }
+  /**
+   * <pre>
+   * The validator every write to the table must match (design §45 §4.1,
+   * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+   * own fields (not `_id` or `_creationTime`). Absent: any document.
+   * </pre>
+   *
+   * <code>.loams.live.v1.Validator validator = 3 [json_name = "validator"];</code>
+   */
+  @java.lang.Override
+  public dev.loams.gen.loams.live.v1.ValidatorOrBuilder getValidatorOrBuilder() {
+    return validator_ == null ? dev.loams.gen.loams.live.v1.Validator.getDefaultInstance() : validator_;
+  }
+
+  public static final int SCHEMA_VALIDATION_FIELD_NUMBER = 4;
+  private boolean schemaValidation_ = false;
+  /**
+   * <pre>
+   * Whether a deploy that makes the validator stricter checks the table's
+   * existing documents first (absent: true). With `false` the new validator
+   * applies at once to new writes only, as Convex's `schemaValidation`.
+   * </pre>
+   *
+   * <code>optional bool schema_validation = 4 [json_name = "schemaValidation"];</code>
+   * @return Whether the schemaValidation field is set.
+   */
+  @java.lang.Override
+  public boolean hasSchemaValidation() {
+    return ((bitField0_ & 0x00000002) != 0);
+  }
+  /**
+   * <pre>
+   * Whether a deploy that makes the validator stricter checks the table's
+   * existing documents first (absent: true). With `false` the new validator
+   * applies at once to new writes only, as Convex's `schemaValidation`.
+   * </pre>
+   *
+   * <code>optional bool schema_validation = 4 [json_name = "schemaValidation"];</code>
+   * @return The schemaValidation.
+   */
+  @java.lang.Override
+  public boolean getSchemaValidation() {
+    return schemaValidation_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -164,6 +240,12 @@ private static final long serialVersionUID = 0L;
     for (int i = 0; i < indexes_.size(); i++) {
       output.writeMessage(2, indexes_.get(i));
     }
+    if (((bitField0_ & 0x00000001) != 0)) {
+      output.writeMessage(3, getValidator());
+    }
+    if (((bitField0_ & 0x00000002) != 0)) {
+      output.writeBool(4, schemaValidation_);
+    }
     getUnknownFields().writeTo(output);
   }
 
@@ -179,6 +261,14 @@ private static final long serialVersionUID = 0L;
     for (int i = 0; i < indexes_.size(); i++) {
       size += com.google.protobuf.CodedOutputStream
         .computeMessageSize(2, indexes_.get(i));
+    }
+    if (((bitField0_ & 0x00000001) != 0)) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeMessageSize(3, getValidator());
+    }
+    if (((bitField0_ & 0x00000002) != 0)) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(4, schemaValidation_);
     }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
@@ -199,6 +289,16 @@ private static final long serialVersionUID = 0L;
         .equals(other.getName())) return false;
     if (!getIndexesList()
         .equals(other.getIndexesList())) return false;
+    if (hasValidator() != other.hasValidator()) return false;
+    if (hasValidator()) {
+      if (!getValidator()
+          .equals(other.getValidator())) return false;
+    }
+    if (hasSchemaValidation() != other.hasSchemaValidation()) return false;
+    if (hasSchemaValidation()) {
+      if (getSchemaValidation()
+          != other.getSchemaValidation()) return false;
+    }
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -215,6 +315,15 @@ private static final long serialVersionUID = 0L;
     if (getIndexesCount() > 0) {
       hash = (37 * hash) + INDEXES_FIELD_NUMBER;
       hash = (53 * hash) + getIndexesList().hashCode();
+    }
+    if (hasValidator()) {
+      hash = (37 * hash) + VALIDATOR_FIELD_NUMBER;
+      hash = (53 * hash) + getValidator().hashCode();
+    }
+    if (hasSchemaValidation()) {
+      hash = (37 * hash) + SCHEMA_VALIDATION_FIELD_NUMBER;
+      hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+          getSchemaValidation());
     }
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
@@ -335,13 +444,20 @@ private static final long serialVersionUID = 0L;
 
     // Construct using dev.loams.gen.loams.live.v1.TableSchema.newBuilder()
     private Builder() {
-
+      maybeForceBuilderInitialization();
     }
 
     private Builder(
         com.google.protobuf.GeneratedMessage.BuilderParent parent) {
       super(parent);
-
+      maybeForceBuilderInitialization();
+    }
+    private void maybeForceBuilderInitialization() {
+      if (com.google.protobuf.GeneratedMessage
+              .alwaysUseFieldBuilders) {
+        getIndexesFieldBuilder();
+        getValidatorFieldBuilder();
+      }
     }
     @java.lang.Override
     public Builder clear() {
@@ -355,6 +471,12 @@ private static final long serialVersionUID = 0L;
         indexesBuilder_.clear();
       }
       bitField0_ = (bitField0_ & ~0x00000002);
+      validator_ = null;
+      if (validatorBuilder_ != null) {
+        validatorBuilder_.dispose();
+        validatorBuilder_ = null;
+      }
+      schemaValidation_ = false;
       return this;
     }
 
@@ -404,6 +526,18 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000001) != 0)) {
         result.name_ = name_;
       }
+      int to_bitField0_ = 0;
+      if (((from_bitField0_ & 0x00000004) != 0)) {
+        result.validator_ = validatorBuilder_ == null
+            ? validator_
+            : validatorBuilder_.build();
+        to_bitField0_ |= 0x00000001;
+      }
+      if (((from_bitField0_ & 0x00000008) != 0)) {
+        result.schemaValidation_ = schemaValidation_;
+        to_bitField0_ |= 0x00000002;
+      }
+      result.bitField0_ |= to_bitField0_;
     }
 
     @java.lang.Override
@@ -449,6 +583,12 @@ private static final long serialVersionUID = 0L;
           }
         }
       }
+      if (other.hasValidator()) {
+        mergeValidator(other.getValidator());
+      }
+      if (other.hasSchemaValidation()) {
+        setSchemaValidation(other.getSchemaValidation());
+      }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
       return this;
@@ -493,6 +633,18 @@ private static final long serialVersionUID = 0L;
               }
               break;
             } // case 18
+            case 26: {
+              input.readMessage(
+                  getValidatorFieldBuilder().getBuilder(),
+                  extensionRegistry);
+              bitField0_ |= 0x00000004;
+              break;
+            } // case 26
+            case 32: {
+              schemaValidation_ = input.readBool();
+              bitField0_ |= 0x00000008;
+              break;
+            } // case 32
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -892,6 +1044,245 @@ private static final long serialVersionUID = 0L;
         indexes_ = null;
       }
       return indexesBuilder_;
+    }
+
+    private dev.loams.gen.loams.live.v1.Validator validator_;
+    private com.google.protobuf.SingleFieldBuilder<
+        dev.loams.gen.loams.live.v1.Validator, dev.loams.gen.loams.live.v1.Validator.Builder, dev.loams.gen.loams.live.v1.ValidatorOrBuilder> validatorBuilder_;
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1,
+     * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+     * own fields (not `_id` or `_creationTime`). Absent: any document.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 3 [json_name = "validator"];</code>
+     * @return Whether the validator field is set.
+     */
+    public boolean hasValidator() {
+      return ((bitField0_ & 0x00000004) != 0);
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1,
+     * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+     * own fields (not `_id` or `_creationTime`). Absent: any document.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 3 [json_name = "validator"];</code>
+     * @return The validator.
+     */
+    public dev.loams.gen.loams.live.v1.Validator getValidator() {
+      if (validatorBuilder_ == null) {
+        return validator_ == null ? dev.loams.gen.loams.live.v1.Validator.getDefaultInstance() : validator_;
+      } else {
+        return validatorBuilder_.getMessage();
+      }
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1,
+     * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+     * own fields (not `_id` or `_creationTime`). Absent: any document.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 3 [json_name = "validator"];</code>
+     */
+    public Builder setValidator(dev.loams.gen.loams.live.v1.Validator value) {
+      if (validatorBuilder_ == null) {
+        if (value == null) {
+          throw new NullPointerException();
+        }
+        validator_ = value;
+      } else {
+        validatorBuilder_.setMessage(value);
+      }
+      bitField0_ |= 0x00000004;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1,
+     * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+     * own fields (not `_id` or `_creationTime`). Absent: any document.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 3 [json_name = "validator"];</code>
+     */
+    public Builder setValidator(
+        dev.loams.gen.loams.live.v1.Validator.Builder builderForValue) {
+      if (validatorBuilder_ == null) {
+        validator_ = builderForValue.build();
+      } else {
+        validatorBuilder_.setMessage(builderForValue.build());
+      }
+      bitField0_ |= 0x00000004;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1,
+     * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+     * own fields (not `_id` or `_creationTime`). Absent: any document.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 3 [json_name = "validator"];</code>
+     */
+    public Builder mergeValidator(dev.loams.gen.loams.live.v1.Validator value) {
+      if (validatorBuilder_ == null) {
+        if (((bitField0_ & 0x00000004) != 0) &&
+          validator_ != null &&
+          validator_ != dev.loams.gen.loams.live.v1.Validator.getDefaultInstance()) {
+          getValidatorBuilder().mergeFrom(value);
+        } else {
+          validator_ = value;
+        }
+      } else {
+        validatorBuilder_.mergeFrom(value);
+      }
+      if (validator_ != null) {
+        bitField0_ |= 0x00000004;
+        onChanged();
+      }
+      return this;
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1,
+     * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+     * own fields (not `_id` or `_creationTime`). Absent: any document.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 3 [json_name = "validator"];</code>
+     */
+    public Builder clearValidator() {
+      bitField0_ = (bitField0_ & ~0x00000004);
+      validator_ = null;
+      if (validatorBuilder_ != null) {
+        validatorBuilder_.dispose();
+        validatorBuilder_ = null;
+      }
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1,
+     * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+     * own fields (not `_id` or `_creationTime`). Absent: any document.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 3 [json_name = "validator"];</code>
+     */
+    public dev.loams.gen.loams.live.v1.Validator.Builder getValidatorBuilder() {
+      bitField0_ |= 0x00000004;
+      onChanged();
+      return getValidatorFieldBuilder().getBuilder();
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1,
+     * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+     * own fields (not `_id` or `_creationTime`). Absent: any document.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 3 [json_name = "validator"];</code>
+     */
+    public dev.loams.gen.loams.live.v1.ValidatorOrBuilder getValidatorOrBuilder() {
+      if (validatorBuilder_ != null) {
+        return validatorBuilder_.getMessageOrBuilder();
+      } else {
+        return validator_ == null ?
+            dev.loams.gen.loams.live.v1.Validator.getDefaultInstance() : validator_;
+      }
+    }
+    /**
+     * <pre>
+     * The validator every write to the table must match (design §45 §4.1,
+     * D684): a `v.object(…)`, or a `v.union(…)` of them, over the document's
+     * own fields (not `_id` or `_creationTime`). Absent: any document.
+     * </pre>
+     *
+     * <code>.loams.live.v1.Validator validator = 3 [json_name = "validator"];</code>
+     */
+    private com.google.protobuf.SingleFieldBuilder<
+        dev.loams.gen.loams.live.v1.Validator, dev.loams.gen.loams.live.v1.Validator.Builder, dev.loams.gen.loams.live.v1.ValidatorOrBuilder> 
+        getValidatorFieldBuilder() {
+      if (validatorBuilder_ == null) {
+        validatorBuilder_ = new com.google.protobuf.SingleFieldBuilder<
+            dev.loams.gen.loams.live.v1.Validator, dev.loams.gen.loams.live.v1.Validator.Builder, dev.loams.gen.loams.live.v1.ValidatorOrBuilder>(
+                getValidator(),
+                getParentForChildren(),
+                isClean());
+        validator_ = null;
+      }
+      return validatorBuilder_;
+    }
+
+    private boolean schemaValidation_ ;
+    /**
+     * <pre>
+     * Whether a deploy that makes the validator stricter checks the table's
+     * existing documents first (absent: true). With `false` the new validator
+     * applies at once to new writes only, as Convex's `schemaValidation`.
+     * </pre>
+     *
+     * <code>optional bool schema_validation = 4 [json_name = "schemaValidation"];</code>
+     * @return Whether the schemaValidation field is set.
+     */
+    @java.lang.Override
+    public boolean hasSchemaValidation() {
+      return ((bitField0_ & 0x00000008) != 0);
+    }
+    /**
+     * <pre>
+     * Whether a deploy that makes the validator stricter checks the table's
+     * existing documents first (absent: true). With `false` the new validator
+     * applies at once to new writes only, as Convex's `schemaValidation`.
+     * </pre>
+     *
+     * <code>optional bool schema_validation = 4 [json_name = "schemaValidation"];</code>
+     * @return The schemaValidation.
+     */
+    @java.lang.Override
+    public boolean getSchemaValidation() {
+      return schemaValidation_;
+    }
+    /**
+     * <pre>
+     * Whether a deploy that makes the validator stricter checks the table's
+     * existing documents first (absent: true). With `false` the new validator
+     * applies at once to new writes only, as Convex's `schemaValidation`.
+     * </pre>
+     *
+     * <code>optional bool schema_validation = 4 [json_name = "schemaValidation"];</code>
+     * @param value The schemaValidation to set.
+     * @return This builder for chaining.
+     */
+    public Builder setSchemaValidation(boolean value) {
+
+      schemaValidation_ = value;
+      bitField0_ |= 0x00000008;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Whether a deploy that makes the validator stricter checks the table's
+     * existing documents first (absent: true). With `false` the new validator
+     * applies at once to new writes only, as Convex's `schemaValidation`.
+     * </pre>
+     *
+     * <code>optional bool schema_validation = 4 [json_name = "schemaValidation"];</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearSchemaValidation() {
+      bitField0_ = (bitField0_ & ~0x00000008);
+      schemaValidation_ = false;
+      onChanged();
+      return this;
     }
 
     // @@protoc_insertion_point(builder_scope:loams.live.v1.TableSchema)

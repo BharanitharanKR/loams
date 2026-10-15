@@ -115,6 +115,14 @@ if [ "$no_server" -eq 0 ]; then
   # A conformance run wants the API and nothing else, so the optional listeners
   # are switched off: a dev stack that also binds Flight SQL, Qdrant and
   # Elasticsearch fails on a developer machine that already has something on 8082.
+  #
+  # `--no-live` is not only a listener: the corpus is recorded from a `loams dev`
+  # with Live off, and it depends on that. Since LV1 Task 12 a running Live serves
+  # `loams.live.v1` on this port, so `LiveService/Query` would answer `not_found`
+  # (no function deployed) instead of the `feature_not_in_variant` refusal that
+  # `live_query_*` and `live_watch` pin, and `GetInstance` would list the package
+  # as served. Every SDK suite asserts the unavailable-service path through
+  # `loams.live.v1`, so the server it is checked against must not run Live.
   datadir="$(mktemp -d)"
   # `loams dev` does not take port 0, so a free port is chosen here. Two
   # concurrent runs must not collide, which is why this is a probe and not a
@@ -123,7 +131,7 @@ if [ "$no_server" -eq 0 ]; then
   for _ in $(seq 1 10); do
     port=$((20000 + RANDOM % 20000))
     "$bin" dev --listen "127.0.0.1:$port" --data-dir "$datadir" \
-      --no-flight-sql --no-qdrant --no-es >> "$log" 2>&1 &
+      --no-flight-sql --no-qdrant --no-es --no-live >> "$log" 2>&1 &
     echo "$!" > "$PID_FILE"
     pid="$!"
     for _ in $(seq 1 100); do

@@ -158,6 +158,9 @@ pub(crate) struct ResultFrame {
     pub usage: UsageBody,
     #[serde(default)]
     pub session_id: Option<String>,
+    /// The CLI's own cost of the run, when it reports one.
+    #[serde(default)]
+    pub total_cost_usd: Option<f64>,
 }
 
 #[derive(Debug, Default, Deserialize)]
@@ -166,6 +169,10 @@ pub(crate) struct UsageBody {
     pub input_tokens: u64,
     #[serde(default)]
     pub output_tokens: u64,
+    #[serde(default)]
+    pub cache_read_input_tokens: Option<u64>,
+    #[serde(default)]
+    pub cache_creation_input_tokens: Option<u64>,
 }
 
 /// A CLI→client control request (`can_use_tool` is the one we act on).
@@ -185,6 +192,9 @@ pub(crate) struct ControlRequestBody {
     pub tool_name: String,
     #[serde(default)]
     pub input: Value,
+    /// The tool use the permission is for (CLI 2.1.x sends it).
+    #[serde(default)]
+    pub tool_use_id: Option<String>,
 }
 
 /// Parse one stdout JSONL line. `Err` = not JSON; unknown types = `Other`.

@@ -8,6 +8,31 @@ const hasWindowsSigning = Boolean(process.env.WINDOWS_SIGN_KEYSTORE);
 const sfx = (name) => process.env[name] ?? "";
 const named = (suffix) => `loams-desktop-\${version}-\${os}-\${arch}${suffix}.\${ext}`;
 
+// macOS signing. With a Developer ID certificate (CSC_LINK, or CSC_NAME for one already in the
+// keychain) electron-builder signs with it under the hardened runtime, and notarizes when the
+// notary credentials are set too (APPLE_API_KEY + APPLE_API_KEY_ID + APPLE_API_ISSUER, or APPLE_ID +
+// APPLE_APP_SPECIFIC_PASSWORD + APPLE_TEAM_ID; electron-builder reads them from the environment).
+// Without a certificate the app is ad-hoc signed ("-"): no identity and no notarization, but a valid
+// signature, which Apple Silicon requires before it runs an arm64 binary at all (an unsigned arm64
+// app is reported as "damaged"). Users still clear the quarantine flag once (docs/release/desktop.md).
+const hasAppleCertificate = Boolean(process.env.CSC_LINK || process.env.CSC_NAME);
+const hasNotaryCredentials = Boolean(
+	(process.env.APPLE_API_KEY && process.env.APPLE_API_KEY_ID && process.env.APPLE_API_ISSUER) ||
+		(process.env.APPLE_ID && process.env.APPLE_APP_SPECIFIC_PASSWORD && process.env.APPLE_TEAM_ID),
+);
+// One macOS architecture per run: "arm64" or "x64" (the release builds x64 on an arm64 runner).
+// Unset, electron-builder builds for the machine it runs on.
+const macArch = process.env.LOAMS_DESKTOP_MAC_ARCH || undefined;
+if (macArch && !["arm64", "x64"].includes(macArch)) {
+	throw new Error(`LOAMS_DESKTOP_MAC_ARCH must be arm64 or x64, not ${macArch}`);
+}
+// The release of the Loams product (a vX.Y.Z tag) stamps its own version on the desktop build, so
+// the app and its file names match the release they are attached to. Unset: package.json's version.
+const version = process.env.LOAMS_DESKTOP_VERSION || undefined;
+if (version !== undefined && !/^\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?$/.test(version)) {
+	throw new Error(`LOAMS_DESKTOP_VERSION must be X.Y.Z or X.Y.Z-pre, not ${version}`);
+}
+
 /** @type {import('electron-builder').Configuration} */
 module.exports = {
 	appId: "dev.loams.desktop",
@@ -16,6 +41,7 @@ module.exports = {
 	protocols: [{ name: "Loams", schemes: ["loams"] }],
 	asar: true,
 	directories: { output: "dist", buildResources: "build" },
+	...(version ? { extraMetadata: { version } } : {}),
 	// build/tray-*.png are read at runtime from app.getAppPath()/build (src/main/shell/tray.electron.ts),
 	// so they ship inside the asar. App icons in build/ are consumed by electron-builder itself.
 	files: ["out/**", "package.json", "build/tray-*.png"],
@@ -27,6 +53,10 @@ module.exports = {
 		{ from: "../../deploy/wesql", to: "stacks/wesql" },
 		{ from: "../../deploy/tikv", to: "stacks/tikv" },
 		{ from: "resources/connectors.json", to: "connectors.json" },
+		// Attribution (SD1 T1-7, Task 28): the desktop's NOTICE and T3 Code's MIT licence
+		// for the vendored Loams Studio code in the console bundle.
+		{ from: "NOTICE", to: "NOTICE" },
+		{ from: "../../web/packages/studio-ui/LICENSE.t3code", to: "LICENSE.t3code" },
 	],
 	artifactName: "loams-desktop-${version}-${os}-${arch}.${ext}",
 	linux: {
@@ -45,14 +75,17 @@ module.exports = {
 		artifactName: named(sfx("LOAMS_SUFFIX_GPG")),
 		packageName: "loams-desktop", depends: ["libgtk-3-0", "libnotify4", "libnss3", "libxss1", "libxtst6", "xdg-utils", "libatspi2.0-0", "libuuid1", "libsecret-1-0"] },
 	mac: {
-		target: ["dmg", "zip"],
+		target: ["dmg", "zip"].map((target) => (macArch ? { target, arch: [macArch] } : { target })),
 		category: "public.app-category.developer-tools",
 		icon: "build/icon.icns",
-		// Unsigned until the owner supplies Apple credentials (D677): no identity, no hardened
-		// runtime, no notarization.
-		identity: null,
-		hardenedRuntime: false,
-		notarize: false,
+		...(hasAppleCertificate
+			? {
+					hardenedRuntime: true,
+					entitlements: "build/entitlements.mac.plist",
+					entitlementsInherit: "build/entitlements.mac.plist",
+					notarize: hasNotaryCredentials,
+				}
+			: { identity: "-", hardenedRuntime: false, notarize: false }),
 	},
 	win: {
 		target: [{ target: "nsis", arch: ["x64"] }],

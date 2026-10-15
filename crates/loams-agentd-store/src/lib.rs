@@ -3,6 +3,10 @@
 //! (mark-BEFORE-execute semantics). The doc IS the outbox: commands and user entries
 //! flush immediately. The edge room clients that synced these docs are gone (D781).
 
+mod review_comments;
+mod run_groups;
 mod store;
 
-pub use store::{DocsStore, StoreError};
+pub use review_comments::ReviewCommentRow;
+pub use run_groups::StoredRunGroup;
+pub use store::{DocsStore, PendingApprovalRow, StoreError, TurnUsageRow};

@@ -6,10 +6,15 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 authors.workspace = true
-# Not published yet: build.rs reads the protos from the workspace's proto/
-# directory, as loams-live-proto does. SDK1 decides how the Rust SDK ships
-# them (§44 §11).
-publish = false
+repository = "https://github.com/ostrium-labs/loams"
+homepage = "https://loams.dev"
+keywords = ["loams", "protobuf", "connect", "grpc"]
+categories = ["api-bindings"]
+# Published: the Rust SDK (`sdks/rust`, crate `loams` on crates.io) depends on it,
+# so it ships with the SDKs (.github/workflows/sdk-release.yml). The protos ship
+# inside the crate: `proto/` here is a symlink to the workspace's `proto/`, which
+# `cargo package` resolves into real files, and build.rs reads it. Building the
+# crate needs `protoc` on PATH, as it always has.
 
 [features]
 # The generated service clients (connect-rust's client transport), for the

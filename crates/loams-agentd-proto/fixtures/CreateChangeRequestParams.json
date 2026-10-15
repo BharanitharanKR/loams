@@ -1,0 +1,10 @@
+{
+  "base": "main",
+  "body": "Links again.",
+  "cwd": "/home/dev/project",
+  "draft": false,
+  "head": "fix-linker",
+  "linkIssue": "42",
+  "provider": "forgejo",
+  "title": "Fix the linker"
+}

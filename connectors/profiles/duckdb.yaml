@@ -1,0 +1,16 @@
+# DuckDB — a target on the analytics family's ADBC module (CN2 Task 17, R17.2, R17.7).
+# The driver is DuckDB's own libduckdb (v1.5.6, entry point duckdb_adbc_init), loaded
+# by path from the runtime's allowlist (LOAMS_ADBC_ALLOWLIST) with a SHA-256 check
+# (CN1 Ruling 9). The suite runs in connectors-p2's analytics shard against the real
+# library, which CI fetches and checks (LOAMS_DUCKDB_DRIVER); the fixture holds
+# database files the DuckDB CLI wrote.
+apiVersion: loams.flow/v1
+kind: Profile
+id: duckdb
+profile_kind: target
+module: analytics
+system:
+  name: DuckDB
+  service: { fixture: conformance/connectors/fixtures/duckdb }
+defaults: { driver: duckdb }
+narrows: []

@@ -1,0 +1,43 @@
+{
+  "recorded_from": "GitHub",
+  "synthetic": true,
+  "docs": [
+    "https://docs.github.com/en/webhooks/using-webhooks/validating-webhook-deliveries"
+  ],
+  "scenario": {
+    "direction": "webhook",
+    "scheme": "github",
+    "header": "X-Hub-Signature-256",
+    "secret": "synthetic-github-webhook-secret",
+    "url": "https://hooks.loams.test/fabric/github/issues",
+    "now": 1759320000
+  },
+  "exchanges": [
+    {
+      "request": {
+        "method": "POST",
+        "path": "/fabric/github/issues",
+        "headers": {
+          "content-type": "application/json",
+          "x-github-event": "issues",
+          "x-github-delivery": "72d3162e-cc78-11e3-81ab-4c9367dc0958",
+          "x-hub-signature-256": "sha256=153b0a5fe855573ea7e249e38b7b25c203ecd77dd83f296c44cd9a48ee85b86b"
+        },
+        "body": {
+          "text": "{\"action\":\"opened\",\"issue\":{\"number\":4,\"title\":\"Imported\"},\"repository\":{\"full_name\":\"loams-labs/demo\"}}"
+        }
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "content-type": "application/json"
+        },
+        "body": {
+          "json": {
+            "ok": true
+          }
+        }
+      }
+    }
+  ]
+}

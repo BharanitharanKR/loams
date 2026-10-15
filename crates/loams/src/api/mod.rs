@@ -11,7 +11,10 @@
 
 mod collections;
 pub mod connect;
+mod connect_admin;
+mod connect_auth;
 mod connect_collections;
+mod connect_console;
 mod connect_documents;
 mod connect_errors;
 mod connect_hot;
@@ -24,13 +27,24 @@ mod connect_query_filters;
 mod connect_query_ir;
 mod errors;
 pub mod events;
-mod graph;
+// Loams Git's forwarded commits and cluster seams (GT1 Task 14).
+#[cfg(feature = "git")]
+pub mod git_internal;
+// Git tokens, the git listener and main-port grants (GT1 Task 16).
+#[cfg(feature = "git")]
+pub mod git_auth;
+// The `_git` mirror on the server (GT1 Task 15).
+#[cfg(feature = "git")]
+pub mod git_events;
+pub(crate) mod graph;
 pub mod hot;
 pub mod house_proxy;
 pub mod internal;
+pub(crate) mod live;
 #[cfg(feature = "postgres")]
 mod postgres_messages;
 mod query;
+pub mod repos;
 mod sql;
 pub mod streams;
 
@@ -51,6 +65,7 @@ use bytes::Bytes;
 use loams_collection::ConsistencyToken;
 use loams_common::meta::{
     Consistency, Link, MetaStore, Retention, StreamState, TargetRef, WalClass,
+    is_reserved_namespace,
 };
 use loams_common::{NamespaceId, StreamId};
 use loams_hot::{ForwardStats, HotTierImpl, Roles};
@@ -139,6 +154,18 @@ pub struct AppState {
     /// design §49 §18.1); `None` when no `[house] endpoint` is configured, and
     /// then the package answers `house_not_configured`.
     pub house: Option<Arc<house_proxy::HouseProxy>>,
+    /// Loams Git's `RepoService` (GT1 Task 13, feature `git`): the bucket catalog and this
+    /// node's repository sequencers; `None` when this node does not serve it.
+    #[cfg(feature = "git")]
+    pub git: Option<Arc<repos::GitRuntime>>,
+    /// The principal store, its authorizer and the setup gate, behind
+    /// `loams.auth.v1` and `loams.admin.v1` (API2 Tasks 6 and 7).
+    pub principals: crate::auth::Principals,
+    /// Loams Live's two services (LV1 plan Task 12, feature `live`), registered on this router;
+    /// `None` when Live is off or this router may not serve it (a non-loopback main port before
+    /// LV1 Task 18), and then the package answers `feature_not_in_variant`.
+    #[cfg(feature = "live")]
+    pub live: Option<loams_live::LiveRoutes>,
 }
 
 /// What a query node needs to run forwarded reads (plan M1.3 Task 11).
@@ -267,6 +294,7 @@ pub fn router(state: AppState) -> Router {
         .merge(hot::routes())
         .fallback(no_route)
         .method_not_allowed_fallback(method_not_allowed)
+        .layer(axum::middleware::from_fn(refuse_reserved_namespace))
         .layer(DefaultBodyLimit::max(MAX_BODY_BYTES))
         .with_state(state)
         .layer(hot_layer)
@@ -377,6 +405,9 @@ async fn create_namespace(
 ) -> ApiResult {
     let body = body?;
     let request: CreateNamespace = parse_json(&body)?;
+    if is_reserved_namespace(&request.name) {
+        return Err(ApiError::namespace_reserved(&request.name));
+    }
     let id = state.meta.create_namespace(&request.name).await?;
     Ok((StatusCode::CREATED, axum::Json(json!({ "id": id.0 }))).into_response())
 }
@@ -394,7 +425,28 @@ struct CreateStream {
     retention: Option<RetentionBody>,
 }
 
+/// Every `/v1/namespaces/{ns}/…` route refuses the reserved namespace
+/// (`namespace_reserved`, UP1 Task 2) before its handler runs.
+async fn refuse_reserved_namespace(
+    request: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let reserved = request
+        .uri()
+        .path()
+        .strip_prefix("/v1/namespaces/")
+        .map(|rest| rest.split('/').next().unwrap_or_default())
+        .filter(|ns| is_reserved_namespace(ns));
+    match reserved {
+        Some(ns) => ApiError::namespace_reserved(ns).into_response(),
+        None => next.run(request).await,
+    }
+}
+
 async fn namespace_id(meta: &dyn MetaStore, name: &str) -> Result<NamespaceId, ApiError> {
+    if is_reserved_namespace(name) {
+        return Err(ApiError::namespace_reserved(name));
+    }
     meta.namespace_by_name(Consistency::Local, name)
         .await?
         .map(|n| n.id)

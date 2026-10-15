@@ -1,0 +1,16 @@
+{
+  "branch": "fix-linker",
+  "changeRequest": {
+    "baseRef": "main",
+    "headRef": "fix-linker",
+    "number": 42,
+    "provider": "github",
+    "state": "open",
+    "title": "Fix the linker",
+    "url": "https://github.com/example/project/pull/42"
+  },
+  "checkoutId": "checkout-1",
+  "cwd": "/home/dev/project",
+  "deviceId": "device-1",
+  "updatedAt": "2026-10-12T09:30:00Z"
+}

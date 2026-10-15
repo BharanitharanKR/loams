@@ -1,0 +1,989 @@
+[
+  {
+    "method": "Hello",
+    "params": {
+      "client": "electron-main",
+      "clientVersion": "0.2.1",
+      "protocol": 1
+    }
+  },
+  {
+    "method": "Shutdown",
+    "params": {}
+  },
+  {
+    "method": "WatchPreviews",
+    "params": {
+      "chatId": "chat-1"
+    }
+  },
+  {
+    "method": "ListHarnesses",
+    "params": {}
+  },
+  {
+    "method": "CancelInstall",
+    "params": {
+      "harness": "codex"
+    }
+  },
+  {
+    "method": "InstallHarness",
+    "params": {
+      "harness": "codex"
+    }
+  },
+  {
+    "method": "GetTitleSettings",
+    "params": {}
+  },
+  {
+    "method": "SetTitleSettings",
+    "params": {
+      "harness": "claude-code",
+      "model": null
+    }
+  },
+  {
+    "method": "SetHarnessEnabled",
+    "params": {
+      "harness": "pi",
+      "enabled": false
+    }
+  },
+  {
+    "method": "ListModels",
+    "params": {
+      "harness": "codex",
+      "force": false
+    }
+  },
+  {
+    "method": "ListSkills",
+    "params": {
+      "harness": "claude-code",
+      "chatId": "chat-1"
+    }
+  },
+  {
+    "method": "ListCommands",
+    "params": {
+      "harness": "claude-code",
+      "spaceId": "space-1"
+    }
+  },
+  {
+    "method": "QueueCommand",
+    "params": {
+      "chatId": "chat-1",
+      "command": {
+        "kind": "run",
+        "request": {
+          "prompt": "Fix the build",
+          "model": "claude-sonnet",
+          "reasoning": "high",
+          "modelOptions": {},
+          "cwd": "/home/dev/project",
+          "sandbox": "workspace-write",
+          "autoApprove": false,
+          "resume": null,
+          "harness": "claude-code"
+        },
+        "messageId": "msg-u1"
+      }
+    }
+  },
+  {
+    "method": "QueueCommand",
+    "params": {
+      "chatId": "chat-1",
+      "command": {
+        "kind": "steer",
+        "prompt": "Also run the tests",
+        "messageId": null
+      }
+    }
+  },
+  {
+    "method": "QueueCommand",
+    "params": {
+      "chatId": "chat-1",
+      "command": {
+        "kind": "interrupt"
+      }
+    }
+  },
+  {
+    "method": "QueueCommand",
+    "params": {
+      "chatId": "chat-1",
+      "command": {
+        "kind": "respondInput",
+        "requestId": "req-1",
+        "answers": [
+          {
+            "questionId": "q-1",
+            "labels": [
+              "main"
+            ]
+          }
+        ]
+      }
+    }
+  },
+  {
+    "method": "RetryDelivery",
+    "params": {
+      "chatId": "chat-1"
+    }
+  },
+  {
+    "method": "TakeProjectActionSetup",
+    "params": {
+      "chatId": "chat-1",
+      "commandId": "cmd-1"
+    }
+  },
+  {
+    "method": "ForkSideChat",
+    "params": {
+      "chatId": "chat-2",
+      "sourceChatId": "chat-1"
+    }
+  },
+  {
+    "method": "ListCheckpoints",
+    "params": {
+      "chatId": "chat-1"
+    }
+  },
+  {
+    "method": "RestoreCheckpoint",
+    "params": {
+      "chatId": "chat-1",
+      "turnId": "msg-1",
+      "expectedChecksum": "sum-1",
+      "scope": "worktree+transcript"
+    }
+  },
+  {
+    "method": "GetThreadUsage",
+    "params": {
+      "chatId": "chat-1"
+    }
+  },
+  {
+    "method": "WatchNotifications",
+    "params": {}
+  },
+  {
+    "method": "WatchDocMessages",
+    "params": {
+      "chatId": "chat-1",
+      "openingTail": true
+    }
+  },
+  {
+    "method": "WatchQueue",
+    "params": {
+      "chatId": "chat-1"
+    }
+  },
+  {
+    "method": "QueueMessage",
+    "params": {
+      "chatId": "chat-1",
+      "text": "Then update the docs"
+    }
+  },
+  {
+    "method": "UpdateQueuedMessage",
+    "params": {
+      "chatId": "chat-1",
+      "id": "queued-1",
+      "text": "Then update the README"
+    }
+  },
+  {
+    "method": "BeginQueuedMessageEdit",
+    "params": {
+      "chatId": "chat-1",
+      "id": "queued-1",
+      "editorDeviceId": "device-1",
+      "editorInstanceId": "window-1"
+    }
+  },
+  {
+    "method": "RenewQueuedMessageEdit",
+    "params": {
+      "chatId": "chat-1",
+      "id": "queued-1",
+      "leaseId": "lease-1"
+    }
+  },
+  {
+    "method": "FinishQueuedMessageEdit",
+    "params": {
+      "chatId": "chat-1",
+      "id": "queued-1",
+      "leaseId": "lease-1",
+      "action": "releaseUnchanged"
+    }
+  },
+  {
+    "method": "MoveQueuedMessage",
+    "params": {
+      "chatId": "chat-1",
+      "id": "queued-1",
+      "toIndex": 0
+    }
+  },
+  {
+    "method": "RemoveQueuedMessage",
+    "params": {
+      "chatId": "chat-1",
+      "id": "queued-1"
+    }
+  },
+  {
+    "method": "SendQueuedMessageNow",
+    "params": {
+      "chatId": "chat-1",
+      "id": "queued-1"
+    }
+  },
+  {
+    "method": "SteerQueuedMessageNow",
+    "params": {
+      "chatId": "chat-1",
+      "id": "queued-1"
+    }
+  },
+  {
+    "method": "WatchChats",
+    "params": {}
+  },
+  {
+    "method": "WatchSidebarPreferences",
+    "params": {}
+  },
+  {
+    "method": "WatchSessions",
+    "params": {}
+  },
+  {
+    "method": "WatchSpaces",
+    "params": {}
+  },
+  {
+    "method": "Mutate",
+    "params": {
+      "op": "createChat",
+      "chatId": "chat-2",
+      "spaceId": "space-1"
+    }
+  },
+  {
+    "method": "Mutate",
+    "params": {
+      "op": "createSpace",
+      "spaceId": "space-2",
+      "deviceId": "device-1",
+      "path": "/home/dev/other",
+      "gitDetected": true
+    }
+  },
+  {
+    "method": "Mutate",
+    "params": {
+      "op": "renameChat",
+      "chatId": "chat-1",
+      "title": "Fix the linker"
+    }
+  },
+  {
+    "method": "Mutate",
+    "params": {
+      "op": "setChatArchived",
+      "chatId": "chat-1",
+      "archived": true
+    }
+  },
+  {
+    "method": "Mutate",
+    "params": {
+      "op": "changeSidebarPin",
+      "change": {
+        "action": "pin",
+        "sessionId": "chat-1",
+        "after": null,
+        "before": null
+      }
+    }
+  },
+  {
+    "method": "Mutate",
+    "params": {
+      "op": "setChatConfig",
+      "chatId": "chat-1",
+      "config": {
+        "harness": "codex",
+        "model": null,
+        "reasoning": null,
+        "modelOptions": {},
+        "sandbox": "read-only"
+      }
+    }
+  },
+  {
+    "method": "Mutate",
+    "params": {
+      "op": "markChatSeen",
+      "chatId": "chat-1"
+    }
+  },
+  {
+    "method": "LocalDevice",
+    "params": {}
+  },
+  {
+    "method": "EngineInfo",
+    "params": {}
+  },
+  {
+    "method": "EngineReady",
+    "params": {}
+  },
+  {
+    "method": "ListRepos",
+    "params": {}
+  },
+  {
+    "method": "AddRepo",
+    "params": {
+      "path": "/home/dev/project"
+    }
+  },
+  {
+    "method": "CloneRepo",
+    "params": {
+      "url": "https://github.com/example/project.git"
+    }
+  },
+  {
+    "method": "CreateRepo",
+    "params": {
+      "name": "project"
+    }
+  },
+  {
+    "method": "ListBranches",
+    "params": {
+      "repoPath": "/home/dev/project"
+    }
+  },
+  {
+    "method": "ListRefs",
+    "params": {
+      "repoPath": "/home/dev/project"
+    }
+  },
+  {
+    "method": "ListGitHistory",
+    "params": {
+      "cwd": "/home/dev/project",
+      "cursor": 0,
+      "limit": 100
+    }
+  },
+  {
+    "method": "SearchGitHistory",
+    "params": {
+      "cwd": "/home/dev/project",
+      "query": "build",
+      "cursor": 0,
+      "limit": 50
+    }
+  },
+  {
+    "method": "ResolveGitAvatars",
+    "params": {
+      "cwd": "/home/dev/project",
+      "authors": [
+        {
+          "sha": "0123abcd",
+          "email": "dev@example.com"
+        }
+      ],
+      "cursor": 0,
+      "limit": 100
+    }
+  },
+  {
+    "method": "FetchAll",
+    "params": {
+      "repoPath": "/home/dev/project"
+    }
+  },
+  {
+    "method": "SwitchRef",
+    "params": {
+      "repoPath": "/home/dev/project",
+      "refName": "origin/dev"
+    }
+  },
+  {
+    "method": "ListFolders",
+    "params": {
+      "path": "/home/dev"
+    }
+  },
+  {
+    "method": "ListDrives",
+    "params": {}
+  },
+  {
+    "method": "SearchFiles",
+    "params": {
+      "query": "main",
+      "chatId": "chat-1"
+    }
+  },
+  {
+    "method": "ListWorkspaceDirectory",
+    "params": {
+      "chatId": "chat-1",
+      "directory": "src",
+      "includeIgnored": false
+    }
+  },
+  {
+    "method": "SearchWorkspaceFiles",
+    "params": {
+      "chatId": "chat-1",
+      "query": "main",
+      "includeIgnored": false
+    }
+  },
+  {
+    "method": "ReadWorkspaceImage",
+    "params": {
+      "chatId": "chat-1",
+      "path": "docs/shot.png",
+      "expectedCheckoutId": "checkout-1",
+      "offset": 0,
+      "expectedContentHash": null
+    }
+  },
+  {
+    "method": "ReadWorkspaceFile",
+    "params": {
+      "chatId": "chat-1",
+      "path": "src/main.rs"
+    }
+  },
+  {
+    "method": "MoveWorkspaceEntry",
+    "params": {
+      "chatId": "chat-1",
+      "operationId": "op-1",
+      "expectedCheckoutId": "checkout-1",
+      "sourcePath": "src/main.rs",
+      "destinationPath": "src/lib.rs",
+      "expectedSourceRevision": "rev-1",
+      "expectedKind": "file"
+    }
+  },
+  {
+    "method": "DeleteWorkspaceEntry",
+    "params": {
+      "chatId": "chat-1",
+      "operationId": "op-2",
+      "expectedCheckoutId": "checkout-1",
+      "path": "target",
+      "expectedSourceRevision": "rev-2",
+      "expectedKind": "directory",
+      "recursive": true
+    }
+  },
+  {
+    "method": "WriteWorkspaceFile",
+    "params": {
+      "chatId": "chat-1",
+      "expectedCheckoutId": "checkout-1",
+      "path": "src/main.rs",
+      "text": "fn main() {}\n",
+      "expectedContentHash": "h-1",
+      "encoding": "utf8",
+      "lineEnding": "lf"
+    }
+  },
+  {
+    "method": "WatchWorkspaceFiles",
+    "params": {
+      "chatId": "chat-1"
+    }
+  },
+  {
+    "method": "CreateWorktree",
+    "params": {
+      "repoPath": "/home/dev/project",
+      "branch": "fix-linker",
+      "spaceId": "space-1"
+    }
+  },
+  {
+    "method": "DeleteWorktree",
+    "params": {
+      "repoPath": "/home/dev/project",
+      "worktreePath": "/home/dev/project-wt/fix-linker"
+    }
+  },
+  {
+    "method": "ListProjectActions",
+    "params": {
+      "spaceId": "space-1"
+    }
+  },
+  {
+    "method": "UpsertProjectAction",
+    "params": {
+      "spaceId": "space-1",
+      "action": {
+        "name": "Test",
+        "command": "cargo test",
+        "icon": "test",
+        "runOnWorktreeCreate": false
+      }
+    }
+  },
+  {
+    "method": "DeleteProjectAction",
+    "params": {
+      "spaceId": "space-1",
+      "actionId": "action-1"
+    }
+  },
+  {
+    "method": "RunProjectAction",
+    "params": {
+      "spaceId": "space-1",
+      "chatId": "chat-1",
+      "actionId": "action-1",
+      "cols": 120,
+      "rows": 32
+    }
+  },
+  {
+    "method": "OpenTerminal",
+    "params": {
+      "chatId": "chat-1",
+      "cols": 120,
+      "rows": 32
+    }
+  },
+  {
+    "method": "SubscribeTerminal",
+    "params": {
+      "terminalId": "term-1",
+      "afterSeq": 10
+    }
+  },
+  {
+    "method": "WriteTerminal",
+    "params": {
+      "terminalId": "term-1",
+      "data": "bHMK"
+    }
+  },
+  {
+    "method": "ResizeTerminal",
+    "params": {
+      "terminalId": "term-1",
+      "cols": 100,
+      "rows": 30
+    }
+  },
+  {
+    "method": "CloseTerminal",
+    "params": {
+      "terminalId": "term-1"
+    }
+  },
+  {
+    "method": "WatchCheckoutDiffs",
+    "params": {}
+  },
+  {
+    "method": "WatchWorkspaceGitStatus",
+    "params": {
+      "chatId": "chat-1"
+    }
+  },
+  {
+    "method": "WatchCheckoutChangeRequest",
+    "params": {
+      "cwd": "/home/dev/project",
+      "branch": "fix-linker"
+    }
+  },
+  {
+    "method": "GetCheckoutDiff",
+    "params": {
+      "cwd": "/home/dev/project",
+      "mode": "branch",
+      "baseRef": "main"
+    }
+  },
+  {
+    "method": "DiscardWorkingTree",
+    "params": {
+      "chatId": "chat-1",
+      "checkoutId": "checkout-1",
+      "expectedChecksum": "sum-1"
+    }
+  },
+  {
+    "method": "DiscardPaths",
+    "params": {
+      "checkoutId": "checkout-1",
+      "paths": [
+        "src/main.rs"
+      ],
+      "expectedChecksum": "sum-1"
+    }
+  },
+  {
+    "method": "ListWorktrees",
+    "params": {
+      "repoPath": "/home/dev/project"
+    }
+  },
+  {
+    "method": "CommitWorktree",
+    "params": {
+      "checkoutId": "checkout-1",
+      "cwd": "/home/dev/project",
+      "message": "Fix the linker",
+      "paths": [
+        "src/main.rs"
+      ],
+      "all": false,
+      "amend": false,
+      "signoff": true,
+      "expectedChecksum": "sum-1"
+    }
+  },
+  {
+    "method": "PushBranch",
+    "params": {
+      "cwd": "/home/dev/project",
+      "remote": "origin",
+      "branch": "fix-linker",
+      "setUpstream": true,
+      "forceWithLease": false
+    }
+  },
+  {
+    "method": "CreateChangeRequest",
+    "params": {
+      "cwd": "/home/dev/project",
+      "provider": "forgejo",
+      "base": "main",
+      "head": "fix-linker",
+      "title": "Fix the linker",
+      "body": "Links again.",
+      "draft": false,
+      "linkIssue": "42"
+    }
+  },
+  {
+    "method": "MergeBranch",
+    "params": {
+      "repoPath": "/home/dev/project",
+      "source": "loams-desktop/fix-linker",
+      "target": "main",
+      "strategy": "squash",
+      "message": "Fix the linker",
+      "deleteSource": true,
+      "removeWorktree": true,
+      "expectedSourceHead": "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+    }
+  },
+  {
+    "method": "WatchReviewComments",
+    "params": {
+      "checkoutId": "checkout-1"
+    }
+  },
+  {
+    "method": "UpsertReviewComment",
+    "params": {
+      "id": "",
+      "checkoutId": "checkout-1",
+      "path": "src/main.rs",
+      "side": "new",
+      "line": 12,
+      "endLine": 14,
+      "body": "This loop never ends.",
+      "diffChecksum": "sum-1",
+      "createdAtMs": 0,
+      "resolved": false,
+      "outdated": false
+    }
+  },
+  {
+    "method": "DeleteReviewComment",
+    "params": {
+      "checkoutId": "checkout-1",
+      "id": "comment-1"
+    }
+  },
+  {
+    "method": "ResolveReviewComment",
+    "params": {
+      "checkoutId": "checkout-1",
+      "id": "comment-1",
+      "resolved": true
+    }
+  },
+  {
+    "method": "SendReviewToThread",
+    "params": {
+      "chatId": "chat-1",
+      "commentIds": [
+        "comment-1"
+      ]
+    }
+  },
+  {
+    "method": "PostReviewToChangeRequest",
+    "params": {
+      "checkoutId": "checkout-1",
+      "commentIds": [
+        "comment-1"
+      ],
+      "event": "request_changes"
+    }
+  },
+  {
+    "method": "SearchWorkspaceContent",
+    "params": {
+      "spaceId": "space-1",
+      "chatId": null,
+      "query": "fn main",
+      "regex": false,
+      "caseSensitive": true,
+      "globs": [
+        "*.rs"
+      ],
+      "maxResults": 200
+    }
+  },
+  {
+    "method": "CreateRunGroup",
+    "params": {
+      "spaceId": "space-1",
+      "repoPath": "/home/dev/project",
+      "base": "main",
+      "prompt": "Fix the build",
+      "attachments": [],
+      "variants": [
+        {
+          "harness": "claude-code",
+          "model": "claude-sonnet",
+          "reasoning": "high",
+          "modelOptions": {}
+        },
+        {
+          "harness": "codex",
+          "model": null,
+          "reasoning": null,
+          "modelOptions": {}
+        }
+      ],
+      "checkActionId": "test",
+      "approvalMode": "supervised"
+    }
+  },
+  {
+    "method": "WatchRunGroups",
+    "params": {
+      "spaceId": null
+    }
+  },
+  {
+    "method": "GetRunGroupComparison",
+    "params": {
+      "groupId": "group-1",
+      "a": "chat-1",
+      "b": "chat-2",
+      "path": null
+    }
+  },
+  {
+    "method": "RunGroupCheck",
+    "params": {
+      "groupId": "group-1",
+      "chatId": null
+    }
+  },
+  {
+    "method": "ResolveRunGroup",
+    "params": {
+      "groupId": "group-1",
+      "winnerChatId": "chat-1",
+      "action": "pr",
+      "merge": null,
+      "pr": {
+        "cwd": "/home/dev/.loams-desktop/worktrees/project/brave-otter",
+        "provider": "github",
+        "base": "main",
+        "head": "loams-desktop/brave-otter",
+        "title": "Fix the build",
+        "body": "",
+        "draft": false,
+        "linkIssue": null
+      },
+      "archiveOthers": true,
+      "removeOtherWorktrees": false,
+      "force": false,
+      "expectedChecksum": "sum-1"
+    }
+  },
+  {
+    "method": "WatchApprovals",
+    "params": {
+      "chatId": "chat-1"
+    }
+  },
+  {
+    "method": "ResolveApproval",
+    "params": {
+      "callId": "call-1",
+      "chatId": "chat-1",
+      "decision": "always"
+    }
+  },
+  {
+    "method": "SetThreadApprovalMode",
+    "params": {
+      "chatId": "chat-1",
+      "mode": "supervised"
+    }
+  },
+  {
+    "method": "GetCheckoutFileDiffText",
+    "params": {
+      "checkoutId": "checkout-1",
+      "cwd": "/home/dev/project",
+      "path": "src/main.rs",
+      "mode": "turn",
+      "chatId": "chat-1",
+      "diffChecksum": "sum-1"
+    }
+  },
+  {
+    "method": "ListAgentAccounts",
+    "params": {
+      "forceUsage": true
+    }
+  },
+  {
+    "method": "ActivateAgentAccount",
+    "params": {
+      "harness": "codex",
+      "accountId": "account-1"
+    }
+  },
+  {
+    "method": "ForgetAgentAccount",
+    "params": {
+      "harness": "codex",
+      "accountId": "account-1"
+    }
+  },
+  {
+    "method": "StartAgentLogin",
+    "params": {
+      "harness": "opencode",
+      "provider": "anthropic"
+    }
+  },
+  {
+    "method": "CompleteAgentLogin",
+    "params": {
+      "loginId": "login-1",
+      "code": "code-1"
+    }
+  },
+  {
+    "method": "PollAgentLogin",
+    "params": {
+      "loginId": "login-1"
+    }
+  },
+  {
+    "method": "CancelAgentLogin",
+    "params": {
+      "loginId": "login-1"
+    }
+  },
+  {
+    "method": "UploadChunk",
+    "params": {
+      "uploadId": "upload-1",
+      "data": "iVBORw0KGgo=",
+      "seq": 0
+    }
+  },
+  {
+    "method": "UploadCommit",
+    "params": {
+      "uploadId": "upload-1",
+      "fileName": "shot.png"
+    }
+  },
+  {
+    "method": "ReadAttachmentChunk",
+    "params": {
+      "path": "/home/dev/.uploads/shot.png",
+      "offset": 0
+    }
+  },
+  {
+    "method": "FetchToolBlob",
+    "params": {
+      "blobRef": "chat-1/call-1",
+      "offset": 0,
+      "len": 262144
+    }
+  },
+  {
+    "method": "WatchHarnessUpdates",
+    "params": {}
+  },
+  {
+    "method": "CheckHarnessUpdates",
+    "params": {}
+  },
+  {
+    "method": "ApplyHarnessUpdate",
+    "params": {
+      "harness": "codex"
+    }
+  },
+  {
+    "method": "CancelHarnessUpdate",
+    "params": {
+      "harness": "codex"
+    }
+  },
+  {
+    "method": "DismissHarnessUpdate",
+    "params": {
+      "harness": "codex",
+      "version": "0.41.0"
+    }
+  }
+]

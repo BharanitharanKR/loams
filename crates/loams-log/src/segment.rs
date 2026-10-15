@@ -17,6 +17,7 @@ use std::ops::Range;
 
 use bytes::{Bytes, BytesMut};
 use loams_common::StreamId;
+use loams_common::formats;
 use serde::{Deserialize, Serialize};
 
 use crate::batch;
@@ -271,11 +272,12 @@ pub fn parse_footer(
         return Err(corrupt("segment header checksum mismatch"));
     }
     let version = u16::from_le_bytes([header[8], header[9]]);
-    if version != VERSION {
-        return Err(corrupt(format!(
-            "unsupported segment format version {version}"
-        )));
-    }
+    // The registry's readable range (UP1 Task 1), not only VERSION.
+    formats::check(formats::LOG_SEGMENT, version).map_err(|e| {
+        corrupt(format!(
+            "unsupported segment format version {version} ({e})"
+        ))
+    })?;
     let encoding = Encoding::try_from(header[10])?;
     encoding.ensure_readable()?;
     if header[11] != 0 {

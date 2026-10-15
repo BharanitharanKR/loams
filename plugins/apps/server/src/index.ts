@@ -715,7 +715,12 @@ bootstrap().catch((err) => {
 
 /** Trailing slashes are not significant in an origin, and users paste them. */
 function normalizeOrigin(origin: string): string {
-  return origin.trim().replace(/\/+$/, "");
+  // A scan, not `/\/+$/`: that regex is quadratic on a long run of slashes, and the
+  // Origin header is attacker-controlled.
+  const trimmed = origin.trim();
+  let end = trimmed.length;
+  while (end > 0 && trimmed[end - 1] === "/") end -= 1;
+  return trimmed.slice(0, end);
 }
 
 /**

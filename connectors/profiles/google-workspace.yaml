@@ -1,0 +1,59 @@
+# Google Workspace — an HTTP-API profile (CN2 OR-11, Task 20) over the Admin
+# SDK Directory API. Written from Google's public reference:
+#   users.list: https://developers.google.com/workspace/admin/directory/reference/rest/v1/users/list
+#   users.insert: https://developers.google.com/workspace/admin/directory/reference/rest/v1/users/insert
+#   groups.list: https://developers.google.com/workspace/admin/directory/reference/rest/v1/groups/list
+#   OAuth 2.0 (refresh-token grant at oauth2.googleapis.com/token):
+#     https://developers.google.com/identity/protocols/oauth2/web-server#offline
+#   Push notification channel token (X-Goog-Channel-Token):
+#     https://developers.google.com/workspace/admin/directory/v1/guides/push
+# The service-account JWT grant with domain-wide delegation is not in the
+# engine yet; an instance uses an OAuth client and a refresh token (R20.6).
+# Creating a user that exists answers 409, which counts as written, so the
+# `users` sink is effectively once by `primaryEmail`.
+apiVersion: loams.flow/v1
+kind: Profile
+id: google-workspace
+profile_kind: http-api
+module: http
+system:
+  name: Google Workspace
+  service: { fixture: conformance/connectors/fixtures/google-workspace }
+defaults:
+  customer: my_customer
+narrows: []
+http:
+  base_url: "https://admin.googleapis.com/admin/directory/v1"
+  auth:
+    scheme: oauth2
+    token_url: "https://oauth2.googleapis.com/token"
+    scopes:
+      - "https://www.googleapis.com/auth/admin.directory.user"
+      - "https://www.googleapis.com/auth/admin.directory.group.readonly"
+  resources:
+    users:
+      list:
+        method: GET
+        path: "/users"
+        items: "/users"
+        cursor: { next: "/nextPageToken", param: pageToken }
+        key: "/id"
+        query: { customer: "{config.customer}", maxResults: "500" }
+      create:
+        method: POST
+        path: "/users"
+        key: "/primaryEmail"
+        conflict_ok: true
+    groups:
+      list:
+        method: GET
+        path: "/groups"
+        items: "/groups"
+        cursor: { next: "/nextPageToken", param: pageToken }
+        key: "/id"
+        query: { customer: "{config.customer}", maxResults: "200" }
+  rate_limit:
+    requests: 2400
+    per_seconds: 60
+    honour_headers: ["Retry-After"]
+  webhook: { scheme: token, header: X-Goog-Channel-Token }

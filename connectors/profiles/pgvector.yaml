@@ -1,0 +1,15 @@
+# pgvector — a target profile on the native Postgres family (CN2 OR-2,
+# Task 10): PostgreSQL with the `vector` extension. `vector(n)` columns map to
+# Arrow `FixedSizeList<Float32>(n)` on the bulk path and back through the sink
+# (`vector` without a dimension to `List<Float32>`). The suite runs against the
+# official `pgvector/pgvector` image (PostgreSQL licence, compose `pgvector`).
+apiVersion: loams.flow/v1
+kind: Profile
+id: pgvector
+profile_kind: target
+module: postgres
+system:
+  name: pgvector
+  service: { compose: pgvector }
+defaults: {}
+narrows: []

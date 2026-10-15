@@ -1,0 +1,23 @@
+# Amazon Aurora, MySQL engine — a target profile on the native MySQL family
+# (CN2 OR-2, Task 11). Aurora MySQL speaks the MySQL protocol and, with
+# `binlog_format = ROW` in its cluster parameter group, writes the row binlog
+# that `loams-connector-mysql` reads; GTIDs follow `gtid-mode`. Aurora has no
+# image: its suites run nightly against a real cluster (OR-3, OR-23); MySQL in
+# compose is an extra target, never the system under test. The PostgreSQL
+# engine is Task 10's `aurora-postgres`; the `aurora` manifest's config
+# `engine` picks the family (R11.10). IAM tokens (`auth: iam`) are minted per
+# connection from AWS credentials the instance names by secret and sent
+# through `mysql_clear_password`, which the family allows only over TLS; the
+# profile carries no credential.
+apiVersion: loams.flow/v1
+kind: Profile
+id: aurora-mysql
+profile_kind: target
+module: mysql
+system:
+  name: Amazon Aurora
+  service: { nightly: [LOAMS_AURORA_MYSQL_URL] }
+# Aurora requires TLS for IAM logins; the RDS CA is not a webpki root, so an
+# instance that verifies the chain sets `tls.ca_pem` to the RDS bundle.
+defaults: { engine: mysql, tls: { enabled: true, verify_full: true } }
+narrows: []

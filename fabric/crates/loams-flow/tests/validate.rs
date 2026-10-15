@@ -18,10 +18,13 @@
 
 use std::path::{Path, PathBuf};
 
-use loams_flow::manifest::{ConnectorSpec, ManifestError, load_manifest, load_manifest_value, pb};
+use loams_flow::manifest::{
+    Choice, ConnectorSpec, ManifestError, RuntimeKind, RuntimeSpec, load_manifest,
+    load_manifest_value, pb,
+};
 use loams_flow::validate::{
-    Direction, ManifestSchema, Mode, SinkRequirement, Uses, check_use, validate_manifest,
-    validate_manifest_with_config_schema,
+    Direction, ManifestSchema, Mode, NATIVE_FIRST_ENFORCED, SinkRequirement, Uses, check_use,
+    semantic_warnings, validate_manifest, validate_manifest_with_config_schema,
 };
 use serde_json::Value;
 
@@ -355,12 +358,17 @@ fn semantic_rules_each_refuse() {
 /// refusal names the connector, the capability and the manifest version.
 #[test]
 fn check_use_refuses_undeclared() {
-    // `postgresql` declares a polling (non-streaming) source and no CDC: the routing
-    // answer for a CDC route is the `debezium-postgres` manifest (CN1 Ruling 7).
-    let postgresql = load(connectors_root().join("registry/postgresql.yaml"));
+    // `snowflake` declares a batch source and no CDC, so a CDC route is refused.
+    // (`postgresql` was the example until CN2 Task 2 gave it native CDC, OR-9.)
+    let snowflake = load(connectors_root().join("registry/snowflake.yaml"));
     assert_eq!(
-        check_use(&postgresql, &uses_cdc()).unwrap_err().capability,
+        check_use(&snowflake, &uses_cdc()).unwrap_err().capability,
         "cdc"
+    );
+    let postgresql = load(connectors_root().join("registry/postgresql.yaml"));
+    assert!(
+        check_use(&postgresql, &uses_cdc()).is_ok(),
+        "CN2 Task 2: postgresql declares native CDC (OR-9)"
     );
 
     // `clickhouse` is an append-only sink: a route that upserts needs a manifest that
@@ -373,8 +381,9 @@ fn check_use_refuses_undeclared() {
         "upsert"
     );
 
-    // `clickhouse` delivers at-least-once into a sink that neither dedupes nor
-    // transactions, so `exactly_once` is refused rather than claimed (§33 §2.2).
+    // `clickhouse`'s sink dedupes by insert token but is not transactional, so it is
+    // effectively once (CN2 R17.3) and `exactly_once` is refused rather than claimed
+    // (§33 §2.2).
     assert_eq!(
         check_use(&clickhouse, &uses_exactly_once())
             .unwrap_err()
@@ -386,10 +395,10 @@ fn check_use_refuses_undeclared() {
     // the error must name.
     let error = check_use(&clickhouse, &uses_exactly_once()).unwrap_err();
     assert_eq!(error.connector, "clickhouse");
-    assert_eq!(error.spec_version, "1.0.0");
+    assert_eq!(error.spec_version, "1.2.0");
     assert_eq!(
         error.to_string(),
-        "clickhouse (manifest specVersion 1.0.0) does not declare the capability delivery.sink"
+        "clickhouse (manifest specVersion 1.2.0) does not declare the capability delivery.sink"
     );
 
     // And the same uses against a manifest that declares them all pass, so the three
@@ -413,10 +422,15 @@ fn check_use_refuses_undeclared() {
         check_use(&debezium, &uses_cdc()).is_ok(),
         "debezium-postgres declares cdc"
     );
-    // Kafka's sink is idempotent but at-least-once, so `exactly_once` stays refused
-    // even though the sink dedupes: the manifest is what the route is checked against.
+    // Kafka's sink is exactly-once through its transactional mode (CN2 Task 9). The
+    // same manifest with only the idempotent producer's `effectively_once` refuses
+    // `exactly_once` even though the sink dedupes: the manifest is what the route is
+    // checked against.
     let kafka = load(connectors_root().join("registry/kafka.yaml"));
-    assert!(check_use(&kafka, &uses_exactly_once()).is_err());
+    assert!(check_use(&kafka, &uses_exactly_once()).is_ok());
+    let mut idempotent_only = kafka.clone();
+    idempotent_only.capabilities.delivery.sink = Delivery::EffectivelyOnce;
+    assert!(check_use(&idempotent_only, &uses_exactly_once()).is_err());
 }
 
 fn uses_cdc() -> Uses {
@@ -491,4 +505,510 @@ fn the_proto_form_uses_proto_names_not_yaml_slugs() {
     assert_eq!(json["configRef"], "schemas/kafka.config.json");
     assert_eq!(json["specVersion"], "1.0.0");
     assert_eq!(json["docs"], "docs/guides/connectors/kafka.md");
+}
+
+// -------------------------------------------------------------------------------------
+// CN2 plan Task 1: per-direction runtimes, fallbacks, profiles, delivery and suites
+// (rules R-CN2-1 to R-CN2-8).
+// -------------------------------------------------------------------------------------
+
+/// Whether any error sits at exactly `path`.
+fn has_path(errors: &[ManifestError], path: &str) -> bool {
+    errors.iter().any(|error| error.path == path)
+}
+
+/// R-CN2-1: a direction override names a direction the manifest declares. A sink
+/// override on a source-only manifest is refused; a source override on the declared
+/// source is not.
+#[test]
+fn override_direction_must_be_declared() {
+    let errors = rules_for(|value| {
+        value["capabilities"]
+            .as_object_mut()
+            .unwrap()
+            .remove("sink");
+        value["runtime"]["sink"] = serde_json::json!({
+            "kind": "native",
+            "ref": "loams_connector_kafka::sink::KafkaSink",
+        });
+    });
+    assert!(
+        has_path(&errors, "runtime.sink"),
+        "R-CN2-1: a sink override on a manifest with no sink must be refused, got {errors:?}"
+    );
+
+    let errors = rules_for(|value| {
+        value["runtime"]["source"] = serde_json::json!({
+            "kind": "native",
+            "ref": "loams_connector_kafka::source::KafkaSource",
+        });
+    });
+    assert!(
+        errors.is_empty(),
+        "R-CN2-1: a source override on the declared source is legal, got {errors:?}"
+    );
+}
+
+/// R-CN2-2: a profile is a native-runtime notion, so a manifest whose declared
+/// directions do not all run on `native` by default cannot name one, and a profile
+/// that names no file under `connectors/profiles/` is refused at load.
+#[test]
+fn profile_requires_native_direction() {
+    // The whole manifest on Camel.
+    let errors = rules_for(|value| {
+        value["runtime"]["kind"] = Value::String("camel".to_string());
+        value["runtime"]["profile"] = Value::String("redpanda".to_string());
+    });
+    assert!(
+        has_path(&errors, "runtime.profile"),
+        "R-CN2-2: a profile on a camel runtime must be refused, got {errors:?}"
+    );
+
+    // Native by default, but the sink direction overridden to Camel.
+    let errors = rules_for(|value| {
+        value["runtime"]["profile"] = Value::String("redpanda".to_string());
+        value["runtime"]["sink"] = serde_json::json!({ "kind": "camel", "ref": "kafka" });
+    });
+    assert!(
+        has_path(&errors, "runtime.profile"),
+        "R-CN2-2: a profile with a non-native direction must be refused, got {errors:?}"
+    );
+
+    // Native in both directions passes the rule itself...
+    let errors = rules_for(|value| {
+        value["runtime"]["profile"] = Value::String("redpanda".to_string());
+    });
+    assert!(
+        !has_path(&errors, "runtime.profile"),
+        "R-CN2-2: a native manifest may name a profile, got {errors:?}"
+    );
+
+    // ...and the loader, which knows the `connectors/` root, refuses a profile that
+    // is not a file under `connectors/profiles/`.
+    let mut value = kafka_example();
+    value["runtime"]["profile"] = Value::String("no-such-profile".to_string());
+    let errors = load_manifest_value(
+        "kafka.yaml",
+        &value,
+        &connectors_root(),
+        &ManifestSchema::embedded().expect("the manifest schema compiles"),
+    )
+    .err()
+    .unwrap_or_default();
+    assert!(
+        has_path(&errors, "runtime.profile"),
+        "R-CN2-2: a profile with no file under connectors/profiles/ must be refused, got {errors:?}"
+    );
+
+    // A profile id is a registry-style id, never a path.
+    let errors = rules_for(|value| {
+        value["runtime"]["profile"] = Value::String("../registry/kafka".to_string());
+    });
+    assert!(
+        errors.iter().any(|error| error.path == "runtime.profile"),
+        "a profile id that is a path must be refused by the schema, got {errors:?}"
+    );
+}
+
+/// R-CN2-3: a sink that replies (OR-19) must emit a type and let the instance name
+/// the reply topic.
+#[test]
+fn reply_requires_reply_topic() {
+    let with_reply_topic = {
+        let mut config = kafka_config_schema();
+        config["properties"]["reply_topic"] = serde_json::json!({ "type": "string" });
+        config
+    };
+
+    // The config schema has no `reply_topic`.
+    let errors = rules_for(|value| value["capabilities"]["sink"]["reply"] = Value::Bool(true));
+    assert!(
+        has_path(&errors, "capabilities.sink.reply"),
+        "R-CN2-3: a replying sink without reply_topic must be refused, got {errors:?}"
+    );
+
+    // `reply_topic` is there, but the manifest emits nothing.
+    let errors = rules_with_config(
+        |value| {
+            value["capabilities"]["sink"]["reply"] = Value::Bool(true);
+            value["envelope"]["emits"] = Value::String(String::new());
+        },
+        with_reply_topic.clone(),
+    );
+    assert!(
+        has_path(&errors, "capabilities.sink.reply"),
+        "R-CN2-3: a replying sink that emits no type must be refused, got {errors:?}"
+    );
+
+    // Both present: legal.
+    let errors = rules_with_config(
+        |value| value["capabilities"]["sink"]["reply"] = Value::Bool(true),
+        with_reply_topic,
+    );
+    assert!(
+        errors.is_empty(),
+        "R-CN2-3: a replying sink with an emitted type and reply_topic is legal, got {errors:?}"
+    );
+
+    // `reply` defaults to false when the manifest omits it.
+    let schema = ManifestSchema::embedded().expect("the manifest schema compiles");
+    let spec = validate_manifest(&kafka_example(), schema.validator()).unwrap();
+    assert!(!spec.capabilities.sink.unwrap().reply);
+}
+
+/// R-CN2-5: `preview` and `stable` need the contract suite (OR-23).
+#[test]
+fn preview_requires_contract_suite() {
+    for status in ["preview", "stable"] {
+        let errors = rules_for(|value| {
+            value["status"] = Value::String(status.to_string());
+            value["conformance"] = serde_json::json!(["roundtrip", "kill-restart"]);
+        });
+        assert!(
+            has_path(&errors, "conformance"),
+            "R-CN2-5: status {status} without contract must be refused, got {errors:?}"
+        );
+    }
+    let errors = rules_for(|value| {
+        value["status"] = Value::String("planned".to_string());
+        value["conformance"] = serde_json::json!([]);
+    });
+    assert!(
+        !has_path(&errors, "conformance"),
+        "R-CN2-5: a planned manifest needs no suite, got {errors:?}"
+    );
+}
+
+/// The manifest with one field changed, and what R-CN2-6 says about it: its refusals
+/// since CN2 Task 2 made the rule an error, and nothing on the warning channel.
+fn native_first_findings(mutate: impl FnOnce(&mut Value)) -> Vec<ManifestError> {
+    let schema = ManifestSchema::embedded().expect("the manifest schema compiles");
+    let mut value = kafka_example();
+    mutate(&mut value);
+    let errors = match validate_manifest(&value, schema.validator()) {
+        Ok(spec) => {
+            assert!(
+                semantic_warnings(&spec).is_empty(),
+                "R-CN2-6 no longer warns once it is an error"
+            );
+            Vec::new()
+        }
+        Err(errors) => errors,
+    };
+    errors
+        .into_iter()
+        .filter(|error| error.path.starts_with("runtime"))
+        .collect()
+}
+
+/// R-CN2-6 (OR-1): a P1 or P2 direction runs native by default unless a
+/// `fallback-only:` note gives one of OR-4's reasons. CN2 Task 2 assigned the
+/// runtimes and made it an error, so a manifest that breaks it no longer loads.
+#[test]
+fn p1_p2_default_runtime_is_native_or_explained() {
+    const {
+        assert!(
+            NATIVE_FIRST_ENFORCED,
+            "R-CN2-6 is an error since CN2 Task 2 assigned the runtimes"
+        );
+    }
+    // Native in both directions: nothing to say.
+    assert!(native_first_findings(|_| {}).is_empty());
+
+    // A P2 manifest on Camel with no note is refused.
+    let errors = native_first_findings(|value| {
+        value["starred"] = Value::Bool(false);
+        value["priority"] = Value::String("P2".to_string());
+        value["runtime"]["kind"] = Value::String("camel".to_string());
+        value["runtime"]["ref"] = Value::String("jdbc".to_string());
+    });
+    assert!(
+        has_path(&errors, "runtime"),
+        "R-CN2-6: a P2 camel default with no note must be refused, got {errors:?}"
+    );
+
+    // A per-direction override is named by its own path.
+    let errors = native_first_findings(|value| {
+        value["runtime"]["sink"] = serde_json::json!({ "kind": "iggy", "ref": "kafka_sink" });
+    });
+    assert!(
+        has_path(&errors, "runtime.sink") && !has_path(&errors, "runtime"),
+        "R-CN2-6: only the overridden direction is non-native, got {errors:?}"
+    );
+
+    // A `fallback-only:` note that names an OR-4 reason explains it, the Camel runtime
+    // row's reason (CN2 Task 2) included.
+    for note in [
+        "fallback-only: generic JDBC is a Java API",
+        "fallback-only: the Camel runtime itself, which OR-4 keeps as the fallback runtime",
+    ] {
+        let errors = native_first_findings(|value| {
+            value["runtime"]["kind"] = Value::String("camel".to_string());
+            value["notes"] = serde_json::json!([note]);
+        });
+        assert!(
+            errors.is_empty(),
+            "R-CN2-6: {note:?} explains a non-native default, got {errors:?}"
+        );
+    }
+
+    // A note that is not `fallback-only:`, or gives no OR-4 reason, does not.
+    for note in [
+        "narrows: no transactions",
+        "fallback-only: we have not written it yet",
+        "fallback-only: camel is convenient",
+    ] {
+        let errors = native_first_findings(|value| {
+            value["runtime"]["kind"] = Value::String("camel".to_string());
+            value["notes"] = serde_json::json!([note]);
+        });
+        assert!(
+            has_path(&errors, "runtime"),
+            "R-CN2-6: {note:?} does not explain a camel default, got {errors:?}"
+        );
+    }
+
+    // P3 is CN3's and outside OR-1.
+    let errors = native_first_findings(|value| {
+        value["starred"] = Value::Bool(false);
+        value["priority"] = Value::String("P3".to_string());
+        value["runtime"]["kind"] = Value::String("camel".to_string());
+    });
+    assert!(errors.is_empty(), "R-CN2-6 covers P1 and P2 only");
+
+    // The refusal comes through the rules every load runs, not a side channel.
+    let errors = rules_for(|value| {
+        value["runtime"]["kind"] = Value::String("camel".to_string());
+    });
+    assert!(
+        has_path(&errors, "runtime"),
+        "R-CN2-6 is an error since CN2 Task 2, got {errors:?}"
+    );
+}
+
+/// R-CN2-7 (OR-7): `exactly_once` is a `TransactionalSink` claim, proven by the
+/// `exactly-once` suite. An idempotent sink alone is effectively once.
+#[test]
+fn exactly_once_requires_transactional_sink() {
+    // Idempotent only: no longer enough (CN1's rule 3 accepted it).
+    let errors = rules_for(|value| {
+        value["capabilities"]["delivery"]["sink"] = Value::String("exactly_once".to_string());
+        value["conformance"] = serde_json::json!(["contract", "exactly-once"]);
+    });
+    assert!(
+        has_path(&errors, "capabilities.delivery.sink"),
+        "R-CN2-7: an idempotent but not transactional sink is not exactly once, got {errors:?}"
+    );
+
+    // Transactional, but without the suite that proves it.
+    let errors = rules_for(|value| {
+        value["capabilities"]["delivery"]["sink"] = Value::String("exactly_once".to_string());
+        value["capabilities"]["sink"]["transactional"] = Value::Bool(true);
+    });
+    assert!(
+        has_path(&errors, "conformance"),
+        "R-CN2-7: exactly_once needs the exactly-once suite, got {errors:?}"
+    );
+
+    // Both: legal.
+    let errors = rules_for(|value| {
+        value["capabilities"]["delivery"]["sink"] = Value::String("exactly_once".to_string());
+        value["capabilities"]["sink"]["transactional"] = Value::Bool(true);
+        value["conformance"] = serde_json::json!(["contract", "exactly-once"]);
+    });
+    assert!(
+        errors.is_empty(),
+        "R-CN2-7: a transactional sink with the exactly-once suite is legal, got {errors:?}"
+    );
+}
+
+/// R-CN2-7 (OR-7): `effectively_once` needs a sink that dedupes (idempotent or
+/// upsert) or a source whose ids are stable across re-reads.
+#[test]
+fn effectively_once_requires_dedup_or_stable_ids() {
+    // A sink that neither dedupes nor upserts.
+    let errors = rules_for(|value| {
+        value["capabilities"]["delivery"]["sink"] = Value::String("effectively_once".to_string());
+        value["capabilities"]["sink"]["idempotent"] = Value::Bool(false);
+    });
+    assert!(
+        has_path(&errors, "capabilities.delivery.sink"),
+        "R-CN2-7: an effectively-once sink must dedupe, got {errors:?}"
+    );
+    // Idempotent (the §33 §4 example) or upsert: legal.
+    let errors = rules_for(|value| {
+        value["capabilities"]["delivery"]["sink"] = Value::String("effectively_once".to_string());
+    });
+    assert!(errors.is_empty(), "idempotent suffices, got {errors:?}");
+    let errors = rules_with_config(
+        |value| {
+            value["capabilities"]["delivery"]["sink"] =
+                Value::String("effectively_once".to_string());
+            value["capabilities"]["sink"]["idempotent"] = Value::Bool(false);
+            value["capabilities"]["sink"]["upsert"] = Value::Bool(true);
+        },
+        config_schema_with_a_key(),
+    );
+    assert!(errors.is_empty(), "upsert suffices, got {errors:?}");
+
+    // A source without stable ids.
+    let errors = rules_for(|value| {
+        value["capabilities"]["delivery"]["source"] = Value::String("effectively_once".to_string());
+    });
+    assert!(
+        has_path(&errors, "capabilities.delivery.source"),
+        "R-CN2-7: an effectively-once source needs envelope.stable_ids, got {errors:?}"
+    );
+    let errors = rules_for(|value| {
+        value["capabilities"]["delivery"]["source"] = Value::String("effectively_once".to_string());
+        value["envelope"]["stable_ids"] = Value::Bool(true);
+    });
+    assert!(errors.is_empty(), "stable ids suffice, got {errors:?}");
+
+    // Effectively once sits between at-least-once and exactly-once for §33 §4
+    // rule 1: a route asking for it is refused by an at-least-once sink and accepted
+    // by an effectively-once one, which still refuses exactly-once.
+    let schema = ManifestSchema::embedded().expect("the manifest schema compiles");
+    let at_least_once = validate_manifest(&kafka_example(), schema.validator()).unwrap();
+    let uses = Uses {
+        direction: Direction::Sink,
+        delivery: Some(Delivery::EffectivelyOnce),
+        ..Uses::default()
+    };
+    assert_eq!(
+        check_use(&at_least_once, &uses).unwrap_err().capability,
+        "delivery.sink"
+    );
+    let mut value = kafka_example();
+    value["capabilities"]["delivery"]["sink"] = Value::String("effectively_once".to_string());
+    let effectively_once = validate_manifest(&value, schema.validator()).unwrap();
+    assert!(check_use(&effectively_once, &uses).is_ok());
+    assert!(check_use(&effectively_once, &uses_exactly_once()).is_err());
+}
+
+/// R-CN2-8 (OR-4): a fallback is Camel, Debezium or Iggy, in declared directions,
+/// and names the task that replaces or replaced it.
+#[test]
+fn fallback_needs_replaced_by() {
+    let fallback = |replaced_by: &str| {
+        serde_json::json!({
+            "kind": "iggy",
+            "ref": "kafka_sink",
+            "directions": ["sink"],
+            "replaced_by": replaced_by,
+        })
+    };
+
+    for blank in ["", "   "] {
+        let errors = rules_for(|value| value["runtime"]["fallback"] = fallback(blank));
+        assert!(
+            has_path(&errors, "runtime.fallback.replaced_by"),
+            "R-CN2-8: replaced_by {blank:?} must be refused, got {errors:?}"
+        );
+    }
+
+    // A native or openapi "fallback" is not one of OR-4's fallback runtimes.
+    for kind in ["native", "openapi"] {
+        let errors = rules_for(|value| {
+            let mut block = fallback("CN2 Task 9");
+            block["kind"] = Value::String(kind.to_string());
+            value["runtime"]["fallback"] = block;
+        });
+        assert!(
+            has_path(&errors, "runtime.fallback.kind"),
+            "R-CN2-8: a {kind} fallback must be refused, got {errors:?}"
+        );
+    }
+
+    // A fallback direction the manifest does not declare.
+    let errors = rules_for(|value| {
+        value["capabilities"]
+            .as_object_mut()
+            .unwrap()
+            .remove("sink");
+        value["runtime"]["fallback"] = fallback("CN2 Task 9");
+    });
+    assert!(
+        has_path(&errors, "runtime.fallback.directions"),
+        "R-CN2-8: a fallback in an undeclared direction must be refused, got {errors:?}"
+    );
+
+    // The whole block present and right: legal.
+    let errors = rules_for(|value| value["runtime"]["fallback"] = fallback("CN2 Task 9"));
+    assert!(
+        errors.is_empty(),
+        "a complete fallback is legal, got {errors:?}"
+    );
+
+    // The schema requires `replaced_by` to be there at all.
+    let errors = rules_for(|value| {
+        let mut block = fallback("CN2 Task 9");
+        block.as_object_mut().unwrap().remove("replaced_by");
+        value["runtime"]["fallback"] = block;
+    });
+    assert!(
+        errors
+            .iter()
+            .any(|error| error.path.starts_with("runtime.fallback")),
+        "the schema requires replaced_by, got {errors:?}"
+    );
+}
+
+/// `RuntimeSpec::for_direction`: the default choice never returns the fallback, and
+/// the fallback is returned only for the directions it declares.
+#[test]
+fn for_direction_falls_back_only_when_asked() {
+    let runtime: RuntimeSpec = serde_json::from_value(serde_json::json!({
+        "kind": "native",
+        "ref": "loams_connector_postgres::Postgres",
+        "version": "loams-connector-postgres 0.1",
+        "source": { "kind": "native", "ref": "loams_connector_postgres::cdc::PgCdc" },
+        "fallback": {
+            "kind": "debezium",
+            "ref": "io.debezium.connector.postgresql.PostgresConnector",
+            "directions": ["source"],
+            "replaced_by": "CN2 Task 10",
+        },
+    }))
+    .unwrap();
+
+    // The default: the override where there is one, the top level otherwise.
+    assert_eq!(
+        runtime.for_direction(Direction::Source, Choice::Default),
+        Some((RuntimeKind::Native, "loams_connector_postgres::cdc::PgCdc"))
+    );
+    assert_eq!(
+        runtime.for_direction(Direction::Sink, Choice::Default),
+        Some((RuntimeKind::Native, "loams_connector_postgres::Postgres"))
+    );
+
+    // The fallback, only when asked and only for its declared direction.
+    assert_eq!(
+        runtime.for_direction(Direction::Source, Choice::Fallback),
+        Some((
+            RuntimeKind::Debezium,
+            "io.debezium.connector.postgresql.PostgresConnector"
+        ))
+    );
+    assert_eq!(
+        runtime.for_direction(Direction::Sink, Choice::Fallback),
+        None,
+        "the fallback declares the source only"
+    );
+
+    // A runtime with no fallback has none to give.
+    let plain: RuntimeSpec = serde_json::from_value(serde_json::json!({
+        "kind": "camel",
+        "ref": "jdbc",
+    }))
+    .unwrap();
+    assert_eq!(
+        plain.for_direction(Direction::Sink, Choice::Default),
+        Some((RuntimeKind::Camel, "jdbc"))
+    );
+    assert_eq!(
+        plain.for_direction(Direction::Source, Choice::Fallback),
+        None
+    );
+    assert_eq!(plain.for_direction(Direction::Sink, Choice::Fallback), None);
 }

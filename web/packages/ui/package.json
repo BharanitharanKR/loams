@@ -2,7 +2,7 @@
   "name": "@loams/ui",
   "version": "0.1.0",
   "description": "Loams's design system: tokens, the mark, grain textures and React primitives.",
-  "license": "Apache-2.0",
+  "license": "Apache-2.0 AND MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/ostrium-labs/loams",
@@ -34,19 +34,35 @@
   "files": [
     "dist",
     "src/*.css",
-    "README.md"
+    "README.md",
+    "NOTICE",
+    "LICENSE.t3code",
+    "provenance.json"
   ],
   "scripts": {
     "build": "tsup",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "vitest run"
   },
   "peerDependencies": {
-    "react": ">=19"
+    "react": ">=19",
+    "react-dom": ">=19"
   },
   "devDependencies": {
-    "@types/react": "19.3.0",
-    "react": "19.3.0",
+    "@testing-library/react": "16.3.3",
+    "@types/node": "24.13.6",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
+    "jsdom": "30.1.1",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "tsup": "8.5.1",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "5.0.3"
+  },
+  "dependencies": {
+    "@base-ui/react": "catalog:",
+    "@tanstack/react-table": "catalog:",
+    "@tanstack/react-virtual": "catalog:"
   }
 }

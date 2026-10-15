@@ -178,7 +178,7 @@ function ChangedPaths({ ws }: { ws: Workspace }) {
       </thead>
       <tbody>
         {sorted.map((c: ChangedPath) => (
-          <tr key={c.path} className="border-0 border-t border-solid border-line">
+          <tr key={c.path} className="border-0 border-t border-solid border-rule">
             <td className="py-1 font-mono">{c.path}</td>
             <td className="py-1">
               <Badge>{CHANGE_TEXT[c.kind]}</Badge>
@@ -247,13 +247,13 @@ function SnapshotTimeline(p: {
           {error.message}
         </Notice>
       )}
-      <ol className="m-0 flex list-none flex-col gap-0 border-0 border-l-2 border-solid border-line p-0 pl-4">
+      <ol className="m-0 flex list-none flex-col gap-0 border-0 border-l-2 border-solid border-rule p-0 pl-4">
         {snaps.map((s) => (
           <li key={s.n} className="relative flex flex-col gap-0.5 py-2">
             <span
               aria-hidden="true"
               className={`absolute top-3 -left-[21px] h-2.5 w-2.5 rounded-full ${
-                s.label ? 'bg-accent' : 'bg-line'
+                s.label ? 'bg-accent' : 'bg-rule'
               }`}
             />
             <span className="flex flex-wrap items-center gap-2 text-sm">

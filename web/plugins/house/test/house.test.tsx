@@ -203,7 +203,10 @@ describe('analytics page', () => {
     const results = await screen.findByRole('region', { name: 'Result rows' });
     expect(within(results).getByText('kind')).toBeTruthy();
     expect(within(results).getByText('LowCardinality(String)')).toBeTruthy();
-    const req = client.requests.at(-1);
+    // The page also loads system.functions for completion in the background, through
+    // the same client and at its own row cap; under CI load that request can land after
+    // this one, so look for the console's own query, not whichever came last.
+    const req = client.requests.filter((r) => !r.sql.includes('FROM system.functions')).at(-1);
     expect(req?.readOnly).toBe(true);
     expect(req?.maxRows).toBe(PAGE_MAX_ROWS);
     expect(req?.format).toBe('ARROW_IPC');

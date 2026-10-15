@@ -1,0 +1,5 @@
+{
+  "kind": "search",
+  "path": "src",
+  "pattern": "fn main"
+}

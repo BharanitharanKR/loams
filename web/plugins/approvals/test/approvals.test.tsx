@@ -1,9 +1,19 @@
-import { createClient } from '@connectrpc/connect';
+import { create, fromJson } from '@bufbuild/protobuf';
+import { ValueSchema } from '@bufbuild/protobuf/wkt';
+import { createClient, createRouterTransport } from '@connectrpc/connect';
+import type { AgentdService } from '@loams/console-host';
 import { createMockControl } from '@loams/console-host/testing';
 import { approvals } from '@loams/proto';
+import {
+  ApprovalSchema as AgentApprovalSchema,
+  ApprovalService as AgentApprovalService,
+  ApprovalDecision as AgentDecision,
+  ApprovalRisk,
+  type ResolveApprovalRequest,
+} from '@loams/proto/agentd';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { InboxPage, pendingCount } from '../src/index.js';
+import { AgentInbox, followAgentApprovals, InboxPage, pendingCount } from '../src/index.js';
 import { Inbox, reasonOf } from '../src/store.js';
 
 afterEach(cleanup);
@@ -149,5 +159,106 @@ describe('pendingCount', () => {
         ],
       }),
     ).toBe(2);
+  });
+});
+
+/** A daemon whose `WatchApprovals` holds one supervised tool call (SD1 Task 13). */
+function agentDaemon() {
+  const resolved: ResolveApprovalRequest[] = [];
+  const transport = createRouterTransport(({ service }) => {
+    service(AgentApprovalService, {
+      async *watchApprovals(_request, ctx) {
+        yield {
+          pending: [
+            create(AgentApprovalSchema, {
+              id: 'call-7',
+              chatId: 'chat-1',
+              turnId: 'msg-1',
+              tool: 'Bash',
+              args: fromJson(ValueSchema, { command: 'rm -rf build' }),
+              risk: ApprovalRisk.DESTRUCTIVE,
+              createdAtMs: 5n,
+            }),
+          ],
+        };
+        await new Promise<void>((resolve) =>
+          ctx.signal.addEventListener('abort', () => resolve(), { once: true }),
+        );
+      },
+      resolveApproval: (request) => {
+        resolved.push(request);
+        return {};
+      },
+    });
+  });
+  const agentd: AgentdService = {
+    kind: 'desktop',
+    reach: () => ({ state: 'ready' }),
+    subscribe: () => () => {},
+    transport: () => transport,
+    host: () => undefined,
+  };
+  return { agentd, resolved };
+}
+
+describe('agent approvals', () => {
+  it('approvals_page_lists_agent_approvals', async () => {
+    const { client, inbox, stop } = await live();
+    const daemon = agentDaemon();
+    const agentInbox = new AgentInbox();
+    const unfollow = followAgentApprovals(daemon.agentd, agentInbox);
+    render(
+      <InboxPage
+        inbox={inbox}
+        client={client}
+        agent={{
+          inbox: agentInbox,
+          resolve: async (approval, decision) => {
+            await createClient(
+              AgentApprovalService,
+              daemon.agentd.transport() as never,
+            ).resolveApproval({ callId: approval.id, chatId: approval.chatId, decision });
+          },
+        }}
+      />,
+    );
+    // The server's approval and the agent's, side by side, each labelled by source.
+    expect(screen.getByText('Create an API key for search-dev')).toBeTruthy();
+    const title = await screen.findByText('Bash wants to run');
+    const card = title.closest('section') as HTMLElement;
+    expect(card.textContent).toContain('Agent');
+    expect(card.textContent).toContain('destructive');
+    expect(card.textContent).toContain('rm -rf build');
+    expect(card.querySelector('a')?.getAttribute('href')).toBe('#/studio/t/chat-1');
+    const server = screen.getByText('Create an API key for search-dev').closest('section');
+    expect(server?.textContent).toContain('Server');
+
+    // "Always for this thread" sends the thread with the decision.
+    fireEvent.click(screen.getByRole('button', { name: 'Always for this thread' }));
+    await waitFor(() => expect(daemon.resolved).toHaveLength(1));
+    expect(daemon.resolved[0]).toMatchObject({
+      callId: 'call-7',
+      chatId: 'chat-1',
+      decision: AgentDecision.ALWAYS,
+    });
+    await waitFor(() => expect(screen.queryByText('Bash wants to run')).toBeNull());
+    unfollow();
+    stop();
+  });
+
+  it('no daemon, or one without approvals, lists no agent approvals', () => {
+    const agentInbox = new AgentInbox();
+    const unfollow = followAgentApprovals(
+      {
+        kind: 'web',
+        reach: () => ({ state: 'no-host' }),
+        subscribe: () => () => {},
+        transport: () => undefined,
+        host: () => undefined,
+      },
+      agentInbox,
+    );
+    expect(agentInbox.getSnapshot()).toMatchObject({ approvals: [], available: false });
+    unfollow();
   });
 });

@@ -29,7 +29,7 @@ Same as the M1 overview §8, plus:
 - **No AWS account in CI.** Lambda tests run against the Runtime Interface Emulator; a real-AWS job is optional, manual, and needs the owner's credentials decision (Task 5).
 - **The build machine.** One cargo build at a time, the shared target, `-j 6`, lld; `loams-runner-lambda` is built only in its own job and when its task is worked on.
 - **Commit areas:** `runner`, `ci`, `docs`.
-- **No billing-grade names (D552).** No identifier, file or string in this plan's crates may contain `loams.meter`, `meter.sock`, `HostReport` or `x-loams-usage`; the guard `scripts/ci/no-metering.sh` (MT4 Task 8) enforces it.
+- **No billing-grade names (D552).** No identifier, file or string in this plan's crates may contain `loams.meter`, `meter.sock`, `HostReport` or `x-loams-usage`; the no-metering guard (MT4 Task 8, removed 2026-10-15) enforced it.
 
 ## Rulings made while writing this plan
 
@@ -51,7 +51,7 @@ From §24 §16: the `Runner` trait sketch, refined here. From §41 §10: `Invoca
 1. **Exactly one observation.** Tests: Task 3 (`supervisor_kind_is_observed_once`, `external_runner_is_observed_once`).
 2. **The observer cannot hurt an invocation.** Tests: Task 3 (`panicking_observer_does_not_fail_invoke`, `no_observer_costs_nothing`).
 3. **The open Lambda path carries no usage value.** Tests: Task 5 (`bootstrap_adds_no_headers`, `runner_returns_no_billing_figure`).
-4. **No billing-grade names.** `scripts/ci/no-metering.sh` passes on this plan's crates.
+4. **No billing-grade names** in this plan's crates.
 
 
 ## File structure
@@ -167,7 +167,7 @@ pub struct StaticLambdaControl { pub function: String }
 
 **Files:** `docs/design/27-usage-hooks.md` (§3.7 as built), `docs/design/24-cpu-time-runtime.md` (§16 as built), `CHANGELOG.md`.
 
-**Tests:** the `runner` and `runner-lambda` jobs green; `cargo deny check`; `scripts/ci/no-metering.sh` once MT4 Task 8 has landed.
+**Tests:** the `runner` and `runner-lambda` jobs green; `cargo deny check`.
 
 **Commit:** `docs: record RN1 as built`.
 

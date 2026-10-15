@@ -1,15 +1,30 @@
 name: CI
 
-# Docs-only changes still run the required CI summary. The nightly schedule is unfiltered.
+# What runs (owner, 2026-10-13): two tiers.
+# - fast tier, a pull request into dev and a push to dev: the jobs whose paths
+#   changed among DCO, repository checks, fmt and clippy, the Rust tests, the
+#   console, cargo-deny, the protos and the seven supported SDKs. A draft skips
+#   the heavy ones of those (label `ci:full`, then a push, runs them).
+# - full tier, a pull request into main (the dev -> main release gate): also
+#   the engine, TiKV, Live, durable, Graph, fuzzing, specs, browser, Dapr and
+#   the wave 2 and 3 SDKs, by path.
+# - push to main, a manual dispatch and the nightly on dev (nightly.yml):
+#   everything, regardless of paths.
 on:
   push:
     branches: [main, dev]
   pull_request:
-  schedule:
-    # Nightly: the long simulation sweep (M0.4 plan Task 6), the tail-merge
-    # property test (M1.2 plan Task 15), the TiKV suites (R1 plan Task 1) and
-    # the durable store on TiDB (D1 plan Task 5).
-    - cron: "17 2 * * *"
+    types: [opened, synchronize, reopened, ready_for_review]
+  # nightly.yml dispatches this on dev every night with nightly: true (a
+  # `schedule:` here would run on main, the default branch): the long
+  # simulation sweep, the tail-merge property test, the TiKV suites and the
+  # durable store on TiDB, on top of everything.
+  workflow_dispatch:
+    inputs:
+      nightly:
+        description: "Run the nightly-only suites too."
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -21,24 +36,30 @@ permissions:
 # whose free minutes are counted per vCPU: keep light jobs off it.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
+  # A newer dev head supersedes an older one; main runs to completion.
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Which parts of the tree a pull request touches. The jobs below run on a
-  # pull request only when their filter matches; on a push to main and on the
-  # nightly schedule the relevant jobs run (this job is skipped there).
-  # dorny/paths-filter is MIT-licensed; pinned to v4.0.3.
+  # Which parts of the tree a pull request, or a push to dev, touches. The jobs
+  # below run there only when their filter matches; on a push to main, the
+  # nightly schedule and a manual dispatch this job is skipped and every job
+  # runs. dorny/paths-filter is MIT-licensed; pinned to v4.0.3.
   changes:
-    name: changed paths
-    if: github.event_name == 'pull_request'
+    name: Changed paths
+    if: github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/dev')
     runs-on: ubuntu-24.04
     permissions:
       contents: read
       pull-requests: read
     outputs:
+      # 'false' on a draft pull request without the `ci:full` label: the heavy
+      # jobs (Blacksmith and macOS) wait until it is ready for review.
+      heavy: ${{ github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
+      # 'true' on a pull request into main: the full tier.
+      full: ${{ github.base_ref == 'main' }}
       rust: ${{ steps.filter.outputs.rust }}
       engine: ${{ steps.filter.outputs.engine }}
       es: ${{ steps.filter.outputs.es }}
@@ -59,6 +80,12 @@ jobs:
       sdk-cpp: ${{ steps.filter.outputs.sdk-cpp }}
       sdk-csharp: ${{ steps.filter.outputs.sdk-csharp }}
       sdk-swift: ${{ steps.filter.outputs.sdk-swift }}
+      sdk-java: ${{ steps.filter.outputs.sdk-java }}
+      sdk-kotlin: ${{ steps.filter.outputs.sdk-kotlin }}
+      sdk-ruby: ${{ steps.filter.outputs.sdk-ruby }}
+      sdk-php: ${{ steps.filter.outputs.sdk-php }}
+      sdk-dart: ${{ steps.filter.outputs.sdk-dart }}
+      sdk-objc: ${{ steps.filter.outputs.sdk-objc }}
       web: ${{ steps.filter.outputs.web }}
       dapr-edge: ${{ steps.filter.outputs.dapr-edge }}
       spec: ${{ steps.filter.outputs.spec }}
@@ -66,9 +93,16 @@ jobs:
       specview: ${{ steps.filter.outputs.specview }}
       lean: ${{ steps.filter.outputs.lean }}
     steps:
+      # A push is compared with the previous dev head (github.event.before),
+      # which needs the repository; a pull request uses the API.
+      - uses: actions/checkout@v7
+        if: github.event_name == 'push'
+        with:
+          persist-credentials: false
       - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         id: filter
         with:
+          base: ${{ github.event_name == 'push' && github.event.before || '' }}
           filters: |
             # Every Rust filter includes these.
             toolchain: &toolchain
@@ -76,7 +110,7 @@ jobs:
               - "Cargo.lock"
               - "rust-toolchain*"
               - ".cargo/**"
-              - ".github/workflows/**"
+              - ".github/workflows/ci.yml"
             # Any Rust change: fmt, clippy, the workspace tests.
             # loams-apps-mock embeds api/console/openapi.json through
             # loams-console-mock.
@@ -181,10 +215,14 @@ jobs:
               - "crates/*/Cargo.toml"
               - "deny.toml"
             # The desktop agent daemon (design §50, DD1 Task 4): the headless
-            # guard (D782) and the loams-agentd* clippy and test suites.
+            # guard (D782) and the loams-agentd* clippy and test suites. The
+            # TypeScript contract package is here too: loams-agentd-proto's
+            # tests check its generated files and parse its requests.json
+            # (DD1 Task 9); the monorepo web job runs its own suite.
             agentd:
               - *toolchain
               - "crates/loams-agentd*/**"
+              - "web/packages/agentd-client/**"
               - "scripts/ci/agentd-*"
               - ".config/nextest.toml"
             # Loams Graph (GR1, design §48): the engine crate, its proto, the
@@ -213,7 +251,7 @@ jobs:
               - "nx.json"
             protos:
               - *pnpm-workspace
-              - ".github/workflows/**"
+              - ".github/workflows/ci.yml"
               - "proto/**"
               - "buf.yaml"
               - "buf.gen.yaml"
@@ -222,7 +260,7 @@ jobs:
             # The app protos (design §37 §8, AP0) and @loams/proto.
             app-protos:
               - *pnpm-workspace
-              - ".github/workflows/**"
+              - ".github/workflows/ci.yml"
               - "proto/**"
               - "buf.yaml"
               - "buf.gen.*.yaml"
@@ -231,7 +269,7 @@ jobs:
             # generator (crates/loams-facade-gen), and the conformance corpus.
             sdk-typescript:
               - *pnpm-workspace
-              - ".github/workflows/**"
+              - ".github/workflows/ci.yml"
               - "proto/**"
               - "buf.yaml"
               - "buf.gen.*.yaml"
@@ -245,7 +283,7 @@ jobs:
             # PR #340 merged with four failing tests and a green board.
             sdk-rust:
               - *pnpm-workspace
-              - ".github/workflows/**"
+              - ".github/workflows/ci.yml"
               - "rust-toolchain*"
               - "crates/loams-proto/**"
               - "crates/loams-live-proto/**"
@@ -257,7 +295,7 @@ jobs:
             # SDK2 Task 1: the Python SDK. CI's Python jobs are the qdrant smoke
             # and static analysis, neither of which imports the SDK.
             sdk-python:
-              - ".github/workflows/**"
+              - ".github/workflows/ci.yml"
               - "docs/api/reasons.md"
               - "docs/sdk/**"
               - "proto/**"
@@ -266,17 +304,22 @@ jobs:
             # SDK2 Task 2: the Go SDK, whose module sits outside the web
             # workspace and so had no job of its own.
             sdk-go:
-              - ".github/workflows/**"
+              - *pnpm-workspace
+              - ".github/workflows/ci.yml"
+              - "rust-toolchain*"
+              - "crates/loams-facade-gen/**"
               - "docs/api/reasons.md"
               - "docs/sdk/**"
               - "proto/**"
+              - "scripts/sdk/**"
               - "sdks/go/**"
+              - "sdks/templates/go/**"
               - "sdks/conformance/**"
             # The C++ SDK (#295). Its buf.gen.yaml pins the protoc release, so a
             # proto edit has to re-run the job even when no C++ file moved.
             sdk-cpp:
               - *pnpm-workspace
-              - ".github/workflows/**"
+              - ".github/workflows/ci.yml"
               - "docs/api/reasons.md"
               - "docs/sdk/**"
               - "proto/**"
@@ -287,7 +330,7 @@ jobs:
             # committed stubs are the surface the suite tests.
             sdk-csharp:
               - *pnpm-workspace
-              - ".github/workflows/**"
+              - ".github/workflows/ci.yml"
               - "docs/api/reasons.md"
               - "docs/sdk/**"
               - "proto/**"
@@ -297,27 +340,50 @@ jobs:
             # that develop this repo, so macOS is the only thing that can
             # compile it. Without this job it merges as unverified source.
             sdk-swift:
-              - ".github/workflows/**"
+              - ".github/workflows/ci.yml"
               - "docs/api/reasons.md"
               - "docs/sdk/**"
               - "proto/**"
               - "sdks/swift/**"
               - "sdks/conformance/**"
+            # API2 Task 19: the wave 2 and 3 SDKs that had no job. Advisory: none
+            # of them is in `required.needs` (API2-Q2).
+            # On a pull request only when their own directory changes; a proto,
+            # docs or shared-fixture change reaches them on the nightly, which
+            # opens an issue on failure (runner slots, not minutes, are scarce).
+            sdk-java:
+              - ".github/workflows/ci.yml"
+              - "sdks/java/**"
+            sdk-kotlin:
+              - ".github/workflows/ci.yml"
+              - "sdks/kotlin/**"
+            sdk-ruby:
+              - ".github/workflows/ci.yml"
+              - "sdks/ruby/**"
+            sdk-php:
+              - ".github/workflows/ci.yml"
+              - "sdks/php/**"
+            sdk-dart:
+              - ".github/workflows/ci.yml"
+              - "sdks/dart/**"
+            sdk-objc:
+              - ".github/workflows/ci.yml"
+              - "sdks/objc/**"
             web:
               - *pnpm-workspace
-              - ".github/workflows/**"
+              - ".github/workflows/ci.yml"
               - "web/**"
               - "api/**"
             # deploy/dapr/edge is its own crate and lock, outside the
             # workspace; it compiles loams-stream-grpc's stream.proto.
             dapr-edge:
-              - ".github/workflows/**"
+              - ".github/workflows/ci.yml"
               - "rust-toolchain*"
               - "deploy/dapr/**"
               - "crates/loams-stream-grpc/proto/**"
             # The router's TLA+ specs and their checker (RT0, D310).
             spec:
-              - ".github/workflows/**"
+              - ".github/workflows/ci.yml"
               - "spec/**"
               - "scripts/spec/**"
             # The Lean proofs and the Rust code they are the oracle for (RT0 Task 8, D312).
@@ -330,7 +396,7 @@ jobs:
               - "crates/loams-sqlrouter/src/reference/**"
             # The router's kernel crate and compatibility inventory (RT0).
             router:
-              - ".github/workflows/**"
+              - ".github/workflows/ci.yml"
               - "crates/loams-sqlrouter/**"
               - "crates/loams-compat/**"
               - "conformance/**"
@@ -343,15 +409,17 @@ jobs:
               - "spec/tla/**"
 
   check:
-    name: fmt and clippy
+    name: "Rust: fmt and clippy"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true') }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.rust == 'true') }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
     steps:
       - uses: actions/checkout@v7
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: rustfmt
         run: cargo fmt --all --check
       - name: clippy
@@ -416,32 +484,32 @@ jobs:
       - name: doc tests
         run: cargo test --workspace --doc --locked
 
+  # The workspace tests, built and run in one job on the heavy runner. (A nextest
+  # archive moved to other runners broke the tests that spawn the built binary or
+  # read files through compile-time paths, so build and run stay together.)
   rust-tests:
-    name: Rust tests (${{ matrix.partition }}/2)
+    name: "Rust: tests"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true') }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
-    # A hung test fails its partition instead of holding the runner; nextest
-    # also terminates a loams-agentd* test after 3 minutes (.config/nextest.toml).
-    timeout-minutes: 90
-    strategy:
-      fail-fast: false
-      matrix:
-        partition: [1, 2]
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.rust == 'true') && needs.changes.outputs.heavy != 'false' }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
+    # A hung test fails the job instead of holding the runner; nextest also
+    # terminates a loams-agentd* test after 3 minutes (.config/nextest.toml).
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - uses: taiki-e/install-action@badb8c3638e0b773c6c17a6025c2306a8f1c4303 # nextest, 2026-10-02
       # The loams-agentd-harness tests run `#!/usr/bin/env node` and
-      # `#!/usr/bin/env python3` fixtures (harness stand-ins). The runner images
-      # ship both; pin Node here so the fixtures do not depend on the image.
+      # `#!/usr/bin/env python3` fixtures (harness stand-ins).
       - uses: actions/setup-node@v7
         with:
           node-version: 22
       - name: workspace tests
-        run: cargo nextest run --workspace --locked --partition hash:${{ matrix.partition }}/2
+        run: cargo nextest run --workspace --locked
 
   # The desktop agent daemon (design §50, DD1 Task 4). The headless guard
   # (D782) fails if a GUI, webview or audio crate enters loams-agentd's tree on
@@ -450,17 +518,22 @@ jobs:
   # every crate builds with only its own features (the workspace `check` and
   # `rust-tests` jobs unify features across the whole workspace).
   agentd:
-    name: loams-agentd (headless guard, clippy, tests)
+    name: "Agentd: guard, clippy and tests"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.agentd == 'true') }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.agentd == 'true'))) && needs.changes.outputs.heavy != 'false' }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
     # PTY, shell and harness-fixture tests; a hung one fails the job.
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
+      # loams-agentd-connect's build.rs generates loams.agentd.v1 with protoc.
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       # The loams-agentd-harness tests run `#!/usr/bin/env node` and
       # `#!/usr/bin/env python3` fixtures (harness stand-ins).
       - uses: actions/setup-node@v7
@@ -489,15 +562,17 @@ jobs:
           fi
 
   feature-tests:
-    name: Rust feature tests
+    name: "Rust: feature tests"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.rust == 'true') }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.rust == 'true'))) && needs.changes.outputs.heavy != 'false' }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
     steps:
       - uses: actions/checkout@v7
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: loams's MySQL wire listener (mysql-wire feature)
         run: 'cargo test -p loams --features mysql-wire --lib --locked mysql_wire::'
       - name: loams's PostgreSQL wire listener (pgwire feature)
@@ -530,30 +605,34 @@ jobs:
           done
 
   crash-gate:
-    name: kill -9 crash gate
+    name: "Engine: crash gate"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (github.base_ref == 'main' && needs.changes.outputs.engine == 'true')) }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (github.base_ref == 'main' && needs.changes.outputs.engine == 'true')) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: clippy with failpoints
         run: cargo clippy -p loams --all-targets --features failpoints --locked -- -D warnings
       - name: crash gate
         run: cargo test -p loams --features failpoints --test crash --locked
 
   cluster:
-    name: multi-process cluster
+    name: "Engine: cluster tests"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (github.base_ref == 'main' && needs.changes.outputs.engine == 'true')) }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (github.base_ref == 'main' && needs.changes.outputs.engine == 'true')) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: build
         run: cargo build -p loams --locked
       - name: clippy with cluster tests
@@ -563,15 +642,17 @@ jobs:
         run: cargo test -p loams --features cluster-tests --test cluster --locked -- --test-threads=1
 
   qdrant-client:
-    name: Python qdrant-client smoke
+    name: "Engine: Qdrant client"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.engine == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.engine == 'true'))) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: build
         run: cargo build -p loams --locked
       - name: start loams dev
@@ -600,9 +681,9 @@ jobs:
         run: tail -n 200 "$RUNNER_TEMP/loams.log" || true
 
   es-client:
-    name: Elasticsearch client suite
+    name: "Engine: Elasticsearch client"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.es == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.es == 'true'))) }}
     runs-on: ubuntu-24.04
     # The Elasticsearch 8.19 oracle (plan M1.5 Task 11, owner ruling
     # O-M15-6): a CI-only test oracle, never vendored or shipped (R14).
@@ -624,6 +705,8 @@ jobs:
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: build
         run: cargo build -p loams --locked
       - uses: astral-sh/setup-uv@v7
@@ -635,28 +718,14 @@ jobs:
           ES_ORACLE_URL: http://127.0.0.1:9250
         run: conformance/es-client/run.sh
 
-  # The remaining light jobs (docs, TLA+, Lean, the boundary guard and the
-  # required summary) run on GitHub-hosted ubuntu-24.04, like `changes`.
-  docs:
-    name: decision log IDs
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - name: Decision ID checker self-test
-        run: scripts/docs/check-decision-ids.sh --self-test
-      - name: Unique decision and question declarations
-        run: scripts/docs/check-decision-ids.sh
-
   # RT0 Task 1 (D310): model-check the router's TLA+ specs. Pull requests run
   # the PR variants; the nightly schedule runs the larger bounds. Every result
   # must match its `expect` in spec/tla/*/specs.toml, so the unsafe variants
   # must fail for the declared reason. Then the PgDog provenance check (D318).
   tla:
-    name: TLA+ specs
+    name: "Spec: TLA+"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.spec == 'true' || needs.changes.outputs.router == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.spec == 'true' || needs.changes.outputs.router == 'true'))) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -671,10 +740,10 @@ jobs:
       - name: checker self-test
         run: scripts/spec/check.sh --self-test
       - name: specs (PR bounds)
-        if: github.event_name != 'schedule'
+        if: ${{ inputs.nightly != true }}
         run: scripts/spec/check.sh --all
       - name: specs (nightly bounds)
-        if: github.event_name == 'schedule'
+        if: ${{ inputs.nightly == true }}
         run: scripts/spec/check.sh --all --nightly
       - name: PgDog provenance
         run: scripts/spec/provenance.sh
@@ -683,9 +752,9 @@ jobs:
   # run the randomised properties, then run loams-sqlrouter's ranges against
   # the Lean oracle on 10 000 random cases.
   lean:
-    name: Lean proofs
+    name: "Spec: Lean proofs"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.lean == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.lean == 'true'))) }}
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -713,7 +782,9 @@ jobs:
         run: lake test
       - name: no sorry
         run: '! grep -rn --include=*.lean -w sorry LoamsRouter Main.lean PropTest.lean'
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: Rust against the Lean oracle (10 000 cases)
         working-directory: .
         run: cargo test -p loams-sqlrouter --locked --test it lean_oracle -- --nocapture
@@ -723,9 +794,9 @@ jobs:
   # with trunk. trunk is a prebuilt release (Apache-2.0/MIT) pinned by checksum;
   # it fetches the wasm-bindgen CLI that matches Cargo.lock.
   specview:
-    name: loams-specview
+    name: "Spec: specview"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.specview == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.specview == 'true'))) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -737,7 +808,9 @@ jobs:
         with:
           path: ~/.cache/loam/spec-tools
           key: spec-tools-${{ hashFiles('scripts/spec/tools.lock') }}
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: clippy (server)
         run: cargo clippy -p loams-specview --all-targets --locked -- -D warnings
       - name: tests (the live ones need Java and the pinned tools)
@@ -756,25 +829,27 @@ jobs:
         run: trunk build --release --locked
 
   sim:
-    name: simulation seed sweep
+    name: "Engine: simulation"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sim == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sim == 'true'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: simulation (32 seeds x 300 steps)
-        if: github.event_name != 'schedule'
+        if: ${{ inputs.nightly != true }}
         run: cargo test -p loams-sim --release --locked
       - name: simulation (1000 seeds x 300 steps, nightly)
-        if: github.event_name == 'schedule'
+        if: ${{ inputs.nightly == true }}
         run: 'cargo test -p loams-sim --release --locked --test it sim::'
         env:
           SIM_SEEDS: "1000"
       - name: tail merge against a full rebuild (256 cases, nightly)
-        if: github.event_name == 'schedule'
+        if: ${{ inputs.nightly == true }}
         run: 'cargo test -p loams-query --release --locked --test it tail_vs_rebuild::'
         env:
           TAIL_PROP_CASES: "256"
@@ -784,15 +859,17 @@ jobs:
   # they touch the TiKV crates, their cluster config or scripts, or the Live
   # protos (the `tikv` filter in the changes job). Nightly has its own job.
   tikv:
-    name: TiKV suites
+    name: "TiKV: suites"
     needs: changes
-    if: ${{ !cancelled() && github.event_name != 'schedule' && (github.event_name != 'pull_request' || (github.base_ref == 'main' && needs.changes.outputs.tikv == 'true')) }}
+    if: ${{ !cancelled() && inputs.nightly != true && (needs.changes.result == 'skipped' || (github.base_ref == 'main' && needs.changes.outputs.tikv == 'true')) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: packages
         id: packages
         # The TiKV crates that exist so far (later R1 tasks add the rest).
@@ -810,7 +887,7 @@ jobs:
           cargo test -p loams --features live-tikv --bin loams live --locked --no-run
           cargo test -p loams-durable --features tikv --lib --test tikv --locked --no-run
           cargo test -p loams-safekeeper --features tikv --test tikv --locked --no-run
-          cargo test -p loams-pg-control --features tikv --test store_tikv --test service_tikv --test reconcile_tikv --locked --no-run
+          cargo test -p loams-pg-control --features tikv --test store_tikv --test service_tikv --test reconcile_tikv --test endpoints_tikv --locked --no-run
       - uses: actions/cache@v6
         with:
           path: ~/.tiup/components
@@ -838,7 +915,7 @@ jobs:
           cargo test -p loams --features live-tikv --bin loams live --locked
           cargo test -p loams-durable --features tikv --lib --test tikv --locked
           cargo test -p loams-safekeeper --features tikv --test tikv --locked
-          cargo test -p loams-pg-control --features tikv --test store_tikv --test service_tikv --test reconcile_tikv --locked
+          cargo test -p loams-pg-control --features tikv --test store_tikv --test service_tikv --test reconcile_tikv --test endpoints_tikv --locked
       - name: playground logs
         if: failure()
         uses: actions/upload-artifact@v7.0.1
@@ -857,15 +934,17 @@ jobs:
   # the TiKV job runs them). `parity::every_live_suite_runs_on_embedded`
   # fails a suite that opens a store outside `live_test!`.
   live-embedded:
-    name: Live suites on the embedded store
+    name: "Live: embedded store"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.live-embedded == 'true') }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.live-embedded == 'true'))) && needs.changes.outputs.heavy != 'false' }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
     steps:
       - uses: actions/checkout@v7
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: the suites, embedded only
         env:
           LOAMS_TEST_PD: ""
@@ -878,8 +957,8 @@ jobs:
   # The same suites every night, plus the nightly-only TiKV suites later R1
   # tasks add.
   tikv-nightly:
-    name: TiKV suites (nightly)
-    if: github.event_name == 'schedule'
+    name: "TiKV: suites (nightly)"
+    if: ${{ inputs.nightly == true }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -891,6 +970,8 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.paths.outputs.run == 'true'
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - name: packages
         id: packages
         if: steps.paths.outputs.run == 'true'
@@ -979,10 +1060,10 @@ jobs:
   # scripts, the workflows, or the workspace manifests (the `durable` filter
   # in the changes job). `durable` is an opt-in feature (O1).
   durable:
-    name: durable execution (SQLite linearizability)
+    name: "Durable: SQLite linearizability"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'schedule' && (github.event_name != 'pull_request' || needs.changes.outputs.durable == 'true')) }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    if: ${{ !cancelled() && (inputs.nightly != true && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.durable == 'true')))) && needs.changes.outputs.heavy != 'false' }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
     timeout-minutes: 120
     env:
       DURABLE_FORK_TARGET_DIR: ${{ github.workspace }}/target/durable-fork-build
@@ -992,6 +1073,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           key: durable
       - uses: actions/setup-go@v7
         with:
@@ -1021,8 +1103,8 @@ jobs:
   # drops 503 answers as not applied (porc-503.sh) until upstream PR 0b; the
   # job summary shows how many there were.
   durable-tidb:
-    name: durable execution on TiDB (nightly)
-    if: github.event_name == 'schedule'
+    name: "Durable: TiDB (nightly)"
+    if: ${{ inputs.nightly == true }}
     runs-on: ubuntu-24.04
     timeout-minutes: 180
     env:
@@ -1033,6 +1115,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler mysql-client
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           key: durable
       - uses: actions/setup-go@v7
         with:
@@ -1086,9 +1169,9 @@ jobs:
   # sdks/typescript/packages/live/package.json. The Rust code is generated at build
   # time (loams-live-proto's build.rs), so the check job covers it.
   live-protos:
-    name: loams.live.v1 protos and generated TypeScript
+    name: "Protos: Live"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.protos == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.protos == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -1125,9 +1208,9 @@ jobs:
   # smoke-generated into the runner's temp directory (nothing is compiled
   # here). The Rust side is loams-apps-mock's build.rs, covered by `check`.
   app-protos:
-    name: app protos, @loams/proto and the mobile templates
+    name: "Protos: apps"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.app-protos == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.app-protos == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -1178,15 +1261,17 @@ jobs:
   # this job regenerates and fails on a diff; the runtime suite replays the
   # recorded conformance corpus (design §44 §10.4), which needs no server.
   sdk-typescript:
-    name: the TypeScript SDK and its conformance suite
+    name: "SDK: TypeScript"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-typescript == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk-typescript == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       - uses: pnpm/action-setup@v6
         with:
           version: 11.27.1
@@ -1270,9 +1355,9 @@ jobs:
   # All five language SDK jobs now gate `dev`, which is what makes a green board
   # mean something for a language SDK.
   sdk-rust:
-    name: the Rust SDK and its conformance suite
+    name: "SDK: Rust"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-rust == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk-rust == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -1283,6 +1368,8 @@ jobs:
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       # -j 4: the SDK path-depends on loams-proto and loams-live-proto, and the
       # runners are 4 vCPU.
       - name: the Rust SDK's tests
@@ -1326,9 +1413,9 @@ jobs:
   # SDK2 Task 1: the Python SDK. CI's existing Python jobs are the qdrant
   # smoke and static analysis, neither of which imports this package.
   sdk-python:
-    name: the Python SDK and its conformance suite
+    name: "SDK: Python"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-python == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk-python == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -1347,7 +1434,7 @@ jobs:
       - name: the SDK's runtime dependencies are exact pins
         working-directory: sdks/python
         run: |
-          for pin in 'connect-python==' 'protobuf=='; do
+          for pin in 'connectrpc==' 'protobuf=='; do
             grep -qF "$pin" pyproject.toml || {
               echo "pyproject.toml must pin $pin exactly, not a range"; exit 1;
             }
@@ -1358,12 +1445,16 @@ jobs:
   # machine that develops this repo does. `Package.swift` declares no package
   # dependencies, so this needs no resolution step and no cache.
   sdk-swift:
-    name: the Swift SDK and its conformance suite
+    name: "SDK: Swift"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-swift == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk-swift == 'true') && needs.changes.outputs.heavy != 'false' }}
     # macOS, not the Linux runner: the SDK is written against Foundation's
     # async URLSession, and macos-latest ships a Swift toolchain preinstalled.
     runs-on: macos-latest
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
       - name: the Swift toolchain's version
@@ -1379,12 +1470,18 @@ jobs:
         if: ${{ hashFiles('sdks/swift/Package.swift') != '' }}
         working-directory: sdks/swift
         run: swift test
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && inputs.nightly == true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh swift
 
   # SDK2 Task 2: the Go SDK, whose module sits outside the web workspace.
   sdk-go:
-    name: the Go SDK and its conformance suite
+    name: "SDK: Go"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-go == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk-go == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -1404,6 +1501,32 @@ jobs:
       - name: vet the Go SDK
         working-directory: sdks/go
         run: go vet ./...
+      # The drift check below, as in sdk-rust: scripts/sdk/drift.sh builds
+      # protoc-gen-loams-facade with cargo (the toolchain comes from
+      # rust-toolchain.toml) and runs the buf CLI pinned in web's
+      # node_modules, so it needs both.
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.27.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - name: install
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+      # The stubs under sdks/go/gen/loams are committed (the mirror repository
+      # builds from a tag), so a proto edit that moved them cannot pass with a
+      # stale tree. drift.sh regenerates with the template
+      # sdks/templates/go/template.env names, sdks/go/buf.gen.go.yaml, and
+      # fails on a diff or on a new, uncommitted stub. The hand-written
+      # gen/facade (Q604) is neither regenerated nor cleaned.
+      - name: the Go SDK's generated code is not stale
+        run: ./scripts/sdk/drift.sh go
 
   # SDK2 Task 11 (#295): the C++ SDK. protobuf 36.1.0 and libcurl 8.x are
   # preinstalled on the runner, and the pinned `buf.build/protocolbuffers/cpp`
@@ -1412,10 +1535,14 @@ jobs:
   # guarantee rather than a choice. A protobuf bump and a buf.gen.yaml bump are
   # therefore one commit (D643).
   sdk-cpp:
-    name: the C++ SDK and its conformance suite
+    name: "SDK: C++"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-cpp == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk-cpp == 'true') }}
     runs-on: ubuntu-24.04
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
       # `pkg-config` is what protobuf's link line comes from: the SDK parses
@@ -1502,6 +1629,12 @@ jobs:
           git diff --exit-code -- sdks/cpp/gen || {
             echo "sdks/cpp/gen is stale: regenerate with sdks/cpp/buf.gen.yaml and commit"; exit 1;
           }
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && inputs.nightly == true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh cpp
 
   # SDK2 Task 7 (#297): the C# SDK. `setup-dotnet` installs the channel, not the
   # patch, so `global.json` pins the exact SDK: `TreatWarningsAsErrors` is on, and
@@ -1514,10 +1647,14 @@ jobs:
   # would reference a path that does not exist. Closing that is its own commit
   # rather than something to fake here.
   sdk-csharp:
-    name: the C# SDK and its conformance suite
+    name: "SDK: C#"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sdk-csharp == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.sdk-csharp == 'true') }}
     runs-on: ubuntu-24.04
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-dotnet@v5
@@ -1554,6 +1691,185 @@ jobs:
           git diff --exit-code -- sdks/csharp/src/Loams/Gen || {
             echo "the committed stubs are stale: regenerate with sdks/csharp/buf.gen.proto.yaml"; exit 1;
           }
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && inputs.nightly == true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh csharp
+
+  # API2 Task 19: a job for each SDK that had none (Java, Kotlin, Ruby, PHP,
+  # Dart, Objective-C). They run on a PR that touches their paths, on pushes to
+  # dev and main, and nightly. None is in `required.needs` (API2-Q2): promoting
+  # a language to PR-blocking is a separate ruling.
+  sdk-java:
+    name: "SDK: Java"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sdk-java == 'true'))) }}
+    runs-on: ubuntu-24.04
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: the Java SDK's tests
+        working-directory: sdks/java
+        run: ./build.sh test
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && inputs.nightly == true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh java
+
+  sdk-kotlin:
+    name: "SDK: Kotlin"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sdk-kotlin == 'true'))) }}
+    runs-on: ubuntu-24.04
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
+    env:
+      KOTLIN_VERSION: '2.2.20'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      # build.sh looks for kotlinc on PATH. The runner has none.
+      - name: kotlinc
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/kotlinc.zip" \
+            "https://github.com/JetBrains/kotlin/releases/download/v${KOTLIN_VERSION}/kotlin-compiler-${KOTLIN_VERSION}.zip"
+          unzip -q "$RUNNER_TEMP/kotlinc.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/kotlinc/bin" >> "$GITHUB_PATH"
+      - name: the Kotlin SDK's tests
+        working-directory: sdks/kotlin
+        run: ./build.sh test
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && inputs.nightly == true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh kotlin
+
+  sdk-ruby:
+    name: "SDK: Ruby"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sdk-ruby == 'true'))) }}
+    runs-on: ubuntu-24.04
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+          working-directory: sdks/ruby
+      - name: the Ruby SDK's tests
+        working-directory: sdks/ruby
+        run: bundle exec rake test
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && inputs.nightly == true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh ruby
+
+  sdk-php:
+    name: "SDK: PHP"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sdk-php == 'true'))) }}
+    runs-on: ubuntu-24.04
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+      # vendor/ is not tracked; Composer builds it from composer.lock.
+      - name: install
+        working-directory: sdks/php
+        run: composer install --no-interaction --no-progress
+      - name: the PHP SDK's tests
+        working-directory: sdks/php
+        run: vendor/bin/phpunit
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && inputs.nightly == true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh php
+
+  sdk-dart:
+    name: "SDK: Dart"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sdk-dart == 'true'))) }}
+    runs-on: ubuntu-24.04
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+      - name: install
+        working-directory: sdks/dart
+        run: dart pub get
+      - name: analyze
+        working-directory: sdks/dart
+        run: dart analyze
+      - name: the Dart SDK's tests
+        working-directory: sdks/dart
+        run: dart test
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && inputs.nightly == true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh dart
+
+  # Objective-C builds through SwiftPM (D614: no CocoaPods), so macOS.
+  sdk-objc:
+    name: "SDK: Objective-C"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sdk-objc == 'true'))) && needs.changes.outputs.heavy != 'false' }}
+    runs-on: macos-latest
+    # issues: write is for the nightly-failure issue step only (schedule only).
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - uses: actions/checkout@v7
+      - name: the Objective-C SDK builds
+        working-directory: sdks/objc
+        run: swift build
+      - name: the Objective-C SDK's tests
+        working-directory: sdks/objc
+        run: swift test --disable-swift-testing
+      # API2 Task 19: a nightly failure opens or updates one issue per language.
+      - name: open or update the nightly-failure issue
+        if: ${{ failure() && inputs.nightly == true }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/ci/sdk-nightly-issue.sh objc
 
   # GR1 Task 1 (design §48, D741): Loams Graph's engine crate, and the rule
   # that `loams` links Grafeo only with the `graph` feature (GR1 Global
@@ -1561,15 +1877,17 @@ jobs:
   # `licences_cover_every_grafeo_crate`, which fails when a grafeo* crate in a
   # Cargo.lock has no connectors/licences.toml stanza.
   graph:
-    name: Loams Graph (loams-graph, no grafeo by default)
+    name: "Graph: tests"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.graph == 'true') }}
-    runs-on: blacksmith-8vcpu-ubuntu-2404
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.graph == 'true'))) && needs.changes.outputs.heavy != 'false' }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
     steps:
       - uses: actions/checkout@v7
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
       # loams_default_build_has_no_grafeo: `cargo build -p loams` without
       # `graph` must not compile Grafeo.
       - name: loams's default build has no grafeo
@@ -1591,7 +1909,11 @@ jobs:
         run: cargo test -p loams-graph --locked
       # GR1 Task 3: panic containment (`engine_panic_poisons_one_graph`) behind a failpoint.
       - name: loams-graph with failpoints
-        run: cargo test -p loams-graph --features failpoints --locked --test failpoints
+        run: cargo test -p loams-graph --features failpoints --locked --test failpoints --test durability
+      # GR1 Task 16: the durability fault gate (kill matrix, bucket faults, metastore outage),
+      # about 80 s, ignored in the workspace run.
+      - name: loams-graph durability fault gate
+        run: cargo test -p loams-graph --locked --test faults -- --ignored --test-threads 1
       # GR1 Task 5: loams.graph.v1 on the main port, in both builds (the default build answers
       # feature_not_in_variant; the graph build serves it).
       - name: loams serves loams.graph.v1 (graph feature)
@@ -1603,9 +1925,9 @@ jobs:
   # packets. Each cargo-fuzz target runs 60 s from its seed corpus; the same
   # invariants run under proptest in `cargo test`.
   sqlgate-fuzz:
-    name: Loams SQL gate codec fuzzing
+    name: "SQL gate: fuzzing"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.sqlgate == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sqlgate == 'true'))) }}
     runs-on: ubuntu-24.04
     # Five targets x 60 s plus the build.
     timeout-minutes: 20
@@ -1645,9 +1967,9 @@ jobs:
   # and WebSocket upgrade heads. Each cargo-fuzz target runs 60 s from its
   # seed corpus; the same invariants run on the seeds in `cargo test`.
   agentd-fuzz:
-    name: loams-agentd RPC fuzzing
+    name: "Agentd: RPC fuzzing"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.agentd == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.agentd == 'true'))) }}
     runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
     # Two targets x 60 s plus the build.
     timeout-minutes: 20
@@ -1682,19 +2004,73 @@ jobs:
           path: crates/loams-agentd-rpc/fuzz/artifacts
           if-no-files-found: ignore
 
-  deny:
-    name: licenses, advisories, sources
+  # SD1 Task 30: Loams Studio's untrusted input to the daemon. The Connect
+  # decoders and mappings behind every loams.agentd.v1 method, the remote
+  # listener's OIDC tokens, every ndjson method's typed params, and the path,
+  # URL and ref jails. Each cargo-fuzz target runs 60 s from its seed corpus
+  # (the full tier and the nightly); the same invariants run on seeds in
+  # `cargo test`.
+  agentd-connect-fuzz:
+    name: "Agentd: Studio fuzzing"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.deny == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.agentd == 'true'))) }}
+    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    # Four targets x 60 s plus the build (the sessions crate is large).
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: nightly toolchain (libFuzzer instrumentation)
+        run: rustup toolchain install nightly-2026-09-24 --profile minimal
+      - name: protoc (the generated loams.agentd.v1 code)
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends protobuf-compiler libprotobuf-dev
+      - uses: taiki-e/install-action@badb8c3638e0b773c6c17a6025c2306a8f1c4303 # nextest, 2026-10-02
+        with:
+          tool: cargo-fuzz@0.13.2
+      # cargo-fuzz has no --locked: check fuzz/Cargo.lock is current first.
+      - name: fuzz lock file is current (--locked)
+        working-directory: crates/loams-agentd-connect
+        run: cargo +nightly-2026-09-24 metadata --locked --format-version 1 --manifest-path fuzz/Cargo.toml > /dev/null
+      # Keep in sync with fuzz/Cargo.toml (tests/ci.rs checks it).
+      - name: fuzz every target for 60 s
+        working-directory: crates/loams-agentd-connect
+        run: |
+          set -euo pipefail
+          host=$(rustc +nightly-2026-09-24 -vV | sed -n 's/^host: //p')  # cargo-fuzz is a musl build; see sqlgate-fuzz
+          for t in connect_decode jwt ndjson_params path_jail; do
+            mkdir -p "fuzz/corpus/$t"
+            cargo +nightly-2026-09-24 fuzz run --target "$host" "$t" "fuzz/corpus/$t" -- -max_total_time=60 -rss_limit_mb=2048 -timeout=20
+          done
+      - name: upload crashing inputs
+        if: failure()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: agentd-connect-fuzz-artifacts
+          path: crates/loams-agentd-connect/fuzz/artifacts
+          if-no-files-found: ignore
+
+  deny:
+    name: "Deps: cargo-deny"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.deny == 'true') }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
-      - uses: EmbarkStudios/cargo-deny-action@v2
+      # cargo-deny on the runner, not in the action's container: the container's
+      # rustup has only its own toolchain, so rust-toolchain.toml's 1.97.1 fails
+      # as "override toolchain ... is not installed" before it is fetched.
+      # taiki-e/install-action is the pin the other jobs use.
+      - uses: taiki-e/install-action@badb8c3638e0b773c6c17a6025c2306a8f1c4303 # nextest, 2026-10-02
+        with:
+          tool: cargo-deny
+      - name: advisories, bans, licenses, sources
+        run: cargo deny --locked check
 
   web:
-    name: console and @loams/ui
+    name: "Console: build and tests"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.web == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.web == 'true') }}
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -1711,8 +2087,9 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
         working-directory: .
-      - name: the generated API types match the contract
-        run: pnpm gen:api && git diff --exit-code -- apps/console/src/api/schema.d.ts
+      # The console speaks Connect through @loams/proto since API2 Task 10; it has no
+      # OpenAPI schema to regenerate (connect-console.test.ts holds that line), and the
+      # Connect stubs' drift is checked by "Protos: apps".
       - run: pnpm lint
       - run: pnpm typecheck
       - run: pnpm test
@@ -1758,9 +2135,9 @@ jobs:
   # is logged as diagnostics instead, so a channel change is visible in this job's
   # log rather than only as a red build.
   web-browser:
-    name: console in a real Chrome (WebMCP detection)
+    name: "Console: Chrome (WebMCP)"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.web == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.web == 'true'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -1814,9 +2191,9 @@ jobs:
   # The Dapr trigger edge (deploy/dapr/edge): a standalone crate with its own
   # Cargo.lock, so the workspace jobs never build it.
   dapr-edge:
-    name: Dapr trigger edge
+    name: "Dapr: edge trigger"
     needs: changes
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || needs.changes.outputs.dapr-edge == 'true') }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.dapr-edge == 'true'))) }}
     runs-on: ubuntu-24.04
     defaults:
       run:
@@ -1827,6 +2204,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
+          save-if: ${{ github.event_name != 'pull_request' }}
           workspaces: deploy/dapr/edge -> target
       - name: rustfmt
         run: cargo fmt --check
@@ -1837,73 +2215,98 @@ jobs:
       - name: the manifests render
         working-directory: .
         run: kubectl kustomize deploy/dapr > /dev/null
-
-  no-metering:
-    name: open-core boundary (no metering)
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-      - name: boundary guard regression fixtures
-        run: python3 scripts/ci/test-no-metering.py
-      - name: audit all tracked files and Cargo packages
-        run: scripts/ci/no-metering.sh
-
-  # The Linux signing scope (issue #253, PR: SignPath). scripts/ci/
-  # signpath-artifacts.py is what refuses to submit a Windows or macOS artifact
-  # to SignPath, and the owner's ruling of 2026-10-03 is that those platforms
-  # stay unsigned. An unconditional job with no path filter on purpose: the
-  # invariant is "no artifact outside Linux is ever submitted", so it should be
-  # checked on every pull request rather than only on ones that touch the
-  # script. The self-test is pure-python fixtures and takes about a second.
-  signing:
-    name: Linux signing scope
-    runs-on: ubuntu-24.04
+  # Windows: the engine must keep compiling there (the Windows CLI zip and the
+  # desktop app ship it), and no other pull request job builds for Windows.
+  # Full tier: pull requests into main, a push to main, dispatch, the nightly.
+  windows-check:
+    name: "Rust: Windows check"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && needs.changes.outputs.engine == 'true')) }}
+    runs-on: windows-2025
+    timeout-minutes: 90
+    env:
+      # aws-lc-sys's prebuilt NASM objects: no NASM install needed for a check.
+      AWS_LC_SYS_PREBUILT_NASM: "1"
     steps:
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
-      - name: the SignPath artifact guard self-test
+      - name: protoc
+        uses: ./.github/actions/windows-build-tools
+        with:
+          nasm: "false"
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
+      - name: cargo check (the loams binary)
+        run: cargo check -p loams --bin loams --locked
+
+  # The unconditional light checks, one job (one runner slot instead of four:
+  # the org's concurrent-job limit, not minutes, is what queues pull requests).
+  # Each has no path filter on purpose; see the comment on each step group.
+  # - decision log IDs: unique decision and question declarations.
+  # - every SDK has a CI job, and only wave 1 is required.
+  # - Linux signing scope (issue #253): scripts/ci/signpath-artifacts.py refuses
+  #   to submit a Windows or macOS artifact to SignPath (owner ruling 2026-10-03).
+  # - Linux packaging definitions: nFPM and the apt repository layout are only
+  #   validated by these self-tests, so they run on every pull request.
+  repo-checks:
+    name: "Repo: checks"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: no local working files (.superpowers) committed
+        run: |
+          if git ls-files --error-unmatch .superpowers >/dev/null 2>&1; then
+            git ls-files .superpowers
+            echo "::error::.superpowers/ is local working state (in .gitignore); untrack it with git rm --cached"
+            exit 1
+          fi
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: Decision ID checker self-test
+        run: scripts/docs/check-decision-ids.sh --self-test
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: Unique decision and question declarations
+        run: scripts/docs/check-decision-ids.sh
+      # API2 Task 19's every_sdk_dir_has_a_job and only_wave1_is_required. Here
+      # because this job is unconditional and light, so a new sdks/<lang>
+      # without a job fails every pull request that adds it.
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: every SDK has a CI job; only wave 1 is required
+        run: |
+          python3 scripts/ci/check-sdk-jobs.py --self-test
+          python3 scripts/ci/check-sdk-jobs.py
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: the SignPath artifact guard self-test
         run: python3 scripts/ci/signpath-artifacts.py --self-test
-
-  # release/nfpm.yaml and scripts/release/*.py define the .deb, the .rpm and the
-  # .pkg.tar.zst. nFPM is the only thing that validates a packager field, so a
-  # definition it rejects is invisible to every other gate here -- and the same
-  # is true of the apt repository layout, which is generated in Python. Both
-  # self-tests build real packages from fixtures and read every field back.
-  #
-  # Unconditional, no path filter, for the reason the `signing` job above gives:
-  # the invariant is "the packaging definitions are valid on every pull request",
-  # so it is checked on all of them. nFPM is installed by the repo's own pinned,
-  # SHA-256-checked script; createrepo_c is not installed, so that one repository
-  # layout is reported as skipped by the self-test rather than passing silently.
-  packaging:
-    name: Linux packaging definitions
-    runs-on: ubuntu-24.04
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          persist-credentials: false
-      - name: PyYAML
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: PyYAML
         run: python3 -m pip install --quiet --disable-pip-version-check PyYAML
-      - name: nFPM
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: nFPM
         run: |
           bash scripts/release/install-nfpm.sh "$RUNNER_TEMP/bin"
           echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
-      - name: the artifact builder self-test
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: the artifact builder self-test
         run: python3 scripts/release/build-artifacts.py --self-test
-      - name: the repository builder self-test
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: the repository builder self-test
         run: python3 scripts/release/make-repo.py --self-test
+
 
   required:
     name: CI required
     if: always()
     needs:
       - changes
-      - no-metering
-      - signing
-      - packaging
-      - docs
+      - repo-checks
       - check
+      - windows-check
       - rust-tests
       - agentd
       - feature-tests
@@ -1932,6 +2335,7 @@ jobs:
       - graph
       - sqlgate-fuzz
       - agentd-fuzz
+      - agentd-connect-fuzz
       - deny
       - web
       - dapr-edge

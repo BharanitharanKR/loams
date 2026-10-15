@@ -860,6 +860,24 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
 
 [[package]]
+name = "loams-trigger-edge"
+version = "0.0.1"
+dependencies = [
+ "axum 0.8.9",
+ "dapr",
+ "hex",
+ "prost",
+ "prost-types",
+ "reqwest",
+ "serde_json",
+ "sha2",
+ "tokio",
+ "tonic",
+ "tonic-prost",
+ "tonic-prost-build",
+]
+
+[[package]]
 name = "lock_api"
 version = "0.4.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -935,24 +953,6 @@ name = "once_cell"
 version = "1.21.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
-
-[[package]]
-name = "loams-trigger-edge"
-version = "0.0.1"
-dependencies = [
- "axum 0.8.9",
- "dapr",
- "hex",
- "prost",
- "prost-types",
- "reqwest",
- "serde_json",
- "sha2",
- "tokio",
- "tonic",
- "tonic-prost",
- "tonic-prost-build",
-]
 
 [[package]]
 name = "parking_lot"
@@ -1329,9 +1329,9 @@ dependencies = [
 
 [[package]]
 name = "rustls"
-version = "0.23.45"
+version = "0.23.46"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d41d731c7d2f962d1ccc364cec258de3c0e93b38c2fb3ba97ac74513048d634"
+checksum = "48e13bd8c0e9365c43cfa5c9e8f9ad49d3c8444926c9aac819e0e4dc503c8fdf"
 dependencies = [
  "once_cell",
  "ring",

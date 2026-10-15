@@ -12,16 +12,18 @@ use std::collections::BTreeMap;
 
 use loams_common::meta::{
     AliasAction, AliasTargetAction, AliasTargets, ApplyError, COLLECTION_KIND, Collection,
-    CollectionHead, HotConfig, IndexEntry, Link, LinkHead, LinkId, MAX_ALIAS_TARGETS,
+    CollectionHead, Fence, HotConfig, IndexEntry, Link, LinkHead, LinkId, MAX_ALIAS_TARGETS,
     MAX_COLLECTION_NAME_LEN, MAX_KEY_LEN, MAX_NAME_LEN, MAX_PARTITIONS, MetaError, MetaResult,
     NameTarget, Namespace, Pointer, Retention, Stream, TargetRef, WalClass, collection_pk_prefix,
-    collection_pointer_key, collection_prefix, implicit_name, link_pointer_key,
+    collection_pointer_key, collection_prefix, graph_stream_name, implicit_name, is_graph_id,
+    legacy_graph_stream_name, link_pointer_key, system_stream_partitions,
 };
 use loams_common::schema::{CollectionSchema, SchemaError};
 use loams_common::{CollectionId, NamespaceId, StreamId};
 use loams_tikv::{Tikv, Txn, TxnError};
 
 use crate::keys::{self, AliasMap, Head, IdKind};
+use crate::leases::check_fence;
 use crate::log::release_entries;
 use crate::{Reader, TikvMeta, decode_all, fatal, load, load_id, rejected};
 
@@ -325,6 +327,173 @@ impl TikvMeta {
             })
         })
         .await
+    }
+
+    /// Graph `graph`'s implicit stream: found, renamed from its GR1 Task 11
+    /// name in place, or created (GR1 Task 12; as
+    /// `loams-meta/src/state/catalog.rs`).
+    pub(crate) async fn ensure_graph_stream_impl(
+        &self,
+        ns: NamespaceId,
+        graph: &str,
+    ) -> MetaResult<StreamId> {
+        check_graph_id(graph)?;
+        let id = StreamId(self.next_id(IdKind::Stream).await?);
+        let graph = graph.to_string();
+        self.write_plain("meta.ensure_graph_stream", move |txn| {
+            let graph = graph.clone();
+            Box::pin(async move {
+                if !namespace_exists(txn, ns).await? {
+                    return Ok(Err(ApplyError::NamespaceNotFound(ns)));
+                }
+                let name = graph_stream_name(&graph);
+                let name_key = keys::stream_name(ns, &name);
+                if let Some(existing) = load_id(txn, "stream name", &name_key).await? {
+                    return Ok(Ok(StreamId(existing)));
+                }
+                let legacy_key = keys::stream_name(ns, &legacy_graph_stream_name(&graph));
+                if let Some(existing) = load_id(txn, "stream name", &legacy_key).await? {
+                    let existing = StreamId(existing);
+                    let Some(mut stream) = load_stream(txn, existing).await? else {
+                        return Err(TxnError::Fatal(format!(
+                            "stream name {graph} names the missing stream {existing}"
+                        )));
+                    };
+                    // Only a stream shaped like a graph's moves under the reserved name (PR
+                    // #443 review): `graph.<gr_id>` is an ordinary name.
+                    if stream.partitions != 1
+                        || stream.class != WalClass::Standard
+                        || stream.retention != Retention::default()
+                    {
+                        return Ok(Err(ApplyError::InvalidArgument(format!(
+                            "stream {} ({}) is not shaped like a graph's stream (one partition, \
+                             standard class, no retention)",
+                            stream.id, stream.name
+                        ))));
+                    }
+                    stream.name = name;
+                    txn.delete(&legacy_key).await?;
+                    put_stream(txn, &stream).await?;
+                    return Ok(Ok(existing));
+                }
+                put_stream(
+                    txn,
+                    &Stream {
+                        id,
+                        namespace: ns,
+                        name,
+                        partitions: 1,
+                        class: WalClass::Standard,
+                        retention: Retention::default(),
+                    },
+                )
+                .await?;
+                Ok(Ok(id))
+            })
+        })
+        .await
+    }
+
+    /// Reserved system stream `name` (GT1 Task 15; as `loams-meta/src/state/catalog.rs`):
+    /// found, or created with its partitions.
+    pub(crate) async fn ensure_system_stream_impl(
+        &self,
+        ns: NamespaceId,
+        name: &str,
+    ) -> MetaResult<StreamId> {
+        let Some(partitions) = system_stream_partitions(name) else {
+            return Err(MetaError::Rejected(ApplyError::InvalidArgument(format!(
+                "{name:?} is not a system stream"
+            ))));
+        };
+        let id = StreamId(self.next_id(IdKind::Stream).await?);
+        let name = name.to_string();
+        self.write_plain("meta.ensure_system_stream", move |txn| {
+            let name = name.clone();
+            Box::pin(async move {
+                if !namespace_exists(txn, ns).await? {
+                    return Ok(Err(ApplyError::NamespaceNotFound(ns)));
+                }
+                let name_key = keys::stream_name(ns, &name);
+                if let Some(existing) = load_id(txn, "stream name", &name_key).await? {
+                    return Ok(Ok(StreamId(existing)));
+                }
+                put_stream(
+                    txn,
+                    &Stream {
+                        id,
+                        namespace: ns,
+                        name,
+                        partitions,
+                        class: WalClass::Standard,
+                        retention: Retention::default(),
+                    },
+                )
+                .await?;
+                Ok(Ok(id))
+            })
+        })
+        .await
+    }
+
+    /// Drops graph `graph`'s implicit stream, under either name, while the
+    /// fence holds (GR1 Task 12): its record, name, heads and index entries,
+    /// retiring objects no other entry references, as `drop_collection`
+    /// drops a collection's stream.
+    pub(crate) async fn drop_graph_stream_impl(
+        &self,
+        ns: NamespaceId,
+        graph: &str,
+        fence: Option<Fence>,
+    ) -> MetaResult<Option<StreamId>> {
+        check_graph_id(graph)?;
+        self.reach_now().await;
+        let graph = graph.to_string();
+        let dropped = self
+            .write_plain("meta.drop_graph_stream", move |txn| {
+                let (graph, fence) = (graph.clone(), fence.clone());
+                Box::pin(async move {
+                    if let Some(fence) = &fence
+                        && let Err(e) = check_fence(txn, fence).await?
+                    {
+                        return Ok(Err(e));
+                    }
+                    let now_ms = Tikv::physical_ms(&txn.start_ts());
+                    let mut found = None;
+                    for name in [graph_stream_name(&graph), legacy_graph_stream_name(&graph)] {
+                        let name_key = keys::stream_name(ns, &name);
+                        if let Some(id) = load_id(txn, "stream name", &name_key).await? {
+                            found = Some((StreamId(id), name_key));
+                            break;
+                        }
+                    }
+                    let Some((id, name_key)) = found else {
+                        return Ok(Ok(None));
+                    };
+                    let partitions = load_stream(txn, id).await?.map_or(1, |s| s.partitions);
+                    txn.delete(&keys::stream(id)).await?;
+                    txn.delete(&name_key).await?;
+                    for p in 0..partitions {
+                        txn.delete(&keys::head(id, p)).await?;
+                    }
+                    let entries = txn.scan_prefix(&keys::index_entries(id)).await?;
+                    let mut released = Vec::with_capacity(entries.len());
+                    for (key, value) in entries {
+                        let entry: IndexEntry =
+                            keys::decode("index entry", &value).map_err(fatal)?;
+                        txn.delete(&key).await?;
+                        released.push(entry);
+                    }
+                    release_entries(txn, &released, now_ms).await?;
+                    Ok(Ok(Some(id)))
+                })
+            })
+            .await?;
+        if let Some(stream) = dropped {
+            // As `drop_collection`: the stream's ledger entries, in pages.
+            let _ = self.purge_idempotency_stream(stream).await;
+        }
+        Ok(dropped)
     }
 
     pub(crate) async fn set_retention_impl(
@@ -1120,6 +1289,17 @@ impl TikvMeta {
             })
         })
         .await
+    }
+}
+
+/// A graph stream is named after a graph id (`gr_<ULID>`).
+fn check_graph_id(graph: &str) -> Result<(), MetaError> {
+    if is_graph_id(graph) {
+        Ok(())
+    } else {
+        Err(MetaError::Rejected(ApplyError::InvalidArgument(format!(
+            "{graph:?} is not a graph id (gr_<ULID>)"
+        ))))
     }
 }
 

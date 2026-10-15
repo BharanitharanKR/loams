@@ -31,13 +31,20 @@
 //! - **The resync's sweep** ([`resync`]) deletes role secrets no record
 //!   names (R6.1).
 //!
-//! Endpoints are not reconciled here (Task 11): a branch or project delete
-//! waits until its endpoints are gone.
+//! - **Endpoints** ([`endpoint`], Task 11), when the reconciler has
+//!   [`Computes`](endpoint::Computes) ([`Reconciler::with_computes`]): each
+//!   pass first makes the project's endpoints' computes match what the API
+//!   asked (start, suspend, restart, crash replacement, spec pushes), and
+//!   removes the endpoints of a deleting endpoint, branch or project
+//!   (R7.1's cascade). Without them a branch or project delete waits until
+//!   its endpoints are gone.
 
 pub mod branch;
+pub mod endpoint;
 mod lease;
 pub mod project;
 pub mod resync;
+pub mod scale;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
@@ -191,6 +198,10 @@ pub enum ReconcileError {
     Neon(NeonApiError),
     #[error("credential store: {0}")]
     Secrets(SecretError),
+    /// The compute runtime or a compute's `compute_ctl` failed in a way
+    /// that may pass (Task 11).
+    #[error("compute runtime: {0}")]
+    Runtime(String),
     /// [`Reconciler::run`] was called a second time on this reconciler.
     #[error("the reconciler is already running")]
     Running,
@@ -244,6 +255,8 @@ pub(crate) struct Ctx<S, N> {
     pub neon: N,
     pub secrets: Arc<dyn SecretStore>,
     pub config: ReconcilerConfig,
+    /// What endpoints are reconciled with (Task 11); `None`: they are not.
+    pub computes: Option<endpoint::Computes>,
     leases: Leases,
     /// The `pitr_interval` (seconds) this instance last set per project,
     /// so a changed `history_retention` reaches the tenant once.
@@ -424,11 +437,27 @@ impl<S: PgControlStore, N: NeonWrite> Reconciler<S, N> {
                 neon,
                 secrets,
                 config,
+                computes: None,
                 applied: Mutex::new(HashMap::new()),
             }),
             kicks,
             inbox: Mutex::new(Some(inbox)),
         }
+    }
+
+    /// Reconciles endpoints too, with `computes` (Task 11). Called before
+    /// [`run`](Self::run).
+    ///
+    /// # Panics
+    ///
+    /// When called after the reconciler was shared (it never is before
+    /// `run`: [`kicker`](Self::kicker) shares only the kick channel).
+    #[must_use]
+    pub fn with_computes(mut self, computes: endpoint::Computes) -> Self {
+        Arc::get_mut(&mut self.ctx)
+            .expect("with_computes is called before the reconciler runs")
+            .computes = Some(computes);
+        self
     }
 
     /// A handle that kicks this reconciler's run loop.
@@ -449,6 +478,49 @@ impl<S: PgControlStore, N: NeonWrite> Reconciler<S, N> {
         project_id: &str,
     ) -> Result<Pass, ReconcileError> {
         pass(&self.ctx, namespace, project_id).await
+    }
+
+    /// One tick of the warm pool (Task 14, [`crate::pool`]): `None` without
+    /// one. The run loop ticks it; tests call this directly.
+    ///
+    /// # Errors
+    ///
+    /// [`ReconcileError`]: the tick stopped, and the next one starts again.
+    pub async fn tick_pool(&self) -> Result<Option<crate::pool::PoolTick>, ReconcileError> {
+        let Some(computes) = &self.ctx.computes else {
+            return Ok(None);
+        };
+        let Some(pool) = &computes.pool else {
+            return Ok(None);
+        };
+        let config = &self.ctx.config;
+        pool.tick(
+            &self.ctx.store,
+            computes,
+            &config.holder,
+            config.lease_ttl,
+            self.ctx.now_ms(),
+        )
+        .await
+        .map(Some)
+    }
+
+    /// One tick of the autoscaler (Task 15, [`scale`]): `None` without one.
+    /// The run loop ticks it every [`TICK`](crate::autoscale::TICK); tests
+    /// call this directly.
+    ///
+    /// # Errors
+    ///
+    /// None yet: a decision that failed is logged and retried at the next
+    /// tick. The `Result` keeps the run loop's shape.
+    pub async fn tick_autoscaler(&self) -> Result<Option<scale::ScaleTick>, ReconcileError> {
+        let Some(computes) = &self.ctx.computes else {
+            return Ok(None);
+        };
+        let Some(scaling) = &computes.scaling else {
+            return Ok(None);
+        };
+        Ok(Some(scale::tick(&self.ctx, computes, scaling).await))
     }
 
     /// The resync's sweep: deletes the role secrets no record names that
@@ -497,6 +569,20 @@ impl<S: PgControlStore, N: NeonWrite> Reconciler<S, N> {
         let mut delays: JoinSet<String> = JoinSet::new();
         let mut sweeps: JoinSet<()> = JoinSet::new();
         let mut last_sweep: Option<tokio::time::Instant> = None;
+        let mut pool: JoinSet<()> = JoinSet::new();
+        if let Some(computes) = &self.ctx.computes
+            && let Some(warm) = computes.pool.clone()
+        {
+            pool.spawn(pool_loop(self.ctx.clone(), warm));
+        }
+        if self
+            .ctx
+            .computes
+            .as_ref()
+            .is_some_and(|c| c.scaling.is_some())
+        {
+            pool.spawn(scale_loop(self.ctx.clone()));
+        }
         tokio::pin!(shutdown);
         tracing::info!(holder = %config.holder, "pg-control reconciler started");
         loop {
@@ -553,8 +639,82 @@ impl<S: PgControlStore, N: NeonWrite> Reconciler<S, N> {
         passes.abort_all();
         delays.abort_all();
         sweeps.abort_all();
+        pool.abort_all();
         tracing::info!(holder = %config.holder, "pg-control reconciler stopped");
         Ok(())
+    }
+}
+
+/// The warm pool's loop (Task 14): a tick every
+/// [`every`](crate::pool::PoolConfig::every), after
+/// [`poll`](crate::pool::PoolConfig::poll) while computes start, and at
+/// once when a compute was taken.
+async fn pool_loop<S: PgControlStore, N: NeonWrite>(
+    ctx: Arc<Ctx<S, N>>,
+    warm: Arc<crate::pool::WarmPool>,
+) {
+    let Some(computes) = ctx.computes.as_ref() else {
+        return;
+    };
+    loop {
+        let config = &ctx.config;
+        let wait = match warm
+            .tick(
+                &ctx.store,
+                computes,
+                &config.holder,
+                config.lease_ttl,
+                ctx.now_ms(),
+            )
+            .await
+        {
+            Ok(t) if t.pending > 0 => warm.config().poll,
+            Ok(t) => {
+                if t.started + t.drained > 0 {
+                    tracing::debug!(
+                        started = t.started,
+                        drained = t.drained,
+                        warm = t.warm,
+                        "warm pool ticked"
+                    );
+                }
+                warm.config().every
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "the warm pool's tick stopped");
+                warm.config().every
+            }
+        };
+        tokio::select! {
+            () = tokio::time::sleep(wait) => {}
+            () = warm.kicked() => {}
+        }
+    }
+}
+
+/// The autoscaler's loop (Task 15): a tick every
+/// [`TICK`](crate::autoscale::TICK).
+async fn scale_loop<S: PgControlStore, N: NeonWrite>(ctx: Arc<Ctx<S, N>>) {
+    let Some(computes) = ctx.computes.as_ref() else {
+        return;
+    };
+    let Some(scaling) = computes.scaling.as_ref() else {
+        return;
+    };
+    let mut every = tokio::time::interval(crate::autoscale::TICK);
+    every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        every.tick().await;
+        let t = scale::tick(&ctx, computes, scaling).await;
+        if t.decided > 0 {
+            tracing::debug!(
+                sampled = t.sampled,
+                decided = t.decided,
+                applied = t.applied,
+                refused = t.refused,
+                "autoscaler ticked"
+            );
+        }
     }
 }
 
@@ -568,6 +728,13 @@ async fn pass<S: PgControlStore, N: NeonWrite>(
         ctx.leases.forget(project_id);
         return Ok(Pass::Idle);
     };
+    // A project with endpoints keeps its namespace's warm pool (Task 14).
+    if let Some(pool) = ctx.computes.as_ref().and_then(|c| c.pool.as_ref())
+        && !snapshot.endpoints.is_empty()
+        && snapshot.project.record.state != crate::model::ProjectState::Deleting
+    {
+        pool.want(namespace, snapshot.project.record.pg_version, ctx.now_ms());
+    }
     if !snapshot.needs_work(ctx) {
         return Ok(Pass::Idle);
     }
@@ -576,7 +743,7 @@ async fn pass<S: PgControlStore, N: NeonWrite>(
         Taken::Other(holder) => return Ok(Pass::Held { holder }),
     };
     // Read again under the lease: what the first read saw may be done.
-    let Some(snapshot) = project::Snapshot::read(ctx, namespace, project_id).await? else {
+    let Some(mut snapshot) = project::Snapshot::read(ctx, namespace, project_id).await? else {
         return Ok(Pass::Idle);
     };
     let act = Act {
@@ -584,7 +751,26 @@ async fn pass<S: PgControlStore, N: NeonWrite>(
         project_id: project_id.to_string(),
         fence,
     };
-    project::reconcile(&act, snapshot).await
+    let mut again = None;
+    if let Some(computes) = &ctx.computes
+        && !snapshot.endpoints.is_empty()
+    {
+        let out = endpoint::reconcile(&act, computes, &snapshot).await?;
+        again = out.again;
+        if out.removed {
+            // The branches and the project may go now.
+            let Some(fresh) = project::Snapshot::read(ctx, namespace, project_id).await? else {
+                return Ok(Pass::Idle);
+            };
+            snapshot = fresh;
+        }
+    }
+    let pass = project::reconcile(&act, snapshot).await?;
+    Ok(match (pass, again) {
+        (Pass::Again(a), Some(b)) => Pass::Again(a.min(b)),
+        (Pass::Done | Pass::Idle, Some(b)) => Pass::Again(b),
+        (pass, _) => pass,
+    })
 }
 
 /// Which projects the run loop is to pass over.

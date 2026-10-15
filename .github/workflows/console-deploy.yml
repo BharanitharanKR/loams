@@ -11,7 +11,7 @@
 # deploy so oidc is offered; LOAMS_AUTH_ISSUER defaults to https://auth.loams.dev.
 # Each person connects their own engine on first run (LOAMS_ENGINE_URL stays
 # unset here). Engine-hosted builds retain the same-origin empty config.
-name: console deploy
+name: Console deploy
 
 on:
   push:
@@ -35,7 +35,7 @@ concurrency:
 
 jobs:
   deploy:
-    name: console.loams.dev
+    name: Deploy
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -75,6 +75,8 @@ jobs:
           LOAMS_AUTH_MODE: ${{ vars.LOAMS_AUTH_MODE || 'tailscale' }}
           LOAMS_AUTH_ISSUER: ${{ vars.LOAMS_AUTH_ISSUER }}
           LOAMS_AUTH_CLIENT_ID: ${{ vars.LOAMS_AUTH_CLIENT_ID }}
+          # The remote agentd hosts Studio may call and frame (SD1 Task 30).
+          LOAMS_AGENTD_ORIGINS: ${{ vars.LOAMS_AGENTD_ORIGINS }}
           DEPLOYING: ${{ steps.secrets.outputs.ok }}
         run: |
           if [ "$DEPLOYING" = true ]; then

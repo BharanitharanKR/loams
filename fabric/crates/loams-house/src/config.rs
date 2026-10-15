@@ -50,6 +50,9 @@ pub struct HouseConfig {
     pub wait_end_of_query_max_bytes: u64,
     /// The most all spools together may hold at once (review I2): 8 GiB.
     pub spool_budget_bytes: u64,
+    /// The most one `INSERT` into a lake table writes, as its worker's Arrow
+    /// bytes: 1 GiB (HS1 Task 12, R12.2).
+    pub lake_insert_max_bytes: u64,
     /// How much output is held before the response head goes out, unless
     /// `buffer_size` says otherwise (clamped to [`BUFFER_SIZE_RANGE`]): ClickHouse's
     /// 1 MiB. A statement that fails inside it still gets a proper error status.
@@ -82,6 +85,29 @@ pub struct HouseConfig {
     pub session_limits: crate::settings::SessionLimits,
     /// Sessions live at once (FL2 Ruling 10).
     pub max_live_sessions: usize,
+    /// The TLS listener (8443, HS1 Task 20), which may face other hosts:
+    /// where it listens and its rustls configuration ([`crate::tls`]).
+    pub tls: Option<TlsListener>,
+    /// The Loams principals the engine's link acts for (HS1 Task 20).
+    pub principals: Vec<crate::identity::PrincipalMap>,
+    /// Who an unmapped principal acts as; `None` (the default): nobody, it
+    /// has no House access. Only `--single-node --dev-unmapped-principals`
+    /// sets it.
+    pub unmapped_principals: Option<UserMap>,
+    /// Where every statement's audit record goes (HS1 Task 20); `None`, nowhere.
+    pub audit: Option<std::sync::Arc<dyn crate::audit::AuditSink>>,
+    /// How often background compaction looks at tables that took commits
+    /// (HS1 Task 13): 30 s; zero turns it off.
+    pub compaction_interval: Duration,
+}
+
+/// A TLS listener (HS1 Task 20).
+#[derive(Clone, Debug)]
+pub struct TlsListener {
+    /// Where it listens; any address.
+    pub listen: SocketAddr,
+    /// Its certificate and protocols.
+    pub config: std::sync::Arc<rustls::ServerConfig>,
 }
 
 /// The bytes a `wait_end_of_query` spool keeps in memory before it moves to a file
@@ -101,6 +127,12 @@ impl Default for HouseConfig {
             tmp_dir: PathBuf::from("loams-house-data").join("spool"),
             wait_end_of_query_max_bytes: 1024 * 1024 * 1024,
             spool_budget_bytes: 8 * 1024 * 1024 * 1024,
+            lake_insert_max_bytes: crate::insert::DEFAULT_MAX_INSERT_BYTES,
+            tls: None,
+            principals: Vec::new(),
+            unmapped_principals: None,
+            audit: None,
+            compaction_interval: Duration::from_secs(30),
             default_buffer_size: 1024 * 1024,
             max_query_size: 256 * 1024,
             receive_timeout: Duration::from_secs(30),
@@ -129,6 +161,22 @@ pub fn check_listen(addr: SocketAddr) -> Result<(), HouseError> {
     ))))
 }
 
+/// A TLS listener off loopback faces other hosts (HS1 Task 20): no user may
+/// sign in there without a password.
+pub fn check_tls_users(listen: SocketAddr, users: &[UserMap]) -> Result<(), HouseError> {
+    if listen.ip().is_loopback() {
+        return Ok(());
+    }
+    match users.iter().find(|u| u.verifies("")) {
+        Some(user) => Err(HouseError::from(ChError::bad_arguments(format!(
+            "house TLS listen on {listen}: user {:?} has an empty password, and a listener \
+             other hosts reach takes none",
+            user.user
+        )))),
+        None => Ok(()),
+    }
+}
+
 /// A development user (FL2 Task 2): a name, the SHA-256 of its password, the
 /// namespace its queries run in, and whether it may only read. Task 20 replaces
 /// these with Loams identities.
@@ -142,17 +190,44 @@ pub struct UserMap {
     pub namespace: u64,
     /// Whether the user may only read (as GET does for everyone).
     pub readonly: bool,
+    /// What it may do (HS1 Task 20, [`crate::identity`]).
+    pub scopes: crate::identity::Scopes,
+    /// The tables it may touch; `None`, every table of its namespace.
+    pub grants: Option<crate::identity::Grants>,
+    /// The engine's link: it acts for the Loams principal each request names.
+    pub link: bool,
+    /// The Loams principal this identity acts for, when the engine's link
+    /// named one (what the audit records).
+    pub principal: Option<String>,
 }
 
 impl UserMap {
-    /// A user from a clear-text password, hashed here.
+    /// A user from a clear-text password, hashed here: every scope, or `read`
+    /// alone when `readonly`; every table of its namespace.
     pub fn dev(user: &str, password: &str, namespace: u64, readonly: bool) -> Self {
         Self {
             user: user.to_string(),
             password_sha256: sha256_hex(password),
             namespace,
             readonly,
+            scopes: if readonly {
+                crate::identity::Scopes::READ
+            } else {
+                crate::identity::Scopes::ALL
+            },
+            grants: None,
+            link: false,
+            principal: None,
         }
+    }
+
+    /// The engine's link user (HS1 Task 20): signs in with `key` and acts for
+    /// the principals of [`HouseConfig::principals`].
+    pub fn link(user: &str, key: &str) -> Self {
+        let mut link = Self::dev(user, key, 0, true);
+        link.scopes = crate::identity::Scopes::default();
+        link.link = true;
+        link
     }
 
     /// Whether `password` is this user's, compared in constant time over the digest.
@@ -176,6 +251,10 @@ impl fmt::Debug for UserMap {
             .field("password_sha256", &"[redacted]")
             .field("namespace", &self.namespace)
             .field("readonly", &self.readonly)
+            .field("scopes", &self.scopes)
+            .field("grants", &self.grants)
+            .field("link", &self.link)
+            .field("principal", &self.principal)
             .finish()
     }
 }
@@ -220,8 +299,8 @@ impl std::str::FromStr for WorkersMode {
     }
 }
 
-/// The catalog of record (`--catalog=rest:<url>|local:<path>`; HS1 Task 10 uses
-/// it).
+/// The catalog of record (`--catalog=rest:<url>?warehouse=<name>|local:<path>`;
+/// HS1 Task 10).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum CatalogSpec {
     /// An Iceberg REST catalog (Lakekeeper in production).
@@ -306,9 +385,14 @@ pub struct HouseSection {
     /// `--data-dir`: the spool, the workers' private directories and, with
     /// `--single-node`, the local catalog, bucket and key.
     pub data_dir: Option<PathBuf>,
-    /// Development users (FL2 Task 2's `UserMap`) until HS1 Task 20.
+    /// Users, with their scopes and tables (HS1 Task 20).
     #[serde(default)]
     pub users: Vec<FileUser>,
+    /// The Loams principals the engine's link acts for (HS1 Task 20).
+    #[serde(default)]
+    pub principals: Vec<FilePrincipal>,
+    /// The file the audit is appended to (HS1 Task 20); `--audit-log`.
+    pub audit_log: Option<PathBuf>,
     /// `[house.limits]`.
     #[serde(default)]
     pub limits: LimitsSection,
@@ -339,6 +423,16 @@ pub struct FileUser {
     /// Whether the user may only read.
     #[serde(default)]
     pub readonly: bool,
+    /// Its scopes (HS1 Task 20); absent, every scope (or `read` when
+    /// `readonly`).
+    #[serde(default)]
+    pub scopes: Option<Vec<String>>,
+    /// Its tables, `database.table` with `*` for any; absent, every table.
+    #[serde(default)]
+    pub tables: Option<Vec<String>>,
+    /// The engine's link: it acts for `[[house.principals]]`.
+    #[serde(default)]
+    pub link: bool,
 }
 
 impl fmt::Debug for FileUser {
@@ -349,18 +443,70 @@ impl fmt::Debug for FileUser {
             .field("password_sha256", &"[redacted]")
             .field("namespace", &self.namespace)
             .field("readonly", &self.readonly)
+            .field("scopes", &self.scopes)
+            .field("tables", &self.tables)
+            .field("link", &self.link)
             .finish()
     }
 }
 
 impl From<&FileUser> for UserMap {
+    /// [`HouseFile::parse`] has checked the scopes and grants.
     fn from(user: &FileUser) -> Self {
+        let scopes = match &user.scopes {
+            Some(list) => crate::identity::Scopes::parse(&list.join(",")).unwrap_or_default(),
+            None if user.readonly => crate::identity::Scopes::READ,
+            None => crate::identity::Scopes::ALL,
+        };
         Self {
             user: user.user.clone(),
             password_sha256: user.password_sha256.to_ascii_lowercase(),
             namespace: user.namespace,
-            readonly: user.readonly,
+            readonly: user.readonly || scopes.read_only(),
+            scopes: if user.link {
+                crate::identity::Scopes::default()
+            } else {
+                scopes
+            },
+            grants: user
+                .tables
+                .as_ref()
+                .map(|t| crate::identity::Grants::parse(t).unwrap_or_default()),
+            link: user.link,
+            principal: None,
         }
+    }
+}
+
+/// One `[[house.principals]]` entry (HS1 Task 20).
+#[derive(Clone, Debug, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct FilePrincipal {
+    /// The Loams principal (`tailscale:<login>`, `apikey:<id>`, `user:<sub>`,
+    /// `session:<id>`, `dev-loopback`) or `email:<address>`.
+    pub principal: String,
+    /// The namespace its statements run in.
+    pub namespace: u64,
+    /// Its scopes: `read`, `write`, `ddl`, `admin`.
+    pub scopes: Vec<String>,
+    /// Its tables, `database.table` with `*` for any; absent, every table.
+    #[serde(default)]
+    pub tables: Option<Vec<String>>,
+}
+
+impl FilePrincipal {
+    /// The principal's map, or why the entry is not valid.
+    pub fn to_map(&self) -> Result<crate::identity::PrincipalMap, String> {
+        Ok(crate::identity::PrincipalMap {
+            principal: self.principal.clone(),
+            namespace: self.namespace,
+            scopes: crate::identity::Scopes::parse(&self.scopes.join(","))?,
+            grants: self
+                .tables
+                .as_ref()
+                .map(crate::identity::Grants::parse)
+                .transpose()?,
+        })
     }
 }
 
@@ -382,6 +528,8 @@ pub struct LimitsSection {
     pub wait_end_of_query_max_bytes: Option<u64>,
     /// [`HouseConfig::spool_budget_bytes`].
     pub spool_budget_bytes: Option<u64>,
+    /// [`HouseConfig::lake_insert_max_bytes`].
+    pub lake_insert_max_bytes: Option<u64>,
     /// [`HouseConfig::max_live_sessions`].
     pub max_live_sessions: Option<usize>,
     /// The `max_memory_usage` cap (§49 §12).
@@ -406,6 +554,10 @@ impl LimitsSection {
             self.wait_end_of_query_max_bytes,
         );
         set(&mut config.spool_budget_bytes, self.spool_budget_bytes);
+        set(
+            &mut config.lake_insert_max_bytes,
+            self.lake_insert_max_bytes,
+        );
         set(&mut config.max_live_sessions, self.max_live_sessions);
         let caps = &mut config.session_limits;
         set(&mut caps.max_memory_usage, self.max_memory_usage);
@@ -510,6 +662,26 @@ impl HouseFile {
                     user.user
                 ))));
             }
+            let bad = |why: String| {
+                HouseError::from(ChError::bad_arguments(format!(
+                    "the house configuration file: user {:?}: {why}",
+                    user.user
+                )))
+            };
+            if let Some(scopes) = &user.scopes {
+                crate::identity::Scopes::parse(&scopes.join(",")).map_err(bad)?;
+            }
+            if let Some(tables) = &user.tables {
+                crate::identity::Grants::parse(tables).map_err(bad)?;
+            }
+        }
+        for principal in &file.house.principals {
+            principal.to_map().map_err(|why| {
+                HouseError::from(ChError::bad_arguments(format!(
+                    "the house configuration file: principal {:?}: {why}",
+                    principal.principal
+                )))
+            })?;
         }
         Ok(file)
     }

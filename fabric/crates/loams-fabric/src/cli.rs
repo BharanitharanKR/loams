@@ -36,18 +36,52 @@ pub struct HouseArgs {
     /// `[house.catalog]`, `[house.store]` and `[house.tls]`.
     #[arg(long)]
     pub config: Option<PathBuf>,
-    /// The ClickHouse HTTP listener (loopback only until TLS, HS1 Task 20)
+    /// The ClickHouse HTTP listener, plaintext and so loopback only
     /// [default: 127.0.0.1:8123].
     #[arg(long)]
     pub house_listen: Option<SocketAddr>,
-    /// The TLS HTTP listener (8443; HS1 Task 20).
+    /// The TLS HTTP listener (8443; HS1 Task 20), which may face other hosts.
     #[arg(long)]
     pub house_tls_listen: Option<SocketAddr>,
+    /// The TLS listener's certificate chain (PEM). With --single-node and no
+    /// certificate, a self-signed one is made here on first start
+    /// [default with --single-node: <data-dir>/tls/house.crt].
+    #[arg(long)]
+    pub house_tls_cert: Option<PathBuf>,
+    /// The TLS listener's private key (PEM)
+    /// [default with --single-node: <data-dir>/tls/house.key].
+    #[arg(long)]
+    pub house_tls_key: Option<PathBuf>,
+    /// With --single-node: where the local user's key is kept (created on first
+    /// start, mode 0600) [default: <data-dir>/house.key].
+    #[arg(long)]
+    pub local_key_file: Option<PathBuf>,
+    /// With --single-node: where the engine's link key is kept (created on first
+    /// start, mode 0600). The link acts for the Loams principals of
+    /// --principals; without this flag the House has no link user.
+    #[arg(long)]
+    pub link_key_file: Option<PathBuf>,
+    /// With --single-node: the Loams principals the engine's link may act for,
+    /// `principal=scopes` separated by `;` (scopes: read, write, ddl, admin,
+    /// joined by `+` or `,`), such as
+    /// `tailscale:alice@example.com=read+write+ddl;apikey:ci=read`. Also
+    /// LOAMS_HOUSE_PRINCIPALS. A principal not listed has no House access.
+    #[arg(long)]
+    pub principals: Option<String>,
+    /// With --single-node, for development: a principal not listed acts as the
+    /// local user instead of being refused.
+    #[arg(long)]
+    pub dev_unmapped_principals: bool,
+    /// The audit log, one JSON line per statement
+    /// [default with --single-node: <data-dir>/audit.log].
+    #[arg(long)]
+    pub audit_log: Option<PathBuf>,
     /// The native protocol listener (9000; served from HS1 Task 31)
     /// [default with --single-node: 127.0.0.1:9000].
     #[arg(long)]
     pub native_listen: Option<SocketAddr>,
-    /// The TLS native listener (9440; HS1 Task 20).
+    /// The TLS native listener (9440; served with the native protocol, HS1
+    /// Task 31).
     #[arg(long)]
     pub native_tls_listen: Option<SocketAddr>,
     /// Admin and metrics (served from HS1 Task 23) [default: 127.0.0.1:8125].

@@ -287,7 +287,7 @@ def test_the_recorded_watch_case_replays_and_reports_the_refusal() -> None:
     """The corpus half, which used to be an xfail on a premise that turned out false.
 
     This test asserted that `live_watch` could not be replayed, on the reasoning
-    that connect-python "cannot read this recording in any configuration" -- asking
+    that connectrpc "cannot read this recording in any configuration" -- asking
     for proto and getting the `+proto` label meant it parsed JSON as proto and
     failed. Replaying the recorded bytes directly says otherwise:
 
@@ -296,15 +296,15 @@ def test_the_recorded_watch_case_replays_and_reports_the_refusal() -> None:
     The recording is a valid Connect stream: one empty data frame, then a
     JSON-encoded end-of-stream frame, under `application/connect+proto`. The
     Connect protocol defines that end frame as JSON *whatever the codec is*, and
-    connect-python implements it that way. `verify-corpus.mjs` was flagging the
+    connectrpc implements it that way. `verify-corpus.mjs` was flagging the
     same recording, because its encoder check judged every frame against the
     codec label; both are corrected, and this is now an assertion rather than a
     standing excuse.
 
     It is worth being explicit about how that went wrong, because the failure mode
     was not a bug report -- it was a plausible story. The observation that
-    connect-go reads the bytes happily sat next to "connect-python cannot", and
-    the tidy conclusion was that connect-go sniffs where connect-python is strict,
+    connect-go reads the bytes happily sat next to "connectrpc cannot", and
+    the tidy conclusion was that connect-go sniffs where connectrpc is strict,
     so the recording must be at fault. Both halves of that were unverified. The
     cheap check nobody ran was: serve the exact bytes at the exact content-type and
     see what the client does.
@@ -464,7 +464,7 @@ def test_an_async_stream_refusal_is_read_out_of_the_envelope() -> None:
     """End to end through `AsyncLoams.stream`, over a real connection.
 
     This is the only test that runs the wiring the sync one cannot: the async
-    facade lookup, the generated async module method, connect-python's async
+    facade lookup, the generated async module method, connectrpc's async
     streaming client and `async_watch`, all against HTTP 200 with the refusal
     inside the envelope. `async_watch` on a stub proves the cursor logic; this
     proves the bytes still arrive.
@@ -548,7 +548,7 @@ class _ExpiringStreamServer:
     report one. Two wrong shapes got tried first, and both failed *silently*
     rather than loudly, which is the note worth keeping:
 
-    - 401 with a framed end-stream: connect-python does not read frames from a
+    - 401 with a framed end-stream: connectrpc does not read frames from a
       non-2xx, so it decoded a bare `UnauthenticatedError` with no reason -- which
       the runtime correctly refuses to refresh against.
     - 401 with `content-type: application/json`: that is the *unary* JSON content
@@ -612,7 +612,7 @@ class _ExpiringStreamServer:
                     outer.bearers.append(bearer)
                 if bearer != f"Bearer {outer.expected}":
                     # The label must match the codec the client asked for, or
-                    # connect-python rejects it with `invalid content-type ...
+                    # connectrpc rejects it with `invalid content-type ...
                     # expecting 'application/connect+proto'` before the reason is
                     # ever read. The end-stream *payload* stays JSON either way:
                     # the Connect protocol defines that frame as JSON regardless

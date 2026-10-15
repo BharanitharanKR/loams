@@ -1,0 +1,39 @@
+[package]
+name = "loams-house-lake"
+description = "Iceberg table metadata for the Loams House's lake tables: schemas, partition specs, sort orders, metadata files and the commit rules the House's own catalogs apply, over iceberg-rust 0.10 with its arrow 58 kept inside this crate (HS1 Task 10, design §49 §5, R0.3)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[dependencies]
+# The spec, the metadata builder, the commit types and the data file writers:
+# nothing of iceberg's Arrow API is re-exported, so arrow 58 never meets the
+# workspace's arrow 59 in a signature (R0.3; `arrow_58_stays_in_the_lake` checks
+# the graph).
+iceberg.workspace = true
+# HS1 Task 12's data files: the worker's rows arrive as Arrow IPC stream bytes
+# and are decoded, conformed to the table's Iceberg schema and written as
+# Parquet with iceberg's writers, all with iceberg's own arrow 58 and parquet 58
+# (already in the graph through iceberg; this crate is the only one that names
+# them, R0.3). Apache-2.0.
+arrow-array-58 = { package = "arrow-array", version = "58.4.0" }
+arrow-buffer-58 = { package = "arrow-buffer", version = "58.4.0" }
+arrow-cast-58 = { package = "arrow-cast", version = "58.4.0" }
+arrow-ipc-58 = { package = "arrow-ipc", version = "58.4.0" }
+arrow-schema-58 = { package = "arrow-schema", version = "58.4.0" }
+parquet-58 = { package = "parquet", version = "58.4.0", default-features = false, features = ["zstd"] }
+# The manifest and manifest list an append writes, as bytes for the caller's
+# store.
+bytes.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[lints]
+workspace = true

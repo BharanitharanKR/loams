@@ -11,6 +11,10 @@
       "types": "./src/index.ts",
       "default": "./src/index.ts"
     },
+    "./query": {
+      "types": "./src/query.ts",
+      "default": "./src/query.ts"
+    },
     "./testing": {
       "types": "./src/testing/index.ts",
       "default": "./src/testing/index.ts"
@@ -24,10 +28,13 @@
   "dependencies": {
     "@bufbuild/protobuf": "2.16.0",
     "@connectrpc/connect": "2.2.0",
+    "@loams/agentd-client": "workspace:*",
     "@loams/cordis": "workspace:*",
     "@loams/proto": "workspace:*",
     "@loams/slots": "workspace:*",
-    "yaml": "2.9.1"
+    "yaml": "2.9.1",
+    "@connectrpc/connect-query": "catalog:",
+    "@tanstack/react-query": "catalog:"
   },
   "peerDependencies": {
     "react": ">=19",
@@ -35,11 +42,11 @@
   },
   "devDependencies": {
     "@testing-library/react": "16.3.3",
-    "@types/react": "19.3.0",
-    "@types/react-dom": "19.3.0",
+    "@types/react": "catalog:",
+    "@types/react-dom": "catalog:",
     "jsdom": "30.1.1",
-    "react": "19.3.0",
-    "react-dom": "19.3.0",
+    "react": "catalog:",
+    "react-dom": "catalog:",
     "typescript": "5.9.3",
     "vitest": "5.0.3"
   }

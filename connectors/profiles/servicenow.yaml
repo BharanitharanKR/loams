@@ -1,0 +1,40 @@
+# ServiceNow — an HTTP-API profile (CN2 OR-11, Task 20). Written from
+# ServiceNow's public REST API reference:
+#   Table API: https://developer.servicenow.com/dev.do#!/reference/api/latest/rest/c_TableAPI
+#   Pagination (sysparm_limit, Link rel="next"): the Table API's GET /now/table/{tableName} section
+#   Basic auth: https://www.servicenow.com/docs/bundle/zurich-api-reference/page/integrate/inbound-rest/concept/c_RESTAPI.html
+#   Rate-limit headers: https://www.servicenow.com/docs/bundle/zurich-api-reference/page/integrate/inbound-rest/concept/inbound-REST-API-rate-limiting.html
+# `instance` is the `<instance>.service-now.com` name and `table` the table
+# (default `incident`). ServiceNow has no standard signed outbound webhook, so
+# the profile declares none; outbound REST messages reach the webhooks source
+# with a shared token once Task 8 routes it.
+apiVersion: loams.flow/v1
+kind: Profile
+id: servicenow
+profile_kind: http-api
+module: http
+system:
+  name: ServiceNow
+  service: { fixture: conformance/connectors/fixtures/servicenow }
+defaults:
+  table: incident
+narrows: []
+http:
+  base_url: "https://{config.instance}.service-now.com"
+  auth: { scheme: basic }
+  headers: { Accept: application/json }
+  resources:
+    records:
+      list:
+        method: GET
+        path: "/api/now/table/{config.table}"
+        items: "/result"
+        key: "/sys_id"
+        query: { sysparm_limit: "100", sysparm_query: "ORDERBYsys_updated_on" }
+      create:
+        method: POST
+        path: "/api/now/table/{config.table}"
+  rate_limit:
+    requests: 100
+    per_seconds: 1
+    honour_headers: ["Retry-After", "X-RateLimit-Remaining", "X-RateLimit-Reset"]

@@ -179,11 +179,28 @@ fn descriptors_round_trip() {
         "v2;01J0000000000000000000000;127.0.0.1:1;query;",
         "v1;nope;127.0.0.1:1;query;",
         "v1;01J0000000000000000000000;host:1;query;",
-        "v1;01J0000000000000000000000;127.0.0.1:1;cook;",
         "v1;01J0000000000000000000000;127.0.0.1:1;query",
     ] {
         assert!(NodeDescriptor::decode(1, bad).is_err(), "{bad:?}");
     }
+}
+
+/// A peer that lists a role this release does not know (a newer node in a
+/// rolling upgrade) still decodes, with the roles this node knows (GR1 Task
+/// 12, R0.16).
+#[test]
+fn a_descriptor_with_an_unknown_role_keeps_the_known_ones() {
+    let incarnation = Ulid::from_parts(1, 1);
+    let peer = NodeDescriptor::decode(
+        1,
+        &format!("v1;{incarnation};127.0.0.1:1;query,cook,graph;z1"),
+    )
+    .expect("decode");
+    assert!(peer.roles.query && peer.roles.graph);
+    assert_eq!(peer.roles.to_string(), "query,graph");
+    let none =
+        NodeDescriptor::decode(1, &format!("v1;{incarnation};127.0.0.1:1;cook;")).expect("decode");
+    assert!(none.roles.is_empty());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
@@ -213,6 +230,10 @@ fn roles_parse_and_display() {
     assert!(roles.meta && roles.query && !roles.log && !roles.worker && !roles.gateway);
     assert_eq!(roles.to_string(), "meta,query");
     assert_eq!(Roles::all().to_string(), "meta,log,query,worker,gateway");
+    // `graph` is asked for by name: `all` leaves it out (GR1 Task 12).
+    let graph = Roles::parse("graph,query").expect("roles");
+    assert!(graph.graph && graph.query && !Roles::all().graph);
+    assert_eq!(graph.to_string(), "query,graph");
     assert_eq!(
         Roles::parse("gateway,worker,log")
             .expect("roles")

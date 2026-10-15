@@ -262,7 +262,7 @@ Into the Fabric and into Loams objects: exactly-once in the target where the tar
 
 ### 6.4 Where it runs (D339)
 
-`loams-fabric flow` is a stateless service: routes in the metastore, connector instances supervised as Iggy connectors-runtime processes, `loams-connect` routes or Debezium Server instances (one per instance, §33 D354), and native connectors as tasks in `loams-fabric`. Its state is in `_fabric.flow_objects` (D337); in CN1 one `flow` process supervises every instance, and FL3 adds task leases through the Loams metastore's network API (the §09 §6 lease model), so the `fabric/` workspace never links `loams-meta`. By open-core.md, all of this is open: a single organisation needs connectors to self-host. `loams-platform` adds the fleet (per-tenant connector pods, autoscaling, plan limits, billing).
+`loams-fabric flow` is a stateless service: routes in the metastore, connector instances supervised as Iggy connectors-runtime processes, `loams-connect` routes or Debezium Server instances (one per instance, §33 D354), and native connectors as tasks in `loams-fabric`. Its state is in `_fabric.flow_objects` (D337); in CN1 one `flow` process supervises every instance, and FL3 adds task leases through the Loams metastore's network API (the §09 §6 lease model), so the `fabric/` workspace never links `loams-meta`. By the open-core boundary, all of this is open: a single organisation needs connectors to self-host. `loams-platform` adds the fleet (per-tenant connector pods, autoscaling, plan limits, billing).
 
 ### 6.5 UI (D340)
 
@@ -562,5 +562,5 @@ All read on 2026-10-01 unless stated.
 - **Kestra**: `github.com/kestra-io/kestra` v2.0.4 (2026-09-29), README; `github.com/orgs/kestra-io` plugin repositories.
 - **Debezium**: `github.com/debezium/debezium` tag v3.7.0.Final; `github.com/debezium/debezium-server` (`debezium-server-http`, `debezium-server-fluss`, …).
 - **Lakekeeper** v0.13.6 (2026-09-22); **Flink Kubernetes Operator** `release-1.16.1`; **iceberg-rust** `iceberg` 0.10.1 (arrow 58); **sqlparser** 0.63.0.
-- **Loams**: §00 §7, §02 (§5, §7, §7.4, §8.1), §06 §5, §07, §08, §09, §11, §18 §5, §19, §21, §24, §26 (§10, §16), §27, §28 §7.2, §29 (PR #172), `docs/open-core.md`; `crates/loams-cloudevents` (`CloudEvent::dedup_key`), `crates/loams-worker`, `crates/loams-link`; decisions D1, D4–D6, D11, D20–D22, D42, D44, D45, D51, D66, D72–D76, D88, D111, D127, D128, D184, D186, D189, D190, D202, D204, D211, D212, D220, D260, D270, D-SC-13, D-SC-15.
+- **Loams**: §00 §7, §02 (§5, §7, §7.4, §8.1), §06 §5, §07, §08, §09, §11, §18 §5, §19, §21, §24, §26 (§10, §16), §27, §28 §7.2, §29 (PR #172); `crates/loams-cloudevents` (`CloudEvent::dedup_key`), `crates/loams-worker`, `crates/loams-link`; decisions D1, D4–D6, D11, D20–D22, D42, D44, D45, D51, D66, D72–D76, D88, D111, D127, D128, D184, D186, D189, D190, D202, D204, D211, D212, D220, D260, D270, D-SC-13, D-SC-15.
 - **The draft**: `chatdump.md` lines 325–628 (the owner's "Loams: Final Plan", "Précis (CDMP, Java stack)", "Top 200 connectors", "Rollout").

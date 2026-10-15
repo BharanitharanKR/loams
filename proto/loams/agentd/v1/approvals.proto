@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+// Approvals (design §53 §8.1, §6.5 G17, G18, G22; plan SD1 Task 4): the
+// pending tool calls of supervised threads, and their answers. `ResolveApproval`
+// keeps DD1 Task 24's contract (Ruling 7); the `mcp` role can never call it.
+// Served since SD1 Task 13. See studio.proto for the package's rules.
+package loams.agentd.v1;
+
+import "google/protobuf/struct.proto";
+import "loams/options/v1/options.proto";
+
+service ApprovalService {
+  option (loams.options.v1.module) = {
+    name: "agentd.approvals"
+    summary: "Loams Studio's approvals: pending tool calls and their answers."
+    unstable: true
+  };
+
+  // G17: the pending approvals, then the list again on each change.
+  rpc WatchApprovals(WatchApprovalsRequest) returns (stream WatchApprovalsResponse);
+  // G18: DD1's `ResolveApproval`; `approval_not_pending` when it was already
+  // answered.
+  rpc ResolveApproval(ResolveApprovalRequest) returns (ResolveApprovalResponse);
+  // G22: a thread's approval mode.
+  rpc SetThreadApprovalMode(SetThreadApprovalModeRequest) returns (SetThreadApprovalModeResponse);
+}
+
+enum ApprovalMode {
+  APPROVAL_MODE_UNSPECIFIED = 0;
+  APPROVAL_MODE_FULL_ACCESS = 1;
+  APPROVAL_MODE_SUPERVISED = 2;
+}
+
+enum ApprovalRisk {
+  APPROVAL_RISK_UNSPECIFIED = 0;
+  APPROVAL_RISK_READ = 1;
+  APPROVAL_RISK_WRITE = 2;
+  APPROVAL_RISK_DESTRUCTIVE = 3;
+}
+
+enum ApprovalDecision {
+  APPROVAL_DECISION_UNSPECIFIED = 0;
+  APPROVAL_DECISION_ONCE = 1;
+  APPROVAL_DECISION_ALWAYS = 2;
+  APPROVAL_DECISION_DENY = 3;
+}
+
+message Approval {
+  string id = 1;
+  string chat_id = 2;
+  string turn_id = 3;
+  string tool = 4;
+  // The tool's arguments, redacted.
+  google.protobuf.Value args = 5;
+  ApprovalRisk risk = 6;
+  int64 created_at_ms = 7;
+}
+
+message WatchApprovalsRequest {
+  optional string chat_id = 1;
+}
+
+message WatchApprovalsResponse {
+  repeated Approval pending = 1;
+  // The watched thread's effective mode (with `chat_id` only).
+  optional ApprovalMode mode = 2;
+}
+
+message ResolveApprovalRequest {
+  string call_id = 1;
+  // The thread; optional while the call id is unique among the pending.
+  optional string chat_id = 2;
+  ApprovalDecision decision = 3;
+}
+
+message ResolveApprovalResponse {}
+
+message SetThreadApprovalModeRequest {
+  string chat_id = 1;
+  ApprovalMode mode = 2;
+}
+
+message SetThreadApprovalModeResponse {}

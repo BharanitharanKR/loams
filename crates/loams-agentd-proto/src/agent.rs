@@ -1,8 +1,9 @@
 //! Agent-side wire types: harness identity, run requests, streaming events, tool calls.
 
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum HarnessId {
     ClaudeCode,
@@ -42,8 +43,56 @@ pub const HARNESS_UNSUPPORTED: &str = "harness_unsupported";
 /// The notice shown on such a session.
 pub const UNSUPPORTED_HARNESS_NOTICE: &str = "This agent is no longer supported";
 
+/// What `ListHarnesses` reports per harness.
+#[derive(Debug, Clone, Serialize, Deserialize, TS)]
+#[serde(rename_all = "camelCase")]
+pub struct HarnessDescriptor {
+    pub id: HarnessId,
+    pub name: String,
+    pub supports_steering: bool,
+    pub steering_mode: SteeringMode,
+    pub reasoning_levels: Vec<ReasoningLevel>,
+    /// Whether the agent's CLI is present on the listing device (the settings
+    /// enable-gate). Defaults true so catalogs from engines predating the
+    /// field never read as uninstallable.
+    #[serde(default = "default_installed")]
+    pub installed: bool,
+    /// Explicit CLI installation is available on this listing device.
+    #[serde(default)]
+    pub can_install: bool,
+    /// Whether the listing device offers this harness (Settings → Providers).
+    /// `None` — the catalog came from an engine predating the setting — means
+    /// "unknown": consumers fall back to detection (see [`descriptor_enabled`]).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+}
+
+impl HarnessDescriptor {
+    /// Whether this harness can accept a prompt inside the turn that is
+    /// currently running. Turn-boundary steering is still useful to the
+    /// automatic queue drain, but it is not the non-interrupting "Steer"
+    /// action exposed on an individual queued row.
+    pub fn steers_mid_turn(&self) -> bool {
+        self.supports_steering && self.steering_mode == SteeringMode::StepBoundary
+    }
+}
+
+fn default_installed() -> bool {
+    true
+}
+
+/// Per-device automatic session title preferences.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, TS)]
+#[serde(default, rename_all = "camelCase")]
+pub struct TitleSettings {
+    /// None follows the session harness, using a supported installed fallback.
+    pub harness: Option<HarnessId>,
+    /// None selects the cheapest model offered by the selected harness.
+    pub model: Option<String>,
+}
+
 /// Best-effort classification of the installation that owns an agent CLI.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum HarnessInstallSource {
     Npm,
@@ -58,7 +107,7 @@ pub enum HarnessInstallSource {
 }
 
 /// The externally visible harness-update state machine.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum HarnessUpdatePhase {
     Dormant,
@@ -77,7 +126,7 @@ pub enum HarnessUpdatePhase {
 
 /// Real provider progress only. An absent value means the UI must render an
 /// indeterminate activity indicator rather than inventing a percentage.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct HarnessUpdateProgress {
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -88,7 +137,7 @@ pub struct HarnessUpdateProgress {
     pub message: Option<String>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct HarnessUpdateFailure {
     pub message: String,
@@ -97,7 +146,7 @@ pub struct HarnessUpdateFailure {
 }
 
 /// One row in the device-local harness-update stream.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct HarnessUpdateStatus {
     pub harness: HarnessId,
@@ -145,7 +194,7 @@ impl HarnessUpdateStatus {
     }
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 pub enum ReasoningLevel {
     Minimal,
@@ -161,7 +210,7 @@ pub enum ReasoningLevel {
     Ultrathink,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum SandboxLevel {
     ReadOnly,
@@ -169,7 +218,7 @@ pub enum SandboxLevel {
     DangerFullAccess,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "kebab-case")]
 pub enum SteeringMode {
     /// Steer delivered at the next step boundary within the live turn.
@@ -178,7 +227,7 @@ pub enum SteeringMode {
     TurnBoundary,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct Model {
     pub id: String,
@@ -193,7 +242,7 @@ pub struct Model {
     pub options: Vec<ModelOption>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelOption {
     pub id: String,
@@ -202,14 +251,14 @@ pub struct ModelOption {
     pub default_choice: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ModelOptionChoice {
     pub id: String,
     pub label: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct RunRequest {
     pub prompt: String,
@@ -260,7 +309,7 @@ pub struct RunRequest {
 /// `mcp_servers.*` config overrides).
 ///
 /// `env` can hold a scoped run token, so `Debug` lists its keys only.
-#[derive(Clone, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[derive(Clone, PartialEq, Eq, Default, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct McpServer {
     pub name: String,
@@ -287,7 +336,7 @@ impl std::fmt::Debug for McpServer {
 /// blocking CreateWorktree RPC — so the send path stays durable: a lost relay
 /// frame can't wedge the composer on "Sending…" while the session runs anyway
 /// (2026-08-18 user report).
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct WorktreeSpec {
     /// The repo whose worktree to create (the space's folder on the host).
@@ -309,7 +358,7 @@ pub struct WorktreeSpec {
 pub const LIVE_PLAN_TOOL_ID: &str = "acp-plan";
 
 /// A decoded tool invocation, reduced to the fields each kind renders.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum ToolCall {
     Exec {
@@ -321,23 +370,23 @@ pub enum ToolCall {
     WriteFile {
         path: String,
         /// Full content; STRIPPED by the render-parts policy before entering the doc.
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         content: Option<String>,
     },
     EditFile {
         path: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         old_string: Option<String>,
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         new_string: Option<String>,
     },
     ApplyPatch {
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         path: Option<String>,
     },
     Search {
         pattern: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         path: Option<String>,
     },
     Glob {
@@ -345,7 +394,7 @@ pub enum ToolCall {
     },
     WebFetch {
         url: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         prompt: Option<String>,
     },
     WebSearch {
@@ -358,12 +407,12 @@ pub enum ToolCall {
     Mcp {
         server: String,
         tool: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         input: Option<serde_json::Value>,
     },
     Unknown {
         name: String,
-        #[serde(skip_serializing_if = "Option::is_none")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         input: Option<serde_json::Value>,
     },
 }
@@ -429,7 +478,7 @@ pub const SUBAGENT_INPUT_KEEP: [&str; 5] = [
     "subagent_type",
 ];
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct TodoItem {
     pub text: String,
@@ -438,7 +487,7 @@ pub struct TodoItem {
 
 /// A slash command advertised by the agent (ACP `availableCommands`): typed as
 /// `/name` at the start of the composer, sent to the agent as prompt text.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct SlashCommand {
     pub name: String,
@@ -451,7 +500,7 @@ pub struct SlashCommand {
 
 /// A file modification carried inline on a tool result (ACP
 /// `ToolCallContent::Diff`). `old_text: None` means a new file.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ToolDiff {
     pub path: String,
@@ -460,7 +509,7 @@ pub struct ToolDiff {
     pub new_text: String,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct UserInputQuestion {
     pub id: String,
@@ -475,14 +524,14 @@ pub struct UserInputQuestion {
     pub multiline: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct UserInputAnswer {
     pub question_id: String,
     pub labels: Vec<String>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub enum DoneStatus {
     Completed,
@@ -493,7 +542,7 @@ pub enum DoneStatus {
 /// The normalized streaming event every harness emits.
 ///
 /// Mirrors loams-desktop's `AgentEvent` tagged enum.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum AgentEvent {
     #[serde(rename_all = "camelCase")]
@@ -550,11 +599,20 @@ pub enum AgentEvent {
         tokens: Option<u64>,
         window: Option<u64>,
     },
-    /// Kept as a harness passthrough (rate-limit probes); never persisted to docs.
+    /// The turn's tokens as the harness reports them. Never persisted to
+    /// docs; the engine keeps them per turn for the thread header (SD1
+    /// Task 14), informational only, never billing.
     #[serde(rename_all = "camelCase")]
     Usage {
         input_tokens: u64,
         output_tokens: u64,
+        /// Prompt-cache tokens (read and written), when the harness reports them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cache_tokens: Option<u64>,
+        /// The turn's cost, only when the harness itself reports one; the
+        /// daemon never computes it.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cost_usd: Option<f64>,
     },
     /// The agent advertised (or changed) its slash-command set — ACP
     /// `available_commands_update`. The engine caches the latest list per
@@ -574,6 +632,23 @@ pub enum AgentEvent {
     #[serde(rename_all = "camelCase")]
     InputResolved {
         request_id: String,
+    },
+    /// A supervised thread's tool call waits for a person (DD1 Task 24's
+    /// contract; SD1 Task 13). Emitted by the engine's approval bridge, which
+    /// owns the lifecycle, never by a harness; `args` are redacted. Never
+    /// persisted to docs: `WatchApprovals` is the pending list.
+    #[serde(rename_all = "camelCase")]
+    ApprovalRequested {
+        call_id: String,
+        tool: String,
+        args: serde_json::Value,
+        risk: crate::approvals::ToolRisk,
+    },
+    /// The approval was answered (or timed out, or its turn ended: `deny`).
+    #[serde(rename_all = "camelCase")]
+    ApprovalResolved {
+        call_id: String,
+        decision: crate::approvals::ApprovalDecision,
     },
     /// A confirmed new assignment. When tagged as Subagent, this reopens the
     /// same child transcript even if the provider does not echo the user text.
@@ -837,7 +912,7 @@ mod tests {
 }
 
 /// Host-owned context snapshot, replicated with the chat document.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "camelCase")]
 pub struct ContextUsage {
     pub tokens: Option<u64>,

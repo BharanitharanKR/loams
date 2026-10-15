@@ -506,7 +506,7 @@ Detailed in plan SF5; the decisions in brief:
 - Forgejo: `forgejo.org/docs/latest/admin/config-cheat-sheet/` (`X_FRAME_OPTIONS`, default `SAMEORIGIN`). Read 2026-10-02.
 - Not found on the web in this pass (so marked **verify**): Zulip's and Plane's framing headers, Plane CE's API coverage, OpenPanel's read API, Langfuse's OTLP path and headers.
 - zeron: `github.com/zeronsh/zeron` (`README`, `ARCHITECTURE.md`, `crates/*/Cargo.toml`: engine, harness, proto, doc, sync, rpc, ui, mobile, mcp, preview). Read 2026-10-02 through the GitHub API; the sidebar browser's implementation was not found in the architecture notes (SF1 Task 0).
-- This repository: §19, §21, §22, §24, §30, §36, §37, §38, `docs/open-core.md`, the decision log; the DeepSeek harness repositories at `~/Documents/research-clones/deepseek-harness-desktop` (`packages/client/ui-*`, `packages/subagent/*`, `packages/acp`, `packages/interaction/*`) and `deepseek-harness-mobile`.
+- This repository: §19, §21, §22, §24, §30, §36, §37, §38, the decision log; the DeepSeek harness repositories at `~/Documents/research-clones/deepseek-harness-desktop` (`packages/client/ui-*`, `packages/subagent/*`, `packages/acp`, `packages/interaction/*`) and `deepseek-harness-mobile`.
 
 ## 18. Contradictions with earlier decisions, and how they are resolved
 
