@@ -342,18 +342,9 @@ pub fn jwt(data: &[u8]) {
     };
     // Read the claims again without the verifier's checks, and hold them to
     // what an accepted token must say.
-    let mut insecure = jsonwebtoken::Validation::new(header.alg);
-    insecure.insecure_disable_signature_validation();
-    insecure.validate_aud = false;
-    insecure.validate_exp = false;
-    insecure.required_spec_claims.clear();
-    let claims = jsonwebtoken::decode::<serde_json::Value>(
-        token,
-        &jsonwebtoken::DecodingKey::from_secret(&[]),
-        &insecure,
-    )
-    .expect("an accepted token decodes")
-    .claims;
+    let claims = jsonwebtoken::dangerous::insecure_decode::<serde_json::Value>(token)
+        .expect("an accepted token decodes")
+        .claims;
     assert_eq!(
         header.alg,
         jsonwebtoken::Algorithm::EdDSA,

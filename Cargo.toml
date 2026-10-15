@@ -117,8 +117,11 @@ indexmap = { version = "2", features = ["serde"] }
 itertools = "0.15"
 # Ed25519 JWTs for computes (PG2 Task 8: the spec upcall's per-compute token
 # and pg-control's token for compute_ctl), the library compute_ctl verifies
-# them with. 9.3.1 (2025-02-01) is already in the lockfile (resonate).
-jsonwebtoken = { version = "=9.3.1", default-features = false }
+# them with. 10.4.0 (2026-05-11): 10.3.0 and later check an exp or nbf claim of
+# the wrong JSON type instead of skipping it (GHSA-h395-gr6q-cpjc). The
+# aws-lc-rs backend, as Resonate's resonate-auth and rustls use; never also
+# enable `rust_crypto` (with both, jsonwebtoken picks no provider and panics).
+jsonwebtoken = { version = "=10.4.0", default-features = false, features = ["aws_lc_rs"] }
 # The Kubernetes client (PG2 Task 6's KubeSecretStore first). Task 0 ruling 5
 # asks for the newest release at least 14 days old, 4.2.0; it is held at
 # 3.1.0 (2026-03-17, k8s-openapi 0.27.1 of 2026-03-05) because kube-client 4.x
@@ -171,25 +174,26 @@ regex = "1"
 reqwest = { version = "0.13", default-features = false, features = ["json"] }
 # Resonate, embedded by loams-durable (D1, D140): the fork ostrium-labs/resonate,
 # branch loam/0.10.1 = upstream 28dfd01 + PR 0c (#1164), the gcp-idtoken
-# feature, PR 0a (#1162), PR 1 (#1163) and the SDK's reqwest defaults as a
-# feature. Pinned by rev only; a bump compares each 0001_initial.sql with the
-# pinned one and says in its PR when existing durable stores must be dropped
-# (D1 plan X11). Never add resonate-server-scylladb or the NATS packages
+# feature, PR 0a (#1162), PR 1 (#1163), the SDK's reqwest defaults as a
+# feature and resonate-auth on jsonwebtoken 10.3 (31ffb201; 0001_initial.sql
+# unchanged from e3606698). Pinned by rev only; a bump compares each
+# 0001_initial.sql with the pinned one and says in its PR when existing
+# durable stores must be dropped (D1 plan X11). Never add resonate-server-scylladb or the NATS packages
 # (BUSL-1.1 lineage).
-resonate-base = { git = "https://github.com/ostrium-labs/resonate", rev = "e3606698e6e3f2502bb018bba1e618deb63f907a" }
-resonate-server-blob = { git = "https://github.com/ostrium-labs/resonate", rev = "e3606698e6e3f2502bb018bba1e618deb63f907a" }
-resonate-core = { git = "https://github.com/ostrium-labs/resonate", rev = "e3606698e6e3f2502bb018bba1e618deb63f907a" }
-resonate-gateway-http = { git = "https://github.com/ostrium-labs/resonate", rev = "e3606698e6e3f2502bb018bba1e618deb63f907a" }
-resonate-plugin = { git = "https://github.com/ostrium-labs/resonate", rev = "e3606698e6e3f2502bb018bba1e618deb63f907a" }
+resonate-base = { git = "https://github.com/ostrium-labs/resonate", rev = "31ffb2011b324c187f1d324b83feec2e16787e74" }
+resonate-server-blob = { git = "https://github.com/ostrium-labs/resonate", rev = "31ffb2011b324c187f1d324b83feec2e16787e74" }
+resonate-core = { git = "https://github.com/ostrium-labs/resonate", rev = "31ffb2011b324c187f1d324b83feec2e16787e74" }
+resonate-gateway-http = { git = "https://github.com/ostrium-labs/resonate", rev = "31ffb2011b324c187f1d324b83feec2e16787e74" }
+resonate-plugin = { git = "https://github.com/ostrium-labs/resonate", rev = "31ffb2011b324c187f1d324b83feec2e16787e74" }
 # The package is resonate-sdk (lib resonate_sdk); `resonate` in that repository
 # is the server binary. Its reqwest defaults (TLS, charset, system proxy) are
 # off: Loams talks to the server in process.
-resonate-sdk = { git = "https://github.com/ostrium-labs/resonate", rev = "e3606698e6e3f2502bb018bba1e618deb63f907a", default-features = false }
-resonate-server-mysql = { git = "https://github.com/ostrium-labs/resonate", rev = "e3606698e6e3f2502bb018bba1e618deb63f907a" }
-resonate-server-sqlite = { git = "https://github.com/ostrium-labs/resonate", rev = "e3606698e6e3f2502bb018bba1e618deb63f907a" }
-resonate-transport-http-poll = { git = "https://github.com/ostrium-labs/resonate", rev = "e3606698e6e3f2502bb018bba1e618deb63f907a" }
+resonate-sdk = { git = "https://github.com/ostrium-labs/resonate", rev = "31ffb2011b324c187f1d324b83feec2e16787e74", default-features = false }
+resonate-server-mysql = { git = "https://github.com/ostrium-labs/resonate", rev = "31ffb2011b324c187f1d324b83feec2e16787e74" }
+resonate-server-sqlite = { git = "https://github.com/ostrium-labs/resonate", rev = "31ffb2011b324c187f1d324b83feec2e16787e74" }
+resonate-transport-http-poll = { git = "https://github.com/ostrium-labs/resonate", rev = "31ffb2011b324c187f1d324b83feec2e16787e74" }
 # Without gcp-idtoken: no google-cloud-auth, and auth.mode = "gcp" is refused.
-resonate-transport-http-push = { git = "https://github.com/ostrium-labs/resonate", rev = "e3606698e6e3f2502bb018bba1e618deb63f907a", default-features = false }
+resonate-transport-http-push = { git = "https://github.com/ostrium-labs/resonate", rev = "31ffb2011b324c187f1d324b83feec2e16787e74", default-features = false }
 # pg-control's Ed25519 signing key (PG2 Task 8). 0.17.14 (2025-03-11) is
 # already in the lockfile (rustls, jsonwebtoken).
 ring = "=0.17.14"
@@ -220,14 +224,15 @@ tempfile = "3"
 thiserror = "2"
 # Loams's fork of tikv/client-rust, pinned by rev: branch `loam` of
 # ostrium-labs/client-rust, upstream ab4be1c plus the TSO stream reconnect, the
-# public generated protos, async-commit lock resolution on the read path and
-# async commit's max_commit_ts (docs/plans/r1-dependency-spike.md, "The
+# public generated protos, async-commit lock resolution on the read path,
+# async commit's max_commit_ts and fail 0.5 (off rand 0.7, 8126c49a)
+# (docs/plans/r1-dependency-spike.md, "The
 # client-rust fork"). Not crates.io 0.4.0: it fails cargo-deny's advisories
 # through tonic 0.10 and reports lost async-commit and 1PC acknowledgements as
 # plain errors (R1 plan row R4). Default features pull in openssl, procfs and
 # protobuf 2 through prometheus. The pin moves only by a PR that reruns the
 # loams-tikv, loams-meta-tikv and loams-live suites.
-tikv-client = { git = "https://github.com/ostrium-labs/client-rust", rev = "1f8962b00b33ebc6f34b72d6c52d08b8a8e1906e", default-features = false }
+tikv-client = { git = "https://github.com/ostrium-labs/client-rust", rev = "8126c49a15c0af7f1e7427f3b9020ae8d2c280cf", default-features = false }
 time = { version = "0.3", features = ["std", "formatting", "parsing", "macros"] }
 time-fmt = "0.3.8"
 toml = "0.8"
