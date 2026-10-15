@@ -17,6 +17,7 @@
 import json
 import pathlib
 import re
+import subprocess
 import sys
 import tempfile
 import tomllib
@@ -80,6 +81,51 @@ def pins(root):
     return out
 
 
+def pin_version(value):
+    """A pin's numeric version (`v8.5.8-loams.1` -> (8, 5, 8)); None for a digest."""
+    m = re.match(r"v?(\d+(?:\.\d+)*)", value)
+    return tuple(int(x) for x in m.group(1).split(".")) if m else None
+
+
+def check_pin_policy(newest, previous):
+    """Design §54 §9.2 (UP1 Task 21): no component goes down, and one that
+    crosses a major needs a point-of-no-return migration in the release."""
+    pnr = any(m.get("class") == "point_of_no_return" for m in newest.get("migration", []))
+    for name, value in newest.get("components", {}).items():
+        old = previous.get(name)
+        a, b = pin_version(value), pin_version(old) if old else None
+        if a is None or b is None:
+            continue
+        if a < b:
+            raise CheckError(f"{newest['version']}: component {name} goes down from {old} to {value}")
+        if a[0] > b[0] and not pnr:
+            raise CheckError(
+                f"{newest['version']}: component {name} crosses a major ({old} -> {value}): its files do not go "
+                "back, so the release needs a point_of_no_return migration entry"
+            )
+
+
+def pins_at(root, ref):
+    """The pins of the pin files at git `ref`."""
+    files = [".env.example", "release/sqldb-images.toml", "deploy/pins/loams-postgres-images.toml",
+             "fabric/crates/loams-chdb-sys/build.rs", "Cargo.toml"]
+    files = ["deploy/release/.env.example" if f == ".env.example" else f for f in files]
+    with tempfile.TemporaryDirectory() as tmp:
+        for f in files:
+            out = subprocess.run(["git", "-C", str(root), "show", f"{ref}:{f}"], capture_output=True)
+            if out.returncode == 0:
+                target = pathlib.Path(tmp) / f
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(out.stdout)
+        return pins(pathlib.Path(tmp))
+
+
+def pins_changed(root, ref):
+    """{component: (at ref, now)} for every pin that differs from `ref`."""
+    before, now = pins_at(root, ref), pins(root)
+    return {k: (before.get(k), now.get(k)) for k in sorted(set(before) | set(now)) if before.get(k) != now.get(k)}
+
+
 def check(root):
     releases = load(root)
     versions = [r["version"] for r in releases]
@@ -127,8 +173,9 @@ def check(root):
                 at = by_version[sorted(older)[-1]]
                 continue
             raise CheckError(f"{at['version']} upgrades from {src}, which is not in the train")
-    # The newest release's pins equal the pin files.
+    # The newest release's pins equal the pin files, and follow the policy.
     newest = releases[0]
+    check_pin_policy(newest, previous_components(root, newest["version"]))
     found = pins(root)
     for name, value in newest.get("components", {}).items():
         if name in found and found[name] != value:
@@ -321,6 +368,27 @@ from = "fresh"
     with_section = tree(good, ["0000-a"],
                         changelog="## [0.1.0-preview.3] - unreleased\n\n### Upgrading\n\nx\n\n## [0.1.0-preview.2]\n")
     check_changelog(with_section)
+    # The pin policy (Task 21): pin_downgrade_fails_check and
+    # major_bump_requires_point_of_no_return_entry.
+    old = {"version": "0.1.0-preview.3", "components": {"tikv": "v8.5.8", "tidb": "v8.5.8-loams.1"}}
+    down = {"version": "0.1.0-preview.4", "components": {"tikv": "v8.5.7"}}
+    try:
+        check_pin_policy(down, old["components"])
+        raise AssertionError("a pin downgrade passed")
+    except CheckError as e:
+        assert "goes down from v8.5.8 to v8.5.7" in str(e), e
+    major = {"version": "0.1.0-preview.4", "components": {"tidb": "v9.0.0-loams.1"}}
+    try:
+        check_pin_policy(major, old["components"])
+        raise AssertionError("a major bump without a point_of_no_return entry passed")
+    except CheckError as e:
+        assert "crosses a major" in str(e), e
+    major["migration"] = [{"id": "0002-tidb-9", "class": "point_of_no_return"}]
+    check_pin_policy(major, old["components"])
+    check_pin_policy({"version": "x", "components": {"tikv": "v8.5.9", "loams_postgres": "sha256:ab"}},
+                     {"tikv": "v8.5.8", "loams_postgres": "sha256:cd"})
+    # pin_change_without_gate_label_fails reads this: the pins that changed against a ref.
+    assert pins_at(real, "HEAD").get("tikv"), "the pins are read from a git ref"
     print("upgrade_path: self-test passed")
 
 
@@ -341,6 +409,9 @@ def main(argv):
         if cmd == "check":
             compiled = check(root)
             print(f"upgrade-path: ok ({len(compiled)} compiled migrations listed)")
+        elif cmd == "pins-changed" and len(argv) == 3:
+            for name, (old, new) in pins_changed(root, argv[2]).items():
+                print(f"{name}: {old} -> {new}")
         elif cmd == "notes" and len(argv) == 3:
             sys.stdout.write(notes(root, argv[2]))
         elif cmd == "manifest" and len(argv) == 3:

@@ -2307,6 +2307,21 @@ jobs:
       - if: ${{ !cancelled() }}
         name: the upgrade path matches the migrations and the pins
         run: scripts/release/check-upgrade-path.sh
+      # Design §54 §9.2 (UP1 Task 21): a pull request into dev that changes a
+      # third-party pin runs the upgrade gate, by the `ci:upgrade` label.
+      - if: ${{ !cancelled() && github.event_name == 'pull_request' && github.base_ref == 'dev' }}
+        name: a third-party pin change carries ci:upgrade
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          changed="$(python3 scripts/release/upgrade_path.py pins-changed "$BASE_SHA")"
+          if [ -n "$changed" ] && [[ ",$LABELS," != *",ci:upgrade,"* ]]; then
+            echo "::error::this pull request changes third-party pins; add the ci:upgrade label so the upgrade gate runs:"
+            echo "$changed"
+            exit 1
+          fi
       - if: ${{ !cancelled() && github.event_name == 'pull_request' && github.base_ref == 'main' }}
         name: the release's CHANGELOG entry has its Upgrading section
         run: python3 scripts/release/upgrade_path.py check-changelog
