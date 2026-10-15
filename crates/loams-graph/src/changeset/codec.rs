@@ -478,7 +478,9 @@ impl Writer {
 /// [`CodecError::Malformed`].
 pub fn decode(bytes: &[u8]) -> Result<GraphRecord, CodecError> {
     let (&version, _) = bytes.split_first().ok_or(CodecError::Empty)?;
-    if version != RECORD_VERSION {
+    if loams_common::formats::check(loams_common::formats::GRAPH_CHANGESET, u16::from(version))
+        .is_err()
+    {
         return Err(CodecError::UnknownVersion(version));
     }
     let mut input = Reader { bytes, at: 1 };
@@ -547,7 +549,9 @@ pub fn decode(bytes: &[u8]) -> Result<GraphRecord, CodecError> {
 /// [`CodecError::Malformed`].
 pub fn decode_props(bytes: &[u8]) -> Result<PropMap, CodecError> {
     let (&version, _) = bytes.split_first().ok_or(CodecError::Empty)?;
-    if version != RECORD_VERSION {
+    if loams_common::formats::check(loams_common::formats::GRAPH_CHANGESET, u16::from(version))
+        .is_err()
+    {
         return Err(CodecError::UnknownVersion(version));
     }
     let mut input = Reader { bytes, at: 1 };

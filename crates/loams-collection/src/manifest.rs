@@ -17,6 +17,7 @@ use std::ops::Range;
 
 use bytes::Bytes;
 use loams_common::CollectionId;
+use loams_common::formats;
 use prost::Message;
 use ulid::Ulid;
 
@@ -203,9 +204,9 @@ pub fn decode_manifest(bytes: &[u8]) -> Result<CollectionManifest, CollectionErr
         return Err(corrupt("crc mismatch"));
     }
     let version = u16::from_le_bytes([framed[4], framed[5]]);
-    if version != MANIFEST_FORMAT_VERSION {
-        return Err(corrupt(format!("unknown format version {version}")));
-    }
+    // The registry's readable range (UP1 Task 1), not only the current one.
+    formats::check(formats::COLLECTION_MANIFEST, version)
+        .map_err(|e| corrupt(format!("unknown format version {version} ({e})")))?;
     let body = pb::CollectionManifest::decode(&framed[HEADER_LEN..])
         .map_err(|err| corrupt(format!("malformed body: {err}")))?;
     let manifest = from_pb(body)?;

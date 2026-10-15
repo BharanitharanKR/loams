@@ -21,6 +21,7 @@ use std::path::{Path, PathBuf};
 use std::sync::{Mutex, PoisonError, RwLock};
 use std::time::{Duration, Instant};
 
+use loams_common::formats;
 use loams_common::{CollectionId, NamespaceId};
 use loams_query::text::{SplitChecksums, SplitChecksumsBuilder, checksums_path};
 use loams_store::Store;
@@ -34,6 +35,7 @@ pub const SPLIT_PIECE_BYTES: u64 = 64 << 20;
 
 /// Quickwit's footer trailer: `footer_start u64 LE | 1u32 LE | b"QWFT"`.
 const TRAILER_LEN: usize = 16;
+#[cfg(test)]
 const TRAILER_VERSION: u32 = 1;
 const TRAILER_MAGIC: &[u8; 4] = b"QWFT";
 
@@ -159,20 +161,26 @@ async fn write_split(
     if written != size {
         return Err(corrupt(format!("wrote {written} bytes, expected {size}")));
     }
-    let mut start = [0; 8];
-    start.copy_from_slice(&tail[..8]);
-    let mut version = [0; 4];
-    version.copy_from_slice(&tail[8..12]);
-    if &tail[12..] != TRAILER_MAGIC || u32::from_le_bytes(version) != TRAILER_VERSION {
+    let Some(start) = trailer_footer_start(&tail) else {
         return Err(corrupt("no Quickwit footer trailer at its end".to_string()));
-    }
-    if u64::from_le_bytes(start) != footer_start {
+    };
+    if start != footer_start {
         return Err(corrupt(format!(
-            "the trailer puts the footer at {}, the manifest at {footer_start}",
-            u64::from_le_bytes(start)
+            "the trailer puts the footer at {start}, the manifest at {footer_start}"
         )));
     }
     Ok(checksums.finish())
+}
+
+/// The footer start a split's last [`TRAILER_LEN`] bytes name, when they are
+/// a trailer whose version the registry reads (UP1 Task 1).
+fn trailer_footer_start(tail: &[u8]) -> Option<u64> {
+    if tail.len() != TRAILER_LEN || &tail[12..] != TRAILER_MAGIC {
+        return None;
+    }
+    let version = u32::from_le_bytes(tail[8..12].try_into().ok()?);
+    formats::check_wide(formats::TEXT_SPLIT_TRAILER, u64::from(version)).ok()?;
+    Some(u64::from_le_bytes(tail[..8].try_into().ok()?))
 }
 
 /// A split key: namespace, collection and split ULID.
@@ -415,7 +423,42 @@ pub(crate) async fn delete_files(files: Vec<PathBuf>) {
 
 #[cfg(test)]
 mod tests {
+    use loams_common::formats::FormatSpec;
+
     use super::*;
+
+    fn trailer(version: u32) -> Vec<u8> {
+        let mut out = 42u64.to_le_bytes().to_vec();
+        out.extend_from_slice(&version.to_le_bytes());
+        out.extend_from_slice(TRAILER_MAGIC);
+        out
+    }
+
+    #[test]
+    fn format_constants_match_registry() {
+        let current = formats::spec_of(formats::TEXT_SPLIT_TRAILER).current;
+        assert_eq!(TRAILER_VERSION, u32::from(current));
+    }
+
+    #[test]
+    fn reader_accepts_previous_version() {
+        assert_eq!(trailer_footer_start(&trailer(TRAILER_VERSION)), Some(42));
+        let older = trailer(TRAILER_VERSION - 1);
+        assert_eq!(trailer_footer_start(&older), None);
+        let spec = formats::spec_of(formats::TEXT_SPLIT_TRAILER);
+        let spec = FormatSpec {
+            min_read: spec.current - 1,
+            ..spec
+        };
+        formats::with_override(spec, || {
+            assert_eq!(trailer_footer_start(&older), Some(42));
+        });
+    }
+
+    #[test]
+    fn reader_refuses_next_version() {
+        assert_eq!(trailer_footer_start(&trailer(TRAILER_VERSION + 1)), None);
+    }
 
     #[test]
     fn a_split_pinned_again_is_not_deleted_by_its_eviction_linger() {

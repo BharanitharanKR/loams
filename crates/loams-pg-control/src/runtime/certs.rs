@@ -180,7 +180,13 @@ impl ComputeCa {
     fn from_secret(s: &Secret<Vec<u8>>) -> Result<Self, CertError> {
         let stored: StoredCa =
             serde_json::from_slice(s.expose()).map_err(|e| CertError::Corrupt(e.to_string()))?;
-        if stored.format != CA_FORMAT {
+        // The registry's readable range (UP1 Task 1), not only CA_FORMAT.
+        if loams_common::formats::check(
+            loams_common::formats::PG_CONTROL_CA,
+            u16::from(stored.format),
+        )
+        .is_err()
+        {
             return Err(CertError::Corrupt(format!(
                 "unknown format {}",
                 stored.format
@@ -278,6 +284,47 @@ mod tests {
     use super::*;
 
     const NOW: u64 = 1_791_590_400; // 2026-10-10
+
+    /// UP1 Task 1: the stored CA's reader checks the registry's readable
+    /// range.
+    mod format_tests {
+        use loams_common::formats::{self, FormatSpec};
+
+        use super::*;
+
+        fn stored_at(format: u8) -> Secret<Vec<u8>> {
+            let ca = ComputeCa::generate(now()).expect("CA");
+            let mut stored: StoredCa =
+                serde_json::from_slice(ca.to_secret().unwrap().expose()).unwrap();
+            stored.format = format;
+            Secret::new(serde_json::to_vec(&stored).unwrap())
+        }
+
+        #[test]
+        fn format_constants_match_registry() {
+            let current = formats::spec_of(formats::PG_CONTROL_CA).current;
+            assert_eq!(u16::from(CA_FORMAT), current);
+        }
+
+        #[test]
+        fn reader_accepts_previous_version() {
+            let older = stored_at(CA_FORMAT - 1);
+            assert!(ComputeCa::from_secret(&older).is_err());
+            let spec = formats::spec_of(formats::PG_CONTROL_CA);
+            let spec = FormatSpec {
+                min_read: spec.current - 1,
+                ..spec
+            };
+            formats::with_override(spec, || {
+                ComputeCa::from_secret(&older).expect("N-1 opens once min_read allows it");
+            });
+        }
+
+        #[test]
+        fn reader_refuses_next_version() {
+            assert!(ComputeCa::from_secret(&stored_at(CA_FORMAT + 1)).is_err());
+        }
+    }
 
     fn now() -> SystemTime {
         SystemTime::UNIX_EPOCH + Duration::from_secs(NOW)

@@ -157,3 +157,56 @@ proptest! {
         let _ = wal::parse(&prefixed);
     }
 }
+
+/// UP1 Task 1: the WAL reader checks the registry's readable range.
+mod formats {
+    use loams_common::formats::{self, FormatSpec, LOG_WAL};
+    use loams_log::wal;
+
+    /// `object` with its header's version set to `version` and the index
+    /// checksum (which covers the header) fixed up.
+    fn at_version(object: &[u8], version: u16) -> Vec<u8> {
+        let mut out = object.to_vec();
+        out[8..10].copy_from_slice(&version.to_le_bytes());
+        let trailer_at = out.len() - wal::TRAILER_LEN;
+        let index_offset =
+            u64::from_le_bytes(out[trailer_at..trailer_at + 8].try_into().expect("8 bytes"))
+                as usize;
+        let crc = crc32c::crc32c_append(
+            crc32c::crc32c(&out[..wal::HEADER_LEN]),
+            &out[index_offset..trailer_at],
+        );
+        out[trailer_at + 12..trailer_at + 16].copy_from_slice(&crc.to_le_bytes());
+        out
+    }
+
+    #[test]
+    fn format_constants_match_registry() {
+        assert_eq!(wal::VERSION, formats::spec_of(LOG_WAL).current);
+    }
+
+    #[test]
+    fn reader_accepts_previous_version() {
+        let current = wal::VERSION;
+        let older = at_version(&super::small_object(), current - 1);
+        assert!(
+            wal::parse(&older).is_err(),
+            "N-1 refused while min_read is N"
+        );
+        let spec = FormatSpec {
+            min_read: current - 1,
+            ..formats::spec_of(LOG_WAL)
+        };
+        formats::with_override(spec, || {
+            let (header, _) = wal::parse(&older).expect("N-1 opens once min_read allows it");
+            assert_eq!(header.version, current - 1);
+        });
+    }
+
+    #[test]
+    fn reader_refuses_next_version() {
+        let newer = at_version(&super::small_object(), wal::VERSION + 1);
+        let err = wal::parse(&newer).unwrap_err();
+        assert!(err.to_string().contains("format_unreadable"), "{err}");
+    }
+}

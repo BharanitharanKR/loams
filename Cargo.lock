@@ -8345,6 +8345,7 @@ dependencies = [
  "data-encoding",
  "futures",
  "hmac 0.13.0",
+ "loams-common",
  "loams-kv",
  "loams-live",
  "loams-live-js",
@@ -8492,6 +8493,12 @@ dependencies = [
 [[package]]
 name = "loams-migrate"
 version = "0.1.0-preview.2"
+dependencies = [
+ "loams-common",
+ "postcard",
+ "serde",
+ "thiserror 2.0.21",
+]
 
 [[package]]
 name = "loams-pg-control"
@@ -8509,6 +8516,7 @@ dependencies = [
  "k8s-openapi",
  "keyring",
  "kube",
+ "loams-common",
  "loams-kv",
  "loams-pg-control",
  "loams-postgres",
@@ -8678,6 +8686,7 @@ dependencies = [
  "hex",
  "humantime",
  "itertools 0.15.0",
+ "loams-common",
  "postcard",
  "proptest",
  "rand 0.9.5",

@@ -19,6 +19,7 @@ futures.workspace = true
 hex.workspace = true
 humantime.workspace = true
 itertools.workspace = true
+loams-common.workspace = true
 postcard.workspace = true
 regex.workspace = true
 rustc-hash.workspace = true

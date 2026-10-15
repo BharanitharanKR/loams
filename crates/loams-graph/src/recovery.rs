@@ -46,6 +46,16 @@ pub const DATABASE_FILE: &str = "graph.grafeo";
 /// The stamp's format.
 const STAMP_FORMAT: u32 = 1;
 
+/// Whether this release reads a recovery stamp of `format`: the registry's
+/// range (UP1 Task 1), not only [`STAMP_FORMAT`].
+fn stamp_format_readable(format: u32) -> bool {
+    loams_common::formats::check_wide(
+        loams_common::formats::GRAPH_RECOVERY_STAMP,
+        u64::from(format),
+    )
+    .is_ok()
+}
+
 /// Snapshot staging directories a checkpoint left behind (GR1 Task 13), cleared on open.
 const STAGING: &str = "snapshots";
 
@@ -405,7 +415,7 @@ fn take_stamp(
     let Ok(stamp) = serde_json::from_slice::<Stamp>(&text) else {
         return distrust("its stamp does not parse");
     };
-    if stamp.format != STAMP_FORMAT {
+    if !stamp_format_readable(stamp.format) {
         return distrust("its stamp's format is unknown");
     }
     if stamp.graph != graph.to_string() || stamp.stream != durable.stream.0 {
@@ -499,6 +509,36 @@ fn create(dir: &Path) -> Result<(), GraphError> {
 
 #[cfg(test)]
 mod tests {
+    /// UP1 Task 1: the stamp reader checks the registry's readable range.
+    mod format_tests {
+        use loams_common::formats::{self, FormatSpec};
+
+        use super::super::*;
+
+        #[test]
+        fn format_constants_match_registry() {
+            let current = formats::spec_of(formats::GRAPH_RECOVERY_STAMP).current;
+            assert_eq!(STAMP_FORMAT, u32::from(current));
+        }
+
+        #[test]
+        fn reader_accepts_previous_version() {
+            assert!(stamp_format_readable(STAMP_FORMAT));
+            assert!(!stamp_format_readable(STAMP_FORMAT - 1));
+            let spec = formats::spec_of(formats::GRAPH_RECOVERY_STAMP);
+            let spec = FormatSpec {
+                min_read: spec.current - 1,
+                ..spec
+            };
+            formats::with_override(spec, || assert!(stamp_format_readable(STAMP_FORMAT - 1)));
+        }
+
+        #[test]
+        fn reader_refuses_next_version() {
+            assert!(!stamp_format_readable(STAMP_FORMAT + 1));
+        }
+    }
+
     use super::*;
 
     #[test]

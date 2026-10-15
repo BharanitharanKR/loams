@@ -7,9 +7,13 @@
 //! [`schema`] holds the collection schema types: the metastore's commands
 //! carry them, and `loams-collection` re-exports them.
 //!
+//! [`formats`] is the registry of every persisted Loams format (design §54
+//! §4, UP1 Task 1).
+//!
 //! [`meta`] holds the metastore's shared types: catalog records, errors and
 //! consistency levels, moved from `loams-meta` (M1.2a plan).
 
+pub mod formats;
 mod id;
 pub mod meta;
 pub mod schema;

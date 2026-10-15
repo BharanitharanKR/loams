@@ -154,7 +154,7 @@ impl JobRecord {
 
     fn to_proto(&self) -> pb::TableJobRecord {
         pb::TableJobRecord {
-            format: 1,
+            format: crate::RECORD_FORMAT,
             kind: self.kind.to_proto().into(),
             table_id: self.table.0,
             deployment: self.deployment.to_bytes().to_vec(),
@@ -179,8 +179,12 @@ impl JobRecord {
     fn decode(bytes: &[u8]) -> Result<Self, LiveError> {
         let corrupt = |what: String| LiveError::Corrupt(format!("table job record: {what}"));
         let p = pb::TableJobRecord::decode_from_slice(bytes).map_err(|e| corrupt(e.to_string()))?;
-        if p.format != 1 {
-            return Err(corrupt(format!("format {} (expected 1)", p.format)));
+        if !crate::record_format_readable(p.format) {
+            return Err(corrupt(format!(
+                "format {} (this release reads {})",
+                p.format,
+                crate::record_format_range()
+            )));
         }
         let kind = match p.kind.as_known() {
             Some(pb::TableJobKind::TABLE_JOB_KIND_VALIDATE) => JobKind::Validate,

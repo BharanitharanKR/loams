@@ -10,13 +10,14 @@
 //! ```
 
 use bytes::Bytes;
+use loams_common::formats;
 use serde::{Deserialize, Serialize};
 
 use crate::error::CollectionError;
 use crate::pkindex::{open_envelope, seal_envelope};
 
 pub const DEAD_LETTERS_MAGIC: &[u8; 4] = b"OPDL";
-const DEAD_LETTERS_VERSION: u16 = 1;
+pub(crate) const DEAD_LETTERS_VERSION: u16 = 1;
 
 /// One skipped record: where it was, what it held, and why it was skipped.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -38,7 +39,8 @@ pub fn encode_dead_letters(letters: &[DeadLetter]) -> Bytes {
 /// mismatch or a malformed body is `Corrupt`.
 pub fn decode_dead_letters(bytes: &[u8]) -> Result<Vec<DeadLetter>, CollectionError> {
     let corrupt = |why: String| CollectionError::Corrupt(format!("dead letters: {why}"));
-    let body = open_envelope(DEAD_LETTERS_MAGIC, DEAD_LETTERS_VERSION, bytes).map_err(corrupt)?;
+    let body = open_envelope(DEAD_LETTERS_MAGIC, formats::COLLECTION_DEAD_LETTERS, bytes)
+        .map_err(corrupt)?;
     let (letters, rest) =
         postcard::take_from_bytes(body).map_err(|err| corrupt(err.to_string()))?;
     if !rest.is_empty() {

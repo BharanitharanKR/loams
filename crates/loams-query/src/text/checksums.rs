@@ -76,7 +76,12 @@ impl SplitChecksums {
             return Err("the split checksums fail their own checksum".to_string());
         }
         let u32_at = |at: usize| u32::from_le_bytes(body[at..at + 4].try_into().expect("4 bytes"));
-        if &body[..4] != MAGIC || u32_at(4) != VERSION {
+        let readable = loams_common::formats::check_wide(
+            loams_common::formats::TEXT_CHECKSUMS,
+            u64::from(u32_at(4)),
+        )
+        .is_ok();
+        if &body[..4] != MAGIC || !readable {
             return Err("not split checksums (magic or version)".to_string());
         }
         let block = u32_at(8);
@@ -185,7 +190,45 @@ impl SplitChecksumsBuilder {
 
 #[cfg(test)]
 mod tests {
+    use loams_common::formats::{self, FormatSpec};
+
     use super::*;
+
+    /// Encoded checksums with their version set to `version` and the total
+    /// checksum fixed up.
+    fn at_version(version: u32) -> Vec<u8> {
+        let bytes = SplitChecksums::of(&bytes(5000)).encode();
+        let mut out = bytes[..bytes.len() - 4].to_vec();
+        out[4..8].copy_from_slice(&version.to_le_bytes());
+        let total = crc32c::crc32c(&out);
+        out.extend_from_slice(&total.to_le_bytes());
+        out
+    }
+
+    #[test]
+    fn format_constants_match_registry() {
+        let current = formats::spec_of(formats::TEXT_CHECKSUMS).current;
+        assert_eq!(VERSION, u32::from(current));
+    }
+
+    #[test]
+    fn reader_accepts_previous_version() {
+        let older = at_version(VERSION - 1);
+        assert!(SplitChecksums::decode(&older).is_err());
+        let spec = formats::spec_of(formats::TEXT_CHECKSUMS);
+        let spec = FormatSpec {
+            min_read: spec.current - 1,
+            ..spec
+        };
+        formats::with_override(spec, || {
+            SplitChecksums::decode(&older).expect("N-1 opens once min_read allows it");
+        });
+    }
+
+    #[test]
+    fn reader_refuses_next_version() {
+        assert!(SplitChecksums::decode(&at_version(VERSION + 1)).is_err());
+    }
 
     fn bytes(n: usize) -> Vec<u8> {
         (0..n).map(|i| (i * 7 + i / 300) as u8).collect()

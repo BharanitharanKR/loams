@@ -410,7 +410,13 @@ impl BucketRepoCatalog {
             path: path.clone(),
             reason,
         };
-        if doc.v != DOC_VERSION {
+        // The registry's readable range (UP1 Task 1), not only DOC_VERSION.
+        if loams_common::formats::check_wide(
+            loams_common::formats::GIT_CATALOG_DOC,
+            u64::from(doc.v),
+        )
+        .is_err()
+        {
             return Err(corrupt(format!("version {}", doc.v)));
         }
         let repo_id = RepoId::parse(&doc.repo_id).map_err(|err| corrupt(err.to_string()))?;
@@ -782,5 +788,57 @@ impl RepoCatalog for BucketRepoCatalog {
         // Ours or a racing delete's: the stored marker is the answer.
         let stored = self.deleting_doc(ns, &record.repo_id).await?;
         Self::record_of(ns, name, &doc, Some(stored.as_ref().unwrap_or(&marker)))
+    }
+}
+
+/// UP1 Task 1: the catalog document reader checks the registry's readable
+/// range.
+#[cfg(test)]
+mod format_tests {
+    use loams_common::formats::{self, FormatSpec};
+
+    use super::*;
+
+    fn doc(v: u32) -> NameDoc {
+        NameDoc {
+            v,
+            repo_id: RepoId::generate().as_str().to_string(),
+            object_format: "sha1".to_string(),
+            created_unix_ms: 1,
+            parent: None,
+            fork_depth: 0,
+            idem_key: String::new(),
+            request: String::new(),
+        }
+    }
+
+    fn read(v: u32) -> Result<RepoRecord, CatalogError> {
+        let name = RepoName::parse("app").unwrap();
+        BucketRepoCatalog::record_of(NamespaceId(1), &name, &doc(v), None)
+    }
+
+    #[test]
+    fn format_constants_match_registry() {
+        let current = formats::spec_of(formats::GIT_CATALOG_DOC).current;
+        assert_eq!(DOC_VERSION, u32::from(current));
+    }
+
+    #[test]
+    fn reader_accepts_previous_version() {
+        assert!(read(DOC_VERSION).is_ok());
+        assert!(read(DOC_VERSION - 1).is_err());
+        let spec = formats::spec_of(formats::GIT_CATALOG_DOC);
+        let spec = FormatSpec {
+            min_read: spec.current - 1,
+            ..spec
+        };
+        formats::with_override(spec, || {
+            read(DOC_VERSION - 1).expect("N-1 opens once min_read allows it");
+        });
+    }
+
+    #[test]
+    fn reader_refuses_next_version() {
+        assert!(read(DOC_VERSION + 1).is_err());
     }
 }

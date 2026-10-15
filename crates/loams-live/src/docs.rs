@@ -43,7 +43,7 @@ impl Doc {
     /// The stored record.
     pub fn to_record(&self) -> pb::DocumentRecord {
         pb::DocumentRecord {
-            format: 1,
+            format: crate::RECORD_FORMAT,
             creation_ms: self.creation_ms,
             fields: fields_to_proto(&self.fields),
             ..Default::default()
@@ -52,10 +52,11 @@ impl Doc {
 
     /// The document of a stored record.
     pub fn from_record(id: DocId, record: pb::DocumentRecord) -> Result<Self, LiveError> {
-        if record.format != 1 {
+        if !crate::record_format_readable(record.format) {
             return Err(LiveError::Corrupt(format!(
-                "document {id}: record format {} (expected 1)",
-                record.format
+                "document {id}: record format {} (this release reads {})",
+                record.format,
+                crate::record_format_range()
             )));
         }
         Ok(Doc {

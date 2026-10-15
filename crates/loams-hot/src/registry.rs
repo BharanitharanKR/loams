@@ -9,6 +9,7 @@ use std::str::FromStr;
 use std::sync::{Arc, Mutex, PoisonError, RwLock, Weak};
 use std::time::Duration;
 
+use loams_common::formats;
 use loams_common::meta::{ApplyError, Consistency, MetaError, MetaStore};
 use tokio::task::JoinHandle;
 use ulid::Ulid;
@@ -169,7 +170,11 @@ impl NodeDescriptor {
         ) else {
             return Err(malformed("expected 5 fields"));
         };
-        if version != "v1" {
+        let readable = version
+            .strip_prefix('v')
+            .and_then(|v| v.parse::<u16>().ok())
+            .is_some_and(|v| formats::check(formats::HOT_OWNER, v).is_ok());
+        if !readable {
             return Err(malformed("unknown version"));
         }
         let incarnation =

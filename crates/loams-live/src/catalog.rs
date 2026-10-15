@@ -200,7 +200,7 @@ impl TableDef {
     /// The catalog record.
     pub fn to_proto(&self) -> pb::TableDef {
         pb::TableDef {
-            format: 1,
+            format: crate::RECORD_FORMAT,
             id: self.id.0,
             name: self.name.clone(),
             indexes: self
@@ -250,10 +250,11 @@ impl TableDef {
 
     /// The table of a catalog record.
     pub fn from_proto(p: pb::TableDef) -> Result<Self, LiveError> {
-        if p.format != 1 {
+        if !crate::record_format_readable(p.format) {
             return Err(LiveError::Corrupt(format!(
-                "table record format {} (expected 1)",
-                p.format
+                "table record format {} (this release reads {})",
+                p.format,
+                crate::record_format_range()
             )));
         }
         Ok(TableDef {
@@ -625,10 +626,11 @@ pub async fn load_journal_shards(
     };
     let def = pb::AppDef::decode_from_slice(&bytes)
         .map_err(|e| LiveError::Corrupt(format!("app record: {e}")))?;
-    if def.format != 1 {
+    if !crate::record_format_readable(def.format) {
         return Err(LiveError::Corrupt(format!(
-            "app record format {} (expected 1)",
-            def.format
+            "app record format {} (this release reads {})",
+            def.format,
+            crate::record_format_range()
         )));
     }
     let shards = u16::try_from(def.journal_shards)
@@ -725,7 +727,7 @@ fn check_shards(shards: u16) -> Result<(), LiveError> {
 
 fn app_def(shards: u16) -> Vec<u8> {
     pb::AppDef {
-        format: 1,
+        format: crate::RECORD_FORMAT,
         journal_shards: u32::from(shards),
         ..Default::default()
     }
