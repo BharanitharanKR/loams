@@ -24,7 +24,8 @@ OUT_DIR=${OUT_DIR:-$ROOT/bench/results}
 log() { printf '%s cold-start: %s\n' "$(date -u +%H:%M:%S)" "$*" >&2; }
 fail() { log "FAIL: $*"; exit 1; }
 
-case "$RUNS" in '' | *[!0-9]*) fail "RUNS must be a number" ;; esac
+case "$RUNS" in '' | *[!0-9]*) fail "RUNS must be a positive number" ;; esac
+[ "$RUNS" -ge 1 ] || fail "RUNS must be a positive number"
 
 if [ -z "${DOCKER_HOST:-}" ] && [ -S "/run/user/$(id -u)/podman/podman.sock" ]; then
   DOCKER_HOST=unix:///run/user/$(id -u)/podman/podman.sock

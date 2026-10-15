@@ -102,17 +102,19 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - name: protoc
         run: command -v protoc || { sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev; }
       - name: cold starts
         env:
           RUNS: ${{ inputs.runs }}
-        run: |
-          case "$RUNS" in ''|*[!0-9]*) echo "runs must be a number" >&2; exit 2 ;; esac
-          scripts/pg2/cold-start.sh
+          # This run's results only (bench/results holds earlier ones).
+          OUT_DIR: ${{ runner.temp }}/coldstart
+        run: scripts/pg2/cold-start.sh
       - name: results
         if: always()
         uses: actions/upload-artifact@v7.0.1
         with:
           name: loams-pg-coldstart
-          path: bench/results/*-coldstart.json
+          path: ${{ runner.temp }}/coldstart/

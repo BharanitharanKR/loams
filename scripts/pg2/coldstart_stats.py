@@ -37,6 +37,8 @@ def pct(sorted_ms, q):
 def stats_from_samples(samples_ms):
     """p50, p90 and p99 (nearest rank), min, max and mean, in ms."""
     s = sorted(float(x) for x in samples_ms)
+    if not all(math.isfinite(x) and x >= 0 for x in s):
+        raise ValueError("a sample is not a finite, non-negative number of ms")
     if not s:
         return {"n": 0}
     return {
@@ -77,6 +79,9 @@ class Tests(unittest.TestCase):
         # Nearest rank on 50 samples: p99 is the largest, p90 the 45th.
         st = stats_from_samples(range(1, 51))
         self.assertEqual((st["p90_ms"], st["p99_ms"]), (45.0, 50.0))
+        for bad in ([1e309], [float("nan")], [-1]):
+            with self.assertRaises(ValueError):
+                stats_from_samples(bad)
 
     def test_variant_checks_its_target(self):
         doc = {"runtime": "compose", "pool": "off", "samples_ms": [900, 1100, 25000]}
@@ -107,7 +112,8 @@ def main():
     for path in a.samples:
         with open(path) as fh:
             runs.append(variant(json.load(fh)))
-    print(json.dumps({"date": a.date, "sha": a.sha, "host": a.host, "runs": runs}, indent=2))
+    doc = {"date": a.date, "sha": a.sha, "host": a.host, "runs": runs}
+    print(json.dumps(doc, indent=2, allow_nan=False))
 
 
 if __name__ == "__main__":
