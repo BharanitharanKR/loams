@@ -27,13 +27,7 @@ enforcement are open source. Billing-grade metering, billing and commercial APIs
 belong in the private `loams-platform` repository. **Integrity** is the rule:
 "could a charge depend on this value, and could a tenant or an agent profit from
 forging it?" If so, its producer and validator belong in the private platform.
-
-Run `scripts/ci/no-metering.sh` before submitting changes. The guard scans tracked
-files and Cargo manifests/lockfiles; only the historical boundary documents named
-in [MT4 Task 8](docs/plans/2026-10-02-mt4-byoc-control-plane.md) may mention the
-private protocol's identifiers. New exceptions require a boundary review. The
-open engine never depends on a private platform package. See
-[open-core.md](docs/open-core.md) for the full boundary.
+The open engine never depends on a private platform package.
 
 ## Development setup
 

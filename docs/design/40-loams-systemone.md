@@ -555,4 +555,4 @@ All fetched or queried on 2026-10-02.
 - Self-hosted API: github.com/1Panel-dev/laya-server (Apache-2.0).
 - Jev: docs.typesafe.ai (overview and primitives), docs.litellm.ai/docs/pass_through/typesafe, typesafe.ai/legal/terms and /legal/privacy-policy, github.com/browser-use/jev-ultrafast (MIT).
 - Rust: crates.io `ort` (2.0.0-rc.13, 2026-07-28), `kevala` (absent); `huggingface/candle` (`modernbert.rs`).
-- Internal: §37 (D422, §18), §39 (D-SF-2, D-SF-3, D-SF-9, D-SF-11), `docs/open-core.md` (D220), D111, D128.
+- Internal: §37 (D422, §18), §39 (D-SF-2, D-SF-3, D-SF-9, D-SF-11), D220, D111, D128.

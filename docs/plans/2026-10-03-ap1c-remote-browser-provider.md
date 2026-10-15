@@ -41,7 +41,7 @@ Gates are satisfied when each has a command and a recorded result.
 2. `cargo clippy -p loams-web-bridge --all-targets --locked -- -D warnings`
 3. `cargo test -p loams-web-bridge --locked` — 34 unit tests and 42 integration tests, including the credential-never-leak test, the two-provider conformance suite and the refusal matrix.
 4. `cargo deny check` — the new dependencies (`tokio-tungstenite`, `tungstenite` and their transitive crates) are MIT or Apache-2.0.
-5. `bash scripts/ci/no-metering.sh` — the open crate meters nothing.
+5. The open crate meters nothing (the no-metering guard that checked this was removed 2026-10-15).
 6. A human reads the credential test and confirms it would fail if a `SecretValue` were printed anywhere.
 7. **Not satisfied here:** the live spike (Task 0). It needs the owner's Cloudflare credentials. Stated plainly rather than implied.
 

@@ -59,7 +59,7 @@ The exit is "Exit criteria for production" at the end of this plan, with the tas
   - [§49](../design/49-loams-house-production.md) §14, §15 (D776);
   - [§45](../design/45-loams-live-production.md) §3.2, §7, §12 (D682, D690, D696).
 - The product plans, at their current rulings: [PG2](2026-10-08-pg2-postgres-production.md) (Task 0 rulings 3–5, R1.7, R5.x; Tasks 9, 47, 48), [SQ1](2026-10-08-sq1-loams-sql-tidb.md) (Tasks 11, 14, 25), [GR1](2026-10-08-gr1-graph-production.md) (Tasks 24, 25), [HS1](2026-10-08-hs1-house-production.md) (Tasks 20, 22, 26), [LV1](2026-10-08-lv1-live-production.md) (Task 28).
-- [§44](../design/44-unified-api-and-sdks.md) §4–§7 (API rules); [open-core.md](../open-core.md); MT1, MT2, MT3 and NET1 as planned.
+- [§44](../design/44-unified-api-and-sdks.md) §4–§7 (API rules); MT1, MT2, MT3 and NET1 as planned.
 
 ## Owner rulings 2026-10-10 (defaults)
 
@@ -167,7 +167,6 @@ deploy/helm/loams-control/  deploy/helm/loams-byoc-agent/                       
 deploy/observability/loams-control/{dashboards/,alerts.yaml}                                    Task 28
 release/manifest.toml                                                                            Task 24
 web/apps/console/src/pages/operator/                                                             Task 26
-scripts/ci/no-metering.py   (field-segment rule)                                                 Task 27
 docs/security/loams-control-threat-model.md   docs/runbooks/loams-control/                       Tasks 29–30
 .github/workflows/{cp1.yml,cp1-e2e.yml}
 ```
@@ -988,7 +987,7 @@ Commit `feat(console): operator view and control-plane CLI`.
 
 ### Task 27: The no-metering guard, extended to field names
 
-**Files:** `scripts/ci/no-metering.py`, `scripts/ci/test-no-metering.py`, `CONTRIBUTING.md` (a short section). Tests: the script's self-tests.
+**Files:** the guard script and its self-tests (both removed 2026-10-15), `CONTRIBUTING.md` (a short section). Tests: the script's self-tests.
 
 **Contract:** keep T8-1 to T8-5 as built. Add a field-segment rule:
 - **Scope:** `.proto` files under `proto/loams/{control,tenancy}`, and Rust `pub` items and serde field names in `crates/loams-{control,ctlstore,tenancy,tenancy-client,gitops,operator,byoc-agent,net}`, plus each product's `tenancy.rs`.

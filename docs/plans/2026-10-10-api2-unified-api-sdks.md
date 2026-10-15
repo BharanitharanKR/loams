@@ -89,7 +89,7 @@ The exit is "Exit criteria for production" at the end of this plan, with the own
 - **Generated code is never hand-edited.** `scripts/sdk/drift.sh` fails on a diff in any committed output. A pin bump is its own PR with the regenerated output and its `pins.lock` row.
 - **One required-fixture bar** (D617). `sdks/fixtures/manifest.json` is the only definition. A language skips a required fixture only when the fixture is `transport: grpc-only` and the language runs the Connect-unary fallback (D613).
 - **Secrets.** Bearer tokens, API keys and refresh tokens never appear in a URL, a log line, an error message, an `ErrorInfo.metadata` value, a span attribute or a fixture. SDK `Debug`/`toString`/`repr` of a `TokenSource` prints `[redacted]`. Recorded fixtures carry the placeholder `Bearer <redacted>`.
-- **No billing** (D220, D552). No RPC, field or SDK module named `meter`, `usage`, `invoice`, `credit`, `plan` or `price`. `scripts/ci/no-metering.sh` gains `proto/` and `sdks/` (Task 12).
+- **No billing** (D220, D552). No RPC, field or SDK module named `meter`, `usage`, `invoice`, `credit`, `plan` or `price`.
 - **Pins.** Exact versions for every new crate, package and plugin, at least 14 days old (registry date). Record each pin in the task's commit message and, for the generation toolchain, in `scripts/sdk/pins.lock`.
 - **Do not publish** to any registry until the owner has done §44 §13's account actions for it. Until then every release job is a dry run (Task 25).
 
@@ -146,7 +146,6 @@ docs/api/{reasons.md,route-map.md,migrate.md,curl.md,reference/,snippets/}   Tas
 docs/sdk/{runtime-contract.md,fixtures.md,toolchain-2026-10.md,versioning.md}   Tasks 0, 16, 24
 docs/release/publishing.md                                        Task 25
 scripts/sdk/{gen.sh,drift.sh,check-pins.sh,pins.lock,release-dry-run.sh}       Tasks 13–14, 25
-scripts/ci/no-metering.sh                                         Task 12
 .github/workflows/{ci.yml,sdk-release.yml,sdk-mirror.yml,api-protos.yml}        Tasks 12, 19, 23, 25
 .github/CODEOWNERS                                                Task 12 (reasons.md, Q612)
 ```
@@ -513,13 +512,12 @@ Commit `feat(api): remove the native REST and the console OpenAPI`.
 
 ### Task 12: Contract gates
 
-**Files:** `.github/workflows/api-protos.yml` (or a job in `ci.yml`, as `app-protos` is), `docs/api/curl.md`, `crates/loams/tests/curl_examples.rs`, `.github/CODEOWNERS`, `scripts/ci/no-metering.sh` and `buf.yaml`.
+**Files:** `.github/workflows/api-protos.yml` (or a job in `ci.yml`, as `app-protos` is), `docs/api/curl.md`, `crates/loams/tests/curl_examples.rs`, `.github/CODEOWNERS` and `buf.yaml`.
 
 **Interfaces:**
 - `buf lint` on `proto/` and `proto-internal/`.
 - `buf breaking` against `dev` until a tag `v*` exists, then against the latest tag. It covers every package not listed as `unstable`.
 - CODEOWNERS on `docs/api/reasons.md` and `proto/**` (Q612).
-- `no-metering.sh` covers `proto/` and `sdks/`.
 
 Tests:
 - `breaking_change_fails_ci`: a fixture proto pair under `crates/loams-proto/tests/breaking/`.

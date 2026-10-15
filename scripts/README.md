@@ -8,7 +8,7 @@ This directory contains development, verification, benchmarking, and CI scripts 
 
 | Directory | Purpose | Primary Scripts |
 | --- | --- | --- |
-| **[`ci/`](ci/)** | Continuous integration checks | `check-dco.sh`, `auto-promote.py`, `no-metering.sh`, `publishable-crates.py`, `signpath-artifacts.py` |
+| **[`ci/`](ci/)** | Continuous integration checks | `check-dco.sh`, `auto-promote.py`, `publishable-crates.py`, `signpath-artifacts.py` |
 | **[`sdk/`](sdk/)** | SDK generation and verification | `gen.sh` (code generation), `drift.sh` (API drift check), `check-pins.sh` |
 | **[`connectors/`](connectors/)** | Connector tooling & generation | `gen_registry.sh`, `camel_catalog.py`, `kestra_catalog.py`, `matrix.py` |
 | **[`loams-pg-bench/`](loams-pg-bench/)** | Postgres benchmark & gating | `run.sh`, `workload.sh`, `gate.sh`, `compare.py`, `stats.py` |

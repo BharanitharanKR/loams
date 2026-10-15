@@ -167,7 +167,5 @@ job ends.
   marketplace, not publishing Loams itself.
 - D292 (cargo-dist for binaries and GitHub Releases), D294 (`cargo install
   loams`), D298 (the CLI track) and D400 (the `loams` package namespace).
-- D220 and D552 (the open-core boundary and the `scripts/ci/no-metering.sh`
-  guard). A publish path may not add a billing-grade name or a private package
-  to anything it uploads; the guard runs over the workflows themselves, because
-  they are tracked files.
+- D220 and D552 (the open-core boundary). A publish path may not add a
+  billing-grade name or a private package to anything it uploads.

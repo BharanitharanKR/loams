@@ -125,7 +125,7 @@ D220 put "the control plane" in `loams-platform`. D540 then opened the multi-ten
 | `ComputeLifecycleObserver`: a Rust trait called with a plain struct (`org`, `namespace`, `project`, `endpoint`, `compute`, `event: Started \| Resized{cu} \| Suspended \| Failed`, `at`), no wire format, no buffer, no persistence, as D549's `InvocationObserver` | The observer implementation that turns those events into billing records, linked in at build time |
 | Helm chart, single-node mode, desktop integration | — |
 
-The dependency runs one way (D551): nothing here names `loams-platform`, and `scripts/ci/no-metering.sh` (MT4 Task 8) also scans `loams-pg-control`.
+The dependency runs one way (D551): nothing here names `loams-platform`.
 
 ## 6. The control plane (D704–D706)
 

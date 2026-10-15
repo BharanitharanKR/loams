@@ -13,7 +13,7 @@ Rules that hold across every plane:
   `console.loams.dev`.
 - **Open standards:** TLS, mTLS, OIDC, Connect, CloudEvents, and the Postgres and MySQL wire
   protocols.
-- **Billing-grade metering stays out of this repository** ([open core](../open-core.md)). Limits,
+- **Billing-grade metering stays out of this repository** (open core, §41). Limits,
   caps and backpressure belong here; usage billing does not.
 - **Identity** is Authentik behind `auth.loams.dev`, an issuer of the operator's own choosing, or the
   tailnet's own identity (see §1).

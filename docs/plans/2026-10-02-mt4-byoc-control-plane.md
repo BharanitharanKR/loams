@@ -11,7 +11,7 @@
 - Release channels and upgrade rings (§41 §8).
 - The limits API with approximate enforcement state (§41 §9).
 - The operator view in the console and the CLI commands.
-- `scripts/ci/no-metering.sh` and the exit-gate e2e (D552, D558).
+- The no-metering guard (removed 2026-10-15) and the exit-gate e2e (D552, D558).
 
 **Architecture:**
 - **Git is the write path.** The control plane writes records to the `ControlStore` and an outbox; the Git writer renders files; Argo CD or Flux applies them; the operator reconciles and reports. Nothing here runs `kubectl apply` against a tenant cluster.
@@ -23,12 +23,11 @@
 
 **Spec:**
 - [§41](../design/41-multitenant-byoc-control-plane.md) (all); [§18](../design/18-metastore-backends-and-router.md) §5 to §8 (D63 to D65, D98, D103); [§38](../design/38-knative-authentik-gitops.md) §3.3, §4, §6; [§25](../design/25-clever-cloud-stack.md) §5, §6; [§27](../design/27-usage-hooks.md) §3.7.
-- [open-core.md](../open-core.md).
 
 ## Global Constraints
 
 Same as the M1 overview §8, plus:
-- **No billing, no plan, no price, no invoice, no usage record** in any type, table, proto field, metric or endpoint added here. Review rejects a field named `plan`, `price`, `invoice`, `credit`, `meter`, `billable` or `usage` (the limits API's `used` is *enforcement state* and is documented as such). `scripts/ci/no-metering.sh` (Task 8) enforces the names.
+- **No billing, no plan, no price, no invoice, no usage record** in any type, table, proto field, metric or endpoint added here. Review rejects a field named `plan`, `price`, `invoice`, `credit`, `meter`, `billable` or `usage` (the limits API's `used` is *enforcement state* and is documented as such). The no-metering guard (Task 8, removed 2026-10-15) enforced the names.
 - **No endpoint that spends money, changes a plan or reads billing-grade usage** (D550).
 - **The dependency runs one way** (D551). No crate may depend on anything named `loams-platform*`; a `cargo deny` ban and the guard check it.
 - **Idempotent mutations.** Every mutating RPC takes a `client_token` and replays return the first result.
@@ -83,7 +82,6 @@ crates/loams-operator/src/tenant.rs         # Task 4 (existing crate)
 deploy/gitops/appset-tenants.yaml  deploy/gitops/appset-rings/  deploy/authentik/blueprints/{scim.yaml,enforced-sso.yaml}
 deploy/helm/loams-stack/charts/control/     # chart for loams-control and the BYOC profile
 web/apps/console/src/pages/operator/        # Task 7
-scripts/ci/no-metering.sh                   # Task 8
 .github/workflows/ci.yml                    # jobs control (path-filtered), mt4-e2e (k3d + Forgejo)
 docs/design/41-multitenant-byoc-control-plane.md  docs/design/13-decision-log.md  CHANGELOG.md
 ```
@@ -170,9 +168,9 @@ docs/design/41-multitenant-byoc-control-plane.md  docs/design/13-decision-log.md
 
 ### Task 8: The no-metering guard and `InvocationObserver` conformance
 
-**Files:** `scripts/ci/no-metering.sh`, `.github/workflows/ci.yml`, `deny.toml`, `CONTRIBUTING.md` (a short section).
+**Files:** the guard script (removed 2026-10-15), `.github/workflows/ci.yml`, `deny.toml`, `CONTRIBUTING.md` (a short section).
 
-**Produces:** the guard of D552: it fails if `loams.meter`, `meter.sock`, `HostReport`, `x-loams-usage` or `loams_meter_` appears in tracked files outside the allowlist (Q554: `docs/design/13-decision-log.md`, `docs/design/_pending/`, `docs/design/27-usage-hooks.md`, `docs/design/41-*.md`, `docs/open-core.md`, `docs/plans/2026-10-0*-rn1-*.md`, `docs/plans/2026-10-02-mt4-*.md`, `CHANGELOG.md`); it fails if any `Cargo.toml` or lockfile names a package starting with `loams-platform`; a `cargo deny` ban on the same; a conformance test in `loams-runner` (if RN1 Task 3 has merged) that `InvocationObserver`'s data type has no buffer, socket or serialization derive (`Observation` is not `Serialize`).
+**Produces:** the guard of D552: it fails if `loams.meter`, `meter.sock`, `HostReport`, `x-loams-usage` or `loams_meter_` appears in tracked files outside the allowlist (Q554: `docs/design/13-decision-log.md`, `docs/design/_pending/`, `docs/design/27-usage-hooks.md`, `docs/design/41-*.md`, the open-core page (removed 2026-10-15), `docs/plans/2026-10-0*-rn1-*.md`, `docs/plans/2026-10-02-mt4-*.md`, `CHANGELOG.md`); it fails if any `Cargo.toml` or lockfile names a package starting with `loams-platform`; a `cargo deny` ban on the same; a conformance test in `loams-runner` (if RN1 Task 3 has merged) that `InvocationObserver`'s data type has no buffer, socket or serialization derive (`Observation` is not `Serialize`).
 
 **Tests:** `guard_rejects_meter_names` (a fixture tree with a forbidden name); `guard_allows_allowlisted_docs`; `guard_rejects_platform_dependency`; `observation_is_not_serializable` (a compile-fail test with `trybuild`).
 

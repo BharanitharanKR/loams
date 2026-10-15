@@ -19,6 +19,6 @@ Forks, embedded uses, hosted services and products built on Loams are welcome. S
 
 ## Principles and longer-term governance
 
-The self-hosted engine, open control plane and APIs are Apache-2.0; commercial metering, billing and hosted services live in private repositories, as described in [open-core.md](docs/open-core.md). Data at rest stays readable without Loams. No single company should control the roadmap long term.
+The self-hosted engine, open control plane and APIs are Apache-2.0; commercial metering, billing and hosted services live in private repositories. Data at rest stays readable without Loams. No single company should control the roadmap long term.
 
 Once at least three organizations contribute regularly, the maintainers intend to propose Loams to a neutral foundation and adopt that foundation's governance.

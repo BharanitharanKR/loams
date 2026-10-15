@@ -1,6 +1,6 @@
 # 41 — Loams Multitenant BYOC Control Plane with GitOps
 
-Status: **Proposed** · 2026-10-02. Source: the owner's open-core ruling of 2026-10-02: "in open-core, multi-tenant Knative and GitOps using Argo CD is fully open source, so name it as Multitenant BYOC Control Plane with GitOps, and move the commercial API and metering to private, because they may be used to abuse by agents — integrity is the security principle of Loams." The boundary is in [open-core.md](../open-core.md); this document is the architecture of the open half. Decisions **D540–D559** and questions **Q540–Q559** are recorded in the [decision log](13-decision-log.md). Plan: [MT4](../plans/2026-10-02-mt4-byoc-control-plane.md).
+Status: **Proposed** · 2026-10-02. Source: the owner's open-core ruling of 2026-10-02: "in open-core, multi-tenant Knative and GitOps using Argo CD is fully open source, so name it as Multitenant BYOC Control Plane with GitOps, and move the commercial API and metering to private, because they may be used to abuse by agents — integrity is the security principle of Loams." This document is the architecture of the open half. Decisions **D540–D559** and questions **Q540–Q559** are recorded in the [decision log](13-decision-log.md). Plan: [MT4](../plans/2026-10-02-mt4-byoc-control-plane.md).
 
 **Amends** D220 and D221 (the multi-tenant control plane, BYOC management, SCIM, enforced SSO and cross-org admin are open), D403 and D440 (the parts that kept the multi-tenant control plane private), [§18](18-metastore-backends-and-router.md) §8 (D64: BYOC is open), [§24](24-cpu-time-runtime.md) §7 and §16, [§27](27-usage-hooks.md) (billing-grade metering moved to `loams-platform`), [§38](38-knative-authentik-gitops.md) §2.2 (its non-goals) and RN1. **Reaffirms** D190, D202 and D444 (no metering in this repository), with a new reason.
 
@@ -304,7 +304,7 @@ The platform may not need the observer at all: cgroups are authoritative for T0 
 
 | Earlier text | Now |
 |---|---|
-| D220 and [open-core.md](../open-core.md): the multi-tenant control plane, BYOC management and fleet operations are private | **Amended** (D540). Control plane, BYOC and multi-cluster GitOps are open; hosted-only fleet operations stay private |
+| D220: the multi-tenant control plane, BYOC management and fleet operations are private | **Amended** (D540). Control plane, BYOC and multi-cluster GitOps are open; hosted-only fleet operations stay private |
 | D221: SCIM, enforced SSO and cross-org admin are private | **Amended** (D553): open through Authentik; hosted audit UI, long retention, SIEM and compliance packs stay private |
 | D403, D440: "keep loams cloud private; Knative in OSS but no metering" | **Kept** except that the multi-tenant control plane is now open (D540) |
 | §18 §8 (D64): the hosted `loams-control` | Now the open `loams-control` (this document §4) |
@@ -322,7 +322,7 @@ The platform may not need the observer at all: cgroups are authoritative for T0 
 
 [MT4](../plans/2026-10-02-mt4-byoc-control-plane.md) builds what is new here: `loams-control` and `loams.control.v1`, the tenants-repo Git writer and ApplicationSet layout, the BYOC agent and enrolment, release channels and rings, limits API and enforcement state, the operator view, the `InvocationObserver` and the no-metering CI guard. MT1 to MT3 remain as written, with the notes in their plans.
 
-**Exit (D558).** On k3d in CI: create an org and a namespace through the API and see the commit, the `Application`, the Kubernetes namespace with its `NetworkPolicy` and `ResourceQuota`, and the directory entry `active`; enrol a second k3d cluster as BYOC through the agent and onboard a tenant there; promote a release through ring 0 to ring 1 and fail a gate on purpose to see promotion stop; exceed a limit and receive 429 with no usage record written anywhere; and `scripts/ci/no-metering.sh` passes.
+**Exit (D558).** On k3d in CI: create an org and a namespace through the API and see the commit, the `Application`, the Kubernetes namespace with its `NetworkPolicy` and `ResourceQuota`, and the directory entry `active`; enrol a second k3d cluster as BYOC through the agent and onboard a tenant there; promote a release through ring 0 to ring 1 and fail a gate on purpose to see promotion stop; exceed a limit and receive 429 with no usage record written anywhere; and the no-metering guard passes (the guard was removed 2026-10-15).
 
 ## 15. Risks
 
@@ -337,4 +337,4 @@ The platform may not need the observer at all: cgroups are authoritative for T0 
 
 ## 16. Sources
 
-Read on 2026-10-02: [open-core.md](../open-core.md) (previous revision); §18 §5 to §9; §24 §4, §5, §7, §16; §25 §5 to §6; §27 in full; §34's stub; §38 in full; the plans RN1, MT1, MT2, MT3; decisions D63, D64, D65, D86, D98, D103, D185 to D188, D190, D200 to D202, D220, D221, D403, D404, D440 to D459; `loams-platform` docs 01 to 05 and README. External claims marked **(verify)** (Argo CD ApplicationSet progressive sync status in 3.5, commit signature verification options) are checked by MT4 Task 0.
+Read on 2026-10-02: the previous revision of the open-core boundary page; §18 §5 to §9; §24 §4, §5, §7, §16; §25 §5 to §6; §27 in full; §34's stub; §38 in full; the plans RN1, MT1, MT2, MT3; decisions D63, D64, D65, D86, D98, D103, D185 to D188, D190, D200 to D202, D220, D221, D403, D404, D440 to D459; `loams-platform` docs 01 to 05 and README. External claims marked **(verify)** (Argo CD ApplicationSet progressive sync status in 3.5, commit signature verification options) are checked by MT4 Task 0.

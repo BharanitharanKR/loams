@@ -44,7 +44,7 @@ The exit is §52 §17's checklist, repeated at the end of this plan with the own
 - **Rust builds** use the shared target directory (`~/Documents/.cargo/config.toml`). Never set `CARGO_TARGET_DIR`, never build in `/tmp`. Run one cargo build at a time (jobs and linker from `~/.cargo/config.toml`). Build the touched crates (`cargo test -p loams-memory`), and `cargo test -p loams --features memory` before a commit that touches `loams`. Never `cargo build --workspace --all-features` locally.
 - **The default build does not change.** `cargo tree -p loams -e normal` on default features lists none of `loams-memory`, `loams-llm`, `loams-mcp`, `loams-codegraph`, `tree-sitter*` (Task 11 test `default_features_exclude_memory`). `code-memory` is a separate feature (Task 27).
 - **AP0 API rules** (§44 §8, API2): every mutation that is not idempotent by construction has `idempotency_key` (field 15); reads are `NO_SIDE_EFFECTS`; errors are `loams.errors.v1.ErrorInfo` with reasons registered in `docs/api/reasons.md`; AIP-158 pagination; server streaming only, with a cursor and a 15 s heartbeat; resource names are fields.
-- **No billing.** No RPC, field, metric or module named `meter`, `usage`, `invoice`, `credit`, `plan` or `price` (API2's rule). `scripts/ci/no-metering.sh` covers `crates/loams-memory`, `crates/loams-llm`, `crates/loams-codegraph` and `proto/loams/memory` (Task 1).
+- **No billing.** No RPC, field, metric or module named `meter`, `usage`, `invoice`, `credit`, `plan` or `price` (API2's rule).
 - **I-ISO is enforced in one place.** Only `SpaceScope` (Task 3) may put a `space_id` predicate into a query or a key prefix into a write. Handlers receive a `SpaceScope`, never a raw space id list. A grep test (`no_raw_space_filters`) fails if any other module builds a `space_id` filter.
 - **Memories are data.** Every rendering of memory content for a model (the constructor, MCP results, adapters, the daemon) uses `render::frame` (Task 8). No code path concatenates memory text into a prompt outside that function, except the extraction prompts, which quote episodes as data inside their own fixed template.
 - **No content in logs.** Episode content, fact text, block values, prompts, model outputs, query text and embeddings never reach a log line, a span attribute, a metric label or an error message. Fingerprints (SHA-256 prefixes) and ids only. Test per crate: `no_content_in_logs` with a canary string.
@@ -251,7 +251,7 @@ Steps:
 
 ### Task 1: `loams.memory.v1` protos, reasons and route map
 
-**Files:** create `proto/loams/memory/v1/memory.proto`; modify `crates/loams-proto` (package list), `docs/api/reasons.md`, `docs/api/route-map.md`, `buf.yaml` (`unstable` ignore), `scripts/ci/no-metering.sh`. Tests in `crates/loams-proto/tests/memory.rs`.
+**Files:** create `proto/loams/memory/v1/memory.proto`; modify `crates/loams-proto` (package list), `docs/api/reasons.md`, `docs/api/route-map.md`, `buf.yaml` (`unstable` ignore). Tests in `crates/loams-proto/tests/memory.rs`.
 
 **Interfaces:** `MemoryAdminService` and `MemoryService` complete, as §52 §9.1; `ModuleOptions.unstable = true`; facade annotations (module `memory`, retry classes); every mutation's `idempotency_key = 15` except create-by-name and set-state RPCs (API1 ruling 2.4); `Fact`, `Entity`, `Episode`, `Block`, `Profile`, `DreamRun`, `Erasure`, `Interval`, `Relation`, `Extractor`, `ModelCallStats`.
 

@@ -57,7 +57,7 @@ The exit is "Exit criteria for production" at the end of this plan, with the own
 - **AP0 API rules** (§44) for `loams.repos.v1`: every mutation has `idempotency_key = 15`; reads are `NO_SIDE_EFFECTS`; errors are `loams.errors.v1` with reasons registered in `docs/api/reasons.md`; pagination is `page_size`/`page_token`; watch streams send a snapshot, then changes, then a heartbeat every 15 s.
 - **Tenant from the credential** (D182). The namespace comes from the token, never from the URL alone. A URL that names another namespace answers `404` with no detail.
 - **Loopback and local-first until MT1** (D111, D837). Every new listener refuses a non-loopback address with `<listener> listen on <addr>: only loopback addresses are served until the unified auth plan (D111)`. Authorization goes through `GitAuthorizer` (Task 16). vfsd's control socket is `$XDG_RUNTIME_DIR/loams/vfsd.sock` (mode 0600; D788's rules: no TCP, peer uid checked).
-- **No billing** (D393). No field, metric, table or endpoint may be named `plan`, `price`, `invoice`, `credit`, `meter`, `billable` or `usage`. `scripts/ci/no-metering.sh` covers every new crate (Task 74).
+- **No billing** (D393). No field, metric, table or endpoint may be named `plan`, `price`, `invoice`, `credit`, `meter`, `billable` or `usage`.
 - **Secrets.** Tokens, vended credentials, vault values, data keys and `repo_fp_key` are `Secret<T>`, whose `Debug` and `Display` print `[redacted]`.
 - **Pins.** Exact versions for every new crate, image and tool, at least 14 days old. Record each pin in the task's commit message.
 - **Docs and code stay in step.** A change to a §36 format, constant or rule updates §36 in the same PR, marked "As built (GT1x)".
@@ -163,7 +163,7 @@ crates/loams/src/api/{repos.rs,workspaces.rs,objects.rs,env.rs,git_http.rs,git_i
 crates/loams/src/{main.rs,server.rs}                          --git-listen, dev --git, vfs/env subcommands (Task 81)
 bench/{git-wal,git-ws,git-vfs}/                               Tasks 13, 58, 80
 scripts/git/{rustfs.sh,openbao.sh,bench.sh,matrix.sh,record-agent-corpus.sh,mono-fixture.sh,restore-drill.sh,chaos.sh}
-scripts/env/gen-rules.sh  scripts/ci/{git-licence.sh,no-metering.sh}
+scripts/env/gen-rules.sh  scripts/ci/git-licence.sh
 deploy/loams-git-dev/compose.yaml  deploy/observability/loams-git/{dashboards/,alerts.yaml}
 docs/security/loams-git-threat-model.md  docs/runbooks/loams-git/  docs/guides/{git.md,workspaces.md,git-shim.md,env.md,build-cache.md,crates-mirror.md}
 .github/workflows/{gt1.yml,gt1-fuse.yml,gt1-e2e.yml,gt1-nightly.yml}
