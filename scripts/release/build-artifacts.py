@@ -2,14 +2,19 @@
 """Build the release artifacts: three Linux packages, the Windows zip, or a macOS tarball.
 
 The Linux formats are .deb, .rpm and .pkg.tar.zst, all from one nFPM config
-(`release/nfpm.yaml`). The Windows artifact is a zip holding `loams.exe`, the
-built web console and the licence files, because there is no Tauri desktop app
-and no GUI to wrap: what Windows gets is the server binary and the console, the
-same two things the Linux packages install.
+(`release/nfpm.yaml`). The Windows artifact is a zip holding `loams.exe`,
+`git-remote-loams.exe`, the built web console and the licence files, because
+there is no Tauri desktop app and no GUI to wrap: what Windows gets is the
+server binary, git's remote helper and the console, the same things the Linux
+packages install.
+
+Every artifact carries `git-remote-loams` next to `loams` (from
+0.1.0-preview.3): git runs `git-remote-loams` for a `loams::` URL and finds it
+by name on PATH, so it is installed in the same directory as `loams`.
 
 Two rules this script exists to enforce:
 
-  * Every artifact carries the same content on every platform. The binary, the
+  * Every artifact carries the same content on every platform. The binaries, the
     console build, LICENSE, NOTICE and README.md come from one staging tree that
     is built once and then packed, so a .deb and a .pkg.tar.zst of the same
     release cannot drift.
@@ -24,14 +29,14 @@ Two rules this script exists to enforce:
     the publication gate never has to guess.
 
 Usage:
-    build-artifacts.py package --version 0.1.0 --binary PATH [--console DIR]
-                              --format deb --format rpm --format archlinux
+    build-artifacts.py package --version 0.1.0 --binary PATH --git-remote PATH
+                              [--console DIR] --format deb --format rpm --format archlinux
                               --out DIR [--target x86_64-unknown-linux-gnu]
                               [--mtime RFC3339] [--gpg-key FILE] [--gpg-key-id ID]
     build-artifacts.py windows-zip --version 0.1.0 --binary loams.exe
-                              --console DIR --out DIR
+                              --git-remote git-remote-loams.exe --console DIR --out DIR
     build-artifacts.py macos-tar --version 0.1.0 --binary loams
-                              --arch arm64|x86_64 --console DIR --out DIR
+                              --git-remote git-remote-loams --arch arm64|x86_64 --console DIR --out DIR
     build-artifacts.py --self-test
 
 `--nfpm PATH` overrides the nFPM binary; without it the script looks for `nfpm`
@@ -61,6 +66,9 @@ REPO_ROOT = Path(__file__).resolve().parents[2]
 NFPM_CONFIG = REPO_ROOT / "release" / "nfpm.yaml"
 SYSTEMD_DIR = REPO_ROOT / "release" / "systemd"
 DOC_FILES = ("LICENSE", "NOTICE", "README.md")
+# git's remote helper for `loams::` URLs (crates/loams-git-remote). git looks it
+# up by this exact name on PATH, so every artifact installs it next to `loams`.
+GIT_REMOTE = "git-remote-loams"
 
 # The formats, and what each one's leading bytes must be. A package that does
 # not start with its format's magic is a failed build, and catching it here is
@@ -109,24 +117,32 @@ def sha256(path: Path) -> str:
 # --------------------------------------------------------------------------
 
 
-def build_stage(stage: Path, binary: Path, console: Path | None) -> Path:
+def check_executable(path: Path, what: str) -> None:
+    """Refuse a missing, empty or non-executable binary before packing it."""
+    if not path.is_file():
+        raise SystemExit(f"build-artifacts: {what} is missing: {path}")
+    if path.stat().st_size == 0:
+        raise SystemExit(f"build-artifacts: {what} is empty: {path}")
+    if not os.access(path, os.X_OK):
+        raise SystemExit(f"build-artifacts: {what} is not executable: {path}")
+
+
+def build_stage(stage: Path, binary: Path, console: Path | None, git_remote: Path) -> Path:
     """Assemble the tree every Linux package is built from.
 
     One tree, packed three ways. The layout mirrors the destinations declared in
     release/nfpm.yaml, and build-stage refuses anything it was not given rather
     than packaging an empty directory.
     """
-    if not binary.is_file():
-        raise SystemExit(f"build-artifacts: the server binary is missing: {binary}")
-    if binary.stat().st_size == 0:
-        raise SystemExit(f"build-artifacts: the server binary is empty: {binary}")
-    if not os.access(binary, os.X_OK):
-        raise SystemExit(f"build-artifacts: the server binary is not executable: {binary}")
+    check_executable(binary, "the server binary")
+    check_executable(git_remote, f"the {GIT_REMOTE} binary")
 
     usr_bin = stage / "usr" / "bin"
     usr_bin.mkdir(parents=True)
     shutil.copy2(binary, usr_bin / "loams")
     os.chmod(usr_bin / "loams", 0o755)
+    shutil.copy2(git_remote, usr_bin / GIT_REMOTE)
+    os.chmod(usr_bin / GIT_REMOTE, 0o755)
 
     doc = stage / "usr" / "share" / "doc" / "loams"
     doc.mkdir(parents=True)
@@ -298,6 +314,25 @@ def deb_is_signed(path: Path) -> bool:
     return False
 
 
+def deb_payload_modes(path: Path) -> dict[str, int]:
+    """Each regular file in a .deb's data.tar.*, with its permission bits.
+
+    The ar walk is `deb_is_signed`'s. nFPM writes data.tar.xz here (nfpm.yaml's
+    `deb.compression`), which tarfile reads without anything extra.
+    """
+    data = path.read_bytes()
+    offset = 8
+    while offset + 60 <= len(data):
+        name = data[offset : offset + 16].strip(b" ").rstrip(b"/")
+        size = int(data[offset + 48 : offset + 58].strip() or b"0")
+        body = data[offset + 60 : offset + 60 + size]
+        if name.startswith(b"data.tar"):
+            with tarfile.open(fileobj=io.BytesIO(body)) as payload:
+                return {m.name: stat.S_IMODE(m.mode) for m in payload.getmembers() if m.isfile()}
+        offset += 60 + size + (size % 2)
+    return {}
+
+
 def rpm_is_signed(path: Path) -> bool:
     """True when an RPM carries a signature header.
 
@@ -461,7 +496,8 @@ def command_package(args) -> int:
     out.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(prefix="loams-package-") as scratch:
         stage = build_stage(Path(scratch) / "staging", Path(args.binary),
-                            Path(args.console) if args.console else None)
+                            Path(args.console) if args.console else None,
+                            Path(args.git_remote))
         if args.keep_stage:
             keep = out / "staging"
             if keep.exists():
@@ -491,7 +527,7 @@ def command_package(args) -> int:
 
 
 def command_windows_zip(args) -> int:
-    """The Windows artifact: loams.exe, the console, and the licence files.
+    """The Windows artifact: loams.exe, git-remote-loams.exe, the console, and the licence files.
 
     A zip, not an MSI: there is no installer UI in this project, and wrapping a
     console server binary in one would add a WiX build, a code-signing
@@ -502,6 +538,9 @@ def command_windows_zip(args) -> int:
     binary = Path(args.binary)
     if not binary.is_file():
         raise SystemExit(f"build-artifacts: the Windows binary is missing: {binary}")
+    git_remote = Path(args.git_remote)
+    if not git_remote.is_file() or git_remote.stat().st_size == 0:
+        raise SystemExit(f"build-artifacts: {GIT_REMOTE}.exe is missing or empty: {git_remote}")
     console = Path(args.console)
     if not (console / "index.html").is_file():
         raise SystemExit(
@@ -509,7 +548,9 @@ def command_windows_zip(args) -> int:
         )
     name = f"loams-{args.version}-windows-x86_64.zip"
     target = out / name
-    members: list[tuple[Path, str]] = [(binary, "loams.exe")]
+    # Side by side at the top of the zip: putting that one directory on PATH
+    # gives both `loams` and git's `loams::` helper.
+    members: list[tuple[Path, str]] = [(binary, "loams.exe"), (git_remote, f"{GIT_REMOTE}.exe")]
     for doc in DOC_FILES:
         members.append((REPO_ROOT / doc, doc))
     for path in sorted(console.rglob("*")):
@@ -538,7 +579,7 @@ MACOS_ARCHES = ("arm64", "x86_64")
 
 
 def command_macos_tar(args) -> int:
-    """The macOS artifact: a tarball holding `loams`, the console and the licence files.
+    """The macOS artifact: a tarball holding `loams`, `git-remote-loams`, the console and the licence files.
 
     The same content as the Windows zip, under one top-level directory so that
     `tar -xzf` never scatters files into the current directory. The binary is
@@ -554,6 +595,9 @@ def command_macos_tar(args) -> int:
     binary = Path(args.binary)
     if not binary.is_file() or binary.stat().st_size == 0:
         raise SystemExit(f"build-artifacts: the macOS binary is missing or empty: {binary}")
+    git_remote = Path(args.git_remote)
+    if not git_remote.is_file() or git_remote.stat().st_size == 0:
+        raise SystemExit(f"build-artifacts: {GIT_REMOTE} is missing or empty: {git_remote}")
     console = Path(args.console)
     if not (console / "index.html").is_file():
         raise SystemExit(
@@ -566,7 +610,7 @@ def command_macos_tar(args) -> int:
     top = f"loams-{args.version}-macos-{args.arch}"
     name = f"{top}.tar.gz"
     target = out / name
-    members: list[tuple[Path, str, int]] = [(binary, "loams", 0o755)]
+    members: list[tuple[Path, str, int]] = [(binary, "loams", 0o755), (git_remote, GIT_REMOTE, 0o755)]
     for doc in DOC_FILES:
         members.append((REPO_ROOT / doc, doc, 0o644))
     for path in sorted(console.rglob("*")):
@@ -629,15 +673,19 @@ def self_test(gpg_key: str | None = None) -> int:
         binary = root / "loams"
         binary.write_text("#!/bin/sh\necho loams\n")
         os.chmod(binary, 0o755)
+        helper = root / GIT_REMOTE
+        helper.write_text("#!/bin/sh\necho git-remote-loams\n")
+        os.chmod(helper, 0o755)
         console = root / "console"
         (console / "assets").mkdir(parents=True)
         (console / "index.html").write_text("<!doctype html>\n")
         (console / "assets" / "app.js").write_text("console.log(1)\n")
 
         # staging
-        stage = build_stage(root / "stage", binary, console)
+        stage = build_stage(root / "stage", binary, console, helper)
         for expected in (
             "usr/bin/loams",
+            f"usr/bin/{GIT_REMOTE}",
             "usr/share/loams/console/index.html",
             "usr/share/loams/console/assets/app.js",
             "usr/share/doc/loams/LICENSE",
@@ -650,6 +698,8 @@ def self_test(gpg_key: str | None = None) -> int:
                 failures.append(f"stage: {expected} was not staged")
         if oct(stat.S_IMODE((stage / "usr/bin/loams").stat().st_mode)) != "0o755":
             failures.append("stage: usr/bin/loams is not 0755")
+        if oct(stat.S_IMODE((stage / "usr/bin" / GIT_REMOTE).stat().st_mode)) != "0o755":
+            failures.append(f"stage: usr/bin/{GIT_REMOTE} is not 0755")
         if oct(stat.S_IMODE((stage / "usr/lib/systemd/system/loams.service").stat().st_mode)) != "0o644":
             failures.append("stage: the systemd unit is not 0644")
 
@@ -658,8 +708,10 @@ def self_test(gpg_key: str | None = None) -> int:
         not_a_console.mkdir()
         (not_a_console / "readme.txt").write_text("no index.html here\n")
         for label, call in (
-            ("a missing binary", lambda: build_stage(root / "s1", root / "absent", console)),
-            ("a console without index.html", lambda: build_stage(root / "s2", binary, not_a_console)),
+            ("a missing binary", lambda: build_stage(root / "s1", root / "absent", console, helper)),
+            ("a console without index.html",
+             lambda: build_stage(root / "s2", binary, not_a_console, helper)),
+            (f"a missing {GIT_REMOTE}", lambda: build_stage(root / "s3", binary, console, root / "absent")),
         ):
             try:
                 call()
@@ -669,7 +721,8 @@ def self_test(gpg_key: str | None = None) -> int:
 
         # windows zip
         zip_args = argparse.Namespace(
-            version="9.9.9", binary=str(binary), console=str(console), out=str(root / "win")
+            version="9.9.9", binary=str(binary), git_remote=str(helper), console=str(console),
+            out=str(root / "win")
         )
         command_windows_zip(zip_args)
         archive_path = next((root / "win").glob("*.zip"))
@@ -677,7 +730,7 @@ def self_test(gpg_key: str | None = None) -> int:
             names = set(archive.namelist())
             if archive.testzip() is not None:
                 failures.append("windows-zip: the archive is corrupt")
-        for member in ("loams.exe", "LICENSE", "NOTICE", "README.md",
+        for member in ("loams.exe", f"{GIT_REMOTE}.exe", "LICENSE", "NOTICE", "README.md",
                        "console/index.html", "console/assets/app.js"):
             if member not in names:
                 failures.append(f"windows-zip: {member} is missing")
@@ -685,27 +738,30 @@ def self_test(gpg_key: str | None = None) -> int:
         # macOS tarball
         for arch in MACOS_ARCHES:
             tar_args = argparse.Namespace(
-                version="9.9.9", binary=str(binary), console=str(console),
+                version="9.9.9", binary=str(binary), git_remote=str(helper), console=str(console),
                 arch=arch, out=str(root / "mac"), mtime="2026-01-01T00:00:00Z",
             )
             command_macos_tar(tar_args)
         first = root / "mac" / "loams-9.9.9-macos-arm64.tar.gz"
         before = first.read_bytes()
         command_macos_tar(argparse.Namespace(
-            version="9.9.9", binary=str(binary), console=str(console),
+            version="9.9.9", binary=str(binary), git_remote=str(helper), console=str(console),
             arch="arm64", out=str(root / "mac"), mtime="2026-01-01T00:00:00Z",
         ))
         if first.read_bytes() != before:
             failures.append("macos-tar: two builds of the same input differ")
         with tarfile.open(first) as archive:
             tar_members = {m.name: m for m in archive.getmembers()}
-        for member in ("loams", "LICENSE", "NOTICE", "README.md",
+        for member in ("loams", GIT_REMOTE, "LICENSE", "NOTICE", "README.md",
                        "console/index.html", "console/assets/app.js"):
             if f"loams-9.9.9-macos-arm64/{member}" not in tar_members:
                 failures.append(f"macos-tar: {member} is missing")
         exe = tar_members.get("loams-9.9.9-macos-arm64/loams")
         if exe is not None and stat.S_IMODE(exe.mode) != 0o755:
             failures.append("macos-tar: loams is not 0755")
+        helper_member = tar_members.get(f"loams-9.9.9-macos-arm64/{GIT_REMOTE}")
+        if helper_member is not None and stat.S_IMODE(helper_member.mode) != 0o755:
+            failures.append(f"macos-tar: {GIT_REMOTE} is not 0755")
         if not (root / "mac" / "loams-9.9.9-macos-x86_64.tar.gz").is_file():
             failures.append("macos-tar: no x86_64 tarball")
         if any(not m.name.startswith("loams-9.9.9-macos-arm64") for m in tar_members.values()):
@@ -729,6 +785,7 @@ def self_test(gpg_key: str | None = None) -> int:
             pkg_args = argparse.Namespace(
                 version="9.9.9",
                 binary=str(binary),
+                git_remote=str(helper),
                 console=str(console),
                 format=["deb", "rpm", "archlinux"],
                 out=str(root / "pkg"),
@@ -752,6 +809,11 @@ def self_test(gpg_key: str | None = None) -> int:
                         failures.append(f"nFPM produced no {fmt}")
                     else:
                         verify_magic(matches[0], fmt)
+                # The .deb's payload installs both binaries in /usr/bin, 0755.
+                deb_files = deb_payload_modes(root / "pkg" / package_name("deb", "9.9.9", "amd64"))
+                for path in ("./usr/bin/loams", f"./usr/bin/{GIT_REMOTE}"):
+                    if deb_files.get(path) != 0o755:
+                        failures.append(f"deb: {path} is {deb_files.get(path)!r}, not 0755")
                 # The report must agree with the files, whatever the key was.
                 report = json.loads((root / "pkg" / "signing.json").read_text())
                 for name, entry in report.items():
@@ -792,6 +854,7 @@ def main(argv: list[str]) -> int:
     package = sub.add_parser("package", help="build the .deb, the .rpm and the .pkg.tar.zst")
     package.add_argument("--version", required=True)
     package.add_argument("--binary", required=True, help="the loams binary for this target")
+    package.add_argument("--git-remote", required=True, help=f"the {GIT_REMOTE} binary for this target")
     package.add_argument("--console", help="the built console directory (web/apps/console/dist)")
     package.add_argument("--format", action="append", required=True,
                          choices=sorted(FORMAT_MAGIC), help="repeatable")
@@ -807,12 +870,14 @@ def main(argv: list[str]) -> int:
     windows = sub.add_parser("windows-zip", help="build the Windows zip")
     windows.add_argument("--version", required=True)
     windows.add_argument("--binary", required=True, help="loams.exe")
+    windows.add_argument("--git-remote", required=True, help=f"{GIT_REMOTE}.exe")
     windows.add_argument("--console", required=True)
     windows.add_argument("--out", required=True)
 
     macos = sub.add_parser("macos-tar", help="build the macOS tarball")
     macos.add_argument("--version", required=True)
     macos.add_argument("--binary", required=True, help="the loams binary, stripped and signed")
+    macos.add_argument("--git-remote", required=True, help=f"the {GIT_REMOTE} binary, stripped and signed")
     macos.add_argument("--arch", required=True, choices=MACOS_ARCHES)
     macos.add_argument("--console", required=True)
     macos.add_argument("--out", required=True)

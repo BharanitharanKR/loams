@@ -48,9 +48,11 @@ description: |
   The Loams server: the native HTTP API, the Qdrant and Elasticsearch gateways,
   and the dev, standalone, cluster, warm and durable commands.
   .
-  This package installs the `loams` binary under /usr/bin, the built web
-  console under /usr/share/loams/console, and the systemd units loams.service
-  and loams@.service.
+  This package installs the `loams` binary and `git-remote-loams` (git's
+  remote helper for `loams::` URLs, so `git clone`, `fetch` and `push` reach a
+  Loams Git repository on a bucket) under /usr/bin, the built web console under
+  /usr/share/loams/console, and the systemd units loams.service and
+  loams@.service.
 
 # The shared library set of a x86_64-unknown-linux-gnu Rust binary. Verified
 # 2026-10-04 with `readelf -d` on a `cargo build --release -p loams --bin loams`
@@ -96,6 +98,15 @@ contents:
   # The binary itself.
   - src: staging/usr/bin/loams
     dst: /usr/bin/loams
+    file_info:
+      mode: 0755
+
+  # git's remote helper for `loams::<store-url>/ns/<ns>/repos/<repo>` URLs
+  # (crates/loams-git-remote). git finds a helper by name on PATH, so it goes
+  # next to `loams` in /usr/bin. Its DT_NEEDED set is the same four libraries
+  # as the server's, so the `depends` list above covers it.
+  - src: staging/usr/bin/git-remote-loams
+    dst: /usr/bin/git-remote-loams
     file_info:
       mode: 0755
 
