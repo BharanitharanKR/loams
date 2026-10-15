@@ -123,6 +123,24 @@ impl Http {
         })
     }
 
+    /// Send, and read the answer as text (a Prometheus exposition).
+    pub(crate) async fn text(&self, op: Op, req: RequestBuilder) -> Result<String, NeonError> {
+        let transport =
+            |e: reqwest::Error| NeonError::transport(self.component, op, e.without_url());
+        let resp = req.send().await.map_err(transport)?;
+        let status = resp.status();
+        let body = resp.text().await.map_err(transport)?;
+        if !status.is_success() {
+            return Err(NeonError {
+                status: status.as_u16(),
+                msg: body,
+                component: self.component,
+                op,
+            });
+        }
+        Ok(body)
+    }
+
     pub(crate) async fn json<B: Serialize + ?Sized, T: DeserializeOwned>(
         &self,
         op: Op,

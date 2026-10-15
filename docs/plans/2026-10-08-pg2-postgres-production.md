@@ -1976,3 +1976,35 @@ No task of this plan put `pg-control` in the preview release stack: R10.10 noted
   - No TiKV variant: the pool's writes are plain fenced compare-and-sets, which the conformance suite covers.
   - No kind run: the pool on kind needs storage, which waits for Task 48. Task 17's cold-start harness measures it with the pool on and off.
 - **R14.8 Also changed.** `WatchEvent::Endpoint` holds a `Box<EndpointView>`, because `ComputeRec` grew past clippy's `large_enum_variant`.
+
+### Task 15 rulings (2026-10-15)
+
+- **R15.1 Q644, answered.**
+  - Autoscaling uses Kubernetes in-place Pod resize (D712, the `resize` subresource of Task 13). NeonVM and Neon's autoscaler agent are not used: they need KVM nodes, which BYOC and Autopilot-class clusters lack.
+  - 0.25 CU stays the smallest size.
+  - Compose cannot resize a running container (R10.4), so `pg-control` builds the autoscaler only with `--runtime kubernetes`. A runtime that answers `Unsupported` is never asked again for that compute.
+- **R15.2 Samples (`ComputeMetrics`, `src/autoscale.rs`).**
+  - **CPU** comes from the Kubernetes metrics API (metrics-server): the `compute` container's `usage.cpu` in the Pod's `PodMetrics`, as a fraction of the compute's size. `KubeRuntime` implements it. The Role gains `get` on `metrics.k8s.io` `pods`, and nothing else in that group.
+  - **The file cache's size and working set** come from `compute_ctl`'s unauthenticated `/autoscaling_metrics`. That is the `neon` communicator's exposition (`pgxn/neon/communicator/src/worker_process/lfc_metrics.rs`): `lfc_cache_size_limit` and `lfc_approximate_working_set_size_windows{duration_seconds="300"}` in 8 KiB pages. It is read through `ComputeCtlClient::autoscaling_metrics` (fixture `src_autoscaling_metrics.txt`, built from the source) and `ComputeCtl::file_cache`.
+  - `Combined` joins the two sources. A source that fails leaves its fields unknown, and an unknown field triggers nothing.
+- **R15.3 The file cache is in the spec.** Neon leaves the local file cache off by default (`neon.max_file_cache_size = 0`), so the spec now sets two values after the endpoint's settings:
+  - `neon.max_file_cache_size` is 16 CU's cache. It is a start-time setting, and only sizes a shared-memory table.
+  - `neon.file_cache_size_limit` is the compute's own size. It is reloadable, and the autoscaler moves it.
+  - The cache is 768 MiB per 0.25 CU (75 % of the memory), at the extension's default path `file.cache` in the data directory, on the Pod's `emptyDir`. `spec::build` therefore takes the compute's CU. A changed size changes the spec's version, so a pass that sees a cache size the compute did not get pushes it.
+- **R15.4 The policy (`Autoscaler::tick`, pure).**
+  - It runs every 5 s. It scales up after 15 s above 70 % CPU, or at once when the working set passes 75 % of the cache. It scales down after 2 minutes below 30 % CPU, and only if the working set would fit 75 % of the smaller cache.
+  - A step is at most ×2 up and −25 % down, and always at least one 0.25 CU step. Below 1 CU, 25 % is less than a step, so the step is one quarter. A compute outside its endpoint's `[min_cu, max_cu]` moves inside at once.
+  - **Windows.** A decision's window holds until the decision is applied, so a refused resize is asked again at the next tick, not after a new window.
+  - **Caps.** A namespace cap on its computes' total CU (`Scaling::set_cap`, which Task 47's limits record feeds) cuts each scale-up to what is left, taken in observation order.
+- **R15.5 The applier (`src/reconcile/scale.rs`, under the project's lease).**
+  - The reconciler's passes follow each running compute (`Scaling::track`, refreshed with the endpoint's range on every pass) and stop when it ends.
+  - Each tick samples the followed computes, decides, and applies:
+    - Up: resize, then `/configure` the larger cache.
+    - Down: `/configure` the smaller cache first, then resize. A resize that does not apply puts the cache back.
+  - An applied resize writes `C/`'s `cu` and `spec_version` by compare-and-set, and the observer receives `Resized { cu }`.
+  - A compute that is no longer its endpoint's running one, or whose lease is held by another instance, is no longer followed on this instance.
+- **R15.6 Tests.**
+  - `tests/autoscale.rs` holds the six named cases, plus `unsupported_resize_stops_deciding` and `scale_down_shrinks_the_cache_first`. The applier runs on `endpoints/env.rs`'s fakes: the runtime takes a queue of resize answers, and resizes and `/configure`s are logged in order.
+  - `tests/runtime_kube.rs` has `pod_cpu_from_the_metrics_api`, and `role.json` is re-blessed.
+  - `loams-postgres`'s client test parses the exposition.
+  - No kind run: metrics-server and storage in kind wait for Task 48. That the cache reloads without a restart (§46 §7.4's "verify") is Task 17's to measure on a real compute.

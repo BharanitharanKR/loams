@@ -1,0 +1,23 @@
+# HELP lfc_cache_size_limit LFC cache size limit in bytes
+# TYPE lfc_cache_size_limit gauge
+lfc_cache_size_limit 3221225472
+# HELP lfc_hits LFC cache hits
+# TYPE lfc_hits gauge
+lfc_hits 1200
+# HELP lfc_misses LFC cache misses
+# TYPE lfc_misses gauge
+lfc_misses 340
+# HELP lfc_used LFC chunks used (chunk = 1MB)
+# TYPE lfc_used gauge
+lfc_used 512
+# HELP lfc_writes LFC cache writes
+# TYPE lfc_writes gauge
+lfc_writes 77
+# HELP lfc_approximate_working_set_size_windows Approximate working set size in pages of 8192 bytes
+# TYPE lfc_approximate_working_set_size_windows gauge
+lfc_approximate_working_set_size_windows{duration_seconds="60"} 1000
+lfc_approximate_working_set_size_windows{duration_seconds="120"} 2000
+lfc_approximate_working_set_size_windows{duration_seconds="180"} 2500
+lfc_approximate_working_set_size_windows{duration_seconds="240"} 2800
+lfc_approximate_working_set_size_windows{duration_seconds="300"} 3000
+lfc_approximate_working_set_size_windows{duration_seconds="360"} 3100

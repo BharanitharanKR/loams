@@ -484,7 +484,7 @@ fn compose_or_runner(
 async fn kube_runtime(
     settings: &ComputesConfig,
     secrets: &dyn SecretStore,
-) -> Result<Arc<dyn ComputeRuntime>, PgControlError> {
+) -> Result<Arc<loams_pg_control::runtime::kubernetes::KubeRuntime>, PgControlError> {
     use loams_pg_control::runtime::kubernetes::{KubeConfig, KubeRuntime};
     let runtime_error = |e: &dyn fmt::Display| PgControlError::Runtime(e.to_string());
     let Some(uri) = &settings.control_plane_uri else {
@@ -641,9 +641,19 @@ impl PgControl {
             }
             #[cfg(feature = "postgres-kubernetes")]
             (PgRuntime::Kubernetes { .. }, Some(settings)) => {
-                let runtime = kube_runtime(settings, secrets.as_ref()).await?;
+                use loams_pg_control::autoscale::{Combined, CtlMetrics, Policy, Scaling};
+                let kube = kube_runtime(settings, secrets.as_ref()).await?;
                 let mut computes =
-                    computes(&config, settings, runtime, &keys, &clock, upcall_addr)?;
+                    computes(&config, settings, kube.clone(), &keys, &clock, upcall_addr)?;
+                // The autoscaler (Task 15): CPU from the metrics API, the file
+                // cache from compute_ctl. Compose cannot resize (R10.4).
+                computes.scaling = Some(Arc::new(Scaling::new(
+                    Arc::new(Combined {
+                        cpu: kube,
+                        cache: Arc::new(CtlMetrics(computes.ctl.clone())),
+                    }),
+                    Policy::default(),
+                )));
                 // Kept at size 0 too, so a pool left from a larger size drains.
                 let size = settings
                     .warm_pool_size

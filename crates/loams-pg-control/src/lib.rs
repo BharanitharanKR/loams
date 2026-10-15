@@ -26,6 +26,7 @@
 
 pub mod audit;
 pub mod authz;
+pub mod autoscale;
 pub mod idle;
 pub mod ids;
 pub mod model;

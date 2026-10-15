@@ -125,13 +125,20 @@ fn service_golden() {
 }
 
 /// The Role reaches Pods (and their resize), Services and Secrets of its
-/// namespace, nothing else: `tests/fixtures/kube/role.json`.
+/// namespace, and reads Pods' metrics, nothing else:
+/// `tests/fixtures/kube/role.json`.
 #[test]
 fn rbac_allows_only_pods_services_secrets() {
     let role = serde_json::to_value(role(K8S_NS)).unwrap();
     golden("role.json", &role);
     let mut resources = BTreeSet::new();
     for rule in role["rules"].as_array().unwrap() {
+        if rule["apiGroups"] == json!(["metrics.k8s.io"]) {
+            // The autoscaler reads Pods' CPU, and only reads it (R15.2).
+            assert_eq!(rule["resources"], json!(["pods"]), "{rule}");
+            assert_eq!(rule["verbs"], json!(["get"]), "{rule}");
+            continue;
+        }
         assert_eq!(rule["apiGroups"], json!([""]), "{rule}");
         for r in rule["resources"].as_array().unwrap() {
             resources.insert(r.as_str().unwrap().to_owned());
@@ -291,6 +298,18 @@ async fn remove(
     }
 }
 
+async fn pod_metrics(
+    State(s): State<Shared>,
+    Path((ns, name)): Path<(String, String)>,
+) -> Response {
+    let mut api = s.lock().unwrap();
+    api.calls.push(format!("GET podmetrics {name}"));
+    match api.objects.get(&(ns, "podmetrics".into(), name.clone())) {
+        Some(o) => (StatusCode::OK, axum::Json(o.clone())).into_response(),
+        None => status(404, "NotFound", &format!("podmetrics {name:?} not found")),
+    }
+}
+
 async fn resize(
     State(s): State<Shared>,
     Path((ns, name)): Path<(String, String)>,
@@ -322,6 +341,10 @@ async fn stand_in(ca: Option<ComputeCa>) -> (Shared, KubeRuntime) {
     let shared: Shared = Arc::default();
     let app = Router::new()
         .route("/api/v1/namespaces/{ns}/pods/{name}/resize", patch(resize))
+        .route(
+            "/apis/metrics.k8s.io/v1beta1/namespaces/{ns}/pods/{name}",
+            get(pod_metrics),
+        )
         .route(
             "/api/v1/namespaces/{ns}/{res}/{name}",
             get(read).patch(update).delete(remove),
@@ -626,4 +649,49 @@ async fn certificate_mounted_with_a_ca() {
             .iter()
             .any(|v| v["name"] == "tls")
     );
+}
+
+/// The autoscaler's CPU (Task 15): the compute container's usage from the
+/// Pod's metrics, as a fraction of the compute's size; an error without
+/// metrics.
+#[tokio::test]
+async fn pod_cpu_from_the_metrics_api() {
+    use loams_pg_control::autoscale::ComputeMetrics;
+    use loams_pg_control::model::{ComputeRec, ComputeStatus};
+    use loams_pg_control::runtime::kubernetes::cpu_cores;
+
+    assert_eq!(cpu_cores("250m"), Some(0.25));
+    assert_eq!(cpu_cores("1500000000n"), Some(1.5));
+    assert_eq!(cpu_cores("2"), Some(2.0));
+    assert_eq!(cpu_cores("x"), None);
+    let (api, rt) = stand_in(None).await;
+    let compute = ComputeRec {
+        id: CMP.into(),
+        binding: None,
+        pool: None,
+        bound_at_ms: None,
+        spec_version: 0,
+        status: ComputeStatus::Running,
+        jwt_key_id: None,
+        ctl_url: None,
+        cu: Cu(2),
+        created_at_ms: 0,
+        last_active_ms: None,
+    };
+    assert!(rt.sample("acme", &compute).await.is_err(), "no metrics yet");
+    api.lock().unwrap().objects.insert(
+        (K8S_NS.into(), "podmetrics".into(), CMP.to_lowercase()),
+        json!({
+            "apiVersion": "metrics.k8s.io/v1beta1",
+            "kind": "PodMetrics",
+            "metadata": { "name": CMP.to_lowercase(), "namespace": K8S_NS },
+            "timestamp": "2026-10-14T00:00:00Z",
+            "window": "15s",
+            "containers": [{ "name": "compute", "usage": { "cpu": "400m", "memory": "1Gi" } }],
+        }),
+    );
+    let s = rt.sample("acme", &compute).await.unwrap();
+    // 0.4 cores of a 0.5 CU (0.5 vCPU) compute.
+    assert!((s.cpu.unwrap() - 0.8).abs() < 1e-9, "{s:?}");
+    assert_eq!(s.lfc_size, None);
 }
