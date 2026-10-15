@@ -44,6 +44,9 @@ pub struct Release {
     /// snapshot estimate.
     #[serde(default)]
     pub free_factor: Option<f64>,
+    /// The expected downtime of this step, excluding image pulls.
+    #[serde(default)]
+    pub downtime_seconds: Option<u64>,
     /// The migrations this release introduced, in order.
     #[serde(default, rename = "migration")]
     pub migrations: Vec<PathMigration>,
