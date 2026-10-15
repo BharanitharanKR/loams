@@ -2072,3 +2072,54 @@ No task of this plan put `pg-control` in the preview release stack: R10.10 noted
   - **A replica that stops.** A replica that is suspended or fails ends its pending promotion as `aborted`, and the flag is cleared in the same write.
   - The PEM is written to a temporary file and renamed into place.
   - Tests: `suspend_ends_a_pending_promotion`, `rw_start_refused_while_promoting`, `an_unknown_promotion_outcome_replaces_the_compute` and `promote_errors_are_refusals_only_before_pg_promote`.
+
+### Task 18 rulings (2026-10-15): PgDog, checked
+
+The checks ran on the scratch stack `deploy/pgdog/compose.yaml`: the pinned PgDog, two `postgres:17.11` backends (`pg1`, `pg2`), and `pg3`, which starts later. Configs are in `deploy/pgdog/scratch/`. They were run locally under rootless Podman with `psql` 17 as the client. Nothing of PgDog's is in the repository: these are field names and observed behaviour.
+
+- **R18.1 The pin.**
+  - PgDog **v0.1.60** (2026-09-24, git `0d040f9`), the newest release at least 14 days old. v0.1.61 (2026-10-09) is six days old.
+  - Image `ghcr.io/pgdogdev/pgdog@sha256:25d1908886f595a2e3b00ec59783326712e3c0f75f91d29f032ff712b30f2266`, the multi-arch index (linux/amd64 is `sha256:1bf5346d…`). This is the same pin as `conformance/router` and RT1's inventory.
+  - Still **AGPL-3.0** (`gh api repos/pgdogdev/pgdog`: `license: AGPL-3.0`, not archived).
+- **R18.2 Q640: PgDog queues a client while its backend is down.**
+  - A client of a database whose server cannot be reached waits in the pool's queue. `SHOW POOLS` shows `cl_waiting = 1`, and `SHOW CLIENTS` shows the client's `state` as `waiting`.
+  - Meanwhile PgDog asks for a new server connection about every `connect_attempt_delay` (500 ms here; reason `client_waiting`), each with `connect_timeout` (1 s).
+  - With `pg3` started 3 s after the client connected, the client's query answered **5.1 s** after it connected, once Postgres was up.
+  - A backend that never comes back fails the client with `FATAL: checkout timeout` after **`checkout_timeout`** (15 s set; it took 16.1 s).
+  - The pool of a lone primary is **not banned** (`banned = f`), so the next client waits the full `checkout_timeout` again (15.0 s).
+  - The settings, in ms in `[general]`: `checkout_timeout`, `connect_timeout`, `connect_attempts`, `connect_attempt_delay`, `ban_timeout`, `healthcheck_interval`, `idle_healthcheck_interval`, `idle_healthcheck_delay`, `healthcheck_timeout`, `min_pool_size`, `idle_timeout`.
+- **R18.3 Q643: `users.toml` takes a SCRAM verifier.**
+  - `password_hash` holds Postgres's own verifier (`SCRAM-SHA-256$4096:…`, as `pg_authid.rolpassword` shows it). The right password logs in over SCRAM, and a wrong one is refused ("password … is wrong").
+  - The backend login is separate: `server_user` and `server_password`. `current_user` on the backend was the server user.
+  - `passwords` (several) and `server_auth` (`rds_iam`, `azure_workload_identity`, `vault_dynamic`, `vault_static`) also exist.
+  - **Ruling for Task 24:** `users.toml` holds each role's SCRAM verifier, so the plaintext is never stored there. It also holds a backend-only password that `pg-control` generates per role and that the user never sees, with `server_user` as the same role. §46's assumption that PgDog needs the user's plaintext is withdrawn.
+- **R18.4 Q642: no JWT or OIDC client auth, and no SNI routing in PgDog.**
+  - Client `auth_type` is one of `scram`, `md5`, `plain` or `trust`. `jwt` appears only as Vault's Kubernetes login path. Nothing reads the TLS server name.
+  - So the credential exchange (Task 25) and the L4 SNI listener in front (Task 22) stay as designed.
+- **R18.5 Other settings.**
+  - **Pool mode.** Per database (`[[databases]].pooler_mode`) and per user (`users.pooler_mode`): `transaction`, `session` or `statement`.
+  - **Replicas.** A `[[databases]]` entry has `role = "primary" | "replica" | "auto"`. Replicas get `read_only = true`. Load balancing is `load_balancing_strategy` (default `random`). The read/write split is `read_write_split` (default `include_primary`) and `read_write_strategy` (default `conservative`). A user can be `read_only`.
+  - **No allowed-address or `hba`-style setting** exists, so NetworkPolicy alone decides who reaches PgDog (Tasks 22 and 48).
+  - **TLS.** Clients: `tls_certificate`, `tls_private_key`, `tls_client_required`, and `tls_client_ca_certificate` for mTLS. Backends: `tls_verify` (`disabled`, `prefer` (default), `verify_ca`, `verify_full`), `tls_server_ca_certificate`, and client certificates per `[[databases]]` entry (Task 23).
+- **R18.6 `RELOAD` re-reads both files and keeps connections.**
+  - Users added to `users.toml` and 1,000 databases added to `pgdog.toml` were all served after one `RELOAD` (1,004 pools; `db999` answered).
+  - The admin command answered in **1.85 s** with 1,000 databases.
+  - A client connected across the reload ran its next query on the **same backend** (pid unchanged).
+- **R18.7 The admin database** (`[admin]` `name`, `user`, `password`).
+  - `SHOW POOLS`: `id, database, user, addr, port, shard, role, cl_waiting, sv_idle, sv_active, sv_idle_xact, sv_total, maxwait, maxwait_us, pool_mode, paused, banned, healthy, errors, re_synced, out_of_sync, force_closed, online, schema_admin`. **There is no `cl_active`.**
+  - `SHOW CLIENTS`: `id, user, database, addr, port, state (active|idle|waiting), replication, connect_time, last_request, queries, transactions, transactions_2pc, wait_time, query_time, transaction_time, bytes_received, bytes_sent, errors, application_name, locked, prepared_statements`.
+  - `SHOW SERVERS`: `pool_id, database, user, addr, port, state, connect_time, request_time, remote_pid, client_id, transactions, queries, rollbacks, prepared_statements, healthchecks, errors, bytes_received, bytes_sent, last_sent, last_received, age, application_name`.
+  - `SHOW DATABASES` and `SHOW USERS` answer one empty column in this version. `SHOW CONFIG` lists the effective settings.
+  - **Change to R12.3's `PoolRow`, carried to Task 21's admin adapter:** `cl_active` is not a column. The idle monitor's clients of an endpoint are `sv_active + cl_waiting` from `SHOW POOLS`, which counts a client holding a server in a query or transaction. Alternatively they are the `active` and `waiting` rows of `SHOW CLIENTS` for the pool's database.
+- **R18.8 Metrics.** OpenMetrics is on `openmetrics_port` and `openmetrics_host`, with no prefix unless `openmetrics_namespace` is set. The series include `cl_waiting`, `clients`, `sv_active`, `sv_idle`, `sv_idle_xact`, `maxwait`, `banned`, `errors`, `max_connections`, and the `avg_*` family (`avg_query_time`, `avg_wait_time`, `avg_xact_time`, `avg_checkout_timeouts`, …). Task 28 maps them.
+- **R18.9 §46 §8.4's path: PgDog's own queue, with the waker.** No Neon proxy and no shim.
+  - **What Tasks 20, 26 and 27 render:**
+    - `checkout_timeout` **20 s** above the compose cold-start p99 (6.6 s, R17.3) and §46's Kubernetes no-pool target of 15 s. §46 §8.4's 15 s is amended.
+    - `connect_timeout` 1 s, `connect_attempts` 1 and `connect_attempt_delay` 500 ms, so a waiting client sees its compute within about 0.5 s of it listening.
+    - `ban_timeout` short (1 s) for replica pools.
+  - **What the waker does.** It reads `cl_waiting > 0` on a suspended endpoint's pool, as R12.3 and §46 §8.4 have it.
+  - **Health checks must not keep computes awake** (the carry from Task 12). An idle-connection health check runs a query on the compute, which moves `compute_ctl`'s `last_active` (R12.1). The rendering therefore uses:
+    - `idle_healthcheck_interval = 0` (off);
+    - `min_pool_size = 0` (no connection is kept open, so none is checked and a suspended endpoint is not dialled for `below_min`);
+    - `idle_timeout` below the shortest suspend timeout (30 s, under the 60 s minimum), so PgDog lets go of an idle compute.
+  - Checking out a connection still health-checks it when it is older than `healthcheck_interval`, but only on behalf of a client, which is activity anyway.
