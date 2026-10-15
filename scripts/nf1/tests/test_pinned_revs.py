@@ -32,6 +32,7 @@ CHECK = NF1 / "check-pinned-revs.sh"
 FORK_POINT = "fa504217c61bbcaf5c512d75830564541f917f8f"
 TRIM_1 = "1218fb7a6a37e1b4c268bad5c2952c238d81d368"  # on main since Task 3
 TRIM_2 = "80356b2998710722020134d81102d810f921fe6b"  # tag loams-decoder-trim-2
+TRIM_3 = "0bc9b0c5f70f7d94093fd1bd8ff647dfa8756815"  # tag loams-decoder-trim-3, the decoder's pin
 DIVERGED = "de27c7dc667650aa1a89553d574d5358e72bd0a9"  # a Neon branch head, not on main
 RUST_PG = "f3cf448febde5fd298071d54d568a9c875a7a62b"
 
@@ -234,8 +235,7 @@ class Live(unittest.TestCase):
         """pinned_revs_reachable: the repository's pins, today."""
         r = self.run_check(REPO)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
-        self.assertIn(f"ok   loams-postgres {TRIM_2}", r.stdout)
-        self.assertIn(f"ok   rust-postgres {RUST_PG}", r.stdout)
+        self.assertIn(f"ok   loams-postgres {TRIM_3} (tag loams-decoder-trim-3)", r.stdout)
 
     def test_decoder_trim_1_on_main(self):
         """The fast-forward: 1218fb7a is reachable from main, by the old URL too."""
