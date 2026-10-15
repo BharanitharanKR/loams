@@ -703,6 +703,25 @@ async fn compute_ctl_calls() {
         r#"{"error":"Multiple requests for prewarm are not allowed"}"#,
     );
     assert_eq!(ctl.prewarm(None).await.unwrap_err().reason(), "aborted");
+
+    // The file cache, as the autoscaler reads it (PG2 Task 15): the
+    // exposition of pgxn/neon/communicator's lfc_metrics.rs.
+    fake.answer(200, &fixture("src_autoscaling_metrics.txt"));
+    let fc = ctl.autoscaling_metrics().await.unwrap();
+    assert_eq!(fc.size_bytes, Some(3_221_225_472));
+    assert_eq!(fc.working_set_bytes, Some(3000 * 8192));
+    let seen = fake.last();
+    assert_eq!(
+        (seen.method.as_str(), seen.path_and_query.as_str()),
+        ("GET", "/autoscaling_metrics")
+    );
+    assert_eq!(
+        loams_postgres::compute_ctl::FileCacheMetrics::parse("lfc_hits 3\n"),
+        loams_postgres::compute_ctl::FileCacheMetrics::default(),
+        "a series it does not read leaves both unknown"
+    );
+    fake.answer(500, "communicator socket gone");
+    assert_eq!(ctl.autoscaling_metrics().await.unwrap_err().status, 500);
 }
 
 /// A failover target prewarms from endpoint storage: the spec carries its

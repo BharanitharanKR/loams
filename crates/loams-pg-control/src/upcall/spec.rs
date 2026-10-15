@@ -24,8 +24,9 @@ use loams_postgres::spec::{
 use loams_postgres::{TenantId, TimelineId};
 use sha2::{Digest, Sha256};
 
+use crate::autoscale::{MAX_CU, file_cache_mb};
 use crate::model::{
-    BranchKey, BranchRec, BranchScope, BranchState, ComputeBinding, ComputeRec, DatabaseRec,
+    BranchKey, BranchRec, BranchScope, BranchState, ComputeBinding, ComputeRec, Cu, DatabaseRec,
     EndpointKey, EndpointRec, EndpointType, ProjectKey, ProjectRec, ProjectState, Record, RoleRec,
     WalService,
 };
@@ -156,7 +157,7 @@ pub(crate) async fn attached<S: PgControlStore>(
     binding: &ComputeBinding,
 ) -> Result<ComputeSpec, SpecError> {
     let inputs = read_inputs(store, binding, Some(&compute.id)).await?;
-    Ok(build(sources, &compute.id, &inputs)?.0)
+    Ok(build(sources, &compute.id, compute.cu, &inputs)?.0)
 }
 
 /// What a spec's inputs come to, as a number: a SHA-256 of the spec's
@@ -209,10 +210,12 @@ fn pageserver(sources: &Sources, branch: &BranchRec) -> Result<(u64, String), Sp
     Ok((node, url.clone()))
 }
 
-/// The spec of compute `compute_id` from `inputs`, and its inputs' version.
+/// The spec of compute `compute_id`, of size `cu`, from `inputs`, and its
+/// inputs' version.
 pub(crate) fn build(
     sources: &Sources,
     compute_id: &str,
+    cu: Cu,
     inputs: &Inputs,
 ) -> Result<(ComputeSpec, u64), SpecError> {
     let project = &inputs.project.record;
@@ -259,6 +262,19 @@ pub(crate) fn build(
         .setting(Setting::new(
             "port",
             &crate::runtime::COMPUTE_PG_PORT.to_string(),
+            "integer",
+        ))
+        // The local file cache (Task 15, R15.3): its ceiling is the
+        // largest compute's (a start-time setting), its limit the
+        // compute's size, which the autoscaler moves.
+        .setting(Setting::new(
+            "neon.max_file_cache_size",
+            &file_cache_mb(MAX_CU).to_string(),
+            "integer",
+        ))
+        .setting(Setting::new(
+            "neon.file_cache_size_limit",
+            &file_cache_mb(cu).to_string(),
             "integer",
         ));
     for r in &inputs.roles {

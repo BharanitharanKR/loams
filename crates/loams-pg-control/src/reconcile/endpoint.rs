@@ -61,6 +61,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use async_trait::async_trait;
+pub use loams_postgres::compute_ctl::FileCacheMetrics;
 use loams_postgres::compute_ctl::{
     ComputeCtlClient, ComputeCtlConfig, ComputeStatus as CtlState, TerminateMode,
 };
@@ -68,10 +69,11 @@ use loams_postgres::spec::ComputeSpec;
 
 use super::project::Snapshot;
 use super::{Act, ReconcileError};
+use crate::autoscale::{Scaling, Tracked};
 use crate::idle::IdleMonitor;
 use crate::ids::ComputeId;
 use crate::model::{
-    BranchState, CRASH_WINDOW_MS, ComputeBinding, ComputeKey, ComputeRec, ComputeStatus,
+    BranchState, CRASH_WINDOW_MS, ComputeBinding, ComputeKey, ComputeRec, ComputeStatus, Cu,
     DesiredState, EndpointRec, EndpointState, OperationError, OperationKey, OperationKind,
     OperationRec, OperationState, PoolKey, ProjectState, Record as _,
 };
@@ -149,6 +151,12 @@ pub trait ComputeCtl: Send + Sync + 'static {
     async fn configure(&self, compute: &ComputeRec, spec: &ComputeSpec) -> Result<(), CtlError>;
     /// `POST /terminate?mode=immediate`.
     async fn terminate(&self, compute: &ComputeRec) -> Result<(), CtlError>;
+    /// `GET /autoscaling_metrics`: the local file cache (Task 15). Not
+    /// read by default.
+    async fn file_cache(&self, compute: &ComputeRec) -> Result<FileCacheMetrics, CtlError> {
+        let _ = compute;
+        Err(CtlError("compute_ctl's metrics are not read".into()))
+    }
 }
 
 /// [`ComputeCtl`] over HTTP at the record's `ctl_url`, with a
@@ -236,6 +244,13 @@ impl ComputeCtl for HttpComputeCtl {
             .map(|_| ())
             .map_err(|e| CtlError(e.to_string()))
     }
+
+    async fn file_cache(&self, compute: &ComputeRec) -> Result<FileCacheMetrics, CtlError> {
+        self.client(compute)?
+            .autoscaling_metrics()
+            .await
+            .map_err(|e| CtlError(e.to_string()))
+    }
 }
 
 /// What the endpoint reconciler drives computes with.
@@ -266,6 +281,10 @@ pub struct Computes {
     /// The warm pool a start takes a compute from (Task 14); `None` by
     /// default.
     pub pool: Option<Arc<WarmPool>>,
+    /// The autoscaler (Task 15): the running computes it follows, their
+    /// samples and the policy. `None` (the default): computes keep their
+    /// start size.
+    pub scaling: Option<Arc<Scaling>>,
 }
 
 impl Computes {
@@ -289,6 +308,7 @@ impl Computes {
             idle: Arc::new(IdleMonitor::new(Arc::new(NoPgDog))),
             lifecycle: Lifecycle::default(),
             pool: None,
+            scaling: None,
         }
     }
 }
@@ -303,6 +323,7 @@ impl std::fmt::Debug for Computes {
             .field("idle", &self.idle)
             .field("lifecycle", &self.lifecycle)
             .field("pool", &self.pool)
+            .field("scaling", &self.scaling.is_some())
             .finish_non_exhaustive()
     }
 }
@@ -641,6 +662,9 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
             .emit(binding, &compute.id, event, self.now());
         if ended {
             self.c.idle.forget(&compute.id);
+            if let Some(s) = &self.c.scaling {
+                s.forget(&compute.id);
+            }
         }
     }
 
@@ -993,6 +1017,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
     async fn binding_for(
         &self,
         id: &str,
+        cu: Cu,
         addr: &BackendAddr,
     ) -> Result<(EndpointRec, ComputeBinding, u64), ReconcileError> {
         let project = &self.snap.project.record;
@@ -1007,7 +1032,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         let spec_version = match spec::read_inputs(&self.act.ctx.store, &binding, None).await {
             Ok(mut inputs) => {
                 inputs.endpoint = endpoint.clone();
-                spec::build(&self.c.sources, id, &inputs).map_or(0, |(_, version)| version)
+                spec::build(&self.c.sources, id, cu, &inputs).map_or(0, |(_, version)| version)
             }
             Err(SpecError::Store(e)) => return Err(e.into()),
             Err(_) => 0,
@@ -1058,7 +1083,8 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
             let Some(addr) = self.address().await? else {
                 return Ok(true);
             };
-            let (endpoint, binding, spec_version) = self.binding_for(&rec.id, &addr).await?;
+            let (endpoint, binding, spec_version) =
+                self.binding_for(&rec.id, rec.cu, &addr).await?;
             let mut bound = rec.clone();
             bound.binding = Some(binding);
             bound.status = ComputeStatus::Pending;
@@ -1099,7 +1125,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
                 return Ok(());
             }
         };
-        let spec = match spec::build(&self.c.sources, &compute.id, &inputs) {
+        let spec = match spec::build(&self.c.sources, &compute.id, compute.cu, &inputs) {
             Ok((spec, _)) => spec,
             Err(e) => {
                 tracing::info!(compute = %compute.id, error = ?e, "no spec for the warm compute yet");
@@ -1129,7 +1155,9 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
             return Ok(());
         };
         let id = ComputeId::new();
-        let (endpoint, binding, spec_version) = self.binding_for(&id.to_string(), &addr).await?;
+        let (endpoint, binding, spec_version) = self
+            .binding_for(&id.to_string(), self.ep().min_cu, &addr)
+            .await?;
         let compute = ComputeRec {
             id: id.to_string(),
             binding: Some(binding),
@@ -1249,6 +1277,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         };
         self.c.idle.observe(&running.id, self.now(), reported, 0);
         self.emit(&running, LifecycleKind::Started { cu: running.cu });
+        self.track(&running);
         self.compute = Some(Versioned {
             record: running,
             version: out[at].unwrap_or_default(),
@@ -1306,6 +1335,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
                 Activity::Unreadable
             }
         };
+        self.track(&compute.record);
         // An operation settled here (a start or restart of a running
         // endpoint) was asked just now: the sample counts it as activity.
         let asked = !self.ops.is_empty();
@@ -1323,6 +1353,21 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
             (Step::Done, Some(b)) => Step::Again(b),
             (step, _) => step,
         })
+    }
+
+    /// The autoscaler follows the running compute (Task 15), with the
+    /// endpoint's range as this pass read it.
+    fn track(&self, compute: &ComputeRec) {
+        if let Some(s) = &self.c.scaling {
+            s.track(Tracked {
+                namespace: self.ns().to_owned(),
+                project_id: self.ep().project_id.clone(),
+                endpoint_id: self.ep().id.clone(),
+                compute: compute.clone(),
+                min_cu: self.ep().min_cu,
+                max_cu: self.ep().max_cu,
+            });
+        }
     }
 
     /// Idle detection ([`crate::idle`]): one sample of the running compute
@@ -1407,7 +1452,12 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
                 return Ok(Step::Done);
             }
         };
-        let (spec, version) = match spec::build(&self.c.sources, &compute.record.id, &inputs) {
+        let (spec, version) = match spec::build(
+            &self.c.sources,
+            &compute.record.id,
+            compute.record.cu,
+            &inputs,
+        ) {
             Ok(built) => built,
             Err(e) => {
                 tracing::info!(compute = %compute.record.id, error = ?e, "no spec to push");

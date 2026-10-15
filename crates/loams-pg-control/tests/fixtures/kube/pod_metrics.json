@@ -1,0 +1,19 @@
+{
+  "apiVersion": "metrics.k8s.io/v1beta1",
+  "kind": "PodMetrics",
+  "metadata": {
+    "name": "cmp-01jz0000000000000000000003",
+    "namespace": "loams-pg-acme"
+  },
+  "timestamp": "2026-10-14T00:00:00Z",
+  "window": "15s",
+  "containers": [
+    {
+      "name": "compute",
+      "usage": {
+        "cpu": "400m",
+        "memory": "1Gi"
+      }
+    }
+  ]
+}

@@ -273,4 +273,61 @@ impl ComputeCtlClient {
     pub async fn prewarm_state(&self) -> Result<PrewarmState, NeonError> {
         self.http.get(Op::PrewarmState, "/lfc/prewarm").await
     }
+
+    /// `GET /autoscaling_metrics`: the local file cache's size and working
+    /// set, which the `neon` extension's communicator exports (unauthenticated
+    /// in `compute_ctl`).
+    pub async fn autoscaling_metrics(&self) -> Result<FileCacheMetrics, NeonError> {
+        let req = self
+            .http
+            .request(Method::GET, "/autoscaling_metrics", DEFAULT_TIMEOUT);
+        let text = self.http.text(Op::AutoscalingMetrics, req).await?;
+        Ok(FileCacheMetrics::parse(&text))
+    }
+}
+
+/// The local file cache, as `/autoscaling_metrics` reports it
+/// (`pgxn/neon/communicator/src/worker_process/lfc_metrics.rs`). `None`
+/// where the exposition lacks the series.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct FileCacheMetrics {
+    /// `lfc_cache_size_limit`, in bytes.
+    pub size_bytes: Option<u64>,
+    /// `lfc_approximate_working_set_size_windows{duration_seconds="300"}`
+    /// (pages of 8 KiB), in bytes: the pages touched in the last 5 minutes.
+    pub working_set_bytes: Option<u64>,
+}
+
+/// The working-set window the autoscaler reads.
+pub const WORKING_SET_WINDOW_S: u32 = 300;
+
+impl FileCacheMetrics {
+    /// Reads the two series out of a Prometheus text exposition; anything
+    /// else is ignored.
+    pub fn parse(text: &str) -> Self {
+        let window = format!(
+            "lfc_approximate_working_set_size_windows{{duration_seconds=\"{WORKING_SET_WINDOW_S}\"}}"
+        );
+        let mut out = FileCacheMetrics::default();
+        for line in text.lines().filter(|l| !l.starts_with('#')) {
+            let Some((series, value)) = line.rsplit_once(' ') else {
+                continue;
+            };
+            let Ok(value) = value.trim().parse::<f64>() else {
+                continue;
+            };
+            if !value.is_finite() || value < 0.0 {
+                continue;
+            }
+            // Gauges are integers here; f64 reads the exposition's format.
+            #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+            let value = value as u64;
+            match series.trim() {
+                "lfc_cache_size_limit" => out.size_bytes = Some(value),
+                s if s == window => out.working_set_bytes = Some(value.saturating_mul(8192)),
+                _ => {}
+            }
+        }
+        out
+    }
 }

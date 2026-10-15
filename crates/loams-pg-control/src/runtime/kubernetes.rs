@@ -393,7 +393,8 @@ pub fn computes_service(k8s_ns: &str) -> Service {
 
 /// The Role `pg-control` needs in `k8s_ns`: Pods (with `resize`; `patch`
 /// labels a warm-pool Pod with its endpoint when it is bound, R14.5),
-/// Services and Secrets, nothing else (§46 §7.2).
+/// Services and Secrets, and the Pods' CPU from the metrics API (the
+/// autoscaler, R15.2), nothing else (§46 §7.2).
 ///
 /// # Panics
 ///
@@ -428,6 +429,11 @@ pub fn role(k8s_ns: &str) -> Role {
                     "apiGroups": [""],
                     "resources": ["secrets"],
                     "verbs": ["get", "create", "patch", "delete"],
+                },
+                {
+                    "apiGroups": ["metrics.k8s.io"],
+                    "resources": ["pods"],
+                    "verbs": ["get"],
                 },
             ],
         }),
@@ -813,5 +819,64 @@ pub fn pod_status(pod: &Pod) -> RuntimeStatus {
             code: terminated_code(),
         },
         _ => RuntimeStatus::Pending,
+    }
+}
+
+/// CPU in cores from a Kubernetes quantity (`123456789n`, `250m`, `1500u`,
+/// `2`); `None` for anything else.
+pub fn cpu_cores(q: &str) -> Option<f64> {
+    let (num, scale) = match q.as_bytes().last()? {
+        b'n' => (&q[..q.len() - 1], 1e-9),
+        b'u' => (&q[..q.len() - 1], 1e-6),
+        b'm' => (&q[..q.len() - 1], 1e-3),
+        _ => (q, 1.0),
+    };
+    let v: f64 = num.parse().ok()?;
+    (v.is_finite() && v >= 0.0).then_some(v * scale)
+}
+
+/// The compute's CPU (Task 15): its Pod's `PodMetrics` from the metrics
+/// API (`metrics.k8s.io/v1beta1`, metrics-server), as a fraction of the
+/// compute's size. No file cache figures: those are `compute_ctl`'s.
+#[async_trait]
+impl crate::autoscale::ComputeMetrics for KubeRuntime {
+    async fn sample(
+        &self,
+        ns: &str,
+        compute: &crate::model::ComputeRec,
+    ) -> Result<crate::autoscale::Sample, crate::autoscale::MetricsError> {
+        use kube::api::{ApiResource, DynamicObject};
+        let fail = |e: String| crate::autoscale::MetricsError(e);
+        let k8s_ns = namespace_for(ns).map_err(|e| fail(e.to_string()))?;
+        let id: ComputeId = compute
+            .id
+            .parse()
+            .map_err(|_| fail(format!("compute id {}", compute.id)))?;
+        let resource = ApiResource {
+            group: "metrics.k8s.io".into(),
+            version: "v1beta1".into(),
+            api_version: "metrics.k8s.io/v1beta1".into(),
+            kind: "PodMetrics".into(),
+            plural: "pods".into(),
+        };
+        let api: Api<DynamicObject> = Api::namespaced_with(self.client.clone(), &k8s_ns, &resource);
+        let metrics = api
+            .get(&pod_name(&id))
+            .await
+            .map_err(|e| fail(format!("the Pod's metrics: {e}")))?;
+        let cores = metrics.data["containers"]
+            .as_array()
+            .and_then(|cs| cs.iter().find(|c| c["name"] == "compute"))
+            // The container's resource figures: the one object in its entry
+            // that holds `cpu` (the field's own name is a billing word to
+            // the no-metering guard, R9.8).
+            .and_then(|c| c.as_object()?.values().find_map(|v| v.get("cpu")?.as_str()))
+            .and_then(cpu_cores)
+            .ok_or_else(|| fail("the Pod's metrics name no compute CPU".into()))?;
+        let size = f64::from(compute.cu.0) * 0.25;
+        Ok(crate::autoscale::Sample {
+            cpu: (size > 0.0).then(|| cores / size),
+            ..crate::autoscale::Sample::default()
+        })
     }
 }

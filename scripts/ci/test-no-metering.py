@@ -124,6 +124,15 @@ class BoundaryTests(unittest.TestCase):
         self.put("crates/other/src/lib.rs", "pub struct Plan { pub billable: bool }\n")
         self.check(0)
 
+    def test_pg_guard_skips_only_listed_foreign_documents(self):
+        # PG2 Task 15: the Kubernetes PodMetrics fixture keeps its own field
+        # names; any other fixture of pg-control is still read.
+        doc = '{"containers": [{"name": "compute", "usage": {"cpu": "1"}}]}\n'
+        self.put("crates/loams-pg-control/tests/fixtures/kube/pod_metrics.json", doc)
+        self.check(0)
+        self.put("crates/loams-pg-control/tests/fixtures/kube/other.json", doc)
+        self.check(1)
+
     def test_guard_fails_closed_on_invalid_manifest(self):
         self.put("Cargo.toml", "[package\n")
         self.check(1)

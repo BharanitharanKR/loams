@@ -44,6 +44,7 @@ pub mod endpoint;
 mod lease;
 pub mod project;
 pub mod resync;
+pub mod scale;
 
 use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fmt;
@@ -504,6 +505,24 @@ impl<S: PgControlStore, N: NeonWrite> Reconciler<S, N> {
         .map(Some)
     }
 
+    /// One tick of the autoscaler (Task 15, [`scale`]): `None` without one.
+    /// The run loop ticks it every [`TICK`](crate::autoscale::TICK); tests
+    /// call this directly.
+    ///
+    /// # Errors
+    ///
+    /// None yet: a decision that failed is logged and retried at the next
+    /// tick. The `Result` keeps the run loop's shape.
+    pub async fn tick_autoscaler(&self) -> Result<Option<scale::ScaleTick>, ReconcileError> {
+        let Some(computes) = &self.ctx.computes else {
+            return Ok(None);
+        };
+        let Some(scaling) = &computes.scaling else {
+            return Ok(None);
+        };
+        Ok(Some(scale::tick(&self.ctx, computes, scaling).await))
+    }
+
     /// The resync's sweep: deletes the role secrets no record names that
     /// are older than [`secret_grace`](ReconcilerConfig::secret_grace), and
     /// answers how many it deleted.
@@ -555,6 +574,14 @@ impl<S: PgControlStore, N: NeonWrite> Reconciler<S, N> {
             && let Some(warm) = computes.pool.clone()
         {
             pool.spawn(pool_loop(self.ctx.clone(), warm));
+        }
+        if self
+            .ctx
+            .computes
+            .as_ref()
+            .is_some_and(|c| c.scaling.is_some())
+        {
+            pool.spawn(scale_loop(self.ctx.clone()));
         }
         tokio::pin!(shutdown);
         tracing::info!(holder = %config.holder, "pg-control reconciler started");
@@ -661,6 +688,32 @@ async fn pool_loop<S: PgControlStore, N: NeonWrite>(
         tokio::select! {
             () = tokio::time::sleep(wait) => {}
             () = warm.kicked() => {}
+        }
+    }
+}
+
+/// The autoscaler's loop (Task 15): a tick every
+/// [`TICK`](crate::autoscale::TICK).
+async fn scale_loop<S: PgControlStore, N: NeonWrite>(ctx: Arc<Ctx<S, N>>) {
+    let Some(computes) = ctx.computes.as_ref() else {
+        return;
+    };
+    let Some(scaling) = computes.scaling.as_ref() else {
+        return;
+    };
+    let mut every = tokio::time::interval(crate::autoscale::TICK);
+    every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    loop {
+        every.tick().await;
+        let t = scale::tick(&ctx, computes, scaling).await;
+        if t.decided > 0 {
+            tracing::debug!(
+                sampled = t.sampled,
+                decided = t.decided,
+                applied = t.applied,
+                refused = t.refused,
+                "autoscaler ticked"
+            );
         }
     }
 }

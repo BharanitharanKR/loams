@@ -12,6 +12,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use async_trait::async_trait;
+use loams_pg_control::autoscale::{ComputeMetrics, Policy, Scaling};
 use loams_pg_control::idle::IdleMonitor;
 use loams_pg_control::ids::ComputeId;
 use loams_pg_control::model::{
@@ -57,6 +58,13 @@ pub struct RuntimeInner {
     pub launched: BTreeMap<String, (String, String)>,
     /// Computes whose stop fails (`Unavailable`).
     pub fail_stop: std::collections::BTreeSet<String>,
+    /// What the next resizes answer, in order; `Applied` once empty.
+    pub resize: std::collections::VecDeque<ResizeOutcome>,
+    /// Every resize asked: (compute, size).
+    pub resized: Vec<(String, Cu)>,
+    /// Resizes and (through the fake `compute_ctl`) `/configure`s, in
+    /// order.
+    pub order: Vec<String>,
     pub starts: Vec<String>,
     pub stops: Vec<String>,
     pub removed_addresses: Vec<String>,
@@ -187,8 +195,11 @@ impl ComputeRuntime for FakeRuntime {
             .get(&compute_id.to_string())
             .map_or(RuntimeStatus::Missing, |(_, s)| *s))
     }
-    async fn resize(&self, _: &str, _: &ComputeId, _: Cu) -> Result<ResizeOutcome, RuntimeError> {
-        Ok(ResizeOutcome::Unsupported)
+    async fn resize(&self, _: &str, id: &ComputeId, cu: Cu) -> Result<ResizeOutcome, RuntimeError> {
+        let mut inner = self.lock();
+        inner.resized.push((id.to_string(), cu));
+        inner.order.push(format!("resize {id} {}", cu.0));
+        Ok(inner.resize.pop_front().unwrap_or(ResizeOutcome::Applied))
     }
 }
 
@@ -218,6 +229,8 @@ pub struct CtlInner {
     pub clock: Option<Arc<AtomicU64>>,
     pub configured: Vec<(String, ComputeSpec)>,
     pub terminated: Vec<String>,
+    /// The runtime whose `order` hears each `/configure` (Task 15).
+    pub runtime: Option<FakeRuntime>,
 }
 
 /// A fake `compute_ctl` of every compute.
@@ -278,7 +291,11 @@ impl ComputeCtl for FakeCtl {
         })
     }
     async fn configure(&self, c: &ComputeRec, spec: &ComputeSpec) -> Result<(), CtlError> {
-        self.lock().configured.push((c.id.clone(), spec.clone()));
+        let mut inner = self.lock();
+        inner.configured.push((c.id.clone(), spec.clone()));
+        if let Some(r) = &inner.runtime {
+            r.lock().order.push("configure".into());
+        }
         Ok(())
     }
     async fn terminate(&self, c: &ComputeRec) -> Result<(), CtlError> {
@@ -401,6 +418,22 @@ pub fn sources() -> SpecSources {
 
 pub fn env_on(h: Harness) -> Env {
     env_with(h, None)
+}
+
+/// As [`env_on`], with an autoscaler on `metrics` (Task 15).
+pub fn env_scaling(h: Harness, metrics: Arc<dyn ComputeMetrics>) -> Env {
+    let mut env = env_with(h, None);
+    env.ctl.lock().runtime = Some(env.runtime.clone());
+    let mut computes = env.computes(IMAGE, None);
+    computes.scaling = Some(Arc::new(Scaling::new(metrics, Policy::default())));
+    env.r = Reconciler::new(
+        env.h.store.clone(),
+        env.h.neon.clone(),
+        env.h.secrets.clone(),
+        reconciler_config(&env.h),
+    )
+    .with_computes(computes);
+    env
 }
 
 /// The reconciler's settings: instance `pg-control-a` on the harness's
