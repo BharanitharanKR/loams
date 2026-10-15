@@ -42,7 +42,7 @@ use std::sync::Arc;
 use buffa::MessageField;
 use buffa::RepeatedView;
 use connectrpc::{ConnectError, RequestContext, Response, ServiceRequest, ServiceResult};
-use loams_common::meta::HotConfig;
+use loams_common::meta::{HotConfig, is_reserved_namespace};
 use loams_proto::loams::collection::v1 as pb;
 use loams_proto::loams::collection::v1::{
     AddFieldsRequest, AddFieldsResponse, CollectionService, CollectionServiceExt,
@@ -58,6 +58,7 @@ use serde_json::{Map, Value, json};
 
 use super::connect_errors::{invalid, refused, refused_meta, refused_service};
 use super::connect_messages as msg;
+use super::errors::ApiError;
 use super::{AppState, CONSISTENCY_TOKEN, hot};
 
 /// Both services of `loams.collection.v1`, over the server's state.
@@ -77,6 +78,9 @@ impl Collections {
     fn namespace(request_namespace: &str) -> Result<&str, ConnectError> {
         if request_namespace.is_empty() {
             return Err(invalid("namespace", "a namespace is required"));
+        }
+        if is_reserved_namespace(request_namespace) {
+            return Err(refused(ApiError::namespace_reserved(request_namespace)));
         }
         Ok(request_namespace)
     }

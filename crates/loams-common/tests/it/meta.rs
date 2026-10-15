@@ -393,6 +393,14 @@ mod dyn_compatible {
         ) -> MetaResult<Option<Pointer>> {
             unimplemented!()
         }
+        async fn pointers_with_prefix(
+            &self,
+            _: Consistency,
+            _: NamespaceId,
+            _: &str,
+        ) -> MetaResult<Vec<(String, Pointer)>> {
+            unimplemented!()
+        }
         async fn create_collection(
             &self,
             _: NamespaceId,

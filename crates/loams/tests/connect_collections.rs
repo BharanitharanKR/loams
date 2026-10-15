@@ -1261,3 +1261,79 @@ async fn unknown_collection_reports_a_reason() {
 fn hot_status(body: &Value) -> &Value {
     body.get("hot").unwrap_or(body)
 }
+
+/// UP1 Task 2: `_system` holds Loams's own records (the auth directory, the
+/// upgrade ledger), so no caller creates or addresses it: `CreateNamespace`,
+/// the collection RPCs and every `/v1/namespaces/_system/…` route answer
+/// `invalid_argument` (`field` = `namespace`, message `namespace_reserved: …`).
+/// There is no namespace listing to omit it from.
+#[tokio::test]
+async fn system_namespace_is_reserved() {
+    let running = Running::start().await;
+    let error = running
+        .connect(CREATE_NAMESPACE, &json!({"namespace": "_system"}))
+        .await
+        .expect_error(StatusCode::BAD_REQUEST);
+    let info = error_info(&error);
+    assert_eq!(info.reason, "invalid_argument", "{error}");
+    assert_eq!(
+        info.metadata.get("field").map(String::as_str),
+        Some("namespace"),
+        "{error}"
+    );
+    assert!(error.to_string().contains("namespace_reserved"), "{error}");
+    let error = running
+        .connect(
+            CREATE_COLLECTION,
+            &json!({"namespace": "_system", "name": "kb", "schema": kb_schema()}),
+        )
+        .await
+        .expect_error(StatusCode::BAD_REQUEST);
+    assert!(error.to_string().contains("namespace_reserved"), "{error}");
+
+    let created = running
+        .rest(
+            Method::POST,
+            "/v1/namespaces",
+            Some(json!({"name": "_system"})),
+        )
+        .await;
+    assert_eq!(created.status, StatusCode::BAD_REQUEST, "{}", created.body);
+    assert_eq!(
+        created.body["error"], "invalid_argument",
+        "{}",
+        created.body
+    );
+    assert!(
+        created.body["message"]
+            .as_str()
+            .is_some_and(|m| m.starts_with("namespace_reserved")),
+        "{}",
+        created.body
+    );
+    for path in [
+        "/v1/namespaces/_system/streams",
+        "/v1/namespaces/_system/collections",
+        "/v1/namespaces/_system/collections/kb/documents/count",
+    ] {
+        let reply = running.rest(Method::POST, path, Some(json!({}))).await;
+        assert_eq!(
+            reply.status,
+            StatusCode::BAD_REQUEST,
+            "{path}: {}",
+            reply.body
+        );
+        assert_eq!(reply.body["error"], "invalid_argument", "{path}");
+    }
+    // A name that merely starts like it is an ordinary namespace.
+    let other = running
+        .rest(
+            Method::POST,
+            "/v1/namespaces",
+            Some(json!({"name": "_systemx"})),
+        )
+        .await;
+    assert_eq!(other.status, StatusCode::CREATED, "{}", other.body);
+
+    running.shutdown().await;
+}

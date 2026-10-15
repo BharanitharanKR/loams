@@ -41,6 +41,7 @@ macro_rules! for_each_case {
             cas_create_then_update,
             cas_mismatch_carries_the_current_pointer,
             a_fenced_cas_is_refused,
+            pointers_with_prefix_lists_only_that_prefix,
             a_stale_cas_is_refused,
             a_collection_pointer_needs_its_collection,
             a_key_over_the_limit_is_invalid,

@@ -56,7 +56,7 @@ pub const AUDIT_KEPT: usize = 1_000;
 /// The newest revoked token ids the directory keeps.
 pub const REVOKED_TOKENS_KEPT: usize = 10_000;
 /// The reserved namespace whose pointer names the directory.
-pub const SYSTEM_NAMESPACE: &str = "_system";
+pub use loams_common::meta::SYSTEM_NAMESPACE;
 /// The pointer key.
 pub const POINTER_KEY: &str = "principal-directory";
 /// Where the directory's objects live in the bucket.

@@ -599,6 +599,11 @@ mod served {
             if name.is_empty() {
                 return Err(invalid("namespace", "a namespace is required"));
             }
+            if loams_common::meta::is_reserved_namespace(name) {
+                return Err(super::connect_errors::refused(
+                    super::errors::ApiError::namespace_reserved(name),
+                ));
+            }
             let found = self
                 .meta
                 .namespace_by_name(Consistency::Linearizable, name)

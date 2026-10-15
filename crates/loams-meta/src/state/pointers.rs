@@ -76,4 +76,17 @@ impl MetaState {
     pub fn pointer(&self, namespace: NamespaceId, key: &str) -> Option<&Pointer> {
         self.pointers.get(&(namespace, key.to_string()))
     }
+
+    /// The pointers of `namespace` whose keys start with `prefix`, in key
+    /// order.
+    pub fn pointers_with_prefix<'a>(
+        &'a self,
+        namespace: NamespaceId,
+        prefix: &'a str,
+    ) -> impl Iterator<Item = (&'a str, &'a Pointer)> {
+        self.pointers
+            .range((namespace, prefix.to_string())..)
+            .take_while(move |((ns, key), _)| *ns == namespace && key.starts_with(prefix))
+            .map(|((_, key), pointer)| (key.as_str(), pointer))
+    }
 }

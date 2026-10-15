@@ -34,6 +34,16 @@ impl ApiError {
         Self::new(StatusCode::BAD_REQUEST, "invalid_argument", message)
     }
 
+    /// The caller named `_system`, the namespace Loams keeps its own records
+    /// in (UP1 Task 2): `invalid_argument` with `field` = `namespace` and the
+    /// message `namespace_reserved: …`.
+    pub(crate) fn namespace_reserved(name: &str) -> Self {
+        Self::invalid(format!(
+            "namespace_reserved: namespace {name:?} is reserved for Loams"
+        ))
+        .with("field", "namespace")
+    }
+
     pub(crate) fn not_found(message: impl Into<String>) -> Self {
         Self::new(StatusCode::NOT_FOUND, "not_found", message)
     }

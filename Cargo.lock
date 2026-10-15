@@ -8494,10 +8494,15 @@ dependencies = [
 name = "loams-migrate"
 version = "0.1.0-preview.2"
 dependencies = [
+ "base64 0.23.1",
  "loams-common",
+ "loams-meta",
+ "loams-store",
  "postcard",
  "serde",
+ "tempfile",
  "thiserror 2.0.21",
+ "tokio",
 ]
 
 [[package]]
