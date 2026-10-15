@@ -524,8 +524,11 @@ jobs:
   # `rust-tests` jobs unify features across the whole workspace).
   agentd:
     name: "Agentd: guard, clippy and tests"
+    # Fast tier: agentd is security-sensitive (approvals, sandbox levels) and this job
+    # runs only when agentd's paths change. On the full tier it let #623 merge with
+    # ~80 agentd-sessions tests unrun.
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.agentd == 'true'))) && needs.changes.outputs.heavy != 'false' }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.agentd == 'true') && needs.changes.outputs.heavy != 'false' }}
     runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
     # PTY, shell and harness-fixture tests; a hung one fails the job.
     timeout-minutes: 60
