@@ -429,6 +429,11 @@ jobs:
       # build free of the git-pinned tikv-client.
       - name: clippy (loams with the tikv, graph and optional listener features)
         run: cargo clippy -p loams --all-targets --features tikv,live-tikv,durable-tikv,stream-grpc,pgwire,mysql-wire,graph --locked -- -D warnings
+      # The release images build `loams` with these feature sets (deploy/release/Containerfile.*);
+      # `postgres,tikv` turns on loams-kv's TiKV store without loams-live's `tikv`, a combination
+      # nothing else here builds (v0.1.0-preview.2's loams-pg-control image broke on it).
+      - name: check (loams with the loams-pg-control image's features)
+        run: cargo check --locked -p loams --bin loams --features postgres,tikv
       - name: clippy (loams-live without TiKV, as the default build has it)
         run: cargo clippy -p loams-live --lib --locked -- -D warnings
       - name: clippy (loams-durable with the native TiKV store)
