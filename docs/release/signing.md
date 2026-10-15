@@ -29,6 +29,17 @@ deliberate future decision ([Q615](#decision-log-rows)). Shipping an unsigned
 build with a documented local build path is better than shipping a build signed by
 a certificate in someone else's name.
 
+## The project GPG key (Linux `.deb`, `.pkg.tar.zst`, AppImage and `SHA256SUMS`)
+
+Both release workflows read the same settings:
+- the secret `LOAMS_GPG_PRIVATE_KEY`, holding the armored private key;
+- the repository variable `LOAMS_GPG_KEY_ID`, which isn't secret.
+
+Create the key **without a passphrase**. `release-package.yml` (the CLI packages) can't unlock one,
+and the key is protected by being a secret available only to the release workflows. Publish the
+public key (for example at `https://loams.dev/gpg.asc` and on keys.openpgp.org) so users can check
+the `.sig` files.
+
 ## What SignPath's free programme can and cannot sign
 
 Verified 2026-10-03 against <https://docs.signpath.io/artifact-configuration/reference>,

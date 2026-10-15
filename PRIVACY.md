@@ -1,0 +1,76 @@
+# Privacy policy
+
+This policy covers the Loams software in this repository: the `loams` engine and CLI, the Docker
+Compose stack, Loams Desktop, the SDKs and the console. It also covers the two services Ostrium Labs
+runs for the preview: the hosted console at `console.loams.dev` and the sign-in service at
+`auth.loams.dev`.
+
+**Short version:** Loams collects no telemetry or analytics. The software you run sends your data
+only where you tell it to. The services we run see only what they need to serve a page or sign
+you in.
+
+## The software you run
+
+- **No telemetry.** The engine, the CLI, the Compose stack, the SDKs and Loams Desktop send no usage
+  data, crash reports or analytics to Ostrium Labs or anyone else.
+- **Your data stays where you put it.** Documents, vectors, tables, graphs, logs and backups live in
+  the object store and databases you configure: your bucket, your machines, your tailnet. Loams
+  connects only to the services in your configuration, such as your bucket, your connectors' source
+  and sink systems, and your identity provider.
+- **Observability is opt-in.** Metrics, traces and logs go only to endpoints you configure, for
+  example your own OpenTelemetry collector.
+
+## The one automatic network request: desktop update checks
+
+Packaged Loams Desktop builds check for updates. They download the update manifest from this
+repository's GitHub releases (the `desktop-latest` release) about 30 seconds after the app starts,
+every 6 hours after that, and when the computer wakes. Windows and AppImage builds then download and
+install the update. macOS and `.deb`/`.rpm`/`.pacman` installs only show a "Download" link.
+
+The request goes to GitHub and carries what any download carries: your IP address and a user
+agent. It carries no account, no usage data and nothing about your engines or data. GitHub's own
+privacy statement covers that request.
+
+A setting to turn update checks off is planned. Until it ships, every packaged build makes this
+check. The only way to stop it is to block `github.com` for the app. Builds you compile yourself
+(unpackaged) never check.
+
+## Services we run
+
+### Hosted console (`console.loams.dev`)
+
+- **What it is:** a static web app served from Cloudflare. Your browser downloads the app and then
+  talks **directly to your own engine**, over your tailnet or at the address you enter. Your queries,
+  results and data never pass through Ostrium Labs.
+- **What is stored:** the engine address you enter is kept in your browser's local storage. We
+  receive nothing about it.
+- **Hosting logs:** Cloudflare, as the host, processes standard request data (IP address, user agent,
+  requested path) to serve and protect the site. We don't add analytics or tracking.
+
+### Sign-in (`auth.loams.dev`)
+
+You only use this if you choose **Loams account** sign-in. Tailscale sign-in and API keys don't
+touch it.
+
+- **What it stores:** your account: email address, name, the hashed credentials or the identity
+  provider link you sign in with, and sign-in records kept for security.
+- **What it shares:** it issues signed tokens with your identity to the Loams engines **you** connect
+  to. It shares nothing else with anyone.
+- **Your control:** you can ask for your account to be exported or deleted (see Contact).
+
+## Children
+
+Loams is developer and infrastructure software and isn't directed at children.
+
+## Changes
+
+Changes to this policy are made in this file, so the git history shows every version. Material
+changes are noted in the release notes.
+
+## Contact
+
+Privacy questions or requests (account export or deletion): open a
+[GitHub Discussion](https://github.com/ostrium-labs/loams/discussions), or for anything sensitive,
+use the private reporting channel in [SECURITY.md](SECURITY.md).
+
+_Last updated: 2026-10-15._
