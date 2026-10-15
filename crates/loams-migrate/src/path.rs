@@ -179,6 +179,18 @@ impl UpgradePath {
         }
     }
 
+    /// Whether the release that introduced migration `id` is `release` or an
+    /// earlier one, by the train's order (newest first). A migration the
+    /// train does not list is never "at or before".
+    pub fn introduced_at_or_before(&self, id: &str, release: &str) -> bool {
+        let introduced = self
+            .releases
+            .iter()
+            .position(|r| r.migrations.iter().any(|m| m.id == id));
+        let stored = self.releases.iter().position(|r| r.version == release);
+        matches!((introduced, stored), (Some(i), Some(s)) if i >= s)
+    }
+
     /// The releases from the first one that keeps data up to `target`,
     /// oldest first (for messages and `loams upgrade`'s chain walk).
     pub fn chain(&self, target: &str) -> Vec<String> {

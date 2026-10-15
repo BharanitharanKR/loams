@@ -11,8 +11,11 @@
 //!   (plan, run with resume, abandon), checked against [`path`], the release
 //!   train of `release/upgrade-path.toml`.
 //!
-//! Later UP1 tasks add the startup gate, preview.2's adoption, the store
-//! contexts, snapshots and restores.
+//! - [`startup`]: the startup gate every Loams process runs before it
+//!   serves (§54 §4.3).
+//!
+//! Later UP1 tasks add preview.2's adoption, the store contexts, snapshots
+//! and restores.
 
 /// Evaluates a named failpoint of the crash matrix. With the `failpoints`
 /// feature a configured failpoint stops the caller as a crash would (it
@@ -37,9 +40,11 @@ pub mod migrations;
 pub mod path;
 pub mod runner;
 pub mod stack;
+pub mod startup;
 
 pub use ledger::{Class, Ledger, LedgerEntry, LedgerError, LedgerState, MigrationLease};
 pub use migration::{Cursor, Cx, Estimate, Migration, MigrationError, Step};
 pub use path::UpgradePath;
 pub use runner::{Plan, Report, RunError, RunOptions, Runner};
 pub use stack::{StackRecord, StoredVersions, Unreadable};
+pub use startup::{StartupVerdict, check_startup};

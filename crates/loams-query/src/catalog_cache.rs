@@ -183,6 +183,10 @@ async fn refresh_loop(meta: Arc<dyn MetaStore>, inner: Weak<Inner>) {
 async fn read_names(meta: &dyn MetaStore) -> MetaResult<Names> {
     let mut out = Names::new();
     for namespace in meta.namespaces(Consistency::Local).await? {
+        // Loams's own records are no caller's catalog (UP1 Task 2).
+        if loams_common::meta::is_reserved_namespace(&namespace.name) {
+            continue;
+        }
         let entry = read_namespace(meta, &namespace).await?;
         out.insert(namespace.name, entry);
     }

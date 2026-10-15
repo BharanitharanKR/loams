@@ -7597,6 +7597,7 @@ dependencies = [
  "loams-log",
  "loams-meta",
  "loams-meta-tikv",
+ "loams-migrate",
  "loams-pg-control",
  "loams-postgres",
  "loams-proto",
