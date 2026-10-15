@@ -589,6 +589,8 @@ jobs:
         run: cargo test -p loams-link --features failpoints --locked
       - name: collection with failpoints
         run: cargo test -p loams-collection --features failpoints --locked
+      - name: migration runner crash matrix (UP1 Task 3)
+        run: cargo test -p loams-migrate --features failpoints --test runner_failpoints --locked
       - name: WAL service over TCP and the NVMe store (loams-safekeeper, features server, nvme)
         run: cargo test -p loams-safekeeper --features server,nvme --locked
       - name: WAL restart regression (20 consecutive runs, no retries)
