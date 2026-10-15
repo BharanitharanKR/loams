@@ -18,7 +18,7 @@
 //! instance as the proposer are woken by an in-process registry; others poll
 //! the store.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::future::Future;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -216,6 +216,62 @@ struct Registry {
     /// connected here (their `max_replication_*_lag` backpressure). Nothing
     /// is kept: when the pageserver's connection closes, feedback stops.
     feedback: Mutex<HashMap<TimelineId, broadcast::Sender<PageserverFeedback>>>,
+    /// The applied LSN each replica streaming from this instance last
+    /// reported (`'r'`), per timeline and connection: their least is the
+    /// timeline's `standby_horizon` (PG2 Task 16).
+    standbys: Arc<Standbys>,
+}
+
+/// Replicas' applied LSNs, per timeline and connection.
+#[derive(Debug, Default)]
+struct Standbys {
+    applied: Mutex<HashMap<TimelineId, BTreeMap<u64, Lsn>>>,
+    next: std::sync::atomic::AtomicU64,
+}
+
+impl Standbys {
+    fn set(&self, tl: TimelineId, conn: u64, applied: Option<Lsn>) {
+        let mut m = self.applied.lock().unwrap_or_else(|p| p.into_inner());
+        let per = m.entry(tl).or_default();
+        match applied {
+            Some(lsn) => {
+                per.insert(conn, lsn);
+            }
+            None => {
+                per.remove(&conn);
+            }
+        }
+        if per.is_empty() {
+            m.remove(&tl);
+        }
+    }
+
+    fn horizon(&self, tl: TimelineId) -> Lsn {
+        let m = self.applied.lock().unwrap_or_else(|p| p.into_inner());
+        m.get(&tl)
+            .and_then(|per| per.values().min().copied())
+            .unwrap_or_default()
+    }
+}
+
+/// One replication connection's place in [`Standbys`]; leaving drops its
+/// applied LSN.
+struct StandbySlot {
+    standbys: Arc<Standbys>,
+    tl: TimelineId,
+    conn: u64,
+}
+
+impl StandbySlot {
+    fn applied(&self, lsn: Option<Lsn>) {
+        self.standbys.set(self.tl, self.conn, lsn);
+    }
+}
+
+impl Drop for StandbySlot {
+    fn drop(&mut self) {
+        self.standbys.set(self.tl, self.conn, None);
+    }
 }
 
 impl Registry {
@@ -352,6 +408,14 @@ impl<S: WalStore> WalService<S> {
         })
     }
 
+    /// The least LSN the replicas streaming `tl` from this instance report
+    /// applied (0 with none): the `standby_horizon` this instance publishes,
+    /// so the pageserver keeps what they still need (the fork's
+    /// `walsenders.get_hotstandby()`).
+    pub fn standby_horizon(&self, tl: TimelineId) -> Lsn {
+        self.registry.standbys.horizon(tl)
+    }
+
     /// Pageserver feedback for `tl` as it arrives on this instance, from
     /// now on.
     pub fn subscribe_feedback(&self, tl: TimelineId) -> broadcast::Receiver<PageserverFeedback> {
@@ -370,7 +434,15 @@ impl<S: WalStore> WalService<S> {
         R: AsyncRead + Unpin + Send + 'static,
     {
         let (conn, rx) = watch::channel(None);
-        let task = tokio::spawn(read_feedback(rd, conn, self.registry.feedback(tl)));
+        let standbys = self.registry.standbys.clone();
+        let slot = StandbySlot {
+            conn: standbys
+                .next
+                .fetch_add(1, std::sync::atomic::Ordering::Relaxed),
+            standbys,
+            tl,
+        };
+        let task = tokio::spawn(read_feedback(rd, conn, self.registry.feedback(tl), slot));
         (
             task,
             Feedback {
@@ -1164,15 +1236,17 @@ async fn read_proposer<R: AsyncRead + Unpin>(mut rd: R, tx: mpsc::Sender<Propose
     }
 }
 
-/// Replication feedback: `'r'` standby status, `'h'` hot standby, and the
-/// pageserver's `'z'` status update, which is published to this connection
-/// (`conn`, the latest value wins) and broadcast to the walproposers on this
-/// instance (`shared`, every update; a lagging receiver skips). Publishing
-/// never waits.
+/// Replication feedback: a replica's `'r'` standby status (its applied
+/// LSN, kept in `standby` while the connection lives; 0 is none), `'h'` hot
+/// standby (not relayed), and the pageserver's `'z'` status update, which is
+/// published to this connection (`conn`, the latest value wins) and
+/// broadcast to the walproposers on this instance (`shared`, every update; a
+/// lagging receiver skips). Publishing never waits.
 async fn read_feedback<R: AsyncRead + Unpin>(
     mut rd: R,
     conn: watch::Sender<Option<PageserverFeedback>>,
     shared: broadcast::Sender<PageserverFeedback>,
+    standby: StandbySlot,
 ) {
     loop {
         match pgwire::read_message(&mut rd).await {
@@ -1183,6 +1257,12 @@ async fn read_feedback<R: AsyncRead + Unpin>(
                         // No walproposer here is not an error.
                         let _ = shared.send(fb);
                     }
+                }
+                // 'r', write, flush, apply (u64 each), the send time, a
+                // reply-requested byte.
+                Some(b'r') if body.len() >= 25 => {
+                    let applied = u64::from_be_bytes(body[17..25].try_into().unwrap_or_default());
+                    standby.applied((applied != 0).then_some(Lsn(applied)));
                 }
                 Some(b'r') | Some(b'h') => {}
                 _ => debug!("unexpected replication feedback"),

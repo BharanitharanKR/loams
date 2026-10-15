@@ -1138,3 +1138,92 @@ async fn vanilla_keepalives_request_a_reply() {
     assert_eq!(k.len(), 18);
     assert_eq!(k[17], 1, "request_reply");
 }
+
+/// A vanilla replication reader (a read-only compute's walreceiver).
+async fn replica(addr: SocketAddr) -> TcpStream {
+    let mut r = connect(addr).await;
+    client::query(
+        &mut r,
+        &format!("START_REPLICATION PHYSICAL {}", Lsn(START)),
+    )
+    .await
+    .unwrap();
+    client::expect_copy_both(&mut r).await.unwrap();
+    r
+}
+
+/// A standby status update (`'r'`, walreceiver.c's `XLogWalRcvSendReply`):
+/// written, flushed and applied LSNs, the send time, reply requested.
+fn standby_reply(applied: Lsn) -> BytesMut {
+    let mut body = BytesMut::new();
+    body.put_u8(b'r');
+    body.put_u64(applied.0);
+    body.put_u64(applied.0);
+    body.put_u64(applied.0);
+    body.put_i64(0);
+    body.put_u8(0);
+    body
+}
+
+/// Read-only computes stream from `loams-wal`, and the pageserver must keep
+/// what they have not applied yet (PG2 Task 16, Task 32's review M4): the
+/// least LSN the connected replicas report applied is published as
+/// `standby_horizon` (the fork's `walsenders.get_hotstandby()`), in the
+/// broker's timeline info. A reply without an applied LSN says nothing, and
+/// a replica that leaves stops holding the horizon back.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn standby_horizon_published_from_replica_feedback() {
+    let (pg, _web, svc) = start().await;
+    let payload = vec![7u8; 1000];
+    let _p = propose(pg, &payload).await;
+    let tl = loams_safekeeper::TimelineId::new(TENANT.parse().unwrap(), TIMELINE.parse().unwrap());
+    assert_eq!(svc.standby_horizon(tl), Lsn(0), "no replica yet");
+
+    let until = |want: Lsn| {
+        let svc = svc.clone();
+        async move {
+            tokio::time::timeout(Duration::from_secs(5), async {
+                while svc.standby_horizon(tl) != want {
+                    tokio::time::sleep(Duration::from_millis(10)).await;
+                }
+            })
+            .await
+            .unwrap_or_else(|_| panic!("standby_horizon {} != {want}", svc.standby_horizon(tl)));
+        }
+    };
+    let mut a = replica(pg).await;
+    let mut b = replica(pg).await;
+    client::send_copy_data(&mut a, &standby_reply(Lsn(START + 300)))
+        .await
+        .unwrap();
+    until(Lsn(START + 300)).await;
+    client::send_copy_data(&mut b, &standby_reply(Lsn(START + 100)))
+        .await
+        .unwrap();
+    until(Lsn(START + 100)).await;
+
+    let cfg = loams_safekeeper::broker::BrokerConfig::new(
+        "http://broker:50051".into(),
+        1,
+        "wal:5454".into(),
+        "wal:7676".into(),
+    );
+    let info = loams_safekeeper::broker::timeline_info(&svc, tl, &cfg)
+        .await
+        .unwrap()
+        .expect("the timeline");
+    assert_eq!(info.standby_horizon, START + 100);
+
+    client::send_copy_data(&mut b, &standby_reply(Lsn(0)))
+        .await
+        .unwrap();
+    until(Lsn(START + 300)).await;
+    client::send_copy_data(&mut b, &standby_reply(Lsn(START + 200)))
+        .await
+        .unwrap();
+    until(Lsn(START + 200)).await;
+    drop(b);
+    until(Lsn(START + 300)).await;
+    drop(a);
+    until(Lsn(0)).await;
+}
