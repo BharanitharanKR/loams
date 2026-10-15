@@ -212,42 +212,9 @@ pub fn report(
 /// Services of the stack that are not running, or not healthy (one-shot
 /// services that exited 0 are fine).
 pub fn unhealthy_services(runtime: &dyn Runtime, stack: &StackDir) -> Result<Vec<String>> {
-    let out = runtime.compose(&stack.dir, &args(["ps", "-a", "--format", "json"]))?;
-    if !out.ok() {
-        return Err(UpgradeError::new(
-            "stack_unhealthy",
-            out.stderr.trim().to_string(),
-        ));
-    }
-    let mut bad = Vec::new();
-    // `docker compose ps --format json` prints one object per line (newer)
-    // or one array (older).
-    let rows: Vec<serde_json::Value> =
-        match serde_json::from_str::<serde_json::Value>(out.stdout.trim()) {
-            Ok(serde_json::Value::Array(rows)) => rows,
-            Ok(row) => vec![row],
-            Err(_) => out
-                .stdout
-                .lines()
-                .filter_map(|l| serde_json::from_str(l).ok())
-                .collect(),
-        };
-    for row in rows {
-        let service = row["Service"].as_str().unwrap_or_default().to_string();
-        let state = row["State"].as_str().unwrap_or_default();
-        let health = row["Health"].as_str().unwrap_or_default();
-        let exit = row["ExitCode"].as_i64().unwrap_or(0);
-        let ok = match state {
-            "running" => health.is_empty() || health == "healthy",
-            "exited" => exit == 0,
-            _ => false,
-        };
-        if !ok {
-            bad.push(service);
-        }
-    }
-    bad.sort();
-    Ok(bad)
+    Ok(crate::compose::unhealthy(&crate::compose::ps(
+        runtime, &stack.dir,
+    )?))
 }
 
 /// `loams migrate plan` in a container of `image` (the target's), so a

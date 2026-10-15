@@ -8976,6 +8976,7 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "toml 0.8.23",
+ "ulid 3.0.0",
 ]
 
 [[package]]

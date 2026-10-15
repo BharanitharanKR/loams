@@ -28,12 +28,18 @@ RUN --mount=type=cache,id=loams-cargo-registry,target=/usr/local/cargo/registry 
 FROM ${RUNTIME_IMAGE}
 ARG VERSION=dev
 ARG REVISION=unknown
+# `migrate` also mounts the House's, pg-control's and the snapshots' volumes
+# (design §54 §6.4, §7.3): a volume first mounted by this image takes the
+# owners of these directories, so the House and pg-control (the same uid)
+# still own theirs.
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ca-certificates curl tini \
  && rm -rf /var/lib/apt/lists/* \
  && groupadd --system --gid 10001 loams \
  && useradd --system --uid 10001 --gid loams --home-dir /var/lib/loams --shell /usr/sbin/nologin loams \
- && install -d -o loams -g loams -m 0750 /var/lib/loams /var/lib/loams/bucket /var/lib/loams/graph
+ && install -d -o loams -g loams -m 0750 /var/lib/loams /var/lib/loams/bucket /var/lib/loams/graph \
+ && install -d -o loams -g loams -m 0750 /var/lib/loams-house \
+ && install -d -o loams -g loams -m 0700 /var/lib/loams-pg-control /var/lib/loams-upgrade-snapshots
 COPY --from=build /out/loams /usr/local/bin/loams
 LABEL org.opencontainers.image.title="loams" \
       org.opencontainers.image.description="Loams engine (preview)" \
