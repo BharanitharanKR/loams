@@ -364,8 +364,10 @@ The compose default is `tailscale`.
   the Postgres stack. The tailnet encrypts the hop from your device to the stack.
 - **The Postgres development stack uses default credentials** and `fsync = off` in its
   compute spec (see its [README](../../deploy/loams-postgres-dev/README.md)).
-- **No backups or upgrades are automated.** Back up the compose volumes yourself; a later
-  preview may need a fresh stack.
+- **Upgrades take a snapshot first.** `loams upgrade` snapshots every store before it changes
+  anything, and `loams upgrade rollback` restores it ([upgrades](upgrades.md)). The snapshots
+  stay on the host, mode 0700, and hold your data and secrets. Other backups are still yours to
+  make.
 - **No external security review** has been done.
 
 Report anything you find through [SECURITY.md](../../SECURITY.md), not in a public issue.
@@ -401,9 +403,12 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
   your own Vercel or Cloudflare; self-service OIDC clients; one-click OAuth deploy.
 - **Browsers on Chromium** may ask for permission the first time a page on a public origin
   calls an address on your tailnet (Local Network Access). Allow it for the console's origin.
-- **No upgrade path between previews.** Formats can change; read the
-  [changelog](../../CHANGELOG.md) before pulling a new `:preview`. Moving from preview.1, start
-  a fresh stack (`docker compose down -v`, then `up -d` with `LOAMS_VERSION=0.1.0-preview.2`).
+- **Upgrades go one preview at a time, with `loams upgrade`.** From preview.2 on, a stack keeps
+  its data: `loams upgrade check --to 0.1.0-preview.3`, then `loams upgrade --to
+  0.1.0-preview.3` (see [upgrades](upgrades.md)). Do not upgrade by editing `LOAMS_VERSION` and
+  running `docker compose up`: preview.3 recreates the safekeeper, which must be drained first.
+  preview.1 → preview.2 kept no data: from preview.1, start a fresh stack (`docker compose down
+  -v`, then `up -d` with `LOAMS_VERSION=0.1.0-preview.2`).
 
 ## Reporting issues
 
