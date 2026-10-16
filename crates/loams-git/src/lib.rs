@@ -51,7 +51,7 @@ pub use ids::{
     SecretId, Seq, SnapN, TraceParent, WsId, WsName,
 };
 pub use mirror_events::{GitEventSink, MirrorCursor, repair_repo, run_mirror};
-pub use odb::{ObjectDb, OdbError, PackCache, PackCacheOdb};
+pub use odb::{ObjectDb, OdbError, PackCache, PackCacheOdb, RangeOdb, WsOdb};
 pub use owner::{
     AlwaysHere, Cluster, LeaseError, OwnerConfig, OwnerStatsSnapshot, RepoSequencers, SeqLeases,
     SeqOwner, SeqPlacement, repo_placement_hash, seq_lease_key,
