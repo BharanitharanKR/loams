@@ -103,8 +103,17 @@ describe('agent providers section', () => {
     ) as HTMLInputElement;
     expect(box.checked).toBe(false);
     expect(c.getByText(/price applies/)).toBeTruthy();
-    fireEvent.click(box);
-    fireEvent.click(c.getByRole('button', { name: 'Save' }));
+    // The form resets itself to the saved values in an effect after its first
+    // render; on a busy runner that can land after a click and undo it, and Save
+    // stays disabled until the edit has rendered. So click until the edit holds
+    // (only ever when it is not yet checked), and Save has enabled with it.
+    const save = c.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+    await waitFor(() => {
+      if (!box.checked) fireEvent.click(box);
+      expect(box.checked).toBe(true);
+      expect(save.disabled).toBe(false);
+    });
+    fireEvent.click(save);
     await waitFor(() => expect(chat.configureProvider).toHaveBeenCalled());
     expect(chat.configureProvider.mock.calls[0]?.[1]).toMatchObject({ fallback: true });
   });
