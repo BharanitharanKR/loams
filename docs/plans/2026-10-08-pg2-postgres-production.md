@@ -977,6 +977,8 @@ Commit `feat(wal): membership, failover and pool moves`.
 - `recover_from_bucket_drill` (lose every hot-tier copy, recover up to `backup_lsn`, restart the compute, data up to `backup_lsn` present);
 - `archive_restore_matches_checksums` (vanilla Postgres from basebackup plus `.lwal` equals the pageserver branch at the same LSN).
 
+> **Pointer (2026-10-16, [§58](../design/58-data-access-and-htap.md) §8.5, D1060, Q924):** the offload's create-only `.lwal` writes, unknown-outcome resolution, framing and GC go into the shared bucket-segment library `loams-seglog`, extracted from `loams-git`'s `StoreWalStore` in this task ([DA1](2026-10-16-da1-data-access.md) Task F1). The `.lwal` format is unchanged.
+
 Commit `feat(wal): offload, recover and archive restore`.
 
 ### Task 41: Chaos and nemesis
@@ -1005,6 +1007,8 @@ Commit `test(wal): nemesis and simulation`.
 4. The chosen store becomes `pg-control`'s default pool. The other stays behind the setting `postgres.wal.store`.
 
 **Gate:** every §46 §9.3 row green for the chosen store, or an owner-approved revision recorded in §46.
+
+> **Pointer (2026-10-16, [§58](../design/58-data-access-and-htap.md) §8.3, D1058):** the proposed default going into this bake-off (a lean, not a ruling) is Arm A for production, with the TiKV store behind `WalStore` for small and single-node deployments. This task's results and Q652 decide.
 
 Commit `bench(wal): launch gate run <date>`.
 
