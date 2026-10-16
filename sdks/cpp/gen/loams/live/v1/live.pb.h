@@ -59,6 +59,22 @@ enum ErrorCode : int;
 extern const uint32_t ErrorCode_internal_data_[];
 enum ValidatorPrimitive : int;
 extern const uint32_t ValidatorPrimitive_internal_data_[];
+class AuthenticateRequest;
+struct AuthenticateRequestGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern AuthenticateRequestGlobalsTypeInternal AuthenticateRequest_globals_;
+extern const ::google::protobuf::internal::ClassDataFull AuthenticateRequest_class_data_;
+#else
+extern const AuthenticateRequestGlobalsTypeInternal AuthenticateRequest_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class AuthenticateResponse;
+struct AuthenticateResponseGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern AuthenticateResponseGlobalsTypeInternal AuthenticateResponse_globals_;
+extern const ::google::protobuf::internal::ClassDataFull AuthenticateResponse_class_data_;
+#else
+extern const AuthenticateResponseGlobalsTypeInternal AuthenticateResponse_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class IndexSchema;
 struct IndexSchemaGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -644,7 +660,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Removed final : public ::google::pr
   [[nodiscard]] static const Removed& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<Removed>(&Removed_globals_);
   }
-  static constexpr int kIndexInFileMessages = 10;
+  static constexpr int kIndexInFileMessages = 12;
   friend void swap(Removed& a, Removed& b) { a.Swap(&b); }
   inline void Swap(Removed* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -921,7 +937,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED LiveError final : public ::google::
   [[nodiscard]] static const LiveError& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<LiveError>(&LiveError_globals_);
   }
-  static constexpr int kIndexInFileMessages = 22;
+  static constexpr int kIndexInFileMessages = 24;
   friend void swap(LiveError& a, LiveError& b) { a.Swap(&b); }
   inline void Swap(LiveError* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1139,7 +1155,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IndexSchema final : public ::google
   [[nodiscard]] static const IndexSchema& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<IndexSchema>(&IndexSchema_globals_);
   }
-  static constexpr int kIndexInFileMessages = 17;
+  static constexpr int kIndexInFileMessages = 19;
   friend void swap(IndexSchema& a, IndexSchema& b) { a.Swap(&b); }
   inline void Swap(IndexSchema* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1315,6 +1331,413 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IndexSchema final : public ::google
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AuthenticateResponse final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:loams.live.v1.AuthenticateResponse) */ {
+  using Super_ = ::google::protobuf::Message;
+
+ public:
+  inline AuthenticateResponse() : AuthenticateResponse(nullptr) {}
+  ~AuthenticateResponse() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AuthenticateResponse* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AuthenticateResponse));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AuthenticateResponse(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AuthenticateResponse(const AuthenticateResponse& from) : AuthenticateResponse(nullptr, from) {}
+  inline AuthenticateResponse(AuthenticateResponse&& from) noexcept : AuthenticateResponse(nullptr, ::std::move(from)) {}
+  inline AuthenticateResponse& operator=(const AuthenticateResponse& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AuthenticateResponse& operator=(AuthenticateResponse&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AuthenticateResponse& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AuthenticateResponse>(&AuthenticateResponse_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 9;
+  friend void swap(AuthenticateResponse& a, AuthenticateResponse& b) { a.Swap(&b); }
+  inline void Swap(AuthenticateResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AuthenticateResponse* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AuthenticateResponse* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return Super_::DefaultConstruct<AuthenticateResponse>(arena);
+  }
+  using Super_::CopyFrom;
+  void CopyFrom(const AuthenticateResponse& from);
+  using Super_::MergeFrom;
+  void MergeFrom(const AuthenticateResponse& from) { AuthenticateResponse::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AuthenticateResponse* PROTOBUF_NONNULL other);
+ private:
+  static ::absl::string_view FullMessageName() { return "loams.live.v1.AuthenticateResponse"; }
+
+  explicit AuthenticateResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AuthenticateResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AuthenticateResponse& from);
+  AuthenticateResponse(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AuthenticateResponse&& from) noexcept
+      : AuthenticateResponse(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kIdentityFieldNumber = 1,
+  };
+  // uint64 identity = 1 [json_name = "identity"];
+  void clear_identity() ;
+  [[nodiscard]] ::uint64_t identity() const;
+  void set_identity(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_identity() const;
+  void _internal_set_identity(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:loams.live.v1.AuthenticateResponse)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 0,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AuthenticateResponse& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::uint64_t identity_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_loams_2flive_2fv1_2flive_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AuthenticateRequest final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:loams.live.v1.AuthenticateRequest) */ {
+  using Super_ = ::google::protobuf::Message;
+
+ public:
+  inline AuthenticateRequest() : AuthenticateRequest(nullptr) {}
+  ~AuthenticateRequest() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AuthenticateRequest* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AuthenticateRequest));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AuthenticateRequest(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AuthenticateRequest(const AuthenticateRequest& from) : AuthenticateRequest(nullptr, from) {}
+  inline AuthenticateRequest(AuthenticateRequest&& from) noexcept : AuthenticateRequest(nullptr, ::std::move(from)) {}
+  inline AuthenticateRequest& operator=(const AuthenticateRequest& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AuthenticateRequest& operator=(AuthenticateRequest&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AuthenticateRequest& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AuthenticateRequest>(&AuthenticateRequest_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 8;
+  friend void swap(AuthenticateRequest& a, AuthenticateRequest& b) { a.Swap(&b); }
+  inline void Swap(AuthenticateRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AuthenticateRequest* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AuthenticateRequest* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return Super_::DefaultConstruct<AuthenticateRequest>(arena);
+  }
+  using Super_::CopyFrom;
+  void CopyFrom(const AuthenticateRequest& from);
+  using Super_::MergeFrom;
+  void MergeFrom(const AuthenticateRequest& from) { AuthenticateRequest::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AuthenticateRequest* PROTOBUF_NONNULL other);
+ private:
+  static ::absl::string_view FullMessageName() { return "loams.live.v1.AuthenticateRequest"; }
+
+  explicit AuthenticateRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AuthenticateRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AuthenticateRequest& from);
+  AuthenticateRequest(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AuthenticateRequest&& from) noexcept
+      : AuthenticateRequest(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kSessionIdFieldNumber = 1,
+  };
+  // string session_id = 1 [json_name = "sessionId"];
+  void clear_session_id() ;
+  [[nodiscard]] const ::std::string& session_id() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_session_id(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_session_id();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_session_id();
+  void set_allocated_session_id(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_session_id() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_session_id(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_session_id();
+
+  public:
+  // @@protoc_insertion_point(class_scope:loams.live.v1.AuthenticateRequest)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<0, 1,
+                          0, 52,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AuthenticateRequest& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr session_id_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_loams_2flive_2fv1_2flive_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Validator final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:loams.live.v1.Validator) */ {
   using Super_ = ::google::protobuf::Message;
@@ -1383,7 +1806,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Validator final : public ::google::
     kId = 7,
     KIND_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 18;
+  static constexpr int kIndexInFileMessages = 20;
   friend void swap(Validator& a, Validator& b) { a.Swap(&b); }
   inline void Swap(Validator* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1723,7 +2146,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ValidatorObject final : public ::go
   [[nodiscard]] static const ValidatorObject& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ValidatorObject>(&ValidatorObject_globals_);
   }
-  static constexpr int kIndexInFileMessages = 20;
+  static constexpr int kIndexInFileMessages = 22;
   friend void swap(ValidatorObject& a, ValidatorObject& b) { a.Swap(&b); }
   inline void Swap(ValidatorObject* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -1979,7 +2402,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ValidatorUnion final : public ::goo
   [[nodiscard]] static const ValidatorUnion& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<ValidatorUnion>(&ValidatorUnion_globals_);
   }
-  static constexpr int kIndexInFileMessages = 21;
+  static constexpr int kIndexInFileMessages = 23;
   friend void swap(ValidatorUnion& a, ValidatorUnion& b) { a.Swap(&b); }
   inline void Swap(ValidatorUnion* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2196,7 +2619,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QueryUpdate final : public ::google
     kRemoved = 4,
     UPDATE_NOT_SET = 0,
   };
-  static constexpr int kIndexInFileMessages = 9;
+  static constexpr int kIndexInFileMessages = 11;
   friend void swap(QueryUpdate& a, QueryUpdate& b) { a.Swap(&b); }
   inline void Swap(QueryUpdate* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2707,7 +3130,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QueryResponse final : public ::goog
   [[nodiscard]] static const QueryResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<QueryResponse>(&QueryResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 12;
+  static constexpr int kIndexInFileMessages = 14;
   friend void swap(QueryResponse& a, QueryResponse& b) { a.Swap(&b); }
   inline void Swap(QueryResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -2925,7 +3348,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED QueryRequest final : public ::googl
   [[nodiscard]] static const QueryRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<QueryRequest>(&QueryRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 11;
+  static constexpr int kIndexInFileMessages = 13;
   friend void swap(QueryRequest& a, QueryRequest& b) { a.Swap(&b); }
   inline void Swap(QueryRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3161,7 +3584,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MutateResponse final : public ::goo
   [[nodiscard]] static const MutateResponse& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MutateResponse>(&MutateResponse_globals_);
   }
-  static constexpr int kIndexInFileMessages = 14;
+  static constexpr int kIndexInFileMessages = 16;
   friend void swap(MutateResponse& a, MutateResponse& b) { a.Swap(&b); }
   inline void Swap(MutateResponse* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3379,7 +3802,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED MutateRequest final : public ::goog
   [[nodiscard]] static const MutateRequest& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<MutateRequest>(&MutateRequest_globals_);
   }
-  static constexpr int kIndexInFileMessages = 13;
+  static constexpr int kIndexInFileMessages = 15;
   friend void swap(MutateRequest& a, MutateRequest& b) { a.Swap(&b); }
   inline void Swap(MutateRequest* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3620,7 +4043,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Transition final : public ::google:
   [[nodiscard]] static const Transition& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<Transition>(&Transition_globals_);
   }
-  static constexpr int kIndexInFileMessages = 8;
+  static constexpr int kIndexInFileMessages = 10;
   friend void swap(Transition& a, Transition& b) { a.Swap(&b); }
   inline void Swap(Transition* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -3894,7 +4317,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TableSchema final : public ::google
   [[nodiscard]] static const TableSchema& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<TableSchema>(&TableSchema_globals_);
   }
-  static constexpr int kIndexInFileMessages = 16;
+  static constexpr int kIndexInFileMessages = 18;
   friend void swap(TableSchema& a, TableSchema& b) { a.Swap(&b); }
   inline void Swap(TableSchema* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -4613,7 +5036,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED Schema final : public ::google::pro
   [[nodiscard]] static const Schema& default_instance() {
     return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<Schema>(&Schema_globals_);
   }
-  static constexpr int kIndexInFileMessages = 15;
+  static constexpr int kIndexInFileMessages = 17;
   friend void swap(Schema& a, Schema& b) { a.Swap(&b); }
   inline void Swap(Schema* PROTOBUF_NONNULL other) {
     if (other == this) return;
@@ -6518,6 +6941,102 @@ inline QuerySetChange::ChangeCase QuerySetChange::change_case() const {
 // -------------------------------------------------------------------
 
 // ModifyQuerySetResponse
+
+// -------------------------------------------------------------------
+
+// AuthenticateRequest
+
+// string session_id = 1 [json_name = "sessionId"];
+inline void AuthenticateRequest::clear_session_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_id_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& AuthenticateRequest::session_id() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.AuthenticateRequest.session_id)
+  return _internal_session_id();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AuthenticateRequest::set_session_id(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.session_id_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:loams.live.v1.AuthenticateRequest.session_id)
+}
+inline ::std::string* PROTOBUF_NONNULL AuthenticateRequest::mutable_session_id()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_session_id();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.AuthenticateRequest.session_id)
+  return _s;
+}
+inline const ::std::string& AuthenticateRequest::_internal_session_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.session_id_.Get();
+}
+inline void AuthenticateRequest::_internal_set_session_id(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.session_id_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AuthenticateRequest::_internal_mutable_session_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.session_id_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AuthenticateRequest::release_session_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.AuthenticateRequest.session_id)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.session_id_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.session_id_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AuthenticateRequest::set_allocated_session_id(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.session_id_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.session_id_.IsDefault()) {
+    _impl_.session_id_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.AuthenticateRequest.session_id)
+}
+
+// -------------------------------------------------------------------
+
+// AuthenticateResponse
+
+// uint64 identity = 1 [json_name = "identity"];
+inline void AuthenticateResponse::clear_identity() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.identity_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline ::uint64_t AuthenticateResponse::identity() const {
+  // @@protoc_insertion_point(field_get:loams.live.v1.AuthenticateResponse.identity)
+  return _internal_identity();
+}
+inline void AuthenticateResponse::set_identity(::uint64_t value) {
+  _internal_set_identity(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  // @@protoc_insertion_point(field_set:loams.live.v1.AuthenticateResponse.identity)
+}
+inline ::uint64_t AuthenticateResponse::_internal_identity() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.identity_;
+}
+inline void AuthenticateResponse::_internal_set_identity(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.identity_ = value;
+}
 
 // -------------------------------------------------------------------
 

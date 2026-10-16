@@ -45,6 +45,10 @@ PROTOBUF_CONSTINIT ::google::protobuf::internal::ReflectionData
         {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
         // ::loams::live::v1::ModifyQuerySetResponse
         {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
+        // ::loams::live::v1::AuthenticateRequest
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
+        // ::loams::live::v1::AuthenticateResponse
+        {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
         // ::loams::live::v1::Transition
         {&::_pbi::kDescriptorMethods, &::descriptor_table_loams_2flive_2fv1_2flive_2eproto, /* tracker*/ nullptr,},
         // ::loams::live::v1::QueryUpdate
@@ -309,7 +313,7 @@ constexpr auto Removed::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[10],
+      &file_reflection_data[12],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -585,7 +589,7 @@ constexpr auto LiveError::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[22],
+      &file_reflection_data[24],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -742,7 +746,7 @@ constexpr auto IndexSchema::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[17],
+      &file_reflection_data[19],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -789,6 +793,291 @@ const ::_pbi::ClassData* IndexSchema_get_class_data() {
   return IndexSchema_globals_.GetClassData();
 #else
   return IndexSchema_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class AuthenticateResponse::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<AuthenticateResponse>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(AuthenticateResponse, _impl_._has_bits_);
+};
+
+constexpr AuthenticateResponse::ParseTableT_ AuthenticateResponse::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(AuthenticateResponse, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::MpUnknownFields,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::loams::live::v1::AuthenticateResponse>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // uint64 identity = 1 [json_name = "identity"];
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(AuthenticateResponse, _impl_.identity_), 0>(),
+       {8, 0, 0,
+        PROTOBUF_FIELD_OFFSET(AuthenticateResponse, _impl_.identity_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // uint64 identity = 1 [json_name = "identity"];
+      {PROTOBUF_FIELD_OFFSET(AuthenticateResponse, _impl_.identity_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+    }},
+    // no aux_entries
+    {{
+    }},
+  };
+}
+
+
+inline constexpr AuthenticateResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : identity_{::uint64_t{0u}} {}
+
+template <typename>
+constexpr AuthenticateResponse::AuthenticateResponse(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : Super_(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL AuthenticateResponse::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) AuthenticateResponse(arena);
+}
+constexpr auto AuthenticateResponse::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::ZeroInit(sizeof(AuthenticateResponse), alignof(AuthenticateResponse));
+}
+constexpr auto AuthenticateResponse::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &AuthenticateResponse::MergeImpl,
+          Super_::GetNewImpl<AuthenticateResponse>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &AuthenticateResponse::SharedDtor,
+          Super_::GetClearImpl<AuthenticateResponse>(), &AuthenticateResponse::ByteSizeLong,
+              &AuthenticateResponse::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(AuthenticateResponse, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[9],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct AuthenticateResponseGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr AuthenticateResponseGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 AuthenticateResponse_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(AuthenticateResponse::InternalGenerateClassData_(
+            _default, &AuthenticateResponse_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<AuthenticateResponse>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~AuthenticateResponseGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) AuthenticateResponse _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<AuthenticateResponse>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(AuthenticateResponseGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AuthenticateResponseGlobalsTypeInternal AuthenticateResponse_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* AuthenticateResponse_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return AuthenticateResponse_globals_.GetClassData();
+#else
+  return AuthenticateResponse_class_data_.base();
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+}
+}  // namespace
+#endif  // PROTOBUF_CUSTOM_VTABLE
+class AuthenticateRequest::_Internal {
+ public:
+  using HasBits = decltype(::std::declval<AuthenticateRequest>()._impl_._has_bits_);
+  static constexpr ::int32_t kHasBitsOffset =
+      8 * PROTOBUF_FIELD_OFFSET(AuthenticateRequest, _impl_._has_bits_);
+};
+
+constexpr AuthenticateRequest::ParseTableT_ AuthenticateRequest::InternalGenerateParseTable_(const ::_pbi::ClassData* class_data) {
+  return ParseTableT_{
+    {
+      PROTOBUF_FIELD_OFFSET(AuthenticateRequest, _impl_._has_bits_),
+      0, // no _extensions_
+      1, 0,  // max_field_number, fast_idx_mask
+      offsetof(ParseTableT_, field_lookup_table),
+      4294967294,  // skipmap
+      offsetof(ParseTableT_, field_entries),
+      1,  // num_field_entries
+      0,  // num_aux_entries
+      offsetof(ParseTableT_, field_names),  // no aux_entries
+      class_data,
+      nullptr,  // post_loop_handler
+      ::_pbi::TcParser::MpUnknownFields,  // fallback
+      #ifdef PROTOBUF_PREFETCH_PARSE_TABLE
+      ::_pbi::TcParser::GetTable<::loams::live::v1::AuthenticateRequest>(),  // to_prefetch
+      #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
+    }, {{
+      // string session_id = 1 [json_name = "sessionId"];
+      {::_pbi::TcParser::FastUS1,
+       {10, 0, 0,
+        PROTOBUF_FIELD_OFFSET(AuthenticateRequest, _impl_.session_id_)}},
+    }}, {{
+      65535, 65535
+    }}, {{
+      // string session_id = 1 [json_name = "sessionId"];
+      {PROTOBUF_FIELD_OFFSET(AuthenticateRequest, _impl_.session_id_), _Internal::kHasBitsOffset + 0, 0, (0 | ::_fl::kFcOptional | ::_fl::kUtf8String | ::_fl::kRepAString)},
+    }},
+    // no aux_entries
+    {{
+      "\41\12\0\0\0\0\0\0"
+      "loams.live.v1.AuthenticateRequest"
+      "session_id"
+    }},
+  };
+}
+
+
+inline constexpr AuthenticateRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    ::_pbi::ConstantInitialized) noexcept
+      : session_id_(
+            &::google::protobuf::internal::fixed_address_empty_string,
+            ::_pbi::ConstantInitialized()) {}
+
+template <typename>
+constexpr AuthenticateRequest::AuthenticateRequest(::_pbi::ConstantInitialized,
+                       const ::_pbi::ClassData* PROTOBUF_NONNULL class_data)
+    : Super_(
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          class_data
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          ),
+      _impl_(internal_visibility(), ::_pbi::ConstantInitialized()) {
+}
+inline void* PROTOBUF_NONNULL AuthenticateRequest::PlacementNew_(
+    const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena) {
+  return ::new (mem) AuthenticateRequest(arena);
+}
+constexpr auto AuthenticateRequest::InternalNewImpl_() {
+  return ::google::protobuf::internal::MessageCreator::CopyInit(sizeof(AuthenticateRequest), alignof(AuthenticateRequest));
+}
+constexpr auto AuthenticateRequest::InternalGenerateClassData_(
+    const MessageLite& prototype,
+    const ::google::protobuf::internal::TcParseTableBase* tc_table) {
+  return ::google::protobuf::internal::ClassDataFull{
+      ::google::protobuf::internal::ClassData{
+          &prototype,
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+          &_table_.header,
+#else
+          tc_table,
+#endif
+          nullptr,  // IsInitialized
+          &AuthenticateRequest::MergeImpl,
+          Super_::GetNewImpl<AuthenticateRequest>(),
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+          &AuthenticateRequest::SharedDtor,
+          Super_::GetClearImpl<AuthenticateRequest>(), &AuthenticateRequest::ByteSizeLong,
+              &AuthenticateRequest::_InternalSerialize,
+#endif  // PROTOBUF_CUSTOM_VTABLE
+          PROTOBUF_FIELD_OFFSET(AuthenticateRequest, _impl_._cached_size_),
+          false,
+      },
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+      &file_reflection_data[8],
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+      &::_pbi::kDescriptorMethods,
+      &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
+      nullptr,  // tracker
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  };
+}
+struct AuthenticateRequestGlobalsTypeInternal : ::_pbi::MessageGlobalsBase {
+  constexpr AuthenticateRequestGlobalsTypeInternal()
+      :
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+        _default(::_pbi::ConstantInitialized{},
+                 AuthenticateRequest_class_data_.base())
+#else   // !PROTOBUF_MESSAGE_GLOBALS
+        MessageGlobalsBase(AuthenticateRequest::InternalGenerateClassData_(
+            _default, &AuthenticateRequest_globals_._table.header)),
+        _default(::_pbi::ConstantInitialized{}, GetClassData()),
+        _table(::_pbi::PrivateAccess::GenerateParseTable<AuthenticateRequest>(
+            GetClassData()))
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+  {
+  }
+  ~AuthenticateRequestGlobalsTypeInternal() {}
+  union {
+    alignas(::_pbi::kMaxMessageAlignment) AuthenticateRequest _default;
+  };
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  decltype(::_pbi::PrivateAccess::GenerateParseTable<AuthenticateRequest>(
+      ::std::declval<const ::_pbi::ClassData*>())) _table;
+#endif
+};
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+static_assert(PROTOBUF_FIELD_OFFSET(AuthenticateRequestGlobalsTypeInternal, _default) ==
+              ::_pbi::MessageGlobalsBase::OffsetToDefault());
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+
+PROTOBUF_ATTRIBUTE_NO_DESTROY PROTOBUF_CONSTINIT
+    PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 PROTOBUF_MESSAGE_GLOBALS_CONST AuthenticateRequestGlobalsTypeInternal AuthenticateRequest_globals_
+        PROTOBUF_MESSAGE_GLOBALS_SECTION(.data.rel.ro);
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+namespace {
+const ::_pbi::ClassData* AuthenticateRequest_get_class_data() {
+#ifdef PROTOBUF_MESSAGE_GLOBALS
+  return AuthenticateRequest_globals_.GetClassData();
+#else
+  return AuthenticateRequest_class_data_.base();
 #endif  // PROTOBUF_MESSAGE_GLOBALS
 }
 }  // namespace
@@ -926,7 +1215,7 @@ constexpr auto Validator::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[18],
+      &file_reflection_data[20],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -1083,7 +1372,7 @@ constexpr auto ValidatorObject::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[20],
+      &file_reflection_data[22],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -1224,7 +1513,7 @@ constexpr auto ValidatorObject_FieldsEntry_DoNotUse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[19],
+      &file_reflection_data[21],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -1374,7 +1663,7 @@ constexpr auto ValidatorUnion::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[21],
+      &file_reflection_data[23],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -1540,7 +1829,7 @@ constexpr auto QueryUpdate::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[9],
+      &file_reflection_data[11],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -1859,7 +2148,7 @@ constexpr auto QueryResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[12],
+      &file_reflection_data[14],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -2025,7 +2314,7 @@ constexpr auto QueryRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[11],
+      &file_reflection_data[13],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -2178,7 +2467,7 @@ constexpr auto MutateResponse::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[14],
+      &file_reflection_data[16],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -2347,7 +2636,7 @@ constexpr auto MutateRequest::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[13],
+      &file_reflection_data[15],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -2543,7 +2832,7 @@ constexpr auto Transition::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[8],
+      &file_reflection_data[10],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -2724,7 +3013,7 @@ constexpr auto TableSchema::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[16],
+      &file_reflection_data[18],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -3182,7 +3471,7 @@ constexpr auto Schema::InternalGenerateClassData_(
           false,
       },
 #ifdef PROTOBUF_MESSAGE_GLOBALS
-      &file_reflection_data[15],
+      &file_reflection_data[17],
 #else   // !PROTOBUF_MESSAGE_GLOBALS
       &::_pbi::kDescriptorMethods,
       &descriptor_table_loams_2flive_2fv1_2flive_2eproto,
@@ -3788,6 +4077,16 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::QuerySetChange, _impl_.change_),
         0x000, // bitmap
         0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::AuthenticateRequest, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::AuthenticateRequest, _impl_.session_id_),
+        0,
+        0x081, // bitmap
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::AuthenticateResponse, _impl_._has_bits_),
+        4, // hasbit index offset
+        PROTOBUF_FIELD_OFFSET(::loams::live::v1::AuthenticateResponse, _impl_.identity_),
+        0,
+        0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::Transition, _impl_._has_bits_),
         8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::loams::live::v1::Transition, _impl_.session_id_),
@@ -3915,21 +4214,23 @@ static const ::_pbi::MigrationSchema
         {37, sizeof(::loams::live::v1::ModifyQuerySetRequest)},
         {48, sizeof(::loams::live::v1::QuerySetChange)},
         {53, sizeof(::loams::live::v1::ModifyQuerySetResponse)},
-        {54, sizeof(::loams::live::v1::Transition)},
-        {67, sizeof(::loams::live::v1::QueryUpdate)},
-        {80, sizeof(::loams::live::v1::Removed)},
-        {81, sizeof(::loams::live::v1::QueryRequest)},
-        {90, sizeof(::loams::live::v1::QueryResponse)},
-        {97, sizeof(::loams::live::v1::MutateRequest)},
-        {106, sizeof(::loams::live::v1::MutateResponse)},
-        {113, sizeof(::loams::live::v1::Schema)},
-        {118, sizeof(::loams::live::v1::TableSchema)},
-        {129, sizeof(::loams::live::v1::IndexSchema)},
-        {136, sizeof(::loams::live::v1::Validator)},
-        {146, sizeof(::loams::live::v1::ValidatorObject_FieldsEntry_DoNotUse)},
-        {153, sizeof(::loams::live::v1::ValidatorObject)},
-        {158, sizeof(::loams::live::v1::ValidatorUnion)},
-        {163, sizeof(::loams::live::v1::LiveError)},
+        {54, sizeof(::loams::live::v1::AuthenticateRequest)},
+        {59, sizeof(::loams::live::v1::AuthenticateResponse)},
+        {64, sizeof(::loams::live::v1::Transition)},
+        {77, sizeof(::loams::live::v1::QueryUpdate)},
+        {90, sizeof(::loams::live::v1::Removed)},
+        {91, sizeof(::loams::live::v1::QueryRequest)},
+        {100, sizeof(::loams::live::v1::QueryResponse)},
+        {107, sizeof(::loams::live::v1::MutateRequest)},
+        {116, sizeof(::loams::live::v1::MutateResponse)},
+        {123, sizeof(::loams::live::v1::Schema)},
+        {128, sizeof(::loams::live::v1::TableSchema)},
+        {139, sizeof(::loams::live::v1::IndexSchema)},
+        {146, sizeof(::loams::live::v1::Validator)},
+        {156, sizeof(::loams::live::v1::ValidatorObject_FieldsEntry_DoNotUse)},
+        {163, sizeof(::loams::live::v1::ValidatorObject)},
+        {168, sizeof(::loams::live::v1::ValidatorUnion)},
+        {173, sizeof(::loams::live::v1::LiveError)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -3941,6 +4242,8 @@ static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
         &::loams::live::v1::ModifyQuerySetRequest_globals_,
         &::loams::live::v1::QuerySetChange_globals_,
         &::loams::live::v1::ModifyQuerySetResponse_globals_,
+        &::loams::live::v1::AuthenticateRequest_globals_,
+        &::loams::live::v1::AuthenticateResponse_globals_,
         &::loams::live::v1::Transition_globals_,
         &::loams::live::v1::QueryUpdate_globals_,
         &::loams::live::v1::Removed_globals_,
@@ -3982,82 +4285,87 @@ const char descriptor_table_protodef_loams_2flive_2fv1_2flive_2eproto[] ABSL_ATT
     "v1.QuerySetChangeR\007changes\"b\n\016QuerySetCh"
     "ange\022,\n\003add\030\001 \001(\0132\030.loams.live.v1.QueryS"
     "pecH\000R\003add\022\030\n\006remove\030\002 \001(\rH\000R\006removeB\010\n\006"
-    "change\"\030\n\026ModifyQuerySetResponse\"\327\001\n\nTra"
-    "nsition\022\035\n\nsession_id\030\001 \001(\tR\tsessionId\0221"
-    "\n\005start\030\002 \001(\0132\033.loams.live.v1.StateVersi"
-    "onR\005start\022-\n\003end\030\003 \001(\0132\033.loams.live.v1.S"
-    "tateVersionR\003end\0224\n\007updates\030\004 \003(\0132\032.loam"
-    "s.live.v1.QueryUpdateR\007updates\022\022\n\004more\030\005"
-    " \001(\010R\004more\"\306\001\n\013QueryUpdate\022\031\n\010query_id\030\001"
-    " \001(\rR\007queryId\022,\n\005value\030\002 \001(\0132\024.loams.liv"
-    "e.v1.ValueH\000R\005value\0220\n\005error\030\003 \001(\0132\030.loa"
-    "ms.live.v1.LiveErrorH\000R\005error\0222\n\007removed"
-    "\030\004 \001(\0132\026.loams.live.v1.RemovedH\000R\007remove"
-    "dB\010\n\006update\"\t\n\007Removed\"p\n\014QueryRequest\022\032"
-    "\n\010function\030\001 \001(\tR\010function\022(\n\004args\030\002 \001(\013"
-    "2\024.loams.live.v1.ValueR\004args\022\023\n\002ts\030\003 \001(\004"
-    "H\000R\002ts\210\001\001B\005\n\003_ts\"M\n\rQueryResponse\022\016\n\002ts\030"
-    "\001 \001(\004R\002ts\022,\n\006result\030\002 \001(\0132\024.loams.live.v"
-    "1.ValueR\006result\"\227\001\n\rMutateRequest\022\032\n\010fun"
-    "ction\030\001 \001(\tR\010function\022(\n\004args\030\002 \001(\0132\024.lo"
-    "ams.live.v1.ValueR\004args\022,\n\017idempotency_k"
-    "ey\030\003 \001(\tH\000R\016idempotencyKey\210\001\001B\022\n\020_idempo"
-    "tency_key\"[\n\016MutateResponse\022\033\n\tcommit_ts"
-    "\030\001 \001(\004R\010commitTs\022,\n\006result\030\002 \001(\0132\024.loams"
-    ".live.v1.ValueR\006result\"<\n\006Schema\0222\n\006tabl"
-    "es\030\001 \003(\0132\032.loams.live.v1.TableSchemaR\006ta"
-    "bles\"\327\001\n\013TableSchema\022\022\n\004name\030\001 \001(\tR\004name"
-    "\0224\n\007indexes\030\002 \003(\0132\032.loams.live.v1.IndexS"
-    "chemaR\007indexes\0226\n\tvalidator\030\003 \001(\0132\030.loam"
-    "s.live.v1.ValidatorR\tvalidator\0220\n\021schema"
-    "_validation\030\004 \001(\010H\000R\020schemaValidation\210\001\001"
-    "B\024\n\022_schema_validation\"9\n\013IndexSchema\022\022\n"
-    "\004name\030\001 \001(\tR\004name\022\026\n\006fields\030\002 \003(\tR\006field"
-    "s\"\365\002\n\tValidator\022A\n\tprimitive\030\001 \001(\0162!.loa"
-    "ms.live.v1.ValidatorPrimitiveH\000R\tprimiti"
-    "ve\0220\n\005array\030\002 \001(\0132\030.loams.live.v1.Valida"
-    "torH\000R\005array\0228\n\006object\030\003 \001(\0132\036.loams.liv"
-    "e.v1.ValidatorObjectH\000R\006object\0220\n\007litera"
-    "l\030\004 \001(\0132\024.loams.live.v1.ValueH\000R\007literal"
-    "\0225\n\005union\030\005 \001(\0132\035.loams.live.v1.Validato"
-    "rUnionH\000R\005union\0226\n\010optional\030\006 \001(\0132\030.loam"
-    "s.live.v1.ValidatorH\000R\010optional\022\020\n\002id\030\007 "
-    "\001(\tH\000R\002idB\006\n\004kind\"\252\001\n\017ValidatorObject\022B\n"
-    "\006fields\030\001 \003(\0132*.loams.live.v1.ValidatorO"
-    "bject.FieldsEntryR\006fields\032S\n\013FieldsEntry"
-    "\022\020\n\003key\030\001 \001(\tR\003key\022.\n\005value\030\002 \001(\0132\030.loam"
-    "s.live.v1.ValidatorR\005value:\0028\001\"D\n\016Valida"
-    "torUnion\0222\n\007members\030\001 \003(\0132\030.loams.live.v"
-    "1.ValidatorR\007members\"S\n\tLiveError\022,\n\004cod"
-    "e\030\001 \001(\0162\030.loams.live.v1.ErrorCodeR\004code\022"
-    "\030\n\007message\030\002 \001(\tR\007message*\224\002\n\022ValidatorP"
-    "rimitive\022#\n\037VALIDATOR_PRIMITIVE_UNSPECIF"
-    "IED\020\000\022\034\n\030VALIDATOR_PRIMITIVE_NULL\020\001\022\035\n\031V"
-    "ALIDATOR_PRIMITIVE_INT64\020\002\022\037\n\033VALIDATOR_"
-    "PRIMITIVE_FLOAT64\020\003\022\037\n\033VALIDATOR_PRIMITI"
-    "VE_BOOLEAN\020\004\022\036\n\032VALIDATOR_PRIMITIVE_STRI"
-    "NG\020\005\022\035\n\031VALIDATOR_PRIMITIVE_BYTES\020\006\022\033\n\027V"
-    "ALIDATOR_PRIMITIVE_ANY\020\007*\305\002\n\tErrorCode\022\032"
-    "\n\026ERROR_CODE_UNSPECIFIED\020\000\022\037\n\033ERROR_CODE"
-    "_INVALID_ARGUMENT\020\001\022\030\n\024ERROR_CODE_NOT_FO"
-    "UND\020\002\022\"\n\036ERROR_CODE_FAILED_PRECONDITION\020"
-    "\003\022!\n\035ERROR_CODE_RESOURCE_EXHAUSTED\020\004\022\035\n\031"
-    "ERROR_CODE_FUNCTION_ERROR\020\005\022\037\n\033ERROR_COD"
-    "E_FUNCTION_TIMEOUT\020\006\022%\n!ERROR_CODE_FUNCT"
-    "ION_OUT_OF_MEMORY\020\007\022\032\n\026ERROR_CODE_UNAVAI"
-    "LABLE\020\010\022\027\n\023ERROR_CODE_INTERNAL\020\t2\312\003\n\013Liv"
-    "eService\022N\n\005Watch\022\033.loams.live.v1.WatchR"
-    "equest\032\031.loams.live.v1.Transition\"\013\222\265\030\007\022"
-    "\005watch0\001\022s\n\016ModifyQuerySet\022$.loams.live."
-    "v1.ModifyQuerySetRequest\032%.loams.live.v1"
-    ".ModifyQuerySetResponse\"\024\222\265\030\020\022\016modifyQue"
-    "rySet\022W\n\005Query\022\033.loams.live.v1.QueryRequ"
-    "est\032\034.loams.live.v1.QueryResponse\"\023\222\265\030\017\n"
-    "\006tables\022\005query\022[\n\006Mutate\022\034.loams.live.v1"
-    ".MutateRequest\032\035.loams.live.v1.MutateRes"
-    "ponse\"\024\222\265\030\020\n\006tables\022\006mutate\032@\212\265\030<\n\004live\022"
-    "2Live sync: watch a query set over a ser"
-    "ver stream.\030\001b\006proto3"
+    "change\"\030\n\026ModifyQuerySetResponse\"4\n\023Auth"
+    "enticateRequest\022\035\n\nsession_id\030\001 \001(\tR\tses"
+    "sionId\"2\n\024AuthenticateResponse\022\032\n\010identi"
+    "ty\030\001 \001(\004R\010identity\"\327\001\n\nTransition\022\035\n\nses"
+    "sion_id\030\001 \001(\tR\tsessionId\0221\n\005start\030\002 \001(\0132"
+    "\033.loams.live.v1.StateVersionR\005start\022-\n\003e"
+    "nd\030\003 \001(\0132\033.loams.live.v1.StateVersionR\003e"
+    "nd\0224\n\007updates\030\004 \003(\0132\032.loams.live.v1.Quer"
+    "yUpdateR\007updates\022\022\n\004more\030\005 \001(\010R\004more\"\306\001\n"
+    "\013QueryUpdate\022\031\n\010query_id\030\001 \001(\rR\007queryId\022"
+    ",\n\005value\030\002 \001(\0132\024.loams.live.v1.ValueH\000R\005"
+    "value\0220\n\005error\030\003 \001(\0132\030.loams.live.v1.Liv"
+    "eErrorH\000R\005error\0222\n\007removed\030\004 \001(\0132\026.loams"
+    ".live.v1.RemovedH\000R\007removedB\010\n\006update\"\t\n"
+    "\007Removed\"p\n\014QueryRequest\022\032\n\010function\030\001 \001"
+    "(\tR\010function\022(\n\004args\030\002 \001(\0132\024.loams.live."
+    "v1.ValueR\004args\022\023\n\002ts\030\003 \001(\004H\000R\002ts\210\001\001B\005\n\003_"
+    "ts\"M\n\rQueryResponse\022\016\n\002ts\030\001 \001(\004R\002ts\022,\n\006r"
+    "esult\030\002 \001(\0132\024.loams.live.v1.ValueR\006resul"
+    "t\"\227\001\n\rMutateRequest\022\032\n\010function\030\001 \001(\tR\010f"
+    "unction\022(\n\004args\030\002 \001(\0132\024.loams.live.v1.Va"
+    "lueR\004args\022,\n\017idempotency_key\030\003 \001(\tH\000R\016id"
+    "empotencyKey\210\001\001B\022\n\020_idempotency_key\"[\n\016M"
+    "utateResponse\022\033\n\tcommit_ts\030\001 \001(\004R\010commit"
+    "Ts\022,\n\006result\030\002 \001(\0132\024.loams.live.v1.Value"
+    "R\006result\"<\n\006Schema\0222\n\006tables\030\001 \003(\0132\032.loa"
+    "ms.live.v1.TableSchemaR\006tables\"\327\001\n\013Table"
+    "Schema\022\022\n\004name\030\001 \001(\tR\004name\0224\n\007indexes\030\002 "
+    "\003(\0132\032.loams.live.v1.IndexSchemaR\007indexes"
+    "\0226\n\tvalidator\030\003 \001(\0132\030.loams.live.v1.Vali"
+    "datorR\tvalidator\0220\n\021schema_validation\030\004 "
+    "\001(\010H\000R\020schemaValidation\210\001\001B\024\n\022_schema_va"
+    "lidation\"9\n\013IndexSchema\022\022\n\004name\030\001 \001(\tR\004n"
+    "ame\022\026\n\006fields\030\002 \003(\tR\006fields\"\365\002\n\tValidato"
+    "r\022A\n\tprimitive\030\001 \001(\0162!.loams.live.v1.Val"
+    "idatorPrimitiveH\000R\tprimitive\0220\n\005array\030\002 "
+    "\001(\0132\030.loams.live.v1.ValidatorH\000R\005array\0228"
+    "\n\006object\030\003 \001(\0132\036.loams.live.v1.Validator"
+    "ObjectH\000R\006object\0220\n\007literal\030\004 \001(\0132\024.loam"
+    "s.live.v1.ValueH\000R\007literal\0225\n\005union\030\005 \001("
+    "\0132\035.loams.live.v1.ValidatorUnionH\000R\005unio"
+    "n\0226\n\010optional\030\006 \001(\0132\030.loams.live.v1.Vali"
+    "datorH\000R\010optional\022\020\n\002id\030\007 \001(\tH\000R\002idB\006\n\004k"
+    "ind\"\252\001\n\017ValidatorObject\022B\n\006fields\030\001 \003(\0132"
+    "*.loams.live.v1.ValidatorObject.FieldsEn"
+    "tryR\006fields\032S\n\013FieldsEntry\022\020\n\003key\030\001 \001(\tR"
+    "\003key\022.\n\005value\030\002 \001(\0132\030.loams.live.v1.Vali"
+    "datorR\005value:\0028\001\"D\n\016ValidatorUnion\0222\n\007me"
+    "mbers\030\001 \003(\0132\030.loams.live.v1.ValidatorR\007m"
+    "embers\"S\n\tLiveError\022,\n\004code\030\001 \001(\0162\030.loam"
+    "s.live.v1.ErrorCodeR\004code\022\030\n\007message\030\002 \001"
+    "(\tR\007message*\224\002\n\022ValidatorPrimitive\022#\n\037VA"
+    "LIDATOR_PRIMITIVE_UNSPECIFIED\020\000\022\034\n\030VALID"
+    "ATOR_PRIMITIVE_NULL\020\001\022\035\n\031VALIDATOR_PRIMI"
+    "TIVE_INT64\020\002\022\037\n\033VALIDATOR_PRIMITIVE_FLOA"
+    "T64\020\003\022\037\n\033VALIDATOR_PRIMITIVE_BOOLEAN\020\004\022\036"
+    "\n\032VALIDATOR_PRIMITIVE_STRING\020\005\022\035\n\031VALIDA"
+    "TOR_PRIMITIVE_BYTES\020\006\022\033\n\027VALIDATOR_PRIMI"
+    "TIVE_ANY\020\007*\305\002\n\tErrorCode\022\032\n\026ERROR_CODE_U"
+    "NSPECIFIED\020\000\022\037\n\033ERROR_CODE_INVALID_ARGUM"
+    "ENT\020\001\022\030\n\024ERROR_CODE_NOT_FOUND\020\002\022\"\n\036ERROR"
+    "_CODE_FAILED_PRECONDITION\020\003\022!\n\035ERROR_COD"
+    "E_RESOURCE_EXHAUSTED\020\004\022\035\n\031ERROR_CODE_FUN"
+    "CTION_ERROR\020\005\022\037\n\033ERROR_CODE_FUNCTION_TIM"
+    "EOUT\020\006\022%\n!ERROR_CODE_FUNCTION_OUT_OF_MEM"
+    "ORY\020\007\022\032\n\026ERROR_CODE_UNAVAILABLE\020\010\022\027\n\023ERR"
+    "OR_CODE_INTERNAL\020\t2\267\004\n\013LiveService\022N\n\005Wa"
+    "tch\022\033.loams.live.v1.WatchRequest\032\031.loams"
+    ".live.v1.Transition\"\013\222\265\030\007\022\005watch0\001\022s\n\016Mo"
+    "difyQuerySet\022$.loams.live.v1.ModifyQuery"
+    "SetRequest\032%.loams.live.v1.ModifyQuerySe"
+    "tResponse\"\024\222\265\030\020\022\016modifyQuerySet\022k\n\014Authe"
+    "nticate\022\".loams.live.v1.AuthenticateRequ"
+    "est\032#.loams.live.v1.AuthenticateResponse"
+    "\"\022\222\265\030\016\022\014authenticate\022W\n\005Query\022\033.loams.li"
+    "ve.v1.QueryRequest\032\034.loams.live.v1.Query"
+    "Response\"\023\222\265\030\017\n\006tables\022\005query\022[\n\006Mutate\022"
+    "\034.loams.live.v1.MutateRequest\032\035.loams.li"
+    "ve.v1.MutateResponse\"\024\222\265\030\020\n\006tables\022\006muta"
+    "te\032@\212\265\030<\n\004live\0222Live sync: watch a query"
+    " set over a server stream.\030\001b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_loams_2flive_2fv1_2flive_2eproto_deps[2] = {
@@ -4068,13 +4376,13 @@ static ::absl::once_flag descriptor_table_loams_2flive_2fv1_2flive_2eproto_once;
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_loams_2flive_2fv1_2flive_2eproto = {
     false,
     false,
-    3941,
+    4156,
     descriptor_table_protodef_loams_2flive_2fv1_2flive_2eproto,
     "loams/live/v1/live.proto",
     &descriptor_table_loams_2flive_2fv1_2flive_2eproto_once,
     descriptor_table_loams_2flive_2fv1_2flive_2eproto_deps,
     2,
-    23,
+    25,
     schemas,
     file_message_globals,
     TableStruct_loams_2flive_2fv1_2flive_2eproto::offsets,
@@ -6094,6 +6402,401 @@ PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const ModifyQuerySetResponse::ParseTableT_
 
 
 ::google::protobuf::Metadata ModifyQuerySetResponse::GetMetadata() const {
+  return Super_::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+AuthenticateRequest::AuthenticateRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : Super_(arena, AuthenticateRequest_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : Super_(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:loams.live.v1.AuthenticateRequest)
+}
+PROTOBUF_NDEBUG_INLINE AuthenticateRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+    [[maybe_unused]] const ::loams::live::v1::AuthenticateRequest& from_msg)
+      : _has_bits_{from._has_bits_},
+        session_id_(arena, from.session_id_) {}
+
+AuthenticateRequest::AuthenticateRequest(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena,
+    const AuthenticateRequest& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : Super_(arena, AuthenticateRequest_get_class_data()) {
+
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : Super_(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  AuthenticateRequest* const _this = this;
+  (void)_this;
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+  new (&_impl_) Impl_(internal_visibility(), arena, from._impl_, from);
+
+  // @@protoc_insertion_point(copy_constructor:loams.live.v1.AuthenticateRequest)
+}
+PROTOBUF_NDEBUG_INLINE AuthenticateRequest::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+      : session_id_(arena) {}
+
+inline void AuthenticateRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+}
+AuthenticateRequest::~AuthenticateRequest() {
+  // @@protoc_insertion_point(destructor:loams.live.v1.AuthenticateRequest)
+  SharedDtor(*this);
+}
+inline void AuthenticateRequest::SharedDtor(MessageLite& self) {
+  AuthenticateRequest& this_ = static_cast<AuthenticateRequest&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.session_id_.Destroy();
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull AuthenticateRequest_class_data_ =
+        AuthenticateRequest::InternalGenerateClassData_(AuthenticateRequest_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AuthenticateRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AuthenticateRequest_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(AuthenticateRequest_class_data_.tc_table);
+  return AuthenticateRequest_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AuthenticateRequest::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AuthenticateRequest_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&AuthenticateRequest_globals_));
+  return AuthenticateRequest_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const AuthenticateRequest::ParseTableT_
+    AuthenticateRequest::_table_ =
+        AuthenticateRequest::InternalGenerateParseTable_(AuthenticateRequest_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void AuthenticateRequest::Clear() {
+  auto& this_ [[maybe_unused]] = *this;
+  // @@protoc_insertion_point(message_clear_start:loams.live.v1.AuthenticateRequest)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    this_._impl_.session_id_.ClearNonDefaultToEmpty();
+  }
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL AuthenticateRequest::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const AuthenticateRequest& this_ = static_cast<const AuthenticateRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL AuthenticateRequest::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const AuthenticateRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:loams.live.v1.AuthenticateRequest)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // string session_id = 1 [json_name = "sessionId"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!this_._internal_session_id().empty()) {
+      const ::std::string& _s = this_._internal_session_id();
+      ::google::protobuf::internal::WireFormatLite::VerifyUtf8String(
+          _s.data(), static_cast<int>(_s.length()), ::google::protobuf::internal::WireFormatLite::SERIALIZE, "loams.live.v1.AuthenticateRequest.session_id");
+      target = stream->WriteStringMaybeAliased(1, _s, target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:loams.live.v1.AuthenticateRequest)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t AuthenticateRequest::ByteSizeLong(const MessageLite& base) {
+  const AuthenticateRequest& this_ = static_cast<const AuthenticateRequest&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t AuthenticateRequest::ByteSizeLong() const {
+  const AuthenticateRequest& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:loams.live.v1.AuthenticateRequest)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
+
+   {
+    // string session_id = 1 [json_name = "sessionId"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (!this_._internal_session_id().empty()) {
+        total_size += 1 + ::google::protobuf::internal::WireFormatLite::StringSize(
+                                        this_._internal_session_id());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void AuthenticateRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<AuthenticateRequest*>(&to_msg);
+  auto& from = static_cast<const AuthenticateRequest&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:loams.live.v1.AuthenticateRequest)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (!from._internal_session_id().empty()) {
+      _this->_internal_set_session_id(from._internal_session_id());
+    } else {
+      if (_this->_impl_.session_id_.IsDefault()) {
+        _this->_internal_set_session_id("");
+      }
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void AuthenticateRequest::CopyFrom(const AuthenticateRequest& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:loams.live.v1.AuthenticateRequest)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void AuthenticateRequest::InternalSwap(AuthenticateRequest* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  auto* arena = GetArena();
+  ABSL_DCHECK_EQ(arena, other->GetArena());
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.session_id_, &other->_impl_.session_id_, arena);
+}
+
+::google::protobuf::Metadata AuthenticateRequest::GetMetadata() const {
+  return Super_::GetMetadataImpl(GetClassData()->full());
+}
+// ===================================================================
+
+AuthenticateResponse::AuthenticateResponse(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : Super_(arena, AuthenticateResponse_get_class_data()) {
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : Super_(arena) {
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  SharedCtor(arena);
+  // @@protoc_insertion_point(arena_constructor:loams.live.v1.AuthenticateResponse)
+}
+AuthenticateResponse::AuthenticateResponse(
+    ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AuthenticateResponse& from)
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+    : Super_(arena, AuthenticateResponse_get_class_data()),
+#else   // PROTOBUF_CUSTOM_VTABLE
+    : Super_(arena),
+#endif  // PROTOBUF_CUSTOM_VTABLE
+      _impl_(from._impl_) {
+  _internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+PROTOBUF_NDEBUG_INLINE AuthenticateResponse::Impl_::Impl_(
+    [[maybe_unused]] ::google::protobuf::internal::InternalVisibility visibility,
+    [[maybe_unused]] ::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
+     {}
+
+inline void AuthenticateResponse::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE arena) {
+  new (&_impl_) Impl_(internal_visibility(), arena);
+  _impl_.identity_ = {};
+}
+AuthenticateResponse::~AuthenticateResponse() {
+  // @@protoc_insertion_point(destructor:loams.live.v1.AuthenticateResponse)
+  SharedDtor(*this);
+}
+inline void AuthenticateResponse::SharedDtor(MessageLite& self) {
+  AuthenticateResponse& this_ = static_cast<AuthenticateResponse&>(self);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  this_._internal_metadata_.Delete<::google::protobuf::UnknownFieldSet>();
+  ABSL_DCHECK(this_.GetArena() == nullptr);
+  this_._impl_.~Impl_();
+}
+
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const
+    ::google::protobuf::internal::ClassDataFull AuthenticateResponse_class_data_ =
+        AuthenticateResponse::InternalGenerateClassData_(AuthenticateResponse_globals_._default);
+
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AuthenticateResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AuthenticateResponse_class_data_);
+  ::google::protobuf::internal::PrefetchToLocalCache(AuthenticateResponse_class_data_.tc_table);
+  return AuthenticateResponse_class_data_.base();
+}
+#else
+PROTOBUF_ATTRIBUTE_WEAK const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+AuthenticateResponse::GetClassData() const {
+  ::google::protobuf::internal::PrefetchToLocalCache(&AuthenticateResponse_globals_);
+  ::google::protobuf::internal::PrefetchToLocalCache(
+      ::google::protobuf::internal::MessageGlobalsBase::ToParseTableBase(&AuthenticateResponse_globals_));
+  return AuthenticateResponse_globals_.GetClassData();
+}
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_CONSTINIT
+PROTOBUF_ATTRIBUTE_INIT_PRIORITY1 const AuthenticateResponse::ParseTableT_
+    AuthenticateResponse::_table_ =
+        AuthenticateResponse::InternalGenerateParseTable_(AuthenticateResponse_class_data_.base());
+#endif  // !PROTOBUF_MESSAGE_GLOBALS
+PROTOBUF_NOINLINE void AuthenticateResponse::Clear() {
+  auto& this_ [[maybe_unused]] = *this;
+  // @@protoc_insertion_point(message_clear_start:loams.live.v1.AuthenticateResponse)
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
+
+  this_._impl_.identity_ = ::uint64_t{0u};
+  _impl_._has_bits_.Clear();
+  _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::uint8_t* PROTOBUF_NONNULL AuthenticateResponse::_InternalSerialize(
+    const ::google::protobuf::MessageLite& base, ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) {
+  const AuthenticateResponse& this_ = static_cast<const AuthenticateResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::uint8_t* PROTOBUF_NONNULL AuthenticateResponse::_InternalSerialize(
+    ::uint8_t* PROTOBUF_NONNULL target,
+    ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+  const AuthenticateResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    this_.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(serialize_to_array_start:loams.live.v1.AuthenticateResponse)
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = this_._impl_._has_bits_[0];
+  // uint64 identity = 1 [json_name = "identity"];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (this_._internal_identity() != 0) {
+      target = stream->EnsureSpace(target);
+      target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
+          1, this_._internal_identity(), target);
+    }
+  }
+
+  if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
+    target =
+        ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
+            this_._internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance), target, stream);
+  }
+  // @@protoc_insertion_point(serialize_to_array_end:loams.live.v1.AuthenticateResponse)
+  return target;
+}
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+::size_t AuthenticateResponse::ByteSizeLong(const MessageLite& base) {
+  const AuthenticateResponse& this_ = static_cast<const AuthenticateResponse&>(base);
+#else   // PROTOBUF_CUSTOM_VTABLE
+::size_t AuthenticateResponse::ByteSizeLong() const {
+  const AuthenticateResponse& this_ = *this;
+#endif  // PROTOBUF_CUSTOM_VTABLE
+  // @@protoc_insertion_point(message_byte_size_start:loams.live.v1.AuthenticateResponse)
+  ::size_t total_size = 0;
+
+  ::uint32_t cached_has_bits [[maybe_unused]] = 0;
+
+   {
+    // uint64 identity = 1 [json_name = "identity"];
+    cached_has_bits = this_._impl_._has_bits_[0];
+    if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+      if (this_._internal_identity() != 0) {
+        total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
+            this_._internal_identity());
+      }
+    }
+  }
+  return this_.MaybeComputeUnknownFieldsSize(total_size,
+                                             &this_._impl_._cached_size_);
+}
+
+void AuthenticateResponse::MergeImpl(::google::protobuf::MessageLite& to_msg,
+                      const ::google::protobuf::MessageLite& from_msg) {
+   auto* const _this = static_cast<AuthenticateResponse*>(&to_msg);
+  auto& from = static_cast<const AuthenticateResponse&>(from_msg);
+  if constexpr (::_pbi::DebugHardenCheckHasBitConsistency()) {
+    from.CheckHasBitConsistency();
+  }
+  // @@protoc_insertion_point(class_specific_merge_from_start:loams.live.v1.AuthenticateResponse)
+  ABSL_DCHECK_NE(&from, _this);
+  ::uint32_t cached_has_bits = 0;
+  (void)cached_has_bits;
+
+  cached_has_bits = from._impl_._has_bits_[0];
+  if (CheckHasBit(cached_has_bits, 0x00000001U)) {
+    if (from._internal_identity() != 0) {
+      _this->_impl_.identity_ = from._impl_.identity_;
+    }
+  }
+  _this->_impl_._has_bits_[0] |= cached_has_bits;
+  _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
+      from._internal_metadata_);
+}
+
+void AuthenticateResponse::CopyFrom(const AuthenticateResponse& from) {
+  // @@protoc_insertion_point(class_specific_copy_from_start:loams.live.v1.AuthenticateResponse)
+  if (&from == this) return;
+  Clear();
+  MergeFrom(from);
+}
+
+
+void AuthenticateResponse::InternalSwap(AuthenticateResponse* PROTOBUF_RESTRICT PROTOBUF_NONNULL other) {
+  using ::std::swap;
+  _internal_metadata_.InternalSwap(&other->_internal_metadata_);
+  swap(_impl_._has_bits_[0], other->_impl_._has_bits_[0]);
+  swap(_impl_.identity_, other->_impl_.identity_);
+}
+
+::google::protobuf::Metadata AuthenticateResponse::GetMetadata() const {
   return Super_::GetMetadataImpl(GetClassData()->full());
 }
 // ===================================================================

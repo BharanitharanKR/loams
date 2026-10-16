@@ -239,6 +239,15 @@ pub struct LiveRoutes {
     admin: Arc<Admin>,
 }
 
+impl LiveRoutes {
+    /// Closes the sessions of `principal` (an API key's `apikey:<id>`, a
+    /// person's id) in every app this server runs: its credential was
+    /// revoked (LV1 plan Task 17).
+    pub fn revoke(&self, principal: &str) {
+        self.live.engines.revoke(principal);
+    }
+}
+
 impl std::fmt::Debug for LiveRoutes {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("LiveRoutes").finish_non_exhaustive()
@@ -507,7 +516,10 @@ impl LiveService for Live {
                 .await
                 .map_err(|e| connect_error(&e))?;
         }
-        let session = app.sessions().open(start).map_err(|e| connect_error(&e))?;
+        let session = app
+            .sessions()
+            .open_as(start, caller)
+            .map_err(|e| connect_error(&e))?;
         Ok(Response::new(transitions(
             session.outbox,
             self.max_transition_bytes,
@@ -533,6 +545,30 @@ impl LiveService for Live {
             .await
             .map_err(|e| connect_error(&e))?;
         Ok(Response::new(pb::ModifyQuerySetResponse::default()))
+    }
+
+    async fn authenticate(
+        &self,
+        ctx: RequestContext,
+        request: ServiceRequest<'_, pb::AuthenticateRequest>,
+    ) -> ServiceResult<pb::AuthenticateResponse> {
+        let (app, caller) = app_of(&self.engines, &ctx)
+            .await
+            .map_err(|e| connect_error(&e))?;
+        let req = request.to_owned_message();
+        let name = app.name().to_string();
+        let check: crate::session::Check = Arc::new(move |caller, f, args| {
+            authz::check_call(&ScopeAuthorizer, caller, &name, f, args)
+        });
+        let identity = app
+            .sessions()
+            .authenticate(&req.session_id, caller, check)
+            .await
+            .map_err(|e| connect_error(&e))?;
+        Ok(Response::new(pb::AuthenticateResponse {
+            identity,
+            ..Default::default()
+        }))
     }
 
     async fn query(

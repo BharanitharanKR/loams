@@ -51,6 +51,7 @@ public enum Reason: String, Sendable, Hashable, CaseIterable {
     case liveLimitExceeded = "live_limit_exceeded"
     case liveAppMismatch = "live_app_mismatch"
     case liveOriginNotAllowed = "live_origin_not_allowed"
+    case sessionRotate = "session_rotate"
     case deviceRevoked = "device_revoked"
     case pushTargetUnknown = "push_target_unknown"
     case notImplemented = "not_implemented"
@@ -113,6 +114,7 @@ public let loamsReasonCodes: [Reason: Code] = [
     .liveLimitExceeded: .resourceExhausted,
     .liveAppMismatch: .permissionDenied,
     .liveOriginNotAllowed: .permissionDenied,
+    .sessionRotate: .unavailable,
     .deviceRevoked: .unauthenticated,
     .pushTargetUnknown: .notFound,
     .notImplemented: .unimplemented,

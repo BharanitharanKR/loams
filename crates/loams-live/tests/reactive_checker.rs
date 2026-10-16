@@ -188,13 +188,13 @@ async fn reactive_checker_reports_unwired_disturbances(store: TestStore) {
         sessions: 1,
         tables: 1,
         ops: 20,
-        disturb: vec![Disturbance::IdentityChange { at_op: 5 }],
+        disturb: vec![Disturbance::NodeKill { at_op: 5 }],
     };
     let report = run_reactive_checker(store.fresh_root().await.store(), w).await;
     let kinds: Vec<ViolationKind> = report.violations.iter().map(|v| v.kind).collect();
     assert_eq!(kinds, [ViolationKind::Unwired], "{:?}", report.violations);
     assert!(
-        report.violations[0].detail.contains("Task 17"),
+        report.violations[0].detail.contains("Task 24"),
         "{:?}",
         report.violations
     );
@@ -211,6 +211,32 @@ async fn reactive_checker_reports_unwired_disturbances(store: TestStore) {
     assert_eq!(kinds, [ViolationKind::Workload], "{:?}", report.violations);
 }
 live_test!(reactive_checker_reports_unwired_disturbances);
+
+/// LV1 plan Task 17: sessions whose identity changes in the middle of a
+/// workload (twice) still never show a result that differs from a fresh
+/// evaluation, and their versions only move forward.
+async fn reactive_checker_with_identity_changes(store: TestStore) {
+    let w = Workload {
+        seed: 7,
+        sessions: 3,
+        tables: 2,
+        ops: 300,
+        disturb: vec![
+            Disturbance::IdentityChange { at_op: 60 },
+            Disturbance::IdentityChange { at_op: 180 },
+        ],
+    };
+    let report = run_reactive_checker(store.fresh_root().await.store(), w).await;
+    assert!(
+        report.violations.is_empty(),
+        "{} violations, the first:\n{}",
+        report.violations.len(),
+        first(&report)
+    );
+    assert_eq!(report.identity_changes, 6);
+    assert!(report.checked > 0, "nothing checked");
+}
+live_test!(reactive_checker_with_identity_changes);
 
 /// Every mutation of the workload carries an idempotency key (one per op,
 /// kept across its retries), so a retry after an unknown outcome replays

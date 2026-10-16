@@ -34,8 +34,9 @@ use connectrpc::client::{ClientConfig, ClientTransport, HttpClient, UnaryRespons
 use connectrpc::http_body::Body;
 use futures::Stream;
 use loams_live_proto::loams::live::v1::{
-    LiveServiceClient, ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest,
-    MutateResponse, QueryRequest, QueryResponse, Transition, TransitionView, WatchRequest,
+    AuthenticateRequest, AuthenticateResponse, LiveServiceClient, ModifyQuerySetRequest,
+    ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition,
+    TransitionView, WatchRequest,
 };
 use loams_proto::loams::instance::v1::{
     GetInstanceRequest, GetInstanceResponse, InstanceServiceClient, WhoAmIRequest, WhoAmIResponse,
@@ -560,6 +561,31 @@ where
             options,
             self.runtime,
             |request, opts| client.modify_query_set_with_options(request, opts),
+        )
+        .await
+    }
+
+    /// `loams.live.v1.LiveService/Authenticate`: replaces an open session's
+    /// identity with this call's credential (LV1 plan Task 17).
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`LoamsError`] for an unknown session or a credential the
+    /// app does not accept.
+    pub async fn authenticate(
+        &self,
+        request: AuthenticateRequest,
+        options: CallOptionsOverrides,
+    ) -> Result<AuthenticateResponse, LoamsError> {
+        let binding = crate::binding::binding_of("live", "authenticate").expect("generated");
+        let client = &self.client;
+        send(
+            binding,
+            request,
+            false,
+            options,
+            self.runtime,
+            |request, opts| client.authenticate_with_options(request, opts),
         )
         .await
     }

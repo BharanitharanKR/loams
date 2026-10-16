@@ -148,6 +148,13 @@ See [docs/release/upgrades.md](docs/release/upgrades.md).
   engine refuses to start with `--listen listen on <addr>: non-loopback addresses need [tls] and
   [auth] (MT1)`. Set the `LOAMS_TLS_*` variables and `LOAMS_AUTH_MODE`, bind `--listen` to
   loopback (the compose stack does), or pass `--no-live` (LV1 Task 18).
+- **Loams Live sessions follow who is signed in.** `LiveService/Authenticate{session_id}` replaces
+  an open session's identity with the call's credential: the same user only extends the session,
+  another user (a sign-in or sign-out) bumps `StateVersion.identity` and reruns every query as
+  them in one Transition. Subscriptions are keyed by who runs them, so a result is never shared
+  across users. A session closes with `unauthenticated` (`token_expired`) 60 s after its token
+  expires, with `token_revoked` when its API key is revoked or its member removed, and with
+  `unavailable` (`session_rotate`, new) after 24 h; clients resume (LV1 Task 17).
 
 ## [0.1.0-preview.2] - unreleased
 

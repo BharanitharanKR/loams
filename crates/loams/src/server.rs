@@ -2516,6 +2516,15 @@ impl Server {
         // The principal store (API2 Tasks 6 and 7): its sessions and API
         // keys authenticate through `auth` from here on.
         let principals = crate::auth::Principals::attach(&auth, meta_store.clone(), store.clone());
+        // LV1 plan Task 17: a revoked key or a removed member closes its
+        // Live sessions.
+        #[cfg(feature = "live")]
+        if let Some(live) = &live {
+            tokio::spawn(crate::api::live::close_revoked(
+                principals.directory.subscribe(),
+                live.clone(),
+            ));
+        }
         let guard = crate::auth::AuthLayerState::new(auth.clone(), &[]);
         let main_guard =
             crate::auth::AuthLayerState::new(auth.clone(), crate::auth::layer::MAIN_PUBLIC_PATHS);

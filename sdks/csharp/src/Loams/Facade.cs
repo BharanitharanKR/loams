@@ -347,6 +347,9 @@ public static class Facade
         Add("live", "Watch", "watch", "loams.live.v1.LiveService", "Watch",
             IdempotencyLevel.None, Streaming.Server,
             "Loams.Live.V1.WatchRequest", "Loams.Live.V1.Transition");
+        Add("live", "Authenticate", "authenticate", "loams.live.v1.LiveService", "Authenticate",
+            IdempotencyLevel.None, Streaming.Unary,
+            "Loams.Live.V1.AuthenticateRequest", "Loams.Live.V1.AuthenticateResponse");
         Add("live", "ModifyQuerySet", "modifyQuerySet", "loams.live.v1.LiveService", "ModifyQuerySet",
             IdempotencyLevel.None, Streaming.Unary,
             "Loams.Live.V1.ModifyQuerySetRequest", "Loams.Live.V1.ModifyQuerySetResponse");

@@ -15,6 +15,7 @@ use connectrpc::ConnectError;
 use connectrpc::client::{CallOptions, ClientConfig, HttpClient};
 use loams_live::apps::TrustedIssuer;
 use loams_live::auth::{Caller, CallerKind, EndUsers};
+use loams_live::session::{ClientState, QueryResult, SessionConfig};
 use loams_live::system::QUERY;
 use loams_live::testing::TestStore;
 use loams_live::{APP_HEADER, LiveHandle, LiveServer, LiveValue, live_test, pb};
@@ -23,6 +24,10 @@ use tokio_util::sync::CancellationToken;
 
 type Client = pb::LiveServiceClient<HttpClient>;
 type Admin = pb::LiveAdminServiceClient<HttpClient>;
+type Watch = connectrpc::client::ServerStream<
+    <HttpClient as connectrpc::client::ClientTransport>::ResponseBody,
+    pb::__buffa::view::TransitionView<'static>,
+>;
 
 /// The app the suite's end users belong to.
 const APP: &str = "shop";
@@ -83,7 +88,17 @@ async fn server_trusting(
     issuer: pb::TrustedIssuer,
     anonymous: bool,
 ) -> LiveHandle {
+    server_with(store, issuer, anonymous, SessionConfig::default()).await
+}
+
+async fn server_with(
+    store: &TestStore,
+    issuer: pb::TrustedIssuer,
+    anonymous: bool,
+    session: SessionConfig,
+) -> LiveHandle {
     let mut config = store.live_config("main");
+    config.session = session;
     config.listen = "127.0.0.1:0".parse().expect("an address");
     let loader = loams_live_js::JsLoader::new(loams_live_js::JsConfig {
         contexts: 1,
@@ -533,3 +548,258 @@ async fn authentik_end_user_e2e(store: TestStore) {
     handle.stop().await;
 }
 live_test!(authentik_end_user_e2e);
+
+// ---- session identity (LV1 plan Task 17) ----
+
+/// A Watch of `me:whoami` (query 1) as `o`'s caller.
+async fn watch_whoami(c: &Client, o: CallOptions) -> Watch {
+    let set = pb::QuerySet {
+        version: 1,
+        queries: vec![pb::QuerySpec {
+            query_id: 1,
+            function: "me:whoami".into(),
+            args: MessageField::some(LiveValue::Object(Default::default()).to_proto()),
+            ..Default::default()
+        }],
+        ..Default::default()
+    };
+    c.watch_with_options(
+        pb::WatchRequest {
+            start: Some(pb::__buffa::oneof::watch_request::Start::Initial(Box::new(
+                set,
+            ))),
+            ..Default::default()
+        },
+        o,
+    )
+    .await
+    .expect("Watch opens")
+}
+
+/// The next message of `w`: a Transition, or the stream's end (`Ok(None)`)
+/// or error.
+async fn next(w: &mut Watch) -> Result<Option<pb::Transition>, ConnectError> {
+    tokio::time::timeout(Duration::from_secs(20), w.message())
+        .await
+        .expect("a message within 20 s")
+        .map(|m| m.map(|t| t.to_owned_message()))
+}
+
+/// Applies Transitions until one carries a result for query 1; returns it,
+/// the Transition's end identity version and the session id.
+async fn whoami(w: &mut Watch, client: &mut ClientState) -> (LiveValue, u64, String) {
+    loop {
+        let t = next(w).await.expect("the stream").expect("not the end");
+        client.apply(&t).expect("in order");
+        if t.updates.iter().any(|u| u.query_id == 1) {
+            let value = match &client.results[&1] {
+                QueryResult::Value(v) => v.clone(),
+                QueryResult::Error(e) => panic!("whoami failed: {e:?}"),
+            };
+            return (value, client.version.identity, t.session_id);
+        }
+    }
+}
+
+fn subject(v: &LiveValue) -> Option<String> {
+    match v {
+        LiveValue::Null => None,
+        v => match field(v, "subject") {
+            LiveValue::Str(s) => Some(s.clone()),
+            other => panic!("a subject: {other:?}"),
+        },
+    }
+}
+
+async fn authenticate(c: &Client, session: &str, o: CallOptions) -> Result<u64, ConnectError> {
+    Ok(c.authenticate_with_options(
+        pb::AuthenticateRequest {
+            session_id: session.into(),
+            ..Default::default()
+        },
+        o,
+    )
+    .await?
+    .into_owned()
+    .identity)
+}
+
+/// The app `shop`'s subscription counters.
+async fn shop_stats(handle: &LiveHandle) -> loams_live::SubsStats {
+    let shop = handle
+        .engines()
+        .resolve(Some(APP))
+        .await
+        .expect("shop runs");
+    shop.subs().stats()
+}
+
+/// `Authenticate` with the same caller (a refreshed token) moves the expiry
+/// only: no rerun, no new identity version.
+async fn authenticate_same_subject_extends_without_rerun(store: TestStore) {
+    let issuer = Issuer::start().await;
+    let handle = server(&store, &issuer, false).await;
+    let c = client(&handle);
+    let first = issuer.token("ada");
+    let mut w = watch_whoami(&c, who(Some("anonymous"), Some(&first))).await;
+    let mut state = ClientState::new();
+    let (me, identity, session) = whoami(&mut w, &mut state).await;
+    assert_eq!((subject(&me).as_deref(), identity), (Some("ada"), 0));
+    let before = shop_stats(&handle).await.reruns;
+    let refreshed = issuer.token_with(&issuer.key, "ada", |c| c["iat"] = json!(1));
+    let version = authenticate(&c, &session, who(Some("anonymous"), Some(&refreshed)))
+        .await
+        .expect("Authenticate");
+    assert_eq!(version, 0, "the same subject keeps the identity version");
+    assert_eq!(shop_stats(&handle).await.reruns, before, "nothing reran");
+    handle.stop().await;
+}
+live_test!(authenticate_same_subject_extends_without_rerun);
+
+/// `Authenticate` with another caller bumps the identity version and reruns
+/// every query as the new caller; a sign-out to anonymous does the same.
+async fn authenticate_new_subject_bumps_identity_and_reruns(store: TestStore) {
+    let issuer = Issuer::start().await;
+    let handle = server(&store, &issuer, true).await;
+    let c = client(&handle);
+    let mut w = watch_whoami(&c, who(Some("anonymous"), Some(&issuer.token("ada")))).await;
+    let mut state = ClientState::new();
+    let (me, _, session) = whoami(&mut w, &mut state).await;
+    assert_eq!(subject(&me).as_deref(), Some("ada"));
+    let version = authenticate(
+        &c,
+        &session,
+        who(Some("anonymous"), Some(&issuer.token("bob"))),
+    )
+    .await
+    .expect("Authenticate as bob");
+    assert_eq!(version, 1);
+    let (me, identity, _) = whoami(&mut w, &mut state).await;
+    assert_eq!((subject(&me).as_deref(), identity), (Some("bob"), 1));
+    // Signing out: anonymous (the app takes anonymous calls).
+    let version = authenticate(&c, &session, who(Some("anonymous"), None))
+        .await
+        .expect("sign out");
+    assert_eq!(version, 2);
+    let (me, identity, _) = whoami(&mut w, &mut state).await;
+    assert_eq!((me, identity), (LiveValue::Null, 2));
+    // A token that does not verify changes nothing.
+    let e = authenticate(&c, &session, who(Some("anonymous"), Some("e30.e30.sig")))
+        .await
+        .expect_err("a bad token");
+    assert_eq!(e.code, connectrpc::ErrorCode::Unauthenticated, "{e:?}");
+    // An unknown session.
+    let e = authenticate(&c, "nobody", who(Some("anonymous"), None))
+        .await
+        .expect_err("no such session");
+    assert_eq!(e.code, connectrpc::ErrorCode::NotFound, "{e:?}");
+    handle.stop().await;
+}
+live_test!(authenticate_new_subject_bumps_identity_and_reruns);
+
+/// A session whose token expires (plus the leeway) without an
+/// `Authenticate` is closed with `token_expired`.
+async fn expired_session_closed_with_token_expired(store: TestStore) {
+    let issuer = Issuer::start().await;
+    let session = SessionConfig {
+        expiry_leeway: Duration::from_millis(200),
+        ..SessionConfig::default()
+    };
+    let handle = server_with(&store, issuer.trusted_pb(), false, session).await;
+    let c = client(&handle);
+    // Valid for verification (60 s leeway), but already past its `exp`.
+    let stale = issuer.token_with(&issuer.key, "ada", |claims| {
+        let now = claims["iat"].as_u64().expect("iat");
+        claims["exp"] = json!(now - 1);
+    });
+    let mut w = watch_whoami(&c, who(Some("anonymous"), Some(&stale))).await;
+    let mut state = ClientState::new();
+    whoami(&mut w, &mut state).await;
+    let closed = loop {
+        match next(&mut w).await {
+            Ok(Some(t)) => state.apply(&t).expect("in order"),
+            Ok(None) => panic!("the stream ended without an error"),
+            Err(e) => break e,
+        };
+    };
+    assert_eq!(outcome::<()>(Err(closed)), "unauthenticated token_expired");
+    handle.stop().await;
+}
+live_test!(expired_session_closed_with_token_expired);
+
+/// Revoking a credential closes its sessions with `token_revoked`; others
+/// stay open.
+async fn revoked_key_closes_sessions(store: TestStore) {
+    let issuer = Issuer::start().await;
+    let handle = server(&store, &issuer, false).await;
+    let c = client(&handle);
+    let mut revoked = watch_whoami(&c, who(Some("api_key"), None)).await;
+    let mut kept = watch_whoami(&c, who(Some("anonymous"), Some(&issuer.token("ada")))).await;
+    let (mut a, mut b) = (ClientState::new(), ClientState::new());
+    whoami(&mut revoked, &mut a).await;
+    whoami(&mut kept, &mut b).await;
+    handle.routes().revoke("apikey:01");
+    let closed = loop {
+        match next(&mut revoked).await {
+            Ok(Some(_)) => {}
+            Ok(None) => panic!("the stream ended without an error"),
+            Err(e) => break e,
+        }
+    };
+    assert_eq!(outcome::<()>(Err(closed)), "unauthenticated token_revoked");
+    let shop = handle
+        .engines()
+        .resolve(Some(APP))
+        .await
+        .expect("shop runs");
+    assert_eq!(shop.sessions().len(), 1, "the other session stays");
+    handle.stop().await;
+}
+live_test!(revoked_key_closes_sessions);
+
+/// A stream is rotated after the session's maximum age (24 h by default)
+/// with `session_rotate`, and the client resumes.
+async fn stream_rotates_after_24h(store: TestStore) {
+    assert_eq!(
+        SessionConfig::default().max_age,
+        Duration::from_secs(24 * 60 * 60)
+    );
+    let issuer = Issuer::start().await;
+    let session = SessionConfig {
+        max_age: Duration::from_millis(400),
+        ..SessionConfig::default()
+    };
+    let handle = server_with(&store, issuer.trusted_pb(), false, session).await;
+    let c = client(&handle);
+    let mut w = watch_whoami(&c, who(Some("api_key"), None)).await;
+    let mut state = ClientState::new();
+    whoami(&mut w, &mut state).await;
+    let closed = loop {
+        match next(&mut w).await {
+            Ok(Some(_)) => {}
+            Ok(None) => panic!("the stream ended without an error"),
+            Err(e) => break e,
+        }
+    };
+    assert_eq!(outcome::<()>(Err(closed)), "unavailable session_rotate");
+    handle.stop().await;
+}
+live_test!(stream_rotates_after_24h);
+
+/// Two end users watching one `ctx.auth`-dependent query each see their own
+/// result, and the manager holds one subscription per user.
+async fn results_never_shared_across_identities(store: TestStore) {
+    let issuer = Issuer::start().await;
+    let handle = server(&store, &issuer, false).await;
+    let c = client(&handle);
+    let mut ada = watch_whoami(&c, who(Some("anonymous"), Some(&issuer.token("ada")))).await;
+    let mut bob = watch_whoami(&c, who(Some("anonymous"), Some(&issuer.token("bob")))).await;
+    let (mut a, mut b) = (ClientState::new(), ClientState::new());
+    let (me_a, ..) = whoami(&mut ada, &mut a).await;
+    let (me_b, ..) = whoami(&mut bob, &mut b).await;
+    assert_eq!(subject(&me_a).as_deref(), Some("ada"));
+    assert_eq!(subject(&me_b).as_deref(), Some("bob"));
+    assert_eq!(shop_stats(&handle).await.subscriptions, 2);
+    handle.stop().await;
+}
+live_test!(results_never_shared_across_identities);

@@ -272,6 +272,18 @@ public let loamsModules: [ModuleBinding] = [
         calls: [
             CallBinding(
                 module: "live",
+                name: "Authenticate",
+                protoName: "authenticate",
+                method: "Authenticate",
+                rpc: LoamsService.live + "/Authenticate",
+                service: LoamsService.live,
+                package: "loams.live.v1",
+                idempotency: .none,
+                retry: .manual,
+                streaming: .unary
+            ),
+            CallBinding(
+                module: "live",
                 name: "ModifyQuerySet",
                 protoName: "modifyQuerySet",
                 method: "ModifyQuerySet",

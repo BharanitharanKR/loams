@@ -133,6 +133,7 @@ var Reasons = []Reason{
 	"live_limit_exceeded",
 	"live_app_mismatch",
 	"live_origin_not_allowed",
+	"session_rotate",
 	"role_required",
 	"setup_required",
 	"token_missing",
@@ -237,6 +238,7 @@ var ReasonCodes = map[Reason]string{
 	"live_limit_exceeded":         "resource_exhausted",
 	"live_app_mismatch":           "permission_denied",
 	"live_origin_not_allowed":     "permission_denied",
+	"session_rotate":              "unavailable",
 	"role_required":               "permission_denied",
 	"setup_required":              "failed_precondition",
 	"token_missing":               "unauthenticated",
@@ -468,6 +470,7 @@ var Modules = []ModuleBinding{
 		Unstable: true,
 		Derived:  false,
 		Calls: []CallBinding{
+			{Module: "live", Name: "Authenticate", ProtoName: "authenticate", Method: "Authenticate", RPC: "loams.live.v1.LiveService/Authenticate", Service: "loams.live.v1.LiveService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
 			{Module: "live", Name: "ModifyQuerySet", ProtoName: "modifyQuerySet", Method: "ModifyQuerySet", RPC: "loams.live.v1.LiveService/ModifyQuerySet", Service: "loams.live.v1.LiveService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
 			{Module: "live", Name: "Watch", ProtoName: "watch", Method: "Watch", RPC: "loams.live.v1.LiveService/Watch", Service: "loams.live.v1.LiveService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingServer, Pagination: nil},
 		},
@@ -697,6 +700,8 @@ type LiveModule interface {
 	// Unstable reports that the package's wire contract may still change.
 	Unstable() bool
 
+	// Authenticate calls loams.live.v1.LiveService/Authenticate, retried: manual.
+	Authenticate(ctx context.Context, req *connect.Request[livev1.AuthenticateRequest], opts *CallOptions) (*connect.Response[livev1.AuthenticateResponse], error)
 	// ModifyQuerySet calls loams.live.v1.LiveService/ModifyQuerySet, retried: manual.
 	ModifyQuerySet(ctx context.Context, req *connect.Request[livev1.ModifyQuerySetRequest], opts *CallOptions) (*connect.Response[livev1.ModifyQuerySetResponse], error)
 	// Watch calls loams.live.v1.LiveService/Watch, retried: manual.

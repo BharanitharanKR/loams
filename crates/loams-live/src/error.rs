@@ -44,6 +44,9 @@ pub const LIVE_REASONS: &[&str] = &[
     crate::auth::reason::TOKEN_UNKNOWN_KEY,
     crate::auth::reason::TOKEN_ALGORITHM,
     crate::auth::reason::AUTH_UNAVAILABLE,
+    // Session identity (LV1 plan Task 17).
+    crate::auth::reason::TOKEN_REVOKED,
+    crate::session::SESSION_ROTATE,
 ];
 
 /// Why a Loams Live operation failed. Each variant maps to one
@@ -97,6 +100,10 @@ pub enum LiveError {
     /// `UNAVAILABLE`, reason `auth_unavailable`.
     #[error("unavailable: {0}")]
     AuthUnavailable(String),
+    /// A session that reached its maximum age (LV1 plan Task 17, Q637):
+    /// `UNAVAILABLE`, reason `session_rotate`; the client resumes.
+    #[error("unavailable: {0}")]
+    SessionRotated(String),
     /// `CreateApp` with a name another app has (LV1 plan Task 13):
     /// `FAILED_PRECONDITION`, reason `live_app_exists`.
     #[error("failed precondition: {0}")]
@@ -201,7 +208,9 @@ impl LiveError {
             | LiveError::DeployConflict(_)
             | LiveError::JournalTrimmed { .. } => pb::ErrorCode::ERROR_CODE_FAILED_PRECONDITION,
             LiveError::LimitExceeded { .. } => pb::ErrorCode::ERROR_CODE_RESOURCE_EXHAUSTED,
-            LiveError::AuthUnavailable(_) => pb::ErrorCode::ERROR_CODE_UNAVAILABLE,
+            LiveError::AuthUnavailable(_) | LiveError::SessionRotated(_) => {
+                pb::ErrorCode::ERROR_CODE_UNAVAILABLE
+            }
             LiveError::Corrupt(_) | LiveError::Internal(_) => pb::ErrorCode::ERROR_CODE_INTERNAL,
             LiveError::FunctionError(_) | LiveError::WorkerCrashed(_) => {
                 pb::ErrorCode::ERROR_CODE_FUNCTION_ERROR
@@ -237,6 +246,7 @@ impl LiveError {
             LiveError::PermissionDenied { reason, .. } => Some(reason),
             LiveError::Unauthenticated { reason, .. } => Some(reason),
             LiveError::AuthUnavailable(_) => Some(crate::auth::reason::AUTH_UNAVAILABLE),
+            LiveError::SessionRotated(_) => Some(crate::session::SESSION_ROTATE),
             _ => None,
         }
     }
