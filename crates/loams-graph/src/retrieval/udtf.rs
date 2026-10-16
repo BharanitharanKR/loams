@@ -16,13 +16,14 @@ use loams_collection::PrimaryKey;
 use loams_query::ServiceError;
 use loams_query::expand::ExpandDirection;
 use loams_query::graph::{
-    DegreeCall, GraphTables, IncidentEdge, NeighborsCall, PathCall, PathStep,
+    AlgorithmCall, AlgorithmRow, AlgorithmSpec, AlgorithmValue, DegreeCall, GraphTables,
+    IncidentEdge, NeighborsCall, PathCall, PathStep,
 };
 
 use super::expand::{
     LoamsGraphExpander, arrow, clauses, edge_pk, ident, json_props, key_value, vertex_of,
 };
-use super::filter;
+use super::{algos, filter};
 use crate::consistency::Consistency;
 
 /// The directions a call walks, each a fixed edge arrow: out before in.
@@ -394,5 +395,93 @@ impl GraphTables for LoamsGraphExpander {
             frontier = next;
         }
         Ok(Vec::new())
+    }
+
+    async fn algorithm(&self, call: AlgorithmCall<'_>) -> Result<Vec<AlgorithmRow>, ServiceError> {
+        let edge_types = call.edge_types.clone();
+        let (algorithm, label) = match call.spec {
+            AlgorithmSpec::PageRank {
+                label,
+                damping,
+                max_iterations,
+                tolerance,
+            } => (
+                algos::Algorithm::PageRank(algos::PageRank {
+                    label: label.clone(),
+                    edge_types,
+                    damping,
+                    max_iterations,
+                    tolerance,
+                }),
+                label,
+            ),
+            AlgorithmSpec::Wcc => (algos::Algorithm::Wcc { edge_types }, None),
+            AlgorithmSpec::Leiden {
+                weight,
+                resolution,
+                max_levels,
+                max_cluster_size,
+                seed,
+            } => (
+                algos::Algorithm::Leiden(algos::Leiden {
+                    edge_types,
+                    weight,
+                    resolution,
+                    max_levels,
+                    max_cluster_size,
+                    seed,
+                }),
+                None,
+            ),
+        };
+        let answer = self
+            .admin()
+            .run_algorithm(call.namespace, call.graph, &algorithm, &Consistency::Strong)
+            .await
+            .map_err(|err| algorithm_error(&err, call.graph))?;
+        let view = &answer.pinned.view;
+        Ok(answer
+            .rows
+            .iter()
+            .filter_map(|row| {
+                let (first, key) = algos::identity(view, row.ordinal)?;
+                let value = match row.score {
+                    algos::Score::Rank(rank) => AlgorithmValue::Rank(rank),
+                    algos::Score::Component(c) => AlgorithmValue::Component(c),
+                    algos::Score::Community(c) => AlgorithmValue::Community {
+                        level: c.level,
+                        community: c.community,
+                        parent_community: c.parent,
+                    },
+                };
+                Some(AlgorithmRow {
+                    label: label.clone().unwrap_or(first),
+                    key,
+                    value,
+                })
+            })
+            .collect())
+    }
+}
+
+/// A graph's refusal of an algorithm, as the SQL layer reports it.
+fn algorithm_error(err: &connectrpc::ConnectError, graph: &str) -> ServiceError {
+    use connectrpc::ErrorCode;
+    let message = err
+        .message
+        .clone()
+        .unwrap_or_else(|| format!("{:?}", err.code));
+    match err.code {
+        ErrorCode::NotFound => ServiceError::NotFound {
+            kind: "graph",
+            name: graph.to_string(),
+        },
+        ErrorCode::InvalidArgument | ErrorCode::FailedPrecondition | ErrorCode::OutOfRange => {
+            ServiceError::InvalidArgument(format!("an algorithm on graph {graph}: {message}"))
+        }
+        ErrorCode::Unavailable | ErrorCode::DeadlineExceeded | ErrorCode::Aborted => {
+            ServiceError::Unavailable(format!("an algorithm on graph {graph}: {message}"))
+        }
+        _ => ServiceError::Internal(format!("an algorithm on graph {graph}: {message}")),
     }
 }

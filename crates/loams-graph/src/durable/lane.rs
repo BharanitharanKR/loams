@@ -78,8 +78,9 @@ pub(crate) type LinkApplyFn = Box<
 /// append that fails, reloads the graph from its stream, as for a GQL write.
 pub(crate) struct LinkJob {
     /// The link's progress once the record is durable. Its `version` is the target's expected
-    /// version plus one: the commit is refused (`VersionMismatch`) at any other version.
-    pub(crate) progress: LinkApply,
+    /// version plus one: the commit is refused (`VersionMismatch`) at any other version. `None`
+    /// for a batch of operations no link writes: an algorithm's write-back (GR1 Task 22).
+    pub(crate) progress: Option<LinkApply>,
     /// Applies the batch.
     pub(crate) apply: LinkApplyFn,
 }
@@ -275,14 +276,16 @@ impl WriteLane {
             }
             let ran = match job.link.take() {
                 Some(link) => {
-                    let current = link_versions
-                        .get(&link.progress.link)
-                        .copied()
-                        .unwrap_or_else(|| {
-                            durable
-                                .link_progress(link.progress.link)
-                                .map_or(0, |progress| progress.version)
-                        });
+                    let current = link.progress.as_ref().map(|progress| {
+                        link_versions
+                            .get(&progress.link)
+                            .copied()
+                            .unwrap_or_else(|| {
+                                durable
+                                    .link_progress(progress.link)
+                                    .map_or(0, |progress| progress.version)
+                            })
+                    });
                     run_link(graph, durable, link, current)
                 }
                 None => run(graph, &job).map(|(results, captured, commit_epoch)| {
@@ -565,13 +568,15 @@ pub(crate) fn log_record(value: Bytes, now_ms: u64) -> loams_log::Record {
 
 /// Runs a link's commit (GR1 Task 18) at the link's `current` version: applies its batch to the
 /// engine's store, with the links' index of the graph's elements (built here the first time),
-/// and answers the operations as its capture. The caller holds the gate exclusively.
+/// and answers the operations as its capture. A batch no link writes (`current` and the job's
+/// progress `None`: a write-back, GR1 Task 22) is not version-checked and gets an empty index.
+/// The caller holds the gate exclusively.
 #[allow(clippy::type_complexity)]
 fn run_link(
     graph: &Graph,
     durable: &Durable,
     job: LinkJob,
-    current: u64,
+    current: Option<u64>,
 ) -> Result<
     (
         Vec<GraphResult>,
@@ -581,12 +586,14 @@ fn run_link(
     ),
     Step,
 > {
-    let expected = job.progress.version.saturating_sub(1);
-    if expected != current {
-        return Err(Step::Refused(GraphError::VersionMismatch {
-            expected,
-            current,
-        }));
+    if let (Some(progress), Some(current)) = (&job.progress, current) {
+        let expected = progress.version.saturating_sub(1);
+        if expected != current {
+            return Err(Step::Refused(GraphError::VersionMismatch {
+                expected,
+                current,
+            }));
+        }
     }
     reach(graph, KillPoint::Begin);
     let db = graph.db();
@@ -594,7 +601,12 @@ fn run_link(
         .link_index
         .lock()
         .unwrap_or_else(PoisonError::into_inner);
-    let index = slot.get_or_insert_with(|| crate::link::LinkIndex::build(db));
+    let mut unlinked = crate::link::LinkIndex::default();
+    let index = if job.progress.is_some() {
+        slot.get_or_insert_with(|| crate::link::LinkIndex::build(db))
+    } else {
+        &mut unlinked
+    };
     let applied = (job.apply)(db, index);
     let ops = match applied {
         Ok(ops) => ops,
@@ -621,7 +633,7 @@ fn run_link(
         Vec::new(),
         captured,
         graph.db().current_epoch().as_u64(),
-        Some(job.progress),
+        job.progress,
     ))
 }
 

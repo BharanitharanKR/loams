@@ -143,6 +143,12 @@ pub struct GraphAdmin {
     /// Takes the graphs' snapshots, commits their manifests and trims their streams (GR1 Task
     /// 13). Set with the log: a graph with no log has no snapshots.
     checkpointer: Option<Checkpointer>,
+    /// Builds, publishes and serves the graphs' adjacency indexes (GR1 Task 22). Set with the
+    /// log: an index is built from a graph's stream.
+    indexer: Option<crate::adjacency::Indexer>,
+    /// Where an algorithm's write-back patches a LINKED graph's vertex documents (GR1 Task 22):
+    /// the server's collections.
+    documents: Option<Arc<dyn crate::retrieval::algos::DocumentPatcher>>,
     /// This call came from another node (`GraphForward`): it is served here or refused, never
     /// forwarded again.
     forwarded: bool,
@@ -303,6 +309,8 @@ impl GraphAdmin {
             log: None,
             ownership: None,
             checkpointer: None,
+            indexer: None,
+            documents: None,
             forwarded: false,
             evict_policy: EvictPolicy::default(),
             evictor: Arc::default(),
@@ -319,10 +327,13 @@ impl GraphAdmin {
     #[must_use]
     pub fn with_log(mut self, log: crate::durable::GraphLog) -> Self {
         let ownership = Ownership::single(log.meta().clone());
-        self.checkpointer = Some(Checkpointer::new(
-            ManifestStore::new(log.meta().clone(), self.catalog.store().clone()),
-            CheckpointPolicy::default(),
+        let manifests = ManifestStore::new(log.meta().clone(), self.catalog.store().clone());
+        self.indexer = Some(crate::adjacency::Indexer::new(
+            manifests.clone(),
+            crate::adjacency::AdjacencyConfig::default(),
+            self.engine.data_dir().map(std::path::Path::to_path_buf),
         ));
+        self.checkpointer = Some(Checkpointer::new(manifests, CheckpointPolicy::default()));
         self.log = Some(log);
         self.replicas = Some(Arc::new(Replicas::new(&self.engine)));
         self.with_ownership(ownership)
@@ -362,6 +373,37 @@ impl GraphAdmin {
     #[must_use]
     pub fn checkpointer(&self) -> Option<&Checkpointer> {
         self.checkpointer.as_ref()
+    }
+
+    /// The same admin with another adjacency index configuration (GR1 Task 22). Only after
+    /// [`GraphAdmin::with_log`]; the indexer's counters and cache are kept.
+    #[must_use]
+    pub fn with_adjacency_config(mut self, config: crate::adjacency::AdjacencyConfig) -> Self {
+        self.indexer = self.indexer.map(|indexer| indexer.with_config(config));
+        self
+    }
+
+    /// The adjacency indexer, when graphs are durable (GR1 Task 22).
+    #[must_use]
+    pub fn indexer(&self) -> Option<&crate::adjacency::Indexer> {
+        self.indexer.as_ref()
+    }
+
+    /// The same admin writing algorithm results back into LINKED graphs' vertex documents
+    /// through `documents` (GR1 Task 22).
+    #[must_use]
+    pub fn with_documents(
+        mut self,
+        documents: Arc<dyn crate::retrieval::algos::DocumentPatcher>,
+    ) -> Self {
+        self.documents = Some(documents);
+        self
+    }
+
+    /// Where write-backs patch LINKED graphs' documents, when set.
+    #[must_use]
+    pub fn documents(&self) -> Option<&Arc<dyn crate::retrieval::algos::DocumentPatcher>> {
+        self.documents.as_ref()
     }
 
     /// The same admin with another eviction policy (GR1 Task 14). Its clones share what was
@@ -849,6 +891,25 @@ impl GraphAdmin {
             version: meta.version,
             ..Default::default()
         }
+    }
+
+    /// The id of namespace `namespace`, which holds graph `name`: `NOT_FOUND` for the graph
+    /// when the namespace is gone.
+    pub async fn namespace_of(
+        &self,
+        namespace: &str,
+        name: &str,
+    ) -> Result<loams_common::NamespaceId, ConnectError> {
+        self.catalog
+            .namespace_id(namespace)
+            .await
+            .map_err(map_catalog)?
+            .ok_or_else(|| {
+                map_catalog(CatalogError::NotFound {
+                    namespace: namespace.to_string(),
+                    name: name.to_string(),
+                })
+            })
     }
 
     /// The engine's open graph under a name, if any.
@@ -2372,8 +2433,9 @@ impl GraphAdmin {
     }
 
     /// Takes every snapshot that is due of every durable graph open (and so owned) here, under
-    /// the checkpoint policy (GR1 Task 13). Run periodically by the server. Answers how many
-    /// graphs were checkpointed; a failure is logged and the graph is tried again next time.
+    /// the checkpoint policy (GR1 Task 13), and keeps each one's adjacency index fresh, if it has
+    /// one (GR1 Task 22). Run periodically by the server. Answers how many graphs were
+    /// checkpointed; a failure is logged and the graph is tried again next time.
     pub async fn checkpoint_due(&self) -> usize {
         let Some(checkpointer) = &self.checkpointer else {
             return 0;
@@ -2423,6 +2485,13 @@ impl GraphAdmin {
             };
             if graph.is_poisoned_or_failed() || graph.is_fenced() {
                 continue;
+            }
+            // The adjacency index, when an algorithm gave the graph one (GR1 Task 22): kept
+            // within `rebuild_after_records` and `interval`, off the write lane.
+            if let Some(indexer) = &self.indexer
+                && let Err(err) = indexer.maintain(Arc::clone(&graph), ns).await
+            {
+                tracing::warn!(%namespace, %name, error = %err, "maintaining a graph's adjacency index failed; retried next time");
             }
             let kinds = match checkpointer.due(&graph, ns).await {
                 Ok(kinds) if kinds.is_empty() => continue,

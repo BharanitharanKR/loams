@@ -22,6 +22,7 @@
 
 #![deny(missing_docs)]
 
+pub mod adjacency;
 pub mod catalog;
 pub mod changeset;
 pub mod classify;

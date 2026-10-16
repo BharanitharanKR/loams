@@ -156,7 +156,7 @@ impl GraphFunction {
 }
 
 /// A key's text.
-fn key_text(pk: &PrimaryKey) -> String {
+pub(super) fn key_text(pk: &PrimaryKey) -> String {
     match pk {
         PrimaryKey::U64(n) => n.to_string(),
         PrimaryKey::Str(s) => s.clone(),
@@ -238,14 +238,14 @@ fn keys_of(function: &str, what: &str, value: &ScalarValue) -> DfResult<Keys> {
     }
 }
 
-fn text_of(function: &str, what: &str, value: &ScalarValue) -> DfResult<String> {
+pub(super) fn text_of(function: &str, what: &str, value: &ScalarValue) -> DfResult<String> {
     match value.try_as_str() {
         Some(Some(text)) => Ok(text.to_string()),
         _ => plan_err!("{function}: {what} must be a string"),
     }
 }
 
-fn whole_of(function: &str, what: &str, value: &ScalarValue) -> DfResult<u64> {
+pub(super) fn whole_of(function: &str, what: &str, value: &ScalarValue) -> DfResult<u64> {
     let n = match value {
         ScalarValue::Int64(Some(n)) if *n >= 0 => Some(*n as u64),
         ScalarValue::Int32(Some(n)) if *n >= 0 => Some(*n as u64),
@@ -271,7 +271,7 @@ fn direction_of(function: &str, value: &ScalarValue) -> DfResult<ExpandDirection
     }
 }
 
-fn types_of(function: &str, value: &ScalarValue) -> DfResult<Vec<String>> {
+pub(super) fn types_of(function: &str, value: &ScalarValue) -> DfResult<Vec<String>> {
     match value {
         ScalarValue::List(list) => {
             let mut out = Vec::new();
@@ -296,6 +296,32 @@ fn filter_of(function: &str, what: &str, value: &ScalarValue) -> DfResult<Query>
     })
 }
 
+/// A call's arguments as constants (`None` for `NULL`), refusing a column with the `LATERAL`
+/// advice (R21.2) and anything else that is not a constant.
+pub(super) fn constants(
+    name: &str,
+    names: &[&str],
+    exprs: &[Expr],
+) -> DfResult<Vec<Option<ScalarValue>>> {
+    let simplifier = ExprSimplifier::new(SimplifyContext::default());
+    let mut values: Vec<Option<ScalarValue>> = Vec::with_capacity(exprs.len());
+    for (i, expr) in exprs.iter().enumerate() {
+        match simplifier.simplify(expr.clone())? {
+            Expr::Literal(value, _) => values.push((!value.is_null()).then_some(value)),
+            Expr::Column(_) => {
+                return plan_err!(
+                    "{name}: {} is a column; a table function is planned before the rows of a \
+                     LATERAL join, so pass the keys as a query string instead: '{}'",
+                    names[i],
+                    "SELECT key FROM …"
+                );
+            }
+            _ => return plan_err!("{name}: {} must be a constant", names[i]),
+        }
+    }
+    Ok(values)
+}
+
 impl Call {
     fn parse(function: GraphFunction, exprs: &[Expr]) -> DfResult<Self> {
         let name = function.name();
@@ -308,22 +334,7 @@ impl Call {
                 exprs.len()
             );
         }
-        let simplifier = ExprSimplifier::new(SimplifyContext::default());
-        let mut values: Vec<Option<ScalarValue>> = Vec::with_capacity(exprs.len());
-        for (i, expr) in exprs.iter().enumerate() {
-            match simplifier.simplify(expr.clone())? {
-                Expr::Literal(value, _) => values.push((!value.is_null()).then_some(value)),
-                Expr::Column(_) => {
-                    return plan_err!(
-                        "{name}: {} is a column; a table function is planned before the rows of a \
-                         LATERAL join, so pass the keys as a query string instead: '{}'",
-                        names[i],
-                        "SELECT key FROM …"
-                    );
-                }
-                _ => return plan_err!("{name}: {} must be a constant", names[i]),
-            }
-        }
+        let values = constants(name, names, exprs)?;
         let at = |arg: &str| -> Option<&ScalarValue> {
             names
                 .iter()
@@ -456,7 +467,40 @@ struct Inner {
     call: Call,
 }
 
-fn unavailable() -> ServiceError {
+/// One graph table function's call, run when its plan executes: the four functions here and the
+/// algorithms ([`super::graph_algos`]).
+#[async_trait]
+pub(crate) trait GraphBatch: fmt::Debug + Send + Sync {
+    /// The function's name.
+    fn function(&self) -> &'static str;
+    /// The graph it reads.
+    fn graph(&self) -> &str;
+    /// Its output columns.
+    fn schema(&self) -> SchemaRef;
+    /// Runs it.
+    async fn run(&self) -> Result<RecordBatch, ServiceError>;
+}
+
+#[async_trait]
+impl GraphBatch for Inner {
+    fn function(&self) -> &'static str {
+        self.call.function.name()
+    }
+
+    fn graph(&self) -> &str {
+        &self.call.graph
+    }
+
+    fn schema(&self) -> SchemaRef {
+        self.call.function.schema()
+    }
+
+    async fn run(&self) -> Result<RecordBatch, ServiceError> {
+        self.answer().await
+    }
+}
+
+pub(crate) fn unavailable() -> ServiceError {
     ServiceError::InvalidArgument(
         "the graph table functions run on Loams Graph, which this server does not run".to_string(),
     )
@@ -498,7 +542,7 @@ impl Inner {
         }
     }
 
-    async fn run(&self) -> Result<RecordBatch, ServiceError> {
+    async fn answer(&self) -> Result<RecordBatch, ServiceError> {
         let call = &self.call;
         let service = &self.scope.service;
         let ns = self.scope.ns.as_str();
@@ -647,14 +691,14 @@ impl Inner {
 }
 
 #[derive(Debug)]
-struct GraphProvider {
-    inner: Arc<Inner>,
+pub(crate) struct GraphProvider {
+    pub(crate) inner: Arc<dyn GraphBatch>,
 }
 
 #[async_trait]
 impl TableProvider for GraphProvider {
     fn schema(&self) -> SchemaRef {
-        self.inner.call.function.schema()
+        self.inner.schema()
     }
 
     fn table_type(&self) -> TableType {
@@ -668,7 +712,7 @@ impl TableProvider for GraphProvider {
         _filters: &[Expr],
         _limit: Option<usize>,
     ) -> DfResult<Arc<dyn ExecutionPlan>> {
-        let full = self.inner.call.function.schema();
+        let full = self.inner.schema();
         let projection = projection.cloned();
         let schema = match &projection {
             Some(columns) => Arc::new(full.project(columns)?),
@@ -684,7 +728,7 @@ impl TableProvider for GraphProvider {
 }
 
 struct GraphExec {
-    inner: Arc<Inner>,
+    inner: Arc<dyn GraphBatch>,
     projection: Option<Vec<usize>>,
     schema: SchemaRef,
     properties: Arc<PlanProperties>,
@@ -693,8 +737,8 @@ struct GraphExec {
 impl fmt::Debug for GraphExec {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("GraphExec")
-            .field("function", &self.inner.call.function)
-            .field("graph", &self.inner.call.graph)
+            .field("function", &self.inner.function())
+            .field("graph", &self.inner.graph())
             .finish_non_exhaustive()
     }
 }
@@ -704,8 +748,8 @@ impl DisplayAs for GraphExec {
         write!(
             f,
             "GraphExec: function={}, graph={}",
-            self.inner.call.function.name(),
-            self.inner.call.graph
+            self.inner.function(),
+            self.inner.graph()
         )
     }
 }

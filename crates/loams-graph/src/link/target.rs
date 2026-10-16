@@ -141,7 +141,10 @@ impl GraphLinkTarget {
                 Box::new(move |db, index| plan.apply(db, index, &ops))
             }
         };
-        Ok(crate::durable::lane::LinkJob { progress, apply })
+        Ok(crate::durable::lane::LinkJob {
+            progress: Some(progress),
+            apply,
+        })
     }
 }
 
