@@ -774,6 +774,47 @@ impl Graph {
         self.call(|| durable.follow(&self.db, records))
     }
 
+    /// Commits a link target's batch through the write lane (GR1 Task 18), at the link's expected
+    /// version, and waits until it is durable. Answers the graph's version after it (its token's
+    /// offset). Blocks: run it on the statement pool. Only the owner commits: a follower's engine
+    /// has no lane that appends.
+    ///
+    /// # Errors
+    ///
+    /// [`GraphError::VersionMismatch`] when the link's version moved, [`GraphError::Reloading`]
+    /// when the record could not be made durable (the graph reloads; whether it landed, the
+    /// stream tells), and what [`Graph::call`] answers.
+    pub(crate) fn commit_link(
+        &self,
+        job: crate::durable::lane::LinkJob,
+    ) -> Result<u64, GraphError> {
+        let durable = self
+            .durable
+            .as_ref()
+            .filter(|_| !self.spec.follower)
+            .ok_or_else(|| GraphError::engine("only a durable graph's owner commits a link"))?;
+        let job = crate::durable::lane::LaneJob {
+            statements: Vec::new(),
+            access: Access::Write,
+            writes: true,
+            options: crate::durable::WriteOptions::default(),
+            max_rows: None,
+            link: Some(job),
+        };
+        let committed = self.call(|| durable.lane.submit(self, durable, job))?;
+        Ok(committed.commit.token.offset)
+    }
+
+    /// Link `link`'s latest durable progress in this graph (GR1 Task 18).
+    pub(crate) fn link_progress(
+        &self,
+        link: loams_common::meta::LinkId,
+    ) -> Option<crate::changeset::LinkApply> {
+        self.durable
+            .as_ref()
+            .and_then(|durable| durable.link_progress(link))
+    }
+
     /// Whether writes to this graph are durable in Loams' log (GR1 Task 11).
     pub fn is_durable(&self) -> bool {
         self.durable.is_some()
@@ -1164,6 +1205,7 @@ impl Graph {
                 writes: verdict.writes(),
                 options: options.clone(),
                 max_rows,
+                link: None,
             };
             let committed = self.call(|| durable.lane.submit(self, durable, job))?;
             return Ok(batch_results(committed, 1).pop().unwrap_or_default());
@@ -1370,6 +1412,7 @@ impl Graph {
                 writes,
                 options: options.clone(),
                 max_rows,
+                link: None,
             };
             let committed = self.call(|| durable.lane.submit(self, durable, job))?;
             return Ok(batch_results(committed, statements.len()));

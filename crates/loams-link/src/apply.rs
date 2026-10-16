@@ -5,10 +5,11 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use async_trait::async_trait;
-use loams_common::meta::{Consistency, Link, LinkId, MetaStore};
+use loams_common::meta::{Consistency, Fence, Link, LinkId, MetaStore};
 use loams_log::{FetchRequest, LogError, LogReader};
 use loams_worker::{
-    Candidate, Priority, Task, TaskContext, TaskError, TaskKey, TaskOutcome, TaskSource,
+    CancellationToken, Candidate, Priority, Task, TaskContext, TaskError, TaskKey, TaskOutcome,
+    TaskSource,
 };
 
 use crate::counter::MAX_COMMIT_DELAY;
@@ -227,133 +228,173 @@ impl ApplyTask {
             .unwrap_or_else(PoisonError::into_inner)
             .insert(self.link.id, state.applied.clone());
     }
+}
 
-    /// Fetches records from each partition's applied offset, up to the batch
-    /// limits. Returns the batch and whether a limit stopped it.
-    async fn gather(
-        &self,
-        meta: &dyn MetaStore,
-        state: &TargetState,
-    ) -> Result<(ApplyBatch, bool), LinkError> {
-        let config = &self.shared.config;
-        let stream = self.link.source;
-        let partitions = meta
-            .stream(Consistency::Local, stream)
-            .await?
-            .map(|st| st.partitions)
-            .ok_or_else(|| LinkError::NotFound(format!("stream {stream}")))?;
-        let mut batch = ApplyBatch::default();
-        let mut bytes = 0usize;
-        let mut full = false;
-        // Start at a different partition on every version, so one busy
-        // partition cannot starve the others of batch space.
-        let first = u32::try_from(state.version % u64::from(partitions.max(1))).unwrap_or(0);
-        'partitions: for i in 0..partitions {
-            let partition = (first + i) % partitions;
-            let mut offset = state.applied.get(&partition).copied().unwrap_or(0);
-            loop {
-                if batch.records.len() >= config.batch_records || bytes >= config.max_batch_bytes {
+/// Fetches records of `link`'s source from each partition's applied offset in `state`, up to
+/// `config`'s batch limits. Returns the batch and whether a limit stopped it.
+async fn gather(
+    reader: &LogReader,
+    meta: &dyn MetaStore,
+    config: &LinkConfig,
+    link: &Link,
+    state: &TargetState,
+) -> Result<(ApplyBatch, bool), LinkError> {
+    let stream = link.source;
+    let partitions = meta
+        .stream(Consistency::Local, stream)
+        .await?
+        .map(|st| st.partitions)
+        .ok_or_else(|| LinkError::NotFound(format!("stream {stream}")))?;
+    let mut batch = ApplyBatch::default();
+    let mut bytes = 0usize;
+    let mut full = false;
+    // Start at a different partition on every version, so one busy
+    // partition cannot starve the others of batch space.
+    let first = u32::try_from(state.version % u64::from(partitions.max(1))).unwrap_or(0);
+    'partitions: for i in 0..partitions {
+        let partition = (first + i) % partitions;
+        let mut offset = state.applied.get(&partition).copied().unwrap_or(0);
+        loop {
+            if batch.records.len() >= config.batch_records || bytes >= config.max_batch_bytes {
+                full = true;
+                break 'partitions;
+            }
+            let request = FetchRequest {
+                stream,
+                partition,
+                offset,
+                max_bytes: FETCH_BYTES.min(config.max_batch_bytes - bytes).max(1),
+                max_wait: Duration::ZERO,
+            };
+            let response = match reader.fetch(request).await {
+                Ok(response) => response,
+                // Trimmed before the link got there: skip to the log start
+                // (the gap is counted as skipped by the target).
+                Err(LogError::OffsetOutOfRange {
+                    requested,
+                    log_start_offset,
+                    ..
+                }) if requested < log_start_offset => {
+                    offset = log_start_offset;
+                    batch.applied_after.insert(partition, offset);
+                    continue;
+                }
+                // Ahead of this node's view of the stream (a lagging
+                // replica): nothing to apply from here yet.
+                Err(LogError::OffsetOutOfRange { .. }) => break,
+                Err(err) => return Err(err.into()),
+            };
+            if response.records.is_empty() {
+                break;
+            }
+            for record in response.records {
+                if batch.records.len() >= config.batch_records {
                     full = true;
-                    break 'partitions;
-                }
-                let request = FetchRequest {
-                    stream,
-                    partition,
-                    offset,
-                    max_bytes: FETCH_BYTES.min(config.max_batch_bytes - bytes).max(1),
-                    max_wait: Duration::ZERO,
-                };
-                let response = match self.shared.reader.fetch(request).await {
-                    Ok(response) => response,
-                    // Trimmed before the link got there: skip to the log start
-                    // (the gap is counted as skipped by the target).
-                    Err(LogError::OffsetOutOfRange {
-                        requested,
-                        log_start_offset,
-                        ..
-                    }) if requested < log_start_offset => {
-                        offset = log_start_offset;
-                        batch.applied_after.insert(partition, offset);
-                        continue;
-                    }
-                    // Ahead of this node's view of the stream (a lagging
-                    // replica): nothing to apply from here yet.
-                    Err(LogError::OffsetOutOfRange { .. }) => break,
-                    Err(err) => return Err(err.into()),
-                };
-                if response.records.is_empty() {
                     break;
                 }
-                for record in response.records {
-                    if batch.records.len() >= config.batch_records {
-                        full = true;
-                        break;
-                    }
-                    let record_bytes = record.record.key.as_ref().map_or(0, |k| k.len())
-                        + record.record.value.as_ref().map_or(0, |v| v.len())
-                        + record
-                            .record
-                            .headers
-                            .iter()
-                            .map(|(k, v)| k.len() + v.as_ref().map_or(0, |v| v.len()))
-                            .sum::<usize>();
-                    offset = record.offset + 1;
-                    bytes += record_bytes;
-                    batch.records.push((partition, record));
-                }
-                batch.applied_after.insert(partition, offset);
-                if full || offset >= response.high_watermark {
-                    break;
-                }
+                let record_bytes = record.record.key.as_ref().map_or(0, |k| k.len())
+                    + record.record.value.as_ref().map_or(0, |v| v.len())
+                    + record
+                        .record
+                        .headers
+                        .iter()
+                        .map(|(k, v)| k.len() + v.as_ref().map_or(0, |v| v.len()))
+                        .sum::<usize>();
+                offset = record.offset + 1;
+                bytes += record_bytes;
+                batch.records.push((partition, record));
+            }
+            batch.applied_after.insert(partition, offset);
+            if full || offset >= response.high_watermark {
+                break;
             }
         }
-        Ok((batch, full))
+    }
+    Ok((batch, full))
+}
+
+/// One run of a link's apply (design §09 §3): what the worker's link-apply task runs, also for a
+/// caller that schedules a link itself rather than through [`LinkApplySource`] (a LINKED graph's
+/// collection links run on the graph's owner, GR1 Task 18).
+///
+/// Loads what `target` has committed (handing the state to `loaded`), gathers records of `link`'s
+/// source from there up to `config`'s limits, waits up to `batch_interval` for a small batch to
+/// grow, and commits it with its offsets under `fence`, reloading on a conflict. Answers `Idle`
+/// when nothing is left to apply, `MoreWork` when a limit stopped the batch, and `Done` once
+/// `cancel` fires.
+///
+/// # Errors
+///
+/// [`TaskError::Fenced`] when the commit was fenced, and a failed task for any other error.
+#[allow(clippy::too_many_arguments)]
+pub async fn apply_link(
+    reader: &LogReader,
+    meta: &dyn MetaStore,
+    config: &LinkConfig,
+    link: &Link,
+    target: &dyn LinkTarget,
+    fence: &Fence,
+    cancel: &CancellationToken,
+    mut loaded: impl FnMut(&TargetState) + Send,
+) -> Result<TaskOutcome, TaskError> {
+    let started = Instant::now();
+    loop {
+        if cancel.is_cancelled() {
+            return Ok(TaskOutcome::Done);
+        }
+        // 1. What the target has committed.
+        let state = target.load().await.map_err(failed)?;
+        loaded(&state);
+        // 2. Records from each partition's applied offset.
+        let (batch, full) = gather(reader, meta, config, link, &state)
+            .await
+            .map_err(failed)?;
+        let advances = batch
+            .applied_after
+            .iter()
+            .any(|(p, to)| *to > state.applied.get(p).copied().unwrap_or(0));
+        // 3. Nothing to do.
+        if !advances {
+            return Ok(TaskOutcome::Idle);
+        }
+        // A small batch waits for more records, up to `batch_interval`.
+        let waited = started.elapsed();
+        if !full && waited < config.batch_interval {
+            tokio::select! {
+                () = cancel.cancelled() => return Ok(TaskOutcome::Done),
+                () = tokio::time::sleep(config.batch_interval - waited) => {}
+            }
+            continue;
+        }
+        // 4. Commit data and offsets together; 5. on conflict, reload.
+        match target.commit(state.version, batch, fence).await {
+            Ok(_) => {
+                return Ok(if full {
+                    TaskOutcome::MoreWork
+                } else {
+                    TaskOutcome::Idle
+                });
+            }
+            Err(CommitError::Conflict) => continue,
+            Err(CommitError::Fenced) => return Err(TaskError::Fenced),
+            Err(CommitError::Other(err)) => return Err(failed(err)),
+        }
     }
 }
 
 #[async_trait]
 impl Task for ApplyTask {
     async fn run(&self, ctx: TaskContext) -> Result<TaskOutcome, TaskError> {
-        let started = Instant::now();
-        loop {
-            if ctx.cancel.is_cancelled() {
-                return Ok(TaskOutcome::Done);
-            }
-            // 1. What the target has committed.
-            let state = self.target.load().await.map_err(failed)?;
-            self.seen(&state);
-            // 2. Records from each partition's applied offset.
-            let (batch, full) = self.gather(&*ctx.meta, &state).await.map_err(failed)?;
-            let advances = batch
-                .applied_after
-                .iter()
-                .any(|(p, to)| *to > state.applied.get(p).copied().unwrap_or(0));
-            // 3. Nothing to do.
-            if !advances {
-                return Ok(TaskOutcome::Idle);
-            }
-            // A small batch waits for more records, up to `batch_interval`.
-            let waited = started.elapsed();
-            if !full && waited < self.shared.config.batch_interval {
-                tokio::select! {
-                    () = ctx.cancel.cancelled() => return Ok(TaskOutcome::Done),
-                    () = tokio::time::sleep(self.shared.config.batch_interval - waited) => {}
-                }
-                continue;
-            }
-            // 4. Commit data and offsets together; 5. on conflict, reload.
-            match self.target.commit(state.version, batch, &ctx.fence).await {
-                Ok(_) => {
-                    return Ok(if full {
-                        TaskOutcome::MoreWork
-                    } else {
-                        TaskOutcome::Idle
-                    });
-                }
-                Err(CommitError::Conflict) => continue,
-                Err(CommitError::Fenced) => return Err(TaskError::Fenced),
-                Err(CommitError::Other(err)) => return Err(failed(err)),
-            }
-        }
+        apply_link(
+            &self.shared.reader,
+            &*ctx.meta,
+            &self.shared.config,
+            &self.link,
+            &*self.target,
+            &ctx.fence,
+            &ctx.cancel,
+            |state| self.seen(state),
+        )
+        .await
     }
 }

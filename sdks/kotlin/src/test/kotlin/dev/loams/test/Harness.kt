@@ -161,6 +161,7 @@ object RunTests {
         StreamResumeTest.register()
         TokenSourceTest.register()
         PaginationTest.register()
+        LiveAdminTest.register()
         CodecTest.register()
         Harness.test("kotlin_the_driver_derives_its_coverage_from_the_manifest") { theDriverDerivesItsCoverage() }
         Harness.test("kotlin_a_fixture_the_driver_cannot_reach_is_named") { anUnreachableFixtureIsNamed() }

@@ -302,8 +302,6 @@ pub const DENIED_CLAUSES: &[(&str, &str)] = &[("INTO", "OUTFILE"), ("FROM", "INF
 pub const DENIED_STATEMENTS: &[&str] = &[
     "SYSTEM",
     "ATTACH",
-    "BACKUP",
-    "RESTORE",
     "CREATE FUNCTION",
     "CREATE DICTIONARY",
     "CREATE NAMED COLLECTION",
@@ -484,6 +482,9 @@ pub const ALLOWED_SYSTEM_TABLES: &[&str] = &[
     "errors",
     "events",
     "metrics",
+    // The House's own (HS1 Task 16): it is never chDB's, the front's view
+    // answers it.
+    "loams_pipes",
 ];
 
 /// The database `merge()` may name besides the current one. HS1 Task 11 builds
@@ -621,8 +622,16 @@ pub fn check_database_engine(engine: &str) -> Result<(), ChError> {
     )))
 }
 
-/// `344` for a statement on [`DENIED_STATEMENTS`].
+/// `344` for a statement on [`DENIED_STATEMENTS`]; `BACKUP` and `RESTORE` are `48`
+/// with a pointer to `RestoreTable` (§49 §11, D775).
 pub fn denied_statement(what: &str) -> ChError {
+    if matches!(what, "BACKUP" | "RESTORE") {
+        return ChError::not_implemented(format!(
+            "{what} is not implemented on the House: tables are restored from Iceberg snapshots \
+             with the RestoreTable operation (or UNDROP TABLE within the retention); see the \
+             surface page"
+        ));
+    }
     disabled(format!(
         "{what} is disabled on the House (see the surface page)"
     ))

@@ -141,6 +141,12 @@ impl GraphLog {
         }
     }
 
+    /// The reader the graphs' streams are read with (and a link's sources, GR1 Task 18).
+    #[must_use]
+    pub fn reader(&self) -> &LogReader {
+        &self.inner.reader
+    }
+
     /// The metastore the log commits through.
     #[must_use]
     pub fn meta(&self) -> &Arc<dyn MetaStore> {

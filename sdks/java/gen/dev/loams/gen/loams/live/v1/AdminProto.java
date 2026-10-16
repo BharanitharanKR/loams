@@ -110,6 +110,81 @@ public final class AdminProto {
   static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_loams_live_v1_LogEntry_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_App_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_App_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_AppLimits_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_AppLimits_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_TrustedIssuer_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_TrustedIssuer_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_CreateAppRequest_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_CreateAppRequest_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_CreateAppResponse_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_CreateAppResponse_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_ListAppsRequest_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_ListAppsRequest_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_ListAppsResponse_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_ListAppsResponse_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_GetAppRequest_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_GetAppRequest_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_GetAppResponse_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_GetAppResponse_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_UpdateAppRequest_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_UpdateAppRequest_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_TrustedIssuers_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_TrustedIssuers_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_AllowedOrigins_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_AllowedOrigins_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_UpdateAppResponse_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_UpdateAppResponse_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_DeleteAppRequest_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_DeleteAppRequest_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_DeleteAppResponse_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_DeleteAppResponse_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -184,49 +259,119 @@ public final class AdminProto {
       "\036\n\ndeployment\030\004 \001(\tR\ndeployment\022-\n\005level" +
       "\030\005 \001(\0162\027.loams.live.v1.LogLevelR\005level\022\022" +
       "\n\004line\030\006 \001(\tR\004line\022\034\n\ttruncated\030\007 \001(\010R\tt" +
-      "runcated*\216\002\n\017DeploymentState\022 \n\034DEPLOYME" +
-      "NT_STATE_UNSPECIFIED\020\000\022\034\n\030DEPLOYMENT_STA" +
-      "TE_PENDING\020\001\022\037\n\033DEPLOYMENT_STATE_VALIDAT" +
-      "ING\020\002\022 \n\034DEPLOYMENT_STATE_BACKFILLING\020\003\022" +
-      "\033\n\027DEPLOYMENT_STATE_ACTIVE\020\004\022\037\n\033DEPLOYME" +
-      "NT_STATE_SUPERSEDED\020\005\022\033\n\027DEPLOYMENT_STAT" +
-      "E_FAILED\020\006\022\035\n\031DEPLOYMENT_STATE_DEGRADED\020" +
-      "\007*b\n\014FunctionKind\022\035\n\031FUNCTION_KIND_UNSPE" +
-      "CIFIED\020\000\022\027\n\023FUNCTION_KIND_QUERY\020\001\022\032\n\026FUN" +
-      "CTION_KIND_MUTATION\020\002*{\n\022FunctionVisibil" +
-      "ity\022#\n\037FUNCTION_VISIBILITY_UNSPECIFIED\020\000" +
-      "\022\036\n\032FUNCTION_VISIBILITY_PUBLIC\020\001\022 \n\034FUNC" +
-      "TION_VISIBILITY_INTERNAL\020\002*w\n\nIndexState" +
-      "\022\033\n\027INDEX_STATE_UNSPECIFIED\020\000\022\033\n\027INDEX_S" +
-      "TATE_BACKFILLING\020\001\022\025\n\021INDEX_STATE_READY\020" +
-      "\002\022\030\n\024INDEX_STATE_DROPPING\020\003*\212\001\n\010LogLevel" +
-      "\022\031\n\025LOG_LEVEL_UNSPECIFIED\020\000\022\023\n\017LOG_LEVEL" +
-      "_DEBUG\020\001\022\021\n\rLOG_LEVEL_LOG\020\002\022\022\n\016LOG_LEVEL" +
-      "_INFO\020\003\022\022\n\016LOG_LEVEL_WARN\020\004\022\023\n\017LOG_LEVEL" +
-      "_ERROR\020\0052\254\006\n\020LiveAdminService\022S\n\006Deploy\022" +
-      "\034.loams.live.v1.DeployRequest\032\035.loams.li" +
-      "ve.v1.DeployResponse\"\014\222\265\030\010\022\006deploy\022\226\001\n\017L" +
-      "istDeployments\022%.loams.live.v1.ListDeplo" +
-      "ymentsRequest\032&.loams.live.v1.ListDeploy" +
-      "mentsResponse\"4\222\265\0300\022\017listDeployments\030\001\"\033" +
-      "deployments:next_page_token\022q\n\rGetDeploy" +
-      "ment\022#.loams.live.v1.GetDeploymentReques" +
-      "t\032$.loams.live.v1.GetDeploymentResponse\"" +
-      "\025\222\265\030\021\022\rgetDeployment\030\001\022\203\001\n\022ActivateDeplo" +
-      "yment\022(.loams.live.v1.ActivateDeployment" +
-      "Request\032).loams.live.v1.ActivateDeployme" +
-      "ntResponse\"\030\222\265\030\024\022\022activateDeployment\022u\n\016" +
-      "GetIndexStatus\022$.loams.live.v1.GetIndexS" +
-      "tatusRequest\032%.loams.live.v1.GetIndexSta" +
-      "tusResponse\"\026\222\265\030\022\022\016getIndexStatus\030\001\022]\n\010T" +
-      "ailLogs\022\036.loams.live.v1.TailLogsRequest\032" +
-      "\037.loams.live.v1.TailLogsResponse\"\016\222\265\030\n\022\010" +
-      "tailLogs0\001\032[\212\265\030W\n\nlive.admin\022GLive admin" +
-      "istration: deploy, roll back, index stat" +
-      "us and function logs.\030\001B\177\n\033dev.loams.gen" +
-      ".loams.live.v1B\nAdminProtoP\001\242\002\003LLX\252\002\rLoa" +
-      "ms.Live.V1\312\002\rLoams\\Live\\V1\342\002\031Loams\\Live\\" +
-      "V1\\GPBMetadata\352\002\017Loams::Live::V1b\006proto3"
+      "runcated\"\230\003\n\003App\022\016\n\002id\030\001 \001(\rR\002id\022\022\n\004name" +
+      "\030\002 \001(\tR\004name\022\034\n\tnamespace\030\003 \001(\tR\tnamespa" +
+      "ce\022\032\n\010keyspace\030\004 \001(\tR\010keyspace\022-\n\005state\030" +
+      "\005 \001(\0162\027.loams.live.v1.AppStateR\005state\022$\n" +
+      "\016purge_after_ms\030\006 \001(\004R\014purgeAfterMs\0220\n\006l" +
+      "imits\030\007 \001(\0132\030.loams.live.v1.AppLimitsR\006l" +
+      "imits\0226\n\007issuers\030\010 \003(\0132\034.loams.live.v1.T" +
+      "rustedIssuerR\007issuers\022\'\n\017allowed_origins" +
+      "\030\t \003(\tR\016allowedOrigins\022\'\n\017allow_anonymou" +
+      "s\030\n \001(\010R\016allowAnonymous\022\"\n\rcreated_at_ms" +
+      "\030\013 \001(\004R\013createdAtMs\"\250\003\n\tAppLimits\022&\n\rmax" +
+      "_js_cpu_ms\030\001 \001(\004H\000R\nmaxJsCpuMs\210\001\001\0225\n\024mut" +
+      "ation_deadline_ms\030\002 \001(\004H\001R\022mutationDeadl" +
+      "ineMs\210\001\001\022-\n\020max_result_bytes\030\003 \001(\004H\002R\016ma" +
+      "xResultBytes\210\001\001\022-\n\020max_scanned_docs\030\004 \001(" +
+      "\004H\003R\016maxScannedDocs\210\001\001\022-\n\020max_written_do" +
+      "cs\030\005 \001(\004H\004R\016maxWrittenDocs\210\001\001\022/\n\021max_wri" +
+      "tten_bytes\030\006 \001(\004H\005R\017maxWrittenBytes\210\001\001B\020" +
+      "\n\016_max_js_cpu_msB\027\n\025_mutation_deadline_m" +
+      "sB\023\n\021_max_result_bytesB\023\n\021_max_scanned_d" +
+      "ocsB\023\n\021_max_written_docsB\024\n\022_max_written" +
+      "_bytes\"r\n\rTrustedIssuer\022\026\n\006issuer\030\001 \001(\tR" +
+      "\006issuer\022\034\n\taudiences\030\002 \003(\tR\taudiences\022\036\n" +
+      "\010jwks_uri\030\003 \001(\tH\000R\007jwksUri\210\001\001B\013\n\t_jwks_u" +
+      "ri\"\200\002\n\020CreateAppRequest\022\022\n\004name\030\001 \001(\tR\004n" +
+      "ame\022\034\n\tnamespace\030\002 \001(\tR\tnamespace\0220\n\006lim" +
+      "its\030\003 \001(\0132\030.loams.live.v1.AppLimitsR\006lim" +
+      "its\0226\n\007issuers\030\004 \003(\0132\034.loams.live.v1.Tru" +
+      "stedIssuerR\007issuers\022\'\n\017allowed_origins\030\005" +
+      " \003(\tR\016allowedOrigins\022\'\n\017allow_anonymous\030" +
+      "\006 \001(\010R\016allowAnonymous\"9\n\021CreateAppRespon" +
+      "se\022$\n\003app\030\001 \001(\0132\022.loams.live.v1.AppR\003app" +
+      "\"M\n\017ListAppsRequest\022\033\n\tpage_size\030\001 \001(\005R\010" +
+      "pageSize\022\035\n\npage_token\030\002 \001(\tR\tpageToken\"" +
+      "b\n\020ListAppsResponse\022&\n\004apps\030\001 \003(\0132\022.loam" +
+      "s.live.v1.AppR\004apps\022&\n\017next_page_token\030\002" +
+      " \001(\tR\rnextPageToken\"#\n\rGetAppRequest\022\022\n\004" +
+      "name\030\001 \001(\tR\004name\"6\n\016GetAppResponse\022$\n\003ap" +
+      "p\030\001 \001(\0132\022.loams.live.v1.AppR\003app\"\331\002\n\020Upd" +
+      "ateAppRequest\022\022\n\004name\030\001 \001(\tR\004name\0222\n\005sta" +
+      "te\030\002 \001(\0162\027.loams.live.v1.AppStateH\000R\005sta" +
+      "te\210\001\001\0220\n\006limits\030\003 \001(\0132\030.loams.live.v1.Ap" +
+      "pLimitsR\006limits\0227\n\007issuers\030\004 \001(\0132\035.loams" +
+      ".live.v1.TrustedIssuersR\007issuers\022F\n\017allo" +
+      "wed_origins\030\005 \001(\0132\035.loams.live.v1.Allowe" +
+      "dOriginsR\016allowedOrigins\022,\n\017allow_anonym" +
+      "ous\030\006 \001(\010H\001R\016allowAnonymous\210\001\001B\010\n\006_state" +
+      "B\022\n\020_allow_anonymous\"H\n\016TrustedIssuers\0226" +
+      "\n\007issuers\030\001 \003(\0132\034.loams.live.v1.TrustedI" +
+      "ssuerR\007issuers\"*\n\016AllowedOrigins\022\030\n\007orig" +
+      "ins\030\001 \003(\tR\007origins\"9\n\021UpdateAppResponse\022" +
+      "$\n\003app\030\001 \001(\0132\022.loams.live.v1.AppR\003app\"&\n" +
+      "\020DeleteAppRequest\022\022\n\004name\030\001 \001(\tR\004name\"9\n" +
+      "\021DeleteAppResponse\022$\n\003app\030\001 \001(\0132\022.loams." +
+      "live.v1.AppR\003app*\216\002\n\017DeploymentState\022 \n\034" +
+      "DEPLOYMENT_STATE_UNSPECIFIED\020\000\022\034\n\030DEPLOY" +
+      "MENT_STATE_PENDING\020\001\022\037\n\033DEPLOYMENT_STATE" +
+      "_VALIDATING\020\002\022 \n\034DEPLOYMENT_STATE_BACKFI" +
+      "LLING\020\003\022\033\n\027DEPLOYMENT_STATE_ACTIVE\020\004\022\037\n\033" +
+      "DEPLOYMENT_STATE_SUPERSEDED\020\005\022\033\n\027DEPLOYM" +
+      "ENT_STATE_FAILED\020\006\022\035\n\031DEPLOYMENT_STATE_D" +
+      "EGRADED\020\007*b\n\014FunctionKind\022\035\n\031FUNCTION_KI" +
+      "ND_UNSPECIFIED\020\000\022\027\n\023FUNCTION_KIND_QUERY\020" +
+      "\001\022\032\n\026FUNCTION_KIND_MUTATION\020\002*{\n\022Functio" +
+      "nVisibility\022#\n\037FUNCTION_VISIBILITY_UNSPE" +
+      "CIFIED\020\000\022\036\n\032FUNCTION_VISIBILITY_PUBLIC\020\001" +
+      "\022 \n\034FUNCTION_VISIBILITY_INTERNAL\020\002*w\n\nIn" +
+      "dexState\022\033\n\027INDEX_STATE_UNSPECIFIED\020\000\022\033\n" +
+      "\027INDEX_STATE_BACKFILLING\020\001\022\025\n\021INDEX_STAT" +
+      "E_READY\020\002\022\030\n\024INDEX_STATE_DROPPING\020\003*\212\001\n\010" +
+      "LogLevel\022\031\n\025LOG_LEVEL_UNSPECIFIED\020\000\022\023\n\017L" +
+      "OG_LEVEL_DEBUG\020\001\022\021\n\rLOG_LEVEL_LOG\020\002\022\022\n\016L" +
+      "OG_LEVEL_INFO\020\003\022\022\n\016LOG_LEVEL_WARN\020\004\022\023\n\017L" +
+      "OG_LEVEL_ERROR\020\005*k\n\010AppState\022\031\n\025APP_STAT" +
+      "E_UNSPECIFIED\020\000\022\024\n\020APP_STATE_ACTIVE\020\001\022\026\n" +
+      "\022APP_STATE_DISABLED\020\002\022\026\n\022APP_STATE_DELET" +
+      "ING\020\0032\241\n\n\020LiveAdminService\022S\n\006Deploy\022\034.l" +
+      "oams.live.v1.DeployRequest\032\035.loams.live." +
+      "v1.DeployResponse\"\014\222\265\030\010\022\006deploy\022\226\001\n\017List" +
+      "Deployments\022%.loams.live.v1.ListDeployme" +
+      "ntsRequest\032&.loams.live.v1.ListDeploymen" +
+      "tsResponse\"4\222\265\0300\022\017listDeployments\030\001\"\033dep" +
+      "loyments:next_page_token\022q\n\rGetDeploymen" +
+      "t\022#.loams.live.v1.GetDeploymentRequest\032$" +
+      ".loams.live.v1.GetDeploymentResponse\"\025\222\265" +
+      "\030\021\022\rgetDeployment\030\001\022\203\001\n\022ActivateDeployme" +
+      "nt\022(.loams.live.v1.ActivateDeploymentReq" +
+      "uest\032).loams.live.v1.ActivateDeploymentR" +
+      "esponse\"\030\222\265\030\024\022\022activateDeployment\022u\n\016Get" +
+      "IndexStatus\022$.loams.live.v1.GetIndexStat" +
+      "usRequest\032%.loams.live.v1.GetIndexStatus" +
+      "Response\"\026\222\265\030\022\022\016getIndexStatus\030\001\022]\n\010Tail" +
+      "Logs\022\036.loams.live.v1.TailLogsRequest\032\037.l" +
+      "oams.live.v1.TailLogsResponse\"\016\222\265\030\n\022\010tai" +
+      "lLogs0\001\022_\n\tCreateApp\022\037.loams.live.v1.Cre" +
+      "ateAppRequest\032 .loams.live.v1.CreateAppR" +
+      "esponse\"\017\222\265\030\013\022\tcreateApp\022s\n\010ListApps\022\036.l" +
+      "oams.live.v1.ListAppsRequest\032\037.loams.liv" +
+      "e.v1.ListAppsResponse\"&\222\265\030\"\022\010listApps\030\001\"" +
+      "\024apps:next_page_token\022U\n\006GetApp\022\034.loams." +
+      "live.v1.GetAppRequest\032\035.loams.live.v1.Ge" +
+      "tAppResponse\"\016\222\265\030\n\022\006getApp\030\001\022_\n\tUpdateAp" +
+      "p\022\037.loams.live.v1.UpdateAppRequest\032 .loa" +
+      "ms.live.v1.UpdateAppResponse\"\017\222\265\030\013\022\tupda" +
+      "teApp\022_\n\tDeleteApp\022\037.loams.live.v1.Delet" +
+      "eAppRequest\032 .loams.live.v1.DeleteAppRes" +
+      "ponse\"\017\222\265\030\013\022\tdeleteApp\032a\212\265\030]\n\nlive.admin" +
+      "\022MLive administration: apps, deploy, rol" +
+      "l back, index status and function logs.\030" +
+      "\001B\177\n\033dev.loams.gen.loams.live.v1B\nAdminP" +
+      "rotoP\001\242\002\003LLX\252\002\rLoams.Live.V1\312\002\rLoams\\Liv" +
+      "e\\V1\342\002\031Loams\\Live\\V1\\GPBMetadata\352\002\017Loams" +
+      "::Live::V1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -336,6 +481,96 @@ public final class AdminProto {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_LogEntry_descriptor,
         new java.lang.String[] { "TsMs", "RequestId", "Function", "Deployment", "Level", "Line", "Truncated", });
+    internal_static_loams_live_v1_App_descriptor =
+      getDescriptor().getMessageTypes().get(17);
+    internal_static_loams_live_v1_App_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_App_descriptor,
+        new java.lang.String[] { "Id", "Name", "Namespace", "Keyspace", "State", "PurgeAfterMs", "Limits", "Issuers", "AllowedOrigins", "AllowAnonymous", "CreatedAtMs", });
+    internal_static_loams_live_v1_AppLimits_descriptor =
+      getDescriptor().getMessageTypes().get(18);
+    internal_static_loams_live_v1_AppLimits_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_AppLimits_descriptor,
+        new java.lang.String[] { "MaxJsCpuMs", "MutationDeadlineMs", "MaxResultBytes", "MaxScannedDocs", "MaxWrittenDocs", "MaxWrittenBytes", });
+    internal_static_loams_live_v1_TrustedIssuer_descriptor =
+      getDescriptor().getMessageTypes().get(19);
+    internal_static_loams_live_v1_TrustedIssuer_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_TrustedIssuer_descriptor,
+        new java.lang.String[] { "Issuer", "Audiences", "JwksUri", });
+    internal_static_loams_live_v1_CreateAppRequest_descriptor =
+      getDescriptor().getMessageTypes().get(20);
+    internal_static_loams_live_v1_CreateAppRequest_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_CreateAppRequest_descriptor,
+        new java.lang.String[] { "Name", "Namespace", "Limits", "Issuers", "AllowedOrigins", "AllowAnonymous", });
+    internal_static_loams_live_v1_CreateAppResponse_descriptor =
+      getDescriptor().getMessageTypes().get(21);
+    internal_static_loams_live_v1_CreateAppResponse_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_CreateAppResponse_descriptor,
+        new java.lang.String[] { "App", });
+    internal_static_loams_live_v1_ListAppsRequest_descriptor =
+      getDescriptor().getMessageTypes().get(22);
+    internal_static_loams_live_v1_ListAppsRequest_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_ListAppsRequest_descriptor,
+        new java.lang.String[] { "PageSize", "PageToken", });
+    internal_static_loams_live_v1_ListAppsResponse_descriptor =
+      getDescriptor().getMessageTypes().get(23);
+    internal_static_loams_live_v1_ListAppsResponse_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_ListAppsResponse_descriptor,
+        new java.lang.String[] { "Apps", "NextPageToken", });
+    internal_static_loams_live_v1_GetAppRequest_descriptor =
+      getDescriptor().getMessageTypes().get(24);
+    internal_static_loams_live_v1_GetAppRequest_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_GetAppRequest_descriptor,
+        new java.lang.String[] { "Name", });
+    internal_static_loams_live_v1_GetAppResponse_descriptor =
+      getDescriptor().getMessageTypes().get(25);
+    internal_static_loams_live_v1_GetAppResponse_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_GetAppResponse_descriptor,
+        new java.lang.String[] { "App", });
+    internal_static_loams_live_v1_UpdateAppRequest_descriptor =
+      getDescriptor().getMessageTypes().get(26);
+    internal_static_loams_live_v1_UpdateAppRequest_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_UpdateAppRequest_descriptor,
+        new java.lang.String[] { "Name", "State", "Limits", "Issuers", "AllowedOrigins", "AllowAnonymous", });
+    internal_static_loams_live_v1_TrustedIssuers_descriptor =
+      getDescriptor().getMessageTypes().get(27);
+    internal_static_loams_live_v1_TrustedIssuers_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_TrustedIssuers_descriptor,
+        new java.lang.String[] { "Issuers", });
+    internal_static_loams_live_v1_AllowedOrigins_descriptor =
+      getDescriptor().getMessageTypes().get(28);
+    internal_static_loams_live_v1_AllowedOrigins_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_AllowedOrigins_descriptor,
+        new java.lang.String[] { "Origins", });
+    internal_static_loams_live_v1_UpdateAppResponse_descriptor =
+      getDescriptor().getMessageTypes().get(29);
+    internal_static_loams_live_v1_UpdateAppResponse_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_UpdateAppResponse_descriptor,
+        new java.lang.String[] { "App", });
+    internal_static_loams_live_v1_DeleteAppRequest_descriptor =
+      getDescriptor().getMessageTypes().get(30);
+    internal_static_loams_live_v1_DeleteAppRequest_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_DeleteAppRequest_descriptor,
+        new java.lang.String[] { "Name", });
+    internal_static_loams_live_v1_DeleteAppResponse_descriptor =
+      getDescriptor().getMessageTypes().get(31);
+    internal_static_loams_live_v1_DeleteAppResponse_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_DeleteAppResponse_descriptor,
+        new java.lang.String[] { "App", });
     descriptor.resolveAllFeaturesImmutable();
     dev.loams.gen.loams.live.v1.LiveProto.getDescriptor();
     dev.loams.gen.loams.options.v1.OptionsProto.getDescriptor();

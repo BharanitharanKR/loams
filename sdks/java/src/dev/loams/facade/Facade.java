@@ -58,6 +58,12 @@ public final class Facade {
     /** {@code loams.live.v1.LiveAdminService}, where Deploy moved (LV1 Task 10). */
     public static final String LIVE_ADMIN_SERVICE = "loams.live.v1.LiveAdminService";
 
+    /**
+     * The request header that selects one of a Live node's apps (LV1 Task 13). A request without
+     * it addresses the server's own app ({@code --live-app}).
+     */
+    public static final String LIVE_APP_HEADER = "loams-live-app";
+
     /** The module catalogue, ordered by module name. */
     public static final List<ModuleBinding> MODULES = modules();
 
@@ -105,6 +111,31 @@ public final class Facade {
                                 call("live", "Watch", "watch", LIVE_SERVICE,
                                         IdempotencyLevel.NONE, RetryClass.MANUAL,
                                         Streaming.SERVER, null, false))),
+                new ModuleBinding(
+                        "live.admin",
+                        "Live administration: the app directory (LV1 Task 13).",
+                        LIVE_ADMIN_SERVICE,
+                        "loams.live.v1",
+                        true,
+                        false,
+                        // The app-directory calls only; Deploy is still reached as
+                        // `tables.deploy`.
+                        List.of(
+                                call("live.admin", "CreateApp", "createApp", LIVE_ADMIN_SERVICE,
+                                        IdempotencyLevel.NONE, RetryClass.MANUAL,
+                                        Streaming.UNARY, null, false),
+                                call("live.admin", "DeleteApp", "deleteApp", LIVE_ADMIN_SERVICE,
+                                        IdempotencyLevel.NONE, RetryClass.MANUAL,
+                                        Streaming.UNARY, null, false),
+                                call("live.admin", "GetApp", "getApp", LIVE_ADMIN_SERVICE,
+                                        IdempotencyLevel.NONE, RetryClass.SAFE,
+                                        Streaming.UNARY, null, false),
+                                call("live.admin", "ListApps", "listApps", LIVE_ADMIN_SERVICE,
+                                        IdempotencyLevel.NONE, RetryClass.SAFE,
+                                        Streaming.UNARY, new Pagination("apps", "next_page_token", "page_size", "page_token"), false),
+                                call("live.admin", "UpdateApp", "updateApp", LIVE_ADMIN_SERVICE,
+                                        IdempotencyLevel.NONE, RetryClass.MANUAL,
+                                        Streaming.UNARY, null, false))),
                 new ModuleBinding(
                         "tables",
                         "",

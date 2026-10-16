@@ -213,7 +213,7 @@ Design §46 §4.2's console REST for Loams Postgres. Since PG2 Task 9 the `pg-co
 
 ## Planned: `loams.repos.v1` and Loams Git's HTTP routes (GT1 Task 12)
 
-Loams Git (design §36, §19.10). With the `loams` feature `git`, the main port serves `loams.repos.v1.RepoService` over Connect, gRPC and gRPC-Web, behind the engine's authentication (`LOAMS_AUTH_MODE`), from GT1 Task 13; without it every RPC answers `feature_not_in_variant`. As for `loams.postgres.v1`, **no REST route** is served (API2, D602): the console REST rows below stay planned. `every_rpc_has_a_planned_console_route` (`crates/loams-proto/tests/repos.rs`) checks that every row names an RPC of the service and every RPC has a row. `{repo}` is the repository's name, which the server resolves to its immutable `repo_id`; `Idempotency-Key` carries `idempotency_key` and `Loams-Consistency-Token` carries `consistency_token` (§44 §5.2). The rows put the route first, which `route_map_covers_every_route` skips.
+Loams Git (design §36, §19.10). With the `loams` feature `git`, the main port serves `loams.repos.v1.RepoService` (and, from GT1 Task 18, `ObjectService`, which has no REST rows: it is a client data path) over Connect, gRPC and gRPC-Web, behind the engine's authentication (`LOAMS_AUTH_MODE`), from GT1 Task 13; without it every RPC answers `feature_not_in_variant`. As for `loams.postgres.v1`, **no REST route** is served (API2, D602): the console REST rows below stay planned. `every_rpc_has_a_planned_console_route` (`crates/loams-proto/tests/repos.rs`) checks that every row names an RPC of the service and every RPC has a row. `{repo}` is the repository's name, which the server resolves to its immutable `repo_id`; `Idempotency-Key` carries `idempotency_key` and `Loams-Consistency-Token` carries `consistency_token` (§44 §5.2). The rows put the route first, which `route_map_covers_every_route` skips.
 
 | Route | Method | Target RPC | Notes |
 |---|---|---|---|
@@ -234,6 +234,7 @@ Git Smart HTTP (§36 §6.1, D602, D603) is a **protocol** surface and stays HTTP
 | `/git/{ns}/{repo}.git/info/refs` | GET | protocol | `?service=git-upload-pack` or `git-receive-pack` |
 | `/git/{ns}/{repo}.git/git-upload-pack` | POST | protocol | v2 (`Git-Protocol: version=2`), and v0/v1 for libgit2 (Task 52, R0.10) |
 | `/git/{ns}/{repo}.git/git-receive-pack` | POST | protocol | v0/v1 receive-pack |
+| `/git/{ns}/{repo}.git/loams/objects/{oid}` | GET | object | one object in git's loose format, `Cache-Control: private, max-age=31536000, immutable`; `?ws=<ws_id>` reads a workspace's packs too (GT1 Task 18, §36 §19.5.1) |
 
 Until Task 46 the listener serves only the authenticated catch-all routes listed under "Loams Git listener" above.
 

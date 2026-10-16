@@ -93,6 +93,13 @@ class LiveWorkerCrashedException extends LoamsException {}
 class LiveDeployConflictException extends LoamsException {}
 class LiveSchemaViolationException extends LoamsException {}
 class LiveIndexNotReadyException extends LoamsException {}
+class LiveAppDisabledException extends LoamsException {}
+class LiveAppExistsException extends LoamsException {}
+class LiveFunctionErrorException extends LoamsException {}
+class LiveFunctionTimeoutException extends LoamsException {}
+class LiveFunctionOutOfMemoryException extends LoamsException {}
+class LiveLimitExceededException extends LoamsException {}
+class LiveAppMismatchException extends LoamsException {}
 class RoleRequiredException extends LoamsException {}
 class SetupRequiredException extends LoamsException {}
 class TokenMissingException extends LoamsException {}
@@ -194,6 +201,13 @@ class ErrorParser
         'live_deploy_conflict' => LiveDeployConflictException::class,
         'live_schema_violation' => LiveSchemaViolationException::class,
         'live_index_not_ready' => LiveIndexNotReadyException::class,
+        'live_app_disabled' => LiveAppDisabledException::class,
+        'live_app_exists' => LiveAppExistsException::class,
+        'live_function_error' => LiveFunctionErrorException::class,
+        'live_function_timeout' => LiveFunctionTimeoutException::class,
+        'live_function_out_of_memory' => LiveFunctionOutOfMemoryException::class,
+        'live_limit_exceeded' => LiveLimitExceededException::class,
+        'live_app_mismatch' => LiveAppMismatchException::class,
         'role_required' => RoleRequiredException::class,
         'setup_required' => SetupRequiredException::class,
         'token_missing' => TokenMissingException::class,

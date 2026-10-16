@@ -73,6 +73,13 @@ Bug reports, client compatibility reports, docs fixes, tests and code are all we
 
 [Discussions](https://github.com/ostrium-labs/loams/discussions) · [Issues](https://github.com/ostrium-labs/loams/issues) · [Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Governance](GOVERNANCE.md) · [Ecosystem](ECOSYSTEM.md) · [Privacy](PRIVACY.md)
 
+## Code signing policy
+
+- **Linux and checksums:** the release workflows sign `.deb`, `.pacman`, AppImage and `SHA256SUMS` with the [project GPG key](docs/release/loams-release-key.asc), set up on 2026-10-16; `.rpm` packages are planned for SignPath. The previews so far shipped without it: a file built without its signing credentials is named `-unsigned`, as every v0.1.0-preview.2 desktop file is, and the release notes say so.
+- **Windows and macOS:** unsigned today. The Windows (Authenticode) and `.rpm` signing steps through [SignPath Foundation](https://signpath.org) are built into the release workflows, but the application is not made yet, so nothing is signed that way; it will be made once the project has traction. macOS stays unsigned and not notarized.
+- **Verify a download:** `sha256sum -c SHA256SUMS --ignore-missing`, then `gpg --import docs/release/loams-release-key.asc` (fingerprint `333A C945 99D5 A1EB 2A41 6D1E 83DC 134D 8CAF 895D`) and `gpg --verify SHA256SUMS.asc SHA256SUMS`.
+- **Roles:** the three SignPath roles (authors, reviewers, approvers) are the repository's maintainers and owners; the named people will be listed here once the application is approved. Details: [signing policy](docs/release/signing.md), [desktop releases](docs/release/desktop.md).
+
 ## License
 
 [Apache License 2.0](LICENSE). Loams builds on DataFusion, Lance, Tantivy, Quickwit, qdrant-edge, SlateDB, openraft, TiKV, TiDB, Neon, Grafeo, chDB and Resonate; attributions are in [NOTICE](NOTICE). Everything needed to self-host Loams is open source here; only metering, billing and the commercial APIs are proprietary (open core).

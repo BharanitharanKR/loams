@@ -1908,3 +1908,133 @@ Carried in: the per-graph gate stays (R9.3, LG-0005 ruling 2026-10-13), so a fol
 - `loams-graph` `tests/links.rs`: `mapping_validates_against_schema` (six schema mistakes, both mode mistakes, nothing created by any of them), `type_from_column_maps_many_types` (also an idempotent replay with another mapping refused), `linked_graph_refuses_gql_writes`.
 - `loams-query` `tests/it/graph_ddl.rs`: `sql_create_graph_equals_rpc_mapping` (§07's example equals the mapping the RPC test sends; the relaxed form parses the same), `type_from_column_maps_many_types`, `malformed_create_graph_is_refused_with_what_was_expected`.
 - Unit tests in `mapping.rs`.
+
+### Task 18 (2026-10-16, on `gr1-b2-t18`)
+
+**R18.1 A graph's collection links are the graph's own, not metastore links (deviation in mechanism).**
+- The metastore refuses a link whose source is a collection's implicit stream (`create_link`: "it lives and dies with its collection, so a user link would dangle"). Allowing it would change the replicated state machine of both metastores (and `drop_collection`'s cleanup), which is the log owner's call, not this task's.
+- So the mapping is the declaration. Each collection it names (a name and an alias of one collection are one source) feeds the graph through a link whose progress is keyed by a graph-local id, `collection_link_id(c) = 2^63 | c` (metastore link ids are small sequential numbers, so the two never meet in a graph's records).
+- `loams-link` keeps the one apply loop: its body is now `loams_link::apply_link` (load, gather, wait for a batch, commit, reload on conflict), which the worker's `LinkApplySource` and the graph's `LinkRunner` both run. `CollectionLinkTarget` implements `LinkTarget`.
+- `LinkRunner` runs on every graph node (`GraphRuntime`, a pass every 500 ms, `loams-link`'s `LinkConfig`), not on the worker: graph nodes need not be worker nodes. A pass lists the LINKED graphs (every 5 s), skips a link whose source has not moved since its last apply (so an idle graph can still be evicted), and applies the rest on the node that holds the graph's lease, or that the rendezvous places it on when the lease is free.
+- No `LinkTargetFactory` is registered: nothing in the metastore names these links. Task 19's `stream → graph` link reads a user stream, which a metastore link may name, so it can use the factory route.
+
+**R18.2 A link commit is one record through the write lane.**
+- `LaneJob.link: Option<LinkJob { progress: LinkApply, apply }>`. The lane checks the link's version (the expected one) against its durable progress and the earlier records of the same group, under the exclusive gate (`VersionMismatch` → `CommitError::Conflict`).
+- The batch is applied to the store directly, as a replay applies a record: no Grafeo transaction and no change capture, since the operations are the record. The exclusive gate already hides every non-durable write (I2). A failure after the first write, or a failed append, reloads the graph from its stream, as for a GQL write.
+- The record is a `GraphChangeSet` with `link: Some(LinkApply { link, version, applied_after })` (R0.17), appended even when the batch changed nothing, so the progress is durable. Kill points `Begin`, `Executed`, `Committed`, `Captured` are reached around the apply; the group's points as for any write.
+- The fence of `LinkTarget::commit` is not used: the graph's owner lease fences every append, and the version makes a retried or concurrent commit apply once.
+- A batch over 2,048 records or 4 MiB of source values is committed as several records, each with its own offsets.
+
+**R18.3 Where the progress lives.** `Durable.links` (the latest `LinkApply` per link, rebuilt from the records on open and on a follower's tail, keeping the higher version), and, because a link's last record may be below the trim point: each snapshot entry of the manifest (`SnapshotEntry.links`) and the clean-close stamp (`cache.json`'s `links`). Both fields are additive and absent when empty, so neither format changes.
+
+**R18.4 What a link writes (§48 §10.1).**
+- A vertex document is the vertex `(label, key)`. Its properties are the document's fields (nulls absent) plus `_collection` and `_key`, and `_pk` when the key is a field rather than `_pk` (so a delete, which names only the primary key, finds it).
+- An upsert writes the vertex whole, so a second upsert of a key replaces the first in place: the entity is merged, never duplicated, and keeps its edges. A patch is applied (`apply_patch`) to the document the vertex holds. A delete removes the vertex and its edges. A key that changes makes it another vertex.
+- An edge document is the edge `(edge name, primary key)`, of the declared name or its `TYPE FROM` value, between the vertices its endpoint fields key. Its properties are the fields plus `_collection`, `_key` (the edge document's primary key) and `_edge` (the edge name). A change of type or endpoint replaces the edge.
+- An endpoint with no vertex is a stub: the endpoint's label, `_key`, `_stub = true` (Q681 answered as §48 proposed). The vertex's upsert fills it. A stub that loses its last edge goes.
+- A document with no key, endpoint or type is skipped with a warning, and what it made before goes. A record that does not decode is skipped with a warning (the collection's writer encodes every record, so it is corrupt): dead letters for graphs are not built.
+- Keys: a `u64` primary key is an integer (a string above `i64::MAX`), a UUID its hyphenated lower-case text, a string itself; a field's integer or string value.
+- `LinkIndex` (`(label, key)`, `(label, pk)`, `(edge, pk)` → ids, edge ends and incident edges) is built from the engine on the first link commit and kept by every commit; it lives and dies with the engine instance. Its memory is Task 26's to count.
+
+**R18.5 Lag (deviation in surface).** `LinkRunner::lag` answers each link's applied offsets, its source's high watermarks, the records behind, and `missing` for a collection that is gone (its link stops where it was; its vertices stay). No proto field is added (the package's generated TypeScript and SDKs would move with it); Task 27 exports `loams_graph_link_lag_records` from it.
+
+**R18.6 Gaps carried.** A dropped collection's elements stay in the graph (R17.2 said its labels become empty): removing them is a rebuild, which goes with Task 29's import/rebuild path. A collection renamed under the mapping's name after creation is not followed. Two documents sharing a non-`_pk` key are one vertex, the last write's.
+
+**R18.7 Tests** (`tests/links.rs`, 5 new): `link_apply_exactly_once_under_kill` (the owner killed at each of seven write-path points during the second commit of a batch; the other node takes the graph and the links; the graph equals the mapping applied to the documents, each link's versions in the log are 1, 2, 3, … with none twice; releasing the dead node changes nothing), `stub_vertex_filled_by_later_upsert`, `vertex_delete_removes_incident_edges`, `pk_upsert_is_entity_merge`, `link_lag_metric_reported` (also: an evicted graph reopens from its stamp with its progress, and nothing is applied twice; a dropped collection is reported missing). Unit tests in `link/collection.rs`.
+
+### Task 19 (2026-10-16, on `gr1-b2-t19`)
+
+**R19.1 Where a stream link is declared (coordinator ruling, 2026-10-16, under the owner's "pick sensible defaults" rule).** `loams.graph.v1.GraphMapping` gains `repeated StreamMapping streams = 3` (with `StreamRule` and `StreamOperation`), additive in the unstable package (`buf breaking` clean); `@loams/proto`'s generated TypeScript is regenerated in the same PR. No SDK carries graph messages. The Task 18 `LinkRunner` applies a stream link on the graph's owner, exactly as a collection link, with the graph-local id `2^63 | 2^62 | stream id`. A later link API (API1) may add a metastore-link front for the same mapping; the mapping and the commit path stay.
+
+**R19.2 The rules.**
+- A record's root is its JSON object; a CloudEvent in structured mode (`specversion` and `type`) is that object, and one in binary mode (`ce_*` headers, as `ProduceCloudEvents` stores it, or `ce-*`) is its attributes with the value parsed as `data`.
+- Every rule a record matches applies, in order. A rule with an `event_type` matches only CloudEvents of that type. A record no rule matches is skipped.
+- Fields are dot-separated selectors from the root (`data.id`), named `*_field` on the wire so `proto_has_no_path_fields` (Review Focus 4) keeps holding: none names a file. A key is an integer or a string.
+- A node upsert **merges** the record's properties into `(label, key)` (events are deltas), creating it or filling a stub. A node delete removes the node and its edges.
+- An edge is identified among its stream's edges by its `edge_key_field` value, or by its type and endpoints. An upsert merges into it, makes stub endpoints, and replaces it when its type or endpoints change. A delete from any rule of the stream finds it. A stub left without edges goes.
+- Properties are the object at `properties_field`, else `data` for a CloudEvent and the whole record otherwise. Nodes and edges carry `_stream` and `_key` (edges `_edge = stream:<name>`).
+- A mapping may hold only streams: the vertex-label minimum of R17.1 applies when there are no streams. Rule names share the edges' names. A stream name starting with `_` (a collection's implicit stream) is refused, and the stream must exist when the graph is created.
+
+**R19.3 Dead letters.** A record a matching rule cannot read (not JSON, a missing or non-key key, a missing type, properties that are not an object) is written as one JSON object, `{partition, offset, rule?, reason, value}` (value at most 4 KiB, lossy UTF-8), at `ns/<ns>/graphs/<gr>/deadletters/<link>/<partition>-<offset>.json`, before the commit that skips it. The name is the record's, so a retried batch rewrites the same object. Nothing of the record is applied. `LinkRunner::dead_letters` reads them; `LinkLag.dead_letters` counts them (Task 27 exports the metric). A graph's purge deletes them with its prefix; the snapshot sweep does not touch them. `LinkLag.collection` is renamed `source`.
+
+**R19.4 Code.** `link/target.rs` (`GraphLinkTarget`: one target for both kinds; the Task 18 `CollectionLinkTarget` is folded into it), `link/writer.rs` (the shared writer), `link/collection.rs` and `link/stream.rs` (the two plans).
+
+**R19.5 Gaps carried.** A stream deleted after creation stops its link (`missing`), and its elements stay. Data that is not JSON (`datacontenttype` other than JSON) is dead-lettered. A `TYPE`-routed rule ignores the CloudEvent `source`.
+
+**R19.6 Tests** (`tests/links.rs`, 3 new): `cloudevents_map_to_nodes_and_edges` (structured and binary events, stubs filled, merges, an edge moved and deleted, a node delete taking its edges, an unmapped type skipped; the graph equals a sequential model), `malformed_record_dead_lettered_not_blocking` (three letters, the record after them applied, nothing re-lettered on a second pass), `stream_link_exactly_once_under_kill` (seven kill points, as Task 18's). Unit tests in `link/stream.rs` and `mapping.rs`.
+
+### Task 20 (2026-10-16, on `gr1-b2-t20`; Q670 answered yes by the owner, PR #678)
+
+**R20.1 Where the stage runs.** `loams-query` (in every build) defines the IR (`expand::{Expand, Rerank, Neighbor, GraphHit, ExpandStats}`) and the `GraphExpander` trait; `loams-graph` implements it (`retrieval::LoamsGraphExpander`), and the server hands it to `CollectionService::set_graph_expander` when it runs graphs. Without one, a request that expands is `INVALID_ARGUMENT`. `loams-graph` gains `loams-query` (already in `loams`).
+
+**R20.2 The plan.** The base search is the request without its stages, limited to `expand.seeds` (or, rerank alone, to the page), then the expansion, the neighbors' documents (`expand.select`; absent fetches none), the rerank and `offset`/`limit`. Expand and rerank refuse `group_by`, `aggregations`, `sort` and `search_after`. A seed is the hit's primary key, or its source's `from_field` (which `select` must return).
+
+**R20.3 The expansion is parameterized GQL.** Three read-only statements through the graph's own `Execute` (routing, followers, tokens): the seeds' vertices, the first hop, the second hop from the first hop's vertices. Values (seed keys, labels, edge types) are parameters; the text varies only in one of three fixed edge arrows. The later statements read `at_least` the first one's token, so one expansion never goes back in time. `expand.consistency_token` (a graph token) makes the first read `at_least` it; absent is `strong`.
+
+**R20.4 Semantics (§07 §4).**
+- A vertex is `(label, _key)`; an OWNED graph's vertices need `_key` to be reached.
+- A seed is every vertex with its key (of `seed_label` if given). A seed's own vertices are never its neighbors, and a seed repeated in the hits is expanded once, for its first hit.
+- Each seed's vertices are kept at the smallest hop. Among equal-hop paths the smallest canonical key bytes of `via`, then of the edge, win.
+- `edge_filter` prunes edges walked; `vertex_filter` prunes the vertices reached, which are neither answered nor walked through. Both take the structured subset of the IR's `Query` (`match_all`, `match_none`, `term`, `terms`, `range`, `exists`, `is_null`, `prefix`, `ids`, `bool`); a full-text query is refused.
+- Order: hop, then canonical key bytes, then label; `limit_per_seed` per seed, then `limit` for the answer, seed order breaking ties. No mapping declares an edge weight, so §07 §4's weight order is not applied.
+- A statement answer the engine truncates is refused (`INVALID_ARGUMENT`, narrow the request), so a truncated answer is never non-deterministic.
+
+**R20.5 Scores and rerank.** Without a rerank a neighbor scores `seed score × 0.5^hop` (`inherit` with its default decay). `inherit {decay}` takes the most over its seeds. `vector {field, query}` scores seeds and neighbors by cosine similarity (0 without a vector), fetching the field and answering it only when `select` asked. `model` is refused: an external reranker is off by default (§05 §4). Nested answers order each hit's neighbors by score, then hop; flat answers one hit per vertex (best score, smallest hop, its seeds), seeds first by score, ties by canonical key bytes.
+
+**R20.6 Surfaces.** The REST query body (IR and §05 §4 forms) takes `expand`/`rerank` in the IR's JSON. `QueryService/Search` takes typed `ExpandSpec expand_spec = 22` and `RerankSpec rerank_spec = 23` (Q-T0-4); 17 and 18 stay `Struct`, deprecated and refused. `Hit.neighbors = 9`, `Hit.graph = 10`, `SearchResponse.expand = 8`. Additive in `loams.collection.v1` (`buf breaking` clean); `@loams/proto` regenerated. The SDKs and the MCP `search` tool expose the stages in Task 36.
+
+**R20.7 The reference.** `conformance/graph/reference/expand.py` (networkx 3.4.2) builds the fixture and writes the expected answers before and after its deletes; the Rust test reads the committed JSON, so CI needs no Python. Regenerate with the script when the semantics change.
+
+**R20.8 Tests.** `loams-graph` `tests/retrieval.rs`: `expand_matches_networkx_reference` (12 cases × before/after deletes: hops, directions, types, both filters, both truncations, a key two labels share, missing/repeated/keyless seeds; RED: reversing the tie-break fails it), `truncation_is_deterministic` (100 runs and after an eviction), `expand_respects_consistency_token` (a follower that must apply the token's write; another stream's token refused), `seed_without_vertex_is_skipped_and_counted`. `loams` `connect_graph`: `search_expands_through_a_linked_graph` (collections → links → REST and Connect expand with documents; flat with a vector rerank). Unit tests in `loams-query` `expand.rs` and `loams-graph` `retrieval/filter.rs`.
+
+Gaps: a UUID-keyed vertex document is fetched by its key's text, which a UUID collection does not match (its neighbors come back without a source); hits of a forwarded base search are expanded on the receiving node.
+
+### Task 21 (2026-10-16, on `gr1-b2-t21`, stacked on Task 20)
+
+**R21.1 Positional arguments (deviation in syntax).** DataFusion 54 refuses named table-function arguments ("Unsupported function argument type: graph => 'kg'"), so §07 §5.1's arguments are taken by position, in its order, `NULL` taking a default: `graph_expand(graph, seeds, seed_label, hops, direction, edge_types, edge_filter, vertex_filter, limit_per_seed)`, `graph_neighbors(graph, keys, label, direction, edge_types, edge_filter, limit_per_key)`, `graph_degree(graph, keys, label, direction, edge_types)`, `graph_shortest_path(graph, from, to, label, direction, edge_types, max_hops)`. The output columns are §07 §5.1's exactly.
+
+**R21.2 Seeds and keys.** A key (an unsigned integer or a string), an `ARRAY` of keys, or a query string starting with `SELECT` or `WITH` whose first column holds them, run in the same namespace and consistency: the `seeds => 'SELECT …'` fallback R0.x foresaw. A `LATERAL` outer column is refused at planning with that advice (`lateral_join_with_collection`): a table function is planned before the join's rows.
+
+**R21.3 Filters are filter JSON (deviation).** `edge_filter` and `vertex_filter` are the IR's filter JSON, as `vector_search`'s `filter_json`, served by the structured subset of R20.4: a graph's elements come from several collections, so a SQL predicate has no one schema to plan over.
+
+**R21.4 Answers.** Keys are text (an integer key as its digits), so one column holds every label's keys. `graph_expand` is the `expand` stage (R20.4) with `limit` at its maximum. `graph_neighbors`: per key in call order (each once), out before in, then type, the other end's canonical key bytes and the edge's; `limit_per_key` default 100. `graph_degree`: the incident edges matching `edge_types` (a self-loop counts in and out); a key with no vertex has no row. `graph_shortest_path`: breadth first from `from` (the smallest vertex in canonical order when labels share the key), one parameterized statement per depth, each vertex keeping its first parent in canonical order (vertex, label, edge, other end); bounded by `max_hops` (default 6, 1 to 16); empty when there is none. Defaults: `direction` out for `graph_expand`, both for the other three. Graph reads are `strong`.
+
+**R21.5 Where they run.** `loams-query` defines `graph::GraphTables` and registers the four functions in every SQL context; `loams-graph`'s `LoamsGraphExpander` implements it, and the server sets it with the expander. Without Loams Graph a call is refused at execution.
+
+**R21.6 Tests.** `loams-graph` `tests/retrieval.rs`: `udtf_results_match_reference` (12 cases × before/after deletes against the networkx reference, which `expand.py` now also computes), `shortest_path_depth_bound`. `loams-query`: `udtf_signatures_match_section_07` (unit), `lateral_join_with_collection` (`tests/it/sql.rs`). `loams` `connect_graph`: the four functions over a LINKED graph on the SQL route, a query-string seed joined back to its collection, and the LATERAL refusal.
+
+### Task 22 (prep, 2026-10-16; proposal, owner to confirm)
+
+Research only, nothing built: Grafeo read at `0.5.43` (`~/.cargo/registry/src/*/grafeo-adapters-0.5.43/src/plugins/algorithms/`, identical to the fork's pin `92bc59a` for these files), crates read from crates.io and the source tarballs.
+
+**R22.0 Which algorithms come from where (proposal).**
+
+| §07 §5.3 / Task 22 need | Grafeo 0.5.43 (`algos`) | Verdict | Source for Task 22 |
+|---|---|---|---|
+| `pagerank` (damping, `max_iterations`, `tolerance`) | `centrality::pagerank(store, damping, max_iterations, tolerance)` | Partial. Power iteration, uniform dangling mass (the networkx convention), so it should meet 1e-6. Directed, unweighted, no `edge_types`, no label filter, takes a whole `&dyn GraphStore`. | Task 22 builds the snapshot's CSR itself (it needs `edge_types` and `label` anyway) and runs its own 40-line power iteration, using Grafeo's loop as the reference. No new dependency. |
+| `wcc` | `components::connected_components(store)`: union-find over both directions | Present, but whole-store only (no `edge_types`). | Own union-find on the same CSR (`edge_types` filter), same algorithm. Component ids renumbered by smallest canonical key for determinism. |
+| `leiden` (`resolution`, `max_levels`, `max_cluster_size`, `seed`, hierarchical) | None. `grep -i leiden` over the fork finds nothing. | Missing. | A crate, see R22.1. |
+| `louvain` (Phase B) | `community::louvain(store, resolution)` | Partial: one level only (no aggregation phase, despite its doc), edge weight hard-coded to 1.0, no seed. | Defer; Leiden covers it. Not used. |
+| `label_propagation`, `k_core`, `triangle_count`, sampled `betweenness` (Phase B) | `label_propagation`, `structure::k_core`/`kcore_decomposition`, `clustering::triangle_count`, `centrality::betweenness_centrality` (exact, not sampled) | Present (betweenness not sampled). | Phase B, out of Task 22. Same CSR-filter caveat. |
+
+The pattern: Grafeo's algorithms read a whole `GraphStore` and carry no weights, `edge_types` or seed. Task 22's `pagerank` and `wcc` therefore run on Loams' own snapshot CSR, and the only dependency the task adds is the Leiden crate.
+
+**R22.1 Leiden: candidates and licence evidence (read 2026-10-16).**
+
+| Candidate | Licence (checked against the file) | Last release / age | Fit | Weight |
+|---|---|---|---|---|
+| `network_partitions` 0.3.0, the Rust core of `graspologic-native` ([github.com/microsoft/graspologic-native](https://github.com/microsoft/graspologic-native), tag `v1.3.1`, 2026-06-14, 124 days) | MIT (`LICENSE`, HTTP 200 at `https://raw.githubusercontent.com/microsoft/graspologic-native/v1.3.1/LICENSE`; `Cargo.toml` `license = "MIT"`) | Active (tags 1.3.0 2026-06-03, 1.3.1 2026-06-14) | `hierarchical_leiden(network, …, resolution, randomness, rng, use_modularity, max_cluster_size, …)` is exactly §5.3 (hierarchy, `max_cluster_size`, seeded rng) and is what GraphRAG uses. | `rand 0.10` only (`petgraph`/`sprs` are optional features); `rand 0.10.3` is already in `Cargo.lock`. |
+| `leiden-rs` 0.8.1 ([crates.io](https://crates.io/crates/leiden-rs), repo on gitcode.com) | MIT OR Apache-2.0 (`LICENSE-MIT` and `LICENSE-APACHE` both in the tarball) | 2026-05-15, 154 days; 32k downloads | Seeded, weighted, hierarchical by aggregation level. `max_comm_size` is a flat cap, not GraphRAG's recursive `max_cluster_size`. | `rand 0.9`, `rustc-hash 2`, `thiserror 2` (all already in `Cargo.lock`); the rest are optional. |
+| `single-clustering` 0.7.0, `fa-leiden-cd` 0.1.0 | crates.io metadata says "non-standard"; not checked further | 2026-08-04, 2025-08-27 | Not pursued: the licence field is not an SPDX expression. | |
+| `petgraph` 0.8.3, `rustworkx-core` 0.18.1 | MIT OR Apache-2.0; Apache-2.0 | 2025-09-30; 2026-07-29 | Neither has Leiden or Louvain; `petgraph` has components and a PageRank, but on its own graph types, so using it would mean a second graph copy. Not needed. | |
+| `graspologic-native` by that name | n/a | not on crates.io (`crates/graspologic-native` returns "does not exist"); it ships to PyPI only | The Rust library is the `network_partitions` package inside the repo, not on crates.io either. | |
+
+`deny.toml`: MIT and Apache-2.0 are in `[licenses].allow`, so licences pass for either. `network_partitions` is not on crates.io, so it needs a `git` + `rev` pin and `https://github.com/microsoft/graspologic-native` added to `[sources] allow-git` (today `unknown-git = "deny"`). `leiden-rs` is a registry crate and needs no `deny.toml` change. (`cargo deny` was not run; disk is tight. Task 22 runs it.)
+
+**R22.2 Proposed ruling.**
+1. `pagerank` and `wcc`: in-house on the snapshot CSR (R22.0). No new dependency.
+2. `leiden`: use `network_partitions` 0.3.0 from `microsoft/graspologic-native` at the `v1.3.1` commit, `default-features = false`, as a git dependency, because it implements the hierarchical, `max_cluster_size`, seeded algorithm §07 §5.3 specifies and which GraphRAG's outputs assume. Cost: add the repo to `deny.toml` `allow-git`, add a `connectors/licences.toml`/NOTICE entry (MIT, Microsoft copyright), and pin by rev (the tag is 124 days old, so the 14-day rule holds). Task 22's first step is a spike that builds a 1k-node graph and checks `leiden_modularity_within_reference_tolerance` against `graspologic` on the same graph.
+3. Fallback if the owner prefers a registry crate (no `deny.toml` change): `leiden-rs` 0.8.1 (MIT OR Apache-2.0), with `max_cluster_size` implemented in-house by re-running Leiden on any community above the cap (that is graspologic's own approach).
+4. Neither is called through Grafeo. Louvain stays unused.
+
+Decision for the owner: git dependency on `microsoft/graspologic-native` (exact GraphRAG parity, one `deny.toml` line) or `leiden-rs` from the registry (no policy change, in-house cap). This proposal recommends the first.

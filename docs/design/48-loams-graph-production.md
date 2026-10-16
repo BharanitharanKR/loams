@@ -366,17 +366,31 @@ Gremlin, GraphQL, SPARQL, SQL/PGQ and RDF stay compiled out. `QueryLanguage` kee
 - **Dangling edges** (an edge whose endpoint does not exist yet, which LightRAG does): the link creates a **stub vertex** of the declared endpoint label with only its key and `_stub = true`, and the vertex's later upsert fills it. Q681 asks whether to skip instead, as §07 §7 did.
 - Vertices carry `_collection` and `_key`, which is how GraphRAG joins back to documents.
 - *As built by GR1 Task 17 (R17.1–R17.4):* the mapping is checked against the collections' schemas when the graph is created (a key or endpoint is `_pk` or a keyword, integer or UUID field; `TYPE FROM` a keyword or text field), it carries no projection (properties are the documents' fields), GQL writes to a LINKED graph are `FAILED_PRECONDITION`/`graph_is_linked`, and SQL's `CREATE GRAPH` parses into the same `GraphMapping` the RPC takes.
+- *As built by GR1 Task 18 (R18.1–R18.6):* a graph's collection links are the graph's own (the metastore refuses links on a collection's implicit stream), keyed by a graph-local id and applied by a runner on the graph's owner through `loams-link`'s apply loop. Each commit is one record through the write lane carrying the batch's operations and the link's progress; the progress is also kept in the manifest's snapshot entries and the clean-close stamp. Stubs are made as proposed (Q681), filled by the vertex's upsert, and removed with their last edge. Edges carry `_collection`, `_key` and `_edge`.
 
 ### 10.2 `stream → graph` and Flow
 
 - A `stream → graph` link applies records from a Loams stream (JSON or CloudEvents) through a mapping of field paths to node and edge operations, with the same exactly-once apply.
 - Flow routes write graphs through `loams_sink` into a linked graph's source collections (§32 §6 row 4), or directly as a `stream → graph` link on a Loams stream the route fills. The CN1 `grafeo` connector reads and writes graphs through `loams.graph.v1` (§4.4).
+- *As built by GR1 Task 19 (R19.1–R19.6):* a LINKED graph's mapping carries `streams`, each a stream of the graph's namespace and its rules (`loams.graph.v1.StreamMapping`); the Task 18 runner applies them on the graph's owner with the same exactly-once commit. Rules route CloudEvents by `type`, key nodes and edges by field paths from the record's root (`type`, `id`, `data.<field>`), merge an upsert's properties into the element, and make stubs for missing endpoints. A record a matching rule cannot read is dead-lettered to `ns/<ns>/graphs/<gr>/deadletters/<link>/` and the link goes on. A Flow route feeds a graph with `loams_sink` producing CloudEvents into such a stream (`ProduceCloudEvents` stores binary mode, `ce_*` headers):
+
+  ```json
+  {"streams": [{"stream": "people-events", "rules": [
+    {"name": "person", "event_type": "person.upserted", "operation": "STREAM_OPERATION_UPSERT_NODE",
+     "label": "Person", "key_field": "data.id"},
+    {"name": "knows", "event_type": "knows.added", "operation": "STREAM_OPERATION_UPSERT_EDGE",
+     "source_label": "Person", "source_key_field": "data.from",
+     "destination_label": "Person", "destination_key_field": "data.to",
+     "edge_type": "KNOWS", "edge_key_field": "data.edge"}]}]}
+  ```
 
 ### 10.3 Retrieval
 
 - **`Search.expand`** (§07 §5.2's contract, unchanged): retrievers → fusion → `Limit(seeds)` → **expand in Loams Graph** → document fetch → rerank → limit. The expand step is a Loams-generated, parameterized GQL template (seed keys and filters as parameters, never interpolated), run at the request's consistency, with §07 §4's deterministic truncation order (hop, weight, canonical key) enforced by Loams after the engine returns.
 - **SQL table functions** `graph_expand`, `graph_neighbors`, `graph_degree` and `graph_shortest_path` (§07 §5.1, same signatures) are DataFusion UDTFs that call the in-process graph engine and return Arrow batches. Their output joins collection tables as before.
 - **Algorithms** `pagerank`, `wcc` and `leiden` (§07 §5.3) run on a snapshot through Grafeo's `algos` feature where it provides them (verify Leiden), otherwise `graspologic-native` (licence to verify), as a job that writes results back to the vertex source collection (linked graphs) or as properties (owned graphs).
+- *As built by GR1 Task 20 (R20.1–R20.8):* `SearchRequest` gains `expand` and `rerank` (§07 §5.2's shapes, plus `consistency_token`); `QueryService/Search` takes them as typed `expand_spec`/`rerank_spec` (fields 17 and 18 stay deprecated), and `Hit` gains `neighbors` and `graph`, `SearchResponse` `expand`. `loams-query` runs the base search for the seeds and calls a `GraphExpander`, which `loams-graph` serves with three parameterized GQL reads through the graph's own `Execute` path; dedup, tie-breaks and truncation are Loams'. Edge and vertex filters take the structured subset of the IR's `Query`. `rerank.model` is refused (off by default, §05 §4). A networkx reference (`conformance/graph/reference/expand.py`) fixes the expected answers.
+- *As built by GR1 Task 21 (R21.1–R21.6):* the four table functions take §07 §5.1's arguments **by position** (DataFusion 54 refuses named table-function arguments) and answer its columns, keys as text. `seeds`/`keys` take a key, an `ARRAY` or a query string (the `seeds => 'SELECT …'` fallback; a `LATERAL` column is refused with that advice); `edge_filter`/`vertex_filter` take the IR's filter JSON, as `vector_search` does. They read through `loams-query`'s `GraphTables` (and the `expand` stage's expander), served by `loams-graph` with parameterized GQL; `graph_shortest_path` is breadth first, one statement per depth, deterministic by canonical key order, bounded by `max_hops` (default 6, at most 16).
 - **GQL seeded by vector search** inside one GQL statement (a procedure such as `CALL loams.search(...)`) is not in v1 (Q683 covers the related change feed); the composition lives in `Search` and SQL, where the planner can see both halves.
 
 ### 10.4 Why not Grafeo's own vector index
@@ -636,7 +650,7 @@ Before GA, on the docs site: a Graph overview (owned vs linked), a quickstart (T
 
 | # | Question | Owner | Needed by |
 |---|---|---|---|
-| Q670 | Approve D743: Loams Graph also executes §07's `expand` stage and SQL table functions, with §07's CSR sidecars and `ExpandExec` deferred? Default: yes | Owner | GR1c |
+| Q670 | ~~Approve D743: Loams Graph also executes §07's `expand` stage and SQL table functions, with §07's CSR sidecars and `ExpandExec` deferred? Default: yes~~ **Answered 2026-10-16 by the owner: yes.** | Owner | GR1c |
 | Q671 | Approve D741: the `graph` role of `loams` (feature `graph`), not `loams-fabric`? Default: yes | Owner | GR1a Task 1 |
 | Q672 | ~~Which change-capture mechanism (§6.3 A, B or C)? Default: B, if Task 9's completeness tests pass~~ **Answered by GR1 Task 9 (2026-10-10): B**, CDC events resolved against the store into a net-effect change set; client isolation by a per-graph gate held until durable, not by viewing epochs (GR1 plan R9.1–R9.3) | Eng | Answered |
 | Q673 | Ship the Cypher compatibility dialect at GA (opt-in per graph), or GQL only? Default: ship it opt-in | Owner | GR1e |
@@ -647,7 +661,7 @@ Before GA, on the docs site: a Graph overview (owned vs linked), a quickstart (T
 | Q678 | Fork Grafeo now, or track upstream under §19.3's trigger? Default: track upstream | Owner | GR1a Task 0 |
 | Q679 | Contribute a commit hook (change-set listener) and caller-chosen ids upstream? Default: yes, as soon as Task 9 knows what is missing | Eng | GR1b |
 | Q680 | Pursue an audited LDBC SNB run? Default: not before GA | Owner | After GA |
-| Q681 | Dangling edges in linked graphs: stub vertices (default) or skip, as §07 §7 had it? | Eng | GR1c |
+| Q681 | ~~Dangling edges in linked graphs: stub vertices (default) or skip, as §07 §7 had it?~~ **Answered by GR1 Task 18 (2026-10-16): stub vertices**, filled by the vertex's upsert and removed with their last edge | Eng | GR1c |
 | Q682 | Offer a Bolt endpoint or a `grafeo-server` companion for Neo4j-driver users? Default: no (D634 (c)) | Owner | After GA |
 | Q683 | A public graph change feed (`WatchGraph`, server streaming) and GQL procedures that call collection search? Default: Phase B | Owner | After GA |
 | Q684 | The metering units for graphs (statement CPU-seconds, stored elements, stored bytes) for `loams-platform` | Owner | Before Cloud GA |

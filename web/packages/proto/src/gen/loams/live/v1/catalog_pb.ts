@@ -8,7 +8,7 @@
 
 import type { GenEnum, GenFile, GenMessage } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc } from "@bufbuild/protobuf/codegenv2";
-import type { DeploymentState, FunctionInfo, IndexState } from "./admin_pb.js";
+import type { App, DeploymentState, FunctionInfo, IndexState } from "./admin_pb.js";
 import { file_loams_live_v1_admin } from "./admin_pb.js";
 import type { Schema, Validator } from "./live_pb.js";
 import { file_loams_live_v1_live } from "./live_pb.js";
@@ -18,7 +18,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file loams/live/v1/catalog.proto.
  */
 export const file_loams_live_v1_catalog: GenFile = /*@__PURE__*/
-  fileDesc("Chtsb2Ftcy9saXZlL3YxL2NhdGFsb2cucHJvdG8SDWxvYW1zLmxpdmUudjEi2AEKCFRhYmxlRGVmEg4KBmZvcm1hdBgBIAEoDRIKCgJpZBgCIAEoDRIMCgRuYW1lGAMgASgJEigKB2luZGV4ZXMYBCADKAsyFy5sb2Ftcy5saXZlLnYxLkluZGV4RGVmEhUKDW5leHRfaW5kZXhfaWQYBSABKA0SKwoJdmFsaWRhdG9yGAYgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3ISNAoJZW5mb3JjaW5nGAcgASgLMiEubG9hbXMubGl2ZS52MS5FbmZvcmNpbmdWYWxpZGF0b3IiVQoSRW5mb3JjaW5nVmFsaWRhdG9yEisKCXZhbGlkYXRvchgBIAEoCzIYLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yEhIKCmRlcGxveW1lbnQYAiABKAwi+gEKDlRhYmxlSm9iUmVjb3JkEg4KBmZvcm1hdBgBIAEoDRIpCgRraW5kGAIgASgOMhsubG9hbXMubGl2ZS52MS5UYWJsZUpvYktpbmQSEAoIdGFibGVfaWQYAyABKA0SEgoKZGVwbG95bWVudBgEIAEoDBINCgVvd25lchgFIAEoCRIYChBsZWFzZV9leHBpcmVzX21zGAYgASgEEhIKCmNoZWNrcG9pbnQYByABKAwSDwoHc2Nhbm5lZBgIIAEoBBIMCgRkb25lGAkgASgIEisKCGZpbmRpbmdzGAogAygLMhkubG9hbXMubGl2ZS52MS5Kb2JGaW5kaW5nIiwKCkpvYkZpbmRpbmcSDgoGZG9jX2lkGAEgASgMEg4KBmRldGFpbBgCIAEoCSJyCghJbmRleERlZhIKCgJpZBgBIAEoDRIMCgRuYW1lGAIgASgJEg4KBmZpZWxkcxgDIAMoCRIoCgVzdGF0ZRgEIAEoDjIZLmxvYW1zLmxpdmUudjEuSW5kZXhTdGF0ZRISCgpkZXBsb3ltZW50GAUgASgMIjAKBkFwcERlZhIOCgZmb3JtYXQYASABKA0SFgoOam91cm5hbF9zaGFyZHMYAiABKA0irwIKEERlcGxveW1lbnRSZWNvcmQSDgoGZm9ybWF0GAEgASgNEgoKAmlkGAIgASgMEhUKDWJ1bmRsZV9zaGEyNTYYAyABKAwSJQoGc2NoZW1hGAQgASgLMhUubG9hbXMubGl2ZS52MS5TY2hlbWESFQoNY3JlYXRlZF9hdF9tcxgFIAEoBBISCgpjcmVhdGVkX2J5GAYgASgJEg8KB21lc3NhZ2UYByABKAkSDgoGcGFyZW50GAggASgMEi0KBXN0YXRlGAkgASgOMh4ubG9hbXMubGl2ZS52MS5EZXBsb3ltZW50U3RhdGUSFgoOZmFpbHVyZV9yZWFzb24YCiABKAkSLgoJZnVuY3Rpb25zGAsgAygLMhsubG9hbXMubGl2ZS52MS5GdW5jdGlvbkluZm8qaAoMVGFibGVKb2JLaW5kEh4KGlRBQkxFX0pPQl9LSU5EX1VOU1BFQ0lGSUVEEAASGwoXVEFCTEVfSk9CX0tJTkRfVkFMSURBVEUQARIbChdUQUJMRV9KT0JfS0lORF9CQUNLRklMTBACYgZwcm90bzM", [file_loams_live_v1_admin, file_loams_live_v1_live]);
+  fileDesc("Chtsb2Ftcy9saXZlL3YxL2NhdGFsb2cucHJvdG8SDWxvYW1zLmxpdmUudjEi2AEKCFRhYmxlRGVmEg4KBmZvcm1hdBgBIAEoDRIKCgJpZBgCIAEoDRIMCgRuYW1lGAMgASgJEigKB2luZGV4ZXMYBCADKAsyFy5sb2Ftcy5saXZlLnYxLkluZGV4RGVmEhUKDW5leHRfaW5kZXhfaWQYBSABKA0SKwoJdmFsaWRhdG9yGAYgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3ISNAoJZW5mb3JjaW5nGAcgASgLMiEubG9hbXMubGl2ZS52MS5FbmZvcmNpbmdWYWxpZGF0b3IiVQoSRW5mb3JjaW5nVmFsaWRhdG9yEisKCXZhbGlkYXRvchgBIAEoCzIYLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yEhIKCmRlcGxveW1lbnQYAiABKAwi+gEKDlRhYmxlSm9iUmVjb3JkEg4KBmZvcm1hdBgBIAEoDRIpCgRraW5kGAIgASgOMhsubG9hbXMubGl2ZS52MS5UYWJsZUpvYktpbmQSEAoIdGFibGVfaWQYAyABKA0SEgoKZGVwbG95bWVudBgEIAEoDBINCgVvd25lchgFIAEoCRIYChBsZWFzZV9leHBpcmVzX21zGAYgASgEEhIKCmNoZWNrcG9pbnQYByABKAwSDwoHc2Nhbm5lZBgIIAEoBBIMCgRkb25lGAkgASgIEisKCGZpbmRpbmdzGAogAygLMhkubG9hbXMubGl2ZS52MS5Kb2JGaW5kaW5nIiwKCkpvYkZpbmRpbmcSDgoGZG9jX2lkGAEgASgMEg4KBmRldGFpbBgCIAEoCSJyCghJbmRleERlZhIKCgJpZBgBIAEoDRIMCgRuYW1lGAIgASgJEg4KBmZpZWxkcxgDIAMoCRIoCgVzdGF0ZRgEIAEoDjIZLmxvYW1zLmxpdmUudjEuSW5kZXhTdGF0ZRISCgpkZXBsb3ltZW50GAUgASgMIjAKBkFwcERlZhIOCgZmb3JtYXQYASABKA0SFgoOam91cm5hbF9zaGFyZHMYAiABKA0irwIKEERlcGxveW1lbnRSZWNvcmQSDgoGZm9ybWF0GAEgASgNEgoKAmlkGAIgASgMEhUKDWJ1bmRsZV9zaGEyNTYYAyABKAwSJQoGc2NoZW1hGAQgASgLMhUubG9hbXMubGl2ZS52MS5TY2hlbWESFQoNY3JlYXRlZF9hdF9tcxgFIAEoBBISCgpjcmVhdGVkX2J5GAYgASgJEg8KB21lc3NhZ2UYByABKAkSDgoGcGFyZW50GAggASgMEi0KBXN0YXRlGAkgASgOMh4ubG9hbXMubGl2ZS52MS5EZXBsb3ltZW50U3RhdGUSFgoOZmFpbHVyZV9yZWFzb24YCiABKAkSLgoJZnVuY3Rpb25zGAsgAygLMhsubG9hbXMubGl2ZS52MS5GdW5jdGlvbkluZm8iVAoJQXBwUmVjb3JkEg4KBmZvcm1hdBgBIAEoDRIfCgNhcHAYAiABKAsyEi5sb2Ftcy5saXZlLnYxLkFwcBIWCg5jdXJzb3Jfa2V5X3JlZhgDIAEoCSJeCglBcHBJbnRlbnQSDgoGZm9ybWF0GAEgASgNEgoKAmlkGAIgASgNEgwKBG5hbWUYAyABKAkSEAoIa2V5c3BhY2UYBCABKAkSFQoNc3RhcnRlZF9hdF9tcxgFIAEoBCpoCgxUYWJsZUpvYktpbmQSHgoaVEFCTEVfSk9CX0tJTkRfVU5TUEVDSUZJRUQQABIbChdUQUJMRV9KT0JfS0lORF9WQUxJREFURRABEhsKF1RBQkxFX0pPQl9LSU5EX0JBQ0tGSUxMEAJiBnByb3RvMw", [file_loams_live_v1_admin, file_loams_live_v1_live]);
 
 /**
  * A table: the value of its catalog record `0x01 ‖ 0x02 ‖ id:u32 BE`. The
@@ -401,6 +401,89 @@ export type DeploymentRecord = Message<"loams.live.v1.DeploymentRecord"> & {
  */
 export const DeploymentRecordSchema: GenMessage<DeploymentRecord> = /*@__PURE__*/
   messageDesc(file_loams_live_v1_catalog, 6);
+
+/**
+ * One app of the directory (design §45 §7, D690; LV1 plan Task 13): the
+ * value of `0x01 ‖ id:u32 BE` in the system keyspace `loams_live_system`.
+ *
+ * @generated from message loams.live.v1.AppRecord
+ */
+export type AppRecord = Message<"loams.live.v1.AppRecord"> & {
+  /**
+   * The encoding version; 1 in LV1.
+   *
+   * @generated from field: uint32 format = 1;
+   */
+  format: number;
+
+  /**
+   * The app as the admin API shows it.
+   *
+   * @generated from field: loams.live.v1.App app = 2;
+   */
+  app?: App | undefined;
+
+  /**
+   * Where the app's pagination cursor key lives: `catalog`, a record of the
+   * app's own catalog (LV1 Task 4).
+   *
+   * @generated from field: string cursor_key_ref = 3;
+   */
+  cursorKeyRef: string;
+};
+
+/**
+ * Describes the message loams.live.v1.AppRecord.
+ * Use `create(AppRecordSchema)` to create a new message.
+ */
+export const AppRecordSchema: GenMessage<AppRecord> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_catalog, 7);
+
+/**
+ * A create in progress (LV1 plan Task 13): the value of `0x03 ‖ id:u32 BE`
+ * in the system keyspace, written before the app's keyspace is ensured and
+ * removed by the transaction that writes the app's record. One left behind
+ * names a keyspace no app owns, which the directory janitor reports.
+ *
+ * @generated from message loams.live.v1.AppIntent
+ */
+export type AppIntent = Message<"loams.live.v1.AppIntent"> & {
+  /**
+   * The encoding version; 1 in LV1.
+   *
+   * @generated from field: uint32 format = 1;
+   */
+  format: number;
+
+  /**
+   * @generated from field: uint32 id = 2;
+   */
+  id: number;
+
+  /**
+   * @generated from field: string name = 3;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string keyspace = 4;
+   */
+  keyspace: string;
+
+  /**
+   * Unix ms.
+   *
+   * @generated from field: uint64 started_at_ms = 5;
+   */
+  startedAtMs: bigint;
+};
+
+/**
+ * Describes the message loams.live.v1.AppIntent.
+ * Use `create(AppIntentSchema)` to create a new message.
+ */
+export const AppIntentSchema: GenMessage<AppIntent> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_catalog, 8);
 
 /**
  * @generated from enum loams.live.v1.TableJobKind

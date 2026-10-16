@@ -492,6 +492,10 @@ impl Shared {
                 request_id: txn.ctx().request_id.clone(),
                 result_bytes: result_bytes as u64,
                 host_bytes: host_bytes as u64,
+                identity: match &txn.ctx().identity {
+                    Some(identity) => buffa::MessageField::some(identity.to_value().to_proto()),
+                    None => buffa::MessageField::none(),
+                },
                 ..Default::default()
             }),
             ..Default::default()

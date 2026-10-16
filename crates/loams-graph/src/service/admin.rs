@@ -762,6 +762,35 @@ impl GraphAdmin {
         &self.catalog
     }
 
+    /// Loams' log the graphs are durable in, when the admin has one.
+    #[must_use]
+    pub fn log(&self) -> Option<&crate::durable::GraphLog> {
+        self.log.as_ref()
+    }
+
+    /// Opens catalog graph `meta` here, as its owner, for one of its links (GR1 Task 18).
+    ///
+    /// # Errors
+    ///
+    /// As [`GraphAdmin::open`]: `NOT_FOUND` for a deleted graph, `UNAVAILABLE` when another
+    /// node owns it.
+    pub(crate) async fn link_graph(&self, meta: &GraphMeta) -> Result<Arc<Graph>, ConnectError> {
+        self.open_meta(meta).await
+    }
+
+    /// Commits a link's batch to `graph` on the statement pool (GR1 Task 18). The outer error is
+    /// the pool's; the inner one the graph's.
+    pub(crate) async fn link_commit(
+        &self,
+        graph: Arc<Graph>,
+        job: crate::durable::lane::LinkJob,
+    ) -> Result<Result<u64, crate::GraphError>, ConnectError> {
+        if self.is_shutting_down() {
+            return Err(shutting_down());
+        }
+        self.on_pool(move || Ok(graph.commit_link(job))).await
+    }
+
     /// Fills a `Graph` message: the catalog record, with the engine's state and counts when the
     /// graph is open.
     fn message(&self, meta: &GraphMeta) -> pb::Graph {
@@ -1163,9 +1192,10 @@ impl GraphAdmin {
                 return Err(invalid(format!("mode {:?} is not a graph mode", req.mode)));
             }
         }
-        let mapping = crate::mapping::GraphMapping::from_proto(
+        let mapping = crate::mapping::GraphMapping::try_from_proto(
             given.ok_or_else(|| invalid("a LINKED graph needs a mapping".to_string()))?,
-        );
+        )
+        .map_err(|err| invalid(err.to_string()))?;
         mapping.check().map_err(|err| invalid(err.to_string()))?;
         // The collections are the namespace's, read now: a mapping is checked when it is
         // created, as an index is (a collection dropped later leaves its labels empty).
@@ -1208,6 +1238,33 @@ impl GraphAdmin {
         mapping
             .check_against(|collection| schemas.get(collection).cloned().flatten())
             .map_err(|err| invalid(err.to_string()))?;
+        // Its streams exist now (GR1 Task 19); one deleted later stops its link.
+        for stream in &mapping.streams {
+            let found = match namespace {
+                Some(namespace) => meta
+                    .stream_by_name(
+                        loams_common::meta::Consistency::Linearizable,
+                        namespace,
+                        &stream.stream,
+                    )
+                    .await
+                    .map_err(|err| {
+                        tracing::warn!(error = %err, "reading a LINKED graph's streams failed");
+                        refuse(
+                            ErrorCode::Unavailable,
+                            "unavailable",
+                            "the namespace's streams could not be read; retry",
+                        )
+                    })?,
+                None => None,
+            };
+            if found.is_none() {
+                return Err(invalid(format!(
+                    "no stream {:?} in the namespace",
+                    stream.stream
+                )));
+            }
+        }
         Ok((GraphMode::Linked, Some(mapping)))
     }
 

@@ -184,6 +184,13 @@ class Modules(private val client: LoamsClient) {
     val live: ModuleFacade get() = ModuleFacade(client, "live")
 
     /**
+     * `loams.live.admin` — the Live app directory (`createApp`, `listApps`, `getApp`,
+     * `updateApp`, `deleteApp`, LV1 Task 13) beside deploys and function logs. Address one
+     * app with [CallOptions.liveApp]. Experimental.
+     */
+    val liveAdmin: ModuleFacade get() = ModuleFacade(client, "live.admin")
+
+    /**
      * `loams.tables` — the table half of `loams.live.v1`: query, mutate, deploy.
      *
      * A **separate** module from [live] because §44 §7.2 splits the service in two, and

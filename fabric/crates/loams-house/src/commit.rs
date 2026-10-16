@@ -179,8 +179,22 @@ impl CommitIo {
 
 type Queues = Arc<Mutex<HashMap<String, mpsc::UnboundedSender<Pending>>>>;
 
-/// Tables that took a commit since compaction last looked (HS1 Task 13).
-type Dirty = Arc<Mutex<std::collections::HashSet<TableIdent>>>;
+/// Tables that took a commit since compaction (HS1 Task 13) and the views'
+/// catch-up (HS1 Task 17) last looked.
+#[derive(Debug, Default)]
+struct DirtySets {
+    compaction: std::collections::HashSet<TableIdent>,
+    views: std::collections::HashSet<TableIdent>,
+}
+
+impl DirtySets {
+    fn mark(&mut self, table: &TableIdent) {
+        self.compaction.insert(table.clone());
+        self.views.insert(table.clone());
+    }
+}
+
+type Dirty = Arc<Mutex<DirtySets>>;
 
 /// The lake's commit queues, one per table (see the module docs).
 #[derive(Debug)]
@@ -196,7 +210,7 @@ impl Committer {
         Self {
             io: Arc::new(io),
             queues: Arc::new(Mutex::new(HashMap::new())),
-            dirty: Arc::new(Mutex::new(std::collections::HashSet::new())),
+            dirty: Arc::new(Mutex::new(DirtySets::default())),
         }
     }
 
@@ -204,15 +218,22 @@ impl Committer {
     /// candidates, HS1 Task 13).
     pub fn take_dirty(&self) -> Vec<TableIdent> {
         let mut dirty = self.dirty.lock().unwrap_or_else(|e| e.into_inner());
-        dirty.drain().collect()
+        dirty.compaction.drain().collect()
     }
 
-    /// Marks a table for compaction's next look.
+    /// The tables that took commits since the last call (the views'
+    /// catch-up's candidates, HS1 Task 17).
+    pub fn take_views_dirty(&self) -> Vec<TableIdent> {
+        let mut dirty = self.dirty.lock().unwrap_or_else(|e| e.into_inner());
+        dirty.views.drain().collect()
+    }
+
+    /// Marks a table for compaction's and the views' next look.
     pub fn mark_dirty(&self, table: &TableIdent) {
         self.dirty
             .lock()
             .unwrap_or_else(|e| e.into_inner())
-            .insert(table.clone());
+            .mark(table);
     }
 
     /// The store and catalog it commits through.
@@ -316,10 +337,7 @@ async fn run_table(
         }
         let cycle = Instant::now();
         commit_batch(&io, &table, batch).await;
-        dirty
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .insert(table.clone());
+        dirty.lock().unwrap_or_else(|e| e.into_inner()).mark(&table);
         last_cycle = cycle.elapsed();
         last_commit = Some(Instant::now());
     }

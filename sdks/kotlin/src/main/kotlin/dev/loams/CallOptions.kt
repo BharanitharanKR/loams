@@ -38,6 +38,19 @@ data class CallOptions(
     companion object {
         /** An empty set of overrides, which is what a caller who asked for nothing gets. */
         val NONE: CallOptions = CallOptions()
+
+        /**
+         * The request header that selects one of a Live node's apps (LV1 Task 13). A request
+         * without it addresses the server's own app (`--live-app`).
+         */
+        const val LIVE_APP_HEADER: String = "loams-live-app"
+
+        /**
+         * Options that address the Live app [name]. Pass [base] to keep other overrides; its
+         * own headers are kept too.
+         */
+        fun liveApp(name: String, base: CallOptions = NONE): CallOptions =
+            base.copy(headers = base.headers + (LIVE_APP_HEADER to name))
     }
 }
 

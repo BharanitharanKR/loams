@@ -201,6 +201,12 @@ export interface LoamsDesktopApi {
 			percent?: number;
 		}>;
 		check(): Promise<void>;
+		/**
+		 * "Check for updates automatically" (`update.autoCheck`, default on). `locked` is
+		 * true when `LOAMS_DESKTOP_NO_UPDATE_CHECK=1` forces updates off.
+		 */
+		autoCheck(): Promise<{ enabled: boolean; locked: boolean }>;
+		setAutoCheck(enabled: boolean): Promise<void>;
 		/** "self" mode: fetch the update. "manual" mode: open the release page. */
 		download(): Promise<void>;
 		installAndRestart(): Promise<void>;
@@ -306,6 +312,8 @@ export const CH = {
 	shellCommand: "shell:command",
 	updateState: "update:state",
 	updateCheck: "update:check",
+	updateAutoGet: "update:auto-get",
+	updateAutoSet: "update:auto-set",
 	updateDownload: "update:download",
 	updateInstall: "update:install",
 	stacksState: "stacks:state",

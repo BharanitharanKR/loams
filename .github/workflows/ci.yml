@@ -430,8 +430,10 @@ jobs:
       # Owner ruling T7-3: the TiKV metastore is behind loams's `tikv`
       # feature (off by default), so lint that code too, and keep the default
       # build free of the git-pinned tikv-client.
-      - name: clippy (loams with the tikv, graph and optional listener features)
-        run: cargo clippy -p loams --all-targets --features tikv,live-tikv,durable-tikv,stream-grpc,pgwire,mysql-wire,graph --locked -- -D warnings
+      # The product features (git, buildcache, registry, sqldb, postgres) are linted here too:
+      # dev once stopped building with `--features git` and no fast-tier job noticed (GT1 T18.4).
+      - name: clippy (loams with the tikv, graph, product and optional listener features)
+        run: cargo clippy -p loams --all-targets --features tikv,live-tikv,durable-tikv,stream-grpc,pgwire,mysql-wire,graph,git,buildcache,registry,sqldb,postgres --locked -- -D warnings
       # The release images build `loams` with these feature sets (deploy/release/Containerfile.*);
       # `postgres,tikv` turns on loams-kv's TiKV store without loams-live's `tikv`, a combination
       # nothing else here builds (v0.1.0-preview.2's loams-pg-control image broke on it).
@@ -527,8 +529,11 @@ jobs:
   # `rust-tests` jobs unify features across the whole workspace).
   agentd:
     name: "Agentd: guard, clippy and tests"
+    # Fast tier: agentd is security-sensitive (approvals, sandbox levels) and this job
+    # runs only when agentd's paths change. On the full tier it let #623 merge with
+    # ~80 agentd-sessions tests unrun.
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.agentd == 'true'))) && needs.changes.outputs.heavy != 'false' }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.agentd == 'true') && needs.changes.outputs.heavy != 'false' }}
     runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
     # PTY, shell and harness-fixture tests; a hung one fails the job.
     timeout-minutes: 60

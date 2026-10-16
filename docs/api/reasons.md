@@ -74,29 +74,36 @@ The rules, in the order they bite:
 | `fork_too_deep` | failed_precondition | ForkRepo of a repository that is already 8 forks deep (`MAX_FORK_DEPTH`) | `max` |
 | `sequencer_unavailable` | unavailable | a `loams.repos.v1` write whose repository sequencer is shutting down, lost its lease, or could not learn whether the write committed: retry with the same `idempotency_key`, which answers the first outcome if it did | `repo` |
 | `idempotency_key_reused` | failed_precondition | a `loams.repos.v1` mutation whose `idempotency_key` was used inside its window for a different request | |
-| `workspace_not_found` | not_found | every `WorkspaceService` RPC that names a workspace (GT1 Task 25, §36 §19.10) | `workspace` |
+| `workspace_not_found` | not_found | every `WorkspaceService` RPC that names a workspace (GT1 Task 25, §36 §19.10), and `ObjectService`'s reads that name one the repository does not have (GT1 Task 18) | `workspace` |
 | `workspace_fenced` | aborted | SaveSnapshot, ApplyEdits: another writer appended snapshot `n` first (§19.4.3); the caller reads the new head, merges or salvages | `workspace`, `n` |
 | `workspace_read_only` | failed_precondition | a write to a workspace mounted or opened read-only, or to a past snapshot | `workspace` |
 | `workspace_name_taken` | already_exists | CreateWorkspace, ForkWorkspace: the owner already has a workspace of that name | `workspace` |
-| `object_missing` | failed_precondition | SaveSnapshot, PushWorkspace, PutWorkspacePack: a snapshot or push names an object that is neither uploaded nor in the repository (§19.5.2) | `oid` |
+| `object_missing` | failed_precondition | SaveSnapshot, PushWorkspace, PutWorkspacePack: a snapshot or push names an object that is neither uploaded nor in the repository (§19.5.2); GetTrees: the root, or an object a tree names, is not held (GT1 Task 18) | `oid` |
 | `secret_detected` | failed_precondition | ApplyEdits, PushWorkspace, receive-pack: the leak scanner found a credential outside `env/` (§19.13.9) | `path`, `rule` |
 | `env_unsealed` | invalid_argument | ApplyEdits, PushWorkspace, receive-pack: an `env/` file holds a plaintext value (§19.13.2) | `path` |
 | `env_access_denied` | permission_denied | `EnvService` Open, GetLiveSet, Seal: the credential has no grant for the environment (§19.13.7) | `environment` |
 | `env_foreign_reference` | permission_denied | ApplyEdits, PushWorkspace, receive-pack: a sealed `env/` reference names a secret of another repository or path (§19.13.4) | `path` |
 | `live_bad_cursor` | invalid_argument | `loams.live.v1` Query, Mutate and the session's queries: a function's `paginate` got a cursor that is malformed, altered, or from another app, table or index (LV1 Task 4) | |
-| `live_worker_crashed` | internal | `loams.live.v1` Query, Mutate and the session's queries: the isolated worker process running the function crashed or was killed; the call's transaction never committed, and a mutation is not retried (LV1 Task 5, design §45 §3.1). Live's own wire code is `ERROR_CODE_FUNCTION_ERROR`; `internal` is provisional until Task 19 maps Live errors to Connect codes | |
+| `live_worker_crashed` | internal | `loams.live.v1` Query, Mutate and the session's queries: the isolated worker process running the function crashed or was killed; the call's transaction never committed, and a mutation is not retried (LV1 Task 5, design §45 §3.1). Live's own wire code is `ERROR_CODE_FUNCTION_ERROR`; on Connect it is `internal`, since the crash is the server's (LV1 Task 19) | |
 | `live_deploy_conflict` | failed_precondition | `loams.live.v1` Deploy (LiveAdminService's Deploy and ActivateDeployment from LV1 Task 10): the deploy's `expected_active` is not the app's active deployment, because another deploy activated in between; the message names both. The deployment's record is `failed` (LV1 Task 6, design §45 §3.3) | |
 | `live_schema_violation` | invalid_argument | `loams.live.v1` Mutate (and every write a function makes, `_system:*` included): the document does not match its table's validator, or a stricter validator a deploy is checking; the message names the table and the field paths, never the values (LV1 Task 8, design §45 §4.1) | `field_violations` (path, description) |
 | `live_index_not_ready` | failed_precondition | `loams.live.v1` Query, Mutate and the session's queries: the function read an index a deploy is still backfilling; it becomes readable when that deploy activates (LV1 Task 9, design §45 §4.2). The message names the index and the table | |
+| `live_app_disabled` | failed_precondition | `loams.live.v1` every `LiveService` and `LiveAdminService` call that addresses an app (the `loams-live-app` header, or the server's own app): the app is disabled (`UpdateApp`) or deleted (`DeleteApp`, until it is purged) (LV1 Task 13, design §45 §7) | |
+| `live_app_exists` | failed_precondition | `loams.live.v1` LiveAdminService CreateApp: another app of the cluster has that name (LV1 Task 13) | |
+| `live_function_error` | unknown | `loams.live.v1` Query, Mutate and the session's queries: the deployed function threw; the message is the function's own error message (LV1 Task 19) | |
+| `live_function_timeout` | deadline_exceeded | `loams.live.v1` Query, Mutate and the session's queries: the function ran past its JavaScript CPU limit (LV1 Task 19) | |
+| `live_function_out_of_memory` | resource_exhausted | `loams.live.v1` Query, Mutate and the session's queries: the function ran past its runtime's memory limit (LV1 Task 19) | |
+| `live_limit_exceeded` | resource_exhausted | `loams.live.v1` every call: one of the app's limits was exceeded (a document's size or fields, a mutation's writes, a function's scans or result); `limit` names it (LV1 Task 19, design §20 §4.1 and §5.1) | `limit` |
+| `live_app_mismatch` | permission_denied | `loams.live.v1` every call: the credential is bound to an environment, and the addressed Live app belongs to another (or the call creates or lists apps, which needs a credential bound to none) (LV1 Task 15, design §45 §6.2) | |
 | `role_required` | permission_denied | every `loams.admin.v1` RPC whose caller's org role is below the one it needs (reads `member`, mutations `admin`, inviting or removing an owner `owner`), or who is not in the org (API2 Task 7, `member_cannot_create_key`); every `loams.repos.v1.RepoService` RPC likewise (reads `member`; create, fork, delete, configure and compact `admin`; GT1 Task 16) | `role` (the role needed) |
 | `setup_required` | failed_precondition | every `loams.admin.v1` RPC, and every `loams.repos.v1.RepoService` RPC of a caller who is not the operator (GT1 Task 16), before first-run setup (`AuthService/CompleteSetup`) has created the org | |
-| `token_missing` | unauthenticated | any main-port RPC outside `PUBLIC_RPCS` called without a credential (the auth layer, API2 Task 6) | |
+| `token_missing` | unauthenticated | any main-port RPC outside `PUBLIC_RPCS` called without a credential (the auth layer, API2 Task 6); on `LiveService`, Live's own refusal when the addressed app takes no anonymous calls (LV1 Task 16) | |
 | `token_malformed` | unauthenticated | a credential that is neither an API key, a session token nor a JWT, or more than one `Authorization` header | |
 | `token_revoked` | unauthenticated | a revoked API key (`KeyService/RevokeKey`), or a console session that was signed out or whose person left the org | |
 | `token_not_yet_valid` | unauthenticated | an OIDC token whose `nbf` is in the future | |
 | `token_bad_signature` | unauthenticated | an OIDC token whose signature does not verify | |
-| `token_wrong_audience` | unauthenticated | an OIDC token for another audience | |
-| `token_wrong_issuer` | unauthenticated | an OIDC token from an issuer this engine does not trust | |
+| `token_wrong_audience` | unauthenticated | an OIDC token for another audience (on `LiveService`, none of the issuer's audiences on the addressed Live app) | |
+| `token_wrong_issuer` | unauthenticated | an OIDC token from an issuer this engine does not trust (on `LiveService`, nor the addressed Live app, LV1 Task 16) | |
 | `token_unknown_key` | unauthenticated | an OIDC token signed with a key its issuer's JWKS does not have | |
 | `token_algorithm_not_allowed` | unauthenticated | an OIDC token signed with an algorithm other than RS256 or EdDSA | |
 | `api_key_invalid` | unauthenticated | an API key no key file or metastore record admits | |
@@ -123,7 +130,7 @@ The `loams.postgres.v1` rows (`project_not_found` to `secret_already_issued`) ar
 
 The `loams.repos.v1` rows (`repo_not_found` to `env_foreign_reference`) are Loams Git's (design §36 §19.10, plan GT1's "Public API" contract), registered by GT1 Task 12 before any RPC raises them; `reasons_registered` (`crates/loams-proto/tests/repos.rs`) fails if one the proto or §19.10 names is missing. `quota_exceeded` is shared with `loams.postgres.v1`.
 
-`live_bad_cursor` is LV1 Task 4's, `live_worker_crashed` LV1 Task 5's, `live_deploy_conflict` LV1 Task 6's, `live_schema_violation` LV1 Task 8's and `live_index_not_ready` LV1 Task 9's: `loams_live::LiveError::reason` names them, and they reach the wire when Live moves onto the main Connect port (LV1 Task 12) and their errors are mapped there (Task 19).
+`live_bad_cursor` is LV1 Task 4's, `live_worker_crashed` LV1 Task 5's, `live_deploy_conflict` LV1 Task 6's, `live_schema_violation` LV1 Task 8's, `live_index_not_ready` LV1 Task 9's, `live_app_disabled` and `live_app_exists` LV1 Task 13's, the function and limit reasons LV1 Task 19's, and `live_app_mismatch` LV1 Task 15's: `loams_live::LiveError::wire_reason` names them, and every Live error carries one in its `ErrorInfo` on both the main port and Live's own listener (Task 19), an internal one with a `request_id` the server log carries.
 
 The generic rows (`invalid_argument` and below) are the code-to-class mapping of D611's error hierarchy: they are what an SDK turns into its own `InvalidArgument`, `NotFound`, ... types. They carry no Loams-specific semantics, so they were already the native REST API's `error` values (`crates/loams/src/api/errors.rs`) and become the RPC `reason` unchanged. The rows above them are the specific causes AP0 registered; the specific causes API1 Tasks 2–8 add are appended as their services land, and `unavailable_service_reports_reason` covers the variant case.
 

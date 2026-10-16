@@ -114,6 +114,8 @@ struct Point {
     created_at_ms: u64,
     counts: (u64, u64),
     log_bytes: u64,
+    /// Each link's progress at `offset` (GR1 Task 18).
+    links: Vec<super::manifest::LinkProgress>,
 }
 
 /// The checkpointer of one node's graphs. Cheap to clone.
@@ -349,6 +351,7 @@ impl Checkpointer {
                 created_at_ms: point.created_at_ms,
                 nodes: point.counts.0,
                 edges: point.counts.1,
+                links: point.links.clone(),
             };
             match snapshot {
                 Taken::Native { staging, taken } => {
@@ -450,6 +453,7 @@ fn take(graph: &Graph, kinds: &[SnapshotKind]) -> Result<(Point, Vec<Taken>), Sn
         created_at_ms: durable.log.now_ms(),
         counts: durable.position.counts(),
         log_bytes: durable.log_bytes.load(Ordering::Acquire),
+        links: super::manifest::LinkProgress::all(&durable.link_entries()),
     };
     let mut taken = Vec::with_capacity(kinds.len());
     for kind in kinds {

@@ -20,8 +20,9 @@
 //! * `--sandbox=none` needs `--unsafe-no-sandbox` (HS1 R1.10, R6.8), except on a
 //!   system with no L3 (macOS) in `--single-node` mode, and is logged either way.
 //! * `--workers=inproc` needs `--single-node` and a build with `inproc-worker`.
-//! * The native listener (Task 31) and admin (Task 23) are resolved and
-//!   validated now, and [`start`] says on stderr that they are not served yet.
+//! * The native listener (Task 31) is resolved and validated now, and
+//!   [`start`] says on stderr that it is not served yet. The admin listener
+//!   serves `GET /metrics` (Task 23), loopback only.
 //!   The store is read through `house-cache` by process workers (Task 9) and
 //!   written by the front (Task 12).
 //! * `--catalog` (HS1 Task 10) needs `--store`: the catalog of lake tables writes
@@ -90,7 +91,7 @@ pub struct HouseSettings {
     pub data_dir: PathBuf,
     /// The native listener (not served until HS1 Task 31).
     pub native_listen: Option<SocketAddr>,
-    /// Admin and metrics (not served until HS1 Task 23).
+    /// Admin and metrics: `GET /metrics` (HS1 Task 23).
     pub admin_listen: SocketAddr,
     /// The catalog (used from HS1 Task 10).
     pub catalog: Option<CatalogSpec>,
@@ -214,6 +215,9 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
         ..HouseConfig::default()
     };
     house.limits.apply(&mut http);
+    http.admin_listen = Some(admin_listen);
+    // The engine whose streams pipes read (HS1 Task 16).
+    http.engine = house.engine.link().map_err(bad)?;
     if let Some(hours) = house.snapshot_retention_hours {
         http.snapshot_retention = loams_house::retention::check_retention(Duration::from_secs(
             hours.saturating_mul(3600),
@@ -360,6 +364,11 @@ impl Running {
         self.handle.tls_addr()
     }
 
+    /// Where the admin listener (`GET /metrics`) listens (HS1 Task 23).
+    pub fn admin_addr(&self) -> Option<SocketAddr> {
+        self.handle.admin_addr()
+    }
+
     /// The worker pool.
     pub fn pool(&self) -> &WorkerPool {
         &self.pool
@@ -456,10 +465,6 @@ pub fn not_served_yet(settings: &HouseSettings) -> Vec<String> {
             "native protocol {native}: not served until HS1 Task 31"
         ));
     }
-    out.push(format!(
-        "admin and metrics {}: not served until HS1 Task 23",
-        settings.admin_listen
-    ));
     if let Some(store) = &settings.store {
         out.push(match settings.workers {
             WorkersMode::Process => {

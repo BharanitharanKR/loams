@@ -109,6 +109,49 @@ MessageStream LiveModule::Watch(live_v1::WatchRequest* request) {
                              FramedEncoding(client_->Encoding()), /*resume=*/nullptr);
 }
 
+namespace {
+
+/// The headers a `LiveAdminModule` call carries: the app, when one was named.
+std::vector<std::pair<std::string, std::string>> AppHeaders(const std::string& app) {
+  std::vector<std::pair<std::string, std::string>> headers;
+  if (!app.empty()) {
+    headers.emplace_back(kLiveAppHeader, app);
+  }
+  return headers;
+}
+
+}  // namespace
+
+void LiveAdminModule::CreateApp(live_v1::CreateAppRequest* request, live_v1::CreateAppResponse* response,
+                                const std::string& app) {
+  client_->Unary(BindingFor("loams.live.v1.LiveAdminService/CreateApp"), *request, response, client_->Encoding(),
+                 /*idempotency_key=*/"", AppHeaders(app));
+}
+
+void LiveAdminModule::ListApps(live_v1::ListAppsRequest* request, live_v1::ListAppsResponse* response,
+                               const std::string& app) {
+  client_->Unary(BindingFor("loams.live.v1.LiveAdminService/ListApps"), *request, response, client_->Encoding(),
+                 /*idempotency_key=*/"", AppHeaders(app));
+}
+
+void LiveAdminModule::GetApp(live_v1::GetAppRequest* request, live_v1::GetAppResponse* response,
+                             const std::string& app) {
+  client_->Unary(BindingFor("loams.live.v1.LiveAdminService/GetApp"), *request, response, client_->Encoding(),
+                 /*idempotency_key=*/"", AppHeaders(app));
+}
+
+void LiveAdminModule::UpdateApp(live_v1::UpdateAppRequest* request, live_v1::UpdateAppResponse* response,
+                                const std::string& app) {
+  client_->Unary(BindingFor("loams.live.v1.LiveAdminService/UpdateApp"), *request, response, client_->Encoding(),
+                 /*idempotency_key=*/"", AppHeaders(app));
+}
+
+void LiveAdminModule::DeleteApp(live_v1::DeleteAppRequest* request, live_v1::DeleteAppResponse* response,
+                                const std::string& app) {
+  client_->Unary(BindingFor("loams.live.v1.LiveAdminService/DeleteApp"), *request, response, client_->Encoding(),
+                 /*idempotency_key=*/"", AppHeaders(app));
+}
+
 void TablesModule::Query(live_v1::QueryRequest* request, live_v1::QueryResponse* response) {
   client_->Unary(BindingFor("loams.live.v1.LiveService/Query"), *request, response, client_->Encoding());
 }
@@ -178,6 +221,7 @@ Loams::Loams(std::shared_ptr<Client> client)
     : client_(std::move(client)),
       instance_(client_.get()),
       live_(client_.get()),
+      live_admin_(client_.get()),
       tables_(client_.get()),
       approvals_(client_.get()),
       devices_(client_.get()),
@@ -186,6 +230,7 @@ Loams::Loams(std::shared_ptr<Client> client)
 
 InstanceModule* Loams::Instance() { return &instance_; }
 LiveModule* Loams::Live() { return &live_; }
+LiveAdminModule* Loams::LiveAdmin() { return &live_admin_; }
 TablesModule* Loams::Tables() { return &tables_; }
 ApprovalsModule* Loams::Approvals() { return &approvals_; }
 DevicesModule* Loams::Devices() { return &devices_; }

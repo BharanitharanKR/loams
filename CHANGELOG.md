@@ -106,6 +106,35 @@ See [docs/release/upgrades.md](docs/release/upgrades.md).
   journal in its own transaction, and each node's subscription manager reloads at the tick
   that holds it (LV1 Task 11). A deploy or rollback on one node no longer takes up to 60
   seconds to reach live queries on another.
+- **Loams Live serves many apps per engine.** `LiveAdminService` gains `CreateApp`,
+  `ListApps`, `GetApp`, `UpdateApp` and `DeleteApp`; each app has its own keyspace, and a call
+  names its app with the `loams-live-app` header (the engine's own `--live-app` without it).
+  An app's engine starts on its first request and stops after 10 minutes idle. A disabled or
+  deleted app refuses calls (`live_app_disabled`), and a deleted app's data is purged after 7
+  days (LV1 Task 13).
+- **Loams Live errors carry a stable reason.** Every Live error has a
+  `loams.errors.v1.ErrorInfo` with a registered reason (new: `live_function_error`,
+  `live_function_timeout`, `live_function_out_of_memory`, `live_limit_exceeded`). A function's
+  own error is now Connect `unknown` rather than `internal`, a CPU timeout `deadline_exceeded`.
+  An internal error no longer shows raw store keys; it names a request id the server log
+  carries. Function arguments are limited to 4 MiB and bundles to 16 MiB before decoding (a
+  bundle over 4 MB can now be deployed), and a read timestamp ahead of the server's clock is
+  refused (LV1 Task 19).
+- **Loams Live authorizes every call per app and per table.** A credential bound to an
+  environment (a `KeyService` key, or a token with an `env` claim) reaches only that
+  environment's app (`live_app_mismatch`) and addresses it without the `loams-live-app` header.
+  Scopes `live:call`, `live:read`, `live:write` (or `live:read:<table>`/`live:write:<table>`),
+  `live:deploy` and `live:admin` gate functions, `_system:*` reads and writes, deploys and the
+  app directory; a credential that names no scopes keeps every scope. Deploys and writes are
+  audited in the log (LV1 Tasks 14 and 15).
+- **Loams Live apps have end users.** An app's trusted issuers (`CreateApp`/`UpdateApp`
+  `issuers`: any OIDC provider, by discovery or a `jwks_uri`) now sign its end users in: a
+  token from one of them calls the app's public functions on `LiveService`, and
+  `ctx.auth.getUserIdentity()` returns `{ issuer, subject, tokenIdentifier, email, name, claims }`
+  (null otherwise). End users never reach internal functions, `_system:*` or
+  `LiveAdminService`. A `LiveService` call with no credential is admitted only when the app's
+  `allow_anonymous` is on; otherwise it is `unauthenticated` with the reason `token_missing`
+  in the error's `ErrorInfo` (no longer in the `loams-auth-reason` header) (LV1 Task 16).
 
 ## [0.1.0-preview.2] - unreleased
 

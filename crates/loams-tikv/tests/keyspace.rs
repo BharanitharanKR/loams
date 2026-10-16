@@ -11,9 +11,9 @@ use axum::Router;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::routing::{get, post};
+use axum::routing::{get, post, put};
 use loams_tikv::testing::{self, TEST_META};
-use loams_tikv::{Tikv, TikvError, TimestampExt, TxnOptions, ensure_keyspace};
+use loams_tikv::{Tikv, TikvError, TimestampExt, TxnOptions, ensure_keyspace, set_keyspace_state};
 
 // ---- against the test cluster ----
 
@@ -149,6 +149,8 @@ struct FakePd {
     /// Every GET fails with an unrelated 500.
     broken: bool,
     posts: Mutex<u32>,
+    /// The states `PUT …/state` set, by keyspace.
+    states: Mutex<BTreeMap<String, String>>,
 }
 
 fn meta(name: &str, id: u32) -> serde_json::Value {
@@ -187,10 +189,29 @@ async fn fake_post(State(pd): State<Arc<FakePd>>, Json(req): Json<serde_json::Va
     Json(meta(&name, id)).into_response()
 }
 
+async fn fake_put_state(
+    State(pd): State<Arc<FakePd>>,
+    Path(name): Path<String>,
+    Json(req): Json<serde_json::Value>,
+) -> Response {
+    let state = req["state"].as_str().expect("fake PD").to_string();
+    let Some(id) = pd.keyspaces.lock().expect("fake PD").get(&name).copied() else {
+        return pd_500("keyspace does not exist");
+    };
+    pd.states
+        .lock()
+        .expect("fake PD")
+        .insert(name.clone(), state.clone());
+    let mut body = meta(&name, id);
+    body["state"] = serde_json::Value::String(state);
+    Json(body).into_response()
+}
+
 async fn serve(pd: Arc<FakePd>) -> String {
     let app = Router::new()
         .route("/pd/api/v2/keyspaces/{name}", get(fake_get))
         .route("/pd/api/v2/keyspaces", post(fake_post))
+        .route("/pd/api/v2/keyspaces/{name}/state", put(fake_put_state))
         .with_state(pd);
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0")
         .await
@@ -238,6 +259,33 @@ async fn ensure_keyspace_surfaces_other_errors_against_a_fake_pd() {
     }
     assert!(matches!(
         ensure_keyspace(&url, "no/slashes").await,
+        Err(TikvError::Config(_))
+    ));
+}
+
+#[tokio::test]
+async fn set_keyspace_state_puts_the_state_against_a_fake_pd() {
+    let pd = Arc::new(FakePd::default());
+    let url = serve(pd.clone()).await;
+    ensure_keyspace(&url, "loams_live_a7").await.unwrap();
+    let meta = set_keyspace_state(&url, "loams_live_a7", "DISABLED")
+        .await
+        .unwrap();
+    assert_eq!(meta.state, "DISABLED");
+    assert_eq!(
+        pd.states
+            .lock()
+            .unwrap()
+            .get("loams_live_a7")
+            .map(String::as_str),
+        Some("DISABLED")
+    );
+    assert!(matches!(
+        set_keyspace_state(&url, "loams_live_a8", "DISABLED").await,
+        Err(TikvError::Pd { status: 500, .. })
+    ));
+    assert!(matches!(
+        set_keyspace_state(&url, "loams_live_a7", "GONE").await,
         Err(TikvError::Config(_))
     ));
 }

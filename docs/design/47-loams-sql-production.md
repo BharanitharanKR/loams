@@ -260,6 +260,7 @@ TiKV keeps its row data on NVMe with three replicas. For every SQL keyspace, BR 
 TiKV's Raft log (`raft-engine`) **is** the write-ahead log, replicated and fenced by Raft. Therefore:
 - **mywal is withdrawn.** It existed only because stock MySQL's binlog needed an external durable home.
 - **`loams-wal` and the safekeeper protocol add nothing in v1.** A second log in front of TiKV would double the commit latency for no durability gain. They stay Postgres's (§28, §46).
+- **By design, TiKV's Raft log stays Loams SQL's only log** ([§58](58-data-access-and-htap.md) §8, D1057): TiKV is the substrate for small transactions and metadata, `loams-wal` is the byte log for Postgres WAL, and Loams SQL does not use `loams-wal`.
 - **The one place a "Loams WAL" could matter later** is S-B. If TiKV nodes are to become stateless, the Raft log itself must live off-node, as Neon moved its WAL to safekeepers. That is what TiDB X's RF engine does with background uploads, and what `cloud-engine`'s `rfengine` was for. If S-B is chosen, the safekeeper-on-TiKV idea (D237) is **not** reusable as is: the log must be per-region and Raft-native. The candidate is `rfengine`, not `loams-wal`. This is recorded so that nobody wires `loams-wal` under TiKV by analogy with Neon.
 
 ## 9. Branches and PITR (D727)

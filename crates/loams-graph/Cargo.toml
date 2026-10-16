@@ -66,6 +66,17 @@ arrow-schema.workspace = true
 parquet.workspace = true
 # The CRC-32C a native snapshot's manifest entry carries, checked when it is read back.
 crc32c.workspace = true
+# The `collection → graph` link (GR1 Task 18): `loams-link`'s target contract and its apply loop,
+# and the collections' `DocOp` records and their codec. `loams` depends on both already, so the
+# server build gains no crate.
+async-trait.workspace = true
+loams-collection.workspace = true
+loams-link.workspace = true
+loams-worker.workspace = true
+tokio-util.workspace = true
+# `Search.expand` (GR1 Task 20): `loams-query`'s graph expander and its IR. `loams` depends on it
+# already, so the server build gains no crate.
+loams-query.workspace = true
 
 [features]
 # `engine_panic_poisons_one_graph`: `cargo test -p loams-graph --features failpoints`.

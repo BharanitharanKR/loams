@@ -358,7 +358,9 @@ func testPaginationIterator(t *testing.T) {
 		// RPC lands this case has to be written rather than quietly passing.
 		for _, module := range facade.Modules {
 			for _, call := range module.Calls {
-				if call.Pagination != nil {
+				// `live.admin.ListApps` (LV1 Task 13) is the one paged call, and
+				// its end-to-end half is `TestLiveAdminListAppsPaginates`.
+				if call.Pagination != nil && module.Name+"."+call.Name != "live.admin.ListApps" {
 					t.Fatalf("%s.%s is paged, so the end-to-end half of %s must be written now",
 						module.Name, call.Name, PaginationIterator)
 				}

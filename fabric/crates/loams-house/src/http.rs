@@ -117,10 +117,15 @@ const LINGER: Duration = Duration::from_secs(2);
 pub struct HouseHandle {
     addr: SocketAddr,
     tls_addr: Option<SocketAddr>,
+    admin_addr: Option<SocketAddr>,
     accept: JoinHandle<()>,
+    admin: Option<JoinHandle<()>>,
     tls_accept: Option<JoinHandle<()>>,
     compaction: Option<JoinHandle<()>>,
     retention: Option<JoinHandle<()>>,
+    pipes: Option<JoinHandle<()>>,
+    queues: Option<JoinHandle<()>>,
+    views: Option<JoinHandle<()>>,
 }
 
 impl HouseHandle {
@@ -132,6 +137,11 @@ impl HouseHandle {
     /// The TLS listener's address, when it has one (HS1 Task 20).
     pub fn tls_addr(&self) -> Option<SocketAddr> {
         self.tls_addr
+    }
+
+    /// The admin listener's address, when it has one (HS1 Task 23).
+    pub fn admin_addr(&self) -> Option<SocketAddr> {
+        self.admin_addr
     }
 
     /// Stops accepting connections.
@@ -146,6 +156,18 @@ impl HouseHandle {
         }
         if let Some(retention) = &self.retention {
             retention.abort();
+        }
+        if let Some(pipes) = &self.pipes {
+            pipes.abort();
+        }
+        if let Some(queues) = &self.queues {
+            queues.abort();
+        }
+        if let Some(admin) = &self.admin {
+            admin.abort();
+        }
+        if let Some(views) = &self.views {
+            views.abort();
         }
         if let Some(compaction) = &self.compaction {
             compaction.abort();
@@ -244,6 +266,20 @@ async fn serve_all(
         }
         None => (None, None),
     };
+    // The admin listener (HS1 Task 23): metrics, loopback only.
+    let admin_listener = match config.admin_listen {
+        Some(admin) => {
+            config::check_listen(admin)?;
+            let listener = TcpListener::bind(admin)
+                .await
+                .map_err(|err| network("bind the admin listener", err))?;
+            let bound = listener
+                .local_addr()
+                .map_err(|err| network("the admin listener's address", err))?;
+            Some((listener, bound))
+        }
+        None => None,
+    };
     let permits = Arc::new(Semaphore::new(config.max_connections.max(1)));
     let tls_permits = Arc::clone(&permits);
     let unpin_pool = pool.clone();
@@ -293,6 +329,68 @@ async fn serve_all(
         (Some(lake), every) if !every.is_zero() => {
             Some(crate::retention::Scheduler::new(Arc::clone(lake)).spawn(every))
         }
+        _ => None,
+    };
+    // The pipes' runner (HS1 Task 16), when the House reaches an engine.
+    let pipes = match (
+        &shared.lake,
+        &shared.config.engine,
+        shared.config.pipe_interval,
+    ) {
+        (Some(lake), Some(link), every) if !every.is_zero() => {
+            match crate::pipes::engine_source(link) {
+                Ok(source) => Some(
+                    crate::pipes::PipeRunner::new(
+                        Arc::clone(lake),
+                        shared.pool.clone(),
+                        shared.config.clone(),
+                        link.clone(),
+                        source,
+                    )
+                    .spawn(every),
+                ),
+                Err(err) => {
+                    eprintln!("loams-house: pipes do not run: {}", err.message());
+                    None
+                }
+            }
+        }
+        _ => None,
+    };
+    let (admin, admin_addr) = match admin_listener {
+        Some((listener, bound)) => (
+            Some(crate::metrics::serve(
+                listener,
+                shared.pool.clone(),
+                shared.lake.clone(),
+            )),
+            Some(bound),
+        ),
+        None => (None, None),
+    };
+    // The `S3Queue` pipes' runner (HS1 Task 18): no engine link needed.
+    let queues = match (&shared.lake, shared.config.pipe_interval) {
+        (Some(lake), every) if !every.is_zero() => Some(
+            crate::pipes::s3queue::QueueRunner::new(
+                Arc::clone(lake),
+                shared.pool.clone(),
+                shared.config.clone(),
+            )
+            .spawn(every),
+        ),
+        _ => None,
+    };
+    // Materialized views' catch-up (HS1 Task 17).
+    let views = match (&shared.lake, shared.config.view_interval) {
+        (Some(lake), every) if !every.is_zero() => Some(
+            crate::mv::Scheduler::new(crate::mv::ViewRunner::new(crate::pipes::ViewWriter {
+                lake: Arc::clone(lake),
+                pool: shared.pool.clone(),
+                limits: shared.config.session_limits,
+                max_insert_bytes: shared.config.lake_insert_max_bytes,
+            }))
+            .spawn(every),
+        ),
         _ => None,
     };
     let accept = tokio::spawn(async move {
@@ -351,10 +449,15 @@ async fn serve_all(
     Ok(HouseHandle {
         addr,
         tls_addr,
+        admin_addr,
         accept,
+        admin,
         tls_accept,
         compaction,
         retention,
+        pipes,
+        queues,
+        views,
     })
 }
 
@@ -1347,6 +1450,7 @@ async fn run(
             &analysis,
             &sql,
             &all,
+            None,
         )
         .await
         {
@@ -1702,6 +1806,7 @@ async fn lake_insert(
         limits: &shared.config.session_limits,
         known: &known,
         max_insert_bytes: shared.config.lake_insert_max_bytes,
+        pipe_batch: None,
     };
     let mut feed = BodyFeed {
         body,
@@ -1709,6 +1814,10 @@ async fn lake_insert(
         first: first_data,
     };
     let feed: Option<&mut dyn crate::insert::Feed> = if streams { Some(&mut feed) } else { None };
+    let inserted_into = match &write.job {
+        LakeJob::Insert(target) => Some((target.database.clone(), target.name.clone())),
+        _ => None,
+    };
     let inserted = match write.job {
         LakeJob::Insert(target) => crate::insert::run(&ctx, lease, *target, feed).await,
         LakeJob::CreateAs(plan) => crate::insert::create_as(&ctx, lease, *plan).await,
@@ -1719,6 +1828,26 @@ async fn lake_insert(
                 .release(lease, crate::admission::Outcome::Completed);
             crate::compact::optimize(&ctx, &plan).await
         }
+    };
+    // The source's materialized views run before the answer (HS1 Task 17).
+    let inserted = match (inserted, inserted_into, shared.lake.as_ref()) {
+        (Ok(inserted), Some((database, name)), Some(lake))
+            if inserted.snapshot_id.is_some() && inserted.written_rows > 0 =>
+        {
+            crate::mv::after_insert(
+                lake,
+                &shared.pool,
+                shared.config.session_limits,
+                shared.config.lake_insert_max_bytes,
+                user.namespace,
+                &database,
+                &name,
+                &write.settings,
+            )
+            .await
+            .map(|()| inserted)
+        }
+        (other, _, _) => other,
     };
     match inserted {
         Ok(inserted) => {

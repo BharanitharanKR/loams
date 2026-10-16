@@ -340,6 +340,11 @@ public class PaginationTest {
     public void noGeneratedCallIsPagedYet() {
         for (var module : dev.loams.facade.Facade.MODULES) {
             for (CallBinding call : module.calls()) {
+                // `live.admin.ListApps` (LV1 Task 13) is the one paged call; LiveAdminTest
+                // drives it end to end.
+                if (call.module().equals("live.admin") && call.name().equals("ListApps")) {
+                    continue;
+                }
                 assertNull(
                         "binding "
                                 + call.module()

@@ -1,6 +1,6 @@
 // The Loams Live admin API (design §45 §6.3, D689; LV1 plan Task 10):
 // deploying functions and schemas, listing deployments, rollback, index
-// status and function logs. App lifecycle (Task 13) and backups (Tasks
+// status, function logs, and the app directory (Task 13). Backups (Tasks
 // 29–30) join it later.
 //
 // Platform principals only, never an app's end users (§45 §5.3). The
@@ -61,6 +61,20 @@ const (
 	// LiveAdminServiceTailLogsProcedure is the fully-qualified name of the LiveAdminService's TailLogs
 	// RPC.
 	LiveAdminServiceTailLogsProcedure = "/loams.live.v1.LiveAdminService/TailLogs"
+	// LiveAdminServiceCreateAppProcedure is the fully-qualified name of the LiveAdminService's
+	// CreateApp RPC.
+	LiveAdminServiceCreateAppProcedure = "/loams.live.v1.LiveAdminService/CreateApp"
+	// LiveAdminServiceListAppsProcedure is the fully-qualified name of the LiveAdminService's ListApps
+	// RPC.
+	LiveAdminServiceListAppsProcedure = "/loams.live.v1.LiveAdminService/ListApps"
+	// LiveAdminServiceGetAppProcedure is the fully-qualified name of the LiveAdminService's GetApp RPC.
+	LiveAdminServiceGetAppProcedure = "/loams.live.v1.LiveAdminService/GetApp"
+	// LiveAdminServiceUpdateAppProcedure is the fully-qualified name of the LiveAdminService's
+	// UpdateApp RPC.
+	LiveAdminServiceUpdateAppProcedure = "/loams.live.v1.LiveAdminService/UpdateApp"
+	// LiveAdminServiceDeleteAppProcedure is the fully-qualified name of the LiveAdminService's
+	// DeleteApp RPC.
+	LiveAdminServiceDeleteAppProcedure = "/loams.live.v1.LiveAdminService/DeleteApp"
 )
 
 // LiveAdminServiceClient is a client for the loams.live.v1.LiveAdminService service.
@@ -84,6 +98,21 @@ type LiveAdminServiceClient interface {
 	// The functions' `console.*` output on this node (§45 §3.3): the lines
 	// the node still holds, then, with `follow`, new lines as they come.
 	TailLogs(context.Context, *connect.Request[v1.TailLogsRequest]) (*connect.ServerStreamForClient[v1.TailLogsResponse], error)
+	// Creates an app (design §45 §7, D690): its dedicated keyspace
+	// `loams_live_a<id>` first, then its directory record. A taken name is
+	// FAILED_PRECONDITION, reason `live_app_exists`; more apps than the
+	// cluster allows is RESOURCE_EXHAUSTED.
+	CreateApp(context.Context, *connect.Request[v1.CreateAppRequest]) (*connect.Response[v1.CreateAppResponse], error)
+	// The cluster's apps, by id.
+	ListApps(context.Context, *connect.Request[v1.ListAppsRequest]) (*connect.Response[v1.ListAppsResponse], error)
+	// One app, by name.
+	GetApp(context.Context, *connect.Request[v1.GetAppRequest]) (*connect.Response[v1.GetAppResponse], error)
+	// Changes an app's settings, or disables and enables it. Fields left out
+	// are kept.
+	UpdateApp(context.Context, *connect.Request[v1.UpdateAppRequest]) (*connect.Response[v1.UpdateAppResponse], error)
+	// Deletes an app softly: it is `APP_STATE_DELETING` (every call refused)
+	// and its data is purged after the retention, 7 days by default.
+	DeleteApp(context.Context, *connect.Request[v1.DeleteAppRequest]) (*connect.Response[v1.DeleteAppResponse], error)
 }
 
 // NewLiveAdminServiceClient constructs a client for the loams.live.v1.LiveAdminService service. By
@@ -133,6 +162,36 @@ func NewLiveAdminServiceClient(httpClient connect.HTTPClient, baseURL string, op
 			connect.WithSchema(liveAdminServiceMethods.ByName("TailLogs")),
 			connect.WithClientOptions(opts...),
 		),
+		createApp: connect.NewClient[v1.CreateAppRequest, v1.CreateAppResponse](
+			httpClient,
+			baseURL+LiveAdminServiceCreateAppProcedure,
+			connect.WithSchema(liveAdminServiceMethods.ByName("CreateApp")),
+			connect.WithClientOptions(opts...),
+		),
+		listApps: connect.NewClient[v1.ListAppsRequest, v1.ListAppsResponse](
+			httpClient,
+			baseURL+LiveAdminServiceListAppsProcedure,
+			connect.WithSchema(liveAdminServiceMethods.ByName("ListApps")),
+			connect.WithClientOptions(opts...),
+		),
+		getApp: connect.NewClient[v1.GetAppRequest, v1.GetAppResponse](
+			httpClient,
+			baseURL+LiveAdminServiceGetAppProcedure,
+			connect.WithSchema(liveAdminServiceMethods.ByName("GetApp")),
+			connect.WithClientOptions(opts...),
+		),
+		updateApp: connect.NewClient[v1.UpdateAppRequest, v1.UpdateAppResponse](
+			httpClient,
+			baseURL+LiveAdminServiceUpdateAppProcedure,
+			connect.WithSchema(liveAdminServiceMethods.ByName("UpdateApp")),
+			connect.WithClientOptions(opts...),
+		),
+		deleteApp: connect.NewClient[v1.DeleteAppRequest, v1.DeleteAppResponse](
+			httpClient,
+			baseURL+LiveAdminServiceDeleteAppProcedure,
+			connect.WithSchema(liveAdminServiceMethods.ByName("DeleteApp")),
+			connect.WithClientOptions(opts...),
+		),
 	}
 }
 
@@ -144,6 +203,11 @@ type liveAdminServiceClient struct {
 	activateDeployment *connect.Client[v1.ActivateDeploymentRequest, v1.ActivateDeploymentResponse]
 	getIndexStatus     *connect.Client[v1.GetIndexStatusRequest, v1.GetIndexStatusResponse]
 	tailLogs           *connect.Client[v1.TailLogsRequest, v1.TailLogsResponse]
+	createApp          *connect.Client[v1.CreateAppRequest, v1.CreateAppResponse]
+	listApps           *connect.Client[v1.ListAppsRequest, v1.ListAppsResponse]
+	getApp             *connect.Client[v1.GetAppRequest, v1.GetAppResponse]
+	updateApp          *connect.Client[v1.UpdateAppRequest, v1.UpdateAppResponse]
+	deleteApp          *connect.Client[v1.DeleteAppRequest, v1.DeleteAppResponse]
 }
 
 // Deploy calls loams.live.v1.LiveAdminService.Deploy.
@@ -176,6 +240,31 @@ func (c *liveAdminServiceClient) TailLogs(ctx context.Context, req *connect.Requ
 	return c.tailLogs.CallServerStream(ctx, req)
 }
 
+// CreateApp calls loams.live.v1.LiveAdminService.CreateApp.
+func (c *liveAdminServiceClient) CreateApp(ctx context.Context, req *connect.Request[v1.CreateAppRequest]) (*connect.Response[v1.CreateAppResponse], error) {
+	return c.createApp.CallUnary(ctx, req)
+}
+
+// ListApps calls loams.live.v1.LiveAdminService.ListApps.
+func (c *liveAdminServiceClient) ListApps(ctx context.Context, req *connect.Request[v1.ListAppsRequest]) (*connect.Response[v1.ListAppsResponse], error) {
+	return c.listApps.CallUnary(ctx, req)
+}
+
+// GetApp calls loams.live.v1.LiveAdminService.GetApp.
+func (c *liveAdminServiceClient) GetApp(ctx context.Context, req *connect.Request[v1.GetAppRequest]) (*connect.Response[v1.GetAppResponse], error) {
+	return c.getApp.CallUnary(ctx, req)
+}
+
+// UpdateApp calls loams.live.v1.LiveAdminService.UpdateApp.
+func (c *liveAdminServiceClient) UpdateApp(ctx context.Context, req *connect.Request[v1.UpdateAppRequest]) (*connect.Response[v1.UpdateAppResponse], error) {
+	return c.updateApp.CallUnary(ctx, req)
+}
+
+// DeleteApp calls loams.live.v1.LiveAdminService.DeleteApp.
+func (c *liveAdminServiceClient) DeleteApp(ctx context.Context, req *connect.Request[v1.DeleteAppRequest]) (*connect.Response[v1.DeleteAppResponse], error) {
+	return c.deleteApp.CallUnary(ctx, req)
+}
+
 // LiveAdminServiceHandler is an implementation of the loams.live.v1.LiveAdminService service.
 type LiveAdminServiceHandler interface {
 	// Deploys a function bundle and a schema (§45 §3.3). The deployment
@@ -197,6 +286,21 @@ type LiveAdminServiceHandler interface {
 	// The functions' `console.*` output on this node (§45 §3.3): the lines
 	// the node still holds, then, with `follow`, new lines as they come.
 	TailLogs(context.Context, *connect.Request[v1.TailLogsRequest], *connect.ServerStream[v1.TailLogsResponse]) error
+	// Creates an app (design §45 §7, D690): its dedicated keyspace
+	// `loams_live_a<id>` first, then its directory record. A taken name is
+	// FAILED_PRECONDITION, reason `live_app_exists`; more apps than the
+	// cluster allows is RESOURCE_EXHAUSTED.
+	CreateApp(context.Context, *connect.Request[v1.CreateAppRequest]) (*connect.Response[v1.CreateAppResponse], error)
+	// The cluster's apps, by id.
+	ListApps(context.Context, *connect.Request[v1.ListAppsRequest]) (*connect.Response[v1.ListAppsResponse], error)
+	// One app, by name.
+	GetApp(context.Context, *connect.Request[v1.GetAppRequest]) (*connect.Response[v1.GetAppResponse], error)
+	// Changes an app's settings, or disables and enables it. Fields left out
+	// are kept.
+	UpdateApp(context.Context, *connect.Request[v1.UpdateAppRequest]) (*connect.Response[v1.UpdateAppResponse], error)
+	// Deletes an app softly: it is `APP_STATE_DELETING` (every call refused)
+	// and its data is purged after the retention, 7 days by default.
+	DeleteApp(context.Context, *connect.Request[v1.DeleteAppRequest]) (*connect.Response[v1.DeleteAppResponse], error)
 }
 
 // NewLiveAdminServiceHandler builds an HTTP handler from the service implementation. It returns the
@@ -242,6 +346,36 @@ func NewLiveAdminServiceHandler(svc LiveAdminServiceHandler, opts ...connect.Han
 		connect.WithSchema(liveAdminServiceMethods.ByName("TailLogs")),
 		connect.WithHandlerOptions(opts...),
 	)
+	liveAdminServiceCreateAppHandler := connect.NewUnaryHandler(
+		LiveAdminServiceCreateAppProcedure,
+		svc.CreateApp,
+		connect.WithSchema(liveAdminServiceMethods.ByName("CreateApp")),
+		connect.WithHandlerOptions(opts...),
+	)
+	liveAdminServiceListAppsHandler := connect.NewUnaryHandler(
+		LiveAdminServiceListAppsProcedure,
+		svc.ListApps,
+		connect.WithSchema(liveAdminServiceMethods.ByName("ListApps")),
+		connect.WithHandlerOptions(opts...),
+	)
+	liveAdminServiceGetAppHandler := connect.NewUnaryHandler(
+		LiveAdminServiceGetAppProcedure,
+		svc.GetApp,
+		connect.WithSchema(liveAdminServiceMethods.ByName("GetApp")),
+		connect.WithHandlerOptions(opts...),
+	)
+	liveAdminServiceUpdateAppHandler := connect.NewUnaryHandler(
+		LiveAdminServiceUpdateAppProcedure,
+		svc.UpdateApp,
+		connect.WithSchema(liveAdminServiceMethods.ByName("UpdateApp")),
+		connect.WithHandlerOptions(opts...),
+	)
+	liveAdminServiceDeleteAppHandler := connect.NewUnaryHandler(
+		LiveAdminServiceDeleteAppProcedure,
+		svc.DeleteApp,
+		connect.WithSchema(liveAdminServiceMethods.ByName("DeleteApp")),
+		connect.WithHandlerOptions(opts...),
+	)
 	return "/loams.live.v1.LiveAdminService/", http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
 		case LiveAdminServiceDeployProcedure:
@@ -256,6 +390,16 @@ func NewLiveAdminServiceHandler(svc LiveAdminServiceHandler, opts ...connect.Han
 			liveAdminServiceGetIndexStatusHandler.ServeHTTP(w, r)
 		case LiveAdminServiceTailLogsProcedure:
 			liveAdminServiceTailLogsHandler.ServeHTTP(w, r)
+		case LiveAdminServiceCreateAppProcedure:
+			liveAdminServiceCreateAppHandler.ServeHTTP(w, r)
+		case LiveAdminServiceListAppsProcedure:
+			liveAdminServiceListAppsHandler.ServeHTTP(w, r)
+		case LiveAdminServiceGetAppProcedure:
+			liveAdminServiceGetAppHandler.ServeHTTP(w, r)
+		case LiveAdminServiceUpdateAppProcedure:
+			liveAdminServiceUpdateAppHandler.ServeHTTP(w, r)
+		case LiveAdminServiceDeleteAppProcedure:
+			liveAdminServiceDeleteAppHandler.ServeHTTP(w, r)
 		default:
 			http.NotFound(w, r)
 		}
@@ -287,4 +431,24 @@ func (UnimplementedLiveAdminServiceHandler) GetIndexStatus(context.Context, *con
 
 func (UnimplementedLiveAdminServiceHandler) TailLogs(context.Context, *connect.Request[v1.TailLogsRequest], *connect.ServerStream[v1.TailLogsResponse]) error {
 	return connect.NewError(connect.CodeUnimplemented, errors.New("loams.live.v1.LiveAdminService.TailLogs is not implemented"))
+}
+
+func (UnimplementedLiveAdminServiceHandler) CreateApp(context.Context, *connect.Request[v1.CreateAppRequest]) (*connect.Response[v1.CreateAppResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("loams.live.v1.LiveAdminService.CreateApp is not implemented"))
+}
+
+func (UnimplementedLiveAdminServiceHandler) ListApps(context.Context, *connect.Request[v1.ListAppsRequest]) (*connect.Response[v1.ListAppsResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("loams.live.v1.LiveAdminService.ListApps is not implemented"))
+}
+
+func (UnimplementedLiveAdminServiceHandler) GetApp(context.Context, *connect.Request[v1.GetAppRequest]) (*connect.Response[v1.GetAppResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("loams.live.v1.LiveAdminService.GetApp is not implemented"))
+}
+
+func (UnimplementedLiveAdminServiceHandler) UpdateApp(context.Context, *connect.Request[v1.UpdateAppRequest]) (*connect.Response[v1.UpdateAppResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("loams.live.v1.LiveAdminService.UpdateApp is not implemented"))
+}
+
+func (UnimplementedLiveAdminServiceHandler) DeleteApp(context.Context, *connect.Request[v1.DeleteAppRequest]) (*connect.Response[v1.DeleteAppResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("loams.live.v1.LiveAdminService.DeleteApp is not implemented"))
 }

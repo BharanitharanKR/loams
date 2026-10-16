@@ -190,6 +190,8 @@ public static class Facade
             "loams.instance.v1", "loams.instance.v1.InstanceService", Unstable: false),
         new ModuleBinding("live", "The live sync session half.", "loams.live.v1",
             "loams.live.v1.LiveService", Unstable: true),
+        new ModuleBinding("live.admin", "Live administration: the app directory (LV1 Task 13).",
+            "loams.live.v1", "loams.live.v1.LiveAdminService", Unstable: true),
         new ModuleBinding("tables", "The table half of loams.live.v1.", "loams.live.v1",
             "loams.live.v1.LiveService", Unstable: true),
         new ModuleBinding("approvals", "The approval promises destructive operations wait on.",
@@ -359,6 +361,28 @@ public static class Facade
         Add("tables", "Deploy", "deploy", "loams.live.v1.LiveAdminService", "Deploy",
             IdempotencyLevel.None, Streaming.Unary,
             "Loams.Live.V1.DeployRequest", "Loams.Live.V1.DeployResponse");
+
+        // The app directory of loams.live.v1.LiveAdminService (LV1 Task 13). The two
+        // reads carry no `idempotency_level`; `FacadeOptions.retry_safe` makes them
+        // safe, as in the TypeScript and Rust facades.
+        Add("live.admin", "CreateApp", "createApp", "loams.live.v1.LiveAdminService", "CreateApp",
+            IdempotencyLevel.None, Streaming.Unary,
+            "Loams.Live.V1.CreateAppRequest", "Loams.Live.V1.CreateAppResponse");
+        Add("live.admin", "ListApps", "listApps", "loams.live.v1.LiveAdminService", "ListApps",
+            IdempotencyLevel.None, Streaming.Unary,
+            "Loams.Live.V1.ListAppsRequest", "Loams.Live.V1.ListAppsResponse",
+            pagination: new Pagination("Apps", "NextPageToken"),
+            retry: RetryClass.Safe);
+        Add("live.admin", "GetApp", "getApp", "loams.live.v1.LiveAdminService", "GetApp",
+            IdempotencyLevel.None, Streaming.Unary,
+            "Loams.Live.V1.GetAppRequest", "Loams.Live.V1.GetAppResponse",
+            retry: RetryClass.Safe);
+        Add("live.admin", "UpdateApp", "updateApp", "loams.live.v1.LiveAdminService", "UpdateApp",
+            IdempotencyLevel.None, Streaming.Unary,
+            "Loams.Live.V1.UpdateAppRequest", "Loams.Live.V1.UpdateAppResponse");
+        Add("live.admin", "DeleteApp", "deleteApp", "loams.live.v1.LiveAdminService", "DeleteApp",
+            IdempotencyLevel.None, Streaming.Unary,
+            "Loams.Live.V1.DeleteAppRequest", "Loams.Live.V1.DeleteAppResponse");
 
         return table;
     }

@@ -233,6 +233,27 @@ enum class Reason {
     /** `live_index_not_ready` (docs/api/reasons.md). */
     LIVE_INDEX_NOT_READY,
 
+    /** `live_app_disabled` (docs/api/reasons.md). */
+    LIVE_APP_DISABLED,
+
+    /** `live_app_exists` (docs/api/reasons.md). */
+    LIVE_APP_EXISTS,
+
+    /** `live_function_error` (docs/api/reasons.md). */
+    LIVE_FUNCTION_ERROR,
+
+    /** `live_function_timeout` (docs/api/reasons.md). */
+    LIVE_FUNCTION_TIMEOUT,
+
+    /** `live_function_out_of_memory` (docs/api/reasons.md). */
+    LIVE_FUNCTION_OUT_OF_MEMORY,
+
+    /** `live_limit_exceeded` (docs/api/reasons.md). */
+    LIVE_LIMIT_EXCEEDED,
+
+    /** `live_app_mismatch` (docs/api/reasons.md). */
+    LIVE_APP_MISMATCH,
+
     /** The caller's org role is below the one the admin RPC needs, or the caller is not in the org. */
     ROLE_REQUIRED,
 
@@ -410,6 +431,13 @@ object ReasonRegistry {
         Reason.LIVE_DEPLOY_CONFLICT,
         Reason.LIVE_SCHEMA_VIOLATION,
         Reason.LIVE_INDEX_NOT_READY,
+        Reason.LIVE_APP_DISABLED,
+        Reason.LIVE_APP_EXISTS,
+        Reason.LIVE_FUNCTION_ERROR,
+        Reason.LIVE_FUNCTION_TIMEOUT,
+        Reason.LIVE_FUNCTION_OUT_OF_MEMORY,
+        Reason.LIVE_LIMIT_EXCEEDED,
+        Reason.LIVE_APP_MISMATCH,
         Reason.ROLE_REQUIRED,
         Reason.SETUP_REQUIRED,
         Reason.TOKEN_MISSING,
@@ -504,6 +532,13 @@ object ReasonRegistry {
         Reason.LIVE_DEPLOY_CONFLICT to "live_deploy_conflict",
         Reason.LIVE_SCHEMA_VIOLATION to "live_schema_violation",
         Reason.LIVE_INDEX_NOT_READY to "live_index_not_ready",
+        Reason.LIVE_APP_DISABLED to "live_app_disabled",
+        Reason.LIVE_APP_EXISTS to "live_app_exists",
+        Reason.LIVE_FUNCTION_ERROR to "live_function_error",
+        Reason.LIVE_FUNCTION_TIMEOUT to "live_function_timeout",
+        Reason.LIVE_FUNCTION_OUT_OF_MEMORY to "live_function_out_of_memory",
+        Reason.LIVE_LIMIT_EXCEEDED to "live_limit_exceeded",
+        Reason.LIVE_APP_MISMATCH to "live_app_mismatch",
         Reason.ROLE_REQUIRED to "role_required",
         Reason.SETUP_REQUIRED to "setup_required",
         Reason.TOKEN_MISSING to "token_missing",
@@ -605,6 +640,13 @@ object ReasonRegistry {
         Reason.LIVE_DEPLOY_CONFLICT to Code.FAILED_PRECONDITION,
         Reason.LIVE_SCHEMA_VIOLATION to Code.INVALID_ARGUMENT,
         Reason.LIVE_INDEX_NOT_READY to Code.FAILED_PRECONDITION,
+        Reason.LIVE_APP_DISABLED to Code.FAILED_PRECONDITION,
+        Reason.LIVE_APP_EXISTS to Code.FAILED_PRECONDITION,
+        Reason.LIVE_FUNCTION_ERROR to Code.UNKNOWN,
+        Reason.LIVE_FUNCTION_TIMEOUT to Code.DEADLINE_EXCEEDED,
+        Reason.LIVE_FUNCTION_OUT_OF_MEMORY to Code.RESOURCE_EXHAUSTED,
+        Reason.LIVE_LIMIT_EXCEEDED to Code.RESOURCE_EXHAUSTED,
+        Reason.LIVE_APP_MISMATCH to Code.PERMISSION_DENIED,
         Reason.ROLE_REQUIRED to Code.PERMISSION_DENIED,
         Reason.SETUP_REQUIRED to Code.FAILED_PRECONDITION,
         Reason.TOKEN_MISSING to Code.UNAUTHENTICATED,

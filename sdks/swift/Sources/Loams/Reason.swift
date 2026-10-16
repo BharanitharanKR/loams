@@ -38,6 +38,18 @@ public enum Reason: String, Sendable, Hashable, CaseIterable {
     case invalidDecision = "invalid_decision"
     case pairingExpired = "pairing_expired"
     case pairingUsed = "pairing_used"
+    case liveBadCursor = "live_bad_cursor"
+    case liveWorkerCrashed = "live_worker_crashed"
+    case liveDeployConflict = "live_deploy_conflict"
+    case liveSchemaViolation = "live_schema_violation"
+    case liveIndexNotReady = "live_index_not_ready"
+    case liveAppDisabled = "live_app_disabled"
+    case liveAppExists = "live_app_exists"
+    case liveFunctionError = "live_function_error"
+    case liveFunctionTimeout = "live_function_timeout"
+    case liveFunctionOutOfMemory = "live_function_out_of_memory"
+    case liveLimitExceeded = "live_limit_exceeded"
+    case liveAppMismatch = "live_app_mismatch"
     case deviceRevoked = "device_revoked"
     case pushTargetUnknown = "push_target_unknown"
     case notImplemented = "not_implemented"
@@ -87,6 +99,18 @@ public let loamsReasonCodes: [Reason: Code] = [
     .invalidDecision: .invalidArgument,
     .pairingExpired: .failedPrecondition,
     .pairingUsed: .failedPrecondition,
+    .liveBadCursor: .invalidArgument,
+    .liveWorkerCrashed: .internal,
+    .liveDeployConflict: .failedPrecondition,
+    .liveSchemaViolation: .invalidArgument,
+    .liveIndexNotReady: .failedPrecondition,
+    .liveAppDisabled: .failedPrecondition,
+    .liveAppExists: .failedPrecondition,
+    .liveFunctionError: .unknown,
+    .liveFunctionTimeout: .deadlineExceeded,
+    .liveFunctionOutOfMemory: .resourceExhausted,
+    .liveLimitExceeded: .resourceExhausted,
+    .liveAppMismatch: .permissionDenied,
     .deviceRevoked: .unauthenticated,
     .pushTargetUnknown: .notFound,
     .notImplemented: .unimplemented,

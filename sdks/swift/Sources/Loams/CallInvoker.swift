@@ -114,7 +114,8 @@ public actor CallInvoker {
         let wire = WireRequest(
             rpc: binding.rpc,
             body: keyed.request.loamsFields(),
-            serverStreaming: false
+            serverStreaming: false,
+            headers: overrides.headers
         )
 
         // R1: the refresh budget is a counter that lives **outside** the loop, so
@@ -247,6 +248,11 @@ public actor CallInvoker {
 
 // MARK: - Per-call options
 
+/// The request header that selects one of a Live node's apps
+/// (`loams.live.v1.LiveAdminService`, LV1 Task 13). A request without it
+/// addresses the server's own app (`--live-app`).
+public let loamsLiveAppHeader = "loams-live-app"
+
 /// Per-call overrides.
 ///
 /// They are a struct rather than trailing closures because Swift has no default
@@ -278,5 +284,14 @@ public struct CallOptions: Sendable {
         self.maxTokenRefreshes = maxTokenRefreshes
         self.idempotencyKey = idempotencyKey
         self.headers = headers
+    }
+
+    /// Options that address the Live app `name` (the ``loamsLiveAppHeader``
+    /// header). Set the same header in `extraHeaders` to address one app on
+    /// every call a client makes.
+    public static func liveApp(_ name: String, _ base: CallOptions = .init()) -> CallOptions {
+        var options = base
+        options.headers[loamsLiveAppHeader] = name
+        return options
     }
 }

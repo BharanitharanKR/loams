@@ -144,14 +144,20 @@ async fn the_live_listener_sits_behind_the_auth_layer() {
         let text = response.text().await.expect("a body");
         (status, reason, text)
     };
-    for path in [
+    let (status, reason, body) = call(
         "/loams.live.v1.LiveAdminService/ListDeployments",
-        "/loams.live.v1.LiveService/Query",
-    ] {
-        let (status, reason, body) = call(path, json!({}), None).await;
-        assert_eq!(status, 401, "{path}: {body}");
-        assert_eq!(reason.as_deref(), Some("token_missing"), "{path}");
-    }
+        json!({}),
+        None,
+    )
+    .await;
+    assert_eq!(status, 401, "{body}");
+    assert_eq!(reason.as_deref(), Some("token_missing"));
+    // LiveService leaves a call without a credential to the app (LV1 plan
+    // Task 16), which takes no anonymous calls: Live refuses it itself.
+    let (status, reason, body) = call("/loams.live.v1.LiveService/Query", json!({}), None).await;
+    assert_eq!(status, 401, "{body}");
+    assert_eq!(reason, None, "Live's refusal, not the layer's");
+    assert!(body.contains("unauthenticated"), "{body}");
     let (status, _, body) = call(
         "/loams.live.v1.LiveAdminService/ListDeployments",
         json!({}),

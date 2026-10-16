@@ -441,10 +441,11 @@ final class StreamContractTests: XCTestCase {
 final class ReasonRegistryTests: XCTestCase {
     /// The registry is the contract. A reason the registry has lost must stop
     /// compiling, which is why this asserts the **count** as well as the set.
-    func testReasonRegistryHasAllTwentySix() {
+    func testReasonRegistryHasAllThirtyEight() {
         XCTAssertEqual(
-            loamsAllReasons.count, 26,
-            "docs/api/reasons.md lists 26 reasons; the SDK's registry must match it exactly"
+            loamsAllReasons.count, 38,
+            "the 26 original reasons plus the 12 `live_*` ones (including `live_app_disabled`, "
+                + "`live_app_exists` and `live_app_mismatch`); the registry must match exactly"
         )
     }
 

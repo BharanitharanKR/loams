@@ -33,7 +33,7 @@ use crate::scan::{ScanAt, ScanPlan};
 use crate::tail::TailConfig;
 use crate::types::{
     AliasInfo, AliasMember, CollectionInfo, ManifestInfo, NameInfo, PinnedRead, Projection,
-    StoredDoc,
+    SourceFilter, StoredDoc,
 };
 use crate::validate::validate_request;
 use crate::vector::AnnConfig;
@@ -128,6 +128,11 @@ pub struct CollectionService {
     pub(crate) catalog: CatalogCache,
     pub(crate) backlog: BacklogMonitor,
     pub(crate) config: ServiceConfig,
+    /// The graphs a search's `expand` runs on (GR1 Task 20): Loams Graph's, when the server
+    /// runs it.
+    pub(crate) graph: RwLock<Option<Arc<dyn crate::expand::GraphExpander>>>,
+    /// The graphs the graph table functions read (GR1 Task 21).
+    pub(crate) graph_tables: RwLock<Option<Arc<dyn crate::graph::GraphTables>>>,
     /// The service itself, for the SQL catalog of Task 10.
     pub(crate) this: Weak<CollectionService>,
 }
@@ -240,11 +245,42 @@ impl CollectionService {
             backlog: BacklogMonitor::new(ctx.clone(), config.backpressure.clone()),
             hot: RwLock::new(Arc::new(NoHotTier)),
             placement: RwLock::new((Arc::new(LocalOnly), Arc::new(NoRemoteReads))),
+            graph: RwLock::new(None),
+            graph_tables: RwLock::new(None),
             ctx,
             writer,
             config,
             this: this.clone(),
         })
+    }
+
+    /// The graphs a search's `expand` runs on (GR1 Task 20).
+    pub fn set_graph_expander(&self, expander: Arc<dyn crate::expand::GraphExpander>) {
+        *self.graph.write().unwrap_or_else(PoisonError::into_inner) = Some(expander);
+    }
+
+    /// The graphs the graph table functions read (GR1 Task 21).
+    pub fn set_graph_tables(&self, tables: Arc<dyn crate::graph::GraphTables>) {
+        *self
+            .graph_tables
+            .write()
+            .unwrap_or_else(PoisonError::into_inner) = Some(tables);
+    }
+
+    /// The graph expander, when the server runs graphs.
+    pub(crate) fn graph_expander(&self) -> Option<Arc<dyn crate::expand::GraphExpander>> {
+        self.graph
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// The graph table functions' backend, when the server runs graphs.
+    pub(crate) fn graph_tables(&self) -> Option<Arc<dyn crate::graph::GraphTables>> {
+        self.graph_tables
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     pub fn set_hot_tier(&self, hot: Arc<dyn HotTier>) {
@@ -904,6 +940,9 @@ impl CollectionService {
         ns: &str,
         request: SearchRequest,
     ) -> Result<SearchResponse, ServiceError> {
+        if request.expand.is_some() || request.rerank.is_some() {
+            return self.search_expanded(ns, request).await;
+        }
         let hot = self.request_hot();
         validate_request(&request, &self.config.search.limits)?;
         let (ns_id, collection) = self.resolve(ns, &request.collection).await?;
@@ -917,6 +956,170 @@ impl CollectionService {
             }
         }
         self.search_in(ns_id, &collection, request, &hot).await
+    }
+
+    /// A search with `expand` or `rerank` (GR1 Task 20; §07 §5.2): the base search for the
+    /// seeds, then the graph's expansion, the neighbors' documents, the rerank and the page.
+    async fn search_expanded(
+        &self,
+        ns: &str,
+        request: SearchRequest,
+    ) -> Result<SearchResponse, ServiceError> {
+        use crate::expand::{Assembly, ExpandCall, ExpandStats, Fetched, Rerank, seed_key};
+        validate_request(&request, &self.config.search.limits)?;
+        crate::expand::validate(
+            request.expand.as_ref(),
+            request.rerank.as_ref(),
+            request.group_by.is_some(),
+            request.aggregations.is_some(),
+            !request.sort.is_empty() || request.search_after.is_some(),
+        )?;
+        let expander = match &request.expand {
+            Some(_) => Some(
+                self.graph
+                    .read()
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .clone()
+                    .ok_or_else(|| {
+                        ServiceError::InvalidArgument(
+                            "expand runs on Loams Graph, which this server does not run"
+                                .to_string(),
+                        )
+                    })?,
+            ),
+            None => None,
+        };
+        let rerank_field = match &request.rerank {
+            Some(Rerank::Vector { field, .. }) => Some(field.clone()),
+            _ => None,
+        };
+        // The base search: the seeds (or, rerank alone, the page), with the reranked vector.
+        let mut base = request.clone();
+        base.expand = None;
+        base.rerank = None;
+        base.offset = 0;
+        base.limit = match &request.expand {
+            Some(expand) => expand.seeds,
+            None => request.offset + request.limit,
+        };
+        if let Some(field) = &rerank_field
+            && !base.select.vectors.contains(field)
+        {
+            base.select.vectors.push(field.clone());
+        }
+        let response = Box::pin(self.search(ns, base)).await?;
+        let hits = response.hits;
+        let seed_vectors: Vec<Option<Vec<f32>>> = hits
+            .iter()
+            .map(|h| {
+                rerank_field
+                    .as_ref()
+                    .and_then(|f| h.vectors.get(f).cloned())
+            })
+            .collect();
+        let mut fetched: BTreeMap<(Option<String>, PrimaryKey), Fetched> = BTreeMap::new();
+        let (expanded, stats) = match (&request.expand, expander) {
+            (Some(expand), Some(expander)) => {
+                let seeds: Vec<Option<PrimaryKey>> = hits
+                    .iter()
+                    .map(|h| seed_key(h, expand.from_field.as_deref()))
+                    .collect();
+                let no_key = seeds.iter().filter(|s| s.is_none()).count();
+                let expanded = expander
+                    .expand(ExpandCall {
+                        namespace: ns,
+                        expand,
+                        seeds,
+                    })
+                    .await?;
+                // The neighbors' documents (and the reranked vector), by collection.
+                let mut select = expand.select.clone();
+                if let Some(field) = &rerank_field {
+                    let projection = select.get_or_insert_with(|| Projection {
+                        source: SourceFilter::None,
+                        vectors: Vec::new(),
+                        fields: Vec::new(),
+                    });
+                    if !projection.vectors.contains(field) {
+                        projection.vectors.push(field.clone());
+                    }
+                }
+                if let Some(select) = &select {
+                    let mut by_collection: BTreeMap<String, Vec<PrimaryKey>> = BTreeMap::new();
+                    for reached in &expanded.reached {
+                        if let Some(collection) = &reached.collection {
+                            let keys = by_collection.entry(collection.clone()).or_default();
+                            if !keys.contains(&reached.key) {
+                                keys.push(reached.key.clone());
+                            }
+                        }
+                    }
+                    for (collection, keys) in by_collection {
+                        for chunk in keys.chunks(self.config.max_get_keys.max(1)) {
+                            let docs = Box::pin(self.get(
+                                ns,
+                                &collection,
+                                chunk,
+                                select,
+                                ReadConsistency::Strong,
+                            ))
+                            .await?;
+                            for (key, doc) in chunk.iter().zip(docs) {
+                                let Some(doc) = doc else { continue };
+                                // `get` answers the projection's source already.
+                                let source = doc.source;
+                                let vector = rerank_field
+                                    .as_ref()
+                                    .and_then(|f| doc.vectors.get(f).cloned());
+                                fetched.insert(
+                                    (Some(collection.clone()), key.clone()),
+                                    Fetched { source, vector },
+                                );
+                            }
+                        }
+                    }
+                }
+                let stats = ExpandStats {
+                    seeds: hits.len(),
+                    seeds_skipped: no_key + expanded.skipped.len(),
+                    neighbors: 0,
+                    graph_token: expanded.token.clone(),
+                };
+                (expanded, Some(stats))
+            }
+            _ => (crate::expand::Expanded::default(), None),
+        };
+        let (mut page, neighbors) = crate::expand::assemble(
+            hits,
+            &expanded,
+            &Assembly {
+                expand: request.expand.as_ref(),
+                rerank: request.rerank.as_ref(),
+                fetched: &fetched,
+                seed_vectors,
+                offset: request.offset,
+                limit: request.limit,
+            },
+        );
+        // The reranked vector goes back only when the request asked for it.
+        if let Some(field) = &rerank_field
+            && !request.select.vectors.contains(field)
+        {
+            for hit in &mut page {
+                if hit.graph.as_ref().is_none_or(|g| g.hop == 0) {
+                    hit.vectors.remove(field);
+                }
+            }
+        }
+        Ok(SearchResponse {
+            hits: page,
+            total: response.total,
+            aggregations: None,
+            groups: None,
+            read_token: response.read_token,
+            hot_used: response.hot_used,
+            expand: stats.map(|stats| ExpandStats { neighbors, ..stats }),
+        })
     }
 
     /// [`CollectionService::search`] on this node, never forwarded.

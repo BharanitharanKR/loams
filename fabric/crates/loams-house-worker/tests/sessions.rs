@@ -439,9 +439,14 @@ async fn owned_statements_of_later_tasks_are_48() {
             "has no catalog",
         ),
         (
+            // A pipe is a catalog table (HS1 Task 16): without a catalog it
+            // answers as any lake table does.
             "CREATE TABLE q (a String) ENGINE = LoamsStream('s', 'JSONEachRow')",
-            "Tasks 16 and 18",
+            "has no catalog",
         ),
+        // BACKUP and RESTORE point at RestoreTable (design 49 §11, D775).
+        ("BACKUP TABLE t TO Disk('default', 'b')", "RestoreTable"),
+        ("RESTORE TABLE t FROM Disk('default', 'b')", "RestoreTable"),
         ("OPTIMIZE TABLE t FINAL", "has no catalog"),
         ("KILL QUERY WHERE query_id = 'x'", "Task 21"),
         ("UNDROP TABLE t", "has no catalog"),

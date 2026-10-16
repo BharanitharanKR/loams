@@ -33,14 +33,212 @@ pub const PRIMARY_KEY: &str = "_pk";
 /// The most vertex labels or edge types one mapping declares.
 pub const MAX_MAPPINGS: usize = 64;
 
-/// How collections feed a LINKED graph.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// How collections and streams feed a LINKED graph.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct GraphMapping {
     /// Vertex labels, each over one collection.
     pub vertices: Vec<VertexMap>,
     /// Edge types, each over one collection.
     #[serde(default)]
     pub edges: Vec<EdgeMap>,
+    /// `stream → graph` links (GR1 Task 19; §48 §10.2).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub streams: Vec<StreamMap>,
+}
+
+/// One stream feeding a LINKED graph: its records, JSON or CloudEvents, through rules (GR1
+/// Task 19). See `loams.graph.v1.StreamMapping`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StreamMap {
+    /// The stream's name in the graph's namespace.
+    pub stream: String,
+    /// The rules, in order: every rule a record matches applies.
+    pub rules: Vec<StreamRule>,
+}
+
+/// What a stream rule does with a record it matches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StreamOp {
+    /// Creates the node, or merges the record's properties into it.
+    UpsertNode,
+    /// Deletes the node and its edges.
+    DeleteNode,
+    /// Creates the edge (and stub endpoints), or merges its properties.
+    UpsertEdge,
+    /// Deletes the edge.
+    DeleteEdge,
+}
+
+impl StreamOp {
+    /// Whether the rule writes an edge.
+    #[must_use]
+    pub fn is_edge(self) -> bool {
+        matches!(self, Self::UpsertEdge | Self::DeleteEdge)
+    }
+}
+
+/// One rule of a [`StreamMap`]. Paths are dot-separated field paths from the record's root (a
+/// CloudEvent's attributes and `data.<field>`); an empty string is an absent field.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct StreamRule {
+    /// The rule's name, unique among the mapping's edges and rules.
+    pub name: String,
+    /// Only CloudEvents of this `type`; empty matches every record.
+    #[serde(default)]
+    pub event_type: String,
+    /// What the rule does.
+    pub op: StreamOp,
+    /// Node operations: the label.
+    #[serde(default)]
+    pub label: String,
+    /// Node operations: the path of the key.
+    #[serde(default)]
+    pub key_field: String,
+    /// Edge operations: the source's label.
+    #[serde(default)]
+    pub source_label: String,
+    /// Edge operations: the path of the source's key.
+    #[serde(default)]
+    pub source_key_field: String,
+    /// Edge operations: the destination's label.
+    #[serde(default)]
+    pub destination_label: String,
+    /// Edge operations: the path of the destination's key.
+    #[serde(default)]
+    pub destination_key_field: String,
+    /// Edge operations: the type, unless `edge_type_field` names it.
+    #[serde(default)]
+    pub edge_type: String,
+    /// Edge operations: the path of a field holding the type.
+    #[serde(default)]
+    pub edge_type_field: String,
+    /// Edge operations: the path of the edge's own key, which identifies it among the stream's
+    /// edges; empty identifies an edge by its type and endpoints.
+    #[serde(default)]
+    pub edge_key_field: String,
+    /// Upserts: the path of the object whose fields are the properties; empty is `data` for a
+    /// CloudEvent and the whole record otherwise.
+    #[serde(default)]
+    pub properties_field: String,
+}
+
+/// The most rules one mapping's streams declare.
+pub const MAX_STREAM_RULES: usize = 64;
+
+/// A field path: 1 to 255 bytes of dot-separated, non-empty segments.
+fn check_path(what: &str, path: &str) -> Result<(), MappingError> {
+    check_reference(what, path)?;
+    if path.split('.').any(str::is_empty) {
+        return Err(invalid(format!(
+            "{what} {path:?} must be dot-separated non-empty field names"
+        )));
+    }
+    Ok(())
+}
+
+impl StreamRule {
+    /// The rule on its own (GR1 Task 19).
+    fn check(&self) -> Result<(), MappingError> {
+        check_name("stream rule name", &self.name)?;
+        if self.event_type.len() > 255 {
+            return Err(invalid(format!(
+                "rule {:?}'s event type is longer than 255 bytes",
+                self.name
+            )));
+        }
+        let optional_path = |what: &str, path: &str| {
+            if path.is_empty() {
+                Ok(())
+            } else {
+                check_path(what, path)
+            }
+        };
+        optional_path("properties path", &self.properties_field)?;
+        if self.op.is_edge() {
+            for (end, label, path) in [
+                ("source", &self.source_label, &self.source_key_field),
+                (
+                    "destination",
+                    &self.destination_label,
+                    &self.destination_key_field,
+                ),
+            ] {
+                check_name(&format!("rule {:?}'s {end} label", self.name), label)?;
+                check_path(&format!("rule {:?}'s {end} key path", self.name), path)?;
+            }
+            match (self.edge_type.is_empty(), self.edge_type_field.is_empty()) {
+                (false, true) => check_reference("edge type", &self.edge_type)?,
+                (true, false) => check_path("edge type path", &self.edge_type_field)?,
+                _ => {
+                    return Err(invalid(format!(
+                        "edge rule {:?} names its type or the path of its type, one of the two",
+                        self.name
+                    )));
+                }
+            }
+            optional_path("edge key path", &self.edge_key_field)?;
+        } else {
+            check_name(&format!("rule {:?}'s label", self.name), &self.label)?;
+            check_path(&format!("rule {:?}'s key path", self.name), &self.key_field)?;
+        }
+        Ok(())
+    }
+
+    fn from_proto(rule: &pb::StreamRule) -> Result<Self, MappingError> {
+        let op = match rule.operation.as_known() {
+            Some(pb::StreamOperation::UpsertNode) => StreamOp::UpsertNode,
+            Some(pb::StreamOperation::DeleteNode) => StreamOp::DeleteNode,
+            Some(pb::StreamOperation::UpsertEdge) => StreamOp::UpsertEdge,
+            Some(pb::StreamOperation::DeleteEdge) => StreamOp::DeleteEdge,
+            _ => {
+                return Err(invalid(format!(
+                    "stream rule {:?} names no operation",
+                    rule.name
+                )));
+            }
+        };
+        Ok(Self {
+            name: rule.name.clone(),
+            event_type: rule.event_type.clone(),
+            op,
+            label: rule.label.clone(),
+            key_field: rule.key_field.clone(),
+            source_label: rule.source_label.clone(),
+            source_key_field: rule.source_key_field.clone(),
+            destination_label: rule.destination_label.clone(),
+            destination_key_field: rule.destination_key_field.clone(),
+            edge_type: rule.edge_type.clone(),
+            edge_type_field: rule.edge_type_field.clone(),
+            edge_key_field: rule.edge_key_field.clone(),
+            properties_field: rule.properties_field.clone(),
+        })
+    }
+
+    fn to_proto(&self) -> pb::StreamRule {
+        pb::StreamRule {
+            name: self.name.clone(),
+            event_type: self.event_type.clone(),
+            operation: match self.op {
+                StreamOp::UpsertNode => pb::StreamOperation::UpsertNode,
+                StreamOp::DeleteNode => pb::StreamOperation::DeleteNode,
+                StreamOp::UpsertEdge => pb::StreamOperation::UpsertEdge,
+                StreamOp::DeleteEdge => pb::StreamOperation::DeleteEdge,
+            }
+            .into(),
+            label: self.label.clone(),
+            key_field: self.key_field.clone(),
+            source_label: self.source_label.clone(),
+            source_key_field: self.source_key_field.clone(),
+            destination_label: self.destination_label.clone(),
+            destination_key_field: self.destination_key_field.clone(),
+            edge_type: self.edge_type.clone(),
+            edge_type_field: self.edge_type_field.clone(),
+            edge_key_field: self.edge_key_field.clone(),
+            properties_field: self.properties_field.clone(),
+            ..Default::default()
+        }
+    }
 }
 
 /// `VERTEX <label> KEY (<key_field>) FROM COLLECTION <collection>`.
@@ -146,9 +344,9 @@ impl GraphMapping {
     ///
     /// [`MappingError`] naming the first problem.
     pub fn check(&self) -> Result<(), MappingError> {
-        if self.vertices.is_empty() {
+        if self.vertices.is_empty() && self.streams.is_empty() {
             return Err(invalid(
-                "a LINKED graph's mapping declares at least one vertex label",
+                "a LINKED graph's mapping declares at least one vertex label or stream",
             ));
         }
         if self.vertices.len() > MAX_MAPPINGS || self.edges.len() > MAX_MAPPINGS {
@@ -184,6 +382,41 @@ impl GraphMapping {
                     return Err(invalid(format!(
                         "edge {:?}'s {end} label {:?} is not a declared vertex label",
                         edge.name, endpoint.label
+                    )));
+                }
+            }
+        }
+        // Rules are named among the edges, so an error or a dead letter names one thing.
+        let rules: usize = self.streams.iter().map(|s| s.rules.len()).sum();
+        if rules > MAX_STREAM_RULES {
+            return Err(invalid(format!(
+                "a mapping's streams declare at most {MAX_STREAM_RULES} rules"
+            )));
+        }
+        let mut streams = BTreeSet::new();
+        for stream in &self.streams {
+            check_reference("stream", &stream.stream)?;
+            if stream.stream.starts_with('_') {
+                return Err(invalid(format!(
+                    "stream {:?} is reserved; a LINKED graph reads a collection through its                      collection mapping",
+                    stream.stream
+                )));
+            }
+            if !streams.insert(stream.stream.as_str()) {
+                return Err(invalid(format!(
+                    "stream {:?} is mapped twice",
+                    stream.stream
+                )));
+            }
+            if stream.rules.is_empty() {
+                return Err(invalid(format!("stream {:?} has no rules", stream.stream)));
+            }
+            for rule in &stream.rules {
+                rule.check()?;
+                if !names.insert(rule.name.as_str()) {
+                    return Err(invalid(format!(
+                        "the name {:?} is declared twice among the edges and stream rules",
+                        rule.name
                     )));
                 }
             }
@@ -246,10 +479,47 @@ impl GraphMapping {
         Ok(())
     }
 
-    /// The mapping a request carries.
+    /// The mapping a request carries, refusing a stream rule with no operation.
+    ///
+    /// # Errors
+    ///
+    /// [`MappingError`] for a stream rule whose operation is unspecified or unknown.
+    pub fn try_from_proto(mapping: &pb::GraphMapping) -> Result<Self, MappingError> {
+        let mut out = Self::from_proto(mapping);
+        out.streams = mapping
+            .streams
+            .iter()
+            .map(|s| {
+                Ok(StreamMap {
+                    stream: s.stream.clone(),
+                    rules: s
+                        .rules
+                        .iter()
+                        .map(StreamRule::from_proto)
+                        .collect::<Result<_, MappingError>>()?,
+                })
+            })
+            .collect::<Result<_, MappingError>>()?;
+        Ok(out)
+    }
+
+    /// The mapping a request carries. A stream rule with no known operation is dropped; a
+    /// request goes through [`GraphMapping::try_from_proto`], which refuses it.
     #[must_use]
     pub fn from_proto(mapping: &pb::GraphMapping) -> Self {
         Self {
+            streams: mapping
+                .streams
+                .iter()
+                .map(|s| StreamMap {
+                    stream: s.stream.clone(),
+                    rules: s
+                        .rules
+                        .iter()
+                        .filter_map(|r| StreamRule::from_proto(r).ok())
+                        .collect(),
+                })
+                .collect(),
             vertices: mapping
                 .vertices
                 .iter()
@@ -307,6 +577,15 @@ impl GraphMapping {
                     ..Default::default()
                 })
                 .collect(),
+            streams: self
+                .streams
+                .iter()
+                .map(|s| pb::StreamMapping {
+                    stream: s.stream.clone(),
+                    rules: s.rules.iter().map(StreamRule::to_proto).collect(),
+                    ..Default::default()
+                })
+                .collect(),
             ..Default::default()
         }
     }
@@ -349,6 +628,7 @@ mod tests {
                     field: "dst".to_string(),
                 },
             }],
+            streams: Vec::new(),
         }
     }
 
@@ -397,6 +677,90 @@ mod tests {
         let mut reserved = kg();
         reserved.vertices[0].label = "_stub".to_string();
         assert!(reserved.check().is_err());
+    }
+
+    fn streamed() -> GraphMapping {
+        let rule = |name: &str, op| StreamRule {
+            name: name.to_string(),
+            event_type: "person.upserted".to_string(),
+            op,
+            label: "Person".to_string(),
+            key_field: "data.id".to_string(),
+            source_label: "Person".to_string(),
+            source_key_field: "data.from".to_string(),
+            destination_label: "Person".to_string(),
+            destination_key_field: "data.to".to_string(),
+            edge_type: "KNOWS".to_string(),
+            edge_type_field: String::new(),
+            edge_key_field: String::new(),
+            properties_field: String::new(),
+        };
+        GraphMapping {
+            streams: vec![StreamMap {
+                stream: "events".to_string(),
+                rules: vec![
+                    rule("person", StreamOp::UpsertNode),
+                    rule("knows", StreamOp::UpsertEdge),
+                ],
+            }],
+            ..kg()
+        }
+    }
+
+    #[test]
+    fn stream_mappings_round_trip_and_are_checked() {
+        let mapping = streamed();
+        assert_eq!(mapping.check(), Ok(()));
+        assert_eq!(
+            GraphMapping::try_from_proto(&mapping.to_proto()),
+            Ok(mapping.clone())
+        );
+        let json = serde_json::to_string(&mapping).expect("json");
+        assert_eq!(
+            serde_json::from_str::<GraphMapping>(&json).expect("parse"),
+            mapping
+        );
+        // A streams-only mapping needs no vertex label.
+        let only = GraphMapping {
+            vertices: Vec::new(),
+            edges: Vec::new(),
+            ..streamed()
+        };
+        assert_eq!(only.check(), Ok(()));
+        // An operation the wire does not name is refused.
+        let mut wire = mapping.to_proto();
+        wire.streams[0].rules[0].operation = buffa::EnumValue::from(0);
+        assert!(GraphMapping::try_from_proto(&wire).is_err());
+        let refused: Vec<(&str, GraphMapping)> = vec![
+            ("a reserved stream", {
+                let mut m = streamed();
+                m.streams[0].stream = "_c1".to_string();
+                m
+            }),
+            ("a rule named as an edge", {
+                let mut m = streamed();
+                m.streams[0].rules[0].name = "RELATED".to_string();
+                m
+            }),
+            ("both a type and its path", {
+                let mut m = streamed();
+                m.streams[0].rules[1].edge_type_field = "data.ty".to_string();
+                m
+            }),
+            ("an empty path segment", {
+                let mut m = streamed();
+                m.streams[0].rules[0].key_field = "data..id".to_string();
+                m
+            }),
+            ("no rules", {
+                let mut m = streamed();
+                m.streams[0].rules.clear();
+                m
+            }),
+        ];
+        for (what, mapping) in refused {
+            assert!(mapping.check().is_err(), "{what}");
+        }
     }
 
     #[test]

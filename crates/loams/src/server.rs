@@ -1170,7 +1170,7 @@ impl LiveRuntime {
             bundles,
             loader: Arc::new(loader),
         };
-        let layer = crate::auth::AuthLayerState::new(auth, &[]);
+        let layer = crate::auth::AuthLayerState::new(auth, &[]).leaving_to_apps();
         let guard: loams_live::service::Guard = Arc::new(move |router: axum::Router| {
             layer.wrap(router.layer(axum::middleware::from_fn(crate::api::live::caller)))
         });
@@ -1336,6 +1336,8 @@ struct GraphRuntime {
     data_dir: Option<PathBuf>,
     stop: CancellationToken,
     maintenance: JoinHandle<()>,
+    /// The task applying the LINKED graphs' links this node serves (GR1 Task 18).
+    links: (loams_graph::link::LinkRunner, JoinHandle<()>),
     shutdown_wait: Duration,
     /// Catalog sweeps the maintenance task has completed.
     sweeps: Arc<std::sync::atomic::AtomicU64>,
@@ -1356,6 +1358,7 @@ impl GraphRuntime {
         reader: LogReader,
         log_node: u64,
         registry: Option<Arc<NodeRegistry>>,
+        link: LinkConfig,
     ) -> Result<Self, ServerError> {
         use loams_graph::Engine;
         use loams_graph::catalog::GraphCatalog;
@@ -1460,12 +1463,34 @@ impl GraphRuntime {
                 }
             })
         };
+        // The links of the LINKED graphs this node owns (GR1 Task 18): every pass applies each
+        // link whose collection has records the graph has not.
+        let links = {
+            let runner = loams_graph::link::LinkRunner::new((*admin).clone(), link);
+            let (task_runner, stop) = (runner.clone(), stop.clone());
+            let task = tokio::spawn(async move {
+                let mut tick = tokio::time::interval(loams_graph::link::LinkRunner::EVERY);
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                loop {
+                    tokio::select! {
+                        () = stop.cancelled() => return,
+                        _ = tick.tick() => {}
+                    }
+                    let committed = task_runner.run_once().await;
+                    if committed > 0 {
+                        tracing::debug!(links = committed, "applied graph links");
+                    }
+                }
+            });
+            (runner, task)
+        };
         Ok(Self {
             admin,
             log,
             data_dir: config.data_dir.clone(),
             stop,
             maintenance,
+            links,
             shutdown_wait: config.shutdown_wait,
             sweeps,
             checkpoints,
@@ -1479,6 +1504,15 @@ impl GraphRuntime {
     /// [`GraphConfig::shutdown_wait`]).
     async fn stop(self) {
         self.stop.cancel();
+        let (runner, mut links) = self.links;
+        runner.stop();
+        if tokio::time::timeout(self.shutdown_wait, &mut links)
+            .await
+            .is_err()
+        {
+            tracing::warn!("a graph link pass outlasted the shutdown wait; abandoned");
+            links.abort();
+        }
         let mut maintenance = self.maintenance;
         if tokio::time::timeout(self.shutdown_wait, &mut maintenance)
             .await
@@ -1518,6 +1552,7 @@ impl GitRuntimeHandle {
         config: &GitConfig,
         meta: Arc<dyn MetaStore>,
         store: Store,
+        h1: RangeCache,
         sink: Arc<api::git_events::StreamSink>,
         cluster: Option<loams_git::Cluster>,
         listener: Option<(
@@ -1556,6 +1591,10 @@ impl GitRuntimeHandle {
             catalog: catalog.clone(),
             sequencers: Arc::new(sequencers),
             watch_heartbeat: config.watch_heartbeat,
+            store: store.clone(),
+            h1,
+            // Until the workspace store (GT1 Task 25, ruling T18.1).
+            workspaces: Arc::new(loams_git::objects::NoWorkspaces),
         });
         let stop = CancellationToken::new();
         let purge = {
@@ -2431,6 +2470,17 @@ impl Server {
             auth,
             crate::auth::layer::MAIN_PUBLIC_PATHS,
         );
+        // LV1 plan Task 16: where Live is served, its end users' calls go to
+        // the app (the main port serves Live on loopback only until Task 18).
+        #[cfg(feature = "live")]
+        let (main_guard, tailscale_guard) = match &live {
+            Some(_) if config.listen.ip().is_loopback() => (
+                main_guard.leaving_to_apps(),
+                tailscale_guard.leaving_to_apps(),
+            ),
+            Some(_) => (main_guard, tailscale_guard.leaving_to_apps()),
+            None => (main_guard, tailscale_guard),
+        };
         // Scan plans name the Lance datasets under the bucket (Task 14 rule 8).
         config.query.lance_base_url = Some(bucket_url(config)?);
         let cache = RangeCache::new(store.clone(), config.cache.clone()).await?;
@@ -2838,9 +2888,20 @@ impl Server {
                 reader.clone(),
                 config.log.node_id,
                 node_registry,
+                config.link.clone(),
             )?),
             false => None,
         };
+        // `Search.expand` runs on this node's graphs (GR1 Task 20).
+        #[cfg(feature = "graph")]
+        if let Some(graph) = &graph {
+            let expander = Arc::new(loams_graph::retrieval::LoamsGraphExpander::new(
+                (*graph.admin).clone(),
+            ));
+            collections.set_graph_expander(expander.clone());
+            // And the graph table functions (GR1 Task 21).
+            collections.set_graph_tables(expander);
+        }
         let house = match roles.gateway {
             true => crate::api::house_proxy::HouseProxy::start(&config.house)
                 .map_err(|err| ServerError::Config(format!("the House proxy: {err}")))?,
@@ -2877,6 +2938,7 @@ impl Server {
                 &config.git,
                 meta_store.clone(),
                 store.clone(),
+                cache.clone(),
                 sink,
                 cluster,
                 git_listener,

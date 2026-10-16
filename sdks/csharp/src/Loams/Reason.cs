@@ -297,6 +297,27 @@ public enum Reason
     /// <summary>The credential cannot be checked now: the issuer's JWKS or the principal store is unreachable.</summary>
     AuthUnavailable = 91,
 
+    /// <summary>A call to a Live app that is disabled or deleted.</summary>
+    LiveAppDisabled = 92,
+
+    /// <summary>CreateApp named a Live app that already exists.</summary>
+    LiveAppExists = 93,
+
+    /// <summary>A deployed Live function threw.</summary>
+    LiveFunctionError = 94,
+
+    /// <summary>A Live function ran past its CPU limit.</summary>
+    LiveFunctionTimeout = 95,
+
+    /// <summary>A Live function ran past its memory limit.</summary>
+    LiveFunctionOutOfMemory = 96,
+
+    /// <summary>A Live call exceeded one of the app's limits.</summary>
+    LiveLimitExceeded = 97,
+
+    /// <summary>A credential reached a Live app outside its environment.</summary>
+    LiveAppMismatch = 98,
+
     /// <summary>A malformed field or an unparseable value.</summary>
     InvalidArgument = 15,
 
@@ -424,6 +445,13 @@ public static class ReasonRegistry
         Reason.LiveDeployConflict,
         Reason.LiveSchemaViolation,
         Reason.LiveIndexNotReady,
+        Reason.LiveAppDisabled,
+        Reason.LiveAppExists,
+        Reason.LiveFunctionError,
+        Reason.LiveFunctionTimeout,
+        Reason.LiveFunctionOutOfMemory,
+        Reason.LiveLimitExceeded,
+        Reason.LiveAppMismatch,
         Reason.RoleRequired,
         Reason.SetupRequired,
         Reason.TokenMissing,
@@ -520,6 +548,13 @@ public static class ReasonRegistry
             [Reason.LiveDeployConflict] = "live_deploy_conflict",
             [Reason.LiveSchemaViolation] = "live_schema_violation",
             [Reason.LiveIndexNotReady] = "live_index_not_ready",
+            [Reason.LiveAppDisabled] = "live_app_disabled",
+            [Reason.LiveAppExists] = "live_app_exists",
+            [Reason.LiveFunctionError] = "live_function_error",
+            [Reason.LiveFunctionTimeout] = "live_function_timeout",
+            [Reason.LiveFunctionOutOfMemory] = "live_function_out_of_memory",
+            [Reason.LiveLimitExceeded] = "live_limit_exceeded",
+            [Reason.LiveAppMismatch] = "live_app_mismatch",
             [Reason.RoleRequired] = "role_required",
             [Reason.SetupRequired] = "setup_required",
             [Reason.TokenMissing] = "token_missing",
@@ -641,6 +676,13 @@ public static class ReasonRegistry
             [Reason.LiveDeployConflict] = Code.FailedPrecondition,
             [Reason.LiveSchemaViolation] = Code.InvalidArgument,
             [Reason.LiveIndexNotReady] = Code.FailedPrecondition,
+            [Reason.LiveAppDisabled] = Code.FailedPrecondition,
+            [Reason.LiveAppExists] = Code.FailedPrecondition,
+            [Reason.LiveFunctionError] = Code.Unknown,
+            [Reason.LiveFunctionTimeout] = Code.DeadlineExceeded,
+            [Reason.LiveFunctionOutOfMemory] = Code.ResourceExhausted,
+            [Reason.LiveLimitExceeded] = Code.ResourceExhausted,
+            [Reason.LiveAppMismatch] = Code.PermissionDenied,
             [Reason.RoleRequired] = Code.PermissionDenied,
             [Reason.SetupRequired] = Code.FailedPrecondition,
             [Reason.TokenMissing] = Code.Unauthenticated,

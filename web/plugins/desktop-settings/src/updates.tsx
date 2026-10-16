@@ -1,5 +1,5 @@
 import type { LoamsDesktopApi } from '@loams/desktop/contracts';
-import { Button, Card, Notice, StatusTag } from '@loams/ui';
+import { Button, Card, Checkbox, Notice, StatusTag } from '@loams/ui';
 import { useCallback, useEffect, useState } from 'react';
 
 type UpdateState = Awaited<ReturnType<LoamsDesktopApi['update']['state']>>;
@@ -27,6 +27,13 @@ const PHASE_TONE: Record<UpdateState['phase'], 'done' | 'progress' | 'planned' |
 export function UpdatesSection({ desktop }: { desktop: LoamsDesktopApi }) {
   const [state, setState] = useState<UpdateState>();
   const [error, setError] = useState<string>();
+  const [auto, setAuto] = useState<{ enabled: boolean; locked: boolean }>();
+  useEffect(() => {
+    desktop.update
+      .autoCheck()
+      .then(setAuto)
+      .catch(() => undefined);
+  }, [desktop]);
   const refresh = useCallback(async () => {
     try {
       setState(await desktop.update.state());
@@ -72,8 +79,9 @@ export function UpdatesSection({ desktop }: { desktop: LoamsDesktopApi }) {
         {!state && !error && <p className="text-muted">Reading the update state…</p>}
         {phase === 'disabled' && (
           <p className="text-muted">
-            Updates are off: no update feed is configured for this build, so nothing is checked and
-            nothing leaves this computer.
+            Updates are off: no update feed is configured for this build (or
+            LOAMS_DESKTOP_NO_UPDATE_CHECK is set), so nothing is checked and nothing leaves this
+            computer.
           </p>
         )}
         {phase === 'idle' && <p className="text-muted">You are on the latest version.</p>}
@@ -99,6 +107,27 @@ export function UpdatesSection({ desktop }: { desktop: LoamsDesktopApi }) {
           <Notice tone="danger" title="The update check failed">
             {state?.message ?? 'Unknown error.'}
           </Notice>
+        )}
+        {auto && (
+          <div className="mt-4">
+            <Checkbox
+              label="Check for updates automatically"
+              checked={auto.enabled && !auto.locked}
+              disabled={auto.locked}
+              onChange={(e) => {
+                const enabled = e.target.checked;
+                setAuto({ ...auto, enabled });
+                void desktop.update
+                  .setAutoCheck(enabled)
+                  .catch((err) => setError(err instanceof Error ? err.message : String(err)));
+              }}
+            />
+            <p className="text-muted text-sm m-0">
+              {auto.locked
+                ? 'Turned off by LOAMS_DESKTOP_NO_UPDATE_CHECK.'
+                : 'When off, Loams Desktop makes no update request on its own; Check now still works.'}
+            </p>
+          </div>
         )}
         <div className="flex gap-2 mt-4">
           <Button

@@ -186,6 +186,8 @@ pub struct Lake {
     store: Option<loams_store::Store>,
     /// The tables' commit queues (HS1 Task 12), made at the first write.
     committer: std::sync::OnceLock<Arc<crate::commit::Committer>>,
+    /// This front's state of the pipes' views (HS1 Task 16).
+    pipe_states: Arc<crate::pipes::PipeStates>,
 }
 
 impl fmt::Debug for Lake {
@@ -222,7 +224,13 @@ impl Lake {
             grants: None,
             store: None,
             committer: std::sync::OnceLock::new(),
+            pipe_states: Arc::default(),
         }
+    }
+
+    /// This front's state of the pipes' views (HS1 Task 16).
+    pub fn pipe_states(&self) -> Arc<crate::pipes::PipeStates> {
+        Arc::clone(&self.pipe_states)
     }
 
     /// The commit queues of this lake's tables (HS1 Task 12).

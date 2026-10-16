@@ -12,6 +12,7 @@ pub mod blob;
 pub mod catalog;
 pub mod checkpointer;
 pub mod clock;
+pub mod derived;
 pub mod error;
 pub mod fork;
 pub mod format;
@@ -20,6 +21,7 @@ pub mod gc;
 pub mod ids;
 pub mod limits;
 pub mod mirror_events;
+pub mod objects;
 pub mod odb;
 pub mod owner;
 pub mod paths;
@@ -40,8 +42,9 @@ pub use catalog::{
 };
 pub use checkpointer::{CheckpointPolicy, create_repo, latest_state, state_at};
 pub use clock::{Clock, SystemClock};
+pub use derived::{DerivedError, DerivedStore};
 pub use error::IdError;
-pub use fork::{ForkError, fork_repo, open_fork_odb};
+pub use fork::{ForkError, fork_repo, open_fork_odb, open_fork_range_odb};
 pub use format::FormatError;
 pub use format::segment::{WalBatch, WalSegment};
 pub use forward::{FORWARD_PATH, SeqCommit, SeqForwarder};
@@ -51,7 +54,7 @@ pub use ids::{
     SecretId, Seq, SnapN, TraceParent, WsId, WsName,
 };
 pub use mirror_events::{GitEventSink, MirrorCursor, repair_repo, run_mirror};
-pub use odb::{ObjectDb, OdbError, PackCache, PackCacheOdb};
+pub use odb::{ObjectDb, OdbError, PackCache, PackCacheOdb, RangeOdb, WsOdb};
 pub use owner::{
     AlwaysHere, Cluster, LeaseError, OwnerConfig, OwnerStatsSnapshot, RepoSequencers, SeqLeases,
     SeqOwner, SeqPlacement, repo_placement_hash, seq_lease_key,

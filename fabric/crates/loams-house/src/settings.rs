@@ -70,8 +70,12 @@ fn over(name: &str, cap: impl std::fmt::Display) -> HouseError {
 
 /// ClickHouse settings the front takes for itself and never passes to chDB:
 /// `insert_deduplication_token` names an insert's deduplication key on lake
-/// tables (HS1 Task 12).
-pub const FRONT_SETTINGS: &[&str] = &["insert_deduplication_token"];
+/// tables (HS1 Task 12); `materialized_views_ignore_errors` says whether a
+/// failing materialized view fails the insert that fed it (HS1 Task 17).
+pub const FRONT_SETTINGS: &[&str] = &[
+    "insert_deduplication_token",
+    "materialized_views_ignore_errors",
+];
 
 /// Whether `name` is one of Loams's settings.
 pub fn is_loams(name: &str) -> bool {

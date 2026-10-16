@@ -77,6 +77,13 @@ const (
 	ReasonLiveDeployConflict       Reason = "live_deploy_conflict"
 	ReasonLiveSchemaViolation      Reason = "live_schema_violation"
 	ReasonLiveIndexNotReady        Reason = "live_index_not_ready"
+	ReasonLiveAppDisabled          Reason = "live_app_disabled"
+	ReasonLiveAppExists            Reason = "live_app_exists"
+	ReasonLiveFunctionError        Reason = "live_function_error"
+	ReasonLiveFunctionTimeout      Reason = "live_function_timeout"
+	ReasonLiveFunctionOutOfMemory  Reason = "live_function_out_of_memory"
+	ReasonLiveLimitExceeded        Reason = "live_limit_exceeded"
+	ReasonLiveAppMismatch          Reason = "live_app_mismatch"
 	ReasonRoleRequired             Reason = "role_required"
 	ReasonSetupRequired            Reason = "setup_required"
 	ReasonTokenMissing             Reason = "token_missing"
@@ -179,6 +186,13 @@ var Reasons = []Reason{
 	ReasonLiveDeployConflict,
 	ReasonLiveSchemaViolation,
 	ReasonLiveIndexNotReady,
+	ReasonLiveAppDisabled,
+	ReasonLiveAppExists,
+	ReasonLiveFunctionError,
+	ReasonLiveFunctionTimeout,
+	ReasonLiveFunctionOutOfMemory,
+	ReasonLiveLimitExceeded,
+	ReasonLiveAppMismatch,
 	ReasonRoleRequired,
 	ReasonSetupRequired,
 	ReasonTokenMissing,
@@ -276,6 +290,13 @@ var ReasonCodes = map[Reason]string{
 	ReasonLiveDeployConflict:       "failed_precondition",
 	ReasonLiveSchemaViolation:      "invalid_argument",
 	ReasonLiveIndexNotReady:        "failed_precondition",
+	ReasonLiveAppDisabled:          "failed_precondition",
+	ReasonLiveAppExists:            "failed_precondition",
+	ReasonLiveFunctionError:        "unknown",
+	ReasonLiveFunctionTimeout:      "deadline_exceeded",
+	ReasonLiveFunctionOutOfMemory:  "resource_exhausted",
+	ReasonLiveLimitExceeded:        "resource_exhausted",
+	ReasonLiveAppMismatch:          "permission_denied",
 	ReasonRoleRequired:             "permission_denied",
 	ReasonSetupRequired:            "failed_precondition",
 	ReasonTokenMissing:             "unauthenticated",
