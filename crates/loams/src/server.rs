@@ -1552,6 +1552,7 @@ impl GitRuntimeHandle {
         config: &GitConfig,
         meta: Arc<dyn MetaStore>,
         store: Store,
+        h1: RangeCache,
         sink: Arc<api::git_events::StreamSink>,
         cluster: Option<loams_git::Cluster>,
         listener: Option<(
@@ -1590,6 +1591,10 @@ impl GitRuntimeHandle {
             catalog: catalog.clone(),
             sequencers: Arc::new(sequencers),
             watch_heartbeat: config.watch_heartbeat,
+            store: store.clone(),
+            h1,
+            // Until the workspace store (GT1 Task 25, ruling T18.1).
+            workspaces: Arc::new(loams_git::objects::NoWorkspaces),
         });
         let stop = CancellationToken::new();
         let purge = {
@@ -2912,6 +2917,7 @@ impl Server {
                 &config.git,
                 meta_store.clone(),
                 store.clone(),
+                cache.clone(),
                 sink,
                 cluster,
                 git_listener,

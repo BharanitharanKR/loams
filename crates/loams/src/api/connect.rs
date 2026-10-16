@@ -185,11 +185,12 @@ const CATALOGUE: &[Package] = &[
     },
     Package {
         // Loams Git (GT1 Task 12, design §36 §19.10, D834, ruling T0-10): served with the `git`
-        // cargo feature (`RepoService` from GT1 Task 13); otherwise every RPC answers
-        // `feature_not_in_variant` (`super::repos`). The package's other services join this row
-        // as GT1 Tasks 18, 25 and 61 give them RPCs. Unstable until GT1 GA.
+        // cargo feature (`RepoService` from GT1 Task 13, `ObjectService` from Task 18);
+        // otherwise every RPC answers `feature_not_in_variant` (`super::repos`,
+        // `super::objects`). The package's other services join this row as GT1 Tasks 25 and 61
+        // give them RPCs. Unstable until GT1 GA.
         package: "loams.repos.v1",
-        services: &["loams.repos.v1.RepoService"],
+        services: &["loams.repos.v1.RepoService", "loams.repos.v1.ObjectService"],
         available: super::repos::SERVED,
         unstable: true,
     },
@@ -543,6 +544,7 @@ pub(crate) fn routes(state: &AppState, hot_default: bool) -> AxumRouter {
     rpc = super::live::register(rpc, state);
     rpc = super::graph::register(rpc, state);
     rpc = super::repos::register(rpc, state);
+    rpc = super::objects::register(rpc, state);
     rpc = super::connect_collections::register(rpc, state);
     rpc = super::connect_documents::register(rpc, state);
     rpc = super::connect_query::register(rpc, state);

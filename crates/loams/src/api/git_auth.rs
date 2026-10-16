@@ -22,7 +22,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use axum::Router;
-use axum::extract::{Path as UrlPath, State};
+use axum::extract::{Path as UrlPath, Query, State};
 use axum::http::{HeaderMap, HeaderValue, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
@@ -342,6 +342,7 @@ fn unauthenticated() -> Response {
 async fn serve(
     State(state): State<GitHttp>,
     UrlPath(params): UrlPath<HashMap<String, String>>,
+    Query(query): Query<HashMap<String, String>>,
     headers: HeaderMap,
 ) -> Response {
     let Some(token) = credential(&headers) else {
@@ -376,13 +377,31 @@ async fn serve(
     if !grant.covers(namespace, &repo) {
         return not_found();
     }
-    match state.runtime.catalog.get(namespace, &repo).await {
-        Ok(Some(record)) if record.state == RepoLifecycle::Active => {}
+    let record = match state.runtime.catalog.get(namespace, &repo).await {
+        Ok(Some(record)) if record.state == RepoLifecycle::Active => record,
         Ok(_) => return not_found(),
         Err(err) => {
             tracing::warn!(%err, "reading the repository catalog for the git listener failed");
             return (StatusCode::SERVICE_UNAVAILABLE, "loams: try again later\n").into_response();
         }
+    };
+    // The immutable object route (GT1 Task 18, §19.5.1).
+    if let Some(oid) = params
+        .get("rest")
+        .and_then(|rest| rest.strip_prefix("loams/objects/"))
+    {
+        return super::objects::serve_object(
+            &state.runtime,
+            super::objects::ObjectRoute {
+                grant: &grant,
+                ns: namespace,
+                ns_name: ns,
+                record: &record,
+                oid,
+                workspace: query.get("ws").map(String::as_str),
+            },
+        )
+        .await;
     }
     (
         StatusCode::NOT_IMPLEMENTED,

@@ -74,11 +74,11 @@ The rules, in the order they bite:
 | `fork_too_deep` | failed_precondition | ForkRepo of a repository that is already 8 forks deep (`MAX_FORK_DEPTH`) | `max` |
 | `sequencer_unavailable` | unavailable | a `loams.repos.v1` write whose repository sequencer is shutting down, lost its lease, or could not learn whether the write committed: retry with the same `idempotency_key`, which answers the first outcome if it did | `repo` |
 | `idempotency_key_reused` | failed_precondition | a `loams.repos.v1` mutation whose `idempotency_key` was used inside its window for a different request | |
-| `workspace_not_found` | not_found | every `WorkspaceService` RPC that names a workspace (GT1 Task 25, §36 §19.10) | `workspace` |
+| `workspace_not_found` | not_found | every `WorkspaceService` RPC that names a workspace (GT1 Task 25, §36 §19.10), and `ObjectService`'s reads that name one the repository does not have (GT1 Task 18) | `workspace` |
 | `workspace_fenced` | aborted | SaveSnapshot, ApplyEdits: another writer appended snapshot `n` first (§19.4.3); the caller reads the new head, merges or salvages | `workspace`, `n` |
 | `workspace_read_only` | failed_precondition | a write to a workspace mounted or opened read-only, or to a past snapshot | `workspace` |
 | `workspace_name_taken` | already_exists | CreateWorkspace, ForkWorkspace: the owner already has a workspace of that name | `workspace` |
-| `object_missing` | failed_precondition | SaveSnapshot, PushWorkspace, PutWorkspacePack: a snapshot or push names an object that is neither uploaded nor in the repository (§19.5.2) | `oid` |
+| `object_missing` | failed_precondition | SaveSnapshot, PushWorkspace, PutWorkspacePack: a snapshot or push names an object that is neither uploaded nor in the repository (§19.5.2); GetTrees: the root, or an object a tree names, is not held (GT1 Task 18) | `oid` |
 | `secret_detected` | failed_precondition | ApplyEdits, PushWorkspace, receive-pack: the leak scanner found a credential outside `env/` (§19.13.9) | `path`, `rule` |
 | `env_unsealed` | invalid_argument | ApplyEdits, PushWorkspace, receive-pack: an `env/` file holds a plaintext value (§19.13.2) | `path` |
 | `env_access_denied` | permission_denied | `EnvService` Open, GetLiveSet, Seal: the credential has no grant for the environment (§19.13.7) | `environment` |

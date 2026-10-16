@@ -15,7 +15,7 @@ use crate::checkpointer::state_at;
 use crate::format::pb;
 use crate::ids::{NamespaceId, RepoId, Seq};
 use crate::limits::MAX_FORK_DEPTH;
-use crate::odb::{OdbError, PackCache, PackCacheOdb};
+use crate::odb::{OdbError, PackCache, PackCacheOdb, RangeOdb};
 use crate::paths::RepoPaths;
 use crate::reflog::{ReadAt, RefError, RefLog, RefSnapshot};
 use crate::wal::{StoreWalStore, WalStore};
@@ -74,17 +74,14 @@ pub async fn fork_repo(
     Ok(snapshot.seq)
 }
 
-/// The object database of repository `repo`'s `snapshot` in namespace
-/// `ns` of `store`, with every fork parent opened at the seq its child
-/// names (each parent's state is read from its own WAL). Refuses a chain
-/// of more than `MAX_FORK_DEPTH` parents (`ForkTooDeep`).
-pub async fn open_fork_odb(
+/// The chain from `repo` up to its root fork parent, each with its
+/// snapshot at the seq its child names; at most `MAX_FORK_DEPTH` parents.
+async fn fork_chain(
     store: &Store,
     ns: NamespaceId,
     repo: &RepoId,
     snapshot: &RefSnapshot,
-    cache: Arc<PackCache>,
-) -> Result<PackCacheOdb, ForkError> {
+) -> Result<Vec<(RepoId, RefSnapshot)>, ForkError> {
     // The chain from `repo` up to its root, each with its snapshot.
     let mut chain: Vec<(RepoId, RefSnapshot)> = vec![(repo.clone(), snapshot.clone())];
     while let Some(parent) = chain.last().and_then(|(_, snap)| snap.parent.clone()) {
@@ -101,10 +98,48 @@ pub async fn open_fork_odb(
         let state = state_at(&wal, Seq(parent.seq)).await?;
         chain.push((id, state.snapshot()));
     }
+    Ok(chain)
+}
+
+/// The object database of repository `repo`'s `snapshot` in namespace
+/// `ns` of `store`, with every fork parent opened at the seq its child
+/// names (each parent's state is read from its own WAL). Refuses a chain
+/// of more than `MAX_FORK_DEPTH` parents (`ForkTooDeep`).
+pub async fn open_fork_odb(
+    store: &Store,
+    ns: NamespaceId,
+    repo: &RepoId,
+    snapshot: &RefSnapshot,
+    cache: Arc<PackCache>,
+) -> Result<PackCacheOdb, ForkError> {
+    let chain = fork_chain(store, ns, repo, snapshot).await?;
     let mut odb: Option<Arc<PackCacheOdb>> = None;
     for (id, snap) in chain.into_iter().rev() {
         let blobs = Arc::new(StoreBlobStore::new(store.clone(), RepoPaths::new(ns, &id)));
         let opened = PackCacheOdb::open(id, blobs, Arc::clone(&cache), &snap, odb).await?;
+        odb = Some(Arc::new(opened));
+    }
+    let odb = odb.expect("the chain holds `repo`");
+    Ok(Arc::try_unwrap(odb).expect("only this function holds the database"))
+}
+
+/// As [`open_fork_odb`], as a [`RangeOdb`] (plan GT1 Task 18): every layer's
+/// packs in its own repository's blob store, read through `h1` when given.
+pub async fn open_fork_range_odb(
+    store: &Store,
+    ns: NamespaceId,
+    repo: &RepoId,
+    snapshot: &RefSnapshot,
+    h1: Option<loams_cache::RangeCache>,
+) -> Result<RangeOdb, ForkError> {
+    let chain = fork_chain(store, ns, repo, snapshot).await?;
+    let mut odb: Option<Arc<RangeOdb>> = None;
+    for (id, snap) in chain.into_iter().rev() {
+        let mut blobs = StoreBlobStore::new(store.clone(), RepoPaths::new(ns, &id));
+        if let Some(h1) = &h1 {
+            blobs = blobs.with_range_cache(h1.clone());
+        }
+        let opened = RangeOdb::open(id, Arc::new(blobs), &snap, odb).await?;
         odb = Some(Arc::new(opened));
     }
     let odb = odb.expect("the chain holds `repo`");
