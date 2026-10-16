@@ -109,6 +109,15 @@ func WithHeader(name, value string) CallOption {
 	}
 }
 
+// LiveAppHeader is the request header that selects one of a Live node's apps
+// (`LiveAdminService`, LV1 Task 13). A request without it addresses the server's
+// own app (`--live-app`).
+const LiveAppHeader = "loams-live-app"
+
+// WithLiveApp addresses the Live app `name` on this call. To address one app on
+// every call a client makes, set the same header in `TransportConfig.ExtraHeaders`.
+func WithLiveApp(name string) CallOption { return WithHeader(LiveAppHeader, name) }
+
 // WithStreamResume makes a server stream reconnect from its last cursor on a
 // retryable failure (R7).
 //

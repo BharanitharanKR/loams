@@ -193,6 +193,52 @@ var Modules = []ModuleBinding{
 		},
 	},
 	{
+		Name:     "live.admin",
+		Summary:  "Live administration: the app directory (LV1 Task 13).",
+		Service:  livev1connect.LiveAdminServiceName,
+		Package:  "loams.live.v1",
+		Unstable: true,
+		// The app-directory calls only. Deploy is still reached as
+		// `tables.Deploy`; the rest of `LiveAdminService` is not in this
+		// facade yet (see the provenance note above).
+		Calls: []CallBinding{
+			{
+				Module: "live.admin", Name: "CreateApp", ProtoName: "createApp",
+				Method: "CreateApp", RPC: livev1connect.LiveAdminServiceName + "/CreateApp",
+				Service: livev1connect.LiveAdminServiceName, Package: "loams.live.v1",
+				Idempotency: None, Retry: RetryManual, Streaming: Unary,
+			},
+			{
+				Module: "live.admin", Name: "DeleteApp", ProtoName: "deleteApp",
+				Method: "DeleteApp", RPC: livev1connect.LiveAdminServiceName + "/DeleteApp",
+				Service: livev1connect.LiveAdminServiceName, Package: "loams.live.v1",
+				Idempotency: None, Retry: RetryManual, Streaming: Unary,
+			},
+			{
+				Module: "live.admin", Name: "GetApp", ProtoName: "getApp",
+				Method: "GetApp", RPC: livev1connect.LiveAdminServiceName + "/GetApp",
+				Service: livev1connect.LiveAdminServiceName, Package: "loams.live.v1",
+				Idempotency: None, Retry: RetrySafe, Streaming: Unary,
+			},
+			{
+				Module: "live.admin", Name: "ListApps", ProtoName: "listApps",
+				Method: "ListApps", RPC: livev1connect.LiveAdminServiceName + "/ListApps",
+				Service: livev1connect.LiveAdminServiceName, Package: "loams.live.v1",
+				Idempotency: None, Retry: RetrySafe, Streaming: Unary,
+				Pagination: &Pagination{
+					ItemsField: "Apps", NextPageTokenField: "NextPageToken",
+					PageSizeField: "PageSize", PageTokenField: "PageToken",
+				},
+			},
+			{
+				Module: "live.admin", Name: "UpdateApp", ProtoName: "updateApp",
+				Method: "UpdateApp", RPC: livev1connect.LiveAdminServiceName + "/UpdateApp",
+				Service: livev1connect.LiveAdminServiceName, Package: "loams.live.v1",
+				Idempotency: None, Retry: RetryManual, Streaming: Unary,
+			},
+		},
+	},
+	{
 		Name:     "tables",
 		Service:  livev1connect.LiveServiceName,
 		Package:  "loams.live.v1",

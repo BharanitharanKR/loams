@@ -121,6 +121,29 @@ type TablesModule interface {
 	Deploy(ctx context.Context, request *DeployRequest, options ...CallOption) (*DeployResponse, error)
 }
 
+// LiveAdminModule is `loams.live.admin`: the app-directory half of
+// `loams.live.v1.LiveAdminService` (LV1 Task 13). Select the app a call
+// addresses with `WithLiveApp`, which sends the `loams-live-app` header.
+type LiveAdminModule interface {
+	// Module is the SDK module, as it appears on the client.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable is whether the package's wire contract may still change.
+	Unstable() bool
+
+	// CreateApp is `loams.live.v1.LiveAdminService/CreateApp`, retried: manual. Registers an app in the node's directory. An existing name answers `live_app_exists`; a node without the app directory answers `live_app_disabled`.
+	CreateApp(ctx context.Context, request *CreateAppRequest, options ...CallOption) (*CreateAppResponse, error)
+	// ListApps is `loams.live.v1.LiveAdminService/ListApps`, retried: safe. One page of the node's apps (AIP-158: `Apps` and `NextPageToken`).
+	ListApps(ctx context.Context, request *ListAppsRequest, options ...CallOption) (*ListAppsResponse, error)
+	// GetApp is `loams.live.v1.LiveAdminService/GetApp`, retried: safe. One app by name.
+	GetApp(ctx context.Context, request *GetAppRequest, options ...CallOption) (*GetAppResponse, error)
+	// UpdateApp is `loams.live.v1.LiveAdminService/UpdateApp`, retried: manual. Updates an app's settings.
+	UpdateApp(ctx context.Context, request *UpdateAppRequest, options ...CallOption) (*UpdateAppResponse, error)
+	// DeleteApp is `loams.live.v1.LiveAdminService/DeleteApp`, retried: manual. Removes an app from the directory. The server's own app (`--live-app`) cannot be deleted.
+	DeleteApp(ctx context.Context, request *DeleteAppRequest, options ...CallOption) (*DeleteAppResponse, error)
+}
+
 // moduleInfo is what the three implementations share. `registry` is the map a
 // caller reaches every module through, so `Client.Module(name)` and the concrete
 // accessors can never disagree about what exists.
@@ -180,6 +203,68 @@ func (m *instanceModule) WhoAmI(ctx context.Context, request *WhoAmIRequest, opt
 		return nil, err
 	}
 	return Unary(m.invoker, ctx, binding, client.WhoAmI, request, options...)
+}
+
+type liveAdminModule struct{ moduleInfo }
+
+func (m *liveAdminModule) CreateApp(ctx context.Context, request *CreateAppRequest, options ...CallOption) (*CreateAppResponse, error) {
+	binding, err := m.binding("CreateApp")
+	if err != nil {
+		return nil, err
+	}
+	client, err := clientOf[livev1connect.LiveAdminServiceClient](m.invoker, binding.Service)
+	if err != nil {
+		return nil, err
+	}
+	return Unary(m.invoker, ctx, binding, client.CreateApp, request, options...)
+}
+
+func (m *liveAdminModule) ListApps(ctx context.Context, request *ListAppsRequest, options ...CallOption) (*ListAppsResponse, error) {
+	binding, err := m.binding("ListApps")
+	if err != nil {
+		return nil, err
+	}
+	client, err := clientOf[livev1connect.LiveAdminServiceClient](m.invoker, binding.Service)
+	if err != nil {
+		return nil, err
+	}
+	return Unary(m.invoker, ctx, binding, client.ListApps, request, options...)
+}
+
+func (m *liveAdminModule) GetApp(ctx context.Context, request *GetAppRequest, options ...CallOption) (*GetAppResponse, error) {
+	binding, err := m.binding("GetApp")
+	if err != nil {
+		return nil, err
+	}
+	client, err := clientOf[livev1connect.LiveAdminServiceClient](m.invoker, binding.Service)
+	if err != nil {
+		return nil, err
+	}
+	return Unary(m.invoker, ctx, binding, client.GetApp, request, options...)
+}
+
+func (m *liveAdminModule) UpdateApp(ctx context.Context, request *UpdateAppRequest, options ...CallOption) (*UpdateAppResponse, error) {
+	binding, err := m.binding("UpdateApp")
+	if err != nil {
+		return nil, err
+	}
+	client, err := clientOf[livev1connect.LiveAdminServiceClient](m.invoker, binding.Service)
+	if err != nil {
+		return nil, err
+	}
+	return Unary(m.invoker, ctx, binding, client.UpdateApp, request, options...)
+}
+
+func (m *liveAdminModule) DeleteApp(ctx context.Context, request *DeleteAppRequest, options ...CallOption) (*DeleteAppResponse, error) {
+	binding, err := m.binding("DeleteApp")
+	if err != nil {
+		return nil, err
+	}
+	client, err := clientOf[livev1connect.LiveAdminServiceClient](m.invoker, binding.Service)
+	if err != nil {
+		return nil, err
+	}
+	return Unary(m.invoker, ctx, binding, client.DeleteApp, request, options...)
 }
 
 type liveModule struct{ moduleInfo }

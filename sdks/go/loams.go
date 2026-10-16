@@ -83,10 +83,11 @@ type Client struct {
 	// session is nil unless SessionConsistency was on.
 	session *ConsistencySession
 
-	instance InstanceModule
-	live     LiveModule
-	tables   TablesModule
-	system   *System
+	instance  InstanceModule
+	live      LiveModule
+	liveAdmin LiveAdminModule
+	tables    TablesModule
+	system    *System
 
 	// modules is every generated module, by name: the catalogue a caller
 	// iterates when it wants to feature-detect without hard-coding a field.
@@ -145,9 +146,11 @@ func New(options Options) (*Client, error) {
 
 	client.instance = &instanceModule{moduleInfo{invoker: client.invoker, registry: client.modules, name: "instance"}}
 	client.live = &liveModule{moduleInfo{invoker: client.invoker, registry: client.modules, name: "live"}}
+	client.liveAdmin = &liveAdminModule{moduleInfo{invoker: client.invoker, registry: client.modules, name: "live.admin"}}
 	client.tables = &tablesModule{moduleInfo{invoker: client.invoker, registry: client.modules, name: "tables"}}
 	client.modules["instance"] = client.instance
 	client.modules["live"] = client.live
+	client.modules["live.admin"] = client.liveAdmin
 	client.modules["tables"] = client.tables
 	client.system = &System{
 		client:   client,
@@ -174,6 +177,11 @@ func (c *Client) Instance() InstanceModule { return c.instance }
 // Live is `loams.live` — the live sync session half. Its package is unstable, so
 // its wire contract may still change (§44 §10.3).
 func (c *Client) Live() LiveModule { return c.live }
+
+// LiveAdmin is `loams.live.admin` — the app directory of the Live engine
+// (`CreateApp`, `ListApps`, `GetApp`, `UpdateApp`, `DeleteApp`). Address one app
+// with `WithLiveApp`.
+func (c *Client) LiveAdmin() LiveAdminModule { return c.liveAdmin }
 
 // Tables is `loams.tables` — the table half of the same service (design §44
 // §7.2).
@@ -300,6 +308,17 @@ type (
 	MutateResponse         = livev1.MutateResponse
 	DeployRequest          = livev1.DeployRequest
 	DeployResponse         = livev1.DeployResponse
+	// The app directory (LV1 Task 13).
+	CreateAppRequest  = livev1.CreateAppRequest
+	CreateAppResponse = livev1.CreateAppResponse
+	ListAppsRequest   = livev1.ListAppsRequest
+	ListAppsResponse  = livev1.ListAppsResponse
+	GetAppRequest     = livev1.GetAppRequest
+	GetAppResponse    = livev1.GetAppResponse
+	UpdateAppRequest  = livev1.UpdateAppRequest
+	UpdateAppResponse = livev1.UpdateAppResponse
+	DeleteAppRequest  = livev1.DeleteAppRequest
+	DeleteAppResponse = livev1.DeleteAppResponse
 )
 
 // _ keeps the connect import in this file's import list honest: a caller's
