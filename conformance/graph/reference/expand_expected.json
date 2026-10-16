@@ -1,0 +1,2344 @@
+{
+ "after": {
+  "both_two_hops": {
+   "reached": [
+    {
+     "edge": "r027",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 100,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e03"
+    },
+    {
+     "edge": "r044",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 105,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e03"
+    },
+    {
+     "edge": "r009",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e00",
+     "label": "entity",
+     "seed": 0,
+     "via": "e03"
+    },
+    {
+     "edge": "r048",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 0,
+     "via": "e03"
+    },
+    {
+     "edge": "r031",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": 101,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r047",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e02",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r049",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e04",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r042",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e06",
+     "label": "entity",
+     "seed": 0,
+     "via": 105
+    },
+    {
+     "edge": "r005",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e07",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r029",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e08",
+     "label": "entity",
+     "seed": 0,
+     "via": 100
+    },
+    {
+     "edge": "r053",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e09",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r021",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e10",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r028",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e11",
+     "label": "entity",
+     "seed": 0,
+     "via": 100
+    },
+    {
+     "edge": "r005",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 1,
+     "via": "e07"
+    },
+    {
+     "edge": "r008",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e06",
+     "label": "entity",
+     "seed": 1,
+     "via": "e07"
+    },
+    {
+     "edge": "r039",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": 104,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e06"
+    },
+    {
+     "edge": "r042",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": 105,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e06"
+    },
+    {
+     "edge": "r045",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e00",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r047",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e02",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r048",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e03",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r049",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e04",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r024",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e08",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r053",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e09",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r014",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e10",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r055",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e11",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    }
+   ],
+   "skipped": []
+  },
+  "chunks_to_entities": {
+   "reached": [
+    {
+     "edge": "r027",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e03",
+     "label": "entity",
+     "seed": 0,
+     "via": 100
+    },
+    {
+     "edge": "r029",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e08",
+     "label": "entity",
+     "seed": 0,
+     "via": 100
+    },
+    {
+     "edge": "r028",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e11",
+     "label": "entity",
+     "seed": 0,
+     "via": 100
+    },
+    {
+     "edge": "r024",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e05",
+     "label": "entity",
+     "seed": 0,
+     "via": "e08"
+    },
+    {
+     "edge": "r001",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e10",
+     "label": "entity",
+     "seed": 0,
+     "via": "e11"
+    },
+    {
+     "edge": "r031",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e00",
+     "label": "entity",
+     "seed": 1,
+     "via": 101
+    },
+    {
+     "edge": "r032",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e02",
+     "label": "entity",
+     "seed": 1,
+     "via": 101
+    },
+    {
+     "edge": "r030",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e08",
+     "label": "entity",
+     "seed": 1,
+     "via": 101
+    },
+    {
+     "edge": "r009",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e03",
+     "label": "entity",
+     "seed": 1,
+     "via": "e00"
+    },
+    {
+     "edge": "r002",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e04",
+     "label": "entity",
+     "seed": 1,
+     "via": "e02"
+    },
+    {
+     "edge": "r024",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e05",
+     "label": "entity",
+     "seed": 1,
+     "via": "e08"
+    },
+    {
+     "edge": "r021",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e10",
+     "label": "entity",
+     "seed": 1,
+     "via": "e00"
+    }
+   ],
+   "skipped": [
+    2
+   ]
+  },
+  "edge_filter": {
+   "reached": [
+    {
+     "edge": "r037",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 103,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e04"
+    },
+    {
+     "edge": "r059",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e00",
+     "label": "chunk",
+     "seed": 1,
+     "via": "e04"
+    },
+    {
+     "edge": "r002",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e02",
+     "label": "entity",
+     "seed": 1,
+     "via": "e04"
+    },
+    {
+     "edge": "r049",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 1,
+     "via": "e04"
+    },
+    {
+     "edge": "r026",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e10",
+     "label": "entity",
+     "seed": 1,
+     "via": "e04"
+    },
+    {
+     "edge": "r032",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": 101,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e02"
+    },
+    {
+     "edge": "r045",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e00",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r048",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e03",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r018",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e06",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r005",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e07",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r024",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e08",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r053",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e09",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r038",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e11",
+     "label": "entity",
+     "seed": 1,
+     "via": 103
+    },
+    {
+     "edge": "r029",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 100,
+     "label": "chunk",
+     "seed": 2,
+     "via": "e08"
+    },
+    {
+     "edge": "r030",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 101,
+     "label": "chunk",
+     "seed": 2,
+     "via": "e08"
+    },
+    {
+     "edge": "r024",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 2,
+     "via": "e08"
+    },
+    {
+     "edge": "r031",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e00",
+     "label": "entity",
+     "seed": 2,
+     "via": 101
+    },
+    {
+     "edge": "r032",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e02",
+     "label": "entity",
+     "seed": 2,
+     "via": 101
+    },
+    {
+     "edge": "r027",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e03",
+     "label": "entity",
+     "seed": 2,
+     "via": 100
+    },
+    {
+     "edge": "r049",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e04",
+     "label": "entity",
+     "seed": 2,
+     "via": "e05"
+    },
+    {
+     "edge": "r018",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e06",
+     "label": "entity",
+     "seed": 2,
+     "via": "e05"
+    },
+    {
+     "edge": "r005",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e07",
+     "label": "entity",
+     "seed": 2,
+     "via": "e05"
+    },
+    {
+     "edge": "r053",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e09",
+     "label": "entity",
+     "seed": 2,
+     "via": "e05"
+    },
+    {
+     "edge": "r014",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e10",
+     "label": "entity",
+     "seed": 2,
+     "via": "e05"
+    },
+    {
+     "edge": "r028",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e11",
+     "label": "entity",
+     "seed": 2,
+     "via": 100
+    }
+   ],
+   "skipped": [
+    0
+   ]
+  },
+  "in_one_hop": {
+   "reached": [
+    {
+     "edge": "r032",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 101,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e02"
+    },
+    {
+     "edge": "r036",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 103,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e02"
+    },
+    {
+     "edge": "r047",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 0,
+     "via": "e02"
+    }
+   ],
+   "skipped": []
+  },
+  "limit": {
+   "reached": [
+    {
+     "edge": "r045",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e00",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r047",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e02",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r048",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e03",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r031",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 101,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e00"
+    },
+    {
+     "edge": "r009",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e03",
+     "label": "entity",
+     "seed": 1,
+     "via": "e00"
+    },
+    {
+     "edge": "r032",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 101,
+     "label": "chunk",
+     "seed": 2,
+     "via": "e02"
+    },
+    {
+     "edge": "r036",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 103,
+     "label": "chunk",
+     "seed": 2,
+     "via": "e02"
+    }
+   ],
+   "skipped": []
+  },
+  "limit_per_seed": {
+   "reached": [
+    {
+     "edge": "r045",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e00",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r047",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e02",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r048",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e03",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r049",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e04",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r031",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 101,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e00"
+    },
+    {
+     "edge": "r009",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e03",
+     "label": "entity",
+     "seed": 1,
+     "via": "e00"
+    },
+    {
+     "edge": "r059",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e04",
+     "label": "entity",
+     "seed": 1,
+     "via": "e00"
+    },
+    {
+     "edge": "r045",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 1,
+     "via": "e00"
+    }
+   ],
+   "skipped": []
+  },
+  "missing_and_repeated_seeds": {
+   "reached": [],
+   "skipped": [
+    0,
+    1,
+    2,
+    4
+   ]
+  },
+  "out_one_hop": {
+   "reached": [
+    {
+     "edge": "r009",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e03",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r059",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e04",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r019",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e08",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r021",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e10",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    }
+   ],
+   "skipped": [
+    1
+   ]
+  },
+  "range_filter": {
+   "reached": [
+    {
+     "edge": "r013",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e10",
+     "label": "entity",
+     "seed": 0,
+     "via": "e09"
+    },
+    {
+     "edge": "r021",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e00",
+     "label": "entity",
+     "seed": 1,
+     "via": "e10"
+    },
+    {
+     "edge": "r026",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e04",
+     "label": "entity",
+     "seed": 1,
+     "via": "e10"
+    },
+    {
+     "edge": "r014",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 1,
+     "via": "e10"
+    },
+    {
+     "edge": "r013",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e09",
+     "label": "entity",
+     "seed": 1,
+     "via": "e10"
+    },
+    {
+     "edge": "r001",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e11",
+     "label": "entity",
+     "seed": 1,
+     "via": "e10"
+    }
+   ],
+   "skipped": []
+  },
+  "types": {
+   "reached": [
+    {
+     "edge": "r005",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e07",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r008",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e06",
+     "label": "entity",
+     "seed": 0,
+     "via": "e07"
+    },
+    {
+     "edge": "r018",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 1,
+     "via": "e06"
+    },
+    {
+     "edge": "r022",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e07",
+     "label": "entity",
+     "seed": 1,
+     "via": "e06"
+    }
+   ],
+   "skipped": []
+  },
+  "unlabelled_seed_reaches_both_labels": {
+   "reached": [
+    {
+     "edge": "r009",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e03",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r059",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e04",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r019",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e08",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r021",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e10",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    }
+   ],
+   "skipped": []
+  },
+  "vertex_filter": {
+   "reached": [
+    {
+     "edge": "r045",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e00",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r048",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e03",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r018",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e06",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r053",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e09",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    }
+   ],
+   "skipped": []
+  }
+ },
+ "before": {
+  "both_two_hops": {
+   "reached": [
+    {
+     "edge": "r027",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 100,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e03"
+    },
+    {
+     "edge": "r044",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 105,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e03"
+    },
+    {
+     "edge": "r009",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e00",
+     "label": "entity",
+     "seed": 0,
+     "via": "e03"
+    },
+    {
+     "edge": "r048",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 0,
+     "via": "e03"
+    },
+    {
+     "edge": "r031",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": 101,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r033",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": 102,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r043",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e01",
+     "label": "entity",
+     "seed": 0,
+     "via": 105
+    },
+    {
+     "edge": "r047",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e02",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r049",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e04",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r042",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e06",
+     "label": "entity",
+     "seed": 0,
+     "via": 105
+    },
+    {
+     "edge": "r005",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e07",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r029",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e08",
+     "label": "entity",
+     "seed": 0,
+     "via": 100
+    },
+    {
+     "edge": "r053",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e09",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r021",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e10",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r028",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e11",
+     "label": "entity",
+     "seed": 0,
+     "via": 100
+    },
+    {
+     "edge": "r005",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 1,
+     "via": "e07"
+    },
+    {
+     "edge": "r008",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e06",
+     "label": "entity",
+     "seed": 1,
+     "via": "e07"
+    },
+    {
+     "edge": "r039",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": 104,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e06"
+    },
+    {
+     "edge": "r042",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": 105,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e06"
+    },
+    {
+     "edge": "r045",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e00",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r003",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e01",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r047",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e02",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r048",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e03",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r049",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e04",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r024",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e08",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r053",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e09",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r014",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e10",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r055",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e11",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    }
+   ],
+   "skipped": []
+  },
+  "chunks_to_entities": {
+   "reached": [
+    {
+     "edge": "r027",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e03",
+     "label": "entity",
+     "seed": 0,
+     "via": 100
+    },
+    {
+     "edge": "r029",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e08",
+     "label": "entity",
+     "seed": 0,
+     "via": 100
+    },
+    {
+     "edge": "r028",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e11",
+     "label": "entity",
+     "seed": 0,
+     "via": 100
+    },
+    {
+     "edge": "r010",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e04",
+     "label": "entity",
+     "seed": 0,
+     "via": "e11"
+    },
+    {
+     "edge": "r024",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e05",
+     "label": "entity",
+     "seed": 0,
+     "via": "e08"
+    },
+    {
+     "edge": "r001",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e10",
+     "label": "entity",
+     "seed": 0,
+     "via": "e11"
+    },
+    {
+     "edge": "r031",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e00",
+     "label": "entity",
+     "seed": 1,
+     "via": 101
+    },
+    {
+     "edge": "r032",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e02",
+     "label": "entity",
+     "seed": 1,
+     "via": 101
+    },
+    {
+     "edge": "r030",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e08",
+     "label": "entity",
+     "seed": 1,
+     "via": 101
+    },
+    {
+     "edge": "r020",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e01",
+     "label": "entity",
+     "seed": 1,
+     "via": "e02"
+    },
+    {
+     "edge": "r009",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e03",
+     "label": "entity",
+     "seed": 1,
+     "via": "e00"
+    },
+    {
+     "edge": "r002",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e04",
+     "label": "entity",
+     "seed": 1,
+     "via": "e02"
+    },
+    {
+     "edge": "r024",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e05",
+     "label": "entity",
+     "seed": 1,
+     "via": "e08"
+    },
+    {
+     "edge": "r021",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e10",
+     "label": "entity",
+     "seed": 1,
+     "via": "e00"
+    },
+    {
+     "edge": "r033",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e00",
+     "label": "entity",
+     "seed": 2,
+     "via": 102
+    },
+    {
+     "edge": "r035",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e08",
+     "label": "entity",
+     "seed": 2,
+     "via": 102
+    },
+    {
+     "edge": "r034",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e10",
+     "label": "entity",
+     "seed": 2,
+     "via": 102
+    },
+    {
+     "edge": "r009",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e03",
+     "label": "entity",
+     "seed": 2,
+     "via": "e00"
+    },
+    {
+     "edge": "r026",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e04",
+     "label": "entity",
+     "seed": 2,
+     "via": "e10"
+    },
+    {
+     "edge": "r024",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e05",
+     "label": "entity",
+     "seed": 2,
+     "via": "e08"
+    },
+    {
+     "edge": "r013",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e09",
+     "label": "entity",
+     "seed": 2,
+     "via": "e10"
+    }
+   ],
+   "skipped": []
+  },
+  "edge_filter": {
+   "reached": [
+    {
+     "edge": "r041",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 104,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e01"
+    },
+    {
+     "edge": "r043",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 105,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e01"
+    },
+    {
+     "edge": "r020",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e02",
+     "label": "entity",
+     "seed": 0,
+     "via": "e01"
+    },
+    {
+     "edge": "r046",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 0,
+     "via": "e01"
+    },
+    {
+     "edge": "r011",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e09",
+     "label": "entity",
+     "seed": 0,
+     "via": "e01"
+    },
+    {
+     "edge": "r017",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e11",
+     "label": "entity",
+     "seed": 0,
+     "via": "e01"
+    },
+    {
+     "edge": "r028",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": 100,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e11"
+    },
+    {
+     "edge": "r032",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": 101,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e02"
+    },
+    {
+     "edge": "r036",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": 103,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e02"
+    },
+    {
+     "edge": "r045",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e00",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r044",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e03",
+     "label": "entity",
+     "seed": 0,
+     "via": 105
+    },
+    {
+     "edge": "r040",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e04",
+     "label": "entity",
+     "seed": 0,
+     "via": 104
+    },
+    {
+     "edge": "r039",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e06",
+     "label": "entity",
+     "seed": 0,
+     "via": 104
+    },
+    {
+     "edge": "r005",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e07",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r024",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e08",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r015",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e10",
+     "label": "entity",
+     "seed": 0,
+     "via": "e02"
+    },
+    {
+     "edge": "r037",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 103,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e04"
+    },
+    {
+     "edge": "r040",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 104,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e04"
+    },
+    {
+     "edge": "r059",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e00",
+     "label": "chunk",
+     "seed": 1,
+     "via": "e04"
+    },
+    {
+     "edge": "r002",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e02",
+     "label": "entity",
+     "seed": 1,
+     "via": "e04"
+    },
+    {
+     "edge": "r049",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 1,
+     "via": "e04"
+    },
+    {
+     "edge": "r026",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e10",
+     "label": "entity",
+     "seed": 1,
+     "via": "e04"
+    },
+    {
+     "edge": "r010",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e11",
+     "label": "entity",
+     "seed": 1,
+     "via": "e04"
+    },
+    {
+     "edge": "r028",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": 100,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e11"
+    },
+    {
+     "edge": "r032",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": 101,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e02"
+    },
+    {
+     "edge": "r034",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": 102,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e10"
+    },
+    {
+     "edge": "r045",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e00",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r041",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e01",
+     "label": "entity",
+     "seed": 1,
+     "via": 104
+    },
+    {
+     "edge": "r048",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e03",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r039",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e06",
+     "label": "entity",
+     "seed": 1,
+     "via": 104
+    },
+    {
+     "edge": "r005",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e07",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r024",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e08",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r053",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e09",
+     "label": "entity",
+     "seed": 1,
+     "via": "e05"
+    },
+    {
+     "edge": "r029",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 100,
+     "label": "chunk",
+     "seed": 2,
+     "via": "e08"
+    },
+    {
+     "edge": "r030",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 101,
+     "label": "chunk",
+     "seed": 2,
+     "via": "e08"
+    },
+    {
+     "edge": "r035",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 102,
+     "label": "chunk",
+     "seed": 2,
+     "via": "e08"
+    },
+    {
+     "edge": "r024",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 2,
+     "via": "e08"
+    },
+    {
+     "edge": "r031",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e00",
+     "label": "entity",
+     "seed": 2,
+     "via": 101
+    },
+    {
+     "edge": "r046",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e01",
+     "label": "entity",
+     "seed": 2,
+     "via": "e05"
+    },
+    {
+     "edge": "r032",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e02",
+     "label": "entity",
+     "seed": 2,
+     "via": 101
+    },
+    {
+     "edge": "r027",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e03",
+     "label": "entity",
+     "seed": 2,
+     "via": 100
+    },
+    {
+     "edge": "r049",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e04",
+     "label": "entity",
+     "seed": 2,
+     "via": "e05"
+    },
+    {
+     "edge": "r018",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e06",
+     "label": "entity",
+     "seed": 2,
+     "via": "e05"
+    },
+    {
+     "edge": "r005",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e07",
+     "label": "entity",
+     "seed": 2,
+     "via": "e05"
+    },
+    {
+     "edge": "r053",
+     "edge_type": "KNOWS",
+     "hop": 2,
+     "key": "e09",
+     "label": "entity",
+     "seed": 2,
+     "via": "e05"
+    },
+    {
+     "edge": "r034",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e10",
+     "label": "entity",
+     "seed": 2,
+     "via": 102
+    },
+    {
+     "edge": "r028",
+     "edge_type": "MENTIONS",
+     "hop": 2,
+     "key": "e11",
+     "label": "entity",
+     "seed": 2,
+     "via": 100
+    }
+   ],
+   "skipped": []
+  },
+  "in_one_hop": {
+   "reached": [
+    {
+     "edge": "r032",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 101,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e02"
+    },
+    {
+     "edge": "r036",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 103,
+     "label": "chunk",
+     "seed": 0,
+     "via": "e02"
+    },
+    {
+     "edge": "r057",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e01",
+     "label": "entity",
+     "seed": 0,
+     "via": "e02"
+    },
+    {
+     "edge": "r047",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 0,
+     "via": "e02"
+    }
+   ],
+   "skipped": []
+  },
+  "limit": {
+   "reached": [
+    {
+     "edge": "r045",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e00",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r003",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e01",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r031",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 101,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e00"
+    },
+    {
+     "edge": "r033",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 102,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e00"
+    },
+    {
+     "edge": "r032",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 101,
+     "label": "chunk",
+     "seed": 2,
+     "via": "e02"
+    },
+    {
+     "edge": "r036",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 103,
+     "label": "chunk",
+     "seed": 2,
+     "via": "e02"
+    },
+    {
+     "edge": "r020",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e01",
+     "label": "entity",
+     "seed": 2,
+     "via": "e02"
+    }
+   ],
+   "skipped": []
+  },
+  "limit_per_seed": {
+   "reached": [
+    {
+     "edge": "r045",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e00",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r003",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e01",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r047",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e02",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r048",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e03",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r031",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 101,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e00"
+    },
+    {
+     "edge": "r033",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": 102,
+     "label": "chunk",
+     "seed": 1,
+     "via": "e00"
+    },
+    {
+     "edge": "r009",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e03",
+     "label": "entity",
+     "seed": 1,
+     "via": "e00"
+    },
+    {
+     "edge": "r059",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e04",
+     "label": "entity",
+     "seed": 1,
+     "via": "e00"
+    }
+   ],
+   "skipped": []
+  },
+  "missing_and_repeated_seeds": {
+   "reached": [
+    {
+     "edge": "r057",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e02",
+     "label": "entity",
+     "seed": 1,
+     "via": "e01"
+    },
+    {
+     "edge": "r003",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 1,
+     "via": "e01"
+    },
+    {
+     "edge": "r017",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e11",
+     "label": "entity",
+     "seed": 1,
+     "via": "e01"
+    }
+   ],
+   "skipped": [
+    0,
+    4
+   ]
+  },
+  "out_one_hop": {
+   "reached": [
+    {
+     "edge": "r009",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e03",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r059",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e04",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r019",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e08",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r021",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e10",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r057",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e02",
+     "label": "entity",
+     "seed": 1,
+     "via": "e01"
+    },
+    {
+     "edge": "r003",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 1,
+     "via": "e01"
+    },
+    {
+     "edge": "r017",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e11",
+     "label": "entity",
+     "seed": 1,
+     "via": "e01"
+    }
+   ],
+   "skipped": []
+  },
+  "range_filter": {
+   "reached": [
+    {
+     "edge": "r013",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e10",
+     "label": "entity",
+     "seed": 0,
+     "via": "e09"
+    },
+    {
+     "edge": "r021",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e00",
+     "label": "entity",
+     "seed": 1,
+     "via": "e10"
+    },
+    {
+     "edge": "r026",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e04",
+     "label": "entity",
+     "seed": 1,
+     "via": "e10"
+    },
+    {
+     "edge": "r014",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 1,
+     "via": "e10"
+    },
+    {
+     "edge": "r013",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e09",
+     "label": "entity",
+     "seed": 1,
+     "via": "e10"
+    },
+    {
+     "edge": "r001",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e11",
+     "label": "entity",
+     "seed": 1,
+     "via": "e10"
+    }
+   ],
+   "skipped": []
+  },
+  "types": {
+   "reached": [
+    {
+     "edge": "r005",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e07",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r008",
+     "edge_type": "RELATED",
+     "hop": 2,
+     "key": "e06",
+     "label": "entity",
+     "seed": 0,
+     "via": "e07"
+    },
+    {
+     "edge": "r018",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e05",
+     "label": "entity",
+     "seed": 1,
+     "via": "e06"
+    },
+    {
+     "edge": "r022",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e07",
+     "label": "entity",
+     "seed": 1,
+     "via": "e06"
+    }
+   ],
+   "skipped": []
+  },
+  "unlabelled_seed_reaches_both_labels": {
+   "reached": [
+    {
+     "edge": "r009",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e03",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r059",
+     "edge_type": "MENTIONS",
+     "hop": 1,
+     "key": "e04",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r019",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e08",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    },
+    {
+     "edge": "r021",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e10",
+     "label": "entity",
+     "seed": 0,
+     "via": "e00"
+    }
+   ],
+   "skipped": []
+  },
+  "vertex_filter": {
+   "reached": [
+    {
+     "edge": "r045",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e00",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r048",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e03",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r018",
+     "edge_type": "RELATED",
+     "hop": 1,
+     "key": "e06",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    },
+    {
+     "edge": "r053",
+     "edge_type": "KNOWS",
+     "hop": 1,
+     "key": "e09",
+     "label": "entity",
+     "seed": 0,
+     "via": "e05"
+    }
+   ],
+   "skipped": []
+  }
+ }
+}

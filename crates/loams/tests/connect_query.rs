@@ -1378,10 +1378,10 @@ async fn the_section_05_body_is_accepted_rpc() {
     );
     assert_eq!(pks(&body), pks(&rest), "{body} vs {rest}");
 
-    // `rerank` arrives in M3: `invalid_argument`, with the same prose, on both
-    // surfaces. This is the assertion that fails if the hybrid body is decoded
-    // **after** the typed message, because proto3 JSON ignores an unknown
-    // field and the request would silently drop the stage.
+    // The deprecated untyped `rerank` field is `invalid_argument` (GR1 Task 20:
+    // `rerank_spec` carries the stage). This is the assertion that fails if the
+    // hybrid body is decoded **after** the typed message, because proto3 JSON
+    // ignores an unknown field and the request would silently drop the stage.
     let mut rpc = fixture.rpc.clone();
     rpc.as_object_mut()
         .expect("an object")
@@ -1391,7 +1391,7 @@ async fn the_section_05_body_is_accepted_rpc() {
     let error = error.expect_error(StatusCode::BAD_REQUEST);
     assert_eq!(error["code"], "invalid_argument", "{error}");
     assert_reason(&error, "invalid_argument");
-    assert!(message.contains("rerank arrives in M3"), "{message}");
+    assert!(message.contains("rerank_spec"), "{message}");
 
     let mut rest = fixture.rest.clone();
     rest.as_object_mut()

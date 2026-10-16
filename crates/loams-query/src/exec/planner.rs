@@ -702,6 +702,7 @@ impl SearchPlanner {
             groups,
             read_token: view.read_token.clone(),
             hot_used: view.hot_used.kinds(),
+            expand: None,
         })
     }
 
@@ -731,6 +732,8 @@ impl SearchPlanner {
             sparse_vectors: row.sparse_vectors,
             highlight: Default::default(),
             fields,
+            neighbors: Vec::new(),
+            graph: None,
         }
     }
 

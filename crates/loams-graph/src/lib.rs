@@ -36,6 +36,7 @@ pub mod owner;
 pub mod recovery;
 pub mod redact;
 pub mod replica;
+pub mod retrieval;
 pub mod service;
 pub mod snapshot;
 pub mod value;

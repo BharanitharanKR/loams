@@ -28,6 +28,7 @@ pub mod backlog;
 pub mod catalog_cache;
 pub mod error;
 pub mod exec;
+pub mod expand;
 pub mod filter_write;
 pub mod flight;
 pub mod flight_ingest;
