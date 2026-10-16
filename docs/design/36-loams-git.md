@@ -858,6 +858,8 @@ message WorkspaceSnapshot {
 - **Complete, not a delta.** Mounting reads one snapshot, plus the hint and a probe, as WAL readers do (§4.6). The tree objects carry the size of the overlay, so the record stays small. A change to `k` files writes about `k × depth` new tree objects into the save's pack.
 - **Status is O(changed).** The `changed` hint lists every path that differs among HEAD, the index and the worktree. Past `MAX_CHANGED_HINT` (10,000 paths) it is omitted and readers diff the trees, which skips equal subtrees by object id.
 
+**As built (GT1d, Task 22; `crates/loams-git/src/format/snapshot.rs`).** The framing above is exact: the header's `format_version` is u16 LE and `n` u64 LE, the CRC32C covers header and body, and both encoder and decoder refuse a body over 1 MiB. The snapshot commit (D835) has tree `worktree_tree`, parent `head` (none for an unborn workspace), author and committer `Loams Snapshot <snapshot@loams.invalid>` at `created_unix_ms` truncated to seconds in `+0000`, and message `loams snapshot <ws_id>@<n>` with a final newline. Plan ruling T22.1.
+
 #### 19.4.3 Writers, readers and takeover (D827)
 
 ```

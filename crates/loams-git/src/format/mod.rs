@@ -1,5 +1,6 @@
-//! The `loams.git.v1` on-disk formats (§36 §4.3, D390, D415): WAL segments,
-//! checkpoints, pack objects and the CloudEvents each transaction is.
+//! The `loams.git.v1` on-disk formats (§36 §4.3, §19.4.2, D390, D415): WAL
+//! segments, checkpoints, pack objects, the CloudEvents each transaction is,
+//! and workspace snapshots.
 //!
 //! Every format is little-endian, framed by a magic at each end and checked
 //! by CRC32C (Castagnoli). Readers accept format versions N and N−1 (§03 §6);
@@ -9,6 +10,7 @@ pub mod checkpoint;
 pub mod event;
 pub mod lpk;
 pub mod segment;
+pub mod snapshot;
 
 use crate::ids::Seq;
 
