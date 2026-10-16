@@ -34,8 +34,12 @@
 //!   compaction (ruling R16.2).
 //! * **Its state** — lag, last commit, last error — is kept per front and shown
 //!   by `system.loams_pipes` and `ListPipes`.
+//! * **`S3Queue` pipes** (HS1 Task 18) read objects under the namespace's own
+//!   prefix instead of a stream, with their own runner ([`s3queue`]) and the
+//!   same views, writer and cursor commit.
 
 pub mod loams_stream;
+pub mod s3queue;
 
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::fmt;
@@ -191,6 +195,25 @@ impl MaterializedView {
     }
 }
 
+/// What a pipe reads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum PipeFeed {
+    /// A Loams stream (`LoamsStream`).
+    Stream(PipeSource),
+    /// Objects under the namespace's prefix (`S3Queue`, HS1 Task 18).
+    Queue(s3queue::QueueSource),
+}
+
+impl PipeFeed {
+    /// The engine as `SHOW CREATE` prints it.
+    pub fn render(&self) -> String {
+        match self {
+            Self::Stream(source) => source.render(),
+            Self::Queue(source) => source.render(),
+        }
+    }
+}
+
 /// A pipe as the catalog holds it, with its views.
 #[derive(Debug, Clone)]
 pub struct Pipe {
@@ -201,7 +224,7 @@ pub struct Pipe {
     /// The catalog entry.
     pub table: LakeTable,
     /// Its source.
-    pub source: PipeSource,
+    pub source: PipeFeed,
     /// `loams_pipe_max_rows`.
     pub max_rows: u64,
     /// `loams_pipe_max_delay_ms`.
@@ -217,7 +240,12 @@ impl Pipe {
             return None;
         }
         let properties = table.metadata.properties();
-        let source: PipeSource = serde_json::from_str(properties.get(PROP_SOURCE)?).ok()?;
+        let source = match properties.get(PROP_SOURCE) {
+            Some(json) => PipeFeed::Stream(serde_json::from_str(json).ok()?),
+            None => {
+                PipeFeed::Queue(serde_json::from_str(properties.get(s3queue::PROP_QUEUE)?).ok()?)
+            }
+        };
         let settings: Vec<(String, String)> = properties
             .get(PROP_SETTINGS)
             .and_then(|s| serde_json::from_str(s).ok())
@@ -305,7 +333,50 @@ fn number_setting(name: &str, value: &str, min: u64, max: u64) -> Result<(), Hou
     }
 }
 
-/// `CREATE TABLE … ENGINE = LoamsStream('<stream>', '<format>'[, '<consumer>'])`.
+/// `LoamsStream('<stream>', '<format>'[, '<consumer>'])` with its `SETTINGS`.
+fn stream_source(args: &[String], settings: &[(String, String)]) -> Result<PipeSource, HouseError> {
+    let literal = |raw: &String| -> Result<String, HouseError> {
+        if raw.starts_with('\'') && raw.ends_with('\'') && raw.len() >= 2 {
+            Ok(ddl::unquote(raw))
+        } else {
+            Err(bad(format!(
+                "LoamsStream's arguments are string literals, not {raw}"
+            )))
+        }
+    };
+    if !(2..=3).contains(&args.len()) {
+        return Err(bad(
+            "LoamsStream takes the stream, the format and, optionally, a consumer name: \
+             LoamsStream('<stream>', '<format>'[, '<consumer>'])",
+        ));
+    }
+    let stream = literal(&args[0])?;
+    if stream.is_empty() {
+        return Err(bad("LoamsStream's stream name is empty"));
+    }
+    let format = PipeFormat::parse(&literal(&args[1])?)?;
+    let consumer = args.get(2).map(literal).transpose()?;
+    for (name, value) in settings {
+        match name.as_str() {
+            "loams_pipe_max_rows" => number_setting(name, value, 1, 100_000_000)?,
+            "loams_pipe_max_delay_ms" => number_setting(name, value, 1, 3_600_000)?,
+            _ => {
+                return Err(HouseError::from(ChError::unknown_setting(format!(
+                    "Unknown setting '{name}': for a LoamsStream pipe (loams_pipe_max_rows, \
+                     loams_pipe_max_delay_ms)"
+                ))));
+            }
+        }
+    }
+    Ok(PipeSource {
+        stream,
+        format,
+        consumer,
+    })
+}
+
+/// `CREATE TABLE … ENGINE = LoamsStream('<stream>', '<format>'[, '<consumer>'])`
+/// or `S3Queue('ns/<id>/<path>', '<format>')`.
 pub async fn create_pipe(
     lake: &Lake,
     namespace: u64,
@@ -318,16 +389,11 @@ pub async fn create_pipe(
         return Err(bad("A pipe names its engine"));
     };
     match engine.as_str() {
-        "LoamsStream" => {}
+        "LoamsStream" | "S3Queue" => {}
         "IggyTopic" => {
             return Err(not_implemented(
                 "An IggyTopic pipe needs the Fabric (FL1), which this House is not deployed \
                  with (HS1 Task 18)",
-            ));
-        }
-        "S3Queue" => {
-            return Err(not_implemented(
-                "S3Queue pipes are served from HS1 Task 18; this House does not serve them yet",
             ));
         }
         other => {
@@ -359,39 +425,15 @@ pub async fn create_pipe(
     if let Some(entry) = &stmt.other_entry {
         return refuse(&format!("{entry} in the column list"));
     }
-    let literal = |raw: &String| -> Result<String, HouseError> {
-        if raw.starts_with('\'') && raw.ends_with('\'') && raw.len() >= 2 {
-            Ok(ddl::unquote(raw))
-        } else {
-            Err(bad(format!(
-                "LoamsStream's arguments are string literals, not {raw}"
-            )))
-        }
+    let feed = if engine == "S3Queue" {
+        PipeFeed::Queue(s3queue::QueueSource::parse(
+            namespace,
+            args,
+            &stmt.settings,
+        )?)
+    } else {
+        PipeFeed::Stream(stream_source(args, &stmt.settings)?)
     };
-    if !(2..=3).contains(&args.len()) {
-        return Err(bad(
-            "LoamsStream takes the stream, the format and, optionally, a consumer name: \
-             LoamsStream('<stream>', '<format>'[, '<consumer>'])",
-        ));
-    }
-    let stream = literal(&args[0])?;
-    if stream.is_empty() {
-        return Err(bad("LoamsStream's stream name is empty"));
-    }
-    let format = PipeFormat::parse(&literal(&args[1])?)?;
-    let consumer = args.get(2).map(literal).transpose()?;
-    for (name, value) in &stmt.settings {
-        match name.as_str() {
-            "loams_pipe_max_rows" => number_setting(name, value, 1, 100_000_000)?,
-            "loams_pipe_max_delay_ms" => number_setting(name, value, 1, 3_600_000)?,
-            _ => {
-                return Err(HouseError::from(ChError::unknown_setting(format!(
-                    "Unknown setting '{name}': for a LoamsStream pipe (loams_pipe_max_rows, \
-                     loams_pipe_max_delay_ms)"
-                ))));
-            }
-        }
-    }
     // chDB knows no pipe engine and reads a `SETTINGS` clause against the
     // engine, so the deny list reads the columns under `Null`.
     oracle
@@ -424,21 +466,19 @@ pub async fn create_pipe(
     };
     let location = lake.root().table_location(namespace, database, &stmt.name);
     let mut creation = ddl::plan_table(&plain, text, location, &described, &[])?;
-    let source = PipeSource {
-        stream,
-        format,
-        consumer,
-    };
     creation
         .properties
-        .insert(PROP_ENGINE.to_string(), source.render());
+        .insert(PROP_ENGINE.to_string(), feed.render());
     creation
         .properties
         .insert(PROP_CLASS.to_string(), "pipe".to_string());
-    creation.properties.insert(
-        PROP_SOURCE.to_string(),
-        serde_json::to_string(&source).map_err(|e| bad(e.to_string()))?,
-    );
+    let (key, json) = match &feed {
+        PipeFeed::Stream(source) => (PROP_SOURCE, serde_json::to_string(source)),
+        PipeFeed::Queue(source) => (s3queue::PROP_QUEUE, serde_json::to_string(source)),
+    };
+    creation
+        .properties
+        .insert(key.to_string(), json.map_err(|e| bad(e.to_string()))?);
     creation.properties.remove(ddl::PROP_ORDER_BY);
     if !stmt.settings.is_empty() {
         creation.properties.insert(
@@ -628,6 +668,15 @@ impl PipeBatch {
             root.bucket(),
             key.trim_matches('/')
         );
+        let PipeFeed::Stream(source) = &pipe.source else {
+            return Err(bad("a stream batch for a pipe that reads no stream"));
+        };
+        Self::over(pipe, &url, source.format.input())
+    }
+
+    /// The objects `url` names (through `house-cache`) read as `pipe`'s rows
+    /// in `format`.
+    pub fn over(pipe: &Pipe, url: &str, format: &str) -> Result<Self, HouseError> {
         let ch = ChTable::from_lake(&pipe.database, &pipe.name, &pipe.table);
         let mut typed = Vec::new();
         let mut names = Vec::new();
@@ -651,8 +700,8 @@ impl PipeBatch {
             quote_name(&pipe.database),
             quote_name(&pipe.name),
             names.join(", "),
-            quote_string(&url),
-            quote_string(pipe.source.format.input()),
+            quote_string(url),
+            quote_string(format),
             quote_string(&structure),
         );
         Ok(Self {
@@ -886,6 +935,10 @@ impl PipeRunner {
         pipe: &Pipe,
         view: &MaterializedView,
     ) -> Result<Ran, HouseError> {
+        if !matches!(pipe.source, PipeFeed::Stream(_)) {
+            // `S3Queue` pipes are the queue runner's, their state its own.
+            return Ok(Ran::Idle);
+        }
         let result = self.run_inner(namespace, pipe, view).await;
         let states = self.lake.pipe_states();
         states.update(namespace, view, |state| match &result {
@@ -910,6 +963,9 @@ impl PipeRunner {
         let Some(engine_namespace) = self.link.namespaces.get(&namespace) else {
             return Ok(Ran::Idle);
         };
+        let PipeFeed::Stream(source) = &pipe.source else {
+            return Ok(Ran::Idle);
+        };
         let lake = &self.lake;
         let target = lake
             .lake_table(
@@ -920,12 +976,12 @@ impl PipeRunner {
             )
             .await?;
         let cursor = cursor_of(&target, view);
-        let events = pipe.source.format == PipeFormat::CloudEvents;
+        let events = source.format == PipeFormat::CloudEvents;
 
         // The records past the cursor.
         let bounds = self
             .source
-            .partitions(engine_namespace, &pipe.source.stream)
+            .partitions(engine_namespace, &source.stream)
             .await?;
         let mut data: Vec<u8> = Vec::new();
         let mut rows = 0u64;
@@ -944,7 +1000,7 @@ impl PipeRunner {
                     .source
                     .fetch(
                         engine_namespace,
-                        &pipe.source.stream,
+                        &source.stream,
                         b.partition,
                         offset,
                         FETCH_BYTES,
@@ -1002,7 +1058,7 @@ impl PipeRunner {
                 "{}/data/__loams_pipe_{}.{}",
                 target.metadata.location().trim_end_matches('/'),
                 uuid::Uuid::new_v4().simple(),
-                if pipe.source.format == PipeFormat::CSV {
+                if source.format == PipeFormat::CSV {
                     "csv"
                 } else {
                     "jsonl"
