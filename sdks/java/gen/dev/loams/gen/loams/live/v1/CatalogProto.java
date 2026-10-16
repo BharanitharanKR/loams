@@ -60,6 +60,16 @@ public final class CatalogProto {
   static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_loams_live_v1_DeploymentRecord_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_AppRecord_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_AppRecord_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_AppIntent_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_AppIntent_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -107,13 +117,19 @@ public final class CatalogProto {
       "\0162\036.loams.live.v1.DeploymentStateR\005state" +
       "\022%\n\016failure_reason\030\n \001(\tR\rfailureReason\022" +
       "9\n\tfunctions\030\013 \003(\0132\033.loams.live.v1.Funct" +
-      "ionInfoR\tfunctions*h\n\014TableJobKind\022\036\n\032TA" +
-      "BLE_JOB_KIND_UNSPECIFIED\020\000\022\033\n\027TABLE_JOB_" +
-      "KIND_VALIDATE\020\001\022\033\n\027TABLE_JOB_KIND_BACKFI" +
-      "LL\020\002B\201\001\n\033dev.loams.gen.loams.live.v1B\014Ca" +
-      "talogProtoP\001\242\002\003LLX\252\002\rLoams.Live.V1\312\002\rLoa" +
-      "ms\\Live\\V1\342\002\031Loams\\Live\\V1\\GPBMetadata\352\002" +
-      "\017Loams::Live::V1b\006proto3"
+      "ionInfoR\tfunctions\"o\n\tAppRecord\022\026\n\006forma" +
+      "t\030\001 \001(\rR\006format\022$\n\003app\030\002 \001(\0132\022.loams.liv" +
+      "e.v1.AppR\003app\022$\n\016cursor_key_ref\030\003 \001(\tR\014c" +
+      "ursorKeyRef\"\207\001\n\tAppIntent\022\026\n\006format\030\001 \001(" +
+      "\rR\006format\022\016\n\002id\030\002 \001(\rR\002id\022\022\n\004name\030\003 \001(\tR" +
+      "\004name\022\032\n\010keyspace\030\004 \001(\tR\010keyspace\022\"\n\rsta" +
+      "rted_at_ms\030\005 \001(\004R\013startedAtMs*h\n\014TableJo" +
+      "bKind\022\036\n\032TABLE_JOB_KIND_UNSPECIFIED\020\000\022\033\n" +
+      "\027TABLE_JOB_KIND_VALIDATE\020\001\022\033\n\027TABLE_JOB_" +
+      "KIND_BACKFILL\020\002B\201\001\n\033dev.loams.gen.loams." +
+      "live.v1B\014CatalogProtoP\001\242\002\003LLX\252\002\rLoams.Li" +
+      "ve.V1\312\002\rLoams\\Live\\V1\342\002\031Loams\\Live\\V1\\GP" +
+      "BMetadata\352\002\017Loams::Live::V1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -163,6 +179,18 @@ public final class CatalogProto {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_DeploymentRecord_descriptor,
         new java.lang.String[] { "Format", "Id", "BundleSha256", "Schema", "CreatedAtMs", "CreatedBy", "Message", "Parent", "State", "FailureReason", "Functions", });
+    internal_static_loams_live_v1_AppRecord_descriptor =
+      getDescriptor().getMessageTypes().get(7);
+    internal_static_loams_live_v1_AppRecord_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_AppRecord_descriptor,
+        new java.lang.String[] { "Format", "App", "CursorKeyRef", });
+    internal_static_loams_live_v1_AppIntent_descriptor =
+      getDescriptor().getMessageTypes().get(8);
+    internal_static_loams_live_v1_AppIntent_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_AppIntent_descriptor,
+        new java.lang.String[] { "Format", "Id", "Name", "Keyspace", "StartedAtMs", });
     descriptor.resolveAllFeaturesImmutable();
     dev.loams.gen.loams.live.v1.AdminProto.getDescriptor();
     dev.loams.gen.loams.live.v1.LiveProto.getDescriptor();

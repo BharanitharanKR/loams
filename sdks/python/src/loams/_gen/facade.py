@@ -36,7 +36,7 @@ from loams.auth.v1.auth_connect import AuthServiceClient, AuthServiceClientSync
 from loams.instance.v1.instance_pb2 import GetInstanceRequest, GetInstanceResponse, WhoAmIRequest, WhoAmIResponse
 from loams.instance.v1.instance_connect import InstanceServiceClient, InstanceServiceClientSync
 from loams.live.v1.live_pb2 import ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition, WatchRequest
-from loams.live.v1.admin_pb2 import ActivateDeploymentRequest, ActivateDeploymentResponse, DeployRequest, DeployResponse, GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse, ListDeploymentsRequest, ListDeploymentsResponse, TailLogsRequest, TailLogsResponse
+from loams.live.v1.admin_pb2 import ActivateDeploymentRequest, ActivateDeploymentResponse, CreateAppRequest, CreateAppResponse, DeleteAppRequest, DeleteAppResponse, DeployRequest, DeployResponse, GetAppRequest, GetAppResponse, GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse, ListAppsRequest, ListAppsResponse, ListDeploymentsRequest, ListDeploymentsResponse, TailLogsRequest, TailLogsResponse, UpdateAppRequest, UpdateAppResponse
 from loams.live.v1.live_connect import LiveServiceClient, LiveServiceClientSync
 from loams.live.v1.admin_connect import LiveAdminServiceClient, LiveAdminServiceClientSync
 
@@ -107,6 +107,8 @@ Reason = Literal[
     "live_deploy_conflict",
     "live_schema_violation",
     "live_index_not_ready",
+    "live_app_disabled",
+    "live_app_exists",
     "role_required",
     "setup_required",
     "token_missing",
@@ -206,6 +208,8 @@ REASONS: Final[tuple[Reason, ...]] = (
     "live_deploy_conflict",
     "live_schema_violation",
     "live_index_not_ready",
+    "live_app_disabled",
+    "live_app_exists",
     "role_required",
     "setup_required",
     "token_missing",
@@ -301,6 +305,8 @@ REASON_CODES: Final[dict[Reason, str]] = {
     "live_deploy_conflict": "failed_precondition",
     "live_schema_violation": "invalid_argument",
     "live_index_not_ready": "failed_precondition",
+    "live_app_disabled": "failed_precondition",
+    "live_app_exists": "failed_precondition",
     "role_required": "permission_denied",
     "setup_required": "failed_precondition",
     "token_missing": "unauthenticated",
@@ -1096,7 +1102,7 @@ MODULES: Final[tuple[ModuleBinding, ...]] = (
     ),
     ModuleBinding(
         name="live.admin",
-        summary="Live administration: deploy, roll back, index status and function logs.",
+        summary="Live administration: apps, deploy, roll back, index status and function logs.",
         service="loams.live.v1.LiveAdminService",
         package="loams.live.v1",
         unstable=True,
@@ -1117,6 +1123,32 @@ MODULES: Final[tuple[ModuleBinding, ...]] = (
             ),
             CallBinding(
                 module="live.admin",
+                name="create_app",
+                proto_name="createApp",
+                method="CreateApp",
+                rpc="loams.live.v1.LiveAdminService/CreateApp",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="live.admin",
+                name="delete_app",
+                proto_name="deleteApp",
+                method="DeleteApp",
+                rpc="loams.live.v1.LiveAdminService/DeleteApp",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="live.admin",
                 name="deploy",
                 proto_name="deploy",
                 method="Deploy",
@@ -1125,6 +1157,19 @@ MODULES: Final[tuple[ModuleBinding, ...]] = (
                 package="loams.live.v1",
                 idempotency="none",
                 retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="live.admin",
+                name="get_app",
+                proto_name="getApp",
+                method="GetApp",
+                rpc="loams.live.v1.LiveAdminService/GetApp",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="safe",
                 streaming="unary",
                 pagination=None,
             ),
@@ -1156,6 +1201,19 @@ MODULES: Final[tuple[ModuleBinding, ...]] = (
             ),
             CallBinding(
                 module="live.admin",
+                name="list_apps",
+                proto_name="listApps",
+                method="ListApps",
+                rpc="loams.live.v1.LiveAdminService/ListApps",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="apps", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="live.admin",
                 name="list_deployments",
                 proto_name="listDeployments",
                 method="ListDeployments",
@@ -1178,6 +1236,19 @@ MODULES: Final[tuple[ModuleBinding, ...]] = (
                 idempotency="none",
                 retry="manual",
                 streaming="server",
+                pagination=None,
+            ),
+            CallBinding(
+                module="live.admin",
+                name="update_app",
+                proto_name="updateApp",
+                method="UpdateApp",
+                rpc="loams.live.v1.LiveAdminService/UpdateApp",
+                service="loams.live.v1.LiveAdminService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
                 pagination=None,
             ),
         ),
@@ -1559,11 +1630,32 @@ METHODS: Final[dict[str, MethodInfo[Message, Message]]] = {
         output=ActivateDeploymentResponse,
         idempotency_level=IDEMPOTENCY_LEVELS["none"],
     ),
+    "loams.live.v1.LiveAdminService/CreateApp": MethodInfo(
+        name="CreateApp",
+        service_name="loams.live.v1.LiveAdminService",
+        input=CreateAppRequest,
+        output=CreateAppResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.live.v1.LiveAdminService/DeleteApp": MethodInfo(
+        name="DeleteApp",
+        service_name="loams.live.v1.LiveAdminService",
+        input=DeleteAppRequest,
+        output=DeleteAppResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
     "loams.live.v1.LiveAdminService/Deploy": MethodInfo(
         name="Deploy",
         service_name="loams.live.v1.LiveAdminService",
         input=DeployRequest,
         output=DeployResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.live.v1.LiveAdminService/GetApp": MethodInfo(
+        name="GetApp",
+        service_name="loams.live.v1.LiveAdminService",
+        input=GetAppRequest,
+        output=GetAppResponse,
         idempotency_level=IDEMPOTENCY_LEVELS["none"],
     ),
     "loams.live.v1.LiveAdminService/GetDeployment": MethodInfo(
@@ -1580,6 +1672,13 @@ METHODS: Final[dict[str, MethodInfo[Message, Message]]] = {
         output=GetIndexStatusResponse,
         idempotency_level=IDEMPOTENCY_LEVELS["none"],
     ),
+    "loams.live.v1.LiveAdminService/ListApps": MethodInfo(
+        name="ListApps",
+        service_name="loams.live.v1.LiveAdminService",
+        input=ListAppsRequest,
+        output=ListAppsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
     "loams.live.v1.LiveAdminService/ListDeployments": MethodInfo(
         name="ListDeployments",
         service_name="loams.live.v1.LiveAdminService",
@@ -1592,6 +1691,13 @@ METHODS: Final[dict[str, MethodInfo[Message, Message]]] = {
         service_name="loams.live.v1.LiveAdminService",
         input=TailLogsRequest,
         output=TailLogsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.live.v1.LiveAdminService/UpdateApp": MethodInfo(
+        name="UpdateApp",
+        service_name="loams.live.v1.LiveAdminService",
+        input=UpdateAppRequest,
+        output=UpdateAppResponse,
         idempotency_level=IDEMPOTENCY_LEVELS["none"],
     ),
     "loams.live.v1.LiveService/Mutate": MethodInfo(
@@ -2706,7 +2812,7 @@ class LiveModuleSync(Protocol):
 
 
 class LiveAdminModule(Protocol):
-    """`loams.live.admin` — Live administration: deploy, roll back, index status and function logs.
+    """`loams.live.admin` — Live administration: apps, deploy, roll back, index status and function logs.
 
     Wraps `loams.live.v1.LiveAdminService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
     """
@@ -2724,6 +2830,26 @@ class LiveAdminModule(Protocol):
     ) -> loams.live.v1.admin_pb2.ActivateDeploymentResponse:
         ...
 
+    """`loams.live.v1.LiveAdminService/CreateApp`, retried: manual.
+    """
+    async def create_app(
+        self,
+        request: loams.live.v1.admin_pb2.CreateAppRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.CreateAppResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/DeleteApp`, retried: manual.
+    """
+    async def delete_app(
+        self,
+        request: loams.live.v1.admin_pb2.DeleteAppRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.DeleteAppResponse:
+        ...
+
     """`loams.live.v1.LiveAdminService/Deploy`, retried: manual.
     """
     async def deploy(
@@ -2732,6 +2858,16 @@ class LiveAdminModule(Protocol):
         *,
         options: CallOptions | None = None,
     ) -> loams.live.v1.admin_pb2.DeployResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/GetApp`, retried: safe.
+    """
+    async def get_app(
+        self,
+        request: loams.live.v1.admin_pb2.GetAppRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.GetAppResponse:
         ...
 
     """`loams.live.v1.LiveAdminService/GetDeployment`, retried: safe.
@@ -2754,6 +2890,16 @@ class LiveAdminModule(Protocol):
     ) -> loams.live.v1.admin_pb2.GetIndexStatusResponse:
         ...
 
+    """`loams.live.v1.LiveAdminService/ListApps`, retried: safe. AIP-158: page with `apps` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list_apps(
+        self,
+        request: loams.live.v1.admin_pb2.ListAppsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.ListAppsResponse:
+        ...
+
     """`loams.live.v1.LiveAdminService/ListDeployments`, retried: safe. AIP-158: page with `deployments` and follow `next_page_token` through `loams.paginate`.
     """
     async def list_deployments(
@@ -2774,10 +2920,20 @@ class LiveAdminModule(Protocol):
     ) -> AsyncIterator[loams.live.v1.admin_pb2.TailLogsResponse]:
         ...
 
+    """`loams.live.v1.LiveAdminService/UpdateApp`, retried: manual.
+    """
+    async def update_app(
+        self,
+        request: loams.live.v1.admin_pb2.UpdateAppRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.UpdateAppResponse:
+        ...
+
 
 
 class LiveAdminModuleSync(Protocol):
-    """`loams.live.admin` — Live administration: deploy, roll back, index status and function logs.
+    """`loams.live.admin` — Live administration: apps, deploy, roll back, index status and function logs.
 
     Wraps `loams.live.v1.LiveAdminService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
     """
@@ -2795,6 +2951,26 @@ class LiveAdminModuleSync(Protocol):
     ) -> loams.live.v1.admin_pb2.ActivateDeploymentResponse:
         ...
 
+    """`loams.live.v1.LiveAdminService/CreateApp`, retried: manual.
+    """
+    def create_app(
+        self,
+        request: loams.live.v1.admin_pb2.CreateAppRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.CreateAppResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/DeleteApp`, retried: manual.
+    """
+    def delete_app(
+        self,
+        request: loams.live.v1.admin_pb2.DeleteAppRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.DeleteAppResponse:
+        ...
+
     """`loams.live.v1.LiveAdminService/Deploy`, retried: manual.
     """
     def deploy(
@@ -2803,6 +2979,16 @@ class LiveAdminModuleSync(Protocol):
         *,
         options: CallOptions | None = None,
     ) -> loams.live.v1.admin_pb2.DeployResponse:
+        ...
+
+    """`loams.live.v1.LiveAdminService/GetApp`, retried: safe.
+    """
+    def get_app(
+        self,
+        request: loams.live.v1.admin_pb2.GetAppRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.GetAppResponse:
         ...
 
     """`loams.live.v1.LiveAdminService/GetDeployment`, retried: safe.
@@ -2825,6 +3011,16 @@ class LiveAdminModuleSync(Protocol):
     ) -> loams.live.v1.admin_pb2.GetIndexStatusResponse:
         ...
 
+    """`loams.live.v1.LiveAdminService/ListApps`, retried: safe. AIP-158: page with `apps` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list_apps(
+        self,
+        request: loams.live.v1.admin_pb2.ListAppsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.ListAppsResponse:
+        ...
+
     """`loams.live.v1.LiveAdminService/ListDeployments`, retried: safe. AIP-158: page with `deployments` and follow `next_page_token` through `loams.paginate`.
     """
     def list_deployments(
@@ -2843,6 +3039,16 @@ class LiveAdminModuleSync(Protocol):
         *,
         options: CallOptions | None = None,
     ) -> Iterator[loams.live.v1.admin_pb2.TailLogsResponse]:
+        ...
+
+    """`loams.live.v1.LiveAdminService/UpdateApp`, retried: manual.
+    """
+    def update_app(
+        self,
+        request: loams.live.v1.admin_pb2.UpdateAppRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.admin_pb2.UpdateAppResponse:
         ...
 
 

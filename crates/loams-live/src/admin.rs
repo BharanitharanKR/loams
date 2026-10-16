@@ -1,6 +1,8 @@
 //! `loams.live.v1.LiveAdminService` (design §45 §6.3, D689; LV1 plan Task
 //! 10): deploys, the deployment list, rollback by activation, index status
-//! and function logs, over the app's [`AppEngine`].
+//! and function logs, over the [`AppEngine`] of the app the request
+//! addresses (its `loams-live-app` header); and the app directory (LV1 plan
+//! Task 13): creating, listing, reading, updating and deleting apps.
 //!
 //! The server serves it beside `LiveService` on the Live listener, behind
 //! the guard the engine gives [`LiveServer::start_guarded`] (its
@@ -16,15 +18,16 @@ use std::str::FromStr;
 
 use connectrpc::{RequestContext, Response, ServiceRequest, ServiceResult, ServiceStream};
 use futures::StreamExt;
-use tokio_util::sync::CancellationToken;
 use ulid::Ulid;
 
+use crate::apps::{AppLimits, AppRecord, AppState, AppUpdate, NewApp, TrustedIssuer};
 use crate::catalog::IndexState;
-use crate::deploy::{self, AppEngine, DeployOutcome, DeploymentRecord, PageRequest};
+use crate::deploy::{self, DeployOutcome, DeploymentRecord, PageRequest};
+use crate::engines::Engines;
 use crate::logs::{Read, TailFilter};
 use crate::pb::{self, LiveAdminService};
 use crate::schema::{IndexChange, Schema, SchemaChanges};
-use crate::service::connect_error;
+use crate::service::{app_of, connect_error};
 use crate::{LiveError, backfill};
 
 /// Who is calling: the principal the server's authentication layer
@@ -36,11 +39,9 @@ pub struct Caller {
     pub id: String,
 }
 
-/// The `LiveAdminService` implementation of one app.
+/// The `LiveAdminService` implementation of a server's apps.
 pub(crate) struct Admin {
-    pub(crate) engine: AppEngine,
-    /// Ends the log tails when the server stops.
-    pub(crate) stop: CancellationToken,
+    pub(crate) engines: Engines,
 }
 
 fn caller(ctx: &RequestContext) -> String {
@@ -125,6 +126,21 @@ fn page_request(size: i32, token: &str) -> Result<PageRequest, LiveError> {
     Ok(PageRequest { after, limit })
 }
 
+/// An AIP-158 page of the app list: the page size and the id to start
+/// after.
+fn app_page(size: i32, token: &str) -> Result<(Option<u32>, usize), LiveError> {
+    let limit =
+        usize::try_from(size).map_err(|_| LiveError::invalid("page_size must not be negative"))?;
+    let after = match token {
+        "" => None,
+        t => Some(
+            t.parse::<u32>()
+                .map_err(|_| LiveError::invalid(format!("page_token: {t:?} is not a token")))?,
+        ),
+    };
+    Ok((after, limit))
+}
+
 fn tail_response(read: Read) -> pb::TailLogsResponse {
     pb::TailLogsResponse {
         entries: read.entries.iter().map(|e| e.to_proto()).collect(),
@@ -146,6 +162,7 @@ impl LiveAdminService for Admin {
         let req = request.to_owned_message();
         let by = caller(&ctx);
         let run = async {
+            let app = app_of(&self.engines, &ctx).await?;
             let schema = req
                 .schema
                 .as_option()
@@ -159,7 +176,7 @@ impl LiveAdminService for Admin {
                 message: req.message,
                 dry_run: req.dry_run,
             };
-            deploy::deploy(&self.engine, deploy_request, &by).await
+            deploy::deploy(app.engine(), deploy_request, &by).await
         };
         let done = run.await.map_err(|e| connect_error(&e))?;
         let (deployment, changes) = outcome(&done);
@@ -172,13 +189,14 @@ impl LiveAdminService for Admin {
 
     async fn list_deployments(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::ListDeploymentsRequest>,
     ) -> ServiceResult<pb::ListDeploymentsResponse> {
         let req = request.to_owned_message();
         let run = async {
+            let app = app_of(&self.engines, &ctx).await?;
             let page = page_request(req.page_size, &req.page_token)?;
-            deploy::list_deployments(&self.engine, page).await
+            deploy::list_deployments(app.engine(), page).await
         };
         let page = run.await.map_err(|e| connect_error(&e))?;
         Ok(Response::new(pb::ListDeploymentsResponse {
@@ -190,13 +208,14 @@ impl LiveAdminService for Admin {
 
     async fn get_deployment(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::GetDeploymentRequest>,
     ) -> ServiceResult<pb::GetDeploymentResponse> {
         let req = request.to_owned_message();
         let run = async {
+            let app = app_of(&self.engines, &ctx).await?;
             let id = deployment_id("id", &req.id)?;
-            deploy::get_deployment(&self.engine, id).await
+            deploy::get_deployment(app.engine(), id).await
         };
         let record = run.await.map_err(|e| connect_error(&e))?;
         Ok(Response::new(pb::GetDeploymentResponse {
@@ -215,9 +234,10 @@ impl LiveAdminService for Admin {
         let req = request.to_owned_message();
         let by = caller(&ctx);
         let run = async {
+            let app = app_of(&self.engines, &ctx).await?;
             let id = deployment_id("id", &req.id)?;
             let expected_active = expected(req.expected_active.as_deref())?;
-            deploy::activate(&self.engine, id, expected_active, &by).await
+            deploy::activate(app.engine(), id, expected_active, &by).await
         };
         let done = run.await.map_err(|e| connect_error(&e))?;
         let (deployment, changes) = outcome(&done);
@@ -230,13 +250,15 @@ impl LiveAdminService for Admin {
 
     async fn get_index_status(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::GetIndexStatusRequest>,
     ) -> ServiceResult<pb::GetIndexStatusResponse> {
         let req = request.to_owned_message();
-        let status = backfill::index_status(self.engine.runner(), &req.table, &req.index)
-            .await
-            .map_err(|e| connect_error(&e))?;
+        let run = async {
+            let app = app_of(&self.engines, &ctx).await?;
+            backfill::index_status(app.runner(), &req.table, &req.index).await
+        };
+        let status = run.await.map_err(|e| connect_error(&e))?;
         Ok(Response::new(pb::GetIndexStatusResponse {
             state: index_state(status.state).into(),
             done: status.done,
@@ -247,21 +269,159 @@ impl LiveAdminService for Admin {
 
     async fn tail_logs(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::TailLogsRequest>,
     ) -> ServiceResult<ServiceStream<pb::TailLogsResponse>> {
         let req = request.to_owned_message();
+        let app = app_of(&self.engines, &ctx)
+            .await
+            .map_err(|e| connect_error(&e))?;
         let filter = TailFilter {
             since_ms: req.since_ms,
             function: req.function,
         };
-        let tail = self
-            .engine
+        // The tail ends when the server, or the app's engine, stops.
+        let tail = app
             .runner()
             .logs()
-            .tail(filter, req.follow, self.stop.clone())
+            .tail(filter, req.follow, app.stopping().clone())
             .map(|read| Ok(tail_response(read)));
         Ok(Response::new(tail.boxed()))
+    }
+
+    async fn create_app(
+        &self,
+        _ctx: RequestContext,
+        request: ServiceRequest<'_, pb::CreateAppRequest>,
+    ) -> ServiceResult<pb::CreateAppResponse> {
+        let req = request.to_owned_message();
+        let new = NewApp {
+            name: req.name,
+            namespace: req.namespace,
+            settings: crate::apps::AppSettings {
+                limits: req
+                    .limits
+                    .as_option()
+                    .map(AppLimits::from_proto)
+                    .unwrap_or_default(),
+                issuers: req.issuers.iter().map(TrustedIssuer::from_proto).collect(),
+                allowed_origins: req.allowed_origins,
+                allow_anonymous: req.allow_anonymous,
+            },
+        };
+        let record = self
+            .engines
+            .apps()
+            .create(new)
+            .await
+            .map_err(|e| connect_error(&e))?;
+        Ok(Response::new(pb::CreateAppResponse {
+            app: buffa::MessageField::some(record.to_proto()),
+            ..Default::default()
+        }))
+    }
+
+    async fn list_apps(
+        &self,
+        _ctx: RequestContext,
+        request: ServiceRequest<'_, pb::ListAppsRequest>,
+    ) -> ServiceResult<pb::ListAppsResponse> {
+        let req = request.to_owned_message();
+        let run = async {
+            let (after, limit) = app_page(req.page_size, &req.page_token)?;
+            self.engines.apps().list(after, limit).await
+        };
+        let page = run.await.map_err(|e| connect_error(&e))?;
+        Ok(Response::new(pb::ListAppsResponse {
+            apps: page.apps.iter().map(AppRecord::to_proto).collect(),
+            next_page_token: page.next.map(|n| n.to_string()).unwrap_or_default(),
+            ..Default::default()
+        }))
+    }
+
+    async fn get_app(
+        &self,
+        _ctx: RequestContext,
+        request: ServiceRequest<'_, pb::GetAppRequest>,
+    ) -> ServiceResult<pb::GetAppResponse> {
+        let req = request.to_owned_message();
+        let record = self
+            .engines
+            .apps()
+            .get_by_name(&req.name)
+            .await
+            .and_then(|r| {
+                r.ok_or_else(|| LiveError::NotFound(format!("no Live app is named {}", req.name)))
+            })
+            .map_err(|e| connect_error(&e))?;
+        Ok(Response::new(pb::GetAppResponse {
+            app: buffa::MessageField::some(record.to_proto()),
+            ..Default::default()
+        }))
+    }
+
+    async fn update_app(
+        &self,
+        _ctx: RequestContext,
+        request: ServiceRequest<'_, pb::UpdateAppRequest>,
+    ) -> ServiceResult<pb::UpdateAppResponse> {
+        let req = request.to_owned_message();
+        let run = async {
+            let state = match req.state.map(|s| s.as_known()) {
+                None => None,
+                Some(Some(pb::AppState::APP_STATE_ACTIVE)) => Some(AppState::Active),
+                Some(Some(pb::AppState::APP_STATE_DISABLED)) => Some(AppState::Disabled),
+                Some(_) => {
+                    return Err(LiveError::invalid(
+                        "state: UpdateApp sets APP_STATE_ACTIVE or APP_STATE_DISABLED",
+                    ));
+                }
+            };
+            let update = AppUpdate {
+                state,
+                limits: req.limits.as_option().map(AppLimits::from_proto),
+                issuers: req
+                    .issuers
+                    .as_option()
+                    .map(|l| l.issuers.iter().map(TrustedIssuer::from_proto).collect()),
+                allowed_origins: req.allowed_origins.as_option().map(|l| l.origins.clone()),
+                allow_anonymous: req.allow_anonymous,
+            };
+            let record = self.engines.apps().update(&req.name, update).await?;
+            // This node stops the app's engine now when it is disabled or
+            // its limits changed; the others within the directory poll.
+            self.engines.reconcile().await?;
+            Ok(record)
+        };
+        let record = run.await.map_err(|e| connect_error(&e))?;
+        Ok(Response::new(pb::UpdateAppResponse {
+            app: buffa::MessageField::some(record.to_proto()),
+            ..Default::default()
+        }))
+    }
+
+    async fn delete_app(
+        &self,
+        _ctx: RequestContext,
+        request: ServiceRequest<'_, pb::DeleteAppRequest>,
+    ) -> ServiceResult<pb::DeleteAppResponse> {
+        let req = request.to_owned_message();
+        let run = async {
+            if req.name == self.engines.default_app() {
+                return Err(LiveError::FailedPrecondition(format!(
+                    "{} is this server's own app (--live-app); it cannot be deleted",
+                    req.name
+                )));
+            }
+            let record = self.engines.apps().delete(&req.name).await?;
+            self.engines.stop_app(&record.name).await;
+            Ok(record)
+        };
+        let record = run.await.map_err(|e| connect_error(&e))?;
+        Ok(Response::new(pb::DeleteAppResponse {
+            app: buffa::MessageField::some(record.to_proto()),
+            ..Default::default()
+        }))
     }
 }
 

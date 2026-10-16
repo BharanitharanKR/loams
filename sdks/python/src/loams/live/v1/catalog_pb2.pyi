@@ -123,3 +123,27 @@ class DeploymentRecord(_message.Message):
     failure_reason: str
     functions: _containers.RepeatedCompositeFieldContainer[_admin_pb2.FunctionInfo]
     def __init__(self, format: _Optional[int] = ..., id: _Optional[bytes] = ..., bundle_sha256: _Optional[bytes] = ..., schema: _Optional[_Union[_live_pb2.Schema, _Mapping]] = ..., created_at_ms: _Optional[int] = ..., created_by: _Optional[str] = ..., message: _Optional[str] = ..., parent: _Optional[bytes] = ..., state: _Optional[_Union[_admin_pb2.DeploymentState, str]] = ..., failure_reason: _Optional[str] = ..., functions: _Optional[_Iterable[_Union[_admin_pb2.FunctionInfo, _Mapping]]] = ...) -> None: ...
+
+class AppRecord(_message.Message):
+    __slots__ = ("format", "app", "cursor_key_ref")
+    FORMAT_FIELD_NUMBER: _ClassVar[int]
+    APP_FIELD_NUMBER: _ClassVar[int]
+    CURSOR_KEY_REF_FIELD_NUMBER: _ClassVar[int]
+    format: int
+    app: _admin_pb2.App
+    cursor_key_ref: str
+    def __init__(self, format: _Optional[int] = ..., app: _Optional[_Union[_admin_pb2.App, _Mapping]] = ..., cursor_key_ref: _Optional[str] = ...) -> None: ...
+
+class AppIntent(_message.Message):
+    __slots__ = ("format", "id", "name", "keyspace", "started_at_ms")
+    FORMAT_FIELD_NUMBER: _ClassVar[int]
+    ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    KEYSPACE_FIELD_NUMBER: _ClassVar[int]
+    STARTED_AT_MS_FIELD_NUMBER: _ClassVar[int]
+    format: int
+    id: int
+    name: str
+    keyspace: str
+    started_at_ms: int
+    def __init__(self, format: _Optional[int] = ..., id: _Optional[int] = ..., name: _Optional[str] = ..., keyspace: _Optional[str] = ..., started_at_ms: _Optional[int] = ...) -> None: ...

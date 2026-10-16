@@ -58,9 +58,15 @@ namespace Loams.Live.V1 {
             "GAkgASgOMh4ubG9hbXMubGl2ZS52MS5EZXBsb3ltZW50U3RhdGVSBXN0YXRl",
             "EiUKDmZhaWx1cmVfcmVhc29uGAogASgJUg1mYWlsdXJlUmVhc29uEjkKCWZ1",
             "bmN0aW9ucxgLIAMoCzIbLmxvYW1zLmxpdmUudjEuRnVuY3Rpb25JbmZvUglm",
-            "dW5jdGlvbnMqaAoMVGFibGVKb2JLaW5kEh4KGlRBQkxFX0pPQl9LSU5EX1VO",
-            "U1BFQ0lGSUVEEAASGwoXVEFCTEVfSk9CX0tJTkRfVkFMSURBVEUQARIbChdU",
-            "QUJMRV9KT0JfS0lORF9CQUNLRklMTBACYgZwcm90bzM="));
+            "dW5jdGlvbnMibwoJQXBwUmVjb3JkEhYKBmZvcm1hdBgBIAEoDVIGZm9ybWF0",
+            "EiQKA2FwcBgCIAEoCzISLmxvYW1zLmxpdmUudjEuQXBwUgNhcHASJAoOY3Vy",
+            "c29yX2tleV9yZWYYAyABKAlSDGN1cnNvcktleVJlZiKHAQoJQXBwSW50ZW50",
+            "EhYKBmZvcm1hdBgBIAEoDVIGZm9ybWF0Eg4KAmlkGAIgASgNUgJpZBISCgRu",
+            "YW1lGAMgASgJUgRuYW1lEhoKCGtleXNwYWNlGAQgASgJUghrZXlzcGFjZRIi",
+            "Cg1zdGFydGVkX2F0X21zGAUgASgEUgtzdGFydGVkQXRNcypoCgxUYWJsZUpv",
+            "YktpbmQSHgoaVEFCTEVfSk9CX0tJTkRfVU5TUEVDSUZJRUQQABIbChdUQUJM",
+            "RV9KT0JfS0lORF9WQUxJREFURRABEhsKF1RBQkxFX0pPQl9LSU5EX0JBQ0tG",
+            "SUxMEAJiBnByb3RvMw=="));
       descriptor = pbr::FileDescriptor.FromGeneratedCode(descriptorData,
           new pbr::FileDescriptor[] { global::Loams.Live.V1.AdminReflection.Descriptor, global::Loams.Live.V1.LiveReflection.Descriptor, },
           new pbr::GeneratedClrTypeInfo(new[] {typeof(global::Loams.Live.V1.TableJobKind), }, null, new pbr::GeneratedClrTypeInfo[] {
@@ -70,7 +76,9 @@ namespace Loams.Live.V1 {
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.JobFinding), global::Loams.Live.V1.JobFinding.Parser, new[]{ "DocId", "Detail" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.IndexDef), global::Loams.Live.V1.IndexDef.Parser, new[]{ "Id", "Name", "Fields", "State", "Deployment" }, null, null, null, null),
             new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.AppDef), global::Loams.Live.V1.AppDef.Parser, new[]{ "Format", "JournalShards" }, null, null, null, null),
-            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.DeploymentRecord), global::Loams.Live.V1.DeploymentRecord.Parser, new[]{ "Format", "Id", "BundleSha256", "Schema", "CreatedAtMs", "CreatedBy", "Message", "Parent", "State", "FailureReason", "Functions" }, null, null, null, null)
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.DeploymentRecord), global::Loams.Live.V1.DeploymentRecord.Parser, new[]{ "Format", "Id", "BundleSha256", "Schema", "CreatedAtMs", "CreatedBy", "Message", "Parent", "State", "FailureReason", "Functions" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.AppRecord), global::Loams.Live.V1.AppRecord.Parser, new[]{ "Format", "App", "CursorKeyRef" }, null, null, null, null),
+            new pbr::GeneratedClrTypeInfo(typeof(global::Loams.Live.V1.AppIntent), global::Loams.Live.V1.AppIntent.Parser, new[]{ "Format", "Id", "Name", "Keyspace", "StartedAtMs" }, null, null, null, null)
           }));
     }
     #endregion
@@ -2786,6 +2794,659 @@ namespace Loams.Live.V1 {
           }
           case 90: {
             functions_.AddEntriesFrom(ref input, _repeated_functions_codec);
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// One app of the directory (design §45 §7, D690; LV1 plan Task 13): the
+  /// value of `0x01 ‖ id:u32 BE` in the system keyspace `loams_live_system`.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class AppRecord : pb::IMessage<AppRecord>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<AppRecord> _parser = new pb::MessageParser<AppRecord>(() => new AppRecord());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<AppRecord> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Loams.Live.V1.CatalogReflection.Descriptor.MessageTypes[7]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AppRecord() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AppRecord(AppRecord other) : this() {
+      format_ = other.format_;
+      app_ = other.app_ != null ? other.app_.Clone() : null;
+      cursorKeyRef_ = other.cursorKeyRef_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AppRecord Clone() {
+      return new AppRecord(this);
+    }
+
+    /// <summary>Field number for the "format" field.</summary>
+    public const int FormatFieldNumber = 1;
+    private uint format_;
+    /// <summary>
+    /// The encoding version; 1 in LV1.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Format {
+      get { return format_; }
+      set {
+        format_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "app" field.</summary>
+    public const int AppFieldNumber = 2;
+    private global::Loams.Live.V1.App app_;
+    /// <summary>
+    /// The app as the admin API shows it.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public global::Loams.Live.V1.App App {
+      get { return app_; }
+      set {
+        app_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "cursor_key_ref" field.</summary>
+    public const int CursorKeyRefFieldNumber = 3;
+    private string cursorKeyRef_ = "";
+    /// <summary>
+    /// Where the app's pagination cursor key lives: `catalog`, a record of the
+    /// app's own catalog (LV1 Task 4).
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string CursorKeyRef {
+      get { return cursorKeyRef_; }
+      set {
+        cursorKeyRef_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as AppRecord);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(AppRecord other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Format != other.Format) return false;
+      if (!object.Equals(App, other.App)) return false;
+      if (CursorKeyRef != other.CursorKeyRef) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Format != 0) hash ^= Format.GetHashCode();
+      if (app_ != null) hash ^= App.GetHashCode();
+      if (CursorKeyRef.Length != 0) hash ^= CursorKeyRef.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Format != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Format);
+      }
+      if (app_ != null) {
+        output.WriteRawTag(18);
+        output.WriteMessage(App);
+      }
+      if (CursorKeyRef.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(CursorKeyRef);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Format != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Format);
+      }
+      if (app_ != null) {
+        output.WriteRawTag(18);
+        output.WriteMessage(App);
+      }
+      if (CursorKeyRef.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(CursorKeyRef);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Format != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Format);
+      }
+      if (app_ != null) {
+        size += 1 + pb::CodedOutputStream.ComputeMessageSize(App);
+      }
+      if (CursorKeyRef.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(CursorKeyRef);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(AppRecord other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Format != 0) {
+        Format = other.Format;
+      }
+      if (other.app_ != null) {
+        if (app_ == null) {
+          App = new global::Loams.Live.V1.App();
+        }
+        App.MergeFrom(other.App);
+      }
+      if (other.CursorKeyRef.Length != 0) {
+        CursorKeyRef = other.CursorKeyRef;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Format = input.ReadUInt32();
+            break;
+          }
+          case 18: {
+            if (app_ == null) {
+              App = new global::Loams.Live.V1.App();
+            }
+            input.ReadMessage(App);
+            break;
+          }
+          case 26: {
+            CursorKeyRef = input.ReadString();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Format = input.ReadUInt32();
+            break;
+          }
+          case 18: {
+            if (app_ == null) {
+              App = new global::Loams.Live.V1.App();
+            }
+            input.ReadMessage(App);
+            break;
+          }
+          case 26: {
+            CursorKeyRef = input.ReadString();
+            break;
+          }
+        }
+      }
+    }
+    #endif
+
+  }
+
+  /// <summary>
+  /// A create in progress (LV1 plan Task 13): the value of `0x03 ‖ id:u32 BE`
+  /// in the system keyspace, written before the app's keyspace is ensured and
+  /// removed by the transaction that writes the app's record. One left behind
+  /// names a keyspace no app owns, which the directory janitor reports.
+  /// </summary>
+  [global::System.Diagnostics.DebuggerDisplayAttribute("{ToString(),nq}")]
+  public sealed partial class AppIntent : pb::IMessage<AppIntent>
+  #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      , pb::IBufferMessage
+  #endif
+  {
+    private static readonly pb::MessageParser<AppIntent> _parser = new pb::MessageParser<AppIntent>(() => new AppIntent());
+    private pb::UnknownFieldSet _unknownFields;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pb::MessageParser<AppIntent> Parser { get { return _parser; } }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public static pbr::MessageDescriptor Descriptor {
+      get { return global::Loams.Live.V1.CatalogReflection.Descriptor.MessageTypes[8]; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    pbr::MessageDescriptor pb::IMessage.Descriptor {
+      get { return Descriptor; }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AppIntent() {
+      OnConstruction();
+    }
+
+    partial void OnConstruction();
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AppIntent(AppIntent other) : this() {
+      format_ = other.format_;
+      id_ = other.id_;
+      name_ = other.name_;
+      keyspace_ = other.keyspace_;
+      startedAtMs_ = other.startedAtMs_;
+      _unknownFields = pb::UnknownFieldSet.Clone(other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public AppIntent Clone() {
+      return new AppIntent(this);
+    }
+
+    /// <summary>Field number for the "format" field.</summary>
+    public const int FormatFieldNumber = 1;
+    private uint format_;
+    /// <summary>
+    /// The encoding version; 1 in LV1.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Format {
+      get { return format_; }
+      set {
+        format_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "id" field.</summary>
+    public const int IdFieldNumber = 2;
+    private uint id_;
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public uint Id {
+      get { return id_; }
+      set {
+        id_ = value;
+      }
+    }
+
+    /// <summary>Field number for the "name" field.</summary>
+    public const int NameFieldNumber = 3;
+    private string name_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Name {
+      get { return name_; }
+      set {
+        name_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "keyspace" field.</summary>
+    public const int KeyspaceFieldNumber = 4;
+    private string keyspace_ = "";
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public string Keyspace {
+      get { return keyspace_; }
+      set {
+        keyspace_ = pb::ProtoPreconditions.CheckNotNull(value, "value");
+      }
+    }
+
+    /// <summary>Field number for the "started_at_ms" field.</summary>
+    public const int StartedAtMsFieldNumber = 5;
+    private ulong startedAtMs_;
+    /// <summary>
+    /// Unix ms.
+    /// </summary>
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public ulong StartedAtMs {
+      get { return startedAtMs_; }
+      set {
+        startedAtMs_ = value;
+      }
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override bool Equals(object other) {
+      return Equals(other as AppIntent);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public bool Equals(AppIntent other) {
+      if (ReferenceEquals(other, null)) {
+        return false;
+      }
+      if (ReferenceEquals(other, this)) {
+        return true;
+      }
+      if (Format != other.Format) return false;
+      if (Id != other.Id) return false;
+      if (Name != other.Name) return false;
+      if (Keyspace != other.Keyspace) return false;
+      if (StartedAtMs != other.StartedAtMs) return false;
+      return Equals(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override int GetHashCode() {
+      int hash = 1;
+      if (Format != 0) hash ^= Format.GetHashCode();
+      if (Id != 0) hash ^= Id.GetHashCode();
+      if (Name.Length != 0) hash ^= Name.GetHashCode();
+      if (Keyspace.Length != 0) hash ^= Keyspace.GetHashCode();
+      if (StartedAtMs != 0UL) hash ^= StartedAtMs.GetHashCode();
+      if (_unknownFields != null) {
+        hash ^= _unknownFields.GetHashCode();
+      }
+      return hash;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public override string ToString() {
+      return pb::JsonFormatter.ToDiagnosticString(this);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void WriteTo(pb::CodedOutputStream output) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      output.WriteRawMessage(this);
+    #else
+      if (Format != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Format);
+      }
+      if (Id != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(Id);
+      }
+      if (Name.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(Name);
+      }
+      if (Keyspace.Length != 0) {
+        output.WriteRawTag(34);
+        output.WriteString(Keyspace);
+      }
+      if (StartedAtMs != 0UL) {
+        output.WriteRawTag(40);
+        output.WriteUInt64(StartedAtMs);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(output);
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalWriteTo(ref pb::WriteContext output) {
+      if (Format != 0) {
+        output.WriteRawTag(8);
+        output.WriteUInt32(Format);
+      }
+      if (Id != 0) {
+        output.WriteRawTag(16);
+        output.WriteUInt32(Id);
+      }
+      if (Name.Length != 0) {
+        output.WriteRawTag(26);
+        output.WriteString(Name);
+      }
+      if (Keyspace.Length != 0) {
+        output.WriteRawTag(34);
+        output.WriteString(Keyspace);
+      }
+      if (StartedAtMs != 0UL) {
+        output.WriteRawTag(40);
+        output.WriteUInt64(StartedAtMs);
+      }
+      if (_unknownFields != null) {
+        _unknownFields.WriteTo(ref output);
+      }
+    }
+    #endif
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public int CalculateSize() {
+      int size = 0;
+      if (Format != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Format);
+      }
+      if (Id != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt32Size(Id);
+      }
+      if (Name.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Name);
+      }
+      if (Keyspace.Length != 0) {
+        size += 1 + pb::CodedOutputStream.ComputeStringSize(Keyspace);
+      }
+      if (StartedAtMs != 0UL) {
+        size += 1 + pb::CodedOutputStream.ComputeUInt64Size(StartedAtMs);
+      }
+      if (_unknownFields != null) {
+        size += _unknownFields.CalculateSize();
+      }
+      return size;
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(AppIntent other) {
+      if (other == null) {
+        return;
+      }
+      if (other.Format != 0) {
+        Format = other.Format;
+      }
+      if (other.Id != 0) {
+        Id = other.Id;
+      }
+      if (other.Name.Length != 0) {
+        Name = other.Name;
+      }
+      if (other.Keyspace.Length != 0) {
+        Keyspace = other.Keyspace;
+      }
+      if (other.StartedAtMs != 0UL) {
+        StartedAtMs = other.StartedAtMs;
+      }
+      _unknownFields = pb::UnknownFieldSet.MergeFrom(_unknownFields, other._unknownFields);
+    }
+
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    public void MergeFrom(pb::CodedInputStream input) {
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+      input.ReadRawMessage(this);
+    #else
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, input);
+            break;
+          case 8: {
+            Format = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Id = input.ReadUInt32();
+            break;
+          }
+          case 26: {
+            Name = input.ReadString();
+            break;
+          }
+          case 34: {
+            Keyspace = input.ReadString();
+            break;
+          }
+          case 40: {
+            StartedAtMs = input.ReadUInt64();
+            break;
+          }
+        }
+      }
+    #endif
+    }
+
+    #if !GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE
+    [global::System.Diagnostics.DebuggerNonUserCodeAttribute]
+    [global::System.CodeDom.Compiler.GeneratedCode("protoc", null)]
+    void pb::IBufferMessage.InternalMergeFrom(ref pb::ParseContext input) {
+      uint tag;
+      while ((tag = input.ReadTag()) != 0) {
+      if ((tag & 7) == 4) {
+        // Abort on any end group tag.
+        return;
+      }
+      switch(tag) {
+          default:
+            _unknownFields = pb::UnknownFieldSet.MergeFieldFrom(_unknownFields, ref input);
+            break;
+          case 8: {
+            Format = input.ReadUInt32();
+            break;
+          }
+          case 16: {
+            Id = input.ReadUInt32();
+            break;
+          }
+          case 26: {
+            Name = input.ReadString();
+            break;
+          }
+          case 34: {
+            Keyspace = input.ReadString();
+            break;
+          }
+          case 40: {
+            StartedAtMs = input.ReadUInt64();
             break;
           }
         }

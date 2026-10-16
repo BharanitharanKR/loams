@@ -1,6 +1,6 @@
 // The Loams Live admin API (design §45 §6.3, D689; LV1 plan Task 10):
 // deploying functions and schemas, listing deployments, rollback, index
-// status and function logs. App lifecycle (Task 13) and backups (Tasks
+// status, function logs, and the app directory (Task 13). Backups (Tasks
 // 29–30) join it later.
 //
 // Platform principals only, never an app's end users (§45 §5.3). The
@@ -19,7 +19,7 @@ service LiveAdminService {
   // Unstable like the rest of the package (§44 §10.3).
   option (loams.options.v1.module) = {
     name: "live.admin"
-    summary: "Live administration: deploy, roll back, index status and function logs."
+    summary: "Live administration: apps, deploy, roll back, index status and function logs."
     unstable: true
   };
 
@@ -57,6 +57,36 @@ service LiveAdminService {
   // the node still holds, then, with `follow`, new lines as they come.
   rpc TailLogs(TailLogsRequest) returns (stream TailLogsResponse) {
     option (loams.options.v1.facade) = { name: "tailLogs" };
+  }
+
+  // Creates an app (design §45 §7, D690): its dedicated keyspace
+  // `loams_live_a<id>` first, then its directory record. A taken name is
+  // FAILED_PRECONDITION, reason `live_app_exists`; more apps than the
+  // cluster allows is RESOURCE_EXHAUSTED.
+  rpc CreateApp(CreateAppRequest) returns (CreateAppResponse) {
+    option (loams.options.v1.facade) = { name: "createApp" };
+  }
+  // The cluster's apps, by id.
+  rpc ListApps(ListAppsRequest) returns (ListAppsResponse) {
+    option (loams.options.v1.facade) = {
+      name: "listApps"
+      retry_safe: true
+      pagination: "apps:next_page_token"
+    };
+  }
+  // One app, by name.
+  rpc GetApp(GetAppRequest) returns (GetAppResponse) {
+    option (loams.options.v1.facade) = { name: "getApp" retry_safe: true };
+  }
+  // Changes an app's settings, or disables and enables it. Fields left out
+  // are kept.
+  rpc UpdateApp(UpdateAppRequest) returns (UpdateAppResponse) {
+    option (loams.options.v1.facade) = { name: "updateApp" };
+  }
+  // Deletes an app softly: it is `APP_STATE_DELETING` (every call refused)
+  // and its data is purged after the retention, 7 days by default.
+  rpc DeleteApp(DeleteAppRequest) returns (DeleteAppResponse) {
+    option (loams.options.v1.facade) = { name: "deleteApp" };
   }
 }
 
@@ -280,4 +310,139 @@ enum LogLevel {
   LOG_LEVEL_WARN = 4;
   // `console.error`, and the error a call ended with.
   LOG_LEVEL_ERROR = 5;
+}
+
+// One Live app of the cluster (design §45 §7, D690).
+message App {
+  // Cluster-unique and permanent.
+  uint32 id = 1;
+  // Unique among the cluster's apps; the `loams-live-app` header names it.
+  string name = 2;
+  // The org and environment the app belongs to (Q639: one app per
+  // environment); free text until the authorization of LV1 Task 15.
+  string namespace = 3;
+  // Where its data lives: `loams_live_a<id>`, or the server's own keyspace
+  // for its default app (`--live-app`).
+  string keyspace = 4;
+  AppState state = 5;
+  // When a deleted app's data is purged (Unix ms); 0 unless deleting.
+  uint64 purge_after_ms = 6;
+  AppLimits limits = 7;
+  repeated TrustedIssuer issuers = 8;
+  // The browser origins allowed to call the app (CORS, LV1 Task 18).
+  repeated string allowed_origins = 9;
+  // Whether calls without a credential are accepted (LV1 Task 16).
+  bool allow_anonymous = 10;
+  // Unix ms.
+  uint64 created_at_ms = 11;
+}
+
+enum AppState {
+  APP_STATE_UNSPECIFIED = 0;
+  // Calls are served.
+  APP_STATE_ACTIVE = 1;
+  // Every call is FAILED_PRECONDITION, reason `live_app_disabled`.
+  APP_STATE_DISABLED = 2;
+  // Deleted: refused as disabled, and purged at `purge_after_ms`.
+  APP_STATE_DELETING = 3;
+}
+
+// Per-app limits. Each one only tightens the server's own; absent means
+// the server's.
+message AppLimits {
+  // JavaScript CPU time of one call, in ms.
+  optional uint64 max_js_cpu_ms = 1;
+  // The wall-clock deadline of one mutation, in ms.
+  optional uint64 mutation_deadline_ms = 2;
+  // The value one call returns, in bytes.
+  optional uint64 max_result_bytes = 3;
+  // Documents one function scans.
+  optional uint64 max_scanned_docs = 4;
+  // Documents one mutation writes.
+  optional uint64 max_written_docs = 5;
+  // Bytes one mutation writes.
+  optional uint64 max_written_bytes = 6;
+}
+
+// An OIDC issuer whose tokens identify the app's end users (design §45
+// §5.3; used from LV1 Task 16).
+message TrustedIssuer {
+  // The issuer URL, as the tokens' `iss` names it.
+  string issuer = 1;
+  // The `aud` values accepted; at least one.
+  repeated string audiences = 2;
+  // The JWKS URL; absent means OIDC discovery.
+  optional string jwks_uri = 3;
+}
+
+message CreateAppRequest {
+  string name = 1;
+  string namespace = 2;
+  AppLimits limits = 3;
+  repeated TrustedIssuer issuers = 4;
+  repeated string allowed_origins = 5;
+  bool allow_anonymous = 6;
+}
+
+message CreateAppResponse {
+  App app = 1;
+}
+
+message ListAppsRequest {
+  // AIP-158 page size: 100 when 0, at most 1 000.
+  int32 page_size = 1;
+  // The `next_page_token` of the previous page; empty starts at the first.
+  string page_token = 2;
+}
+
+message ListAppsResponse {
+  // By id. Deleted apps are listed until they are purged.
+  repeated App apps = 1;
+  // Empty on the last page.
+  string next_page_token = 2;
+}
+
+message GetAppRequest {
+  string name = 1;
+}
+
+message GetAppResponse {
+  App app = 1;
+}
+
+message UpdateAppRequest {
+  string name = 1;
+  // `APP_STATE_ACTIVE` or `APP_STATE_DISABLED`; a deleted app cannot
+  // change state.
+  optional AppState state = 2;
+  // Replaces the limits.
+  AppLimits limits = 3;
+  // Replaces the issuers.
+  TrustedIssuers issuers = 4;
+  // Replaces the allowed origins.
+  AllowedOrigins allowed_origins = 5;
+  optional bool allow_anonymous = 6;
+}
+
+// A list that replaces the app's issuers (empty removes them all).
+message TrustedIssuers {
+  repeated TrustedIssuer issuers = 1;
+}
+
+// A list that replaces the app's allowed origins (empty removes them all).
+message AllowedOrigins {
+  repeated string origins = 1;
+}
+
+message UpdateAppResponse {
+  App app = 1;
+}
+
+message DeleteAppRequest {
+  string name = 1;
+}
+
+message DeleteAppResponse {
+  // The app, now `APP_STATE_DELETING`.
+  App app = 1;
 }

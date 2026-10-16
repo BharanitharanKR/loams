@@ -53,6 +53,40 @@ pub async fn ensure_keyspace(pd_http: &str, name: &str) -> Result<KeyspaceMeta, 
     })
 }
 
+/// Moves the keyspace `name` to `state` (`ENABLED`, `DISABLED`, `ARCHIVED`
+/// or `TOMBSTONE`) through `PUT /pd/api/v2/keyspaces/<name>/state`, and
+/// returns it as PD then reports it. PD allows ENABLED ⇄ DISABLED, DISABLED →
+/// ARCHIVED and ARCHIVED → TOMBSTONE; moving to the state a keyspace is
+/// already in succeeds. A Live app's deletion disables its keyspace, and its
+/// purge archives it (LV1 plan Task 13).
+pub async fn set_keyspace_state(
+    pd_http: &str,
+    name: &str,
+    state: &str,
+) -> Result<KeyspaceMeta, TikvError> {
+    const OP: &str = "PUT keyspace state";
+    validate_name(name)?;
+    if !matches!(state, "ENABLED" | "DISABLED" | "ARCHIVED" | "TOMBSTONE") {
+        return Err(TikvError::Config(format!(
+            "keyspace state '{state}' is not ENABLED, DISABLED, ARCHIVED or TOMBSTONE"
+        )));
+    }
+    let http = http_client(DEFAULT_REQUEST_TIMEOUT)?;
+    let base = pd_http.trim_end_matches('/');
+    let request = http
+        .put(format!("{base}/pd/api/v2/keyspaces/{name}/state"))
+        .json(&serde_json::json!({ "state": state }));
+    let (status, body) = send(OP, request).await?;
+    match classify(status, &body) {
+        Answer::Ok => parse(OP, &body, name),
+        Answer::DoesNotExist | Answer::AlreadyExists | Answer::Other => Err(TikvError::Pd {
+            op: OP,
+            status,
+            body,
+        }),
+    }
+}
+
 pub(crate) fn http_client(timeout: Duration) -> Result<reqwest::Client, TikvError> {
     reqwest::Client::builder()
         .timeout(timeout)

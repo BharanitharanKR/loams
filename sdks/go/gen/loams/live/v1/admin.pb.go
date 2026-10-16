@@ -1,6 +1,6 @@
 // The Loams Live admin API (design §45 §6.3, D689; LV1 plan Task 10):
 // deploying functions and schemas, listing deployments, rollback, index
-// status and function logs. App lifecycle (Task 13) and backups (Tasks
+// status, function logs, and the app directory (Task 13). Backups (Tasks
 // 29–30) join it later.
 //
 // Platform principals only, never an app's end users (§45 §5.3). The
@@ -327,6 +327,61 @@ func (x LogLevel) Number() protoreflect.EnumNumber {
 // Deprecated: Use LogLevel.Descriptor instead.
 func (LogLevel) EnumDescriptor() ([]byte, []int) {
 	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{4}
+}
+
+type AppState int32
+
+const (
+	AppState_APP_STATE_UNSPECIFIED AppState = 0
+	// Calls are served.
+	AppState_APP_STATE_ACTIVE AppState = 1
+	// Every call is FAILED_PRECONDITION, reason `live_app_disabled`.
+	AppState_APP_STATE_DISABLED AppState = 2
+	// Deleted: refused as disabled, and purged at `purge_after_ms`.
+	AppState_APP_STATE_DELETING AppState = 3
+)
+
+// Enum value maps for AppState.
+var (
+	AppState_name = map[int32]string{
+		0: "APP_STATE_UNSPECIFIED",
+		1: "APP_STATE_ACTIVE",
+		2: "APP_STATE_DISABLED",
+		3: "APP_STATE_DELETING",
+	}
+	AppState_value = map[string]int32{
+		"APP_STATE_UNSPECIFIED": 0,
+		"APP_STATE_ACTIVE":      1,
+		"APP_STATE_DISABLED":    2,
+		"APP_STATE_DELETING":    3,
+	}
+)
+
+func (x AppState) Enum() *AppState {
+	p := new(AppState)
+	*p = x
+	return p
+}
+
+func (x AppState) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (AppState) Descriptor() protoreflect.EnumDescriptor {
+	return file_loams_live_v1_admin_proto_enumTypes[5].Descriptor()
+}
+
+func (AppState) Type() protoreflect.EnumType {
+	return &file_loams_live_v1_admin_proto_enumTypes[5]
+}
+
+func (x AppState) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use AppState.Descriptor instead.
+func (AppState) EnumDescriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{5}
 }
 
 // A deployment as the admin API shows it (the catalog's record without the
@@ -1434,6 +1489,934 @@ func (x *LogEntry) GetTruncated() bool {
 	return false
 }
 
+// One Live app of the cluster (design §45 §7, D690).
+type App struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// Cluster-unique and permanent.
+	Id uint32 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	// Unique among the cluster's apps; the `loams-live-app` header names it.
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// The org and environment the app belongs to (Q639: one app per
+	// environment); free text until the authorization of LV1 Task 15.
+	Namespace string `protobuf:"bytes,3,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	// Where its data lives: `loams_live_a<id>`, or the server's own keyspace
+	// for its default app (`--live-app`).
+	Keyspace string   `protobuf:"bytes,4,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	State    AppState `protobuf:"varint,5,opt,name=state,proto3,enum=loams.live.v1.AppState" json:"state,omitempty"`
+	// When a deleted app's data is purged (Unix ms); 0 unless deleting.
+	PurgeAfterMs uint64           `protobuf:"varint,6,opt,name=purge_after_ms,json=purgeAfterMs,proto3" json:"purge_after_ms,omitempty"`
+	Limits       *AppLimits       `protobuf:"bytes,7,opt,name=limits,proto3" json:"limits,omitempty"`
+	Issuers      []*TrustedIssuer `protobuf:"bytes,8,rep,name=issuers,proto3" json:"issuers,omitempty"`
+	// The browser origins allowed to call the app (CORS, LV1 Task 18).
+	AllowedOrigins []string `protobuf:"bytes,9,rep,name=allowed_origins,json=allowedOrigins,proto3" json:"allowed_origins,omitempty"`
+	// Whether calls without a credential are accepted (LV1 Task 16).
+	AllowAnonymous bool `protobuf:"varint,10,opt,name=allow_anonymous,json=allowAnonymous,proto3" json:"allow_anonymous,omitempty"`
+	// Unix ms.
+	CreatedAtMs   uint64 `protobuf:"varint,11,opt,name=created_at_ms,json=createdAtMs,proto3" json:"created_at_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *App) Reset() {
+	*x = App{}
+	mi := &file_loams_live_v1_admin_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *App) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*App) ProtoMessage() {}
+
+func (x *App) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_admin_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use App.ProtoReflect.Descriptor instead.
+func (*App) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *App) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *App) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *App) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
+func (x *App) GetKeyspace() string {
+	if x != nil {
+		return x.Keyspace
+	}
+	return ""
+}
+
+func (x *App) GetState() AppState {
+	if x != nil {
+		return x.State
+	}
+	return AppState_APP_STATE_UNSPECIFIED
+}
+
+func (x *App) GetPurgeAfterMs() uint64 {
+	if x != nil {
+		return x.PurgeAfterMs
+	}
+	return 0
+}
+
+func (x *App) GetLimits() *AppLimits {
+	if x != nil {
+		return x.Limits
+	}
+	return nil
+}
+
+func (x *App) GetIssuers() []*TrustedIssuer {
+	if x != nil {
+		return x.Issuers
+	}
+	return nil
+}
+
+func (x *App) GetAllowedOrigins() []string {
+	if x != nil {
+		return x.AllowedOrigins
+	}
+	return nil
+}
+
+func (x *App) GetAllowAnonymous() bool {
+	if x != nil {
+		return x.AllowAnonymous
+	}
+	return false
+}
+
+func (x *App) GetCreatedAtMs() uint64 {
+	if x != nil {
+		return x.CreatedAtMs
+	}
+	return 0
+}
+
+// Per-app limits. Each one only tightens the server's own; absent means
+// the server's.
+type AppLimits struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// JavaScript CPU time of one call, in ms.
+	MaxJsCpuMs *uint64 `protobuf:"varint,1,opt,name=max_js_cpu_ms,json=maxJsCpuMs,proto3,oneof" json:"max_js_cpu_ms,omitempty"`
+	// The wall-clock deadline of one mutation, in ms.
+	MutationDeadlineMs *uint64 `protobuf:"varint,2,opt,name=mutation_deadline_ms,json=mutationDeadlineMs,proto3,oneof" json:"mutation_deadline_ms,omitempty"`
+	// The value one call returns, in bytes.
+	MaxResultBytes *uint64 `protobuf:"varint,3,opt,name=max_result_bytes,json=maxResultBytes,proto3,oneof" json:"max_result_bytes,omitempty"`
+	// Documents one function scans.
+	MaxScannedDocs *uint64 `protobuf:"varint,4,opt,name=max_scanned_docs,json=maxScannedDocs,proto3,oneof" json:"max_scanned_docs,omitempty"`
+	// Documents one mutation writes.
+	MaxWrittenDocs *uint64 `protobuf:"varint,5,opt,name=max_written_docs,json=maxWrittenDocs,proto3,oneof" json:"max_written_docs,omitempty"`
+	// Bytes one mutation writes.
+	MaxWrittenBytes *uint64 `protobuf:"varint,6,opt,name=max_written_bytes,json=maxWrittenBytes,proto3,oneof" json:"max_written_bytes,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *AppLimits) Reset() {
+	*x = AppLimits{}
+	mi := &file_loams_live_v1_admin_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AppLimits) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AppLimits) ProtoMessage() {}
+
+func (x *AppLimits) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_admin_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AppLimits.ProtoReflect.Descriptor instead.
+func (*AppLimits) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *AppLimits) GetMaxJsCpuMs() uint64 {
+	if x != nil && x.MaxJsCpuMs != nil {
+		return *x.MaxJsCpuMs
+	}
+	return 0
+}
+
+func (x *AppLimits) GetMutationDeadlineMs() uint64 {
+	if x != nil && x.MutationDeadlineMs != nil {
+		return *x.MutationDeadlineMs
+	}
+	return 0
+}
+
+func (x *AppLimits) GetMaxResultBytes() uint64 {
+	if x != nil && x.MaxResultBytes != nil {
+		return *x.MaxResultBytes
+	}
+	return 0
+}
+
+func (x *AppLimits) GetMaxScannedDocs() uint64 {
+	if x != nil && x.MaxScannedDocs != nil {
+		return *x.MaxScannedDocs
+	}
+	return 0
+}
+
+func (x *AppLimits) GetMaxWrittenDocs() uint64 {
+	if x != nil && x.MaxWrittenDocs != nil {
+		return *x.MaxWrittenDocs
+	}
+	return 0
+}
+
+func (x *AppLimits) GetMaxWrittenBytes() uint64 {
+	if x != nil && x.MaxWrittenBytes != nil {
+		return *x.MaxWrittenBytes
+	}
+	return 0
+}
+
+// An OIDC issuer whose tokens identify the app's end users (design §45
+// §5.3; used from LV1 Task 16).
+type TrustedIssuer struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The issuer URL, as the tokens' `iss` names it.
+	Issuer string `protobuf:"bytes,1,opt,name=issuer,proto3" json:"issuer,omitempty"`
+	// The `aud` values accepted; at least one.
+	Audiences []string `protobuf:"bytes,2,rep,name=audiences,proto3" json:"audiences,omitempty"`
+	// The JWKS URL; absent means OIDC discovery.
+	JwksUri       *string `protobuf:"bytes,3,opt,name=jwks_uri,json=jwksUri,proto3,oneof" json:"jwks_uri,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrustedIssuer) Reset() {
+	*x = TrustedIssuer{}
+	mi := &file_loams_live_v1_admin_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrustedIssuer) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrustedIssuer) ProtoMessage() {}
+
+func (x *TrustedIssuer) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_admin_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrustedIssuer.ProtoReflect.Descriptor instead.
+func (*TrustedIssuer) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *TrustedIssuer) GetIssuer() string {
+	if x != nil {
+		return x.Issuer
+	}
+	return ""
+}
+
+func (x *TrustedIssuer) GetAudiences() []string {
+	if x != nil {
+		return x.Audiences
+	}
+	return nil
+}
+
+func (x *TrustedIssuer) GetJwksUri() string {
+	if x != nil && x.JwksUri != nil {
+		return *x.JwksUri
+	}
+	return ""
+}
+
+type CreateAppRequest struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Name           string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	Namespace      string                 `protobuf:"bytes,2,opt,name=namespace,proto3" json:"namespace,omitempty"`
+	Limits         *AppLimits             `protobuf:"bytes,3,opt,name=limits,proto3" json:"limits,omitempty"`
+	Issuers        []*TrustedIssuer       `protobuf:"bytes,4,rep,name=issuers,proto3" json:"issuers,omitempty"`
+	AllowedOrigins []string               `protobuf:"bytes,5,rep,name=allowed_origins,json=allowedOrigins,proto3" json:"allowed_origins,omitempty"`
+	AllowAnonymous bool                   `protobuf:"varint,6,opt,name=allow_anonymous,json=allowAnonymous,proto3" json:"allow_anonymous,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *CreateAppRequest) Reset() {
+	*x = CreateAppRequest{}
+	mi := &file_loams_live_v1_admin_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateAppRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateAppRequest) ProtoMessage() {}
+
+func (x *CreateAppRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_admin_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateAppRequest.ProtoReflect.Descriptor instead.
+func (*CreateAppRequest) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *CreateAppRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *CreateAppRequest) GetNamespace() string {
+	if x != nil {
+		return x.Namespace
+	}
+	return ""
+}
+
+func (x *CreateAppRequest) GetLimits() *AppLimits {
+	if x != nil {
+		return x.Limits
+	}
+	return nil
+}
+
+func (x *CreateAppRequest) GetIssuers() []*TrustedIssuer {
+	if x != nil {
+		return x.Issuers
+	}
+	return nil
+}
+
+func (x *CreateAppRequest) GetAllowedOrigins() []string {
+	if x != nil {
+		return x.AllowedOrigins
+	}
+	return nil
+}
+
+func (x *CreateAppRequest) GetAllowAnonymous() bool {
+	if x != nil {
+		return x.AllowAnonymous
+	}
+	return false
+}
+
+type CreateAppResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	App           *App                   `protobuf:"bytes,1,opt,name=app,proto3" json:"app,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateAppResponse) Reset() {
+	*x = CreateAppResponse{}
+	mi := &file_loams_live_v1_admin_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateAppResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateAppResponse) ProtoMessage() {}
+
+func (x *CreateAppResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_admin_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateAppResponse.ProtoReflect.Descriptor instead.
+func (*CreateAppResponse) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *CreateAppResponse) GetApp() *App {
+	if x != nil {
+		return x.App
+	}
+	return nil
+}
+
+type ListAppsRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// AIP-158 page size: 100 when 0, at most 1 000.
+	PageSize int32 `protobuf:"varint,1,opt,name=page_size,json=pageSize,proto3" json:"page_size,omitempty"`
+	// The `next_page_token` of the previous page; empty starts at the first.
+	PageToken     string `protobuf:"bytes,2,opt,name=page_token,json=pageToken,proto3" json:"page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAppsRequest) Reset() {
+	*x = ListAppsRequest{}
+	mi := &file_loams_live_v1_admin_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAppsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAppsRequest) ProtoMessage() {}
+
+func (x *ListAppsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_admin_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAppsRequest.ProtoReflect.Descriptor instead.
+func (*ListAppsRequest) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *ListAppsRequest) GetPageSize() int32 {
+	if x != nil {
+		return x.PageSize
+	}
+	return 0
+}
+
+func (x *ListAppsRequest) GetPageToken() string {
+	if x != nil {
+		return x.PageToken
+	}
+	return ""
+}
+
+type ListAppsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// By id. Deleted apps are listed until they are purged.
+	Apps []*App `protobuf:"bytes,1,rep,name=apps,proto3" json:"apps,omitempty"`
+	// Empty on the last page.
+	NextPageToken string `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListAppsResponse) Reset() {
+	*x = ListAppsResponse{}
+	mi := &file_loams_live_v1_admin_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListAppsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListAppsResponse) ProtoMessage() {}
+
+func (x *ListAppsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_admin_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListAppsResponse.ProtoReflect.Descriptor instead.
+func (*ListAppsResponse) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *ListAppsResponse) GetApps() []*App {
+	if x != nil {
+		return x.Apps
+	}
+	return nil
+}
+
+func (x *ListAppsResponse) GetNextPageToken() string {
+	if x != nil {
+		return x.NextPageToken
+	}
+	return ""
+}
+
+type GetAppRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAppRequest) Reset() {
+	*x = GetAppRequest{}
+	mi := &file_loams_live_v1_admin_proto_msgTypes[24]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAppRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAppRequest) ProtoMessage() {}
+
+func (x *GetAppRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_admin_proto_msgTypes[24]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAppRequest.ProtoReflect.Descriptor instead.
+func (*GetAppRequest) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{24}
+}
+
+func (x *GetAppRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type GetAppResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	App           *App                   `protobuf:"bytes,1,opt,name=app,proto3" json:"app,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetAppResponse) Reset() {
+	*x = GetAppResponse{}
+	mi := &file_loams_live_v1_admin_proto_msgTypes[25]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetAppResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetAppResponse) ProtoMessage() {}
+
+func (x *GetAppResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_admin_proto_msgTypes[25]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetAppResponse.ProtoReflect.Descriptor instead.
+func (*GetAppResponse) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{25}
+}
+
+func (x *GetAppResponse) GetApp() *App {
+	if x != nil {
+		return x.App
+	}
+	return nil
+}
+
+type UpdateAppRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Name  string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	// `APP_STATE_ACTIVE` or `APP_STATE_DISABLED`; a deleted app cannot
+	// change state.
+	State *AppState `protobuf:"varint,2,opt,name=state,proto3,enum=loams.live.v1.AppState,oneof" json:"state,omitempty"`
+	// Replaces the limits.
+	Limits *AppLimits `protobuf:"bytes,3,opt,name=limits,proto3" json:"limits,omitempty"`
+	// Replaces the issuers.
+	Issuers *TrustedIssuers `protobuf:"bytes,4,opt,name=issuers,proto3" json:"issuers,omitempty"`
+	// Replaces the allowed origins.
+	AllowedOrigins *AllowedOrigins `protobuf:"bytes,5,opt,name=allowed_origins,json=allowedOrigins,proto3" json:"allowed_origins,omitempty"`
+	AllowAnonymous *bool           `protobuf:"varint,6,opt,name=allow_anonymous,json=allowAnonymous,proto3,oneof" json:"allow_anonymous,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *UpdateAppRequest) Reset() {
+	*x = UpdateAppRequest{}
+	mi := &file_loams_live_v1_admin_proto_msgTypes[26]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateAppRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateAppRequest) ProtoMessage() {}
+
+func (x *UpdateAppRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_admin_proto_msgTypes[26]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateAppRequest.ProtoReflect.Descriptor instead.
+func (*UpdateAppRequest) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{26}
+}
+
+func (x *UpdateAppRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *UpdateAppRequest) GetState() AppState {
+	if x != nil && x.State != nil {
+		return *x.State
+	}
+	return AppState_APP_STATE_UNSPECIFIED
+}
+
+func (x *UpdateAppRequest) GetLimits() *AppLimits {
+	if x != nil {
+		return x.Limits
+	}
+	return nil
+}
+
+func (x *UpdateAppRequest) GetIssuers() *TrustedIssuers {
+	if x != nil {
+		return x.Issuers
+	}
+	return nil
+}
+
+func (x *UpdateAppRequest) GetAllowedOrigins() *AllowedOrigins {
+	if x != nil {
+		return x.AllowedOrigins
+	}
+	return nil
+}
+
+func (x *UpdateAppRequest) GetAllowAnonymous() bool {
+	if x != nil && x.AllowAnonymous != nil {
+		return *x.AllowAnonymous
+	}
+	return false
+}
+
+// A list that replaces the app's issuers (empty removes them all).
+type TrustedIssuers struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Issuers       []*TrustedIssuer       `protobuf:"bytes,1,rep,name=issuers,proto3" json:"issuers,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TrustedIssuers) Reset() {
+	*x = TrustedIssuers{}
+	mi := &file_loams_live_v1_admin_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrustedIssuers) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrustedIssuers) ProtoMessage() {}
+
+func (x *TrustedIssuers) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_admin_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrustedIssuers.ProtoReflect.Descriptor instead.
+func (*TrustedIssuers) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *TrustedIssuers) GetIssuers() []*TrustedIssuer {
+	if x != nil {
+		return x.Issuers
+	}
+	return nil
+}
+
+// A list that replaces the app's allowed origins (empty removes them all).
+type AllowedOrigins struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Origins       []string               `protobuf:"bytes,1,rep,name=origins,proto3" json:"origins,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AllowedOrigins) Reset() {
+	*x = AllowedOrigins{}
+	mi := &file_loams_live_v1_admin_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AllowedOrigins) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AllowedOrigins) ProtoMessage() {}
+
+func (x *AllowedOrigins) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_admin_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AllowedOrigins.ProtoReflect.Descriptor instead.
+func (*AllowedOrigins) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *AllowedOrigins) GetOrigins() []string {
+	if x != nil {
+		return x.Origins
+	}
+	return nil
+}
+
+type UpdateAppResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	App           *App                   `protobuf:"bytes,1,opt,name=app,proto3" json:"app,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateAppResponse) Reset() {
+	*x = UpdateAppResponse{}
+	mi := &file_loams_live_v1_admin_proto_msgTypes[29]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateAppResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateAppResponse) ProtoMessage() {}
+
+func (x *UpdateAppResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_admin_proto_msgTypes[29]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateAppResponse.ProtoReflect.Descriptor instead.
+func (*UpdateAppResponse) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{29}
+}
+
+func (x *UpdateAppResponse) GetApp() *App {
+	if x != nil {
+		return x.App
+	}
+	return nil
+}
+
+type DeleteAppRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Name          string                 `protobuf:"bytes,1,opt,name=name,proto3" json:"name,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteAppRequest) Reset() {
+	*x = DeleteAppRequest{}
+	mi := &file_loams_live_v1_admin_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteAppRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteAppRequest) ProtoMessage() {}
+
+func (x *DeleteAppRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_admin_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteAppRequest.ProtoReflect.Descriptor instead.
+func (*DeleteAppRequest) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *DeleteAppRequest) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+type DeleteAppResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The app, now `APP_STATE_DELETING`.
+	App           *App `protobuf:"bytes,1,opt,name=app,proto3" json:"app,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteAppResponse) Reset() {
+	*x = DeleteAppResponse{}
+	mi := &file_loams_live_v1_admin_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteAppResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteAppResponse) ProtoMessage() {}
+
+func (x *DeleteAppResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_admin_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteAppResponse.ProtoReflect.Descriptor instead.
+func (*DeleteAppResponse) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_admin_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *DeleteAppResponse) GetApp() *App {
+	if x != nil {
+		return x.App
+	}
+	return nil
+}
+
 var File_loams_live_v1_admin_proto protoreflect.FileDescriptor
 
 const file_loams_live_v1_admin_proto_rawDesc = "" +
@@ -1528,7 +2511,78 @@ const file_loams_live_v1_admin_proto_rawDesc = "" +
 	"deployment\x12-\n" +
 	"\x05level\x18\x05 \x01(\x0e2\x17.loams.live.v1.LogLevelR\x05level\x12\x12\n" +
 	"\x04line\x18\x06 \x01(\tR\x04line\x12\x1c\n" +
-	"\ttruncated\x18\a \x01(\bR\ttruncated*\x8e\x02\n" +
+	"\ttruncated\x18\a \x01(\bR\ttruncated\"\x98\x03\n" +
+	"\x03App\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\rR\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x1c\n" +
+	"\tnamespace\x18\x03 \x01(\tR\tnamespace\x12\x1a\n" +
+	"\bkeyspace\x18\x04 \x01(\tR\bkeyspace\x12-\n" +
+	"\x05state\x18\x05 \x01(\x0e2\x17.loams.live.v1.AppStateR\x05state\x12$\n" +
+	"\x0epurge_after_ms\x18\x06 \x01(\x04R\fpurgeAfterMs\x120\n" +
+	"\x06limits\x18\a \x01(\v2\x18.loams.live.v1.AppLimitsR\x06limits\x126\n" +
+	"\aissuers\x18\b \x03(\v2\x1c.loams.live.v1.TrustedIssuerR\aissuers\x12'\n" +
+	"\x0fallowed_origins\x18\t \x03(\tR\x0eallowedOrigins\x12'\n" +
+	"\x0fallow_anonymous\x18\n" +
+	" \x01(\bR\x0eallowAnonymous\x12\"\n" +
+	"\rcreated_at_ms\x18\v \x01(\x04R\vcreatedAtMs\"\xa8\x03\n" +
+	"\tAppLimits\x12&\n" +
+	"\rmax_js_cpu_ms\x18\x01 \x01(\x04H\x00R\n" +
+	"maxJsCpuMs\x88\x01\x01\x125\n" +
+	"\x14mutation_deadline_ms\x18\x02 \x01(\x04H\x01R\x12mutationDeadlineMs\x88\x01\x01\x12-\n" +
+	"\x10max_result_bytes\x18\x03 \x01(\x04H\x02R\x0emaxResultBytes\x88\x01\x01\x12-\n" +
+	"\x10max_scanned_docs\x18\x04 \x01(\x04H\x03R\x0emaxScannedDocs\x88\x01\x01\x12-\n" +
+	"\x10max_written_docs\x18\x05 \x01(\x04H\x04R\x0emaxWrittenDocs\x88\x01\x01\x12/\n" +
+	"\x11max_written_bytes\x18\x06 \x01(\x04H\x05R\x0fmaxWrittenBytes\x88\x01\x01B\x10\n" +
+	"\x0e_max_js_cpu_msB\x17\n" +
+	"\x15_mutation_deadline_msB\x13\n" +
+	"\x11_max_result_bytesB\x13\n" +
+	"\x11_max_scanned_docsB\x13\n" +
+	"\x11_max_written_docsB\x14\n" +
+	"\x12_max_written_bytes\"r\n" +
+	"\rTrustedIssuer\x12\x16\n" +
+	"\x06issuer\x18\x01 \x01(\tR\x06issuer\x12\x1c\n" +
+	"\taudiences\x18\x02 \x03(\tR\taudiences\x12\x1e\n" +
+	"\bjwks_uri\x18\x03 \x01(\tH\x00R\ajwksUri\x88\x01\x01B\v\n" +
+	"\t_jwks_uri\"\x80\x02\n" +
+	"\x10CreateAppRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x12\x1c\n" +
+	"\tnamespace\x18\x02 \x01(\tR\tnamespace\x120\n" +
+	"\x06limits\x18\x03 \x01(\v2\x18.loams.live.v1.AppLimitsR\x06limits\x126\n" +
+	"\aissuers\x18\x04 \x03(\v2\x1c.loams.live.v1.TrustedIssuerR\aissuers\x12'\n" +
+	"\x0fallowed_origins\x18\x05 \x03(\tR\x0eallowedOrigins\x12'\n" +
+	"\x0fallow_anonymous\x18\x06 \x01(\bR\x0eallowAnonymous\"9\n" +
+	"\x11CreateAppResponse\x12$\n" +
+	"\x03app\x18\x01 \x01(\v2\x12.loams.live.v1.AppR\x03app\"M\n" +
+	"\x0fListAppsRequest\x12\x1b\n" +
+	"\tpage_size\x18\x01 \x01(\x05R\bpageSize\x12\x1d\n" +
+	"\n" +
+	"page_token\x18\x02 \x01(\tR\tpageToken\"b\n" +
+	"\x10ListAppsResponse\x12&\n" +
+	"\x04apps\x18\x01 \x03(\v2\x12.loams.live.v1.AppR\x04apps\x12&\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"#\n" +
+	"\rGetAppRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"6\n" +
+	"\x0eGetAppResponse\x12$\n" +
+	"\x03app\x18\x01 \x01(\v2\x12.loams.live.v1.AppR\x03app\"\xd9\x02\n" +
+	"\x10UpdateAppRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\x122\n" +
+	"\x05state\x18\x02 \x01(\x0e2\x17.loams.live.v1.AppStateH\x00R\x05state\x88\x01\x01\x120\n" +
+	"\x06limits\x18\x03 \x01(\v2\x18.loams.live.v1.AppLimitsR\x06limits\x127\n" +
+	"\aissuers\x18\x04 \x01(\v2\x1d.loams.live.v1.TrustedIssuersR\aissuers\x12F\n" +
+	"\x0fallowed_origins\x18\x05 \x01(\v2\x1d.loams.live.v1.AllowedOriginsR\x0eallowedOrigins\x12,\n" +
+	"\x0fallow_anonymous\x18\x06 \x01(\bH\x01R\x0eallowAnonymous\x88\x01\x01B\b\n" +
+	"\x06_stateB\x12\n" +
+	"\x10_allow_anonymous\"H\n" +
+	"\x0eTrustedIssuers\x126\n" +
+	"\aissuers\x18\x01 \x03(\v2\x1c.loams.live.v1.TrustedIssuerR\aissuers\"*\n" +
+	"\x0eAllowedOrigins\x12\x18\n" +
+	"\aorigins\x18\x01 \x03(\tR\aorigins\"9\n" +
+	"\x11UpdateAppResponse\x12$\n" +
+	"\x03app\x18\x01 \x01(\v2\x12.loams.live.v1.AppR\x03app\"&\n" +
+	"\x10DeleteAppRequest\x12\x12\n" +
+	"\x04name\x18\x01 \x01(\tR\x04name\"9\n" +
+	"\x11DeleteAppResponse\x12$\n" +
+	"\x03app\x18\x01 \x01(\v2\x12.loams.live.v1.AppR\x03app*\x8e\x02\n" +
 	"\x0fDeploymentState\x12 \n" +
 	"\x1cDEPLOYMENT_STATE_UNSPECIFIED\x10\x00\x12\x1c\n" +
 	"\x18DEPLOYMENT_STATE_PENDING\x10\x01\x12\x1f\n" +
@@ -1558,7 +2612,13 @@ const file_loams_live_v1_admin_proto_rawDesc = "" +
 	"\rLOG_LEVEL_LOG\x10\x02\x12\x12\n" +
 	"\x0eLOG_LEVEL_INFO\x10\x03\x12\x12\n" +
 	"\x0eLOG_LEVEL_WARN\x10\x04\x12\x13\n" +
-	"\x0fLOG_LEVEL_ERROR\x10\x052\xac\x06\n" +
+	"\x0fLOG_LEVEL_ERROR\x10\x05*k\n" +
+	"\bAppState\x12\x19\n" +
+	"\x15APP_STATE_UNSPECIFIED\x10\x00\x12\x14\n" +
+	"\x10APP_STATE_ACTIVE\x10\x01\x12\x16\n" +
+	"\x12APP_STATE_DISABLED\x10\x02\x12\x16\n" +
+	"\x12APP_STATE_DELETING\x10\x032\xa1\n" +
+	"\n" +
 	"\x10LiveAdminService\x12S\n" +
 	"\x06Deploy\x12\x1c.loams.live.v1.DeployRequest\x1a\x1d.loams.live.v1.DeployResponse\"\f\x92\xb5\x18\b\x12\x06deploy\x12\x96\x01\n" +
 	"\x0fListDeployments\x12%.loams.live.v1.ListDeploymentsRequest\x1a&.loams.live.v1.ListDeploymentsResponse\"4\x92\xb5\x180\x12\x0flistDeployments\x18\x01\"\x1bdeployments:next_page_token\x12q\n" +
@@ -1566,9 +2626,15 @@ const file_loams_live_v1_admin_proto_rawDesc = "" +
 	"\x12ActivateDeployment\x12(.loams.live.v1.ActivateDeploymentRequest\x1a).loams.live.v1.ActivateDeploymentResponse\"\x18\x92\xb5\x18\x14\x12\x12activateDeployment\x12u\n" +
 	"\x0eGetIndexStatus\x12$.loams.live.v1.GetIndexStatusRequest\x1a%.loams.live.v1.GetIndexStatusResponse\"\x16\x92\xb5\x18\x12\x12\x0egetIndexStatus\x18\x01\x12]\n" +
 	"\bTailLogs\x12\x1e.loams.live.v1.TailLogsRequest\x1a\x1f.loams.live.v1.TailLogsResponse\"\x0e\x92\xb5\x18\n" +
-	"\x12\btailLogs0\x01\x1a[\x8a\xb5\x18W\n" +
+	"\x12\btailLogs0\x01\x12_\n" +
+	"\tCreateApp\x12\x1f.loams.live.v1.CreateAppRequest\x1a .loams.live.v1.CreateAppResponse\"\x0f\x92\xb5\x18\v\x12\tcreateApp\x12s\n" +
+	"\bListApps\x12\x1e.loams.live.v1.ListAppsRequest\x1a\x1f.loams.live.v1.ListAppsResponse\"&\x92\xb5\x18\"\x12\blistApps\x18\x01\"\x14apps:next_page_token\x12U\n" +
+	"\x06GetApp\x12\x1c.loams.live.v1.GetAppRequest\x1a\x1d.loams.live.v1.GetAppResponse\"\x0e\x92\xb5\x18\n" +
+	"\x12\x06getApp\x18\x01\x12_\n" +
+	"\tUpdateApp\x12\x1f.loams.live.v1.UpdateAppRequest\x1a .loams.live.v1.UpdateAppResponse\"\x0f\x92\xb5\x18\v\x12\tupdateApp\x12_\n" +
+	"\tDeleteApp\x12\x1f.loams.live.v1.DeleteAppRequest\x1a .loams.live.v1.DeleteAppResponse\"\x0f\x92\xb5\x18\v\x12\tdeleteApp\x1aa\x8a\xb5\x18]\n" +
 	"\n" +
-	"live.admin\x12GLive administration: deploy, roll back, index status and function logs.\x18\x01b\x06proto3"
+	"live.admin\x12MLive administration: apps, deploy, roll back, index status and function logs.\x18\x01b\x06proto3"
 
 var (
 	file_loams_live_v1_admin_proto_rawDescOnce sync.Once
@@ -1582,70 +2648,111 @@ func file_loams_live_v1_admin_proto_rawDescGZIP() []byte {
 	return file_loams_live_v1_admin_proto_rawDescData
 }
 
-var file_loams_live_v1_admin_proto_enumTypes = make([]protoimpl.EnumInfo, 5)
-var file_loams_live_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
+var file_loams_live_v1_admin_proto_enumTypes = make([]protoimpl.EnumInfo, 6)
+var file_loams_live_v1_admin_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_loams_live_v1_admin_proto_goTypes = []any{
 	(DeploymentState)(0),               // 0: loams.live.v1.DeploymentState
 	(FunctionKind)(0),                  // 1: loams.live.v1.FunctionKind
 	(FunctionVisibility)(0),            // 2: loams.live.v1.FunctionVisibility
 	(IndexState)(0),                    // 3: loams.live.v1.IndexState
 	(LogLevel)(0),                      // 4: loams.live.v1.LogLevel
-	(*Deployment)(nil),                 // 5: loams.live.v1.Deployment
-	(*FunctionInfo)(nil),               // 6: loams.live.v1.FunctionInfo
-	(*DeployRequest)(nil),              // 7: loams.live.v1.DeployRequest
-	(*DeployResponse)(nil),             // 8: loams.live.v1.DeployResponse
-	(*SchemaChanges)(nil),              // 9: loams.live.v1.SchemaChanges
-	(*IndexRef)(nil),                   // 10: loams.live.v1.IndexRef
-	(*ListDeploymentsRequest)(nil),     // 11: loams.live.v1.ListDeploymentsRequest
-	(*ListDeploymentsResponse)(nil),    // 12: loams.live.v1.ListDeploymentsResponse
-	(*GetDeploymentRequest)(nil),       // 13: loams.live.v1.GetDeploymentRequest
-	(*GetDeploymentResponse)(nil),      // 14: loams.live.v1.GetDeploymentResponse
-	(*ActivateDeploymentRequest)(nil),  // 15: loams.live.v1.ActivateDeploymentRequest
-	(*ActivateDeploymentResponse)(nil), // 16: loams.live.v1.ActivateDeploymentResponse
-	(*GetIndexStatusRequest)(nil),      // 17: loams.live.v1.GetIndexStatusRequest
-	(*GetIndexStatusResponse)(nil),     // 18: loams.live.v1.GetIndexStatusResponse
-	(*TailLogsRequest)(nil),            // 19: loams.live.v1.TailLogsRequest
-	(*TailLogsResponse)(nil),           // 20: loams.live.v1.TailLogsResponse
-	(*LogEntry)(nil),                   // 21: loams.live.v1.LogEntry
-	(*Validator)(nil),                  // 22: loams.live.v1.Validator
-	(*Schema)(nil),                     // 23: loams.live.v1.Schema
+	(AppState)(0),                      // 5: loams.live.v1.AppState
+	(*Deployment)(nil),                 // 6: loams.live.v1.Deployment
+	(*FunctionInfo)(nil),               // 7: loams.live.v1.FunctionInfo
+	(*DeployRequest)(nil),              // 8: loams.live.v1.DeployRequest
+	(*DeployResponse)(nil),             // 9: loams.live.v1.DeployResponse
+	(*SchemaChanges)(nil),              // 10: loams.live.v1.SchemaChanges
+	(*IndexRef)(nil),                   // 11: loams.live.v1.IndexRef
+	(*ListDeploymentsRequest)(nil),     // 12: loams.live.v1.ListDeploymentsRequest
+	(*ListDeploymentsResponse)(nil),    // 13: loams.live.v1.ListDeploymentsResponse
+	(*GetDeploymentRequest)(nil),       // 14: loams.live.v1.GetDeploymentRequest
+	(*GetDeploymentResponse)(nil),      // 15: loams.live.v1.GetDeploymentResponse
+	(*ActivateDeploymentRequest)(nil),  // 16: loams.live.v1.ActivateDeploymentRequest
+	(*ActivateDeploymentResponse)(nil), // 17: loams.live.v1.ActivateDeploymentResponse
+	(*GetIndexStatusRequest)(nil),      // 18: loams.live.v1.GetIndexStatusRequest
+	(*GetIndexStatusResponse)(nil),     // 19: loams.live.v1.GetIndexStatusResponse
+	(*TailLogsRequest)(nil),            // 20: loams.live.v1.TailLogsRequest
+	(*TailLogsResponse)(nil),           // 21: loams.live.v1.TailLogsResponse
+	(*LogEntry)(nil),                   // 22: loams.live.v1.LogEntry
+	(*App)(nil),                        // 23: loams.live.v1.App
+	(*AppLimits)(nil),                  // 24: loams.live.v1.AppLimits
+	(*TrustedIssuer)(nil),              // 25: loams.live.v1.TrustedIssuer
+	(*CreateAppRequest)(nil),           // 26: loams.live.v1.CreateAppRequest
+	(*CreateAppResponse)(nil),          // 27: loams.live.v1.CreateAppResponse
+	(*ListAppsRequest)(nil),            // 28: loams.live.v1.ListAppsRequest
+	(*ListAppsResponse)(nil),           // 29: loams.live.v1.ListAppsResponse
+	(*GetAppRequest)(nil),              // 30: loams.live.v1.GetAppRequest
+	(*GetAppResponse)(nil),             // 31: loams.live.v1.GetAppResponse
+	(*UpdateAppRequest)(nil),           // 32: loams.live.v1.UpdateAppRequest
+	(*TrustedIssuers)(nil),             // 33: loams.live.v1.TrustedIssuers
+	(*AllowedOrigins)(nil),             // 34: loams.live.v1.AllowedOrigins
+	(*UpdateAppResponse)(nil),          // 35: loams.live.v1.UpdateAppResponse
+	(*DeleteAppRequest)(nil),           // 36: loams.live.v1.DeleteAppRequest
+	(*DeleteAppResponse)(nil),          // 37: loams.live.v1.DeleteAppResponse
+	(*Validator)(nil),                  // 38: loams.live.v1.Validator
+	(*Schema)(nil),                     // 39: loams.live.v1.Schema
 }
 var file_loams_live_v1_admin_proto_depIdxs = []int32{
 	0,  // 0: loams.live.v1.Deployment.state:type_name -> loams.live.v1.DeploymentState
 	1,  // 1: loams.live.v1.FunctionInfo.kind:type_name -> loams.live.v1.FunctionKind
 	2,  // 2: loams.live.v1.FunctionInfo.visibility:type_name -> loams.live.v1.FunctionVisibility
-	22, // 3: loams.live.v1.FunctionInfo.args:type_name -> loams.live.v1.Validator
-	23, // 4: loams.live.v1.DeployRequest.schema:type_name -> loams.live.v1.Schema
-	5,  // 5: loams.live.v1.DeployResponse.deployment:type_name -> loams.live.v1.Deployment
-	9,  // 6: loams.live.v1.DeployResponse.changes:type_name -> loams.live.v1.SchemaChanges
-	10, // 7: loams.live.v1.SchemaChanges.indexes_added:type_name -> loams.live.v1.IndexRef
-	10, // 8: loams.live.v1.SchemaChanges.indexes_dropped:type_name -> loams.live.v1.IndexRef
-	5,  // 9: loams.live.v1.ListDeploymentsResponse.deployments:type_name -> loams.live.v1.Deployment
-	5,  // 10: loams.live.v1.GetDeploymentResponse.deployment:type_name -> loams.live.v1.Deployment
-	23, // 11: loams.live.v1.GetDeploymentResponse.schema:type_name -> loams.live.v1.Schema
-	6,  // 12: loams.live.v1.GetDeploymentResponse.functions:type_name -> loams.live.v1.FunctionInfo
-	5,  // 13: loams.live.v1.ActivateDeploymentResponse.deployment:type_name -> loams.live.v1.Deployment
-	9,  // 14: loams.live.v1.ActivateDeploymentResponse.changes:type_name -> loams.live.v1.SchemaChanges
+	38, // 3: loams.live.v1.FunctionInfo.args:type_name -> loams.live.v1.Validator
+	39, // 4: loams.live.v1.DeployRequest.schema:type_name -> loams.live.v1.Schema
+	6,  // 5: loams.live.v1.DeployResponse.deployment:type_name -> loams.live.v1.Deployment
+	10, // 6: loams.live.v1.DeployResponse.changes:type_name -> loams.live.v1.SchemaChanges
+	11, // 7: loams.live.v1.SchemaChanges.indexes_added:type_name -> loams.live.v1.IndexRef
+	11, // 8: loams.live.v1.SchemaChanges.indexes_dropped:type_name -> loams.live.v1.IndexRef
+	6,  // 9: loams.live.v1.ListDeploymentsResponse.deployments:type_name -> loams.live.v1.Deployment
+	6,  // 10: loams.live.v1.GetDeploymentResponse.deployment:type_name -> loams.live.v1.Deployment
+	39, // 11: loams.live.v1.GetDeploymentResponse.schema:type_name -> loams.live.v1.Schema
+	7,  // 12: loams.live.v1.GetDeploymentResponse.functions:type_name -> loams.live.v1.FunctionInfo
+	6,  // 13: loams.live.v1.ActivateDeploymentResponse.deployment:type_name -> loams.live.v1.Deployment
+	10, // 14: loams.live.v1.ActivateDeploymentResponse.changes:type_name -> loams.live.v1.SchemaChanges
 	3,  // 15: loams.live.v1.GetIndexStatusResponse.state:type_name -> loams.live.v1.IndexState
-	21, // 16: loams.live.v1.TailLogsResponse.entries:type_name -> loams.live.v1.LogEntry
+	22, // 16: loams.live.v1.TailLogsResponse.entries:type_name -> loams.live.v1.LogEntry
 	4,  // 17: loams.live.v1.LogEntry.level:type_name -> loams.live.v1.LogLevel
-	7,  // 18: loams.live.v1.LiveAdminService.Deploy:input_type -> loams.live.v1.DeployRequest
-	11, // 19: loams.live.v1.LiveAdminService.ListDeployments:input_type -> loams.live.v1.ListDeploymentsRequest
-	13, // 20: loams.live.v1.LiveAdminService.GetDeployment:input_type -> loams.live.v1.GetDeploymentRequest
-	15, // 21: loams.live.v1.LiveAdminService.ActivateDeployment:input_type -> loams.live.v1.ActivateDeploymentRequest
-	17, // 22: loams.live.v1.LiveAdminService.GetIndexStatus:input_type -> loams.live.v1.GetIndexStatusRequest
-	19, // 23: loams.live.v1.LiveAdminService.TailLogs:input_type -> loams.live.v1.TailLogsRequest
-	8,  // 24: loams.live.v1.LiveAdminService.Deploy:output_type -> loams.live.v1.DeployResponse
-	12, // 25: loams.live.v1.LiveAdminService.ListDeployments:output_type -> loams.live.v1.ListDeploymentsResponse
-	14, // 26: loams.live.v1.LiveAdminService.GetDeployment:output_type -> loams.live.v1.GetDeploymentResponse
-	16, // 27: loams.live.v1.LiveAdminService.ActivateDeployment:output_type -> loams.live.v1.ActivateDeploymentResponse
-	18, // 28: loams.live.v1.LiveAdminService.GetIndexStatus:output_type -> loams.live.v1.GetIndexStatusResponse
-	20, // 29: loams.live.v1.LiveAdminService.TailLogs:output_type -> loams.live.v1.TailLogsResponse
-	24, // [24:30] is the sub-list for method output_type
-	18, // [18:24] is the sub-list for method input_type
-	18, // [18:18] is the sub-list for extension type_name
-	18, // [18:18] is the sub-list for extension extendee
-	0,  // [0:18] is the sub-list for field type_name
+	5,  // 18: loams.live.v1.App.state:type_name -> loams.live.v1.AppState
+	24, // 19: loams.live.v1.App.limits:type_name -> loams.live.v1.AppLimits
+	25, // 20: loams.live.v1.App.issuers:type_name -> loams.live.v1.TrustedIssuer
+	24, // 21: loams.live.v1.CreateAppRequest.limits:type_name -> loams.live.v1.AppLimits
+	25, // 22: loams.live.v1.CreateAppRequest.issuers:type_name -> loams.live.v1.TrustedIssuer
+	23, // 23: loams.live.v1.CreateAppResponse.app:type_name -> loams.live.v1.App
+	23, // 24: loams.live.v1.ListAppsResponse.apps:type_name -> loams.live.v1.App
+	23, // 25: loams.live.v1.GetAppResponse.app:type_name -> loams.live.v1.App
+	5,  // 26: loams.live.v1.UpdateAppRequest.state:type_name -> loams.live.v1.AppState
+	24, // 27: loams.live.v1.UpdateAppRequest.limits:type_name -> loams.live.v1.AppLimits
+	33, // 28: loams.live.v1.UpdateAppRequest.issuers:type_name -> loams.live.v1.TrustedIssuers
+	34, // 29: loams.live.v1.UpdateAppRequest.allowed_origins:type_name -> loams.live.v1.AllowedOrigins
+	25, // 30: loams.live.v1.TrustedIssuers.issuers:type_name -> loams.live.v1.TrustedIssuer
+	23, // 31: loams.live.v1.UpdateAppResponse.app:type_name -> loams.live.v1.App
+	23, // 32: loams.live.v1.DeleteAppResponse.app:type_name -> loams.live.v1.App
+	8,  // 33: loams.live.v1.LiveAdminService.Deploy:input_type -> loams.live.v1.DeployRequest
+	12, // 34: loams.live.v1.LiveAdminService.ListDeployments:input_type -> loams.live.v1.ListDeploymentsRequest
+	14, // 35: loams.live.v1.LiveAdminService.GetDeployment:input_type -> loams.live.v1.GetDeploymentRequest
+	16, // 36: loams.live.v1.LiveAdminService.ActivateDeployment:input_type -> loams.live.v1.ActivateDeploymentRequest
+	18, // 37: loams.live.v1.LiveAdminService.GetIndexStatus:input_type -> loams.live.v1.GetIndexStatusRequest
+	20, // 38: loams.live.v1.LiveAdminService.TailLogs:input_type -> loams.live.v1.TailLogsRequest
+	26, // 39: loams.live.v1.LiveAdminService.CreateApp:input_type -> loams.live.v1.CreateAppRequest
+	28, // 40: loams.live.v1.LiveAdminService.ListApps:input_type -> loams.live.v1.ListAppsRequest
+	30, // 41: loams.live.v1.LiveAdminService.GetApp:input_type -> loams.live.v1.GetAppRequest
+	32, // 42: loams.live.v1.LiveAdminService.UpdateApp:input_type -> loams.live.v1.UpdateAppRequest
+	36, // 43: loams.live.v1.LiveAdminService.DeleteApp:input_type -> loams.live.v1.DeleteAppRequest
+	9,  // 44: loams.live.v1.LiveAdminService.Deploy:output_type -> loams.live.v1.DeployResponse
+	13, // 45: loams.live.v1.LiveAdminService.ListDeployments:output_type -> loams.live.v1.ListDeploymentsResponse
+	15, // 46: loams.live.v1.LiveAdminService.GetDeployment:output_type -> loams.live.v1.GetDeploymentResponse
+	17, // 47: loams.live.v1.LiveAdminService.ActivateDeployment:output_type -> loams.live.v1.ActivateDeploymentResponse
+	19, // 48: loams.live.v1.LiveAdminService.GetIndexStatus:output_type -> loams.live.v1.GetIndexStatusResponse
+	21, // 49: loams.live.v1.LiveAdminService.TailLogs:output_type -> loams.live.v1.TailLogsResponse
+	27, // 50: loams.live.v1.LiveAdminService.CreateApp:output_type -> loams.live.v1.CreateAppResponse
+	29, // 51: loams.live.v1.LiveAdminService.ListApps:output_type -> loams.live.v1.ListAppsResponse
+	31, // 52: loams.live.v1.LiveAdminService.GetApp:output_type -> loams.live.v1.GetAppResponse
+	35, // 53: loams.live.v1.LiveAdminService.UpdateApp:output_type -> loams.live.v1.UpdateAppResponse
+	37, // 54: loams.live.v1.LiveAdminService.DeleteApp:output_type -> loams.live.v1.DeleteAppResponse
+	44, // [44:55] is the sub-list for method output_type
+	33, // [33:44] is the sub-list for method input_type
+	33, // [33:33] is the sub-list for extension type_name
+	33, // [33:33] is the sub-list for extension extendee
+	0,  // [0:33] is the sub-list for field type_name
 }
 
 func init() { file_loams_live_v1_admin_proto_init() }
@@ -1657,13 +2764,16 @@ func file_loams_live_v1_admin_proto_init() {
 	file_loams_live_v1_admin_proto_msgTypes[2].OneofWrappers = []any{}
 	file_loams_live_v1_admin_proto_msgTypes[10].OneofWrappers = []any{}
 	file_loams_live_v1_admin_proto_msgTypes[14].OneofWrappers = []any{}
+	file_loams_live_v1_admin_proto_msgTypes[18].OneofWrappers = []any{}
+	file_loams_live_v1_admin_proto_msgTypes[19].OneofWrappers = []any{}
+	file_loams_live_v1_admin_proto_msgTypes[26].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_loams_live_v1_admin_proto_rawDesc), len(file_loams_live_v1_admin_proto_rawDesc)),
-			NumEnums:      5,
-			NumMessages:   17,
+			NumEnums:      6,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

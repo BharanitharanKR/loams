@@ -1,13 +1,14 @@
 //! The Loams Live sync service (design §20 §7, D121; R1 plan Task 12):
 //! [`LiveServer`] serves `loams.live.v1.LiveService` and
 //! `LiveAdminService` (LV1 plan Task 10, [`crate::admin`]) over connect-rust
-//! and axum on its own loopback listener, with one [`Subscriptions`]
-//! manager, one journal janitor and the [`Sessions`] of the app, and
-//! `grpc.reflection.v1` listing those two services.
+//! and axum on its own loopback listener, with the [`Engines`] of its apps
+//! (each with one subscription manager, one journal janitor and its
+//! sessions), and `grpc.reflection.v1` listing those two services.
 //!
 //! `Watch` opens a session and streams its Transitions; `ModifyQuerySet`
 //! changes a session's query set; `Query` and `Mutate` run through the
-//! app's [`Runner`], resolving functions through its [`AppEngine`]: the
+//! app's [`Runner`](crate::Runner), resolving functions through its
+//! [`AppEngine`](crate::AppEngine): the
 //! `_system:*` functions, else the active deployment's. Each `Query` and
 //! `Mutate` gets a request id, answered in the `loams-request-id` header,
 //! under which its function's console lines go to the app's log ring
@@ -20,6 +21,10 @@
 //! Task 12, D688): [`LiveHandle::routes`] hands it the same service
 //! instances as [`LiveRoutes`], which it registers on its own router,
 //! behind that port's authentication layer.
+//!
+//! A server serves many apps (LV1 plan Task 13, D690): each call names its
+//! app with the `loams-live-app` header (the server's own app without it),
+//! and [`Engines`] runs that app's engine, starting it on first use.
 
 use std::net::SocketAddr;
 use std::sync::Arc;
@@ -34,12 +39,14 @@ use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
 use crate::admin::Admin;
-use crate::deploy::{self, AppEngine, Runtime};
+use crate::apps::APP_HEADER;
+use crate::deploy::{self, Runtime};
+use crate::engines::{AppRuntime, Engines};
 use crate::logs::{CallInfo, REQUEST_ID_HEADER, Ring};
 use crate::pb::{self, LiveAdminServiceExt, LiveService, LiveServiceExt};
-use crate::session::{Outbox, SESSION_HEADER, Sessions, Start, args_of, chunks, ts_of};
-use crate::subs::{SubsConfig, SubsStats, Subscriptions};
-use crate::{Janitor, LiveConfig, LiveError, Runner, check_isolation, check_listen};
+use crate::session::{Outbox, SESSION_HEADER, Start, args_of, chunks, ts_of};
+use crate::subs::SubsStats;
+use crate::{LiveConfig, LiveError, check_isolation, check_listen};
 
 /// How long stopping waits for in-flight requests before aborting them.
 const STOP_GRACE: Duration = Duration::from_secs(10);
@@ -66,13 +73,10 @@ pub struct LiveServer;
 pub struct LiveHandle {
     /// The address the sync API listens on.
     pub addr: SocketAddr,
-    store: Store,
+    engines: Engines,
     routes: LiveRoutes,
-    subs: Arc<Subscriptions>,
-    sessions: Sessions,
     stop: CancellationToken,
     serve: JoinHandle<()>,
-    janitor: JoinHandle<()>,
 }
 
 impl LiveServer {
@@ -95,13 +99,14 @@ impl LiveServer {
         LiveServer::start_guarded(config, runtime, None, shutdown).await
     }
 
-    /// Checks that `config.listen` is loopback, opens the app's store
-    /// (whichever backend `config.store` names), opens its runner and its
-    /// [`AppEngine`] on `runtime` (loading the active deployment), starts
-    /// the subscription manager (its consumer is `config.node` unless set)
-    /// and the janitor, binds the listener and serves, behind `guard` when
-    /// given, until `shutdown` is cancelled or [`LiveHandle::stop`]. Without
-    /// a guard it logs once that the API is unauthenticated.
+    /// Checks that `config.listen` is loopback, starts the app [`Engines`]
+    /// on `runtime` (the app directory beside `config.store`, and the
+    /// server's own app `config.app`: its store, runner and engine with the
+    /// active deployment, its subscription manager, whose consumer is
+    /// `config.node` unless set, and its janitor), binds the listener and
+    /// serves, behind `guard` when given, until `shutdown` is cancelled or
+    /// [`LiveHandle::stop`]. Without a guard it logs once that the API is
+    /// unauthenticated.
     pub async fn start_guarded(
         config: LiveConfig,
         runtime: Runtime,
@@ -110,55 +115,33 @@ impl LiveServer {
     ) -> Result<LiveHandle, LiveError> {
         check_listen(config.listen)?;
         check_isolation(&config)?;
-        let store = Store::open(config.store.clone()).await.map_err(|e| {
-            LiveError::Internal(format!(
-                "opening the Live store (keyspace {}): {e}",
-                config.store.keyspace()
-            ))
-        })?;
-        let runner = Runner::open(store.clone(), &config).await?;
-        let engine = AppEngine::open(&config.app, runner.clone(), runtime).await?;
-        let listener = tokio::net::TcpListener::bind(config.listen)
-            .await
-            .map_err(|e| LiveError::Internal(format!("live listen on {}: {e}", config.listen)))?;
-        let addr = listener
-            .local_addr()
-            .map_err(|e| LiveError::Internal(format!("live listen on {}: {e}", config.listen)))?;
         let stop = shutdown.child_token();
-        let subs_config = SubsConfig {
-            consumer: config
-                .subs
-                .consumer
-                .clone()
-                .or_else(|| Some(config.node.clone())),
-            ..config.subs.clone()
+        let listen = config.listen;
+        let app_name = config.app.clone();
+        let max_transition_bytes = config.session.max_transition_bytes;
+        let engines = Engines::start(config, runtime, stop.clone()).await?;
+        let bound = async {
+            let listener = tokio::net::TcpListener::bind(listen)
+                .await
+                .map_err(|e| LiveError::Internal(format!("live listen on {listen}: {e}")))?;
+            let addr = listener
+                .local_addr()
+                .map_err(|e| LiveError::Internal(format!("live listen on {listen}: {e}")))?;
+            Ok::<_, LiveError>((listener, addr))
         };
-        // The manager follows the engine: at an activation's tick every
-        // subscription reruns on the new deployment (LV1 plan Task 7).
-        let subs = Arc::new(Subscriptions::spawn_for(&engine, subs_config, stop.clone()));
-        let resolver = engine.clone();
-        let sessions = Sessions::new(
-            subs.clone(),
-            Arc::new(move |name: &str| deploy::resolve(&resolver, name)),
-            config.session.clone(),
-            config.node.clone(),
-            stop.clone(),
-        );
-        let janitor = tokio::spawn(janitor_loop(
-            engine.clone(),
-            config.janitor_interval,
-            stop.clone(),
-        ));
+        let (listener, addr) = match bound.await {
+            Ok(bound) => bound,
+            Err(e) => {
+                engines.shutdown().await;
+                return Err(e);
+            }
+        };
         let service = Live {
-            runner,
-            engine: engine.clone(),
-            subs: subs.clone(),
-            sessions: sessions.clone(),
-            max_transition_bytes: config.session.max_transition_bytes,
+            engines: engines.clone(),
+            max_transition_bytes,
         };
         let admin = Admin {
-            engine,
-            stop: stop.clone(),
+            engines: engines.clone(),
         };
         let routes = LiveRoutes {
             live: Arc::new(service),
@@ -182,41 +165,44 @@ impl LiveServer {
         if !guarded {
             tracing::warn!(
                 %addr,
-                app = %config.app,
+                app = %app_name,
                 "Loams Live API is unauthenticated (D111): Query, Mutate and the admin calls are \
                  open to every local process; it listens on loopback only"
             );
         }
         Ok(LiveHandle {
             addr,
-            store,
+            engines,
             routes,
-            subs,
-            sessions,
             stop,
             serve,
-            janitor,
         })
     }
 }
 
 impl LiveHandle {
-    /// The app's store (on TiKV, the cluster GC loop sweeps its commit
-    /// tokens through `Store::as_tikv`, feature `tikv`; the embedded store runs its own
-    /// GC).
+    /// The server's own app's store (on TiKV, the cluster GC loop sweeps
+    /// its commit tokens through `Store::as_tikv`, feature `tikv`; the
+    /// embedded store runs its own GC).
     pub fn store(&self) -> &Store {
-        &self.store
+        self.engines.default_runtime().store()
     }
 
-    /// The subscription manager's counters. `missed_invalidations` is the
-    /// `live_missed_invalidation_total` counter (row T12-8).
+    /// The server's own app's subscription counters.
+    /// `missed_invalidations` is the `live_missed_invalidation_total`
+    /// counter (row T12-8).
     pub fn stats(&self) -> SubsStats {
-        self.subs.stats()
+        self.engines.default_runtime().subs().stats()
     }
 
-    /// Open sessions.
+    /// The server's own app's open sessions.
     pub fn sessions(&self) -> usize {
-        self.sessions.len()
+        self.engines.default_runtime().sessions().len()
+    }
+
+    /// The apps this server serves (LV1 plan Task 13).
+    pub fn engines(&self) -> &Engines {
+        &self.engines
     }
 
     /// The two services this server answers, for another router (the
@@ -226,8 +212,8 @@ impl LiveHandle {
         self.routes.clone()
     }
 
-    /// Stops serving: ends every session's stream, stops the manager and the
-    /// janitor, and waits up to 10 s for in-flight requests.
+    /// Stops serving: ends every session's stream, stops every app's
+    /// manager and janitor, and waits up to 10 s for in-flight requests.
     pub async fn stop(self) {
         self.stop.cancel();
         let mut serve = self.serve;
@@ -235,7 +221,7 @@ impl LiveHandle {
             tracing::warn!("Live requests did not finish; aborting them");
             serve.abort();
         }
-        let _ = self.janitor.await;
+        self.engines.shutdown().await;
     }
 }
 
@@ -262,38 +248,6 @@ impl LiveRoutes {
     }
 }
 
-/// Runs the journal janitor and the deployment janitor every `interval`
-/// (the first run one interval after start), and refreshes the deployment
-/// this node serves: a backstop for a deploy made on another node, which
-/// the subscription manager already picks up at the activation's tick
-/// from its catalog journal entry (LV1 plan Task 11).
-async fn janitor_loop(engine: AppEngine, interval: Duration, stop: CancellationToken) {
-    let runner = engine.runner().clone();
-    let mut every = tokio::time::interval_at(tokio::time::Instant::now() + interval, interval);
-    every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
-    loop {
-        tokio::select! {
-            () = stop.cancelled() => return,
-            _ = every.tick() => {}
-        }
-        let run = async {
-            let journal = runner.journal().await?;
-            Janitor::new(runner.store().clone(), journal)
-                .run_once()
-                .await
-        };
-        match run.await {
-            Ok(report) => tracing::debug!(?report, "the Live journal janitor ran"),
-            Err(e) => tracing::warn!(error = %e, "the Live journal janitor failed; retrying"),
-        }
-        // A refresh logs its own failures; the next round retries.
-        let _ = engine.refresh().await;
-        if let Err(e) = deploy::retain(&engine).await {
-            tracing::warn!(error = %e, "the Live deployment janitor failed; retrying");
-        }
-    }
-}
-
 /// Installs `grpc.reflection.v1` on `rpc`, listing the two Live services
 /// (and itself). Reflection is a convenience: a descriptor set that does
 /// not parse is logged and the listener serves without it.
@@ -311,28 +265,40 @@ fn reflection(rpc: connectrpc::Router) -> connectrpc::Router {
 
 /// The `LiveService` implementation.
 struct Live {
-    runner: Runner,
-    engine: AppEngine,
-    subs: Arc<Subscriptions>,
-    sessions: Sessions,
+    engines: Engines,
     max_transition_bytes: usize,
 }
 
-impl Live {
-    /// Records what a call of `f` wrote in the app's log ring.
-    fn record(
-        &self,
-        request_id: &str,
-        f: &dyn crate::Function,
-        outcome: Result<&crate::CallOutput, &LiveError>,
-    ) {
-        let call = CallInfo {
-            request_id: Some(request_id),
-            function: f.name(),
-            deployment: f.deployment(),
-        };
-        self.runner.logs().record(&call, outcome);
-    }
+/// The app a request addresses (its `loams-live-app` header, else the
+/// server's own app), its engine started when it does not run here yet.
+pub(crate) async fn app_of(
+    engines: &Engines,
+    ctx: &RequestContext,
+) -> Result<Arc<AppRuntime>, LiveError> {
+    let header = match ctx.header(APP_HEADER) {
+        None => None,
+        Some(value) => Some(
+            value
+                .to_str()
+                .map_err(|_| LiveError::invalid(format!("the {APP_HEADER} header is not text")))?,
+        ),
+    };
+    engines.resolve(header).await
+}
+
+/// Records what a call of `f` wrote in the app's log ring.
+fn record(
+    app: &AppRuntime,
+    request_id: &str,
+    f: &dyn crate::Function,
+    outcome: Result<&crate::CallOutput, &LiveError>,
+) {
+    let call = CallInfo {
+        request_id: Some(request_id),
+        function: f.name(),
+        deployment: f.deployment(),
+    };
+    app.runner().logs().record(&call, outcome);
 }
 
 /// The Connect error of `e`, answered with the call's request id.
@@ -400,12 +366,15 @@ fn transitions(outbox: Arc<Outbox>, max_bytes: usize) -> ServiceStream<pb::Trans
 impl LiveService for Live {
     async fn watch(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::WatchRequest>,
     ) -> ServiceResult<ServiceStream<pb::Transition>> {
+        let app = app_of(&self.engines, &ctx)
+            .await
+            .map_err(|e| connect_error(&e))?;
         let start =
             Start::from_request(request.to_owned_message()).map_err(|e| connect_error(&e))?;
-        let session = self.sessions.open(start).map_err(|e| connect_error(&e))?;
+        let session = app.sessions().open(start).map_err(|e| connect_error(&e))?;
         Ok(Response::new(transitions(
             session.outbox,
             self.max_transition_bytes,
@@ -414,10 +383,13 @@ impl LiveService for Live {
 
     async fn modify_query_set(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::ModifyQuerySetRequest>,
     ) -> ServiceResult<pb::ModifyQuerySetResponse> {
-        self.sessions
+        let app = app_of(&self.engines, &ctx)
+            .await
+            .map_err(|e| connect_error(&e))?;
+        app.sessions()
             .modify(request.to_owned_message())
             .await
             .map_err(|e| connect_error(&e))?;
@@ -426,28 +398,29 @@ impl LiveService for Live {
 
     async fn query(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::QueryRequest>,
     ) -> ServiceResult<pb::QueryResponse> {
         let req = request.to_owned_message();
         let request_id = Ring::request_id();
         let run = async {
-            let f = deploy::resolve(&self.engine, &req.function)?;
+            let app = app_of(&self.engines, &ctx).await?;
+            let f = deploy::resolve(app.engine(), &req.function)?;
             let args = args_of(req.args.into_option())?;
             let at = match req.ts {
                 Some(ts) => ts_of(ts),
-                None => match self.subs.current() {
+                None => match app.subs().current() {
                     Some(at) => at,
-                    None => self
-                        .runner
+                    None => app
+                        .runner()
                         .store()
                         .now()
                         .await
                         .map_err(|e| LiveError::Internal(format!("a timestamp: {e}")))?,
                 },
             };
-            let queried = self.runner.query(&*f, args, at).await;
-            self.record(&request_id, &*f, queried.as_ref().map(|q| &q.output));
+            let queried = app.runner().query(&*f, args, at).await;
+            record(&app, &request_id, &*f, queried.as_ref().map(|q| &q.output));
             queried
         };
         let queried = run.await.map_err(|e| with_request_id(&e, &request_id))?;
@@ -467,19 +440,20 @@ impl LiveService for Live {
         let req = request.to_owned_message();
         let request_id = Ring::request_id();
         let run = async {
-            let f = deploy::resolve(&self.engine, &req.function)?;
+            let app = app_of(&self.engines, &ctx).await?;
+            let f = deploy::resolve(app.engine(), &req.function)?;
             let args = args_of(req.args.into_option())?;
-            let mutated = self
-                .runner
+            let mutated = app
+                .runner()
                 .mutate(f.clone(), args, req.idempotency_key)
                 .await;
-            self.record(&request_id, &*f, mutated.as_ref().map(|m| &m.output));
-            mutated
+            record(&app, &request_id, &*f, mutated.as_ref().map(|m| &m.output));
+            mutated.map(|m| (app, m))
         };
-        let mutated = run.await.map_err(|e| with_request_id(&e, &request_id))?;
+        let (app, mutated) = run.await.map_err(|e| with_request_id(&e, &request_id))?;
         let commit_ts = mutated.commit_ts.0;
         if let Some(session) = ctx.header(SESSION_HEADER).and_then(|v| v.to_str().ok()) {
-            self.sessions.mutation_committed(session, commit_ts);
+            app.sessions().mutation_committed(session, commit_ts);
         }
         Ok(Response::new(pb::MutateResponse {
             commit_ts,

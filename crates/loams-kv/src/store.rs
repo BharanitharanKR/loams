@@ -118,6 +118,90 @@ impl StoreConfig {
             StoreConfig::Tikv(_) => Backend::Tikv,
         }
     }
+
+    /// The root prefix every key of the store lives under.
+    pub fn root(&self) -> &[u8] {
+        match self {
+            StoreConfig::Embedded(c) => &c.root,
+            #[cfg(feature = "tikv")]
+            StoreConfig::Tikv(c) => &c.root,
+        }
+    }
+
+    /// This configuration on the keyspace `keyspace` (of the same file or
+    /// cluster, under the same root).
+    pub fn with_keyspace(&self, keyspace: &str) -> StoreConfig {
+        let mut config = self.clone();
+        match &mut config {
+            StoreConfig::Embedded(c) => c.keyspace = keyspace.to_string(),
+            #[cfg(feature = "tikv")]
+            StoreConfig::Tikv(c) => c.keyspace = keyspace.to_string(),
+        }
+        config
+    }
+
+    /// This configuration under the root `root` (of the same keyspace).
+    pub fn with_root(&self, root: Vec<u8>) -> StoreConfig {
+        let mut config = self.clone();
+        match &mut config {
+            StoreConfig::Embedded(c) => c.root = root,
+            #[cfg(feature = "tikv")]
+            StoreConfig::Tikv(c) => c.root = root,
+        }
+        config
+    }
+
+    /// Creates the keyspace when the backend needs it first: on TiKV through
+    /// PD's HTTP API (`loams_tikv::ensure_keyspace`, idempotent). An embedded
+    /// keyspace is created when a store first opens it, so this does
+    /// nothing there.
+    pub async fn ensure_keyspace(&self) -> Result<(), KvError> {
+        match self {
+            StoreConfig::Embedded(_) => Ok(()),
+            #[cfg(feature = "tikv")]
+            StoreConfig::Tikv(c) => {
+                loams_tikv::ensure_keyspace(&c.pd_http_url(), &c.keyspace).await?;
+                Ok(())
+            }
+        }
+    }
+
+    /// Moves the keyspace to `state` on TiKV (PD's keyspace state,
+    /// `loams_tikv::set_keyspace_state`). An embedded keyspace has no state,
+    /// so this does nothing there.
+    pub async fn set_keyspace_state(&self, state: KeyspaceState) -> Result<(), KvError> {
+        match self {
+            StoreConfig::Embedded(_) => {
+                let _ = state;
+                Ok(())
+            }
+            #[cfg(feature = "tikv")]
+            StoreConfig::Tikv(c) => {
+                loams_tikv::set_keyspace_state(&c.pd_http_url(), &c.keyspace, state.as_pd())
+                    .await?;
+                Ok(())
+            }
+        }
+    }
+}
+
+/// A keyspace's state in PD ([`StoreConfig::set_keyspace_state`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum KeyspaceState {
+    Enabled,
+    Disabled,
+    Archived,
+}
+
+impl KeyspaceState {
+    /// PD's name of the state.
+    pub fn as_pd(self) -> &'static str {
+        match self {
+            KeyspaceState::Enabled => "ENABLED",
+            KeyspaceState::Disabled => "DISABLED",
+            KeyspaceState::Archived => "ARCHIVED",
+        }
+    }
 }
 
 /// A keyspace-scoped store under a root prefix. Cheap to clone.

@@ -106,6 +106,12 @@ See [docs/release/upgrades.md](docs/release/upgrades.md).
   journal in its own transaction, and each node's subscription manager reloads at the tick
   that holds it (LV1 Task 11). A deploy or rollback on one node no longer takes up to 60
   seconds to reach live queries on another.
+- **Loams Live serves many apps per engine.** `LiveAdminService` gains `CreateApp`,
+  `ListApps`, `GetApp`, `UpdateApp` and `DeleteApp`; each app has its own keyspace, and a call
+  names its app with the `loams-live-app` header (the engine's own `--live-app` without it).
+  An app's engine starts on its first request and stops after 10 minutes idle. A disabled or
+  deleted app refuses calls (`live_app_disabled`), and a deleted app's data is purged after 7
+  days (LV1 Task 13).
 
 ## [0.1.0-preview.2] - unreleased
 

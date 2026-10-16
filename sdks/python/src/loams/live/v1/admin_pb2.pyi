@@ -47,6 +47,13 @@ class LogLevel(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
     LOG_LEVEL_INFO: _ClassVar[LogLevel]
     LOG_LEVEL_WARN: _ClassVar[LogLevel]
     LOG_LEVEL_ERROR: _ClassVar[LogLevel]
+
+class AppState(int, metaclass=_enum_type_wrapper.EnumTypeWrapper):
+    __slots__ = ()
+    APP_STATE_UNSPECIFIED: _ClassVar[AppState]
+    APP_STATE_ACTIVE: _ClassVar[AppState]
+    APP_STATE_DISABLED: _ClassVar[AppState]
+    APP_STATE_DELETING: _ClassVar[AppState]
 DEPLOYMENT_STATE_UNSPECIFIED: DeploymentState
 DEPLOYMENT_STATE_PENDING: DeploymentState
 DEPLOYMENT_STATE_VALIDATING: DeploymentState
@@ -71,6 +78,10 @@ LOG_LEVEL_LOG: LogLevel
 LOG_LEVEL_INFO: LogLevel
 LOG_LEVEL_WARN: LogLevel
 LOG_LEVEL_ERROR: LogLevel
+APP_STATE_UNSPECIFIED: AppState
+APP_STATE_ACTIVE: AppState
+APP_STATE_DISABLED: AppState
+APP_STATE_DELETING: AppState
 
 class Deployment(_message.Message):
     __slots__ = ("id", "bundle_sha256", "created_at_ms", "created_by", "message", "parent", "state", "failure_reason")
@@ -249,3 +260,151 @@ class LogEntry(_message.Message):
     line: str
     truncated: bool
     def __init__(self, ts_ms: _Optional[int] = ..., request_id: _Optional[str] = ..., function: _Optional[str] = ..., deployment: _Optional[str] = ..., level: _Optional[_Union[LogLevel, str]] = ..., line: _Optional[str] = ..., truncated: _Optional[bool] = ...) -> None: ...
+
+class App(_message.Message):
+    __slots__ = ("id", "name", "namespace", "keyspace", "state", "purge_after_ms", "limits", "issuers", "allowed_origins", "allow_anonymous", "created_at_ms")
+    ID_FIELD_NUMBER: _ClassVar[int]
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    NAMESPACE_FIELD_NUMBER: _ClassVar[int]
+    KEYSPACE_FIELD_NUMBER: _ClassVar[int]
+    STATE_FIELD_NUMBER: _ClassVar[int]
+    PURGE_AFTER_MS_FIELD_NUMBER: _ClassVar[int]
+    LIMITS_FIELD_NUMBER: _ClassVar[int]
+    ISSUERS_FIELD_NUMBER: _ClassVar[int]
+    ALLOWED_ORIGINS_FIELD_NUMBER: _ClassVar[int]
+    ALLOW_ANONYMOUS_FIELD_NUMBER: _ClassVar[int]
+    CREATED_AT_MS_FIELD_NUMBER: _ClassVar[int]
+    id: int
+    name: str
+    namespace: str
+    keyspace: str
+    state: AppState
+    purge_after_ms: int
+    limits: AppLimits
+    issuers: _containers.RepeatedCompositeFieldContainer[TrustedIssuer]
+    allowed_origins: _containers.RepeatedScalarFieldContainer[str]
+    allow_anonymous: bool
+    created_at_ms: int
+    def __init__(self, id: _Optional[int] = ..., name: _Optional[str] = ..., namespace: _Optional[str] = ..., keyspace: _Optional[str] = ..., state: _Optional[_Union[AppState, str]] = ..., purge_after_ms: _Optional[int] = ..., limits: _Optional[_Union[AppLimits, _Mapping]] = ..., issuers: _Optional[_Iterable[_Union[TrustedIssuer, _Mapping]]] = ..., allowed_origins: _Optional[_Iterable[str]] = ..., allow_anonymous: _Optional[bool] = ..., created_at_ms: _Optional[int] = ...) -> None: ...
+
+class AppLimits(_message.Message):
+    __slots__ = ("max_js_cpu_ms", "mutation_deadline_ms", "max_result_bytes", "max_scanned_docs", "max_written_docs", "max_written_bytes")
+    MAX_JS_CPU_MS_FIELD_NUMBER: _ClassVar[int]
+    MUTATION_DEADLINE_MS_FIELD_NUMBER: _ClassVar[int]
+    MAX_RESULT_BYTES_FIELD_NUMBER: _ClassVar[int]
+    MAX_SCANNED_DOCS_FIELD_NUMBER: _ClassVar[int]
+    MAX_WRITTEN_DOCS_FIELD_NUMBER: _ClassVar[int]
+    MAX_WRITTEN_BYTES_FIELD_NUMBER: _ClassVar[int]
+    max_js_cpu_ms: int
+    mutation_deadline_ms: int
+    max_result_bytes: int
+    max_scanned_docs: int
+    max_written_docs: int
+    max_written_bytes: int
+    def __init__(self, max_js_cpu_ms: _Optional[int] = ..., mutation_deadline_ms: _Optional[int] = ..., max_result_bytes: _Optional[int] = ..., max_scanned_docs: _Optional[int] = ..., max_written_docs: _Optional[int] = ..., max_written_bytes: _Optional[int] = ...) -> None: ...
+
+class TrustedIssuer(_message.Message):
+    __slots__ = ("issuer", "audiences", "jwks_uri")
+    ISSUER_FIELD_NUMBER: _ClassVar[int]
+    AUDIENCES_FIELD_NUMBER: _ClassVar[int]
+    JWKS_URI_FIELD_NUMBER: _ClassVar[int]
+    issuer: str
+    audiences: _containers.RepeatedScalarFieldContainer[str]
+    jwks_uri: str
+    def __init__(self, issuer: _Optional[str] = ..., audiences: _Optional[_Iterable[str]] = ..., jwks_uri: _Optional[str] = ...) -> None: ...
+
+class CreateAppRequest(_message.Message):
+    __slots__ = ("name", "namespace", "limits", "issuers", "allowed_origins", "allow_anonymous")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    NAMESPACE_FIELD_NUMBER: _ClassVar[int]
+    LIMITS_FIELD_NUMBER: _ClassVar[int]
+    ISSUERS_FIELD_NUMBER: _ClassVar[int]
+    ALLOWED_ORIGINS_FIELD_NUMBER: _ClassVar[int]
+    ALLOW_ANONYMOUS_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    namespace: str
+    limits: AppLimits
+    issuers: _containers.RepeatedCompositeFieldContainer[TrustedIssuer]
+    allowed_origins: _containers.RepeatedScalarFieldContainer[str]
+    allow_anonymous: bool
+    def __init__(self, name: _Optional[str] = ..., namespace: _Optional[str] = ..., limits: _Optional[_Union[AppLimits, _Mapping]] = ..., issuers: _Optional[_Iterable[_Union[TrustedIssuer, _Mapping]]] = ..., allowed_origins: _Optional[_Iterable[str]] = ..., allow_anonymous: _Optional[bool] = ...) -> None: ...
+
+class CreateAppResponse(_message.Message):
+    __slots__ = ("app",)
+    APP_FIELD_NUMBER: _ClassVar[int]
+    app: App
+    def __init__(self, app: _Optional[_Union[App, _Mapping]] = ...) -> None: ...
+
+class ListAppsRequest(_message.Message):
+    __slots__ = ("page_size", "page_token")
+    PAGE_SIZE_FIELD_NUMBER: _ClassVar[int]
+    PAGE_TOKEN_FIELD_NUMBER: _ClassVar[int]
+    page_size: int
+    page_token: str
+    def __init__(self, page_size: _Optional[int] = ..., page_token: _Optional[str] = ...) -> None: ...
+
+class ListAppsResponse(_message.Message):
+    __slots__ = ("apps", "next_page_token")
+    APPS_FIELD_NUMBER: _ClassVar[int]
+    NEXT_PAGE_TOKEN_FIELD_NUMBER: _ClassVar[int]
+    apps: _containers.RepeatedCompositeFieldContainer[App]
+    next_page_token: str
+    def __init__(self, apps: _Optional[_Iterable[_Union[App, _Mapping]]] = ..., next_page_token: _Optional[str] = ...) -> None: ...
+
+class GetAppRequest(_message.Message):
+    __slots__ = ("name",)
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    def __init__(self, name: _Optional[str] = ...) -> None: ...
+
+class GetAppResponse(_message.Message):
+    __slots__ = ("app",)
+    APP_FIELD_NUMBER: _ClassVar[int]
+    app: App
+    def __init__(self, app: _Optional[_Union[App, _Mapping]] = ...) -> None: ...
+
+class UpdateAppRequest(_message.Message):
+    __slots__ = ("name", "state", "limits", "issuers", "allowed_origins", "allow_anonymous")
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    STATE_FIELD_NUMBER: _ClassVar[int]
+    LIMITS_FIELD_NUMBER: _ClassVar[int]
+    ISSUERS_FIELD_NUMBER: _ClassVar[int]
+    ALLOWED_ORIGINS_FIELD_NUMBER: _ClassVar[int]
+    ALLOW_ANONYMOUS_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    state: AppState
+    limits: AppLimits
+    issuers: TrustedIssuers
+    allowed_origins: AllowedOrigins
+    allow_anonymous: bool
+    def __init__(self, name: _Optional[str] = ..., state: _Optional[_Union[AppState, str]] = ..., limits: _Optional[_Union[AppLimits, _Mapping]] = ..., issuers: _Optional[_Union[TrustedIssuers, _Mapping]] = ..., allowed_origins: _Optional[_Union[AllowedOrigins, _Mapping]] = ..., allow_anonymous: _Optional[bool] = ...) -> None: ...
+
+class TrustedIssuers(_message.Message):
+    __slots__ = ("issuers",)
+    ISSUERS_FIELD_NUMBER: _ClassVar[int]
+    issuers: _containers.RepeatedCompositeFieldContainer[TrustedIssuer]
+    def __init__(self, issuers: _Optional[_Iterable[_Union[TrustedIssuer, _Mapping]]] = ...) -> None: ...
+
+class AllowedOrigins(_message.Message):
+    __slots__ = ("origins",)
+    ORIGINS_FIELD_NUMBER: _ClassVar[int]
+    origins: _containers.RepeatedScalarFieldContainer[str]
+    def __init__(self, origins: _Optional[_Iterable[str]] = ...) -> None: ...
+
+class UpdateAppResponse(_message.Message):
+    __slots__ = ("app",)
+    APP_FIELD_NUMBER: _ClassVar[int]
+    app: App
+    def __init__(self, app: _Optional[_Union[App, _Mapping]] = ...) -> None: ...
+
+class DeleteAppRequest(_message.Message):
+    __slots__ = ("name",)
+    NAME_FIELD_NUMBER: _ClassVar[int]
+    name: str
+    def __init__(self, name: _Optional[str] = ...) -> None: ...
+
+class DeleteAppResponse(_message.Message):
+    __slots__ = ("app",)
+    APP_FIELD_NUMBER: _ClassVar[int]
+    app: App
+    def __init__(self, app: _Optional[_Union[App, _Mapping]] = ...) -> None: ...
