@@ -2884,9 +2884,12 @@ impl Server {
         // `Search.expand` runs on this node's graphs (GR1 Task 20).
         #[cfg(feature = "graph")]
         if let Some(graph) = &graph {
-            collections.set_graph_expander(Arc::new(
-                loams_graph::retrieval::LoamsGraphExpander::new((*graph.admin).clone()),
+            let expander = Arc::new(loams_graph::retrieval::LoamsGraphExpander::new(
+                (*graph.admin).clone(),
             ));
+            collections.set_graph_expander(expander.clone());
+            // And the graph table functions (GR1 Task 21).
+            collections.set_graph_tables(expander);
         }
         let house = match roles.gateway {
             true => crate::api::house_proxy::HouseProxy::start(&config.house)

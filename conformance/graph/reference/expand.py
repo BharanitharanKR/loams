@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
-"""The reference for `Search.expand` on Loams Graph (GR1 Task 20; design §07 §4, §5.2).
+"""The reference for `Search.expand` and the graph table functions on Loams Graph (GR1 Tasks 20
+and 21; design §07 §4, §5).
 
 Builds the fixture graph (`expand_fixture.json`) and computes, with networkx, what every case of
 it must answer, before and after the fixture's deletes (`expand_expected.json`). The Rust test
@@ -173,7 +174,31 @@ def fixture():
          "hops": 1, "direction": "out"},
     ]
     deletes = {"nodes": [entity(1), chunk(2)], "edges": ["r003", "r010", "r040"]}
-    return {"nodes": nodes, "edges": edges, "cases": cases, "deletes": deletes}
+    # The table functions (GR1 Task 21).
+    tables = [
+        {"name": "neighbors_both", "function": "neighbors", "keys": ["e03", "e01", "e03"],
+         "direction": "both"},
+        {"name": "neighbors_out_types", "function": "neighbors", "keys": ["e05"],
+         "direction": "out", "edge_types": ["KNOWS"], "limit_per_key": 5},
+        {"name": "neighbors_filtered", "function": "neighbors", "keys": ["e04", "e08"],
+         "direction": "in", "edge_filter": {"exists": {"field": "weight"}}},
+        {"name": "neighbors_shared_key", "function": "neighbors", "keys": ["e00"],
+         "direction": "out"},
+        {"name": "degree_both", "function": "degree", "keys": ["e05", "e03", "zz", "e00"],
+         "direction": "both"},
+        {"name": "degree_labelled", "function": "degree", "keys": ["e00", 101], "label": "chunk",
+         "direction": "out"},
+        {"name": "path_chunk_to_entity", "function": "path", "from": 100, "to": "e11",
+         "direction": "both"},
+        {"name": "path_out", "function": "path", "from": "e02", "to": "e09", "direction": "out"},
+        {"name": "path_self", "function": "path", "from": "e06", "to": "e06", "direction": "out"},
+        {"name": "path_bounded", "function": "path", "from": "e02", "to": "e09",
+         "direction": "out", "max_hops": 1},
+        {"name": "path_two_hops", "function": "path", "from": "e02", "to": "e09",
+         "direction": "out", "max_hops": 2},
+        {"name": "path_none", "function": "path", "from": "e02", "to": 105, "direction": "out"},
+    ]
+    return {"nodes": nodes, "edges": edges, "cases": cases, "deletes": deletes, "tables": tables}
 
 
 def build(fix, deleted):
@@ -256,12 +281,103 @@ def expand(g, case):
     return {"reached": answer, "skipped": skipped}
 
 
+def all_steps(g, keys, direction, types):
+    """(from vertex, direction, other end, edge key, edge type, props) from every vertex keyed `keys`."""
+    out = []
+    for v in g.nodes:
+        if v[1] not in keys:
+            continue
+        for d in (["out", "in"] if direction == "both" else [direction]):
+            for w, k, t, p in steps(g, v, d):
+                if not types or t in types:
+                    out.append((v, d, w, k, t, p))
+    return out
+
+
+def neighbors(g, case):
+    keys, rows = [], []
+    for k in case["keys"]:
+        if k not in keys:
+            keys.append(k)
+    label = case.get("label")
+    ef = case.get("edge_filter")
+    for k in keys:
+        mine = [s for s in all_steps(g, [k], case.get("direction", "both"), set(case.get("edge_types", [])))
+                if (label is None or s[0][0] == label) and (ef is None or matches(ef, s[5]))]
+        mine.sort(key=lambda s: (s[1] == "in", s[4], canon(s[2][1]), canon(s[3])))
+        for v, d, w, e, t, _ in mine[: case.get("limit_per_key", 100)]:
+            rows.append({"key": k, "direction": d, "edge_type": t, "edge": e,
+                         "other_label": w[0], "other_key": w[1]})
+    return rows
+
+
+def degree(g, case):
+    keys, rows = [], []
+    for k in case["keys"]:
+        if k not in keys:
+            keys.append(k)
+    label = case.get("label")
+    for k in keys:
+        if not any(v[1] == k and (label is None or v[0] == label) for v in g.nodes):
+            continue
+        n = sum(1 for s in all_steps(g, [k], case.get("direction", "both"), set(case.get("edge_types", [])))
+                if label is None or s[0][0] == label)
+        rows.append({"key": k, "degree": n})
+    return rows
+
+
+def path(g, case):
+    label = case.get("label")
+    direction = case.get("direction", "both")
+    types = set(case.get("edge_types", []))
+    target = lambda v: v[1] == case["to"] and (label is None or v[0] == label)
+    starts = sorted((v for v in g.nodes if v[1] == case["from"] and (label is None or v[0] == label)),
+                    key=lambda v: (canon(v[1]), v[0]))
+    if not starts or not any(target(v) for v in g.nodes):
+        return []
+    start = starts[0]
+    if target(start):
+        return [{"step": 0, "label": start[0], "key": start[1], "edge_type": None, "edge": None}]
+    parent = {start: None}
+    frontier = {start}
+    for _ in range(case.get("max_hops", 6)):
+        mine = [s for s in all_steps(g, {v[1] for v in frontier}, direction, types) if s[0] in frontier]
+        mine.sort(key=lambda s: (canon(s[0][1]), s[0][0], canon(s[3]), canon(s[2][1])))
+        nxt, found = set(), None
+        for v, _, w, e, t, _ in mine:
+            if w in parent:
+                continue
+            parent[w] = (v, t, e)
+            if found is None and target(w):
+                found = w
+            nxt.add(w)
+        if found is not None:
+            out, at = [], found
+            while at is not None:
+                entry = parent[at]
+                out.append((at, entry))
+                at = entry[0] if entry else None
+            out.reverse()
+            return [{"step": i, "label": v[0], "key": v[1],
+                     "edge_type": e[1] if e else None, "edge": e[2] if e else None}
+                    for i, (v, e) in enumerate(out)]
+        if not nxt:
+            break
+        frontier = nxt
+    return []
+
+
+TABLES = {"neighbors": neighbors, "degree": degree, "path": path}
+
+
 def main():
     fix = fixture()
     expected = {}
     for phase, deleted in (("before", False), ("after", True)):
         g = build(fix, deleted)
         expected[phase] = {case["name"]: expand(g, case) for case in fix["cases"]}
+        expected[phase].update(
+            {case["name"]: TABLES[case["function"]](g, case) for case in fix["tables"]})
     (HERE / "expand_fixture.json").write_text(json.dumps(fix, indent=1, sort_keys=True) + "\n")
     (HERE / "expand_expected.json").write_text(json.dumps(expected, indent=1, sort_keys=True) + "\n")
     print(f"wrote {len(fix['cases'])} cases, {len(fix['nodes'])} nodes, {len(fix['edges'])} edges",

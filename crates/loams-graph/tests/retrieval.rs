@@ -324,3 +324,199 @@ async fn expand_respects_consistency_token() {
             .is_err()
     );
 }
+
+// ---------------------------------------------------------------------------------------------
+// GR1 Task 21: the graph table functions' backend
+// ---------------------------------------------------------------------------------------------
+
+use loams_query::graph::{DegreeCall, GraphTables, NeighborsCall, PathCall};
+
+fn direction(case: &Value) -> ExpandDirection {
+    match case["direction"].as_str().unwrap_or("both") {
+        "out" => ExpandDirection::Out,
+        "in" => ExpandDirection::In,
+        _ => ExpandDirection::Both,
+    }
+}
+
+fn types(case: &Value) -> Vec<String> {
+    case["edge_types"]
+        .as_array()
+        .map(|t| {
+            t.iter()
+                .map(|t| t.as_str().expect("type").to_string())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn keys(case: &Value) -> Vec<PrimaryKey> {
+    case["keys"]
+        .as_array()
+        .expect("keys")
+        .iter()
+        .filter_map(pk)
+        .collect()
+}
+
+/// Runs one table-function case of the fixture and answers its rows as the reference's JSON.
+async fn table(expander: &LoamsGraphExpander, case: &Value) -> Value {
+    let key = |pk: &PrimaryKey| loams_query::json::pk::to_json(pk);
+    let label = case["label"].as_str().map(str::to_string);
+    match case["function"].as_str().expect("function") {
+        "neighbors" => {
+            let rows = expander
+                .neighbors(NeighborsCall {
+                    namespace: "acme",
+                    graph: "g",
+                    keys: keys(case),
+                    label,
+                    direction: direction(case),
+                    edge_types: types(case),
+                    edge_filter: (!case["edge_filter"].is_null()).then(|| {
+                        serde_json::from_value(case["edge_filter"].clone()).expect("a query")
+                    }),
+                    limit_per_key: usize::try_from(case["limit_per_key"].as_u64().unwrap_or(100))
+                        .expect("small"),
+                })
+                .await
+                .expect("neighbors");
+            json!(
+                rows.iter()
+                    .map(|r| json!({
+                        "key": key(&r.key),
+                        "direction": if r.direction == ExpandDirection::In { "in" } else { "out" },
+                        "edge_type": r.edge_type, "edge": key(&r.edge),
+                        "other_label": r.other_label, "other_key": key(&r.other_key),
+                    }))
+                    .collect::<Vec<_>>()
+            )
+        }
+        "degree" => {
+            let rows = expander
+                .degree(DegreeCall {
+                    namespace: "acme",
+                    graph: "g",
+                    keys: keys(case),
+                    label,
+                    direction: direction(case),
+                    edge_types: types(case),
+                })
+                .await
+                .expect("degree");
+            json!(
+                rows.iter()
+                    .map(|(k, d)| json!({"key": key(k), "degree": d}))
+                    .collect::<Vec<_>>()
+            )
+        }
+        _ => {
+            let rows = expander
+                .shortest_path(PathCall {
+                    namespace: "acme",
+                    graph: "g",
+                    from: pk(&case["from"]).expect("from"),
+                    to: pk(&case["to"]).expect("to"),
+                    label,
+                    direction: direction(case),
+                    edge_types: types(case),
+                    max_hops: u8::try_from(case["max_hops"].as_u64().unwrap_or(6)).expect("small"),
+                })
+                .await
+                .expect("path");
+            json!(
+                rows.iter()
+                    .map(|s| json!({
+                        "step": s.step, "label": s.label, "key": key(&s.key),
+                        "edge_type": s.edge_type, "edge": s.edge.as_ref().map(key),
+                    }))
+                    .collect::<Vec<_>>()
+            )
+        }
+    }
+}
+
+/// `graph_neighbors`, `graph_degree` and `graph_shortest_path` answer the networkx reference's
+/// rows, before and after the fixture's deletes.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn udtf_results_match_reference() {
+    let fixture = reference("expand_fixture.json");
+    let expected = reference("expand_expected.json");
+    let cluster = Cluster::start(1, SHORT).await;
+    load(&cluster, &fixture).await;
+    let expander = LoamsGraphExpander::new(cluster.node(1).admin.clone());
+    for phase in ["before", "after"] {
+        if phase == "after" {
+            delete(&cluster, &fixture).await;
+        }
+        for case in fixture["tables"].as_array().expect("tables") {
+            let name = case["name"].as_str().expect("name");
+            assert_eq!(
+                table(&expander, case).await,
+                expected[phase][name],
+                "{phase} {name}"
+            );
+        }
+    }
+}
+
+/// A shortest path longer than `max_hops` is not found; within the bound it is.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn shortest_path_depth_bound() {
+    let cluster = Cluster::start(1, SHORT).await;
+    let admin = &cluster.node(1).admin;
+    create(admin, "g").await;
+    run(
+        admin,
+        "g",
+        "INSERT (:v {_key: 'a'})-[:R {_key: 'r1'}]->(:v {_key: 'b'})-[:R {_key: 'r2'}]->(:v {_key: 'c'})-[:R {_key: 'r3'}]->(:v {_key: 'd'})",
+    )
+    .await;
+    let expander = LoamsGraphExpander::new(admin.clone());
+    let path = |max_hops: u8| PathCall {
+        namespace: "acme",
+        graph: "g",
+        from: PrimaryKey::Str("a".to_string()),
+        to: PrimaryKey::Str("d".to_string()),
+        label: None,
+        direction: ExpandDirection::Out,
+        edge_types: Vec::new(),
+        max_hops,
+    };
+    assert!(
+        expander
+            .shortest_path(path(2))
+            .await
+            .expect("path")
+            .is_empty()
+    );
+    let found = expander.shortest_path(path(3)).await.expect("path");
+    assert_eq!(
+        found
+            .iter()
+            .map(|s| (s.step, s.key.clone(), s.edge.clone()))
+            .collect::<Vec<_>>(),
+        vec![
+            (0, PrimaryKey::Str("a".to_string()), None),
+            (
+                1,
+                PrimaryKey::Str("b".to_string()),
+                Some(PrimaryKey::Str("r1".to_string()))
+            ),
+            (
+                2,
+                PrimaryKey::Str("c".to_string()),
+                Some(PrimaryKey::Str("r2".to_string()))
+            ),
+            (
+                3,
+                PrimaryKey::Str("d".to_string()),
+                Some(PrimaryKey::Str("r3".to_string()))
+            ),
+        ]
+    );
+    // Against the edges' direction, there is none.
+    let mut back = path(6);
+    back.direction = ExpandDirection::In;
+    assert!(expander.shortest_path(back).await.expect("path").is_empty());
+}

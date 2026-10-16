@@ -1150,5 +1150,116 @@
     "text": "shadow"
    }
   }
+ ],
+ "tables": [
+  {
+   "direction": "both",
+   "function": "neighbors",
+   "keys": [
+    "e03",
+    "e01",
+    "e03"
+   ],
+   "name": "neighbors_both"
+  },
+  {
+   "direction": "out",
+   "edge_types": [
+    "KNOWS"
+   ],
+   "function": "neighbors",
+   "keys": [
+    "e05"
+   ],
+   "limit_per_key": 5,
+   "name": "neighbors_out_types"
+  },
+  {
+   "direction": "in",
+   "edge_filter": {
+    "exists": {
+     "field": "weight"
+    }
+   },
+   "function": "neighbors",
+   "keys": [
+    "e04",
+    "e08"
+   ],
+   "name": "neighbors_filtered"
+  },
+  {
+   "direction": "out",
+   "function": "neighbors",
+   "keys": [
+    "e00"
+   ],
+   "name": "neighbors_shared_key"
+  },
+  {
+   "direction": "both",
+   "function": "degree",
+   "keys": [
+    "e05",
+    "e03",
+    "zz",
+    "e00"
+   ],
+   "name": "degree_both"
+  },
+  {
+   "direction": "out",
+   "function": "degree",
+   "keys": [
+    "e00",
+    101
+   ],
+   "label": "chunk",
+   "name": "degree_labelled"
+  },
+  {
+   "direction": "both",
+   "from": 100,
+   "function": "path",
+   "name": "path_chunk_to_entity",
+   "to": "e11"
+  },
+  {
+   "direction": "out",
+   "from": "e02",
+   "function": "path",
+   "name": "path_out",
+   "to": "e09"
+  },
+  {
+   "direction": "out",
+   "from": "e06",
+   "function": "path",
+   "name": "path_self",
+   "to": "e06"
+  },
+  {
+   "direction": "out",
+   "from": "e02",
+   "function": "path",
+   "max_hops": 1,
+   "name": "path_bounded",
+   "to": "e09"
+  },
+  {
+   "direction": "out",
+   "from": "e02",
+   "function": "path",
+   "max_hops": 2,
+   "name": "path_two_hops",
+   "to": "e09"
+  },
+  {
+   "direction": "out",
+   "from": "e02",
+   "function": "path",
+   "name": "path_none",
+   "to": 105
+  }
  ]
 }

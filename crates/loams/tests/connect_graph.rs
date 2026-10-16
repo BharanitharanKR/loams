@@ -1166,5 +1166,63 @@ async fn search_expands_through_a_linked_graph() {
             .is_none_or(|v| v.get("embedding").is_none()),
         "{body}"
     );
+
+    // GR1 Task 21: the graph table functions over the same graph, on the SQL route.
+    let sql = |query: &str| rest("/v1/namespaces/acme/sql", json!({"query": query}));
+    let (status, body) = sql(
+        "SELECT seed, key, hop, edge_type, via FROM graph_expand('kg', 'a', 'entity', 2) ORDER BY key",
+    )
+    .await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{body}");
+    assert_eq!(
+        body["rows"],
+        json!([
+            ["a", "b", 1, "KNOWS", "a"],
+            ["a", "c", 2, "KNOWS", "b"],
+            ["a", "d", 1, "LIKES", "a"]
+        ]),
+        "{body}"
+    );
+    // Seeds from a query over a collection (the `seeds => 'SELECT …'` form), joined back to it.
+    let (status, body) = sql(
+        "SELECT n.key, e.name FROM graph_expand('kg', 'SELECT _id FROM entities WHERE name = ''A''', \
+         'entity', 1) n JOIN entities e ON e._id = n.key ORDER BY n.key",
+    )
+    .await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{body}");
+    assert_eq!(body["rows"], json!([["b", "B"], ["d", "D"]]), "{body}");
+    // A LATERAL column is refused, with the query-string form as the advice.
+    let (status, body) =
+        sql("SELECT n.key FROM entities e CROSS JOIN LATERAL graph_expand('kg', e._id) n").await;
+    assert_eq!(status, reqwest::StatusCode::BAD_REQUEST, "{body}");
+    assert!(body.to_string().contains("LATERAL"), "{body}");
+    let (status, body) = sql(
+        "SELECT key, direction, edge_type, other_key FROM graph_neighbors('kg', ARRAY['b'], 'entity')",
+    )
+    .await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{body}");
+    assert_eq!(
+        body["rows"],
+        json!([["b", "out", "KNOWS", "c"], ["b", "in", "KNOWS", "a"]]),
+        "{body}"
+    );
+    let (status, body) =
+        sql("SELECT key, degree FROM graph_degree('kg', ARRAY['a', 'c', 'zz'])").await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{body}");
+    assert_eq!(body["rows"], json!([["a", 2], ["c", 1]]), "{body}");
+    let (status, body) =
+        sql("SELECT step, key, edge FROM graph_shortest_path('kg', 'd', 'c', 'entity', 'both')")
+            .await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{body}");
+    assert_eq!(
+        body["rows"],
+        json!([
+            [0, "d", null],
+            [1, "a", "r3"],
+            [2, "b", "r1"],
+            [3, "c", "r2"]
+        ]),
+        "{body}"
+    );
     running.server.shutdown().await.expect("shutdown");
 }
