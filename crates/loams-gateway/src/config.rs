@@ -53,6 +53,10 @@ pub struct RoutesConfig {
     pub path: PathBuf,
     #[serde(default = "default_poll_interval_ms")]
     pub poll_interval_ms: u64,
+    /// Refuse a routes file without its `generation` line (the default;
+    /// `pg-control` always writes it). Off only for hand-written local files.
+    #[serde(default = "default_true")]
+    pub require_generation: bool,
 }
 
 impl RoutesConfig {
@@ -223,6 +227,9 @@ pub enum ConfigError {
     Invalid(String),
 }
 
+fn default_true() -> bool {
+    true
+}
 fn default_admin_listen() -> SocketAddr {
     SocketAddr::new(IpAddr::V4(Ipv4Addr::UNSPECIFIED), 9187)
 }

@@ -78,6 +78,7 @@ impl Gateway {
             config.routes.path.clone(),
             config.routes.poll_interval(),
             config.pg.dedicated_ports.0.clone(),
+            config.routes.require_generation,
             tx,
             stopped(shutdown_rx.clone()),
         )));

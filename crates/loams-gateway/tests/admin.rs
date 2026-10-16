@@ -28,6 +28,7 @@ fn config_defaults_match_the_design() {
     .unwrap();
     assert_eq!(c.admin.listen, "0.0.0.0:9187".parse().unwrap());
     assert_eq!(c.routes.poll_interval_ms, 1000);
+    assert!(c.routes.require_generation);
     assert_eq!(c.pg.listen, "0.0.0.0:5432".parse().unwrap());
     assert_eq!(c.pg.dedicated_ports.0, 16000..=17999);
     assert_eq!(c.pg.tls_mode, TlsMode::Passthrough);
@@ -63,11 +64,8 @@ async fn readyz_waits_for_routes() {
         .unwrap();
     assert_eq!(get(g.admin_addr(), "/healthz").await.0, 200);
     assert_eq!(get(g.admin_addr(), "/readyz").await.0, 503);
-    std::fs::write(
-        &path,
-        common::ns("acme", "127.0.0.1:6432".parse().unwrap(), None),
-    )
-    .unwrap();
+    let routes = common::ns("acme", "127.0.0.1:6432".parse().unwrap(), None);
+    std::fs::write(&path, loams_gateway::routes::with_generation(&routes)).unwrap();
     let mut rx = g.routes();
     rx.wait_for(|t| t.is_some()).await.unwrap();
     assert_eq!(get(g.admin_addr(), "/readyz").await.0, 200);

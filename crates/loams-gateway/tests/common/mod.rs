@@ -8,6 +8,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
+use loams_gateway::routes::with_generation;
 use loams_gateway::{Gateway, GatewayConfig};
 use rcgen::{BasicConstraints, CertificateParams, IsCa, KeyPair};
 use rustls::pki_types::pem::PemObject as _;
@@ -283,7 +284,7 @@ pub async fn start(upstream_ca: &Ca, routes: &str, opts: Options) -> Harness {
     std::fs::write(dir.path().join("tls.key"), key).unwrap();
     std::fs::write(dir.path().join("upstream-ca.crt"), &upstream_ca.pem).unwrap();
     let routes_path = dir.path().join("routes.toml");
-    std::fs::write(&routes_path, routes).unwrap();
+    std::fs::write(&routes_path, with_generation(routes)).unwrap();
     let d = dir.path().display();
     let config = format!(
         r#"
@@ -335,7 +336,7 @@ impl Harness {
     /// Rewrites the routes file and waits until the gateway serves it.
     pub async fn set_routes(&self, routes: &str) {
         let tmp = self.dir.path().join("routes.toml.tmp");
-        std::fs::write(&tmp, routes).unwrap();
+        std::fs::write(&tmp, with_generation(routes)).unwrap();
         std::fs::rename(&tmp, &self.routes_path).unwrap();
         let want = loams_gateway::routes::generation_of(routes);
         let mut rx = self.gateway.routes();

@@ -37,12 +37,16 @@ pub enum ReloadError {
 }
 
 /// Reads and validates the routes file once.
-pub fn load_file(path: &Path, dedicated: &RangeInclusive<u16>) -> Result<RouteTable, ReloadError> {
+pub fn load_file(
+    path: &Path,
+    dedicated: &RangeInclusive<u16>,
+    require_generation: bool,
+) -> Result<RouteTable, ReloadError> {
     let text = std::fs::read_to_string(path).map_err(|source| ReloadError::Read {
         path: path.to_owned(),
         source,
     })?;
-    Ok(RouteTable::parse(&text, dedicated)?)
+    Ok(RouteTable::parse(&text, dedicated, require_generation)?)
 }
 
 /// Watches the routes file until `shutdown` resolves.
@@ -50,6 +54,7 @@ pub async fn watch_file(
     path: PathBuf,
     every: Duration,
     dedicated: RangeInclusive<u16>,
+    require_generation: bool,
     tx: RouteTx,
     shutdown: impl Future<Output = ()>,
 ) {
@@ -86,7 +91,7 @@ pub async fn watch_file(
         last = Some(digest);
         let parsed = std::str::from_utf8(&bytes)
             .map_err(|e| RouteError::Parse(e.to_string()))
-            .and_then(|text| RouteTable::parse(text, &dedicated));
+            .and_then(|text| RouteTable::parse(text, &dedicated, require_generation));
         match parsed {
             Ok(table) => {
                 tracing::info!(

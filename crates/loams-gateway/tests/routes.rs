@@ -27,7 +27,7 @@ upstreams = ["10.0.0.7:6432"]
 "#;
 
 fn parse(text: &str) -> Result<RouteTable, RouteError> {
-    RouteTable::parse(text, &RANGE)
+    RouteTable::parse(text, &RANGE, false)
 }
 
 #[test]
@@ -96,6 +96,16 @@ fn bad_names_and_upstreams_rejected() {
 }
 
 #[test]
+fn missing_generation_refused_when_required() {
+    assert_eq!(
+        RouteTable::parse(FULL, &RANGE, true).unwrap_err(),
+        RouteError::MissingGeneration
+    );
+    let with = loams_gateway::routes::with_generation(FULL);
+    assert!(RouteTable::parse(&with, &RANGE, true).is_ok());
+}
+
+#[test]
 fn generation_mismatch_rejected() {
     let good = generation_of(FULL);
     let with = format!("generation = \"{good}\"\n{FULL}");
@@ -151,6 +161,17 @@ async fn invalid_file_keeps_old_table() {
         .clone();
     std::fs::write(&h.routes_path, "[[pg.namespaces]]\nname = \"BAD NAME\"\n").unwrap();
     tokio::time::sleep(Duration::from_millis(300)).await;
+    assert_eq!(
+        h.gateway.routes().borrow().as_ref().unwrap().generation,
+        before
+    );
+    // Valid, but without its generation line: refused too.
+    std::fs::write(
+        &h.routes_path,
+        common::ns("beta", "127.0.0.1:1".parse().unwrap(), None),
+    )
+    .unwrap();
+    tokio::time::sleep(Duration::from_millis(300)).await;
     let after = h
         .gateway
         .routes()
@@ -175,6 +196,7 @@ async fn sighup_reloads_at_once() {
         path.clone(),
         Duration::from_secs(3600),
         RANGE,
+        false,
         tx,
         async move {
             let _ = stop_rx.await;

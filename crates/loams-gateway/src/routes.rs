@@ -86,21 +86,31 @@ pub enum RouteError {
     Parse(String),
     #[error("routes: {0}")]
     Invalid(String),
+    #[error("routes: no generation line (pg-control always writes one)")]
+    MissingGeneration,
     #[error("routes: generation {found} does not match the content ({computed})")]
     Generation { found: String, computed: String },
 }
 
 impl RouteTable {
     /// Parses and validates a routes file. `dedicated` is the port range a
-    /// route's `port` must fall in.
-    pub fn parse(text: &str, dedicated: &RangeInclusive<u16>) -> Result<RouteTable, RouteError> {
+    /// route's `port` must fall in. With `require_generation`, a file
+    /// without its `generation` line is refused, so a truncated or
+    /// hand-edited file never replaces the table.
+    pub fn parse(
+        text: &str,
+        dedicated: &RangeInclusive<u16>,
+        require_generation: bool,
+    ) -> Result<RouteTable, RouteError> {
         let file: RoutesFile =
             toml::from_str(text).map_err(|e| RouteError::Parse(e.to_string()))?;
         let computed = generation_of(text);
-        if let Some(found) = file.generation
-            && found != computed
-        {
-            return Err(RouteError::Generation { found, computed });
+        match file.generation {
+            Some(found) if found != computed => {
+                return Err(RouteError::Generation { found, computed });
+            }
+            None if require_generation => return Err(RouteError::MissingGeneration),
+            _ => {}
         }
         let pg = PgRoutes::build(file.pg, dedicated)?;
         Ok(RouteTable {
@@ -182,6 +192,11 @@ impl PgRoutes {
         }
         Ok(routes)
     }
+}
+
+/// `text` with its `generation` line prepended, as `pg-control` writes it.
+pub fn with_generation(text: &str) -> String {
+    format!("generation = \"{}\"\n{text}", generation_of(text))
 }
 
 /// The generation of a routes file: `sha256:<hex>` of its text without the
