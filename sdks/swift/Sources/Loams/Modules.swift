@@ -208,6 +208,56 @@ public struct LiveAdminModule: Sendable {
         return try await invoker.unary(binding: binding, request: request, overrides: options)
     }
 
+    /// Registers an app in the node's directory (`CreateAppRequest`).
+    ///
+    /// An existing name answers `live_app_exists`; a node without the app
+    /// directory answers `live_app_disabled`. Never retried: it has no
+    /// idempotency key. Address an app on other calls with ``CallOptions/liveApp(_:_:)``.
+    public func createApp(
+        _ request: DynamicMessage,
+        options: CallOptions = .init()
+    ) async throws -> DynamicMessage {
+        let binding = try loamsRequireBinding(module: "live.admin", call: "CreateApp")
+        return try await invoker.unary(binding: binding, request: request, overrides: options)
+    }
+
+    /// One page of the node's apps (AIP-158: `apps`, `next_page_token`). Retry-safe.
+    public func listApps(
+        _ request: DynamicMessage,
+        options: CallOptions = .init()
+    ) async throws -> DynamicMessage {
+        let binding = try loamsRequireBinding(module: "live.admin", call: "ListApps")
+        return try await invoker.unary(binding: binding, request: request, overrides: options)
+    }
+
+    /// One app by name. Retry-safe.
+    public func getApp(
+        _ request: DynamicMessage,
+        options: CallOptions = .init()
+    ) async throws -> DynamicMessage {
+        let binding = try loamsRequireBinding(module: "live.admin", call: "GetApp")
+        return try await invoker.unary(binding: binding, request: request, overrides: options)
+    }
+
+    /// Updates an app's settings. A mutation with no idempotency key, so it is never retried.
+    public func updateApp(
+        _ request: DynamicMessage,
+        options: CallOptions = .init()
+    ) async throws -> DynamicMessage {
+        let binding = try loamsRequireBinding(module: "live.admin", call: "UpdateApp")
+        return try await invoker.unary(binding: binding, request: request, overrides: options)
+    }
+
+    /// Removes an app from the directory. The server's own app (`--live-app`)
+    /// cannot be deleted. Never retried.
+    public func deleteApp(
+        _ request: DynamicMessage,
+        options: CallOptions = .init()
+    ) async throws -> DynamicMessage {
+        let binding = try loamsRequireBinding(module: "live.admin", call: "DeleteApp")
+        return try await invoker.unary(binding: binding, request: request, overrides: options)
+    }
+
     /// Tails the app's function logs over a server stream (R7).
     public func tailLogs(
         _ request: DynamicMessage,

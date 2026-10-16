@@ -317,6 +317,30 @@ public let loamsModules: [ModuleBinding] = [
             ),
             CallBinding(
                 module: "live.admin",
+                name: "CreateApp",
+                protoName: "createApp",
+                method: "CreateApp",
+                rpc: LoamsService.liveAdmin + "/CreateApp",
+                service: LoamsService.liveAdmin,
+                package: "loams.live.v1",
+                idempotency: .none,
+                retry: .manual,
+                streaming: .unary
+            ),
+            CallBinding(
+                module: "live.admin",
+                name: "DeleteApp",
+                protoName: "deleteApp",
+                method: "DeleteApp",
+                rpc: LoamsService.liveAdmin + "/DeleteApp",
+                service: LoamsService.liveAdmin,
+                package: "loams.live.v1",
+                idempotency: .none,
+                retry: .manual,
+                streaming: .unary
+            ),
+            CallBinding(
+                module: "live.admin",
                 name: "Deploy",
                 protoName: "deploy",
                 method: "Deploy",
@@ -327,7 +351,19 @@ public let loamsModules: [ModuleBinding] = [
                 retry: .manual,
                 streaming: .unary
             ),
-            // The three reads have no `idempotency_level`; `FacadeOptions.retry_safe`
+            CallBinding(
+                module: "live.admin",
+                name: "GetApp",
+                protoName: "getApp",
+                method: "GetApp",
+                rpc: LoamsService.liveAdmin + "/GetApp",
+                service: LoamsService.liveAdmin,
+                package: "loams.live.v1",
+                idempotency: .none,
+                retry: .safe,
+                streaming: .unary
+            ),
+            // The reads have no `idempotency_level`; `FacadeOptions.retry_safe`
             // (admin.proto) is what makes them `.safe`, as in the TypeScript and
             // Rust facades.
             CallBinding(
@@ -356,6 +392,19 @@ public let loamsModules: [ModuleBinding] = [
             ),
             CallBinding(
                 module: "live.admin",
+                name: "ListApps",
+                protoName: "listApps",
+                method: "ListApps",
+                rpc: LoamsService.liveAdmin + "/ListApps",
+                service: LoamsService.liveAdmin,
+                package: "loams.live.v1",
+                idempotency: .none,
+                retry: .safe,
+                streaming: .unary,
+                pagination: Pagination(itemsField: "apps", nextPageTokenField: "next_page_token")
+            ),
+            CallBinding(
+                module: "live.admin",
                 name: "ListDeployments",
                 protoName: "listDeployments",
                 method: "ListDeployments",
@@ -378,6 +427,18 @@ public let loamsModules: [ModuleBinding] = [
                 idempotency: .none,
                 retry: .manual,
                 streaming: .server
+            ),
+            CallBinding(
+                module: "live.admin",
+                name: "UpdateApp",
+                protoName: "updateApp",
+                method: "UpdateApp",
+                rpc: LoamsService.liveAdmin + "/UpdateApp",
+                service: LoamsService.liveAdmin,
+                package: "loams.live.v1",
+                idempotency: .none,
+                retry: .manual,
+                streaming: .unary
             ),
         ]
     ),

@@ -11,7 +11,7 @@ import XCTest
 final class LiveAdminTests: XCTestCase {
     private let admin = "loams.live.v1.LiveAdminService"
 
-    /// The catalogue has the TypeScript and Rust facades' six calls, and no
+    /// The catalogue has the TypeScript and Rust facades' eleven calls, and no
     /// binding anywhere still names `LiveService/Deploy`.
     func testLiveAdminCatalogueMatchesTheOtherFacades() throws {
         let module = try XCTUnwrap(loamsModule("live.admin"))
@@ -21,14 +21,24 @@ final class LiveAdminTests: XCTestCase {
         XCTAssertFalse(module.derived)
         XCTAssertEqual(
             module.calls.map(\.name),
-            ["ActivateDeployment", "Deploy", "GetDeployment", "GetIndexStatus", "ListDeployments", "TailLogs"]
+            [
+                "ActivateDeployment", "CreateApp", "DeleteApp", "Deploy", "GetApp", "GetDeployment",
+                "GetIndexStatus", "ListApps", "ListDeployments", "TailLogs", "UpdateApp",
+            ]
         )
         for call in module.calls {
             XCTAssertEqual(call.rpc, "\(admin)/\(call.method)")
             XCTAssertFalse(call.takesIdempotencyKey, "no admin request declares idempotency_key")
         }
         let safe = module.calls.filter { $0.retry == .safe }.map(\.name)
-        XCTAssertEqual(safe, ["GetDeployment", "GetIndexStatus", "ListDeployments"], "retry_safe in admin.proto")
+        XCTAssertEqual(
+            safe,
+            ["GetApp", "GetDeployment", "GetIndexStatus", "ListApps", "ListDeployments"],
+            "retry_safe in admin.proto"
+        )
+        XCTAssertEqual(
+            try loamsRequireBinding(module: "live.admin", call: "ListApps").pagination?.itemsField, "apps"
+        )
         XCTAssertEqual(try loamsRequireBinding(module: "live.admin", call: "tailLogs").streaming, .server)
 
         XCTAssertNil(loamsBinding(module: "tables", call: "Deploy"), "Deploy is live.admin's now")
@@ -101,6 +111,54 @@ final class LiveAdminTests: XCTestCase {
         XCTAssertNil(transport.calls[0].body["page_token"])
         XCTAssertEqual(transport.calls[1].body["page_token"], .string("p2"))
         XCTAssertEqual(transport.calls[1].body["page_size"], .int(2), "the caller's request is kept")
+    }
+}
+
+extension LiveAdminTests {
+    /// The five app-directory calls (LV1 Task 13) go to `LiveAdminService`; the
+    /// mutations are sent once, and `liveApp` puts the app on the wire as the
+    /// `loams-live-app` header.
+    func testAppCallsGoToTheAdminServiceWithTheAppHeader() async throws {
+        let transport = StubTransport(replies: [.success([:])])
+        let admin = LiveAdminModule(invoker: CallInvoker(transport: transport, auth: nil, maxRetries: 0))
+        let app = CallOptions.liveApp("blog")
+        let request = { (type: String) in DynamicMessage(protoTypeName: type, fields: ["name": .string("blog")]) }
+
+        _ = try await admin.createApp(request(createAppRequestTypeName))
+        _ = try await admin.listApps(request(listAppsRequestTypeName))
+        _ = try await admin.getApp(request(getAppRequestTypeName), options: app)
+        _ = try await admin.updateApp(request(updateAppRequestTypeName), options: app)
+        _ = try await admin.deleteApp(request(deleteAppRequestTypeName), options: app)
+
+        XCTAssertEqual(
+            transport.calls.map(\.rpc),
+            ["CreateApp", "ListApps", "GetApp", "UpdateApp", "DeleteApp"].map { "\(self.admin)/\($0)" }
+        )
+        XCTAssertEqual(loamsLiveAppHeader, "loams-live-app")
+        XCTAssertEqual(transport.calls[0].headers, [:], "no app option, no header: the server's own app")
+        XCTAssertEqual(transport.calls[2].headers, ["loams-live-app": "blog"])
+        XCTAssertEqual(transport.calls[4].headers, ["loams-live-app": "blog"])
+    }
+
+    /// `live_app_exists` and `live_app_mismatch` are in the reason registry, and
+    /// a failed create is not retried.
+    func testAppReasonsAndNoRetryOnCreate() async throws {
+        XCTAssertNotNil(loamsReason(from: "live_app_disabled"))
+        XCTAssertNotNil(loamsReason(from: "live_app_exists"))
+        XCTAssertNotNil(loamsReason(from: "live_app_mismatch"))
+        let transport = StubTransport(replies: [
+            .failure(code: .unavailable, message: "restarting", info: nil),
+        ])
+        let admin = LiveAdminModule(
+            invoker: CallInvoker(transport: transport, auth: nil, maxRetries: loamsDefaultMaxRetries)
+        )
+        do {
+            _ = try await admin.createApp(DynamicMessage(protoTypeName: createAppRequestTypeName, fields: [:]))
+            XCTFail("the stub refuses every call")
+        } catch {
+            XCTAssertEqual(LoamsError.code(of: error), .unavailable)
+        }
+        XCTAssertEqual(transport.calls.count, 1)
     }
 }
 
