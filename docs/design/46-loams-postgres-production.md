@@ -4,6 +4,8 @@ Status: **Proposed** · 2026-10-08. Source: the owner's goal "Loams Postgres (se
 
 This is an addendum to [§28](28-loams-postgres.md). It keeps §28's approved decisions D230–D232 and D234–D236 and its proposals D237–D241 and D263–D272. Under the owner's directive of 2026-10-08 ("remove safekeepers"), it **reverses D233's gating**: `loams-wal` is the only WAL at launch, and §28 §7's relative gate becomes the absolute launch targets of §9.3 (D714). It also builds on [§23](23-neon-and-wesql.md) §6 (N1–N6), [§31](31-loams-router-and-verification.md) (D304–D307, PgDog sharding), [§41](41-multitenant-byoc-control-plane.md) (D540–D559, the open control plane), [§19](19-console-identity-and-agents.md) and [§38](38-knative-authentik-gitops.md) §4 (identity), [§44](44-unified-api-and-sdks.md) (the API rules) and [§37](37-desktop-and-mobile-apps.md) §19.10 (D667, D668: the desktop as a local control plane). It **answers Q113**: the scale-to-zero design is PgDog plus a Loams waker, with Neon's proxy kept as the fallback (D709). It **amends D668**: the desktop's direct pageserver calls become the fallback, used only when a server does not offer this API (D719).
 
+**Amended by [§57](57-loams-gateway.md) (2026-10-16).** The L4 SNI listener of §8.1 is `loams-gateway`, not Envoy, Kourier or Traefik (D1011, amending D708). `SSLRequest` clients are spliced to PgDog, so PgDog still terminates their TLS; direct-TLS clients are terminated at the gateway and re-encrypted to PgDog (D1014, amending D710 for them). Dedicated namespace ports are on request (D1016).
+
 **Amended by [§51](51-loams-postgres-fork.md) (2026-10-09).** Ostrium Labs now owns and maintains the Neon fork (D800). Fork releases follow D810–D811, not D241. The majors are D813's, which answers Q649. Major upgrades go through `fast_import` and `ImportPgdata` first (D815, amending D716's dump and restore into a fallback). The extension allow-list is D812's catalogue (Q651).
 
 **Amended again by [§51](51-loams-postgres-fork.md) §1a (2026-10-09, hard fork).** The owner made the fork a **hard fork named Loams Postgres** (D820): `ostrium-labs/neon` is now `ostrium-labs/loams-postgres`, `main` is ours, nothing is merged from `neondatabase/*`, and security and bug fixes are ours alone. Postgres minors are tracked directly from `postgres/postgres` (D821). Ownership is re-costed at about 0.7–1.1 FTE ongoing (D824).
@@ -212,8 +214,8 @@ The prefixes `x/`, `X/` and `C/` are unused in `crates/loams-meta-tikv/src/keys.
 ### 8.1 Shape
 
 ```
- client ──TLS, SNI = <ns>.<region>.pg.<base-domain>──► L4 SNI-passthrough listener (Envoy/Kourier/Traefik TCP route)
-                                                          │ TLS untouched
+ client ──SSLRequest + TLS (or direct TLS), SNI = <ns>.<region>.pg.<base-domain>──► loams-gateway (§57; D1011)
+                                   │ SSLRequest clients: spliced, TLS untouched │ direct TLS: terminated, re-encrypted
                                                           ▼
                      PgDog Deployment in loams-pg-<ns> (×2, unmodified image pinned by digest)
                      TLS termination ─ SCRAM ─ pools ─ route by database name ─ read/write split ─ health checks
@@ -236,7 +238,7 @@ The prefixes `x/`, `X/` and `C/` are unused in `crates/loams-meta-tikv/src/keys.
   | `<project>__<branch>.<database>` | that branch, that database |
   | `<project>__<branch>__ro` | the branch's read-only endpoints, load-balanced |
 
-  This extends §28 §8's `<db>__<branch>` (Q49). Clients that cannot send SNI (old libpq, some JDBC setups) connect to the namespace's dedicated port on the same listener instead, which PG2 Task 22 defines. Per-endpoint hostnames in the Neon style are not offered. If PgDog gains SNI-based routing upstream (verify), they could be added by configuration.
+  This extends §28 §8's `<db>__<branch>` (Q49). Clients that cannot send SNI (old libpq, some JDBC setups) connect to the namespace's dedicated port on the same gateway instead (on request, §57 §7.5, D1016). Per-endpoint hostnames in the Neon style are not offered. If PgDog gains SNI-based routing upstream (verify), they could be added by configuration.
 - **Pooling.** Transaction mode by default. A role whose `pool_mode` is `session` gets session pooling, for migrations, `LISTEN`/`NOTIFY`, advisory locks and session-level prepared statements beyond PgDog's support (PgDog sets pool modes per user (verify), with a per-database alias as the fallback). Pool size per (role, database) is `min(max_connections of the compute's CU × 0.8, the role's limit)`, rendered from the CU.
 - **Reads.** Read-only endpoints are PgDog `role = replica` hosts for the branch. `__ro` names go only to replicas. On the primary name, PgDog's read/write split is **off by default**, because it changes read-your-writes semantics for applications that did not ask for it. A project setting turns it on.
 - **Health and failover.** PgDog's health checks and bans mark a backend down. Failover of a read-write endpoint is `pg-control` replacing the compute behind the same Service (§11), so PgDog's config does not change. PgDog's `ban_timeout` is rendered short (1 s, verify the field name) so a replaced compute is used at once.
