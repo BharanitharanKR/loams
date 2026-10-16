@@ -1,8 +1,9 @@
 //! `loams.live.v1.LiveAdminService` (design §45 §6.3, D689; LV1 plan Task
 //! 10): deploys, the deployment list, rollback by activation, index status
-//! and function logs, over the [`AppEngine`] of the app the request
-//! addresses (its `loams-live-app` header); and the app directory (LV1 plan
-//! Task 13): creating, listing, reading, updating and deleting apps.
+//! and function logs, over the [`AppEngine`](crate::AppEngine) of the app
+//! the request addresses (its `loams-live-app` header); and the app
+//! directory (LV1 plan Task 13): creating, listing, reading, updating and
+//! deleting apps.
 //!
 //! The server serves it beside `LiveService` on the Live listener, behind
 //! the guard the engine gives [`LiveServer::start_guarded`] (its
