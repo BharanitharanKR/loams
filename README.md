@@ -75,7 +75,7 @@ Bug reports, client compatibility reports, docs fixes, tests and code are all we
 
 ## Code signing policy
 
-- **Linux and checksums:** `.deb`, `.pacman`, AppImage and `SHA256SUMS` are signed with the project GPG key (`LOAMS_GPG_KEY_ID`); `.rpm` packages are planned for SignPath. A file built without its signing credentials is named `-unsigned` and the release notes say so.
+- **Linux and checksums:** the release workflows sign `.deb`, `.pacman`, AppImage and `SHA256SUMS` with the project GPG key (`LOAMS_GPG_KEY_ID`) when the release has it; `.rpm` packages are planned for SignPath. The previews so far shipped without it: a file built without its signing credentials is named `-unsigned`, as every v0.1.0-preview.2 desktop file is, and the release notes say so.
 - **Windows and macOS:** unsigned today. The Windows (Authenticode) and `.rpm` signing steps through [SignPath Foundation](https://signpath.org) are built into the release workflows, but the application is not made yet, so nothing is signed that way; it will be made once the project has traction. macOS stays unsigned and not notarized.
 - **Verify a download:** `sha256sum -c SHA256SUMS --ignore-missing`, then `gpg --verify SHA256SUMS.asc SHA256SUMS`.
 - **Roles:** the three SignPath roles (authors, reviewers, approvers) are the repository's maintainers and owners; the named people will be listed here once the application is approved. Details: [signing policy](docs/release/signing.md), [desktop releases](docs/release/desktop.md).
