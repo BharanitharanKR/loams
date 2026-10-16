@@ -268,6 +268,16 @@ async fn mv_failure_does_not_fail_source_insert() {
     let failed = post_with(addr, &[], "INSERT INTO src VALUES (13, 1)").await;
     assert_ne!(failed.status, 200);
     assert_eq!(failed.header("X-ClickHouse-Exception-Code"), Some("395"));
+    // The view's last error shows in system.loams_pipes (HS1 Task 23, R23.1).
+    assert_eq!(
+        ok(
+            addr,
+            "SELECT name, pipe, source, target, position(last_error, 'throwIf') > 0 \
+             FROM system.loams_pipes"
+        )
+        .await,
+        "mv\tdefault.src\tMergeTree\tdefault.agg\t1\n"
+    );
     assert_eq!(ok(addr, "SELECT count() FROM src").await, "1\n");
     let ignored = post_with(
         addr,
@@ -279,6 +289,38 @@ async fn mv_failure_does_not_fail_source_insert() {
     ok(addr, "INSERT INTO src VALUES (1, 5)").await;
     assert_eq!(ok(addr, "SELECT count() FROM src").await, "3\n");
     assert_eq!(ok(addr, AGG_ROWS).await, "1\t1\t5\n");
+}
+
+/// Views are rows of `system.tables`, so `SHOW TABLES` lists them (HS1 Task
+/// 23, R23.1), and they hold no data of their own.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn views_are_rows_of_system_tables() {
+    let house = lakehouse("mv-tables", Duration::ZERO).await;
+    let addr = house.handle.local_addr();
+    ok(addr, SOURCE).await;
+    ok(addr, AGG).await;
+    ok(addr, VIEW).await;
+    assert_eq!(ok(addr, "SHOW TABLES").await, "agg\nmv\nsrc\n");
+    assert_eq!(
+        ok(
+            addr,
+            "SELECT engine, has_own_data, total_rows IS NULL, engine_full, as_select \
+             FROM system.tables WHERE name = 'mv'"
+        )
+        .await,
+        "MaterializedView\t0\t1\t\tSELECT k, count() AS c, sum(v) AS s FROM src GROUP BY k\n"
+    );
+    assert_eq!(
+        ok(
+            addr,
+            "SELECT create_table_query FROM system.tables WHERE name = 'mv'"
+        )
+        .await,
+        "CREATE MATERIALIZED VIEW default.mv TO default.agg AS SELECT k, count() AS c, sum(v) \
+         AS s FROM src GROUP BY k\n"
+    );
+    ok(addr, "DROP VIEW mv").await;
+    assert_eq!(ok(addr, "SHOW TABLES").await, "agg\nsrc\n");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

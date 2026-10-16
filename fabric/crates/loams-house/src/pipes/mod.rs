@@ -632,6 +632,7 @@ pub async fn drop_materialized_view(
             }],
         )
         .await?;
+    lake.pipe_states().forget(namespace, database, name);
     Ok(true)
 }
 
@@ -757,6 +758,25 @@ impl PipeStates {
             .unwrap_or_default()
     }
 
+    /// Every view's state this front holds, by `(namespace, database, view)`.
+    pub fn all(&self) -> Vec<((u64, String, String), PipeState)> {
+        self.0
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .iter()
+            .map(|(k, v)| (k.clone(), v.clone()))
+            .collect()
+    }
+
+    /// Forgets a dropped view's state, so its metrics series ends.
+    pub(crate) fn forget(&self, namespace: u64, database: &str, name: &str) {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).remove(&(
+            namespace,
+            database.to_string(),
+            name.to_string(),
+        ));
+    }
+
     pub(crate) fn update(
         &self,
         namespace: u64,
@@ -770,37 +790,56 @@ impl PipeStates {
     }
 }
 
-/// One row of `system.loams_pipes` and `ListPipes`.
+/// One row of `system.loams_pipes` (every materialized view) and `ListPipes`
+/// (the views over pipes).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct PipeRow {
     /// The view's database.
     pub database: String,
     /// The view.
     pub name: String,
-    /// `db.pipe`.
+    /// `db.pipe`: its source, a pipe or a lake table.
     pub pipe: String,
-    /// The pipe's engine.
+    /// The source's engine.
     pub source: String,
+    /// Whether the source is a pipe (not a lake table, HS1 Task 17).
+    pub over_pipe: bool,
     /// `db.target`.
     pub target: String,
     /// This front's state.
     pub state: PipeState,
 }
 
-/// The namespace's views over pipes, with this front's state.
+/// The namespace's materialized views — over pipes and over lake tables (HS1
+/// Task 23, ruling R23.1) — with this front's state.
 pub async fn rows(lake: &Lake, namespace: u64) -> Result<Vec<PipeRow>, HouseError> {
     let states = lake.pipe_states();
     let mut out = Vec::new();
-    for pipe in pipes(lake, namespace).await? {
-        for view in &pipe.views {
-            out.push(PipeRow {
-                database: view.database.clone(),
-                name: view.name.clone(),
-                pipe: format!("{}.{}", pipe.database, pipe.name),
-                source: pipe.source.render(),
-                target: format!("{}.{}", view.target_database, view.target),
-                state: states.get(namespace, &view.database, &view.name),
-            });
+    for database in lake.databases(namespace).await? {
+        for name in lake.table_names(namespace, &database.name).await? {
+            let Some(table) = lake.load(namespace, &database.name, &name).await? else {
+                continue;
+            };
+            let views = views_of(&table);
+            if views.is_empty() {
+                continue;
+            }
+            let ch = ChTable::from_lake(&database.name, &name, &table);
+            let (source, over_pipe) = match Pipe::from_table(&database.name, &name, table) {
+                Some(pipe) => (pipe.source.render(), true),
+                None => (ch.engine, false),
+            };
+            for view in views {
+                out.push(PipeRow {
+                    state: states.get(namespace, &view.database, &view.name),
+                    pipe: format!("{}.{name}", database.name),
+                    source: source.clone(),
+                    over_pipe,
+                    target: format!("{}.{}", view.target_database, view.target),
+                    database: view.database,
+                    name: view.name,
+                });
+            }
         }
     }
     out.sort_by(|a, b| (&a.database, &a.name).cmp(&(&b.database, &b.name)));

@@ -16,7 +16,8 @@
 //!   databases and lake and external tables, `ReplacingMergeTree` shown as such
 //!   — plus chDB's rows for `system` (the tables the deny list allows) and
 //!   `information_schema`, with their paths blanked; `tables` also shows the
-//!   session's temporary tables;
+//!   session's temporary tables and the namespace's materialized views (engine
+//!   `MaterializedView`, HS1 Task 23), which `SHOW TABLES` lists in turn;
 //! * `parts` has one row per live data file of each table's current snapshot;
 //! * `processes` and `errors` are chDB's rows with the host columns blanked
 //!   and the House user in place of chDB's.
@@ -53,7 +54,8 @@ pub const REPLACED: &[&str] = &[
 ];
 
 /// `system.loams_pipes` (HS1 Task 16): the House's own, one row per
-/// materialized view over a pipe, with this front's view of its runs.
+/// materialized view — over a pipe or, from HS1 Task 23, a lake table — with
+/// this front's view of its runs.
 pub const PIPES_COLUMNS: &[(&str, &str)] = &[
     ("database", "String"),
     ("name", "String"),
@@ -458,9 +460,21 @@ pub async fn views(
         }
         _ => Vec::new(),
     };
+    // Materialized views are recorded on their sources (HS1 Tasks 16, 17).
+    let mut materialized: Vec<(crate::pipes::MaterializedView, i64)> = catalog
+        .iter()
+        .flat_map(|(_, _, table)| {
+            let at = table.metadata.last_updated_ms();
+            crate::pipes::views_of(table)
+                .into_iter()
+                .map(move |view| (view, at))
+        })
+        .collect();
+    materialized.sort_by(|(a, _), (b, _)| (&a.database, &a.name).cmp(&(&b.database, &b.name)));
     // Only the tables the identity may touch are listed (HS1 Task 20).
     if let Some(grants) = ctx.grants {
         catalog.retain(|(database, name, _)| grants.allows(database, name));
+        materialized.retain(|(view, _)| grants.allows(&view.database, &view.name));
     }
     let mut out = vec![format!(
         "CREATE DATABASE IF NOT EXISTS {} ENGINE = Memory",
@@ -479,7 +493,7 @@ pub async fn views(
         let shape = shape(lease, table).await?;
         let body = match table.as_str() {
             "databases" => databases(ctx, &shape).await?,
-            "tables" => tables_view(&shape, &catalog),
+            "tables" => tables_view(&shape, &catalog, &materialized),
             "columns" => columns_view(&shape, &catalog),
             "parts" => match ctx.lake {
                 Some(lake) => parts_view(lake, &shape, &catalog).await?,
@@ -616,7 +630,23 @@ async fn databases(ctx: ReadContext<'_>, shape: &[ShapeColumn]) -> Result<String
     ))
 }
 
-fn tables_view(shape: &[ShapeColumn], catalog: &[(String, String, LakeTable)]) -> String {
+/// `CREATE MATERIALIZED VIEW` as `system.tables.create_table_query` shows it.
+fn view_ddl(view: &crate::pipes::MaterializedView) -> String {
+    format!(
+        "CREATE MATERIALIZED VIEW {}.{} TO {}.{} AS {}",
+        quote_name(&view.database),
+        quote_name(&view.name),
+        quote_name(&view.target_database),
+        quote_name(&view.target),
+        view.select
+    )
+}
+
+fn tables_view(
+    shape: &[ShapeColumn],
+    catalog: &[(String, String, LakeTable)],
+    materialized: &[(crate::pipes::MaterializedView, i64)],
+) -> String {
     let mut rows = Rows {
         columns: vec![
             "database",
@@ -637,6 +667,7 @@ fn tables_view(shape: &[ShapeColumn], catalog: &[(String, String, LakeTable)]) -
             "comment",
             "has_own_data",
             "table",
+            "as_select",
         ],
         rows: Vec::new(),
     };
@@ -667,6 +698,36 @@ fn tables_view(shape: &[ShapeColumn], catalog: &[(String, String, LakeTable)]) -
             Some(ch.comment.clone()),
             Some("1".to_string()),
             Some(name.clone()),
+            Some(String::new()),
+        ]);
+    }
+    // A view with `TO` holds no data: ClickHouse's sizes are NULL.
+    for (view, at) in materialized {
+        rows.rows.push(vec![
+            Some(view.database.clone()),
+            Some(view.name.clone()),
+            Some(
+                uuid::Uuid::parse_str(&view.id)
+                    .unwrap_or_default()
+                    .hyphenated()
+                    .to_string(),
+            ),
+            Some("MaterializedView".to_string()),
+            Some("0".to_string()),
+            Some(datetime_text(*at)),
+            Some(view_ddl(view)),
+            Some(String::new()),
+            Some(String::new()),
+            Some(String::new()),
+            Some(String::new()),
+            None,
+            None,
+            None,
+            None,
+            Some(String::new()),
+            Some("0".to_string()),
+            Some(view.name.clone()),
+            Some(view.select.clone()),
         ]);
     }
     format!(

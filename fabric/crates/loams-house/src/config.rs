@@ -106,6 +106,9 @@ pub struct HouseConfig {
     /// How often snapshot expiry, orphan removal and purges sweep the
     /// catalog (HS1 Task 15): 1 h; zero turns it off.
     pub retention_interval: Duration,
+    /// The admin listener (`--admin-listen`, 8125, loopback only): `GET
+    /// /metrics` (HS1 Task 23). `None`: not served.
+    pub admin_listen: Option<SocketAddr>,
     /// The engine whose streams `LoamsStream` pipes read (HS1 Task 16);
     /// `None`: no pipe can be made.
     pub engine: Option<EngineLink>,
@@ -173,6 +176,7 @@ impl Default for HouseConfig {
             compaction_interval: Duration::from_secs(30),
             snapshot_retention: crate::catalog::DEFAULT_RETENTION,
             retention_interval: crate::retention::DEFAULT_SWEEP_INTERVAL,
+            admin_listen: None,
             engine: None,
             pipe_interval: Duration::from_secs(1),
             view_interval: Duration::from_secs(5),
