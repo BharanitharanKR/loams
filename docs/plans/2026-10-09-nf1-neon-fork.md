@@ -1671,3 +1671,84 @@ Fork PR ostrium-labs/loams-postgres#18 (branch `loams/nf1-postgres-branches`, LP
 4. **The submodules still point at Neon's revisions** (17.5 `1e01fcea`, 16.9 `a42351fc`), with `branch = REL_<N>_STABLE_neon` in `.gitmodules`. Task 17 moves them to `loams/REL_<N>_STABLE` with the 17.11 and 16.15 merges. Postgres 18 has no submodule until Task 24.
 5. **Q733 is answered (owner, 2026-10-16).** The owner set `LOAMS_BOT_TOKEN` as an organisation secret visible to every repository. From the next release on, `loams-release.yml`'s `pin-pr` job opens the pin PR itself, and the cadence check can open its issue. Task 18's pushes to `ostrium-labs/postgres` use the same secret. The rest of Q733 is now moot: the bot is a token, so nobody needs to refresh the `gh` token's scopes for it. The token's scopes were not inspected, so the first real use is its check.
 6. **Clone approval (Task 0).** The owner approved cloning `ostrium-labs/postgres` for Task 17 (2026-10-16). The clone must be blobless or treeless, outside `/tmp` and `/mnt/Projects`, and deleted afterwards. A CI job that does the upstream merge is preferred, because it can be repeated for every later minor.
+
+### Task 16 rulings (2026-10-16, at `dev` `f329a139`)
+
+Fork PRs ostrium-labs/loams-postgres#19 (`6212f59e`, the gate), #21 (a mode bit), #22 (concurrency, protobuf) and #23 (clippy `--no-deps`), plus the shellcheck fix carried in #20; all are LP-0015. Loams PR #698 (`nf1-candidate.yml`). CodeRabbit skips the fork repositories and was rate-limited on #698, so all of these were self-reviewed.
+
+1. **When the gate runs (owner, 2026-10-16; this answers Q721):**
+   - on GitHub-hosted standard runners;
+   - **nightly** at 21:07 UTC, away from Loams' nightly at 02:17;
+   - **on every release:** `loams-release.yml` calls G0–G2 before it builds, and G3 before it tags;
+   - **by hand** (`workflow_dispatch`, any set of tiers).
+
+   It does **not** run on pull requests.
+   - **Concurrency.** The organisation's concurrent-job limit is shared with Loams' CI. So there is one gate per caller and ref: a newer nightly or dispatch cancels the older one, and a release's calls queue and are never cancelled. At most two heavy jobs run at once: G1 beside G2's build, then the G2 majors with `max-parallel: 2`.
+   - **No image builds from these PRs.** A fork PR that touches Rust code also starts the storage and compute image builds. Those were cancelled on these PRs, because the only Rust change was rustfmt and G1/G2 compile it.
+2. **Required checks (deviation).** The plan's `required_checks_configured` lists `g0`, `g1`, `dco` and `patches`. A tier that does not run on pull requests cannot be a required check, so `main`'s new ruleset `main: required checks (hygiene, patches, dco)` requires the pull-request tier instead. It has the same admin bypass as the PR rule. `gate.py required-checks` verifies the ruleset live in `loams-hygiene`. G0–G2 gate releases instead.
+3. **G0** runs rustfmt, clippy `-D warnings` on G1's crates, `cargo deny check bans licenses sources`, actionlint (with shellcheck), and the `hygiene`, `patches` and `dco` workflows.
+   - **Advisories are not in G0 (deviation).** `cargo deny check advisories` fails at today's `main`. `loams-advisories.yml` already gives each advisory a tracked issue with a due date (D805), and putting advisories in G0 would stop every release at once.
+   - **Fixes the first runs needed:**
+     - `libs/remote_storage/src/gcs_bucket.rs` was the workspace's one unformatted file; it is now formatted (formatting only).
+     - A shellcheck finding in `loams-build-compute.yml` (SC2153) was fixed.
+     - `libprotobuf-dev` is installed, because `storage_broker`'s build script needs `google/protobuf/empty.proto` for clippy.
+     - Clippy runs with `--no-deps`: it lints G1's crates themselves, not every workspace crate they depend on. `remote_storage`'s GCS backend has 41 findings at `main`; cleaning it up is a follow-up.
+4. **G1 runs once, not once per major (deviation).** The Rust tests do not take the major from the environment: `postgres_ffi` is generic over every major it has bindings for, and the pageserver's WAL-redo tests use `DEFAULT_PG_VERSION` (17). So G1 builds Postgres and Neon's extensions for every major (`make neon-pg-ext`), then runs:
+   - `cargo nextest` on `postgres_ffi`, `wal_decoder`, `pageserver_api`, `compute_api` and `compute_tools`;
+   - the pageserver's tests twice, with `NEON_PAGESERVER_UNIT_TEST_VIRTUAL_FILE_IOENGINE=std-fs` and with `tokio-epoll-uring`.
+
+   The per-major tier is G2.
+   - It runs in the pinned `loams-postgres-build-tools` image (`scripts/loams/gate-docker.sh`) as uid 1000, because Postgres refuses root, with seccomp unconfined so io_uring is available.
+   - **The first run passed:** 105, 283 and 283 tests, in 20 minutes.
+5. **G2** is one release build (`make all`, feature `testing`, 38 minutes), shared as an artifact, then `test_runner` per pinned major (16, 17) on `scripts/loams/gate-subset.txt`. The subset has 9 functions, 18 tests with their parameters:
+   - `test_pg_regress`;
+   - `test_branch_behind` and `test_branching_with_pgbench`;
+   - `test_compute_reconfigure`;
+   - `test_pgdata_import_smoke`;
+   - `test_lfc_resize` and `test_local_file_cache_unlink`;
+   - `test_wal_acceptor.py::test_restarts` and `::test_restart_endpoint`.
+
+   `gate.py subset-check` (in `loams-hygiene`) checks that each name exists. A flake is skipped only by a `deselect <node> <issue URL>` line.
+   - **The first run passed:** 18 tests on pg16 and 18 on pg17, about 15 minutes each.
+6. **`gate_fails_on_red_tier`:**
+   - **Unit tests:** `gate.py verdict` fails the job `gate` when a job of a requested tier failed, was cancelled or was skipped.
+   - **Live:** the first run (https://github.com/ostrium-labs/loams-postgres/actions/runs/38935843561) had G1 and G2 green and G0's lint red, and the job `gate` failed.
+7. **G3 (deviation: a pin document, not per-image digests).** The fork sends the candidate's whole pin document (`release-notes.py pin-doc`), because a minor release changes `pg_minor` too, not only digests.
+   - **In Loams:** `scripts/nf1/candidate.py` accepts an image only when it is built from the candidate's commit (in a `ghcr.io/ostrium-labs/loams-postgres-*` repository), or when it is exactly what Loams pins today. `pg2-e2e.yml` and `pg2.yml`'s WAL decoder job became callable (`candidate-pins`). `candidate-smoke.sh` checks the version, an extension smoke and a branch; it passed locally on 17.5. The status goes back as `loams-gate / g3`.
+   - **In the release:** `tag-images` is split. `candidate` resolves the digests and writes the documents; G3 then runs on that document; only then does `tag-images` tag the images.
+8. **`g3_reports_status` is blocked on the owner.** The dry run with today's pins (https://github.com/ostrium-labs/loams-postgres/actions/runs/38941121083) failed at the dispatch: `HTTP 403: Resource not accessible by personal access token`. `LOAMS_BOT_TOKEN` is a fine-grained token, and it lacks **Actions: read and write on `ostrium-labs/loams`**. The report also needs **Commit statuses: read and write on `ostrium-labs/loams-postgres`**.
+
+   Until the token has both, G3 fails, so **no release can be tagged**. That is deliberate: a release without Loams' integration is not a release.
+
+### Task 17 rulings (2026-10-16, in progress)
+
+Fork PR ostrium-labs/loams-postgres#20 (LP-0016) merged.
+
+1. **The merge runs in CI, not on a workstation** (owner, 2026-10-16: prefer a repeatable CI job). `loams-postgres-merge.yml` runs `scripts/loams/postgres-merge.sh`:
+   - a blobless clone of `ostrium-labs/postgres` inside the job;
+   - the upstream tag from `postgres/postgres`;
+   - `git merge --no-ff` with `Loams-Sync: <tag>`;
+   - `push` writes `loams/minor-<N>-<tag>`; `promote` fast-forwards `loams/REL_<N>_STABLE`;
+   - a conflict uploads the files and the diff.
+
+   `test_postgres_merge.sh` covers it with 5 cases. Nothing was cloned locally.
+2. **Starting points.** `loams/REL_17_STABLE` is at 17.8 and `loams/REL_16_STABLE` at 16.12, from Neon's branches.
+3. **Dry runs (no push):**
+   - **`REL_16_15`** (https://github.com/ostrium-labs/loams-postgres/actions/runs/38937088537): 5 conflicted files.
+     - `hash_xlog.c`: Neon's `am_wal_redo_postgres` guard against upstream's new `XLogFlushBufferForRedoIfInit` helper.
+     - `walsender.c`.
+     - `pgstat.c`: includes.
+     - `encoding.out` and `encoding.sql`: tests added on both sides.
+   - **`REL_17_11`** (https://github.com/ostrium-labs/loams-postgres/actions/runs/38937081682): 10 conflicted files. They are the same kinds as in 16, plus `read_stream.c`, `postgres.c`, `injection_point.c`, the injection-points test module, and **`heapam.c`**.
+4. **A maintainer must decide 17.11's `heapam.c` before the 17 merge.** Upstream 17.11 includes "Fix VM clear WAL logging by registering VM blocks": heap insert, delete, update and lock records now register the visibility-map page as an extra block reference. Neon writes those records as its own `RM_NEON_ID` records (`xl_neon_heap_*`). The pageserver ingests them (`wal_decoder`, `walingest.rs`), and `neon_rmgr` replays them, and the pageserver clears visibility-map bits from the record's flags itself. There are two ways forward:
+   - **(a)** Keep Neon's records without the new block reference, and confirm that the pageserver's own VM handling already covers the case the fix is for.
+   - **(b)** Add the VM block reference to the `RM_NEON_ID` records, and change `neon_rmgr`, `wal_decoder`, the pageserver's ingest and Loams' `loams-wal-decoder` fixtures to match.
+
+   Either way it is a WAL-format question (Review Focus 7), so it is not settled inside a merge commit. 16.15 does not have this change, so its five conflicts are mechanical.
+5. **Still to do for `lp-2026.11.0` (deadline 2026-11-19):**
+   - resolve both merges on `loams/minor-<N>-<tag>`, recording each resolution in its merge commit;
+   - move `vendor/postgres-v16` and `vendor/postgres-v17`, `.gitmodules` (`branch = loams/REL_<N>_STABLE`) and `vendor/revisions.json`;
+   - run G1 and G2 on that branch, and G3 once the token is fixed;
+   - release.
+
+   17.12 and 16.16 follow on 2026-11-12, through the same workflow.
