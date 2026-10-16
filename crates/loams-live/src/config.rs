@@ -8,6 +8,7 @@ use std::time::Duration;
 use loams_kv::TikvConfig;
 use loams_kv::{EmbeddedConfig, StoreConfig};
 
+use crate::apps::{AppsOptions, Layout};
 use crate::session::SessionConfig;
 use crate::subs::SubsConfig;
 use crate::{Limits, LiveError, catalog};
@@ -29,6 +30,10 @@ pub fn store_path(data_dir: &Path) -> PathBuf {
 /// Where the Live sync API listens by default (§20 §7.1).
 pub const DEFAULT_LISTEN: SocketAddr =
     SocketAddr::new(std::net::IpAddr::V4(Ipv4Addr::LOCALHOST), 7710);
+
+/// How long an app's engine runs on a node with no session and no request
+/// before it is stopped (design §45 §7).
+pub const DEFAULT_IDLE_AFTER: Duration = Duration::from_secs(10 * 60);
 
 /// How often the journal janitor runs (it trims entries older than the
 /// retention and not held by a checkpoint, and sweeps expired idempotency
@@ -68,6 +73,15 @@ pub struct LiveConfig {
     /// Whether this node serves one tenant's code or many; `Multi` needs
     /// [`Isolation::Isolated`] ([`check_isolation`]).
     pub tenancy: Tenancy,
+    /// Where the other apps' keyspaces and the app directory live beside
+    /// `store` (LV1 plan Task 13): their own keyspaces, or (tests) roots
+    /// under `store`'s.
+    pub layout: Layout,
+    /// The app directory's limits and ages.
+    pub apps: AppsOptions,
+    /// How long an app's engine stays up on this node with no session and
+    /// no request (the server's own app always runs).
+    pub idle_after: Duration,
 }
 
 /// Where a deployment's functions run (`[live] isolation`, design §45
@@ -166,6 +180,9 @@ impl LiveConfig {
             janitor_interval: DEFAULT_JANITOR_INTERVAL,
             isolation: Isolation::default(),
             tenancy: Tenancy::default(),
+            layout: Layout::default(),
+            apps: AppsOptions::default(),
+            idle_after: DEFAULT_IDLE_AFTER,
         }
     }
 }

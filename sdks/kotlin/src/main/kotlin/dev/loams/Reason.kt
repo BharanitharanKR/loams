@@ -233,6 +233,12 @@ enum class Reason {
     /** `live_index_not_ready` (docs/api/reasons.md). */
     LIVE_INDEX_NOT_READY,
 
+    /** `live_app_disabled` (docs/api/reasons.md). */
+    LIVE_APP_DISABLED,
+
+    /** `live_app_exists` (docs/api/reasons.md). */
+    LIVE_APP_EXISTS,
+
     /** The caller's org role is below the one the admin RPC needs, or the caller is not in the org. */
     ROLE_REQUIRED,
 
@@ -410,6 +416,8 @@ object ReasonRegistry {
         Reason.LIVE_DEPLOY_CONFLICT,
         Reason.LIVE_SCHEMA_VIOLATION,
         Reason.LIVE_INDEX_NOT_READY,
+        Reason.LIVE_APP_DISABLED,
+        Reason.LIVE_APP_EXISTS,
         Reason.ROLE_REQUIRED,
         Reason.SETUP_REQUIRED,
         Reason.TOKEN_MISSING,
@@ -504,6 +512,8 @@ object ReasonRegistry {
         Reason.LIVE_DEPLOY_CONFLICT to "live_deploy_conflict",
         Reason.LIVE_SCHEMA_VIOLATION to "live_schema_violation",
         Reason.LIVE_INDEX_NOT_READY to "live_index_not_ready",
+        Reason.LIVE_APP_DISABLED to "live_app_disabled",
+        Reason.LIVE_APP_EXISTS to "live_app_exists",
         Reason.ROLE_REQUIRED to "role_required",
         Reason.SETUP_REQUIRED to "setup_required",
         Reason.TOKEN_MISSING to "token_missing",
@@ -605,6 +615,8 @@ object ReasonRegistry {
         Reason.LIVE_DEPLOY_CONFLICT to Code.FAILED_PRECONDITION,
         Reason.LIVE_SCHEMA_VIOLATION to Code.INVALID_ARGUMENT,
         Reason.LIVE_INDEX_NOT_READY to Code.FAILED_PRECONDITION,
+        Reason.LIVE_APP_DISABLED to Code.FAILED_PRECONDITION,
+        Reason.LIVE_APP_EXISTS to Code.FAILED_PRECONDITION,
         Reason.ROLE_REQUIRED to Code.PERMISSION_DENIED,
         Reason.SETUP_REQUIRED to Code.FAILED_PRECONDITION,
         Reason.TOKEN_MISSING to Code.UNAUTHENTICATED,

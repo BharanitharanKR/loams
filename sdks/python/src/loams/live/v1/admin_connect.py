@@ -18,7 +18,7 @@ from connectrpc.protocol import ProtocolType
 from connectrpc.server import ConnectASGIApplication, ConnectWSGIApplication, DEFAULT_READ_MAX_BYTES, Endpoint, EndpointSync
 from pyqwest import Client, SyncClient
 
-from .admin_pb2 import ActivateDeploymentRequest, ActivateDeploymentResponse, DeployRequest, DeployResponse, GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse, ListDeploymentsRequest, ListDeploymentsResponse, TailLogsRequest, TailLogsResponse
+from .admin_pb2 import ActivateDeploymentRequest, ActivateDeploymentResponse, CreateAppRequest, CreateAppResponse, DeleteAppRequest, DeleteAppResponse, DeployRequest, DeployResponse, GetAppRequest, GetAppResponse, GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse, ListAppsRequest, ListAppsResponse, ListDeploymentsRequest, ListDeploymentsResponse, TailLogsRequest, TailLogsResponse, UpdateAppRequest, UpdateAppResponse
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator, Iterable, Iterator, Mapping
@@ -75,6 +75,41 @@ class LiveAdminService(Protocol):
         """
         The functions' `console.*` output on this node (§45 §3.3): the lines
         the node still holds, then, with `follow`, new lines as they come.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def create_app(self, request: CreateAppRequest, ctx: RequestContext[CreateAppRequest, CreateAppResponse], /) -> CreateAppResponse:
+        """
+        Creates an app (design §45 §7, D690): its dedicated keyspace
+        `loams_live_a<id>` first, then its directory record. A taken name is
+        FAILED_PRECONDITION, reason `live_app_exists`; more apps than the
+        cluster allows is RESOURCE_EXHAUSTED.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def list_apps(self, request: ListAppsRequest, ctx: RequestContext[ListAppsRequest, ListAppsResponse], /) -> ListAppsResponse:
+        """
+        The cluster's apps, by id.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def get_app(self, request: GetAppRequest, ctx: RequestContext[GetAppRequest, GetAppResponse], /) -> GetAppResponse:
+        """
+        One app, by name.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def update_app(self, request: UpdateAppRequest, ctx: RequestContext[UpdateAppRequest, UpdateAppResponse], /) -> UpdateAppResponse:
+        """
+        Changes an app's settings, or disables and enables it. Fields left out
+        are kept.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def delete_app(self, request: DeleteAppRequest, ctx: RequestContext[DeleteAppRequest, DeleteAppResponse], /) -> DeleteAppResponse:
+        """
+        Deletes an app softly: it is `APP_STATE_DELETING` (every call refused)
+        and its data is purged after the retention, 7 days by default.
         """
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
@@ -151,6 +186,56 @@ class LiveAdminServiceASGIApplication(ConnectASGIApplication[LiveAdminService]):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.tail_logs,
+                ),
+                "/loams.live.v1.LiveAdminService/CreateApp": Endpoint.unary(
+                    method=MethodInfo(
+                        name="CreateApp",
+                        service_name="loams.live.v1.LiveAdminService",
+                        input=CreateAppRequest,
+                        output=CreateAppResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.create_app,
+                ),
+                "/loams.live.v1.LiveAdminService/ListApps": Endpoint.unary(
+                    method=MethodInfo(
+                        name="ListApps",
+                        service_name="loams.live.v1.LiveAdminService",
+                        input=ListAppsRequest,
+                        output=ListAppsResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.list_apps,
+                ),
+                "/loams.live.v1.LiveAdminService/GetApp": Endpoint.unary(
+                    method=MethodInfo(
+                        name="GetApp",
+                        service_name="loams.live.v1.LiveAdminService",
+                        input=GetAppRequest,
+                        output=GetAppResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.get_app,
+                ),
+                "/loams.live.v1.LiveAdminService/UpdateApp": Endpoint.unary(
+                    method=MethodInfo(
+                        name="UpdateApp",
+                        service_name="loams.live.v1.LiveAdminService",
+                        input=UpdateAppRequest,
+                        output=UpdateAppResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.update_app,
+                ),
+                "/loams.live.v1.LiveAdminService/DeleteApp": Endpoint.unary(
+                    method=MethodInfo(
+                        name="DeleteApp",
+                        service_name="loams.live.v1.LiveAdminService",
+                        input=DeleteAppRequest,
+                        output=DeleteAppResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.delete_app,
                 ),
             },
             interceptors=interceptors,
@@ -335,6 +420,126 @@ class LiveAdminServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def create_app(
+        self,
+        request: CreateAppRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> CreateAppResponse:
+        """
+        Creates an app (design §45 §7, D690): its dedicated keyspace
+        `loams_live_a<id>` first, then its directory record. A taken name is
+        FAILED_PRECONDITION, reason `live_app_exists`; more apps than the
+        cluster allows is RESOURCE_EXHAUSTED.
+        """
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="CreateApp",
+                service_name="loams.live.v1.LiveAdminService",
+                input=CreateAppRequest,
+                output=CreateAppResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def list_apps(
+        self,
+        request: ListAppsRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> ListAppsResponse:
+        """
+        The cluster's apps, by id.
+        """
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ListApps",
+                service_name="loams.live.v1.LiveAdminService",
+                input=ListAppsRequest,
+                output=ListAppsResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def get_app(
+        self,
+        request: GetAppRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> GetAppResponse:
+        """
+        One app, by name.
+        """
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="GetApp",
+                service_name="loams.live.v1.LiveAdminService",
+                input=GetAppRequest,
+                output=GetAppResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def update_app(
+        self,
+        request: UpdateAppRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> UpdateAppResponse:
+        """
+        Changes an app's settings, or disables and enables it. Fields left out
+        are kept.
+        """
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="UpdateApp",
+                service_name="loams.live.v1.LiveAdminService",
+                input=UpdateAppRequest,
+                output=UpdateAppResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
+    async def delete_app(
+        self,
+        request: DeleteAppRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> DeleteAppResponse:
+        """
+        Deletes an app softly: it is `APP_STATE_DELETING` (every call refused)
+        and its data is purged after the retention, 7 days by default.
+        """
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="DeleteApp",
+                service_name="loams.live.v1.LiveAdminService",
+                input=DeleteAppRequest,
+                output=DeleteAppResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
 class LiveAdminServiceSync(Protocol):
     def deploy(self, request: DeployRequest, ctx: RequestContext[DeployRequest, DeployResponse], /) -> DeployResponse:
         """
@@ -376,6 +581,41 @@ class LiveAdminServiceSync(Protocol):
         """
         The functions' `console.*` output on this node (§45 §3.3): the lines
         the node still holds, then, with `follow`, new lines as they come.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def create_app(self, request: CreateAppRequest, ctx: RequestContext[CreateAppRequest, CreateAppResponse], /) -> CreateAppResponse:
+        """
+        Creates an app (design §45 §7, D690): its dedicated keyspace
+        `loams_live_a<id>` first, then its directory record. A taken name is
+        FAILED_PRECONDITION, reason `live_app_exists`; more apps than the
+        cluster allows is RESOURCE_EXHAUSTED.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def list_apps(self, request: ListAppsRequest, ctx: RequestContext[ListAppsRequest, ListAppsResponse], /) -> ListAppsResponse:
+        """
+        The cluster's apps, by id.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def get_app(self, request: GetAppRequest, ctx: RequestContext[GetAppRequest, GetAppResponse], /) -> GetAppResponse:
+        """
+        One app, by name.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def update_app(self, request: UpdateAppRequest, ctx: RequestContext[UpdateAppRequest, UpdateAppResponse], /) -> UpdateAppResponse:
+        """
+        Changes an app's settings, or disables and enables it. Fields left out
+        are kept.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    def delete_app(self, request: DeleteAppRequest, ctx: RequestContext[DeleteAppRequest, DeleteAppResponse], /) -> DeleteAppResponse:
+        """
+        Deletes an app softly: it is `APP_STATE_DELETING` (every call refused)
+        and its data is purged after the retention, 7 days by default.
         """
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
@@ -450,6 +690,56 @@ class LiveAdminServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.tail_logs,
+                ),
+                "/loams.live.v1.LiveAdminService/CreateApp": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="CreateApp",
+                        service_name="loams.live.v1.LiveAdminService",
+                        input=CreateAppRequest,
+                        output=CreateAppResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.create_app,
+                ),
+                "/loams.live.v1.LiveAdminService/ListApps": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="ListApps",
+                        service_name="loams.live.v1.LiveAdminService",
+                        input=ListAppsRequest,
+                        output=ListAppsResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.list_apps,
+                ),
+                "/loams.live.v1.LiveAdminService/GetApp": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="GetApp",
+                        service_name="loams.live.v1.LiveAdminService",
+                        input=GetAppRequest,
+                        output=GetAppResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.get_app,
+                ),
+                "/loams.live.v1.LiveAdminService/UpdateApp": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="UpdateApp",
+                        service_name="loams.live.v1.LiveAdminService",
+                        input=UpdateAppRequest,
+                        output=UpdateAppResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.update_app,
+                ),
+                "/loams.live.v1.LiveAdminService/DeleteApp": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="DeleteApp",
+                        service_name="loams.live.v1.LiveAdminService",
+                        input=DeleteAppRequest,
+                        output=DeleteAppResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.delete_app,
                 ),
             },
             interceptors=interceptors,
@@ -623,6 +913,121 @@ class LiveAdminServiceClientSync(ConnectClientSync):
                 service_name="loams.live.v1.LiveAdminService",
                 input=TailLogsRequest,
                 output=TailLogsResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    def create_app(
+        self,
+        request: CreateAppRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> CreateAppResponse:
+        """
+        Creates an app (design §45 §7, D690): its dedicated keyspace
+        `loams_live_a<id>` first, then its directory record. A taken name is
+        FAILED_PRECONDITION, reason `live_app_exists`; more apps than the
+        cluster allows is RESOURCE_EXHAUSTED.
+        """
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="CreateApp",
+                service_name="loams.live.v1.LiveAdminService",
+                input=CreateAppRequest,
+                output=CreateAppResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    def list_apps(
+        self,
+        request: ListAppsRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> ListAppsResponse:
+        """
+        The cluster's apps, by id.
+        """
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="ListApps",
+                service_name="loams.live.v1.LiveAdminService",
+                input=ListAppsRequest,
+                output=ListAppsResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    def get_app(
+        self,
+        request: GetAppRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> GetAppResponse:
+        """
+        One app, by name.
+        """
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="GetApp",
+                service_name="loams.live.v1.LiveAdminService",
+                input=GetAppRequest,
+                output=GetAppResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    def update_app(
+        self,
+        request: UpdateAppRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> UpdateAppResponse:
+        """
+        Changes an app's settings, or disables and enables it. Fields left out
+        are kept.
+        """
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="UpdateApp",
+                service_name="loams.live.v1.LiveAdminService",
+                input=UpdateAppRequest,
+                output=UpdateAppResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    def delete_app(
+        self,
+        request: DeleteAppRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> DeleteAppResponse:
+        """
+        Deletes an app softly: it is `APP_STATE_DELETING` (every call refused)
+        and its data is purged after the retention, 7 days by default.
+        """
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="DeleteApp",
+                service_name="loams.live.v1.LiveAdminService",
+                input=DeleteAppRequest,
+                output=DeleteAppResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

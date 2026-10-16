@@ -142,3 +142,29 @@ message DeploymentRecord {
   // a record written before Task 10.
   repeated FunctionInfo functions = 11;
 }
+
+// One app of the directory (design §45 §7, D690; LV1 plan Task 13): the
+// value of `0x01 ‖ id:u32 BE` in the system keyspace `loams_live_system`.
+message AppRecord {
+  // The encoding version; 1 in LV1.
+  uint32 format = 1;
+  // The app as the admin API shows it.
+  App app = 2;
+  // Where the app's pagination cursor key lives: `catalog`, a record of the
+  // app's own catalog (LV1 Task 4).
+  string cursor_key_ref = 3;
+}
+
+// A create in progress (LV1 plan Task 13): the value of `0x03 ‖ id:u32 BE`
+// in the system keyspace, written before the app's keyspace is ensured and
+// removed by the transaction that writes the app's record. One left behind
+// names a keyspace no app owns, which the directory janitor reports.
+message AppIntent {
+  // The encoding version; 1 in LV1.
+  uint32 format = 1;
+  uint32 id = 2;
+  string name = 3;
+  string keyspace = 4;
+  // Unix ms.
+  uint64 started_at_ms = 5;
+}

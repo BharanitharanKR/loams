@@ -705,6 +705,154 @@ func (x *DeploymentRecord) GetFunctions() []*FunctionInfo {
 	return nil
 }
 
+// One app of the directory (design §45 §7, D690; LV1 plan Task 13): the
+// value of `0x01 ‖ id:u32 BE` in the system keyspace `loams_live_system`.
+type AppRecord struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The encoding version; 1 in LV1.
+	Format uint32 `protobuf:"varint,1,opt,name=format,proto3" json:"format,omitempty"`
+	// The app as the admin API shows it.
+	App *App `protobuf:"bytes,2,opt,name=app,proto3" json:"app,omitempty"`
+	// Where the app's pagination cursor key lives: `catalog`, a record of the
+	// app's own catalog (LV1 Task 4).
+	CursorKeyRef  string `protobuf:"bytes,3,opt,name=cursor_key_ref,json=cursorKeyRef,proto3" json:"cursor_key_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AppRecord) Reset() {
+	*x = AppRecord{}
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AppRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AppRecord) ProtoMessage() {}
+
+func (x *AppRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AppRecord.ProtoReflect.Descriptor instead.
+func (*AppRecord) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_catalog_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *AppRecord) GetFormat() uint32 {
+	if x != nil {
+		return x.Format
+	}
+	return 0
+}
+
+func (x *AppRecord) GetApp() *App {
+	if x != nil {
+		return x.App
+	}
+	return nil
+}
+
+func (x *AppRecord) GetCursorKeyRef() string {
+	if x != nil {
+		return x.CursorKeyRef
+	}
+	return ""
+}
+
+// A create in progress (LV1 plan Task 13): the value of `0x03 ‖ id:u32 BE`
+// in the system keyspace, written before the app's keyspace is ensured and
+// removed by the transaction that writes the app's record. One left behind
+// names a keyspace no app owns, which the directory janitor reports.
+type AppIntent struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The encoding version; 1 in LV1.
+	Format   uint32 `protobuf:"varint,1,opt,name=format,proto3" json:"format,omitempty"`
+	Id       uint32 `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
+	Name     string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Keyspace string `protobuf:"bytes,4,opt,name=keyspace,proto3" json:"keyspace,omitempty"`
+	// Unix ms.
+	StartedAtMs   uint64 `protobuf:"varint,5,opt,name=started_at_ms,json=startedAtMs,proto3" json:"started_at_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AppIntent) Reset() {
+	*x = AppIntent{}
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AppIntent) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AppIntent) ProtoMessage() {}
+
+func (x *AppIntent) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_catalog_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AppIntent.ProtoReflect.Descriptor instead.
+func (*AppIntent) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_catalog_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *AppIntent) GetFormat() uint32 {
+	if x != nil {
+		return x.Format
+	}
+	return 0
+}
+
+func (x *AppIntent) GetId() uint32 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *AppIntent) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *AppIntent) GetKeyspace() string {
+	if x != nil {
+		return x.Keyspace
+	}
+	return ""
+}
+
+func (x *AppIntent) GetStartedAtMs() uint64 {
+	if x != nil {
+		return x.StartedAtMs
+	}
+	return 0
+}
+
 var File_loams_live_v1_catalog_proto protoreflect.FileDescriptor
 
 const file_loams_live_v1_catalog_proto_rawDesc = "" +
@@ -767,7 +915,17 @@ const file_loams_live_v1_catalog_proto_rawDesc = "" +
 	"\x05state\x18\t \x01(\x0e2\x1e.loams.live.v1.DeploymentStateR\x05state\x12%\n" +
 	"\x0efailure_reason\x18\n" +
 	" \x01(\tR\rfailureReason\x129\n" +
-	"\tfunctions\x18\v \x03(\v2\x1b.loams.live.v1.FunctionInfoR\tfunctions*h\n" +
+	"\tfunctions\x18\v \x03(\v2\x1b.loams.live.v1.FunctionInfoR\tfunctions\"o\n" +
+	"\tAppRecord\x12\x16\n" +
+	"\x06format\x18\x01 \x01(\rR\x06format\x12$\n" +
+	"\x03app\x18\x02 \x01(\v2\x12.loams.live.v1.AppR\x03app\x12$\n" +
+	"\x0ecursor_key_ref\x18\x03 \x01(\tR\fcursorKeyRef\"\x87\x01\n" +
+	"\tAppIntent\x12\x16\n" +
+	"\x06format\x18\x01 \x01(\rR\x06format\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\rR\x02id\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x1a\n" +
+	"\bkeyspace\x18\x04 \x01(\tR\bkeyspace\x12\"\n" +
+	"\rstarted_at_ms\x18\x05 \x01(\x04R\vstartedAtMs*h\n" +
 	"\fTableJobKind\x12\x1e\n" +
 	"\x1aTABLE_JOB_KIND_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17TABLE_JOB_KIND_VALIDATE\x10\x01\x12\x1b\n" +
@@ -786,7 +944,7 @@ func file_loams_live_v1_catalog_proto_rawDescGZIP() []byte {
 }
 
 var file_loams_live_v1_catalog_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_loams_live_v1_catalog_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_loams_live_v1_catalog_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_loams_live_v1_catalog_proto_goTypes = []any{
 	(TableJobKind)(0),          // 0: loams.live.v1.TableJobKind
 	(*TableDef)(nil),           // 1: loams.live.v1.TableDef
@@ -796,28 +954,32 @@ var file_loams_live_v1_catalog_proto_goTypes = []any{
 	(*IndexDef)(nil),           // 5: loams.live.v1.IndexDef
 	(*AppDef)(nil),             // 6: loams.live.v1.AppDef
 	(*DeploymentRecord)(nil),   // 7: loams.live.v1.DeploymentRecord
-	(*Validator)(nil),          // 8: loams.live.v1.Validator
-	(IndexState)(0),            // 9: loams.live.v1.IndexState
-	(*Schema)(nil),             // 10: loams.live.v1.Schema
-	(DeploymentState)(0),       // 11: loams.live.v1.DeploymentState
-	(*FunctionInfo)(nil),       // 12: loams.live.v1.FunctionInfo
+	(*AppRecord)(nil),          // 8: loams.live.v1.AppRecord
+	(*AppIntent)(nil),          // 9: loams.live.v1.AppIntent
+	(*Validator)(nil),          // 10: loams.live.v1.Validator
+	(IndexState)(0),            // 11: loams.live.v1.IndexState
+	(*Schema)(nil),             // 12: loams.live.v1.Schema
+	(DeploymentState)(0),       // 13: loams.live.v1.DeploymentState
+	(*FunctionInfo)(nil),       // 14: loams.live.v1.FunctionInfo
+	(*App)(nil),                // 15: loams.live.v1.App
 }
 var file_loams_live_v1_catalog_proto_depIdxs = []int32{
 	5,  // 0: loams.live.v1.TableDef.indexes:type_name -> loams.live.v1.IndexDef
-	8,  // 1: loams.live.v1.TableDef.validator:type_name -> loams.live.v1.Validator
+	10, // 1: loams.live.v1.TableDef.validator:type_name -> loams.live.v1.Validator
 	2,  // 2: loams.live.v1.TableDef.enforcing:type_name -> loams.live.v1.EnforcingValidator
-	8,  // 3: loams.live.v1.EnforcingValidator.validator:type_name -> loams.live.v1.Validator
+	10, // 3: loams.live.v1.EnforcingValidator.validator:type_name -> loams.live.v1.Validator
 	0,  // 4: loams.live.v1.TableJobRecord.kind:type_name -> loams.live.v1.TableJobKind
 	4,  // 5: loams.live.v1.TableJobRecord.findings:type_name -> loams.live.v1.JobFinding
-	9,  // 6: loams.live.v1.IndexDef.state:type_name -> loams.live.v1.IndexState
-	10, // 7: loams.live.v1.DeploymentRecord.schema:type_name -> loams.live.v1.Schema
-	11, // 8: loams.live.v1.DeploymentRecord.state:type_name -> loams.live.v1.DeploymentState
-	12, // 9: loams.live.v1.DeploymentRecord.functions:type_name -> loams.live.v1.FunctionInfo
-	10, // [10:10] is the sub-list for method output_type
-	10, // [10:10] is the sub-list for method input_type
-	10, // [10:10] is the sub-list for extension type_name
-	10, // [10:10] is the sub-list for extension extendee
-	0,  // [0:10] is the sub-list for field type_name
+	11, // 6: loams.live.v1.IndexDef.state:type_name -> loams.live.v1.IndexState
+	12, // 7: loams.live.v1.DeploymentRecord.schema:type_name -> loams.live.v1.Schema
+	13, // 8: loams.live.v1.DeploymentRecord.state:type_name -> loams.live.v1.DeploymentState
+	14, // 9: loams.live.v1.DeploymentRecord.functions:type_name -> loams.live.v1.FunctionInfo
+	15, // 10: loams.live.v1.AppRecord.app:type_name -> loams.live.v1.App
+	11, // [11:11] is the sub-list for method output_type
+	11, // [11:11] is the sub-list for method input_type
+	11, // [11:11] is the sub-list for extension type_name
+	11, // [11:11] is the sub-list for extension extendee
+	0,  // [0:11] is the sub-list for field type_name
 }
 
 func init() { file_loams_live_v1_catalog_proto_init() }
@@ -833,7 +995,7 @@ func file_loams_live_v1_catalog_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_loams_live_v1_catalog_proto_rawDesc), len(file_loams_live_v1_catalog_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   0,
 		},

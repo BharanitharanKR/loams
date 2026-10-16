@@ -99,6 +99,8 @@ enum class Reason {
   kLiveDeployConflict,
   kLiveSchemaViolation,
   kLiveIndexNotReady,
+  kLiveAppDisabled,
+  kLiveAppExists,
   kRoleRequired,
   kSetupRequired,
   kTokenMissing,

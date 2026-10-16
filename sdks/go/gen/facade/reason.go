@@ -77,6 +77,8 @@ const (
 	ReasonLiveDeployConflict       Reason = "live_deploy_conflict"
 	ReasonLiveSchemaViolation      Reason = "live_schema_violation"
 	ReasonLiveIndexNotReady        Reason = "live_index_not_ready"
+	ReasonLiveAppDisabled        Reason = "live_app_disabled"
+	ReasonLiveAppExists        Reason = "live_app_exists"
 	ReasonRoleRequired             Reason = "role_required"
 	ReasonSetupRequired            Reason = "setup_required"
 	ReasonTokenMissing             Reason = "token_missing"
@@ -179,6 +181,8 @@ var Reasons = []Reason{
 	ReasonLiveDeployConflict,
 	ReasonLiveSchemaViolation,
 	ReasonLiveIndexNotReady,
+	ReasonLiveAppDisabled,
+	ReasonLiveAppExists,
 	ReasonRoleRequired,
 	ReasonSetupRequired,
 	ReasonTokenMissing,
@@ -276,6 +280,8 @@ var ReasonCodes = map[Reason]string{
 	ReasonLiveDeployConflict:       "failed_precondition",
 	ReasonLiveSchemaViolation:      "invalid_argument",
 	ReasonLiveIndexNotReady:        "failed_precondition",
+	ReasonLiveAppDisabled:        "failed_precondition",
+	ReasonLiveAppExists:        "failed_precondition",
 	ReasonRoleRequired:             "permission_denied",
 	ReasonSetupRequired:            "failed_precondition",
 	ReasonTokenMissing:             "unauthenticated",

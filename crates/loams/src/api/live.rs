@@ -21,12 +21,14 @@ use std::sync::Arc;
 
 use connectrpc::{RequestContext, Router, ServiceRequest, ServiceResult, ServiceStream};
 use loams_live_proto::loams::live::v1::{
-    ActivateDeploymentRequest, ActivateDeploymentResponse, DeployRequest, DeployResponse,
-    GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse,
-    ListDeploymentsRequest, ListDeploymentsResponse, LiveAdminService, LiveAdminServiceExt,
-    LiveService, LiveServiceExt, ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest,
-    MutateResponse, QueryRequest, QueryResponse, TailLogsRequest, TailLogsResponse, Transition,
-    WatchRequest,
+    ActivateDeploymentRequest, ActivateDeploymentResponse, CreateAppRequest, CreateAppResponse,
+    DeleteAppRequest, DeleteAppResponse, DeployRequest, DeployResponse, GetAppRequest,
+    GetAppResponse, GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest,
+    GetIndexStatusResponse, ListAppsRequest, ListAppsResponse, ListDeploymentsRequest,
+    ListDeploymentsResponse, LiveAdminService, LiveAdminServiceExt, LiveService, LiveServiceExt,
+    ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest,
+    QueryResponse, TailLogsRequest, TailLogsResponse, Transition, UpdateAppRequest,
+    UpdateAppResponse, WatchRequest,
 };
 
 use super::AppState;
@@ -178,5 +180,45 @@ impl LiveAdminService for LiveAdminAbsent {
         _request: ServiceRequest<'_, TailLogsRequest>,
     ) -> ServiceResult<ServiceStream<TailLogsResponse>> {
         Err(not_in_variant("loams.live.v1.LiveAdminService/TailLogs"))
+    }
+
+    async fn create_app(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, CreateAppRequest>,
+    ) -> ServiceResult<CreateAppResponse> {
+        Err(not_in_variant("loams.live.v1.LiveAdminService/CreateApp"))
+    }
+
+    async fn list_apps(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, ListAppsRequest>,
+    ) -> ServiceResult<ListAppsResponse> {
+        Err(not_in_variant("loams.live.v1.LiveAdminService/ListApps"))
+    }
+
+    async fn get_app(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, GetAppRequest>,
+    ) -> ServiceResult<GetAppResponse> {
+        Err(not_in_variant("loams.live.v1.LiveAdminService/GetApp"))
+    }
+
+    async fn update_app(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, UpdateAppRequest>,
+    ) -> ServiceResult<UpdateAppResponse> {
+        Err(not_in_variant("loams.live.v1.LiveAdminService/UpdateApp"))
+    }
+
+    async fn delete_app(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, DeleteAppRequest>,
+    ) -> ServiceResult<DeleteAppResponse> {
+        Err(not_in_variant("loams.live.v1.LiveAdminService/DeleteApp"))
     }
 }
