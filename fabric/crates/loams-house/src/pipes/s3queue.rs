@@ -29,7 +29,12 @@
 //!   lands is never read: writers name objects in increasing order, as
 //!   ClickHouse's ordered mode asks (ruling R18.1).
 //! * **`after_processing`**: `keep` (the default) or `delete`, which removes
-//!   the objects once their commit landed.
+//!   the objects read once their commit landed (skipped ones, never read, are
+//!   kept).
+//! * **A poison object** — one the view cannot write (a malformed row, rows
+//!   past the insert cap) — fails its batch before the commit, so the view
+//!   stays at it, the error in its `last_error`, until it is fixed or removed
+//!   (ruling R18.3). The first object of a batch is taken whatever its size.
 
 use std::collections::BTreeMap;
 use std::sync::{Arc, Mutex};
