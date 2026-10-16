@@ -113,7 +113,7 @@ And old clients without SNI (libpq before 14, some JDBC configurations, tools th
 - **The route table** is immutable. A reload builds a new one, validates it whole (unique names, unique hostnames, unique ports, parseable upstreams), computes its generation, and swaps it into a `tokio::sync::watch` channel. Each connection reads the table once, at routing time.
 - **Upstream sets** are ordered lists of `host:port`. A host is resolved at connect time to all of its addresses, sorted, so a headless Kubernetes Service lists every replica. A failed connect marks that address down for 2 s (passive ejection) and the next is tried; there are no active health checks, because a PgDog health query must not keep anything awake (R18.9).
 - **TLS** is rustls with the `ring` provider, as elsewhere in the workspace. Server certificates are chosen by SNI from a list of `(names, cert, key)`, where a name may be one wildcard label. Upstream TLS verifies against a configured CA with the route's server name. mTLS is the admin listener's and the route push's (§8.4).
-- **Admin listener:** `/healthz` (the process runs), `/readyz` (a route table is loaded and every fixed listener is bound), `GET /v1/routes` (the generation and counts, no secrets). `/metrics` arrives with GW1's metrics task. Bound to the pod network only, never exposed by the Service.
+- **Admin listener:** `/healthz` (the process runs), `/readyz` (a route table is loaded and every fixed listener is bound; dedicated ports that failed to bind are listed as `degraded`, and the replica stays Ready because its shared port still serves every SNI client: taking it out of the load balancer would cut those too, so a bind failure raises an alert instead, GW1 Task 13), `GET /v1/routes` (the generation and counts, no secrets). `/metrics` arrives with GW1's metrics task. Bound to the pod network only, never exposed by the Service.
 
 ## 6. Frameworks (D1013)
 
@@ -176,7 +176,7 @@ The owner's default (2026-10-16) is Pingora for the HTTP side, with rama as the 
 
 **Why the terminate path presents PgDog's own certificate (found by GW1's integration test).** Over TLS, libpq authenticates with SCRAM-SHA-256-PLUS when the server offers it (`channel_binding=prefer`, the default), and PgDog offers it. Its `tls-server-end-point` binding is a hash of the server certificate the **client** saw, which PgDog checks against the certificate **it** holds. A gateway certificate of its own, however valid for the hostname, makes PgDog answer "password … is wrong" to every direct client. So the gateway connects to PgDog first and presents the certificate PgDog presented, which it must hold a copy of; without one it refuses direct clients with a clear log line rather than letting them fail at authentication. This is one more reason the splice is the default.
 
-**What this means for certificates.** PgDog's client certificate is the regional wildcard `*.<region>.pg.<base-domain>` (§46 §8.5), one certificate shared by every namespace's PgDog and by the gateway. Per-namespace certificates would work only if the gateway held each one (Q905).
+**What this means for certificates (Q905).** Each namespace's PgDog holds **only its own** certificate and key, for `<ns>.<region>.pg.<base-domain>` (PG2 Task 23's "a `Certificate` per namespace hostname"), and the gateway holds a copy of each, chosen by matching PgDog's leaf. So a compromised PgDog can present only its own namespace's name; the gateway, which fronts every namespace anyway, is the one place that holds them all. The routes file names each namespace's certificate files, and they are loaded with the table on every reload (GW1 Task 9). A regional wildcard shared by every PgDog is simpler but lets one leaked key impersonate every namespace, so it is kept for single-node and compose stacks, which have one trust domain.
 
 **The modes:** `tls_mode = "auto"` (the default: splice `SSLRequest`, terminate direct), `"terminate"` (both terminated; for operators who want one certificate place), `"passthrough"` (both spliced; direct clients refused, so the gateway needs no key at all).
 
@@ -240,7 +240,7 @@ upstream_server_name = "acme.eu1.pg.example.com"            # optional; default 
 ```
 
 - The file carries no secret: names, hosts and ports only. TLS material stays in the static config's files.
-- The generation is computed by the gateway when absent, and checked when present, so a truncated or hand-edited file is refused.
+- The generation is **required** (`routes.require_generation = true`, the default) and checked, so a truncated or hand-edited file is refused rather than accepted with a new digest. A hand-written file for a local stack may turn the requirement off; the gateway then computes the digest.
 
 ### 8.2 Reload
 
@@ -267,7 +267,7 @@ A file makes the gateway independent of `pg-control`'s availability: a `pg-contr
 - **Workload:** `loams-gateway` Deployment, two replicas, anti-affinity across zones, PodDisruptionBudget `minAvailable: 1`, in the platform's system namespace. Its own image, built from `deploy/release/Containerfile.loams-gateway` beside the others.
 - **Service:** `type: LoadBalancer` with `externalTrafficPolicy: Local` (client addresses kept where the load balancer supports it), port 5432 plus each allocated dedicated port, rendered by `pg-control` into the tenants repository with the namespace (MT4's renderer hook), or into the `loams-postgres` chart's values before MT4 lands.
 - **NetworkPolicy:** egress only to PgDog's port 6432 in `loams-pg-*` namespaces and to DNS; each PgDog namespace admits 6432 only from the gateway's pods (and `pg-control` for admin). The gateway is the only way in from outside.
-- **Certificates:** one cert-manager `Certificate` for `*.<region>.pg.<base-domain>` (§46 §8.5) is copied into each PgDog namespace and into the gateway's (for example by a secret-replication controller, or rendered by `pg-control`, Task 11), because the terminate path must present PgDog's exact certificate (§7.3). The gateway also trusts the issuer's CA for upstream verification. With `tls_mode = "passthrough"` it needs neither.
+- **Certificates:** one cert-manager `Certificate` per namespace hostname in that namespace (PG2 Task 23), mounted by its PgDog only; the gateway reads a copy of each (its ServiceAccount may read those Secrets, or a replication controller copies them into its namespace; GW1 Task 11), because the terminate path must present PgDog's exact certificate (§7.3). The gateway also trusts the issuer's CA for upstream verification. With `tls_mode = "passthrough"` it needs none of this.
 - **Rolling restarts:** a replica stops accepting, lets live relays finish for up to the drain timeout (default 60 s), then exits. The load balancer moves new connections to the other replica.
 
 ### 9.2 Compose and single node
@@ -308,7 +308,7 @@ ca = "/etc/loams-gateway/upstream-ca/ca.crt"
 
 - **Before authentication** the gateway parses only untrusted bytes: Postgres startup packets and a ClientHello. Each has a size limit and the shared handshake deadline (D1020). rustls parses the ClientHello. The startup classifier and the replay buffer are fuzzed (`cargo fuzz` targets in the crate, run by the nightly fuzz job), as the networking map's §5 asks.
 - **No plaintext** reaches PgDog through the gateway, and none leaves it except the protocol's own pre-TLS messages (§7.4).
-- **Keys:** with `auto`, the gateway holds a copy of PgDog's regional wildcard key, used for direct clients only. With `passthrough`, it holds none. Keys are read from files (mounted Secrets) and never logged.
+- **Keys:** with `auto`, the gateway holds a copy of every namespace PgDog's key (Q905), used for direct clients only; each PgDog holds only its own. With `passthrough`, it holds none. Keys are read from files (mounted Secrets) and never logged.
 - **Connection caps:** a per-process cap and a per-source-address cap on unfinished handshakes (default 64), so a slow-loris client cannot exhaust handshake slots.
 - **The admin listener** is not on the Service. Its route push, when built (§8.3), is mTLS only, like `pgdog-config-sync`.
 - **Threat model** additions go into PG2 Task 53's review, with the gateway in scope.
@@ -391,7 +391,7 @@ The protocol gateway's commercial adapters (OpenRTB, partner APIs, §34) stay in
 | Q902 | Upstream order per namespace: ordered (active and standby) or random? | Ordered; random as a per-namespace option |
 | Q903 | `tls_mode` default: `auto` (holds a key for direct clients) or `passthrough` (no key; direct clients refused)? | `auto`, so libpq 17's direct mode works |
 | Q904 | Where the gateway runs in single-node and desktop stacks: always, or only when Postgres is enabled? | Only with Postgres (`loams dev --postgres`, the desktop's Postgres stack) |
-| Q905 | PgDog's client certificate: one regional wildcard shared with the gateway (needed by the terminate path's channel binding, §7.3), or one per namespace, all copied to the gateway? | One regional wildcard (§46 §8.5's shape); PG2 Task 23 issues it |
+| Q905 | PgDog's client certificate: one per namespace, each copied to the gateway (the terminate path must present PgDog's exact certificate for channel binding, §7.3), or one regional wildcard shared by every PgDog and the gateway? | One per namespace (a leaked PgDog key then impersonates only its own namespace); the wildcard only in single-node and compose stacks |
 
 ## 18. Sources
 

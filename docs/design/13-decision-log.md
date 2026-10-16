@@ -1527,7 +1527,7 @@ Living document. Newest decisions at the bottom of each table.
 | Q902 | Upstream order per namespace: ordered (active and standby) or random? Default: Ordered; random as a per-namespace option ([§57](57-loams-gateway.md) §17) | Eng | GW1 Task 3 |
 | Q903 | The gateway's `tls_mode` default: `auto` (holds a key for direct-TLS clients) or `passthrough` (holds no key; direct clients refused)? Default: `auto`, so libpq 17's direct mode works ([§57](57-loams-gateway.md) §17) | Owner | GW1 Task 5 |
 | Q904 | Does the gateway run in single-node and desktop stacks always, or only with Postgres? Default: Only with Postgres ([§57](57-loams-gateway.md) §17) | Eng | GW1 Task 10 |
-| Q905 | PgDog's client certificate: one regional wildcard shared with the gateway (the terminate path must present PgDog's exact certificate for SCRAM channel binding), or one per namespace, all copied to the gateway? Default: One regional wildcard (§46 §8.5's shape), issued by PG2 Task 23 ([§57](57-loams-gateway.md) §17) | Eng | PG2 Task 23 |
+| Q905 | PgDog's client certificate: one per namespace, each copied to the gateway (the terminate path must present PgDog's exact certificate for SCRAM channel binding), or one regional wildcard shared by every PgDog and the gateway? Default: One per namespace, so a leaked PgDog key impersonates only its own namespace; the wildcard only in single-node and compose stacks ([§57](57-loams-gateway.md) §17) | Eng | PG2 Task 23, GW1 Task 9 |
 
 ## Owner actions pending (2026-10-02)
 
