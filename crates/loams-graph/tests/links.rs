@@ -141,6 +141,7 @@ fn kg() -> GraphMapping {
         field: field.to_string(),
     };
     GraphMapping {
+        streams: Vec::new(),
         vertices: vec![
             VertexMap {
                 label: "entity".to_string(),
@@ -434,6 +435,7 @@ mod collection_link {
     /// The graph the tests link: entities, and relations between them typed by `rel_type`.
     fn mapping() -> GraphMapping {
         GraphMapping {
+            streams: Vec::new(),
             vertices: vec![VertexMap {
                 label: "entity".to_string(),
                 collection: "entities".to_string(),
@@ -1084,10 +1086,8 @@ mod collection_link {
                 .await;
         }
         let lag = runner.lag("acme", "kg").await.expect("lag");
-        let by_name: BTreeMap<&str, u64> = lag
-            .iter()
-            .map(|l| (l.collection.as_str(), l.records))
-            .collect();
+        let by_name: BTreeMap<&str, u64> =
+            lag.iter().map(|l| (l.source.as_str(), l.records)).collect();
         assert_eq!(by_name, BTreeMap::from([("entities", 5), ("relations", 0)]));
         linked.catch_up(1).await;
         let records = linked.link_versions().await.len();
@@ -1114,7 +1114,7 @@ mod collection_link {
 
         let entities = lag
             .iter()
-            .find(|l| l.collection == "entities")
+            .find(|l| l.source == "entities")
             .expect("entities");
         assert_eq!(
             entities.link,
@@ -1141,12 +1141,643 @@ mod collection_link {
             .expect("drop");
         let lag = runner.lag("acme", "kg").await.expect("lag");
         assert!(
-            lag.iter().any(|l| l.collection == "relations" && l.missing),
+            lag.iter().any(|l| l.source == "relations" && l.missing),
             "{lag:?}"
         );
         runner
             .apply_graph("acme", "kg")
             .await
             .expect("a missing source stops only its link");
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
+// GR1 Task 19: the `stream → graph` link
+// ---------------------------------------------------------------------------------------------
+
+mod stream_link {
+    use std::collections::BTreeMap;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::Duration;
+
+    use bytes::Bytes;
+    use loams_common::StreamId;
+    use loams_common::meta::{LinkId, Retention, WalClass};
+    use loams_graph::changeset::{GraphRecord, decode};
+    use loams_graph::durable::GraphLog;
+    use loams_graph::durable::faults::{KillHook, KillPoint};
+    use loams_graph::link::LinkRunner;
+    use loams_graph::mapping::{GraphMapping, StreamMap, StreamOp, StreamRule};
+    use loams_link::LinkConfig;
+    use loams_log::{LogWriter, Record};
+    use loams_proto::loams::graph::v1 as pb;
+    use serde_json::{Map, Value as Json, json};
+    use tokio::sync::watch;
+
+    use super::common::{Cluster, SHORT, wait_out_the_lease};
+
+    const PARTITIONS: u32 = 2;
+
+    fn rule(name: &str, event_type: &str, op: StreamOp) -> StreamRule {
+        StreamRule {
+            name: name.to_string(),
+            event_type: event_type.to_string(),
+            op,
+            label: String::new(),
+            key_field: String::new(),
+            source_label: String::new(),
+            source_key_field: String::new(),
+            destination_label: String::new(),
+            destination_key_field: String::new(),
+            edge_type: String::new(),
+            edge_type_field: String::new(),
+            edge_key_field: String::new(),
+            properties_field: String::new(),
+        }
+    }
+
+    /// People and who knows whom, from CloudEvents.
+    fn mapping() -> GraphMapping {
+        let node = |name: &str, ty: &str, op| StreamRule {
+            label: "Person".to_string(),
+            key_field: "data.id".to_string(),
+            ..rule(name, ty, op)
+        };
+        let edge = |name: &str, ty: &str, op| StreamRule {
+            source_label: "Person".to_string(),
+            source_key_field: "data.from".to_string(),
+            destination_label: "Person".to_string(),
+            destination_key_field: "data.to".to_string(),
+            edge_type: "KNOWS".to_string(),
+            edge_key_field: "data.edge".to_string(),
+            ..rule(name, ty, op)
+        };
+        GraphMapping {
+            streams: vec![StreamMap {
+                stream: "events".to_string(),
+                rules: vec![
+                    node("person", "person.upserted", StreamOp::UpsertNode),
+                    node("person_gone", "person.deleted", StreamOp::DeleteNode),
+                    edge("knows", "knows.added", StreamOp::UpsertEdge),
+                    edge("knows_gone", "knows.removed", StreamOp::DeleteEdge),
+                ],
+            }],
+            ..GraphMapping::default()
+        }
+    }
+
+    /// What the graph must hold: people by id (stub or not, properties) and edges by key.
+    #[derive(Debug, Default, PartialEq, Clone)]
+    struct Model {
+        nodes: BTreeMap<i64, (bool, BTreeMap<String, String>)>,
+        edges: BTreeMap<i64, (i64, i64, BTreeMap<String, String>)>,
+    }
+
+    fn debug(v: grafeo::Value) -> String {
+        format!("{v:?}")
+    }
+
+    fn json_props(data: &Map<String, Json>) -> BTreeMap<String, String> {
+        data.iter()
+            .map(|(k, v)| {
+                let value = match v {
+                    Json::String(s) => grafeo::Value::String(s.as_str().into()),
+                    Json::Number(n) => grafeo::Value::Int64(n.as_i64().expect("an integer")),
+                    other => panic!("the tests write no {other}"),
+                };
+                (k.clone(), debug(value))
+            })
+            .collect()
+    }
+
+    impl Model {
+        fn stub(id: i64) -> (bool, BTreeMap<String, String>) {
+            (
+                true,
+                BTreeMap::from([
+                    ("_key".to_string(), debug(grafeo::Value::Int64(id))),
+                    ("_stub".to_string(), debug(grafeo::Value::Bool(true))),
+                ]),
+            )
+        }
+
+        fn link_props(mut props: BTreeMap<String, String>, key: i64) -> BTreeMap<String, String> {
+            props.insert(
+                "_stream".to_string(),
+                debug(grafeo::Value::String("events".into())),
+            );
+            props.insert("_key".to_string(), debug(grafeo::Value::Int64(key)));
+            props
+        }
+
+        fn upsert_node(&mut self, data: &Map<String, Json>) {
+            let id = data["id"].as_i64().expect("id");
+            let entry = self
+                .nodes
+                .entry(id)
+                .or_insert_with(|| (false, BTreeMap::new()));
+            entry.0 = false;
+            entry.1.remove("_stub");
+            entry.1.extend(json_props(data));
+            entry.1 = Self::link_props(std::mem::take(&mut entry.1), id);
+        }
+
+        fn delete_node(&mut self, id: i64) {
+            if self.nodes.remove(&id).is_none() {
+                return;
+            }
+            let gone: Vec<i64> = self
+                .edges
+                .iter()
+                .filter(|(_, (s, d, _))| *s == id || *d == id)
+                .map(|(k, _)| *k)
+                .collect();
+            for edge in gone {
+                self.delete_edge(edge);
+            }
+        }
+
+        fn upsert_edge(&mut self, data: &Map<String, Json>) {
+            let (key, from, to) = (
+                data["edge"].as_i64().expect("edge"),
+                data["from"].as_i64().expect("from"),
+                data["to"].as_i64().expect("to"),
+            );
+            for end in [from, to] {
+                self.nodes.entry(end).or_insert_with(|| Self::stub(end));
+            }
+            let old = self.edges.get(&key).cloned();
+            let mut props = match &old {
+                Some((_, _, props)) => props.clone(),
+                None => BTreeMap::new(),
+            };
+            props.extend(json_props(data));
+            props = Self::link_props(props, key);
+            props.insert(
+                "_edge".to_string(),
+                debug(grafeo::Value::String("stream:events".into())),
+            );
+            self.edges.insert(key, (from, to, props));
+            if let Some((s, d, _)) = old {
+                self.drop_stubs([s, d]);
+            }
+        }
+
+        fn delete_edge(&mut self, key: i64) {
+            if let Some((s, d, _)) = self.edges.remove(&key) {
+                self.drop_stubs([s, d]);
+            }
+        }
+
+        fn drop_stubs(&mut self, ends: [i64; 2]) {
+            for end in ends {
+                let used = self.edges.values().any(|(s, d, _)| *s == end || *d == end);
+                if !used && self.nodes.get(&end).is_some_and(|(stub, _)| *stub) {
+                    self.nodes.remove(&end);
+                }
+            }
+        }
+
+        fn of(rows: &loams_graph::snapshot::portable::GraphRows) -> Self {
+            let key = |props: &loams_graph::changeset::PropMap| match props.get("_key") {
+                Some(grafeo::Value::Int64(k)) => *k,
+                other => panic!("an element without an integer key: {other:?}"),
+            };
+            let mut ids = BTreeMap::new();
+            let mut model = Self::default();
+            for node in &rows.nodes {
+                assert_eq!(node.labels, vec!["Person".to_string()]);
+                let k = key(&node.props);
+                ids.insert(node.id, k);
+                let stub = matches!(node.props.get("_stub"), Some(grafeo::Value::Bool(true)));
+                let props = node
+                    .props
+                    .iter()
+                    .map(|(k, v)| (k.clone(), debug(v.clone())))
+                    .collect();
+                assert!(
+                    model.nodes.insert(k, (stub, props)).is_none(),
+                    "two nodes of one key"
+                );
+            }
+            for edge in &rows.edges {
+                assert_eq!(edge.ty, "KNOWS");
+                let props = edge
+                    .props
+                    .iter()
+                    .map(|(k, v)| (k.clone(), debug(v.clone())))
+                    .collect();
+                model
+                    .edges
+                    .insert(key(&edge.props), (ids[&edge.src], ids[&edge.dst], props));
+            }
+            model
+        }
+    }
+
+    static WRITER_NODE: AtomicU64 = AtomicU64::new(950);
+
+    struct Linked {
+        cluster: Cluster,
+        writer: LogWriter,
+        stream: StreamId,
+        model: Mutex<Model>,
+        sent: AtomicU64,
+    }
+
+    impl Linked {
+        async fn start(nodes: u64) -> Self {
+            let cluster = Cluster::start(nodes, SHORT).await;
+            let ns = cluster
+                .meta
+                .create_namespace("acme")
+                .await
+                .expect("namespace");
+            let stream = cluster
+                .meta
+                .create_stream(
+                    ns,
+                    "events",
+                    PARTITIONS,
+                    WalClass::Standard,
+                    Retention::default(),
+                )
+                .await
+                .expect("stream");
+            let writer = LogWriter::start(
+                cluster.meta.clone(),
+                cluster.store.clone(),
+                GraphLog::log_config(WRITER_NODE.fetch_add(1, Ordering::SeqCst)),
+            )
+            .expect("writer");
+            cluster
+                .node(1)
+                .admin
+                .create_graph(pb::CreateGraphRequest {
+                    namespace: "acme".to_string(),
+                    name: "sg".to_string(),
+                    mode: pb::GraphMode::Linked.into(),
+                    mapping: mapping().to_proto().into(),
+                    ..Default::default()
+                })
+                .await
+                .expect("create");
+            Self {
+                cluster,
+                writer,
+                stream,
+                model: Mutex::default(),
+                sent: AtomicU64::new(0),
+            }
+        }
+
+        /// Appends a raw record to partition `partition`.
+        async fn raw(&self, partition: u32, value: &str, headers: Vec<(&str, &str)>) {
+            self.writer
+                .append(
+                    self.stream,
+                    partition,
+                    vec![Record {
+                        key: None,
+                        value: Some(Bytes::from(value.to_string())),
+                        headers: headers
+                            .into_iter()
+                            .map(|(k, v)| (k.to_string(), Some(Bytes::from(v.to_string()))))
+                            .collect(),
+                        timestamp_ms: -1,
+                    }],
+                )
+                .await
+                .expect("append");
+        }
+
+        /// Sends one CloudEvent (structured mode, or binary mode every third event) and applies
+        /// it to the model. Events go to one partition, so their order is the model's.
+        async fn event(&self, ty: &str, data: Json) {
+            let n = self.sent.fetch_add(1, Ordering::SeqCst);
+            let object = data.as_object().expect("data").clone();
+            if n % 3 == 2 {
+                let id = format!("e{n}");
+                self.raw(
+                    0,
+                    &data.to_string(),
+                    vec![
+                        ("ce_specversion", "1.0"),
+                        ("ce_type", ty),
+                        ("ce_id", &id),
+                        ("ce_source", "test"),
+                    ],
+                )
+                .await;
+            } else {
+                let event = json!({"specversion": "1.0", "type": ty, "id": format!("e{n}"), "source": "test", "data": data});
+                self.raw(0, &event.to_string(), vec![]).await;
+            }
+            let mut model = self.model.lock().expect("lock");
+            match ty {
+                "person.upserted" => model.upsert_node(&object),
+                "person.deleted" => model.delete_node(object["id"].as_i64().expect("id")),
+                "knows.added" => model.upsert_edge(&object),
+                "knows.removed" => model.delete_edge(object["edge"].as_i64().expect("edge")),
+                _ => {}
+            }
+        }
+
+        fn runner(&self, node: u64) -> LinkRunner {
+            LinkRunner::new(
+                self.cluster.node(node).admin.clone(),
+                LinkConfig {
+                    batch_records: 3,
+                    batch_interval: Duration::ZERO,
+                    ..LinkConfig::default()
+                },
+            )
+        }
+
+        async fn catch_up(&self, node: u64) {
+            let runner = self.runner(node);
+            for _ in 0..200 {
+                runner.apply_graph("acme", "sg").await.expect("apply");
+                if runner
+                    .lag("acme", "sg")
+                    .await
+                    .expect("lag")
+                    .iter()
+                    .all(|l| l.records == 0)
+                {
+                    return;
+                }
+            }
+            panic!("the stream link never caught up");
+        }
+
+        fn graph(&self, node: u64) -> Model {
+            let graph = self
+                .cluster
+                .node(node)
+                .admin
+                .engine()
+                .list(Some("acme"))
+                .expect("list")
+                .into_iter()
+                .find(|g| g.name() == "sg")
+                .expect("sg is open");
+            Model::of(&graph.rows().expect("rows"))
+        }
+
+        fn expected(&self) -> Model {
+            self.model.lock().expect("lock").clone()
+        }
+
+        async fn assert_versions_consecutive(&self, case: &str) {
+            let stream = self.cluster.stream_of("sg").await;
+            let mut next: BTreeMap<LinkId, u64> = BTreeMap::new();
+            for record in self.cluster.records(stream).await {
+                if let Ok(GraphRecord::ChangeSet(change)) =
+                    decode(record.record.value.as_deref().expect("value"))
+                    && let Some(link) = change.link
+                {
+                    let expected = next.entry(link.link).or_insert(1);
+                    assert_eq!(link.version, *expected, "{case}: link {:?}", link.link);
+                    *expected += 1;
+                }
+            }
+        }
+    }
+
+    async fn workload(linked: &Linked, round: i64) {
+        let base = round * 10;
+        for i in 0..4 {
+            linked
+                .event(
+                    "person.upserted",
+                    json!({"id": base + i, "name": format!("p{}", base + i)}),
+                )
+                .await;
+        }
+        // An edge to a person not seen yet: a stub, filled below.
+        linked
+            .event(
+                "knows.added",
+                json!({"edge": base + 1, "from": base, "to": base + 7, "since": 2020}),
+            )
+            .await;
+        linked
+            .event(
+                "knows.added",
+                json!({"edge": base + 2, "from": base + 1, "to": base + 2}),
+            )
+            .await;
+        linked
+            .event(
+                "knows.added",
+                json!({"edge": base + 3, "from": base + 2, "to": base + 8}),
+            )
+            .await;
+        linked
+            .event("person.upserted", json!({"id": base + 7, "age": 41}))
+            .await;
+        linked
+            .event("person.upserted", json!({"id": base, "age": 30}))
+            .await;
+        // A merge into an edge, and one that moves it.
+        linked
+            .event(
+                "knows.added",
+                json!({"edge": base + 2, "from": base + 1, "to": base + 2, "since": 1999}),
+            )
+            .await;
+        linked
+            .event(
+                "knows.added",
+                json!({"edge": base + 3, "from": base + 2, "to": base + 3}),
+            )
+            .await;
+        linked
+            .event(
+                "knows.removed",
+                json!({"edge": base + 1, "from": base, "to": base + 7}),
+            )
+            .await;
+        linked
+            .event("person.deleted", json!({"id": base + 2}))
+            .await;
+        // A type no rule maps is skipped.
+        linked.event("person.viewed", json!({"id": base})).await;
+    }
+
+    /// CloudEvents of each type become node and edge operations: stubs filled, properties
+    /// merged, edges moved and deleted, a node's delete taking its edges.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn cloudevents_map_to_nodes_and_edges() {
+        let linked = Linked::start(1).await;
+        workload(&linked, 0).await;
+        linked.catch_up(1).await;
+        let graph = linked.graph(1);
+        assert_eq!(graph, linked.expected());
+        // The checks the model encodes, spelled out.
+        let (stub, seven) = &graph.nodes[&7];
+        assert!(!stub, "the stub was filled");
+        assert_eq!(seven["age"], debug(grafeo::Value::Int64(41)));
+        let (_, zero) = &graph.nodes[&0];
+        assert!(
+            zero.contains_key("name") && zero.contains_key("age"),
+            "merged: {zero:?}"
+        );
+        assert!(!graph.nodes.contains_key(&2), "deleted");
+        assert!(
+            !graph.nodes.contains_key(&8),
+            "a stub the moved edge left goes"
+        );
+        assert!(graph.edges.is_empty(), "{:?}", graph.edges);
+        let lag = linked.runner(1).lag("acme", "sg").await.expect("lag");
+        assert_eq!(lag.len(), 1);
+        assert_eq!((lag[0].records, lag[0].dead_letters), (0, 0));
+    }
+
+    /// A record a rule cannot read is dead-lettered with why, and the records after it apply.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn malformed_record_dead_lettered_not_blocking() {
+        let linked = Linked::start(1).await;
+        linked.raw(1, "not json", vec![]).await;
+        linked
+            .raw(1, &json!({"specversion": "1.0", "type": "person.upserted", "id": "x", "data": {"name": "no id"}}).to_string(), vec![])
+            .await;
+        linked
+            .raw(
+                1,
+                "{",
+                vec![("ce_type", "person.upserted"), ("ce_specversion", "1.0")],
+            )
+            .await;
+        linked
+            .event("person.upserted", json!({"id": 9, "name": "ok"}))
+            .await;
+        linked.catch_up(1).await;
+        assert_eq!(linked.graph(1), linked.expected());
+        let letters = linked
+            .runner(1)
+            .dead_letters("acme", "sg", "events")
+            .await
+            .expect("dead letters");
+        assert_eq!(
+            letters
+                .iter()
+                .map(|l| (l.partition, l.offset))
+                .collect::<Vec<_>>(),
+            vec![(1, 0), (1, 1), (1, 2)]
+        );
+        assert_eq!(letters[0].value, "not json");
+        assert_eq!(letters[1].rule.as_deref(), Some("person"));
+        assert!(
+            letters[1].reason.contains("data.id"),
+            "{}",
+            letters[1].reason
+        );
+        let lag = linked.runner(1).lag("acme", "sg").await.expect("lag");
+        assert_eq!((lag[0].records, lag[0].dead_letters), (0, 3));
+        // Applying again neither re-applies nor re-letters anything.
+        linked
+            .runner(1)
+            .apply_graph("acme", "sg")
+            .await
+            .expect("apply");
+        assert_eq!(
+            linked
+                .runner(1)
+                .dead_letters("acme", "sg", "events")
+                .await
+                .expect("again")
+                .len(),
+            3
+        );
+        assert_eq!(linked.graph(1), linked.expected());
+    }
+
+    fn kill_at(
+        point: KillPoint,
+        occurrence: u64,
+        reached: watch::Sender<bool>,
+        release: watch::Receiver<bool>,
+    ) -> KillHook {
+        let seen = std::sync::Arc::new(AtomicU64::new(0));
+        let reached = std::sync::Arc::new(reached);
+        std::sync::Arc::new(move |at| {
+            let stop = at == point && seen.fetch_add(1, Ordering::SeqCst) + 1 == occurrence;
+            let (reached, mut release) = (reached.clone(), release.clone());
+            Box::pin(async move {
+                if stop {
+                    let _ = reached.send(true);
+                    let _ = release.wait_for(|released| *released).await;
+                }
+            })
+        })
+    }
+
+    async fn kill_case(point: KillPoint) {
+        let case = format!("{point:?}");
+        let linked = Linked::start(2).await;
+        let graph = linked.cluster.graph_id("sg").await;
+        let victim = linked.cluster.preferred(graph);
+        let survivor = 3 - victim;
+        workload(&linked, 0).await;
+        linked.catch_up(victim).await;
+        assert_eq!(linked.graph(victim), linked.expected(), "{case}: before");
+        workload(&linked, 1).await;
+        let (reached_tx, mut reached) = watch::channel(false);
+        let (release, released) = watch::channel(false);
+        linked
+            .cluster
+            .node(victim)
+            .log
+            .set_kill_hook(Some(kill_at(point, 2, reached_tx, released)));
+        let runner = linked.runner(victim);
+        let stuck = tokio::spawn(async move { runner.apply_graph("acme", "sg").await });
+        tokio::time::timeout(Duration::from_secs(30), reached.wait_for(|r| *r))
+            .await
+            .unwrap_or_else(|_| panic!("{case}: the kill point was never reached"))
+            .expect("the hook");
+        linked.cluster.node(victim).ownership.pause_renewals(true);
+        linked.cluster.forwarder.cut_off(victim);
+        linked
+            .cluster
+            .node(survivor)
+            .membership
+            .set(vec![linked.cluster.node(survivor).me.clone()]);
+        wait_out_the_lease(&linked.cluster, graph).await;
+        linked.catch_up(survivor).await;
+        assert_eq!(
+            linked.graph(survivor),
+            linked.expected(),
+            "{case}: after the kill"
+        );
+        linked.assert_versions_consecutive(&case).await;
+        let _ = release.send(true);
+        let _ = tokio::time::timeout(Duration::from_secs(30), stuck).await;
+        linked.catch_up(survivor).await;
+        assert_eq!(
+            linked.graph(survivor),
+            linked.expected(),
+            "{case}: after the release"
+        );
+        linked.assert_versions_consecutive(&case).await;
+    }
+
+    /// The stream link's owner killed at each write-path point mid-batch: the other node takes
+    /// over, and every event is applied once.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn stream_link_exactly_once_under_kill() {
+        for point in [
+            KillPoint::Begin,
+            KillPoint::Executed,
+            KillPoint::Committed,
+            KillPoint::Captured,
+            KillPoint::Enqueued,
+            KillPoint::Appended,
+            KillPoint::Published,
+        ] {
+            kill_case(point).await;
+        }
     }
 }

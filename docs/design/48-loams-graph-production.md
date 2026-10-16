@@ -372,6 +372,17 @@ Gremlin, GraphQL, SPARQL, SQL/PGQ and RDF stay compiled out. `QueryLanguage` kee
 
 - A `stream → graph` link applies records from a Loams stream (JSON or CloudEvents) through a mapping of field paths to node and edge operations, with the same exactly-once apply.
 - Flow routes write graphs through `loams_sink` into a linked graph's source collections (§32 §6 row 4), or directly as a `stream → graph` link on a Loams stream the route fills. The CN1 `grafeo` connector reads and writes graphs through `loams.graph.v1` (§4.4).
+- *As built by GR1 Task 19 (R19.1–R19.6):* a LINKED graph's mapping carries `streams`, each a stream of the graph's namespace and its rules (`loams.graph.v1.StreamMapping`); the Task 18 runner applies them on the graph's owner with the same exactly-once commit. Rules route CloudEvents by `type`, key nodes and edges by field paths from the record's root (`type`, `id`, `data.<field>`), merge an upsert's properties into the element, and make stubs for missing endpoints. A record a matching rule cannot read is dead-lettered to `ns/<ns>/graphs/<gr>/deadletters/<link>/` and the link goes on. A Flow route feeds a graph with `loams_sink` producing CloudEvents into such a stream (`ProduceCloudEvents` stores binary mode, `ce_*` headers):
+
+  ```json
+  {"streams": [{"stream": "people-events", "rules": [
+    {"name": "person", "event_type": "person.upserted", "operation": "STREAM_OPERATION_UPSERT_NODE",
+     "label": "Person", "key_field": "data.id"},
+    {"name": "knows", "event_type": "knows.added", "operation": "STREAM_OPERATION_UPSERT_EDGE",
+     "source_label": "Person", "source_key_field": "data.from",
+     "destination_label": "Person", "destination_key_field": "data.to",
+     "edge_type": "KNOWS", "edge_key_field": "data.edge"}]}]}
+  ```
 
 ### 10.3 Retrieval
 
