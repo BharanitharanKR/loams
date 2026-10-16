@@ -6,7 +6,7 @@
 // page `docs/api/reasons.md`, so a caller switching on it is exhaustive and a
 // reason the registry has lost stops compiling.
 //
-// This walks **every** reason in the registry — all ninety-three — round a full
+// This walks **every** reason in the registry — all ninety-seven — round a full
 // encode/decode cycle, through the wire form the server actually sends: a Connect
 // JSON error body with a base64 `loams.errors.v1.ErrorInfo` in `details`, and a
 // gRPC-Web `grpc-status-details-bin` header. It asserts the reason survives, that
@@ -124,6 +124,10 @@ const std::vector<RegistryRow>& Registry() {
       {Reason::kLiveIndexNotReady, Code::kFailedPrecondition, ""},
       {Reason::kLiveAppDisabled, Code::kFailedPrecondition, ""},
       {Reason::kLiveAppExists, Code::kFailedPrecondition, ""},
+      {Reason::kLiveFunctionError, Code::kUnknown, ""},
+      {Reason::kLiveFunctionTimeout, Code::kDeadlineExceeded, ""},
+      {Reason::kLiveFunctionOutOfMemory, Code::kResourceExhausted, ""},
+      {Reason::kLiveLimitExceeded, Code::kResourceExhausted, ""},
       {Reason::kRoleRequired, Code::kPermissionDenied, ""},
       {Reason::kSetupRequired, Code::kFailedPrecondition, ""},
       {Reason::kTokenMissing, Code::kUnauthenticated, ""},
@@ -322,7 +326,7 @@ int main() {
   // matched, which is how a caller stops branching on it.
   const std::vector<Reason>& all = AllReasons();
   LOAMS_REQUIRE(!all.empty(), "the reason registry is empty");
-  LOAMS_CHECK_EQ(all.size(), std::size_t{93}, "the registry should carry all ninety-three reasons");
+  LOAMS_CHECK_EQ(all.size(), std::size_t{97}, "the registry should carry all ninety-seven reasons");
   LOAMS_CHECK_EQ(Registry().size(), all.size(), "this test's registry table and the enum disagree in size");
   for (const Reason reason : all) {
     LOAMS_CHECK(!ToString(reason).empty(), "a reason with no registry spelling");

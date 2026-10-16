@@ -112,6 +112,14 @@ See [docs/release/upgrades.md](docs/release/upgrades.md).
   An app's engine starts on its first request and stops after 10 minutes idle. A disabled or
   deleted app refuses calls (`live_app_disabled`), and a deleted app's data is purged after 7
   days (LV1 Task 13).
+- **Loams Live errors carry a stable reason.** Every Live error has a
+  `loams.errors.v1.ErrorInfo` with a registered reason (new: `live_function_error`,
+  `live_function_timeout`, `live_function_out_of_memory`, `live_limit_exceeded`). A function's
+  own error is now Connect `unknown` rather than `internal`, a CPU timeout `deadline_exceeded`.
+  An internal error no longer shows raw store keys; it names a request id the server log
+  carries. Function arguments are limited to 4 MiB and bundles to 16 MiB before decoding (a
+  bundle over 4 MB can now be deployed), and a read timestamp ahead of the server's clock is
+  refused (LV1 Task 19).
 
 ## [0.1.0-preview.2] - unreleased
 

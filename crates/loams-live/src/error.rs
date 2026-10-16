@@ -1,9 +1,37 @@
 //! [`LiveError`], the error of every Loams Live operation, and its wire code.
 
+use std::sync::LazyLock;
+
 use loams_kv::TxnError;
+use regex::Regex;
 
 use crate::pb;
 use crate::validate::FieldViolation;
+
+/// The reason of a deployed function's own error (LV1 plan Task 19).
+pub const FUNCTION_ERROR: &str = "live_function_error";
+/// The reason of a function that ran past its CPU limit.
+pub const FUNCTION_TIMEOUT: &str = "live_function_timeout";
+/// The reason of a function that ran past its memory limit.
+pub const FUNCTION_OUT_OF_MEMORY: &str = "live_function_out_of_memory";
+/// The reason of a call past one of the app's [`Limits`](crate::Limits).
+pub const LIMIT_EXCEEDED: &str = "live_limit_exceeded";
+
+/// Every reason a Live error carries beyond the generic ones, for the
+/// registry check (`docs/api/reasons.md`).
+pub const LIVE_REASONS: &[&str] = &[
+    "live_bad_cursor",
+    "live_schema_violation",
+    "live_deploy_conflict",
+    "live_index_not_ready",
+    "live_worker_crashed",
+    "live_app_disabled",
+    "live_app_exists",
+    FUNCTION_ERROR,
+    FUNCTION_TIMEOUT,
+    FUNCTION_OUT_OF_MEMORY,
+    LIMIT_EXCEEDED,
+];
 
 /// Why a Loams Live operation failed. Each variant maps to one
 /// [`pb::ErrorCode`], which is what clients see (design §20 §7.1).
@@ -172,6 +200,54 @@ impl LiveError {
         }
     }
 
+    /// The `ErrorInfo.reason` this error carries on the wire (LV1 plan Task
+    /// 19): its own [`reason`](Self::reason), else the generic reason of its
+    /// Connect code (`docs/api/reasons.md`). Every Live error has one.
+    pub fn wire_reason(&self) -> &'static str {
+        if let Some(reason) = self.reason() {
+            return reason;
+        }
+        match self {
+            LiveError::FunctionError(_) => FUNCTION_ERROR,
+            LiveError::FunctionTimeout { .. } => FUNCTION_TIMEOUT,
+            LiveError::FunctionOutOfMemory { .. } => FUNCTION_OUT_OF_MEMORY,
+            LiveError::LimitExceeded { .. } => LIMIT_EXCEEDED,
+            _ => match self.code() {
+                pb::ErrorCode::ERROR_CODE_INVALID_ARGUMENT => "invalid_argument",
+                pb::ErrorCode::ERROR_CODE_NOT_FOUND => "not_found",
+                pb::ErrorCode::ERROR_CODE_FAILED_PRECONDITION => "failed_precondition",
+                pb::ErrorCode::ERROR_CODE_RESOURCE_EXHAUSTED => "resource_exhausted",
+                pb::ErrorCode::ERROR_CODE_UNAVAILABLE => "unavailable",
+                _ => "internal",
+            },
+        }
+    }
+
+    /// Whether this error's text comes from the store or the server's
+    /// internals, so it may hold raw keys: the client gets it scrubbed,
+    /// with a request id the server log carries (LV1 plan Task 19).
+    pub fn is_internal(&self) -> bool {
+        matches!(
+            self,
+            LiveError::Internal(_) | LiveError::Corrupt(_) | LiveError::Txn(_)
+        )
+    }
+
+    /// The message a client may see, and the request id that goes with it
+    /// (LV1 plan Task 19). An [internal](Self::is_internal) error's text
+    /// is [scrubbed](scrub) of anything that looks like a raw key and names
+    /// a request id (`request_id`, else a new one), under which the scrubbed
+    /// text is logged for the operator; any other error's text is its own.
+    pub fn public_message(&self, request_id: Option<&str>) -> (String, Option<String>) {
+        if !self.is_internal() {
+            return (self.to_string(), request_id.map(str::to_owned));
+        }
+        let id = request_id.map_or_else(crate::logs::Ring::request_id, str::to_owned);
+        let scrubbed = scrub(&self.to_string());
+        tracing::warn!(request_id = %id, error = %scrubbed, "a Live call failed inside the server");
+        (format!("{scrubbed} (request {id})"), Some(id))
+    }
+
     /// The field violations of a [`LiveError::SchemaViolation`]; empty for
     /// every other error. (They reach the wire's `field_violations` when
     /// Live's errors are mapped onto the main Connect port, LV1 Task 19.)
@@ -182,11 +258,12 @@ impl LiveError {
         }
     }
 
-    /// The wire form of this error.
+    /// The wire form of this error, its message as
+    /// [`public_message`](Self::public_message) gives it.
     pub fn to_proto(&self) -> pb::LiveError {
         pb::LiveError {
             code: self.code().into(),
-            message: self.to_string(),
+            message: self.public_message(None).0,
             ..Default::default()
         }
     }
@@ -211,5 +288,63 @@ impl LiveError {
             limit,
             message: message.into(),
         }
+    }
+}
+
+/// What [`scrub`] replaces: debug-printed byte arrays of four or more
+/// bytes, runs of 16 or more hex digits, and quoted strings with `\x`
+/// escapes (how `tikv-client` and the store print keys).
+static KEY_LIKE: LazyLock<[(Regex, &'static str); 3]> = LazyLock::new(|| {
+    let re = |pattern: &str| Regex::new(pattern).expect("a valid scrub pattern");
+    [
+        (re(r"\[\s*\d{1,3}(?:\s*,\s*\d{1,3}){3,}\s*,?\s*\]"), "[…]"),
+        (
+            re(r#"b?"(?:[^"\\]|\\.)*\\x[0-9a-fA-F]{2}(?:[^"\\]|\\.)*""#),
+            "\"…\"",
+        ),
+        (re(r"(?i)\b(?:0x)?[0-9a-f]{16,}\b"), "…"),
+    ]
+});
+
+/// `text` with every byte string that looks like a key replaced by `…`
+/// (LV1 plan Task 19, §20 §11.4: `tikv-client` errors carry raw keys).
+pub fn scrub(text: &str) -> String {
+    let mut out = text.to_string();
+    for (pattern, with) in KEY_LIKE.iter() {
+        out = pattern.replace_all(&out, *with).into_owned();
+    }
+    out
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn scrub_removes_key_like_bytes() {
+        let raw = "region error: key [1, 2, 3, 4, 120, 0] not in region; \
+                   lock on b\"\\x01\\x02doc\" at 0a0b0c0d0e0f10111213 ts 42";
+        let clean = scrub(raw);
+        assert!(!clean.contains("120"), "{clean}");
+        assert!(!clean.contains("x01"), "{clean}");
+        assert!(!clean.contains("0a0b0c0d0e0f"), "{clean}");
+        assert!(clean.contains("ts 42"), "{clean}");
+        assert!(clean.contains("region error"), "{clean}");
+    }
+
+    #[test]
+    fn every_error_has_a_wire_reason_and_internal_text_is_scrubbed() {
+        let err = LiveError::Internal("key [9, 9, 9, 9] lost".into());
+        let (message, id) = err.public_message(Some("01ABC"));
+        assert_eq!(id.as_deref(), Some("01ABC"));
+        assert!(message.ends_with("(request 01ABC)"), "{message}");
+        assert!(!message.contains("9, 9"), "{message}");
+        assert_eq!(err.wire_reason(), "internal");
+        let limit = LiveError::limit("max_fields", "too many");
+        assert_eq!(limit.wire_reason(), LIMIT_EXCEEDED);
+        assert_eq!(
+            LiveError::NotFound("x".into()).public_message(None),
+            ("not found: x".to_string(), None)
+        );
     }
 }

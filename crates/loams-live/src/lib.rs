@@ -68,7 +68,7 @@ pub use config::{
 pub use deploy::AppEngine;
 pub use docs::{Doc, IndexRange, Order, Reads, WriteRecord};
 pub use engines::{AppRuntime, Engines};
-pub use error::LiveError;
+pub use error::{LIVE_REASONS, LiveError, scrub};
 pub use ids::{DocId, IndexId, TableId};
 pub use journal::{Batch, Checkpoint, Janitor, JanitorReport, Journal, Tailer};
 pub use keys::{AppKeys, KeyRange};
