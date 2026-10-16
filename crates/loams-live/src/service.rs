@@ -31,10 +31,12 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use connectrpc::{
-    ConnectError, RequestContext, Response, ServiceRequest, ServiceResult, ServiceStream,
+    ConnectError, ErrorCode, ErrorDetail, RequestContext, Response, ServiceRequest, ServiceResult,
+    ServiceStream,
 };
 use futures::StreamExt;
 use loams_kv::Store;
+use loams_proto::loams::errors::v1::ErrorInfo;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -241,10 +243,43 @@ impl std::fmt::Debug for LiveRoutes {
     }
 }
 
+/// The largest function arguments a call carries (LV1 plan Task 19).
+pub const MAX_ARGS_BYTES: usize = 4 * 1024 * 1024;
+
+/// The largest bundle a deploy carries (LV1 plan Task 19).
+pub const MAX_BUNDLE_BYTES: usize = 16 * 1024 * 1024;
+
+/// What a request holds beside its arguments or bundle (the function name,
+/// a query set's other entries, a schema), within the message limit.
+const REQUEST_HEADROOM: usize = 1024 * 1024;
+
+/// The limits of a route whose largest field is `payload` bytes: the
+/// message (after decompression) and the body on the wire (twice that, for
+/// JSON's base64 and escapes), both checked before the message is decoded.
+fn limits(payload: usize) -> connectrpc::Limits {
+    connectrpc::Limits::default()
+        .with_max_message_size(payload + REQUEST_HEADROOM)
+        .with_max_request_body_size(2 * (payload + REQUEST_HEADROOM))
+}
+
 impl LiveRoutes {
-    /// `rpc` with both services' routes added.
+    /// `rpc` with both services' routes added, each with its size limits
+    /// (LV1 plan Task 19): arguments up to [`MAX_ARGS_BYTES`] on
+    /// `LiveService`, a bundle up to [`MAX_BUNDLE_BYTES`] on `Deploy`.
     pub fn register(&self, rpc: connectrpc::Router) -> connectrpc::Router {
-        self.admin.clone().register(self.live.clone().register(rpc))
+        let mut rpc = self.admin.clone().register(self.live.clone().register(rpc));
+        for spec in [
+            pb::LIVE_SERVICE_WATCH_SPEC,
+            pb::LIVE_SERVICE_MODIFY_QUERY_SET_SPEC,
+            pb::LIVE_SERVICE_QUERY_SPEC,
+            pb::LIVE_SERVICE_MUTATE_SPEC,
+        ] {
+            rpc = rpc.with_route_limits(spec.procedure, limits(MAX_ARGS_BYTES));
+        }
+        rpc.with_route_limits(
+            pb::LIVE_ADMIN_SERVICE_DEPLOY_SPEC.procedure,
+            limits(MAX_BUNDLE_BYTES),
+        )
     }
 }
 
@@ -286,6 +321,26 @@ pub(crate) async fn app_of(
     engines.resolve(header).await
 }
 
+/// How far ahead of the store's clock a client's read timestamp may be.
+const MAX_TS_AHEAD_MS: u64 = 1_000;
+
+/// Refuses a client-supplied read timestamp ahead of the store's clock, at
+/// the edge and on both backends (LV1 plan Task 19, row T21-14): on TiKV a
+/// far-future read would push the max-ts every later commit must exceed.
+async fn check_read_ts(store: &loams_kv::Store, at: loams_kv::Ts) -> Result<(), LiveError> {
+    let now = store
+        .now()
+        .await
+        .map_err(|e| LiveError::Internal(format!("a timestamp: {e}")))?;
+    if at.physical_ms() > now.physical_ms().saturating_add(MAX_TS_AHEAD_MS) {
+        return Err(LiveError::invalid(format!(
+            "the read timestamp {} is ahead of the store's clock ({})",
+            at.0, now.0
+        )));
+    }
+    Ok(())
+}
+
 /// Records what a call of `f` wrote in the app's log ring.
 fn record(
     app: &AppRuntime,
@@ -301,26 +356,57 @@ fn record(
     app.runner().logs().record(&call, outcome);
 }
 
-/// The Connect error of `e`, answered with the call's request id.
+/// The Connect error of `e`, answered with the call's request id (the
+/// `loams-request-id` header, and `request_id` in its `ErrorInfo`).
 fn with_request_id(e: &LiveError, request_id: &str) -> ConnectError {
     let mut headers = axum::http::HeaderMap::new();
     if let Ok(value) = axum::http::HeaderValue::from_str(request_id) {
         headers.insert(REQUEST_ID_HEADER, value);
     }
-    connect_error(e).with_headers(headers)
+    error_with(e, Some(request_id)).with_headers(headers)
 }
 
-/// The Connect error of `e` (the codes of §20 §7.1).
+/// The Connect error of `e` (LV1 plan Task 19): its Connect code, its
+/// message ([`LiveError::public_message`]: an internal error's scrubbed,
+/// with a request id), and one `loams.errors.v1.ErrorInfo` carrying its
+/// [`wire_reason`](LiveError::wire_reason), plus `request_id` and, for a
+/// limit, `limit` (design §44 §7.4).
 pub fn connect_error(e: &LiveError) -> ConnectError {
-    let message = e.to_string();
-    match e.code() {
-        pb::ErrorCode::ERROR_CODE_INVALID_ARGUMENT => ConnectError::invalid_argument(message),
-        pb::ErrorCode::ERROR_CODE_NOT_FOUND => ConnectError::not_found(message),
-        pb::ErrorCode::ERROR_CODE_FAILED_PRECONDITION => ConnectError::failed_precondition(message),
-        pb::ErrorCode::ERROR_CODE_RESOURCE_EXHAUSTED => ConnectError::resource_exhausted(message),
-        pb::ErrorCode::ERROR_CODE_UNAVAILABLE => ConnectError::unavailable(message),
-        _ => ConnectError::internal(message),
+    error_with(e, None)
+}
+
+fn error_with(e: &LiveError, request_id: Option<&str>) -> ConnectError {
+    let (message, request_id) = e.public_message(request_id);
+    let code = match e.code() {
+        pb::ErrorCode::ERROR_CODE_INVALID_ARGUMENT => ErrorCode::InvalidArgument,
+        pb::ErrorCode::ERROR_CODE_NOT_FOUND => ErrorCode::NotFound,
+        pb::ErrorCode::ERROR_CODE_FAILED_PRECONDITION => ErrorCode::FailedPrecondition,
+        pb::ErrorCode::ERROR_CODE_RESOURCE_EXHAUSTED
+        | pb::ErrorCode::ERROR_CODE_FUNCTION_OUT_OF_MEMORY => ErrorCode::ResourceExhausted,
+        pb::ErrorCode::ERROR_CODE_UNAVAILABLE => ErrorCode::Unavailable,
+        pb::ErrorCode::ERROR_CODE_FUNCTION_TIMEOUT => ErrorCode::DeadlineExceeded,
+        // A function's own error is the application's, not the server's.
+        pb::ErrorCode::ERROR_CODE_FUNCTION_ERROR if !matches!(e, LiveError::WorkerCrashed(_)) => {
+            ErrorCode::Unknown
+        }
+        _ => ErrorCode::Internal,
+    };
+    let mut metadata = std::collections::HashMap::new();
+    if let Some(id) = request_id {
+        metadata.insert("request_id".to_string(), id);
     }
+    if let LiveError::LimitExceeded { limit, .. } = e {
+        metadata.insert("limit".to_string(), (*limit).to_string());
+    }
+    let info = ErrorInfo {
+        reason: e.wire_reason().to_string(),
+        metadata: metadata.into_iter().collect(),
+        ..Default::default()
+    };
+    ConnectError::new(code, message).with_detail(ErrorDetail::from_message(
+        "loams.errors.v1.ErrorInfo",
+        &info,
+    ))
 }
 
 /// The stream of one session's Transitions: pops its outbox, chunks what is
@@ -374,6 +460,11 @@ impl LiveService for Live {
             .map_err(|e| connect_error(&e))?;
         let start =
             Start::from_request(request.to_owned_message()).map_err(|e| connect_error(&e))?;
+        if let Start::Resume { last, .. } = &start {
+            check_read_ts(app.store(), ts_of(last.ts))
+                .await
+                .map_err(|e| connect_error(&e))?;
+        }
         let session = app.sessions().open(start).map_err(|e| connect_error(&e))?;
         Ok(Response::new(transitions(
             session.outbox,
@@ -408,7 +499,11 @@ impl LiveService for Live {
             let f = deploy::resolve(app.engine(), &req.function)?;
             let args = args_of(req.args.into_option())?;
             let at = match req.ts {
-                Some(ts) => ts_of(ts),
+                Some(ts) => {
+                    let at = ts_of(ts);
+                    check_read_ts(app.store(), at).await?;
+                    at
+                }
                 None => match app.subs().current() {
                     Some(at) => at,
                     None => app

@@ -29,6 +29,9 @@ hmac.workspace = true
 # The format registry (UP1 Task 1).
 loams-common.workspace = true
 loams-live-proto.workspace = true
+# `loams.errors.v1.ErrorInfo`, the reason every Live error carries on the
+# wire (LV1 plan Task 19).
+loams-proto.workspace = true
 # The store seam (LV1 Task 20): the embedded store always, TiKV with the
 # `tikv` feature (LV1 plan Task 23).
 loams-kv.workspace = true
@@ -40,6 +43,8 @@ rand.workspace = true
 # The reactive checker's seeded streams (testing::checker): ChaCha8, stable
 # across platforms and rand releases.
 rand_chacha.workspace = true
+# Scrubbing raw keys out of internal error messages (LV1 plan Task 19).
+regex.workspace = true
 # The idempotency key hash (design §20 §4.3).
 sha2.workspace = true
 thiserror.workspace = true
@@ -68,6 +73,8 @@ loams-kv = { workspace = true, features = ["tikv", "faults"] }
 # The suites run the TiKV cases too (with LOAMS_TEST_PD).
 loams-live = { path = ".", features = ["tikv"] }
 proptest.workspace = true
+# Captures the server's log lines (LV1 plan Task 19's scrubbing test).
+tracing-subscriber.workspace = true
 # The deploy suite loads real bundles (LV1 Task 6). A dev-dependency cycle:
 # loams-live-js depends on this crate, and the integration tests link both.
 loams-live-js.workspace = true
