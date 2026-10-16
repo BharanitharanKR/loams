@@ -1651,3 +1651,23 @@ Loams PR #679 (branch `nf1-b2-t14`). There is no fork change: the release was cu
    - **The desktop's stack copy:** the desktop ships `deploy/loams-postgres-dev` unchanged (`electron-builder.config.cjs`). It was run under a scratch compose project, not the Electron app: start, a tenant and timeline, `SELECT 1` (17.5), a branch, and `SELECT 1` on the branch's compute. Torn down with `down -v` of that project only.
 6. **A dev breakage fixed on the way:** `crates/loams-wal-decoder/deny.toml` lacked the root's `zip@7.2.0` ignore (61cc37cb), so `check-decoder-deny.py` failed `pg2.yml`'s WAL decoder job. The entry is copied, with its removal date.
 7. **Left:** `loams-pg-control`'s tests still name Neon's compute digest as an arbitrary pinned image (fakes, not consumers). Q715's default path is closed: the defaults are `ghcr.io/ostrium-labs`, and the neon-archive packages stay private. Until the bot token exists, every release's pin PR is opened by hand.
+
+### Task 15 rulings (2026-10-16, at `dev` `c30e36c0`)
+
+Fork PR ostrium-labs/loams-postgres#18 (branch `loams/nf1-postgres-branches`, LP-0014) merged into `main` as `b9b9becd`. CodeRabbit does not review the fork repositories, so it was self-reviewed.
+
+1. **The branches were created through the REST API** (`POST repos/ostrium-labs/postgres/git/refs`), with no clone (Task 0 ruling).
+   - `loams/REL_17_STABLE` = `efecf23b`, the tip of `loams/meta`: `REL_17_STABLE_neon` `56692dfb` plus Task 5's governance merge (`SECURITY.md`, `CODEOWNERS`). Task 5 ruling 5 already amended "unchanged" for 17.
+   - `loams/REL_16_STABLE` = `2e2cf61f`: `REL_16_STABLE_neon` `59027122` plus one commit adding the same two blobs (`Loams-Patch: LP-0000`, signed off).
+   - `loams/REL_18_STABLE` = `05e445f1`: `REL_18_STABLE_neon` `a616eefe` plus the same commit.
+
+   So "unchanged" (the plan's interface) becomes "unchanged except the governance files". Every branch we maintain carries `SECURITY.md` and `CODEOWNERS`.
+2. **Protection is Task 3's rulesets, unchanged.** `loams/**` has no force-push and no deletion, `REL_*_STABLE_neon` is frozen (update, non-fast-forward and deletion refused), and the tags are immutable. `gh api repos/ostrium-labs/postgres/rules/branches/loams/REL_17_STABLE` lists `non_fast_forward` and `deletion`.
+3. **The tests are one script in the fork,** `scripts/loams/check-postgres-branches.py` (stdlib). It runs in `loams-hygiene.yml` on every PR and push to `main`, with 12 unit tests on a fake API in `test_postgres_branches.py`.
+   - `branches_exist_and_protected`: each `loams/REL_<N>_STABLE` exists, descends from its `_neon` branch, carries both governance files, and refuses force-push and deletion. Each `_neon` branch refuses updates. It reads the public rules endpoint, so the hygiene job needs no extra token.
+   - `submodule_url_relative`: every `.gitmodules` URL in the fork is `../postgres.git`.
+
+   The live check failed before the branches existed (`missing` for all three) and passes now: `check-postgres-branches: ok (.gitmodules and ostrium-labs/postgres loams/REL_{16,17,18}_STABLE)`.
+4. **The submodules still point at Neon's revisions** (17.5 `1e01fcea`, 16.9 `a42351fc`), with `branch = REL_<N>_STABLE_neon` in `.gitmodules`. Task 17 moves them to `loams/REL_<N>_STABLE` with the 17.11 and 16.15 merges. Postgres 18 has no submodule until Task 24.
+5. **Q733 is answered (owner, 2026-10-16).** The owner set `LOAMS_BOT_TOKEN` as an organisation secret visible to every repository. From the next release on, `loams-release.yml`'s `pin-pr` job opens the pin PR itself, and the cadence check can open its issue. Task 18's pushes to `ostrium-labs/postgres` use the same secret. The rest of Q733 is now moot: the bot is a token, so nobody needs to refresh the `gh` token's scopes for it. The token's scopes were not inspected, so the first real use is its check.
+6. **Clone approval (Task 0).** The owner approved cloning `ostrium-labs/postgres` for Task 17 (2026-10-16). The clone must be blobless or treeless, outside `/tmp` and `/mnt/Projects`, and deleted afterwards. A CI job that does the upstream merge is preferred, because it can be repeated for every later minor.
