@@ -225,6 +225,14 @@ Design reference: [57 Loams Gateway](../design/57-loams-gateway.md) (D1010–D10
 |---|---|---|---|
 | [GW1: Loams Gateway, the Postgres front door](2026-10-16-gw1-loams-gateway.md) | **GW1a** (Tasks 1–8): the `loams-gateway` crate, its config and admin listener; the validated, hot-reloaded route table; ordered PgDog upstreams; Postgres sniffing, refusals and the TLS splice for `SSLRequest` clients; direct TLS terminated with ALPN `postgresql` and re-encrypted; dedicated namespace ports; `psql` through the gateway to the pinned PgDog in CI; the image. **GW1b** (9–11): `pg-control`'s routes renderer and dedicated-port records; the single-node compose service; the Helm templates and PG2 Task 22's isolation test. **GW1c** (12–14): PROXY protocol v2, metrics with no tenant label and the connection observer, fuzzing | PG2 Tasks 20–21 (built); PG2 Tasks 48 and 56 for GW1b's bundles | Planned |
 
+## Track DA: data access and HTAP
+
+Design reference: [58 Data Access and HTAP](../design/58-data-access-and-htap.md) (D1030–D1061, Q910–Q925). The owner approved the direction on 2026-10-16.
+
+| Plan | Scope | Depends on | Status |
+|---|---|---|---|
+| [DA1: Data access and HTAP](2026-10-16-da1-data-access.md) | A task list only: **DA1a** Loams protocol extensions in `loams-gateway`; **DA1b** `loams.plan.v1`; **DA1c** the Loams Data API, its spec, and MCP tools; **DA1d** HTAP phases 1–3; **DA1e** ADBC and Power BI; **DA1f** the shared bucket-segment library `loams-seglog` (Task F1, with PG2 Task 40) | GW1, API2 Task 1, PG2, HS1, NF1f | **Stub** |
+
 ## Track RN: runners and the usage hooks
 
 Design reference: [24 CPU-time runtime](../design/24-cpu-time-runtime.md) §16 (the `Runner` trait, D375) and [27 Usage hooks](../design/27-usage-hooks.md) §3.7 (`InvocationObserver`, D549); [34](../design/34-protocol-gateway-and-standards.md) keeps the decision rows. Generic observability only: no metering in this repository (D403, D444, D541), and since 2026-10-02 the usage reporter and the meter protocol are in `loams-platform` too (D548). The usage-event task and the Cloudflare runner moved to `loams-platform` (private) with the protocol gateway (D440).

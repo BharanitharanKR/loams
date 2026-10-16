@@ -394,6 +394,8 @@ Old GT1 Task 1's `ids` and `paths`, plus `RepoId` (Ruling 21), `RepoName`, **`Ws
 §36 §5.3 and Ruling 1. Tests: `put_is_create_only_and_idempotent`; `put_existing_with_other_length_is_mismatch`; `lost_ack_put_returns_existed_on_retry`; `get_range_reads_idx_section`; `range_past_end_is_out_of_range`; `lpk_from_git_pack_round_trips`; `large_blob_uses_multipart`; `rustfs_large_blob_refused_until_q385`. Commit `git: add BlobStore with one-object pack bundles`.
 
 ### Task 7: `WalStore`
+> **Pointer (2026-10-16, [§58](../design/58-data-access-and-htap.md) §8.5, D1060):** this task's segment code moves into the shared bucket-segment library `loams-seglog` with its tests unchanged, in [DA1](2026-10-16-da1-data-access.md) Task F1, together with PG2 Task 40.
+
 §36 §5.1. Tests: `append_is_exclusive_across_writers`; `retry_after_lost_ack_is_committed`; `retry_after_lost_ack_fenced_by_other`; `r2_style_429_resolves_by_read_back`; `read_stops_at_gap`; `corrupt_segment_is_error_not_stop`; `hint_missing_is_empty`; `latest_checkpoint_uses_hint_then_list`; `checkpoint_put_is_idempotent_on_equal_bytes`; `store_faults_never_produce_two_owners`. Commit `git: add the bucket WAL with fenced create-only segments`.
 
 ### Task 8: The repository state machine and idempotency
@@ -406,6 +408,8 @@ As the morning version. Tests: `reads_objects_written_by_git`; `delta_objects_re
 As the morning version, including `GitEvent`s. Tests (`reflog.rs`): `commit_then_snapshot_sees_it`; `group_commit_batches_concurrent_txns`; `group_rejects_only_the_stale_txn`; `atomic_multi_ref_all_or_none`; `lost_ack_resolves_to_committed`; `fenced_group_revalidates`; `replay_returns_original_receipt`; `snapshot_is_a_prefix_of_commits`; `watch_has_no_gaps_across_fences`; `missing_pack_is_refused_before_queueing`; `shutdown_answers_unavailable`; `fence_retry_limit_is_unavailable`. Tests (`linearizable.rs`): `single_sequencer_linearizable`; `two_sequencers_one_store_linearizable`; `four_sequencers_under_faults_linearizable`. Commit `git: add the bucket RefLog with group commit, fencing and idempotency`.
 
 ### Task 11: Checkpoints, forks, segment GC, and the core gate
+> **Pointer (2026-10-16, [§58](../design/58-data-access-and-htap.md) §8.5, D1060):** this task's segment code moves into the shared bucket-segment library `loams-seglog` with its tests unchanged, in [DA1](2026-10-16-da1-data-access.md) Task F1, together with PG2 Task 40.
+
 As the morning version's Task 11, plus the morning version's Task 13 bench and CI (`bench/git-wal/`, `scripts/git/{rustfs.sh,bench.sh}`, `gt1.yml`, `gt1-nightly.yml`). Tests: `checkpoint_plus_replay_equals_state`; `checkpoint_never_delays_ack`; `fork_is_one_put`; `fork_sees_parent_refs_and_objects`; `fork_of_fork_falls_through`; `gc_keeps_exactly_retention`; `gc_deletes_unreachable_above_gap_after_grace`; `gc_never_deletes_segments_a_reader_needs`. **Gate:** at `--put-delay-ms 100`, at least 30 commits/s on one hot repository with p99 under 1 s; RustFS and in-memory numbers recorded (GT-Q8 for the cloud stores); Q393 decided from the numbers. Commits `git: add checkpoints, O(1) forks and segment GC`; `bench: measure the bucket WAL per store`; `ci: run the loams-git suites against RustFS`.
 
 ## GT1b — Repositories as a service (Tasks 12–16)
