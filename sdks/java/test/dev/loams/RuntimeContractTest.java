@@ -609,7 +609,7 @@ public class RuntimeContractTest {
                 Facade.module("tables").orElseThrow().protoPackage());
         assertEquals(
                 "the module list for loams.live.v1 is wrong",
-                List.of("live", "tables"),
+                List.of("live", "live.admin", "tables"),
                 Facade.modulesForPackage("loams.live.v1"));
         // `loams.live` is the module's name with the client's prefix, not a package. Resolving it
         // as a package would ask about `loams.live`, which no instance lists, and report a

@@ -37,6 +37,7 @@ public final class RunTests {
                     "dev.loams.StreamResumeTest",
                     "dev.loams.TokenSourceTest",
                     "dev.loams.PaginationTest",
+                    "dev.loams.LiveAdminTest",
                     "dev.loams.RuntimeContractTest");
 
     public static void main(String[] args) throws Exception {
