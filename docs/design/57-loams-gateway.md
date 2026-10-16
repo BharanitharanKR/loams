@@ -383,7 +383,7 @@ The protocol gateway's commercial adapters (OpenRTB, partner APIs, §34) stay in
 |---|---|---|
 | Q895 | A plaintext `CancelRequest` on the shared port has no SNI. Drop it, or broadcast it to every namespace's PgDog in the region? | Drop and count it; broadcasting sends one tenant's cancel key to every tenant's PgDog |
 | Q896 | Dedicated ports: on request, or for every namespace? And the range? | On request (`dedicated_port: true`); range 16000–17999 per region |
-| Q897 | Ask PgDog upstream to negotiate ALPN `postgresql` (and to accept a direct ClientHello), so direct clients can be spliced too? Contacting upstream needs the owner | Yes, propose it upstream with the owner's approval; terminate direct clients until a pinned PgDog has it |
+| Q897 | ~~Ask PgDog upstream to negotiate ALPN `postgresql` (and to accept a direct ClientHello), so direct clients can be spliced too? Contacting upstream needs the owner~~ **Answered 2026-10-16 by the owner: yes; asked upstream in pgdogdev/pgdog#1840.** | Yes, propose it upstream with the owner's approval; terminate direct clients until a pinned PgDog has it |
 | Q898 | Pingora (default) or rama for the HTTP modules? | Pingora 0.9, pinned exactly, wrapped (owner's default, 2026-10-16) |
 | Q899 | agentgateway for the LLM and MCP modules: run unmodified beside `loams-gateway`, fork it, or borrow designs only? | Evaluate at the LLM/MCP plan; prefer running it unmodified if it fits |
 | Q900 | Does the `http` module replace Envoy as the HTTP edge (D184)? | Decide at the `http` plan, after measuring; Envoy stays the plan until then |
