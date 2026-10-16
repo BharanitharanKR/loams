@@ -334,14 +334,20 @@ async fn every_denied_entry_is_344() {
     for sql in [
         "SYSTEM FLUSH LOGS",
         "ATTACH TABLE a (x String) ENGINE = Memory",
-        "BACKUP TABLE t TO Disk('default', 'b')",
-        "RESTORE TABLE t FROM Disk('default', 'b')",
         "CREATE FUNCTION f AS (x) -> x",
         "CREATE DICTIONARY d (k UInt64) PRIMARY KEY k SOURCE(NULL()) LAYOUT(FLAT()) LIFETIME(0)",
         "CREATE NAMED COLLECTION c AS a = 1",
     ] {
         let response = post(addr, sql).await;
         expect(sql.to_string(), &response, "344");
+    }
+    for sql in [
+        "BACKUP TABLE t TO Disk('default', 'b')",
+        "RESTORE TABLE t FROM Disk('default', 'b')",
+    ] {
+        let response = post(addr, sql).await;
+        expect(sql.to_string(), &response, "48");
+        assert!(response.text().contains("RestoreTable"), "{sql}: {}", response.text());
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }

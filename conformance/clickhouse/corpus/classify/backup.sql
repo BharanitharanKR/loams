@@ -1,2 +1,2 @@
--- kind: error 344
+-- kind: error 48
 BACKUP TABLE t TO File('b')
