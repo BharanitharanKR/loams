@@ -305,6 +305,19 @@ struct MidxTables {
     /// The layer's pack index of each pack the multi-pack index names, or
     /// `None` for one the snapshot does not hold.
     packs: Vec<Option<usize>>,
+    /// The layer's packs the index covers.
+    covered: HashSet<usize>,
+}
+
+/// What a multi-pack index says of an object.
+enum MidxAnswer {
+    /// In this pack of the layer, at this offset.
+    Found(usize, u64),
+    /// Not in any pack it covers (the tables say which).
+    Absent(Arc<MidxTables>),
+    /// In a pack the snapshot does not hold: the index is stale, so every
+    /// pack is searched.
+    Stale,
 }
 
 /// A chunk id of the multi-pack index format.
@@ -398,24 +411,21 @@ impl Midx {
                 named.len()
             )));
         }
+        let covered = named.iter().flatten().copied().collect();
         let tables = Arc::new(MidxTables {
             fanout,
             oidl: oidl.start,
             ooff: ooff.start,
             loff,
             packs: named,
+            covered,
         });
         *lock(&self.tables) = Some(Arc::clone(&tables));
         Ok(tables)
     }
 
-    /// The layer's pack index and offset of `oid`, when the multi-pack
-    /// index holds it in a pack the snapshot holds.
-    async fn lookup(
-        &self,
-        packs: &[PackState],
-        oid: &ObjectId,
-    ) -> Result<Option<(usize, u64)>, OdbError> {
+    /// What the index says of `oid`.
+    async fn lookup(&self, packs: &[PackState], oid: &ObjectId) -> Result<MidxAnswer, OdbError> {
         let tables = self.tables(packs).await?;
         let len = self.source.len();
         let read = |range: Range<u64>| self.source.read(range);
@@ -429,7 +439,7 @@ impl Midx {
         )
         .await?
         else {
-            return Ok(None);
+            return Ok(MidxAnswer::Absent(tables));
         };
         let at = tables.ooff + index * 8;
         let entry = self.source.read(at..at + 8).await?;
@@ -449,22 +459,10 @@ impl Midx {
             be_u64(&self.source.read(at..at + 8).await?, 0)
         };
         match tables.packs.get(pack) {
-            Some(Some(local)) => Ok(Some((*local, offset))),
-            Some(None) => Ok(None),
+            Some(Some(local)) => Ok(MidxAnswer::Found(*local, offset)),
+            Some(None) => Ok(MidxAnswer::Stale),
             None => Err(self.corrupt(format!("pack id {pack} out of range"))),
         }
-    }
-
-    /// The layer's packs this index covers.
-    async fn covered(&self, packs: &[PackState]) -> Result<HashSet<usize>, OdbError> {
-        Ok(self
-            .tables(packs)
-            .await?
-            .packs
-            .iter()
-            .flatten()
-            .copied()
-            .collect())
     }
 }
 
@@ -586,16 +584,15 @@ impl Layer {
     /// multi-pack index answered.
     async fn locate(&self, oid: &ObjectId) -> Result<Option<(usize, u64, bool)>, OdbError> {
         let covered = match &self.midx {
-            Some(midx) => {
-                if let Some((pack, offset)) = midx.lookup(&self.packs, oid).await? {
-                    return Ok(Some((pack, offset, true)));
-                }
-                midx.covered(&self.packs).await?
-            }
-            None => HashSet::new(),
+            Some(midx) => match midx.lookup(&self.packs, oid).await? {
+                MidxAnswer::Found(pack, offset) => return Ok(Some((pack, offset, true))),
+                MidxAnswer::Absent(tables) => Some(tables),
+                MidxAnswer::Stale => None,
+            },
+            None => None,
         };
         for (i, state) in self.packs.iter().enumerate() {
-            if covered.contains(&i) {
+            if covered.as_ref().is_some_and(|t| t.covered.contains(&i)) {
                 continue;
             }
             if let Some(offset) = self.idx_lookup(state, oid).await? {
@@ -752,8 +749,9 @@ impl RangeOdb {
     /// Looks objects of this repository's own packs up in `midx` first, a
     /// multi-pack index (compaction's `midx/<seq:020>.midx`, §36 §4.1) over
     /// some or all of them. Packs it does not cover are still searched by
-    /// their idx; packs it names that the snapshot does not hold are
-    /// ignored.
+    /// their idx. Packs it names that the snapshot does not hold are
+    /// ignored, and an object it places in one is searched for in every
+    /// pack, as if there were no index.
     pub fn with_midx(mut self, midx: Arc<dyn RangeSource>) -> Self {
         let own = &self.layers[0];
         let layer = Layer {
