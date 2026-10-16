@@ -211,7 +211,8 @@ jobs:
           workspaces: crates/loams-wal-decoder
           cache-directories: ~/.cargo/git/db
           shared-key: pg2-wal-decoder
-          save-if: ${{ github.ref == 'refs/heads/dev' }}
+          # Not from a candidate run (nf1-candidate.yml dispatches on dev).
+          save-if: ${{ github.ref == 'refs/heads/dev' && !inputs.candidate-pins }}
       # One commit per Postgres submodule instead of the full history: the
       # build reads the headers from POSTGRES_INSTALL_DIR, never the sources.
       - name: seed the fork's Postgres submodules (shallow)
