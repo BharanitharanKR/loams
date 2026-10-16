@@ -104,7 +104,12 @@ describe('agent providers section', () => {
     expect(box.checked).toBe(false);
     expect(c.getByText(/price applies/)).toBeTruthy();
     fireEvent.click(box);
-    fireEvent.click(c.getByRole('button', { name: 'Save' }));
+    // Save is disabled until the edit has rendered (the form is "dirty"); clicking
+    // it earlier is ignored, which raced on a busy CI runner. Wait for the state.
+    await waitFor(() => expect(box.checked).toBe(true));
+    const save = c.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+    await waitFor(() => expect(save.disabled).toBe(false));
+    fireEvent.click(save);
     await waitFor(() => expect(chat.configureProvider).toHaveBeenCalled());
     expect(chat.configureProvider.mock.calls[0]?.[1]).toMatchObject({ fallback: true });
   });
