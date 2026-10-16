@@ -55,6 +55,10 @@ ignore = [
     # only through sqlx-mysql, which uses it for the RSA password exchange of
     # caching_sha2_password/sha256_password on a non-TLS connection.
     { id = "RUSTSEC-2023-0071", reason = "rsa via sqlx-mysql: used only for RSA password exchange on non-TLS MySQL connections; Loams connects to TiDB over TLS or the cluster network with mysql_native_password (§21 §11.2)" },
+    # The root's entry, kept here because scripts/pg2/check-decoder-deny.py
+    # requires every root ignore (this workspace does not depend on zip).
+    # Remove both with the bump to zip 9.x, after 2026-10-27.
+    { crate = "zip@7.2.0", reason = "yanked upstream with its whole major line; the replacement 9.0.3 is under 14 days old (revisit 2026-10-27)" },
 ]
 
 [sources]
