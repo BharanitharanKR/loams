@@ -1,7 +1,128 @@
 syntax = "proto3";
 
-// Loams Git: `ObjectService`, lazy object reads, workspace packs and history (§19.5, §19.8, §19.10). An empty stub until GT1
-// Task 18 fills it in; it exists so that `loams.repos.v1` is registered
-// with its four files once (GT1 Task 12), and later tasks only add messages
-// and a service. See `repos.proto` for the package's rules.
+// Loams Git: `ObjectService`, lazy object reads for workspaces and their
+// clients (design §36 §19.5, §19.10, D829, D830; plan GT1 Task 18). This
+// file holds the object reads; Tasks 20, 21 and 24 add `Log`, `DiffStat`,
+// `Blame`, `Grep` and `PutWorkspacePack`. See `repos.proto` for the
+// package's rules.
+//
+// Every request names its repository as `RepoService` does (`namespace`,
+// `name`). `workspace` is optional: when set, the workspace's packs are read
+// after the repository's, and objects only in them are readable only this
+// way (`workspace_not_found` for a workspace the repository does not have).
+// Object ids are 40 lowercase hex digits. A read given a
+// `consistency_token` reads at least that seq, and every answer carries the
+// token of the seq it read.
 package loams.repos.v1;
+
+import "loams/options/v1/options.proto";
+
+// Batched, lazy reads of objects and trees.
+service ObjectService {
+  option (loams.options.v1.module) = {
+    name: "repos"
+    summary: "Loams Git: lazy object and tree reads for workspaces and their clients."
+    unstable: true
+  };
+
+  // Up to 1,024 objects, streamed in pack order (not request order): each
+  // object as one or more chunks, then one `missing` message per object the
+  // repository does not hold. More than 1,024 ids is `invalid_argument`.
+  rpc GetObjects(GetObjectsRequest) returns (stream GetObjectsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // A tree and its subtrees to `depth`, each entry with its size, so a
+  // client lists and stats files without fetching them.
+  rpc GetTrees(GetTreesRequest) returns (GetTreesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Which of up to 1,024 objects the repository (and the workspace) holds.
+  rpc HasObjects(HasObjectsRequest) returns (HasObjectsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+}
+
+// An object's kind.
+enum ObjectKind {
+  OBJECT_KIND_UNSPECIFIED = 0;
+  OBJECT_KIND_COMMIT = 1;
+  OBJECT_KIND_TREE = 2;
+  OBJECT_KIND_BLOB = 3;
+  OBJECT_KIND_TAG = 4;
+}
+
+message GetObjectsRequest {
+  string namespace = 1;
+  string name = 2;
+  // A workspace id ("w" + 26 lowercase ULID characters), or empty.
+  string workspace = 3;
+  // At most 1,024; duplicates are answered once.
+  repeated string oids = 4;
+  string consistency_token = 14;
+}
+
+// One chunk of one object, or one missing object. An object larger than
+// 1 MiB comes in several chunks, in order, with the same `oid`; the last
+// one ends at `size`.
+message GetObjectsResponse {
+  string oid = 1;
+  ObjectKind kind = 2;
+  // The object's whole size.
+  uint64 size = 3;
+  // Where `data` starts in the object.
+  uint64 offset = 4;
+  bytes data = 5;
+  // Neither the repository nor the workspace holds `oid`.
+  bool missing = 6;
+  string consistency_token = 14;
+}
+
+message GetTreesRequest {
+  string namespace = 1;
+  string name = 2;
+  string workspace = 3;
+  // A tree, or a commit or tag (peeled to its tree).
+  string root = 4;
+  // Levels below the root: 0 is the root alone; unset is 2; at most 8.
+  optional uint32 depth = 5;
+  string consistency_token = 14;
+}
+
+message GetTreesResponse {
+  // Breadth first from the root, each tree once.
+  repeated Tree trees = 1;
+  // The walk stopped at 1,024 trees before `depth`.
+  bool truncated = 2;
+  string consistency_token = 14;
+}
+
+// A tree with its entries' sizes.
+message Tree {
+  string oid = 1;
+  repeated TreeEntry entries = 2;
+}
+
+message TreeEntry {
+  bytes name = 1;
+  // git's mode bits: 0o100644, 0o100755, 0o120000, 0o40000 or 0o160000.
+  uint32 mode = 2;
+  string oid = 3;
+  // Set for blobs and symlinks; unset for trees and submodules.
+  optional uint64 size = 4;
+}
+
+message HasObjectsRequest {
+  string namespace = 1;
+  string name = 2;
+  string workspace = 3;
+  // At most 1,024.
+  repeated string oids = 4;
+  string consistency_token = 14;
+}
+
+message HasObjectsResponse {
+  // Bit `i % 8` (least significant first) of byte `i / 8` is set when
+  // object `i` of the request is held.
+  bytes present = 1;
+  string consistency_token = 14;
+}

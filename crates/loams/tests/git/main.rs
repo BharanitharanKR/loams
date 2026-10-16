@@ -21,19 +21,24 @@ use tempfile::TempDir;
 #[cfg(feature = "git")]
 mod http;
 #[cfg(feature = "git")]
+mod objects;
+#[cfg(feature = "git")]
 mod repos;
 
 /// Every RPC of `RepoService`, with whether it streams.
-const RPCS: &[(&str, bool)] = &[
-    ("CreateRepo", false),
-    ("GetRepo", false),
-    ("ListRepos", false),
-    ("ForkRepo", false),
-    ("DeleteRepo", false),
-    ("UpdateRepoConfig", false),
-    ("ListRefs", false),
-    ("CompactRepo", false),
-    ("WatchRepo", true),
+const RPCS: &[(&str, &str, bool)] = &[
+    ("RepoService", "CreateRepo", false),
+    ("RepoService", "GetRepo", false),
+    ("RepoService", "ListRepos", false),
+    ("RepoService", "ForkRepo", false),
+    ("RepoService", "DeleteRepo", false),
+    ("RepoService", "UpdateRepoConfig", false),
+    ("RepoService", "ListRefs", false),
+    ("RepoService", "CompactRepo", false),
+    ("RepoService", "WatchRepo", true),
+    ("ObjectService", "GetObjects", true),
+    ("ObjectService", "GetTrees", false),
+    ("ObjectService", "HasObjects", false),
 ];
 
 /// A `loams` server on loopback, with its data directory.
@@ -234,7 +239,10 @@ async fn catalogue_lists_repos_only_with_feature() {
         .find(|s| s["package"] == "loams.repos.v1")
         .cloned()
         .unwrap_or_else(|| panic!("no loams.repos.v1 row: {info}"));
-    assert_eq!(row["services"], json!(["loams.repos.v1.RepoService"]));
+    assert_eq!(
+        row["services"],
+        json!(["loams.repos.v1.RepoService", "loams.repos.v1.ObjectService"])
+    );
     assert_eq!(row["unstable"], json!(true));
     let served = cfg!(feature = "git");
     assert_eq!(row["available"].as_bool().unwrap_or(false), served, "{row}");
@@ -247,8 +255,8 @@ async fn catalogue_lists_repos_only_with_feature() {
     assert_eq!(versions.contains(&"loams.repos.v1"), served, "{versions:?}");
     // A `git` build serves them (`repos.rs`); every RPC of a build without it is refused.
     let rpcs = if served { &[][..] } else { RPCS };
-    for (rpc, streams) in rpcs {
-        let path = format!("/loams.repos.v1.RepoService/{rpc}");
+    for (service, rpc, streams) in rpcs {
+        let path = format!("/loams.repos.v1.{service}/{rpc}");
         let body = json!({"namespace": "default", "name": "app"});
         let error = if *streams {
             let (_, messages) = running.connect_stream(&path, &body).await;

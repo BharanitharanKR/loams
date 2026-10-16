@@ -41,6 +41,7 @@ pub mod hot;
 pub mod house_proxy;
 pub mod internal;
 pub(crate) mod live;
+pub(crate) mod objects;
 #[cfg(feature = "postgres")]
 mod postgres_messages;
 mod query;

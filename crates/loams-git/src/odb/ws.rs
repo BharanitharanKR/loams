@@ -47,6 +47,11 @@ impl WsOdb {
         &self.odb
     }
 
+    /// The combined database, owned.
+    pub fn into_odb(self) -> RangeOdb {
+        self.odb
+    }
+
     /// Whether `loc` is in one of the workspace's own packs.
     pub fn is_workspace(&self, loc: &Location) -> bool {
         loc.layer + 1 == self.odb.layers()
