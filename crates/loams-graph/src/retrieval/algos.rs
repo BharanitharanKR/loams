@@ -736,6 +736,18 @@ impl GraphAdmin {
                     graph.commit_link(crate::durable::lane::LinkJob {
                         progress: None,
                         apply: Box::new(move |db, _| {
+                            // A vertex deleted since the pin is skipped, not an error (which
+                            // would reload the graph).
+                            let store = db.store();
+                            let ops: Vec<_> = ops
+                                .into_iter()
+                                .filter(|op| match op {
+                                    crate::changeset::ChangeOp::SetProps { id, .. } => {
+                                        store.get_node(grafeo::NodeId::new(*id)).is_some()
+                                    }
+                                    _ => true,
+                                })
+                                .collect();
                             crate::changeset::apply_to_store(db, &ops)?;
                             Ok(ops)
                         }),
