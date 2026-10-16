@@ -1,0 +1,58 @@
+# GW1 (docs/plans/2026-10-16-gw1-loams-gateway.md): loams-gateway, the
+# Postgres front door (design §57).
+#
+# gateway: the crate's tests and clippy (the workspace job runs them too),
+# then libpq 17's psql through the gateway to the pinned, unmodified PgDog
+# (deploy/pgdog/compose.yaml, PG2 R18.1) and a Postgres backend, in Docker on
+# the host network: SSLRequest spliced with verify-full and channel binding,
+# direct TLS terminated with ALPN postgresql, a dedicated port without SNI,
+# plaintext and an unknown SNI refused (tests/it_pgdog.rs).
+name: Gateway
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [dev]
+    paths:
+      - "Cargo.lock"
+      - "crates/loams-gateway/**"
+      - "deploy/pgdog/compose.yaml"
+      - ".github/workflows/gateway.yml"
+  pull_request:
+    paths:
+      - "Cargo.lock"
+      - "crates/loams-gateway/**"
+      - "deploy/pgdog/compose.yaml"
+      - ".github/workflows/gateway.yml"
+
+concurrency:
+  group: gateway-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+
+permissions:
+  contents: read
+
+jobs:
+  gateway:
+    name: "Gateway: psql through loams-gateway to PgDog"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: gw1-loams-gateway
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
+      - name: pull the images (PgDog pinned by digest; Postgres by tag)
+        run: |
+          set -euo pipefail
+          pgdog="$(sed -n 's/^ *image: \(ghcr.io\/pgdogdev\/pgdog@sha256:[0-9a-f]*\)$/\1/p' deploy/pgdog/compose.yaml | head -1)"
+          test -n "$pgdog"
+          docker pull "$pgdog"
+          docker pull docker.io/library/postgres:17.11
+      - name: test
+        run: cargo test -p loams-gateway --locked
+      - name: clippy
+        run: cargo clippy -p loams-gateway --all-targets --locked -- -D warnings
+      - name: psql through the gateway to the pinned PgDog
+        run: cargo test -p loams-gateway --locked --test it_pgdog -- --ignored --nocapture

@@ -8132,6 +8132,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "loams-gateway"
+version = "0.1.0-preview.2"
+dependencies = [
+ "clap",
+ "hex",
+ "http-body-util",
+ "hyper",
+ "hyper-util",
+ "rcgen",
+ "rustls",
+ "serde",
+ "serde_json",
+ "sha2 0.11.0",
+ "socket2 0.6.5",
+ "tempfile",
+ "thiserror 2.0.21",
+ "tokio",
+ "tokio-rustls",
+ "toml 0.8.23",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "loams-git"
 version = "0.1.0-preview.2"
 dependencies = [

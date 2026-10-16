@@ -1,0 +1,62 @@
+//! The `loams-gateway` binary (see the library's docs).
+
+use std::path::PathBuf;
+
+use clap::Parser;
+use loams_gateway::{Gateway, GatewayConfig};
+
+/// Loams' gateway: the Postgres front door in front of each namespace's
+/// PgDog (design §57).
+#[derive(Parser)]
+#[command(name = "loams-gateway", version)]
+struct Args {
+    /// The static config (gateway.toml).
+    #[arg(long, default_value = "/etc/loams-gateway/gateway.toml")]
+    config: PathBuf,
+}
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            tracing_subscriber::EnvFilter::try_from_default_env()
+                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info")),
+        )
+        .init();
+    let args = Args::parse();
+    let text = std::fs::read_to_string(&args.config)
+        .map_err(|e| format!("reading {}: {e}", args.config.display()))?;
+    let config = GatewayConfig::from_toml(&text)?;
+    let runtime = tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()?;
+    runtime.block_on(async move {
+        let gateway = Gateway::start(config).await?;
+        terminate().await;
+        tracing::info!("shutting down: draining live connections");
+        gateway.shutdown().await;
+        Ok::<_, Box<dyn std::error::Error>>(())
+    })
+}
+
+/// SIGTERM or Ctrl-C.
+async fn terminate() {
+    #[cfg(unix)]
+    {
+        let mut term =
+            match tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate()) {
+                Ok(s) => s,
+                Err(_) => {
+                    let _ = tokio::signal::ctrl_c().await;
+                    return;
+                }
+            };
+        tokio::select! {
+            _ = term.recv() => {}
+            _ = tokio::signal::ctrl_c() => {}
+        }
+    }
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
+}
