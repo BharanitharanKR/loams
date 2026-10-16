@@ -1,6 +1,6 @@
 # 57 — Loams Gateway: One Rust Gateway, Postgres First
 
-Status: **Approved direction** (owner, 2026-10-16) · details **Proposed** · 2026-10-16. Source: the owner's decision of 2026-10-16 (§1.1), which is binding. Decisions **D1010–D1024** and open questions **Q895–Q904** are declared in the [decision log](13-decision-log.md). Rows that restate the owner's decision are *Approved*. Rows that add detail to it are *Proposed* until the owner confirms them. Plan: [GW1](../plans/2026-10-16-gw1-loams-gateway.md).
+Status: **Approved direction** (owner, 2026-10-16) · details **Proposed** · 2026-10-16. Source: the owner's decision of 2026-10-16 (§1.1), which is binding. Decisions **D1010–D1024** and open questions **Q895–Q905** are declared in the [decision log](13-decision-log.md). Rows that restate the owner's decision are *Approved*. Rows that add detail to it are *Proposed* until the owner confirms them. Plan: [GW1](../plans/2026-10-16-gw1-loams-gateway.md).
 
 This document builds on these earlier designs, and §13 says where it amends each one:
 - [§46](46-loams-postgres-production.md) §8 (PgDog as the front door, D708–D711) and the [PG2](../plans/2026-10-08-pg2-postgres-production.md) rulings R18–R21. The SNI listener of PG2 Task 22 is the first thing this gateway does.
@@ -26,7 +26,7 @@ Loams builds its own gateway in Rust, the crate `loams-gateway`, instead of depl
 | D1011 | **Amends D708:** the L4 SNI listener in front of the per-namespace PgDog is `loams-gateway`, not Envoy, Kourier or Traefik | 7, 13 | Approved direction (owner, 2026-10-16) |
 | D1012 | **The core's shape:** listeners (fixed and dynamic), sniffers that peek without consuming, an immutable route table swapped atomically on reload, upstream sets with ordered failover, TLS and mTLS from rustls, an admin listener, OTel and `/metrics` | 5 | Proposed |
 | D1013 | **Frameworks:** the `http`, `llm` and `mcp` modules build on **Cloudflare Pingora 0.9** (Apache-2.0), pinned exactly and wrapped behind Loams' own traits. The `pg` module is Loams' code on tokio and rustls, run by its own listener manager because its port set changes at runtime; when Pingora enters the binary, that manager runs as a Pingora background service. rama is the recorded alternative. Sōzu and linkerd2-proxy are rejected | 6 | Proposed (owner's default, 2026-10-16) |
-| D1014 | **TLS for Postgres:** a client that sends `SSLRequest` is **spliced**. The gateway answers `S`, reads the ClientHello's SNI, sends its own `SSLRequest` to the namespace's PgDog and forwards the client's TLS bytes unchanged, so TLS runs end to end and PgDog holds the certificate (D710 unchanged). A **direct-TLS** client (`sslnegotiation=direct`) is **terminated** at the gateway with ALPN `postgresql`, then re-encrypted to PgDog after an `SSLRequest`, verifying PgDog's certificate. Pinned PgDog negotiates no ALPN, and libpq refuses a direct connection without it (§7.3) | 7.2, 7.3 | Proposed; amends D710 for direct-TLS clients |
+| D1014 | **TLS for Postgres:** a client that sends `SSLRequest` is **spliced**. The gateway answers `S`, reads the ClientHello's SNI, sends its own `SSLRequest` to the namespace's PgDog and forwards the client's TLS bytes unchanged, so TLS runs end to end and PgDog holds the certificate (D710 unchanged). A **direct-TLS** client (`sslnegotiation=direct`) is **terminated** at the gateway with ALPN `postgresql`, then re-encrypted to PgDog after an `SSLRequest`, verifying PgDog's certificate; the gateway presents **PgDog's own certificate** to the client, because SCRAM channel binding hashes it. Pinned PgDog negotiates no ALPN, and libpq refuses a direct connection without it (§7.3) | 7.2, 7.3 | Proposed; amends D710 for direct-TLS clients |
 | D1015 | **What is refused before TLS:** a plaintext `StartupMessage` gets `FATAL 28000` and is closed; `GSSENCRequest` gets `N`; a ClientHello without a known SNI on the shared port gets the TLS alert `unrecognized_name`; a direct ClientHello without ALPN `postgresql` gets `no_application_protocol` | 7.4 | Proposed |
 | D1016 | **Dedicated namespace ports** for clients without SNI: on request per namespace (`dedicated_port`), allocated by `pg-control` from a range (default 16000–17999) and kept until the namespace's last project is deleted. The port alone picks the namespace. A single-node stack may name a `default_namespace` for the shared port instead | 7.5 | Proposed |
 | D1017 | **Upstream choice per namespace is ordered** (active, then standby): the first healthy PgDog replica takes every connection, and the next takes over on a connect failure. A plaintext `CancelRequest` is sent to every replica of the namespace on a dedicated port and is dropped on the shared port | 7.6, 7.7 | Proposed |
@@ -149,9 +149,9 @@ The owner's default (2026-10-16) is Pingora for the HTTP side, with rama as the 
    - In `tls_mode = "terminate"` (an option, §7.3), this step terminates instead, as for direct TLS.
 3. **Direct TLS** (first byte `0x16`) → read the ClientHello.
    - Without ALPN `postgresql` → alert `no_application_protocol` and close (Postgres 17's own rule for direct connections).
-   - Find the namespace as above; unknown → `unrecognized_name`.
-   - Accept TLS with the certificate for that SNI (or the route's first hostname on a dedicated port), selecting ALPN `postgresql`.
-   - Connect to PgDog, `SSLRequest`, require `S`, and open TLS verifying PgDog's certificate for the route's `upstream_server_name` (default: the route's first hostname) against the upstream CA.
+   - Find the namespace as above; unknown, or a name no configured certificate covers → `unrecognized_name`.
+   - Connect to PgDog **first**: `SSLRequest`, require `S`, and open TLS verifying PgDog's certificate for the route's `upstream_server_name` (default: the route's first hostname) against the upstream CA.
+   - Accept the client's TLS with **the very certificate PgDog presented** (the configured certificate whose leaf is byte-identical to PgDog's), selecting ALPN `postgresql`. If the gateway holds no copy of it → alert `internal_error`, and an error log that names the fix. See §7.3 for why.
    - Relay plaintext between the two TLS sessions.
 4. **`GSSENCRequest`** → answer `N` and go back to step 1 once (libpq then sends `SSLRequest` or a startup). A second `GSSENCRequest` closes.
 5. **A protocol-3 `StartupMessage`** (plaintext) → `ErrorResponse` with severity `FATAL`, SQLSTATE `28000` and "Loams Postgres requires TLS (sslmode=require or stronger)", then close (D710: plaintext refused).
@@ -162,16 +162,21 @@ The owner's default (2026-10-16) is Pingora for the HTTP side, with rama as the 
 
 | | Splice (SSLRequest clients) | Terminate (direct clients) |
 |---|---|---|
-| Who holds the client-facing key | PgDog only | The gateway too (a certificate for the same names) |
+| Who holds the client-facing key | PgDog only | The gateway too: a copy of **PgDog's own certificate and key** (SCRAM channel binding, below) |
 | D710 ("PgDog terminates client TLS") | Unchanged | Amended: the gateway terminates and re-encrypts to PgDog, verifying PgDog's certificate |
 | What the gateway can read | The ClientHello only | Everything, but it parses nothing after TLS: it relays |
 | CPU | Copy only | Two TLS sessions |
 | ALPN `postgresql` | PgDog's (none, §3) | The gateway's, so libpq's direct mode works |
-| `sslmode=verify-full` | Against PgDog's certificate | Against the gateway's certificate for the same hostname |
+| `sslmode=verify-full` | Against PgDog's certificate | Against the same certificate, presented by the gateway |
+| SCRAM-SHA-256-PLUS (`channel_binding`) | Binds to PgDog's certificate | Binds to the same certificate, so PgDog accepts it |
 
 **Why splice is the default for `SSLRequest` clients:** it keeps the property D708 and D710 were written for. The key that protects a namespace's traffic stays with that namespace's PgDog, a compromised gateway reads no SQL or password on that path, and the gateway's cost is a copy. Every libpq before 17, every JDBC, .NET, Go, Node and Python driver, and libpq 17 by default (`sslnegotiation=postgres`) use `SSLRequest`, so almost all traffic is spliced.
 
 **Why direct clients are terminated:** splicing a direct ClientHello to PgDog cannot satisfy libpq's ALPN check (§3, fact 3), because ALPN is decided inside PgDog's handshake. Termination is the only way to serve them without changing PgDog. If PgDog gains ALPN upstream (Q897), `auto` splices direct clients too and the gateway stops holding client-facing keys for Postgres.
+
+**Why the terminate path presents PgDog's own certificate (found by GW1's integration test).** Over TLS, libpq authenticates with SCRAM-SHA-256-PLUS when the server offers it (`channel_binding=prefer`, the default), and PgDog offers it. Its `tls-server-end-point` binding is a hash of the server certificate the **client** saw, which PgDog checks against the certificate **it** holds. A gateway certificate of its own, however valid for the hostname, makes PgDog answer "password … is wrong" to every direct client. So the gateway connects to PgDog first and presents the certificate PgDog presented, which it must hold a copy of; without one it refuses direct clients with a clear log line rather than letting them fail at authentication. This is one more reason the splice is the default.
+
+**What this means for certificates.** PgDog's client certificate is the regional wildcard `*.<region>.pg.<base-domain>` (§46 §8.5), one certificate shared by every namespace's PgDog and by the gateway. Per-namespace certificates would work only if the gateway held each one (Q905).
 
 **The modes:** `tls_mode = "auto"` (the default: splice `SSLRequest`, terminate direct), `"terminate"` (both terminated; for operators who want one certificate place), `"passthrough"` (both spliced; direct clients refused, so the gateway needs no key at all).
 
@@ -262,7 +267,7 @@ A file makes the gateway independent of `pg-control`'s availability: a `pg-contr
 - **Workload:** `loams-gateway` Deployment, two replicas, anti-affinity across zones, PodDisruptionBudget `minAvailable: 1`, in the platform's system namespace. Its own image, built from `deploy/release/Containerfile.loams-gateway` beside the others.
 - **Service:** `type: LoadBalancer` with `externalTrafficPolicy: Local` (client addresses kept where the load balancer supports it), port 5432 plus each allocated dedicated port, rendered by `pg-control` into the tenants repository with the namespace (MT4's renderer hook), or into the `loams-postgres` chart's values before MT4 lands.
 - **NetworkPolicy:** egress only to PgDog's port 6432 in `loams-pg-*` namespaces and to DNS; each PgDog namespace admits 6432 only from the gateway's pods (and `pg-control` for admin). The gateway is the only way in from outside.
-- **Certificates:** PgDog keeps its namespace certificate (Task 23). The gateway gets a cert-manager `Certificate` for `*.<region>.pg.<base-domain>` for the terminate path and trusts the cluster issuer's CA for upstream verification. With `tls_mode = "passthrough"` it needs neither.
+- **Certificates:** one cert-manager `Certificate` for `*.<region>.pg.<base-domain>` (§46 §8.5) is copied into each PgDog namespace and into the gateway's (for example by a secret-replication controller, or rendered by `pg-control`, Task 11), because the terminate path must present PgDog's exact certificate (§7.3). The gateway also trusts the issuer's CA for upstream verification. With `tls_mode = "passthrough"` it needs neither.
 - **Rolling restarts:** a replica stops accepting, lets live relays finish for up to the drain timeout (default 60 s), then exits. The load balancer moves new connections to the other replica.
 
 ### 9.2 Compose and single node
@@ -303,7 +308,7 @@ ca = "/etc/loams-gateway/upstream-ca/ca.crt"
 
 - **Before authentication** the gateway parses only untrusted bytes: Postgres startup packets and a ClientHello. Each has a size limit and the shared handshake deadline (D1020). rustls parses the ClientHello. The startup classifier and the replay buffer are fuzzed (`cargo fuzz` targets in the crate, run by the nightly fuzz job), as the networking map's §5 asks.
 - **No plaintext** reaches PgDog through the gateway, and none leaves it except the protocol's own pre-TLS messages (§7.4).
-- **Keys:** with `auto`, the gateway holds the regional wildcard key for direct clients only. With `passthrough`, it holds none. Keys are read from files (mounted Secrets) and never logged.
+- **Keys:** with `auto`, the gateway holds a copy of PgDog's regional wildcard key, used for direct clients only. With `passthrough`, it holds none. Keys are read from files (mounted Secrets) and never logged.
 - **Connection caps:** a per-process cap and a per-source-address cap on unfinished handshakes (default 64), so a slow-loris client cannot exhaust handshake slots.
 - **The admin listener** is not on the Service. Its route push, when built (§8.3), is mTLS only, like `pgdog-config-sync`.
 - **Threat model** additions go into PG2 Task 53's review, with the gateway in scope.
@@ -372,7 +377,7 @@ The protocol gateway's commercial adapters (OpenRTB, partner APIs, §34) stay in
 | A cloud load balancer's listener quota limits dedicated ports | Medium | Dedicated ports on request only (D1016); a second load balancer when one fills |
 | Plaintext cancels on the shared port are lost | Medium for old drivers | Q895; libpq 17's encrypted cancels route; dedicated ports broadcast |
 
-## 17. Open questions (Q895–Q904)
+## 17. Open questions (Q895–Q905)
 
 | # | Question | Default |
 |---|---|---|
@@ -386,6 +391,7 @@ The protocol gateway's commercial adapters (OpenRTB, partner APIs, §34) stay in
 | Q902 | Upstream order per namespace: ordered (active and standby) or random? | Ordered; random as a per-namespace option |
 | Q903 | `tls_mode` default: `auto` (holds a key for direct clients) or `passthrough` (no key; direct clients refused)? | `auto`, so libpq 17's direct mode works |
 | Q904 | Where the gateway runs in single-node and desktop stacks: always, or only when Postgres is enabled? | Only with Postgres (`loams dev --postgres`, the desktop's Postgres stack) |
+| Q905 | PgDog's client certificate: one regional wildcard shared with the gateway (needed by the terminate path's channel binding, §7.3), or one per namespace, all copied to the gateway? | One regional wildcard (§46 §8.5's shape); PG2 Task 23 issues it |
 
 ## 18. Sources
 
