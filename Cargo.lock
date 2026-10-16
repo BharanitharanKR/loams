@@ -8144,6 +8144,7 @@ dependencies = [
  "gix-pack",
  "gix-validate",
  "gix-zlib",
+ "loams-cache",
  "loams-cloudevents",
  "loams-common",
  "loams-fs",
