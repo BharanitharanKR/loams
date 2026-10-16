@@ -286,6 +286,7 @@ impl Engines {
             tokio::spawn(directory_loop(engines.clone())),
             tokio::spawn(directory_janitor_loop(engines.clone())),
         ];
+        engines.refresh_origins_after_write().await;
         *engines
             .inner
             .background
@@ -444,9 +445,42 @@ impl Engines {
         idle
     }
 
+    /// The union of the active apps' browser origins (LV1 plan Task 18),
+    /// which the engine's CORS layer answers preflights for.
+    pub fn app_origins(&self) -> &crate::origins::AppOrigins {
+        &self.inner.template.app_origins
+    }
+
+    /// Re-reads [`app_origins`](Self::app_origins) from the directory.
+    pub async fn refresh_origins(&self) -> Result<(), LiveError> {
+        let mut apps = Vec::new();
+        let mut after = None;
+        loop {
+            let page = self.inner.apps.list(after, 0).await?;
+            apps.extend(page.apps);
+            match page.next {
+                Some(next) => after = Some(next),
+                None => break,
+            }
+        }
+        self.app_origins().replace(&apps);
+        Ok(())
+    }
+
+    /// [`refresh_origins`](Self::refresh_origins) after this node changed
+    /// the directory: a failure is logged (the directory poll retries), not
+    /// the caller's.
+    pub(crate) async fn refresh_origins_after_write(&self) {
+        if let Err(e) = self.refresh_origins().await {
+            tracing::warn!(error = %e, "reading the Live apps' origins failed; retrying");
+        }
+    }
+
     /// Brings this node in line with the directory: stops the engines of
-    /// apps that are gone, no longer active, or whose limits changed.
+    /// apps that are gone, no longer active, or whose limits changed, and
+    /// re-reads the apps' origins.
     pub async fn reconcile(&self) -> Result<(), LiveError> {
+        self.refresh_origins().await?;
         let running: Vec<(String, AppRecord)> = self
             .running_map()
             .iter()

@@ -135,6 +135,19 @@ See [docs/release/upgrades.md](docs/release/upgrades.md).
   `LiveAdminService`. A `LiveService` call with no credential is admitted only when the app's
   `allow_anonymous` is on; otherwise it is `unauthenticated` with the reason `token_missing`
   in the error's `ErrorInfo` (no longer in the `loams-auth-reason` header) (LV1 Task 16).
+- **TLS on the main port, and Loams Live beyond loopback.** `LOAMS_TLS_CERT_FILE` and
+  `LOAMS_TLS_KEY_FILE` put `--listen` on TLS (HTTP/2 and HTTP/1.1 by ALPN), with
+  `LOAMS_TLS_CLIENT_CA_FILE` for client certificates; `LOAMS_TLS_TERMINATED_BY_PROXY=true` with
+  `LOAMS_TLS_TRUSTED_PROXIES` (addresses or CIDR blocks) takes plain connections from those
+  proxies only. Live is now served on a non-loopback `--listen` behind TLS (either way) and
+  authentication. Browsers on an app's `allowed_origins` get CORS on `LiveService`, and a call
+  from an origin the addressed app does not list is refused with `live_origin_not_allowed`
+  (the console's origins keep working for platform credentials). `Access-Control-Allow-Credentials`
+  is never sent (LV1 Task 18).
+- **A non-loopback `--listen` with Loams Live needs TLS and authentication.** Without them the
+  engine refuses to start with `--listen listen on <addr>: non-loopback addresses need [tls] and
+  [auth] (MT1)`. Set the `LOAMS_TLS_*` variables and `LOAMS_AUTH_MODE`, bind `--listen` to
+  loopback (the compose stack does), or pass `--no-live` (LV1 Task 18).
 
 ## [0.1.0-preview.2] - unreleased
 

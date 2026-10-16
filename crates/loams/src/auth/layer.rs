@@ -14,6 +14,15 @@
 //! carries no credential), and every answer to an allowed origin, refusals
 //! included, carries `Access-Control-Allow-Origin`.
 //!
+//! Loams Live's app end users browse from the apps' own pages (LV1 plan
+//! Task 18, design §45 §6.4): on a router that serves Live, a `LiveService`
+//! call from an origin one of the active apps lists
+//! ([`AuthLayerState::with_app_origins`]) gets CORS too, preflight included
+//! (a preflight cannot name the app), and Live then holds the actual request
+//! to the addressed app's own list. A request on an origin the engine itself
+//! allows is marked [`EngineOrigin`]. `Access-Control-Allow-Credentials` is
+//! never sent.
+//!
 //! Tailscale identity headers are stripped on every listener but the
 //! `tailscale serve` target ([`AuthLayerState::tailscale_target`]). There
 //! the identity is ambient (like a cookie), so CORS never allows any origin:
@@ -71,6 +80,33 @@ pub const APP_END_USER_PATHS: &[&str] = &["/loams.live.v1.LiveService/"];
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct LeftToApp;
 
+/// The extension of a request whose `Origin` the engine's own CORS allows
+/// (`LOAMS_CORS_ORIGINS`, the console's), as opposed to one only a Live
+/// app lists.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct EngineOrigin;
+
+/// The browser origins Loams Live's active apps list (LV1 plan Task 18):
+/// whether one is among them.
+#[derive(Clone)]
+pub struct AppOriginSet(Arc<dyn Fn(&str) -> bool + Send + Sync>);
+
+impl AppOriginSet {
+    pub fn new(contains: impl Fn(&str) -> bool + Send + Sync + 'static) -> Self {
+        Self(Arc::new(contains))
+    }
+
+    fn contains(&self, origin: &str) -> bool {
+        (self.0)(origin)
+    }
+}
+
+impl std::fmt::Debug for AppOriginSet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppOriginSet").finish_non_exhaustive()
+    }
+}
+
 /// The one cookie-authenticated RPC that needs no CSRF token: it is a read,
 /// and its answer is how the console learns the token.
 const GET_SESSION: &str = "/loams.auth.v1.AuthService/GetSession";
@@ -79,7 +115,7 @@ const ALLOW_METHODS: &str = "GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS";
 const ALLOW_HEADERS: &str = "authorization, content-type, accept, connect-protocol-version, \
      connect-timeout-ms, connect-content-encoding, connect-accept-encoding, grpc-timeout, \
      x-grpc-web, x-user-agent, loams-consistency-token, loams-hot, idempotency-key, \
-     x-csrf-token, loam-session-id";
+     x-csrf-token, loam-session-id, loams-live-app, loams-request-id";
 const EXPOSE_HEADERS: &str = "grpc-status, grpc-message, grpc-status-details-bin, \
      loams-consistency-token, loams-request-id, loams-auth-reason, www-authenticate, \
      retry-after";
@@ -123,6 +159,8 @@ pub struct AuthLayerState {
     /// Path prefixes left to an app's own authentication when the engine
     /// cannot admit the caller ([`APP_END_USER_PATHS`]).
     app_end_user_paths: &'static [&'static str],
+    /// The origins Live's apps list, for [`APP_END_USER_PATHS`] (Task 18).
+    app_origins: Option<AppOriginSet>,
 }
 
 impl AuthLayerState {
@@ -132,6 +170,7 @@ impl AuthLayerState {
             public_paths,
             trust_tailscale: false,
             app_end_user_paths: &[],
+            app_origins: None,
         }
     }
 
@@ -143,6 +182,7 @@ impl AuthLayerState {
             public_paths,
             trust_tailscale: true,
             app_end_user_paths: &[],
+            app_origins: None,
         }
     }
 
@@ -153,6 +193,24 @@ impl AuthLayerState {
     pub fn leaving_to_apps(mut self) -> Self {
         self.app_end_user_paths = APP_END_USER_PATHS;
         self
+    }
+
+    /// This layer, answering CORS on [`APP_END_USER_PATHS`] for the origins
+    /// Live's active apps list too (LV1 plan Task 18). Not on the
+    /// `tailscale serve` target, whose identity is ambient: there only the
+    /// engine's own origins are allowed.
+    pub fn with_app_origins(mut self, origins: AppOriginSet) -> Self {
+        if !self.trust_tailscale {
+            self.app_origins = Some(origins);
+        }
+        self
+    }
+
+    /// Whether an app lists `origin` for a request on `path`.
+    fn app_allows(&self, path: &str, origin: &str) -> bool {
+        self.app_origins.as_ref().is_some_and(|set| {
+            self.app_end_user_paths.iter().any(|p| path.starts_with(p)) && set.contains(origin)
+        })
     }
 
     /// `router` behind the layer (every route and the fallback).
@@ -183,9 +241,16 @@ async fn guard(State(state): State<AuthLayerState>, mut request: Request, next: 
         .get(header::ORIGIN)
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned);
-    let allowed_origin = origin
-        .as_deref()
-        .filter(|o| cors.allows(o))
+    let engine_origin = origin.as_deref().filter(|o| cors.allows(o));
+    if engine_origin.is_some() {
+        request.extensions_mut().insert(EngineOrigin);
+    }
+    let allowed_origin = engine_origin
+        .or_else(|| {
+            origin
+                .as_deref()
+                .filter(|o| state.app_allows(request.uri().path(), o))
+        })
         .map(str::to_owned);
     // On the serve target, a foreign page must not ride the ambient tailnet
     // identity, not even with a request that skips the preflight.

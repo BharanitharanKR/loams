@@ -351,6 +351,24 @@ The House's security layers in this preview:
 
 The compose default is `tailscale`.
 
+### TLS on the main port
+
+The compose stack keeps `--listen` on loopback and reaches it over the tailnet, whose TLS it
+uses. To bind `--listen` beyond loopback, give it TLS and turn authentication on:
+
+| Variable | What it does |
+|---|---|
+| `LOAMS_TLS_CERT_FILE`, `LOAMS_TLS_KEY_FILE` | A PEM certificate chain and its key: `--listen` speaks TLS only (HTTP/2 and HTTP/1.1) |
+| `LOAMS_TLS_CLIENT_CA_FILE` | Optional PEM roots: every client must present a certificate they sign |
+| `LOAMS_TLS_TERMINATED_BY_PROXY=true` | TLS ends at your reverse proxy; needs `LOAMS_TLS_TRUSTED_PROXIES` |
+| `LOAMS_TLS_TRUSTED_PROXIES` | Comma-separated addresses or CIDR blocks the proxy connects from; connections from anywhere else are closed |
+
+Loams Live refuses to start on a non-loopback `--listen` without them (pass `--no-live` to run
+the rest of the engine there as before). Live apps list the browser origins of their own pages
+in `allowed_origins`; a `LiveService` call from any other origin is refused with
+`live_origin_not_allowed`, except a console origin (`LOAMS_CORS_ORIGINS`) with a platform
+credential.
+
 **What is not hardened yet:**
 
 - **Authorization is coarse.** A valid token or key can do anything the engine can do; there

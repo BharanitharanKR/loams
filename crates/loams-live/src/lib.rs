@@ -45,6 +45,7 @@ pub mod journal;
 pub mod keys;
 mod limits;
 pub mod logs;
+pub mod origins;
 pub mod query;
 pub mod readset;
 pub mod schema;
@@ -77,6 +78,7 @@ pub use keys::{AppKeys, KeyRange};
 pub use limits::Limits;
 /// The store a [`LiveConfig`] names (LV1 row T20-9).
 pub use loams_kv::{Backend, EmbeddedConfig, StoreConfig};
+pub use origins::{AppOrigins, ConsoleOrigin};
 pub use readset::{ReadSetIndex, SubId};
 pub use service::{LiveHandle, LiveRoutes, LiveServer};
 pub use session::{ClientState, SessionConfig, Sessions, Version};

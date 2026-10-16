@@ -368,7 +368,9 @@ impl LiveAdminService for Admin {
         let run = async {
             let resource = directory_admin(&self.engines, &caller, None).await?;
             audit(&caller, Action::Admin, &resource, "CreateApp");
-            self.engines.apps().create(new).await
+            let record = self.engines.apps().create(new).await?;
+            self.engines.refresh_origins_after_write().await;
+            Ok(record)
         };
         let record = run.await.map_err(|e| connect_error(&e))?;
         Ok(Response::new(pb::CreateAppResponse {
@@ -478,6 +480,7 @@ impl LiveAdminService for Admin {
             audit(&caller, Action::Admin, &resource, "DeleteApp");
             let record = self.engines.apps().delete(&req.name).await?;
             self.engines.stop_app(&record.name).await;
+            self.engines.refresh_origins_after_write().await;
             Ok(record)
         };
         let record = run.await.map_err(|e| connect_error(&e))?;

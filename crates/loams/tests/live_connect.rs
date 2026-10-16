@@ -2,8 +2,8 @@
 //! D688): with Live running, `LiveService` and `LiveAdminService` answer on
 //! `--listen` over Connect, gRPC and gRPC-Web, behind the port's
 //! authentication layer, and `GetInstance` reports the package available.
-//! Until LV1 Task 18 they are served on a loopback main port and on the
-//! `tailscale serve` target only. Without Live, the package answers
+//! Beyond loopback they need TLS and authentication (LV1 Task 18,
+//! `live_exposure.rs`). Without Live, the package answers
 //! `feature_not_in_variant`.
 
 use std::net::SocketAddr;
@@ -499,21 +499,19 @@ async fn app_end_users_reach_live_through_the_engine_layer() {
 
 /// In tailscale mode Live is reached over the tailnet: the `tailscale serve`
 /// target (loopback, TLS from the tailnet) serves it and names the tailnet
-/// user as the deployer. A main port bound beyond loopback does not serve
-/// it until LV1 Task 18 (TLS): there the package is unavailable and its
-/// calls answer `feature_not_in_variant`, even with a valid credential.
+/// user as the deployer. (A main port beyond loopback needs TLS: LV1 Task
+/// 18, `live_exposure.rs`.)
 #[cfg(feature = "live")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn live_over_the_tailnet_but_not_on_a_non_loopback_main_port() {
+async fn live_over_the_tailnet() {
     use loams::auth::tailscale::TailscaleConfig;
     use loams::auth::{AuthConfig, AuthMode};
 
     let dir = TempDir::new().expect("a temp dir");
-    let (key, line) = loams::auth::api_key::new_key("live");
+    let (_, line) = loams::auth::api_key::new_key("live");
     let keys = dir.path().join("api-keys");
     std::fs::write(&keys, format!("{line}\n")).expect("the key file");
     let mut config = config(&dir, true);
-    config.listen = SocketAddr::from(([0, 0, 0, 0], 0));
     config.auth = AuthConfig {
         mode: AuthMode::On {
             api_keys: true,
@@ -540,21 +538,6 @@ async fn live_over_the_tailnet_but_not_on_a_non_loopback_main_port() {
         deployed["deployment"]["createdBy"],
         "tailscale:me@example.com"
     );
-
-    let main = SocketAddr::from(([127, 0, 0, 1], server.local_addr().port()));
-    let bearer = format!("Bearer {key}");
-    let with_key = [("authorization", bearer.as_str())];
-    let (available, versioned, row) = live_row(main, &with_key).await;
-    assert!(!available && !versioned, "{row}");
-    let (status, _, error) = call(
-        main,
-        "/loams.live.v1.LiveAdminService/ListDeployments",
-        &json!({}),
-        &with_key,
-    )
-    .await;
-    assert_eq!(status, 501, "{error}");
-    assert_eq!(reason(&error), "feature_not_in_variant");
     server.shutdown().await.expect("stops");
 }
 

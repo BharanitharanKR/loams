@@ -28,6 +28,7 @@ pub const LIVE_REASONS: &[&str] = &[
     "live_app_disabled",
     "live_app_exists",
     "live_app_mismatch",
+    crate::origins::ORIGIN_NOT_ALLOWED,
     FUNCTION_ERROR,
     FUNCTION_TIMEOUT,
     FUNCTION_OUT_OF_MEMORY,

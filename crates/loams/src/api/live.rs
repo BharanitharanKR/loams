@@ -66,6 +66,14 @@ pub(crate) async fn caller(
     mut request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
+    // LV1 plan Task 18: an origin the engine itself allows (the console's).
+    if request
+        .extensions()
+        .get::<crate::auth::layer::EngineOrigin>()
+        .is_some()
+    {
+        request.extensions_mut().insert(loams_live::ConsoleOrigin);
+    }
     if let Some(principal) = request.extensions().get::<crate::auth::Principal>() {
         let caller = live_caller(principal);
         request.extensions_mut().insert(caller);
