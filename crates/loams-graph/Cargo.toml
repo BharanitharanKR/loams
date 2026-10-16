@@ -74,6 +74,9 @@ loams-collection.workspace = true
 loams-link.workspace = true
 loams-worker.workspace = true
 tokio-util.workspace = true
+# `Search.expand` (GR1 Task 20): `loams-query`'s graph expander and its IR. `loams` depends on it
+# already, so the server build gains no crate.
+loams-query.workspace = true
 
 [features]
 # `engine_panic_poisons_one_graph`: `cargo test -p loams-graph --features failpoints`.

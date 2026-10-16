@@ -95,8 +95,8 @@ use loams_proto::loams::collection::v1::__buffa::view::{
 };
 use loams_query::SortValue;
 use loams_query::ir::TotalRelation as NativeTotalRelation;
+use loams_query::json::hybrid::UNTYPED_STAGE;
 use loams_query::json::hybrid::fuse_from;
-use loams_query::json::hybrid::{EXPAND_UNAVAILABLE, RERANK_UNAVAILABLE};
 use serde_json::{Map, Value, json};
 
 use super::ApiError;
@@ -113,11 +113,8 @@ use super::connect_query_filters as filters;
 pub(super) fn request_json(view: &SearchRequestView<'_>) -> Result<Value, ConnectError> {
     // The M3 stages first, before anything is read: a body carrying one is
     // refused whether or not the rest of it parses. See the module note.
-    if view.rerank.as_option().is_some() {
-        return Err(refused(ApiError::invalid(RERANK_UNAVAILABLE)));
-    }
-    if view.expand.as_option().is_some() {
-        return Err(refused(ApiError::invalid(EXPAND_UNAVAILABLE)));
+    if view.rerank.as_option().is_some() || view.expand.as_option().is_some() {
+        return Err(refused(ApiError::invalid(UNTYPED_STAGE)));
     }
 
     let mut body = Map::new();
@@ -233,7 +230,123 @@ pub(super) fn request_json(view: &SearchRequestView<'_>) -> Result<Value, Connec
             track_total_hits_json(super::connect_messages::json_of_value_view(track))?,
         );
     }
+    if let Some(expand) = view.expand_spec.as_option() {
+        body.insert("expand".to_string(), expand_json(expand)?);
+    }
+    if let Some(rerank) = view.rerank_spec.as_option() {
+        body.insert("rerank".to_string(), rerank_json(rerank)?);
+    }
     Ok(Value::Object(body))
+}
+
+/// `ExpandSpec` as the IR's `expand` JSON (GR1 Task 20): zero is each number's default, and an
+/// unspecified enum the IR's default.
+fn expand_json(
+    view: &loams_proto::loams::collection::v1::__buffa::view::ExpandSpecView<'_>,
+) -> Result<Value, ConnectError> {
+    let mut out = Map::new();
+    out.insert("graph".to_string(), json!(view.graph));
+    let text = |out: &mut Map<String, Value>, key: &str, value: &str| {
+        if !value.is_empty() {
+            out.insert(key.to_string(), json!(value));
+        }
+    };
+    text(&mut out, "from_field", view.from_field);
+    text(&mut out, "seed_label", view.seed_label);
+    text(&mut out, "consistency_token", view.consistency_token);
+    for (key, value) in [
+        ("seeds", view.seeds),
+        ("hops", view.hops),
+        ("limit_per_seed", view.limit_per_seed),
+        ("limit", view.limit),
+    ] {
+        if value != 0 {
+            out.insert(key.to_string(), json!(value));
+        }
+    }
+    match view.direction.as_known() {
+        Some(pb::ExpandDirection::EXPAND_DIRECTION_OUT)
+        | None
+        | Some(pb::ExpandDirection::EXPAND_DIRECTION_UNSPECIFIED) => {}
+        Some(pb::ExpandDirection::EXPAND_DIRECTION_IN) => {
+            out.insert("direction".to_string(), json!("in"));
+        }
+        Some(pb::ExpandDirection::EXPAND_DIRECTION_BOTH) => {
+            out.insert("direction".to_string(), json!("both"));
+        }
+    }
+    if view.direction.as_known().is_none() {
+        return Err(invalid(
+            "expand_spec.direction",
+            "expand_spec.direction is not a direction",
+        ));
+    }
+    match view.output.as_known() {
+        Some(pb::ExpandOutput::EXPAND_OUTPUT_FLAT) => {
+            out.insert("output".to_string(), json!("flat"));
+        }
+        Some(_) => {}
+        None => {
+            return Err(invalid(
+                "expand_spec.output",
+                "expand_spec.output is not an output",
+            ));
+        }
+    }
+    if !view.edge_types.is_empty() {
+        out.insert(
+            "edge_types".to_string(),
+            Value::Array(view.edge_types.iter().map(|t| json!(t)).collect()),
+        );
+    }
+    if let Some(filter) = view.edge_filter.as_option() {
+        out.insert("edge_filter".to_string(), filters::query_json(filter)?);
+    }
+    if let Some(filter) = view.vertex_filter.as_option() {
+        out.insert("vertex_filter".to_string(), filters::query_json(filter)?);
+    }
+    if let Some(select) = view.select.as_option() {
+        let select = projection(super::connect_messages::json_of_view(select))?;
+        out.insert(
+            "select".to_string(),
+            serde_json::to_value(select).map_err(|err| {
+                invalid(
+                    "expand_spec.select",
+                    format!("expand_spec.select is not a projection: {err}"),
+                )
+            })?,
+        );
+    }
+    Ok(Value::Object(out))
+}
+
+/// `RerankSpec` as the IR's `rerank` JSON (GR1 Task 20).
+fn rerank_json(
+    view: &loams_proto::loams::collection::v1::__buffa::view::RerankSpecView<'_>,
+) -> Result<Value, ConnectError> {
+    use loams_proto::loams::collection::v1::__buffa::view::oneof::rerank_spec::Method;
+    Ok(match &view.method {
+        Some(Method::Inherit(inherit)) => match inherit.decay {
+            Some(decay) => json!({"inherit": {"decay": decay}}),
+            None => json!({"inherit": {}}),
+        },
+        Some(Method::Vector(vector)) => json!({"vector": {
+            "field": vector.field,
+            "query": floats(vector.query.iter()),
+        }}),
+        Some(Method::Model(model)) => json!({"model": {
+            "endpoint": model.endpoint,
+            "text_field": model.text_field,
+            "query": model.query,
+            "top_n": model.top_n,
+        }}),
+        None => {
+            return Err(invalid(
+                "rerank_spec",
+                "rerank_spec names a method: inherit, vector or model",
+            ));
+        }
+    })
 }
 
 /// The collection a request names: `collection`, or the §05 §4 `from` with its
@@ -580,6 +693,42 @@ pub(super) fn response_json(response: &loams_query::SearchResponse) -> pb::Searc
         // Named by design (§05 §4) and computed by nothing yet, on either
         // surface. See `query.proto`.
         performance: MessageField::none(),
+        expand: response
+            .expand
+            .as_ref()
+            .map_or_else(MessageField::none, |stats| {
+                MessageField::some(pb::ExpandStats {
+                    seeds: stats.seeds as u64,
+                    seeds_skipped: stats.seeds_skipped as u64,
+                    neighbors: stats.neighbors as u64,
+                    graph_token: stats.graph_token.clone().unwrap_or_default(),
+                    ..Default::default()
+                })
+            }),
+        ..Default::default()
+    }
+}
+
+fn neighbor_message(neighbor: &loams_query::expand::Neighbor) -> pb::Neighbor {
+    let id = |pk| MessageField::some(super::connect_messages::document_id(pk));
+    pb::Neighbor {
+        label: neighbor.label.clone(),
+        key: id(&neighbor.key),
+        hop: u32::from(neighbor.hop),
+        via: id(&neighbor.via),
+        edge_type: neighbor.edge_type.clone(),
+        edge: id(&neighbor.edge),
+        score: neighbor.score,
+        collection: neighbor.collection.clone().unwrap_or_default(),
+        source: neighbor
+            .source
+            .as_ref()
+            .map_or_else(MessageField::none, |source| {
+                MessageField::some(
+                    super::connect_messages::struct_of(&Value::Object(source.clone()))
+                        .expect("a source is a Struct"),
+                )
+            }),
         ..Default::default()
     }
 }
@@ -609,6 +758,20 @@ fn hit_message(hit: &loams_query::Hit) -> pb::Hit {
         sparse_vectors: super::connect_messages::proto_sparse(&hit.sparse_vectors),
         highlight: super::connect_messages::proto_named(&hit.highlight),
         fields: super::connect_messages::proto_named(&hit.fields),
+        neighbors: hit.neighbors.iter().map(neighbor_message).collect(),
+        graph: hit.graph.as_ref().map_or_else(MessageField::none, |graph| {
+            MessageField::some(pb::GraphHit {
+                label: graph.label.clone(),
+                hop: u32::from(graph.hop),
+                seeds: graph
+                    .seeds
+                    .iter()
+                    .map(super::connect_messages::document_id)
+                    .collect(),
+                collection: graph.collection.clone().unwrap_or_default(),
+                ..Default::default()
+            })
+        }),
         ..Default::default()
     }
 }

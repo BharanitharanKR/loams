@@ -170,10 +170,7 @@ async fn the_section_05_body_is_accepted() {
         .expect(StatusCode::BAD_REQUEST);
     assert_eq!(body["error"], "invalid_argument");
     assert!(
-        body["message"]
-            .as_str()
-            .unwrap()
-            .contains("rerank arrives in M3"),
+        body["message"].as_str().unwrap().contains("invalid rerank"),
         "{body}"
     );
     api.shutdown().await;

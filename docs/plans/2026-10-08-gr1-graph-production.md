@@ -1962,3 +1962,29 @@ Carried in: the per-graph gate stays (R9.3, LG-0005 ruling 2026-10-13), so a fol
 **R19.5 Gaps carried.** A stream deleted after creation stops its link (`missing`), and its elements stay. Data that is not JSON (`datacontenttype` other than JSON) is dead-lettered. A `TYPE`-routed rule ignores the CloudEvent `source`.
 
 **R19.6 Tests** (`tests/links.rs`, 3 new): `cloudevents_map_to_nodes_and_edges` (structured and binary events, stubs filled, merges, an edge moved and deleted, a node delete taking its edges, an unmapped type skipped; the graph equals a sequential model), `malformed_record_dead_lettered_not_blocking` (three letters, the record after them applied, nothing re-lettered on a second pass), `stream_link_exactly_once_under_kill` (seven kill points, as Task 18's). Unit tests in `link/stream.rs` and `mapping.rs`.
+
+### Task 20 (2026-10-16, on `gr1-b2-t20`; Q670 answered yes by the owner, PR #678)
+
+**R20.1 Where the stage runs.** `loams-query` (in every build) defines the IR (`expand::{Expand, Rerank, Neighbor, GraphHit, ExpandStats}`) and the `GraphExpander` trait; `loams-graph` implements it (`retrieval::LoamsGraphExpander`), and the server hands it to `CollectionService::set_graph_expander` when it runs graphs. Without one, a request that expands is `INVALID_ARGUMENT`. `loams-graph` gains `loams-query` (already in `loams`).
+
+**R20.2 The plan.** The base search is the request without its stages, limited to `expand.seeds` (or, rerank alone, to the page), then the expansion, the neighbors' documents (`expand.select`; absent fetches none), the rerank and `offset`/`limit`. Expand and rerank refuse `group_by`, `aggregations`, `sort` and `search_after`. A seed is the hit's primary key, or its source's `from_field` (which `select` must return).
+
+**R20.3 The expansion is parameterized GQL.** Three read-only statements through the graph's own `Execute` (routing, followers, tokens): the seeds' vertices, the first hop, the second hop from the first hop's vertices. Values (seed keys, labels, edge types) are parameters; the text varies only in one of three fixed edge arrows. The later statements read `at_least` the first one's token, so one expansion never goes back in time. `expand.consistency_token` (a graph token) makes the first read `at_least` it; absent is `strong`.
+
+**R20.4 Semantics (§07 §4).**
+- A vertex is `(label, _key)`; an OWNED graph's vertices need `_key` to be reached.
+- A seed is every vertex with its key (of `seed_label` if given). A seed's own vertices are never its neighbors, and a seed repeated in the hits is expanded once, for its first hit.
+- Each seed's vertices are kept at the smallest hop. Among equal-hop paths the smallest canonical key bytes of `via`, then of the edge, win.
+- `edge_filter` prunes edges walked; `vertex_filter` prunes the vertices reached, which are neither answered nor walked through. Both take the structured subset of the IR's `Query` (`match_all`, `match_none`, `term`, `terms`, `range`, `exists`, `is_null`, `prefix`, `ids`, `bool`); a full-text query is refused.
+- Order: hop, then canonical key bytes, then label; `limit_per_seed` per seed, then `limit` for the answer, seed order breaking ties. No mapping declares an edge weight, so §07 §4's weight order is not applied.
+- A statement answer the engine truncates is refused (`INVALID_ARGUMENT`, narrow the request), so a truncated answer is never non-deterministic.
+
+**R20.5 Scores and rerank.** Without a rerank a neighbor scores `seed score × 0.5^hop` (`inherit` with its default decay). `inherit {decay}` takes the most over its seeds. `vector {field, query}` scores seeds and neighbors by cosine similarity (0 without a vector), fetching the field and answering it only when `select` asked. `model` is refused: an external reranker is off by default (§05 §4). Nested answers order each hit's neighbors by score, then hop; flat answers one hit per vertex (best score, smallest hop, its seeds), seeds first by score, ties by canonical key bytes.
+
+**R20.6 Surfaces.** The REST query body (IR and §05 §4 forms) takes `expand`/`rerank` in the IR's JSON. `QueryService/Search` takes typed `ExpandSpec expand_spec = 22` and `RerankSpec rerank_spec = 23` (Q-T0-4); 17 and 18 stay `Struct`, deprecated and refused. `Hit.neighbors = 9`, `Hit.graph = 10`, `SearchResponse.expand = 8`. Additive in `loams.collection.v1` (`buf breaking` clean); `@loams/proto` regenerated. The SDKs and the MCP `search` tool expose the stages in Task 36.
+
+**R20.7 The reference.** `conformance/graph/reference/expand.py` (networkx 3.4.2) builds the fixture and writes the expected answers before and after its deletes; the Rust test reads the committed JSON, so CI needs no Python. Regenerate with the script when the semantics change.
+
+**R20.8 Tests.** `loams-graph` `tests/retrieval.rs`: `expand_matches_networkx_reference` (12 cases × before/after deletes: hops, directions, types, both filters, both truncations, a key two labels share, missing/repeated/keyless seeds; RED: reversing the tie-break fails it), `truncation_is_deterministic` (100 runs and after an eviction), `expand_respects_consistency_token` (a follower that must apply the token's write; another stream's token refused), `seed_without_vertex_is_skipped_and_counted`. `loams` `connect_graph`: `search_expands_through_a_linked_graph` (collections → links → REST and Connect expand with documents; flat with a vector rerank). Unit tests in `loams-query` `expand.rs` and `loams-graph` `retrieval/filter.rs`.
+
+Gaps: a UUID-keyed vertex document is fetched by its key's text, which a UUID collection does not match (its neighbors come back without a source); hits of a forwarded base search are expanded on the receiving node.

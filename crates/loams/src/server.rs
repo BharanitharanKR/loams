@@ -2881,6 +2881,13 @@ impl Server {
             )?),
             false => None,
         };
+        // `Search.expand` runs on this node's graphs (GR1 Task 20).
+        #[cfg(feature = "graph")]
+        if let Some(graph) = &graph {
+            collections.set_graph_expander(Arc::new(
+                loams_graph::retrieval::LoamsGraphExpander::new((*graph.admin).clone()),
+            ));
+        }
         let house = match roles.gateway {
             true => crate::api::house_proxy::HouseProxy::start(&config.house)
                 .map_err(|err| ServerError::Config(format!("the House proxy: {err}")))?,

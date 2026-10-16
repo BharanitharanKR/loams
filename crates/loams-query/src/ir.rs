@@ -68,6 +68,12 @@ pub struct SearchRequest {
     pub group_by: Option<GroupBy>,
     #[serde(default)]
     pub track_total_hits: TrackTotalHits,
+    /// The graph expansion of the top hits (GR1 Task 20; §07 §5.2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expand: Option<crate::expand::Expand>,
+    /// Re-scores the final candidates (GR1 Task 20; §07 §5.2).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub rerank: Option<crate::expand::Rerank>,
 }
 
 impl SearchRequest {
@@ -89,6 +95,8 @@ impl SearchRequest {
             highlight: None,
             group_by: None,
             track_total_hits: TrackTotalHits::default(),
+            expand: None,
+            rerank: None,
         }
     }
 
@@ -688,6 +696,9 @@ pub struct SearchResponse {
     /// The hot structures the read used; omitted from JSON when empty.
     #[serde(default, skip_serializing_if = "is_empty_set")]
     pub hot_used: BTreeSet<HotKind>,
+    /// What the expansion did, when the request expanded (GR1 Task 20).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expand: Option<crate::expand::ExpandStats>,
 }
 
 /// One hit.
@@ -706,4 +717,11 @@ pub struct Hit {
     /// Omitted from JSON when empty.
     #[serde(default, skip_serializing_if = "is_empty_map")]
     pub fields: BTreeMap<String, Vec<FieldValue>>,
+    /// The vertices an expansion reached from this hit (`output: nested`, GR1 Task 20); omitted
+    /// from JSON when empty.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub neighbors: Vec<crate::expand::Neighbor>,
+    /// What the hit is in the graph (`output: flat`, GR1 Task 20); omitted from JSON when absent.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub graph: Option<crate::expand::GraphHit>,
 }

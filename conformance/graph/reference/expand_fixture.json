@@ -1,0 +1,1154 @@
+{
+ "cases": [
+  {
+   "direction": "out",
+   "hops": 1,
+   "name": "out_one_hop",
+   "seeds": [
+    "e00",
+    "e01"
+   ]
+  },
+  {
+   "direction": "in",
+   "hops": 1,
+   "name": "in_one_hop",
+   "seeds": [
+    "e02"
+   ]
+  },
+  {
+   "direction": "both",
+   "hops": 2,
+   "limit": 60,
+   "limit_per_seed": 30,
+   "name": "both_two_hops",
+   "seeds": [
+    "e03",
+    "e07"
+   ]
+  },
+  {
+   "direction": "out",
+   "edge_types": [
+    "RELATED"
+   ],
+   "hops": 2,
+   "name": "types",
+   "seeds": [
+    "e05",
+    "e06"
+   ]
+  },
+  {
+   "direction": "out",
+   "edge_types": [
+    "MENTIONS",
+    "RELATED"
+   ],
+   "hops": 2,
+   "name": "chunks_to_entities",
+   "seed_label": "chunk",
+   "seeds": [
+    100,
+    101,
+    102
+   ]
+  },
+  {
+   "direction": "both",
+   "edge_filter": {
+    "bool": {
+     "must_not": [
+      {
+       "exists": {
+        "field": "valid_to"
+       }
+      }
+     ]
+    }
+   },
+   "hops": 2,
+   "name": "edge_filter",
+   "seeds": [
+    "e01",
+    "e04",
+    "e08"
+   ]
+  },
+  {
+   "direction": "both",
+   "hops": 2,
+   "name": "vertex_filter",
+   "seeds": [
+    "e05"
+   ],
+   "vertex_filter": {
+    "term": {
+     "field": "kind",
+     "value": "PERSON"
+    }
+   }
+  },
+  {
+   "direction": "both",
+   "edge_filter": {
+    "range": {
+     "field": "weight",
+     "gte": 0.3,
+     "lt": 0.9
+    }
+   },
+   "hops": 1,
+   "name": "range_filter",
+   "seeds": [
+    "e09",
+    "e10"
+   ]
+  },
+  {
+   "direction": "both",
+   "hops": 2,
+   "limit_per_seed": 4,
+   "name": "limit_per_seed",
+   "seeds": [
+    "e05",
+    "e00"
+   ]
+  },
+  {
+   "direction": "both",
+   "hops": 1,
+   "limit": 7,
+   "name": "limit",
+   "seeds": [
+    "e05",
+    "e00",
+    "e02"
+   ]
+  },
+  {
+   "direction": "out",
+   "hops": 1,
+   "name": "unlabelled_seed_reaches_both_labels",
+   "seeds": [
+    "e00"
+   ]
+  },
+  {
+   "direction": "out",
+   "hops": 1,
+   "name": "missing_and_repeated_seeds",
+   "seeds": [
+    "zz",
+    "e01",
+    "e01",
+    null,
+    999
+   ]
+  }
+ ],
+ "deletes": {
+  "edges": [
+   "r003",
+   "r010",
+   "r040"
+  ],
+  "nodes": [
+   [
+    "entity",
+    "e01"
+   ],
+   [
+    "chunk",
+    102
+   ]
+  ]
+ },
+ "edges": [
+  {
+   "dst": [
+    "entity",
+    "e10"
+   ],
+   "key": "r001",
+   "props": {
+    "weight": 0.787
+   },
+   "src": [
+    "entity",
+    "e11"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e04"
+   ],
+   "key": "r002",
+   "props": {
+    "weight": 0.674
+   },
+   "src": [
+    "entity",
+    "e02"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e05"
+   ],
+   "key": "r003",
+   "props": {
+    "valid_to": 2020,
+    "weight": 0.573
+   },
+   "src": [
+    "entity",
+    "e01"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e06"
+   ],
+   "key": "r004",
+   "props": {
+    "valid_to": 2020,
+    "weight": 0.994
+   },
+   "src": [
+    "entity",
+    "e06"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e07"
+   ],
+   "key": "r005",
+   "props": {
+    "weight": 0.95
+   },
+   "src": [
+    "entity",
+    "e05"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e03"
+   ],
+   "key": "r006",
+   "props": {
+    "weight": 0.317
+   },
+   "src": [
+    "entity",
+    "e03"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e05"
+   ],
+   "key": "r007",
+   "props": {
+    "weight": 0.427
+   },
+   "src": [
+    "entity",
+    "e05"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e06"
+   ],
+   "key": "r008",
+   "props": {
+    "weight": 0.081
+   },
+   "src": [
+    "entity",
+    "e07"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e03"
+   ],
+   "key": "r009",
+   "props": {
+    "valid_to": 2020,
+    "weight": 0.095
+   },
+   "src": [
+    "entity",
+    "e00"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e04"
+   ],
+   "key": "r010",
+   "props": {
+    "weight": 0.305
+   },
+   "src": [
+    "entity",
+    "e11"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e01"
+   ],
+   "key": "r011",
+   "props": {
+    "weight": 0.906
+   },
+   "src": [
+    "entity",
+    "e09"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e03"
+   ],
+   "key": "r012",
+   "props": {
+    "valid_to": 2020,
+    "weight": 0.574
+   },
+   "src": [
+    "entity",
+    "e03"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e09"
+   ],
+   "key": "r013",
+   "props": {
+    "valid_to": 2020,
+    "weight": 0.301
+   },
+   "src": [
+    "entity",
+    "e10"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e05"
+   ],
+   "key": "r014",
+   "props": {
+    "weight": 0.6
+   },
+   "src": [
+    "entity",
+    "e10"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e10"
+   ],
+   "key": "r015",
+   "props": {
+    "weight": 0.274
+   },
+   "src": [
+    "entity",
+    "e02"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e02"
+   ],
+   "key": "r016",
+   "props": {
+    "weight": 0.406
+   },
+   "src": [
+    "entity",
+    "e02"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e11"
+   ],
+   "key": "r017",
+   "props": {
+    "weight": 0.125
+   },
+   "src": [
+    "entity",
+    "e01"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e05"
+   ],
+   "key": "r018",
+   "props": {
+    "weight": 0.224
+   },
+   "src": [
+    "entity",
+    "e06"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e08"
+   ],
+   "key": "r019",
+   "props": {
+    "valid_to": 2020,
+    "weight": 0.193
+   },
+   "src": [
+    "entity",
+    "e00"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e01"
+   ],
+   "key": "r020",
+   "props": {
+    "weight": 0.115
+   },
+   "src": [
+    "entity",
+    "e02"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e10"
+   ],
+   "key": "r021",
+   "props": {
+    "weight": 0.798
+   },
+   "src": [
+    "entity",
+    "e00"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e07"
+   ],
+   "key": "r022",
+   "props": {
+    "weight": 0.53
+   },
+   "src": [
+    "entity",
+    "e06"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e10"
+   ],
+   "key": "r023",
+   "props": {
+    "weight": 0.164
+   },
+   "src": [
+    "entity",
+    "e00"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e05"
+   ],
+   "key": "r024",
+   "props": {
+    "weight": 0.013
+   },
+   "src": [
+    "entity",
+    "e08"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e01"
+   ],
+   "key": "r025",
+   "props": {
+    "weight": 0.333
+   },
+   "src": [
+    "entity",
+    "e01"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e04"
+   ],
+   "key": "r026",
+   "props": {
+    "weight": 0.664
+   },
+   "src": [
+    "entity",
+    "e10"
+   ],
+   "type": "RELATED"
+  },
+  {
+   "dst": [
+    "entity",
+    "e03"
+   ],
+   "key": "r027",
+   "props": {},
+   "src": [
+    "chunk",
+    100
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e11"
+   ],
+   "key": "r028",
+   "props": {},
+   "src": [
+    "chunk",
+    100
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e08"
+   ],
+   "key": "r029",
+   "props": {},
+   "src": [
+    "chunk",
+    100
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e08"
+   ],
+   "key": "r030",
+   "props": {},
+   "src": [
+    "chunk",
+    101
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e00"
+   ],
+   "key": "r031",
+   "props": {},
+   "src": [
+    "chunk",
+    101
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e02"
+   ],
+   "key": "r032",
+   "props": {},
+   "src": [
+    "chunk",
+    101
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e00"
+   ],
+   "key": "r033",
+   "props": {},
+   "src": [
+    "chunk",
+    102
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e10"
+   ],
+   "key": "r034",
+   "props": {},
+   "src": [
+    "chunk",
+    102
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e08"
+   ],
+   "key": "r035",
+   "props": {},
+   "src": [
+    "chunk",
+    102
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e02"
+   ],
+   "key": "r036",
+   "props": {},
+   "src": [
+    "chunk",
+    103
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e04"
+   ],
+   "key": "r037",
+   "props": {},
+   "src": [
+    "chunk",
+    103
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e11"
+   ],
+   "key": "r038",
+   "props": {},
+   "src": [
+    "chunk",
+    103
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e06"
+   ],
+   "key": "r039",
+   "props": {},
+   "src": [
+    "chunk",
+    104
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e04"
+   ],
+   "key": "r040",
+   "props": {},
+   "src": [
+    "chunk",
+    104
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e01"
+   ],
+   "key": "r041",
+   "props": {},
+   "src": [
+    "chunk",
+    104
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e06"
+   ],
+   "key": "r042",
+   "props": {},
+   "src": [
+    "chunk",
+    105
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e01"
+   ],
+   "key": "r043",
+   "props": {},
+   "src": [
+    "chunk",
+    105
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e03"
+   ],
+   "key": "r044",
+   "props": {},
+   "src": [
+    "chunk",
+    105
+   ],
+   "type": "MENTIONS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e00"
+   ],
+   "key": "r045",
+   "props": {},
+   "src": [
+    "entity",
+    "e05"
+   ],
+   "type": "KNOWS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e01"
+   ],
+   "key": "r046",
+   "props": {},
+   "src": [
+    "entity",
+    "e05"
+   ],
+   "type": "KNOWS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e02"
+   ],
+   "key": "r047",
+   "props": {},
+   "src": [
+    "entity",
+    "e05"
+   ],
+   "type": "KNOWS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e03"
+   ],
+   "key": "r048",
+   "props": {},
+   "src": [
+    "entity",
+    "e05"
+   ],
+   "type": "KNOWS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e04"
+   ],
+   "key": "r049",
+   "props": {},
+   "src": [
+    "entity",
+    "e05"
+   ],
+   "type": "KNOWS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e06"
+   ],
+   "key": "r050",
+   "props": {},
+   "src": [
+    "entity",
+    "e05"
+   ],
+   "type": "KNOWS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e07"
+   ],
+   "key": "r051",
+   "props": {},
+   "src": [
+    "entity",
+    "e05"
+   ],
+   "type": "KNOWS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e08"
+   ],
+   "key": "r052",
+   "props": {},
+   "src": [
+    "entity",
+    "e05"
+   ],
+   "type": "KNOWS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e09"
+   ],
+   "key": "r053",
+   "props": {},
+   "src": [
+    "entity",
+    "e05"
+   ],
+   "type": "KNOWS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e10"
+   ],
+   "key": "r054",
+   "props": {},
+   "src": [
+    "entity",
+    "e05"
+   ],
+   "type": "KNOWS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e11"
+   ],
+   "key": "r055",
+   "props": {},
+   "src": [
+    "entity",
+    "e05"
+   ],
+   "type": "KNOWS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e03"
+   ],
+   "key": "r056",
+   "props": {},
+   "src": [
+    "entity",
+    "e03"
+   ],
+   "type": "KNOWS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e02"
+   ],
+   "key": "r057",
+   "props": {},
+   "src": [
+    "entity",
+    "e01"
+   ],
+   "type": "KNOWS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e02"
+   ],
+   "key": "r058",
+   "props": {},
+   "src": [
+    "entity",
+    "e01"
+   ],
+   "type": "KNOWS"
+  },
+  {
+   "dst": [
+    "entity",
+    "e04"
+   ],
+   "key": "r059",
+   "props": {},
+   "src": [
+    "chunk",
+    "e00"
+   ],
+   "type": "MENTIONS"
+  }
+ ],
+ "nodes": [
+  {
+   "key": "e00",
+   "label": "entity",
+   "props": {
+    "kind": "PERSON",
+    "name": "E0",
+    "rank": 0
+   }
+  },
+  {
+   "key": "e01",
+   "label": "entity",
+   "props": {
+    "kind": "ORG",
+    "name": "E1",
+    "rank": 1
+   }
+  },
+  {
+   "key": "e02",
+   "label": "entity",
+   "props": {
+    "kind": "PLACE",
+    "name": "E2",
+    "rank": 2
+   }
+  },
+  {
+   "key": "e03",
+   "label": "entity",
+   "props": {
+    "kind": "PERSON",
+    "name": "E3",
+    "rank": 3
+   }
+  },
+  {
+   "key": "e04",
+   "label": "entity",
+   "props": {
+    "kind": "ORG",
+    "name": "E4",
+    "rank": 4
+   }
+  },
+  {
+   "key": "e05",
+   "label": "entity",
+   "props": {
+    "kind": "PLACE",
+    "name": "E5",
+    "rank": 5
+   }
+  },
+  {
+   "key": "e06",
+   "label": "entity",
+   "props": {
+    "kind": "PERSON",
+    "name": "E6",
+    "rank": 6
+   }
+  },
+  {
+   "key": "e07",
+   "label": "entity",
+   "props": {
+    "kind": "ORG",
+    "name": "E7",
+    "rank": 7
+   }
+  },
+  {
+   "key": "e08",
+   "label": "entity",
+   "props": {
+    "kind": "PLACE",
+    "name": "E8",
+    "rank": 8
+   }
+  },
+  {
+   "key": "e09",
+   "label": "entity",
+   "props": {
+    "kind": "PERSON",
+    "name": "E9",
+    "rank": 9
+   }
+  },
+  {
+   "key": "e10",
+   "label": "entity",
+   "props": {
+    "kind": "ORG",
+    "name": "E10",
+    "rank": 10
+   }
+  },
+  {
+   "key": "e11",
+   "label": "entity",
+   "props": {
+    "kind": "PLACE",
+    "name": "E11",
+    "rank": 11
+   }
+  },
+  {
+   "key": 100,
+   "label": "chunk",
+   "props": {
+    "text": "chunk 0"
+   }
+  },
+  {
+   "key": 101,
+   "label": "chunk",
+   "props": {
+    "text": "chunk 1"
+   }
+  },
+  {
+   "key": 102,
+   "label": "chunk",
+   "props": {
+    "text": "chunk 2"
+   }
+  },
+  {
+   "key": 103,
+   "label": "chunk",
+   "props": {
+    "text": "chunk 3"
+   }
+  },
+  {
+   "key": 104,
+   "label": "chunk",
+   "props": {
+    "text": "chunk 4"
+   }
+  },
+  {
+   "key": 105,
+   "label": "chunk",
+   "props": {
+    "text": "chunk 5"
+   }
+  },
+  {
+   "key": "e00",
+   "label": "chunk",
+   "props": {
+    "text": "shadow"
+   }
+  }
+ ]
+}

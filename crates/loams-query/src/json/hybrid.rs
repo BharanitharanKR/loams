@@ -13,17 +13,11 @@ use crate::ir::{
 use crate::json::pk;
 use crate::types::{Projection, SourceFilter};
 
-/// The refusal a body carrying `expand` gets, on every surface.
-///
-/// API1 Task 4's `QueryService/Search` types the IR and so reads the two M3
-/// stages off its own request message rather than off a body key the hybrid
-/// parser would see; the words it refuses with are these, so a caller moving
-/// from `POST /v1/namespaces/{ns}/query` to the RPC reads the same sentence
-/// from both. Exported rather than duplicated for exactly that reason.
-pub const EXPAND_UNAVAILABLE: &str = "expand needs graphs, which arrive in M3";
-
-/// The refusal a body carrying `rerank` gets. See [`EXPAND_UNAVAILABLE`].
-pub const RERANK_UNAVAILABLE: &str = "rerank arrives in M3";
+/// The refusal the deprecated untyped `expand` and `rerank` fields of
+/// `QueryService/Search` (17 and 18) get: the typed `expand_spec` and
+/// `rerank_spec` carry the stages (GR1 Task 20).
+pub const UNTYPED_STAGE: &str =
+    "the untyped expand and rerank fields are deprecated; send expand_spec and rerank_spec";
 
 const MS_PER: [(char, u64); 4] = [
     ('s', 1_000),
@@ -49,13 +43,9 @@ pub fn parse_query_body(body: Value, now_ms: u64) -> Result<SearchRequest, Servi
     let Value::Object(body) = body else {
         unreachable!("checked above");
     };
-    if body.contains_key("expand") {
-        return Err(invalid(EXPAND_UNAVAILABLE));
-    }
-    if body.contains_key("rerank") {
-        return Err(invalid(RERANK_UNAVAILABLE));
-    }
-    const KEYS: [&str; 8] = [
+    const KEYS: [&str; 10] = [
+        "expand",
+        "rerank",
         "from",
         "consistency",
         "retrieve",
@@ -99,6 +89,19 @@ pub fn parse_query_body(body: Value, now_ms: u64) -> Result<SearchRequest, Servi
     }
     if let Some(offset) = body.get("offset") {
         request.offset = usize_from(offset, "offset")?;
+    }
+    // §07 §5.2's stages, in the IR's own JSON (GR1 Task 20).
+    if let Some(expand) = body.get("expand") {
+        request.expand = Some(
+            serde_json::from_value(expand.clone())
+                .map_err(|err| invalid(format!("invalid expand: {err}")))?,
+        );
+    }
+    if let Some(rerank) = body.get("rerank") {
+        request.rerank = Some(
+            serde_json::from_value(rerank.clone())
+                .map_err(|err| invalid(format!("invalid rerank: {err}")))?,
+        );
     }
     Ok(request)
 }

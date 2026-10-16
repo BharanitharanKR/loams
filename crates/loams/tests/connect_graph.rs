@@ -979,3 +979,192 @@ async fn consistency_tokens_ride_in_the_header() {
     assert_eq!(reason(&body), "invalid_argument");
     running.server.shutdown().await.expect("shutdown");
 }
+
+/// GR1 Task 20 (§07 §5.2, §48 §10.3): `Search.expand` end to end. Collections feed a LINKED
+/// graph through its links; a search over one of them expands its top hit through the graph,
+/// with the neighbors' documents, on the REST route and on `QueryService/Search` alike, nested
+/// and flat, with a vector rerank.
+#[cfg(feature = "graph")]
+#[tokio::test]
+async fn search_expands_through_a_linked_graph() {
+    let running = Running::start().await;
+    let client = reqwest::Client::new();
+    let rest = |path: &str, body: Value| {
+        let request = client
+            .post(format!("{}{path}", running.base))
+            .header("content-type", "application/json")
+            .body(body.to_string());
+        async move {
+            let response = request.send().await.expect("rest call");
+            let status = response.status();
+            let body: Value = response.json().await.unwrap_or(Value::Null);
+            (status, body)
+        }
+    };
+    let (status, body) = rest("/v1/namespaces", json!({"name": "acme"})).await;
+    assert!(status.is_success(), "{status} {body}");
+    let keyword = |name: &str| json!({"name": name, "source_path": name, "kind": "keyword", "indexed": true, "fast": true});
+    for (name, fields, vectors) in [
+        (
+            "entities",
+            vec![keyword("name")],
+            json!([{"name": "embedding", "dim": 2, "distance": "cosine"}]),
+        ),
+        (
+            "relations",
+            vec![keyword("src"), keyword("dst"), keyword("rel_type")],
+            json!([]),
+        ),
+    ] {
+        let schema = json!({"fields": fields, "vectors": vectors, "sparse_vectors": [], "dynamic": "ignore", "max_fields": 100});
+        let (status, body) = rest(
+            "/v1/namespaces/acme/collections",
+            json!({"name": name, "schema": schema, "partitions": 1}),
+        )
+        .await;
+        assert!(status.is_success(), "{name}: {status} {body}");
+    }
+    let entity = |id: &str, name: &str, v: [f32; 2]| json!({"upsert": {"id": id, "source": {"name": name}, "vectors": {"embedding": v}}});
+    let (status, body) = rest(
+        "/v1/namespaces/acme/collections/entities/documents",
+        json!({"ops": [
+            entity("a", "A", [1.0, 0.0]), entity("b", "B", [0.0, 1.0]),
+            entity("c", "C", [0.7, 0.7]), entity("d", "D", [1.0, 0.1]),
+        ]}),
+    )
+    .await;
+    assert!(status.is_success(), "{status} {body}");
+    let relation = |id: &str, src: &str, dst: &str, ty: &str| json!({"upsert": {"id": id, "source": {"src": src, "dst": dst, "rel_type": ty}}});
+    let (status, body) = rest(
+        "/v1/namespaces/acme/collections/relations/documents",
+        json!({"ops": [
+            relation("r1", "a", "b", "KNOWS"), relation("r2", "b", "c", "KNOWS"),
+            relation("r3", "a", "d", "LIKES"),
+        ]}),
+    )
+    .await;
+    assert!(status.is_success(), "{status} {body}");
+    let (status, body) = running
+        .connect(
+            "/loams.graph.v1.GraphAdminService/CreateGraph",
+            &json!({"namespace": "acme", "name": "kg", "mode": "GRAPH_MODE_LINKED", "mapping": {
+                "vertices": [{"label": "entity", "collection": "entities", "keyField": "_pk"}],
+                "edges": [{"type": "RELATED", "collection": "relations", "sourceLabel": "entity",
+                           "sourceField": "src", "destinationLabel": "entity",
+                           "destinationField": "dst", "typeField": "rel_type"}],
+            }}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{body}");
+    // The links apply on the server's own schedule.
+    let deadline = std::time::Instant::now() + Duration::from_secs(60);
+    loop {
+        let (status, body) = running
+            .connect(
+                "/loams.graph.v1.GraphService/Execute",
+                &json!({"namespace": "acme", "graph": "kg",
+                        "statement": "MATCH (a)-[e]->(b) RETURN count(e)"}),
+            )
+            .await;
+        if status == reqwest::StatusCode::OK && body["rows"]["rows"][0]["values"][0]["int64"] == "3"
+        {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "the links never applied: {body}"
+        );
+        tokio::time::sleep(Duration::from_millis(200)).await;
+    }
+
+    let query = json!({
+        "collection": "entities",
+        "filter": {"term": {"field": "name", "value": "A"}},
+        "limit": 5,
+        "expand": {"graph": "kg", "seed_label": "entity", "hops": 2,
+                   "select": {"source": "all", "vectors": [], "fields": []}},
+    });
+    let (status, body) = rest("/v1/namespaces/acme/query", query.clone()).await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{body}");
+    let neighbors = &body["hits"][0]["neighbors"];
+    let summary: Vec<(String, u64, String)> = neighbors
+        .as_array()
+        .expect("neighbors")
+        .iter()
+        .map(|n| {
+            (
+                n["key"].as_str().expect("key").to_string(),
+                n["hop"].as_u64().expect("hop"),
+                n["source"]["name"]
+                    .as_str()
+                    .expect("a fetched source")
+                    .to_string(),
+            )
+        })
+        .collect();
+    let mut sorted = summary.clone();
+    sorted.sort();
+    assert_eq!(
+        sorted,
+        vec![
+            ("b".to_string(), 1, "B".to_string()),
+            ("c".to_string(), 2, "C".to_string()),
+            ("d".to_string(), 1, "D".to_string()),
+        ],
+        "{body}"
+    );
+    assert_eq!(body["expand"]["seeds"], 1, "{body}");
+    assert!(body["expand"]["graph_token"].is_string(), "{body}");
+
+    // The same request on QueryService/Search answers the same neighbors.
+    let (status, rpc) = running
+        .connect(
+            "/loams.collection.v1.QueryService/Search",
+            &json!({"namespace": "acme", "collection": "entities",
+                    "filter": {"term": {"field": "name", "value": "A"}},
+                    "limit": 5,
+                    "expandSpec": {"graph": "kg", "seedLabel": "entity", "hops": 2,
+                                   "select": {"source": "all"}}}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{rpc}");
+    let rpc_keys: Vec<String> = rpc["hits"][0]["neighbors"]
+        .as_array()
+        .expect("neighbors")
+        .iter()
+        .map(|n| {
+            n["key"]["string"]
+                .as_str()
+                .map_or_else(|| n["key"].to_string(), str::to_string)
+        })
+        .collect();
+    assert_eq!(
+        rpc_keys,
+        summary
+            .iter()
+            .map(|(k, _, _)| k.clone())
+            .collect::<Vec<_>>(),
+        "{rpc}"
+    );
+
+    // Flat, reranked by the vectors: d ([1, 0.1]) is nearest to [1, 0] after the seed itself.
+    let mut flat = query;
+    flat["expand"]["output"] = json!("flat");
+    flat["rerank"] = json!({"vector": {"field": "embedding", "query": [1.0, 0.0]}});
+    let (status, body) = rest("/v1/namespaces/acme/query", flat).await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{body}");
+    let order: Vec<&str> = body["hits"]
+        .as_array()
+        .expect("hits")
+        .iter()
+        .map(|h| h["id"].as_str().or(h["pk"].as_str()).expect("an id"))
+        .collect();
+    assert_eq!(order, vec!["a", "d", "c", "b"], "{body}");
+    assert!(
+        body["hits"][0]
+            .get("vectors")
+            .is_none_or(|v| v.get("embedding").is_none()),
+        "{body}"
+    );
+    running.server.shutdown().await.expect("shutdown");
+}
