@@ -27,11 +27,13 @@ object CodecTest {
             // editing this file.
             val modules = dev.loams.Facade.modules
             assertTrue(modules.isNotEmpty(), "modules derived from the descriptor set")
-            assertEquals(
-                listOf("instance", "live"),
-                modules.map { it.name }.sorted(),
-                "the two services that carry a loams.options.v1.module annotation",
-            )
+            // A superset, not a list: every service the protos annotate is a module, so
+            // a proto that adds one must not need this test edited (LV1 Task 13 added
+            // `live.admin`, and the set carries many more).
+            val names = modules.map { it.name }
+            for (expected in listOf("instance", "live", "live.admin")) {
+                assertTrue(expected in names, "the modules to include $expected (have $names)")
+            }
 
             val instance = modules.first { it.name == "instance" }
             assertEquals("loams.instance.v1.InstanceService", instance.service, "InstanceService's binding")
@@ -53,14 +55,20 @@ object CodecTest {
                 dev.loams.Facade.module("live").calls.map { it.facadeName }.sorted(),
                 "the live module's calls",
             )
-            // `FacadeOptions.module = "tables"` puts query/mutate/deploy on a
+            // `FacadeOptions.module = "tables"` puts query/mutate on a
             // *different* module than the service's own — §44 §7.2 splits
             // `loams.live.v1` into the session half and the table half.
             assertEquals(
-                listOf("deploy", "mutate", "query"),
+                listOf("mutate", "query"),
                 dev.loams.Facade.module("tables").calls.map { it.facadeName }.sorted(),
                 "the tables module's calls, from FacadeOptions.module",
             )
+            // `deploy` moved to `LiveAdminService` (LV1 Task 10) and sits beside the app
+            // directory calls (Task 13) on `live.admin`.
+            val admin = dev.loams.Facade.module("live.admin").calls.map { it.facadeName }
+            for (call in listOf("deploy", "createApp", "listApps", "getApp", "updateApp", "deleteApp")) {
+                assertTrue(call in admin, "live.admin to have $call (has $admin)")
+            }
         }
 
         Harness.test("kotlin_every_rpc_in_the_descriptor_set_is_reachable_by_path") {
@@ -404,7 +412,7 @@ fun moduleFor(name: String): ModuleBinding = dev.loams.Facade.module(name)
 /** A guard that a module that does not exist says so with the ones that do. */
 fun aMissingModuleNamesTheOnesThatExist() {
     val error = assertThrows<NoSuchElementException>("a module that does not exist") {
-        dev.loams.Facade.module("collections")
+        dev.loams.Facade.module("no_such_module")
     }
     assertTrue(
         error.message!!.contains("instance"),

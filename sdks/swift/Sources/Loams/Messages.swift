@@ -195,5 +195,20 @@ public let getIndexStatusRequestTypeName = "loams.live.v1.GetIndexStatusRequest"
 /// The proto type name of `loams.live.v1.LiveAdminService/TailLogs`'s request.
 public let tailLogsRequestTypeName = "loams.live.v1.TailLogsRequest"
 
+/// The proto type name of `loams.live.v1.LiveAdminService/CreateApp`'s request.
+public let createAppRequestTypeName = "loams.live.v1.CreateAppRequest"
+
+/// The proto type name of `loams.live.v1.LiveAdminService/ListApps`'s request.
+public let listAppsRequestTypeName = "loams.live.v1.ListAppsRequest"
+
+/// The proto type name of `loams.live.v1.LiveAdminService/GetApp`'s request.
+public let getAppRequestTypeName = "loams.live.v1.GetAppRequest"
+
+/// The proto type name of `loams.live.v1.LiveAdminService/UpdateApp`'s request.
+public let updateAppRequestTypeName = "loams.live.v1.UpdateAppRequest"
+
+/// The proto type name of `loams.live.v1.LiveAdminService/DeleteApp`'s request.
+public let deleteAppRequestTypeName = "loams.live.v1.DeleteAppRequest"
+
 /// The proto type name of `loams.live.v1.LiveService/ModifyQuerySet`'s request.
 public let modifyQuerySetRequestTypeName = "loams.live.v1.ModifyQuerySetRequest"

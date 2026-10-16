@@ -60,6 +60,16 @@ std::vector<MethodBinding> Build() {
   // Deploy moved to LiveAdminService (LV1 Task 10); `tables` keeps the call.
   add("loams.live.v1.LiveAdminService/Deploy", RetryClass::kManual, "");
 
+  // The app directory of `LiveAdminService` (LV1 Task 13). The three mutations are
+  // `kManual` with no key (no request declares `idempotency_key`), so they are never
+  // retried; the two reads are `retry_safe`. `ListApps` pages on `apps` and
+  // `next_page_token`.
+  add("loams.live.v1.LiveAdminService/CreateApp", RetryClass::kManual, "");
+  add("loams.live.v1.LiveAdminService/ListApps", RetryClass::kSafe, "", false, "apps", "next_page_token");
+  add("loams.live.v1.LiveAdminService/GetApp", RetryClass::kSafe, "");
+  add("loams.live.v1.LiveAdminService/UpdateApp", RetryClass::kManual, "");
+  add("loams.live.v1.LiveAdminService/DeleteApp", RetryClass::kManual, "");
+
   // `loams.approvals.v1`. `ListApprovals` **declares** both AIP-158 fields and
   // honours neither, which is why R6's end-to-end half runs against a stub: the
   // fields are named here from the schema, and the recorded corpus pins that the

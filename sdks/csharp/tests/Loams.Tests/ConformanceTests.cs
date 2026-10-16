@@ -471,7 +471,10 @@ public sealed class ConformanceTests
         // The deliberate end: no annotated RPC is paged yet, so nothing here is a
         // fixture. When one is, this assertion fails and says what is owed.
         Assert.True(
-            Facade.Bindings.Values.All((binding) => binding.Pagination is null),
+            // `live.admin.ListApps` (LV1 Task 13) is the one paged call, and
+            // LiveAdminTests drives it end to end.
+            Facade.Bindings.Values.All((binding) =>
+                binding.Pagination is null || (binding.Module == "live.admin" && binding.Name == "ListApps")),
             "no annotated RPC is paged yet; ListCollections arrives with API1 Task 2, and this " +
             "assertion failing is the signal to add an end-to-end half to this test");
     }

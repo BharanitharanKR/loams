@@ -35,6 +35,8 @@ struct StubCall: Sendable {
     let body: [String: JSONValue]
     /// The bearer that was attached, or `nil`.
     let bearer: String?
+    /// The per-call headers the SDK attached (`CallOptions.headers`).
+    let headers: [String: String]
 }
 
 /// A transport that walks a script and records every call.
@@ -76,7 +78,7 @@ final class StubTransport: HTTPTransport, @unchecked Sendable {
     }
 
     func unary(_ request: WireRequest, bearer: String?) async throws -> WireResponse {
-        let reply = next(StubCall(rpc: request.rpc, body: request.body, bearer: bearer))
+        let reply = next(StubCall(rpc: request.rpc, body: request.body, bearer: bearer, headers: request.headers))
         switch reply {
         case .success(let body):
             return .success(body: body, trailers: [:])
@@ -86,7 +88,7 @@ final class StubTransport: HTTPTransport, @unchecked Sendable {
     }
 
     func serverStream(_ request: WireRequest, bearer: String?) async throws -> WireStream {
-        let call = StubCall(rpc: request.rpc, body: request.body, bearer: bearer)
+        let call = StubCall(rpc: request.rpc, body: request.body, bearer: bearer, headers: request.headers)
         let reply = next(call)
         // Which leg of `streamPlan` this is: the count of stream opens so far.
         //

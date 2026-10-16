@@ -51,6 +51,7 @@ public final class Client implements AutoCloseable {
 
     private final Modules.Instance instance;
     private final Modules.Live live;
+    private final Modules.LiveAdmin liveAdmin;
     private final Modules.Tables tables;
     private final SystemModule system;
 
@@ -81,10 +82,12 @@ public final class Client implements AutoCloseable {
 
         this.instance = new Modules.Instance(invoker);
         this.live = new Modules.Live(invoker);
+        this.liveAdmin = new Modules.LiveAdmin(invoker);
         this.tables = new Modules.Tables(invoker);
         this.system = new SystemModule(instance);
         modules.put("instance", instance);
         modules.put("live", live);
+        modules.put("live.admin", liveAdmin);
         modules.put("tables", tables);
     }
 
@@ -129,6 +132,11 @@ public final class Client implements AutoCloseable {
      */
     public Modules.Live live() {
         return live;
+    }
+
+    /** {@code loams.live.admin}: the Live app directory (LV1 Task 13). */
+    public Modules.LiveAdmin liveAdmin() {
+        return liveAdmin;
     }
 
     /** {@code loams.tables}: the table half of the same service (design §44 §7.2). */

@@ -97,11 +97,15 @@ public struct WireRequest: Sendable {
     public let body: [String: JSONValue]
     /// Whether this is a server-streaming call, which changes the framing.
     public let serverStreaming: Bool
+    /// Headers for this call only (`CallOptions.headers`), applied after the
+    /// client's `extraHeaders` so a call's own value wins.
+    public let headers: [String: String]
 
-    public init(rpc: String, body: [String: JSONValue], serverStreaming: Bool) {
+    public init(rpc: String, body: [String: JSONValue], serverStreaming: Bool, headers: [String: String] = [:]) {
         self.rpc = rpc
         self.body = body
         self.serverStreaming = serverStreaming
+        self.headers = headers
     }
 }
 
@@ -330,6 +334,9 @@ public final class ConnectTransport: HTTPTransport, @unchecked Sendable {
             urlRequest.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
         }
         for (name, value) in config.extraHeaders {
+            urlRequest.setValue(value, forHTTPHeaderField: name)
+        }
+        for (name, value) in request.headers where name.lowercased() != "authorization" {
             urlRequest.setValue(value, forHTTPHeaderField: name)
         }
 
