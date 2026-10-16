@@ -214,8 +214,8 @@ The prefixes `x/`, `X/` and `C/` are unused in `crates/loams-meta-tikv/src/keys.
 ### 8.1 Shape
 
 ```
- client ──TLS, SNI = <ns>.<region>.pg.<base-domain>──► L4 SNI-passthrough listener (Envoy/Kourier/Traefik TCP route)
-                                                          │ TLS untouched
+ client ──SSLRequest + TLS (or direct TLS), SNI = <ns>.<region>.pg.<base-domain>──► loams-gateway (§57; D1011)
+                                   │ SSLRequest clients: spliced, TLS untouched │ direct TLS: terminated, re-encrypted
                                                           ▼
                      PgDog Deployment in loams-pg-<ns> (×2, unmodified image pinned by digest)
                      TLS termination ─ SCRAM ─ pools ─ route by database name ─ read/write split ─ health checks
@@ -238,7 +238,7 @@ The prefixes `x/`, `X/` and `C/` are unused in `crates/loams-meta-tikv/src/keys.
   | `<project>__<branch>.<database>` | that branch, that database |
   | `<project>__<branch>__ro` | the branch's read-only endpoints, load-balanced |
 
-  This extends §28 §8's `<db>__<branch>` (Q49). Clients that cannot send SNI (old libpq, some JDBC setups) connect to the namespace's dedicated port on the same listener instead, which PG2 Task 22 defines. Per-endpoint hostnames in the Neon style are not offered. If PgDog gains SNI-based routing upstream (verify), they could be added by configuration.
+  This extends §28 §8's `<db>__<branch>` (Q49). Clients that cannot send SNI (old libpq, some JDBC setups) connect to the namespace's dedicated port on the same gateway instead (on request, §57 §7.5, D1016). Per-endpoint hostnames in the Neon style are not offered. If PgDog gains SNI-based routing upstream (verify), they could be added by configuration.
 - **Pooling.** Transaction mode by default. A role whose `pool_mode` is `session` gets session pooling, for migrations, `LISTEN`/`NOTIFY`, advisory locks and session-level prepared statements beyond PgDog's support (PgDog sets pool modes per user (verify), with a per-database alias as the fallback). Pool size per (role, database) is `min(max_connections of the compute's CU × 0.8, the role's limit)`, rendered from the CU.
 - **Reads.** Read-only endpoints are PgDog `role = replica` hosts for the branch. `__ro` names go only to replicas. On the primary name, PgDog's read/write split is **off by default**, because it changes read-your-writes semantics for applications that did not ask for it. A project setting turns it on.
 - **Health and failover.** PgDog's health checks and bans mark a backend down. Failover of a read-write endpoint is `pg-control` replacing the compute behind the same Service (§11), so PgDog's config does not change. PgDog's `ban_timeout` is rendered short (1 s, verify the field name) so a replaced compute is used at once.
