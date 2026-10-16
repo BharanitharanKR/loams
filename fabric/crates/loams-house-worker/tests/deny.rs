@@ -347,7 +347,11 @@ async fn every_denied_entry_is_344() {
     ] {
         let response = post(addr, sql).await;
         expect(sql.to_string(), &response, "48");
-        assert!(response.text().contains("RestoreTable"), "{sql}: {}", response.text());
+        assert!(
+            response.text().contains("RestoreTable"),
+            "{sql}: {}",
+            response.text()
+        );
     }
     assert!(wrong.is_empty(), "{}", wrong.join("\n"));
 }
