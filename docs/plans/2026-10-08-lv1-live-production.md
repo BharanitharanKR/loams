@@ -674,6 +674,8 @@ Semantics are §45 §3.3:
 
 ### Task 14: The verifier
 
+> **Superseded by rulings T14-1..T14-3** (2026-10-16): no verification core is built. Live's identity is `loams_live::auth::Caller`, filled by the engine's authentication layer (`api::live::live_caller`, from `auth::Principal` and its `Grant`), and `Caller::unauthenticated()` when no principal was admitted. The text below is kept as the original brief.
+
 **Files:** if `loams-auth` exists, adapt to it in `crates/loams-live/src/auth.rs` only. Otherwise also `crates/loams-auth/{Cargo.toml,src/{lib.rs,verify.rs,keys.rs,jwks.rs,revocation.rs}}` and `crates/loams-auth/tests/verify.rs`.
 
 **Consumes:** the instance signing keys and JWKS (§19 §5.3) or a config `[auth] jwks = "<path or url>"`; API key records (`KeyStore`).
@@ -715,7 +717,7 @@ In standalone without the `ControlStore`, a file-backed `KeyStore` (`[auth] keys
 
 **Files:** `crates/loams-live/src/authz.rs`, `crates/loams-live/tests/{authz.rs,authz_matrix.expected.md}`.
 
-**Consumes:** Task 14's `Verified`; the `Authorizer` trait (D66) if it exists, else `authz::Authorizer` with the same `check(principal, action, resource)` signature and an `AllowAll` plus a static role-binding implementation from config (the interim).
+**Consumes:** Task 14's `Verified` (as built: `loams_live::auth::Caller`, row T14-3); the `Authorizer` trait (D66) if it exists, else `authz::Authorizer` with the same `check(principal, action, resource)` signature and an `AllowAll` plus a static role-binding implementation from config (the interim).
 
 **Produces:**
 - the app fence: an env-scoped credential's app must equal the addressed app, else `PERMISSION_DENIED`, reason `live_app_mismatch`;

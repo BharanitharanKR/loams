@@ -239,13 +239,18 @@ impl Claims {
     /// What the token reaches (LV1 plan Task 14): the claims it carries,
     /// the self-hosted default for the ones it does not.
     fn grant(&self) -> super::Grant {
-        let scopes = match (&self.scp, &self.scope) {
-            (Some(ScopeClaim::List(list)), _) => super::Grant::scopes_of(list),
-            (Some(ScopeClaim::Text(text)), _) | (None, Some(text)) => {
-                super::Grant::scopes_of(text.split_whitespace())
-            }
-            (None, None) => None,
+        // `scp` first; a `scp` that names no scope falls back to `scope`,
+        // so an empty `scp` never widens a token to every scope.
+        let scp = match &self.scp {
+            Some(ScopeClaim::List(list)) => super::Grant::scopes_of(list),
+            Some(ScopeClaim::Text(text)) => super::Grant::scopes_of(text.split_whitespace()),
+            None => None,
         };
+        let scopes = scp.or_else(|| {
+            self.scope
+                .as_deref()
+                .and_then(|text| super::Grant::scopes_of(text.split_whitespace()))
+        });
         super::Grant {
             org: self.org.clone().filter(|o| !o.is_empty()),
             environment: self.env.clone().filter(|e| !e.is_empty()),
@@ -548,6 +553,9 @@ mod tests {
         assert!(spaced.has_scope("live:read") && !spaced.has_scope("live:write"));
         let scp_text = claims(serde_json::json!({"sub": "u", "scp": "live:admin"})).grant();
         assert!(scp_text.has_scope("live:admin"));
+        let empty_scp =
+            claims(serde_json::json!({"sub": "u", "scp": [], "scope": "live:read"})).grant();
+        assert!(empty_scp.has_scope("live:read") && !empty_scp.has_scope("live:admin"));
         let bare = claims(serde_json::json!({"sub": "u"})).grant();
         assert_eq!(bare, crate::auth::Grant::default());
         assert!(
