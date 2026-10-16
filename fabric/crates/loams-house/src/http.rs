@@ -120,6 +120,7 @@ pub struct HouseHandle {
     accept: JoinHandle<()>,
     tls_accept: Option<JoinHandle<()>>,
     compaction: Option<JoinHandle<()>>,
+    retention: Option<JoinHandle<()>>,
 }
 
 impl HouseHandle {
@@ -142,6 +143,9 @@ impl HouseHandle {
         self.accept.abort();
         if let Some(tls) = &self.tls_accept {
             tls.abort();
+        }
+        if let Some(retention) = &self.retention {
+            retention.abort();
         }
         if let Some(compaction) = &self.compaction {
             compaction.abort();
@@ -284,6 +288,13 @@ async fn serve_all(
         ),
         _ => None,
     };
+    // Snapshot expiry, orphan files and purges (HS1 Task 15).
+    let retention = match (&shared.lake, shared.config.retention_interval) {
+        (Some(lake), every) if !every.is_zero() => {
+            Some(crate::retention::Scheduler::new(Arc::clone(lake)).spawn(every))
+        }
+        _ => None,
+    };
     let accept = tokio::spawn(async move {
         loop {
             let Ok(permit) = Arc::clone(&permits).acquire_owned().await else {
@@ -343,6 +354,7 @@ async fn serve_all(
         accept,
         tls_accept,
         compaction,
+        retention,
     })
 }
 

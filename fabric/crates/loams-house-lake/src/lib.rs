@@ -16,7 +16,10 @@
 //!   does it server-side;
 //! * [`append`]: a fast append of data files as one snapshot (HS1 Task 11's
 //!   minimum, which Task 12's write path extends), and [`files`]: the live
-//!   files of a snapshot, from its manifest list and manifests.
+//!   files of a snapshot, from its manifest list and manifests;
+//! * [`expire`] and [`orphans`]: which snapshots a table may forget after its
+//!   retention, and which files under its location nothing names any more
+//!   (HS1 Task 15).
 //!
 //! # arrow 58 stays here (R0.3)
 //!
@@ -26,8 +29,10 @@
 //! `loams-house`'s `arrow_58_stays_in_the_lake` checks the dependency graph.
 
 pub mod append;
+pub mod expire;
 pub mod files;
 pub mod metadata;
+pub mod orphans;
 pub mod rewrite;
 pub mod write;
 

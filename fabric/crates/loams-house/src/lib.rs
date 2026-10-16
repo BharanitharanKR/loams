@@ -100,6 +100,7 @@ pub mod identity;
 pub mod insert;
 pub mod read;
 pub mod request;
+pub mod retention;
 pub mod sandbox;
 pub mod session;
 pub mod settings;

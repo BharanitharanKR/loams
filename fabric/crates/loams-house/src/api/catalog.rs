@@ -41,8 +41,6 @@ pub trait ApiCatalog: Send + Sync + std::fmt::Debug {
 pub const QUERY_LOG_TASK: &str = "HS1 Task 23";
 /// The task that serves pipes (§49 §9).
 pub const PIPES_TASK: &str = "HS1 Task 16";
-/// The task that serves `RestoreTable` (§49 §8).
-pub const RESTORE_TASK: &str = "HS1 Task 15";
 
 /// The catalog until Tasks 10, 16 and 23: every namespace has `default`, and
 /// whatever a test adds.
@@ -181,7 +179,8 @@ pub struct LakeCatalog(pub std::sync::Arc<Lake>);
 /// How many snapshots `DescribeTable` lists, newest first.
 pub const DESCRIBED_SNAPSHOTS: usize = 20;
 
-fn timestamp(ms: i64) -> loams_house_proto::google::protobuf::Timestamp {
+/// A time in Unix milliseconds as a `Timestamp`.
+pub(crate) fn timestamp(ms: i64) -> loams_house_proto::google::protobuf::Timestamp {
     loams_house_proto::google::protobuf::Timestamp {
         seconds: ms.div_euclid(1000),
         nanos: (ms.rem_euclid(1000) * 1_000_000) as i32,

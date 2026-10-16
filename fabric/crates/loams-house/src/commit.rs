@@ -140,6 +140,41 @@ impl CommitIo {
                 ))
             })
     }
+
+    /// Every file under a table location (or any directory of the store), by
+    /// absolute location, with when it was written (HS1 Task 15).
+    pub async fn list(
+        &self,
+        location: &str,
+    ) -> Result<Vec<loams_house_lake::orphans::StoredFile>, HouseError> {
+        let key = self.key(location)?;
+        let prefix = format!("{}/", key.trim_end_matches('/'));
+        let root = self.root.to_string();
+        let listed = self.store()?.list(&prefix).await.map_err(|_| {
+            HouseError::from(ChError::network_error(
+                "the store failed to list a table's files",
+            ))
+        })?;
+        Ok(listed
+            .into_iter()
+            .filter(|info| info.path.starts_with(&prefix))
+            .map(|info| loams_house_lake::orphans::StoredFile {
+                location: format!("{root}/{}", info.path),
+                last_modified_ms: info.last_modified_ms,
+            })
+            .collect())
+    }
+
+    /// Deletes a table file by its absolute location; a missing file is
+    /// deleted already (HS1 Task 15).
+    pub async fn delete(&self, location: &str) -> Result<(), HouseError> {
+        let key = self.key(location)?;
+        self.store()?.delete(&key).await.map_err(|_| {
+            HouseError::from(ChError::network_error(
+                "the store failed to delete a table file",
+            ))
+        })
+    }
 }
 
 type Queues = Arc<Mutex<HashMap<String, mpsc::UnboundedSender<Pending>>>>;
