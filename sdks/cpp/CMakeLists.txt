@@ -172,6 +172,11 @@ endforeach()
 add_executable(conformance_test_names tests/test_names.cpp)
 target_link_libraries(conformance_test_names PRIVATE loams loams_warnings)
 add_test(NAME cpp_conformance_test_names COMMAND conformance_test_names)
+
+# The Live app directory (LV1 Task 13). Not one of the six: see the file's header.
+add_executable(live_admin_test tests/live_admin_test.cpp)
+target_link_libraries(live_admin_test PRIVATE loams_test_support loams_warnings)
+add_test(NAME cpp_live_admin COMMAND live_admin_test)
 endif()
 
 # The quickstart is compiled, so a change that breaks it breaks the build rather
