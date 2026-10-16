@@ -38,11 +38,13 @@ impl Key {
 }
 
 /// An OIDC issuer on loopback: `/.well-known/openid-configuration` and a
-/// JWKS that can be swapped, counting JWKS fetches.
+/// JWKS that can be swapped, counting JWKS fetches; with `down` set, the
+/// JWKS answers 503.
 pub struct Issuer {
     pub url: String,
     pub published: Arc<std::sync::Mutex<Vec<Value>>>,
     pub jwks_fetches: Arc<AtomicUsize>,
+    pub down: Arc<std::sync::atomic::AtomicBool>,
     pub key: Key,
     pub task: tokio::task::JoinHandle<()>,
 }
@@ -62,6 +64,8 @@ impl Issuer {
         let discovery = json!({"issuer": url, "jwks_uri": format!("{url}jwks/")});
         let keys = published.clone();
         let fetches = jwks_fetches.clone();
+        let down = Arc::new(std::sync::atomic::AtomicBool::new(false));
+        let is_down = down.clone();
         let app = axum::Router::new()
             .route(
                 "/application/o/shop/.well-known/openid-configuration",
@@ -72,7 +76,14 @@ impl Issuer {
                 axum::routing::get(move || {
                     fetches.fetch_add(1, Ordering::SeqCst);
                     let keys = keys.lock().expect("test fixture").clone();
-                    async move { axum::Json(json!({ "keys": keys })) }
+                    let down = is_down.load(Ordering::SeqCst);
+                    async move {
+                        use axum::response::IntoResponse as _;
+                        if down {
+                            return axum::http::StatusCode::SERVICE_UNAVAILABLE.into_response();
+                        }
+                        axum::Json(json!({ "keys": keys })).into_response()
+                    }
                 }),
             );
         let task = tokio::spawn(async move {
@@ -82,6 +93,7 @@ impl Issuer {
             url,
             published,
             jwks_fetches,
+            down,
             key,
             task,
         }

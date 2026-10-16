@@ -1216,10 +1216,15 @@ fn call_digest(args: &LiveValue, identity: Option<&Identity>) -> [u8; 32] {
     let Some(identity) = identity else {
         return digest;
     };
+    // The issuer and the subject length-prefixed: `tokenIdentifier` joins
+    // them with `|`, which either may contain.
     let mut h = Sha256::new();
-    h.update(b"loams.live.idempotency.identity.v1\0");
+    h.update(b"loams.live.idempotency.identity.v2\0");
     h.update(digest);
-    h.update(identity.token_identifier.as_bytes());
+    for part in [&identity.issuer, &identity.subject] {
+        h.update((part.len() as u64).to_be_bytes());
+        h.update(part.as_bytes());
+    }
     h.finalize().into()
 }
 

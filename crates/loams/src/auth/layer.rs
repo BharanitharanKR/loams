@@ -131,7 +131,7 @@ impl AuthLayerState {
             auth,
             public_paths,
             trust_tailscale: false,
-            app_end_user_paths: APP_END_USER_PATHS,
+            app_end_user_paths: &[],
         }
     }
 
@@ -142,8 +142,17 @@ impl AuthLayerState {
             auth,
             public_paths,
             trust_tailscale: true,
-            app_end_user_paths: APP_END_USER_PATHS,
+            app_end_user_paths: &[],
         }
+    }
+
+    /// This layer, leaving [`APP_END_USER_PATHS`] to the addressed Live
+    /// app when it cannot admit a caller (LV1 plan Task 16): for a router
+    /// that serves Loams Live, never for one that answers
+    /// `feature_not_in_variant` for it.
+    pub fn leaving_to_apps(mut self) -> Self {
+        self.app_end_user_paths = APP_END_USER_PATHS;
+        self
     }
 
     /// `router` behind the layer (every route and the fallback).
@@ -670,7 +679,7 @@ mod tests {
     fn only_live_service_calls_without_an_engine_credential_go_to_the_app() {
         // LV1 plan Task 16: no credential, or a JWT the engine does not
         // take from that issuer or for that audience, on LiveService only.
-        let state = AuthLayerState::new(Auth::off(), &[]);
+        let state = AuthLayerState::new(Auth::off(), &[]).leaving_to_apps();
         let query = "/loams.live.v1.LiveService/Query";
         let err = |reason| AuthError::unauthenticated(reason, "x");
         assert!(state.left_to_app(query, &err(reason::TOKEN_MISSING), false));
@@ -701,6 +710,9 @@ mod tests {
             assert!(!state.left_to_app(path, &err(reason::TOKEN_MISSING), false));
             assert!(!state.left_to_app(path, &err(reason::TOKEN_WRONG_ISSUER), true));
         }
+        // A router that does not serve Live leaves nothing to it.
+        let plain = AuthLayerState::new(Auth::off(), &[]);
+        assert!(!plain.left_to_app(query, &err(reason::TOKEN_MISSING), false));
     }
 
     #[test]

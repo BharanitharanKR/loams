@@ -444,13 +444,23 @@ impl EndUsers {
             return Ok(keys.clone());
         }
         let mut last = at.fetching.lock().await;
-        // Another request may have fetched while this one waited.
-        if let Some((keys, fetched)) = at.cache.read().await.as_ref() {
-            let fresh = fetched.elapsed() < self.ttl;
-            let recent = last.is_some_and(|t| t.elapsed() < self.min_refetch);
-            if (fresh && !force) || recent {
-                return Ok(keys.clone());
+        // Another request may have fetched while this one waited; and a
+        // fetch within `min_refetch` (even a failed one) is not repeated, so
+        // a flood of tokens never hammers an issuer that is down.
+        let recent = last.is_some_and(|t| t.elapsed() < self.min_refetch);
+        match at.cache.read().await.as_ref() {
+            Some((keys, fetched)) => {
+                let fresh = fetched.elapsed() < self.ttl;
+                if (fresh && !force) || recent {
+                    return Ok(keys.clone());
+                }
             }
+            None if recent => {
+                return Err(LiveError::AuthUnavailable(
+                    "the app issuer's signing keys cannot be fetched; try again".into(),
+                ));
+            }
+            None => {}
         }
         *last = Some(Instant::now());
         match self.fetch(at).await {

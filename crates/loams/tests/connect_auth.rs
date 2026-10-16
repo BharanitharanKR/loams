@@ -157,6 +157,12 @@ async fn every_served_rpc_requires_auth_except_allowlist() {
     ] {
         assert!(services.contains(wanted), "{wanted} not in the catalogue");
     }
+    // Only an engine that runs Loams Live leaves its calls to the app.
+    let live_served = instance.ok()["services"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|s| s["package"] == "loams.live.v1" && s["available"] == true);
     let rpcs: Vec<_> = declared_rpcs()
         .into_iter()
         .filter(|(package, service, _, _)| services.contains(&format!("{package}.{service}")))
@@ -171,6 +177,12 @@ async fn every_served_rpc_requires_auth_except_allowlist() {
     for (package, service, method, streaming) in &rpcs {
         let path = format!("/{package}.{service}/{method}");
         let public = PUBLIC_RPCS.contains(&path.as_str());
+        // LV1 plan Task 16: the layer leaves these to the addressed Live
+        // app, which refuses a call with no credential itself.
+        let left_to_app = live_served
+            && loams::auth::layer::APP_END_USER_PATHS
+                .iter()
+                .any(|p| path.starts_with(p));
         let url = format!("{}{path}", engine.base);
         // Connect: JSON unary, or an enveloped stream.
         let (content_type, body) = if *streaming {
@@ -195,6 +207,16 @@ async fn every_served_rpc_requires_auth_except_allowlist() {
             .map(|v| v.to_str().unwrap().to_owned());
         if public {
             assert_ne!(status, 401, "{path} over Connect");
+        } else if left_to_app {
+            assert_eq!(reason, None, "{path}: Live's refusal, not the layer's");
+            let text = response.text().await.unwrap();
+            if *streaming {
+                assert!(text.contains("unauthenticated"), "{path}: {text}");
+            } else {
+                assert_eq!(status, 401, "{path} over Connect");
+                let body: Value = serde_json::from_str(&text).unwrap();
+                assert_eq!(reason_of(&body).as_deref(), Some("token_missing"), "{path}");
+            }
         } else {
             assert_eq!(status, 401, "{path} over Connect");
             assert_eq!(reason.as_deref(), Some("token_missing"), "{path}");

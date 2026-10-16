@@ -471,6 +471,34 @@ async fn jwks_refresh_rate_limited() {
     assert_eq!(issuer.jwks_fetches.load(Ordering::SeqCst), 2);
 }
 
+/// An issuer that is down is not asked again within the interval, however
+/// many tokens arrive: they are `UNAVAILABLE` (`auth_unavailable`) until it
+/// answers.
+#[tokio::test]
+async fn jwks_fetch_failures_are_rate_limited_too() {
+    let issuer = Issuer::start().await;
+    issuer.down.store(true, Ordering::SeqCst);
+    let gap = Duration::from_millis(600);
+    let users = EndUsers::with_timing(Duration::from_secs(600), gap);
+    let issuers = [issuer.trusted()];
+    let token = issuer.token("ada");
+    for _ in 0..10 {
+        let e = users
+            .verify(&token, &issuers)
+            .await
+            .expect_err("the issuer is down");
+        assert_eq!(e.reason(), Some("auth_unavailable"), "{e}");
+    }
+    assert_eq!(issuer.jwks_fetches.load(Ordering::SeqCst), 1);
+    issuer.down.store(false, Ordering::SeqCst);
+    tokio::time::sleep(gap + Duration::from_millis(100)).await;
+    users
+        .verify(&token, &issuers)
+        .await
+        .expect("the issuer is back");
+    assert_eq!(issuer.jwks_fetches.load(Ordering::SeqCst), 2);
+}
+
 /// Against a real Authentik (MT1's compose stack, `deploy/release/auth`):
 /// an Authentik-issued token calls a public function. Skipped unless
 /// `LOAMS_TEST_AUTHENTIK_ISSUER`, `LOAMS_TEST_AUTHENTIK_AUDIENCE` and
