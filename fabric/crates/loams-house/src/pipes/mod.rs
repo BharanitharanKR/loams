@@ -632,6 +632,7 @@ pub async fn drop_materialized_view(
             }],
         )
         .await?;
+    lake.pipe_states().forget(namespace, database, name);
     Ok(true)
 }
 
@@ -765,6 +766,15 @@ impl PipeStates {
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect()
+    }
+
+    /// Forgets a dropped view's state, so its metrics series ends.
+    pub(crate) fn forget(&self, namespace: u64, database: &str, name: &str) {
+        self.0.lock().unwrap_or_else(|e| e.into_inner()).remove(&(
+            namespace,
+            database.to_string(),
+            name.to_string(),
+        ));
     }
 
     pub(crate) fn update(

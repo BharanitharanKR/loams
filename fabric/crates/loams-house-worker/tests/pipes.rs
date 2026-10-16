@@ -367,6 +367,8 @@ async fn pipe_lands_every_record_once() {
 
     // Dropped, the view stops; the pipe and the target stay.
     ok(addr, "DROP VIEW mv").await;
+    // Its state goes with it, so its metrics series ends (HS1 Task 23).
+    assert!(house.lake.pipe_states().all().is_empty());
     house.stream.push("orders", 0, &order(100));
     house.drain(&runner).await;
     assert_eq!(ok(addr, "SELECT count() FROM t WHERE k = 100").await, "0\n");
