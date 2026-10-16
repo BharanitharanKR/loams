@@ -315,6 +315,7 @@ impl ApiCatalog for LakeCatalog {
         let rows = crate::pipes::rows(&self.0, namespace).await?;
         Ok(Some(
             rows.into_iter()
+                .filter(|row| row.over_pipe)
                 .map(|row| pb::Pipe {
                     name: format!("{}.{}", row.database, row.name),
                     source: row.source,

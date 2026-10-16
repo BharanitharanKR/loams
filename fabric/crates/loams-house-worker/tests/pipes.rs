@@ -238,6 +238,7 @@ async fn lakehouse(test: &str) -> Lakehouse {
         compaction_interval: Duration::ZERO,
         retention_interval: Duration::ZERO,
         pipe_interval: Duration::ZERO,
+        admin_listen: Some("127.0.0.1:0".parse().expect("addr")),
         ..HouseConfig::default()
     };
     let handle = serve_with_lake(config.clone(), pool.clone(), lake.clone())
@@ -597,6 +598,31 @@ async fn pipe_lag_metric() {
         .expect("pipes")
         .into_owned();
     assert_eq!(listed.pipes.len(), 1);
+    // The same lag on the admin listener's /metrics (HS1 Task 23).
+    let admin = house.handle.admin_addr().expect("an admin listener");
+    let scraped = tokio::task::spawn_blocking(move || request(admin, "GET", "/metrics", &[], &[]))
+        .await
+        .expect("client");
+    assert_eq!(scraped.status, 200);
+    assert_eq!(
+        scraped.header("Content-Type"),
+        Some("text/plain; version=0.0.4; charset=utf-8")
+    );
+    let metrics = scraped.text();
+    for line in [
+        "# TYPE loams_house_pipe_lag_records gauge",
+        "loams_house_pipe_lag_records{ns=\"2\",pipe=\"default.mv\"} 6",
+        "loams_house_pipe_committed_records_total{ns=\"2\",pipe=\"default.mv\"} 4",
+        "loams_house_pipe_errors{ns=\"2\",pipe=\"default.mv\"} 0",
+        "loams_house_worker_kills_total{reason=\"crash\"} 0",
+    ] {
+        assert!(metrics.lines().any(|l| l == line), "{line} in\n{metrics}");
+    }
+    assert!(metrics.contains("loams_house_workers{state=\"idle\"}"));
+    let missing = tokio::task::spawn_blocking(move || request(admin, "GET", "/", &[], &[]))
+        .await
+        .expect("client");
+    assert_eq!(missing.status, 404);
     let entry = &listed.pipes[0];
     assert_eq!(entry.name, "default.mv");
     assert_eq!(entry.source, "LoamsStream('orders', 'JSONEachRow')");

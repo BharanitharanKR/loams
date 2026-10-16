@@ -117,7 +117,9 @@ const LINGER: Duration = Duration::from_secs(2);
 pub struct HouseHandle {
     addr: SocketAddr,
     tls_addr: Option<SocketAddr>,
+    admin_addr: Option<SocketAddr>,
     accept: JoinHandle<()>,
+    admin: Option<JoinHandle<()>>,
     tls_accept: Option<JoinHandle<()>>,
     compaction: Option<JoinHandle<()>>,
     retention: Option<JoinHandle<()>>,
@@ -135,6 +137,11 @@ impl HouseHandle {
     /// The TLS listener's address, when it has one (HS1 Task 20).
     pub fn tls_addr(&self) -> Option<SocketAddr> {
         self.tls_addr
+    }
+
+    /// The admin listener's address, when it has one (HS1 Task 23).
+    pub fn admin_addr(&self) -> Option<SocketAddr> {
+        self.admin_addr
     }
 
     /// Stops accepting connections.
@@ -155,6 +162,9 @@ impl HouseHandle {
         }
         if let Some(queues) = &self.queues {
             queues.abort();
+        }
+        if let Some(admin) = &self.admin {
+            admin.abort();
         }
         if let Some(views) = &self.views {
             views.abort();
@@ -256,6 +266,20 @@ async fn serve_all(
         }
         None => (None, None),
     };
+    // The admin listener (HS1 Task 23): metrics, loopback only.
+    let admin_listener = match config.admin_listen {
+        Some(admin) => {
+            config::check_listen(admin)?;
+            let listener = TcpListener::bind(admin)
+                .await
+                .map_err(|err| network("bind the admin listener", err))?;
+            let bound = listener
+                .local_addr()
+                .map_err(|err| network("the admin listener's address", err))?;
+            Some((listener, bound))
+        }
+        None => None,
+    };
     let permits = Arc::new(Semaphore::new(config.max_connections.max(1)));
     let tls_permits = Arc::clone(&permits);
     let unpin_pool = pool.clone();
@@ -332,6 +356,17 @@ async fn serve_all(
             }
         }
         _ => None,
+    };
+    let (admin, admin_addr) = match admin_listener {
+        Some((listener, bound)) => (
+            Some(crate::metrics::serve(
+                listener,
+                shared.pool.clone(),
+                shared.lake.clone(),
+            )),
+            Some(bound),
+        ),
+        None => (None, None),
     };
     // The `S3Queue` pipes' runner (HS1 Task 18): no engine link needed.
     let queues = match (&shared.lake, shared.config.pipe_interval) {
@@ -414,7 +449,9 @@ async fn serve_all(
     Ok(HouseHandle {
         addr,
         tls_addr,
+        admin_addr,
         accept,
+        admin,
         tls_accept,
         compaction,
         retention,

@@ -75,9 +75,16 @@ impl Fabric {
 
     /// Starts it and answers its stdout line.
     fn start_line(flags: &[&str]) -> (Self, String) {
+        // Tests run side by side: each its own admin port, unless it names one.
+        let admin: &[&str] = if flags.contains(&"--admin-listen") {
+            &[]
+        } else {
+            &["--admin-listen", "127.0.0.1:0"]
+        };
         let mut child = Command::new(FABRIC)
             .arg("house")
             .args(flags)
+            .args(admin)
             .env_clear()
             .stdin(Stdio::null())
             .stdout(Stdio::piped())

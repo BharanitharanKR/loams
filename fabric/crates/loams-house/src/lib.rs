@@ -98,6 +98,7 @@ pub mod gate;
 pub mod http;
 pub mod identity;
 pub mod insert;
+pub mod metrics;
 pub mod mv;
 pub mod pipes;
 pub mod read;

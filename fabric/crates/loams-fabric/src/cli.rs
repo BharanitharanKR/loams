@@ -84,7 +84,7 @@ pub struct HouseArgs {
     /// Task 31).
     #[arg(long)]
     pub native_tls_listen: Option<SocketAddr>,
-    /// Admin and metrics (served from HS1 Task 23) [default: 127.0.0.1:8125].
+    /// Admin and metrics, `GET /metrics` (HS1 Task 23) [default: 127.0.0.1:8125].
     #[arg(long)]
     pub admin_listen: Option<SocketAddr>,
     /// One machine: the local catalog and store under --data-dir, loopback

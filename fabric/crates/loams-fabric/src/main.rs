@@ -56,6 +56,9 @@ fn run_house(args: &HouseArgs) -> Result<(), HouseError> {
         for note in notes {
             eprintln!("loams-fabric house: {note}");
         }
+        if let Some(admin) = running.admin_addr() {
+            eprintln!("loams-fabric house: metrics on http://{admin}/metrics");
+        }
         if let Some(path) = key {
             eprintln!(
                 "loams-fabric house: single-node user `{}`; its password is in {}",
