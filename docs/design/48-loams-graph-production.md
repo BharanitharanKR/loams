@@ -934,4 +934,4 @@ They run in the heavy tier (nightly and the dev → main PR), not in the PR fast
 | # | Question | Owner | Needed by |
 |---|---|---|---|
 | Q926 | Revisit Bolt as a `loams-gateway` module when Loams Memory unparks (preview.4)? Default: revisit then, read-mostly, with Cypher through Grafeo's opt-in dialect (D748), on `boltr` | Owner | preview.4 (Loams Memory) |
-| Q927 | Approve the Proposed defaults of §26.4–§26.11 (D1065–D1071, and D1072's grammar source)? Default: yes, each taken up by the GR1 task it names | Owner | GR1 Task 26 |
+| Q927 | ~~Approve the Proposed defaults of §26.4–§26.11 (D1065–D1071, and D1072's grammar source)? Default: yes, each taken up by the GR1 task it names~~ **Answered 2026-10-16 by the owner: approved, D1072 stays Approved.** | Owner | GR1 Task 26 |
