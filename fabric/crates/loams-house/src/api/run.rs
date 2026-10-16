@@ -474,6 +474,12 @@ impl HouseApi {
                         max_insert_bytes: config.lake_insert_max_bytes,
                         pipe_batch: None,
                     };
+                    let inserted_into = match &outcome {
+                        gate::CatalogOutcome::Insert(target) => {
+                            Some((target.database.clone(), target.name.clone()))
+                        }
+                        _ => None,
+                    };
                     let inserted = match outcome {
                         gate::CatalogOutcome::Insert(target) => {
                             let streams =
@@ -492,6 +498,27 @@ impl HouseApi {
                             crate::compact::optimize(&ctx, &plan).await
                         }
                         _ => unreachable!("matched above"),
+                    };
+                    // The source's materialized views run before the answer
+                    // (HS1 Task 17).
+                    let inserted = match (inserted, inserted_into, self.lake.as_ref()) {
+                        (Ok(inserted), Some((db, name)), Some(lake))
+                            if inserted.snapshot_id.is_some() && inserted.written_rows > 0 =>
+                        {
+                            crate::mv::after_insert(
+                                lake,
+                                &self.pool,
+                                config.session_limits,
+                                config.lake_insert_max_bytes,
+                                user.namespace,
+                                &db,
+                                &name,
+                                &st.settings,
+                            )
+                            .await
+                            .map(|()| inserted)
+                        }
+                        (other, _, _) => other,
                     }
                     .map_err(|err| to_connect(&err))?;
                     return Ok(Started {

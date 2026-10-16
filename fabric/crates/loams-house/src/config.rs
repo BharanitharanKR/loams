@@ -112,6 +112,9 @@ pub struct HouseConfig {
     /// How often the pipe runner looks for records (HS1 Task 16): 1 s; zero
     /// turns it off.
     pub pipe_interval: Duration,
+    /// How often materialized views over lake tables catch up on commits no
+    /// `INSERT` ran them for (HS1 Task 17): 5 s; zero turns it off.
+    pub view_interval: Duration,
 }
 
 /// The House's link to the engine's stream API (HS1 Task 16, `[house.engine]`).
@@ -172,6 +175,7 @@ impl Default for HouseConfig {
             retention_interval: crate::retention::DEFAULT_SWEEP_INTERVAL,
             engine: None,
             pipe_interval: Duration::from_secs(1),
+            view_interval: Duration::from_secs(5),
             default_buffer_size: 1024 * 1024,
             max_query_size: 256 * 1024,
             receive_timeout: Duration::from_secs(30),

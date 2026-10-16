@@ -230,12 +230,7 @@ impl Pipe {
                 .and_then(|(_, v)| v.parse().ok())
                 .unwrap_or(default)
         };
-        let mut views: Vec<MaterializedView> = properties
-            .iter()
-            .filter(|(k, _)| k.starts_with(MV_PREFIX))
-            .filter_map(|(_, v)| serde_json::from_str(v).ok())
-            .collect();
-        views.sort_by(|a, b| (&a.database, &a.name).cmp(&(&b.database, &b.name)));
+        let views = views_of(&table);
         Some(Self {
             database: database.to_string(),
             name: name.to_string(),
@@ -246,6 +241,20 @@ impl Pipe {
             views,
         })
     }
+}
+
+/// The materialized views recorded on a table (a pipe, or a lake table they
+/// read, HS1 Task 17), by name.
+pub fn views_of(table: &LakeTable) -> Vec<MaterializedView> {
+    let mut views: Vec<MaterializedView> = table
+        .metadata
+        .properties()
+        .iter()
+        .filter(|(k, _)| k.starts_with(MV_PREFIX))
+        .filter_map(|(_, v)| serde_json::from_str(v).ok())
+        .collect();
+    views.sort_by(|a, b| (&a.database, &a.name).cmp(&(&b.database, &b.name)));
+    views
 }
 
 /// Every pipe of a namespace.
@@ -263,21 +272,25 @@ pub async fn pipes(lake: &Lake, namespace: u64) -> Result<Vec<Pipe>, HouseError>
     Ok(out)
 }
 
-/// The view `database.name` of a namespace, with its pipe.
+/// The view `database.name` of a namespace, with the table it is recorded on
+/// (its source: a pipe or a lake table).
 async fn find_view(
     lake: &Lake,
     namespace: u64,
     database: &str,
     name: &str,
-) -> Result<Option<(Pipe, MaterializedView)>, HouseError> {
-    for pipe in pipes(lake, namespace).await? {
-        if let Some(view) = pipe
-            .views
-            .iter()
-            .find(|v| v.database == database && v.name == name)
-            .cloned()
-        {
-            return Ok(Some((pipe, view)));
+) -> Result<Option<(LakeTable, MaterializedView)>, HouseError> {
+    for db in lake.databases(namespace).await? {
+        for table_name in lake.table_names(namespace, &db.name).await? {
+            let Some(table) = lake.load(namespace, &db.name, &table_name).await? else {
+                continue;
+            };
+            if let Some(view) = views_of(&table)
+                .into_iter()
+                .find(|v| v.database == database && v.name == name)
+            {
+                return Ok(Some((table, view)));
+            }
         }
     }
     Ok(None)
@@ -506,12 +519,12 @@ pub async fn create_materialized_view(
                 "Table {source_db}.{source} does not exist"
             )))
         })?;
-    let Some(pipe) = Pipe::from_table(&source_db, &source, source_table) else {
+    let source_class = ddl::class_of(&source_table.metadata);
+    if !matches!(source_class, TableClass::Pipe | TableClass::Lake) {
         return Err(not_implemented(
-            "Materialized views over lake tables are served from HS1 Task 17; this House \
-             serves views over pipes (LoamsStream)",
+            "A materialized view reads a pipe or a lake table the House writes",
         ));
-    };
+    }
     let target = lake
         .lake_table(
             namespace,
@@ -525,6 +538,12 @@ pub async fn create_materialized_view(
             "A materialized view writes into a lake table",
         ));
     }
+    if target.ident == source_table.ident {
+        return Err(bad(format!(
+            "Materialized view {}.{} would read and write {target_database}.{to}",
+            database, stmt.name
+        )));
+    }
     let view = MaterializedView {
         id: uuid::Uuid::new_v4().simple().to_string(),
         database,
@@ -533,9 +552,15 @@ pub async fn create_materialized_view(
         target: to,
         select: stmt.select.clone(),
     };
+    if source_class == TableClass::Lake {
+        // A view over a lake table starts at the source's current snapshot
+        // (no backfill, as ClickHouse without POPULATE): its cursor goes into
+        // the target first, so a view is never recorded without one.
+        crate::mv::start_cursor(lake, &target, &view, &source_table).await?;
+    }
     lake.catalog()
         .commit(
-            &pipe.table.ident,
+            &source_table.ident,
             Vec::new(),
             vec![TableUpdate::SetProperties {
                 updates: HashMap::from([(
@@ -555,12 +580,12 @@ pub async fn drop_materialized_view(
     database: &str,
     name: &str,
 ) -> Result<bool, HouseError> {
-    let Some((pipe, view)) = find_view(lake, namespace, database, name).await? else {
+    let Some((source, view)) = find_view(lake, namespace, database, name).await? else {
         return Ok(false);
     };
     lake.catalog()
         .commit(
-            &pipe.table.ident,
+            &source.ident,
             Vec::new(),
             vec![TableUpdate::RemoveProperties {
                 removals: vec![format!("{MV_PREFIX}{}", view.id)],
@@ -683,7 +708,12 @@ impl PipeStates {
             .unwrap_or_default()
     }
 
-    fn update(&self, namespace: u64, view: &MaterializedView, f: impl FnOnce(&mut PipeState)) {
+    pub(crate) fn update(
+        &self,
+        namespace: u64,
+        view: &MaterializedView,
+        f: impl FnOnce(&mut PipeState),
+    ) {
         let mut states = self.0.lock().unwrap_or_else(|e| e.into_inner());
         f(states
             .entry((namespace, view.database.clone(), view.name.clone()))
@@ -774,8 +804,7 @@ pub enum Ran {
 #[derive(Debug, Clone)]
 pub struct PipeRunner {
     lake: Arc<Lake>,
-    pool: WorkerPool,
-    config: HouseConfig,
+    writer: ViewWriter,
     link: EngineLink,
     source: Arc<dyn StreamSource>,
     hooks: Option<Arc<dyn Hooks>>,
@@ -791,9 +820,13 @@ impl PipeRunner {
         source: Arc<dyn StreamSource>,
     ) -> Self {
         Self {
+            writer: ViewWriter {
+                lake: Arc::clone(&lake),
+                pool,
+                limits: config.session_limits,
+                max_insert_bytes: config.lake_insert_max_bytes,
+            },
             lake,
-            pool,
-            config,
             link,
             source,
             hooks: None,
@@ -978,7 +1011,9 @@ impl PipeRunner {
             io.write(&location, bytes::Bytes::from(data)).await?;
             batch_location = Some(location.clone());
             self.hook(Step::Uploaded, view).await?;
-            let result = self.write(namespace, pipe, view, &target, &location).await;
+            let root = lake.root().clone();
+            let make = |endpoint: &str| PipeBatch::new(pipe, &location, endpoint, &root);
+            let result = self.writer.write(namespace, view, &target, &make).await;
             match result {
                 Ok(files) => written = Some(files),
                 Err(err) => {
@@ -997,6 +1032,11 @@ impl PipeRunner {
         if let Ok(Ran::Committed { .. }) = &outcome {
             self.hook(Step::Committed, view).await?;
             committer.mark_dirty(&target.ident);
+            // The target's own views (HS1 Task 17); their errors are theirs.
+            let views = crate::mv::ViewRunner::new(self.writer.clone());
+            let _ = views
+                .after_commit(namespace, &view.target_database, &view.target)
+                .await;
         }
         if let Some(location) = batch_location {
             let _ = io.delete(&location).await;
@@ -1012,15 +1052,32 @@ impl PipeRunner {
             other => Ok(other),
         }
     }
+}
 
+/// Writes a materialized view's `SELECT` over a batch as files of its target
+/// (HS1 Tasks 16 and 17): the pipes' runner and the views over lake tables
+/// share it.
+#[derive(Debug, Clone)]
+pub struct ViewWriter {
+    /// The catalog.
+    pub lake: Arc<Lake>,
+    /// The workers.
+    pub pool: WorkerPool,
+    /// The caps a statement's settings are held to.
+    pub limits: crate::settings::SessionLimits,
+    /// The most one write takes, as Arrow bytes.
+    pub max_insert_bytes: u64,
+}
+
+impl ViewWriter {
     /// The view's `SELECT` over the batch, written as files of `target`.
-    async fn write(
+    /// `batch` makes the batch's view from the worker's bucket endpoint.
+    pub async fn write(
         &self,
         namespace: u64,
-        pipe: &Pipe,
         view: &MaterializedView,
         target: &LakeTable,
-        batch: &str,
+        batch: &(dyn Fn(&str) -> Result<PipeBatch, HouseError> + Sync),
     ) -> Result<loams_house_lake::write::Written, HouseError> {
         let mut lease = self.pool.acquire(&namespace.to_string()).await?;
         let endpoint = lease.ready().and_then(|r| r.s3_endpoint.clone());
@@ -1031,7 +1088,7 @@ impl PipeRunner {
                  --store)",
             ));
         };
-        let batch = match PipeBatch::new(pipe, batch, &endpoint, self.lake.root()) {
+        let batch = match batch(&endpoint) {
             Ok(batch) => batch,
             Err(err) => {
                 self.pool.release(lease, Outcome::Completed);
@@ -1099,9 +1156,9 @@ impl PipeRunner {
             query_id: &query_id,
             params: &[],
             settings: &[],
-            limits: &self.config.session_limits,
+            limits: &self.limits,
             known: &known,
-            max_insert_bytes: self.config.lake_insert_max_bytes,
+            max_insert_bytes: self.max_insert_bytes,
             pipe_batch: Some(&batch),
         };
         crate::insert::write_files(&ctx, lease, &insert).await
@@ -1200,8 +1257,8 @@ pub fn cursor_of(target: &LakeTable, view: &MaterializedView) -> BTreeMap<u32, u
         .collect()
 }
 
-/// Commits `files` with the cursor moved from `read` to `next` (see the module
-/// docs).
+/// Commits `files` with the pipe's cursor moved from `read` to `next` (see
+/// the module docs).
 async fn commit(
     io: &crate::commit::CommitIo,
     table: &TableIdent,
@@ -1210,17 +1267,47 @@ async fn commit(
     next: &BTreeMap<u32, u64>,
     files: Vec<loams_house_lake::spec::DataFile>,
 ) -> Result<Ran, HouseError> {
-    let cursor: Vec<(String, String)> = next
-        .iter()
-        .map(|(p, o)| (view.cursor_key(*p), o.to_string()))
-        .collect();
+    let strings = |cursor: &BTreeMap<u32, u64>| -> BTreeMap<String, String> {
+        cursor
+            .iter()
+            .map(|(p, o)| (view.cursor_key(*p), o.to_string()))
+            .collect()
+    };
+    let summary: Vec<(String, String)> = strings(next).into_iter().collect();
+    commit_cursor(io, table, &strings(read), &strings(next), summary, files).await
+}
+
+/// Commits `files` into `table` with the table properties `next` set, on the
+/// condition that those properties still read `read` (a key missing from
+/// `read` must be missing). `summary` goes into the new snapshot's summary.
+/// A lost commit reloads: properties that moved mean another runner did this
+/// work (or this commit landed and its answer was lost: then they read `next`);
+/// unmoved means another writer committed, and the append is rebuilt.
+pub(crate) async fn commit_cursor(
+    io: &crate::commit::CommitIo,
+    table: &TableIdent,
+    read: &BTreeMap<String, String>,
+    next: &BTreeMap<String, String>,
+    summary: Vec<(String, String)>,
+    files: Vec<loams_house_lake::spec::DataFile>,
+) -> Result<Ran, HouseError> {
+    let keys: Vec<&String> = read.keys().chain(next.keys()).collect();
+    let current = |metadata: &loams_house_lake::spec::TableMetadata| -> BTreeMap<String, String> {
+        keys.iter()
+            .filter_map(|k| {
+                metadata
+                    .properties()
+                    .get(k.as_str())
+                    .map(|v| ((*k).clone(), v.clone()))
+            })
+            .collect()
+    };
     let mut ambiguous = false;
     for _ in 0..COMMIT_ATTEMPTS {
         let loaded = io.catalog.load_table(table).await?;
-        let now = cursor_of(&loaded, view);
+        let metadata = &loaded.metadata;
+        let now = current(metadata);
         if now != *read {
-            // Moved: by this batch's own commit whose answer was lost, or by
-            // another runner.
             return Ok(if ambiguous && now == *next {
                 Ran::Committed {
                     records: 0,
@@ -1230,9 +1317,8 @@ async fn commit(
                 Ran::Abandoned
             });
         }
-        let metadata = &loaded.metadata;
         let set_cursor = TableUpdate::SetProperties {
-            updates: cursor.iter().cloned().collect(),
+            updates: next.clone().into_iter().collect(),
         };
         let (requirements, updates, uploads) = if files.is_empty() {
             (
@@ -1252,11 +1338,11 @@ async fn commit(
                 metadata,
                 parent_list.as_deref(),
                 files.clone(),
-                cursor.clone(),
+                summary.clone(),
                 now_ms(),
             )
             .await
-            .map_err(|err| bad(format!("the pipe's commit could not be built: {err}")))?;
+            .map_err(|err| bad(format!("the view's commit could not be built: {err}")))?;
             let mut updates = built.updates;
             updates.push(set_cursor);
             (built.requirements, updates, built.files)
@@ -1280,7 +1366,7 @@ async fn commit(
         }
     }
     Err(HouseError::from(ChError::network_error(format!(
-        "the pipe's commit into {} lost to other commits {COMMIT_ATTEMPTS} times; it is tried \
+        "the view's commit into {} lost to other commits {COMMIT_ATTEMPTS} times; it is tried \
          again",
         crate::catalog::table_text(table)
     ))))

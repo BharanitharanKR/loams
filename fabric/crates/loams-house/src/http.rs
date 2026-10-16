@@ -122,6 +122,7 @@ pub struct HouseHandle {
     compaction: Option<JoinHandle<()>>,
     retention: Option<JoinHandle<()>>,
     pipes: Option<JoinHandle<()>>,
+    views: Option<JoinHandle<()>>,
 }
 
 impl HouseHandle {
@@ -150,6 +151,9 @@ impl HouseHandle {
         }
         if let Some(pipes) = &self.pipes {
             pipes.abort();
+        }
+        if let Some(views) = &self.views {
+            views.abort();
         }
         if let Some(compaction) = &self.compaction {
             compaction.abort();
@@ -325,6 +329,19 @@ async fn serve_all(
         }
         _ => None,
     };
+    // Materialized views' catch-up (HS1 Task 17).
+    let views = match (&shared.lake, shared.config.view_interval) {
+        (Some(lake), every) if !every.is_zero() => Some(
+            crate::mv::Scheduler::new(crate::mv::ViewRunner::new(crate::pipes::ViewWriter {
+                lake: Arc::clone(lake),
+                pool: shared.pool.clone(),
+                limits: shared.config.session_limits,
+                max_insert_bytes: shared.config.lake_insert_max_bytes,
+            }))
+            .spawn(every),
+        ),
+        _ => None,
+    };
     let accept = tokio::spawn(async move {
         loop {
             let Ok(permit) = Arc::clone(&permits).acquire_owned().await else {
@@ -386,6 +403,7 @@ async fn serve_all(
         compaction,
         retention,
         pipes,
+        views,
     })
 }
 
@@ -1742,6 +1760,10 @@ async fn lake_insert(
         first: first_data,
     };
     let feed: Option<&mut dyn crate::insert::Feed> = if streams { Some(&mut feed) } else { None };
+    let inserted_into = match &write.job {
+        LakeJob::Insert(target) => Some((target.database.clone(), target.name.clone())),
+        _ => None,
+    };
     let inserted = match write.job {
         LakeJob::Insert(target) => crate::insert::run(&ctx, lease, *target, feed).await,
         LakeJob::CreateAs(plan) => crate::insert::create_as(&ctx, lease, *plan).await,
@@ -1752,6 +1774,26 @@ async fn lake_insert(
                 .release(lease, crate::admission::Outcome::Completed);
             crate::compact::optimize(&ctx, &plan).await
         }
+    };
+    // The source's materialized views run before the answer (HS1 Task 17).
+    let inserted = match (inserted, inserted_into, shared.lake.as_ref()) {
+        (Ok(inserted), Some((database, name)), Some(lake))
+            if inserted.snapshot_id.is_some() && inserted.written_rows > 0 =>
+        {
+            crate::mv::after_insert(
+                lake,
+                &shared.pool,
+                shared.config.session_limits,
+                shared.config.lake_insert_max_bytes,
+                user.namespace,
+                &database,
+                &name,
+                &write.settings,
+            )
+            .await
+            .map(|()| inserted)
+        }
+        (other, _, _) => other,
     };
     match inserted {
         Ok(inserted) => {
