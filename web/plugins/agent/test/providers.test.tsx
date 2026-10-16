@@ -55,17 +55,7 @@ describe('agent providers section', () => {
   it('saves with the key only when typed, and clears the field', async () => {
     const chat = setup([mk({ hasKey: true, configured: true })]);
     const c = await card('DeepSeek');
-    // The form resets itself to the saved values in an effect after its first
-    // render; on a busy runner that can land after the edit and undo it. So
-    // repeat the edit until it holds and Save has enabled with it.
-    const model = c.getByLabelText('Model') as HTMLInputElement;
-    await waitFor(() => {
-      if (model.value !== 'deepseek-reasoner') {
-        fireEvent.change(model, { target: { value: 'deepseek-reasoner' } });
-      }
-      expect(model.value).toBe('deepseek-reasoner');
-      expect((c.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(false);
-    });
+    fireEvent.change(c.getByLabelText('Model'), { target: { value: 'deepseek-reasoner' } });
     fireEvent.click(c.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(chat.configureProvider).toHaveBeenCalledTimes(1));
     expect(chat.configureProvider).toHaveBeenLastCalledWith('deepseek', {
@@ -75,16 +65,10 @@ describe('agent providers section', () => {
     // The first save holds the form busy ("Saving…", disabled) until it settles;
     // a click before then is ignored, so wait for Save to come back.
     await waitFor(() => expect(c.getByRole('button', { name: 'Save' })).toBeTruthy());
-    // The save's result re-renders the form from the returned values, which can
-    // also land after the edit; repeat it until it holds, as above.
-    const key = c.getByLabelText('API key') as HTMLInputElement;
-    await waitFor(() => {
-      if (key.value !== 'sk-new-key-123456') {
-        fireEvent.change(key, { target: { value: 'sk-new-key-123456' } });
-      }
-      expect(key.value).toBe('sk-new-key-123456');
-      expect((c.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(false);
-    });
+    fireEvent.change(c.getByLabelText('API key'), { target: { value: 'sk-new-key-123456' } });
+    await waitFor(() =>
+      expect((c.getByRole('button', { name: 'Save' }) as HTMLButtonElement).disabled).toBe(false),
+    );
     fireEvent.click(c.getByRole('button', { name: 'Save' }));
     await waitFor(() => expect(chat.configureProvider).toHaveBeenCalledTimes(2));
     expect(chat.configureProvider.mock.calls[1]?.[1]).toMatchObject({
