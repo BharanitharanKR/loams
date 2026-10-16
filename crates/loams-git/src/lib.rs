@@ -12,6 +12,7 @@ pub mod blob;
 pub mod catalog;
 pub mod checkpointer;
 pub mod clock;
+pub mod derived;
 pub mod error;
 pub mod fork;
 pub mod format;
@@ -40,6 +41,7 @@ pub use catalog::{
 };
 pub use checkpointer::{CheckpointPolicy, create_repo, latest_state, state_at};
 pub use clock::{Clock, SystemClock};
+pub use derived::{DerivedError, DerivedStore};
 pub use error::IdError;
 pub use fork::{ForkError, fork_repo, open_fork_odb};
 pub use format::FormatError;

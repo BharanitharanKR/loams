@@ -898,6 +898,8 @@ save: PUT ws/<ws_id>/snap/<n+1>.lws  If-None-Match: *
 - `GET /git/<ns>/<repo>.git/loams/objects/<oid>` returns one object, zlib-compressed in the loose format, with `Cache-Control: private, max-age=31536000, immutable`. An organisation's caching proxy can serve it; R2 charges no egress for it.
 - **Prefetch.** `.loams/profiles/<name>.txt` holds gitignore-style patterns, committed to the repository; `loams vfs prefetch --profile <name>` uses one. vfsd's fetch log records the paths a command (`cargo build`, `pytest`) read first and suggests a profile (`loams vfs profile suggest`). On `readdir`, vfsd prefetches that directory's trees to depth 2.
 
+**As built (GT1c, Tasks 17 and 19; `crates/loams-git/src/odb/range.rs`, `src/derived/tree_aux.rs`; plan rulings T17.1–T17.5, T19.1–T19.2).** `RangeOdb` reads idx fan-outs once per pack, the 4 KiB oid pages of one bucket per lookup, and entries in reads of at least 64 KiB, through the blob store's H1 cache; `header` answers a delta's result size from at most 20 inflated bytes of its delta data. `WsOdb` searches a workspace's packs after the repository's, so they never shadow an object. Tree aux data is `derived/tree-aux/<tree_oid>.lta`: magic `LGITTAUX`, version 1, the tree id, a `loams.git.v1.TreeAux` body (name, mode, object id, and a size for blobs and symlinks), CRC32C and the end magic `LGITTEND`.
+
 #### 19.5.2 Upload
 
 - `HasObjects(ws, oids[])` returns a bitmap over the repository and the workspace packs.
