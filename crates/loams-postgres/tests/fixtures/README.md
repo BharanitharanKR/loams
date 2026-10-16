@@ -7,6 +7,8 @@ Recorded on 2026-10-09 from `deploy/loams-postgres-dev` at its pinned digests:
 
 The fork `ostrium-labs/loams-postgres` publishes no images yet (PG2 ruling R2.1). For these APIs the pinned build is the fork's code: none of the 12 commits from `77e22e4b` to the fork's tag `loams-decoder-trim-1` (`1218fb7a`) touches `libs/pageserver_api/src/{models,controller_api}.rs`, `pageserver/src/http/routes.rs`, `storage_controller/src/http.rs`, `libs/compute_api`, `compute_tools/src/http`, `libs/http-utils/src/error.rs` or `safekeeper/src/http` (`git log 77e22e4b..loams-decoder-trim-1 -- <those paths>` is empty; checked 2026-10-09). The pinned `pageserver --version` reports `git-env:77e22e4bf09d88b70b4a83a38c2f6de6301816b4`.
 
+**Re-checked on 2026-10-16 (NF1 Task 14)** against our own build, `lp-2026.10.1`: `loams-postgres-storage@sha256:fc99d2ea…` and `loams-postgres-compute-v17@sha256:ee9f854e…`, built from `ostrium-labs/loams-postgres` `78b24759`. Its `pageserver --version` reports `git-env:78b247596077e1659d0adeaf5f74b258321792a5`. `capture.sh` (without `loams-wal`) re-recorded every pageserver and `compute_ctl` fixture on a fresh stack. Each response came back byte for byte the same, and so did each status. The only differences were `compute_status`'s `start_time` and the timestamp in `lsn_by_timestamp`'s query, which change with every capture. So no fixture was re-recorded, and the shapes above still name their source in the fork.
+
 ## Files
 
 - **`*.request.json`** are what `loams-postgres` sends. `capture.sh` sends them as written, so a request the component refuses fails the capture. `tests/client.rs` checks that the client produces them byte for byte after canonical JSON (keys sorted).

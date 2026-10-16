@@ -40,7 +40,7 @@ summary = "Give the safekeeper a volume (after a drain)"
 pd             = "v8.5.8"
 tikv           = "v8.5.8"
 tidb           = "v8.5.8-loams.1"
-loams_postgres = "sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f"
+loams_postgres = "sha256:fc99d2ea577263590fc9fa0b4c6ed122637b4a357a6f75a3d1478c537ba6347a"
 chdb           = "26.9.0"
 grafeo         = "0.5.43"
 

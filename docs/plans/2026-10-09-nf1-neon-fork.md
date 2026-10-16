@@ -1622,3 +1622,32 @@ Fork PR ostrium-labs/loams-postgres#11 (branch `loams/nf1-release`, LP-0013) mer
 5. **Cadence.** Weekly on Tuesdays: in a month's first week, if no `lp-YYYY.MM.*` tag exists yet, the job opens one issue on `ostrium-labs/loams` (issues are off on the fork). It needs the bot token.
 6. **`docs/loams/release.md`**: the cadence table, cutting a release, what it needs, and verifying with `verify-pins.sh`.
 7. **Not run:** a real release needs Actions, package publishing and the bot token (owner). Task 14 cuts the first one.
+
+### Task 14 rulings (2026-10-16, at `dev` `c8bcf4d8`)
+
+Loams PR #679 (branch `nf1-b2-t14`). There is no fork change: the release was cut with Task 13's workflow.
+
+1. **The parity release is `lp-2026.10.1`** (`78b24759`, the merge of fork PR #17).
+   - `lp-2026.10.0`'s run failed in the compute sources step and created no git tag or Release. Fork PR #17 ("the sources check reads the whole tar listing") fixed that step, and `.1` is the plan's re-release (step 4).
+   - The Postgres revisions equal the mirror's: `vendor/revisions.json` and both submodules are identical at `78b24759` and `77e22e4b` (17.5 `1e01fcea`, 16.9 `a42351fc`).
+   - The three packages are public.
+2. **The pin PR was opened by hand.** The release's `pin-pr` job has no `LOAMS_BOT_TOKEN` (Q733), so it printed the command. This PR runs `pins.py set --from-release https://github.com/ostrium-labs/loams-postgres/releases/download/lp-2026.10.1/loams-postgres-images.toml`, and the diff is the release asset's document.
+3. **New consumer: the release stack's `endpoint-storage`** (`deploy/release/compose.yaml`, `image: ${NEON_IMAGE:-…}`).
+   - It still defaulted to Neon's image and nothing checked it, so `pins.py` now generates and checks it (7 consumers).
+   - The release stack's computes need no line: `loams-pg-control` compiles the pin file in.
+   - `release/upgrade-path.toml`'s preview.3 `loams_postgres` component follows, as `check-upgrade-path.sh` requires. The PR carries `ci:upgrade`, so the upgrade gate runs a preview.2 stack upgraded onto these images.
+4. **`test_pins.py` no longer reads the live pin file as its starting state.** Each scratch tree is rendered from `fixtures/pins/pins-mirror-77e22e4b.toml` (the Task 2 file), so the golden diffs stay put when the pins move. `test_the_repository_pins_our_own_release` checks:
+   - an `lp-` release;
+   - every repository under `ghcr.io/ostrium-labs/loams-postgres-`;
+   - every source equal to `ostrium-labs/loams-postgres@<fork_commit>`;
+   - no `ghcr.io/neondatabase/` in any consumer outside the README's Mirror history.
+
+   That is "no `mirror:` source left".
+5. **Step 3, as run:**
+   - **`verify-pins.sh` on the real pins** (cosign v3.0.6, oras 1.3.1, locally and in a dispatched `nf1-pins.yml`): all three images verified. This confirms the Fulcio identity Task 12 left open: `loams-sign.yml`'s certificate passes the shared regex.
+   - **`pg2-e2e.yml` dispatched on the branch**: every job green (Deploy, Pageserver ingest, pg-control deploy, Compose runtime with `it_endpoint`, Kubernetes runtime).
+   - **The decoder's golden tests** (`pg2.yml` WAL decoder, headers from the new storage digest): green. The headers extracted from our image are identical to those from Neon's `neon` image, per file, for v16 and v17 (R31.6).
+   - **The fixtures:** re-captured against our images and byte-equal except two timestamps (`crates/loams-postgres/tests/fixtures/README.md`).
+   - **The desktop's stack copy:** the desktop ships `deploy/loams-postgres-dev` unchanged (`electron-builder.config.cjs`). It was run under a scratch compose project, not the Electron app: start, a tenant and timeline, `SELECT 1` (17.5), a branch, and `SELECT 1` on the branch's compute. Torn down with `down -v` of that project only.
+6. **A dev breakage fixed on the way:** `crates/loams-wal-decoder/deny.toml` lacked the root's `zip@7.2.0` ignore (61cc37cb), so `check-decoder-deny.py` failed `pg2.yml`'s WAL decoder job. The entry is copied, with its removal date.
+7. **Left:** `loams-pg-control`'s tests still name Neon's compute digest as an arbitrary pinned image (fakes, not consumers). Q715's default path is closed: the defaults are `ghcr.io/ostrium-labs`, and the neon-archive packages stay private. Until the bot token exists, every release's pin PR is opened by hand.

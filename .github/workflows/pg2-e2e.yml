@@ -67,7 +67,7 @@ concurrency:
 env:
   # The server headers' source: images.storage in deploy/pins/loams-postgres-images.toml,
   # written by scripts/nf1/pins.py (as in pg2.yml; NF1 Task 2).
-  PG_HEADERS_IMAGE: ghcr.io/neondatabase/neon@sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f
+  PG_HEADERS_IMAGE: ghcr.io/ostrium-labs/loams-postgres-storage@sha256:fc99d2ea577263590fc9fa0b4c6ed122637b4a357a6f75a3d1478c537ba6347a
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
 jobs:

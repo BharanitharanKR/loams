@@ -39,8 +39,9 @@ Build `loams-wal` once, with podman's socket (or Docker) and tiup available (see
 [`scripts/tikv`](../../scripts/tikv)):
 
 ```sh
-# loams-wal with the interpreted sender: its own workspace, with Postgres headers
-scripts/pg2/pg-headers.sh ghcr.io/neondatabase/neon@sha256:ead56a7b33925ca4df9f1ee0d29f55fa25e165a3fee6a4f19055050c68e8cad0 \
+# loams-wal with the interpreted sender: its own workspace, with Postgres headers from
+# images.storage in deploy/pins/loams-postgres-images.toml
+scripts/pg2/pg-headers.sh "$(python3 -c 'import tomllib; s = tomllib.load(open("deploy/pins/loams-postgres-images.toml", "rb"))["images"]["storage"]; print(s["repository"] + "@" + s["digest"])')" \
   crates/loams-wal-decoder/pg_install
 (cd crates/loams-wal-decoder && POSTGRES_INSTALL_DIR=$PWD/pg_install \
   cargo build --release --features tikv,nvme --bin loams-wal-interpreted)

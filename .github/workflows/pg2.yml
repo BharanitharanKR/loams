@@ -102,10 +102,10 @@ permissions:
 
 env:
   # The headers' source: images.storage in deploy/pins/loams-postgres-images.toml, written
-  # by scripts/nf1/pins.py (NF1 Task 2); today Neon 77e22e4b, the build the golden
-  # fixtures' safekeeper came from (no header changes up to the fork's tag
-  # loams-decoder-trim-1). Its multi-arch index.
-  PG_HEADERS_IMAGE: ghcr.io/neondatabase/neon@sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f
+  # by scripts/nf1/pins.py (NF1 Task 2). Since NF1 Task 14 a Loams Postgres release, with
+  # the same Postgres revisions (16.9, 17.5) as Neon 77e22e4b, the build the golden
+  # fixtures' safekeeper came from, so the headers are unchanged (R31.6). Its multi-arch index.
+  PG_HEADERS_IMAGE: ghcr.io/ostrium-labs/loams-postgres-storage@sha256:fc99d2ea577263590fc9fa0b4c6ed122637b4a357a6f75a3d1478c537ba6347a
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
 jobs:

@@ -11,6 +11,8 @@ digest. The consumers repeat those references and are generated from it:
 - `x-neon-image` (images.storage) and `x-compute-image` (images.compute-v<default>)
   in deploy/loams-postgres-dev/compose.yaml and deploy/loams-pg-bench/compose.yaml,
   each still overridable by NEON_IMAGE / COMPUTE_IMAGE (PG2 R2.1; names kept, D823);
+- the `image: ${NEON_IMAGE:-...}` default (images.storage) of the release stack's
+  services outside the included stack, in deploy/release/compose.yaml (NF1 Task 14);
 - `PG_HEADERS_IMAGE` (images.storage) in pg2.yml, pg2-e2e.yml and loams-pg-bench.yml;
 - the image table between the `pins.py` markers in deploy/loams-postgres-dev/README.md;
 - crates/loams-postgres/src/majors.rs, once `rust` has created it.
@@ -43,6 +45,7 @@ AUDIT_DIR = "deploy/pins/audit"
 README = "deploy/loams-postgres-dev/README.md"
 MAJORS_RS = "crates/loams-postgres/src/majors.rs"
 COMPOSE = ("deploy/loams-postgres-dev/compose.yaml", "deploy/loams-pg-bench/compose.yaml")
+RELEASE_COMPOSE = "deploy/release/compose.yaml"
 WORKFLOWS = (".github/workflows/pg2.yml", ".github/workflows/pg2-e2e.yml", ".github/workflows/loams-pg-bench.yml")
 
 HEADER = "# Written by scripts/nf1/pins.py (set); checked by pins.py (check). Do not edit by hand."
@@ -217,6 +220,8 @@ def consumer_lines(pins):
                       "x-neon-image: &neon-image ${NEON_IMAGE:-" + storage + "}"))
         lines.append((path, r"^x-compute-image: &compute-image \$\{COMPUTE_IMAGE:-[^}\n]*\}$",
                       "x-compute-image: &compute-image ${COMPUTE_IMAGE:-" + compute + "}"))
+    lines.append((RELEASE_COMPOSE, r"^(?P<indent>[ ]+)image: \$\{NEON_IMAGE:-[^}\n]*\}$",
+                  "image: ${NEON_IMAGE:-" + storage + "}"))
     for path in WORKFLOWS:
         lines.append((path, r"^(?P<indent>[ ]+)PG_HEADERS_IMAGE: \S+$", "PG_HEADERS_IMAGE: " + storage))
     return lines
@@ -373,7 +378,7 @@ def cmd_check(root):
     for e in errs:
         print(f"pins.py check: {e}", file=sys.stderr)
     if not errs:
-        print(f"pins.py check: ok ({PIN_FILE}, {len(COMPOSE) + len(WORKFLOWS) + 1} consumers)")
+        print(f"pins.py check: ok ({PIN_FILE}, {len(COMPOSE) + len(WORKFLOWS) + 2} consumers)")
     return 1 if errs else 0
 
 
