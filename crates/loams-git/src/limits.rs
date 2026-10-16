@@ -102,6 +102,17 @@ pub const MAX_ENV_KEYS: usize = 2048;
 /// Files larger than this are scanned in their first and last 8 MiB, and
 /// binary files are skipped (§36 §19.13.9).
 pub const SCAN_MAX_FILE_BYTES: u64 = 8 * MIB;
+/// Paths (changed files and their directories) a commit may change against
+/// its first parent and still get a changed-path Bloom filter; above it the
+/// filter answers "maybe" to every path (git's value; §36 §19.8).
+pub const BLOOM_MAX_CHANGED_PATHS: usize = 512;
+/// Layers in one commit-graph chain; a new layer merges the ones below it
+/// to stay within this (§36 §19.8).
+pub const MAX_GRAPH_LAYERS: usize = 16;
+/// Revisions in one `Log` call (§36 §19.8).
+pub const MAX_LOG_REVS: usize = 64;
+/// Pathspecs in one `Log` or `DiffStat` call (§36 §19.8).
+pub const MAX_HISTORY_PATHS: usize = 64;
 
 /// One limit as the limits table prints it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -166,4 +177,8 @@ pub const LIMITS: &[Limit] = &[
     limit("MAX_ENV_FILE_BYTES", "256 KiB", "§36 §19.13.2"),
     limit("MAX_ENV_KEYS", "2,048", "§36 §19.13.2"),
     limit("SCAN_MAX_FILE_BYTES", "8 MiB", "§36 §19.13.9"),
+    limit("BLOOM_MAX_CHANGED_PATHS", "512 paths", "§36 §19.8"),
+    limit("MAX_GRAPH_LAYERS", "16", "§36 §19.8"),
+    limit("MAX_LOG_REVS", "64", "§36 §19.8"),
+    limit("MAX_HISTORY_PATHS", "64", "§36 §19.8"),
 ];

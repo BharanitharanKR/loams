@@ -1,4 +1,5 @@
-//! `ObjectService` and the immutable object route (GT1 Task 18, design §36 §19.5.1):
+//! `ObjectService` and the immutable object route (GT1 Tasks 18 and 20, design §36 §19.5.1,
+//! §19.8):
 //! `cargo test -p loams --features git --test git objects::`.
 
 use std::net::SocketAddr;
@@ -329,5 +330,88 @@ async fn object_route_is_immutable_cacheable() {
             "{path}"
         );
     }
+    running.shutdown().await;
+}
+
+#[tokio::test]
+async fn log_and_diffstat_are_served() {
+    let Some(dir) = history() else {
+        return;
+    };
+    std::fs::write(dir.path().join("README.md"), "hello\nworld\n").expect("write");
+    git(dir.path(), &["commit", "-q", "-am", "two"], None);
+    let running = Running::start().await;
+    let token = load(&running, &dir).await;
+    let (first, second) = (rev(&dir, "main~1"), rev(&dir, "main"));
+
+    let (status, messages) = running
+        .connect_stream(
+            &format!("{SVC}/Log"),
+            &json!({"namespace": "acme", "name": "web", "revs": ["main"],
+                    "paths": ["README.md"],
+                    "fields": ["LOG_FIELD_MESSAGE", "LOG_FIELD_CHANGED"],
+                    "consistencyToken": token}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let commits: Vec<&Value> = messages
+        .iter()
+        .filter(|(flags, _)| flags & 0x02 == 0)
+        .map(|(_, m)| &m["commit"])
+        .collect();
+    assert_eq!(commits.len(), 2, "{messages:?}");
+    assert_eq!(commits[0]["oid"], second);
+    assert_eq!(commits[0]["parents"], json!([first]));
+    assert_eq!(
+        STANDARD
+            .decode(commits[0]["message"].as_str().expect("message"))
+            .expect("b64"),
+        b"two\n"
+    );
+    assert!(
+        commits[0]["author"].is_null(),
+        "signatures were not asked for"
+    );
+    let changed = &commits[0]["changed"][0];
+    assert_eq!(changed["kind"], "CHANGE_KIND_MODIFIED");
+    assert_eq!(
+        STANDARD
+            .decode(changed["path"].as_str().expect("path"))
+            .expect("b64"),
+        b"README.md"
+    );
+    assert_eq!(commits[1]["oid"], first);
+
+    let (status, stat) = running
+        .connect(
+            &format!("{SVC}/DiffStat"),
+            &json!({"namespace": "acme", "name": "web", "fromRev": first, "toRev": "main",
+                    "consistencyToken": token}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{stat}");
+    let files = stat["files"].as_array().expect("files");
+    assert_eq!(files.len(), 1, "{stat}");
+    assert_eq!(files[0]["added"].as_str().unwrap_or("1"), "1");
+    assert!(files[0]["removed"].is_null() || files[0]["removed"] == "0");
+
+    // A glob pathspec and an unknown revision are refused.
+    let (status, error) = running
+        .connect(
+            &format!("{SVC}/DiffStat"),
+            &json!({"namespace": "acme", "name": "web", "fromRev": first, "toRev": "main",
+                    "paths": ["*.md"]}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::BAD_REQUEST, "{error}");
+    assert_eq!(reason(&error), "invalid_argument");
+    let (_, messages) = running
+        .connect_stream(
+            &format!("{SVC}/Log"),
+            &json!({"namespace": "acme", "name": "web", "revs": ["nope"]}),
+        )
+        .await;
+    let (_, end) = messages.last().expect("an end-of-stream message");
+    assert_eq!(end["error"]["code"], "invalid_argument", "{messages:?}");
     running.shutdown().await;
 }
