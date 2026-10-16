@@ -1105,6 +1105,9 @@ async fn lateral_join_with_collection() {
     assert!(message.contains("does not run"), "{message}");
     // Named arguments are DataFusion's to refuse; positional ones are §07 §5.1's order.
     let message = invalid(sql(&service, "SELECT * FROM graph_degree(graph => 'kg')").await);
-    assert!(message.contains("Unsupported function argument"), "{message}");
+    assert!(
+        message.contains("Unsupported function argument"),
+        "{message}"
+    );
     f.shutdown().await;
 }
