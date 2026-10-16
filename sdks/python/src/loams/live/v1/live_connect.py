@@ -18,7 +18,7 @@ from connectrpc.protocol import ProtocolType
 from connectrpc.server import ConnectASGIApplication, ConnectWSGIApplication, DEFAULT_READ_MAX_BYTES, Endpoint, EndpointSync
 from pyqwest import Client, SyncClient
 
-from .live_pb2 import ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition, WatchRequest
+from .live_pb2 import AuthenticateRequest, AuthenticateResponse, ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition, WatchRequest
 
 if TYPE_CHECKING:
     from collections.abc import AsyncGenerator, AsyncIterator, Iterable, Iterator, Mapping
@@ -51,6 +51,17 @@ class LiveService(Protocol):
         """
         Adds and removes queries in an open session. The next Transition
         reflects the change.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
+    async def authenticate(self, request: AuthenticateRequest, ctx: RequestContext[AuthenticateRequest, AuthenticateResponse], /) -> AuthenticateResponse:
+        """
+        Replaces an open session's identity with this request's credential
+        (its `Authorization` header; design §45 §5.4, LV1 plan Task 17). The
+        same caller only extends the session's expiry; another caller (a
+        sign-in or a sign-out) increments the identity version, and the next
+        Transition reruns every query as the new caller. Answered once that
+        Transition is queued. An unknown session is NOT_FOUND.
         """
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
@@ -103,6 +114,16 @@ class LiveServiceASGIApplication(ConnectASGIApplication[LiveService]):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=svc.modify_query_set,
+                ),
+                "/loams.live.v1.LiveService/Authenticate": Endpoint.unary(
+                    method=MethodInfo(
+                        name="Authenticate",
+                        service_name="loams.live.v1.LiveService",
+                        input=AuthenticateRequest,
+                        output=AuthenticateResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=svc.authenticate,
                 ),
                 "/loams.live.v1.LiveService/Query": Endpoint.unary(
                     method=MethodInfo(
@@ -215,6 +236,34 @@ class LiveServiceClient(ConnectClient):
             timeout_ms=timeout_ms,
         )
 
+    async def authenticate(
+        self,
+        request: AuthenticateRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> AuthenticateResponse:
+        """
+        Replaces an open session's identity with this request's credential
+        (its `Authorization` header; design §45 §5.4, LV1 plan Task 17). The
+        same caller only extends the session's expiry; another caller (a
+        sign-in or a sign-out) increments the identity version, and the next
+        Transition reruns every query as the new caller. Answered once that
+        Transition is queued. An unknown session is NOT_FOUND.
+        """
+        return await self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="Authenticate",
+                service_name="loams.live.v1.LiveService",
+                input=AuthenticateRequest,
+                output=AuthenticateResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+
     async def query(
         self,
         request: QueryRequest,
@@ -285,6 +334,17 @@ class LiveServiceSync(Protocol):
         """
         raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
 
+    def authenticate(self, request: AuthenticateRequest, ctx: RequestContext[AuthenticateRequest, AuthenticateResponse], /) -> AuthenticateResponse:
+        """
+        Replaces an open session's identity with this request's credential
+        (its `Authorization` header; design §45 §5.4, LV1 plan Task 17). The
+        same caller only extends the session's expiry; another caller (a
+        sign-in or a sign-out) increments the identity version, and the next
+        Transition reruns every query as the new caller. Answered once that
+        Transition is queued. An unknown session is NOT_FOUND.
+        """
+        raise ConnectError(Code.UNIMPLEMENTED, 'Not implemented')
+
     def query(self, request: QueryRequest, ctx: RequestContext[QueryRequest, QueryResponse], /) -> QueryResponse:
         """
         A one-shot query, at the latest tick or at a given timestamp.
@@ -332,6 +392,16 @@ class LiveServiceWSGIApplication(ConnectWSGIApplication):
                         idempotency_level=IdempotencyLevel.UNKNOWN,
                     ),
                     function=service.modify_query_set,
+                ),
+                "/loams.live.v1.LiveService/Authenticate": EndpointSync.unary(
+                    method=MethodInfo(
+                        name="Authenticate",
+                        service_name="loams.live.v1.LiveService",
+                        input=AuthenticateRequest,
+                        output=AuthenticateResponse,
+                        idempotency_level=IdempotencyLevel.UNKNOWN,
+                    ),
+                    function=service.authenticate,
                 ),
                 "/loams.live.v1.LiveService/Query": EndpointSync.unary(
                     method=MethodInfo(
@@ -437,6 +507,33 @@ class LiveServiceClientSync(ConnectClientSync):
                 service_name="loams.live.v1.LiveService",
                 input=ModifyQuerySetRequest,
                 output=ModifyQuerySetResponse,
+                idempotency_level=IdempotencyLevel.UNKNOWN,
+            ),
+            headers=headers,
+            timeout_ms=timeout_ms,
+        )
+    def authenticate(
+        self,
+        request: AuthenticateRequest,
+        *,
+        headers: Headers | Mapping[str, str] | None = None, 
+        timeout_ms: int | None = None,
+    ) -> AuthenticateResponse:
+        """
+        Replaces an open session's identity with this request's credential
+        (its `Authorization` header; design §45 §5.4, LV1 plan Task 17). The
+        same caller only extends the session's expiry; another caller (a
+        sign-in or a sign-out) increments the identity version, and the next
+        Transition reruns every query as the new caller. Answered once that
+        Transition is queued. An unknown session is NOT_FOUND.
+        """
+        return self.execute_unary(
+            request=request,
+            method=MethodInfo(
+                name="Authenticate",
+                service_name="loams.live.v1.LiveService",
+                input=AuthenticateRequest,
+                output=AuthenticateResponse,
                 idempotency_level=IdempotencyLevel.UNKNOWN,
             ),
             headers=headers,

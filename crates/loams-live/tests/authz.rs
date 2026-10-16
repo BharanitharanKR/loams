@@ -705,3 +705,67 @@ async fn audit_line_for_deploy_and_system_write(store: TestStore) {
     handle.stop().await;
 }
 live_test!(audit_line_for_deploy_and_system_write);
+
+/// LV1 plan Task 17: `Authenticate` with a refreshed credential of the same
+/// principal is authorized again for the session's queries; one whose scopes
+/// no longer allow them is refused, and the session keeps its identity.
+async fn authenticate_rechecks_a_refreshed_credential(store: TestStore) {
+    let (handle, _) = server(&store).await;
+    let c = client(&handle);
+    let who = |scopes: Option<&'static str>| Who {
+        kind: Some("api_key"),
+        scopes,
+        env: None,
+        bearer: None,
+    };
+    let spec = pb::QuerySpec {
+        query_id: 1,
+        function: "notes:count".into(),
+        ..Default::default()
+    };
+    let set = pb::QuerySet {
+        version: 1,
+        queries: vec![spec],
+        ..Default::default()
+    };
+    let mut stream = c
+        .watch_with_options(
+            pb::WatchRequest {
+                start: Some(pb::__buffa::oneof::watch_request::Start::Initial(Box::new(
+                    set,
+                ))),
+                ..Default::default()
+            },
+            who(None).options(Some(APP)),
+        )
+        .await
+        .expect("Watch");
+    let first = stream
+        .message()
+        .await
+        .expect("the stream")
+        .expect("a Transition")
+        .to_owned_message();
+    let authenticate = |scopes| {
+        let c = &c;
+        let session = first.session_id.clone();
+        async move {
+            c.authenticate_with_options(
+                pb::AuthenticateRequest {
+                    session_id: session,
+                    ..Default::default()
+                },
+                who(scopes).options(Some(APP)),
+            )
+            .await
+            .map(drop)
+        }
+    };
+    assert_eq!(outcome(authenticate(Some("live:call")).await), "allowed");
+    assert_eq!(
+        outcome(authenticate(Some("live:read")).await),
+        "permissiondenied permission_denied"
+    );
+    handle.stop().await;
+}
+live_test!(authenticate_rechecks_a_refreshed_credential);

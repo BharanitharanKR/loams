@@ -21,14 +21,15 @@ use std::sync::Arc;
 
 use connectrpc::{RequestContext, Router, ServiceRequest, ServiceResult, ServiceStream};
 use loams_live_proto::loams::live::v1::{
-    ActivateDeploymentRequest, ActivateDeploymentResponse, CreateAppRequest, CreateAppResponse,
-    DeleteAppRequest, DeleteAppResponse, DeployRequest, DeployResponse, GetAppRequest,
-    GetAppResponse, GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest,
-    GetIndexStatusResponse, ListAppsRequest, ListAppsResponse, ListDeploymentsRequest,
-    ListDeploymentsResponse, LiveAdminService, LiveAdminServiceExt, LiveService, LiveServiceExt,
-    ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest,
-    QueryResponse, TailLogsRequest, TailLogsResponse, Transition, UpdateAppRequest,
-    UpdateAppResponse, WatchRequest,
+    ActivateDeploymentRequest, ActivateDeploymentResponse, AuthenticateRequest,
+    AuthenticateResponse, CreateAppRequest, CreateAppResponse, DeleteAppRequest, DeleteAppResponse,
+    DeployRequest, DeployResponse, GetAppRequest, GetAppResponse, GetDeploymentRequest,
+    GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse, ListAppsRequest,
+    ListAppsResponse, ListDeploymentsRequest, ListDeploymentsResponse, LiveAdminService,
+    LiveAdminServiceExt, LiveService, LiveServiceExt, ModifyQuerySetRequest,
+    ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse,
+    TailLogsRequest, TailLogsResponse, Transition, UpdateAppRequest, UpdateAppResponse,
+    WatchRequest,
 };
 
 use super::AppState;
@@ -91,6 +92,45 @@ pub(crate) async fn caller(
     next.run(request).await
 }
 
+/// Closes the Live sessions of every principal the directory's audit
+/// stream says lost its access (LV1 plan Task 17): a revoked API key
+/// (`apikey:<id>`) or a removed member (their user id). Ends with the
+/// stream.
+#[cfg(feature = "live")]
+pub(crate) async fn close_revoked(
+    mut events: tokio::sync::broadcast::Receiver<crate::auth::directory::AuditRec>,
+    live: loams_live::LiveRoutes,
+) {
+    use tokio::sync::broadcast::error::RecvError;
+    loop {
+        match events.recv().await {
+            Ok(rec) => {
+                if let Some(principal) = revoked_principal(&rec.event) {
+                    live.revoke(&principal);
+                }
+            }
+            Err(RecvError::Lagged(missed)) => {
+                tracing::warn!(
+                    missed,
+                    "Live missed directory audit events; sessions of a revoked credential may stay open until they expire"
+                );
+            }
+            Err(RecvError::Closed) => return,
+        }
+    }
+}
+
+/// The principal an audit event takes access from, if any.
+#[cfg(feature = "live")]
+fn revoked_principal(event: &loams_proto::loams::admin::v1::AuditEvent) -> Option<String> {
+    let target = event.target.as_option()?;
+    match event.action.as_str() {
+        "api_key.revoke" => Some(format!("apikey:{}", target.id)),
+        "member.remove" => Some(target.id.clone()),
+        _ => None,
+    }
+}
+
 /// The Live caller of an admitted principal (LV1 plan Task 14): its id,
 /// its kind and what its credential reaches.
 #[cfg(feature = "live")]
@@ -130,6 +170,30 @@ mod tests {
     use super::*;
     use crate::auth::{Grant, Principal, PrincipalKind};
     use loams_live::auth::CallerKind;
+
+    /// LV1 plan Task 17: a revoked key and a removed member close their
+    /// sessions; other audit events do not.
+    #[test]
+    fn revocations_name_the_principal() {
+        use loams_proto::loams::admin::v1::{AuditEvent, ResourceRef};
+        let event = |action: &str, id: &str| AuditEvent {
+            action: action.to_owned(),
+            target: buffa::MessageField::some(ResourceRef {
+                id: id.to_owned(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(
+            revoked_principal(&event("api_key.revoke", "01")).as_deref(),
+            Some("apikey:01")
+        );
+        assert_eq!(
+            revoked_principal(&event("member.remove", "u1")).as_deref(),
+            Some("u1")
+        );
+        assert_eq!(revoked_principal(&event("api_key.create", "01")), None);
+    }
 
     /// LV1 plan Task 14: the caller carries the principal's kind and grant.
     #[test]
@@ -176,6 +240,14 @@ impl LiveService for LiveAbsent {
         _request: ServiceRequest<'_, ModifyQuerySetRequest>,
     ) -> ServiceResult<ModifyQuerySetResponse> {
         Err(not_in_variant("loams.live.v1.LiveService/ModifyQuerySet"))
+    }
+
+    async fn authenticate(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, AuthenticateRequest>,
+    ) -> ServiceResult<AuthenticateResponse> {
+        Err(not_in_variant("loams.live.v1.LiveService/Authenticate"))
     }
 
     async fn query(

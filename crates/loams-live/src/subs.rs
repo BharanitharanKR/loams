@@ -68,7 +68,7 @@ use crate::deploy::{AppEngine, Serving};
 use crate::journal::{self, Tailer};
 use crate::readset::{ReadSetIndex, SubId};
 use crate::txn::Queried;
-use crate::{FnKind, Function, LiveError, LiveValue, ReadSet, Runner, pb};
+use crate::{FnKind, Function, Identity, LiveError, LiveValue, ReadSet, Runner, pb};
 
 /// Ticks the [`Subscriptions::updates`] channel buffers per receiver; a
 /// receiver that falls further behind gets `Lagged` and must resubscribe.
@@ -130,14 +130,19 @@ impl Default for SubsConfig {
 }
 
 /// A subscription's identity: the deployment that serves the function
-/// (LV1 plan Task 6; the nil ULID for system functions), the function and
-/// the digest of its arguments, so two deployments never share a result.
-/// The caller's identity joins it in R3.
+/// (LV1 plan Task 6; the nil ULID for system functions), the function, the
+/// digest of its arguments, and who it runs for (LV1 plan Task 17, design
+/// §45 §5.4): an end user's `tokenIdentifier`, a platform principal's id,
+/// or `anonymous`. Two deployments never share a result, and neither do two
+/// callers: a result computed for one is never sent to another.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct SubKey {
     pub deployment: Ulid,
     pub function: String,
     pub args_digest: [u8; 32],
+    /// Who the subscription runs for; empty outside a session (tests and
+    /// direct subscribers).
+    pub identity: String,
 }
 
 impl SubKey {
@@ -148,6 +153,15 @@ impl SubKey {
             deployment: Ulid::nil(),
             function: function.to_string(),
             args_digest: args.digest(),
+            identity: String::new(),
+        }
+    }
+
+    /// This key, for the caller named `identity`.
+    pub fn for_identity(self, identity: impl Into<String>) -> Self {
+        SubKey {
+            identity: identity.into(),
+            ..self
         }
     }
 
@@ -256,9 +270,12 @@ type Reply = oneshot::Sender<Result<(SubId, Arc<SubResult>), LiveError>>;
 
 enum Cmd {
     Subscribe {
-        key: SubKey,
+        /// Boxed: the command is mostly the key.
+        key: Box<SubKey>,
         target: Target,
         args: LiveValue,
+        /// Boxed: most subscriptions have none.
+        identity: Option<Box<Identity>>,
         reply: Reply,
     },
     Unsubscribe(SubId),
@@ -385,15 +402,30 @@ impl Subscriptions {
         target: Target,
         args: LiveValue,
     ) -> Result<(SubId, Arc<SubResult>), LiveError> {
+        self.subscribe_as(key, target, args, None).await
+    }
+
+    /// [`subscribe_target`](Self::subscribe_target) as the end user
+    /// `identity` (LV1 plan Task 17): the query sees it in `ctx.auth`.
+    /// `key.identity` must name who it runs for, so that callers never
+    /// share a result.
+    pub async fn subscribe_as(
+        &self,
+        key: SubKey,
+        target: Target,
+        args: LiveValue,
+        identity: Option<Identity>,
+    ) -> Result<(SubId, Arc<SubResult>), LiveError> {
         if let Target::Function(f) = &target {
             check_query(&**f)?;
         }
         let (reply, answer) = oneshot::channel();
         self.cmds
             .send(Cmd::Subscribe {
-                key,
+                key: Box::new(key),
                 target,
                 args,
+                identity: identity.map(Box::new),
                 reply,
             })
             .map_err(|_| stopped())?;
@@ -493,6 +525,8 @@ struct Sub {
     /// Resolved again at every activation.
     deployed: bool,
     args: LiveValue,
+    /// The end user it runs as (`ctx.auth`), if any.
+    identity: Option<Identity>,
     refs: usize,
     result: Arc<SubResult>,
     read_set: ReadSet,
@@ -504,6 +538,7 @@ struct Sub {
 struct NewSub {
     placed: Placed,
     args: LiveValue,
+    identity: Option<Identity>,
     replies: Vec<Reply>,
 }
 
@@ -659,7 +694,7 @@ impl Manager {
                         deployed: true,
                     };
                 }
-                self.resolve(name, args)
+                self.resolve(name, args, &key.identity)
             }
             Target::Missing { name, error } => {
                 if self.follow.is_none() {
@@ -670,15 +705,15 @@ impl Manager {
                         deployed: true,
                     }
                 } else {
-                    self.resolve(name, args)
+                    self.resolve(name, args, &key.identity)
                 }
             }
         }
     }
 
     /// `name` resolved in the adopted deployment.
-    fn resolve(&self, name: String, args: &LiveValue) -> Placed {
-        resolve_in(&self.serving, name, args)
+    fn resolve(&self, name: String, args: &LiveValue, identity: &str) -> Placed {
+        resolve_in(&self.serving, name, args, identity)
     }
 
     /// Adopts what the engine serves: every deployed subscription (and every
@@ -699,7 +734,7 @@ impl Manager {
             else {
                 continue;
             };
-            let placed = self.resolve(name, &args);
+            let placed = self.resolve(name, &args, &old.identity);
             if self.by_key.get(&old) == Some(&id) {
                 self.by_key.remove(&old);
             }
@@ -718,7 +753,12 @@ impl Manager {
         }
         for n in &mut self.waiting {
             if n.placed.deployed {
-                n.placed = resolve_in(&self.serving, n.placed.name.clone(), &n.args);
+                n.placed = resolve_in(
+                    &self.serving,
+                    n.placed.name.clone(),
+                    &n.args,
+                    &n.placed.key.identity,
+                );
             }
         }
     }
@@ -743,9 +783,10 @@ impl Manager {
                     key,
                     target,
                     args,
+                    identity,
                     reply,
                 } => {
-                    let placed = self.place(key, target, &args);
+                    let placed = self.place(*key, target, &args);
                     if let Some(id) = self.by_key.get(&placed.key).copied()
                         && let Some(sub) = self.subs.get_mut(&id)
                     {
@@ -763,6 +804,7 @@ impl Manager {
                         fresh.push(NewSub {
                             placed,
                             args,
+                            identity: identity.map(|i| *i),
                             replies: vec![reply],
                         });
                     }
@@ -811,7 +853,7 @@ impl Manager {
     async fn evaluate_new(&mut self, fresh: Vec<NewSub>, at: &Ts) {
         let jobs = fresh
             .iter()
-            .map(|n| (n.placed.f.clone(), n.args.clone()))
+            .map(|n| (n.placed.f.clone(), n.args.clone(), n.identity.clone()))
             .collect::<Vec<_>>();
         let results = self.run_all(jobs, at).await;
         let mut replies = Vec::new();
@@ -837,6 +879,7 @@ impl Manager {
                     f: n.placed.f,
                     deployed: n.placed.deployed,
                     args: n.args,
+                    identity: n.identity,
                     refs: n.replies.len(),
                     result: result.clone(),
                     read_set,
@@ -857,16 +900,20 @@ impl Manager {
     /// not resolve answers its error.
     async fn run_all(
         &self,
-        jobs: Vec<(Resolved, LiveValue)>,
+        jobs: Vec<(Resolved, LiveValue, Option<Identity>)>,
         at: &Ts,
     ) -> Vec<Result<Queried, LiveError>> {
         let runnable = jobs
             .iter()
-            .filter_map(|(f, args)| f.as_ref().ok().map(|f| (f.clone(), args.clone())))
+            .filter_map(|(f, args, identity)| {
+                f.as_ref()
+                    .ok()
+                    .map(|f| (f.clone(), args.clone(), identity.clone()))
+            })
             .collect::<Vec<_>>();
         let mut evaluated = self.evaluate(runnable, at).await.into_iter();
         jobs.into_iter()
-            .map(|(f, _)| match f {
+            .map(|(f, _, _)| match f {
                 Ok(_) => evaluated.next().unwrap_or_else(|| {
                     Err(LiveError::Internal("an evaluation went missing".into()))
                 }),
@@ -880,16 +927,16 @@ impl Manager {
     /// `tokio::spawn` (a higher-ranked lifetime).
     fn evaluate<'a>(
         &'a self,
-        jobs: Vec<(Arc<dyn Function>, LiveValue)>,
+        jobs: Vec<(Arc<dyn Function>, LiveValue, Option<Identity>)>,
         at: &'a Ts,
     ) -> BoxFuture<'a, Vec<Result<Queried, LiveError>>> {
         let runner = self.runner.clone();
         let concurrency = self.config.rerun_concurrency.max(1);
         futures::stream::iter(jobs)
-            .map(move |(f, args)| {
+            .map(move |(f, args, identity)| {
                 let runner = runner.clone();
                 let at = *at;
-                async move { evaluate_one(&runner, &*f, args, &at).await }.boxed()
+                async move { evaluate_one(&runner, &*f, args, identity, &at).await }.boxed()
             })
             .buffered(concurrency)
             .collect()
@@ -1146,10 +1193,10 @@ impl Manager {
             .filter_map(|id| {
                 self.subs
                     .get(id)
-                    .map(|s| (*id, (s.f.clone(), s.args.clone())))
+                    .map(|s| (*id, (s.f.clone(), s.args.clone(), s.identity.clone())))
             })
             .unzip();
-        let evaluations = jobs.iter().filter(|(f, _)| f.is_ok()).count();
+        let evaluations = jobs.iter().filter(|(f, _, _)| f.is_ok()).count();
         let results = self.run_all(jobs, at).await;
         self.shared
             .counters
@@ -1213,7 +1260,11 @@ impl Manager {
             .iter()
             .filter_map(|id| {
                 let s = self.subs.get(id)?;
-                Some((s.f.as_ref().ok()?.clone(), s.args.clone()))
+                Some((
+                    s.f.as_ref().ok()?.clone(),
+                    s.args.clone(),
+                    s.identity.clone(),
+                ))
             })
             .collect();
         let results = self.evaluate(jobs, at).await;
@@ -1251,7 +1302,7 @@ impl Manager {
 }
 
 /// `name` resolved in `serving`, as a query subscription with `args`.
-fn resolve_in(serving: &Serving, name: String, args: &LiveValue) -> Placed {
+fn resolve_in(serving: &Serving, name: String, args: &LiveValue, identity: &str) -> Placed {
     let f = serving.resolve(&name).and_then(|f| {
         check_query(&*f)?;
         Ok(f)
@@ -1265,6 +1316,7 @@ fn resolve_in(serving: &Serving, name: String, args: &LiveValue) -> Placed {
             deployment,
             function: name.clone(),
             args_digest: args.digest(),
+            identity: identity.to_string(),
         },
         name,
         f,
@@ -1289,11 +1341,15 @@ async fn evaluate_one(
     runner: &Runner,
     f: &dyn Function,
     args: LiveValue,
+    identity: Option<Identity>,
     at: &Ts,
 ) -> Result<Queried, LiveError> {
     let mut attempt = 1;
     let evaluated = loop {
-        match runner.query(f, args.clone(), *at).await {
+        match runner
+            .query_as(f, args.clone(), *at, identity.clone())
+            .await
+        {
             Err(LiveError::Txn(e)) if attempt < EVAL_ATTEMPTS && transient(&e) => {
                 attempt += 1;
                 tokio::time::sleep(Duration::from_millis(10 * u64::from(attempt))).await;

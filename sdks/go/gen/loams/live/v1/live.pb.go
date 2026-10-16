@@ -681,6 +681,95 @@ func (*ModifyQuerySetResponse) Descriptor() ([]byte, []int) {
 	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{7}
 }
 
+type AuthenticateRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuthenticateRequest) Reset() {
+	*x = AuthenticateRequest{}
+	mi := &file_loams_live_v1_live_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuthenticateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuthenticateRequest) ProtoMessage() {}
+
+func (x *AuthenticateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_live_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuthenticateRequest.ProtoReflect.Descriptor instead.
+func (*AuthenticateRequest) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *AuthenticateRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+type AuthenticateResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// The session's identity version after the call.
+	Identity      uint64 `protobuf:"varint,1,opt,name=identity,proto3" json:"identity,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *AuthenticateResponse) Reset() {
+	*x = AuthenticateResponse{}
+	mi := &file_loams_live_v1_live_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AuthenticateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AuthenticateResponse) ProtoMessage() {}
+
+func (x *AuthenticateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_loams_live_v1_live_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AuthenticateResponse.ProtoReflect.Descriptor instead.
+func (*AuthenticateResponse) Descriptor() ([]byte, []int) {
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *AuthenticateResponse) GetIdentity() uint64 {
+	if x != nil {
+		return x.Identity
+	}
+	return 0
+}
+
 // One step of a session, from `start` to `end`.
 type Transition struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
@@ -699,7 +788,7 @@ type Transition struct {
 
 func (x *Transition) Reset() {
 	*x = Transition{}
-	mi := &file_loams_live_v1_live_proto_msgTypes[8]
+	mi := &file_loams_live_v1_live_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -711,7 +800,7 @@ func (x *Transition) String() string {
 func (*Transition) ProtoMessage() {}
 
 func (x *Transition) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_live_proto_msgTypes[8]
+	mi := &file_loams_live_v1_live_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -724,7 +813,7 @@ func (x *Transition) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Transition.ProtoReflect.Descriptor instead.
 func (*Transition) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{8}
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{10}
 }
 
 func (x *Transition) GetSessionId() string {
@@ -777,7 +866,7 @@ type QueryUpdate struct {
 
 func (x *QueryUpdate) Reset() {
 	*x = QueryUpdate{}
-	mi := &file_loams_live_v1_live_proto_msgTypes[9]
+	mi := &file_loams_live_v1_live_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -789,7 +878,7 @@ func (x *QueryUpdate) String() string {
 func (*QueryUpdate) ProtoMessage() {}
 
 func (x *QueryUpdate) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_live_proto_msgTypes[9]
+	mi := &file_loams_live_v1_live_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -802,7 +891,7 @@ func (x *QueryUpdate) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryUpdate.ProtoReflect.Descriptor instead.
 func (*QueryUpdate) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{9}
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *QueryUpdate) GetQueryId() uint32 {
@@ -877,7 +966,7 @@ type Removed struct {
 
 func (x *Removed) Reset() {
 	*x = Removed{}
-	mi := &file_loams_live_v1_live_proto_msgTypes[10]
+	mi := &file_loams_live_v1_live_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -889,7 +978,7 @@ func (x *Removed) String() string {
 func (*Removed) ProtoMessage() {}
 
 func (x *Removed) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_live_proto_msgTypes[10]
+	mi := &file_loams_live_v1_live_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -902,7 +991,7 @@ func (x *Removed) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Removed.ProtoReflect.Descriptor instead.
 func (*Removed) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{10}
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{12}
 }
 
 type QueryRequest struct {
@@ -917,7 +1006,7 @@ type QueryRequest struct {
 
 func (x *QueryRequest) Reset() {
 	*x = QueryRequest{}
-	mi := &file_loams_live_v1_live_proto_msgTypes[11]
+	mi := &file_loams_live_v1_live_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -929,7 +1018,7 @@ func (x *QueryRequest) String() string {
 func (*QueryRequest) ProtoMessage() {}
 
 func (x *QueryRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_live_proto_msgTypes[11]
+	mi := &file_loams_live_v1_live_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -942,7 +1031,7 @@ func (x *QueryRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryRequest.ProtoReflect.Descriptor instead.
 func (*QueryRequest) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{11}
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *QueryRequest) GetFunction() string {
@@ -977,7 +1066,7 @@ type QueryResponse struct {
 
 func (x *QueryResponse) Reset() {
 	*x = QueryResponse{}
-	mi := &file_loams_live_v1_live_proto_msgTypes[12]
+	mi := &file_loams_live_v1_live_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -989,7 +1078,7 @@ func (x *QueryResponse) String() string {
 func (*QueryResponse) ProtoMessage() {}
 
 func (x *QueryResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_live_proto_msgTypes[12]
+	mi := &file_loams_live_v1_live_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1002,7 +1091,7 @@ func (x *QueryResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use QueryResponse.ProtoReflect.Descriptor instead.
 func (*QueryResponse) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{12}
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *QueryResponse) GetTs() uint64 {
@@ -1032,7 +1121,7 @@ type MutateRequest struct {
 
 func (x *MutateRequest) Reset() {
 	*x = MutateRequest{}
-	mi := &file_loams_live_v1_live_proto_msgTypes[13]
+	mi := &file_loams_live_v1_live_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1044,7 +1133,7 @@ func (x *MutateRequest) String() string {
 func (*MutateRequest) ProtoMessage() {}
 
 func (x *MutateRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_live_proto_msgTypes[13]
+	mi := &file_loams_live_v1_live_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1057,7 +1146,7 @@ func (x *MutateRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MutateRequest.ProtoReflect.Descriptor instead.
 func (*MutateRequest) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{13}
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{15}
 }
 
 func (x *MutateRequest) GetFunction() string {
@@ -1091,7 +1180,7 @@ type MutateResponse struct {
 
 func (x *MutateResponse) Reset() {
 	*x = MutateResponse{}
-	mi := &file_loams_live_v1_live_proto_msgTypes[14]
+	mi := &file_loams_live_v1_live_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1103,7 +1192,7 @@ func (x *MutateResponse) String() string {
 func (*MutateResponse) ProtoMessage() {}
 
 func (x *MutateResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_live_proto_msgTypes[14]
+	mi := &file_loams_live_v1_live_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1116,7 +1205,7 @@ func (x *MutateResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use MutateResponse.ProtoReflect.Descriptor instead.
 func (*MutateResponse) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{14}
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *MutateResponse) GetCommitTs() uint64 {
@@ -1143,7 +1232,7 @@ type Schema struct {
 
 func (x *Schema) Reset() {
 	*x = Schema{}
-	mi := &file_loams_live_v1_live_proto_msgTypes[15]
+	mi := &file_loams_live_v1_live_proto_msgTypes[17]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1155,7 +1244,7 @@ func (x *Schema) String() string {
 func (*Schema) ProtoMessage() {}
 
 func (x *Schema) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_live_proto_msgTypes[15]
+	mi := &file_loams_live_v1_live_proto_msgTypes[17]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1168,7 +1257,7 @@ func (x *Schema) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Schema.ProtoReflect.Descriptor instead.
 func (*Schema) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{15}
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{17}
 }
 
 func (x *Schema) GetTables() []*TableSchema {
@@ -1197,7 +1286,7 @@ type TableSchema struct {
 
 func (x *TableSchema) Reset() {
 	*x = TableSchema{}
-	mi := &file_loams_live_v1_live_proto_msgTypes[16]
+	mi := &file_loams_live_v1_live_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1209,7 +1298,7 @@ func (x *TableSchema) String() string {
 func (*TableSchema) ProtoMessage() {}
 
 func (x *TableSchema) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_live_proto_msgTypes[16]
+	mi := &file_loams_live_v1_live_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1222,7 +1311,7 @@ func (x *TableSchema) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TableSchema.ProtoReflect.Descriptor instead.
 func (*TableSchema) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{16}
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *TableSchema) GetName() string {
@@ -1264,7 +1353,7 @@ type IndexSchema struct {
 
 func (x *IndexSchema) Reset() {
 	*x = IndexSchema{}
-	mi := &file_loams_live_v1_live_proto_msgTypes[17]
+	mi := &file_loams_live_v1_live_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1276,7 +1365,7 @@ func (x *IndexSchema) String() string {
 func (*IndexSchema) ProtoMessage() {}
 
 func (x *IndexSchema) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_live_proto_msgTypes[17]
+	mi := &file_loams_live_v1_live_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1289,7 +1378,7 @@ func (x *IndexSchema) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IndexSchema.ProtoReflect.Descriptor instead.
 func (*IndexSchema) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{17}
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *IndexSchema) GetName() string {
@@ -1330,7 +1419,7 @@ type Validator struct {
 
 func (x *Validator) Reset() {
 	*x = Validator{}
-	mi := &file_loams_live_v1_live_proto_msgTypes[18]
+	mi := &file_loams_live_v1_live_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1342,7 +1431,7 @@ func (x *Validator) String() string {
 func (*Validator) ProtoMessage() {}
 
 func (x *Validator) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_live_proto_msgTypes[18]
+	mi := &file_loams_live_v1_live_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1355,7 +1444,7 @@ func (x *Validator) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Validator.ProtoReflect.Descriptor instead.
 func (*Validator) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{18}
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *Validator) GetKind() isValidator_Kind {
@@ -1493,7 +1582,7 @@ type ValidatorObject struct {
 
 func (x *ValidatorObject) Reset() {
 	*x = ValidatorObject{}
-	mi := &file_loams_live_v1_live_proto_msgTypes[19]
+	mi := &file_loams_live_v1_live_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1505,7 +1594,7 @@ func (x *ValidatorObject) String() string {
 func (*ValidatorObject) ProtoMessage() {}
 
 func (x *ValidatorObject) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_live_proto_msgTypes[19]
+	mi := &file_loams_live_v1_live_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1518,7 +1607,7 @@ func (x *ValidatorObject) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidatorObject.ProtoReflect.Descriptor instead.
 func (*ValidatorObject) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{19}
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *ValidatorObject) GetFields() map[string]*Validator {
@@ -1538,7 +1627,7 @@ type ValidatorUnion struct {
 
 func (x *ValidatorUnion) Reset() {
 	*x = ValidatorUnion{}
-	mi := &file_loams_live_v1_live_proto_msgTypes[20]
+	mi := &file_loams_live_v1_live_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1550,7 +1639,7 @@ func (x *ValidatorUnion) String() string {
 func (*ValidatorUnion) ProtoMessage() {}
 
 func (x *ValidatorUnion) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_live_proto_msgTypes[20]
+	mi := &file_loams_live_v1_live_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1563,7 +1652,7 @@ func (x *ValidatorUnion) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidatorUnion.ProtoReflect.Descriptor instead.
 func (*ValidatorUnion) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{20}
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *ValidatorUnion) GetMembers() []*Validator {
@@ -1585,7 +1674,7 @@ type LiveError struct {
 
 func (x *LiveError) Reset() {
 	*x = LiveError{}
-	mi := &file_loams_live_v1_live_proto_msgTypes[21]
+	mi := &file_loams_live_v1_live_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -1597,7 +1686,7 @@ func (x *LiveError) String() string {
 func (*LiveError) ProtoMessage() {}
 
 func (x *LiveError) ProtoReflect() protoreflect.Message {
-	mi := &file_loams_live_v1_live_proto_msgTypes[21]
+	mi := &file_loams_live_v1_live_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -1610,7 +1699,7 @@ func (x *LiveError) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LiveError.ProtoReflect.Descriptor instead.
 func (*LiveError) Descriptor() ([]byte, []int) {
-	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{21}
+	return file_loams_live_v1_live_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *LiveError) GetCode() ErrorCode {
@@ -1661,7 +1750,12 @@ const file_loams_live_v1_live_proto_rawDesc = "" +
 	"\x03add\x18\x01 \x01(\v2\x18.loams.live.v1.QuerySpecH\x00R\x03add\x12\x18\n" +
 	"\x06remove\x18\x02 \x01(\rH\x00R\x06removeB\b\n" +
 	"\x06change\"\x18\n" +
-	"\x16ModifyQuerySetResponse\"\xd7\x01\n" +
+	"\x16ModifyQuerySetResponse\"4\n" +
+	"\x13AuthenticateRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\"2\n" +
+	"\x14AuthenticateResponse\x12\x1a\n" +
+	"\bidentity\x18\x01 \x01(\x04R\bidentity\"\xd7\x01\n" +
 	"\n" +
 	"Transition\x12\x1d\n" +
 	"\n" +
@@ -1742,10 +1836,11 @@ const file_loams_live_v1_live_proto_rawDesc = "" +
 	"\x1bERROR_CODE_FUNCTION_TIMEOUT\x10\x06\x12%\n" +
 	"!ERROR_CODE_FUNCTION_OUT_OF_MEMORY\x10\a\x12\x1a\n" +
 	"\x16ERROR_CODE_UNAVAILABLE\x10\b\x12\x17\n" +
-	"\x13ERROR_CODE_INTERNAL\x10\t2\xca\x03\n" +
+	"\x13ERROR_CODE_INTERNAL\x10\t2\xb7\x04\n" +
 	"\vLiveService\x12N\n" +
 	"\x05Watch\x12\x1b.loams.live.v1.WatchRequest\x1a\x19.loams.live.v1.Transition\"\v\x92\xb5\x18\a\x12\x05watch0\x01\x12s\n" +
-	"\x0eModifyQuerySet\x12$.loams.live.v1.ModifyQuerySetRequest\x1a%.loams.live.v1.ModifyQuerySetResponse\"\x14\x92\xb5\x18\x10\x12\x0emodifyQuerySet\x12W\n" +
+	"\x0eModifyQuerySet\x12$.loams.live.v1.ModifyQuerySetRequest\x1a%.loams.live.v1.ModifyQuerySetResponse\"\x14\x92\xb5\x18\x10\x12\x0emodifyQuerySet\x12k\n" +
+	"\fAuthenticate\x12\".loams.live.v1.AuthenticateRequest\x1a#.loams.live.v1.AuthenticateResponse\"\x12\x92\xb5\x18\x0e\x12\fauthenticate\x12W\n" +
 	"\x05Query\x12\x1b.loams.live.v1.QueryRequest\x1a\x1c.loams.live.v1.QueryResponse\"\x13\x92\xb5\x18\x0f\n" +
 	"\x06tables\x12\x05query\x12[\n" +
 	"\x06Mutate\x12\x1c.loams.live.v1.MutateRequest\x1a\x1d.loams.live.v1.MutateResponse\"\x14\x92\xb5\x18\x10\n" +
@@ -1765,7 +1860,7 @@ func file_loams_live_v1_live_proto_rawDescGZIP() []byte {
 }
 
 var file_loams_live_v1_live_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_loams_live_v1_live_proto_msgTypes = make([]protoimpl.MessageInfo, 23)
+var file_loams_live_v1_live_proto_msgTypes = make([]protoimpl.MessageInfo, 25)
 var file_loams_live_v1_live_proto_goTypes = []any{
 	(ValidatorPrimitive)(0),        // 0: loams.live.v1.ValidatorPrimitive
 	(ErrorCode)(0),                 // 1: loams.live.v1.ErrorCode
@@ -1777,22 +1872,24 @@ var file_loams_live_v1_live_proto_goTypes = []any{
 	(*ModifyQuerySetRequest)(nil),  // 7: loams.live.v1.ModifyQuerySetRequest
 	(*QuerySetChange)(nil),         // 8: loams.live.v1.QuerySetChange
 	(*ModifyQuerySetResponse)(nil), // 9: loams.live.v1.ModifyQuerySetResponse
-	(*Transition)(nil),             // 10: loams.live.v1.Transition
-	(*QueryUpdate)(nil),            // 11: loams.live.v1.QueryUpdate
-	(*Removed)(nil),                // 12: loams.live.v1.Removed
-	(*QueryRequest)(nil),           // 13: loams.live.v1.QueryRequest
-	(*QueryResponse)(nil),          // 14: loams.live.v1.QueryResponse
-	(*MutateRequest)(nil),          // 15: loams.live.v1.MutateRequest
-	(*MutateResponse)(nil),         // 16: loams.live.v1.MutateResponse
-	(*Schema)(nil),                 // 17: loams.live.v1.Schema
-	(*TableSchema)(nil),            // 18: loams.live.v1.TableSchema
-	(*IndexSchema)(nil),            // 19: loams.live.v1.IndexSchema
-	(*Validator)(nil),              // 20: loams.live.v1.Validator
-	(*ValidatorObject)(nil),        // 21: loams.live.v1.ValidatorObject
-	(*ValidatorUnion)(nil),         // 22: loams.live.v1.ValidatorUnion
-	(*LiveError)(nil),              // 23: loams.live.v1.LiveError
-	nil,                            // 24: loams.live.v1.ValidatorObject.FieldsEntry
-	(*Value)(nil),                  // 25: loams.live.v1.Value
+	(*AuthenticateRequest)(nil),    // 10: loams.live.v1.AuthenticateRequest
+	(*AuthenticateResponse)(nil),   // 11: loams.live.v1.AuthenticateResponse
+	(*Transition)(nil),             // 12: loams.live.v1.Transition
+	(*QueryUpdate)(nil),            // 13: loams.live.v1.QueryUpdate
+	(*Removed)(nil),                // 14: loams.live.v1.Removed
+	(*QueryRequest)(nil),           // 15: loams.live.v1.QueryRequest
+	(*QueryResponse)(nil),          // 16: loams.live.v1.QueryResponse
+	(*MutateRequest)(nil),          // 17: loams.live.v1.MutateRequest
+	(*MutateResponse)(nil),         // 18: loams.live.v1.MutateResponse
+	(*Schema)(nil),                 // 19: loams.live.v1.Schema
+	(*TableSchema)(nil),            // 20: loams.live.v1.TableSchema
+	(*IndexSchema)(nil),            // 21: loams.live.v1.IndexSchema
+	(*Validator)(nil),              // 22: loams.live.v1.Validator
+	(*ValidatorObject)(nil),        // 23: loams.live.v1.ValidatorObject
+	(*ValidatorUnion)(nil),         // 24: loams.live.v1.ValidatorUnion
+	(*LiveError)(nil),              // 25: loams.live.v1.LiveError
+	nil,                            // 26: loams.live.v1.ValidatorObject.FieldsEntry
+	(*Value)(nil),                  // 27: loams.live.v1.Value
 }
 var file_loams_live_v1_live_proto_depIdxs = []int32{
 	5,  // 0: loams.live.v1.WatchRequest.initial:type_name -> loams.live.v1.QuerySet
@@ -1800,42 +1897,44 @@ var file_loams_live_v1_live_proto_depIdxs = []int32{
 	2,  // 2: loams.live.v1.Resume.last_version:type_name -> loams.live.v1.StateVersion
 	5,  // 3: loams.live.v1.Resume.query_set:type_name -> loams.live.v1.QuerySet
 	6,  // 4: loams.live.v1.QuerySet.queries:type_name -> loams.live.v1.QuerySpec
-	25, // 5: loams.live.v1.QuerySpec.args:type_name -> loams.live.v1.Value
+	27, // 5: loams.live.v1.QuerySpec.args:type_name -> loams.live.v1.Value
 	8,  // 6: loams.live.v1.ModifyQuerySetRequest.changes:type_name -> loams.live.v1.QuerySetChange
 	6,  // 7: loams.live.v1.QuerySetChange.add:type_name -> loams.live.v1.QuerySpec
 	2,  // 8: loams.live.v1.Transition.start:type_name -> loams.live.v1.StateVersion
 	2,  // 9: loams.live.v1.Transition.end:type_name -> loams.live.v1.StateVersion
-	11, // 10: loams.live.v1.Transition.updates:type_name -> loams.live.v1.QueryUpdate
-	25, // 11: loams.live.v1.QueryUpdate.value:type_name -> loams.live.v1.Value
-	23, // 12: loams.live.v1.QueryUpdate.error:type_name -> loams.live.v1.LiveError
-	12, // 13: loams.live.v1.QueryUpdate.removed:type_name -> loams.live.v1.Removed
-	25, // 14: loams.live.v1.QueryRequest.args:type_name -> loams.live.v1.Value
-	25, // 15: loams.live.v1.QueryResponse.result:type_name -> loams.live.v1.Value
-	25, // 16: loams.live.v1.MutateRequest.args:type_name -> loams.live.v1.Value
-	25, // 17: loams.live.v1.MutateResponse.result:type_name -> loams.live.v1.Value
-	18, // 18: loams.live.v1.Schema.tables:type_name -> loams.live.v1.TableSchema
-	19, // 19: loams.live.v1.TableSchema.indexes:type_name -> loams.live.v1.IndexSchema
-	20, // 20: loams.live.v1.TableSchema.validator:type_name -> loams.live.v1.Validator
+	13, // 10: loams.live.v1.Transition.updates:type_name -> loams.live.v1.QueryUpdate
+	27, // 11: loams.live.v1.QueryUpdate.value:type_name -> loams.live.v1.Value
+	25, // 12: loams.live.v1.QueryUpdate.error:type_name -> loams.live.v1.LiveError
+	14, // 13: loams.live.v1.QueryUpdate.removed:type_name -> loams.live.v1.Removed
+	27, // 14: loams.live.v1.QueryRequest.args:type_name -> loams.live.v1.Value
+	27, // 15: loams.live.v1.QueryResponse.result:type_name -> loams.live.v1.Value
+	27, // 16: loams.live.v1.MutateRequest.args:type_name -> loams.live.v1.Value
+	27, // 17: loams.live.v1.MutateResponse.result:type_name -> loams.live.v1.Value
+	20, // 18: loams.live.v1.Schema.tables:type_name -> loams.live.v1.TableSchema
+	21, // 19: loams.live.v1.TableSchema.indexes:type_name -> loams.live.v1.IndexSchema
+	22, // 20: loams.live.v1.TableSchema.validator:type_name -> loams.live.v1.Validator
 	0,  // 21: loams.live.v1.Validator.primitive:type_name -> loams.live.v1.ValidatorPrimitive
-	20, // 22: loams.live.v1.Validator.array:type_name -> loams.live.v1.Validator
-	21, // 23: loams.live.v1.Validator.object:type_name -> loams.live.v1.ValidatorObject
-	25, // 24: loams.live.v1.Validator.literal:type_name -> loams.live.v1.Value
-	22, // 25: loams.live.v1.Validator.union:type_name -> loams.live.v1.ValidatorUnion
-	20, // 26: loams.live.v1.Validator.optional:type_name -> loams.live.v1.Validator
-	24, // 27: loams.live.v1.ValidatorObject.fields:type_name -> loams.live.v1.ValidatorObject.FieldsEntry
-	20, // 28: loams.live.v1.ValidatorUnion.members:type_name -> loams.live.v1.Validator
+	22, // 22: loams.live.v1.Validator.array:type_name -> loams.live.v1.Validator
+	23, // 23: loams.live.v1.Validator.object:type_name -> loams.live.v1.ValidatorObject
+	27, // 24: loams.live.v1.Validator.literal:type_name -> loams.live.v1.Value
+	24, // 25: loams.live.v1.Validator.union:type_name -> loams.live.v1.ValidatorUnion
+	22, // 26: loams.live.v1.Validator.optional:type_name -> loams.live.v1.Validator
+	26, // 27: loams.live.v1.ValidatorObject.fields:type_name -> loams.live.v1.ValidatorObject.FieldsEntry
+	22, // 28: loams.live.v1.ValidatorUnion.members:type_name -> loams.live.v1.Validator
 	1,  // 29: loams.live.v1.LiveError.code:type_name -> loams.live.v1.ErrorCode
-	20, // 30: loams.live.v1.ValidatorObject.FieldsEntry.value:type_name -> loams.live.v1.Validator
+	22, // 30: loams.live.v1.ValidatorObject.FieldsEntry.value:type_name -> loams.live.v1.Validator
 	3,  // 31: loams.live.v1.LiveService.Watch:input_type -> loams.live.v1.WatchRequest
 	7,  // 32: loams.live.v1.LiveService.ModifyQuerySet:input_type -> loams.live.v1.ModifyQuerySetRequest
-	13, // 33: loams.live.v1.LiveService.Query:input_type -> loams.live.v1.QueryRequest
-	15, // 34: loams.live.v1.LiveService.Mutate:input_type -> loams.live.v1.MutateRequest
-	10, // 35: loams.live.v1.LiveService.Watch:output_type -> loams.live.v1.Transition
-	9,  // 36: loams.live.v1.LiveService.ModifyQuerySet:output_type -> loams.live.v1.ModifyQuerySetResponse
-	14, // 37: loams.live.v1.LiveService.Query:output_type -> loams.live.v1.QueryResponse
-	16, // 38: loams.live.v1.LiveService.Mutate:output_type -> loams.live.v1.MutateResponse
-	35, // [35:39] is the sub-list for method output_type
-	31, // [31:35] is the sub-list for method input_type
+	10, // 33: loams.live.v1.LiveService.Authenticate:input_type -> loams.live.v1.AuthenticateRequest
+	15, // 34: loams.live.v1.LiveService.Query:input_type -> loams.live.v1.QueryRequest
+	17, // 35: loams.live.v1.LiveService.Mutate:input_type -> loams.live.v1.MutateRequest
+	12, // 36: loams.live.v1.LiveService.Watch:output_type -> loams.live.v1.Transition
+	9,  // 37: loams.live.v1.LiveService.ModifyQuerySet:output_type -> loams.live.v1.ModifyQuerySetResponse
+	11, // 38: loams.live.v1.LiveService.Authenticate:output_type -> loams.live.v1.AuthenticateResponse
+	16, // 39: loams.live.v1.LiveService.Query:output_type -> loams.live.v1.QueryResponse
+	18, // 40: loams.live.v1.LiveService.Mutate:output_type -> loams.live.v1.MutateResponse
+	36, // [36:41] is the sub-list for method output_type
+	31, // [31:36] is the sub-list for method input_type
 	31, // [31:31] is the sub-list for extension type_name
 	31, // [31:31] is the sub-list for extension extendee
 	0,  // [0:31] is the sub-list for field type_name
@@ -1855,15 +1954,15 @@ func file_loams_live_v1_live_proto_init() {
 		(*QuerySetChange_Add)(nil),
 		(*QuerySetChange_Remove)(nil),
 	}
-	file_loams_live_v1_live_proto_msgTypes[9].OneofWrappers = []any{
+	file_loams_live_v1_live_proto_msgTypes[11].OneofWrappers = []any{
 		(*QueryUpdate_Value)(nil),
 		(*QueryUpdate_Error)(nil),
 		(*QueryUpdate_Removed)(nil),
 	}
-	file_loams_live_v1_live_proto_msgTypes[11].OneofWrappers = []any{}
 	file_loams_live_v1_live_proto_msgTypes[13].OneofWrappers = []any{}
-	file_loams_live_v1_live_proto_msgTypes[16].OneofWrappers = []any{}
-	file_loams_live_v1_live_proto_msgTypes[18].OneofWrappers = []any{
+	file_loams_live_v1_live_proto_msgTypes[15].OneofWrappers = []any{}
+	file_loams_live_v1_live_proto_msgTypes[18].OneofWrappers = []any{}
+	file_loams_live_v1_live_proto_msgTypes[20].OneofWrappers = []any{
 		(*Validator_Primitive)(nil),
 		(*Validator_Array)(nil),
 		(*Validator_Object)(nil),
@@ -1878,7 +1977,7 @@ func file_loams_live_v1_live_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_loams_live_v1_live_proto_rawDesc), len(file_loams_live_v1_live_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   23,
+			NumMessages:   25,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

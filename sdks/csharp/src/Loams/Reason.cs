@@ -321,6 +321,9 @@ public enum Reason
     /// <summary>A browser origin the addressed Live app does not allow.</summary>
     LiveOriginNotAllowed = 99,
 
+    /// <summary>A Live session reached its maximum age; resume it.</summary>
+    SessionRotate = 100,
+
     /// <summary>A malformed field or an unparseable value.</summary>
     InvalidArgument = 15,
 
@@ -456,6 +459,7 @@ public static class ReasonRegistry
         Reason.LiveLimitExceeded,
         Reason.LiveAppMismatch,
         Reason.LiveOriginNotAllowed,
+        Reason.SessionRotate,
         Reason.RoleRequired,
         Reason.SetupRequired,
         Reason.TokenMissing,
@@ -560,6 +564,7 @@ public static class ReasonRegistry
             [Reason.LiveLimitExceeded] = "live_limit_exceeded",
             [Reason.LiveAppMismatch] = "live_app_mismatch",
             [Reason.LiveOriginNotAllowed] = "live_origin_not_allowed",
+            [Reason.SessionRotate] = "session_rotate",
             [Reason.RoleRequired] = "role_required",
             [Reason.SetupRequired] = "setup_required",
             [Reason.TokenMissing] = "token_missing",
@@ -689,6 +694,7 @@ public static class ReasonRegistry
             [Reason.LiveLimitExceeded] = Code.ResourceExhausted,
             [Reason.LiveAppMismatch] = Code.PermissionDenied,
             [Reason.LiveOriginNotAllowed] = Code.PermissionDenied,
+            [Reason.SessionRotate] = Code.Unavailable,
             [Reason.RoleRequired] = Code.PermissionDenied,
             [Reason.SetupRequired] = Code.FailedPrecondition,
             [Reason.TokenMissing] = Code.Unauthenticated,

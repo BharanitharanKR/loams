@@ -179,6 +179,12 @@ var Modules = []ModuleBinding{
 		Unstable: true,
 		Calls: []CallBinding{
 			{
+				Module: "live", Name: "Authenticate", ProtoName: "authenticate",
+				Method: "Authenticate", RPC: livev1connect.LiveServiceName + "/Authenticate",
+				Service: livev1connect.LiveServiceName, Package: "loams.live.v1",
+				Idempotency: None, Retry: RetryManual, Streaming: Unary,
+			},
+			{
 				Module: "live", Name: "ModifyQuerySet", ProtoName: "modifyQuerySet",
 				Method: "ModifyQuerySet", RPC: livev1connect.LiveServiceName + "/ModifyQuerySet",
 				Service: livev1connect.LiveServiceName, Package: "loams.live.v1",

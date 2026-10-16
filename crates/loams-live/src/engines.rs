@@ -329,6 +329,19 @@ impl Engines {
         names
     }
 
+    /// Closes every session, in every app running here, of `principal`,
+    /// whose credential was revoked (LV1 plan Task 17).
+    pub fn revoke(&self, principal: &str) {
+        let runtimes: Vec<Arc<AppRuntime>> = self
+            .running_map()
+            .values()
+            .filter_map(|slot| slot.get().cloned())
+            .collect();
+        for runtime in runtimes {
+            runtime.sessions().revoke(principal);
+        }
+    }
+
     /// The engine of the app a request addresses: `app` (the
     /// `loams-live-app` header) or, without it, the server's own app;
     /// started when it does not run here yet. Refused for an unknown app

@@ -26,6 +26,19 @@
 //!   Transition at most once per `ts_only_interval`.
 //! - **Chunks.** A Transition over `max_transition_bytes` goes out as several
 //!   messages with one `end`, all but the last with `more = true` ([`chunks`]).
+//! - **Identity** (LV1 plan Task 17, design §45 §5.4). A session runs as the
+//!   caller of its `Watch` ([`Sessions::open_as`]), and each of its
+//!   subscriptions is keyed by who that is ([`SubKey::identity`]), so a
+//!   result is never shared across callers. [`Sessions::authenticate`]
+//!   replaces it: the same caller only moves the expiry; another one bumps
+//!   the identity version and reruns every query as the new caller in one
+//!   Transition. A session whose credential expires (plus
+//!   [`SessionConfig::expiry_leeway`]) closes with `UNAUTHENTICATED`,
+//!   reason `token_expired`; one whose credential is revoked
+//!   ([`Sessions::revoke`]) with `token_revoked`; and every session closes
+//!   after [`SessionConfig::max_age`] with `UNAVAILABLE`, reason
+//!   `session_rotate`, so the client resumes and its identity is checked
+//!   again.
 //! - **Deployments** (LV1 plan Task 7). With a subscription manager that
 //!   follows the app's engine, a query whose function does not resolve now
 //!   (nothing deployed, or not exported) is still subscribed, holding the
@@ -45,6 +58,7 @@ use tokio::sync::{Notify, broadcast, mpsc, oneshot};
 use tokio_util::sync::CancellationToken;
 use ulid::Ulid;
 
+use crate::auth::Caller;
 use crate::pb::__buffa::oneof::query_set_change::Change;
 use crate::pb::__buffa::oneof::query_update::Update;
 use crate::pb::__buffa::oneof::watch_request::Start as StartOneof;
@@ -114,6 +128,11 @@ pub struct SessionConfig {
     pub max_queries: usize,
     /// The shortest time between two ts-only Transitions (1 s).
     pub ts_only_interval: Duration,
+    /// A session is closed (`session_rotate`) after this long (24 h, Q637).
+    pub max_age: Duration,
+    /// How long past its credential's expiry a session stays open (60 s,
+    /// §19 §9).
+    pub expiry_leeway: Duration,
 }
 
 impl Default for SessionConfig {
@@ -125,9 +144,20 @@ impl Default for SessionConfig {
             max_transition_bytes: MAX_TRANSITION_BYTES,
             max_queries: MAX_SESSION_QUERIES,
             ts_only_interval: Duration::from_secs(1),
+            max_age: MAX_SESSION_AGE,
+            expiry_leeway: EXPIRY_LEEWAY,
         }
     }
 }
+
+/// How long one `Watch` stream lasts before it is rotated (Q637).
+pub const MAX_SESSION_AGE: Duration = Duration::from_secs(24 * 60 * 60);
+
+/// How long past its credential's expiry a session stays open.
+pub const EXPIRY_LEEWAY: Duration = Duration::from_secs(60);
+
+/// The reason of a session closed after [`SessionConfig::max_age`].
+pub const SESSION_ROTATE: &str = "session_rotate";
 
 // ---- the client's side ----
 
@@ -503,7 +533,21 @@ enum Cmd {
     },
     /// A mutation of the session committed at this timestamp (version).
     Committed(u64),
+    /// `Authenticate`: run as `caller` from now on, once `check` allows it
+    /// every query; answers the identity version.
+    Authenticate {
+        caller: Box<Caller>,
+        check: Check,
+        reply: oneshot::Sender<Result<u64, LiveError>>,
+    },
+    /// The credential of principal `.0` was revoked.
+    Revoke(String),
 }
+
+/// Whether a caller may run a query function with these arguments (the
+/// authorization of LV1 plan Task 15, checked again on `Authenticate`).
+pub type Check =
+    Arc<dyn Fn(&Caller, &dyn Function, &LiveValue) -> Result<(), LiveError> + Send + Sync>;
 
 /// Test hook (LV1 plan Task 7): the deployments behind a session's results
 /// after one of its Transitions, `deployments` holding every non-nil
@@ -597,8 +641,14 @@ impl Sessions {
 
     /// Opens a session: validates the query set, then subscribes it in the
     /// session's own task, whose first Transition arrives in the returned
-    /// outbox.
+    /// outbox. It runs as [`Caller::unauthenticated`].
     pub fn open(&self, start: Start) -> Result<Session, LiveError> {
+        self.open_as(start, Caller::unauthenticated())
+    }
+
+    /// [`open`](Self::open) as `caller` (LV1 plan Task 17): its queries run
+    /// for it, and the session closes when its credential expires.
+    pub fn open_as(&self, start: Start, caller: Caller) -> Result<Session, LiveError> {
         check_set(&self.inner.config, start.set())?;
         let id = format!(
             "{}-{:016x}{:016x}",
@@ -612,7 +662,11 @@ impl Sessions {
         ));
         let (tx, rx) = mpsc::unbounded_channel();
         self.map().insert(id.clone(), tx);
+        let now = tokio::time::Instant::now();
         let task = SessionTask {
+            expires: expiry(&caller, self.inner.config.expiry_leeway),
+            rotate_at: now + self.inner.config.max_age,
+            caller,
             sessions: self.clone(),
             id: id.clone(),
             outbox: outbox.clone(),
@@ -646,6 +700,41 @@ impl Sessions {
         answer
             .await
             .map_err(|_| LiveError::NotFound("the session has ended".into()))?
+    }
+
+    /// Replaces the identity of session `session_id` with `caller` (LV1
+    /// plan Task 17), once `check` allows it every query of the session:
+    /// the same caller (by id) only moves the expiry; another one bumps the
+    /// identity version and reruns every query as the new caller. Answers
+    /// the session's identity version.
+    pub async fn authenticate(
+        &self,
+        session_id: &str,
+        caller: Caller,
+        check: Check,
+    ) -> Result<u64, LiveError> {
+        let tx = self.map().get(session_id).cloned().ok_or_else(|| {
+            LiveError::NotFound(format!("session {session_id:?} is not open on this node"))
+        })?;
+        let (reply, answer) = oneshot::channel();
+        tx.send(Cmd::Authenticate {
+            caller: Box::new(caller),
+            check,
+            reply,
+        })
+        .map_err(|_| LiveError::NotFound("the session has ended".into()))?;
+        answer
+            .await
+            .map_err(|_| LiveError::NotFound("the session has ended".into()))?
+    }
+
+    /// Closes every session running as `principal` (an API key's
+    /// `apikey:<id>`, a person's subject, an end user's
+    /// `tokenIdentifier`): its credential was revoked (LV1 plan Task 17).
+    pub fn revoke(&self, principal: &str) {
+        for tx in self.map().values() {
+            let _ = tx.send(Cmd::Revoke(principal.to_string()));
+        }
     }
 
     /// A mutation that named `session_id` committed at `commit_ts` (a TSO
@@ -713,6 +802,12 @@ impl Held {
 
 struct SessionTask {
     sessions: Sessions,
+    /// Who the session runs as.
+    caller: Caller,
+    /// When the caller's credential (plus the leeway) expires.
+    expires: Option<tokio::time::Instant>,
+    /// When the session is rotated.
+    rotate_at: tokio::time::Instant,
     id: String,
     outbox: Arc<Outbox>,
     cmds: mpsc::UnboundedReceiver<Cmd>,
@@ -770,7 +865,7 @@ impl SessionTask {
         self.dirty = self.queries.keys().copied().collect();
         let end = Version {
             query_set: set.version,
-            identity: 0,
+            identity: from.identity,
             ts: self.latest,
         };
         self.push(end, Vec::new());
@@ -820,8 +915,25 @@ impl SessionTask {
         housekeeping.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
         let shutdown = self.sessions.inner.shutdown.clone();
         loop {
+            let expires = self.expires;
             tokio::select! {
                 () = shutdown.cancelled() => return,
+                () = sleep_until_opt(expires) => {
+                    self.outbox.close(Some(LiveError::Unauthenticated {
+                        reason: crate::auth::reason::TOKEN_EXPIRED,
+                        message: "the session's credential has expired; authenticate again and \
+                                  resume"
+                            .into(),
+                    }));
+                    return;
+                }
+                () = tokio::time::sleep_until(self.rotate_at) => {
+                    self.outbox.close(Some(LiveError::SessionRotated(format!(
+                        "a session lasts {:?}; resume it",
+                        self.config().max_age
+                    ))));
+                    return;
+                }
                 tick = self.updates.recv() => match tick {
                     Ok(tick) => {
                         self.apply_tick(&tick);
@@ -848,6 +960,19 @@ impl SessionTask {
                     Some(Cmd::Committed(ts)) => {
                         if ts > self.version.ts {
                             self.pending = Some(self.pending.map_or(ts, |p| p.max(ts)));
+                        }
+                    }
+                    Some(Cmd::Authenticate { caller, check, reply }) => {
+                        let result = self.authenticate(*caller, &check).await;
+                        let _ = reply.send(result);
+                    }
+                    Some(Cmd::Revoke(principal)) => {
+                        if principal == self.caller.id {
+                            self.outbox.close(Some(LiveError::Unauthenticated {
+                                reason: crate::auth::reason::TOKEN_REVOKED,
+                                message: "the session's credential was revoked".into(),
+                            }));
+                            return;
                         }
                     }
                 },
@@ -913,9 +1038,13 @@ impl SessionTask {
     /// Subscribes `specs`; a query that cannot subscribe holds its error.
     async fn add(&mut self, specs: Vec<pb::QuerySpec>) {
         let resolve = self.sessions.inner.resolve.clone();
+        let who = self.caller.subscription_key();
+        let identity = self.caller.identity.clone();
         let jobs = specs.into_iter().map(|spec| {
             let subs = self.sessions.inner.subs.clone();
             let resolve = resolve.clone();
+            let who = who.clone();
+            let identity = identity.clone();
             async move {
                 let prepared = (|| {
                     let target = match resolve(&spec.function) {
@@ -936,10 +1065,16 @@ impl SessionTask {
                         let key = match &target {
                             Target::Function(f) => SubKey::for_function(&**f, &args),
                             Target::Missing { name, .. } => SubKey::new(name, &args),
-                        };
-                        subs.subscribe_target(key.clone(), target.clone(), args.clone())
-                            .await
-                            .map(|(id, result)| (id, key, target, args, result))
+                        }
+                        .for_identity(who.clone());
+                        subs.subscribe_as(
+                            key.clone(),
+                            target.clone(),
+                            args.clone(),
+                            identity.clone(),
+                        )
+                        .await
+                        .map(|(id, result)| (id, key, target, args, result))
                     }
                     Err(e) => Err(e),
                 };
@@ -999,7 +1134,7 @@ impl SessionTask {
                 .sessions
                 .inner
                 .subs
-                .subscribe_target(key, target, args)
+                .subscribe_as(key, target, args, self.caller.identity.clone())
                 .await
             {
                 Ok((id, result)) => {
@@ -1028,6 +1163,78 @@ impl SessionTask {
             }
         }
         self.sync();
+    }
+
+    /// `Authenticate` (LV1 plan Task 17): once `check` allows the caller
+    /// every query, the same caller moves the expiry; another one bumps the identity
+    /// version and reruns every query as it, in one Transition.
+    async fn authenticate(&mut self, caller: Caller, check: &Check) -> Result<u64, LiveError> {
+        // On both paths: a refreshed credential of the same caller may carry
+        // narrower scopes (PR #693 review).
+        for query in self.queries.values() {
+            if let Some((_, _, Target::Function(f), args)) = &query.sub {
+                check(&caller, &**f, args)?;
+            }
+        }
+        if caller.subscription_key() == self.caller.subscription_key() {
+            self.expires = expiry(&caller, self.config().expiry_leeway);
+            self.caller = caller;
+            return Ok(self.version.identity);
+        }
+        self.expires = expiry(&caller, self.config().expiry_leeway);
+        self.caller = caller;
+        let mut jobs = Vec::new();
+        for (q, query) in &self.queries {
+            if let Some((id, key, target, args)) = &query.sub {
+                jobs.push((*q, *id, key.clone(), target.clone(), args.clone()));
+            }
+        }
+        for (q, old, key, target, args) in jobs {
+            let key = key.for_identity(self.caller.subscription_key());
+            let subscribed = self
+                .sessions
+                .inner
+                .subs
+                .subscribe_as(
+                    key.clone(),
+                    target.clone(),
+                    args.clone(),
+                    self.caller.identity.clone(),
+                )
+                .await;
+            if let Some(qs) = self.by_sub.get_mut(&old) {
+                qs.remove(&q);
+                if qs.is_empty() {
+                    self.by_sub.remove(&old);
+                }
+            }
+            self.sessions.inner.subs.unsubscribe(old);
+            let query = match subscribed {
+                Ok((id, result)) => {
+                    self.by_sub.entry(id).or_default().insert(q);
+                    Query {
+                        sub: Some((id, key, target, args)),
+                        held: Held::Result(result),
+                    }
+                }
+                Err(e) => Query {
+                    sub: None,
+                    held: Held::Fixed(e.to_proto()),
+                },
+            };
+            self.queries.insert(q, query);
+        }
+        self.sync();
+        // Every result is replaced: the client drops those of the old
+        // identity.
+        self.dirty = self.queries.keys().copied().collect();
+        let end = Version {
+            identity: self.version.identity + 1,
+            ts: self.latest.max(self.version.ts),
+            ..self.version
+        };
+        self.push(end, Vec::new());
+        Ok(end.identity)
     }
 
     async fn modify(&mut self, req: pb::ModifyQuerySetRequest) -> Result<(), LiveError> {
@@ -1184,6 +1391,25 @@ impl SessionTask {
 }
 
 /// A request's arguments: unset is `null`.
+/// When `caller`'s credential, plus `leeway`, expires, on the runtime's
+/// clock; `None` when it does not say.
+fn expiry(caller: &Caller, leeway: Duration) -> Option<tokio::time::Instant> {
+    let at_ms = caller.expires_at_ms?;
+    let now_ms = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| u64::try_from(d.as_millis()).unwrap_or(u64::MAX));
+    let left = Duration::from_millis(at_ms.saturating_sub(now_ms)) + leeway;
+    Some(tokio::time::Instant::now() + left)
+}
+
+/// Sleeps until `at`; forever without one.
+async fn sleep_until_opt(at: Option<tokio::time::Instant>) {
+    match at {
+        Some(at) => tokio::time::sleep_until(at).await,
+        None => std::future::pending().await,
+    }
+}
+
 pub fn args_of(args: Option<pb::Value>) -> Result<LiveValue, LiveError> {
     args.map(LiveValue::from_proto)
         .transpose()

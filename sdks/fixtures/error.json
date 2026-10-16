@@ -724,6 +724,12 @@
       "standIn": null
     },
     {
+      "reason": "session_rotate",
+      "code": "unavailable",
+      "why": "Needs a Watch stream held open for 24 hours; the recorder's sessions are short (LV1 Task 17).",
+      "standIn": null
+    },
+    {
       "reason": "live_function_error",
       "code": "unknown",
       "why": "Needs a deployed function that throws; the recorder deploys nothing (LV1 Task 19).",

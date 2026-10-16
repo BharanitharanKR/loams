@@ -85,6 +85,7 @@ const (
 	ReasonLiveLimitExceeded        Reason = "live_limit_exceeded"
 	ReasonLiveAppMismatch          Reason = "live_app_mismatch"
 	ReasonLiveOriginNotAllowed     Reason = "live_origin_not_allowed"
+	ReasonSessionRotate            Reason = "session_rotate"
 	ReasonRoleRequired             Reason = "role_required"
 	ReasonSetupRequired            Reason = "setup_required"
 	ReasonTokenMissing             Reason = "token_missing"
@@ -195,6 +196,7 @@ var Reasons = []Reason{
 	ReasonLiveLimitExceeded,
 	ReasonLiveAppMismatch,
 	ReasonLiveOriginNotAllowed,
+	ReasonSessionRotate,
 	ReasonRoleRequired,
 	ReasonSetupRequired,
 	ReasonTokenMissing,
@@ -300,6 +302,7 @@ var ReasonCodes = map[Reason]string{
 	ReasonLiveLimitExceeded:        "resource_exhausted",
 	ReasonLiveAppMismatch:          "permission_denied",
 	ReasonLiveOriginNotAllowed:     "permission_denied",
+	ReasonSessionRotate:            "unavailable",
 	ReasonRoleRequired:             "permission_denied",
 	ReasonSetupRequired:            "failed_precondition",
 	ReasonTokenMissing:             "unauthenticated",

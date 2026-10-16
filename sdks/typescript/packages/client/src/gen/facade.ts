@@ -24,7 +24,7 @@ import type { CompleteSetupRequestSchema, CompleteSetupResponse, CreateSessionRe
 import { InstanceService } from '@loams/proto/instance';
 import type { GetInstanceRequestSchema, GetInstanceResponse, WhoAmIRequestSchema, WhoAmIResponse } from '@loams/proto/instance';
 import { LiveAdminService, LiveService } from '@loams/live/live';
-import type { ActivateDeploymentRequestSchema, ActivateDeploymentResponse, CreateAppRequestSchema, CreateAppResponse, DeleteAppRequestSchema, DeleteAppResponse, DeployRequestSchema, DeployResponse, GetAppRequestSchema, GetAppResponse, GetDeploymentRequestSchema, GetDeploymentResponse, GetIndexStatusRequestSchema, GetIndexStatusResponse, ListAppsRequestSchema, ListAppsResponse, ListDeploymentsRequestSchema, ListDeploymentsResponse, ModifyQuerySetRequestSchema, ModifyQuerySetResponse, MutateRequestSchema, MutateResponse, QueryRequestSchema, QueryResponse, TailLogsRequestSchema, TailLogsResponse, Transition, UpdateAppRequestSchema, UpdateAppResponse, WatchRequestSchema } from '@loams/live/live';
+import type { ActivateDeploymentRequestSchema, ActivateDeploymentResponse, AuthenticateRequestSchema, AuthenticateResponse, CreateAppRequestSchema, CreateAppResponse, DeleteAppRequestSchema, DeleteAppResponse, DeployRequestSchema, DeployResponse, GetAppRequestSchema, GetAppResponse, GetDeploymentRequestSchema, GetDeploymentResponse, GetIndexStatusRequestSchema, GetIndexStatusResponse, ListAppsRequestSchema, ListAppsResponse, ListDeploymentsRequestSchema, ListDeploymentsResponse, ModifyQuerySetRequestSchema, ModifyQuerySetResponse, MutateRequestSchema, MutateResponse, QueryRequestSchema, QueryResponse, TailLogsRequestSchema, TailLogsResponse, Transition, UpdateAppRequestSchema, UpdateAppResponse, WatchRequestSchema } from '@loams/live/live';
 /**
  *  `loams.admin.agents` — Agents, their tokens and trust policies, and service accounts.
  *
@@ -444,6 +444,13 @@ export interface LiveModule {
   /** Whether the package's wire contract may still change. */
   readonly unstable: true;
   /**
+   *  `loams.live.v1.LiveService/Authenticate`, retried: manual.
+   */
+  authenticate(
+    request: MessageInitShape<typeof AuthenticateRequestSchema>,
+    options?: CallOptions,
+  ): Promise<AuthenticateResponse>;
+  /**
    *  `loams.live.v1.LiveService/ModifyQuerySet`, retried: manual.
    */
   modifyQuerySet(
@@ -734,6 +741,7 @@ export const MODULES: readonly ModuleBinding[] = [
     unstable: true,
     derived: false,
     calls: [
+      { module: 'live', name: 'authenticate', protoName: 'authenticate', method: 'Authenticate', rpc: 'loams.live.v1.LiveService/Authenticate', service: 'loams.live.v1.LiveService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
       { module: 'live', name: 'modifyQuerySet', protoName: 'modifyQuerySet', method: 'ModifyQuerySet', rpc: 'loams.live.v1.LiveService/ModifyQuerySet', service: 'loams.live.v1.LiveService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
       { module: 'live', name: 'watch', protoName: 'watch', method: 'Watch', rpc: 'loams.live.v1.LiveService/Watch', service: 'loams.live.v1.LiveService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'server', pagination: null },
     ],
@@ -887,6 +895,7 @@ export const REASONS = [
   'live_limit_exceeded',
   'live_app_mismatch',
   'live_origin_not_allowed',
+  'session_rotate',
   'role_required',
   'setup_required',
   'token_missing',
@@ -993,6 +1002,7 @@ export const REASON_CODES: Readonly<Record<Reason, string>> = {
   live_limit_exceeded: 'resource_exhausted',
   live_app_mismatch: 'permission_denied',
   live_origin_not_allowed: 'permission_denied',
+  session_rotate: 'unavailable',
   role_required: 'permission_denied',
   setup_required: 'failed_precondition',
   token_missing: 'unauthenticated',

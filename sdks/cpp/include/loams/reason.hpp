@@ -107,6 +107,7 @@ enum class Reason {
   kLiveLimitExceeded,
   kLiveAppMismatch,
   kLiveOriginNotAllowed,
+  kSessionRotate,
   kRoleRequired,
   kSetupRequired,
   kTokenMissing,

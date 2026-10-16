@@ -257,6 +257,9 @@ enum class Reason {
     /** `live_origin_not_allowed` (docs/api/reasons.md). */
     LIVE_ORIGIN_NOT_ALLOWED,
 
+    /** `session_rotate` (docs/api/reasons.md). */
+    SESSION_ROTATE,
+
     /** The caller's org role is below the one the admin RPC needs, or the caller is not in the org. */
     ROLE_REQUIRED,
 
@@ -442,6 +445,7 @@ object ReasonRegistry {
         Reason.LIVE_LIMIT_EXCEEDED,
         Reason.LIVE_APP_MISMATCH,
         Reason.LIVE_ORIGIN_NOT_ALLOWED,
+        Reason.SESSION_ROTATE,
         Reason.ROLE_REQUIRED,
         Reason.SETUP_REQUIRED,
         Reason.TOKEN_MISSING,
@@ -544,6 +548,7 @@ object ReasonRegistry {
         Reason.LIVE_LIMIT_EXCEEDED to "live_limit_exceeded",
         Reason.LIVE_APP_MISMATCH to "live_app_mismatch",
         Reason.LIVE_ORIGIN_NOT_ALLOWED to "live_origin_not_allowed",
+        Reason.SESSION_ROTATE to "session_rotate",
         Reason.ROLE_REQUIRED to "role_required",
         Reason.SETUP_REQUIRED to "setup_required",
         Reason.TOKEN_MISSING to "token_missing",
@@ -653,6 +658,7 @@ object ReasonRegistry {
         Reason.LIVE_LIMIT_EXCEEDED to Code.RESOURCE_EXHAUSTED,
         Reason.LIVE_APP_MISMATCH to Code.PERMISSION_DENIED,
         Reason.LIVE_ORIGIN_NOT_ALLOWED to Code.PERMISSION_DENIED,
+        Reason.SESSION_ROTATE to Code.UNAVAILABLE,
         Reason.ROLE_REQUIRED to Code.PERMISSION_DENIED,
         Reason.SETUP_REQUIRED to Code.FAILED_PRECONDITION,
         Reason.TOKEN_MISSING to Code.UNAUTHENTICATED,

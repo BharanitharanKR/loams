@@ -119,6 +119,18 @@ class ModifyQuerySetResponse(_message.Message):
     __slots__ = ()
     def __init__(self) -> None: ...
 
+class AuthenticateRequest(_message.Message):
+    __slots__ = ("session_id",)
+    SESSION_ID_FIELD_NUMBER: _ClassVar[int]
+    session_id: str
+    def __init__(self, session_id: _Optional[str] = ...) -> None: ...
+
+class AuthenticateResponse(_message.Message):
+    __slots__ = ("identity",)
+    IDENTITY_FIELD_NUMBER: _ClassVar[int]
+    identity: int
+    def __init__(self, identity: _Optional[int] = ...) -> None: ...
+
 class Transition(_message.Message):
     __slots__ = ("session_id", "start", "end", "updates", "more")
     SESSION_ID_FIELD_NUMBER: _ClassVar[int]

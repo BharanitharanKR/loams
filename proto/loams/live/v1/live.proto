@@ -48,6 +48,15 @@ service LiveService {
   rpc ModifyQuerySet(ModifyQuerySetRequest) returns (ModifyQuerySetResponse) {
     option (loams.options.v1.facade) = { name: "modifyQuerySet" };
   }
+  // Replaces an open session's identity with this request's credential
+  // (its `Authorization` header; design §45 §5.4, LV1 plan Task 17). The
+  // same caller only extends the session's expiry; another caller (a
+  // sign-in or a sign-out) increments the identity version, and the next
+  // Transition reruns every query as the new caller. Answered once that
+  // Transition is queued. An unknown session is NOT_FOUND.
+  rpc Authenticate(AuthenticateRequest) returns (AuthenticateResponse) {
+    option (loams.options.v1.facade) = { name: "authenticate" };
+  }
   // A one-shot query, at the latest tick or at a given timestamp.
   //
   // Exposed on `loams.tables`, not on `loams.live`: §44 §7.2 splits the
@@ -120,6 +129,15 @@ message QuerySetChange {
 }
 
 message ModifyQuerySetResponse {}
+
+message AuthenticateRequest {
+  string session_id = 1;
+}
+
+message AuthenticateResponse {
+  // The session's identity version after the call.
+  uint64 identity = 1;
+}
 
 // One step of a session, from `start` to `end`.
 message Transition {

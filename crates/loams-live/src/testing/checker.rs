@@ -96,6 +96,9 @@ pub struct Report {
     pub checked: usize,
     /// Sessions disconnected and resumed.
     pub resumes: usize,
+    /// Sessions whose identity an `Authenticate` replaced (LV1 plan Task
+    /// 17).
+    pub identity_changes: usize,
     /// Deploys and rollbacks of the workload that activated (the first
     /// deployment, before the sessions open, not counted).
     pub activations: usize,
@@ -591,9 +594,9 @@ pub async fn run_reactive_checker(store: Store, w: Workload) -> Report {
 /// The task (of the LV1 plan) that wires `d`, when it is not wired yet.
 fn unwired(d: Disturbance) -> Option<&'static str> {
     match d {
-        Disturbance::IdentityChange { .. } => Some("Task 17"),
         Disturbance::NodeKill { .. } => Some("Task 24"),
-        Disturbance::Deploy { .. }
+        Disturbance::IdentityChange { .. }
+        | Disturbance::Deploy { .. }
         | Disturbance::Rollback { .. }
         | Disturbance::AddIndex { .. }
         | Disturbance::DropIndex { .. }
@@ -839,6 +842,23 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
                 for watcher in &mut watchers {
                     resume(watcher, &sessions, &shutdown).await?;
                     report.resumes += 1;
+                }
+            }
+            // Every session signs in as a new user (LV1 plan Task 17): its
+            // queries rerun as that user in one Transition at a new
+            // identity version, which the consumers check like any other.
+            Disturbance::IdentityChange { at_op } => {
+                let allow: crate::session::Check = Arc::new(|_, _, _| Ok(()));
+                for watcher in &watchers {
+                    let caller = crate::auth::Caller::new(
+                        format!("checker-user-{}-{at_op}", watcher.index),
+                        crate::auth::CallerKind::User,
+                    );
+                    sessions
+                        .authenticate(&watcher.session.id, caller, allow.clone())
+                        .await
+                        .map_err(|e| format!("{d:?} on session {}: {e}", watcher.index))?;
+                    report.identity_changes += 1;
                 }
             }
             Disturbance::Deploy { .. } => {

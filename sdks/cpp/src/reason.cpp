@@ -98,6 +98,7 @@ constexpr Row kRows[] = {
     {Reason::kLiveLimitExceeded, "live_limit_exceeded"},
     {Reason::kLiveAppMismatch, "live_app_mismatch"},
     {Reason::kLiveOriginNotAllowed, "live_origin_not_allowed"},
+    {Reason::kSessionRotate, "session_rotate"},
     {Reason::kRoleRequired, "role_required"},
     {Reason::kSetupRequired, "setup_required"},
     {Reason::kTokenMissing, "token_missing"},

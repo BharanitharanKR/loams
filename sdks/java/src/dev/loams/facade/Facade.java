@@ -105,6 +105,9 @@ public final class Facade {
                         true,
                         false,
                         List.of(
+                                call("live", "Authenticate", "authenticate", LIVE_SERVICE,
+                                        IdempotencyLevel.NONE, RetryClass.MANUAL,
+                                        Streaming.UNARY, null, false),
                                 call("live", "ModifyQuerySet", "modifyQuerySet", LIVE_SERVICE,
                                         IdempotencyLevel.NONE, RetryClass.MANUAL,
                                         Streaming.UNARY, null, false),

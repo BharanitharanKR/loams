@@ -55,6 +55,7 @@ pub mod reason {
     pub const TOKEN_MISSING: &str = "token_missing";
     pub const TOKEN_MALFORMED: &str = "token_malformed";
     pub const TOKEN_EXPIRED: &str = "token_expired";
+    pub const TOKEN_REVOKED: &str = "token_revoked";
     pub const TOKEN_NOT_YET_VALID: &str = "token_not_yet_valid";
     pub const TOKEN_BAD_SIGNATURE: &str = "token_bad_signature";
     pub const TOKEN_WRONG_AUDIENCE: &str = "token_wrong_audience";
@@ -153,6 +154,24 @@ impl Caller {
             expires_at_ms,
             identity: Some(identity.clone()),
             ..Caller::new(identity.token_identifier, CallerKind::EndUser)
+        }
+    }
+
+    /// Who a subscription runs for ([`SubKey::identity`](crate::SubKey),
+    /// LV1 plan Task 17): `end_user:<issuer length>:<issuer><subject>` for
+    /// an end user (the issuer and subject unambiguously, which
+    /// `tokenIdentifier`'s `|` is not), `anonymous`, or `principal:<id>`
+    /// for a platform principal. Two callers with one key see one result.
+    pub fn subscription_key(&self) -> String {
+        match (&self.kind, &self.identity) {
+            (CallerKind::EndUser, Some(identity)) => format!(
+                "end_user:{}:{}{}",
+                identity.issuer.len(),
+                identity.issuer,
+                identity.subject
+            ),
+            (CallerKind::Anonymous, _) => ANONYMOUS.to_string(),
+            _ => format!("principal:{}", self.id),
         }
     }
 

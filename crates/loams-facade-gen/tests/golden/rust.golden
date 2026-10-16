@@ -167,6 +167,7 @@ pub const REASONS: &[Reason] = &[
     "live_limit_exceeded",
     "live_app_mismatch",
     "live_origin_not_allowed",
+    "session_rotate",
     "role_required",
     "setup_required",
     "token_missing",
@@ -271,6 +272,7 @@ pub const REASON_CODES: &[(Reason, &str)] = &[
     ("live_limit_exceeded", "resource_exhausted"),
     ("live_app_mismatch", "permission_denied"),
     ("live_origin_not_allowed", "permission_denied"),
+    ("session_rotate", "unavailable"),
     ("role_required", "permission_denied"),
     ("setup_required", "failed_precondition"),
     ("token_missing", "unauthenticated"),
@@ -534,6 +536,7 @@ pub static MODULES: &[ModuleBinding] = &[
         unstable: true,
         derived: false,
         calls: &[
+            CallBinding { module: "live", name: "authenticate", proto_name: "authenticate", method: "Authenticate", rpc: "loams.live.v1.LiveService/Authenticate", service: "loams.live.v1.LiveService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
             CallBinding { module: "live", name: "modify_query_set", proto_name: "modifyQuerySet", method: "ModifyQuerySet", rpc: "loams.live.v1.LiveService/ModifyQuerySet", service: "loams.live.v1.LiveService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
             CallBinding { module: "live", name: "watch", proto_name: "watch", method: "Watch", rpc: "loams.live.v1.LiveService/Watch", service: "loams.live.v1.LiveService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Server, pagination: None },
         ],
@@ -983,6 +986,13 @@ pub trait LiveModule {
     const SERVICE: &'static str = "loams.live.v1.LiveService";
     /// Whether the package's wire contract may still change.
     const UNSTABLE: bool = true;
+
+    /// `loams.live.v1.LiveService/Authenticate`, retried: manual.
+    fn authenticate(
+        &self,
+        request: loams_live_proto::loams::live::v1::AuthenticateRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::AuthenticateResponse, LoamsError>> + Send;
 
     /// `loams.live.v1.LiveService/ModifyQuerySet`, retried: manual.
     fn modify_query_set(

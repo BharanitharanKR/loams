@@ -35,7 +35,7 @@ from loams.auth.v1.auth_pb2 import CompleteSetupRequest, CompleteSetupResponse, 
 from loams.auth.v1.auth_connect import AuthServiceClient, AuthServiceClientSync
 from loams.instance.v1.instance_pb2 import GetInstanceRequest, GetInstanceResponse, WhoAmIRequest, WhoAmIResponse
 from loams.instance.v1.instance_connect import InstanceServiceClient, InstanceServiceClientSync
-from loams.live.v1.live_pb2 import ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition, WatchRequest
+from loams.live.v1.live_pb2 import AuthenticateRequest, AuthenticateResponse, ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition, WatchRequest
 from loams.live.v1.admin_pb2 import ActivateDeploymentRequest, ActivateDeploymentResponse, CreateAppRequest, CreateAppResponse, DeleteAppRequest, DeleteAppResponse, DeployRequest, DeployResponse, GetAppRequest, GetAppResponse, GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse, ListAppsRequest, ListAppsResponse, ListDeploymentsRequest, ListDeploymentsResponse, TailLogsRequest, TailLogsResponse, UpdateAppRequest, UpdateAppResponse
 from loams.live.v1.live_connect import LiveServiceClient, LiveServiceClientSync
 from loams.live.v1.admin_connect import LiveAdminServiceClient, LiveAdminServiceClientSync
@@ -115,6 +115,7 @@ Reason = Literal[
     "live_limit_exceeded",
     "live_app_mismatch",
     "live_origin_not_allowed",
+    "session_rotate",
     "role_required",
     "setup_required",
     "token_missing",
@@ -222,6 +223,7 @@ REASONS: Final[tuple[Reason, ...]] = (
     "live_limit_exceeded",
     "live_app_mismatch",
     "live_origin_not_allowed",
+    "session_rotate",
     "role_required",
     "setup_required",
     "token_missing",
@@ -325,6 +327,7 @@ REASON_CODES: Final[dict[Reason, str]] = {
     "live_limit_exceeded": "resource_exhausted",
     "live_app_mismatch": "permission_denied",
     "live_origin_not_allowed": "permission_denied",
+    "session_rotate": "unavailable",
     "role_required": "permission_denied",
     "setup_required": "failed_precondition",
     "token_missing": "unauthenticated",
@@ -1092,6 +1095,19 @@ MODULES: Final[tuple[ModuleBinding, ...]] = (
         calls=(
             CallBinding(
                 module="live",
+                name="authenticate",
+                proto_name="authenticate",
+                method="Authenticate",
+                rpc="loams.live.v1.LiveService/Authenticate",
+                service="loams.live.v1.LiveService",
+                package="loams.live.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="live",
                 name="modify_query_set",
                 proto_name="modifyQuerySet",
                 method="ModifyQuerySet",
@@ -1626,6 +1642,13 @@ METHODS: Final[dict[str, MethodInfo[Message, Message]]] = {
         input=WhoAmIRequest,
         output=WhoAmIResponse,
         idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.live.v1.LiveService/Authenticate": MethodInfo(
+        name="Authenticate",
+        service_name="loams.live.v1.LiveService",
+        input=AuthenticateRequest,
+        output=AuthenticateResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
     ),
     "loams.live.v1.LiveService/ModifyQuerySet": MethodInfo(
         name="ModifyQuerySet",
@@ -2776,6 +2799,16 @@ class LiveModule(Protocol):
     module: ClassVar[Literal["live"]]
     service: ClassVar[Literal["loams.live.v1.LiveService"]]
     unstable: ClassVar[Literal[True]]
+    """`loams.live.v1.LiveService/Authenticate`, retried: manual.
+    """
+    async def authenticate(
+        self,
+        request: loams.live.v1.live_pb2.AuthenticateRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.live_pb2.AuthenticateResponse:
+        ...
+
     """`loams.live.v1.LiveService/ModifyQuerySet`, retried: manual.
     """
     async def modify_query_set(
@@ -2807,6 +2840,16 @@ class LiveModuleSync(Protocol):
     module: ClassVar[Literal["live"]]
     service: ClassVar[Literal["loams.live.v1.LiveService"]]
     unstable: ClassVar[Literal[True]]
+    """`loams.live.v1.LiveService/Authenticate`, retried: manual.
+    """
+    def authenticate(
+        self,
+        request: loams.live.v1.live_pb2.AuthenticateRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.live.v1.live_pb2.AuthenticateResponse:
+        ...
+
     """`loams.live.v1.LiveService/ModifyQuerySet`, retried: manual.
     """
     def modify_query_set(
