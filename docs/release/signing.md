@@ -40,6 +40,14 @@ and the key is protected by being a secret available only to the release workflo
 public key (for example at `https://loams.dev/gpg.asc` and on keys.openpgp.org) so users can check
 the `.sig` files.
 
+### The key
+
+- **User ID:** `Loams Release Signing Key <security@ostriumlabs.com>`, Ed25519, signing only, no passphrase.
+- **Fingerprint:** `333AC94599D5A1EB2A416D1E83DC134D8CAF895D` (`333A C945 99D5 A1EB 2A41 6D1E 83DC 134D 8CAF 895D`). This is the value of `LOAMS_GPG_KEY_ID`.
+- **Created** 2026-10-16, **expires** 2028-10-15. Extend the expiry before then, and re-publish the public key.
+- **Public key:** [`loams-release-key.asc`](loams-release-key.asc), in this directory. Also publish it at `https://loams.dev/gpg.asc` and on keys.openpgp.org.
+- **Set up** on 2026-10-16: the secret `LOAMS_GPG_PRIVATE_KEY` and the variable `LOAMS_GPG_KEY_ID` are repository-scoped. The maintainers hold an offline backup of the private key and its revocation certificate. If the key is ever exposed, revoke it, publish the revocation, and replace both settings.
+
 ## What SignPath's free programme can and cannot sign
 
 Verified 2026-10-03 against <https://docs.signpath.io/artifact-configuration/reference>,
