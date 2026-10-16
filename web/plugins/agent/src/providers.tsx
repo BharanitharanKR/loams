@@ -4,7 +4,7 @@
 
 import type { ChatProviderId, ChatProviderInfo, LoamsDesktopApi } from '@loams/desktop/contracts';
 import { Button, Card, Checkbox, Field, Input, Notice, StatusTag } from '@loams/ui';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { AgentStore } from './store.js';
 
 const originOf = (url: string): string | undefined => {
@@ -40,10 +40,31 @@ function ProviderCard({
   const id: ChatProviderId = provider.id;
 
   // The saved values move when another save lands (or the origin change clears the key).
+  // Reset the form only when they really move: the effect also runs after the first
+  // render, which can land after the user's first edit and would silently undo it.
+  const saved = useRef({
+    baseUrl: provider.baseUrl,
+    model: provider.model,
+    fallback: provider.fallback === true,
+  });
   useEffect(() => {
-    setBaseUrl(provider.baseUrl);
-    setModel(provider.model);
-    setFallback(provider.fallback === true);
+    const next = {
+      baseUrl: provider.baseUrl,
+      model: provider.model,
+      fallback: provider.fallback === true,
+    };
+    const prev = saved.current;
+    if (
+      prev.baseUrl === next.baseUrl &&
+      prev.model === next.model &&
+      prev.fallback === next.fallback
+    ) {
+      return;
+    }
+    saved.current = next;
+    setBaseUrl(next.baseUrl);
+    setModel(next.model);
+    setFallback(next.fallback);
   }, [provider.baseUrl, provider.model, provider.fallback]);
 
   const dirty =
