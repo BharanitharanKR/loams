@@ -8,3 +8,4 @@ mod limits;
 mod lpk;
 mod paths;
 mod segment;
+mod snapshot;
