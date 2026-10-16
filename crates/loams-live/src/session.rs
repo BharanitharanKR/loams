@@ -1165,19 +1165,21 @@ impl SessionTask {
         self.sync();
     }
 
-    /// `Authenticate` (LV1 plan Task 17): the same caller moves the expiry;
-    /// another one, once `check` allows it every query, bumps the identity
+    /// `Authenticate` (LV1 plan Task 17): once `check` allows the caller
+    /// every query, the same caller moves the expiry; another one bumps the identity
     /// version and reruns every query as it, in one Transition.
     async fn authenticate(&mut self, caller: Caller, check: &Check) -> Result<u64, LiveError> {
-        if caller.subscription_key() == self.caller.subscription_key() {
-            self.expires = expiry(&caller, self.config().expiry_leeway);
-            self.caller = caller;
-            return Ok(self.version.identity);
-        }
+        // On both paths: a refreshed credential of the same caller may carry
+        // narrower scopes (PR #693 review).
         for query in self.queries.values() {
             if let Some((_, _, Target::Function(f), args)) = &query.sub {
                 check(&caller, &**f, args)?;
             }
+        }
+        if caller.subscription_key() == self.caller.subscription_key() {
+            self.expires = expiry(&caller, self.config().expiry_leeway);
+            self.caller = caller;
+            return Ok(self.version.identity);
         }
         self.expires = expiry(&caller, self.config().expiry_leeway);
         self.caller = caller;
