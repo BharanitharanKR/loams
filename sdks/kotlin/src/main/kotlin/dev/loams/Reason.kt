@@ -251,6 +251,9 @@ enum class Reason {
     /** `live_limit_exceeded` (docs/api/reasons.md). */
     LIVE_LIMIT_EXCEEDED,
 
+    /** `live_app_mismatch` (docs/api/reasons.md). */
+    LIVE_APP_MISMATCH,
+
     /** The caller's org role is below the one the admin RPC needs, or the caller is not in the org. */
     ROLE_REQUIRED,
 
@@ -434,6 +437,7 @@ object ReasonRegistry {
         Reason.LIVE_FUNCTION_TIMEOUT,
         Reason.LIVE_FUNCTION_OUT_OF_MEMORY,
         Reason.LIVE_LIMIT_EXCEEDED,
+        Reason.LIVE_APP_MISMATCH,
         Reason.ROLE_REQUIRED,
         Reason.SETUP_REQUIRED,
         Reason.TOKEN_MISSING,
@@ -534,6 +538,7 @@ object ReasonRegistry {
         Reason.LIVE_FUNCTION_TIMEOUT to "live_function_timeout",
         Reason.LIVE_FUNCTION_OUT_OF_MEMORY to "live_function_out_of_memory",
         Reason.LIVE_LIMIT_EXCEEDED to "live_limit_exceeded",
+        Reason.LIVE_APP_MISMATCH to "live_app_mismatch",
         Reason.ROLE_REQUIRED to "role_required",
         Reason.SETUP_REQUIRED to "setup_required",
         Reason.TOKEN_MISSING to "token_missing",
@@ -641,6 +646,7 @@ object ReasonRegistry {
         Reason.LIVE_FUNCTION_TIMEOUT to Code.DEADLINE_EXCEEDED,
         Reason.LIVE_FUNCTION_OUT_OF_MEMORY to Code.RESOURCE_EXHAUSTED,
         Reason.LIVE_LIMIT_EXCEEDED to Code.RESOURCE_EXHAUSTED,
+        Reason.LIVE_APP_MISMATCH to Code.PERMISSION_DENIED,
         Reason.ROLE_REQUIRED to Code.PERMISSION_DENIED,
         Reason.SETUP_REQUIRED to Code.FAILED_PRECONDITION,
         Reason.TOKEN_MISSING to Code.UNAUTHENTICATED,

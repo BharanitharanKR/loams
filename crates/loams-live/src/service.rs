@@ -42,6 +42,8 @@ use tokio_util::sync::CancellationToken;
 
 use crate::admin::Admin;
 use crate::apps::APP_HEADER;
+use crate::auth::Caller;
+use crate::authz::{self, ScopeAuthorizer};
 use crate::deploy::{self, Runtime};
 use crate::engines::{AppRuntime, Engines};
 use crate::logs::{CallInfo, REQUEST_ID_HEADER, Ring};
@@ -318,7 +320,25 @@ pub(crate) async fn app_of(
                 .map_err(|_| LiveError::invalid(format!("the {APP_HEADER} header is not text")))?,
         ),
     };
-    engines.resolve(header).await
+    engines.resolve_as(&Caller::of(ctx), header).await
+}
+
+/// Checks that the caller may run each query of a session's query set
+/// (LV1 plan Task 15). A function that does not resolve is left to the
+/// session, which answers it `NOT_FOUND` in that query's result.
+fn check_specs<'a>(
+    app: &AppRuntime,
+    caller: &Caller,
+    specs: impl IntoIterator<Item = &'a pb::QuerySpec>,
+) -> Result<(), LiveError> {
+    for spec in specs {
+        let Ok(f) = deploy::resolve(app.engine(), &spec.function) else {
+            continue;
+        };
+        let args = args_of(spec.args.as_option().cloned())?;
+        authz::check_call(&ScopeAuthorizer, caller, app.name(), &*f, &args)?;
+    }
+    Ok(())
 }
 
 /// How far ahead of the store's clock a client's read timestamp may be.
@@ -378,6 +398,7 @@ pub fn connect_error(e: &LiveError) -> ConnectError {
 fn error_with(e: &LiveError, request_id: Option<&str>) -> ConnectError {
     let (message, request_id) = e.public_message(request_id);
     let code = match e.code() {
+        _ if matches!(e, LiveError::PermissionDenied { .. }) => ErrorCode::PermissionDenied,
         pb::ErrorCode::ERROR_CODE_INVALID_ARGUMENT => ErrorCode::InvalidArgument,
         pb::ErrorCode::ERROR_CODE_NOT_FOUND => ErrorCode::NotFound,
         pb::ErrorCode::ERROR_CODE_FAILED_PRECONDITION => ErrorCode::FailedPrecondition,
@@ -460,6 +481,10 @@ impl LiveService for Live {
             .map_err(|e| connect_error(&e))?;
         let start =
             Start::from_request(request.to_owned_message()).map_err(|e| connect_error(&e))?;
+        let set = match &start {
+            Start::Initial(set) | Start::Resume { set, .. } => set,
+        };
+        check_specs(&app, &Caller::of(&ctx), &set.queries).map_err(|e| connect_error(&e))?;
         if let Start::Resume { last, .. } = &start {
             check_read_ts(app.store(), ts_of(last.ts))
                 .await
@@ -480,8 +505,14 @@ impl LiveService for Live {
         let app = app_of(&self.engines, &ctx)
             .await
             .map_err(|e| connect_error(&e))?;
+        let req = request.to_owned_message();
+        let added = req.changes.iter().filter_map(|c| match &c.change {
+            Some(pb::__buffa::oneof::query_set_change::Change::Add(spec)) => Some(&**spec),
+            _ => None,
+        });
+        check_specs(&app, &Caller::of(&ctx), added).map_err(|e| connect_error(&e))?;
         app.sessions()
-            .modify(request.to_owned_message())
+            .modify(req)
             .await
             .map_err(|e| connect_error(&e))?;
         Ok(Response::new(pb::ModifyQuerySetResponse::default()))
@@ -498,6 +529,7 @@ impl LiveService for Live {
             let app = app_of(&self.engines, &ctx).await?;
             let f = deploy::resolve(app.engine(), &req.function)?;
             let args = args_of(req.args.into_option())?;
+            authz::check_call(&ScopeAuthorizer, &Caller::of(&ctx), app.name(), &*f, &args)?;
             let at = match req.ts {
                 Some(ts) => {
                     let at = ts_of(ts);
@@ -538,6 +570,7 @@ impl LiveService for Live {
             let app = app_of(&self.engines, &ctx).await?;
             let f = deploy::resolve(app.engine(), &req.function)?;
             let args = args_of(req.args.into_option())?;
+            authz::check_call(&ScopeAuthorizer, &Caller::of(&ctx), app.name(), &*f, &args)?;
             let mutated = app
                 .runner()
                 .mutate(f.clone(), args, req.idempotency_key)

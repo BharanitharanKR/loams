@@ -27,6 +27,7 @@ pub const LIVE_REASONS: &[&str] = &[
     "live_worker_crashed",
     "live_app_disabled",
     "live_app_exists",
+    "live_app_mismatch",
     FUNCTION_ERROR,
     FUNCTION_TIMEOUT,
     FUNCTION_OUT_OF_MEMORY,
@@ -62,6 +63,14 @@ pub enum LiveError {
     /// design §45 §7): `FAILED_PRECONDITION`, reason `live_app_disabled`.
     #[error("failed precondition: {0}")]
     AppDisabled(String),
+    /// A call the caller may not make (LV1 plan Task 15): Connect
+    /// `PERMISSION_DENIED`, reason `live_app_mismatch` (outside the
+    /// credential's environment) or `permission_denied` (a missing scope).
+    #[error("permission denied: {message}")]
+    PermissionDenied {
+        reason: &'static str,
+        message: String,
+    },
     /// `CreateApp` with a name another app has (LV1 plan Task 13):
     /// `FAILED_PRECONDITION`, reason `live_app_exists`.
     #[error("failed precondition: {0}")]
@@ -160,6 +169,7 @@ impl LiveError {
             LiveError::FailedPrecondition(_)
             | LiveError::AppDisabled(_)
             | LiveError::AppExists(_)
+            | LiveError::PermissionDenied { .. }
             | LiveError::IndexNotReady(_)
             | LiveError::DeployConflict(_)
             | LiveError::JournalTrimmed { .. } => pb::ErrorCode::ERROR_CODE_FAILED_PRECONDITION,
@@ -196,6 +206,7 @@ impl LiveError {
             LiveError::WorkerCrashed(_) => Some("live_worker_crashed"),
             LiveError::AppDisabled(_) => Some("live_app_disabled"),
             LiveError::AppExists(_) => Some("live_app_exists"),
+            LiveError::PermissionDenied { reason, .. } => Some(reason),
             _ => None,
         }
     }

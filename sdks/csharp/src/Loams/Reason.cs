@@ -315,6 +315,9 @@ public enum Reason
     /// <summary>A Live call exceeded one of the app's limits.</summary>
     LiveLimitExceeded = 97,
 
+    /// <summary>A credential reached a Live app outside its environment.</summary>
+    LiveAppMismatch = 98,
+
     /// <summary>A malformed field or an unparseable value.</summary>
     InvalidArgument = 15,
 
@@ -448,6 +451,7 @@ public static class ReasonRegistry
         Reason.LiveFunctionTimeout,
         Reason.LiveFunctionOutOfMemory,
         Reason.LiveLimitExceeded,
+        Reason.LiveAppMismatch,
         Reason.RoleRequired,
         Reason.SetupRequired,
         Reason.TokenMissing,
@@ -550,6 +554,7 @@ public static class ReasonRegistry
             [Reason.LiveFunctionTimeout] = "live_function_timeout",
             [Reason.LiveFunctionOutOfMemory] = "live_function_out_of_memory",
             [Reason.LiveLimitExceeded] = "live_limit_exceeded",
+            [Reason.LiveAppMismatch] = "live_app_mismatch",
             [Reason.RoleRequired] = "role_required",
             [Reason.SetupRequired] = "setup_required",
             [Reason.TokenMissing] = "token_missing",
@@ -677,6 +682,7 @@ public static class ReasonRegistry
             [Reason.LiveFunctionTimeout] = Code.DeadlineExceeded,
             [Reason.LiveFunctionOutOfMemory] = Code.ResourceExhausted,
             [Reason.LiveLimitExceeded] = Code.ResourceExhausted,
+            [Reason.LiveAppMismatch] = Code.PermissionDenied,
             [Reason.RoleRequired] = Code.PermissionDenied,
             [Reason.SetupRequired] = Code.FailedPrecondition,
             [Reason.TokenMissing] = Code.Unauthenticated,

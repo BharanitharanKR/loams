@@ -330,14 +330,44 @@ impl Engines {
     /// started when it does not run here yet. Refused for an unknown app
     /// (`NOT_FOUND`) and a disabled or deleted one (`live_app_disabled`).
     pub async fn resolve(&self, app: Option<&str>) -> Result<Arc<AppRuntime>, LiveError> {
-        let name = app.unwrap_or(&self.inner.default_app);
-        catalog::check_name("app", name)?;
-        let record = self
-            .inner
-            .apps
-            .get_by_name(name)
-            .await?
-            .ok_or_else(|| LiveError::NotFound(format!("no Live app is named {name}")))?;
+        self.resolve_as(&crate::auth::Caller::unauthenticated(), app)
+            .await
+    }
+
+    /// [`resolve`](Self::resolve) for `caller` (LV1 plan Task 15): without
+    /// the header, a credential bound to an environment addresses the app
+    /// of that environment; and the app fence ([`authz::fence`]) is checked
+    /// before the app's engine starts.
+    ///
+    /// [`authz::fence`]: crate::authz::fence
+    pub async fn resolve_as(
+        &self,
+        caller: &crate::auth::Caller,
+        app: Option<&str>,
+    ) -> Result<Arc<AppRuntime>, LiveError> {
+        let record = match (app, &caller.environment) {
+            (None, Some(env)) => {
+                self.inner
+                    .apps
+                    .find_by_namespace(env)
+                    .await?
+                    .ok_or_else(|| {
+                        LiveError::NotFound(format!("no Live app belongs to the environment {env}"))
+                    })?
+            }
+            _ => {
+                let name = app.unwrap_or(&self.inner.default_app);
+                catalog::check_name("app", name)?;
+                self.inner
+                    .apps
+                    .get_by_name(name)
+                    .await?
+                    .ok_or_else(|| LiveError::NotFound(format!("no Live app is named {name}")))?
+            }
+        };
+        crate::authz::fence(caller, &record)?;
+        let name = record.name.clone();
+        let name = name.as_str();
         match record.state {
             AppState::Active => {}
             AppState::Disabled | AppState::Deleting { .. } => {

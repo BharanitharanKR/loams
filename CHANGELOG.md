@@ -120,6 +120,13 @@ See [docs/release/upgrades.md](docs/release/upgrades.md).
   carries. Function arguments are limited to 4 MiB and bundles to 16 MiB before decoding (a
   bundle over 4 MB can now be deployed), and a read timestamp ahead of the server's clock is
   refused (LV1 Task 19).
+- **Loams Live authorizes every call per app and per table.** A credential bound to an
+  environment (a `KeyService` key, or a token with an `env` claim) reaches only that
+  environment's app (`live_app_mismatch`) and addresses it without the `loams-live-app` header.
+  Scopes `live:call`, `live:read`, `live:write` (or `live:read:<table>`/`live:write:<table>`),
+  `live:deploy` and `live:admin` gate functions, `_system:*` reads and writes, deploys and the
+  app directory; a credential that names no scopes keeps every scope. Deploys and writes are
+  audited in the log (LV1 Tasks 14 and 15).
 
 ## [0.1.0-preview.2] - unreleased
 

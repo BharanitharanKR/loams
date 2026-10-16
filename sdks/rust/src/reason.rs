@@ -159,6 +159,8 @@ pub enum Reason {
     LiveFunctionOutOfMemory,
     /// A Live call exceeded one of the app's limits.
     LiveLimitExceeded,
+    /// A credential reached a Live app outside its environment.
+    LiveAppMismatch,
     /// The caller's org role is below the one the admin RPC needs, or the caller is not in the org.
     RoleRequired,
     /// First-run setup has not created the org yet.
@@ -291,6 +293,7 @@ impl Reason {
         Reason::LiveFunctionTimeout,
         Reason::LiveFunctionOutOfMemory,
         Reason::LiveLimitExceeded,
+        Reason::LiveAppMismatch,
         Reason::RoleRequired,
         Reason::SetupRequired,
         Reason::TokenMissing,
@@ -394,6 +397,7 @@ impl Reason {
             Reason::LiveFunctionTimeout => "live_function_timeout",
             Reason::LiveFunctionOutOfMemory => "live_function_out_of_memory",
             Reason::LiveLimitExceeded => "live_limit_exceeded",
+            Reason::LiveAppMismatch => "live_app_mismatch",
             Reason::RoleRequired => "role_required",
             Reason::SetupRequired => "setup_required",
             Reason::TokenMissing => "token_missing",
@@ -477,6 +481,7 @@ impl Reason {
             | Reason::CsrfTokenInvalid
             | Reason::PrincipalNotAllowed
             | Reason::CorsOriginNotAllowed
+            | Reason::LiveAppMismatch
             | Reason::PermissionDenied => Code::PermissionDenied,
             Reason::StepUpRequired
             | Reason::DeviceRevoked
@@ -579,7 +584,7 @@ mod tests {
 
     #[test]
     fn every_reason_round_trips_through_its_wire_form() {
-        assert!(Reason::ALL.len() >= 97, "the registry has 97 rows");
+        assert!(Reason::ALL.len() >= 98, "the registry has 98 rows");
         for reason in Reason::ALL {
             assert_eq!(Reason::parse(reason.as_str()), Some(*reason));
         }

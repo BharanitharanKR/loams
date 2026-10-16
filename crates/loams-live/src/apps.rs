@@ -909,6 +909,22 @@ impl Apps {
         Ok(found)
     }
 
+    /// The app whose namespace is `namespace` (the app bound to an
+    /// environment, LV1 plan Task 15); the lowest id when several are.
+    pub async fn find_by_namespace(&self, namespace: &str) -> Result<Option<AppRecord>, LiveError> {
+        let mut after = None;
+        loop {
+            let page = self.list(after, MAX_PAGE).await?;
+            if let Some(found) = page.apps.into_iter().find(|a| a.namespace == namespace) {
+                return Ok(Some(found));
+            }
+            match page.next {
+                Some(next) => after = Some(next),
+                None => return Ok(None),
+            }
+        }
+    }
+
     /// A page of apps by id: up to `limit` (100 when 0, at most 1 000)
     /// after the id `after`.
     pub async fn list(&self, after: Option<u32>, limit: usize) -> Result<AppPage, LiveError> {
