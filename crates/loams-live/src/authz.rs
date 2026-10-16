@@ -14,9 +14,12 @@
 //!    A credential that names no scopes has them all. A refusal is
 //!    `PERMISSION_DENIED`, reason `permission_denied`.
 //!
+//! App end users and anonymous callers (Task 16, §45 §5.3) are not
+//! platform principals: they may only `call`, and only public functions;
+//! every other action is `permission_denied` whatever their scopes.
+//!
 //! Calls map to actions as follows: a deployed function is `call` (an
-//! internal one also needs a platform principal, which every caller is
-//! until end users arrive in Task 16); `_system:*` queries are `read` and
+//! internal one also needs a platform principal); `_system:*` queries are `read` and
 //! mutations `write`, of the table they name (`_system:query`,
 //! `_system:insert`) or of the whole app (the id-addressed ones and
 //! `_system:tables`); every `LiveAdminService` deployment call is `deploy`;
@@ -28,7 +31,7 @@
 use std::fmt;
 
 use crate::apps::AppRecord;
-use crate::auth::{Caller, CallerKind};
+use crate::auth::Caller;
 use crate::txn::{FnKind, Function, Visibility};
 use crate::{LiveError, LiveValue};
 
@@ -100,6 +103,16 @@ pub struct ScopeAuthorizer;
 
 impl Authorizer for ScopeAuthorizer {
     fn check(&self, caller: &Caller, action: Action, resource: &Resource) -> Result<(), LiveError> {
+        if !caller.is_platform() && action != Action::Call {
+            return Err(LiveError::PermissionDenied {
+                reason: SCOPE_MISSING,
+                message: format!(
+                    "{} on {resource} needs a platform principal; app end users call only \
+                     public functions",
+                    action.scope()
+                ),
+            });
+        }
         if caller.has_scope(action.scope()) {
             return Ok(());
         }
@@ -186,18 +199,10 @@ pub fn check_call(
     Ok(())
 }
 
-/// Whether the caller is a platform principal (every caller until app end
-/// users arrive in LV1 Task 16).
+/// Whether the caller is a platform principal, not an app end user or an
+/// anonymous caller (Task 16).
 pub fn is_platform(caller: &Caller) -> bool {
-    matches!(
-        caller.kind,
-        CallerKind::User
-            | CallerKind::Session
-            | CallerKind::ApiKey
-            | CallerKind::Tailscale
-            | CallerKind::DevLoopback
-            | CallerKind::Unauthenticated
-    )
+    caller.is_platform()
 }
 
 /// One audit line (`audit = true`), until the engine has an audit log.
@@ -216,6 +221,7 @@ pub fn audit(caller: &Caller, action: Action, resource: &Resource, what: &str) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::auth::CallerKind;
 
     fn caller(scopes: &[&str]) -> Caller {
         Caller {
@@ -249,5 +255,16 @@ mod tests {
                 .check(&all, Action::Admin, &Resource::Directory)
                 .is_ok()
         );
+        // An anonymous caller (or end user) names no scopes, yet only calls.
+        let anonymous = Caller::anonymous();
+        let app = Resource::App("a".into());
+        assert!(
+            ScopeAuthorizer
+                .check(&anonymous, Action::Call, &app)
+                .is_ok()
+        );
+        for action in [Action::Read, Action::Write, Action::Deploy, Action::Admin] {
+            assert!(ScopeAuthorizer.check(&anonymous, action, &notes).is_err());
+        }
     }
 }

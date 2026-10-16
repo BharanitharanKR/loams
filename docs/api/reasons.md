@@ -97,13 +97,13 @@ The rules, in the order they bite:
 | `live_app_mismatch` | permission_denied | `loams.live.v1` every call: the credential is bound to an environment, and the addressed Live app belongs to another (or the call creates or lists apps, which needs a credential bound to none) (LV1 Task 15, design §45 §6.2) | |
 | `role_required` | permission_denied | every `loams.admin.v1` RPC whose caller's org role is below the one it needs (reads `member`, mutations `admin`, inviting or removing an owner `owner`), or who is not in the org (API2 Task 7, `member_cannot_create_key`); every `loams.repos.v1.RepoService` RPC likewise (reads `member`; create, fork, delete, configure and compact `admin`; GT1 Task 16) | `role` (the role needed) |
 | `setup_required` | failed_precondition | every `loams.admin.v1` RPC, and every `loams.repos.v1.RepoService` RPC of a caller who is not the operator (GT1 Task 16), before first-run setup (`AuthService/CompleteSetup`) has created the org | |
-| `token_missing` | unauthenticated | any main-port RPC outside `PUBLIC_RPCS` called without a credential (the auth layer, API2 Task 6) | |
+| `token_missing` | unauthenticated | any main-port RPC outside `PUBLIC_RPCS` called without a credential (the auth layer, API2 Task 6); on `LiveService`, Live's own refusal when the addressed app takes no anonymous calls (LV1 Task 16) | |
 | `token_malformed` | unauthenticated | a credential that is neither an API key, a session token nor a JWT, or more than one `Authorization` header | |
 | `token_revoked` | unauthenticated | a revoked API key (`KeyService/RevokeKey`), or a console session that was signed out or whose person left the org | |
 | `token_not_yet_valid` | unauthenticated | an OIDC token whose `nbf` is in the future | |
 | `token_bad_signature` | unauthenticated | an OIDC token whose signature does not verify | |
-| `token_wrong_audience` | unauthenticated | an OIDC token for another audience | |
-| `token_wrong_issuer` | unauthenticated | an OIDC token from an issuer this engine does not trust | |
+| `token_wrong_audience` | unauthenticated | an OIDC token for another audience (on `LiveService`, none of the issuer's audiences on the addressed Live app) | |
+| `token_wrong_issuer` | unauthenticated | an OIDC token from an issuer this engine does not trust (on `LiveService`, nor the addressed Live app, LV1 Task 16) | |
 | `token_unknown_key` | unauthenticated | an OIDC token signed with a key its issuer's JWKS does not have | |
 | `token_algorithm_not_allowed` | unauthenticated | an OIDC token signed with an algorithm other than RS256 or EdDSA | |
 | `api_key_invalid` | unauthenticated | an API key no key file or metastore record admits | |

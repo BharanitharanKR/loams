@@ -318,7 +318,7 @@ impl AppLimits {
 }
 
 /// An OIDC issuer whose tokens identify the app's end users (design §45
-/// §5.3; verified from LV1 Task 16).
+/// §5.3), verified by [`EndUsers`](crate::auth::EndUsers) (LV1 Task 16).
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct TrustedIssuer {
     pub issuer: String,
@@ -326,14 +326,27 @@ pub struct TrustedIssuer {
     pub jwks_uri: Option<String>,
 }
 
+/// Whether `url` is https, or http to a loopback host (tests and a local
+/// issuer).
+pub(crate) fn https_or_loopback(url: &str) -> bool {
+    if url.starts_with("https://") {
+        return true;
+    }
+    let Some(rest) = url.strip_prefix("http://") else {
+        return false;
+    };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or_default();
+    let host = match authority.strip_prefix('[') {
+        Some(v6) => v6.split(']').next().unwrap_or_default(),
+        None => authority
+            .rsplit_once(':')
+            .map_or(authority, |(host, _port)| host),
+    };
+    matches!(host, "127.0.0.1" | "localhost" | "::1")
+}
+
 impl TrustedIssuer {
     fn check(&self) -> Result<(), LiveError> {
-        let https_or_loopback = |url: &str| {
-            url.starts_with("https://")
-                || url.starts_with("http://127.0.0.1")
-                || url.starts_with("http://localhost")
-                || url.starts_with("http://[::1]")
-        };
         if !https_or_loopback(&self.issuer) {
             return Err(LiveError::invalid(format!(
                 "issuer {:?}: an issuer is an https URL (http only on loopback)",
@@ -1287,6 +1300,21 @@ mod tests {
             .check()
             .is_err()
         );
+        for ok in [
+            "http://127.0.0.1:9000/o/",
+            "http://localhost/",
+            "http://[::1]:80",
+        ] {
+            assert!(https_or_loopback(ok), "{ok}");
+        }
+        for bad in [
+            "http://localhost.evil.example/",
+            "http://127.0.0.1.evil.example",
+            "http://localhost@evil.example/",
+            "ftp://localhost/",
+        ] {
+            assert!(!https_or_loopback(bad), "{bad}");
+        }
     }
 
     #[test]

@@ -1170,7 +1170,7 @@ impl LiveRuntime {
             bundles,
             loader: Arc::new(loader),
         };
-        let layer = crate::auth::AuthLayerState::new(auth, &[]);
+        let layer = crate::auth::AuthLayerState::new(auth, &[]).leaving_to_apps();
         let guard: loams_live::service::Guard = Arc::new(move |router: axum::Router| {
             layer.wrap(router.layer(axum::middleware::from_fn(crate::api::live::caller)))
         });
@@ -2470,6 +2470,17 @@ impl Server {
             auth,
             crate::auth::layer::MAIN_PUBLIC_PATHS,
         );
+        // LV1 plan Task 16: where Live is served, its end users' calls go to
+        // the app (the main port serves Live on loopback only until Task 18).
+        #[cfg(feature = "live")]
+        let (main_guard, tailscale_guard) = match &live {
+            Some(_) if config.listen.ip().is_loopback() => (
+                main_guard.leaving_to_apps(),
+                tailscale_guard.leaving_to_apps(),
+            ),
+            Some(_) => (main_guard, tailscale_guard.leaving_to_apps()),
+            None => (main_guard, tailscale_guard),
+        };
         // Scan plans name the Lance datasets under the bucket (Task 14 rule 8).
         config.query.lance_base_url = Some(bucket_url(config)?);
         let cache = RangeCache::new(store.clone(), config.cache.clone()).await?;

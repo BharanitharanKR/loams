@@ -28,6 +28,7 @@ export const w = {
     return n;
   }),
   insert: mutation(async (ctx, { body }) => await ctx.db.insert("notes", { body })),
+  who: query(async (ctx) => await ctx.auth.getUserIdentity()),
   // C built-ins that loop without polling the interrupt handler (LV1 row
   // T3-7): in process, the first ran 10 s (to the transaction's deadline)
   // and the second 1.3 s past a 200 ms limit. Only a kill stops them.
@@ -427,6 +428,49 @@ async fn deployments_run_in_isolated_workers(store: TestStore) {
 }
 #[cfg(target_os = "linux")]
 live_test!(deployments_run_in_isolated_workers);
+
+/// `ctx.auth.getUserIdentity()` in an isolated worker (LV1 plan Task 16):
+/// the end user's identity crosses the worker protocol; without one it is
+/// null.
+#[cfg(target_os = "linux")]
+async fn ctx_auth_in_isolated_workers(store: TestStore) {
+    let loader = loams_live_js::JsLoader::with_workers(
+        isolated(JsConfig {
+            contexts: 1,
+            ..JsConfig::default()
+        }),
+        workers(),
+    );
+    let app = deployed_app(&store, std::sync::Arc::new(loader)).await;
+    loams_live::deploy::deploy(&app, deploy_request(BUNDLE), "test")
+        .await
+        .expect("the deploy");
+    let who = loams_live::deploy::resolve(&app, "w:who").expect("w:who");
+    let at = app.runner().store().now().await.expect("now");
+    let identity = loams_live::Identity::new(
+        "https://id.example/",
+        "ada",
+        obj(&[("sub", s("ada")), ("email", s("ada@example.com"))]),
+    );
+    let me = app
+        .runner()
+        .query_as(&*who, obj(&[]), at, Some(identity.clone()))
+        .await
+        .expect("a query as an end user")
+        .result;
+    assert_eq!(me, identity.to_value());
+    assert_eq!(field(&me, "tokenIdentifier"), s("https://id.example/|ada"));
+    assert_eq!(field(&me, "email"), s("ada@example.com"));
+    let nobody = app
+        .runner()
+        .query(&*who, obj(&[]), at)
+        .await
+        .expect("a query with no end user")
+        .result;
+    assert_eq!(nobody, LiveValue::Null);
+}
+#[cfg(target_os = "linux")]
+live_test!(ctx_auth_in_isolated_workers);
 
 /// Five worker crashes within a minute mark the active deployment's record
 /// `degraded` (design §45 §3.1); its functions are still served.

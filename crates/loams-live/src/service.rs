@@ -307,11 +307,13 @@ struct Live {
 }
 
 /// The app a request addresses (its `loams-live-app` header, else the
-/// server's own app), its engine started when it does not run here yet.
+/// server's own app), its engine started when it does not run here yet,
+/// and who the request runs as there (LV1 plan Task 16: an app end user
+/// when its bearer is one of the app's issuers' tokens).
 pub(crate) async fn app_of(
     engines: &Engines,
     ctx: &RequestContext,
-) -> Result<Arc<AppRuntime>, LiveError> {
+) -> Result<(Arc<AppRuntime>, Caller), LiveError> {
     let header = match ctx.header(APP_HEADER) {
         None => None,
         Some(value) => Some(
@@ -320,7 +322,10 @@ pub(crate) async fn app_of(
                 .map_err(|_| LiveError::invalid(format!("the {APP_HEADER} header is not text")))?,
         ),
     };
-    engines.resolve_as(&Caller::of(ctx), header).await
+    let bearer = crate::auth::bearer_jwt(ctx);
+    engines
+        .resolve_as(Caller::of(ctx), bearer.as_deref(), header)
+        .await
 }
 
 /// Checks that the caller may run each query of a session's query set
@@ -399,6 +404,7 @@ fn error_with(e: &LiveError, request_id: Option<&str>) -> ConnectError {
     let (message, request_id) = e.public_message(request_id);
     let code = match e.code() {
         _ if matches!(e, LiveError::PermissionDenied { .. }) => ErrorCode::PermissionDenied,
+        _ if matches!(e, LiveError::Unauthenticated { .. }) => ErrorCode::Unauthenticated,
         pb::ErrorCode::ERROR_CODE_INVALID_ARGUMENT => ErrorCode::InvalidArgument,
         pb::ErrorCode::ERROR_CODE_NOT_FOUND => ErrorCode::NotFound,
         pb::ErrorCode::ERROR_CODE_FAILED_PRECONDITION => ErrorCode::FailedPrecondition,
@@ -476,7 +482,7 @@ impl LiveService for Live {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::WatchRequest>,
     ) -> ServiceResult<ServiceStream<pb::Transition>> {
-        let app = app_of(&self.engines, &ctx)
+        let (app, caller) = app_of(&self.engines, &ctx)
             .await
             .map_err(|e| connect_error(&e))?;
         let start =
@@ -484,7 +490,7 @@ impl LiveService for Live {
         let set = match &start {
             Start::Initial(set) | Start::Resume { set, .. } => set,
         };
-        check_specs(&app, &Caller::of(&ctx), &set.queries).map_err(|e| connect_error(&e))?;
+        check_specs(&app, &caller, &set.queries).map_err(|e| connect_error(&e))?;
         if let Start::Resume { last, .. } = &start {
             check_read_ts(app.store(), ts_of(last.ts))
                 .await
@@ -502,7 +508,7 @@ impl LiveService for Live {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::ModifyQuerySetRequest>,
     ) -> ServiceResult<pb::ModifyQuerySetResponse> {
-        let app = app_of(&self.engines, &ctx)
+        let (app, caller) = app_of(&self.engines, &ctx)
             .await
             .map_err(|e| connect_error(&e))?;
         let req = request.to_owned_message();
@@ -510,7 +516,7 @@ impl LiveService for Live {
             Some(pb::__buffa::oneof::query_set_change::Change::Add(spec)) => Some(&**spec),
             _ => None,
         });
-        check_specs(&app, &Caller::of(&ctx), added).map_err(|e| connect_error(&e))?;
+        check_specs(&app, &caller, added).map_err(|e| connect_error(&e))?;
         app.sessions()
             .modify(req)
             .await
@@ -526,10 +532,10 @@ impl LiveService for Live {
         let req = request.to_owned_message();
         let request_id = Ring::request_id();
         let run = async {
-            let app = app_of(&self.engines, &ctx).await?;
+            let (app, caller) = app_of(&self.engines, &ctx).await?;
             let f = deploy::resolve(app.engine(), &req.function)?;
             let args = args_of(req.args.into_option())?;
-            authz::check_call(&ScopeAuthorizer, &Caller::of(&ctx), app.name(), &*f, &args)?;
+            authz::check_call(&ScopeAuthorizer, &caller, app.name(), &*f, &args)?;
             let at = match req.ts {
                 Some(ts) => {
                     let at = ts_of(ts);
@@ -546,7 +552,7 @@ impl LiveService for Live {
                         .map_err(|e| LiveError::Internal(format!("a timestamp: {e}")))?,
                 },
             };
-            let queried = app.runner().query(&*f, args, at).await;
+            let queried = app.runner().query_as(&*f, args, at, caller.identity).await;
             record(&app, &request_id, &*f, queried.as_ref().map(|q| &q.output));
             queried
         };
@@ -567,13 +573,13 @@ impl LiveService for Live {
         let req = request.to_owned_message();
         let request_id = Ring::request_id();
         let run = async {
-            let app = app_of(&self.engines, &ctx).await?;
+            let (app, caller) = app_of(&self.engines, &ctx).await?;
             let f = deploy::resolve(app.engine(), &req.function)?;
             let args = args_of(req.args.into_option())?;
-            authz::check_call(&ScopeAuthorizer, &Caller::of(&ctx), app.name(), &*f, &args)?;
+            authz::check_call(&ScopeAuthorizer, &caller, app.name(), &*f, &args)?;
             let mutated = app
                 .runner()
-                .mutate(f.clone(), args, req.idempotency_key)
+                .mutate_as(f.clone(), args, req.idempotency_key, caller.identity)
                 .await;
             record(&app, &request_id, &*f, mutated.as_ref().map(|m| &m.output));
             mutated.map(|m| (app, m))

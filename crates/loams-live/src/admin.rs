@@ -50,9 +50,9 @@ async fn deployer(
     engines: &Engines,
     ctx: &RequestContext,
 ) -> Result<std::sync::Arc<crate::engines::AppRuntime>, LiveError> {
-    let app = app_of(engines, ctx).await?;
+    let (app, caller) = app_of(engines, ctx).await?;
     ScopeAuthorizer.check(
-        &Caller::of(ctx),
+        &caller,
         Action::Deploy,
         &Resource::App(app.name().to_string()),
     )?;
