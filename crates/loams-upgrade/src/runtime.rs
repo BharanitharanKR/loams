@@ -89,6 +89,22 @@ impl Runtime for Cli {
     }
 }
 
+/// The JSON a `loams migrate …` helper printed: its whole output, else the
+/// last line that is JSON (the engine's log lines can share stdout).
+pub fn helper_json(stdout: &str) -> std::result::Result<serde_json::Value, serde_json::Error> {
+    let whole = serde_json::from_str(stdout.trim());
+    if whole.is_ok() {
+        return whole;
+    }
+    stdout
+        .lines()
+        .rev()
+        .map(str::trim)
+        .filter(|l| l.starts_with('{') || l.starts_with('['))
+        .find_map(|l| serde_json::from_str(l).ok())
+        .map_or(whole, Ok)
+}
+
 /// `args` as owned strings.
 pub fn args<const N: usize>(items: [&str; N]) -> Vec<String> {
     items.iter().map(|s| (*s).to_string()).collect()

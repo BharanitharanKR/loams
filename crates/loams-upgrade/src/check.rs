@@ -240,7 +240,7 @@ pub fn plan(
             format!("loams migrate plan failed: {}", out.stderr.trim()),
         ));
     }
-    serde_json::from_str(out.stdout.trim())
+    crate::runtime::helper_json(&out.stdout)
         .map_err(|e| UpgradeError::new("internal", format!("loams migrate plan's output: {e}")))
 }
 

@@ -21,7 +21,7 @@ pub fn list(runtime: &dyn Runtime, stack: &StackDir, image: &str) -> Result<serd
             format!("listing snapshots: {}", out.stderr.trim()),
         ));
     }
-    serde_json::from_str(out.stdout.trim())
+    crate::runtime::helper_json(&out.stdout)
         .map_err(|e| UpgradeError::new("internal", format!("the snapshot listing: {e}")))
 }
 

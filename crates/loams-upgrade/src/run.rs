@@ -444,7 +444,7 @@ impl Run<'_> {
         if !out.ok() {
             return Err(migrate_error(&out));
         }
-        if let Ok(value) = serde_json::from_str::<serde_json::Value>(out.stdout.trim())
+        if let Ok(value) = crate::runtime::helper_json(&out.stdout)
             && let Some(changes) = value["host_changes"].as_array()
         {
             self.host_changes.clone_from(changes);

@@ -80,3 +80,17 @@ fn status_reports_the_ledger_and_the_last_attempt() {
         "StatusReport changed: LOAMS_UPDATE_SCHEMAS=1"
     );
 }
+
+/// The engine's log lines can share a helper's stdout (the gate's first
+/// `--keep-writes` run read nothing): the JSON is the last JSON line.
+#[test]
+fn helper_json_skips_log_lines() {
+    use loams_upgrade::runtime::helper_json;
+    let out = "\u{1b}[2m2026-10-16T00:09:58Z\u{1b}[0m INFO tikv_client: connect\n{\"stack\":null,\"ledger\":[]}\n";
+    assert_eq!(
+        helper_json(out).expect("json")["ledger"],
+        serde_json::json!([])
+    );
+    assert_eq!(helper_json("[1,2]").expect("whole")[1], 2);
+    assert!(helper_json("INFO only logs").is_err());
+}
