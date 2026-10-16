@@ -1,6 +1,6 @@
 # 48 — Loams Graph in Production: GQL on Grafeo, Durable on the Bucket
 
-Status: **Proposed** · 2026-10-08. Source: the owner's goal "the Grafeo-based graph database (Loams Graph) production ready". Decisions **D740–D759** and questions **Q670–Q684** are recorded in the [decision log](13-decision-log.md). Plan: [GR1](../plans/2026-10-08-gr1-graph-production.md).
+Status: **Proposed** · 2026-10-08. Source: the owner's goal "the Grafeo-based graph database (Loams Graph) production ready". Decisions **D740–D759** and questions **Q670–Q684** are recorded in the [decision log](13-decision-log.md). Plan: [GR1](../plans/2026-10-08-gr1-graph-production.md). §26 (2026-10-16) adds the HydraDB landscape, with decisions **D1062–D1072** and questions **Q926–Q927**.
 
 This is an addendum to [§07](07-graph.md) (native GraphRAG) and to D634 (GQL on Grafeo, recorded with [§33](33-connectors.md)). It also builds on [§01](01-architecture.md) (D5, the five object kinds), [§09](09-links-and-workers.md) (links), [§18](18-metastore-backends-and-router.md) (D65, D66, D76), [§19](19-console-identity-and-agents.md) (identity and agents), [§32](32-loams-flow-fabric-house.md) (D343, D350), [§44](44-unified-api-and-sdks.md) (D600, the API rules) and [§37](37-desktop-and-mobile-apps.md) §19.10 (D674, the desktop Graph page). The sibling addenda [§45](45-loams-live-production.md), [§46](46-loams-postgres-production.md) and [§47](47-loams-sql-production.md) use the same structure, and §46 sets the precedent this document follows for where a service runs (a role of the `loams` binary behind a cargo feature, D704).
 
@@ -17,7 +17,7 @@ Markers: **(verify)** means not checked against a primary source; the plan task 
 | D740 | **"Production ready" means the exit checklist in §21** is met on the reference topology (§17.3). Loams Graph is a **stored property graph** that Loams owns, queried and written with **GQL** (ISO/IEC 39075) over `loams.graph.v1`, executed by an embedded **Grafeo** engine, and made durable by Loams' own log and bucket. It amends D350 and reopens Q339: the owner's goal is the demand Q339 waited for | Proposed |
 | D741 | **Where it runs: the `graph` role of the `loams` binary, behind the cargo feature `graph`**, not a `loams-fabric` binary. `loams-graph` and its proto move from `fabric/` to the root workspace. In a cluster, graph owners can run as separate `loams` processes with only the `graph` role, and the API node forwards to them over `loams.internal.v1`. Amends D634 (b)'s "embedded in the Fabric", D343's graph clause and D51 (§4) | Proposed |
 | D742 | **Durability: the truth is the graph's log and the bucket, not Grafeo's files.** Every committed write transaction becomes one engine-neutral `GraphChangeSet` record in the graph's implicit stream in the Loams WAL, and is acknowledged only after that append is durable. Snapshots go to the bucket, and a manifest in the metastore records which snapshot covers which offset. Grafeo's local `.grafeo` file and WAL are a **rebuildable cache**. No read ever sees a write that is not yet durable (§6) | Proposed |
-| D743 | **A graph is D5's graph object kind, in one of two modes.** An **owned** graph is written with GQL. A **linked** graph is written only by links, from collections (`collection → graph`) and from streams (`stream → graph`), using a declared mapping; GQL may read it but not write it. §07's API surfaces (`graph_expand` and the other SQL table functions, and the `expand` stage of `QueryService/Search`) keep their contracts and are **executed by Loams Graph**. §07's CSR/CSC sidecars and `ExpandExec` are deferred, not cancelled. Amends D44's implementation, not its API (§3, §10) | Proposed |
+| D743 | **A graph is D5's graph object kind, in one of two modes.** An **owned** graph is written with GQL. A **linked** graph is written only by links, from collections (`collection → graph`) and from streams (`stream → graph`), using a declared mapping; GQL may read it but not write it. §07's API surfaces (`graph_expand` and the other SQL table functions, and the `expand` stage of `QueryService/Search`) keep their contracts and are **executed by Loams Graph**. §07's CSR/CSC sidecars and `ExpandExec` are deferred, not cancelled (D1063 amends the deferral for the adjacency index only, §26.3). Amends D44's implementation, not its API (§3, §10) | Proposed |
 | D744 | **One writer per graph, fenced.** A graph's owner holds a lease with an epoch in the metastore, and its appends carry that epoch, so a stale owner's write is refused. Strong reads go to the owner. Followers tail the log and serve `eventual` and `at_least` reads. Consistency tokens have D76's shape over the graph's stream (§7) | Proposed |
 | D745 | **Transactions:** a statement is a transaction, and `ExecuteBatch { atomic: true }` is the only multi-statement transaction. Isolation is Grafeo's snapshot isolation by default, with `SERIALIZABLE` available per batch. There are **no interactive transactions** across RPCs in v1. Every writing call takes an `idempotency_key`, and `ExecuteBatch` takes an optional `if_version` precondition for read-modify-write (§7) | Proposed |
 | D746 | **The API is `loams.graph.v1`, reworked before its first publish.** It has two services, `GraphService` (data) and `GraphAdminService` (resources). Values are a typed GQL value model, with no float narrowing. Errors carry the GQLSTATUS code and the position in the statement. There is a server-streaming `ExecuteStream` for large results. The client-chosen `database_path` is removed. The package stays `unstable` until GR1e (§8) | Proposed |
@@ -54,7 +54,7 @@ Three earlier decisions describe graphs, and they do not agree:
 
 | Decision | What it says | What this document keeps |
 |---|---|---|
-| D44 (§07), approved | Graphs are mapped over collections, accelerated by CSR/CSC sidecars and DataFusion operators, and reached through SQL table functions and the `expand` stage. No Cypher, no Bolt, no native graph store | **The API:** the SQL table functions, the `expand` stage and the adapters' shapes (§07 §5, §6). **Not the engine:** sidecars and `ExpandExec` are deferred (D743) |
+| D44 (§07), approved | Graphs are mapped over collections, accelerated by CSR/CSC sidecars and DataFusion operators, and reached through SQL table functions and the `expand` stage. No Cypher, no Bolt, no native graph store | **The API:** the SQL table functions, the `expand` stage and the adapters' shapes (§07 §5, §6). **Not the engine:** sidecars and `ExpandExec` are deferred (D743); the adjacency index alone comes back, built from the graph's log, for Task 22's algorithms (D1063, §26.3) |
 | D350 (§32 §7.7), approved | Grafeo is not the House graph engine; a `grafeo-server` companion only if Q339 asks | Superseded for the engine choice by the owner's goal (D740); its concerns become requirements here: a second storage engine (answered by D742: the bucket is the truth), a second HNSW (answered by D749: built without it), arrow 60 (answered by §4.3), one maintainer (answered by D759's fork trigger) |
 | D634, recorded 2026-10-04 | GQL over Connect-RPC; Grafeo embedded in the Fabric; no Bolt; Grafeo is a test target, not a foundation | **Kept:** GQL, Connect, no Bolt, no rewriting, and (f)'s point that Loams depends on the standard. **Changed:** where it is embedded (D741), and Grafeo becomes the production engine *behind a Loams-owned log*, which is how (f) stays true |
 
@@ -198,6 +198,7 @@ SchemaChange    v1  { graph_id, lease_epoch, commit_epoch, statement, language }
   - The trim point is the lower of two offsets: the newest snapshot older than the PITR window, and the newest portable snapshot.
   - A portable snapshot's property values use the log record's encoding.
   - A graph whose stream was trimmed opens from its newest usable snapshot. Every other graph still replays its whole stream until Task 14.
+- *Extended by D1063 (§26.3, GR1 Task 22):* the manifest gains an additive `adjacency` entry that names the graph's current change-log adjacency index and the offset it covers.
 
 ### 6.5 Opening, recovery and eviction
 
@@ -391,6 +392,7 @@ Gremlin, GraphQL, SPARQL, SQL/PGQ and RDF stay compiled out. `QueryLanguage` kee
 - **Algorithms** `pagerank`, `wcc` and `leiden` (§07 §5.3) run on a snapshot through Grafeo's `algos` feature where it provides them (verify Leiden), otherwise `graspologic-native` (licence to verify), as a job that writes results back to the vertex source collection (linked graphs) or as properties (owned graphs).
 - *As built by GR1 Task 20 (R20.1–R20.8):* `SearchRequest` gains `expand` and `rerank` (§07 §5.2's shapes, plus `consistency_token`); `QueryService/Search` takes them as typed `expand_spec`/`rerank_spec` (fields 17 and 18 stay deprecated), and `Hit` gains `neighbors` and `graph`, `SearchResponse` `expand`. `loams-query` runs the base search for the seeds and calls a `GraphExpander`, which `loams-graph` serves with three parameterized GQL reads through the graph's own `Execute` path; dedup, tie-breaks and truncation are Loams'. Edge and vertex filters take the structured subset of the IR's `Query`. `rerank.model` is refused (off by default, §05 §4). A networkx reference (`conformance/graph/reference/expand.py`) fixes the expected answers.
 - *As built by GR1 Task 21 (R21.1–R21.6):* the four table functions take §07 §5.1's arguments **by position** (DataFusion 54 refuses named table-function arguments) and answer its columns, keys as text. `seeds`/`keys` take a key, an `ARRAY` or a query string (the `seeds => 'SELECT …'` fallback; a `LATERAL` column is refused with that advice); `edge_filter`/`vertex_filter` take the IR's filter JSON, as `vector_search` does. They read through `loams-query`'s `GraphTables` (and the `expand` stage's expander), served by `loams-graph` with parameterized GQL; `graph_shortest_path` is breadth first, one statement per depth, deterministic by canonical key order, bounded by `max_hops` (default 6, at most 16).
+- *Planned for GR1 Task 22 (R22.0–R22.4; D1063, D1064):* `pagerank` and `wcc` run in Loams on the change-log adjacency index (§26.3) plus the log tail, and `leiden` uses `network_partitions` from `microsoft/graspologic-native` `v1.3.1` (MIT) on the same structure; none goes through Grafeo's `algos`.
 - **GQL seeded by vector search** inside one GQL statement (a procedure such as `CALL loams.search(...)`) is not in v1 (Q683 covers the related change feed); the composition lives in `Search` and SQL, where the planner can see both halves.
 
 ### 10.4 Why not Grafeo's own vector index
@@ -599,6 +601,8 @@ The fixtures that pin this contract (`conformance/graph/desktop/*.json`) are sha
 | LDBC SNB datagen | Apache-2.0 | Bench tooling, not shipped; results are not called LDBC results |
 | ISO/IEC 39075 | Copyrighted standard | Cited by section and feature id, never copied |
 
+§26.11 (D1072) adds rows for HydraDB (ideas only), `boltr` and `network_partitions`.
+
 "Grafeo" is not used as a product name. Docs say "Loams Graph, built on the Grafeo engine".
 
 ### 19.2 Pins
@@ -641,7 +645,7 @@ Before GA, on the docs site: a Graph overview (owned vs linked), a quickstart (T
 | 3 | `set_viewing_epoch` does not isolate reads as I2 needs, or GC removes the pinned versions | Low–Medium | High | Tested in Task 9; fallback: a visibility gate that holds new client sessions until the in-flight group is durable, at a latency cost |
 | 4 | Grafeo's memory limit or timeout does not stop a runaway statement | Medium | High | GR1d memory and timeout tests; a watchdog that poisons and reloads the graph; graph-only processes |
 | 5 | Single maintainer; upstream API churn (0.6 `MutationListener`) | High | Medium | I6, the fork trigger, upstream contributions |
-| 6 | Performance targets out of reach on Grafeo | Medium | Medium | Measure first (GR1e Task 0 of the perf work); escalate past 2×; §07's sidecars remain a deferred alternative for expand |
+| 6 | Performance targets out of reach on Grafeo | Medium | Medium | Measure first (GR1e Task 0 of the perf work); escalate past 2×; the change-log adjacency index (D1063) can also serve expand and shortest paths in memory (§26.4) if Task 34 shows the gain |
 | 7 | Two graph stories (linked vs owned) confuse users | Medium | Low | One object kind, one API, one docs page that explains modes |
 | 8 | The single-writer lane caps write throughput per graph | Medium | Medium | Group commit; many graphs per namespace; partitioned graphs are Phase C (Q677) |
 | 9 | Arrow 60 and Grafeo's tree slow the engine build | High | Low | Off by default; measured; built only in `full` and in CI's graph job |
@@ -662,7 +666,7 @@ Before GA, on the docs site: a Graph overview (owned vs linked), a quickstart (T
 | Q679 | Contribute a commit hook (change-set listener) and caller-chosen ids upstream? Default: yes, as soon as Task 9 knows what is missing | Eng | GR1b |
 | Q680 | Pursue an audited LDBC SNB run? Default: not before GA | Owner | After GA |
 | Q681 | ~~Dangling edges in linked graphs: stub vertices (default) or skip, as §07 §7 had it?~~ **Answered by GR1 Task 18 (2026-10-16): stub vertices**, filled by the vertex's upsert and removed with their last edge | Eng | GR1c |
-| Q682 | Offer a Bolt endpoint or a `grafeo-server` companion for Neo4j-driver users? Default: no (D634 (c)) | Owner | After GA |
+| Q682 | Offer a Bolt endpoint or a `grafeo-server` companion for Neo4j-driver users? Default: no (D634 (c)). Q926 (§26.13) is an earlier checkpoint, at preview.4 | Owner | After GA |
 | Q683 | A public graph change feed (`WatchGraph`, server streaming) and GQL procedures that call collection search? Default: Phase B | Owner | After GA |
 | Q684 | The metering units for graphs (statement CPU-seconds, stored elements, stored bytes) for `loams-platform` | Owner | Before Cloud GA |
 
@@ -677,9 +681,257 @@ Before GA, on the docs site: a Graph overview (owned vs linked), a quickstart (T
 | D674 (Graph page empty until `loams-fabric`) | The page can be live when `loams` advertises the service | D758 amends D674 |
 | §07 §7 (dangling edges are skipped) | Stub vertices in linked graphs | Q681 |
 | §33 A.3's Grafeo row (`auth: none`, embedded) | A networked, authenticated service | §4.4: the connector becomes a Connect client with key auth |
+| D743 (§07's CSR/CSC sidecars deferred) | Task 22 builds an adjacency index with a tail overlay | D1063 amends the deferral for the adjacency index only, built from the graph's change-set stream rather than per source segment; `ExpandExec` stays deferred (§26.3) |
+| D634 (c)'s rationale (the Rust Bolt ecosystem is frozen) | `boltr` 0.2.0 is a maintained pure-Rust Bolt 5.x library | The decision stands and its rationale is corrected (§26.12); Q926 |
 
 ## 25. Sources
 
 - Code on `dev`, 2026-10-08: `fabric/crates/loams-graph/{Cargo.toml,src/lib.rs,src/engine.rs,src/service.rs,tests/graph.rs}`, `fabric/proto/loams/graph/v1/graph.proto`, `fabric/Cargo.lock`, `crates/loams/src/api/connect.rs`, `crates/loams/Cargo.toml`, `connectors/registry/grafeo.yaml`, `connectors/licences.toml`, `.github/workflows/fabric.yml`.
 - Grafeo at tag `v0.5.43`: `crates/grafeo-engine/src/{database/mod.rs,config.rs,session/mod.rs,cdc.rs,auth.rs,transaction/{mod.rs,prepared.rs}}`, `NOTICE`; crates.io API for `grafeo` (versions, features, licences) and `grafeo-storage`, `grafeo-engine`, `grafeo-adapters`, `grafeo-common`; GitHub API for the repository's creation date and contributors; the README (backup, CDC, resource limits, graph-bench numbers, integrations). All read 2026-10-08.
+- §26 (2026-10-16): HydraDB at commit `fe496d4` ([github.com/hydra-db/hydradb](https://github.com/hydra-db/hydradb)): `architecture.md`, `Cargo.toml` and the files §26.2 names, read through the GitHub API, not cloned; GitHub API for its licence, stars and SlateDB fork; crates.io API for `boltr` (versions, licence); `crates/loams-meta/src/{state/leases.rs,clock.rs}` on `dev`.
 - Design: §01, §07, §09, §12, §18, §19, §32 §7.3 and §7.7, §33 A.3, §37 §19.10, §44, §46; decisions D5, D44, D51, D65, D66, D76, D111, D343, D350, D600, D607, D634, D674; the [graph DB spike](../plans/graph-db-rust-spike.md).
+
+## 26. Landscape: HydraDB (2026-10-16)
+
+HydraDB ([github.com/hydra-db/hydradb](https://github.com/hydra-db/hydradb)) is a Rust graph database that keeps its data on object storage. It speaks Cypher over Bolt and HTTP, stores graph records as keys in SlateDB databases under a bucket prefix, runs a separate indexer that publishes immutable CSC files, and decides writer ownership with object-store leases. The owner reviewed it at commit `fe496d4` (2026-10-15, release 0.2.0, about 13 000 stars) and approved the items below.
+
+HydraDB is **AGPL-3.0**. Loams takes ideas from it and nothing else: no code, no prose, no test data, no grammar files (§26.11). This section cites it only by URL and file path, at that commit.
+
+### 26.1 Summary
+
+| # | Decision | Status |
+|---|---|---|
+| D1062 | **This landscape is recorded**, and each idea taken from HydraDB maps to a GR1 task: the change-log adjacency index (Task 22), multi-source traversal (Tasks 20, 21, 34), result caches (Tasks 20, 21, 26), write-path statistics (§8.2, Tasks 20, 26), a lease checklist (Task 28), fault harnesses (Tasks 28, 30), and small notes (`loams-pk`, Tasks 26, 38) | Approved (owner, 2026-10-16) |
+| D1063 | **A change-log adjacency index, built in GR1 Task 22.** The snapshot CSR/CSC that `pagerank`, `wcc` and `leiden` need (R22.0) is built from the graph's own change-set stream, patched incrementally, published to the bucket under its content hash, and named by the manifest through a CAS (§26.3). It amends D743's deferral of §07's sidecars, **for the adjacency index only** | Approved (owner, 2026-10-16) |
+| D1064 | **Readers pin a snapshot, use the index and overlay the log tail** since the index's offset. When the tail is missing or too long they fall back to the canonical path, so an answer is never stale. Counters report delta edges applied against edges scanned (§26.3) | Approved (owner, 2026-10-16) |
+| D1065 | **Multi-source and multi-target traversal in one pass, with a fair result budget**, for `Search.expand`, `graph_shortest_path` and IC13. It stays inside Search and SQL, with no `CALL` procedures (§26.4) | Proposed |
+| D1066 | **Result caches keyed by (graph, durable offset, spec hash)** for expand, the table functions and algorithms. Writes advance the offset, so invalidation needs no logic (§26.5) | Proposed |
+| D1067 | **Write-path statistics:** per-label counts, per-edge-type counts, per-vertex degrees and per-property value counts, kept as change sets apply and rebuilt on open (I4) (§26.6) | Proposed |
+| D1068 | **A lease checklist for Task 28:** expiry judged by the authority's clock, a bounded grace view before readiness is withdrawn, and a distinct error for "not the owner" versus "fenced" (§26.7) | Proposed |
+| D1069 | **Fault harnesses for Tasks 28 and 30:** an object-store pause and restart, a writer-takeover proof, multi-process stress with compaction and GC, and a disposable k3d failover (§26.8) | Proposed |
+| D1070 | **Small items:** a prefix Bloom filter note for `loams-pk`, an allocator snapshot for Task 26's watchdog, and a "limits that look like bugs" page for Task 38 (§26.9) | Proposed |
+| D1071 | **Not adopted:** seven HydraDB choices, each with its reason (§26.10) | Proposed |
+| D1072 | **Licence rule:** HydraDB is a source of ideas only. If Loams ever needs the Neo4j Cypher25 grammar (Apache-2.0), it takes it from Neo4j's repository, not from HydraDB's copy. Extends D759's licence table (§19.1, §26.11) | Approved (owner, 2026-10-16) for ideas only; the grammar source is Proposed |
+
+D634 (c) (no Bolt) stands. Its rationale is corrected in the decision log (§26.12), and Q926 asks when to revisit Bolt. Q927 asks the owner to approve the Proposed defaults.
+
+### 26.2 How it compares
+
+| | Loams Graph (§48) | HydraDB at `fe496d4` |
+|---|---|---|
+| Licence | Apache-2.0 | AGPL-3.0 |
+| Language | GQL (`gql-1`) and opt-in openCypher 9 (D748), plus SQL table functions and `Search.expand` | Cypher (an ANTLR Cypher25 grammar, `crates/cypher-parser-antlr/`; an optional `libcypher-parser` path, `src/query/opencypher.rs`), with path procedures reached through `CALL` (`src/query/path_procedure.rs`) |
+| Wire | `loams.graph.v1` over Connect; no Bolt (D634 (c)) | Bolt 5 on `boltr`, and HTTP (`src/client/bolt.rs`, `src/client/http.rs`) |
+| Engine | Grafeo, embedded behind a log Loams owns (D742) | Its own planner and executor (`crates/cypher-engine/`, `crates/graph-plan/`), with sparse kernels on GraphBLAS (`src/sparse_kernel/graphblas.rs`) |
+| Data at rest | The graph's change-set stream in the Loams WAL, plus bucket snapshots; engine-neutral (I6) | Graph records as string-formatted SlateDB keys (`src/keys.rs`), so SlateDB's WAL, manifests and compaction are the storage |
+| Element identity | Element ids assigned by the owner (R9.4); vertices keyed by `(label, _key)` | Integer ids the caller chooses, used as upsert keys |
+| Traversal index | None until Task 22 (§26.3) | An indexer process (`src/bin/graph-indexer.rs`, `src/engine/artifact_build.rs`, `src/engine/index_store.rs`) publishes content-addressed CSC generations, patched from the WAL tail; queries overlay the tail (`architecture.md`, "Indexed Base Plus WAL Overlay") |
+| Writer ownership | A metastore lease with an epoch; fences checked atomically with offset assignment (D744, R12.1) | An object-store CAS lease plus SlateDB writer fencing (`src/engine/writer_lease.rs`, `crates/placement/src/liveness.rs`, `crates/placement/src/heartbeat.rs`) |
+| Transactions | One statement, or an atomic batch with `if_version` (D745) | Auto-commit statements only |
+| Tenancy | The namespace is the boundary, with one engine per graph (D751) | Namespace and sub-namespace scopes, and cells the client picks |
+| Caches | foyer for the bucket; no result cache yet | Result and path caches keyed by the read epoch, plus matrix, WAL-tail and block caches (`src/core/cache.rs`, `src/engine/matrix_cache.rs`) |
+| Fault testing | `loams-sim` failpoints and the kill matrix (Task 16) | Object-store chaos, writer takeover, multi-process stress and k3s multi-node scripts (`scripts/minio_chaos.sh`, `scripts/fence_takeover.sh`, `scripts/multiprocess_stress.sh`, `scripts/multinode_k3s.sh`) |
+
+HydraDB is ahead in five places today. It keeps a persisted traversal index fresh without full rebuilds. It searches paths from many sources in one pass, with a fair budget. It caches results by read epoch, keeps statistics on the write path, and is careful about lease time. And it ships fault scripts.
+
+Loams is ahead, or chose differently on purpose, in five others: the engine-neutral log, a standard query language, atomic batches with preconditions, server-assigned identities, and one API across SQL, search and graph.
+
+### 26.3 Adopted: the change-log adjacency index (D1063, D1064; GR1 Task 22)
+
+Task 22's algorithms need a CSR/CSC of the graph at a snapshot (R22.0). The index makes that structure once from the change-set stream, keeps it fresh incrementally, and publishes it to the bucket, so no algorithm call has to scan the engine.
+
+**What it holds.**
+- There is one adjacency index per graph. It covers every record of `_graph.<gr_id>` below an offset `N`.
+- It has three parts:
+  - a vertex table: element id, label set, and `_key` when one is set;
+  - the forward CSR and the reverse CSC over vertex ordinals;
+  - for each edge, its element id and an edge-type id.
+- The encoding is canonical.
+  - Vertex ordinals follow element-id order.
+  - Each vertex's run is sorted by edge type, then by the other end's ordinal, then by edge id.
+  - So one graph state always encodes to the same bytes and the same hash, however it was built.
+- The format is `loams.graph.adjacency` version 1. It is specified in `conformance/graph/adjacency/v1/README.md` and frozen by golden vectors, as the record format is (R10.1). The file carries a CRC-32C.
+- The index is derived state. I4 holds without it, and deleting it loses nothing.
+
+**Building it.** The indexer runs these steps:
+1. Read the manifest. The current index covers `N`; there may be none.
+2. Read the graph's durable offset `M`. If `M = N`, there is nothing to do.
+3. **Build incrementally** when every one of these holds:
+   - a previous index exists and its hash checks;
+   - the stream still holds `[N, M)`, so it was not trimmed past `N`;
+   - the tail is at most `adjacency.incremental_max_records` records (default 100 000);
+   - the tail's topology operations are at most `adjacency.incremental_max_fraction` of the index's edges (default 0.25);
+   - every record's version is one the indexer knows.
+
+   The indexer decodes the tail's `GraphChangeSet` records, from GQL writes and link commits alike. It turns `UpsertNode`, `DeleteNode`, `UpsertEdge`, `DeleteEdge`, and any `SetProps` that touches `_key`, into a delta. Then it merges the delta into the previous index in one linear pass. `SchemaChange` records do not change topology and are skipped.
+4. **Otherwise, build in full.** The indexer scans the engine under the graph's shared gate, as the checkpointer's take does (R13.4): client reads continue and the lane waits. The durable offset read before the scan becomes the new `N`.
+   - A full build is normal control flow, not a failure.
+   - It is counted with its reason: `no_index`, `trimmed`, `tail_too_long`, `unknown_version` or `hash_mismatch`.
+5. **Publish.**
+   - The file is written once, under its content hash, at `ns/<ns_id>/graphs/<gr_id>/adj/<N as 20 digits>-<sha256>.adj`, with a create-only PUT.
+   - The manifest then gains or replaces its `adjacency` entry, `{key, covered_offset, sha256, bytes, nodes, edges, format, mode, created_at_ms}`, through the fenced CAS of `graph-manifest/<gr_id>` (R13.2).
+   - The CAS goes through only if the new `covered_offset` is above the current one, so an older index never replaces a newer one. Otherwise the build is dropped.
+   - The field is additive and absent when empty, so the manifest's format does not change (as with R18.3's `links`).
+6. **Retain.** The current entry and the one before it (`adjacency.keep`, default 2) are kept, so a reader that pinned the older one still finds it. R13.7's sweep removes index files no entry names after the sweep grace, and the purge removes them with the graph's prefix.
+
+**When it runs.**
+- It runs on the owner, off the write lane, in the checkpointer's maintenance pass (`checkpoint_due`).
+- A graph gets an index the first time an algorithm runs on it. A graph no algorithm has touched never pays for one.
+- After that, the pass rebuilds the index in either case:
+  - the tail since `N` is over `adjacency.rebuild_after_records` (default 10 000);
+  - the graph changed and `adjacency.interval` (default 15 min) has passed.
+- A new owner uses the published index; nothing is rebuilt on a move.
+
+**Reading it.**
+- An algorithm job first pins a snapshot: the owner's durable offset `M` when it starts, or `at_least` a token.
+- It loads the index from the local cache (`<data>/graphs/<gr_id>/adj/`, by hash), or else from the bucket.
+- It reads the stream `[N, M)` and builds an in-memory overlay: added and removed edges, new and deleted vertices, and changed keys and labels.
+- The algorithm runs over the index plus the overlay, at exactly `M`.
+- **Fallback to the canonical path.** If the tail is no longer in the stream, or it is over `adjacency.overlay_max_records` (default 50 000), the job builds the CSR/CSC from the engine under the shared gate at `M`, as step 4 does, and publishes it. It never answers from a stale index.
+- Neither path holds the write lane. The index path holds no gate at all, because the log and the index file are immutable.
+
+**Counters.** `loams-graph` keeps these, and Task 27 exports them with its families:
+
+| Counter | What it counts |
+|---|---|
+| `loams_graph_adjacency_builds_total{mode, reason}` | Builds, incremental or full, with a full build's reason |
+| `loams_graph_adjacency_delta_edges_total` | Edge operations applied from tails, by incremental builds and by overlays |
+| `loams_graph_adjacency_scanned_edges_total` | Edges read by full builds and fallbacks |
+| `loams_graph_adjacency_overlay_records` | Records each overlay applied (histogram) |
+| `loams_graph_adjacency_lag_records` | `M − N` for each graph that has an index |
+| `loams_graph_adjacency_fallbacks_total{reason}` | Readers that took the canonical path, by reason |
+
+The ratio of delta edges to scanned edges shows whether the incremental path pays for itself.
+
+**Why the graph's log, not §07's sidecars.**
+- §07 §3 built sidecars per edge-source segment of the collections, with an overlay of the sources' tails.
+- Loams Graph already turns every write, from GQL and from links, into one change-set stream. So the index has a single source for both modes.
+- D1063 brings back §07's sidecar-plus-overlay design for the adjacency index only. `ExpandExec`, the vertex-id map and the hot adjacency cache stay deferred under D743, and expand and the table functions still run as parameterized GQL (Tasks 20, 21).
+
+**Memory.** Task 26 counts a loaded index and its overlay as the graph's memory. An algorithm job that would go over the graph's limit fails with `graph_memory_limit`; the process does not.
+
+### 26.4 Multi-source traversal with a fair budget (D1065, Proposed; Tasks 20, 21, 34)
+
+- **`Search.expand` (Task 20)** is already multi-source: one statement per hop for every seed (R20.3).
+  - What it lacks is fairness. `limit` keeps neighbors in hop and key order, so a seed with many neighbors can take most of the answer.
+  - Default: an opt-in `expand.fair = true` hands out `limit` round-robin over seeds (each seed's best neighbor, then each seed's second, and so on), with seed order breaking ties.
+  - It stays off by default, so §07 §4's truncation order and R20.4's tests do not change.
+  - A hub flagged by §26.6's degrees has its second-hop edges read with the per-seed bound applied in the statement, rather than in full.
+- **`graph_shortest_path` (Task 21)** answers one pair, with one statement per depth (R21.4). Its §07 §5.1 signature stays.
+  - Default: a new `graph_shortest_paths(graph, from, to, label, direction, edge_types, max_hops, paths_per_pair, limit)` answers `(from, to, path, step, label, key, edge_type, edge)`.
+  - `from` and `to` take a key, an `ARRAY` or a query string, as `seeds` does (R21.2).
+  - One breadth-first search runs over all sources' frontiers, with one parameterized statement per depth for every pair, and stops early for pairs already answered.
+  - `paths_per_pair` (default 1) bounds each pair, and `limit` (default 1 000) is shared round-robin over pairs, so one well-connected pair cannot use it up.
+  - Ties use R21.4's canonical order.
+- **Over the index.** When a fresh adjacency index exists (§26.3), both forms may run in memory over the index plus the overlay, as one pass with no statement per depth. Default: GQL first; the index path is switched on only when Task 34 measures a gain.
+- **IC13 (Task 34)** is measured as single pairs through `graph_shortest_path`, and as a batch of pairs through `graph_shortest_paths`.
+- **No procedures.** None of this becomes a Cypher or GQL `CALL` procedure (D748). Composition stays in `Search` and SQL, where the planner sees it (§10.3).
+
+### 26.5 Result caches (D1066, Proposed; Tasks 20, 21, 26)
+
+- **Key:** the graph id, the offset the read pinned, and a hash of the normalized spec (the `Expand` message, a table function's arguments, or an algorithm's parameters).
+  - A `strong` read pins the owner's durable offset at its start.
+  - An `eventual` or `at_least` read pins the replica's applied offset.
+  - Any write advances the offset, so an entry can never be stale. Invalidation needs no logic.
+- **What is cached:**
+  - the graph part of the expand stage (not the base search, the document fetch or the rerank);
+  - the four table functions' answers;
+  - algorithm results, which helps repeated `pagerank` calls on a graph that has not changed.
+- **Bounds:** per node, `graph.result_cache_bytes` (default 64 MiB), 10 000 entries and a 5 min idle expiry, evicted least recently used first. Task 26 counts the cache as node memory and drops it first under pressure. Hits, misses and bytes are counted for Task 27.
+- **Authorization** is checked before the lookup. Grants are per graph (D750), with no label- or property-level security, so the key needs no principal. If Q674 ever adds finer security, the key must gain the caller's grant set.
+- Pagination does not change. Cursors stay AIP-158 page tokens, not server state consumed on read (§26.10).
+
+### 26.6 Write-path statistics (D1067, Proposed; §8.2, Tasks 20, 26)
+
+- **What is kept:**
+  - nodes per label;
+  - edges per type;
+  - each vertex's out and in degree, over all types;
+  - per `(label, property key)`, how many elements carry the key.
+- **Where it is kept:** in memory, by every path that applies a change set: the write lane after commit, replay on open, a follower's tail, and link commits.
+- **Derived state only.** Statistics are never written to the log. An open rebuilds them in one pass over the loaded engine, and a follower computes its own, so I4 holds.
+- **Who uses them:**
+  - `GetSchema` (§8.2) answers its counts exactly, with no scan.
+  - **Hubs:** a vertex whose degree is over `graph.hub_degree` (default 10 000) is a hub for §07 §4's supernode rule, which §26.4 uses.
+  - Task 26's memory estimates use element counts times the measured bytes per element.
+- **Cost:** Task 34's write-throughput gate measures it. If it costs more than 5 % of throughput, the degree map is sampled instead of exact.
+
+### 26.7 A lease checklist for Task 28 (D1068, Proposed)
+
+1. **Expiry is judged by the authority's clock.** As read on 2026-10-16, the metastore decides expiry in its state machine, from times the proposer stamps and keeps monotonic (`crates/loams-meta/src/state/leases.rs`, `crates/loams-meta/src/clock.rs`), under D113's skew limit.
+   - **(verify):** whether the metastore lease uses local clocks anywhere, in particular in the holder's own view of how long it may keep appending and serving `strong` reads.
+   - Task 28 makes that view a monotonic deadline taken from the renewal's answer, less a safety margin.
+   - A node that has just started never grants a lease it observes a fresh local TTL.
+2. **A bounded grace view.** When a node cannot renew, or cannot read the node registry, it serves from its last view for at most `graph.lease_grace` (default 7 s: the TTL less one renewal interval). Then it withdraws readiness and stops writes and `strong` reads. Followers keep serving `eventual` reads, as R16 measured.
+3. **Distinct errors.**
+   - "Not the owner, retry there" is `UNAVAILABLE` with the new reason `graph_not_owner`, plus the owner's address in metadata when known. It is routing churn: the forwarder or the SDK retries it.
+   - "Fenced" (the existing `graph_reloading`, or a refused append) means authority was lost. It is counted as fencing, not as routing.
+4. **Cached engines close when the lease moves**, through Task 14's eviction pass. This is already built; Task 28's tests cover it.
+
+### 26.8 Fault harnesses for Tasks 28 and 30 (D1069, Proposed)
+
+| Harness | What it proves | Where |
+|---|---|---|
+| Object-store pause and restart | The S3-compatible test store is paused, then restarted, during writes, checkpoints and index builds. No acknowledged write is lost, reads resume, and Task 30's alerts fire | `scripts/graph/store-pause.sh`, Task 30 |
+| Writer-takeover proof | Two processes contend for one graph, and takeover is forced. A checker over the stream proves no record carries the old epoch after the new epoch's first record, and every acknowledged write is present | `scripts/graph/takeover.sh`, Task 28 |
+| Multi-process stress | Several `loams --roles graph` processes take sustained writes while checkpoints, trims, sweeps and adjacency builds run. Task 16's model checks the final state | `scripts/graph/stress.sh`, Task 28 |
+| Disposable k3d failover | A k3d cluster runs three graph pods from Task 30's chart. The owner pod is killed, D753's RTO is measured, and the cluster is deleted afterwards | `scripts/graph/k3d-failover.sh`, Tasks 28 and 30 |
+
+They run in the heavy tier (nightly and the dev → main PR), not in the PR fast tier.
+
+### 26.9 Small items (D1070, Proposed)
+
+- **`loams-pk`: a prefix Bloom filter.**
+  - Filters keyed by key prefix would let point and prefix lookups on SlateDB skip SSTs.
+  - This is a note for that crate's owner, not GR1 work. Check first what upstream SlateDB at the pinned 0.17 already offers.
+- **An allocator snapshot in `/metrics` for Task 26's watchdog.** Export the allocator's allocated, resident and retained bytes where the allocator exposes them, beside RSS and Grafeo's memory metrics. **(verify)** which global allocator the `loams` binary installs; the root `Cargo.toml` forbids Grafeo's allocator features (R0.2).
+- **"Limits that look like bugs" (Task 38).** One docs page listing the limits that show up as surprising behaviour, each with its reason and its knob. Examples:
+  - the 10 000-row truncation;
+  - `graph_unbounded_path`;
+  - the 16-hop shortest-path cap;
+  - refused writes to a linked graph;
+  - the 24 h idempotency window;
+  - the 2 048-record link commits;
+  - the overlay fallback above.
+
+### 26.10 Not adopted (D1071, Proposed)
+
+| HydraDB choice | Why not |
+|---|---|
+| Integer node ids the caller chooses, used as upsert keys | The owner assigns element ids (R9.4) and vertices are keyed by `(label, _key)`. Caller integers would collide across the links and writers of one graph |
+| Auto-commit only | D745's atomic batches and `if_version` are v1's answer to read-modify-write |
+| Pagination cursors consumed on read | AIP-158 tokens are repeatable. A cursor that vanishes once read breaks client retries |
+| Partitions the client picks and the server cannot list | The namespace is the boundary and every graph is in the catalog (D751). Partitioning, when it comes (Q677), is chosen by the server and can be listed |
+| C dependencies (GraphBLAS, `libcypher-parser`) and a 32 MiB minimum stack | §4.1's single-binary case rests on pure Rust. A deep-recursion stack requirement becomes a crash under a default thread stack |
+| The graph stored as string-formatted LSM keys as the primary store | It would replace D742. The engine-neutral change-set log is the truth, and an LSM key layout would be D350's second storage engine |
+| Two path semantics | GQL states its path mode (`WALK`, `TRAIL`, `ACYCLIC`, `SIMPLE`) in the statement, and the table functions document one semantics. A second, implicit semantics would make answers depend on the entry point |
+
+### 26.11 Licences and shared dependencies (D1072)
+
+- **Ideas only.** HydraDB is AGPL-3.0. Nothing from its repository enters Loams: no code, no prose, no tests, no scripts, no grammar files. Contributors who read it write Loams' version from §26's descriptions.
+- **The Cypher25 grammar.** If Loams ever needs the Neo4j Cypher25 grammar (Apache-2.0), it is taken from Neo4j's own repository at a pinned commit, with its NOTICE, and never from HydraDB's copy (`crates/cypher-parser-antlr/grammar/`). Today Task 33's dialect is Grafeo's parser, and no grammar is needed.
+- **Crates both projects use**, all permissive and already Loams dependencies:
+  - `slatedb` 0.17 (Apache-2.0), in `loams-pk`;
+  - `foyer` (Apache-2.0), the hot tier's cache.
+- **HydraDB's SlateDB fork.** HydraDB maintains an Apache-2.0 fork of SlateDB ([github.com/hydra-db/slatedb](https://github.com/hydra-db/slatedb), a fork of `slatedb/slatedb`), pinned by rev in its `Cargo.toml`, with fixes to the disk cache, the WAL and the compactor. Being Apache-2.0, it may be read, and adopted with attribution. The `loams-pk` owner should check upstream first: each fix may already be in a SlateDB release, and an upstream fix is preferred to a second fork.
+- §19.1's table gains these rows:
+
+| Component | Licence | Use |
+|---|---|---|
+| HydraDB (`hydra-db/hydradb`) | AGPL-3.0 | Ideas only; not a dependency, nothing copied |
+| `boltr` 0.2.0 | MIT OR Apache-2.0 | Not a dependency (D634 (c), Q926) |
+| `network_partitions` 0.3.0 (`microsoft/graspologic-native` tag `v1.3.1`) | MIT | Leiden in Task 22 (R22.3); a git pin with an `allow-git` entry; Microsoft's copyright notice in `NOTICE` |
+
+### 26.12 Bolt: the decision stands, its rationale is corrected
+
+- D634 (c)'s premise was that the Rust Bolt ecosystem is frozen. That is out of date. `boltr` 0.2.0 (MIT OR Apache-2.0, a pure-Rust Bolt 5.x library, crates.io 2026-04-11) is published by GrafeoDB, the organisation behind Grafeo, and HydraDB serves Bolt on it.
+- The decision stands, by the owner's instruction of 2026-10-13 ("do not add bolt"), and for (c)'s other reason: Connect-RPC is the one contract, and Loams does not add a second RPC stack.
+- The decision log appends a dated correction to D634 (c)'s rationale and leaves its status alone.
+- **Q926** asks whether to revisit Bolt as a `loams-gateway` module when Loams Memory unparks (preview.4). Q682, which asks about a Bolt endpoint after GA, stays open, with Q926 as its earlier checkpoint.
+
+### 26.13 Questions
+
+| # | Question | Owner | Needed by |
+|---|---|---|---|
+| Q926 | Revisit Bolt as a `loams-gateway` module when Loams Memory unparks (preview.4)? Default: revisit then, read-mostly, with Cypher through Grafeo's opt-in dialect (D748), on `boltr` | Owner | preview.4 (Loams Memory) |
+| Q927 | Approve the Proposed defaults of §26.4–§26.11 (D1065–D1071, and D1072's grammar source)? Default: yes, each taken up by the GR1 task it names | Owner | GR1 Task 26 |
