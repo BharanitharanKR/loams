@@ -918,3 +918,47 @@ engine crates by path (`loams-store`, `loams-cache`), so `loams-house` takes `lo
 **Release features for local checks:** the release image builds `loams` with
 `live,live-tikv,durable,graph,tikv,pgwire,mysql-wire,stream-grpc` beside the defaults
 (`deploy/release/Containerfile.loams`). Task 4's `cargo test -p loams` uses that set.
+
+### Tasks 9–23 (2026-10-15/16)
+
+The pull requests have the details; this is the list.
+- **T9-1** (#638): the release `loams` image runs `migrate` and is built without `postgres`. So `loams-postgres` (the
+  pageserver and safekeeper HTTP client) is in the default build through `loams-migrate`, and PG2's default-build
+  guard now checks `loams-pg-control` only.
+- **T10-1** (#641): the included Postgres compose file cannot depend on `migrate`. A hand-run `compose up` across
+  preview.2 → preview.3 is unsupported, and `loams upgrade` recreates `safekeeper1` only after `migrate` succeeds.
+- **T11-1** (#644): until CLI2's signed manifest exists, the manifest's `upgrade` object is its own checksummed asset
+  (`loams-upgrade-<version>.json`).
+- **T12-1, T12-2** (#647): a downloaded bundle is checked against the release's `SHA256SUMS`, and there is no
+  `--allow-unsigned`. The crate's module split follows the work.
+- **T13-1 to T13-3** (#650):
+  - TiKV is copied cold (one `tar`) when the running stack's `tikv` does not mount the snapshot volume (preview.2),
+    and with BR otherwise;
+  - the snapshot's host files live in `<stack>/.loams-upgrade/snapshots/<id>/host/`;
+  - verify reads the engine's `/ready` through `compose exec`, because the engine listens on loopback.
+- **T14-1** (#651): without `pg-control`, a rollback lists the snapshot's Postgres branches but does not repoint
+  computes.
+- **T14-2** (#651): `migrate run` of an older release over newer data is a no-op when the formats are readable and
+  every newer migration is `Reversible` and done. This matches the startup gate, and `--keep-writes` needs it.
+- **T16-1 to T16-3** (#645):
+  - plugins declare `requires.engine` beside the existing `requires.api`;
+  - the House and Live plugins keep their own "not served" pages;
+  - `GetInstance.features` keys are `feature.*` and `role.*`.
+- **T17-1** (#646): the SDKs' public symbols are found with per-language declaration patterns.
+- **T19-1, T19-2** (#652):
+  - the fixtures run in a container that shares the `loams` container's network namespace;
+  - Live is checked as served, with no deployed app yet.
+- **T20-1, T20-2** (#656):
+  - on `dev` the candidate is tagged as the newest release of the train;
+  - the planted false-`Reversible` migration is not built, and the `--keep-writes` step is the reversibility check.
+
+  The gate's first green run, preview.2 → candidate, took (in seconds): upgrade 67, rollback 34,
+  `rollback --keep-writes` 28. The candidate build took 815.
+- **T22-1** (#653): the bundle carries no binaries. `byoc/upgrade.sh` fetches the release's Linux package on the VM
+  (amd64 only).
+
+Gaps carried forward:
+- agentd's directory is not in the CLI's snapshot;
+- `pg-runner`'s own compute projects are not quiesced;
+- the Postgres and House fixtures are skipped in the gate (no compute, no House profile);
+- Tasks 15, 18 and 24 are open.
