@@ -122,6 +122,8 @@ const std::vector<RegistryRow>& Registry() {
       {Reason::kLiveDeployConflict, Code::kFailedPrecondition, ""},
       {Reason::kLiveSchemaViolation, Code::kInvalidArgument, ""},
       {Reason::kLiveIndexNotReady, Code::kFailedPrecondition, ""},
+      {Reason::kLiveAppDisabled, Code::kFailedPrecondition, ""},
+      {Reason::kLiveAppExists, Code::kFailedPrecondition, ""},
       {Reason::kRoleRequired, Code::kPermissionDenied, ""},
       {Reason::kSetupRequired, Code::kFailedPrecondition, ""},
       {Reason::kTokenMissing, Code::kUnauthenticated, ""},
