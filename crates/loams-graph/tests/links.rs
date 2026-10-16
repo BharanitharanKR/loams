@@ -413,9 +413,8 @@ mod collection_link {
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::time::Duration;
 
-    use bytes::Bytes;
     use loams_collection::{DocOp, Document, PatchMode, PrimaryKey, encode, partition_of};
-    use loams_common::meta::{LinkId, MetaStore};
+    use loams_common::meta::LinkId;
     use loams_common::schema::{CollectionSchema, DynamicMapping, FieldKind};
     use loams_common::{NamespaceId, StreamId};
     use loams_graph::changeset::{GraphRecord, decode};
@@ -472,7 +471,7 @@ mod collection_link {
         writer: LogWriter,
         streams: BTreeMap<String, (StreamId, u32)>,
         docs: Mutex<BTreeMap<(String, String), Map<String, Json>>>,
-        _ns: NamespaceId,
+        ns: NamespaceId,
     }
 
     static WRITER_NODE: AtomicU64 = AtomicU64::new(900);
@@ -541,7 +540,7 @@ mod collection_link {
                 writer,
                 streams,
                 docs: Mutex::default(),
-                _ns: ns,
+                ns,
             }
         }
 
@@ -1125,7 +1124,7 @@ mod collection_link {
                     .meta
                     .resolve_collection(
                         loams_common::meta::Consistency::Linearizable,
-                        linked._ns,
+                        linked.ns,
                         "entities"
                     )
                     .await
@@ -1137,7 +1136,7 @@ mod collection_link {
         linked
             .cluster
             .meta
-            .drop_collection(linked._ns, "relations")
+            .drop_collection(linked.ns, "relations")
             .await
             .expect("drop");
         let lag = runner.lag("acme", "kg").await.expect("lag");
@@ -1149,7 +1148,5 @@ mod collection_link {
             .apply_graph("acme", "kg")
             .await
             .expect("a missing source stops only its link");
-        let _: &dyn MetaStore = &*linked.cluster.meta;
-        let _ = Bytes::new();
     }
 }

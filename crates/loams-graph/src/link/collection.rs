@@ -96,10 +96,7 @@ impl CollectionLinkTarget {
 
     /// The graph, open here as its owner.
     async fn open(&self) -> Result<Arc<Graph>, LinkError> {
-        self.admin
-            .link_graph(&self.graph)
-            .await
-            .map_err(retryable)
+        self.admin.link_graph(&self.graph).await.map_err(retryable)
     }
 }
 
