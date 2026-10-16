@@ -367,6 +367,7 @@ fn entry(id: &str, kind: SnapshotKind, offset: u64, created_at_ms: u64) -> Snaps
         created_at_ms,
         nodes: 0,
         edges: 0,
+        links: Vec::new(),
     }
 }
 

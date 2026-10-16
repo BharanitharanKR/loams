@@ -1336,6 +1336,8 @@ struct GraphRuntime {
     data_dir: Option<PathBuf>,
     stop: CancellationToken,
     maintenance: JoinHandle<()>,
+    /// The task applying the LINKED graphs' links this node serves (GR1 Task 18).
+    links: (loams_graph::link::LinkRunner, JoinHandle<()>),
     shutdown_wait: Duration,
     /// Catalog sweeps the maintenance task has completed.
     sweeps: Arc<std::sync::atomic::AtomicU64>,
@@ -1356,6 +1358,7 @@ impl GraphRuntime {
         reader: LogReader,
         log_node: u64,
         registry: Option<Arc<NodeRegistry>>,
+        link: LinkConfig,
     ) -> Result<Self, ServerError> {
         use loams_graph::Engine;
         use loams_graph::catalog::GraphCatalog;
@@ -1460,12 +1463,34 @@ impl GraphRuntime {
                 }
             })
         };
+        // The links of the LINKED graphs this node owns (GR1 Task 18): every pass applies each
+        // link whose collection has records the graph has not.
+        let links = {
+            let runner = loams_graph::link::LinkRunner::new((*admin).clone(), link);
+            let (task_runner, stop) = (runner.clone(), stop.clone());
+            let task = tokio::spawn(async move {
+                let mut tick = tokio::time::interval(loams_graph::link::LinkRunner::EVERY);
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                loop {
+                    tokio::select! {
+                        () = stop.cancelled() => return,
+                        _ = tick.tick() => {}
+                    }
+                    let committed = task_runner.run_once().await;
+                    if committed > 0 {
+                        tracing::debug!(links = committed, "applied graph links");
+                    }
+                }
+            });
+            (runner, task)
+        };
         Ok(Self {
             admin,
             log,
             data_dir: config.data_dir.clone(),
             stop,
             maintenance,
+            links,
             shutdown_wait: config.shutdown_wait,
             sweeps,
             checkpoints,
@@ -1479,6 +1504,15 @@ impl GraphRuntime {
     /// [`GraphConfig::shutdown_wait`]).
     async fn stop(self) {
         self.stop.cancel();
+        let (runner, mut links) = self.links;
+        runner.stop();
+        if tokio::time::timeout(self.shutdown_wait, &mut links)
+            .await
+            .is_err()
+        {
+            tracing::warn!("a graph link pass outlasted the shutdown wait; abandoned");
+            links.abort();
+        }
         let mut maintenance = self.maintenance;
         if tokio::time::timeout(self.shutdown_wait, &mut maintenance)
             .await
@@ -2838,6 +2872,7 @@ impl Server {
                 reader.clone(),
                 config.log.node_id,
                 node_registry,
+                config.link.clone(),
             )?),
             false => None,
         };

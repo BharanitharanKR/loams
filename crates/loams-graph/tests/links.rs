@@ -1,6 +1,8 @@
-//! LINKED graphs (GR1 Task 17; design §07 §2.1, §48 §10.1; D743): a graph declared over
-//! collections by a mapping, checked against their schemas when it is created, and read-only to
-//! GQL. The links that write it are Tasks 18 and 19.
+//! LINKED graphs (GR1 Tasks 17 and 18; design §07 §2.1, §48 §10.1; D743): a graph declared over
+//! collections by a mapping, checked against their schemas when it is created, read-only to GQL,
+//! and written by its `collection → graph` links, exactly once.
+
+mod common;
 
 use std::sync::Arc;
 use std::time::Duration;
@@ -399,4 +401,755 @@ async fn linked_graph_refuses_gql_writes() {
         .await
         .expect("a read");
     assert_eq!(read.rows.as_option().expect("rows").rows.len(), 1);
+}
+
+// ---------------------------------------------------------------------------------------------
+// GR1 Task 18: the `collection → graph` link
+// ---------------------------------------------------------------------------------------------
+
+mod collection_link {
+    use std::collections::BTreeMap;
+    use std::sync::Mutex;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    use std::time::Duration;
+
+    use bytes::Bytes;
+    use loams_collection::{DocOp, Document, PatchMode, PrimaryKey, encode, partition_of};
+    use loams_common::meta::{LinkId, MetaStore};
+    use loams_common::schema::{CollectionSchema, DynamicMapping, FieldKind};
+    use loams_common::{NamespaceId, StreamId};
+    use loams_graph::changeset::{GraphRecord, decode};
+    use loams_graph::durable::GraphLog;
+    use loams_graph::durable::faults::{KillHook, KillPoint};
+    use loams_graph::link::{LinkRunner, collection_link_id};
+    use loams_graph::mapping::{EdgeMap, Endpoint, GraphMapping, PRIMARY_KEY, VertexMap};
+    use loams_link::LinkConfig;
+    use loams_log::LogWriter;
+    use loams_proto::loams::graph::v1 as pb;
+    use serde_json::{Map, Value as Json, json};
+    use tokio::sync::watch;
+
+    use super::common::{Cluster, SHORT, wait_out_the_lease};
+    use super::field;
+
+    /// The graph the tests link: entities, and relations between them typed by `rel_type`.
+    fn mapping() -> GraphMapping {
+        GraphMapping {
+            vertices: vec![VertexMap {
+                label: "entity".to_string(),
+                collection: "entities".to_string(),
+                key_field: PRIMARY_KEY.to_string(),
+            }],
+            edges: vec![EdgeMap {
+                name: "RELATED".to_string(),
+                type_field: Some("rel_type".to_string()),
+                collection: "relations".to_string(),
+                source: Endpoint {
+                    label: "entity".to_string(),
+                    field: "src".to_string(),
+                },
+                destination: Endpoint {
+                    label: "entity".to_string(),
+                    field: "dst".to_string(),
+                },
+            }],
+        }
+    }
+
+    fn config() -> LinkConfig {
+        LinkConfig {
+            batch_records: 4,
+            batch_interval: Duration::ZERO,
+            ..LinkConfig::default()
+        }
+    }
+
+    /// A cluster with namespace `acme`, collections `entities` (two partitions) and
+    /// `relations`, a writer of their implicit streams, the LINKED graph `kg` over them, and the
+    /// documents written so far: the model the graph must equal.
+    struct Linked {
+        cluster: Cluster,
+        writer: LogWriter,
+        streams: BTreeMap<String, (StreamId, u32)>,
+        docs: Mutex<BTreeMap<(String, String), Map<String, Json>>>,
+        _ns: NamespaceId,
+    }
+
+    static WRITER_NODE: AtomicU64 = AtomicU64::new(900);
+
+    impl Linked {
+        async fn start(nodes: u64) -> Self {
+            let cluster = Cluster::start(nodes, SHORT).await;
+            let ns = cluster
+                .meta
+                .create_namespace("acme")
+                .await
+                .expect("namespace");
+            let mut streams = BTreeMap::new();
+            for (name, fields, partitions) in [
+                (
+                    "entities",
+                    vec![
+                        field("name", FieldKind::Keyword),
+                        field("rank", FieldKind::I64),
+                    ],
+                    2,
+                ),
+                (
+                    "relations",
+                    vec![
+                        field("src", FieldKind::Keyword),
+                        field("dst", FieldKind::Keyword),
+                        field("rel_type", FieldKind::Keyword),
+                        field("weight", FieldKind::F64),
+                    ],
+                    1,
+                ),
+            ] {
+                let (_, stream, _) = cluster
+                    .meta
+                    .create_collection(
+                        ns,
+                        name,
+                        CollectionSchema::new(fields, Vec::new(), DynamicMapping::Ignore),
+                        partitions,
+                    )
+                    .await
+                    .expect("collection");
+                streams.insert(name.to_string(), (stream, partitions));
+            }
+            let writer = LogWriter::start(
+                cluster.meta.clone(),
+                cluster.store.clone(),
+                GraphLog::log_config(WRITER_NODE.fetch_add(1, Ordering::SeqCst)),
+            )
+            .expect("writer");
+            cluster
+                .node(1)
+                .admin
+                .create_graph(pb::CreateGraphRequest {
+                    namespace: "acme".to_string(),
+                    name: "kg".to_string(),
+                    mode: pb::GraphMode::Linked.into(),
+                    mapping: mapping().to_proto().into(),
+                    ..Default::default()
+                })
+                .await
+                .expect("create");
+            Self {
+                cluster,
+                writer,
+                streams,
+                docs: Mutex::default(),
+                _ns: ns,
+            }
+        }
+
+        async fn append(&self, collection: &str, op: &DocOp) {
+            let (stream, partitions) = self.streams[collection];
+            let record = encode(op).expect("encode");
+            self.writer
+                .append(stream, partition_of(op.pk(), partitions), vec![record])
+                .await
+                .expect("append");
+        }
+
+        async fn upsert(&self, collection: &str, pk: &str, source: Json) {
+            let source = source.as_object().expect("an object").clone();
+            let op = DocOp::Upsert(Document {
+                pk: PrimaryKey::Str(pk.to_string()),
+                source: source.clone(),
+                vectors: BTreeMap::new(),
+                sparse_vectors: BTreeMap::new(),
+            });
+            self.append(collection, &op).await;
+            self.docs
+                .lock()
+                .expect("lock")
+                .insert((collection.to_string(), pk.to_string()), source);
+        }
+
+        /// A `MergeTop` patch, which changes nothing when the document is absent.
+        async fn patch(&self, collection: &str, pk: &str, source: Json) {
+            let source = source.as_object().expect("an object").clone();
+            let op = DocOp::Patch {
+                pk: PrimaryKey::Str(pk.to_string()),
+                mode: PatchMode::MergeTop,
+                source: source.clone(),
+                delete_keys: Vec::new(),
+                vectors: BTreeMap::new(),
+                sparse_vectors: BTreeMap::new(),
+                upsert: None,
+            };
+            self.append(collection, &op).await;
+            if let Some(doc) = self
+                .docs
+                .lock()
+                .expect("lock")
+                .get_mut(&(collection.to_string(), pk.to_string()))
+            {
+                doc.extend(source);
+            }
+        }
+
+        async fn delete(&self, collection: &str, pk: &str) {
+            self.append(collection, &DocOp::Delete(PrimaryKey::Str(pk.to_string())))
+                .await;
+            self.docs
+                .lock()
+                .expect("lock")
+                .remove(&(collection.to_string(), pk.to_string()));
+        }
+
+        fn runner(&self, node: u64) -> LinkRunner {
+            LinkRunner::new(self.cluster.node(node).admin.clone(), config())
+        }
+
+        /// Applies every link of `kg` on `node` until none lags.
+        async fn catch_up(&self, node: u64) {
+            let runner = self.runner(node);
+            for _ in 0..200 {
+                runner.apply_graph("acme", "kg").await.expect("apply");
+                let lag = runner.lag("acme", "kg").await.expect("lag");
+                if lag.iter().all(|l| l.records == 0) {
+                    return;
+                }
+            }
+            panic!("the links never caught up");
+        }
+
+        /// The graph `node` serves, without element ids.
+        fn graph(&self, node: u64) -> Canon {
+            let graph = self
+                .cluster
+                .node(node)
+                .admin
+                .engine()
+                .list(Some("acme"))
+                .expect("list")
+                .into_iter()
+                .find(|g| g.name() == "kg")
+                .expect("kg is open");
+            Canon::of(&graph.rows().expect("rows"))
+        }
+
+        /// The mapping applied to the documents written (§48 §10.1).
+        fn expected(&self) -> Canon {
+            let docs = self.docs.lock().expect("lock");
+            let mut canon = Canon::default();
+            for ((collection, pk), source) in docs.iter() {
+                if collection != "entities" {
+                    continue;
+                }
+                let mut props = props(source);
+                props.insert("_collection".to_string(), text("entities"));
+                props.insert("_key".to_string(), text(pk));
+                canon
+                    .vertices
+                    .insert(("entity".to_string(), pk.clone()), (false, props));
+            }
+            for ((collection, pk), source) in docs.iter() {
+                if collection != "relations" {
+                    continue;
+                }
+                let end = |field: &str| source[field].as_str().expect("a key").to_string();
+                let (src, dst) = (end("src"), end("dst"));
+                for key in [&src, &dst] {
+                    canon
+                        .vertices
+                        .entry(("entity".to_string(), key.clone()))
+                        .or_insert_with(|| {
+                            (
+                                true,
+                                BTreeMap::from([
+                                    ("_key".to_string(), text(key)),
+                                    ("_stub".to_string(), "Bool(true)".to_string()),
+                                ]),
+                            )
+                        });
+                }
+                let mut props = props(source);
+                props.insert("_collection".to_string(), text("relations"));
+                props.insert("_key".to_string(), text(pk));
+                props.insert("_edge".to_string(), text("RELATED"));
+                canon.edges.push((
+                    source["rel_type"].as_str().expect("a type").to_string(),
+                    ("entity".to_string(), src),
+                    ("entity".to_string(), dst),
+                    props,
+                ));
+            }
+            canon.edges.sort();
+            canon
+        }
+
+        /// Every link record of `kg`'s stream: `(link, version)` in log order.
+        async fn link_versions(&self) -> Vec<(LinkId, u64)> {
+            let stream = self.cluster.stream_of("kg").await;
+            self.cluster
+                .records(stream)
+                .await
+                .iter()
+                .filter_map(
+                    |r| match decode(r.record.value.as_deref().expect("value")) {
+                        Ok(GraphRecord::ChangeSet(change)) => {
+                            change.link.map(|link| (link.link, link.version))
+                        }
+                        _ => None,
+                    },
+                )
+                .collect()
+        }
+
+        /// Each link's versions are 1, 2, 3, … in the log: no commit applied twice or lost.
+        async fn assert_versions_consecutive(&self, case: &str) {
+            let mut next: BTreeMap<LinkId, u64> = BTreeMap::new();
+            for (link, version) in self.link_versions().await {
+                let expected = next.entry(link).or_insert(1);
+                assert_eq!(version, *expected, "{case}: link {link:?}");
+                *expected += 1;
+            }
+        }
+    }
+
+    fn text(s: &str) -> String {
+        format!("{:?}", grafeo::Value::String(s.into()))
+    }
+
+    fn props(source: &Map<String, Json>) -> BTreeMap<String, String> {
+        source
+            .iter()
+            .map(|(k, v)| {
+                let value = match v {
+                    Json::String(s) => grafeo::Value::String(s.as_str().into()),
+                    Json::Number(n) => match n.as_i64() {
+                        Some(i) => grafeo::Value::Int64(i),
+                        None => grafeo::Value::Float64(n.as_f64().expect("a number")),
+                    },
+                    Json::Bool(b) => grafeo::Value::Bool(*b),
+                    other => panic!("the tests write no {other}"),
+                };
+                (k.clone(), format!("{value:?}"))
+            })
+            .collect()
+    }
+
+    /// A graph without element ids: vertices by `(label, _key)` with whether they are stubs and
+    /// their properties, and edges by type and endpoints.
+    #[derive(Debug, Default, PartialEq)]
+    struct Canon {
+        vertices: BTreeMap<(String, String), (bool, BTreeMap<String, String>)>,
+        #[allow(clippy::type_complexity)]
+        edges: Vec<(
+            String,
+            (String, String),
+            (String, String),
+            BTreeMap<String, String>,
+        )>,
+    }
+
+    impl Canon {
+        fn of(rows: &loams_graph::snapshot::portable::GraphRows) -> Self {
+            let key = |props: &loams_graph::changeset::PropMap| match props.get("_key") {
+                Some(grafeo::Value::String(s)) => s.to_string(),
+                other => panic!("a link element without a key: {other:?}"),
+            };
+            let mut ends = BTreeMap::new();
+            let mut canon = Self::default();
+            for node in &rows.nodes {
+                let label = node.labels.first().expect("a label").clone();
+                let k = key(&node.props);
+                ends.insert(node.id, (label.clone(), k.clone()));
+                let stub = matches!(node.props.get("_stub"), Some(grafeo::Value::Bool(true)));
+                let props = node
+                    .props
+                    .iter()
+                    .map(|(k, v)| (k.clone(), format!("{v:?}")))
+                    .collect();
+                let previous = canon.vertices.insert((label, k), (stub, props));
+                assert!(previous.is_none(), "two vertices of one key");
+            }
+            for edge in &rows.edges {
+                canon.edges.push((
+                    edge.ty.clone(),
+                    ends[&edge.src].clone(),
+                    ends[&edge.dst].clone(),
+                    edge.props
+                        .iter()
+                        .map(|(k, v)| (k.clone(), format!("{v:?}")))
+                        .collect(),
+                ));
+            }
+            canon.edges.sort();
+            canon
+        }
+    }
+
+    /// A workload that exercises every op: upserts, patches, deletes, edges before their
+    /// endpoints. An entity is deleted only after the relations that name it.
+    async fn workload(linked: &Linked, round: u64) {
+        let e = |i: u64| format!("e{}", (i + round * 3) % 9);
+        for i in 0..6 {
+            linked
+                .upsert(
+                    "entities",
+                    &e(i),
+                    json!({"name": format!("E{i}r{round}"), "rank": i}),
+                )
+                .await;
+            linked
+                .upsert(
+                    "relations",
+                    &format!("r{round}-{i}"),
+                    json!({"src": e(i), "dst": e(i + 4), "rel_type": if i % 2 == 0 { "KNOWS" } else { "LIKES" }, "weight": 0.5}),
+                )
+                .await;
+        }
+        linked
+            .patch(
+                "entities",
+                &e(1),
+                json!({"name": format!("patched{round}")}),
+            )
+            .await;
+        linked
+            .patch(
+                "relations",
+                &format!("r{round}-2"),
+                json!({"rel_type": "WORKS_WITH"}),
+            )
+            .await;
+        linked.delete("relations", &format!("r{round}-3")).await;
+        // An entity no relation names any more, deleted.
+        let named: Vec<String> = linked
+            .docs
+            .lock()
+            .expect("lock")
+            .iter()
+            .filter(|((c, _), _)| c == "relations")
+            .flat_map(|(_, s)| {
+                [
+                    s["src"].as_str().map(str::to_string),
+                    s["dst"].as_str().map(str::to_string),
+                ]
+            })
+            .flatten()
+            .collect();
+        let lonely = (0..9).map(|i| format!("e{i}")).find(|k| {
+            !named.contains(k)
+                && linked
+                    .docs
+                    .lock()
+                    .expect("lock")
+                    .contains_key(&("entities".to_string(), k.clone()))
+        });
+        if let Some(lonely) = lonely {
+            linked.delete("entities", &lonely).await;
+        }
+    }
+
+    /// Kills the owner applying the links at `point`, during the second commit of a batch; the
+    /// other node takes the graph and the links, and the graph equals the mapping applied to the
+    /// collections, each commit in the log once (Review Focus 6).
+    async fn kill_case(point: KillPoint) {
+        let case = format!("{point:?}");
+        let linked = Linked::start(2).await;
+        let graph = linked.cluster.graph_id("kg").await;
+        let victim = linked.cluster.preferred(graph);
+        let survivor = 3 - victim;
+        workload(&linked, 0).await;
+        linked.catch_up(victim).await;
+        assert_eq!(
+            linked.graph(victim),
+            linked.expected(),
+            "{case}: before the kill"
+        );
+        workload(&linked, 1).await;
+
+        let (reached_tx, mut reached) = watch::channel(false);
+        let (release, released) = watch::channel(false);
+        linked
+            .cluster
+            .node(victim)
+            .log
+            .set_kill_hook(Some(kill_at(point, 2, reached_tx, released)));
+        let runner = linked.runner(victim);
+        let stuck = tokio::spawn(async move { runner.apply_graph("acme", "kg").await });
+        tokio::time::timeout(Duration::from_secs(30), reached.wait_for(|r| *r))
+            .await
+            .unwrap_or_else(|_| panic!("{case}: the kill point was never reached"))
+            .expect("the hook");
+        // The node dies: it renews nothing and nobody reaches it.
+        linked.cluster.node(victim).ownership.pause_renewals(true);
+        linked.cluster.forwarder.cut_off(victim);
+        linked
+            .cluster
+            .node(survivor)
+            .membership
+            .set(vec![linked.cluster.node(survivor).me.clone()]);
+        wait_out_the_lease(&linked.cluster, graph).await;
+
+        linked.catch_up(survivor).await;
+        assert_eq!(
+            linked.graph(survivor),
+            linked.expected(),
+            "{case}: after the kill"
+        );
+        linked.assert_versions_consecutive(&case).await;
+
+        // The dead node comes back with its commit in flight: it is fenced, and nothing changes.
+        let _ = release.send(true);
+        let _ = tokio::time::timeout(Duration::from_secs(30), stuck).await;
+        linked.catch_up(survivor).await;
+        assert_eq!(
+            linked.graph(survivor),
+            linked.expected(),
+            "{case}: after the release"
+        );
+        linked.assert_versions_consecutive(&case).await;
+    }
+
+    fn kill_at(
+        point: KillPoint,
+        occurrence: u64,
+        reached: watch::Sender<bool>,
+        release: watch::Receiver<bool>,
+    ) -> KillHook {
+        let seen = std::sync::Arc::new(AtomicU64::new(0));
+        let reached = std::sync::Arc::new(reached);
+        std::sync::Arc::new(move |at| {
+            let stop = at == point && seen.fetch_add(1, Ordering::SeqCst) + 1 == occurrence;
+            let (reached, mut release) = (reached.clone(), release.clone());
+            Box::pin(async move {
+                if stop {
+                    let _ = reached.send(true);
+                    let _ = release.wait_for(|released| *released).await;
+                }
+            })
+        })
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn link_apply_exactly_once_under_kill() {
+        for point in [
+            KillPoint::Begin,
+            KillPoint::Executed,
+            KillPoint::Committed,
+            KillPoint::Captured,
+            KillPoint::Enqueued,
+            KillPoint::Appended,
+            KillPoint::Published,
+        ] {
+            kill_case(point).await;
+        }
+    }
+
+    /// An edge whose endpoint has no document yet makes a stub; the endpoint's upsert fills it,
+    /// and a stub that loses its last edge goes.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn stub_vertex_filled_by_later_upsert() {
+        let linked = Linked::start(1).await;
+        linked
+            .upsert(
+                "relations",
+                "r1",
+                json!({"src": "a", "dst": "b", "rel_type": "KNOWS", "weight": 1.0}),
+            )
+            .await;
+        linked.catch_up(1).await;
+        let graph = linked.graph(1);
+        for key in ["a", "b"] {
+            let (stub, props) = &graph.vertices[&("entity".to_string(), key.to_string())];
+            assert!(stub, "{key} is a stub");
+            assert_eq!(props.len(), 2, "a stub has only _key and _stub: {props:?}");
+        }
+        assert_eq!(graph, linked.expected());
+
+        linked
+            .upsert("entities", "a", json!({"name": "Alice"}))
+            .await;
+        linked.catch_up(1).await;
+        let graph = linked.graph(1);
+        let (stub, props) = &graph.vertices[&("entity".to_string(), "a".to_string())];
+        assert!(!stub, "the upsert filled the stub");
+        assert_eq!(props["name"], text("Alice"));
+        assert_eq!(graph.edges.len(), 1, "the edge stays on the filled vertex");
+        assert_eq!(graph, linked.expected());
+
+        linked.delete("relations", "r1").await;
+        linked.catch_up(1).await;
+        let graph = linked.graph(1);
+        assert!(graph.edges.is_empty());
+        assert!(
+            !graph
+                .vertices
+                .contains_key(&("entity".to_string(), "b".to_string())),
+            "a stub with no edge left goes"
+        );
+        assert_eq!(graph, linked.expected());
+    }
+
+    /// Deleting a vertex document deletes the vertex and its edges, in and out.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn vertex_delete_removes_incident_edges() {
+        let linked = Linked::start(1).await;
+        for key in ["a", "b", "c"] {
+            linked.upsert("entities", key, json!({"name": key})).await;
+        }
+        for (pk, src, dst) in [("r1", "a", "b"), ("r2", "c", "a"), ("r3", "b", "c")] {
+            linked
+                .upsert(
+                    "relations",
+                    pk,
+                    json!({"src": src, "dst": dst, "rel_type": "KNOWS"}),
+                )
+                .await;
+        }
+        linked.catch_up(1).await;
+        assert_eq!(linked.graph(1).edges.len(), 3);
+        linked.delete("entities", "a").await;
+        linked.catch_up(1).await;
+        let graph = linked.graph(1);
+        assert!(
+            !graph
+                .vertices
+                .contains_key(&("entity".to_string(), "a".to_string()))
+        );
+        assert_eq!(graph.vertices.len(), 2);
+        assert_eq!(
+            graph
+                .edges
+                .iter()
+                .map(|(ty, s, d, _)| (ty.as_str(), s.1.as_str(), d.1.as_str()))
+                .collect::<Vec<_>>(),
+            vec![("KNOWS", "b", "c")],
+            "only the edge that did not touch the vertex is left"
+        );
+    }
+
+    /// Upserting a key again merges into the same vertex (its properties replaced, its edges
+    /// kept); a patch is applied to the document the vertex holds.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn pk_upsert_is_entity_merge() {
+        let linked = Linked::start(1).await;
+        linked
+            .upsert("entities", "a", json!({"name": "A", "rank": 1}))
+            .await;
+        linked
+            .upsert(
+                "relations",
+                "r1",
+                json!({"src": "a", "dst": "a", "rel_type": "SELF"}),
+            )
+            .await;
+        linked.catch_up(1).await;
+        let first = linked.cluster.node(1).admin.clone();
+        let id_of_a = || async {
+            first
+                .execute(pb::ExecuteRequest {
+                    namespace: "acme".to_string(),
+                    graph: "kg".to_string(),
+                    statement: "MATCH (n:entity) RETURN id(n)".to_string(),
+                    ..Default::default()
+                })
+                .await
+                .expect("read")
+                .rows
+                .as_option()
+                .expect("rows")
+                .rows
+                .len()
+        };
+        assert_eq!(id_of_a().await, 1);
+        linked.upsert("entities", "a", json!({"name": "A2"})).await;
+        linked.patch("entities", "a", json!({"rank": 7})).await;
+        linked.catch_up(1).await;
+        assert_eq!(id_of_a().await, 1, "one vertex per key");
+        let graph = linked.graph(1);
+        let (_, props) = &graph.vertices[&("entity".to_string(), "a".to_string())];
+        assert_eq!(props["name"], text("A2"));
+        assert_eq!(props["rank"], format!("{:?}", grafeo::Value::Int64(7)));
+        assert_eq!(graph.edges.len(), 1, "the merged vertex keeps its edge");
+        assert_eq!(graph, linked.expected());
+    }
+
+    /// The lag of each link is reported, falls to zero once applied, and a dropped collection
+    /// is reported missing. A reopened graph keeps its links' progress: nothing is applied twice.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn link_lag_metric_reported() {
+        let linked = Linked::start(1).await;
+        let runner = linked.runner(1);
+        for i in 0..5 {
+            linked
+                .upsert("entities", &format!("e{i}"), json!({"name": "x"}))
+                .await;
+        }
+        let lag = runner.lag("acme", "kg").await.expect("lag");
+        let by_name: BTreeMap<&str, u64> = lag
+            .iter()
+            .map(|l| (l.collection.as_str(), l.records))
+            .collect();
+        assert_eq!(by_name, BTreeMap::from([("entities", 5), ("relations", 0)]));
+        linked.catch_up(1).await;
+        let records = linked.link_versions().await.len();
+
+        // Evicted and reopened from its stamped local files: the progress is there.
+        assert!(
+            linked
+                .cluster
+                .node(1)
+                .admin
+                .evict("acme", "kg")
+                .await
+                .expect("evict")
+        );
+        let lag = runner.lag("acme", "kg").await.expect("lag");
+        assert!(lag.iter().all(|l| l.records == 0), "{lag:?}");
+        runner.apply_graph("acme", "kg").await.expect("apply");
+        assert_eq!(
+            linked.link_versions().await.len(),
+            records,
+            "nothing applied twice"
+        );
+        assert_eq!(linked.graph(1), linked.expected());
+
+        let entities = lag
+            .iter()
+            .find(|l| l.collection == "entities")
+            .expect("entities");
+        assert_eq!(
+            entities.link,
+            collection_link_id(
+                linked
+                    .cluster
+                    .meta
+                    .resolve_collection(
+                        loams_common::meta::Consistency::Linearizable,
+                        linked._ns,
+                        "entities"
+                    )
+                    .await
+                    .expect("read")
+                    .expect("entities")
+                    .id
+            )
+        );
+        linked
+            .cluster
+            .meta
+            .drop_collection(linked._ns, "relations")
+            .await
+            .expect("drop");
+        let lag = runner.lag("acme", "kg").await.expect("lag");
+        assert!(
+            lag.iter().any(|l| l.collection == "relations" && l.missing),
+            "{lag:?}"
+        );
+        runner
+            .apply_graph("acme", "kg")
+            .await
+            .expect("a missing source stops only its link");
+        let _: &dyn MetaStore = &*linked.cluster.meta;
+        let _ = Bytes::new();
+    }
 }

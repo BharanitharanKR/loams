@@ -762,6 +762,35 @@ impl GraphAdmin {
         &self.catalog
     }
 
+    /// Loams' log the graphs are durable in, when the admin has one.
+    #[must_use]
+    pub fn log(&self) -> Option<&crate::durable::GraphLog> {
+        self.log.as_ref()
+    }
+
+    /// Opens catalog graph `meta` here, as its owner, for one of its links (GR1 Task 18).
+    ///
+    /// # Errors
+    ///
+    /// As [`GraphAdmin::open`]: `NOT_FOUND` for a deleted graph, `UNAVAILABLE` when another
+    /// node owns it.
+    pub(crate) async fn link_graph(&self, meta: &GraphMeta) -> Result<Arc<Graph>, ConnectError> {
+        self.open_meta(meta).await
+    }
+
+    /// Commits a link's batch to `graph` on the statement pool (GR1 Task 18). The outer error is
+    /// the pool's; the inner one the graph's.
+    pub(crate) async fn link_commit(
+        &self,
+        graph: Arc<Graph>,
+        job: crate::durable::lane::LinkJob,
+    ) -> Result<Result<u64, crate::GraphError>, ConnectError> {
+        if self.is_shutting_down() {
+            return Err(shutting_down());
+        }
+        self.on_pool(move || Ok(graph.commit_link(job))).await
+    }
+
     /// Fills a `Graph` message: the catalog record, with the engine's state and counts when the
     /// graph is open.
     fn message(&self, meta: &GraphMeta) -> pb::Graph {

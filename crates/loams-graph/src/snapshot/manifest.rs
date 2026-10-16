@@ -13,7 +13,7 @@
 //! below the oldest retained snapshot, never inside the PITR window, and never past the newest
 //! portable snapshot (the fallback for an engine that cannot read the native one, §48 §6.5).
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -100,6 +100,59 @@ pub struct SnapshotEntry {
     pub nodes: u64,
     /// Edges in the snapshot.
     pub edges: u64,
+    /// Each link's progress at `offset` (R0.17, GR1 Task 18): a link's last record may be below
+    /// the trim point, so its target's state is kept here. Absent for a graph no link writes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<LinkProgress>,
+}
+
+/// A link's progress as a snapshot keeps it: a [`crate::changeset::LinkApply`] in JSON.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LinkProgress {
+    /// The link's id.
+    pub link: u64,
+    /// Its target's version.
+    pub version: u64,
+    /// The next source offset to apply, by partition.
+    pub applied_after: BTreeMap<u32, u64>,
+}
+
+impl LinkProgress {
+    /// Every link's progress, by link id.
+    #[must_use]
+    pub fn all(
+        links: &BTreeMap<loams_common::meta::LinkId, crate::changeset::LinkApply>,
+    ) -> Vec<Self> {
+        links
+            .values()
+            .map(|apply| Self {
+                link: apply.link.0,
+                version: apply.version,
+                applied_after: apply.applied_after.clone(),
+            })
+            .collect()
+    }
+
+    /// The progress kept by `entries`, by link id.
+    #[must_use]
+    pub fn by_link(
+        entries: &[Self],
+    ) -> BTreeMap<loams_common::meta::LinkId, crate::changeset::LinkApply> {
+        entries
+            .iter()
+            .map(|entry| {
+                let link = loams_common::meta::LinkId(entry.link);
+                (
+                    link,
+                    crate::changeset::LinkApply {
+                        link,
+                        version: entry.version,
+                        applied_after: entry.applied_after.clone(),
+                    },
+                )
+            })
+            .collect()
+    }
 }
 
 /// A graph's manifest (shared contract `GraphManifest`).
@@ -689,6 +742,7 @@ mod tests {
             created_at_ms,
             nodes: 0,
             edges: 0,
+            links: Vec::new(),
         }
     }
 

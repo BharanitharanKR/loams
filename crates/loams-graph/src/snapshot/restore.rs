@@ -125,5 +125,6 @@ pub(crate) fn into_engine(
         offset: chosen.entry.offset,
         next_txn_seq: chosen.entry.next_txn_seq,
         keys: None,
+        links: super::manifest::LinkProgress::by_link(&chosen.entry.links),
     })
 }
