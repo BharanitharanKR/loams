@@ -214,6 +214,8 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
         ..HouseConfig::default()
     };
     house.limits.apply(&mut http);
+    // The engine whose streams pipes read (HS1 Task 16).
+    http.engine = house.engine.link().map_err(bad)?;
     if let Some(hours) = house.snapshot_retention_hours {
         http.snapshot_retention = loams_house::retention::check_retention(Duration::from_secs(
             hours.saturating_mul(3600),

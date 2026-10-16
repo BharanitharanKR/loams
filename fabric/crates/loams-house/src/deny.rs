@@ -484,6 +484,9 @@ pub const ALLOWED_SYSTEM_TABLES: &[&str] = &[
     "errors",
     "events",
     "metrics",
+    // The House's own (HS1 Task 16): it is never chDB's, the front's view
+    // answers it.
+    "loams_pipes",
 ];
 
 /// The database `merge()` may name besides the current one. HS1 Task 11 builds

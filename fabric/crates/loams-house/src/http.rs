@@ -121,6 +121,7 @@ pub struct HouseHandle {
     tls_accept: Option<JoinHandle<()>>,
     compaction: Option<JoinHandle<()>>,
     retention: Option<JoinHandle<()>>,
+    pipes: Option<JoinHandle<()>>,
 }
 
 impl HouseHandle {
@@ -146,6 +147,9 @@ impl HouseHandle {
         }
         if let Some(retention) = &self.retention {
             retention.abort();
+        }
+        if let Some(pipes) = &self.pipes {
+            pipes.abort();
         }
         if let Some(compaction) = &self.compaction {
             compaction.abort();
@@ -295,6 +299,32 @@ async fn serve_all(
         }
         _ => None,
     };
+    // The pipes' runner (HS1 Task 16), when the House reaches an engine.
+    let pipes = match (
+        &shared.lake,
+        &shared.config.engine,
+        shared.config.pipe_interval,
+    ) {
+        (Some(lake), Some(link), every) if !every.is_zero() => {
+            match crate::pipes::engine_source(link) {
+                Ok(source) => Some(
+                    crate::pipes::PipeRunner::new(
+                        Arc::clone(lake),
+                        shared.pool.clone(),
+                        shared.config.clone(),
+                        link.clone(),
+                        source,
+                    )
+                    .spawn(every),
+                ),
+                Err(err) => {
+                    eprintln!("loams-house: pipes do not run: {}", err.message());
+                    None
+                }
+            }
+        }
+        _ => None,
+    };
     let accept = tokio::spawn(async move {
         loop {
             let Ok(permit) = Arc::clone(&permits).acquire_owned().await else {
@@ -355,6 +385,7 @@ async fn serve_all(
         tls_accept,
         compaction,
         retention,
+        pipes,
     })
 }
 
@@ -1347,6 +1378,7 @@ async fn run(
             &analysis,
             &sql,
             &all,
+            None,
         )
         .await
         {
@@ -1702,6 +1734,7 @@ async fn lake_insert(
         limits: &shared.config.session_limits,
         known: &known,
         max_insert_bytes: shared.config.lake_insert_max_bytes,
+        pipe_batch: None,
     };
     let mut feed = BodyFeed {
         body,
