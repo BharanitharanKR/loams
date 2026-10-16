@@ -671,7 +671,7 @@ Commit `feat(pgdog): config push with sidecar`.
 
 **Files:**
 - MT4's tenant renderer hook: a `postgres` addon in `tenants/<org>/namespaces/<ns>.yaml` that renders a PgDog Deployment (×2, anti-affinity across AZs) with its sidecar, Service, NetworkPolicy and PodDisruptionBudget into `loams-pg-<ns>`. If MT4 has not landed, ship these as Helm templates in Task 48's chart, keyed by namespace values, and record the ruling.
-- `deploy/helm/loams-postgres/templates/sni-listener.yaml`: an Envoy (or Kourier/Traefik, per MT2's choice) TCP route per namespace hostname `<ns>.<region>.pg.<base-domain>` with TLS passthrough, plus a non-SNI port per namespace.
+- ~~`deploy/helm/loams-postgres/templates/sni-listener.yaml`: an Envoy (or Kourier/Traefik, per MT2's choice) TCP route per namespace hostname `<ns>.<region>.pg.<base-domain>` with TLS passthrough, plus a non-SNI port per namespace.~~ **Replaced by ruling R22.0:** the SNI listener is `loams-gateway` ([GW1](2026-10-16-gw1-loams-gateway.md) Tasks 1–11), and `sni_route_per_namespace_golden` checks the gateway's rendered routes.
 - `deploy/loams-postgres-single/` gets one PgDog service.
 
 Tests:
@@ -681,6 +681,8 @@ Tests:
 - `it_kind_two_namespaces_isolated`: a client of namespace A's hostname cannot reach B's databases.
 
 Commit `deploy(pgdog): per-namespace deployments and SNI routing`.
+
+**Amended 2026-10-16 (R22.0):** the SNI listener is built by GW1; this task deploys PgDog and consumes GW1's gateway.
 
 ### Task 23: TLS on both hops
 
@@ -2213,3 +2215,16 @@ The checks ran on the scratch stack `deploy/pgdog/compose.yaml`: the pinned PgDo
   - Task 24: credentials. `NoCredentials` renders no users.
   - `run` pushes due namespaces one after another, so one slow replica (up to the 5 s acknowledgement timeout) delays the others. Task 22 decides whether to push namespaces concurrently.
 - Tests: `crates/loams-pgdog-sync/tests/sync.rs` (`sync_writes_atomically`, `sync_requires_mtls`, `pgdog_restart_loads_persisted_copy`); `tests/push.rs` (`push_debounces`, `reload_after_generation_ack`, `drift_triggers_repush`, `failed_reload_is_retried_by_resync`, `sidecar_sink_pushes_over_mtls`, `dir_sink_writes_the_namespace_directory`); `tests/it_pgdog.rs` (`it_reload_picks_up_a_pushed_change`, ignored by default, run locally with Podman).
+
+### Task 22 rulings (2026-10-16, before any code)
+
+- **R22.0 The SNI listener is `loams-gateway`, not Envoy, Kourier or Traefik** (owner, 2026-10-16: "build a crate"; design [§57](../design/57-loams-gateway.md), D1011, amending D708).
+  - **Why a generic L4 router cannot do it:** a Postgres client sends a plaintext `SSLRequest` before its ClientHello, so the first bytes carry no SNI; PgDog does TLS only after `SSLRequest` and reads no SNI (R18.4); and PgDog negotiates no ALPN, which libpq 17's `sslnegotiation=direct` requires (§57 §3).
+  - **What the gateway does** (D1014–D1017): it answers `SSLRequest` with `S`, reads SNI, sends its own `SSLRequest` to the namespace's PgDog and splices the client's TLS bytes, so PgDog still terminates that TLS (D710). It terminates direct-TLS clients with ALPN `postgresql` and re-encrypts to PgDog, verifying PgDog's certificate. Plaintext is refused with `FATAL 28000`. Dedicated ports are allocated on request (`dedicated_port`), and upstream choice is ordered, so cancels reach the issuing replica.
+  - **Split of the work:** GW1 Tasks 1–8 build the gateway and its image. GW1 Task 9 adds `pg-control`'s routes renderer and dedicated-port records. GW1 Tasks 10–11 add the compose service and the Helm templates. This task keeps the PgDog Deployments (×2, sidecar, Service, NetworkPolicy, PDB), and its tests become:
+    - `pgdog_manifests_golden`;
+    - `sni_route_per_namespace_golden` (the rendered gateway routes, GW1 Task 9);
+    - `kubeconform_passes`;
+    - `it_kind_two_namespaces_isolated` (through the gateway, GW1 Task 11).
+  - **PgDog's Service** is headless, so the gateway resolves every replica and tries them in order (D1017).
+  - **NetworkPolicy:** PgDog's port 6432 admits only the gateway's pods and `pg-control`.
