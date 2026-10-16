@@ -1,6 +1,7 @@
 //! `LoamsStream` pipes and their materialized views (HS1 Task 16, §49 §9): a
 //! stream's records land in a lake table exactly once, whatever step a front
-//! dies at and however many fronts run them.
+//! dies at and however many fronts run them. `S3Queue` pipes (HS1 Task 18) do
+//! the same for objects under the namespace's prefix.
 //!
 //! The engine's stream API is stood in for by [`MemStream`] (the HTTP client
 //! itself is `loams_stream`'s unit test); the runner is driven round by
@@ -26,8 +27,9 @@ use loams_house::config::{EngineLink, HouseConfig, UserMap};
 use loams_house::errors::{ChError, HouseError};
 use loams_house::http::{HouseHandle, serve_with_lake};
 use loams_house::pipes::loams_stream::{cloudevent_row, row};
+use loams_house::pipes::s3queue::QueueRunner;
 use loams_house::pipes::{
-    Bounds, Fetched, Hooks, MaterializedView, PipeRunner, Ran, Step, StreamSource, pipes,
+    Bounds, Fetched, Hooks, MaterializedView, PipeFeed, PipeRunner, Ran, Step, StreamSource, pipes,
 };
 use loams_house::{ProcessLauncher, WorkerPool};
 use loams_house_cache::{HouseCache, OneStore, StoreOptions, Upstream};
@@ -121,6 +123,7 @@ struct Lakehouse {
     pool: WorkerPool,
     config: HouseConfig,
     stream: Arc<MemStream>,
+    store: Store,
 }
 
 impl Lakehouse {
@@ -156,6 +159,42 @@ impl Lakehouse {
         panic!("the pipes never caught up");
     }
 
+    fn queue_runner(&self) -> QueueRunner {
+        QueueRunner::new(
+            Arc::clone(&self.lake),
+            self.pool.clone(),
+            self.config.clone(),
+        )
+    }
+
+    /// The `S3Queue` pipes' rounds until one commits nothing.
+    async fn drain_queues(&self, runner: &QueueRunner) {
+        for _ in 0..50 {
+            let mut busy = false;
+            for pipe in pipes(&self.lake, NS).await.expect("pipes") {
+                if !matches!(pipe.source, PipeFeed::Queue(_)) {
+                    continue;
+                }
+                for view in &pipe.views {
+                    if let Ran::Committed { .. } = runner.run(NS, &pipe, view).await.expect("run") {
+                        busy = true;
+                    }
+                }
+            }
+            if !busy {
+                return;
+            }
+        }
+        panic!("the queues never caught up");
+    }
+
+    async fn put(&self, key: &str, body: &str) {
+        self.store
+            .put(key, bytes::Bytes::from(body.to_string()))
+            .await
+            .expect("put");
+    }
+
     async fn properties(&self, table: &str) -> std::collections::HashMap<String, String> {
         self.catalog
             .load_table(&TableIdent::new(
@@ -186,7 +225,7 @@ async fn lakehouse(test: &str) -> Lakehouse {
         .expect("the pool starts");
     let lake = Arc::new(
         Lake::new(catalog.clone() as Arc<dyn HouseCatalog>, LakeRoot::local())
-            .with_store(store)
+            .with_store(store.clone())
             .with_grants(Arc::new(proxy) as Arc<dyn PrefixGrants>),
     );
     let config = HouseConfig {
@@ -211,6 +250,7 @@ async fn lakehouse(test: &str) -> Lakehouse {
         pool,
         config,
         stream: Arc::new(MemStream::default()),
+        store,
     }
 }
 
@@ -682,4 +722,286 @@ async fn pipe_and_view_ddl_refusals() {
             .await
             .contains("LoamsStream")
     );
+}
+
+// ---------------------------------------------------------------------------
+// S3Queue (HS1 Task 18).
+
+/// Three rows `k = 3n, 3n+1, 3n+2` as JSON lines.
+fn lines(n: u64) -> String {
+    (3 * n..3 * n + 3)
+        .map(|k| format!("{{\"k\": {k}, \"v\": \"item{k}\"}}\n"))
+        .collect()
+}
+
+async fn inbox(house: &Lakehouse) {
+    let addr = house.handle.local_addr();
+    ok(
+        addr,
+        "CREATE TABLE inbox (k UInt64, v String) ENGINE = S3Queue('ns/2/in/*.jsonl', \
+         'JSONEachRow') SETTINGS mode = 'ordered', max_processed_files_before_commit = 2",
+    )
+    .await;
+    ok(
+        addr,
+        "CREATE TABLE t (k UInt64, v String) ENGINE = MergeTree ORDER BY k",
+    )
+    .await;
+    ok(
+        addr,
+        "CREATE MATERIALIZED VIEW inbox_mv TO t AS SELECT upper(v) AS v, k FROM inbox",
+    )
+    .await;
+}
+
+fn counted(objects: u64) -> String {
+    let rows = objects * 3;
+    format!("{rows}\t{rows}\n")
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn s3queue_processes_each_object_once() {
+    let house = lakehouse("s3queue-once").await;
+    let addr = house.handle.local_addr();
+    inbox(&house).await;
+    for n in 0..5 {
+        house.put(&format!("ns/2/in/{n:04}.jsonl"), &lines(n)).await;
+    }
+    // Not the pattern's: another extension, a subdirectory, another directory.
+    house.put("ns/2/in/0002.csv", "1,x\n").await;
+    house.put("ns/2/in/sub/0009.jsonl", &lines(90)).await;
+    house.put("ns/2/other/0001.jsonl", &lines(91)).await;
+    let runner = house.queue_runner();
+    house.drain_queues(&runner).await;
+    assert_eq!(
+        ok(addr, "SELECT count(), uniqExact(k) FROM t").await,
+        counted(5)
+    );
+    assert_eq!(
+        ok(addr, "SELECT k, v FROM t WHERE k = 4").await,
+        "4\tITEM4\n"
+    );
+    // The cursor is the greatest key processed; the snapshot names its keys.
+    let properties = house.properties("t").await;
+    let cursor: Vec<(&String, &String)> = properties
+        .iter()
+        .filter(|(k, _)| k.starts_with("loams.s3queue."))
+        .collect();
+    assert_eq!(cursor.len(), 1, "{cursor:?}");
+    assert_eq!(cursor[0].1, "ns/2/in/0004.jsonl");
+    let table = house
+        .catalog
+        .load_table(&TableIdent::new(
+            Lake::namespace(NS, "default"),
+            "t".to_string(),
+        ))
+        .await
+        .expect("t");
+    let summary = &table
+        .metadata
+        .current_snapshot()
+        .expect("snapshot")
+        .summary()
+        .additional_properties;
+    assert_eq!(
+        summary
+            .get(&format!("{}.files", cursor[0].0))
+            .map(String::as_str),
+        Some("[\"ns/2/in/0004.jsonl\"]"),
+        "{summary:?}"
+    );
+
+    // Nothing new: nothing runs. A new object: only it lands.
+    let pipe = pipes(&house.lake, NS).await.expect("pipes").remove(0);
+    assert_eq!(
+        runner.run(NS, &pipe, &pipe.views[0]).await.expect("idle"),
+        Ran::Idle
+    );
+    house.put("ns/2/in/0005.jsonl", &lines(5)).await;
+    house.drain_queues(&runner).await;
+    assert_eq!(
+        ok(addr, "SELECT count(), uniqExact(k) FROM t").await,
+        counted(6)
+    );
+    assert_eq!(
+        ok(
+            addr,
+            "SELECT engine FROM system.tables WHERE name = 'inbox'"
+        )
+        .await,
+        "S3Queue\n"
+    );
+    assert_eq!(
+        ok(
+            addr,
+            "SELECT name, pipe, source, target, lag_records, committed_records, last_error = '' \
+             FROM system.loams_pipes"
+        )
+        .await,
+        "inbox_mv\tdefault.inbox\tS3Queue(\\'ns/2/in/*.jsonl\\', \\'JSONEachRow\\')\tdefault.t\t0\t6\t1\n"
+    );
+    assert_eq!(
+        code(addr, "SELECT * FROM inbox").await.as_deref(),
+        Some("620")
+    );
+    // A stream runner leaves an S3Queue pipe alone.
+    assert_eq!(
+        house
+            .runner()
+            .run(NS, &pipe, &pipe.views[0])
+            .await
+            .expect("stream runner"),
+        Ran::Idle
+    );
+
+    // Two fronts at once: one commits, the other gives its batch up.
+    house.put("ns/2/in/0006.jsonl", &lines(6)).await;
+    let hold = Arc::new(HoldBeforeCommit {
+        held: tokio::sync::Notify::new(),
+        go: tokio::sync::Notify::new(),
+    });
+    let slow = house.queue_runner().with_hooks(hold.clone());
+    let pipe = pipes(&house.lake, NS).await.expect("pipes").remove(0);
+    let (slow_pipe, slow_view) = (pipe.clone(), pipe.views[0].clone());
+    let slow_run = tokio::spawn(async move { slow.run(NS, &slow_pipe, &slow_view).await });
+    hold.held.notified().await;
+    assert!(matches!(
+        house
+            .queue_runner()
+            .run(NS, &pipe, &pipe.views[0])
+            .await
+            .expect("fast"),
+        Ran::Committed {
+            records: 1,
+            rows: 3
+        }
+    ));
+    hold.go.notify_one();
+    assert_eq!(
+        slow_run.await.expect("joined").expect("slow"),
+        Ran::Abandoned
+    );
+    assert_eq!(
+        ok(addr, "SELECT count(), uniqExact(k) FROM t").await,
+        counted(7)
+    );
+
+    // A front dies at each step; the next run lands the object once.
+    let mut objects = 7;
+    for step in [
+        Step::Fetched,
+        Step::Written,
+        Step::BeforeCommit,
+        Step::Committed,
+    ] {
+        house
+            .put(&format!("ns/2/in/{objects:04}.jsonl"), &lines(objects))
+            .await;
+        objects += 1;
+        let dying = house
+            .queue_runner()
+            .with_hooks(Arc::new(DieAt(step, Mutex::new(true))));
+        let pipe = pipes(&house.lake, NS).await.expect("pipes").remove(0);
+        assert!(
+            dying.run(NS, &pipe, &pipe.views[0]).await.is_err(),
+            "{step:?}"
+        );
+        house.drain_queues(&house.queue_runner()).await;
+        assert_eq!(
+            ok(addr, "SELECT count(), uniqExact(k) FROM t").await,
+            counted(objects),
+            "after dying at {step:?}"
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn s3queue_after_processing_delete() {
+    let house = lakehouse("s3queue-delete").await;
+    let addr = house.handle.local_addr();
+    ok(
+        addr,
+        "CREATE TABLE drops (k UInt64, v String) ENGINE = S3Queue('ns/2/drop/day{1..2}/*.csv', \
+         'CSV') SETTINGS after_processing = 'delete'",
+    )
+    .await;
+    ok(
+        addr,
+        "CREATE TABLE d (k UInt64, v String) ENGINE = MergeTree ORDER BY k",
+    )
+    .await;
+    ok(
+        addr,
+        "CREATE MATERIALIZED VIEW drops_mv TO d AS SELECT k, v FROM drops",
+    )
+    .await;
+    house.put("ns/2/drop/day1/a.csv", "1,a\n2,b\n").await;
+    house.put("ns/2/drop/day2/a.csv", "3,c\n").await;
+    house.put("ns/2/drop/day3/a.csv", "4,d\n").await;
+    house.drain_queues(&house.queue_runner()).await;
+    assert_eq!(ok(addr, "SELECT sum(k) FROM d").await, "6\n");
+    let left: Vec<String> = house
+        .store
+        .list("ns/2/drop")
+        .await
+        .expect("list")
+        .into_iter()
+        .map(|o| o.path)
+        .collect();
+    assert_eq!(left, vec!["ns/2/drop/day3/a.csv".to_string()]);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn s3queue_outside_prefix_is_344() {
+    let house = lakehouse("s3queue-prefix").await;
+    let addr = house.handle.local_addr();
+    for path in [
+        "s3://other-bucket/ns/2/in/*.csv",
+        "https://example.com/ns/2/in/*.csv",
+        "ns/3/in/*.csv",
+        "ns/2/../3/in/*.csv",
+        "ns/2/house/default/*.parquet",
+        "/ns/2/in/*.csv",
+        "in/*.csv",
+    ] {
+        assert_eq!(
+            code(
+                addr,
+                &format!("CREATE TABLE q (a String) ENGINE = S3Queue('{path}', 'CSV')")
+            )
+            .await
+            .as_deref(),
+            Some("344"),
+            "{path}"
+        );
+    }
+    // Credentials are never taken: the House reads with its own.
+    assert_eq!(
+        code(
+            addr,
+            "CREATE TABLE q (a String) ENGINE = S3Queue('ns/2/in/*.csv', 'AKIA', 'secret', 'CSV')"
+        )
+        .await
+        .as_deref(),
+        Some("344")
+    );
+    assert_eq!(
+        code(
+            addr,
+            "CREATE TABLE q (a String) ENGINE = S3Queue('ns/2/in/*.csv', 'CSV') SETTINGS mode = \
+             'unordered'"
+        )
+        .await
+        .as_deref(),
+        Some("48")
+    );
+    assert_eq!(
+        ok(addr, "SELECT count() FROM system.tables WHERE name = 'q'").await,
+        "0\n"
+    );
+    ok(
+        addr,
+        "CREATE TABLE q (a String) ENGINE = S3Queue('ns/2/in/*.csv', 'CSV')",
+    )
+    .await;
 }

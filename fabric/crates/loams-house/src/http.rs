@@ -122,6 +122,7 @@ pub struct HouseHandle {
     compaction: Option<JoinHandle<()>>,
     retention: Option<JoinHandle<()>>,
     pipes: Option<JoinHandle<()>>,
+    queues: Option<JoinHandle<()>>,
     views: Option<JoinHandle<()>>,
 }
 
@@ -151,6 +152,9 @@ impl HouseHandle {
         }
         if let Some(pipes) = &self.pipes {
             pipes.abort();
+        }
+        if let Some(queues) = &self.queues {
+            queues.abort();
         }
         if let Some(views) = &self.views {
             views.abort();
@@ -329,6 +333,18 @@ async fn serve_all(
         }
         _ => None,
     };
+    // The `S3Queue` pipes' runner (HS1 Task 18): no engine link needed.
+    let queues = match (&shared.lake, shared.config.pipe_interval) {
+        (Some(lake), every) if !every.is_zero() => Some(
+            crate::pipes::s3queue::QueueRunner::new(
+                Arc::clone(lake),
+                shared.pool.clone(),
+                shared.config.clone(),
+            )
+            .spawn(every),
+        ),
+        _ => None,
+    };
     // Materialized views' catch-up (HS1 Task 17).
     let views = match (&shared.lake, shared.config.view_interval) {
         (Some(lake), every) if !every.is_zero() => Some(
@@ -403,6 +419,7 @@ async fn serve_all(
         compaction,
         retention,
         pipes,
+        queues,
         views,
     })
 }
