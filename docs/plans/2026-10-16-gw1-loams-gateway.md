@@ -282,4 +282,21 @@ Commit `deploy(gateway): helm templates for the postgres front door`.
 
 ## Rulings made during execution
 
-(none yet)
+### Tasks 1–7 rulings (2026-10-16, the Postgres route)
+
+- **R1.1 Flags.** The binary takes `--config` only. Every field lives in `gateway.toml`, so the plan's "every field also a flag" is dropped. A container passes one file, and two sources for one setting would need a precedence rule.
+- **R2.1 `generation` is required by default** (`routes.require_generation = true`, design 57's review on #658). `routes::with_generation(text)` writes the line the way `pg-control` must (Task 9). `parse(text, range, require_generation)` takes the flag.
+- **R3.1 Health.** An address is ejected for 2 s after a failed connect. There are no active checks (R18.9). A host is resolved at every connect, so a headless Service's replicas are seen as they change.
+- **R4.1 The terminate path reaches PgDog first and presents PgDog's own certificate.** The first run of `it_pgdog` failed: with a gateway certificate of its own, libpq 17 (`channel_binding=prefer`) authenticated with SCRAM-SHA-256-PLUS, and PgDog refused it with "password … is wrong". `channel_binding=disable` passed, which confirmed the cause: `tls-server-end-point` hashes the certificate the client saw.
+  - `ServerCerts` now chooses by matching PgDog's leaf. The names in `[[pg.certs]]` only pre-check that the client's SNI is covered, before PgDog is dialled.
+  - Without a copy of PgDog's certificate, a direct client gets `internal_error`, and the log names the fix.
+  - Design 57 §7.3 and Q905 record this; per-namespace copies are loaded with the routes in Task 9.
+- **R4.2 On the splice path**, the gateway answers `S` before dialling PgDog. If PgDog is unreachable or answers `N`, the client gets the TLS alert `internal_error`. The gateway writes nothing to the client in the Postgres protocol after `S`.
+- **R6.1 Readiness.** Dedicated ports that fail to bind show as `degraded` on `/readyz`, and the replica stays Ready (design 57 §5). A failed bind is retried on the next route swap.
+- **R6.2 The cap.** A connection over `max_connections` is closed at accept, before anything is read. The drain waits until every permit is back, up to `drain_timeout`.
+- **R7.1 One integration test.** The five scenarios are steps of `it_pgdog_through_the_gateway`, each printed under the plan's name (`it_sslrequest_verify_full`, `it_direct_tls`, `it_dedicated_port_without_sni`, `it_plaintext_refused`, `it_unknown_sni_refused`), plus a `baseline_psql_to_pgdog`. This way Postgres and PgDog start once, and their containers are removed by guards however the test ends.
+  - The test runtime is multi-threaded, because `psql` runs as a blocking child process.
+- **R7.2 Certificates in the test.** One CA and one `*.gw.pg.test` certificate, held by PgDog and copied to the gateway. Both paths run with `channel_binding=require`.
+- **R7.3 CI.** `gateway.yml` runs on changes to the crate, `deploy/pgdog/compose.yaml`, `Cargo.lock` or itself. It pulls the PgDog image by the digest read from `deploy/pgdog/compose.yaml` (named nowhere else, R19.3). It is not part of `CI required`; the workspace jobs cover the crate's unit tests there.
+- **R7.4 Keepalive.** Relayed sockets get TCP keepalive (60 s idle, 15 s interval) through `socket2` 0.6, a direct dependency that was already in `Cargo.lock` through tokio.
+- **Carried forward:** Task 8 (the image), Task 9 (per-namespace certificates and the renderer, which writes the generation line), Task 13 (an alert on dedicated-port bind failures).
