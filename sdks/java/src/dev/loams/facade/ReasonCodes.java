@@ -92,6 +92,7 @@ public final class ReasonCodes {
         map.put(Reason.LIVE_FUNCTION_OUT_OF_MEMORY, "resource_exhausted");
         map.put(Reason.LIVE_LIMIT_EXCEEDED, "resource_exhausted");
         map.put(Reason.LIVE_APP_MISMATCH, "permission_denied");
+        map.put(Reason.LIVE_ORIGIN_NOT_ALLOWED, "permission_denied");
         map.put(Reason.ROLE_REQUIRED, "permission_denied");
         map.put(Reason.SETUP_REQUIRED, "failed_precondition");
         map.put(Reason.TOKEN_MISSING, "unauthenticated");

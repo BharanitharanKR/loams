@@ -84,6 +84,7 @@ const (
 	ReasonLiveFunctionOutOfMemory  Reason = "live_function_out_of_memory"
 	ReasonLiveLimitExceeded        Reason = "live_limit_exceeded"
 	ReasonLiveAppMismatch          Reason = "live_app_mismatch"
+	ReasonLiveOriginNotAllowed     Reason = "live_origin_not_allowed"
 	ReasonRoleRequired             Reason = "role_required"
 	ReasonSetupRequired            Reason = "setup_required"
 	ReasonTokenMissing             Reason = "token_missing"
@@ -193,6 +194,7 @@ var Reasons = []Reason{
 	ReasonLiveFunctionOutOfMemory,
 	ReasonLiveLimitExceeded,
 	ReasonLiveAppMismatch,
+	ReasonLiveOriginNotAllowed,
 	ReasonRoleRequired,
 	ReasonSetupRequired,
 	ReasonTokenMissing,
@@ -297,6 +299,7 @@ var ReasonCodes = map[Reason]string{
 	ReasonLiveFunctionOutOfMemory:  "resource_exhausted",
 	ReasonLiveLimitExceeded:        "resource_exhausted",
 	ReasonLiveAppMismatch:          "permission_denied",
+	ReasonLiveOriginNotAllowed:     "permission_denied",
 	ReasonRoleRequired:             "permission_denied",
 	ReasonSetupRequired:            "failed_precondition",
 	ReasonTokenMissing:             "unauthenticated",

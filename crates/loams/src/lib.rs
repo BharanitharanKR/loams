@@ -15,6 +15,7 @@ pub mod pg_control;
 mod server;
 #[cfg(feature = "sqldb")]
 pub mod sqlgate;
+pub mod tls;
 
 pub use meta_backend::{MetaBackend, NO_TIKV_FEATURE, TIKV_SCHEME};
 pub use server::{ClusterConfig, Server, ServerConfig, ServerError};

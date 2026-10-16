@@ -294,6 +294,11 @@ pub struct ServerConfig {
     /// `dev` and `standalone` only: a cluster node refuses any other mode
     /// until MT1.
     pub auth: crate::auth::AuthConfig,
+    /// TLS on `--listen` (`LOAMS_TLS_*`, [`crate::tls`]; LV1 plan Task 18).
+    /// Off by default. `dev` and `standalone` only. Loams Live on a
+    /// non-loopback `--listen` needs it (or TLS ended at a trusted proxy)
+    /// and authentication.
+    pub tls: crate::tls::TlsConfig,
 }
 
 /// Loams Git's server settings (GT1 Task 13).
@@ -477,6 +482,7 @@ impl ServerConfig {
             git: GitConfig::default(),
             house: crate::api::house_proxy::HouseProxyConfig::default(),
             auth: crate::auth::AuthConfig::off(),
+            tls: crate::tls::TlsConfig::off(),
         }
     }
 
@@ -539,6 +545,13 @@ impl ServerConfig {
             }
             if loams_live::check_listen(live.listen).is_err() {
                 return Err(ServerError::LiveListenNotLoopback { addr: live.listen });
+            }
+            // LV1 plan Task 18 (the rule of MT1 Task 7): beyond loopback,
+            // Live is served only behind TLS and authentication.
+            if !self.listen.ip().to_canonical().is_loopback()
+                && !(self.tls.secures() && self.auth.enforced())
+            {
+                return Err(ServerError::LiveListenNeedsTlsAndAuth { addr: self.listen });
             }
             // LV1 plan Task 5: strangers' code never runs in this process.
             loams_live::check_isolation(live).map_err(|e| ServerError::Config(e.to_string()))?;
@@ -607,6 +620,14 @@ impl ServerConfig {
     /// `off` only on loopback (preview contract); a cluster node keeps its
     /// private-network routes and refuses any other mode until MT1.
     fn validate_auth(&self) -> Result<(), ServerError> {
+        self.tls.check().map_err(ServerError::Config)?;
+        if self.cluster.is_some() && self.tls.configured() {
+            return Err(ServerError::Config(
+                "LOAMS_TLS_* are for dev and standalone; a cluster node's listeners stay on a \
+                 private network until MT1"
+                    .to_string(),
+            ));
+        }
         if self.cluster.is_some() {
             if self.auth.enforced() {
                 return Err(ServerError::Config(format!(
@@ -797,6 +818,16 @@ pub enum ServerError {
          until the unified auth plan (D111)"
     )]
     LiveListenNotLoopback { addr: SocketAddr },
+    /// Loams Live on a non-loopback `--listen` without TLS and
+    /// authentication (LV1 plan Task 18, design §45 §6.1, MT1 Task 7).
+    #[cfg(feature = "live")]
+    #[error(
+        "--listen listen on {addr}: non-loopback addresses need [tls] and [auth] (MT1): set \
+         LOAMS_TLS_CERT_FILE and LOAMS_TLS_KEY_FILE (or LOAMS_TLS_TERMINATED_BY_PROXY=true with \
+         LOAMS_TLS_TRUSTED_PROXIES) and LOAMS_AUTH_MODE, bind --listen to 127.0.0.1, or pass \
+         --no-live"
+    )]
+    LiveListenNeedsTlsAndAuth { addr: SocketAddr },
     /// Loams Live could not start (R1 plan Task 12).
     #[cfg(feature = "live")]
     #[error("Loams Live: {0}")]
@@ -1170,7 +1201,9 @@ impl LiveRuntime {
             bundles,
             loader: Arc::new(loader),
         };
-        let layer = crate::auth::AuthLayerState::new(auth, &[]).leaving_to_apps();
+        let layer = crate::auth::AuthLayerState::new(auth, &[])
+            .leaving_to_apps()
+            .with_app_origins(app_origin_set(&config));
         let guard: loams_live::service::Guard = Arc::new(move |router: axum::Router| {
             layer.wrap(router.layer(axum::middleware::from_fn(crate::api::live::caller)))
         });
@@ -1213,21 +1246,38 @@ impl LiveRuntime {
     }
 }
 
-/// The main port's state without Loams Live when `listen` is not loopback
-/// (`None`: serve `state` as it is). Until LV1 Task 18 brings TLS and the
-/// non-loopback rule, Live is served on a loopback main port and on the
-/// `tailscale serve` target only (itself loopback, reached over the tailnet
-/// with the tailnet's TLS); elsewhere the main port answers
-/// `feature_not_in_variant` for it, and the start says so once.
+/// The browser origins Live's active apps list, for the engine's CORS
+/// layer (LV1 plan Task 18): the handle `live`'s app engines keep current.
 #[cfg(feature = "live")]
-fn without_live_beyond_loopback(state: &AppState, listen: SocketAddr) -> Option<AppState> {
-    if state.live.is_none() || listen.ip().is_loopback() {
+fn app_origin_set(live: &loams_live::LiveConfig) -> crate::auth::layer::AppOriginSet {
+    let origins = live.app_origins.clone();
+    crate::auth::layer::AppOriginSet::new(move |origin| origins.contains(origin))
+}
+
+/// Whether the main port may serve Loams Live (LV1 plan Task 18, design
+/// §45 §6.1): on loopback, or behind TLS (here or at a trusted proxy) and
+/// authentication. [`ServerConfig::validate`] refuses to start Live on any
+/// other `--listen`, so this only guards the router.
+#[cfg(feature = "live")]
+fn main_port_serves_live(config: &ServerConfig) -> bool {
+    config.listen.ip().to_canonical().is_loopback()
+        || (config.tls.secures() && config.auth.enforced())
+}
+
+/// The main port's state without Loams Live when it may not serve it
+/// ([`main_port_serves_live`]; `None`: serve `state` as it is). The
+/// `tailscale serve` target (loopback, with the tailnet's TLS) serves it
+/// regardless.
+#[cfg(feature = "live")]
+fn without_live_beyond_loopback(state: &AppState, config: &ServerConfig) -> Option<AppState> {
+    if state.live.is_none() || main_port_serves_live(config) {
         return None;
     }
     tracing::warn!(
-        %listen,
-        "Loams Live is not served on --listen {listen}: until it has TLS (LV1 Task 18) it is \
-         served on a loopback --listen and over the tailnet (LOAMS_TAILSCALE_LISTEN) only"
+        listen = %config.listen,
+        "Loams Live is not served on --listen {}: beyond loopback it needs TLS and \
+         authentication (LV1 Task 18)",
+        config.listen
     );
     Some(AppState {
         live: None,
@@ -2062,6 +2112,9 @@ impl Server {
     ) -> Result<Self, ServerError> {
         startup_gate(&meta_store, &config.data_dir).await?;
         let (listener, local_addr) = bind(config.listen).await?;
+        // LV1 plan Task 18: TLS (or a trusted proxy's connections only).
+        let listener =
+            crate::tls::MainListener::new(listener, &config.tls).map_err(ServerError::Config)?;
         // After the leader, before the collection service (row T0-6).
         let durable = Durable::start(&config, NODE_ID).await?;
         let setup = NodeSetup {
@@ -2471,13 +2524,21 @@ impl Server {
             crate::auth::layer::MAIN_PUBLIC_PATHS,
         );
         // LV1 plan Task 16: where Live is served, its end users' calls go to
-        // the app (the main port serves Live on loopback only until Task 18).
+        // the app (the main port serves Live on loopback, or behind TLS and
+        // authentication, Task 18).
         #[cfg(feature = "live")]
         let (main_guard, tailscale_guard) = match &live {
-            Some(_) if config.listen.ip().is_loopback() => (
-                main_guard.leaving_to_apps(),
-                tailscale_guard.leaving_to_apps(),
-            ),
+            Some(_) if main_port_serves_live(config) => {
+                let origins = config.live.as_ref().map(app_origin_set);
+                let main_guard = main_guard.leaving_to_apps();
+                (
+                    match origins {
+                        Some(origins) => main_guard.with_app_origins(origins),
+                        None => main_guard,
+                    },
+                    tailscale_guard.leaving_to_apps(),
+                )
+            }
             Some(_) => (main_guard, tailscale_guard.leaving_to_apps()),
             None => (main_guard, tailscale_guard),
         };
@@ -2978,7 +3039,7 @@ impl Server {
         let (app, tailscale) = match (roles.gateway, config.cluster.is_some()) {
             (true, false) => {
                 #[cfg(feature = "live")]
-                let main_state = without_live_beyond_loopback(&state, config.listen);
+                let main_state = without_live_beyond_loopback(&state, config);
                 let router = api::router(state);
                 #[cfg(feature = "live")]
                 let main_router = match main_state {

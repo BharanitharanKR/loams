@@ -1622,6 +1622,13 @@ async fn serve(cli: Cli) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    config.tls = match loams::tls::TlsConfig::from_env() {
+        Ok(tls) => tls,
+        Err(err) => {
+            eprintln!("loams: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
     let server = match Server::start(config).await {
         Ok(server) => server,
         Err(loams::ServerError::Startup { code, detail }) => {

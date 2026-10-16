@@ -106,6 +106,7 @@ enum class Reason {
   kLiveFunctionOutOfMemory,
   kLiveLimitExceeded,
   kLiveAppMismatch,
+  kLiveOriginNotAllowed,
   kRoleRequired,
   kSetupRequired,
   kTokenMissing,

@@ -718,6 +718,12 @@
       "standIn": null
     },
     {
+      "reason": "live_origin_not_allowed",
+      "code": "permission_denied",
+      "why": "Needs a browser Origin a Live app does not list; the recorder sends no Origin and creates no apps (LV1 Task 18).",
+      "standIn": null
+    },
+    {
       "reason": "live_function_error",
       "code": "unknown",
       "why": "Needs a deployed function that throws; the recorder deploys nothing (LV1 Task 19).",

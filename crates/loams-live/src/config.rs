@@ -9,6 +9,7 @@ use loams_kv::TikvConfig;
 use loams_kv::{EmbeddedConfig, StoreConfig};
 
 use crate::apps::{AppsOptions, Layout};
+use crate::origins::AppOrigins;
 use crate::session::SessionConfig;
 use crate::subs::SubsConfig;
 use crate::{Limits, LiveError, catalog};
@@ -82,6 +83,11 @@ pub struct LiveConfig {
     /// How long an app's engine stays up on this node with no session and
     /// no request (the server's own app always runs).
     pub idle_after: Duration,
+    /// The union of the active apps' browser origins (LV1 plan Task 18),
+    /// which the app [`Engines`](crate::Engines) keep current from the
+    /// directory. The server hands a clone to its CORS layer before Live
+    /// starts.
+    pub app_origins: AppOrigins,
 }
 
 /// Where a deployment's functions run (`[live] isolation`, design §45
@@ -183,6 +189,7 @@ impl LiveConfig {
             layout: Layout::default(),
             apps: AppsOptions::default(),
             idle_after: DEFAULT_IDLE_AFTER,
+            app_origins: AppOrigins::default(),
         }
     }
 }

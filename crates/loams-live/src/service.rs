@@ -323,9 +323,20 @@ pub(crate) async fn app_of(
         ),
     };
     let bearer = crate::auth::bearer_jwt(ctx);
-    engines
+    let (app, caller) = engines
         .resolve_as(Caller::of(ctx), bearer.as_deref(), header)
-        .await
+        .await?;
+    // A browser's call is held to the app's own origins (LV1 plan Task
+    // 18), against its current settings, not the engine's start-time ones.
+    if ctx.header("origin").is_some() {
+        let record = engines
+            .apps()
+            .get_by_name(app.name())
+            .await?
+            .ok_or_else(|| LiveError::NotFound(format!("no Live app is named {}", app.name())))?;
+        crate::origins::check(ctx, &record, &caller)?;
+    }
+    Ok((app, caller))
 }
 
 /// Checks that the caller may run each query of a session's query set
