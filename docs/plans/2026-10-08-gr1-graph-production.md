@@ -75,6 +75,7 @@ crates/loams-graph/
   src/mapping.rs                                 (GraphMapping, §07 §2.1; Task 17)
   src/link/{collection.rs,stream.rs}             (LinkTarget impls; Tasks 18-19)
   src/retrieval/{expand.rs,udtf.rs,algos.rs}     (Tasks 20-22)
+  src/adjacency/{mod.rs,format.rs,build.rs,overlay.rs,publish.rs}  (change-log adjacency index; Task 22, D1063)
   src/authz.rs                                   (Task 24)
   src/quota.rs, src/memory.rs                    (Tasks 25-26)
   src/metrics.rs, src/audit.rs                   (Task 27)
@@ -455,6 +456,8 @@ Commit `feat(link): stream to graph link`.
 
 ### Task 20: `Search.expand` on Loams Graph
 
+> **From §48 §26 (HydraDB landscape, 2026-10-16; Proposed, Q927):** a follow-up to this task adds an opt-in `expand.fair` that hands out `limit` round-robin over seeds (D1065, §26.4), a result cache keyed by (graph, pinned offset, spec hash) for the expansion (D1066, §26.5), and the hub bound from the write-path degrees (D1067, §26.6). The defaults keep R20.4's order and tests unchanged.
+
 **Files:** `crates/loams-graph/src/retrieval/expand.rs`, `crates/loams-query/src/ir.rs` (add §07 §5.2's `expand`/`rerank` if Task 0 found them missing), the search planner hook, `tests/retrieval.rs`. Waits for Q670.
 
 **Interfaces produced:** `GraphExpander::expand(graph, seeds, Expand, consistency) -> Vec<Neighbor>` built on parameterized GQL templates; §07 §4's deterministic truncation (hop asc, weight desc, canonical key bytes asc) applied in Loams; `Rerank::{Inherit, Vector, Model}` as §07 specifies.
@@ -468,6 +471,8 @@ Commit `feat(query): search expand stage on Loams Graph`.
 
 ### Task 21: SQL `graph_*` table functions
 
+> **From §48 §26 (HydraDB landscape, 2026-10-16; Proposed, Q927):** a follow-up adds `graph_shortest_paths(graph, from, to, label, direction, edge_types, max_hops, paths_per_pair, limit)`, one breadth-first search for many pairs with `limit` shared round-robin over pairs, beside the unchanged `graph_shortest_path` (D1065, §26.4), and the result cache for the four functions (D1066). Both may run over Task 22's adjacency index once Task 34 measures the gain.
+
 **Files:** `crates/loams-graph/src/retrieval/udtf.rs`, registration in `loams-query`, `tests/retrieval.rs`. Waits for Q670.
 
 **Interfaces produced:** `graph_expand`, `graph_neighbors`, `graph_degree`, `graph_shortest_path` with §07 §5.1's exact signatures and output columns, returning Arrow (workspace arrow 58) batches.
@@ -476,15 +481,72 @@ Tests: `udtf_signatures_match_section_07`, `udtf_results_match_reference`, `late
 
 Commit `feat(query): graph table functions on Loams Graph`.
 
-### Task 22: Algorithms
+### Task 22: Algorithms and the change-log adjacency index
 
-**Files:** `src/retrieval/algos.rs`, jobs via `loams-worker`, `tests/retrieval.rs`.
+> **Approved by the owner, 2026-10-16 (D1063, D1064; §48 §26.3).** The snapshot CSR/CSC that `pagerank` and `wcc` run on (R22.0) is a published, incrementally maintained index built from the graph's own change-set stream, not a scan of the engine per call. Rulings R22.0–R22.4 apply.
 
-**Interfaces produced:** `pagerank`, `wcc`, `leiden` (§07 §5.3 signatures) on a snapshot; Grafeo `algos` where available, `graspologic-native` otherwise (licence check first, recorded); write-back job to the vertex source collection (linked) or as properties via a change set (owned).
+**Files:**
+- `crates/loams-graph/src/adjacency/format.rs`: `loams.graph.adjacency` v1, the canonical encoding (vertex ordinals in element-id order; runs sorted by edge type, other end, edge id) with a CRC-32C.
+- `src/adjacency/build.rs`: the full build (an engine scan under the shared gate, as R13.4's take) and the incremental patch (a decode of `[N, M)` merged in one linear pass), with `Decline` reasons as control flow.
+- `src/adjacency/overlay.rs`: the reader's pinned view, index plus tail, and the canonical fallback.
+- `src/adjacency/publish.rs`: the create-only PUT under `ns/<ns_id>/graphs/<gr_id>/adj/<N:020>-<sha256>.adj`, the manifest CAS (only to a higher offset), retention (`keep` 2) and the sweep's view of index files.
+- `src/adjacency/mod.rs`: `AdjacencyConfig`, `AdjacencyStats` and the `Indexer`.
+- `src/snapshot/manifest.rs`: the additive `adjacency` entry.
+- `src/snapshot/checkpoint.rs`: the maintenance pass calls the indexer.
+- `src/retrieval/algos.rs`: `pagerank`, `wcc`, `leiden`.
+- Jobs via `loams-worker`.
+- `conformance/graph/adjacency/v1/{README.md,*.bin}`: the format and its golden vectors.
+- `conformance/graph/reference/algos.py`, with committed JSON answers so CI needs no Python (as R20.7): networkx 3.4.2 for PageRank and components, graspologic for Leiden.
+- `deny.toml` (`allow-git` for `https://github.com/microsoft/graspologic-native`).
+- `connectors/licences.toml` and `NOTICE` (`network_partitions`, MIT, Microsoft).
+- `tests/adjacency.rs` and `tests/retrieval.rs`.
 
-Tests: `algorithms_deterministic_for_seed_and_snapshot`, `pagerank_matches_networkx_within_1e-6`, `wcc_matches_reference`, `leiden_modularity_within_reference_tolerance`, `write_back_is_one_atomic_job`.
+**Interfaces produced:**
+- `AdjacencyIndex { covered_offset, vertices, csr, csc, edge_types }`, with `encode`/`decode`. Decoding is total and bounded. The same graph state always gives the same bytes.
+- `build_full(graph) -> AdjacencyIndex`.
+- `patch(prev, tail) -> Result<AdjacencyIndex, Decline>`, where `Decline` is one of `NoIndex`, `Trimmed`, `TailTooLong`, `UnknownVersion`, `HashMismatch`.
+- `Indexer::run(graph) -> BuildOutcome { mode, reason, covered_offset, delta_edges, scanned_edges }`.
+- `PinnedAdjacency::pin(graph, consistency)`: the index plus the overlay at `M`, or the canonical fallback above `overlay_max_records`.
+- `GraphManifest.adjacency: Option<AdjacencyEntry { key, covered_offset, sha256, bytes, nodes, edges, format, mode, created_at_ms }>` plus the retained previous entry. The field is additive and absent when empty.
+- `AdjacencyConfig`, with these defaults:
 
-Commit `feat(graph): graph algorithms and write-back`.
+  | Setting | Default |
+  |---|---|
+  | `incremental_max_records` | 100 000 |
+  | `incremental_max_fraction` | 0.25 |
+  | `overlay_max_records` | 50 000 |
+  | `rebuild_after_records` | 10 000 |
+  | `interval` | 15 min |
+  | `keep` | 2 |
+
+- `AdjacencyStats`: the `loams_graph_adjacency_*` counters of §48 §26.3, exported by Task 27.
+- `pagerank`, `wcc` and `leiden` with §07 §5.3's signatures, run on `PinnedAdjacency`:
+  - `pagerank` is Loams' own power iteration (R22.0);
+  - `wcc` is Loams' own union-find, with components renumbered by the smallest canonical key;
+  - `leiden` is `network_partitions::hierarchical_leiden` (R22.3).
+- A write-back job: to the vertex source collection for linked graphs, or as properties through one change set for owned graphs.
+- A graph gets an index on its first algorithm run, and the maintenance pass keeps it within `rebuild_after_records` and `interval` after that.
+
+**Steps:** first the Leiden spike R22.2 names (a 1k-node graph checked against graspologic). Then the format and golden vectors, then the builds, publication, the overlay, and the algorithms.
+
+**Tests:**
+- The planned five: `algorithms_deterministic_for_seed_and_snapshot` (the same answer from an incrementally built index, a full build and the fallback), `pagerank_matches_networkx_within_1e-6`, `wcc_matches_reference`, `leiden_modularity_within_reference_tolerance`, `write_back_is_one_atomic_job`.
+- `incremental_build_equals_full_build`: a proptest over random change-set sequences, with link commits, deletes, `_key` and label changes. The patch and the full build encode to the same bytes and hash.
+- `adjacency_format_golden_vectors`.
+- `index_publish_is_create_only_and_cas_monotonic`:
+  - an index at a lower offset never replaces a higher one;
+  - a lost CAS leaves an unreferenced file, which the sweep removes after the grace;
+  - a stale owner's CAS is fenced.
+- `full_build_fallback_is_control_flow`: each `Decline` reason gives a full build, is counted, and is not an error.
+- `reader_overlay_sees_tail_writes`: a write acknowledged after `N` is in the answer at `M`, and the answer equals a full build's at `M`.
+- `reader_falls_back_when_tail_missing_or_long`: a trimmed tail, and a tail over `overlay_max_records`.
+- `index_path_holds_no_gate`: writes are acknowledged while an algorithm runs on the index path.
+- `index_survives_owner_move`: the new owner uses the published index and rebuilds nothing.
+- `graph_without_algorithms_has_no_index`.
+- `adjacency_counters_reported`: delta edges against scanned edges, by mode and reason.
+- `cargo deny check` passes with the `allow-git` entry.
+
+Commit `feat(graph): change-log adjacency index, graph algorithms and write-back`.
 
 ### Task 23: The GraphRAG example and harness
 
@@ -524,6 +586,8 @@ Commit `feat(graph): namespace quotas`.
 
 ### Task 26: Memory governance
 
+> **From §48 §26 (HydraDB landscape, 2026-10-16; Proposed, Q927):** count Task 22's loaded adjacency indexes and overlays as graph memory (D1063), and the result caches as node memory that is dropped first (D1066). Use the write-path statistics for estimates (D1067), and put an allocator snapshot in `/metrics` for the watchdog (D1070; verify which allocator `loams` installs).
+
 > **From Task 3 review (M4):** reopening a poisoned graph waits for every holder of its handle to drop it (`graph_reloading` until then, `a_held_poisoned_graph_answers_reloading_until_released`). A long-running statement on another thread can therefore starve the reopen indefinitely. Task 26's watchdog, which detaches runaway statements, must also bound how long a poisoned graph may stay unopened, and fail it (`GraphState::Failed`) past that.
 
 **Files:** `src/memory.rs`, `tests/limits.rs`.
@@ -536,6 +600,8 @@ Commit `feat(graph): memory limits and node budget`.
 
 ### Task 27: Observability and audit
 
+> **From Task 22 (D1064):** export `AdjacencyStats` as the `loams_graph_adjacency_*` families of §48 §26.3.
+
 **Files:** `src/metrics.rs`, `src/audit.rs`, tracing spans in handlers and the write path, `tests/observability.rs`.
 
 **Interfaces produced:** §48 §15's metric families (bounded labels), spans with fingerprints, the slow log (threshold config), audit events for admin RPCs, denials, restores and exports; Grafeo's metrics snapshot exported as `loams_graph_engine_*`.
@@ -545,6 +611,10 @@ Tests: `metric_families_present`, `labels_bounded_by_graph_quota`, `slow_log_red
 Commit `feat(graph): metrics, traces, slow log and audit`.
 
 ### Task 28: HA: standbys, failover and rolling upgrades
+
+> **From §48 §26 (HydraDB landscape, 2026-10-16; Proposed, Q927):**
+> - Work through §26.7's lease checklist (D1068). Lease expiry is judged by the authority's clock, and the holder keeps a monotonic deadline from the renewal's answer. **(verify):** whether the metastore lease uses local clocks. There is a bounded grace view (`graph.lease_grace`, 7 s), after which readiness is withdrawn. `UNAVAILABLE`/`graph_not_owner` (retry there) is distinct from fencing.
+> - Add the takeover proof and the multi-process stress harness of §26.8 (D1069, heavy tier).
 
 **Files:** `src/replica.rs` (standby promotion), `src/owner.rs`, `tests/ha.rs` (multi-node, sim and process level).
 
@@ -565,6 +635,8 @@ Tests: `restore_to_token_matches_history`, `restore_never_overwrites_live_graph`
 Commit `feat(graph): PITR restore, export and import`.
 
 ### Task 30: Deployment, dashboards, alerts and runbooks
+
+> **From §48 §26 (HydraDB landscape, 2026-10-16; Proposed, Q927):** add §26.8's object-store pause and restart harness, which checks that the alerts fire, and the disposable k3d multi-node failover on this task's chart (D1069). Both run in the heavy tier, and the k3d cluster is deleted after the run.
 
 **Files:** `deploy/helm/…` values for the `graph` role (resources, local-cache volume, PodDisruptionBudget, anti-affinity), `deploy/dashboards/graph.json`, `deploy/alerts/graph.yaml`, `docs/operations/graph-runbook.md`.
 
@@ -608,6 +680,11 @@ Commit `feat(conformance): openCypher compatibility subset (D748)`.
 
 ### Task 34: LDBC SNB-derived performance harness and gates
 
+> **From §48 §26 (HydraDB landscape, 2026-10-16; Proposed, Q927):**
+> - Measure IC13 as single pairs (`graph_shortest_path`) and as a batch (`graph_shortest_paths`, D1065).
+> - Measure expand and shortest paths over Task 22's adjacency index against the GQL path. The index path is switched on only where it wins.
+> - Gate the cost of the write-path statistics at 5 % of write throughput (D1067).
+
 **Files:** `bench/graph/ldbc/{README.md,datagen.sh,load.py,queries/*.gql,run.py,gates.toml}`, CI job `graph-bench` (nightly, SF0.1 in CI; SF1 on the reference topology weekly), results into `bench/results/graph/`.
 
 Steps: measure the baseline first on the reference topology and record it as a ruling; compare with §48 §17.2; escalate any target missed by more than 2× to the owner before tuning.
@@ -645,6 +722,8 @@ Tests: each framework's own graph-store tests at the pinned version (Task 0 of t
 Commit `feat(sdk): graph store adapters for LangChain, LlamaIndex and LightRAG`.
 
 ### Task 38: Docs
+
+> **From §48 §26 (HydraDB landscape, 2026-10-16; Proposed, Q927):** add a "limits that look like bugs" page that lists the limits users meet as surprising behaviour, each with its reason and its knob (D1070, §26.9).
 
 **Files:** the docs pages §48 §20 lists (in this repository's docs tree or `loams-cloud` per the docs owner's ruling; Task 0 records which), the limits page entries, the API reference generated from the protos.
 
@@ -2037,4 +2116,17 @@ The pattern: Grafeo's algorithms read a whole `GraphStore` and carry no weights,
 3. Fallback if the owner prefers a registry crate (no `deny.toml` change): `leiden-rs` 0.8.1 (MIT OR Apache-2.0), with `max_cluster_size` implemented in-house by re-running Leiden on any community above the cap (that is graspologic's own approach).
 4. Neither is called through Grafeo. Louvain stays unused.
 
-Decision for the owner: git dependency on `microsoft/graspologic-native` (exact GraphRAG parity, one `deny.toml` line) or `leiden-rs` from the registry (no policy change, in-house cap). This proposal recommends the first.
+Decision for the owner: git dependency on `microsoft/graspologic-native` (exact GraphRAG parity, one `deny.toml` line) or `leiden-rs` from the registry (no policy change, in-house cap). This proposal recommends the first. *Answered by R22.3.*
+
+**R22.3 Leiden comes from `microsoft/graspologic-native` (coordinator ruling, 2026-10-16, under the owner's "pick sensible defaults" rule).** R22.2's recommended default stands:
+- `network_partitions` 0.3.0 from `https://github.com/microsoft/graspologic-native`, pinned by the rev of tag `v1.3.1`, with `default-features = false`.
+- One `[sources] allow-git` entry in `deny.toml`.
+- A `connectors/licences.toml` row and a `NOTICE` entry (MIT, Microsoft's copyright).
+- `leiden-rs` 0.8.1 stays the recorded fallback if the spike fails.
+
+**R22.4 The CSR/CSC is the change-log adjacency index (owner approval, 2026-10-16; D1063, D1064; §48 §26.3).**
+- R22.0's "Task 22 builds the snapshot's CSR itself" becomes an index built from the `_graph.<gr_id>` change sets: patched incrementally from the offset it covers, or built in full from the engine as control flow.
+- It is published content-addressed under the graph's prefix, and named by an additive manifest entry advanced by the fenced CAS.
+- Readers pin `M`, use the index, and overlay `[N, M)`. They fall back to a build from the engine when the tail is trimmed or longer than `overlay_max_records`.
+- `pagerank`, `wcc` (R22.0) and `leiden` (R22.3) all run on that pinned view. Grafeo's `algos` is not called.
+- This amends D743's deferral of §07's sidecars for the adjacency index only. Expand and the table functions stay on parameterized GQL (R20.3, R21.4).
