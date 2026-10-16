@@ -13,17 +13,20 @@ import {
 import { autoUpdater } from "electron-updater";
 import { CH } from "../../shared/contracts";
 import { assertTrustedSender } from "../security/policy";
+import { readSetting, writeSetting } from "../settings";
 import { createController, type State, type UpdaterLike } from "./controller";
 import { fetchFeedFiles, manualGet, type NetRequestLike } from "./feed";
 import { verifyManifest } from "./manifest";
 import {
-	CHECK_INTERVAL_MS,
+	autoCheckEnabled,
 	channelFile,
 	decideUpdateMode,
-	firstCheckDelayMs,
 	releaseUrl,
+	UPDATE_AUTO_KEY,
 	type UpdateMode,
+	updateCheckForcedOff,
 } from "./policy";
+import { createCheckScheduler } from "./scheduler";
 import { UPDATE_FEED, UPDATE_PUBKEY_HEX } from "./pubkey";
 
 export interface UpdaterHandle {
@@ -53,6 +56,8 @@ async function sha512Base64(file: string): Promise<string> {
 }
 
 export function startUpdater(opts: {
+	/** userData/settings.json, where `update.autoCheck` lives. */
+	settingsFile: string;
 	/** Called before quitAndInstall so the engine can stop. */
 	prepareToInstall?: () => Promise<void>;
 	restartEngine?: () => Promise<void>;
@@ -63,7 +68,16 @@ export function startUpdater(opts: {
 		pubkeyHex: UPDATE_PUBKEY_HEX,
 		platform: process.platform,
 		appImage: process.env.APPIMAGE,
+		noUpdateCheckEnv: process.env.LOAMS_DESKTOP_NO_UPDATE_CHECK,
 	});
+	const forcedOff = updateCheckForcedOff(
+		process.env.LOAMS_DESKTOP_NO_UPDATE_CHECK,
+	);
+	const autoOn = (): boolean =>
+		autoCheckEnabled(
+			readSetting<unknown>(opts.settingsFile, UPDATE_AUTO_KEY, true),
+			process.env.LOAMS_DESKTOP_NO_UPDATE_CHECK,
+		);
 	if (mode === "self") {
 		autoUpdater.setFeedURL({ provider: "generic", url: UPDATE_FEED });
 		autoUpdater.allowDowngrade = false;
@@ -109,26 +123,29 @@ export function startUpdater(opts: {
 		await ctl.install();
 	});
 
-	let timers: NodeJS.Timeout[] = [];
-	const onResume = (): void => void ctl.check();
-	if (mode !== "disabled") {
-		timers.push(
-			setTimeout(() => void ctl.check(), firstCheckDelayMs(Math.random())),
-			setInterval(() => void ctl.check(), CHECK_INTERVAL_MS),
-		);
-		powerMonitor.on("resume", onResume);
-	}
+	ipcMain.handle(CH.updateAutoGet, (e) => {
+		assertTrustedSender(e);
+		return { enabled: autoOn(), locked: forcedOff };
+	});
+	ipcMain.handle(CH.updateAutoSet, (e, enabled: unknown) => {
+		assertTrustedSender(e);
+		if (typeof enabled !== "boolean" || forcedOff) return;
+		writeSetting(opts.settingsFile, UPDATE_AUTO_KEY, enabled);
+		scheduler.setEnabled(mode !== "disabled" && autoOn());
+	});
+
+	const scheduler = createCheckScheduler({
+		check: () => void ctl.check(),
+		onResume: (cb) => {
+			powerMonitor.on("resume", cb);
+			return () => void powerMonitor.removeListener("resume", cb);
+		},
+	});
+	scheduler.setEnabled(mode !== "disabled" && autoOn());
 	return {
 		state: () => ctl.state(),
 		hasVerifiedDownload: () => ctl.hasVerifiedDownload(),
 		installOnQuit: () => ctl.installOnQuit(),
-		stop: () => {
-			for (const t of timers) {
-				clearTimeout(t);
-				clearInterval(t);
-			}
-			timers = [];
-			powerMonitor.removeListener("resume", onResume);
-		},
+		stop: () => scheduler.setEnabled(false),
 	};
 }

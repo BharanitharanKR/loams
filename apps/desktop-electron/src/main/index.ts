@@ -333,6 +333,7 @@ const singleInstance = initSingleInstance({
 				},
 			});
 			updater = startUpdater({
+				settingsFile: settingsFile(),
 				prepareToInstall: async () => {
 					await engine?.stop();
 				},

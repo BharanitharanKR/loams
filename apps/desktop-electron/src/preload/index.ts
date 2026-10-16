@@ -75,6 +75,8 @@ const api: LoamsDesktopApi = {
 	update: {
 		state: () => invoke(CH.updateState),
 		check: () => invoke(CH.updateCheck),
+		autoCheck: () => invoke(CH.updateAutoGet),
+		setAutoCheck: (enabled) => invoke(CH.updateAutoSet, enabled),
 		download: () => invoke(CH.updateDownload),
 		installAndRestart: () => invoke(CH.updateInstall),
 	},

@@ -9,6 +9,21 @@ export interface ModeInput {
 	platform: NodeJS.Platform;
 	/** `process.env.APPIMAGE`: set only when running from an AppImage. */
 	appImage: string | undefined;
+	/** `LOAMS_DESKTOP_NO_UPDATE_CHECK`: when "1", updates are off entirely. */
+	noUpdateCheckEnv?: string | undefined;
+}
+
+/** `update.autoCheck` in userData/settings.json: "Check for updates automatically". */
+export const UPDATE_AUTO_KEY = "update.autoCheck";
+
+/** True when the environment forces updates off (`LOAMS_DESKTOP_NO_UPDATE_CHECK=1`). */
+export function updateCheckForcedOff(envValue: string | undefined): boolean {
+	return envValue?.trim() === "1";
+}
+
+/** The saved choice; on unless the person turned it off (only `false` counts). */
+export function autoCheckEnabled(saved: unknown, envValue?: string): boolean {
+	return !updateCheckForcedOff(envValue) && saved !== false;
 }
 
 export const FIRST_CHECK_MS = 15_000;
@@ -23,6 +38,7 @@ export const CHECK_INTERVAL_MS = 6 * 60 * 60 * 1000;
  */
 export function decideUpdateMode(i: ModeInput): UpdateMode {
 	if (!i.packaged) return "disabled";
+	if (updateCheckForcedOff(i.noUpdateCheckEnv)) return "disabled";
 	if (!/^https:\/\/|^http:\/\/(localhost|127\.0\.0\.1)[:/]/.test(i.feed))
 		return "disabled";
 	if (!/^[0-9a-fA-F]{64}$/.test(i.pubkeyHex)) return "disabled";

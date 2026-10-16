@@ -997,8 +997,13 @@ function createFakeChat(): LoamsDesktopApi['chat'] {
 /** The preview's updater: a manual-mode feed that finds v0.2.0 on "Check now". */
 function previewUpdate(): LoamsDesktopApi['update'] {
   let state: Awaited<ReturnType<LoamsDesktopApi['update']['state']>> = { phase: 'idle' };
+  let auto = true;
   return {
     state: async () => state,
+    autoCheck: async () => ({ enabled: auto, locked: false }),
+    setAutoCheck: async (enabled) => {
+      auto = enabled;
+    },
     check: async () => {
       state = { phase: 'checking' };
       await new Promise((r) => globalThis.setTimeout(r, 500));

@@ -23,6 +23,7 @@ function fake(
   init: {
     stacks?: Partial<Record<StackId, StackState>>;
     update?: Update;
+    autoLocked?: boolean;
     liveStore?: 'embedded' | 'tikv-stack';
     liveNotice?: string;
     resetAnswer?: { ok: false; code: string; message: string };
@@ -36,6 +37,7 @@ function fake(
     ...init.stacks,
   };
   let update: Update = init.update ?? { phase: 'idle' };
+  const auto = { enabled: true, locked: init.autoLocked ?? false };
   const ok = { ok: true, value: undefined } as const;
   const api = {
     version: '1.2.3',
@@ -83,6 +85,11 @@ function fake(
       check: async () => {
         calls.push('check');
         update = { phase: 'available', version: '2.0.0', mode: 'manual' };
+      },
+      autoCheck: async () => ({ enabled: auto.enabled, locked: auto.locked }),
+      setAutoCheck: async (v: boolean) => {
+        auto.enabled = v;
+        calls.push(`auto:${v}`);
       },
       download: async () => void calls.push('download'),
       installAndRestart: async () => void calls.push('install'),
@@ -230,6 +237,28 @@ describe('local stacks section', () => {
 });
 
 describe('updates section', () => {
+  it('auto_check_defaults_on_and_saves_the_choice', async () => {
+    const { api, calls } = fake();
+    render(<UpdatesSection desktop={api} />);
+    const box = (await screen.findByLabelText(
+      'Check for updates automatically',
+    )) as HTMLInputElement;
+    expect(box.checked).toBe(true);
+    fireEvent.click(box);
+    await waitFor(() => expect(calls).toContain('auto:false'));
+    expect(box.checked).toBe(false);
+  });
+
+  it('env_lock_shows_it_off_and_disabled', async () => {
+    const { api } = fake({ autoLocked: true });
+    render(<UpdatesSection desktop={api} />);
+    const box = (await screen.findByLabelText(
+      'Check for updates automatically',
+    )) as HTMLInputElement;
+    expect(box.checked).toBe(false);
+    expect(box.disabled).toBe(true);
+  });
+
   it('disabled_has_no_check', async () => {
     const { api } = fake({ update: { phase: 'disabled' } });
     render(<UpdatesSection desktop={api} />);
