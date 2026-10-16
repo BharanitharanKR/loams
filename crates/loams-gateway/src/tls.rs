@@ -94,6 +94,7 @@ impl ServerCerts {
         Ok(())
     }
 
+    /// Whether no certificate is configured (the terminate path is off).
     pub fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }

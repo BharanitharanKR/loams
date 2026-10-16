@@ -19,6 +19,7 @@ pub struct ClientHello {
 }
 
 impl ClientHello {
+    /// Whether the client offered `protocol` in ALPN.
     pub fn offers_alpn(&self, protocol: &[u8]) -> bool {
         self.alpn.iter().any(|p| p == protocol)
     }

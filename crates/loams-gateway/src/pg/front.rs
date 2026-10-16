@@ -28,34 +28,49 @@ pub const PLAINTEXT_REFUSED: &str =
 /// Why a connection ended before it was relayed. Logged, never sent.
 #[derive(Debug, thiserror::Error)]
 pub enum FrontError {
+    /// No route table is loaded yet.
     #[error("no route table loaded yet")]
     NoRoutes,
+    /// The opening or ClientHello could not be read.
     #[error(transparent)]
     Sniff(#[from] SniffError),
+    /// A plaintext `StartupMessage` (refused, D1015).
     #[error("plaintext startup refused")]
     Plaintext,
+    /// Bytes arrived before the gateway answered the request.
     #[error("data sent before the server's answer to {0}")]
     Pipelined(&'static str),
+    /// A second `GSSENCRequest`.
     #[error("a second GSSENCRequest")]
     GssTwice,
+    /// An opening that is not a Postgres packet or TLS.
     #[error("unrecognized opening")]
     Unknown,
+    /// No namespace for the SNI (or no SNI and no default namespace).
     #[error("no namespace for SNI {0:?}")]
     UnknownName(Option<String>),
+    /// Direct TLS without ALPN `postgresql`.
     #[error("direct TLS without ALPN postgresql")]
     NoAlpn,
+    /// Direct TLS while `tls_mode = "passthrough"`.
     #[error("direct TLS refused in passthrough mode")]
     DirectInPassthrough,
+    /// No configured certificate covers the name.
     #[error("no certificate for {0}")]
     NoCertificate(String),
+    /// The gateway holds no copy of PgDog's certificate (channel binding).
     #[error("namespace {0}: PgDog's certificate is not among the gateway's")]
     CertificateMismatch(String),
+    /// No PgDog of the namespace could be used.
     #[error("upstream: {0}")]
     Upstream(#[from] UpstreamError),
+    /// A TLS handshake failed.
     #[error("tls: {0}")]
     Tls(std::io::Error),
+    /// The handshake deadline passed (D1020).
     #[error("handshake timed out")]
     Timeout,
+    /// A socket error.
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }

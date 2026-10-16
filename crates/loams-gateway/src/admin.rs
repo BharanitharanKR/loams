@@ -30,6 +30,8 @@ pub async fn serve(listener: TcpListener, state: State, shutdown: impl Future<Ou
                 Ok(a) => a,
                 Err(e) => {
                     tracing::warn!(error = %e, "admin accept failed");
+                    // A persistent error (EMFILE) must not spin a core.
+                    tokio::time::sleep(std::time::Duration::from_millis(50)).await;
                     continue;
                 }
             },

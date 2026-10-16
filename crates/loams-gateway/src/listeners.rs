@@ -21,11 +21,13 @@ use crate::tls::{self, ServerCerts, TlsError};
 
 #[derive(Debug, thiserror::Error)]
 pub enum GatewayError {
+    /// A fixed listener could not be bound.
     #[error("binding {addr}: {source}")]
     Bind {
         addr: SocketAddr,
         source: std::io::Error,
     },
+    /// A certificate, key or CA file could not be loaded.
     #[error(transparent)]
     Tls(#[from] TlsError),
 }
@@ -59,6 +61,8 @@ impl Gateway {
         Self::start_with_observer(config, Arc::new(NoopObserver)).await
     }
 
+    /// [`Gateway::start`] with an observer that receives every routed
+    /// connection's open and close.
     pub async fn start_with_observer(
         config: GatewayConfig,
         observer: Arc<dyn ConnectionObserver>,
@@ -152,6 +156,7 @@ impl Gateway {
         self.pg_addr
     }
 
+    /// The admin listener's address.
     pub fn admin_addr(&self) -> SocketAddr {
         self.admin_addr
     }

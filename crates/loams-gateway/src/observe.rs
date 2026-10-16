@@ -16,7 +16,10 @@ pub enum Path {
 
 /// Sees each routed connection open and close.
 pub trait ConnectionObserver: Send + Sync + Debug {
+    /// A connection to `namespace` starts relaying over `path`.
     fn on_open(&self, _namespace: &str, _path: Path) {}
+    /// That connection ended after relaying `bytes_in` from the client and
+    /// `bytes_out` to it, `duration` after it was accepted.
     fn on_close(&self, _namespace: &str, _bytes_in: u64, _bytes_out: u64, _duration: Duration) {}
 }
 

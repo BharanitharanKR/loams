@@ -148,6 +148,13 @@ async fn changed_file_is_swapped() {
     assert!(t.by_hostname("beta.gw.pg.test").is_some());
 }
 
+/// Writes `text` over the routes file by a rename.
+fn replace(h: &common::Harness, text: &str) {
+    let tmp = h.dir.path().join("routes.toml.tmp");
+    std::fs::write(&tmp, text).unwrap();
+    std::fs::rename(&tmp, &h.routes_path).unwrap();
+}
+
 #[tokio::test]
 async fn invalid_file_keeps_old_table() {
     let (h, _pg) = harness(&common::ns("acme", "127.0.0.1:1".parse().unwrap(), None)).await;
@@ -159,18 +166,19 @@ async fn invalid_file_keeps_old_table() {
         .unwrap()
         .generation
         .clone();
-    std::fs::write(&h.routes_path, "[[pg.namespaces]]\nname = \"BAD NAME\"\n").unwrap();
+    // Each file is swapped in atomically (as pg-control writes it), so the
+    // watcher sees only whole files; 300 ms is 15 poll intervals.
+    replace(&h, "[[pg.namespaces]]\nname = \"BAD NAME\"\n");
     tokio::time::sleep(Duration::from_millis(300)).await;
     assert_eq!(
         h.gateway.routes().borrow().as_ref().unwrap().generation,
         before
     );
     // Valid, but without its generation line: refused too.
-    std::fs::write(
-        &h.routes_path,
-        common::ns("beta", "127.0.0.1:1".parse().unwrap(), None),
-    )
-    .unwrap();
+    replace(
+        &h,
+        &common::ns("beta", "127.0.0.1:1".parse().unwrap(), None),
+    );
     tokio::time::sleep(Duration::from_millis(300)).await;
     let after = h
         .gateway

@@ -399,3 +399,49 @@ async fn wildcard_certificate_selected() {
     assert!(err.to_string().contains("UnrecognisedName"), "{err}");
     assert_eq!(*pg.connections.lock().unwrap(), before);
 }
+
+#[tokio::test]
+async fn sslrequest_refusal_fails_over() {
+    // The first replica accepts TCP but answers `N`: it is skipped (never
+    // used without TLS) and the next one serves.
+    let up_ca = Ca::new("pgdog ca");
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let refusing = fake_pgdog_on(listener, &up_ca, &[WILDCARD], "refusing", b'N').await;
+    let healthy = fake_pgdog(&up_ca, &[WILDCARD], "healthy").await;
+    let routes = format!(
+        "[[pg.namespaces]]\nname = \"acme\"\nhostnames = [\"acme.gw.pg.test\"]\nupstreams = [\"{}\", \"{}\"]\n",
+        refusing.addr, healthy.addr
+    );
+    let h = start(&up_ca, &routes, Options::default()).await;
+    for _ in 0..2 {
+        let mut c = sslrequest_client(h.gateway.pg_addr(), "acme.gw.pg.test", true, &up_ca.pem)
+            .await
+            .unwrap();
+        assert_eq!(ping(&mut c).await, "healthy:ping");
+    }
+    // Ejected after the first failure: the second client went straight on.
+    assert_eq!(*refusing.connections.lock().unwrap(), 1);
+}
+
+#[tokio::test]
+async fn hung_upstream_is_skipped() {
+    // The first replica accepts TCP (the backlog) but never answers.
+    let up_ca = Ca::new("pgdog ca");
+    let hung = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let healthy = fake_pgdog(&up_ca, &[WILDCARD], "healthy").await;
+    let routes = format!(
+        "[[pg.namespaces]]\nname = \"acme\"\nhostnames = [\"acme.gw.pg.test\"]\nupstreams = [\"{}\", \"{}\"]\n",
+        hung.local_addr().unwrap(),
+        healthy.addr
+    );
+    let opts = Options {
+        handshake_timeout_ms: 5_000,
+        ..Options::default()
+    };
+    let h = start(&up_ca, &routes, opts).await;
+    let mut c = sslrequest_client(h.gateway.pg_addr(), "acme.gw.pg.test", true, &up_ca.pem)
+        .await
+        .unwrap();
+    assert_eq!(ping(&mut c).await, "healthy:ping");
+    drop(hung);
+}

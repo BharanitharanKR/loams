@@ -16,16 +16,22 @@ use crate::sniff::pg::SSL_REQUEST;
 /// How long a failed address is skipped.
 pub const EJECT_FOR: Duration = Duration::from_secs(2);
 
+/// Why no PgDog of a namespace could be used.
 #[derive(Debug, thiserror::Error)]
 pub enum UpstreamError {
+    /// No upstream host resolved to an address.
     #[error("no upstream address resolved for namespace {0}")]
     Unresolved(String),
+    /// Every address failed to connect or to negotiate TLS.
     #[error("every upstream of namespace {0} failed")]
     AllFailed(String),
+    /// PgDog answered `SSLRequest` with `N`.
     #[error("PgDog at {0} refused TLS")]
     NoTls(SocketAddr),
+    /// PgDog answered `SSLRequest` with something else.
     #[error("PgDog at {addr} answered SSLRequest with {answer:#04x}")]
     Protocol { addr: SocketAddr, answer: u8 },
+    /// A socket error.
     #[error(transparent)]
     Io(#[from] std::io::Error),
 }
@@ -114,11 +120,24 @@ pub async fn connect_pgdog(
                 continue;
             }
         };
-        ejections.clear(&addr);
+        // A replica that accepts TCP but then hangs, resets, or answers
+        // anything but `S` is ejected and the next one is tried; one that
+        // answers `N` is skipped, never used (no downgrade).
         let mut stream = stream;
-        stream.set_nodelay(true)?;
-        ssl_request(&mut stream, addr).await?;
-        return Ok((stream, addr));
+        let _ = stream.set_nodelay(true);
+        match tokio::time::timeout(connect_timeout, ssl_request(&mut stream, addr)).await {
+            Ok(Ok(())) => {
+                ejections.clear(&addr);
+                return Ok((stream, addr));
+            }
+            Ok(Err(e)) => {
+                tracing::warn!(namespace = %ns.name, %addr, error = %e, "PgDog SSLRequest failed; ejecting");
+            }
+            Err(_) => {
+                tracing::warn!(namespace = %ns.name, %addr, "PgDog SSLRequest timed out; ejecting");
+            }
+        }
+        ejections.eject(addr, Instant::now());
     }
     Err(UpstreamError::AllFailed(ns.name.clone()))
 }

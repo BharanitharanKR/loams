@@ -15,6 +15,7 @@ pub struct Prefixed<IO> {
 }
 
 impl<IO> Prefixed<IO> {
+    /// A stream that yields `prefix` before anything read from `inner`.
     pub fn new(prefix: Vec<u8>, inner: IO) -> Self {
         Self {
             prefix,
@@ -23,6 +24,7 @@ impl<IO> Prefixed<IO> {
         }
     }
 
+    /// The wrapped stream.
     pub fn get_ref(&self) -> &IO {
         &self.inner
     }
