@@ -323,7 +323,7 @@ pub(crate) fn git_router(state: GitHttp) -> Router {
 
 /// The one `404` of the listener: no detail, the same for a repository outside the token's
 /// namespace as for one that does not exist.
-fn not_found() -> Response {
+pub(crate) fn not_found() -> Response {
     (StatusCode::NOT_FOUND, "Not Found\n").into_response()
 }
 

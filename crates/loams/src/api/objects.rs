@@ -443,7 +443,8 @@ mod served {
     /// exist (404).
     pub(crate) async fn serve_object(git: &GitRuntime, route: ObjectRoute<'_>) -> HttpResponse {
         let unavailable = || text(StatusCode::SERVICE_UNAVAILABLE, "loams: try again later\n");
-        let not_found = || text(StatusCode::NOT_FOUND, "loams: not found\n");
+        // The listener's one 404, so a hidden object looks like any other absent one.
+        let not_found = crate::api::git_auth::not_found;
         if route
             .grant
             .require(route.ns, &route.record.name, GitAccess::Read)
