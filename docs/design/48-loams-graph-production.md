@@ -648,7 +648,7 @@ Before GA, on the docs site: a Graph overview (owned vs linked), a quickstart (T
 | Q678 | Fork Grafeo now, or track upstream under §19.3's trigger? Default: track upstream | Owner | GR1a Task 0 |
 | Q679 | Contribute a commit hook (change-set listener) and caller-chosen ids upstream? Default: yes, as soon as Task 9 knows what is missing | Eng | GR1b |
 | Q680 | Pursue an audited LDBC SNB run? Default: not before GA | Owner | After GA |
-| Q681 | Dangling edges in linked graphs: stub vertices (default) or skip, as §07 §7 had it? | Eng | GR1c |
+| Q681 | ~~Dangling edges in linked graphs: stub vertices (default) or skip, as §07 §7 had it?~~ **Answered by GR1 Task 18 (2026-10-16): stub vertices**, filled by the vertex's upsert and removed with their last edge | Eng | GR1c |
 | Q682 | Offer a Bolt endpoint or a `grafeo-server` companion for Neo4j-driver users? Default: no (D634 (c)) | Owner | After GA |
 | Q683 | A public graph change feed (`WatchGraph`, server streaming) and GQL procedures that call collection search? Default: Phase B | Owner | After GA |
 | Q684 | The metering units for graphs (statement CPU-seconds, stored elements, stored bytes) for `loams-platform` | Owner | Before Cloud GA |
