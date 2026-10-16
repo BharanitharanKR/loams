@@ -378,6 +378,16 @@ impl Ownership {
             .any(|node| node.node_id == me.node_id)
     }
 
+    /// Whether the rendezvous places `graph` on this node among the live graph nodes: where its
+    /// lease goes when nobody holds it (the node that applies a LINKED graph's links when its
+    /// lease is free, GR1 Task 18).
+    #[must_use]
+    pub fn prefers_me(&self, graph: GraphId) -> bool {
+        let me = self.me();
+        rendezvous(graph, &self.membership.graph_nodes())
+            .is_some_and(|node| node.node_id == me.node_id)
+    }
+
     /// The forwarder, when this node forwards.
     #[must_use]
     pub fn forwarder(&self) -> Option<&Arc<dyn Forwarder>> {
