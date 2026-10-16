@@ -624,7 +624,8 @@ async fn pipe_and_view_ddl_refusals() {
             "CREATE TABLE a (k UInt64) ENGINE = LoamsStream('s', 'CSV') SETTINGS x = 1",
             "115",
         ),
-        ("CREATE MATERIALIZED VIEW v TO t AS SELECT k FROM t", "48"),
+        // A view reads a pipe or a lake table, never the table it writes.
+        ("CREATE MATERIALIZED VIEW v TO t AS SELECT k FROM t", "36"),
     ] {
         assert_eq!(code(addr, sql).await.as_deref(), Some(want), "{sql}");
     }

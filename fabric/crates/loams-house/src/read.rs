@@ -542,18 +542,21 @@ pub async fn plan(
                         ctx.user
                     ))));
                 }
-                // A pipe is read only as its view's batch (HS1 Task 16).
-                if crate::ddl::class_of(&table.metadata) == TableClass::Pipe {
-                    match ctx.batch {
-                        Some(batch) if batch.database == database && batch.name == name => {
-                            if !batch_views.contains(&batch.view) {
-                                batch_views.push(batch.view.clone());
-                            }
-                            databases.insert(database);
-                            continue;
-                        }
-                        _ => return Err(crate::pipes::direct_read(&database, &name)),
+                // A materialized view's source reads its block: a pipe's
+                // records (HS1 Task 16) or the files one commit added (Task
+                // 17). A pipe is read no other way.
+                if let Some(batch) = ctx.batch
+                    && batch.database == database
+                    && batch.name == name
+                {
+                    if !batch_views.contains(&batch.view) {
+                        batch_views.push(batch.view.clone());
                     }
+                    databases.insert(database);
+                    continue;
+                }
+                if crate::ddl::class_of(&table.metadata) == TableClass::Pipe {
+                    return Err(crate::pipes::direct_read(&database, &name));
                 }
                 let fin = final_all || refs.finals.iter().any(|f| f == printed);
                 add(database, name, table, fin);
