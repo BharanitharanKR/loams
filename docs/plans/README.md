@@ -219,7 +219,7 @@ Design reference: [56 Loams Sandbox](../design/56-loams-sandbox.md) (D990–D100
 
 ## Track GW: the Loams gateway
 
-Design reference: [57 Loams Gateway](../design/57-loams-gateway.md) (D1010–D1024, Q895–Q904). The owner's decision of 2026-10-16: build a Rust gateway crate instead of adding Envoy or Traefik. Its first job is PG2 Task 22's SNI listener (amends D708); the API, LLM and MCP modules come later on the same core. (The name GW1 was last used for the protocol gateway's plans, which moved to `loams-platform` with §34; this track is unrelated to them.)
+Design reference: [57 Loams Gateway](../design/57-loams-gateway.md) (D1010–D1024, Q895–Q905). The owner's decision of 2026-10-16: build a Rust gateway crate instead of adding Envoy or Traefik. Its first job is PG2 Task 22's SNI listener (amends D708); the API, LLM and MCP modules come later on the same core. (The name GW1 was last used for the protocol gateway's plans, which moved to `loams-platform` with §34; this track is unrelated to them.)
 
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|

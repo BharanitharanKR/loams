@@ -9,7 +9,7 @@
 >
 > Where this plan gives exact names, paths, ports, flags or defaults, use them verbatim. Where it gives a contract and named tests, write the code to that contract, and record any deviation in "Rulings made during execution" at the end of this file.
 >
-> **Status: Planned** (2026-10-16). Track GW, design [§57](../design/57-loams-gateway.md) (D1010–D1024, Q895–Q904). The owner's decision of 2026-10-16 fixes one thing: Loams builds its own gateway crate instead of deploying Envoy or Traefik, and its first job is PG2 Task 22's SNI listener. This plan builds the Postgres front door (GW1a), wires it for PG2 Task 22 (GW1b) and hardens it (GW1c). The `http`, `llm` and `mcp` modules (§57 §12) get plans of their own. This GW1 is unrelated to the protocol gateway's old plans, which moved to `loams-platform` (D1024).
+> **Status: Planned** (2026-10-16). Track GW, design [§57](../design/57-loams-gateway.md) (D1010–D1024, Q895–Q905). The owner's decision of 2026-10-16 fixes one thing: Loams builds its own gateway crate instead of deploying Envoy or Traefik, and its first job is PG2 Task 22's SNI listener. This plan builds the Postgres front door (GW1a), wires it for PG2 Task 22 (GW1b) and hardens it (GW1c). The `http`, `llm` and `mcp` modules (§57 §12) get plans of their own. This GW1 is unrelated to the protocol gateway's old plans, which moved to `loams-platform` (D1024).
 
 **Goal:** a client of `<ns>.<region>.pg.<base-domain>` reaches that namespace's PgDog through one regional listener, whether it negotiates TLS with `SSLRequest` (spliced, TLS end to end to PgDog) or directly (`sslnegotiation=direct`, terminated and re-encrypted); a client without SNI reaches it on the namespace's dedicated port; plaintext is refused; routes follow `pg-control`'s records without a restart.
 
@@ -185,9 +185,9 @@ Commit `feat(gateway): postgres sniffing, refusals and the TLS splice`.
 
 **Files:** `src/tls.rs`, `src/pg/front.rs`, `tests/pg_front.rs`.
 
-**Contract:** §57 §7.2 step 3 and §7.3. `tls::SniResolver` picks a certificate by exact name or one wildcard label; the server config offers ALPN `postgresql` only. The upstream client config trusts `upstream_tls.ca` and verifies `upstream_server_name` (default the namespace's first hostname). `tls_mode`: `auto` (default, Q903), `terminate` (also for `SSLRequest`), `passthrough` (direct refused with `no_application_protocol`). A config with `auto` or `terminate` and no certificate fails at start.
+**Contract:** §57 §7.2 step 3 and §7.3. A name no configured certificate covers (exact, or one wildcard label) is refused before PgDog is dialled. PgDog is reached **first**: the upstream client config trusts `upstream_tls.ca` and verifies `upstream_server_name` (default the namespace's first hostname). The client's TLS is then accepted with the configured certificate whose leaf is byte-identical to the one PgDog presented (SCRAM-SHA-256-PLUS binds to it), offering ALPN `postgresql` only; with no such copy the client gets `internal_error`. `tls_mode`: `auto` (default, Q903), `terminate` (also for `SSLRequest`), `passthrough` (direct refused with `no_application_protocol`). A config with `auto` or `terminate` and no certificate fails at start.
 
-Tests: `direct_tls_terminated_and_reencrypted`, `direct_without_alpn_refused`, `upstream_certificate_verified` (an upstream with a certificate from another CA is refused), `terminate_mode_terminates_sslrequest`, `passthrough_mode_refuses_direct`, `wildcard_certificate_selected`.
+Tests: `direct_tls_terminated_and_reencrypted`, `direct_without_alpn_refused`, `upstream_certificate_verified` (an upstream with a certificate from another CA is refused), `terminate_refused_without_pgdog_certificate`, `terminate_mode_terminates_sslrequest`, `passthrough_mode_refuses_direct`, `wildcard_certificate_selected`.
 
 Commit `feat(gateway): direct tls terminated with alpn postgresql`.
 
@@ -205,7 +205,7 @@ Commit `feat(gateway): dedicated namespace ports reconciled on reload`.
 
 **Files:** `tests/it_pgdog.rs`, `tests/common/mod.rs`, `.github/workflows/gateway.yml`.
 
-**Contract:** a real PgDog (the pin in `deploy/pgdog/compose.yaml`) with TLS (`tls_certificate`, `tls_private_key`, `tls_client_required = true`) and a `postgres:17.11` backend, behind an in-process gateway on random ports. Certificates from `rcgen`: one CA, PgDog's certificate for `*.gw.pg.test`, the gateway's for the same names. libpq 17's `psql` (from the `postgres:17.11` image, host network) is the client, with `hostaddr=127.0.0.1` and `host=acme.gw.pg.test`.
+**Contract:** a real PgDog (the pin in `deploy/pgdog/compose.yaml`) with TLS (`tls_certificate`, `tls_private_key`, `tls_client_required = true`) and a `postgres:17.11` backend, behind an in-process gateway on random ports. Certificates from `rcgen`: one CA and one certificate for `*.gw.pg.test`, held by PgDog and, as a copy, by the gateway (§57 §7.3). Both paths run with `channel_binding=require`. libpq 17's `psql` (from the `postgres:17.11` image, host network) is the client, with `hostaddr=127.0.0.1` and `host=acme.gw.pg.test`.
 
 Tests (all `#[ignore]`; `IT_CONTAINER_ENGINE` is `docker` by default):
 - `it_sslrequest_verify_full`: `sslmode=verify-full`, default negotiation; spliced.
