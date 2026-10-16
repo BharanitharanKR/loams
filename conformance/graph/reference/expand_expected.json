@@ -345,6 +345,30 @@
     2
    ]
   },
+  "degree_both": [
+   {
+    "degree": 16,
+    "key": "e05"
+   },
+   {
+    "degree": 10,
+    "key": "e03"
+   },
+   {
+    "degree": 7,
+    "key": "e00"
+   }
+  ],
+  "degree_labelled": [
+   {
+    "degree": 1,
+    "key": "e00"
+   },
+   {
+    "degree": 3,
+    "key": 101
+   }
+  ],
   "edge_filter": {
    "reached": [
     {
@@ -763,6 +787,198 @@
     4
    ]
   },
+  "neighbors_both": [
+   {
+    "direction": "out",
+    "edge": "r056",
+    "edge_type": "KNOWS",
+    "key": "e03",
+    "other_key": "e03",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r006",
+    "edge_type": "RELATED",
+    "key": "e03",
+    "other_key": "e03",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r012",
+    "edge_type": "RELATED",
+    "key": "e03",
+    "other_key": "e03",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r056",
+    "edge_type": "KNOWS",
+    "key": "e03",
+    "other_key": "e03",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r048",
+    "edge_type": "KNOWS",
+    "key": "e03",
+    "other_key": "e05",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r027",
+    "edge_type": "MENTIONS",
+    "key": "e03",
+    "other_key": 100,
+    "other_label": "chunk"
+   },
+   {
+    "direction": "in",
+    "edge": "r044",
+    "edge_type": "MENTIONS",
+    "key": "e03",
+    "other_key": 105,
+    "other_label": "chunk"
+   },
+   {
+    "direction": "in",
+    "edge": "r009",
+    "edge_type": "RELATED",
+    "key": "e03",
+    "other_key": "e00",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r006",
+    "edge_type": "RELATED",
+    "key": "e03",
+    "other_key": "e03",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r012",
+    "edge_type": "RELATED",
+    "key": "e03",
+    "other_key": "e03",
+    "other_label": "entity"
+   }
+  ],
+  "neighbors_filtered": [
+   {
+    "direction": "in",
+    "edge": "r002",
+    "edge_type": "RELATED",
+    "key": "e04",
+    "other_key": "e02",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r026",
+    "edge_type": "RELATED",
+    "key": "e04",
+    "other_key": "e10",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r019",
+    "edge_type": "RELATED",
+    "key": "e08",
+    "other_key": "e00",
+    "other_label": "entity"
+   }
+  ],
+  "neighbors_out_types": [
+   {
+    "direction": "out",
+    "edge": "r045",
+    "edge_type": "KNOWS",
+    "key": "e05",
+    "other_key": "e00",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r047",
+    "edge_type": "KNOWS",
+    "key": "e05",
+    "other_key": "e02",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r048",
+    "edge_type": "KNOWS",
+    "key": "e05",
+    "other_key": "e03",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r049",
+    "edge_type": "KNOWS",
+    "key": "e05",
+    "other_key": "e04",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r050",
+    "edge_type": "KNOWS",
+    "key": "e05",
+    "other_key": "e06",
+    "other_label": "entity"
+   }
+  ],
+  "neighbors_shared_key": [
+   {
+    "direction": "out",
+    "edge": "r059",
+    "edge_type": "MENTIONS",
+    "key": "e00",
+    "other_key": "e04",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r009",
+    "edge_type": "RELATED",
+    "key": "e00",
+    "other_key": "e03",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r019",
+    "edge_type": "RELATED",
+    "key": "e00",
+    "other_key": "e08",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r021",
+    "edge_type": "RELATED",
+    "key": "e00",
+    "other_key": "e10",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r023",
+    "edge_type": "RELATED",
+    "key": "e00",
+    "other_key": "e10",
+    "other_label": "entity"
+   }
+  ],
   "out_one_hop": {
    "reached": [
     {
@@ -806,6 +1022,79 @@
     1
    ]
   },
+  "path_bounded": [],
+  "path_chunk_to_entity": [
+   {
+    "edge": null,
+    "edge_type": null,
+    "key": 100,
+    "label": "chunk",
+    "step": 0
+   },
+   {
+    "edge": "r028",
+    "edge_type": "MENTIONS",
+    "key": "e11",
+    "label": "entity",
+    "step": 1
+   }
+  ],
+  "path_none": [],
+  "path_out": [
+   {
+    "edge": null,
+    "edge_type": null,
+    "key": "e02",
+    "label": "entity",
+    "step": 0
+   },
+   {
+    "edge": "r015",
+    "edge_type": "RELATED",
+    "key": "e10",
+    "label": "entity",
+    "step": 1
+   },
+   {
+    "edge": "r013",
+    "edge_type": "RELATED",
+    "key": "e09",
+    "label": "entity",
+    "step": 2
+   }
+  ],
+  "path_self": [
+   {
+    "edge": null,
+    "edge_type": null,
+    "key": "e06",
+    "label": "entity",
+    "step": 0
+   }
+  ],
+  "path_two_hops": [
+   {
+    "edge": null,
+    "edge_type": null,
+    "key": "e02",
+    "label": "entity",
+    "step": 0
+   },
+   {
+    "edge": "r015",
+    "edge_type": "RELATED",
+    "key": "e10",
+    "label": "entity",
+    "step": 1
+   },
+   {
+    "edge": "r013",
+    "edge_type": "RELATED",
+    "key": "e09",
+    "label": "entity",
+    "step": 2
+   }
+  ],
   "range_filter": {
    "reached": [
     {
@@ -1441,6 +1730,30 @@
    ],
    "skipped": []
   },
+  "degree_both": [
+   {
+    "degree": 18,
+    "key": "e05"
+   },
+   {
+    "degree": 10,
+    "key": "e03"
+   },
+   {
+    "degree": 8,
+    "key": "e00"
+   }
+  ],
+  "degree_labelled": [
+   {
+    "degree": 1,
+    "key": "e00"
+   },
+   {
+    "degree": 3,
+    "key": 101
+   }
+  ],
   "edge_filter": {
    "reached": [
     {
@@ -2090,6 +2403,294 @@
     4
    ]
   },
+  "neighbors_both": [
+   {
+    "direction": "out",
+    "edge": "r056",
+    "edge_type": "KNOWS",
+    "key": "e03",
+    "other_key": "e03",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r006",
+    "edge_type": "RELATED",
+    "key": "e03",
+    "other_key": "e03",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r012",
+    "edge_type": "RELATED",
+    "key": "e03",
+    "other_key": "e03",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r056",
+    "edge_type": "KNOWS",
+    "key": "e03",
+    "other_key": "e03",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r048",
+    "edge_type": "KNOWS",
+    "key": "e03",
+    "other_key": "e05",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r027",
+    "edge_type": "MENTIONS",
+    "key": "e03",
+    "other_key": 100,
+    "other_label": "chunk"
+   },
+   {
+    "direction": "in",
+    "edge": "r044",
+    "edge_type": "MENTIONS",
+    "key": "e03",
+    "other_key": 105,
+    "other_label": "chunk"
+   },
+   {
+    "direction": "in",
+    "edge": "r009",
+    "edge_type": "RELATED",
+    "key": "e03",
+    "other_key": "e00",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r006",
+    "edge_type": "RELATED",
+    "key": "e03",
+    "other_key": "e03",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r012",
+    "edge_type": "RELATED",
+    "key": "e03",
+    "other_key": "e03",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r057",
+    "edge_type": "KNOWS",
+    "key": "e01",
+    "other_key": "e02",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r058",
+    "edge_type": "KNOWS",
+    "key": "e01",
+    "other_key": "e02",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r025",
+    "edge_type": "RELATED",
+    "key": "e01",
+    "other_key": "e01",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r003",
+    "edge_type": "RELATED",
+    "key": "e01",
+    "other_key": "e05",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r017",
+    "edge_type": "RELATED",
+    "key": "e01",
+    "other_key": "e11",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r046",
+    "edge_type": "KNOWS",
+    "key": "e01",
+    "other_key": "e05",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r041",
+    "edge_type": "MENTIONS",
+    "key": "e01",
+    "other_key": 104,
+    "other_label": "chunk"
+   },
+   {
+    "direction": "in",
+    "edge": "r043",
+    "edge_type": "MENTIONS",
+    "key": "e01",
+    "other_key": 105,
+    "other_label": "chunk"
+   },
+   {
+    "direction": "in",
+    "edge": "r025",
+    "edge_type": "RELATED",
+    "key": "e01",
+    "other_key": "e01",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r020",
+    "edge_type": "RELATED",
+    "key": "e01",
+    "other_key": "e02",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r011",
+    "edge_type": "RELATED",
+    "key": "e01",
+    "other_key": "e09",
+    "other_label": "entity"
+   }
+  ],
+  "neighbors_filtered": [
+   {
+    "direction": "in",
+    "edge": "r002",
+    "edge_type": "RELATED",
+    "key": "e04",
+    "other_key": "e02",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r026",
+    "edge_type": "RELATED",
+    "key": "e04",
+    "other_key": "e10",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r010",
+    "edge_type": "RELATED",
+    "key": "e04",
+    "other_key": "e11",
+    "other_label": "entity"
+   },
+   {
+    "direction": "in",
+    "edge": "r019",
+    "edge_type": "RELATED",
+    "key": "e08",
+    "other_key": "e00",
+    "other_label": "entity"
+   }
+  ],
+  "neighbors_out_types": [
+   {
+    "direction": "out",
+    "edge": "r045",
+    "edge_type": "KNOWS",
+    "key": "e05",
+    "other_key": "e00",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r046",
+    "edge_type": "KNOWS",
+    "key": "e05",
+    "other_key": "e01",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r047",
+    "edge_type": "KNOWS",
+    "key": "e05",
+    "other_key": "e02",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r048",
+    "edge_type": "KNOWS",
+    "key": "e05",
+    "other_key": "e03",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r049",
+    "edge_type": "KNOWS",
+    "key": "e05",
+    "other_key": "e04",
+    "other_label": "entity"
+   }
+  ],
+  "neighbors_shared_key": [
+   {
+    "direction": "out",
+    "edge": "r059",
+    "edge_type": "MENTIONS",
+    "key": "e00",
+    "other_key": "e04",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r009",
+    "edge_type": "RELATED",
+    "key": "e00",
+    "other_key": "e03",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r019",
+    "edge_type": "RELATED",
+    "key": "e00",
+    "other_key": "e08",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r021",
+    "edge_type": "RELATED",
+    "key": "e00",
+    "other_key": "e10",
+    "other_label": "entity"
+   },
+   {
+    "direction": "out",
+    "edge": "r023",
+    "edge_type": "RELATED",
+    "key": "e00",
+    "other_key": "e10",
+    "other_label": "entity"
+   }
+  ],
   "out_one_hop": {
    "reached": [
     {
@@ -2158,6 +2759,79 @@
    ],
    "skipped": []
   },
+  "path_bounded": [],
+  "path_chunk_to_entity": [
+   {
+    "edge": null,
+    "edge_type": null,
+    "key": 100,
+    "label": "chunk",
+    "step": 0
+   },
+   {
+    "edge": "r028",
+    "edge_type": "MENTIONS",
+    "key": "e11",
+    "label": "entity",
+    "step": 1
+   }
+  ],
+  "path_none": [],
+  "path_out": [
+   {
+    "edge": null,
+    "edge_type": null,
+    "key": "e02",
+    "label": "entity",
+    "step": 0
+   },
+   {
+    "edge": "r015",
+    "edge_type": "RELATED",
+    "key": "e10",
+    "label": "entity",
+    "step": 1
+   },
+   {
+    "edge": "r013",
+    "edge_type": "RELATED",
+    "key": "e09",
+    "label": "entity",
+    "step": 2
+   }
+  ],
+  "path_self": [
+   {
+    "edge": null,
+    "edge_type": null,
+    "key": "e06",
+    "label": "entity",
+    "step": 0
+   }
+  ],
+  "path_two_hops": [
+   {
+    "edge": null,
+    "edge_type": null,
+    "key": "e02",
+    "label": "entity",
+    "step": 0
+   },
+   {
+    "edge": "r015",
+    "edge_type": "RELATED",
+    "key": "e10",
+    "label": "entity",
+    "step": 1
+   },
+   {
+    "edge": "r013",
+    "edge_type": "RELATED",
+    "key": "e09",
+    "label": "entity",
+    "step": 2
+   }
+  ],
   "range_filter": {
    "reached": [
     {

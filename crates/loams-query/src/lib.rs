@@ -32,6 +32,7 @@ pub mod expand;
 pub mod filter_write;
 pub mod flight;
 pub mod flight_ingest;
+pub mod graph;
 pub mod hot;
 pub mod ir;
 pub mod json;

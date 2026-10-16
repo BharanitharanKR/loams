@@ -131,6 +131,8 @@ pub struct CollectionService {
     /// The graphs a search's `expand` runs on (GR1 Task 20): Loams Graph's, when the server
     /// runs it.
     pub(crate) graph: RwLock<Option<Arc<dyn crate::expand::GraphExpander>>>,
+    /// The graphs the graph table functions read (GR1 Task 21).
+    pub(crate) graph_tables: RwLock<Option<Arc<dyn crate::graph::GraphTables>>>,
     /// The service itself, for the SQL catalog of Task 10.
     pub(crate) this: Weak<CollectionService>,
 }
@@ -244,6 +246,7 @@ impl CollectionService {
             hot: RwLock::new(Arc::new(NoHotTier)),
             placement: RwLock::new((Arc::new(LocalOnly), Arc::new(NoRemoteReads))),
             graph: RwLock::new(None),
+            graph_tables: RwLock::new(None),
             ctx,
             writer,
             config,
@@ -254,6 +257,30 @@ impl CollectionService {
     /// The graphs a search's `expand` runs on (GR1 Task 20).
     pub fn set_graph_expander(&self, expander: Arc<dyn crate::expand::GraphExpander>) {
         *self.graph.write().unwrap_or_else(PoisonError::into_inner) = Some(expander);
+    }
+
+    /// The graphs the graph table functions read (GR1 Task 21).
+    pub fn set_graph_tables(&self, tables: Arc<dyn crate::graph::GraphTables>) {
+        *self
+            .graph_tables
+            .write()
+            .unwrap_or_else(PoisonError::into_inner) = Some(tables);
+    }
+
+    /// The graph expander, when the server runs graphs.
+    pub(crate) fn graph_expander(&self) -> Option<Arc<dyn crate::expand::GraphExpander>> {
+        self.graph
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
+    }
+
+    /// The graph table functions' backend, when the server runs graphs.
+    pub(crate) fn graph_tables(&self) -> Option<Arc<dyn crate::graph::GraphTables>> {
+        self.graph_tables
+            .read()
+            .unwrap_or_else(PoisonError::into_inner)
+            .clone()
     }
 
     pub fn set_hot_tier(&self, hot: Arc<dyn HotTier>) {

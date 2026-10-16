@@ -6,5 +6,6 @@
 
 pub mod expand;
 pub mod filter;
+pub mod udtf;
 
 pub use expand::LoamsGraphExpander;

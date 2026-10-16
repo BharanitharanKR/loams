@@ -60,7 +60,7 @@ impl LoamsGraphExpander {
 }
 
 /// The edge pattern of a direction.
-fn arrow(direction: ExpandDirection) -> &'static str {
+pub(super) fn arrow(direction: ExpandDirection) -> &'static str {
     match direction {
         ExpandDirection::Out => "-[e]->",
         ExpandDirection::In => "<-[e]-",
@@ -69,17 +69,17 @@ fn arrow(direction: ExpandDirection) -> &'static str {
 }
 
 /// A key as a property value: a `u64` that fits as an integer, a UUID hyphenated, a string.
-fn key_value(pk: &PrimaryKey) -> Value {
+pub(super) fn key_value(pk: &PrimaryKey) -> Value {
     crate::link::Key::of_pk(pk).value()
 }
 
 /// A key's identity as a map key (`Value` is neither `Hash` nor `Ord`).
-fn ident(value: &Value) -> String {
+pub(super) fn ident(value: &Value) -> String {
     format!("{value:?}")
 }
 
 /// A property value as a key: a non-negative integer, else its text.
-fn primary_key(value: &Value) -> Option<PrimaryKey> {
+pub(super) fn primary_key(value: &Value) -> Option<PrimaryKey> {
     match value {
         Value::Int64(n) => {
             Some(u64::try_from(*n).map_or_else(|_| PrimaryKey::Str(n.to_string()), PrimaryKey::U64))
@@ -90,7 +90,7 @@ fn primary_key(value: &Value) -> Option<PrimaryKey> {
 }
 
 /// A property map as JSON, for the filters.
-fn json_props(value: &Value) -> Map<String, serde_json::Value> {
+pub(super) fn json_props(value: &Value) -> Map<String, serde_json::Value> {
     match value {
         Value::Map(map) => map
             .iter()
@@ -114,14 +114,14 @@ fn json(value: &Value) -> serde_json::Value {
     }
 }
 
-fn prop<'a>(props: &'a Value, name: &str) -> Option<&'a Value> {
+pub(super) fn prop<'a>(props: &'a Value, name: &str) -> Option<&'a Value> {
     match props {
         Value::Map(map) => map.iter().find(|(k, _)| k.as_str() == name).map(|(_, v)| v),
         _ => None,
     }
 }
 
-fn first_label(labels: &Value) -> Option<String> {
+pub(super) fn first_label(labels: &Value) -> Option<String> {
     match labels {
         Value::List(items) => items.iter().find_map(|v| match v {
             Value::String(s) => Some(s.to_string()),
@@ -131,7 +131,7 @@ fn first_label(labels: &Value) -> Option<String> {
     }
 }
 
-fn graph_error(err: &ConnectError, graph: &str) -> ServiceError {
+pub(super) fn graph_error(err: &ConnectError, graph: &str) -> ServiceError {
     let message = err
         .message
         .clone()
@@ -153,6 +153,31 @@ fn graph_error(err: &ConnectError, graph: &str) -> ServiceError {
         )),
         _ => ServiceError::Internal(format!("expand on graph {graph}: {message}")),
     }
+}
+
+/// An edge's key: its `_key`, else its engine id.
+pub(super) fn edge_pk(props: &Value, id: &Value) -> PrimaryKey {
+    prop(props, crate::link::KEY_PROPERTY)
+        .and_then(primary_key)
+        .or_else(|| primary_key(id))
+        .unwrap_or_else(|| PrimaryKey::Str(String::new()))
+}
+
+/// A vertex from its labels and properties: its label, its `_key`, its key as a document id
+/// (`_pk` when a field keys it) and its collection; `None` without a `_key`.
+pub(super) fn vertex_of(
+    labels: &Value,
+    props: &Value,
+) -> Option<(String, Value, PrimaryKey, Option<String>)> {
+    let key = prop(props, crate::link::KEY_PROPERTY)?.clone();
+    let pk = prop(props, crate::link::PK_PROPERTY)
+        .and_then(primary_key)
+        .or_else(|| primary_key(&key))?;
+    let collection = match prop(props, crate::link::COLLECTION_PROPERTY) {
+        Some(Value::String(c)) => Some(c.to_string()),
+        _ => None,
+    };
+    Some((first_label(labels)?, key, pk, collection))
 }
 
 /// One reached vertex while a seed is expanded: the identity and the path kept.
@@ -180,13 +205,13 @@ impl Candidate {
 }
 
 /// The rows a statement answered, with the graph state it read.
-struct Answer {
-    rows: Vec<Vec<Value>>,
-    token: String,
+pub(super) struct Answer {
+    pub(super) rows: Vec<Vec<Value>>,
+    pub(super) token: String,
 }
 
 impl LoamsGraphExpander {
-    async fn run(
+    pub(super) async fn run(
         &self,
         namespace: &str,
         graph: &str,
@@ -241,7 +266,7 @@ impl LoamsGraphExpander {
 }
 
 /// The clauses every hop statement shares: the seed or frontier label, the edge types.
-fn clauses(label: bool, types: bool) -> String {
+pub(super) fn clauses(label: bool, types: bool) -> String {
     let mut out = String::new();
     if label {
         out.push_str(" AND $label IN labels(s)");
@@ -340,26 +365,7 @@ impl GraphExpander for LoamsGraphExpander {
                 .as_ref()
                 .is_none_or(|q| filter::matches(q, &json_props(props)))
         };
-        let edge_pk = |props: &Value, id: &Value| -> PrimaryKey {
-            prop(props, crate::link::KEY_PROPERTY)
-                .and_then(primary_key)
-                .or_else(|| primary_key(id))
-                .unwrap_or_else(|| PrimaryKey::Str(String::new()))
-        };
-        // A reached vertex from its labels and properties, or `None` without a key.
-        let reached = |labels: &Value,
-                       props: &Value|
-         -> Option<(String, Value, PrimaryKey, Option<String>)> {
-            let key = prop(props, crate::link::KEY_PROPERTY)?.clone();
-            let pk = prop(props, crate::link::PK_PROPERTY)
-                .and_then(primary_key)
-                .or_else(|| primary_key(&key))?;
-            let collection = match prop(props, crate::link::COLLECTION_PROPERTY) {
-                Some(Value::String(c)) => Some(c.to_string()),
-                _ => None,
-            };
-            Some((first_label(labels)?, key, pk, collection))
-        };
+        let reached = vertex_of;
         // 2. The first hop from every seed vertex.
         let mut params = base.clone();
         params[0] = ("seeds", Value::List(existing.clone().into()));

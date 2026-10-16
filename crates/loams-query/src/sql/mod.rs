@@ -7,6 +7,7 @@
 mod catalog;
 mod exprs;
 pub mod graph_ddl;
+pub mod graph_udtf;
 mod json_rows;
 mod provider;
 mod udtf;
@@ -140,6 +141,18 @@ pub(crate) fn context(
     );
     ctx.register_udtf("rrf", Arc::new(RrfFunction::new(scope.clone())));
     ctx.register_udtf("rerank", Arc::new(RerankFunction));
+    // The graph table functions (GR1 Task 21), answered by Loams Graph when the server runs it.
+    for function in [
+        graph_udtf::GraphFunction::Expand,
+        graph_udtf::GraphFunction::Neighbors,
+        graph_udtf::GraphFunction::Degree,
+        graph_udtf::GraphFunction::ShortestPath,
+    ] {
+        ctx.register_udtf(
+            function.name(),
+            Arc::new(graph_udtf::GraphTableFunction::new(scope.clone(), function)),
+        );
+    }
     for name in udtf::DESCRIPTOR_FUNCTIONS {
         ctx.register_udf(ScalarUDF::new_from_impl(RetrieverDescriptorUdf::new(name)));
     }
