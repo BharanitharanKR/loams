@@ -242,6 +242,8 @@ struct Inner {
     running: Mutex<HashMap<String, Slot>>,
     stop: CancellationToken,
     background: Mutex<Vec<JoinHandle<()>>>,
+    /// Verifies app end users' tokens (LV1 plan Task 16).
+    end_users: crate::auth::EndUsers,
 }
 
 impl Engines {
@@ -276,6 +278,7 @@ impl Engines {
                 running: Mutex::new(running),
                 stop,
                 background: Mutex::new(Vec::new()),
+                end_users: crate::auth::EndUsers::default(),
             }),
         };
         let tasks = vec![
@@ -330,21 +333,26 @@ impl Engines {
     /// started when it does not run here yet. Refused for an unknown app
     /// (`NOT_FOUND`) and a disabled or deleted one (`live_app_disabled`).
     pub async fn resolve(&self, app: Option<&str>) -> Result<Arc<AppRuntime>, LiveError> {
-        self.resolve_as(&crate::auth::Caller::unauthenticated(), app)
+        self.resolve_as(crate::auth::Caller::unauthenticated(), None, app)
             .await
+            .map(|(runtime, _)| runtime)
     }
 
     /// [`resolve`](Self::resolve) for `caller` (LV1 plan Task 15): without
     /// the header, a credential bound to an environment addresses the app
     /// of that environment; and the app fence ([`authz::fence`]) is checked
-    /// before the app's engine starts.
+    /// before the app's engine starts. Then (Task 16) the caller is
+    /// [identified](crate::auth::identify) in the app with the request's
+    /// bearer JWT, against the app's current trusted issuers: the caller
+    /// returned beside the app is who the call runs as.
     ///
     /// [`authz::fence`]: crate::authz::fence
     pub async fn resolve_as(
         &self,
-        caller: &crate::auth::Caller,
+        caller: crate::auth::Caller,
+        bearer: Option<&str>,
         app: Option<&str>,
-    ) -> Result<Arc<AppRuntime>, LiveError> {
+    ) -> Result<(Arc<AppRuntime>, crate::auth::Caller), LiveError> {
         let record = match (app, &caller.environment) {
             (None, Some(env)) => {
                 self.inner
@@ -365,7 +373,7 @@ impl Engines {
                     .ok_or_else(|| LiveError::NotFound(format!("no Live app is named {name}")))?
             }
         };
-        crate::authz::fence(caller, &record)?;
+        crate::authz::fence(&caller, &record)?;
         let name = record.name.clone();
         let name = name.as_str();
         match record.state {
@@ -377,6 +385,7 @@ impl Engines {
                 )));
             }
         }
+        let caller = crate::auth::identify(&self.inner.end_users, caller, bearer, &record).await?;
         let slot = self
             .running_map()
             .entry(name.to_string())
@@ -395,7 +404,7 @@ impl Engines {
             .await?
             .clone();
         runtime.touch();
-        Ok(runtime)
+        Ok((runtime, caller))
     }
 
     /// Stops the engine of `name` on this node, if it runs (never the

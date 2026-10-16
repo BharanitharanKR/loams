@@ -69,6 +69,16 @@ pub(crate) async fn caller(
     if let Some(principal) = request.extensions().get::<crate::auth::Principal>() {
         let caller = live_caller(principal);
         request.extensions_mut().insert(caller);
+    } else if request
+        .extensions()
+        .get::<crate::auth::layer::LeftToApp>()
+        .is_some()
+    {
+        // LV1 plan Task 16: no engine principal; Live identifies the app's
+        // end user (or an anonymous caller) itself.
+        request
+            .extensions_mut()
+            .insert(loams_live::auth::Caller::anonymous());
     }
     next.run(request).await
 }

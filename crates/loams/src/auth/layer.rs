@@ -56,6 +56,21 @@ pub const MAIN_PUBLIC_PATHS: &[&str] = &[
     "/loams.auth.v1.AuthService/DeleteSession",
 ];
 
+/// The path prefixes whose callers may be an app's own end users rather
+/// than this engine's principals (LV1 plan Task 16, design §45 §5.3):
+/// Loams Live's `LiveService`. A request on them that the layer cannot admit
+/// only because it has no credential or carries a JWT from an issuer (or for
+/// an audience) the engine does not take is let through without a
+/// [`Principal`](super::Principal), marked [`LeftToApp`]; Live verifies it
+/// against the addressed app's trusted issuers, or admits it anonymously
+/// where the app allows that, and refuses it otherwise.
+pub const APP_END_USER_PATHS: &[&str] = &["/loams.live.v1.LiveService/"];
+
+/// The extension of a request the layer left to the addressed app's own
+/// authentication ([`APP_END_USER_PATHS`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LeftToApp;
+
 /// The one cookie-authenticated RPC that needs no CSRF token: it is a read,
 /// and its answer is how the console learns the token.
 const GET_SESSION: &str = "/loams.auth.v1.AuthService/GetSession";
@@ -105,6 +120,9 @@ pub struct AuthLayerState {
     public_paths: &'static [&'static str],
     /// The `tailscale serve` target: Tailscale identity headers count.
     trust_tailscale: bool,
+    /// Path prefixes left to an app's own authentication when the engine
+    /// cannot admit the caller ([`APP_END_USER_PATHS`]).
+    app_end_user_paths: &'static [&'static str],
 }
 
 impl AuthLayerState {
@@ -113,6 +131,7 @@ impl AuthLayerState {
             auth,
             public_paths,
             trust_tailscale: false,
+            app_end_user_paths: APP_END_USER_PATHS,
         }
     }
 
@@ -123,6 +142,7 @@ impl AuthLayerState {
             auth,
             public_paths,
             trust_tailscale: true,
+            app_end_user_paths: APP_END_USER_PATHS,
         }
     }
 
@@ -221,11 +241,9 @@ async fn guard(State(state): State<AuthLayerState>, mut request: Request, next: 
     if state.public_paths.contains(&request.uri().path()) {
         return with_cors(next.run(request).await);
     }
-    let result = match (
-        request_credential(&request),
-        &tailnet_user,
-        state.auth.tailscale(),
-    ) {
+    let credential = request_credential(&request);
+    let jwt = matches!(credential, Ok(Credential::Jwt(_)));
+    let result = match (credential, &tailnet_user, state.auth.tailscale()) {
         // An explicit credential wins; otherwise the tailnet identity.
         (Err(err), Some((login, name)), Some(ts)) if err.reason == reason::TOKEN_MISSING => {
             ts.admit(login, name.as_deref())
@@ -238,6 +256,10 @@ async fn guard(State(state): State<AuthLayerState>, mut request: Request, next: 
             request.extensions_mut().insert(principal);
             with_cors(next.run(request).await)
         }
+        Err(err) if state.left_to_app(request.uri().path(), &err, jwt) => {
+            request.extensions_mut().insert(LeftToApp);
+            with_cors(next.run(request).await)
+        }
         Err(err) => {
             tracing::debug!(
                 reason = err.reason,
@@ -246,6 +268,24 @@ async fn guard(State(state): State<AuthLayerState>, mut request: Request, next: 
             );
             with_cors(refuse(request.headers(), &err))
         }
+    }
+}
+
+impl AuthLayerState {
+    /// Whether a request on `path` refused with `err` goes to the app
+    /// instead ([`APP_END_USER_PATHS`]): no credential, or a JWT (`jwt`)
+    /// the engine does not take at all or from that issuer or for that
+    /// audience. An expired or forged token of the engine's own issuer, and
+    /// any API key or session the engine refuses, stay refused here.
+    fn left_to_app(&self, path: &str, err: &AuthError, jwt: bool) -> bool {
+        self.app_end_user_paths.iter().any(|p| path.starts_with(p))
+            && match err.reason {
+                reason::TOKEN_MISSING => !jwt,
+                reason::TOKEN_WRONG_ISSUER
+                | reason::TOKEN_WRONG_AUDIENCE
+                | reason::CREDENTIAL_NOT_ACCEPTED => jwt,
+                _ => false,
+            }
     }
 }
 
@@ -624,6 +664,43 @@ mod tests {
             ])),
             reason::TOKEN_MALFORMED
         );
+    }
+
+    #[test]
+    fn only_live_service_calls_without_an_engine_credential_go_to_the_app() {
+        // LV1 plan Task 16: no credential, or a JWT the engine does not
+        // take from that issuer or for that audience, on LiveService only.
+        let state = AuthLayerState::new(Auth::off(), &[]);
+        let query = "/loams.live.v1.LiveService/Query";
+        let err = |reason| AuthError::unauthenticated(reason, "x");
+        assert!(state.left_to_app(query, &err(reason::TOKEN_MISSING), false));
+        for why in [
+            reason::TOKEN_WRONG_ISSUER,
+            reason::TOKEN_WRONG_AUDIENCE,
+            reason::CREDENTIAL_NOT_ACCEPTED,
+        ] {
+            assert!(state.left_to_app(query, &err(why), true), "{why}");
+            assert!(
+                !state.left_to_app(query, &err(why), false),
+                "{why}: not a JWT"
+            );
+        }
+        for why in [
+            reason::TOKEN_EXPIRED,
+            reason::TOKEN_BAD_SIGNATURE,
+            reason::TOKEN_MALFORMED,
+            reason::API_KEY_INVALID,
+            reason::PRINCIPAL_NOT_ALLOWED,
+        ] {
+            assert!(!state.left_to_app(query, &err(why), true), "{why}");
+        }
+        for path in [
+            "/loams.live.v1.LiveAdminService/Deploy",
+            "/loams.collections.v1.CollectionService/Get",
+        ] {
+            assert!(!state.left_to_app(path, &err(reason::TOKEN_MISSING), false));
+            assert!(!state.left_to_app(path, &err(reason::TOKEN_WRONG_ISSUER), true));
+        }
     }
 
     #[test]

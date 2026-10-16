@@ -32,6 +32,17 @@ pub const LIVE_REASONS: &[&str] = &[
     FUNCTION_TIMEOUT,
     FUNCTION_OUT_OF_MEMORY,
     LIMIT_EXCEEDED,
+    // An app end user's refusals (LV1 plan Task 16), the engine's own.
+    crate::auth::reason::TOKEN_MISSING,
+    crate::auth::reason::TOKEN_MALFORMED,
+    crate::auth::reason::TOKEN_EXPIRED,
+    crate::auth::reason::TOKEN_NOT_YET_VALID,
+    crate::auth::reason::TOKEN_BAD_SIGNATURE,
+    crate::auth::reason::TOKEN_WRONG_AUDIENCE,
+    crate::auth::reason::TOKEN_WRONG_ISSUER,
+    crate::auth::reason::TOKEN_UNKNOWN_KEY,
+    crate::auth::reason::TOKEN_ALGORITHM,
+    crate::auth::reason::AUTH_UNAVAILABLE,
 ];
 
 /// Why a Loams Live operation failed. Each variant maps to one
@@ -71,6 +82,20 @@ pub enum LiveError {
         reason: &'static str,
         message: String,
     },
+    /// A call with no usable credential for the app (LV1 plan Task 16): an
+    /// end user's token that does not verify against the app's issuers, or
+    /// no credential where the app takes no anonymous calls. Connect
+    /// `UNAUTHENTICATED`, with the engine's reason (`token_missing`,
+    /// `token_wrong_issuer`, `token_expired`, ...).
+    #[error("unauthenticated: {message}")]
+    Unauthenticated {
+        reason: &'static str,
+        message: String,
+    },
+    /// An app issuer's signing keys cannot be fetched (LV1 plan Task 16):
+    /// `UNAVAILABLE`, reason `auth_unavailable`.
+    #[error("unavailable: {0}")]
+    AuthUnavailable(String),
     /// `CreateApp` with a name another app has (LV1 plan Task 13):
     /// `FAILED_PRECONDITION`, reason `live_app_exists`.
     #[error("failed precondition: {0}")]
@@ -170,10 +195,12 @@ impl LiveError {
             | LiveError::AppDisabled(_)
             | LiveError::AppExists(_)
             | LiveError::PermissionDenied { .. }
+            | LiveError::Unauthenticated { .. }
             | LiveError::IndexNotReady(_)
             | LiveError::DeployConflict(_)
             | LiveError::JournalTrimmed { .. } => pb::ErrorCode::ERROR_CODE_FAILED_PRECONDITION,
             LiveError::LimitExceeded { .. } => pb::ErrorCode::ERROR_CODE_RESOURCE_EXHAUSTED,
+            LiveError::AuthUnavailable(_) => pb::ErrorCode::ERROR_CODE_UNAVAILABLE,
             LiveError::Corrupt(_) | LiveError::Internal(_) => pb::ErrorCode::ERROR_CODE_INTERNAL,
             LiveError::FunctionError(_) | LiveError::WorkerCrashed(_) => {
                 pb::ErrorCode::ERROR_CODE_FUNCTION_ERROR
@@ -207,6 +234,8 @@ impl LiveError {
             LiveError::AppDisabled(_) => Some("live_app_disabled"),
             LiveError::AppExists(_) => Some("live_app_exists"),
             LiveError::PermissionDenied { reason, .. } => Some(reason),
+            LiveError::Unauthenticated { reason, .. } => Some(reason),
+            LiveError::AuthUnavailable(_) => Some(crate::auth::reason::AUTH_UNAVAILABLE),
             _ => None,
         }
     }

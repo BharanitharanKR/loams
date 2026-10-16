@@ -127,6 +127,14 @@ See [docs/release/upgrades.md](docs/release/upgrades.md).
   `live:deploy` and `live:admin` gate functions, `_system:*` reads and writes, deploys and the
   app directory; a credential that names no scopes keeps every scope. Deploys and writes are
   audited in the log (LV1 Tasks 14 and 15).
+- **Loams Live apps have end users.** An app's trusted issuers (`CreateApp`/`UpdateApp`
+  `issuers`: any OIDC provider, by discovery or a `jwks_uri`) now sign its end users in: a
+  token from one of them calls the app's public functions on `LiveService`, and
+  `ctx.auth.getUserIdentity()` returns `{ issuer, subject, tokenIdentifier, email, name, claims }`
+  (null otherwise). End users never reach internal functions, `_system:*` or
+  `LiveAdminService`. A `LiveService` call with no credential is admitted only when the app's
+  `allow_anonymous` is on; otherwise it is `unauthenticated` with the reason `token_missing`
+  in the error's `ErrorInfo` (no longer in the `loams-auth-reason` header) (LV1 Task 16).
 
 ## [0.1.0-preview.2] - unreleased
 

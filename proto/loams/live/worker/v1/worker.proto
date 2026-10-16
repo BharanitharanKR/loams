@@ -106,6 +106,9 @@ message CallContext {
   uint64 result_bytes = 3;
   // The conversion budget of each `ctx.db` call's arguments.
   uint64 host_bytes = 4;
+  // What `ctx.auth.getUserIdentity()` returns (LV1 plan Task 16): the app
+  // end user's identity object; absent for any other caller (`null`).
+  loams.live.v1.Value identity = 5;
 }
 
 // A `ctx.db` operation the host runs on the call's transaction.

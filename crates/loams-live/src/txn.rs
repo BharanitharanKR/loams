@@ -79,14 +79,69 @@ pub enum Visibility {
     Internal,
 }
 
-/// The identity a call runs as. LV1 plan Task 16 defines it (end users
-/// through OIDC); until then it has no values, so every
-/// [`CallCtx::identity`] is `None`.
+/// The app end user a call runs as (LV1 plan Task 16, design §45 §5.3):
+/// the verified claims of an OIDC token from one of the app's trusted
+/// issuers. A platform principal's or an anonymous call has none.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum Identity {}
+pub struct Identity {
+    /// The token's `iss`.
+    pub issuer: String,
+    /// The token's `sub`.
+    pub subject: String,
+    /// `issuer|subject`: one end user across the app's issuers.
+    pub token_identifier: String,
+    /// The `email` claim, when the token has one.
+    pub email: Option<String>,
+    /// The `name` claim, when the token has one.
+    pub name: Option<String>,
+    /// Every claim of the token, as an object (numbers as doubles).
+    pub claims: LiveValue,
+}
+
+impl Identity {
+    /// The identity `issuer` and `subject` name, with `claims`.
+    pub fn new(issuer: &str, subject: &str, claims: LiveValue) -> Self {
+        let text = |name: &str| match &claims {
+            LiveValue::Object(fields) => match fields.get(name) {
+                Some(LiveValue::Str(s)) => Some(s.clone()),
+                _ => None,
+            },
+            _ => None,
+        };
+        Identity {
+            issuer: issuer.to_string(),
+            subject: subject.to_string(),
+            token_identifier: format!("{issuer}|{subject}"),
+            email: text("email"),
+            name: text("name"),
+            claims,
+        }
+    }
+
+    /// What `ctx.auth.getUserIdentity()` returns: `{ issuer, subject,
+    /// tokenIdentifier, email?, name?, claims }`.
+    pub fn to_value(&self) -> LiveValue {
+        let mut fields = BTreeMap::from([
+            ("issuer".to_string(), LiveValue::Str(self.issuer.clone())),
+            ("subject".to_string(), LiveValue::Str(self.subject.clone())),
+            (
+                "tokenIdentifier".to_string(),
+                LiveValue::Str(self.token_identifier.clone()),
+            ),
+            ("claims".to_string(), self.claims.clone()),
+        ]);
+        if let Some(email) = &self.email {
+            fields.insert("email".to_string(), LiveValue::Str(email.clone()));
+        }
+        if let Some(name) = &self.name {
+            fields.insert("name".to_string(), LiveValue::Str(name.clone()));
+        }
+        LiveValue::Object(fields)
+    }
+}
 
 /// What a function call knows about its caller (LV1 plan Task 4), carried
-/// by its [`LiveTxn`]: the identity (Task 16), the request id (a mutation's
+/// by its [`LiveTxn`]: the end user's identity (Task 16), the request id (a mutation's
 /// idempotency key, else empty; it seeds a JavaScript function's
 /// `Math.random`) and the deployment that serves the function (Task 6;
 /// `None` for built-ins and tests).
@@ -997,6 +1052,19 @@ impl Runner {
         args: LiveValue,
         idempotency_key: Option<String>,
     ) -> Result<Mutated, LiveError> {
+        self.mutate_as(f, args, idempotency_key, None).await
+    }
+
+    /// [`mutate`](Self::mutate) as the end user `identity` (LV1 plan Task
+    /// 16): the function sees it as [`CallCtx::identity`], and an
+    /// idempotency key replays only for the same end user.
+    pub async fn mutate_as(
+        &self,
+        f: Arc<dyn Function>,
+        args: LiveValue,
+        idempotency_key: Option<String>,
+        identity: Option<Identity>,
+    ) -> Result<Mutated, LiveError> {
         if f.kind() != FnKind::Mutation {
             return Err(LiveError::invalid(format!(
                 "{} is a query; run it with Query",
@@ -1008,7 +1076,7 @@ impl Runner {
             .map(|key| {
                 Ok::<_, LiveError>(IdemKey {
                     hash: idempotency_hash(key)?,
-                    args: args.digest(),
+                    args: call_digest(&args, identity.as_ref()),
                 })
             })
             .transpose()?;
@@ -1027,11 +1095,14 @@ impl Runner {
                 let inner = inner.clone();
                 let f = f.clone();
                 let args = args.clone();
-                let request_id = request_id.clone();
+                let ctx = CallCtx {
+                    identity: identity.clone(),
+                    request_id: request_id.clone(),
+                    deployment: None,
+                };
                 let state = body_state.clone();
                 Box::pin(async move {
-                    let attempt =
-                        mutation_attempt(txn, &inner, &*f, args, hash, request_id, &state);
+                    let attempt = mutation_attempt(txn, &inner, &*f, args, hash, ctx, &state);
                     match attempt.await {
                         Ok(outcome) => Ok(outcome),
                         Err(e) => match e.into_txn() {
@@ -1099,6 +1170,18 @@ impl Runner {
         args: LiveValue,
         at: Ts,
     ) -> Result<Queried, LiveError> {
+        self.query_as(f, args, at, None).await
+    }
+
+    /// [`query`](Self::query) as the end user `identity` (LV1 plan Task
+    /// 16), which the function sees as [`CallCtx::identity`].
+    pub async fn query_as(
+        &self,
+        f: &dyn Function,
+        args: LiveValue,
+        at: Ts,
+        identity: Option<Identity>,
+    ) -> Result<Queried, LiveError> {
         if f.kind() != FnKind::Query {
             return Err(LiveError::invalid(format!(
                 "{} is a mutation; run it with Mutate",
@@ -1107,6 +1190,10 @@ impl Runner {
         }
         let mut snap = snapshot(&self.inner.store, at).await?;
         let mut txn = LiveTxn::for_query(&mut snap, &self.inner.app, &self.inner.limits);
+        txn.set_ctx(CallCtx {
+            identity,
+            ..CallCtx::default()
+        });
         let result =
             tokio::time::timeout(self.inner.limits.mutation_deadline, f.call(&mut txn, args))
                 .await
@@ -1119,6 +1206,21 @@ impl Runner {
             output: txn.output,
         })
     }
+}
+
+/// The digest an idempotency record keeps of a call: its arguments', and
+/// for an end user's call also the end user's (LV1 plan Task 16), so a key
+/// never replays one user's result to another.
+fn call_digest(args: &LiveValue, identity: Option<&Identity>) -> [u8; 32] {
+    let digest = args.digest();
+    let Some(identity) = identity else {
+        return digest;
+    };
+    let mut h = Sha256::new();
+    h.update(b"loams.live.idempotency.identity.v1\0");
+    h.update(digest);
+    h.update(identity.token_identifier.as_bytes());
+    h.finalize().into()
 }
 
 /// An idempotent call's key hash and the digest of its arguments.
@@ -1135,7 +1237,7 @@ async fn mutation_attempt(
     f: &dyn Function,
     args: LiveValue,
     idem: Option<IdemKey>,
-    request_id: String,
+    ctx: CallCtx,
     state: &Mutex<Attempts>,
 ) -> Result<Outcome, LiveError> {
     let app = &inner.app;
@@ -1178,10 +1280,8 @@ async fn mutation_attempt(
     }
 
     let mut live = LiveTxn::for_mutation(txn, app, &inner.limits);
-    live.set_ctx(CallCtx {
-        request_id: request_id.clone(),
-        ..CallCtx::default()
-    });
+    let request_id = ctx.request_id.clone();
+    live.set_ctx(ctx);
     let result = f.call(&mut live, args).await?;
     let has_ranges = !live.read_set.ranges.is_empty();
     let usage = live.usage;
