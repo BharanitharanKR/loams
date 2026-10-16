@@ -3,7 +3,7 @@
 //! A LINKED graph is declared over collections by its [`GraphMapping`]. Each collection the
 //! mapping names feeds the graph through a **link**: the collection's implicit stream applied
 //! into the graph, exactly once, by `loams-link`'s [`LinkTarget`](loams_link::LinkTarget) contract
-//! ([`collection::CollectionLinkTarget`]). A commit is one record of the graph's own stream that
+//! ([`target::GraphLinkTarget`]). A commit is one record of the graph's own stream that
 //! carries the batch's change operations *and* the link's progress (R0.17), appended through the
 //! same write lane as a GQL write ([`crate::durable::lane`]), so the graph's durable state always
 //! says how far each link got.
@@ -25,6 +25,9 @@
 //! vertex back to its document.
 
 pub mod collection;
+pub mod stream;
+pub mod target;
+mod writer;
 
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -54,11 +57,14 @@ pub const PK_PROPERTY: &str = "_pk";
 pub const EDGE_PROPERTY: &str = "_edge";
 /// The property marking a stub vertex (§48 §10.1).
 pub const STUB_PROPERTY: &str = "_stub";
+/// The property naming the stream a node or an edge came from (GR1 Task 19).
+pub const STREAM_PROPERTY: &str = "_stream";
 
 /// The properties a link sets itself: never taken from a document, and dropped from an element
 /// when the link rebuilds its document for a patch.
-pub const LINK_PROPERTIES: [&str; 5] = [
+pub const LINK_PROPERTIES: [&str; 6] = [
     COLLECTION_PROPERTY,
+    STREAM_PROPERTY,
     KEY_PROPERTY,
     PK_PROPERTY,
     EDGE_PROPERTY,
@@ -73,6 +79,16 @@ const COLLECTION_LINK_BIT: u64 = 1 << 63;
 #[must_use]
 pub fn collection_link_id(collection: CollectionId) -> LinkId {
     LinkId(COLLECTION_LINK_BIT | collection.0)
+}
+
+/// The second-highest bit of a graph-local stream link id (R19.1), beside
+/// [`COLLECTION_LINK_BIT`].
+const STREAM_LINK_BIT: u64 = 1 << 62;
+
+/// The graph-local id of the link from stream `stream` (R19.1).
+#[must_use]
+pub fn stream_link_id(stream: StreamId) -> LinkId {
+    LinkId(COLLECTION_LINK_BIT | STREAM_LINK_BIT | stream.0)
 }
 
 /// A vertex key, or a primary key as a link stores it: an integer or a string.
@@ -246,8 +262,8 @@ impl LinkIndex {
 /// How far one of a LINKED graph's links is behind its source (GR1 Task 18).
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LinkLag {
-    /// The collection, as the mapping names it.
-    pub collection: String,
+    /// The collection or stream, as the mapping names it.
+    pub source: String,
     /// The link's graph-local id.
     pub link: LinkId,
     /// The next source offset the graph applies, by partition.
@@ -256,27 +272,64 @@ pub struct LinkLag {
     pub high_watermarks: BTreeMap<u32, u64>,
     /// Records of the source not applied yet.
     pub records: u64,
-    /// The collection no longer exists: its link is stopped where it was.
+    /// The collection or stream no longer exists: its link is stopped where it was.
     pub missing: bool,
+    /// Records of a stream the link dead-lettered (GR1 Task 19); 0 for a collection.
+    pub dead_letters: u64,
 }
 
-/// One source of a LINKED graph: a collection and the mapping names that resolve to it.
+/// One source of a LINKED graph: a collection (with the mapping names that resolve to it) or a
+/// stream (GR1 Task 19).
 #[derive(Debug, Clone)]
-pub(crate) struct Source {
-    pub(crate) collection: loams_common::meta::Collection,
-    /// The names the mapping uses for it (a name and an alias of the same collection are one
-    /// source).
-    pub(crate) names: BTreeSet<String>,
+pub(crate) enum Source {
+    Collection {
+        collection: loams_common::meta::Collection,
+        /// The names the mapping uses for it (a name and an alias of the same collection are
+        /// one source).
+        names: BTreeSet<String>,
+    },
+    Stream {
+        stream: loams_common::meta::Stream,
+        map: crate::mapping::StreamMap,
+    },
 }
 
 impl Source {
+    /// The link's graph-local id.
+    pub(crate) fn link_id(&self) -> LinkId {
+        match self {
+            Self::Collection { collection, .. } => collection_link_id(collection.id),
+            Self::Stream { stream, .. } => stream_link_id(stream.id),
+        }
+    }
+
+    /// The stream the link reads.
+    pub(crate) fn stream_id(&self) -> StreamId {
+        match self {
+            Self::Collection { collection, .. } => collection.stream,
+            Self::Stream { stream, .. } => stream.id,
+        }
+    }
+
+    /// The names the mapping gives the source.
+    pub(crate) fn names(&self) -> Vec<String> {
+        match self {
+            Self::Collection { names, .. } => names.iter().cloned().collect(),
+            Self::Stream { map, .. } => vec![map.stream.clone()],
+        }
+    }
+
     /// The link's synthetic metastore shape, for `loams-link`'s apply loop.
     pub(crate) fn link(&self, graph: GraphId) -> Link {
+        let (namespace, name) = match self {
+            Self::Collection { collection, .. } => (collection.namespace, &collection.name),
+            Self::Stream { stream, .. } => (stream.namespace, &stream.name),
+        };
         Link {
-            id: collection_link_id(self.collection.id),
-            namespace: self.collection.namespace,
-            name: format!("{graph}/{}", self.collection.name),
-            source: self.collection.stream,
+            id: self.link_id(),
+            namespace,
+            name: format!("{graph}/{name}"),
+            source: self.stream_id(),
             target: TargetRef {
                 kind: GRAPH_KIND.to_string(),
                 name: graph.to_string(),
@@ -284,10 +337,22 @@ impl Source {
             options: BTreeMap::new(),
         }
     }
+
+    /// How its records become change operations.
+    pub(crate) fn plan(&self, mapping: &GraphMapping) -> target::SourcePlan {
+        match self {
+            Self::Collection { collection, names } => target::SourcePlan::Collection(Arc::new(
+                collection::Plan::new(mapping, collection, names),
+            )),
+            Self::Stream { map, .. } => {
+                target::SourcePlan::Stream(Arc::new(stream::Plan::new(map)))
+            }
+        }
+    }
 }
 
-/// The collections `mapping` names in `namespace`, each once, with the names that reach it, and
-/// the names that resolve to no collection.
+/// The collections and streams `mapping` names in `namespace`, each once, and the names that
+/// resolve to nothing.
 pub(crate) async fn sources(
     meta: &dyn MetaStore,
     namespace: NamespaceId,
@@ -299,7 +364,8 @@ pub(crate) async fn sources(
         .map(|v| v.collection.as_str())
         .chain(mapping.edges.iter().map(|e| e.collection.as_str()))
         .collect();
-    let mut by_id: BTreeMap<CollectionId, Source> = BTreeMap::new();
+    let mut by_id: BTreeMap<CollectionId, (loams_common::meta::Collection, BTreeSet<String>)> =
+        BTreeMap::new();
     let mut missing = BTreeSet::new();
     for name in names {
         match meta
@@ -309,11 +375,8 @@ pub(crate) async fn sources(
             Some(collection) => {
                 by_id
                     .entry(collection.id)
-                    .or_insert_with(|| Source {
-                        collection,
-                        names: BTreeSet::new(),
-                    })
-                    .names
+                    .or_insert_with(|| (collection, BTreeSet::new()))
+                    .1
                     .insert(name.to_string());
             }
             None => {
@@ -321,7 +384,25 @@ pub(crate) async fn sources(
             }
         }
     }
-    Ok((by_id.into_values().collect(), missing))
+    let mut out: Vec<Source> = by_id
+        .into_values()
+        .map(|(collection, names)| Source::Collection { collection, names })
+        .collect();
+    for map in &mapping.streams {
+        match meta
+            .stream_by_name(Consistency::Local, namespace, &map.stream)
+            .await?
+        {
+            Some(stream) => out.push(Source::Stream {
+                stream,
+                map: map.clone(),
+            }),
+            None => {
+                missing.insert(map.stream.clone());
+            }
+        }
+    }
+    Ok((out, missing))
 }
 
 /// The high watermarks of stream `stream`'s partitions that have records, or `None` when the
@@ -572,11 +653,11 @@ impl LinkRunner {
         }
         let mut committed = 0;
         for (source, link) in due {
-            let target = collection::CollectionLinkTarget::new(
+            let target = target::GraphLinkTarget::new(
                 self.admin.clone(),
                 graph.clone(),
-                mapping.clone(),
-                source,
+                namespace,
+                source.plan(mapping),
                 link.id,
             );
             let fence = Fence {
@@ -645,39 +726,89 @@ impl LinkRunner {
             .await
             .map_err(|err| err.to_string())?;
         let mut out = Vec::new();
+        let store = self.admin.catalog().store();
         for source in sources {
-            let link = collection_link_id(source.collection.id);
+            let link = source.link_id();
             let applied = open
                 .link_progress(link)
                 .map(|progress| progress.applied_after)
                 .unwrap_or_default();
-            let hwms = high_watermarks(&*meta, source.collection.stream)
+            let hwms = high_watermarks(&*meta, source.stream_id())
                 .await
                 .map_err(|err| err.to_string())?;
             let records = hwms.as_ref().map_or(0, |hwms| lag(hwms, &applied));
-            for collection in &source.names {
+            let dead_letters = match &source {
+                Source::Collection { .. } => 0,
+                Source::Stream { .. } => {
+                    let prefix = stream::dead_letter_prefix(namespace_id, &graph, link);
+                    store
+                        .list(&prefix)
+                        .await
+                        .map_err(|err| err.to_string())?
+                        .len() as u64
+                }
+            };
+            for name in source.names() {
+                tracing::debug!(graph = %id, source = %name, lag_records = records, dead_letters, "graph link lag");
                 out.push(LinkLag {
-                    collection: collection.clone(),
+                    source: name,
                     link,
                     applied: applied.clone(),
                     high_watermarks: hwms.clone().unwrap_or_default(),
                     records,
                     missing: hwms.is_none(),
+                    dead_letters,
                 });
             }
-            tracing::debug!(graph = %id, collection = %source.collection.name, lag_records = records, "graph link lag");
         }
-        for collection in missing {
+        for source in missing {
             out.push(LinkLag {
-                collection,
+                source,
                 link: LinkId(0),
                 applied: BTreeMap::new(),
                 high_watermarks: BTreeMap::new(),
                 records: 0,
                 missing: true,
+                dead_letters: 0,
             });
         }
-        out.sort_by(|a, b| a.collection.cmp(&b.collection));
+        out.sort_by(|a, b| a.source.cmp(&b.source));
         Ok(out)
+    }
+
+    /// The records of graph `name`'s stream `stream` that its link dead-lettered (GR1 Task 19),
+    /// in partition and offset order.
+    ///
+    /// # Errors
+    ///
+    /// The catalog's, the metastore's or the bucket's error, as text.
+    pub async fn dead_letters(
+        &self,
+        namespace: &str,
+        name: &str,
+        stream_name: &str,
+    ) -> Result<Vec<stream::DeadLetter>, String> {
+        let graph = self
+            .admin
+            .catalog()
+            .get_by_name(namespace, name)
+            .await
+            .map_err(|err| err.to_string())?;
+        let catalog = self.admin.catalog();
+        let namespace_id = catalog
+            .namespace_id(namespace)
+            .await
+            .map_err(|err| err.to_string())?
+            .ok_or_else(|| format!("namespace {namespace} is gone"))?;
+        let found = catalog
+            .meta()
+            .stream_by_name(Consistency::Local, namespace_id, stream_name)
+            .await
+            .map_err(|err| err.to_string())?
+            .ok_or_else(|| format!("no stream {stream_name:?}"))?;
+        let prefix = stream::dead_letter_prefix(namespace_id, &graph, stream_link_id(found.id));
+        stream::read_dead_letters(catalog.store(), &prefix)
+            .await
+            .map_err(|err| err.to_string())
     }
 }

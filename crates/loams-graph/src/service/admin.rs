@@ -1192,9 +1192,10 @@ impl GraphAdmin {
                 return Err(invalid(format!("mode {:?} is not a graph mode", req.mode)));
             }
         }
-        let mapping = crate::mapping::GraphMapping::from_proto(
+        let mapping = crate::mapping::GraphMapping::try_from_proto(
             given.ok_or_else(|| invalid("a LINKED graph needs a mapping".to_string()))?,
-        );
+        )
+        .map_err(|err| invalid(err.to_string()))?;
         mapping.check().map_err(|err| invalid(err.to_string()))?;
         // The collections are the namespace's, read now: a mapping is checked when it is
         // created, as an index is (a collection dropped later leaves its labels empty).
@@ -1237,6 +1238,33 @@ impl GraphAdmin {
         mapping
             .check_against(|collection| schemas.get(collection).cloned().flatten())
             .map_err(|err| invalid(err.to_string()))?;
+        // Its streams exist now (GR1 Task 19); one deleted later stops its link.
+        for stream in &mapping.streams {
+            let found = match namespace {
+                Some(namespace) => meta
+                    .stream_by_name(
+                        loams_common::meta::Consistency::Linearizable,
+                        namespace,
+                        &stream.stream,
+                    )
+                    .await
+                    .map_err(|err| {
+                        tracing::warn!(error = %err, "reading a LINKED graph's streams failed");
+                        refuse(
+                            ErrorCode::Unavailable,
+                            "unavailable",
+                            "the namespace's streams could not be read; retry",
+                        )
+                    })?,
+                None => None,
+            };
+            if found.is_none() {
+                return Err(invalid(format!(
+                    "no stream {:?} in the namespace",
+                    stream.stream
+                )));
+            }
+        }
         Ok((GraphMode::Linked, Some(mapping)))
     }
 
