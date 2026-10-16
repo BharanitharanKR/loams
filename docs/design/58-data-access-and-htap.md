@@ -6,7 +6,7 @@ This document builds on these earlier designs. §9 says where it amends each one
 - [§57](57-loams-gateway.md): `loams-gateway`, the Postgres front door (D1010–D1024). Part A lives in its `pg` module, and Part C in its later `http` and `mcp` modules.
 - [§46](46-loams-postgres-production.md) §8 and §9: PgDog as the front door (D708–D711), and `loams-wal` (D714) with the laptop results of §9.2.
 - [§47](47-loams-sql-production.md): Loams SQL on TiDB and TiKV keyspaces. TiKV's Raft log is the WAL (D725), and CDC runs through `loams-sqlcdc` (D738).
-- [§36](36-loams-git.md) §4–§5: Loams Git's bucket WAL (D388–D391). The open PR #668 adds §20 and D1025 (a TiKV-backed `RefLog` for hot repositories).
+- [§36](36-loams-git.md) §4–§5: Loams Git's bucket WAL (D388–D391). §20 adds D1025 (a TiKV-backed `RefLog` for hot repositories).
 - [§32](32-loams-flow-fabric-house.md) and [§49](49-loams-house-production.md): the House, Iceberg on the bucket, and pipes from Loams streams (D769).
 - [§05](05-query-engine.md) §8: Flight SQL and ADBC bulk ingest (D49, as built in M1.2).
 - [§44](44-unified-api-and-sdks.md) and the [API2 plan](../plans/2026-10-10-api2-unified-api-sdks.md): the planned `loams.sql.v1.SqlService/Query`. That proto does not exist yet.
@@ -455,7 +455,7 @@ The owner asked: "loams-wal vs TiKV Raft — which is best, keep separate?" The 
 
 | Substrate | Is for | Today's users | Not for |
 |---|---|---|---|
-| **TiKV (Raft, Percolator transactions)** | Small transactions and metadata: keyed records, CAS, leases, votes, sequencers | Loams SQL's data (TiKV *is* TiDB's storage, D725 unchanged); Loams Live (D130); the scale-out `MetaStore` (D124); `loams-wal`'s votes, leases and timeline metadata (D268, D269); `pg-control`'s store; control planes; Git refs of hot repositories (D1025, proposed in PR #668) | A high-volume ordered byte log |
+| **TiKV (Raft, Percolator transactions)** | Small transactions and metadata: keyed records, CAS, leases, votes, sequencers | Loams SQL's data (TiKV *is* TiDB's storage, D725 unchanged); Loams Live (D130); the scale-out `MetaStore` (D124); `loams-wal`'s votes, leases and timeline metadata (D268, D269); `pg-control`'s store; control planes; Git refs of hot repositories (D1025, §36 §20.4) | A high-volume ordered byte log |
 | **`loams-wal`** | The high-volume ordered byte log for Postgres WAL: group commit, quorum ack, streaming to the pageserver, offload to the bucket | Loams Postgres (D714 unchanged) | Records with keys, transactions, metadata |
 | **The bucket (create-only objects)** | History, branches, archives, and logs whose commit rate fits object-store latency | The engine's WAL objects (D25), Git's WAL (D388), `.lwal` archives (D269), Iceberg, Lance, pageserver layers | Millisecond commits |
 
@@ -483,7 +483,7 @@ The owner asked: "loams-wal vs TiKV Raft — which is best, keep separate?" The 
 
 - Loams Git does not use `loams-wal`. A repository's commit rate is pushes, not WAL bytes. Its objects (packs) are immutable and belong on the bucket.
 - The bucket WAL (create-only `wal/<seq>.lgw` segments, D388, D389) stays the **default** `RefLog`.
-- D1025 (PR #668) proposes a TiKV-backed `RefLog` for hot repositories, mirrored into the bucket WAL. That is consistent with §8.1: TiKV for small transactions, the bucket as the record.
+- D1025 (§36 §20.4) proposes a TiKV-backed `RefLog` for hot repositories, mirrored into the bucket WAL. That is consistent with §8.1: TiKV for small transactions, the bucket as the record.
 
 ### 8.5 One bucket-segment library (D1060)
 
@@ -494,7 +494,7 @@ The owner asked: "loams-wal vs TiKV Raft — which is best, keep separate?" The 
   Both need: create-only segment writes; fencing by the create condition; resolving an unknown outcome (GET the name, and compare the batch id); header, body and CRC32C framing; checkpoints; readers that stop at the first gap; compaction; and GC after a grace period.
 - **A new crate `loams-seglog`** (Apache-2.0) holds those pieces, extracted from `loams-git`'s `StoreWalStore` (`crates/loams-git/src/wal.rs`) and generalised over the naming scheme (sequence numbers for Git, LSN ranges for `.lwal`). Both logs keep their own formats and their own version numbers. Only the code is shared.
 - **The traits.** Both crates have a trait named `WalStore`: Git's over the bucket, `loams-wal`'s over hot-tier stores. The library adds a third concept, `SegmentLog`, and neither existing trait is renamed.
-- **When.** Extract when the second user is built, in PG2 Task 40 (the offload), not before (Q924). That extraction is DA1 Task F1, and PG2 Task 40 and GT1's WAL tasks carry pointers to it.
+- **When.** Extract when the second user is built, in PG2 Task 40 (the offload), not before (Q924). That extraction is DA1 Task F1. PG2 Task 40, GT1 Tasks 7 and 11, and §36 §4 carry pointers to it.
 
 ## 9. Relation to earlier decisions
 
@@ -512,7 +512,7 @@ The owner asked: "loams-wal vs TiKV Raft — which is best, keep separate?" The 
 | **D49** (Flight SQL and ADBC) | Extended by D1056 |
 | **D714, D725** (`loams-wal` for Postgres; TiKV Raft as Loams SQL's WAL) | Unchanged (D1057) |
 | **D234, D264, Q652** (the TiKV hot tier and Arm A; the launch-store question) | Unchanged. D1058 records a lean as a proposed default, and Q652 still decides |
-| **D388, D389, D1025** (Git's bucket WAL; the TiKV `RefLog`, PR #668) | Consistent (D1059). D1060 shares their segment code |
+| **D388, D389, D1025** (Git's bucket WAL; the TiKV `RefLog`, §36 §20.4) | Consistent (D1059). D1060 shares their segment code |
 | **D360** (the standards charter) | New pinned standards, each behind one crate: Postgres protocol 3.0 and 3.2, and the `_pq_.loams.*` extension spec (`loams-gateway`); ADBC 1.1 (the driver); sqlcommenter (`loams_request_attrs`); MCP 2026-07-28 (the `mcp` module) |
 | **D548** (usage stays outside this repository) | Kept. Budgets and live-query caps are limits, not accounts, and per-namespace numbers leave only through observer hooks |
 | **D816, §51** (the fork's private dependencies dropped; patch-queue rules) | Phase 2 and `loams_request_attrs` are fork work under §51's rules |

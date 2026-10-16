@@ -63,6 +63,8 @@ Markers: **(source)** means read in the upstream repository or documentation on 
 
 ## 4. The WAL on the bucket (D388–D391)
 
+> **Durability substrates (2026-10-16, [§58](58-data-access-and-htap.md) §8.4–§8.5, D1059, D1060).** Loams Git uses no `loams-wal`, which is the Postgres WAL service. Objects stay on the bucket. The bucket WAL below stays the default `RefLog`, and hot repositories may opt into the TiKV `RefLog` (§20.4, D1025). The segment code of `wal/*.lgw` (create-only PUTs, unknown-outcome resolution, framing, checkpoints, GC) moves into the shared bucket-segment library `loams-seglog`, which `loams-wal`'s `.lwal` offload also uses. The formats here do not change.
+
 ### 4.1 Layout
 
 Extends §15 §3.1 and §15 §11:
