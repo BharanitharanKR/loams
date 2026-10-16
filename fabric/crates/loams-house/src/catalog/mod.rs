@@ -30,7 +30,10 @@ use async_trait::async_trait;
 use loams_house_lake::spec::{Schema, TableMetadata};
 use loams_house_lake::{NamespaceIdent, TableCreation, TableIdent, TableRequirement, TableUpdate};
 
-pub use lake::{DatabaseInfo, Lake, LakeRoot, PrefixGrants, RESERVED_PREFIX, register_all};
+pub use lake::{
+    DEFAULT_RETENTION, DROPPED, DROPPED_AT_MS, DROPPED_DATABASE, DROPPED_NAME, DatabaseInfo, Lake,
+    LakeRoot, PrefixGrants, RESERVED_PREFIX, register_all,
+};
 pub use local::{CATALOG_USER_VERSION, LocalCatalog};
 pub use mem::MemCatalog;
 pub use rest::{RestCatalog, RestOptions};
@@ -117,6 +120,14 @@ pub struct LakeTable {
 /// of §49 §11 (HS1 Task 15).
 #[async_trait]
 pub trait HouseCatalog: Send + Sync + fmt::Debug {
+    /// The top-level namespaces (the House's are `ns_<id>`), which the
+    /// retention sweep walks (HS1 Task 15). A catalog that cannot list them
+    /// answers [`CatalogError::Unavailable`], and the sweep skips it.
+    async fn list_root_databases(&self) -> Result<Vec<NamespaceIdent>, CatalogError> {
+        Err(CatalogError::Unavailable(
+            "this catalog does not list its top-level namespaces".to_string(),
+        ))
+    }
     /// The namespaces directly under `parent`.
     async fn list_databases(
         &self,

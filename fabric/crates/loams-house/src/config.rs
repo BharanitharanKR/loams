@@ -99,6 +99,13 @@ pub struct HouseConfig {
     /// How often background compaction looks at tables that took commits
     /// (HS1 Task 13): 30 s; zero turns it off.
     pub compaction_interval: Duration,
+    /// How long lake tables keep their snapshots, and dropped tables wait for
+    /// `UNDROP` (`loams_snapshot_retention`, §49 §11): 7 days, at least 24 h
+    /// (HS1 Task 15).
+    pub snapshot_retention: Duration,
+    /// How often snapshot expiry, orphan removal and purges sweep the
+    /// catalog (HS1 Task 15): 1 h; zero turns it off.
+    pub retention_interval: Duration,
 }
 
 /// A TLS listener (HS1 Task 20).
@@ -133,6 +140,8 @@ impl Default for HouseConfig {
             unmapped_principals: None,
             audit: None,
             compaction_interval: Duration::from_secs(30),
+            snapshot_retention: crate::catalog::DEFAULT_RETENTION,
+            retention_interval: crate::retention::DEFAULT_SWEEP_INTERVAL,
             default_buffer_size: 1024 * 1024,
             max_query_size: 256 * 1024,
             receive_timeout: Duration::from_secs(30),
@@ -393,6 +402,10 @@ pub struct HouseSection {
     pub principals: Vec<FilePrincipal>,
     /// The file the audit is appended to (HS1 Task 20); `--audit-log`.
     pub audit_log: Option<PathBuf>,
+    /// How long lake tables keep their snapshots and dropped tables wait for
+    /// `UNDROP`, in hours (`loams_snapshot_retention`; 168, at least 24; HS1
+    /// Task 15).
+    pub snapshot_retention_hours: Option<u64>,
     /// `[house.limits]`.
     #[serde(default)]
     pub limits: LimitsSection,

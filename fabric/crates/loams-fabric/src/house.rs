@@ -33,6 +33,7 @@ use std::net::SocketAddr;
 use std::os::unix::fs::OpenOptionsExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use loams_cache::RangeCacheConfig;
 use loams_house::catalog::{
@@ -213,6 +214,12 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
         ..HouseConfig::default()
     };
     house.limits.apply(&mut http);
+    if let Some(hours) = house.snapshot_retention_hours {
+        http.snapshot_retention = loams_house::retention::check_retention(Duration::from_secs(
+            hours.saturating_mul(3600),
+        ))
+        .map_err(|err| bad(format!("[house] snapshot_retention_hours: {err}")))?;
+    }
     let mut pool = PoolConfig::default();
     house.pool.apply(&mut pool);
 
@@ -513,7 +520,9 @@ async fn lake(
     // from the same store.
     let files = loams_store::Store::from_url(store_url, Vec::<(String, String)>::new())
         .map_err(|err| bad(format!("--store {store_url:?}: {err}")))?;
-    let mut lake = Lake::new(catalog, root).with_store(files);
+    let mut lake = Lake::new(catalog, root)
+        .with_store(files)
+        .with_retention(settings.http.snapshot_retention);
     if let Some(cache) = cache {
         lake = lake.with_grants(Arc::new(cache.clone()) as Arc<dyn PrefixGrants>);
     }
