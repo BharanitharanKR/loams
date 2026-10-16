@@ -2227,5 +2227,5 @@ The checks ran on the scratch stack `deploy/pgdog/compose.yaml`: the pinned PgDo
     - `kubeconform_passes`;
     - `it_kind_two_namespaces_isolated` (through the gateway, GW1 Task 11).
   - **PgDog's Service** is headless, so the gateway resolves every replica and tries them in order (D1017).
-  - **PgDog's certificate** is the regional wildcard `*.<region>.pg.<base-domain>`, and the gateway holds a copy of it: on the terminate path it must present PgDog's exact certificate, because libpq's SCRAM-SHA-256-PLUS binds to the certificate the client saw (§57 §7.3, Q905). Task 23 issues it once per region and copies it into each PgDog namespace.
+  - **PgDog's certificate** is one per namespace hostname (Task 23), mounted by that namespace's PgDog only, and the gateway reads a copy of each: on the terminate path it must present PgDog's exact certificate, because libpq's SCRAM-SHA-256-PLUS binds to the certificate the client saw (§57 §7.3, Q905).
   - **NetworkPolicy:** PgDog's port 6432 admits only the gateway's pods and `pg-control`.

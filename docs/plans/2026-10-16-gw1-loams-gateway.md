@@ -145,9 +145,9 @@ Commit `feat(gateway): loams-gateway crate, config and admin listener`.
 
 **Files:** `src/routes.rs`, `src/reload.rs`, `tests/routes.rs`.
 
-**Contract:** §57 §8.1–§8.2. Validation: names `[a-z0-9-]{1,63}`; hostnames lower-cased, unique across namespaces; ports unique and inside `dedicated_ports`; at least one upstream (`host:port`); `default_namespace` names a namespace. The generation is `sha256:<hex>` of the file without its `generation` line; a present `generation` must match. The poller re-reads every `poll_interval_ms` by digest and on `SIGHUP`; an invalid file is logged and ignored.
+**Contract:** §57 §8.1–§8.2. The `generation` line is required unless `routes.require_generation = false` (a hand-written local file). Validation: names `[a-z0-9-]{1,63}`; hostnames lower-cased, unique across namespaces; ports unique and inside `dedicated_ports`; at least one upstream (`host:port`); `default_namespace` names a namespace. The generation is `sha256:<hex>` of the file without its `generation` line; a present `generation` must match. The poller re-reads every `poll_interval_ms` by digest and on `SIGHUP`; an invalid file is logged and ignored.
 
-Tests: `parse_minimal_and_full`, `duplicate_hostname_rejected`, `duplicate_port_rejected`, `port_outside_range_rejected`, `generation_mismatch_rejected`, `hostname_lookup_is_case_insensitive`, `invalid_file_keeps_old_table`, `changed_file_is_swapped`, `sighup_reloads_at_once`.
+Tests: `parse_minimal_and_full`, `missing_generation_refused_when_required`, `duplicate_hostname_rejected`, `duplicate_port_rejected`, `port_outside_range_rejected`, `generation_mismatch_rejected`, `hostname_lookup_is_case_insensitive`, `invalid_file_keeps_old_table`, `changed_file_is_swapped`, `sighup_reloads_at_once`.
 
 Commit `feat(gateway): route table with validated hot reload`.
 
@@ -234,9 +234,9 @@ Commit `deploy(gateway): the loams-gateway image`.
 
 **Files:** `crates/loams-pg-control/src/gateway/{mod.rs,ports.rs,render.rs}`, the namespace setting `dedicated_port` (proto field on the namespace's Postgres settings, Task 1's rules), `tests/gateway_render.rs`, `tests/golden/gateway/*.toml`.
 
-**Contract:** D1016, D1018. `ports::allocate(ns)` takes the lowest free port in the range under a CAS on `G/<ns>` and the range index; `release(ns)` keeps a tombstone for 24 h. `render::routes(region, namespaces, settings) -> RenderedRoutes { text, generation }`, byte-identical for identical records. A writer per runtime: `DirSink`-style atomic file for compose, a ConfigMap update for Kubernetes, kicked by the same store watch as `PgDogPusher` (R21.8).
+**Contract:** D1016, D1018, Q905. Each rendered namespace names its PgDog certificate's files (`tls_cert`, `tls_key`, the copy the gateway reads); the gateway loads them with the table on every reload and keeps the static `[[pg.certs]]` for single-node wildcards. `ports::allocate(ns)` takes the lowest free port in the range under a CAS on `G/<ns>` and the range index; `release(ns)` keeps a tombstone for 24 h. `render::routes(region, namespaces, settings) -> RenderedRoutes { text, generation }`, byte-identical for identical records. A writer per runtime: `DirSink`-style atomic file for compose, a ConfigMap update for Kubernetes, kicked by the same store watch as `PgDogPusher` (R21.8).
 
-Tests: `render_is_deterministic`, `render_golden_three_namespaces`, `port_allocated_lowest_free`, `port_not_reused_within_24h`, `concurrent_allocations_unique`, `rendered_routes_parse_in_the_gateway` (a dev-dependency on `loams-gateway`).
+Tests: `render_is_deterministic`, `render_golden_three_namespaces`, `namespace_certificates_reload_with_routes` (in the gateway), `port_allocated_lowest_free`, `port_not_reused_within_24h`, `concurrent_allocations_unique`, `rendered_routes_parse_in_the_gateway` (a dev-dependency on `loams-gateway`).
 
 Commit `feat(pg): gateway routes and dedicated ports from pg-control`.
 
