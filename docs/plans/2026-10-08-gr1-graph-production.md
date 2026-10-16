@@ -2002,3 +2002,39 @@ Gaps: a UUID-keyed vertex document is fetched by its key's text, which a UUID co
 **R21.5 Where they run.** `loams-query` defines `graph::GraphTables` and registers the four functions in every SQL context; `loams-graph`'s `LoamsGraphExpander` implements it, and the server sets it with the expander. Without Loams Graph a call is refused at execution.
 
 **R21.6 Tests.** `loams-graph` `tests/retrieval.rs`: `udtf_results_match_reference` (12 cases × before/after deletes against the networkx reference, which `expand.py` now also computes), `shortest_path_depth_bound`. `loams-query`: `udtf_signatures_match_section_07` (unit), `lateral_join_with_collection` (`tests/it/sql.rs`). `loams` `connect_graph`: the four functions over a LINKED graph on the SQL route, a query-string seed joined back to its collection, and the LATERAL refusal.
+
+### Task 22 (prep, 2026-10-16; proposal, owner to confirm)
+
+Research only, nothing built: Grafeo read at `0.5.43` (`~/.cargo/registry/src/*/grafeo-adapters-0.5.43/src/plugins/algorithms/`, identical to the fork's pin `92bc59a` for these files), crates read from crates.io and the source tarballs.
+
+**R22.0 Which algorithms come from where (proposal).**
+
+| §07 §5.3 / Task 22 need | Grafeo 0.5.43 (`algos`) | Verdict | Source for Task 22 |
+|---|---|---|---|
+| `pagerank` (damping, `max_iterations`, `tolerance`) | `centrality::pagerank(store, damping, max_iterations, tolerance)` | Partial. Power iteration, uniform dangling mass (the networkx convention), so it should meet 1e-6. Directed, unweighted, no `edge_types`, no label filter, takes a whole `&dyn GraphStore`. | Task 22 builds the snapshot's CSR itself (it needs `edge_types` and `label` anyway) and runs its own 40-line power iteration, using Grafeo's loop as the reference. No new dependency. |
+| `wcc` | `components::connected_components(store)`: union-find over both directions | Present, but whole-store only (no `edge_types`). | Own union-find on the same CSR (`edge_types` filter), same algorithm. Component ids renumbered by smallest canonical key for determinism. |
+| `leiden` (`resolution`, `max_levels`, `max_cluster_size`, `seed`, hierarchical) | None. `grep -i leiden` over the fork finds nothing. | Missing. | A crate, see R22.1. |
+| `louvain` (Phase B) | `community::louvain(store, resolution)` | Partial: one level only (no aggregation phase, despite its doc), edge weight hard-coded to 1.0, no seed. | Defer; Leiden covers it. Not used. |
+| `label_propagation`, `k_core`, `triangle_count`, sampled `betweenness` (Phase B) | `label_propagation`, `structure::k_core`/`kcore_decomposition`, `clustering::triangle_count`, `centrality::betweenness_centrality` (exact, not sampled) | Present (betweenness not sampled). | Phase B, out of Task 22. Same CSR-filter caveat. |
+
+The pattern: Grafeo's algorithms read a whole `GraphStore` and carry no weights, `edge_types` or seed. Task 22's `pagerank` and `wcc` therefore run on Loams' own snapshot CSR, and the only dependency the task adds is the Leiden crate.
+
+**R22.1 Leiden: candidates and licence evidence (read 2026-10-16).**
+
+| Candidate | Licence (checked against the file) | Last release / age | Fit | Weight |
+|---|---|---|---|---|
+| `network_partitions` 0.3.0, the Rust core of `graspologic-native` ([github.com/microsoft/graspologic-native](https://github.com/microsoft/graspologic-native), tag `v1.3.1`, 2026-06-14, 124 days) | MIT (`LICENSE`, HTTP 200 at `https://raw.githubusercontent.com/microsoft/graspologic-native/v1.3.1/LICENSE`; `Cargo.toml` `license = "MIT"`) | Active (tags 1.3.0 2026-06-03, 1.3.1 2026-06-14) | `hierarchical_leiden(network, …, resolution, randomness, rng, use_modularity, max_cluster_size, …)` is exactly §5.3 (hierarchy, `max_cluster_size`, seeded rng) and is what GraphRAG uses. | `rand 0.10` only (`petgraph`/`sprs` are optional features); `rand 0.10.3` is already in `Cargo.lock`. |
+| `leiden-rs` 0.8.1 ([crates.io](https://crates.io/crates/leiden-rs), repo on gitcode.com) | MIT OR Apache-2.0 (`LICENSE-MIT` and `LICENSE-APACHE` both in the tarball) | 2026-05-15, 154 days; 32k downloads | Seeded, weighted, hierarchical by aggregation level. `max_comm_size` is a flat cap, not GraphRAG's recursive `max_cluster_size`. | `rand 0.9`, `rustc-hash 2`, `thiserror 2` (all already in `Cargo.lock`); the rest are optional. |
+| `single-clustering` 0.7.0, `fa-leiden-cd` 0.1.0 | crates.io metadata says "non-standard"; not checked further | 2026-08-04, 2025-08-27 | Not pursued: the licence field is not an SPDX expression. | |
+| `petgraph` 0.8.3, `rustworkx-core` 0.18.1 | MIT OR Apache-2.0; Apache-2.0 | 2025-09-30; 2026-07-29 | Neither has Leiden or Louvain; `petgraph` has components and a PageRank, but on its own graph types, so using it would mean a second graph copy. Not needed. | |
+| `graspologic-native` by that name | n/a | not on crates.io (`crates/graspologic-native` returns "does not exist"); it ships to PyPI only | The Rust library is the `network_partitions` package inside the repo, not on crates.io either. | |
+
+`deny.toml`: MIT and Apache-2.0 are in `[licenses].allow`, so licences pass for either. `network_partitions` is not on crates.io, so it needs a `git` + `rev` pin and `https://github.com/microsoft/graspologic-native` added to `[sources] allow-git` (today `unknown-git = "deny"`). `leiden-rs` is a registry crate and needs no `deny.toml` change. (`cargo deny` was not run; disk is tight. Task 22 runs it.)
+
+**R22.2 Proposed ruling.**
+1. `pagerank` and `wcc`: in-house on the snapshot CSR (R22.0). No new dependency.
+2. `leiden`: use `network_partitions` 0.3.0 from `microsoft/graspologic-native` at the `v1.3.1` commit, `default-features = false`, as a git dependency, because it implements the hierarchical, `max_cluster_size`, seeded algorithm §07 §5.3 specifies and which GraphRAG's outputs assume. Cost: add the repo to `deny.toml` `allow-git`, add a `connectors/licences.toml`/NOTICE entry (MIT, Microsoft copyright), and pin by rev (the tag is 124 days old, so the 14-day rule holds). Task 22's first step is a spike that builds a 1k-node graph and checks `leiden_modularity_within_reference_tolerance` against `graspologic` on the same graph.
+3. Fallback if the owner prefers a registry crate (no `deny.toml` change): `leiden-rs` 0.8.1 (MIT OR Apache-2.0), with `max_cluster_size` implemented in-house by re-running Leiden on any community above the cap (that is graspologic's own approach).
+4. Neither is called through Grafeo. Louvain stays unused.
+
+Decision for the owner: git dependency on `microsoft/graspologic-native` (exact GraphRAG parity, one `deny.toml` line) or `leiden-rs` from the registry (no policy change, in-house cap). This proposal recommends the first.
