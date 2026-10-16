@@ -403,6 +403,19 @@ kind = "library"
 used_by = ["grafeo"]
 source = "https://github.com/ostrium-labs/grafeo/tree/v0.5.43-loams.1/crates/grafeo-storage"
 
+# Leiden for Loams Graph's `leiden` algorithm (GR1 Task 22, R22.3; design §48 §26.11 D1072):
+# `network_partitions` 0.3.0, the Rust core of Microsoft's graspologic-native, which GraphRAG's
+# hierarchical Leiden runs. MIT (`LICENSE` at the tag and `license = "MIT"` in its Cargo.toml,
+# read 2026-10-16). Not on crates.io, so pinned by the rev of tag v1.3.1 with an `allow-git`
+# entry in `deny.toml`; Microsoft's notice is in the root `NOTICE`. Linked into `loams` behind
+# the `graph` feature, through `crates/loams-graph`.
+[components.network_partitions]
+name = "network_partitions"
+spdx = "MIT"
+kind = "library"
+used_by = ["grafeo"]
+source = "https://github.com/microsoft/graspologic-native/tree/v1.3.1/packages/network_partitions"
+
 # ----------------------------------------------------------------------------------------
 # Drivers loaded, never compiled in
 # ----------------------------------------------------------------------------------------

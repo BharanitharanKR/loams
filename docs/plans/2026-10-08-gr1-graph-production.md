@@ -2130,3 +2130,33 @@ Decision for the owner: git dependency on `microsoft/graspologic-native` (exact 
 - Readers pin `M`, use the index, and overlay `[N, M)`. They fall back to a build from the engine when the tail is trimmed or longer than `overlay_max_records`.
 - `pagerank`, `wcc` (R22.0) and `leiden` (R22.3) all run on that pinned view. Grafeo's `algos` is not called.
 - This amends D743's deferral of §07's sidecars for the adjacency index only. Expand and the table functions stay on parameterized GQL (R20.3, R21.4).
+
+### Task 22 (2026-10-16, on `gr1-b2-t22`)
+
+**R22.5 The spike (R22.2's first step).** `network_partitions` at `7731814` (tag `v1.3.1`), fed the 1,000-vertex fixture of `conformance/graph/reference/algos.py` and seeded as graspologic's Python binding seeds it (`SmallRng::seed_from_u64`, `rand` 0.10), gives graspologic-native 1.3.1's hierarchy **row for row** in all three cases (unweighted; weighted with `max_cluster_size` 10; `RELATED` only, resolution 0.8, seed 7). The modularity Loams computes equals networkx's within 1e-9: level 0 0.8857 / 0.8552 / 0.9599, final 0.8857 / 0.3716 / 0.5856. `leiden-rs` is not needed. The spike is kept as `leiden_modularity_within_reference_tolerance`.
+
+**R22.6 One PR (coordinator's call).** The index and the algorithms share the pinned view and their tests (`algorithms_deterministic_for_seed_and_snapshot` runs on all three of its paths), so they land together.
+
+**R22.7 Weights are in the index (deviation in format).** `leiden(weight => 'weight')` must run on the index, so v1 keeps each edge's `weight`: the property when it is an integer or a finite float, else 1. A `SetProps` that sets or removes an edge's `weight` changes the topology, as one that touches a vertex's `_key` does. `weight` names `weight` or is `NULL` (1 per edge); another name is `INVALID_ARGUMENT`. The CSC carries no weights; an in-edge's weight is its CSR entry's.
+
+**R22.8 The patch is a merge into the previous topology plus the one canonical encoder** (`AdjacencyIndex::from_topology`), so a patch and a full build are the same bytes by construction (`incremental_build_equals_full_build` checks it against an engine replayed from the same records). It is `O(E log E)`, not a streaming linear pass; Task 34 measures whether that matters. A reader's overlay is the same patch held in memory and never published.
+
+**R22.9 Semantics.**
+- `pagerank`: networkx's power iteration (uniform start and teleport, dangling mass spread uniformly), unweighted, each edge once (parallel edges each, a self-loop as an out-edge). `label` keeps the subgraph its vertices induce. It stops when the L1 change is under `N × tolerance` or after `max_iterations`, and answers its last iterate either way (no error).
+- `wcc`: union-find over both directions; components numbered 0, 1, … by their smallest member in canonical order (canonical `_key` bytes, then element id; keyless vertices last).
+- `leiden`: the undirected projection, one edge per vertex pair weighing the sum over both directions; graspologic's defaults (randomness 0.001, one iteration, modularity); `max_cluster_size` defaults to 1000 (graspologic's; §07 gives none); `max_levels` keeps levels `0..max_levels`; a vertex with no kept edge has no row.
+- Every function computes over every vertex and answers only keyed ones: `(label, key)` with the smallest label (`pagerank` answers the label asked for) and the key as text (R21.4).
+
+**R22.10 Where they run.** `pagerank`, `wcc` and `leiden` are SQL table functions beside Task 21's, positional (R21.1), registered in every SQL context (`loams-query` `sql/graph_algos.rs`), served by `GraphTables::algorithm` (`LoamsGraphExpander`). They run on the graph's owner (`GraphAdmin::run_algorithm` opens the graph here, as `checkpoint` does) and read `strong`. Forwarding an algorithm call to another node's owner is not built.
+
+**R22.11 Write-back.** `GraphAdmin::write_back(namespace, name, WriteBack { algorithm, field })` runs as one `loams-worker` task under `task/graph-algorithm/<gr_id>` (`run_once`), so one write-back of a graph runs at a time. An OWNED graph gets the field on every vertex answered in **one change set** through its write lane (the lane's link job with no link progress). A LINKED graph's vertex documents (`_collection`, then `_pk` or `_key`) get it through a `DocumentPatcher` (implemented for `CollectionService`), one atomic write per collection; its links bring the values back. The field may not be empty or start with `_`. `leiden` writes each vertex's community at its deepest level answered.
+
+**R22.12 Not in UP1's format registry.** The index is derived state: a file of an unknown version is `Decline::UnknownVersion`, a full build and a new file, never a refusal, so `loams.graph.adjacency` is not registered in `loams_common::formats` (which would also rebuild every crate).
+
+**R22.13 Gaps carried.**
+- No REST/Connect surface for write-back jobs (§07 §5.3's `POST /v1/namespaces/{ns}/graphs/{g}/jobs`); the server does not hand the admin a `DocumentPatcher` yet. Both go with the jobs API.
+- A LINKED graph's write-back has no end-to-end test (the OWNED one does).
+- Task 26 counts `AdjacencyIndex::memory_bytes` as graph memory; Task 27 exports `AdjacencyStats::snapshot` as the `loams_graph_adjacency_*` families.
+- The local cache keeps only the newest file per graph (`<data>/graphs/<gr_id>/adj/<sha256>.adj`); older pins read the bucket.
+
+**R22.14 Tests.** `tests/adjacency.rs` (11): `adjacency_format_golden_vectors` (three frozen files in `conformance/graph/adjacency/v1/`; non-canonical bytes with a good CRC and another version refused), `incremental_build_equals_full_build` (proptest, 64 histories of up to 60 change sets with link commits, schema records, deletes, `_key`, label and weight changes; patched from one cut and through two, against a replayed engine's scan; RED: dropping the `_key` `SetProps` fails it), `a_tail_with_a_gap_or_from_elsewhere_is_declined`, `index_publish_is_create_only_and_cas_monotonic`, `full_build_fallback_is_control_flow` (all five reasons), `reader_overlay_sees_tail_writes`, `reader_falls_back_when_tail_missing_or_long`, `index_path_holds_no_gate`, `index_survives_owner_move`, `graph_without_algorithms_has_no_index`, `adjacency_counters_reported`. `tests/retrieval.rs` (5): `algorithms_deterministic_for_seed_and_snapshot`, `pagerank_matches_networkx_within_1e_6`, `wcc_matches_reference`, `leiden_modularity_within_reference_tolerance`, `write_back_is_one_atomic_job`. `loams-query`: `algorithm_signatures_match_section_07`. Unit tests in `adjacency/format.rs`. `cargo deny check` with the `allow-git` entry.

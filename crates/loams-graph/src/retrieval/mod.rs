@@ -4,6 +4,7 @@
 //!   [`GraphExpander`](loams_query::expand::GraphExpander), built on parameterized GQL.
 //! * [`filter`]: the search IR's filters, evaluated over element properties.
 
+pub mod algos;
 pub mod expand;
 pub mod filter;
 pub mod udtf;

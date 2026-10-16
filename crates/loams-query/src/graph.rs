@@ -1,6 +1,7 @@
 //! The graph table functions' backend (GR1 Task 21; design §07 §5.1, §48 §10.3; D743).
 //!
-//! `graph_neighbors`, `graph_degree` and `graph_shortest_path` read a Loams Graph graph through a
+//! `graph_neighbors`, `graph_degree`, `graph_shortest_path` and the algorithms (`pagerank`, `wcc`,
+//! `leiden`; GR1 Task 22) read a Loams Graph graph through a
 //! [`GraphTables`], which the server hands the service when it runs graphs
 //! ([`crate::CollectionService::set_graph_tables`]); `graph_expand` runs on the
 //! [`GraphExpander`](crate::expand::GraphExpander) the `expand` stage uses.
@@ -83,6 +84,63 @@ pub struct PathCall<'a> {
     pub max_hops: u8,
 }
 
+/// Which graph algorithm a call runs, with its parameters (§07 §5.3; GR1 Task 22). Defaults are
+/// §07's: `damping` 0.85, `max_iterations` 20, `tolerance` 1e-6; `resolution` 1.0, `max_levels`
+/// 4, `max_cluster_size` 1000 (graspologic's), `seed` 42.
+#[derive(Clone, Debug, PartialEq)]
+pub enum AlgorithmSpec {
+    /// `pagerank(graph, label, edge_types, damping, max_iterations, tolerance)`.
+    PageRank {
+        label: Option<String>,
+        damping: f64,
+        max_iterations: u32,
+        tolerance: f64,
+    },
+    /// `wcc(graph, edge_types)`.
+    Wcc,
+    /// `leiden(graph, edge_types, weight, resolution, max_levels, max_cluster_size, seed)`.
+    Leiden {
+        weight: Option<String>,
+        resolution: f64,
+        max_levels: u32,
+        max_cluster_size: u32,
+        seed: u64,
+    },
+}
+
+/// A graph algorithm's call.
+#[derive(Clone, Debug)]
+pub struct AlgorithmCall<'a> {
+    pub namespace: &'a str,
+    pub graph: &'a str,
+    /// Only edges of these types; empty is every type.
+    pub edge_types: Vec<String>,
+    pub spec: AlgorithmSpec,
+}
+
+/// What an algorithm answers for one vertex.
+#[derive(Clone, Debug, PartialEq)]
+pub enum AlgorithmValue {
+    /// `pagerank`'s `rank`.
+    Rank(f64),
+    /// `wcc`'s `component`.
+    Component(u64),
+    /// One of `leiden`'s levels.
+    Community {
+        level: u32,
+        community: u64,
+        parent_community: Option<u64>,
+    },
+}
+
+/// One row of an algorithm's answer: a keyed vertex (`label`, `key`) and its value.
+#[derive(Clone, Debug, PartialEq)]
+pub struct AlgorithmRow {
+    pub label: String,
+    pub key: PrimaryKey,
+    pub value: AlgorithmValue,
+}
+
 /// Reads a graph for the graph table functions: Loams Graph's (`loams-graph`), when the server
 /// runs it.
 #[async_trait]
@@ -98,4 +156,8 @@ pub trait GraphTables: Send + Sync + std::fmt::Debug {
     /// A shortest path from `from` to `to` of at most `max_hops` edges, empty when there is none:
     /// the one whose vertices, then edges, have the smallest canonical key bytes at each step.
     async fn shortest_path(&self, call: PathCall<'_>) -> Result<Vec<PathStep>, ServiceError>;
+
+    /// Runs a graph algorithm on the graph at one snapshot (§07 §5.3, GR1 Task 22): one row per
+    /// keyed vertex (per level for `leiden`), in the graph's vertex order.
+    async fn algorithm(&self, call: AlgorithmCall<'_>) -> Result<Vec<AlgorithmRow>, ServiceError>;
 }

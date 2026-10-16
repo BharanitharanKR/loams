@@ -520,3 +520,418 @@ async fn shortest_path_depth_bound() {
     back.direction = ExpandDirection::In;
     assert!(expander.shortest_path(back).await.expect("path").is_empty());
 }
+
+// ---------------------------------------------------------------------------------------------
+// The graph algorithms (GR1 Task 22; §07 §5.3; R22.0, R22.3, R22.4)
+// ---------------------------------------------------------------------------------------------
+
+mod algorithms {
+    use std::collections::BTreeMap;
+    use std::sync::Arc;
+    use std::time::Duration;
+
+    use loams_graph::GraphId;
+    use loams_graph::adjacency::format::{
+        AdjacencyIndex, EdgeState, Topology, VertexKey, VertexState,
+    };
+    use loams_graph::adjacency::{AdjacencyConfig, BuildMode, Decline, PinSource, build};
+    use loams_graph::changeset::{ChangeOp, GraphRecord, decode};
+    use loams_graph::consistency::Consistency;
+    use loams_graph::owner::OwnerConfig;
+    use loams_graph::retrieval::algos::{
+        self, Algorithm, Leiden, PageRank, Score, Scored, WriteBack, compute,
+    };
+    use serde_json::Value;
+
+    use super::common::{Cluster, create, run, token};
+    use super::reference;
+
+    /// The 1,000-vertex fixture `algos.py` wrote, as an index.
+    fn fixture() -> AdjacencyIndex {
+        let fx = reference("algos_fixture.json");
+        let mut topology = Topology::default();
+        for node in fx["nodes"].as_array().expect("nodes") {
+            let key = match &node["key"] {
+                Value::Null => None,
+                Value::String(s) => Some(VertexKey::Str(s.clone())),
+                n => Some(VertexKey::Int(n.as_i64().expect("an integer key"))),
+            };
+            topology.vertices.insert(
+                node["id"].as_u64().expect("id"),
+                VertexState {
+                    labels: node["labels"]
+                        .as_array()
+                        .expect("labels")
+                        .iter()
+                        .map(|l| l.as_str().expect("label").to_string())
+                        .collect(),
+                    key,
+                },
+            );
+        }
+        for e in fx["edges"].as_array().expect("edges") {
+            topology.edges.insert(
+                e["id"].as_u64().expect("id"),
+                EdgeState {
+                    ty: e["ty"].as_str().expect("type").to_string(),
+                    src: e["src"].as_u64().expect("src"),
+                    dst: e["dst"].as_u64().expect("dst"),
+                    weight: e["weight"].as_f64().unwrap_or(1.0),
+                },
+            );
+        }
+        AdjacencyIndex::from_topology(GraphId(ulid::Ulid::nil()), 0, &topology).expect("index")
+    }
+
+    fn types(case: &Value) -> Vec<String> {
+        case["edge_types"]
+            .as_array()
+            .map(|t| {
+                t.iter()
+                    .map(|t| t.as_str().expect("type").to_string())
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
+    #[test]
+    fn pagerank_matches_networkx_within_1e_6() {
+        let view = fixture();
+        for case in reference("algos_expected.json")["pagerank"]
+            .as_array()
+            .expect("cases")
+        {
+            let name = case["name"].as_str().expect("name");
+            let params = PageRank {
+                label: case["label"].as_str().map(str::to_string),
+                edge_types: types(case),
+                damping: case["damping"].as_f64().expect("damping"),
+                max_iterations: case["max_iterations"].as_u64().expect("iterations") as u32,
+                tolerance: case["tolerance"].as_f64().expect("tolerance"),
+            };
+            let ranks = algos::pagerank(&view, &params).expect("pagerank");
+            let expected = case["ranks"].as_object().expect("networkx converged");
+            assert_eq!(ranks.len(), expected.len(), "{name}: the vertices ranked");
+            let mut worst = 0f64;
+            for (ordinal, rank) in ranks {
+                let want = expected[&view.vertices[ordinal].id.to_string()]
+                    .as_f64()
+                    .expect("rank");
+                worst = worst.max((rank - want).abs());
+            }
+            assert!(worst < 1e-6, "{name}: off by {worst}");
+        }
+    }
+
+    #[test]
+    fn wcc_matches_reference() {
+        let view = fixture();
+        for case in reference("algos_expected.json")["wcc"]
+            .as_array()
+            .expect("cases")
+        {
+            let name = case["name"].as_str().expect("name");
+            let expected = case["components"].as_object().expect("components");
+            let got = algos::wcc(&view, &types(case));
+            assert_eq!(got.len(), expected.len(), "{name}");
+            for (ordinal, component) in got {
+                assert_eq!(
+                    Some(component),
+                    expected[&view.vertices[ordinal].id.to_string()].as_u64(),
+                    "{name}: vertex {}",
+                    view.vertices[ordinal].id
+                );
+            }
+        }
+    }
+
+    /// R22.2's spike, kept as the test: `network_partitions` gives graspologic-native's answer on
+    /// the 1,000-vertex graph, row for row, and the modularity networkx measures.
+    #[test]
+    fn leiden_modularity_within_reference_tolerance() {
+        let view = fixture();
+        for case in reference("algos_expected.json")["leiden"]
+            .as_array()
+            .expect("cases")
+        {
+            let name = case["name"].as_str().expect("name");
+            let weighted = case["weighted"].as_bool().expect("weighted");
+            let resolution = case["resolution"].as_f64().expect("resolution");
+            let params = Leiden {
+                edge_types: types(case),
+                weight: weighted.then(|| "weight".to_string()),
+                resolution,
+                max_levels: 64,
+                max_cluster_size: case["max_cluster_size"].as_u64().expect("size") as u32,
+                seed: case["seed"].as_u64().expect("seed"),
+            };
+            let rows = algos::leiden(&view, &params).expect("leiden");
+            let got: Vec<(u32, u64, u64, Option<u64>)> = rows
+                .iter()
+                .map(|r| (r.level, view.vertices[r.ordinal].id, r.community, r.parent))
+                .collect();
+            let mut want: Vec<(u32, u64, u64, Option<u64>)> = case["rows"]
+                .as_array()
+                .expect("rows")
+                .iter()
+                .map(|r| {
+                    // [level, vertex, community, parent, final]
+                    (
+                        r[0].as_u64().expect("level") as u32,
+                        r[1].as_u64().expect("vertex"),
+                        r[2].as_u64().expect("community"),
+                        r[3].as_u64(),
+                    )
+                })
+                .collect();
+            want.sort_by_key(|(level, vertex, ..)| (*level, view.ordinal(*vertex)));
+            assert_eq!(got, want, "{name}: graspologic-native's hierarchy");
+            let partition = |pick: &dyn Fn(&algos::Community) -> bool| -> BTreeMap<usize, u64> {
+                rows.iter()
+                    .filter(|r| pick(r))
+                    .map(|r| (r.ordinal, r.community))
+                    .collect()
+            };
+            let level0 = algos::modularity(
+                &view,
+                &params.edge_types,
+                weighted,
+                resolution,
+                &partition(&|r| r.level == 0),
+            );
+            let last = algos::modularity(
+                &view,
+                &params.edge_types,
+                weighted,
+                resolution,
+                &partition(&|r| r.last),
+            );
+            let tolerance = 1e-9;
+            let reference0 = case["modularity_level0"].as_f64().expect("modularity");
+            let reference_final = case["modularity_final"].as_f64().expect("modularity");
+            assert!(
+                (level0 - reference0).abs() < tolerance,
+                "{name}: level 0 {level0} vs {reference0}"
+            );
+            assert!(
+                (last - reference_final).abs() < tolerance,
+                "{name}: final {last} vs {reference_final}"
+            );
+            assert!(
+                level0 > 0.8,
+                "{name}: the planted communities are found ({level0})"
+            );
+        }
+    }
+
+    /// Writes `n` vertices in two rings joined by one edge, each with a `_key`, and weights.
+    async fn rings(cluster: &Cluster, from: u64, n: u64) {
+        let admin = &cluster.node(1).admin;
+        for k in from..from + n {
+            run(admin, "kg", &format!("INSERT (:N {{_key: {k}, k: {k}}})")).await;
+            if k > 0 {
+                let prev = if k % 10 == 0 { k - 10 } else { k - 1 };
+                run(
+                    admin,
+                    "kg",
+                    &format!(
+                        "MATCH (a:N {{k: {prev}}}), (b:N {{k: {k}}}) INSERT (a)-[:R {{weight: {}}}]->(b)",
+                        1 + k % 3
+                    ),
+                )
+                .await;
+            }
+        }
+    }
+
+    fn all_algorithms() -> Vec<Algorithm> {
+        vec![
+            Algorithm::PageRank(PageRank::default()),
+            Algorithm::Wcc {
+                edge_types: Vec::new(),
+            },
+            Algorithm::Leiden(Leiden {
+                weight: Some("weight".to_string()),
+                max_cluster_size: 4,
+                ..Leiden::default()
+            }),
+        ]
+    }
+
+    fn answers(view: &AdjacencyIndex) -> Vec<Vec<Scored>> {
+        all_algorithms()
+            .iter()
+            .map(|a| compute(view, a).expect("computes"))
+            .collect()
+    }
+
+    async fn cluster(config: AdjacencyConfig) -> Cluster {
+        let mut cluster = Cluster::start(1, OwnerConfig::default()).await;
+        let node = &mut cluster.nodes[0];
+        node.admin = node.admin.clone().with_adjacency_config(config);
+        create(&cluster.node(1).admin, "kg").await;
+        cluster
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn algorithms_deterministic_for_seed_and_snapshot() {
+        let cluster = cluster(AdjacencyConfig {
+            incremental_max_fraction: 100.0,
+            ..AdjacencyConfig::default()
+        })
+        .await;
+        let admin = cluster.node(1).admin.clone();
+        rings(&cluster, 0, 12).await;
+        let first = admin
+            .run_algorithm("acme", "kg", &all_algorithms()[0], &Consistency::Strong)
+            .await
+            .expect("pagerank");
+        assert_eq!(first.pinned.source, PinSource::Built);
+        rings(&cluster, 12, 12).await;
+        // (a) The incrementally built index.
+        let built = admin.build_adjacency("acme", "kg").await.expect("build");
+        assert_eq!(built.mode, BuildMode::Incremental);
+        let indexer = admin.indexer().expect("indexer").clone();
+        let ns = admin.namespace_of("acme", "kg").await.expect("ns");
+        let graph = admin.open("acme", "kg").await.expect("open");
+        let incremental = indexer
+            .pin(
+                Arc::clone(&graph),
+                ns,
+                &Consistency::Strong,
+                Duration::from_secs(5),
+            )
+            .await
+            .expect("pin");
+        assert_eq!(incremental.source, PinSource::Index);
+        // (b) A full build.
+        let held = Arc::clone(&graph);
+        let full = tokio::task::spawn_blocking(move || build::build_full(&held).expect("full").0)
+            .await
+            .expect("join");
+        assert_eq!(full.covered_offset, incremental.offset);
+        // (c) The fallback: the published file no longer checks.
+        let id = cluster.graph_id("kg").await;
+        admin
+            .checkpointer()
+            .expect("checkpointer")
+            .manifests()
+            .update(ns, id, None, |m| {
+                if let Some(entry) = &mut m.adjacency {
+                    entry.sha256 = "f".repeat(64);
+                }
+                Ok((true, ()))
+            })
+            .await
+            .expect("edit");
+        indexer.forget(id);
+        let fallback = indexer
+            .pin(graph, ns, &Consistency::Strong, Duration::from_secs(5))
+            .await
+            .expect("pin");
+        assert_eq!(fallback.source, PinSource::Fallback(Decline::HashMismatch));
+        let expected = answers(&full);
+        assert_eq!(answers(&incremental.view), expected, "incremental = full");
+        assert_eq!(answers(&fallback.view), expected, "fallback = full");
+        assert_eq!(answers(&full), expected, "the same seed, the same answer");
+        // Through the admin, at the same snapshot.
+        for (algorithm, want) in all_algorithms().iter().zip(&expected) {
+            let answer = admin
+                .run_algorithm("acme", "kg", algorithm, &Consistency::Strong)
+                .await
+                .expect("runs");
+            assert_eq!(&answer.rows, want);
+        }
+        // Another seed may answer otherwise, and is again repeatable.
+        let other = Algorithm::Leiden(Leiden {
+            seed: 7,
+            max_cluster_size: 4,
+            ..Leiden::default()
+        });
+        assert_eq!(
+            compute(&full, &other).expect("leiden"),
+            compute(&incremental.view, &other).expect("leiden")
+        );
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn write_back_is_one_atomic_job() {
+        let cluster = cluster(AdjacencyConfig::default()).await;
+        let admin = cluster.node(1).admin.clone();
+        rings(&cluster, 0, 20).await;
+        let before = token(&run(&admin, "kg", "MATCH (n:N) RETURN count(n)").await).offset;
+        let job = WriteBack {
+            algorithm: Algorithm::PageRank(PageRank::default()),
+            field: "rank".to_string(),
+        };
+        let outcome = admin
+            .write_back("acme", "kg", &job)
+            .await
+            .expect("write-back");
+        assert_eq!(outcome.offset, before);
+        assert_eq!(outcome.written, 20);
+        assert_eq!(
+            outcome.committed,
+            Some(before + 1),
+            "one record: all of it, or none"
+        );
+        // The one record holds every vertex's rank.
+        let stream = cluster.stream_of("kg").await;
+        let records = cluster.records(stream).await;
+        let last = records.last().expect("a record");
+        assert_eq!(last.offset, before);
+        let GraphRecord::ChangeSet(change) =
+            decode(last.record.value.as_deref().expect("value")).expect("decodes")
+        else {
+            panic!("a change set");
+        };
+        assert_eq!(change.ops.len(), 20);
+        assert!(change.link.is_none());
+        let answer = admin
+            .run_algorithm("acme", "kg", &job.algorithm, &Consistency::Strong)
+            .await
+            .expect("pagerank");
+        let ranks: BTreeMap<u64, f64> = answer
+            .rows
+            .iter()
+            .map(|r| match r.score {
+                Score::Rank(rank) => (r.element, rank),
+                _ => panic!("a rank"),
+            })
+            .collect();
+        for op in &change.ops {
+            let ChangeOp::SetProps { id, set, .. } = op else {
+                panic!("{op:?}");
+            };
+            assert_eq!(set.get("rank"), Some(&grafeo::Value::Float64(ranks[id])));
+        }
+        // The engine has them, and the write-back's own record does not change the ranks (no
+        // topology changed).
+        let rows = run(
+            &admin,
+            "kg",
+            "MATCH (n:N) WHERE n.rank IS NOT NULL RETURN count(n)",
+        )
+        .await;
+        assert_eq!(
+            format!(
+                "{:?}",
+                rows.rows.as_option().expect("rows").rows[0].values[0].kind
+            ),
+            "Some(Int64(20))"
+        );
+        // A link's own property is refused.
+        let refused = admin
+            .write_back(
+                "acme",
+                "kg",
+                &WriteBack {
+                    field: "_key".to_string(),
+                    ..job.clone()
+                },
+            )
+            .await
+            .expect_err("refused");
+        assert_eq!(refused.code, connectrpc::ErrorCode::InvalidArgument);
+    }
+}

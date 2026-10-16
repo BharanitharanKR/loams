@@ -77,6 +77,12 @@ tokio-util.workspace = true
 # `Search.expand` (GR1 Task 20): `loams-query`'s graph expander and its IR. `loams` depends on it
 # already, so the server build gains no crate.
 loams-query.workspace = true
+# `leiden` (GR1 Task 22, R22.3): hierarchical Leiden from graspologic-native (MIT).
+network_partitions.workspace = true
+rand_010.workspace = true
+# The adjacency index's content address (GR1 Task 22): `adj/<offset>-<sha256>.adj`.
+sha2.workspace = true
+hex.workspace = true
 
 [features]
 # `engine_panic_poisons_one_graph`: `cargo test -p loams-graph --features failpoints`.

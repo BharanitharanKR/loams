@@ -97,6 +97,15 @@ grafeo-common = { version = "=0.5.43", git = "https://github.com/ostrium-labs/gr
 # statement classification matches on (GR1 Task 3, R0.10). Already in the tree
 # under grafeo-engine with the features above; this adds none.
 grafeo-adapters = { version = "=0.5.43", git = "https://github.com/ostrium-labs/grafeo", rev = "92bc59a28ed8b38dbb43659b4a90271770c58956", default-features = false }
+# Leiden for Loams Graph's `leiden` (GR1 Task 22, R22.3): `network_partitions`, the MIT-licensed Rust
+# core of Microsoft's graspologic-native, which GraphRAG's hierarchical Leiden runs. Not on crates.io,
+# so pinned by the rev of tag `v1.3.1` (2026-06-14), with an `allow-git` entry in `deny.toml` and
+# Microsoft's notice in `NOTICE`. `default-features = false` leaves out the optional petgraph/sprs.
+network_partitions = { version = "=0.3.0", git = "https://github.com/microsoft/graspologic-native", rev = "773181488b4e5b81925e302b972b294fd51f61a4", default-features = false }
+# `network_partitions` takes a `rand` 0.10 generator; Loams seeds its `SmallRng` (Xoshiro256++, as
+# graspologic-native's Python binding does) so a seed gives graspologic's answer (GR1 Task 22).
+# Already in `Cargo.lock` at 0.10.3; the workspace's own `rand` stays 0.9.
+rand_010 = { package = "rand", version = "=0.10.3", default-features = false }
 # Loams Git (GT1): the gitoxide 0.88 train of 2026-09-25, pinned exactly
 # (R0.8, T0-21), SHA-1 only (Ruling 8). A move to 0.89 is its own PR after
 # 2026-10-22. MIT OR Apache-2.0.

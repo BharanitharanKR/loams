@@ -6,6 +6,7 @@
 
 mod catalog;
 mod exprs;
+pub mod graph_algos;
 pub mod graph_ddl;
 pub mod graph_udtf;
 mod json_rows;
@@ -151,6 +152,16 @@ pub(crate) fn context(
         ctx.register_udtf(
             function.name(),
             Arc::new(graph_udtf::GraphTableFunction::new(scope.clone(), function)),
+        );
+    }
+    // The graph algorithms (GR1 Task 22), on Loams Graph's adjacency index.
+    for function in graph_algos::AlgorithmFunction::ALL {
+        ctx.register_udtf(
+            function.name(),
+            Arc::new(graph_algos::AlgorithmTableFunction::new(
+                scope.clone(),
+                function,
+            )),
         );
     }
     for name in udtf::DESCRIPTOR_FUNCTIONS {

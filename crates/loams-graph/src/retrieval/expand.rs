@@ -52,6 +52,12 @@ impl std::fmt::Debug for LoamsGraphExpander {
 }
 
 impl LoamsGraphExpander {
+    /// The graphs it reads.
+    #[must_use]
+    pub fn admin(&self) -> &GraphAdmin {
+        &self.admin
+    }
+
     /// An expander over `admin`'s graphs.
     #[must_use]
     pub fn new(admin: GraphAdmin) -> Self {
