@@ -211,6 +211,48 @@ struct Claims {
     preferred_username: Option<String>,
     #[serde(default)]
     groups: Vec<String>,
+    /// The expiry, Unix seconds (required by the validation).
+    #[serde(default)]
+    exp: Option<u64>,
+    /// A Loams token's org and environment (MT1's `org` and `env`).
+    #[serde(default)]
+    org: Option<String>,
+    #[serde(default)]
+    env: Option<String>,
+    /// Scopes: a Loams token's `scp` (a list or a space-separated string)
+    /// or the OAuth `scope` string.
+    #[serde(default)]
+    scp: Option<ScopeClaim>,
+    #[serde(default)]
+    scope: Option<String>,
+}
+
+/// A scope claim as a list or as one space-separated string.
+#[derive(Debug, serde::Deserialize)]
+#[serde(untagged)]
+enum ScopeClaim {
+    List(Vec<String>),
+    Text(String),
+}
+
+impl Claims {
+    /// What the token reaches (LV1 plan Task 14): the claims it carries,
+    /// the self-hosted default for the ones it does not.
+    fn grant(&self) -> super::Grant {
+        let scopes = match (&self.scp, &self.scope) {
+            (Some(ScopeClaim::List(list)), _) => super::Grant::scopes_of(list),
+            (Some(ScopeClaim::Text(text)), _) | (None, Some(text)) => {
+                super::Grant::scopes_of(text.split_whitespace())
+            }
+            (None, None) => None,
+        };
+        super::Grant {
+            org: self.org.clone().filter(|o| !o.is_empty()),
+            environment: self.env.clone().filter(|e| !e.is_empty()),
+            scopes,
+            expires_at_ms: self.exp.map(|s| s.saturating_mul(1000)),
+        }
+    }
 }
 
 impl OidcAuthenticator {
@@ -416,11 +458,13 @@ impl OidcAuthenticator {
             .or(claims.preferred_username.clone())
             .or(verified_email.clone())
             .unwrap_or_else(|| claims.sub.clone());
+        let grant = claims.grant();
         Ok(Principal {
             subject: claims.sub,
             kind: PrincipalKind::User,
             display_name,
             email: verified_email,
+            grant,
         })
     }
 }
@@ -481,6 +525,36 @@ impl Authenticator for OidcAuthenticator {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn claims(json: serde_json::Value) -> Claims {
+        serde_json::from_value(json).expect("claims")
+    }
+
+    /// LV1 plan Task 14: a token's `org`, `env`, `scp` (or `scope`) and
+    /// `exp` become its grant; a token without them gets the self-hosted
+    /// default.
+    #[test]
+    fn claims_fill_the_grant() {
+        let full = claims(serde_json::json!({
+            "sub": "u", "exp": 1_800_000_000u64, "org": "acme", "env": "shop/prod",
+            "scp": ["live:call", "live:read"],
+        }))
+        .grant();
+        assert_eq!(full.org.as_deref(), Some("acme"));
+        assert_eq!(full.environment.as_deref(), Some("shop/prod"));
+        assert!(full.has_scope("live:call") && !full.has_scope("live:deploy"));
+        assert_eq!(full.expires_at_ms, Some(1_800_000_000_000));
+        let spaced = claims(serde_json::json!({"sub": "u", "scope": "openid live:read"})).grant();
+        assert!(spaced.has_scope("live:read") && !spaced.has_scope("live:write"));
+        let scp_text = claims(serde_json::json!({"sub": "u", "scp": "live:admin"})).grant();
+        assert!(scp_text.has_scope("live:admin"));
+        let bare = claims(serde_json::json!({"sub": "u"})).grant();
+        assert_eq!(bare, crate::auth::Grant::default());
+        assert!(
+            bare.has_scope("live:deploy"),
+            "no scopes named: every scope"
+        );
+    }
 
     fn config() -> OidcConfig {
         OidcConfig {

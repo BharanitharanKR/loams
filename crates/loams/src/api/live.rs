@@ -67,12 +67,33 @@ pub(crate) async fn caller(
     next: axum::middleware::Next,
 ) -> axum::response::Response {
     if let Some(principal) = request.extensions().get::<crate::auth::Principal>() {
-        let caller = loams_live::admin::Caller {
-            id: principal.subject.clone(),
-        };
+        let caller = live_caller(principal);
         request.extensions_mut().insert(caller);
     }
     next.run(request).await
+}
+
+/// The Live caller of an admitted principal (LV1 plan Task 14): its id,
+/// its kind and what its credential reaches.
+#[cfg(feature = "live")]
+pub(crate) fn live_caller(principal: &crate::auth::Principal) -> loams_live::auth::Caller {
+    use crate::auth::PrincipalKind;
+    use loams_live::auth::{Caller, CallerKind};
+    let kind = match principal.kind {
+        PrincipalKind::User => CallerKind::User,
+        PrincipalKind::Session => CallerKind::Session,
+        PrincipalKind::ApiKey => CallerKind::ApiKey,
+        PrincipalKind::Tailscale => CallerKind::Tailscale,
+        PrincipalKind::DevLoopback => CallerKind::DevLoopback,
+    };
+    let grant = &principal.grant;
+    Caller {
+        org: grant.org.clone(),
+        environment: grant.environment.clone(),
+        scopes: grant.scopes.clone(),
+        expires_at_ms: grant.expires_at_ms,
+        ..Caller::new(principal.subject.clone(), kind)
+    }
 }
 
 /// `loams.live.v1.LiveService` as this binary answers it: every RPC refuses
@@ -85,6 +106,42 @@ pub(crate) async fn caller(
 /// Live running, the main port answers with this.
 #[derive(Debug)]
 struct LiveAbsent;
+
+#[cfg(all(test, feature = "live"))]
+mod tests {
+    use super::*;
+    use crate::auth::{Grant, Principal, PrincipalKind};
+    use loams_live::auth::CallerKind;
+
+    /// LV1 plan Task 14: the caller carries the principal's kind and grant.
+    #[test]
+    fn the_live_caller_carries_the_grant() {
+        let principal = Principal {
+            subject: "apikey:01".to_owned(),
+            kind: PrincipalKind::ApiKey,
+            display_name: "ci".to_owned(),
+            email: None,
+            grant: Grant {
+                org: Some("acme".to_owned()),
+                environment: Some("shop/prod".to_owned()),
+                scopes: Grant::scopes_of(["live:call"]),
+                expires_at_ms: Some(42),
+            },
+        };
+        let caller = live_caller(&principal);
+        assert_eq!(caller.id, "apikey:01");
+        assert_eq!(caller.kind, CallerKind::ApiKey);
+        assert_eq!(caller.environment.as_deref(), Some("shop/prod"));
+        assert!(caller.has_scope("live:call") && !caller.has_scope("live:deploy"));
+        assert_eq!(caller.expires_at_ms, Some(42));
+        let open = live_caller(&Principal {
+            grant: Grant::default(),
+            kind: PrincipalKind::DevLoopback,
+            ..principal
+        });
+        assert!(open.has_scope("live:deploy") && open.environment.is_none());
+    }
+}
 
 impl LiveService for LiveAbsent {
     async fn watch(

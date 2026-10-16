@@ -31,14 +31,8 @@ use crate::schema::{IndexChange, Schema, SchemaChanges};
 use crate::service::{app_of, connect_error};
 use crate::{LiveError, backfill};
 
-/// Who is calling: the principal the server's authentication layer
-/// admitted, put in the request's extensions for the admin service.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct Caller {
-    /// The principal's id (an OIDC subject, an API key's id, or
-    /// `dev-loopback`); never a credential.
-    pub id: String,
-}
+/// Who is calling (moved to [`crate::auth`], LV1 plan Task 14).
+pub use crate::auth::{Caller, CallerKind};
 
 /// The `LiveAdminService` implementation of a server's apps.
 pub(crate) struct Admin {
@@ -46,9 +40,7 @@ pub(crate) struct Admin {
 }
 
 fn caller(ctx: &RequestContext) -> String {
-    ctx.extensions()
-        .get::<Caller>()
-        .map_or_else(|| deploy::UNAUTHENTICATED.to_string(), |c| c.id.clone())
+    Caller::of(ctx).id
 }
 
 /// A deployment id of a request: a ULID.
