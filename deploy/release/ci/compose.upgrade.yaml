@@ -1,0 +1,33 @@
+# The upgrade gate's override (design §54 §14 step 1, UP1 Task 20). The gate
+# copies it into the stack directory as compose.override.yaml, so the
+# previous release, `loams upgrade` and the candidate all run with it:
+#
+# - no Tailscale: the engine takes API keys (secrets/api-keys) instead, and
+#   the fixtures reach its loopback listeners from a container that shares
+#   the `loams` container's network namespace;
+# - no Postgres compute (it needs a tenant and a timeline the gate does not
+#   create yet); the pageserver and the safekeeper run, so the drain runs;
+# - no published host ports, so parallel stacks on one runner do not collide;
+# - TiKV's open-file limit raised (as the release compose file does since
+#   preview.3).
+services:
+  # TiKV refuses to start below 82920 open files; preview.2's compose file
+  # does not raise the limit, and CI's Docker defaults to 65536.
+  tikv:
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
+  loams:
+    environment:
+      LOAMS_AUTH_MODE: apikey
+  tailscale:
+    profiles: [disabled]
+  compute1:
+    profiles: [disabled]
+  pageserver:
+    ports: !reset []
+  safekeeper1:
+    ports: !reset []
+  rustfs:
+    ports: !reset []

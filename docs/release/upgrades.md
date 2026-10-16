@@ -141,4 +141,5 @@ Every error has a code. `--output json` prints `{"error": code, "message": …}`
 | 10 | `upgrade_failed_rolled_back` | The upgrade failed and the stack is back on the previous release, as it was. The message says why; `status` shows the attempt. |
 | 11 | `rollback_failed` | The rollback failed too. The message names the snapshot, its host files and the manual steps: stop the stack, copy the host files back, restore TiKV, run `loams migrate restore --from <snapshot>` in the target's `loams` image, start the stack. |
 
-For BYOC VMs, run the same commands over SSH in the bundle directory on the VM.
+For a BYOC VM that `byoc/install.sh` set up, `deploy/release/byoc/upgrade.sh user@host --to V` runs the same
+upgrade on the VM over SSH (`--check`, `--rollback`); see [`deploy/release/README.md`](../../deploy/release/README.md).

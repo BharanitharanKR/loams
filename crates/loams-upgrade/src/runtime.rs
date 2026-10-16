@@ -56,6 +56,11 @@ impl Cli {
     }
 
     fn run(&self, args: &[String]) -> Result<Output> {
+        // LOAMS_UPGRADE_TRACE=1 prints every command (the gate keeps it in
+        // its logs). Arguments hold paths and image names, never `.env` values.
+        if std::env::var_os("LOAMS_UPGRADE_TRACE").is_some() {
+            eprintln!("+ {} {}", self.program, args.join(" "));
+        }
         let out = Command::new(&self.program)
             .args(args)
             .output()
@@ -82,6 +87,22 @@ impl Runtime for Cli {
     fn engine(&self, args: &[String]) -> Result<Output> {
         self.run(args)
     }
+}
+
+/// The JSON a `loams migrate …` helper printed: its whole output, else the
+/// last line that is JSON (the engine's log lines can share stdout).
+pub fn helper_json(stdout: &str) -> std::result::Result<serde_json::Value, serde_json::Error> {
+    let whole = serde_json::from_str(stdout.trim());
+    if whole.is_ok() {
+        return whole;
+    }
+    stdout
+        .lines()
+        .rev()
+        .map(str::trim)
+        .filter(|l| l.starts_with('{') || l.starts_with('['))
+        .find_map(|l| serde_json::from_str(l).ok())
+        .map_or(whole, Ok)
 }
 
 /// `args` as owned strings.

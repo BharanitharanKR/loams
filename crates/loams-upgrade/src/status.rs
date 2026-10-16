@@ -46,7 +46,7 @@ pub fn status(runtime: &dyn Runtime, stack: &StackDir, current: &str) -> Result<
     sub.push("--output=json".to_string());
     let out = runtime.engine(&migrate_helper(stack, &image, &sub).render())?;
     let (migrate, migrate_error) = if out.ok() {
-        match serde_json::from_str(out.stdout.trim()) {
+        match crate::runtime::helper_json(&out.stdout) {
             Ok(value) => (Some(value), None),
             Err(e) => (None, Some(format!("loams migrate status's output: {e}"))),
         }
