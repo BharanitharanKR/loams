@@ -18,6 +18,7 @@ pub mod fork;
 pub mod format;
 pub mod forward;
 pub mod gc;
+pub mod history;
 pub mod ids;
 pub mod limits;
 pub mod mirror_events;

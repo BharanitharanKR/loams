@@ -1,10 +1,10 @@
 syntax = "proto3";
 
 // Loams Git: `ObjectService`, lazy object reads for workspaces and their
-// clients (design §36 §19.5, §19.10, D829, D830; plan GT1 Task 18). This
-// file holds the object reads; Tasks 20, 21 and 24 add `Log`, `DiffStat`,
-// `Blame`, `Grep` and `PutWorkspacePack`. See `repos.proto` for the
-// package's rules.
+// clients (design §36 §19.5, §19.8, §19.10, D829, D830, D833; plan GT1
+// Tasks 18 and 20). This file holds the object reads and the history
+// queries `Log` and `DiffStat`; Tasks 21 and 24 add `Blame`, `Grep` and
+// `PutWorkspacePack`. See `repos.proto` for the package's rules.
 //
 // Every request names its repository as `RepoService` does (`namespace`,
 // `name`). `workspace` is optional: when set, the workspace's packs are read
@@ -38,6 +38,18 @@ service ObjectService {
   }
   // Which of up to 1,024 objects the repository (and the workspace) holds.
   rpc HasObjects(HasObjectsRequest) returns (HasObjectsResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // The commits `revs` reach, in `git log`'s order and with its default
+  // history simplification for `paths`, one commit per message. The shim
+  // formats them as git does. Walks the commit graph, which the first call
+  // at a new seq extends (§19.8).
+  rpc Log(LogRequest) returns (stream LogResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Per-file added and removed lines between two trees, as
+  // `git diff --numstat --no-renames` counts them.
+  rpc DiffStat(DiffStatRequest) returns (DiffStatResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
 }
@@ -125,4 +137,105 @@ message HasObjectsResponse {
   // object `i` of the request is held.
   bytes present = 1;
   string consistency_token = 14;
+}
+
+// What a `LogCommit` carries besides its id, tree and parents.
+enum LogField {
+  LOG_FIELD_UNSPECIFIED = 0;
+  // `author` and `committer`.
+  LOG_FIELD_SIGNATURES = 1;
+  LOG_FIELD_MESSAGE = 2;
+  // `changed`: the paths changed against the first parent.
+  LOG_FIELD_CHANGED = 3;
+}
+
+message LogRequest {
+  string namespace = 1;
+  string name = 2;
+  // Each `X` (a ref name, a short name as git resolves it, `HEAD` or 40
+  // hex digits), `^X` (excluded), or `A..B` (`A` excluded; an empty side
+  // is `HEAD`). `A...B` is refused. Empty is `HEAD`; at most 64.
+  repeated string revs = 3;
+  // Literal paths (a file or a directory, matching everything below it);
+  // globs and pathspec magic are `invalid_argument`. At most 64.
+  repeated string paths = 4;
+  // The most commits answered; unset is all.
+  optional uint32 limit = 5;
+  // Empty is signatures and message.
+  repeated LogField fields = 6;
+  string consistency_token = 14;
+}
+
+message LogResponse {
+  LogCommit commit = 1;
+  string consistency_token = 14;
+}
+
+message LogCommit {
+  string oid = 1;
+  string tree = 2;
+  // The true parents, in order (never the simplified ones).
+  repeated string parents = 3;
+  Signature author = 4;
+  Signature committer = 5;
+  // The message as stored, after the headers.
+  bytes message = 6;
+  // With `LOG_FIELD_CHANGED`: against the first parent (the empty tree for
+  // a root), restricted to `paths`.
+  repeated ChangedPath changed = 7;
+}
+
+message Signature {
+  bytes name = 1;
+  bytes email = 2;
+  // Seconds since the epoch.
+  int64 time = 3;
+  // As stored, for example "+0530".
+  string tz = 4;
+}
+
+enum ChangeKind {
+  CHANGE_KIND_UNSPECIFIED = 0;
+  CHANGE_KIND_ADDED = 1;
+  CHANGE_KIND_DELETED = 2;
+  CHANGE_KIND_MODIFIED = 3;
+  // Between a file, a symlink and a submodule.
+  CHANGE_KIND_TYPE_CHANGED = 4;
+}
+
+message ChangedPath {
+  bytes path = 1;
+  ChangeKind kind = 2;
+  // Unset when added.
+  optional uint32 old_mode = 3;
+  string old_oid = 4;
+  // Unset when deleted.
+  optional uint32 new_mode = 5;
+  string new_oid = 6;
+}
+
+message DiffStatRequest {
+  string namespace = 1;
+  string name = 2;
+  // A workspace whose packs are read after the repository's, or empty.
+  string workspace = 3;
+  // Revisions as `LogRequest.revs` names them (a commit, tag or tree).
+  string from_rev = 4;
+  string to_rev = 5;
+  // Literal paths, as `LogRequest.paths`.
+  repeated string paths = 6;
+  string consistency_token = 14;
+}
+
+message DiffStatResponse {
+  // In git's order.
+  repeated FileStat files = 1;
+  string consistency_token = 14;
+}
+
+message FileStat {
+  ChangedPath change = 1;
+  // Both unset for a binary file (`-` in `--numstat`).
+  optional uint64 added = 2;
+  optional uint64 removed = 3;
 }

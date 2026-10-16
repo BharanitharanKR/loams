@@ -1017,6 +1017,8 @@ The projection is **always present** as `.git` at the workspace root, so tools t
 - **`DiffStat(a, b, pathspec)`** returns tree-diff statistics. Line counts need blob reads, which the server does and caches per (a, b) pair.
 - **`env/` files** in all four return keys and fingerprints only (§19.13.8).
 
+**As built (GT1c, Task 20; `crates/loams-git/src/derived/{graph.rs,bloom.rs}`, `src/history/`).** A `derived/graph/<seq:020>.graph` layer is git's commit-graph format with version 2 changed-path Bloom filters, a `BASE` chain and one Loams chunk, `LOAM`, naming each base's seq; `gix-commitgraph` reads it, and it matches `git commit-graph write --changed-paths` chunk for chunk. A layer holds the commits its seq's refs reach that the newest stored chain lacks, and layers merge geometrically (at most 16 in a chain). Two details differ from git's format page and follow git 2.55 instead: a filter is `ceil(10n/8)` bytes, and the 512-path limit counts directories. `Log` emulates git's default walk (date order, ties in the order reached, the excluded side walked in the same queue with git's slop, default history simplification in which only excluded tips count among excluded parents) and checks a commit's filter before its trees. Pathspecs are literal. `DiffStat` counts lines with Myers' shortest edit script, without rename detection, and is not cached yet. Compaction's `commit-graph/` joins as a base kind with Task 53. Plan rulings T20.1–T20.6.
+
 ### 19.9 Interop (D835)
 
 - §6 (Smart HTTP and `git-remote-loams`) is unchanged and is the path for stock clients and CI: `git clone --filter=blob:none --sparse https://…/<repo>.git` works against the same repository.

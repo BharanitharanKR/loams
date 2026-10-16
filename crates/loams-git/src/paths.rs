@@ -225,6 +225,11 @@ impl RepoPaths {
         format!("{}/derived/graph/{seq}.graph", self.root)
     }
 
+    /// The prefix of every commit-graph layer (§19.8).
+    pub fn derived_graph_prefix(&self) -> String {
+        format!("{}/derived/graph/", self.root)
+    }
+
     /// The blame of `path` at `commit` (§19.8): the path is hashed, so any
     /// path length gives one bounded name.
     pub fn derived_blame(&self, commit: &ObjectId, path: &RepoPath) -> String {

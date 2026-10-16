@@ -7,6 +7,8 @@
 //! the winner back. Reads go through the H1 cache when there is one. A
 //! derived object can be deleted at any time: it is computed again.
 
+pub mod bloom;
+pub mod graph;
 pub mod tree_aux;
 
 use bytes::Bytes;
@@ -19,6 +21,7 @@ use crate::odb::OdbError;
 use crate::paths::RepoPaths;
 use crate::retry;
 
+pub use graph::{GraphCommit, GraphView, graph_view};
 pub use tree_aux::{AuxEntry, TreeAux, tree_aux};
 
 /// Errors of derived data.
@@ -101,6 +104,12 @@ impl DerivedStore {
             Err(StoreError::NotFound { .. }) => Ok(None),
             Err(err) => Err(err.into()),
         }
+    }
+
+    /// The paths of the objects under `prefix`, sorted.
+    pub async fn list(&self, prefix: &str) -> Result<Vec<String>, DerivedError> {
+        let listed = retry::retry(|| self.store.list(prefix)).await?;
+        Ok(listed.into_iter().map(|info| info.path).collect())
     }
 
     /// Writes `bytes` at `path` unless an object is there, and returns the

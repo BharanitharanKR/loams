@@ -39,6 +39,8 @@ const RPCS: &[(&str, &str, bool)] = &[
     ("ObjectService", "GetObjects", true),
     ("ObjectService", "GetTrees", false),
     ("ObjectService", "HasObjects", false),
+    ("ObjectService", "Log", true),
+    ("ObjectService", "DiffStat", false),
 ];
 
 /// A `loams` server on loopback, with its data directory.

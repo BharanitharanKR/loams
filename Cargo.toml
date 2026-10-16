@@ -105,6 +105,8 @@ gix-validate = { version = "=0.12.0", default-features = false }
 gix-object = { version = "=0.65.0", default-features = false, features = ["sha1"] }
 gix-pack = { version = "=0.75.0", default-features = false, features = ["sha1"] }
 gix-zlib = { version = "=0.2.0", default-features = false }
+# The commit-graph reader of `derived/graph/` layers (GT1 Task 20).
+gix-commitgraph = { version = "=0.40.0", default-features = false }
 hex = "0.4"
 # Live pagination cursors are HMAC-SHA256 tagged with the app's key (LV1
 # Task 4); 0.13 is the line on sha2 0.11's digest.
@@ -143,6 +145,9 @@ lance-table = { version = "=12.0.0", default-features = false }
 # The isolated worker's filesystem, network and signal sandbox (LV1 plan
 # Task 5, design §45 §3.1): Linux only, best effort for the running kernel.
 landlock = "0.4.7"
+# Commit-graph layers are read from memory through an anonymous mapping
+# (`gix-commitgraph` reads an `Mmap`; GT1 Task 20). Already linked by `gix-pack`.
+memmap2 = "0.9.11"
 moka = { version = "0.12", features = ["future"] }
 object_store = { version = "0.14", features = ["aws", "gcp", "azure", "fs"] }
 once_cell = "1"

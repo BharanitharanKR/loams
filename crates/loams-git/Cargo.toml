@@ -19,6 +19,8 @@ gix-hash.workspace = true
 gix-object.workspace = true
 gix-pack.workspace = true
 gix-zlib.workspace = true
+# The commit-graph reader (Task 20).
+gix-commitgraph.workspace = true
 gix-validate.workspace = true
 # The protobuf format only: `record` would pull in loams-log (R0.4, T0-7).
 loams-cloudevents = { path = "../loams-cloudevents", version = "0.1.0-preview.2", default-features = false, features = ["protobuf"] }
@@ -28,6 +30,8 @@ loams-common.workspace = true
 # Spill files for large blob uploads (§36 §5.3, §17).
 loams-fs.workspace = true
 loams-store.workspace = true
+# Commit-graph layers are mapped anonymously for `gix-commitgraph` (Task 20).
+memmap2.workspace = true
 # The body of a commit forwarded to the sequencer's owner (Ruling 27).
 postcard.workspace = true
 # The loams.git.v1 on-disk messages (R0.5).

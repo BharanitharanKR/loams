@@ -3,10 +3,10 @@
 #![allow(refining_impl_trait)]
 
 //! `loams.repos.v1.ObjectService` on the main port and the immutable object route on the git
-//! listener (Loams Git, GT1 Task 18; design §36 §19.5.1, D829, D830).
+//! listener (Loams Git, GT1 Tasks 18 and 20; design §36 §19.5.1, §19.8, D829, D830, D833).
 //!
-//! With the `git` feature `GetObjects`, `GetTrees` and `HasObjects` are served over the
-//! repository's packs (`loams_git::odb::RangeOdb`, through the server's H1 cache) and, when a
+//! With the `git` feature `GetObjects`, `GetTrees`, `HasObjects`, `Log` and `DiffStat` are
+//! served over the repository's packs (`loams_git::odb::RangeOdb`, through the server's H1 cache) and, when a
 //! request names a workspace, the workspace's packs after them. Callers need the org role
 //! `member`, as for every `RepoService` read; whoever may read a repository may read its
 //! workspaces (GT-Q13's default, ruling T18.2). Without the feature every RPC answers
@@ -82,6 +82,22 @@ impl ObjectService for ObjectsAbsent {
     ) -> ServiceResult<pb::HasObjectsResponse> {
         Err(absent("HasObjects"))
     }
+
+    async fn log(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, pb::LogRequest>,
+    ) -> ServiceResult<ServiceStream<pb::LogResponse>> {
+        Err(absent("Log"))
+    }
+
+    async fn diff_stat(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, pb::DiffStatRequest>,
+    ) -> ServiceResult<pb::DiffStatResponse> {
+        Err(absent("DiffStat"))
+    }
 }
 
 #[cfg(feature = "git")]
@@ -93,7 +109,7 @@ mod served {
 
     use axum::http::{HeaderValue, StatusCode, header};
     use axum::response::{IntoResponse, Response as HttpResponse};
-    use buffa::EnumValue;
+    use buffa::{EnumValue, MessageField};
     use connectrpc::{
         ConnectError, ErrorCode, RequestContext, Response, ServiceRequest, ServiceResult,
         ServiceStream,
@@ -101,6 +117,10 @@ mod served {
     use futures::StreamExt;
     use loams_git::catalog::RepoRecord;
     use loams_git::derived::DerivedError;
+    use loams_git::history::{
+        ChangeKind, ChangedPath, HistoryError, LogEntry, LogFields, LogQuery, Pathspec, Signature,
+        diff_stat, log, resolve_tree,
+    };
     use loams_git::objects::{
         Kind, ObjectRead, ObjectsError, WsView, bitmap, get_objects, get_trees,
         grant_reads_workspace, has_objects, loose_object, workspace_odb,
@@ -112,11 +132,14 @@ mod served {
     };
     use loams_proto::loams::repos::v1 as pb;
     use loams_proto::loams::repos::v1::ObjectService;
+    use tokio::sync::mpsc;
 
     use crate::api::connect::refuse;
     use crate::api::repos::GitRuntime;
     use crate::api::repos::served::{ReposServed, invalid, repo_name, token, unavailable};
 
+    /// Commits a `Log` stream buffers before its walk waits.
+    const LOG_BUFFER: usize = 64;
     /// The largest `data` of one `GetObjectsResponse`; larger objects come in chunks.
     const CHUNK: usize = 1024 * 1024;
     /// The `Cache-Control` of the object route: objects are immutable (§19.5.1).
@@ -223,6 +246,104 @@ mod served {
         }
     }
 
+    fn history_error(err: HistoryError) -> ConnectError {
+        match err {
+            HistoryError::Pathspec { spec, reason } => {
+                invalid("paths", format!("pathspec {spec:?}: {reason}"))
+            }
+            HistoryError::Rev { rev, reason } => {
+                invalid("revs", format!("revision {rev:?}: {reason}"))
+            }
+            HistoryError::TooMany { what, max, got } => {
+                invalid(what, format!("{got} {what}; at most {max} per call"))
+            }
+            HistoryError::Odb(err) => odb_error(err),
+            HistoryError::Derived(DerivedError::Odb(err)) => odb_error(err),
+            HistoryError::Derived(DerivedError::Store(err)) => {
+                unavailable("the commit graph", &err)
+            }
+            HistoryError::Derived(err) => internal("a corrupt commit graph", &err),
+        }
+    }
+
+    fn signature_pb(sig: Signature) -> pb::Signature {
+        pb::Signature {
+            name: sig.name,
+            email: sig.email,
+            time: sig.time,
+            tz: sig.tz,
+            ..Default::default()
+        }
+    }
+
+    fn changed_pb(change: ChangedPath) -> pb::ChangedPath {
+        let kind = match change.kind {
+            ChangeKind::Added => pb::ChangeKind::CHANGE_KIND_ADDED,
+            ChangeKind::Deleted => pb::ChangeKind::CHANGE_KIND_DELETED,
+            ChangeKind::Modified => pb::ChangeKind::CHANGE_KIND_MODIFIED,
+            ChangeKind::TypeChanged => pb::ChangeKind::CHANGE_KIND_TYPE_CHANGED,
+        };
+        pb::ChangedPath {
+            path: change.path,
+            kind: EnumValue::Known(kind),
+            old_mode: change.old.map(|(mode, _)| mode),
+            old_oid: change
+                .old
+                .map(|(_, oid)| oid.to_string())
+                .unwrap_or_default(),
+            new_mode: change.new.map(|(mode, _)| mode),
+            new_oid: change
+                .new
+                .map(|(_, oid)| oid.to_string())
+                .unwrap_or_default(),
+            ..Default::default()
+        }
+    }
+
+    fn log_commit(entry: LogEntry) -> pb::LogCommit {
+        pb::LogCommit {
+            oid: entry.oid.to_string(),
+            tree: entry.tree.to_string(),
+            parents: entry.parents.iter().map(ToString::to_string).collect(),
+            author: match entry.author {
+                Some(sig) => MessageField::some(signature_pb(sig)),
+                None => MessageField::none(),
+            },
+            committer: match entry.committer {
+                Some(sig) => MessageField::some(signature_pb(sig)),
+                None => MessageField::none(),
+            },
+            message: entry.message.map(|m| m.to_vec()).unwrap_or_default(),
+            changed: entry
+                .changed
+                .unwrap_or_default()
+                .into_iter()
+                .map(changed_pb)
+                .collect(),
+            ..Default::default()
+        }
+    }
+
+    fn log_fields(values: &[EnumValue<pb::LogField>]) -> Result<LogFields, ConnectError> {
+        if values.is_empty() {
+            return Ok(LogFields::default());
+        }
+        let mut fields = LogFields {
+            signatures: false,
+            message: false,
+            changed: false,
+        };
+        for value in values {
+            match value {
+                EnumValue::Known(pb::LogField::LOG_FIELD_SIGNATURES) => fields.signatures = true,
+                EnumValue::Known(pb::LogField::LOG_FIELD_MESSAGE) => fields.message = true,
+                EnumValue::Known(pb::LogField::LOG_FIELD_CHANGED) => fields.changed = true,
+                _ => return Err(invalid("fields", "an unknown log field")),
+            }
+        }
+        Ok(fields)
+    }
+
     fn oids(field: &str, values: &[String]) -> Result<Vec<ObjectId>, ConnectError> {
         values.iter().map(|value| parse_oid(field, value)).collect()
     }
@@ -311,6 +432,16 @@ mod served {
         }
     }
 
+    impl ObjectsServed {
+        fn derived(&self, record: &RepoRecord) -> DerivedStore {
+            DerivedStore::new(
+                self.repos.git.store.clone(),
+                RepoPaths::new(record.ns, &record.repo_id),
+            )
+            .with_range_cache(self.repos.git.h1.clone())
+        }
+    }
+
     impl ObjectService for ObjectsServed {
         async fn get_objects(
             &self,
@@ -363,11 +494,7 @@ mod served {
                     &req.consistency_token,
                 )
                 .await?;
-            let derived = DerivedStore::new(
-                self.repos.git.store.clone(),
-                RepoPaths::new(record.ns, &record.repo_id),
-            )
-            .with_range_cache(self.repos.git.h1.clone());
+            let derived = self.derived(&record);
             let got = get_trees(&odb, &derived, &root, depth)
                 .await
                 .map_err(objects_error)?;
@@ -416,6 +543,98 @@ mod served {
             let held = has_objects(&odb, &wanted).await.map_err(objects_error)?;
             Response::ok(pb::HasObjectsResponse {
                 present: bitmap(&held),
+                consistency_token: token(&record.repo_id, snapshot.seq),
+                ..Default::default()
+            })
+        }
+
+        async fn log(
+            &self,
+            ctx: RequestContext,
+            request: ServiceRequest<'_, pb::LogRequest>,
+        ) -> ServiceResult<ServiceStream<pb::LogResponse>> {
+            let req = request.to_owned_message();
+            let query = LogQuery {
+                revs: req.revs.clone(),
+                pathspec: Pathspec::parse(&req.paths).map_err(history_error)?,
+                limit: req.limit.map(|limit| limit as usize),
+                fields: log_fields(&req.fields)?,
+            };
+            // The commit graph holds repository commits only, so `Log` takes no workspace.
+            let (record, snapshot, odb) = self
+                .open(&ctx, &req.namespace, &req.name, "", &req.consistency_token)
+                .await?;
+            let derived = self.derived(&record);
+            let at = token(&record.repo_id, snapshot.seq);
+            let (tx, mut rx) = mpsc::channel::<Result<pb::LogResponse, ConnectError>>(LOG_BUFFER);
+            tokio::spawn(async move {
+                let (entries_tx, mut entries_rx) = mpsc::channel::<LogEntry>(LOG_BUFFER);
+                let forward = {
+                    let tx = tx.clone();
+                    async move {
+                        while let Some(entry) = entries_rx.recv().await {
+                            let message = pb::LogResponse {
+                                commit: MessageField::some(log_commit(entry)),
+                                consistency_token: at.clone(),
+                                ..Default::default()
+                            };
+                            if tx.send(Ok(message)).await.is_err() {
+                                return;
+                            }
+                        }
+                    }
+                };
+                let walk = async move {
+                    let result = log(&odb, &derived, &snapshot, &query, &entries_tx).await;
+                    drop(entries_tx);
+                    result
+                };
+                let (result, ()) = tokio::join!(walk, forward);
+                if let Err(err) = result {
+                    let _ = tx.send(Err(history_error(err))).await;
+                }
+            });
+            Response::ok(
+                Box::pin(futures::stream::poll_fn(move |cx| rx.poll_recv(cx)))
+                    as ServiceStream<pb::LogResponse>,
+            )
+        }
+
+        async fn diff_stat(
+            &self,
+            ctx: RequestContext,
+            request: ServiceRequest<'_, pb::DiffStatRequest>,
+        ) -> ServiceResult<pb::DiffStatResponse> {
+            let req = request.to_owned_message();
+            let spec = Pathspec::parse(&req.paths).map_err(history_error)?;
+            let (record, snapshot, odb) = self
+                .open(
+                    &ctx,
+                    &req.namespace,
+                    &req.name,
+                    &req.workspace,
+                    &req.consistency_token,
+                )
+                .await?;
+            let from = resolve_tree(&odb, &snapshot, &req.from_rev)
+                .await
+                .map_err(history_error)?;
+            let to = resolve_tree(&odb, &snapshot, &req.to_rev)
+                .await
+                .map_err(history_error)?;
+            let files = diff_stat(&odb, Some(from), Some(to), &spec)
+                .await
+                .map_err(history_error)?;
+            Response::ok(pb::DiffStatResponse {
+                files: files
+                    .into_iter()
+                    .map(|file| pb::FileStat {
+                        change: MessageField::some(changed_pb(file.change)),
+                        added: file.added,
+                        removed: file.removed,
+                        ..Default::default()
+                    })
+                    .collect(),
                 consistency_token: token(&record.repo_id, snapshot.seq),
                 ..Default::default()
             })

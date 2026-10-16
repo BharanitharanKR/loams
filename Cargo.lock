@@ -4939,6 +4939,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "gix-commitgraph"
+version = "0.40.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0462cbffd5828447f376559d397d9b29f1979dac3d980b5212b17fa174b174eb"
+dependencies = [
+ "bstr",
+ "gix-chunk",
+ "gix-error",
+ "gix-hash",
+ "memmap2",
+ "nonempty",
+]
+
+[[package]]
 name = "gix-date"
 version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8163,6 +8177,7 @@ dependencies = [
  "bytes",
  "crc32c",
  "futures",
+ "gix-commitgraph",
  "gix-hash",
  "gix-object",
  "gix-pack",
@@ -8174,6 +8189,7 @@ dependencies = [
  "loams-fs",
  "loams-meta-conformance",
  "loams-store",
+ "memmap2",
  "object_store 0.14.2",
  "postcard",
  "proptest",
@@ -9800,6 +9816,12 @@ checksum = "df9761775871bdef83bee530e60050f7e54b1105350d6884eb0fb4f46c2f9405"
 dependencies = [
  "memchr",
 ]
+
+[[package]]
+name = "nonempty"
+version = "0.12.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9737e026353e5cd0736f98eddae28665118eb6f6600902a7f50db585621fecb6"
 
 [[package]]
 name = "nonmax"
