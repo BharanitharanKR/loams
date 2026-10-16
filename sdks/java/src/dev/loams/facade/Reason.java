@@ -86,6 +86,7 @@ public enum Reason {
     LIVE_FUNCTION_TIMEOUT("live_function_timeout"),
     LIVE_FUNCTION_OUT_OF_MEMORY("live_function_out_of_memory"),
     LIVE_LIMIT_EXCEEDED("live_limit_exceeded"),
+    LIVE_APP_MISMATCH("live_app_mismatch"),
     ROLE_REQUIRED("role_required"),
     SETUP_REQUIRED("setup_required"),
     TOKEN_MISSING("token_missing"),

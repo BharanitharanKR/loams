@@ -22,6 +22,7 @@ use futures::StreamExt;
 use ulid::Ulid;
 
 use crate::apps::{AppLimits, AppRecord, AppState, AppUpdate, NewApp, TrustedIssuer};
+use crate::authz::{Action, Authorizer, Resource, ScopeAuthorizer, audit};
 use crate::catalog::IndexState;
 use crate::deploy::{self, DeployOutcome, DeploymentRecord, PageRequest};
 use crate::engines::Engines;
@@ -41,6 +42,53 @@ pub(crate) struct Admin {
 
 fn caller(ctx: &RequestContext) -> String {
     Caller::of(ctx).id
+}
+
+/// The app a deployment call addresses, once the caller may deploy to it
+/// (LV1 plan Task 15: the app fence, then `live:deploy`).
+async fn deployer(
+    engines: &Engines,
+    ctx: &RequestContext,
+) -> Result<std::sync::Arc<crate::engines::AppRuntime>, LiveError> {
+    let app = app_of(engines, ctx).await?;
+    ScopeAuthorizer.check(
+        &Caller::of(ctx),
+        Action::Deploy,
+        &Resource::App(app.name().to_string()),
+    )?;
+    Ok(app)
+}
+
+/// Checks a directory call on the app `name` (or on the directory when
+/// `None`): `live:admin`, the app fence for an app, and for the directory
+/// a credential bound to no environment (LV1 plan Task 15).
+async fn directory_admin(
+    engines: &Engines,
+    caller: &Caller,
+    name: Option<&str>,
+) -> Result<Resource, LiveError> {
+    let resource = match name {
+        None => {
+            if let Some(env) = &caller.environment {
+                return Err(LiveError::PermissionDenied {
+                    reason: crate::authz::APP_MISMATCH,
+                    message: format!(
+                        "this credential is bound to the environment {env}; creating and \
+                         listing apps needs one bound to none"
+                    ),
+                });
+            }
+            Resource::Directory
+        }
+        Some(name) => {
+            if let Some(record) = engines.apps().get_by_name(name).await? {
+                crate::authz::fence(caller, &record)?;
+            }
+            Resource::App(name.to_string())
+        }
+    };
+    ScopeAuthorizer.check(caller, Action::Admin, &resource)?;
+    Ok(resource)
 }
 
 /// A deployment id of a request: a ULID.
@@ -155,7 +203,7 @@ impl LiveAdminService for Admin {
         let req = request.to_owned_message();
         let by = caller(&ctx);
         let run = async {
-            let app = app_of(&self.engines, &ctx).await?;
+            let app = deployer(&self.engines, &ctx).await?;
             let schema = req
                 .schema
                 .as_option()
@@ -169,6 +217,14 @@ impl LiveAdminService for Admin {
                 message: req.message,
                 dry_run: req.dry_run,
             };
+            if !deploy_request.dry_run {
+                audit(
+                    &Caller::of(&ctx),
+                    Action::Deploy,
+                    &Resource::App(app.name().to_string()),
+                    "Deploy",
+                );
+            }
             deploy::deploy(app.engine(), deploy_request, &by).await
         };
         let done = run.await.map_err(|e| connect_error(&e))?;
@@ -187,7 +243,7 @@ impl LiveAdminService for Admin {
     ) -> ServiceResult<pb::ListDeploymentsResponse> {
         let req = request.to_owned_message();
         let run = async {
-            let app = app_of(&self.engines, &ctx).await?;
+            let app = deployer(&self.engines, &ctx).await?;
             let page = page_request(req.page_size, &req.page_token)?;
             deploy::list_deployments(app.engine(), page).await
         };
@@ -206,7 +262,7 @@ impl LiveAdminService for Admin {
     ) -> ServiceResult<pb::GetDeploymentResponse> {
         let req = request.to_owned_message();
         let run = async {
-            let app = app_of(&self.engines, &ctx).await?;
+            let app = deployer(&self.engines, &ctx).await?;
             let id = deployment_id("id", &req.id)?;
             deploy::get_deployment(app.engine(), id).await
         };
@@ -227,9 +283,15 @@ impl LiveAdminService for Admin {
         let req = request.to_owned_message();
         let by = caller(&ctx);
         let run = async {
-            let app = app_of(&self.engines, &ctx).await?;
+            let app = deployer(&self.engines, &ctx).await?;
             let id = deployment_id("id", &req.id)?;
             let expected_active = expected(req.expected_active.as_deref())?;
+            audit(
+                &Caller::of(&ctx),
+                Action::Deploy,
+                &Resource::App(app.name().to_string()),
+                "ActivateDeployment",
+            );
             deploy::activate(app.engine(), id, expected_active, &by).await
         };
         let done = run.await.map_err(|e| connect_error(&e))?;
@@ -248,7 +310,7 @@ impl LiveAdminService for Admin {
     ) -> ServiceResult<pb::GetIndexStatusResponse> {
         let req = request.to_owned_message();
         let run = async {
-            let app = app_of(&self.engines, &ctx).await?;
+            let app = deployer(&self.engines, &ctx).await?;
             backfill::index_status(app.runner(), &req.table, &req.index).await
         };
         let status = run.await.map_err(|e| connect_error(&e))?;
@@ -266,7 +328,7 @@ impl LiveAdminService for Admin {
         request: ServiceRequest<'_, pb::TailLogsRequest>,
     ) -> ServiceResult<ServiceStream<pb::TailLogsResponse>> {
         let req = request.to_owned_message();
-        let app = app_of(&self.engines, &ctx)
+        let app = deployer(&self.engines, &ctx)
             .await
             .map_err(|e| connect_error(&e))?;
         let filter = TailFilter {
@@ -284,7 +346,7 @@ impl LiveAdminService for Admin {
 
     async fn create_app(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::CreateAppRequest>,
     ) -> ServiceResult<pb::CreateAppResponse> {
         let req = request.to_owned_message();
@@ -302,12 +364,13 @@ impl LiveAdminService for Admin {
                 allow_anonymous: req.allow_anonymous,
             },
         };
-        let record = self
-            .engines
-            .apps()
-            .create(new)
-            .await
-            .map_err(|e| connect_error(&e))?;
+        let caller = Caller::of(&ctx);
+        let run = async {
+            let resource = directory_admin(&self.engines, &caller, None).await?;
+            audit(&caller, Action::Admin, &resource, "CreateApp");
+            self.engines.apps().create(new).await
+        };
+        let record = run.await.map_err(|e| connect_error(&e))?;
         Ok(Response::new(pb::CreateAppResponse {
             app: buffa::MessageField::some(record.to_proto()),
             ..Default::default()
@@ -316,11 +379,12 @@ impl LiveAdminService for Admin {
 
     async fn list_apps(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::ListAppsRequest>,
     ) -> ServiceResult<pb::ListAppsResponse> {
         let req = request.to_owned_message();
         let run = async {
+            directory_admin(&self.engines, &Caller::of(&ctx), None).await?;
             let (after, limit) = app_page(req.page_size, &req.page_token)?;
             self.engines.apps().list(after, limit).await
         };
@@ -334,19 +398,19 @@ impl LiveAdminService for Admin {
 
     async fn get_app(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::GetAppRequest>,
     ) -> ServiceResult<pb::GetAppResponse> {
         let req = request.to_owned_message();
-        let record = self
-            .engines
-            .apps()
-            .get_by_name(&req.name)
-            .await
-            .and_then(|r| {
-                r.ok_or_else(|| LiveError::NotFound(format!("no Live app is named {}", req.name)))
-            })
-            .map_err(|e| connect_error(&e))?;
+        let run = async {
+            directory_admin(&self.engines, &Caller::of(&ctx), Some(&req.name)).await?;
+            self.engines
+                .apps()
+                .get_by_name(&req.name)
+                .await?
+                .ok_or_else(|| LiveError::NotFound(format!("no Live app is named {}", req.name)))
+        };
+        let record = run.await.map_err(|e| connect_error(&e))?;
         Ok(Response::new(pb::GetAppResponse {
             app: buffa::MessageField::some(record.to_proto()),
             ..Default::default()
@@ -355,11 +419,14 @@ impl LiveAdminService for Admin {
 
     async fn update_app(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::UpdateAppRequest>,
     ) -> ServiceResult<pb::UpdateAppResponse> {
         let req = request.to_owned_message();
         let run = async {
+            let caller = Caller::of(&ctx);
+            let resource = directory_admin(&self.engines, &caller, Some(&req.name)).await?;
+            audit(&caller, Action::Admin, &resource, "UpdateApp");
             let state = match req.state.map(|s| s.as_known()) {
                 None => None,
                 Some(Some(pb::AppState::APP_STATE_ACTIVE)) => Some(AppState::Active),
@@ -395,17 +462,20 @@ impl LiveAdminService for Admin {
 
     async fn delete_app(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::DeleteAppRequest>,
     ) -> ServiceResult<pb::DeleteAppResponse> {
         let req = request.to_owned_message();
         let run = async {
+            let caller = Caller::of(&ctx);
+            let resource = directory_admin(&self.engines, &caller, Some(&req.name)).await?;
             if req.name == self.engines.default_app() {
                 return Err(LiveError::FailedPrecondition(format!(
                     "{} is this server's own app (--live-app); it cannot be deleted",
                     req.name
                 )));
             }
+            audit(&caller, Action::Admin, &resource, "DeleteApp");
             let record = self.engines.apps().delete(&req.name).await?;
             self.engines.stop_app(&record.name).await;
             Ok(record)

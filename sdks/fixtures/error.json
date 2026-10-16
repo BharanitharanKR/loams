@@ -712,6 +712,12 @@
       "standIn": null
     },
     {
+      "reason": "live_app_mismatch",
+      "code": "permission_denied",
+      "why": "Needs a credential bound to another environment's Live app; the recorder's credentials are bound to none (LV1 Task 15).",
+      "standIn": null
+    },
+    {
       "reason": "live_function_error",
       "code": "unknown",
       "why": "Needs a deployed function that throws; the recorder deploys nothing (LV1 Task 19).",

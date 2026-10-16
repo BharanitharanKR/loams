@@ -31,6 +31,7 @@
 pub mod admin;
 pub mod apps;
 pub mod auth;
+pub mod authz;
 pub mod backfill;
 pub mod catalog;
 mod config;

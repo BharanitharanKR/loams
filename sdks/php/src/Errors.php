@@ -99,6 +99,7 @@ class LiveFunctionErrorException extends LoamsException {}
 class LiveFunctionTimeoutException extends LoamsException {}
 class LiveFunctionOutOfMemoryException extends LoamsException {}
 class LiveLimitExceededException extends LoamsException {}
+class LiveAppMismatchException extends LoamsException {}
 class RoleRequiredException extends LoamsException {}
 class SetupRequiredException extends LoamsException {}
 class TokenMissingException extends LoamsException {}
@@ -206,6 +207,7 @@ class ErrorParser
         'live_function_timeout' => LiveFunctionTimeoutException::class,
         'live_function_out_of_memory' => LiveFunctionOutOfMemoryException::class,
         'live_limit_exceeded' => LiveLimitExceededException::class,
+        'live_app_mismatch' => LiveAppMismatchException::class,
         'role_required' => RoleRequiredException::class,
         'setup_required' => SetupRequiredException::class,
         'token_missing' => TokenMissingException::class,
