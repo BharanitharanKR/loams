@@ -265,6 +265,7 @@ impl Authenticator for TestAuthenticator {
             kind: PrincipalKind::User,
             display_name: name.to_owned(),
             email: Some(format!("{name}@example.test")),
+            grant: Default::default(),
         }))
     }
 }

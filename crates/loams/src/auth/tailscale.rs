@@ -88,6 +88,7 @@ impl TailscaleAuth {
                 .unwrap_or(&login)
                 .to_owned(),
             email: login.contains('@').then(|| login.clone()),
+            grant: super::Grant::default(),
         })
     }
 }
