@@ -968,11 +968,12 @@ fn licence_gate_refuses_flagged() {
     // reclassifies; CN2 Task 2 recorded the new total here (CN2 ruling R2.8). CN2 Task 17
     // added two: `buoyant_kernel` (the Delta kernel deltalake links, R0.14) and `libduckdb`
     // (MIT), the DuckDB target's driver, loaded from the runtime's allowlist (R17.7).
+    // GR1 Task 22 added one: `network_partitions` (MIT), Loams Graph's Leiden (R22.3).
     assert_eq!(
         components.len(),
-        124,
+        125,
         "D359 records 42 components after CN1 Task 15, D634's six Grafeo crates, CN2 \
-         Task 0's 74 crates and images and CN2 Task 17's two"
+         Task 0's 74 crates and images, CN2 Task 17's two and GR1 Task 22's one"
     );
     gate.check_components(&text, "connectors/licences.toml")
         .unwrap_or_else(|error| panic!("no component may be refused: {error}"));
