@@ -1205,7 +1205,7 @@ From the author's knowledge, not re-read on 2026-10-10 (Task 0 of the plan check
 
 ## 20. Landscape: Enroute and Scion, and what Loams Git takes from them (2026-10-16)
 
-Status: **Proposed** (2026-10-16). The owner compared Loams Git with Enroute and with Anthropic's Scion and on 2026-10-16 approved writing five proposals into this document. They are decisions **D1025–D1029** and open questions **Q906–Q909**, entered in the decision log as Proposed with their defaults filled. The plan tasks are [GT1](../plans/2026-10-10-gt1-loams-git.md) Tasks 88–92. Nothing here changes an approved decision until the owner confirms it. §20.9 lists what each proposal would amend.
+Status: **Approved** (owner, 2026-10-16: D1025–D1029 with the defaults of Q906–Q909). The owner compared Loams Git with Enroute and with Anthropic's Scion and on 2026-10-16 approved writing five proposals into this document. They are decisions **D1025–D1029** and open questions **Q906–Q909**, entered in the decision log as Proposed with their defaults filled. The plan tasks are [GT1](../plans/2026-10-10-gt1-loams-git.md) Tasks 88–92. Nothing here changes an approved decision until the owner confirms it. §20.9 lists what each proposal would amend.
 
 Markers as in the rest of this document: **(source)** means read on 2026-10-16 at the URL in §20.11, as the vendor or author states it, not checked by Loams. **(target)** means a number Loams sets out to reach and has not measured. **(verify)** means the task that builds it checks it first.
 

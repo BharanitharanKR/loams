@@ -648,7 +648,7 @@ Before GA, on the docs site: a Graph overview (owned vs linked), a quickstart (T
 
 | # | Question | Owner | Needed by |
 |---|---|---|---|
-| Q670 | Approve D743: Loams Graph also executes §07's `expand` stage and SQL table functions, with §07's CSR sidecars and `ExpandExec` deferred? Default: yes | Owner | GR1c |
+| Q670 | ~~Approve D743: Loams Graph also executes §07's `expand` stage and SQL table functions, with §07's CSR sidecars and `ExpandExec` deferred? Default: yes~~ **Answered 2026-10-16 by the owner: yes.** | Owner | GR1c |
 | Q671 | Approve D741: the `graph` role of `loams` (feature `graph`), not `loams-fabric`? Default: yes | Owner | GR1a Task 1 |
 | Q672 | ~~Which change-capture mechanism (§6.3 A, B or C)? Default: B, if Task 9's completeness tests pass~~ **Answered by GR1 Task 9 (2026-10-10): B**, CDC events resolved against the store into a net-effect change set; client isolation by a per-graph gate held until durable, not by viewing epochs (GR1 plan R9.1–R9.3) | Eng | Answered |
 | Q673 | Ship the Cypher compatibility dialect at GA (opt-in per graph), or GQL only? Default: ship it opt-in | Owner | GR1e |

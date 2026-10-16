@@ -347,7 +347,7 @@ The morning version's `loams_git::limits` table stands (`MAX_GROUP_TXNS` 64, `MA
 11. **GT1k** (68–73) needs only Tasks 1 and 4. It runs in spare slots.
 12. **GT1l** (74–82) last. Task 78's fuzz targets start as soon as their parsers exist.
 13. **After GA:** Tasks 83–87.
-14. **Landscape follow-ups (Tasks 88–92, proposed):** only after the owner confirms D1025–D1029 (§36 §20). Task 88 after Tasks 14 and 15; Task 89 after Tasks 50 and 88; Task 90 after Task 27; Task 91 after Tasks 17, 24, 27, 50 and 53; Task 92 after Tasks 18 and 33. Tasks 90 and 91 do not depend on 88, so they can go first.
+14. **Landscape follow-ups (Tasks 88–92):** the owner approved D1025–D1029 on 2026-10-16 (§36 §20). Task 88 after Tasks 14 and 15; Task 89 after Tasks 50 and 88; Task 90 after Task 27; Task 91 after Tasks 17, 24, 27, 50 and 53; Task 92 after Tasks 18 and 33. Tasks 90 and 91 do not depend on 88, so they can go first.
 
 ---
 
@@ -683,7 +683,7 @@ As the morning version's Task 45, plus the guides `workspaces.md`, `git-shim.md`
 
 ## Landscape follow-ups (Tasks 88–92; proposed, §36 §20)
 
-These tasks build the **proposed** D1025–D1029 (§36 §20, Q906–Q909). They start only after the owner confirms those decisions, and they are not in the GA exit criteria unless the owner adds them. D1029 applies to each of them: every PR cites the public document its idea came from (Enroute's README and article "Everyone is doing Git on S3 wrong", Anthropic's "Redesigning source control at Anthropic"), copies no code from Enroute or `CarterT27/scion`, and never reads `tinyhumansai/openscion`'s source. Suites that need TiKV use `loams_tikv::testing::cluster` (skipped unless `LOAMS_TEST_PD` is set) and run in `gt1-nightly.yml`'s new `git-tikv` job; everything else runs in `gt1.yml`.
+These tasks build D1025–D1029 (§36 §20, Q906–Q909), approved by the owner on 2026-10-16 with the questions' defaults. They are not in the GA exit criteria unless the owner adds them. D1029 applies to each of them: every PR cites the public document its idea came from (Enroute's README and article "Everyone is doing Git on S3 wrong", Anthropic's "Redesigning source control at Anthropic"), copies no code from Enroute or `CarterT27/scion`, and never reads `tinyhumansai/openscion`'s source. Suites that need TiKV use `loams_tikv::testing::cluster` (skipped unless `LOAMS_TEST_PD` is set) and run in `gt1-nightly.yml`'s new `git-tikv` job; everything else runs in `gt1.yml`.
 
 ### Task 88: `TikvRefLog`: a TiKV-ordered log with a bucket mirror (D1025)
 **Files:** `crates/loams-git-tikv/{Cargo.toml,src/{lib.rs,keys.rs,wal.rs,reflog.rs,mirror.rs,handover.rs}}`, `crates/loams-git-tikv/tests/{reflog.rs,linearizable.rs,mirror.rs,handover.rs}`; `crates/loams-git/proto/loams/git/v1/wal.proto` (`enum RefLogKind { BUCKET = 0; TIKV = 1; }`, `message RefLogHandover { RefLogKind to = 1; }`), `crates/loams-git/src/format/event.rs` (the type `io.loams.dev.git.handover.v1`), `crates/loams-git/src/{state.rs,reflog.rs}` (a handover ends bucket appends), `crates/loams-git/src/limits.rs` (`TIKV_MIRROR_LAG` 1 s); `proto/loams/repos/v1/repos.proto` (`RepoConfig.ref_log`), `crates/loams/src/api/repos.rs`, `crates/loams/Cargo.toml` (feature `git-tikv`, off by default, implying `git`); `crates/loams-git-remote/src/push.rs` (the refusal); `docs/api/reasons.md` (`ref_log_unavailable`); §36 §20.4 "As built".
