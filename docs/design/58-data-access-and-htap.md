@@ -384,7 +384,7 @@ The Arrow and Parquet type mapping follows §34 §4's events-to-Arrow rules wher
 - **Postgres and Loams SQL:** a `data` module of `loams-gateway`, on the `http` module's Pingora stack (D1013, D1022). It connects to the namespace's PgDog as an ordinary Postgres client, over TLS and SCRAM with a per-project authenticator credential (Q917), so PgDog stays the front door for Postgres semantics. It connects to `loams-sqlgate` for Loams SQL.
 - **Engine SQL:** the `loams` binary serves `DataService` for `engine:` targets on its main port, over the same DataFusion planner as the Flight SQL listener.
 - **API2.** API2 Task 1 plans `loams.sql.v1.SqlService/Query` and `QueryArrow`. Neither proto exists on `dev` yet. They **ship as planned**, so API2 is not blocked. When DA1c lands, they become a thin shim over `DataService.Execute` and `ExecuteArrow` for `engine:` targets, and §44 §5.1's SQL row points at `loams.data.v1`. This amends §44 and does not break it: `SqlService` stays served for at least one minor release after the shim, under D360's deprecation rule.
-- **The spec** lives at `docs/spec/data-api/` with `proto/loams/data/v1/`, licensed Apache-2.0 and versioned on its own (`data-api-1.0`). The conformance suite is public, so another implementation can claim compatibility (Q916).
+- **The spec** lives in its own repository, `ostrium-labs/loams-data-api` (owner, 2026-10-16), with its protos and the conformance suite; Loams mirrors the protos into `proto/loams/data/v1/`. It is licensed Apache-2.0 and versioned on its own (`data-api-1.0`). The conformance suite is public, so another implementation can claim compatibility (Q916).
 
 ## 6. Part D: HTAP in three phases (D1051–D1054)
 
