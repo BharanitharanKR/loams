@@ -53,7 +53,7 @@ use connectrpc::{
 use loams_house_proto::loams::errors::v1::ErrorInfo;
 use loams_house_proto::loams::house::v1 as pb;
 use loams_house_proto::loams::house::v1::{HouseService, HouseServiceExt};
-use loams_house_proto::loams::operations::v1::Operation;
+use loams_house_proto::loams::operations::v1::{Operation, OperationState};
 
 pub use catalog::{ApiCatalog, FixtureCatalog, LakeCatalog};
 
@@ -698,9 +698,27 @@ impl HouseService for HouseApi {
     ) -> ServiceResult<pb::ListPipesResponse> {
         let user = self.caller(&ctx)?;
         let request = request.to_owned_message();
-        let Some(pipes) = self.catalog.pipes(user.namespace) else {
-            return Err(not_yet("Pipes", catalog::PIPES_TASK));
+        let pipes = self
+            .catalog
+            .pipes(user.namespace)
+            .await
+            .map_err(|err| to_connect(&err))?;
+        let Some(pipes) = pipes else {
+            return Err(refuse(
+                ErrorCode::Unimplemented,
+                "not_implemented",
+                "Pipes need lake tables: this House was started without a catalog",
+                &[],
+            ));
         };
+        // Only the views the identity may touch (HS1 Task 20).
+        let pipes: Vec<pb::Pipe> = pipes
+            .into_iter()
+            .filter(|p| match p.name.split_once('.') {
+                Some((database, name)) => crate::identity::granted(&user, database, name),
+                None => true,
+            })
+            .collect();
         let (pipes, next_page_token) = page(pipes, request.page_size, &request.page_token)?;
         Response::ok(pb::ListPipesResponse {
             pipes,
@@ -712,10 +730,111 @@ impl HouseService for HouseApi {
     async fn restore_table(
         &self,
         ctx: RequestContext,
-        _request: ServiceRequest<'_, pb::RestoreTableRequest>,
+        request: ServiceRequest<'_, pb::RestoreTableRequest>,
     ) -> ServiceResult<Operation> {
-        let _user = self.caller(&ctx)?;
-        Err(not_yet("RestoreTable", catalog::RESTORE_TASK))
+        let user = self.caller(&ctx)?;
+        let request = request.to_owned_message();
+        let Some(lake) = &self.lake else {
+            return Err(refuse(
+                ErrorCode::Unimplemented,
+                "not_implemented",
+                "RestoreTable restores lake tables: this House was started without a catalog",
+                &[],
+            ));
+        };
+        let database = database_or_default(&request.database).to_string();
+        let result = self.restore(lake, &user, &database, &request).await;
+        if let Some(sink) = &self.config.audit {
+            let mut event = crate::audit::AuditEvent::now("api", "");
+            event.user = user.user.clone();
+            event.principal = user.principal.clone();
+            event.namespace = Some(user.namespace);
+            event.statement = Some("RestoreTable".to_string());
+            event.code = result.as_ref().map_or_else(HouseError::code, |_| 0);
+            sink.record(&event);
+        }
+        let restored = result.map_err(|err| to_connect(&err))?;
+        let at = catalog::timestamp(restored.at_ms);
+        let mut fields = std::collections::HashMap::new();
+        fields.insert(
+            "snapshot_id".to_string(),
+            loams_house_proto::google::protobuf::Value::from(restored.snapshot_id.to_string()),
+        );
+        Response::ok(Operation {
+            id: restored.operation_id,
+            kind: RESTORE_KIND.to_string(),
+            namespace: user.namespace.to_string(),
+            target: [
+                ("database".to_string(), database),
+                ("table".to_string(), request.table.clone()),
+            ]
+            .into_iter()
+            .collect(),
+            state: OperationState::OPERATION_STATE_SUCCEEDED.into(),
+            created_at: buffa::MessageField::some(at.clone()),
+            updated_at: buffa::MessageField::some(at),
+            result: buffa::MessageField::some(loams_house_proto::google::protobuf::Struct {
+                fields: fields.into_iter().collect(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+    }
+}
+
+/// `RestoreTable`'s operation kind.
+pub const RESTORE_KIND: &str = "house.restore_table";
+
+impl HouseApi {
+    /// `RestoreTable` for `user` (HS1 Task 15): the `admin` scope, a grant on
+    /// the table, then [`crate::retention::restore_table`].
+    async fn restore(
+        &self,
+        lake: &Lake,
+        user: &UserMap,
+        database: &str,
+        request: &pb::RestoreTableRequest,
+    ) -> Result<crate::retention::Restored, HouseError> {
+        use crate::retention::RestorePoint;
+        use loams_house_proto::loams::house::v1::__buffa::oneof::restore_table_request::Point;
+        if !user.scopes.admin {
+            return Err(crate::identity::lacks(
+                user,
+                crate::identity::Scope::Admin,
+                "RestoreTable",
+            ));
+        }
+        if request.table.is_empty() {
+            return Err(HouseError::from(ChError::bad_arguments(
+                "RestoreTable needs the table to restore",
+            )));
+        }
+        if !crate::identity::granted(user, database, &request.table) {
+            return Err(crate::identity::not_granted(user, database, &request.table));
+        }
+        let point = match &request.point {
+            Some(Point::SnapshotId(id)) => RestorePoint::Snapshot(*id),
+            Some(Point::Timestamp(at)) => RestorePoint::Timestamp(
+                at.seconds
+                    .saturating_mul(1000)
+                    .saturating_add(i64::from(at.nanos) / 1_000_000),
+            ),
+            None => {
+                return Err(HouseError::from(ChError::bad_arguments(
+                    "RestoreTable needs a snapshot_id or a timestamp to restore to",
+                )));
+            }
+        };
+        crate::retention::restore_table(
+            lake,
+            user.namespace,
+            database,
+            &request.table,
+            point,
+            &request.idempotency_key,
+            crate::retention::now_ms(),
+        )
+        .await
     }
 }
 

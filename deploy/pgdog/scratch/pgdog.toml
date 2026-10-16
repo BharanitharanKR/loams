@@ -1,0 +1,35 @@
+# Scratch config for Task 18's checks (not a Loams rendering; Task 20 renders).
+[general]
+host = "0.0.0.0"
+port = 6432
+openmetrics_port = 9090
+auth_type = "scram"
+pooler_mode = "transaction"
+# Q640: how long a client waits for a server connection, and how a refused
+# backend is retried and banned.
+checkout_timeout = 15000
+connect_timeout = 1000
+connect_attempts = 1
+connect_attempt_delay = 500
+ban_timeout = 1000
+healthcheck_interval = 1000
+
+[admin]
+name = "admin"
+user = "admin"
+password = "admin-pw"
+
+[[databases]]
+name = "one"
+host = "pg1"
+database_name = "postgres"
+
+[[databases]]
+name = "two"
+host = "pg2"
+database_name = "postgres"
+
+[[databases]]
+name = "sleepy"
+host = "pg3"
+database_name = "postgres"

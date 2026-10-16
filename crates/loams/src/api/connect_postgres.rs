@@ -1011,16 +1011,17 @@ impl PostgresService for Postgres {
         let op = self
             .gate
             .mutate(&ctx, call, |caller| async move {
-                if r.promote {
-                    return Err(Failure::NotBuilt("PG2 Task 16"));
-                }
                 let action = EndpointAction {
                     namespace: r.namespace,
                     project_id: r.project_id,
                     endpoint_id: r.endpoint_id,
                     idempotency_key: r.idempotency_key,
                 };
-                let op = self.service.restart_endpoint(&caller, action).await?;
+                let op = if r.promote {
+                    self.service.promote_endpoint(&caller, action).await?
+                } else {
+                    self.service.restart_endpoint(&caller, action).await?
+                };
                 let made = Made::operation(&op.id);
                 Ok((op, made))
             })

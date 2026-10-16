@@ -230,7 +230,7 @@ pub async fn timeline_info<S: WalStore>(
         remote_consistent_lsn: st.remote_consistent_lsn.0,
         peer_horizon_lsn: p.peer_horizon_lsn.max(st.peer_horizon_lsn).0,
         local_start_lsn: st.local_start_lsn.0,
-        standby_horizon: 0,
+        standby_horizon: svc.standby_horizon(tl).0,
         safekeeper_connstr: cfg.advertise_pg.clone(),
         http_connstr: cfg.advertise_http.clone(),
         https_connstr: None,
@@ -481,7 +481,7 @@ async fn discover_once<S: WalStore>(
                     commit_lsn: info.commit_lsn,
                     safekeeper_connstr: info.safekeeper_connstr,
                     availability_zone: info.availability_zone,
-                    standby_horizon: 0,
+                    standby_horizon: info.standby_horizon,
                 }),
             })
             .await

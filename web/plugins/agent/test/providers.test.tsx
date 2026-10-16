@@ -119,9 +119,12 @@ describe('agent providers section', () => {
     const chat = setup([mk({ hasKey: true, configured: true })]);
     const c = await card('DeepSeek');
     const test = c.getByRole('button', { name: 'Test' }) as HTMLButtonElement;
+    // The button's disabled state follows the edit on a later render; wait for it
+    // rather than reading it at once (it raced on a busy CI runner).
     fireEvent.change(c.getByLabelText('Model'), { target: { value: 'x' } });
-    expect(test.disabled).toBe(true);
+    await waitFor(() => expect(test.disabled).toBe(true));
     fireEvent.change(c.getByLabelText('Model'), { target: { value: 'deepseek-chat' } });
+    await waitFor(() => expect(test.disabled).toBe(false));
     fireEvent.click(test);
     expect(await c.findByText('The provider answered')).toBeTruthy();
     expect(chat.testProvider).toHaveBeenCalledWith('deepseek');

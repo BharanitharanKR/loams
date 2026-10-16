@@ -1908,3 +1908,36 @@ Carried in: the per-graph gate stays (R9.3, LG-0005 ruling 2026-10-13), so a fol
 - `loams-graph` `tests/links.rs`: `mapping_validates_against_schema` (six schema mistakes, both mode mistakes, nothing created by any of them), `type_from_column_maps_many_types` (also an idempotent replay with another mapping refused), `linked_graph_refuses_gql_writes`.
 - `loams-query` `tests/it/graph_ddl.rs`: `sql_create_graph_equals_rpc_mapping` (§07's example equals the mapping the RPC test sends; the relaxed form parses the same), `type_from_column_maps_many_types`, `malformed_create_graph_is_refused_with_what_was_expected`.
 - Unit tests in `mapping.rs`.
+
+### Task 18 (2026-10-16, on `gr1-b2-t18`)
+
+**R18.1 A graph's collection links are the graph's own, not metastore links (deviation in mechanism).**
+- The metastore refuses a link whose source is a collection's implicit stream (`create_link`: "it lives and dies with its collection, so a user link would dangle"). Allowing it would change the replicated state machine of both metastores (and `drop_collection`'s cleanup), which is the log owner's call, not this task's.
+- So the mapping is the declaration. Each collection it names (a name and an alias of one collection are one source) feeds the graph through a link whose progress is keyed by a graph-local id, `collection_link_id(c) = 2^63 | c` (metastore link ids are small sequential numbers, so the two never meet in a graph's records).
+- `loams-link` keeps the one apply loop: its body is now `loams_link::apply_link` (load, gather, wait for a batch, commit, reload on conflict), which the worker's `LinkApplySource` and the graph's `LinkRunner` both run. `CollectionLinkTarget` implements `LinkTarget`.
+- `LinkRunner` runs on every graph node (`GraphRuntime`, a pass every 500 ms, `loams-link`'s `LinkConfig`), not on the worker: graph nodes need not be worker nodes. A pass lists the LINKED graphs (every 5 s), skips a link whose source has not moved since its last apply (so an idle graph can still be evicted), and applies the rest on the node that holds the graph's lease, or that the rendezvous places it on when the lease is free.
+- No `LinkTargetFactory` is registered: nothing in the metastore names these links. Task 19's `stream → graph` link reads a user stream, which a metastore link may name, so it can use the factory route.
+
+**R18.2 A link commit is one record through the write lane.**
+- `LaneJob.link: Option<LinkJob { progress: LinkApply, apply }>`. The lane checks the link's version (the expected one) against its durable progress and the earlier records of the same group, under the exclusive gate (`VersionMismatch` → `CommitError::Conflict`).
+- The batch is applied to the store directly, as a replay applies a record: no Grafeo transaction and no change capture, since the operations are the record. The exclusive gate already hides every non-durable write (I2). A failure after the first write, or a failed append, reloads the graph from its stream, as for a GQL write.
+- The record is a `GraphChangeSet` with `link: Some(LinkApply { link, version, applied_after })` (R0.17), appended even when the batch changed nothing, so the progress is durable. Kill points `Begin`, `Executed`, `Committed`, `Captured` are reached around the apply; the group's points as for any write.
+- The fence of `LinkTarget::commit` is not used: the graph's owner lease fences every append, and the version makes a retried or concurrent commit apply once.
+- A batch over 2,048 records or 4 MiB of source values is committed as several records, each with its own offsets.
+
+**R18.3 Where the progress lives.** `Durable.links` (the latest `LinkApply` per link, rebuilt from the records on open and on a follower's tail, keeping the higher version), and, because a link's last record may be below the trim point: each snapshot entry of the manifest (`SnapshotEntry.links`) and the clean-close stamp (`cache.json`'s `links`). Both fields are additive and absent when empty, so neither format changes.
+
+**R18.4 What a link writes (§48 §10.1).**
+- A vertex document is the vertex `(label, key)`. Its properties are the document's fields (nulls absent) plus `_collection` and `_key`, and `_pk` when the key is a field rather than `_pk` (so a delete, which names only the primary key, finds it).
+- An upsert writes the vertex whole, so a second upsert of a key replaces the first in place: the entity is merged, never duplicated, and keeps its edges. A patch is applied (`apply_patch`) to the document the vertex holds. A delete removes the vertex and its edges. A key that changes makes it another vertex.
+- An edge document is the edge `(edge name, primary key)`, of the declared name or its `TYPE FROM` value, between the vertices its endpoint fields key. Its properties are the fields plus `_collection`, `_key` (the edge document's primary key) and `_edge` (the edge name). A change of type or endpoint replaces the edge.
+- An endpoint with no vertex is a stub: the endpoint's label, `_key`, `_stub = true` (Q681 answered as §48 proposed). The vertex's upsert fills it. A stub that loses its last edge goes.
+- A document with no key, endpoint or type is skipped with a warning, and what it made before goes. A record that does not decode is skipped with a warning (the collection's writer encodes every record, so it is corrupt): dead letters for graphs are not built.
+- Keys: a `u64` primary key is an integer (a string above `i64::MAX`), a UUID its hyphenated lower-case text, a string itself; a field's integer or string value.
+- `LinkIndex` (`(label, key)`, `(label, pk)`, `(edge, pk)` → ids, edge ends and incident edges) is built from the engine on the first link commit and kept by every commit; it lives and dies with the engine instance. Its memory is Task 26's to count.
+
+**R18.5 Lag (deviation in surface).** `LinkRunner::lag` answers each link's applied offsets, its source's high watermarks, the records behind, and `missing` for a collection that is gone (its link stops where it was; its vertices stay). No proto field is added (the package's generated TypeScript and SDKs would move with it); Task 27 exports `loams_graph_link_lag_records` from it.
+
+**R18.6 Gaps carried.** A dropped collection's elements stay in the graph (R17.2 said its labels become empty): removing them is a rebuild, which goes with Task 29's import/rebuild path. A collection renamed under the mapping's name after creation is not followed. Two documents sharing a non-`_pk` key are one vertex, the last write's.
+
+**R18.7 Tests** (`tests/links.rs`, 5 new): `link_apply_exactly_once_under_kill` (the owner killed at each of seven write-path points during the second commit of a batch; the other node takes the graph and the links; the graph equals the mapping applied to the documents, each link's versions in the log are 1, 2, 3, … with none twice; releasing the dead node changes nothing), `stub_vertex_filled_by_later_upsert`, `vertex_delete_removes_incident_edges`, `pk_upsert_is_entity_merge`, `link_lag_metric_reported` (also: an evicted graph reopens from its stamp with its progress, and nothing is applied twice; a dropped collection is reported missing). Unit tests in `link/collection.rs`.

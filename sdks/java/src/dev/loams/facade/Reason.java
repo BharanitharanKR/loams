@@ -80,6 +80,8 @@ public enum Reason {
     LIVE_DEPLOY_CONFLICT("live_deploy_conflict"),
     LIVE_SCHEMA_VIOLATION("live_schema_violation"),
     LIVE_INDEX_NOT_READY("live_index_not_ready"),
+    LIVE_APP_DISABLED("live_app_disabled"),
+    LIVE_APP_EXISTS("live_app_exists"),
     ROLE_REQUIRED("role_required"),
     SETUP_REQUIRED("setup_required"),
     TOKEN_MISSING("token_missing"),

@@ -1,0 +1,28 @@
+[package]
+name = "loams-upgrade"
+description = "loams upgrade: the client that upgrades a self-hosted compose stack one release at a time (design §54 §10, UP1)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+# The client links no storage crate (design §54 §10.1, CL1's guard): every
+# step that touches data runs `loams migrate …` in a container of the target
+# image. `upgrade_client_has_no_storage_dependencies` checks it.
+[dependencies]
+clap.workspace = true
+schemars.workspace = true
+ulid.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+toml.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

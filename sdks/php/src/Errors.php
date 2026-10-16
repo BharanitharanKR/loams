@@ -93,6 +93,8 @@ class LiveWorkerCrashedException extends LoamsException {}
 class LiveDeployConflictException extends LoamsException {}
 class LiveSchemaViolationException extends LoamsException {}
 class LiveIndexNotReadyException extends LoamsException {}
+class LiveAppDisabledException extends LoamsException {}
+class LiveAppExistsException extends LoamsException {}
 class RoleRequiredException extends LoamsException {}
 class SetupRequiredException extends LoamsException {}
 class TokenMissingException extends LoamsException {}
@@ -194,6 +196,8 @@ class ErrorParser
         'live_deploy_conflict' => LiveDeployConflictException::class,
         'live_schema_violation' => LiveSchemaViolationException::class,
         'live_index_not_ready' => LiveIndexNotReadyException::class,
+        'live_app_disabled' => LiveAppDisabledException::class,
+        'live_app_exists' => LiveAppExistsException::class,
         'role_required' => RoleRequiredException::class,
         'setup_required' => SetupRequiredException::class,
         'token_missing' => TokenMissingException::class,

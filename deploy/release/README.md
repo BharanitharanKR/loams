@@ -172,6 +172,22 @@ HTTP on the tailnet (`TS_SERVE_MODE=http`, inside WireGuard). A console served
 over HTTPS cannot call it (mixed content); serve the console over HTTP from the
 tailnet or this machine.
 
+## Upgrading
+
+From 0.1.0-preview.2, `loams upgrade` upgrades this stack in place, one release at a
+time, with a snapshot first:
+
+```sh
+loams upgrade check --to 0.1.0-preview.3   # what it will do and what would stop it
+loams upgrade --to 0.1.0-preview.3         # snapshot, migrate, restart, verify
+loams upgrade rollback                     # back to the snapshot
+```
+
+Snapshots go to the `upgrade-snapshots` volume, or to `LOAMS_UPGRADE_SNAPSHOT_DIR`
+on this host. Do not upgrade by editing `LOAMS_VERSION` and running `docker compose
+up`. The [upgrade guide](../../docs/release/upgrades.md) has the steps, rollback and
+every error code.
+
 ## On your own VM (BYOC)
 
 ```sh
@@ -183,6 +199,16 @@ deploy/release/byoc/uninstall.sh ubuntu@203.0.113.10          # --purge deletes 
 directory and `deploy/loams-postgres-dev` to `~/loams`, writes `.env` with mode
 0600 and starts `loams tailscale tidb` (`--all` for everything). The VM
 needs SSH and outbound internet only.
+
+```sh
+deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.0-preview.3 --check   # loams upgrade check
+deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.0-preview.3           # loams upgrade, on the VM
+deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.0-preview.3 --rollback
+```
+
+`upgrade.sh` fetches the target release's `loams` CLI on the VM (its Linux
+package, checked against the release's `SHA256SUMS`) and runs `loams upgrade` in
+`~/loams/release`, streaming its output; its exit code is the CLI's.
 
 ## Known gaps in the preview
 

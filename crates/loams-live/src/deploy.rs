@@ -144,7 +144,7 @@ pub fn bundle_path(app: &str, id: Ulid) -> String {
     format!("{}{id}.js", bundles_prefix(app))
 }
 
-fn bundles_prefix(app: &str) -> String {
+pub(crate) fn bundles_prefix(app: &str) -> String {
     format!("live/{app}/deployments/")
 }
 

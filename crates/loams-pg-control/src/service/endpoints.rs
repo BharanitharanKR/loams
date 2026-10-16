@@ -41,7 +41,7 @@ use crate::ids::{BranchId, EndpointId};
 use crate::model::{
     ComputeKey, ComputeRec, Cu, DesiredState, EndpointKey, EndpointPrefix, EndpointRec,
     EndpointState, EndpointType, MAX_OPEN_ENDPOINT_OPS, PoolMode, ProjectKey, ProjectRec,
-    ProjectState,
+    ProjectState, Record as _,
 };
 use crate::store::{Batch, PgControlStore, Versioned};
 
@@ -387,7 +387,10 @@ impl<N: NeonRead> PgService<N> {
                     .await?
                     .into_iter()
                     .find(|e| {
-                        e.record.branch_id == branch_id && e.record.kind == EndpointType::ReadWrite
+                        // A read-only endpoint being promoted is the
+                        // branch's read-write one to come (Task 16).
+                        e.record.branch_id == branch_id
+                            && (e.record.kind == EndpointType::ReadWrite || e.record.promote)
                     })
             {
                 return Err(ServiceError::new(
@@ -618,6 +621,7 @@ impl<N: NeonRead> PgService<N> {
         expected_version: Option<u64>,
         change: impl Fn(&mut EndpointRec) -> Result<(), ServiceError>,
     ) -> Result<OperationRec, ServiceError> {
+        let promote = kind == OperationKind::EndpointPromote;
         for _ in 0..super::ATTEMPTS {
             let claim = match self
                 .begin(caller, rpc, &req.idempotency_key, &(req, expected_version))
@@ -662,6 +666,16 @@ impl<N: NeonRead> PgService<N> {
             rec.updated_at_ms = now;
             let mut batch = Batch::new();
             batch.put(&rec, Some(current.version))?;
+            if promote {
+                self.promotable(&mut batch, &rec).await?;
+            } else if rec.kind == EndpointType::ReadWrite
+                && matches!(
+                    kind,
+                    OperationKind::EndpointStart | OperationKind::EndpointRestart
+                )
+            {
+                self.no_promotion(&mut batch, &rec).await?;
+            }
             add_operation(&mut batch, &op)?;
             batch.check::<ProjectRec>(
                 &ProjectKey {
@@ -762,6 +776,113 @@ impl<N: NeonRead> PgService<N> {
             },
         )
         .await
+    }
+
+    /// `RestartEndpoint{promote}` (Task 16): this read-only endpoint becomes
+    /// its branch's read-write one, and the read-write one (if any) a
+    /// read-only one. Operation `postgres.endpoint.restart` (kind
+    /// [`OperationKind::EndpointPromote`]), finished when the types are
+    /// swapped, or failed `failed_precondition` when `compute_ctl` refused.
+    ///
+    /// # Errors
+    ///
+    /// `failed_precondition` unless the endpoint is read-only and running,
+    /// with no promotion already asked, and its branch's read-write
+    /// endpoint is down (no compute, not asked to run); otherwise as
+    /// [`start_endpoint`](Self::start_endpoint).
+    pub async fn promote_endpoint(
+        &self,
+        caller: &Caller,
+        req: EndpointAction,
+    ) -> Result<OperationRec, ServiceError> {
+        self.endpoint_action(
+            caller,
+            "RestartEndpoint",
+            OperationKind::EndpointPromote,
+            &req,
+            None,
+            |rec| {
+                if rec.kind != EndpointType::ReadOnly {
+                    return Err(ServiceError::failed_precondition(
+                        "only a read-only endpoint is promoted",
+                    ));
+                }
+                if rec.promote {
+                    return Err(ServiceError::failed_precondition(
+                        "a promotion of this endpoint is under way",
+                    ));
+                }
+                if rec.desired != DesiredState::Running
+                    || rec.state != EndpointState::Running
+                    || rec.replace_compute
+                {
+                    return Err(ServiceError::failed_precondition(
+                        "the read-only endpoint must be running to be promoted",
+                    ));
+                }
+                rec.promote = true;
+                Ok(())
+            },
+        )
+        .await
+    }
+
+    /// The promotion's checks against the endpoint's branch (Task 16): its
+    /// read-write endpoint is down, and stays so until the batch commits
+    /// (its version is checked), and the branch's guard is rewritten
+    /// unchanged, so a `CreateEndpoint` of a read-write endpoint racing the
+    /// promotion conflicts with it.
+    async fn promotable(&self, batch: &mut Batch, rec: &EndpointRec) -> Result<(), ServiceError> {
+        let (guard, guard_version) = self.guard(&rec.project_id, &rec.branch_id).await?;
+        batch.put(&guard, guard_version)?;
+        for other in self.all_endpoints(&rec.project_id).await? {
+            let o = &other.record;
+            if o.id == rec.id || o.branch_id != rec.branch_id {
+                continue;
+            }
+            if o.promote {
+                return Err(ServiceError::failed_precondition(format!(
+                    "endpoint {} of this branch is being promoted",
+                    o.id
+                )));
+            }
+            if o.kind != EndpointType::ReadWrite {
+                continue;
+            }
+            if o.desired == DesiredState::Running || o.compute_id.is_some() {
+                return Err(ServiceError::failed_precondition(format!(
+                    "the branch's read-write endpoint {} is running; suspend it first",
+                    o.id
+                ))
+                .with("endpoint", o.id.clone()));
+            }
+            batch.check::<EndpointRec>(&o.key(), Some(other.version))?;
+        }
+        Ok(())
+    }
+
+    /// A read-write endpoint does not start while a read-only endpoint of
+    /// its branch is being promoted (two primaries could result, Task 16).
+    /// The branch's guard is rewritten unchanged, as [`Self::promotable`]
+    /// does, so a start and a promotion conflict whichever commits first.
+    async fn no_promotion(&self, batch: &mut Batch, rec: &EndpointRec) -> Result<(), ServiceError> {
+        let (guard, guard_version) = self.guard(&rec.project_id, &rec.branch_id).await?;
+        batch.put(&guard, guard_version)?;
+        if let Some(other) = self
+            .all_endpoints(&rec.project_id)
+            .await?
+            .into_iter()
+            .find(|o| {
+                o.record.id != rec.id && o.record.branch_id == rec.branch_id && o.record.promote
+            })
+        {
+            return Err(ServiceError::failed_precondition(format!(
+                "read-only endpoint {} of this branch is being promoted",
+                other.record.id
+            ))
+            .with("endpoint", other.record.id));
+        }
+        Ok(())
     }
 
     /// `DeleteEndpoint`: state `deleting`; the reconciler stops the compute,

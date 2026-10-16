@@ -147,6 +147,10 @@ pub enum Reason {
     LiveSchemaViolation,
     /// A Live function read an index a deploy is still backfilling.
     LiveIndexNotReady,
+    /// A call to a Live app that is disabled or deleted.
+    LiveAppDisabled,
+    /// CreateApp named a Live app that already exists.
+    LiveAppExists,
     /// The caller's org role is below the one the admin RPC needs, or the caller is not in the org.
     RoleRequired,
     /// First-run setup has not created the org yet.
@@ -273,6 +277,8 @@ impl Reason {
         Reason::LiveDeployConflict,
         Reason::LiveSchemaViolation,
         Reason::LiveIndexNotReady,
+        Reason::LiveAppDisabled,
+        Reason::LiveAppExists,
         Reason::RoleRequired,
         Reason::SetupRequired,
         Reason::TokenMissing,
@@ -370,6 +376,8 @@ impl Reason {
             Reason::LiveDeployConflict => "live_deploy_conflict",
             Reason::LiveSchemaViolation => "live_schema_violation",
             Reason::LiveIndexNotReady => "live_index_not_ready",
+            Reason::LiveAppDisabled => "live_app_disabled",
+            Reason::LiveAppExists => "live_app_exists",
             Reason::RoleRequired => "role_required",
             Reason::SetupRequired => "setup_required",
             Reason::TokenMissing => "token_missing",
@@ -431,6 +439,8 @@ impl Reason {
             | Reason::SecretAlreadyIssued
             | Reason::LiveDeployConflict
             | Reason::LiveIndexNotReady
+            | Reason::LiveAppDisabled
+            | Reason::LiveAppExists
             | Reason::RepoDeleting
             | Reason::RefProtected
             | Reason::ForkTooDeep
@@ -549,7 +559,7 @@ mod tests {
 
     #[test]
     fn every_reason_round_trips_through_its_wire_form() {
-        assert!(Reason::ALL.len() >= 91, "the registry has 91 rows");
+        assert!(Reason::ALL.len() >= 93, "the registry has 93 rows");
         for reason in Reason::ALL {
             assert_eq!(Reason::parse(reason.as_str()), Some(*reason));
         }

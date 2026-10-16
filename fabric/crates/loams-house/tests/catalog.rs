@@ -124,6 +124,10 @@ async fn namespaces_nest(subject: Subject) {
         c.list_databases(&root).await.expect("lists"),
         vec![child.clone()]
     );
+    // The top level lists the root and not its child (HS1 Task 15's sweep).
+    let top = c.list_root_databases().await.expect("lists the top level");
+    assert!(top.contains(&root), "{top:?}");
+    assert!(!top.contains(&child), "{top:?}");
     assert_eq!(
         c.database_properties(&child)
             .await

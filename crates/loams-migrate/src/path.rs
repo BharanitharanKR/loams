@@ -44,6 +44,9 @@ pub struct Release {
     /// snapshot estimate.
     #[serde(default)]
     pub free_factor: Option<f64>,
+    /// The expected downtime of this step, excluding image pulls.
+    #[serde(default)]
+    pub downtime_seconds: Option<u64>,
     /// The migrations this release introduced, in order.
     #[serde(default, rename = "migration")]
     pub migrations: Vec<PathMigration>,
@@ -53,6 +56,11 @@ pub struct Release {
     /// `.env` changes (UP1 Task 11).
     #[serde(default)]
     pub env: Vec<toml::Value>,
+    /// The oldest app per platform (`ios`, `android`, `desktop`) this
+    /// release supports; the engine serves it as
+    /// `GetInstance.min_app_versions` (design §54 §13.1).
+    #[serde(default)]
+    pub min_app_versions: BTreeMap<String, String>,
 }
 
 /// A migration as the release train lists it.
@@ -105,6 +113,32 @@ fn parse_version(text: &str) -> Option<Version<'_>> {
         minor,
         patch,
         pre,
+    })
+}
+
+/// Semver order of two releases (a pre-release before its release; numeric
+/// pre-release identifiers numerically); `None` when either does not parse.
+pub fn compare_releases(a: &str, b: &str) -> Option<std::cmp::Ordering> {
+    let (x, y) = (parse_version(a)?, parse_version(b)?);
+    let core = (x.major, x.minor, x.patch).cmp(&(y.major, y.minor, y.patch));
+    if core != std::cmp::Ordering::Equal {
+        return Some(core);
+    }
+    Some(match (x.pre, y.pre) {
+        (None, None) => std::cmp::Ordering::Equal,
+        (None, Some(_)) => std::cmp::Ordering::Greater,
+        (Some(_), None) => std::cmp::Ordering::Less,
+        (Some(p), Some(q)) => {
+            let ids = |s: &'_ str| -> Vec<(u64, String)> {
+                s.split('.')
+                    .map(|i| {
+                        i.parse()
+                            .map_or((u64::MAX, i.to_string()), |n| (n, String::new()))
+                    })
+                    .collect()
+            };
+            ids(p).cmp(&ids(q))
+        }
     })
 }
 
@@ -182,6 +216,19 @@ impl UpgradePath {
     /// Whether the release that introduced migration `id` is `release` or an
     /// earlier one, by the train's order (newest first). A migration the
     /// train does not list is never "at or before".
+    /// Whether the release that introduced migration `id` is after `target`
+    /// (the train lists releases newest first): a run to `target` leaves it
+    /// for a later release. A migration the train does not list is never
+    /// "after".
+    pub fn introduced_after(&self, id: &str, target: &str) -> bool {
+        let introduced = self
+            .releases
+            .iter()
+            .position(|r| r.migrations.iter().any(|m| m.id == id));
+        let target = self.releases.iter().position(|r| r.version == target);
+        matches!((introduced, target), (Some(i), Some(t)) if i < t)
+    }
+
     pub fn introduced_at_or_before(&self, id: &str, release: &str) -> bool {
         let introduced = self
             .releases
@@ -223,6 +270,47 @@ mod tests {
             path.release("0.1.0-preview.2").map(|r| r.from.as_str()),
             Some(FRESH)
         );
+    }
+
+    /// A migration belongs to the release that introduced it: a run to an
+    /// earlier release leaves it, a stack stamped at or after it skips it.
+    #[test]
+    fn migrations_belong_to_their_release() {
+        let path = UpgradePath::parse(
+            r#"
+            [[release]]
+            version = "0.1.0-preview.4"
+            from = "0.1.0-preview.3"
+            [[release.migration]]
+            id = "0002-later"
+            store = "meta"
+            class = "reversible"
+            summary = "later"
+
+            [[release]]
+            version = "0.1.0-preview.3"
+            from = "0.1.0-preview.2"
+            [[release.migration]]
+            id = "0001-now"
+            store = "meta"
+            class = "reversible"
+            summary = "now"
+
+            [[release]]
+            version = "0.1.0-preview.2"
+            from = "fresh"
+            "#,
+        )
+        .expect("parse");
+        assert!(path.introduced_after("0002-later", "0.1.0-preview.3"));
+        assert!(!path.introduced_after("0001-now", "0.1.0-preview.3"));
+        assert!(!path.introduced_after("0002-later", "0.1.0-preview.4"));
+        assert!(path.introduced_at_or_before("0001-now", "0.1.0-preview.3"));
+        assert!(path.introduced_at_or_before("0001-now", "0.1.0-preview.4"));
+        assert!(!path.introduced_at_or_before("0002-later", "0.1.0-preview.3"));
+        // A migration the train does not list is neither.
+        assert!(!path.introduced_after("9999-unlisted", "0.1.0-preview.3"));
+        assert!(!path.introduced_at_or_before("9999-unlisted", "0.1.0-preview.3"));
     }
 
     #[test]

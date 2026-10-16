@@ -30,6 +30,14 @@ pub enum LiveError {
     /// A document, table or index does not exist.
     #[error("not found: {0}")]
     NotFound(String),
+    /// A call to an app that is disabled or deleted (LV1 plan Task 13,
+    /// design §45 §7): `FAILED_PRECONDITION`, reason `live_app_disabled`.
+    #[error("failed precondition: {0}")]
+    AppDisabled(String),
+    /// `CreateApp` with a name another app has (LV1 plan Task 13):
+    /// `FAILED_PRECONDITION`, reason `live_app_exists`.
+    #[error("failed precondition: {0}")]
+    AppExists(String),
     /// The request is valid but the state refuses it (for example an index
     /// change on a non-empty table, R1 plan Ruling 5).
     #[error("failed precondition: {0}")]
@@ -122,6 +130,8 @@ impl LiveError {
             | LiveError::IsolationUnavailable => pb::ErrorCode::ERROR_CODE_INVALID_ARGUMENT,
             LiveError::NotFound(_) => pb::ErrorCode::ERROR_CODE_NOT_FOUND,
             LiveError::FailedPrecondition(_)
+            | LiveError::AppDisabled(_)
+            | LiveError::AppExists(_)
             | LiveError::IndexNotReady(_)
             | LiveError::DeployConflict(_)
             | LiveError::JournalTrimmed { .. } => pb::ErrorCode::ERROR_CODE_FAILED_PRECONDITION,
@@ -156,6 +166,8 @@ impl LiveError {
             LiveError::DeployConflict(_) => Some("live_deploy_conflict"),
             LiveError::IndexNotReady(_) => Some("live_index_not_ready"),
             LiveError::WorkerCrashed(_) => Some("live_worker_crashed"),
+            LiveError::AppDisabled(_) => Some("live_app_disabled"),
+            LiveError::AppExists(_) => Some("live_app_exists"),
             _ => None,
         }
     }

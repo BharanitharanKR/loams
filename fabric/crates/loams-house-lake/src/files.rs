@@ -7,7 +7,7 @@
 
 use iceberg::spec::{
     DataContentType, FormatVersion, Literal, Manifest, ManifestContentType, ManifestList,
-    PrimitiveLiteral, Struct,
+    ManifestStatus, PrimitiveLiteral, Struct,
 };
 
 use crate::metadata::LakeError;
@@ -74,6 +74,57 @@ pub fn live_files(manifest: &[u8], of: &ManifestRef) -> Result<Vec<LiveFile>, La
                 partition: partition_text(file.partition()),
                 sequence_number: entry.sequence_number().unwrap_or(of.sequence_number),
                 data: file.content_type() == DataContentType::Data,
+            }
+        })
+        .collect())
+}
+
+/// The data manifests of a snapshot's list that the snapshot itself added
+/// (HS1 Task 17: the files one commit brought).
+pub fn manifests_added_by(
+    list: &[u8],
+    version: FormatVersion,
+    snapshot_id: i64,
+) -> Result<Vec<ManifestRef>, LakeError> {
+    let list = ManifestList::parse_with_version(list, version)
+        .map_err(|e| LakeError::Invalid(format!("a manifest list: {e}")))?;
+    Ok(list
+        .entries()
+        .iter()
+        .filter(|m| m.added_snapshot_id == snapshot_id && m.content == ManifestContentType::Data)
+        .map(|m| ManifestRef {
+            location: m.manifest_path.clone(),
+            sequence_number: m.sequence_number,
+            deletes: false,
+        })
+        .collect())
+}
+
+/// The data files a manifest lists as added by `snapshot_id`.
+pub fn added_files(
+    manifest: &[u8],
+    of: &ManifestRef,
+    snapshot_id: i64,
+) -> Result<Vec<LiveFile>, LakeError> {
+    let manifest = Manifest::parse_avro(manifest)
+        .map_err(|e| LakeError::Invalid(format!("manifest {}: {e}", of.location)))?;
+    Ok(manifest
+        .entries()
+        .iter()
+        .filter(|entry| {
+            entry.status() == ManifestStatus::Added
+                && entry.snapshot_id().is_none_or(|id| id == snapshot_id)
+                && entry.data_file().content_type() == DataContentType::Data
+        })
+        .map(|entry| {
+            let file = entry.data_file();
+            LiveFile {
+                location: file.file_path().to_string(),
+                record_count: file.record_count(),
+                size_bytes: file.file_size_in_bytes(),
+                partition: partition_text(file.partition()),
+                sequence_number: entry.sequence_number().unwrap_or(of.sequence_number),
+                data: true,
             }
         })
         .collect())
@@ -198,6 +249,25 @@ mod tests {
             .collect();
         assert_eq!(seqs, vec![(1, 1), (2, 1), (3, 2)]);
         assert!(files.iter().all(|f| f.data && f.partition == "tuple()"));
+
+        // The second snapshot added one manifest, holding file 3 alone.
+        let second = metadata.current_snapshot().expect("snapshot").snapshot_id();
+        let added = manifests_added_by(list.as_deref().expect("list"), FormatVersion::V2, second)
+            .expect("added");
+        assert_eq!(added.len(), 1);
+        let files_added = added_files(
+            &manifests_by_location[&added[0].location],
+            &added[0],
+            second,
+        )
+        .expect("files");
+        assert_eq!(
+            files_added
+                .iter()
+                .map(|f| f.record_count)
+                .collect::<Vec<_>>(),
+            vec![3]
+        );
 
         // A stale parent is a conflict at commit.
         let stale = fast_append(&table(), None, vec![file(9)], 5)

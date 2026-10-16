@@ -60,5 +60,39 @@ jobs:
           jq -e '.networks["pg-runner"].internal == true' <<<"$cfg"
           jq -e '[.services | to_entries[] | select((.value.networks // {}) | has("pg-runner")) | .key]
                  | sort == ["pg-control", "pg-runner"]' <<<"$cfg"
+      - name: the migrate service runs first and has no door (UP1 Task 7)
+        working-directory: deploy/release
+        run: |
+          cfg="$(docker compose --env-file .env.example --profile '*' config --format json)"
+          # One-shot, nothing published, no tailnet sidecar, no socket, no privilege.
+          jq -e '.services.migrate
+                 | ((.ports // []) == []) and (.restart == "no")
+                   and ((.networks | keys) == ["default"])
+                   and (.network_mode == null) and (.privileged != true)
+                   and ((.cap_add // []) == []) and ((.cap_drop // []) == ["ALL"])
+                   and (.read_only == true)
+                   and ([(.volumes // [])[] | ((.source // "") + " " + (.target // ""))
+                         | test("\\.sock( |$)")] | any | not)
+                   and (.command[0:2] == ["migrate", "run"])' <<<"$cfg"
+          # No tailscale sidecar shares its network namespace.
+          jq -e '[.services[] | select((.network_mode // "") == "service:migrate")] | length == 0' <<<"$cfg"
+          # The engine, the House and pg-control start only after it succeeded.
+          for service in loams house pg-control; do
+            jq -e --arg s "$service" \
+              '.services[$s].depends_on.migrate.condition == "service_completed_successfully"' <<<"$cfg"
+          done
+      - name: compose_safekeeper_has_volume (UP1 Task 10)
+        working-directory: deploy/release
+        run: |
+          cfg="$(docker compose --env-file .env.example config --format json)"
+          jq -e '.services.safekeeper1.volumes
+                 | map(select(.source == "safekeeper-data" and .target == "/data")) | length == 1' <<<"$cfg"
+          # migrate reaches the Postgres storage APIs to drain before a recreate.
+          jq -e '.services.migrate.command
+                 | (index("--pageserver=http://pageserver:9898") != null)
+                   and (index("--safekeeper=http://safekeeper1:7676") != null)' <<<"$cfg"
       - name: shellcheck
-        run: shellcheck deploy/release/build.sh deploy/release/byoc/install.sh deploy/release/byoc/uninstall.sh
+        run: shellcheck deploy/release/build.sh deploy/release/byoc/install.sh deploy/release/byoc/uninstall.sh deploy/release/byoc/upgrade.sh deploy/release/byoc/upgrade-test.sh
+      # UP1 Task 22: upgrade_sh_dry_run_prints_remote_commands.
+      - name: byoc upgrade.sh
+        run: deploy/release/byoc/upgrade-test.sh

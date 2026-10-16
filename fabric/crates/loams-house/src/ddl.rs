@@ -54,6 +54,7 @@ pub const CATALOG_CODES: &[(i32, &str)] = &[
     (15, "DUPLICATE_COLUMN"),
     (47, "UNKNOWN_IDENTIFIER"),
     (82, "DATABASE_ALREADY_EXISTS"),
+    (620, "QUERY_NOT_ALLOWED"),
 ];
 
 /// An error with one of [`CATALOG_CODES`], rendered as ClickHouse renders it.
@@ -94,6 +95,9 @@ pub enum TableClass {
     Realtime,
     /// Written by someone else; read-only here.
     External,
+    /// A pipe (HS1 Task 16): a stream's records, read only by its
+    /// materialized views.
+    Pipe,
 }
 
 /// The class a table's metadata says it has.
@@ -104,6 +108,7 @@ pub fn class_of(metadata: &TableMetadata) -> TableClass {
     }
     match properties.get(PROP_CLASS).map(String::as_str) {
         Some("realtime") => TableClass::Realtime,
+        Some("pipe") => TableClass::Pipe,
         _ => TableClass::Lake,
     }
 }
@@ -201,7 +206,7 @@ pub fn quote_string(value: &str) -> String {
 }
 
 /// The value of a quoted token: a string literal or a quoted name.
-fn unquote(raw: &str) -> String {
+pub(crate) fn unquote(raw: &str) -> String {
     let mut chars = raw.chars();
     let Some(quote) = chars.next() else {
         return String::new();
@@ -753,6 +758,99 @@ pub fn parse_drop(text: &str) -> Result<Drop, HouseError> {
         if_exists,
         names,
     })
+}
+
+/// `CREATE MATERIALIZED VIEW`, as written (HS1 Task 16).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CreateMaterializedView {
+    /// `OR REPLACE` (refused).
+    pub or_replace: bool,
+    /// `IF NOT EXISTS`.
+    pub if_not_exists: bool,
+    /// The view's database, when named.
+    pub database: Option<String>,
+    /// The view.
+    pub name: String,
+    /// `TO [db.]table`.
+    pub to: Option<QualifiedName>,
+    /// A column list or an `ENGINE`: an inner table (refused).
+    pub inner_table: bool,
+    /// `POPULATE` (refused).
+    pub populate: bool,
+    /// `REFRESH` (refused).
+    pub refresh: bool,
+    /// The `SELECT` after `AS`.
+    pub select: String,
+    /// The table the `SELECT` reads first: the view's source.
+    pub source: Option<QualifiedName>,
+}
+
+/// Reads a `CREATE MATERIALIZED VIEW`.
+pub fn parse_create_mv(text: &str) -> Result<CreateMaterializedView, HouseError> {
+    let mut c = Cursor::new(text);
+    let mut out = CreateMaterializedView::default();
+    c.expect("CREATE")?;
+    out.or_replace = c.eat_all(&["OR", "REPLACE"]);
+    c.expect("MATERIALIZED")?;
+    c.expect("VIEW")?;
+    out.if_not_exists = c.eat_all(&["IF", "NOT", "EXISTS"]);
+    let (database, name) = c.qualified()?;
+    out.database = database;
+    out.name = name;
+    c.skip_on_cluster()?;
+    loop {
+        if c.eat("REFRESH") {
+            out.refresh = true;
+            // The schedule runs to `TO` or `AS`.
+            while !c.done() && !c.is_word_at(c.at, "TO") && !c.is_word_at(c.at, "AS") {
+                c.at += 1;
+            }
+        } else if c.eat("TO") {
+            out.to = Some(c.qualified()?);
+        } else if c.eat("POPULATE") {
+            out.populate = true;
+        } else if c.eat("EMPTY") {
+        } else if c.eat("AS") {
+            break;
+        } else if let Some(t) = c.peek() {
+            out.inner_table = true;
+            if c.is_symbol(&t, b'(') {
+                let close = c
+                    .closing(c.at)
+                    .ok_or_else(|| syntax("Unbalanced parentheses in the column list"))?;
+                c.at = close + 1;
+            } else {
+                c.at += 1;
+            }
+        } else {
+            return Err(syntax("Expected AS SELECT in CREATE MATERIALIZED VIEW"));
+        }
+    }
+    let at = c.offset();
+    out.select = text[at..].trim().trim_end_matches(';').trim().to_string();
+    if out.select.is_empty() {
+        return Err(syntax("Expected a SELECT after AS"));
+    }
+    // The source: the first table after a FROM at the SELECT's own depth.
+    let depth = c.peek().map_or(0, |t| t.depth);
+    while let Some(t) = c.peek() {
+        if t.depth == depth && t.word && c.raw(&t).eq_ignore_ascii_case("FROM") {
+            c.at += 1;
+            match c.peek() {
+                Some(next)
+                    if next.word
+                        || c.raw(&next).starts_with('`')
+                        || c.raw(&next).starts_with('"') =>
+                {
+                    out.source = Some(c.qualified()?);
+                }
+                _ => {}
+            }
+            break;
+        }
+        c.at += 1;
+    }
+    Ok(out)
 }
 
 /// Reads `UNDROP TABLE [db.]name`.
@@ -1566,7 +1664,7 @@ impl ChTable {
         if !self.primary_key.is_empty() {
             out.push_str(&format!("\nPRIMARY KEY {}", self.primary_key));
         }
-        if self.class != TableClass::External {
+        if !matches!(self.class, TableClass::External | TableClass::Pipe) {
             let order_by = if self.order_by.is_empty() {
                 "tuple()"
             } else {
@@ -1981,6 +2079,14 @@ pub fn touched(kind: Kind, text: &str, current: &str) -> Vec<Object> {
         Kind::Show => parse_show_create(text).map(qualify).into_iter().collect(),
         Kind::Exists => parse_exists(text).map(qualify).into_iter().collect(),
         Kind::Insert => Vec::new(),
+        Kind::CreateMaterializedView => parse_create_mv(text)
+            .map(|mv| {
+                let mut out = vec![table((mv.database, mv.name))];
+                out.extend(mv.to.map(table));
+                out.extend(mv.source.map(table));
+                out
+            })
+            .unwrap_or_default(),
     }
 }
 
@@ -2007,6 +2113,8 @@ pub enum Kind {
     Exists,
     /// `INSERT`.
     Insert,
+    /// `CREATE MATERIALIZED VIEW` (HS1 Task 16).
+    CreateMaterializedView,
 }
 
 /// The constant query a set of rows answers as: `SELECT … FROM values(…)`.
@@ -2113,6 +2221,12 @@ pub async fn execute(
             if stmt.if_not_exists && lake.load(namespace, &database, &stmt.name).await?.is_some() {
                 return Ok(Answer::Done);
             }
+            if let Some((engine, _)) = &stmt.engine
+                && crate::pipes::is_pipe_engine(engine)
+            {
+                crate::pipes::create_pipe(lake, namespace, &database, &stmt, text, oracle).await?;
+                return Ok(Answer::Done);
+            }
             oracle.check(text).await?;
             let described = if stmt.columns.is_empty() {
                 Vec::new()
@@ -2141,8 +2255,33 @@ pub async fn execute(
             match stmt.kind.as_str() {
                 "TABLE" => {
                     for (db, name) in &stmt.names {
-                        lake.drop_table(namespace, &db_of(db), name, stmt.if_exists)
+                        let database = db_of(db);
+                        // A materialized view is dropped as a table too, as in
+                        // ClickHouse (HS1 Task 16).
+                        if lake.load(namespace, &database, name).await?.is_none()
+                            && crate::pipes::drop_materialized_view(
+                                lake, namespace, &database, name,
+                            )
+                            .await?
+                        {
+                            continue;
+                        }
+                        lake.drop_table(namespace, &database, name, stmt.if_exists)
                             .await?;
+                    }
+                    Ok(Answer::Done)
+                }
+                "VIEW" => {
+                    for (db, name) in &stmt.names {
+                        let database = db_of(db);
+                        if !crate::pipes::drop_materialized_view(lake, namespace, &database, name)
+                            .await?
+                            && !stmt.if_exists
+                        {
+                            return Err(HouseError::from(ChError::unknown_table(format!(
+                                "Table {database}.{name} does not exist"
+                            ))));
+                        }
                     }
                     Ok(Answer::Done)
                 }
@@ -2159,6 +2298,11 @@ pub async fn execute(
                     "DROP {other} is not on the House's surface"
                 )))),
             }
+        }
+        Kind::CreateMaterializedView => {
+            oracle.check(text).await?;
+            crate::pipes::create_materialized_view(lake, namespace, current, text).await?;
+            Ok(Answer::Done)
         }
         Kind::Undrop => {
             let (db, name) = parse_undrop(text)?;

@@ -186,6 +186,8 @@ pub struct Lake {
     store: Option<loams_store::Store>,
     /// The tables' commit queues (HS1 Task 12), made at the first write.
     committer: std::sync::OnceLock<Arc<crate::commit::Committer>>,
+    /// This front's state of the pipes' views (HS1 Task 16).
+    pipe_states: Arc<crate::pipes::PipeStates>,
 }
 
 impl fmt::Debug for Lake {
@@ -222,7 +224,13 @@ impl Lake {
             grants: None,
             store: None,
             committer: std::sync::OnceLock::new(),
+            pipe_states: Arc::default(),
         }
+    }
+
+    /// This front's state of the pipes' views (HS1 Task 16).
+    pub fn pipe_states(&self) -> Arc<crate::pipes::PipeStates> {
+        Arc::clone(&self.pipe_states)
     }
 
     /// The commit queues of this lake's tables (HS1 Task 12).
@@ -268,6 +276,32 @@ impl Lake {
                     "the store failed to read a table file",
                 ))
             })
+    }
+
+    /// How long snapshots and dropped tables are kept (§49 §11).
+    pub fn retention(&self) -> Duration {
+        self.retention
+    }
+
+    /// The namespaces the catalog holds tables for (`ns_<id>`), for the
+    /// retention sweep (HS1 Task 15).
+    pub async fn namespaces(&self) -> Result<Vec<u64>, HouseError> {
+        let roots = self.catalog.list_root_databases().await?;
+        let mut out: Vec<u64> = roots
+            .iter()
+            .filter_map(|ns| match ns.as_ref().as_slice() {
+                [only] => only.strip_prefix("ns_")?.parse().ok(),
+                _ => None,
+            })
+            .collect();
+        out.sort_unstable();
+        Ok(out)
+    }
+
+    /// The name a dropped table is kept under (HS1 Task 15's reconciliation
+    /// gives a table dropped after a catalog's restore point the same one).
+    pub fn dropped_name(table_uuid: &uuid::Uuid, dropped_at_ms: u64) -> String {
+        format!("t_{}_{dropped_at_ms}", table_uuid.simple())
     }
 
     /// How long `UNDROP TABLE` can bring a table back.
@@ -323,11 +357,14 @@ impl Lake {
         NamespaceIdent::from_vec(levels).unwrap_or_else(|_| Self::root_namespace(namespace))
     }
 
-    fn table_ident(namespace: u64, database: &str, table: &str) -> TableIdent {
+    /// The Iceberg identifier of a ClickHouse table.
+    pub fn table_ident(namespace: u64, database: &str, table: &str) -> TableIdent {
         TableIdent::new(Self::namespace(namespace, database), table.to_string())
     }
 
-    fn dropped_namespace(namespace: u64) -> NamespaceIdent {
+    /// `ns_<id>.__loams_dropped`: where dropped tables wait for `UNDROP` or
+    /// their purge (HS1 Task 15).
+    pub fn dropped_namespace(namespace: u64) -> NamespaceIdent {
         Self::namespace(namespace, DROPPED)
     }
 
@@ -652,10 +689,7 @@ impl Lake {
             Ok(()) | Err(CatalogError::NamespaceExists(_)) => {}
             Err(err) => return Err(err.into()),
         }
-        let kept = TableIdent::new(
-            dropped,
-            format!("t_{}_{at}", marked.metadata.uuid().simple()),
-        );
+        let kept = TableIdent::new(dropped, Self::dropped_name(&marked.metadata.uuid(), at));
         self.catalog
             .rename_table(&marked.ident, &kept)
             .await

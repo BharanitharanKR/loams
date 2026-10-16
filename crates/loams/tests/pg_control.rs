@@ -56,14 +56,18 @@ fn packages(tree: &str) -> BTreeSet<String> {
 }
 
 /// Global Constraints, Review Focus 8: the default build links no Postgres
-/// control-plane code.
+/// control-plane code. `loams-postgres` (the plain HTTP client of the
+/// pageserver and the safekeeper) is in it since UP1 Task 9: `loams migrate`
+/// drains the safekeeper and branches every timeline before an upgrade, and
+/// the release `loams` image, which runs `migrate`, has no `postgres`.
 #[test]
 fn default_features_exclude_postgres() {
     let default = packages(&cargo_tree(&["default"]));
     assert!(default.contains("loams"), "the listing parsed: {default:?}");
-    for name in ["loams-pg-control", "loams-postgres"] {
-        assert!(!default.contains(name), "{name} is in the default build");
-    }
+    assert!(
+        !default.contains("loams-pg-control"),
+        "loams-pg-control is in the default build"
+    );
     // The control: the feature does bring them in, so the check above reads
     // a real listing.
     let with = packages(&cargo_tree(&["default", "postgres"]));
@@ -834,8 +838,9 @@ mod postgres {
                 None,
             )
             .await;
-        assert_eq!(status, 501, "{e}");
-        assert_eq!(reason(&e), "not_implemented");
+        // Task 16: promotion is served; this endpoint is read-write.
+        assert_eq!(status, 400, "{e}");
+        assert_eq!(reason(&e), "failed_precondition");
 
         let (status, deleted) = pg
             .call(

@@ -195,7 +195,7 @@ async fn check_meta(cx: &Cx, found: &mut Preview2) -> Result<(), Mismatch> {
 
 /// Opens a collection manifest's envelope (`OPCM ‖ u16 version ‖ body ‖
 /// crc32c`) without decoding its body.
-async fn open_manifest(bucket: &loams_store::Store, path: &str) -> Result<(), Mismatch> {
+pub(crate) async fn open_manifest(bucket: &loams_store::Store, path: &str) -> Result<(), Mismatch> {
     let bad = |detail: String| mismatch("bucket", format!("{path}: {detail}"));
     let (bytes, _) = bucket.get(path).await.map_err(|e| bad(e.to_string()))?;
     if bytes.len() < 10 || &bytes[..4] != MANIFEST_MAGIC {

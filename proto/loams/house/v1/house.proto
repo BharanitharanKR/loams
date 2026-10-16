@@ -274,6 +274,9 @@ enum TableClass {
   TABLE_CLASS_REALTIME = 2;
   // An Iceberg table another writer owns, registered read-only.
   TABLE_CLASS_EXTERNAL = 3;
+  // A pipe: a stream's records, read only by its materialized views (HS1
+  // Task 16).
+  TABLE_CLASS_PIPE = 4;
 }
 
 message ListDatabasesRequest {

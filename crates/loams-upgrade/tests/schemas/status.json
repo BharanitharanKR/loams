@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "StatusReport",
+  "description": "`status`'s JSON.",
+  "type": "object",
+  "required": [
+    "release"
+  ],
+  "properties": {
+    "last_attempt": {
+      "description": "The last line of the history file, if any."
+    },
+    "migrate": {
+      "description": "`loams migrate status`'s output (the stack record and the ledger); `null` when the helper could not read the stores."
+    },
+    "migrate_error": {
+      "description": "Why `migrate` is `null`.",
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "release": {
+      "description": "The release `.env` names.",
+      "type": "string"
+    }
+  }
+}

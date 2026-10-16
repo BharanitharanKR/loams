@@ -1100,11 +1100,17 @@ impl GraphCatalog {
             return Ok(0);
         };
         let target_written = target.last_modified_ms;
+        // An upgrade snapshot's metastore may point at an older document
+        // (UP1 Task 8): keep what it may name.
+        let floor = loams_common::meta::snapshot_gc_floor(&*self.meta)
+            .await
+            .map_err(unavailable)?;
         let mut deleted = 0;
         for object in &objects {
             let older = ulid_of(&object.path).is_some_and(|u| u < target_ulid);
             let aged = object.last_modified_ms.saturating_add(grace_ms) <= target_written;
-            if object.path == current || !older || !aged {
+            let pinned = loams_common::meta::pinned_by(floor, object.last_modified_ms);
+            if object.path == current || !older || !aged || pinned {
                 continue;
             }
             match self.store.delete(&object.path).await {

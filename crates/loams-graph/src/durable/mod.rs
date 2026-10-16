@@ -22,6 +22,7 @@ pub mod idempotency;
 pub mod lane;
 pub mod visibility;
 
+use std::collections::BTreeMap;
 use std::fmt;
 use std::str::FromStr;
 use std::sync::Mutex;
@@ -29,6 +30,7 @@ use std::sync::atomic::{AtomicU64, Ordering};
 
 use grafeo::GrafeoDB;
 use loams_common::StreamId;
+use loams_common::meta::LinkId;
 use loams_log::OffsetRecord;
 
 pub use append::{AppendFault, GraphLog, GroupCommit, is_fenced, stream_name};
@@ -36,7 +38,8 @@ pub use visibility::Visibility;
 
 use crate::GraphId;
 use crate::changeset::{
-    ChangeOp, Counters, GraphChangeSet, GraphRecord, PropMap, apply_to_store, decode, encode,
+    ChangeOp, Counters, GraphChangeSet, GraphRecord, LinkApply, PropMap, apply_to_store, decode,
+    encode,
 };
 use crate::engine::GraphError;
 use idempotency::Idempotency;
@@ -188,6 +191,14 @@ pub(crate) struct Durable {
     pub(crate) opened_at: std::time::Instant,
     /// How many records its open applied on top of its base (GR1 Task 14's `Recovery`).
     pub(crate) replayed: u64,
+    /// Each link's latest progress (R0.17, GR1 Task 18): what its target's `load` answers. Rebuilt
+    /// from the records on open, seeded by the base, and changed by the lane once a link's change
+    /// set is durable.
+    pub(crate) links: Mutex<BTreeMap<LinkId, LinkApply>>,
+    /// Where the links' elements are, built from the engine the first time a link writes and kept
+    /// by the lane (GR1 Task 18). It lives and dies with this engine instance: a reload starts
+    /// without one.
+    pub(crate) link_index: Mutex<Option<crate::link::LinkIndex>>,
 }
 
 /// What a durable engine was restored from before its replay: a snapshot (GR1 Task 13) or a
@@ -203,6 +214,8 @@ pub(crate) struct Base {
     /// records below `offset` are then not read at all. `None` (a snapshot) reads them for their
     /// keys.
     pub(crate) keys: Option<Vec<(String, u64, idempotency::Outcome)>>,
+    /// Each link's progress at `offset` (GR1 Task 18): the records below it may be trimmed.
+    pub(crate) links: BTreeMap<LinkId, LinkApply>,
 }
 
 impl fmt::Debug for Durable {
@@ -249,6 +262,10 @@ impl Durable {
         let now = log.now_ms();
         let mut idempotency = Idempotency::default();
         let mut next_txn_seq = base.as_ref().map_or(1, |base| base.next_txn_seq);
+        let mut links = base
+            .as_ref()
+            .map(|base| base.links.clone())
+            .unwrap_or_default();
         let applied_below = base.as_ref().map_or(0, |base| base.offset);
         // A base that kept its keys needs nothing below its offset.
         let mut read_from = start;
@@ -304,7 +321,7 @@ impl Durable {
                 // Below the snapshot's offset the engine holds the record's effect already.
                 let apply = record.offset >= applied_below;
                 let (seq, applied) =
-                    replay_record(db, graph, &record, apply, &mut idempotency, now)?;
+                    replay_record(db, graph, &record, apply, &mut idempotency, &mut links, now)?;
                 next_txn_seq = next_txn_seq.max(seq + 1);
                 replayed += u64::from(applied);
             }
@@ -328,6 +345,8 @@ impl Durable {
             log_bytes: AtomicU64::new(0),
             opened_at: std::time::Instant::now(),
             replayed,
+            links: Mutex::new(links),
+            link_index: Mutex::new(None),
             log,
         })
     }
@@ -352,6 +371,10 @@ impl Durable {
             .idempotency
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mut links = self
+            .links
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for record in records {
             // Below the position: a fetch that overlapped the last one.
             if record.offset < offset {
@@ -363,7 +386,15 @@ impl Durable {
                     record.offset
                 )));
             }
-            let (seq, _) = replay_record(db, self.graph, record, true, &mut idempotency, now)?;
+            let (seq, _) = replay_record(
+                db,
+                self.graph,
+                record,
+                true,
+                &mut idempotency,
+                &mut links,
+                now,
+            )?;
             self.next_txn_seq.fetch_max(seq + 1, Ordering::AcqRel);
             offset = record.offset + 1;
             applied += 1;
@@ -387,6 +418,23 @@ impl Durable {
             .entries()
     }
 
+    /// Link `link`'s latest durable progress, if it ever committed to this graph (GR1 Task 18).
+    pub(crate) fn link_progress(&self, link: LinkId) -> Option<LinkApply> {
+        self.links
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(&link)
+            .cloned()
+    }
+
+    /// Every link's latest durable progress, for a snapshot or a stamp (GR1 Task 18).
+    pub(crate) fn link_entries(&self) -> BTreeMap<LinkId, LinkApply> {
+        self.links
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone()
+    }
+
     /// The lease epoch this engine's appends carry (0 when unfenced).
     pub(crate) fn lease_epoch(&self) -> u64 {
         self.fence.as_ref().map_or(0, |fence| fence.epoch)
@@ -401,14 +449,16 @@ impl Durable {
 }
 
 /// Reads one record of graph `graph`'s stream: applies it to `db` when `apply` (a record a base
-/// already holds is only read), and records its idempotency key. Answers its `txn_seq` and
-/// whether it was applied. Shared by an open's replay and a follower's tail (GR1 Task 15).
+/// already holds is only read), and records its idempotency key and its link's progress. Answers
+/// its `txn_seq` and whether it was applied. Shared by an open's replay and a follower's tail (GR1
+/// Task 15).
 fn replay_record(
     db: &GrafeoDB,
     graph: GraphId,
     record: &OffsetRecord,
     apply: bool,
     idempotency: &mut Idempotency,
+    links: &mut BTreeMap<LinkId, LinkApply>,
     now: u64,
 ) -> Result<(u64, bool), GraphError> {
     let value = record.record.value.as_deref().unwrap_or_default();
@@ -428,6 +478,9 @@ fn replay_record(
             }
             if apply {
                 apply_to_store(db, &change.ops)?;
+            }
+            if let Some(progress) = &change.link {
+                note_link(links, progress);
             }
             (change.txn_seq, &change.idempotency_key, change.commit_epoch)
         }
@@ -456,6 +509,17 @@ fn replay_record(
         );
     }
     Ok((seq, apply))
+}
+
+/// Records `progress` as its link's latest unless a newer version is known already: a base's
+/// progress is newer than the records below its offset, which an open still reads for their keys.
+pub(crate) fn note_link(links: &mut BTreeMap<LinkId, LinkApply>, progress: &LinkApply) {
+    let newer = links
+        .get(&progress.link)
+        .is_none_or(|known| known.version < progress.version);
+    if newer {
+        links.insert(progress.link, progress.clone());
+    }
 }
 
 /// The whole graph as one change set: every node, then every edge (R11.5).

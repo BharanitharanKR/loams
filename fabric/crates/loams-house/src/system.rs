@@ -49,6 +49,22 @@ pub const REPLACED: &[&str] = &[
     "parts",
     "processes",
     "errors",
+    "loams_pipes",
+];
+
+/// `system.loams_pipes` (HS1 Task 16): the House's own, one row per
+/// materialized view over a pipe, with this front's view of its runs.
+pub const PIPES_COLUMNS: &[(&str, &str)] = &[
+    ("database", "String"),
+    ("name", "String"),
+    ("pipe", "String"),
+    ("source", "String"),
+    ("target", "String"),
+    ("lag_records", "UInt64"),
+    ("committed_records", "UInt64"),
+    ("committed_rows", "UInt64"),
+    ("last_commit_at", "Nullable(DateTime64(3, 'UTC'))"),
+    ("last_error", "String"),
 ];
 
 /// The databases chDB itself has, whose `system` rows are shown as they are.
@@ -451,6 +467,15 @@ pub async fn views(
         quote_name(SYSTEM_VIEWS)
     )];
     for table in tables {
+        if table == "loams_pipes" {
+            out.push(format!(
+                "CREATE OR REPLACE VIEW {}.{} AS\n{}",
+                quote_name(SYSTEM_VIEWS),
+                quote_name(table),
+                pipes_view(ctx).await?
+            ));
+            continue;
+        }
         let shape = shape(lease, table).await?;
         let body = match table.as_str() {
             "databases" => databases(ctx, &shape).await?,
@@ -507,6 +532,46 @@ pub async fn views(
         ));
     }
     Ok(out)
+}
+
+async fn pipes_view(ctx: ReadContext<'_>) -> Result<String, HouseError> {
+    let shape: Vec<ShapeColumn> = PIPES_COLUMNS
+        .iter()
+        .map(|(name, ty)| ShapeColumn {
+            name: name.to_string(),
+            ty: ty.to_string(),
+        })
+        .collect();
+    let mut rows = Rows {
+        columns: PIPES_COLUMNS.iter().map(|(name, _)| *name).collect(),
+        rows: Vec::new(),
+    };
+    if let Some(lake) = ctx.lake {
+        for row in crate::pipes::rows(lake, ctx.namespace).await? {
+            if ctx
+                .grants
+                .is_some_and(|grants| !grants.allows(&row.database, &row.name))
+            {
+                continue;
+            }
+            let state = &row.state;
+            rows.rows.push(vec![
+                Some(row.database),
+                Some(row.name),
+                Some(row.pipe),
+                Some(row.source),
+                Some(row.target),
+                Some(state.lag_records.to_string()),
+                Some(state.committed_records.to_string()),
+                Some(state.committed_rows.to_string()),
+                state
+                    .last_commit_ms
+                    .map(|ms| format!("{}.{:03}", datetime_text(ms), ms.rem_euclid(1000))),
+                Some(state.last_error.clone()),
+            ]);
+        }
+    }
+    Ok(catalog_select(&shape, &rows))
 }
 
 async fn databases(ctx: ReadContext<'_>, shape: &[ShapeColumn]) -> Result<String, HouseError> {

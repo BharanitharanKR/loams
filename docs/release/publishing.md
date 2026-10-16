@@ -56,6 +56,20 @@ The preview's images, the contract the compose stack in
 - **Not yet.** No attestation or cosign signature is attached to the images in the
   preview, and the Loams images are not promised to be multi-architecture.
 
+### Third-party pins (design §54 §9.2)
+
+PD, TiKV and TiDB (`deploy/release/.env.example`, `release/sqldb-images.toml`), the Loams Postgres images
+(`deploy/pins/loams-postgres-images.toml`), chDB (`loams-chdb-sys`) and Grafeo (`Cargo.toml`) follow these rules:
+- A pin changes in its own pull request into `dev`. It names the old and new versions and the component's own
+  upgrade notes.
+- The pull request carries the `ci:upgrade` label, so the upgrade gate runs on it. The repository checks fail a
+  pin change without the label.
+- The newest release's `[release.components]` in `release/upgrade-path.toml` equals the pin files, and no
+  component goes down against the previous release that lists components.
+- A bump across a component's major needs a `point_of_no_return` migration entry in that release, because its
+  files do not go back.
+- `scripts/release/check-upgrade-path.sh` checks the last two rules.
+
 ## What crates.io actually publishes
 
 The crate list is declared in the workflow's `CRATES` and checked by

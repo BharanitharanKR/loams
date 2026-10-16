@@ -36,6 +36,7 @@ on:
       - "crates/loams-wal-decoder/**"
       - "crates/loams-postgres/**"
       - "crates/loams-pg-control/**"
+      - "crates/loams-pgdog-sync/**"
       # compiled into loams-pg-control (runtime::images)
       - "deploy/pins/loams-postgres-images.toml"
       - "crates/loams/Cargo.toml"
@@ -67,6 +68,7 @@ on:
       - "crates/loams-wal-decoder/**"
       - "crates/loams-postgres/**"
       - "crates/loams-pg-control/**"
+      - "crates/loams-pgdog-sync/**"
       # compiled into loams-pg-control (runtime::images)
       - "deploy/pins/loams-postgres-images.toml"
       - "crates/loams/Cargo.toml"
@@ -227,9 +229,9 @@ jobs:
         env:
           LOAMS_TEST_PD: ""
           LOAMS_TEST_TMPDIR: ${{ runner.temp }}
-        run: cargo test -p loams-pg-control --locked
+        run: cargo test -p loams-pg-control -p loams-pgdog-sync --locked
       - name: clippy (default)
-        run: cargo clippy -p loams-pg-control --all-targets --locked -- -D warnings
+        run: cargo clippy -p loams-pg-control -p loams-pgdog-sync --all-targets --locked -- -D warnings
       - name: clippy (tikv)
         run: cargo clippy -p loams-pg-control --all-targets --features tikv --locked -- -D warnings
       - name: test (the Kubernetes secret store, against a stand-in API)

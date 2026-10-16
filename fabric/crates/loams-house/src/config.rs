@@ -99,6 +99,44 @@ pub struct HouseConfig {
     /// How often background compaction looks at tables that took commits
     /// (HS1 Task 13): 30 s; zero turns it off.
     pub compaction_interval: Duration,
+    /// How long lake tables keep their snapshots, and dropped tables wait for
+    /// `UNDROP` (`loams_snapshot_retention`, §49 §11): 7 days, at least 24 h
+    /// (HS1 Task 15).
+    pub snapshot_retention: Duration,
+    /// How often snapshot expiry, orphan removal and purges sweep the
+    /// catalog (HS1 Task 15): 1 h; zero turns it off.
+    pub retention_interval: Duration,
+    /// The engine whose streams `LoamsStream` pipes read (HS1 Task 16);
+    /// `None`: no pipe can be made.
+    pub engine: Option<EngineLink>,
+    /// How often the pipe runner looks for records (HS1 Task 16): 1 s; zero
+    /// turns it off.
+    pub pipe_interval: Duration,
+    /// How often materialized views over lake tables catch up on commits no
+    /// `INSERT` ran them for (HS1 Task 17): 5 s; zero turns it off.
+    pub view_interval: Duration,
+}
+
+/// The House's link to the engine's stream API (HS1 Task 16, `[house.engine]`).
+#[derive(Clone, PartialEq, Eq)]
+pub struct EngineLink {
+    /// The engine's HTTP API (`https://engine:8080`).
+    pub url: String,
+    /// The House's own API key for it (never a caller's).
+    pub key: Option<String>,
+    /// Which engine namespace each House namespace's pipes read; a House
+    /// namespace not listed has no pipes.
+    pub namespaces: std::collections::BTreeMap<u64, String>,
+}
+
+impl fmt::Debug for EngineLink {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EngineLink")
+            .field("url", &self.url)
+            .field("key", &self.key.as_ref().map(|_| "[redacted]"))
+            .field("namespaces", &self.namespaces)
+            .finish()
+    }
 }
 
 /// A TLS listener (HS1 Task 20).
@@ -133,6 +171,11 @@ impl Default for HouseConfig {
             unmapped_principals: None,
             audit: None,
             compaction_interval: Duration::from_secs(30),
+            snapshot_retention: crate::catalog::DEFAULT_RETENTION,
+            retention_interval: crate::retention::DEFAULT_SWEEP_INTERVAL,
+            engine: None,
+            pipe_interval: Duration::from_secs(1),
+            view_interval: Duration::from_secs(5),
             default_buffer_size: 1024 * 1024,
             max_query_size: 256 * 1024,
             receive_timeout: Duration::from_secs(30),
@@ -393,6 +436,10 @@ pub struct HouseSection {
     pub principals: Vec<FilePrincipal>,
     /// The file the audit is appended to (HS1 Task 20); `--audit-log`.
     pub audit_log: Option<PathBuf>,
+    /// How long lake tables keep their snapshots and dropped tables wait for
+    /// `UNDROP`, in hours (`loams_snapshot_retention`; 168, at least 24; HS1
+    /// Task 15).
+    pub snapshot_retention_hours: Option<u64>,
     /// `[house.limits]`.
     #[serde(default)]
     pub limits: LimitsSection,
@@ -408,6 +455,60 @@ pub struct HouseSection {
     /// `[house.tls]`: the certificate and key HS1 Task 20's listeners use.
     #[serde(default)]
     pub tls: TlsSection,
+    /// `[house.engine]`: the engine whose streams pipes read (HS1 Task 16).
+    #[serde(default)]
+    pub engine: EngineSection,
+}
+
+/// `[house.engine]` (HS1 Task 16).
+///
+/// ```toml
+/// [house.engine]
+/// url = "https://engine:8080"
+/// key_file = "/run/secrets/house-engine-key"
+/// [house.engine.namespaces]
+/// 7 = "orders"
+/// ```
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EngineSection {
+    /// The engine's HTTP API.
+    pub url: Option<String>,
+    /// A file holding the House's API key for the engine.
+    pub key_file: Option<PathBuf>,
+    /// House namespace id → the engine namespace its pipes read.
+    #[serde(default)]
+    pub namespaces: std::collections::BTreeMap<String, String>,
+}
+
+impl EngineSection {
+    /// The link, when a URL is set; the key file is read here.
+    pub fn link(&self) -> Result<Option<EngineLink>, String> {
+        let Some(url) = &self.url else {
+            return Ok(None);
+        };
+        let key = match &self.key_file {
+            Some(path) => Some(
+                std::fs::read_to_string(path)
+                    .map_err(|err| format!("[house.engine] key_file {}: {err}", path.display()))?
+                    .trim()
+                    .to_string(),
+            ),
+            None => None,
+        };
+        let mut namespaces = std::collections::BTreeMap::new();
+        for (id, name) in &self.namespaces {
+            let id: u64 = id
+                .parse()
+                .map_err(|_| format!("[house.engine.namespaces] {id:?} is not a namespace id"))?;
+            namespaces.insert(id, name.clone());
+        }
+        Ok(Some(EngineLink {
+            url: url.clone(),
+            key,
+            namespaces,
+        }))
+    }
 }
 
 /// One `[[house.users]]` entry.

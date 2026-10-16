@@ -1,6 +1,6 @@
 # 54 — Upgrades: Keeping Data from One Release to the Next
 
-Status: **Approved direction** (owner, 2026-10-13) · details **Proposed** · 2026-10-13. Source: the owner's direction of 2026-10-13 (§1.1), which is binding. Upgrades ship in **v0.1.0-preview.3**, so that preview.2 → preview.3 is the first upgrade that keeps data. Weekly previews follow, and v0.1.0's exit criteria include a tested upgrade path. Decisions **D923–D945** and open questions **Q820–Q834** are declared in the [decision log](13-decision-log.md). Rows that restate the owner's direction are *Approved*; rows that add detail to it are *Proposed* until the owner confirms them. Plan: [UP1](../plans/2026-10-14-up1-upgrades.md). **No code is written by this document.**
+Status: **Approved** (owner: direction 2026-10-13; D923–D945 and the UP1 rulings 2026-10-16) · 2026-10-16. Source: the owner's direction of 2026-10-13 (§1.1), which is binding. Upgrades ship in **v0.1.0-preview.3**, so that preview.2 → preview.3 is the first upgrade that keeps data. Weekly previews follow, and v0.1.0's exit criteria include a tested upgrade path. Decisions **D923–D945** and open questions **Q820–Q834** are declared in the [decision log](13-decision-log.md). Rows that restate the owner's direction are *Approved*; rows that add detail to it are *Proposed* until the owner confirms them. Plan: [UP1](../plans/2026-10-14-up1-upgrades.md). **No code is written by this document.**
 
 This document builds on [§10](10-operations.md) §6–§7 (backups, format version N/N−1, rolling upgrades), [§03](03-storage-formats.md) §6–§7 (format versioning, garbage collection), [§30](30-loams-cli.md) (the CLI) and [CL1](../plans/2026-10-10-cl1-loams-cli.md), [§41](41-multitenant-byoc-control-plane.md) §8 (upgrade waves and rings), [§44](44-unified-api-and-sdks.md) (the API rules and `GetInstance`), and on the per-product upgrade sections: [§45](45-loams-live-production.md) §4.3 (Live), [§46](46-loams-postgres-production.md) §12 and [§51](51-loams-postgres-fork.md) §9 (Postgres), [§47](47-loams-sql-production.md) §5 (SQL bootstrap), [§48](48-loams-graph-production.md) §14.4 (Graph), [§49](49-loams-house-production.md) §19 (House) and [§50](50-loams-desktop-daemon.md) §5.3 (the desktop daemon). §15 below reconciles each of them; none is contradicted.
 
@@ -506,6 +506,31 @@ Read on `dev` at `7957cfb0`. Paths are from the repository root. UP1 Task 0 (the
 **Releases.** `release-images.yml` builds images on a `v*` tag; `release-github.yml` publishes `loams-compose-<version>.tar.gz` (`deploy/release` plus `deploy/loams-postgres-dev`) with `SHA256SUMS` and inline release notes. `release-compose.yml` checks the compose file's configuration only. **No CI job starts the release stack.** `CHANGELOG.md`'s preview.2 entry says "no upgrade path: start a fresh stack". `buf breaking` runs in `ci.yml`'s `app-protos` against `origin/main`, ignoring the unstable packages listed in `buf.yaml`.
 
 **The desktop.** `apps/desktop-electron`: the engine's data is `userData/engine` (`src/main/paths.ts`); compose stacks are copied to `userData/stacks` and re-copied when the app version changes (`.loams-stack-version`); `electron-updater` 6.8.9 with `allowDowngrade = false`; the `desktop-latest` feed is written only by `desktop-promote.yml`. A Postgres major mismatch is reported (`pg_major_mismatch`) and the only remedy is a reset.
+
+### 17.1 As built (UP1, 2026-10-16)
+
+The table above is the state before UP1. What UP1 built, and where it differs from §1–§16 (the rulings are in
+the plan's "Rulings made during execution"):
+
+- **`_system` already existed in preview.2** (the auth principal directory). The ledger shares it under
+  `upgrade/*` pointers. The stack record is the commit point, because the metastore has no multi-key
+  transaction (T0-2).
+- **The client is `crates/loams-upgrade`**, flattened into `loams` as `loams upgrade` (CL1's `loams-cli` had
+  not landed, T0-3). It also builds as `loams-upgrade` for CI.
+- **TiKV:** BR `backup txn` when the stack's `tikv` mounts the snapshot volume (preview.3 on). A stack without
+  that mount, such as preview.2, gets a cold copy of `pd-data` and `tikv-data` as one archive.
+- **The host files** of a snapshot live in `<stack>/.loams-upgrade/snapshots/<id>/host/`, beside the history
+  file, not in the snapshot volume.
+- **The signed manifest (CLI2) does not exist yet.** A downloaded bundle is checked against the release's
+  `SHA256SUMS`; the manifest's `upgrade` object is the asset `loams-upgrade-<version>.json` (T11-1, T12-1).
+- **`loams-postgres`** (the pageserver and safekeeper HTTP client) is in the default build through
+  `loams-migrate`, because the release `loams` image runs `migrate` (T9-1).
+- **An older release over newer data** that only `Reversible` migrations changed is accepted by both the
+  startup gate and `migrate run` (a no-op). This is what makes `rollback --keep-writes` work (T14-2).
+- **The safekeeper volume** cannot be guarded by compose alone, because the included Postgres file cannot
+  depend on `migrate`. A hand-run `compose up` across preview.2 → preview.3 is unsupported (T10-1).
+- **The console** gates plugins on `requires.api` and the new `requires.engine`. `GetInstance.features`
+  announces `feature.*` and `role.*` (T16-1 to T16-3).
 
 ## 18. Risks
 

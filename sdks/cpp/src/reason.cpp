@@ -90,6 +90,8 @@ constexpr Row kRows[] = {
     {Reason::kLiveDeployConflict, "live_deploy_conflict"},
     {Reason::kLiveSchemaViolation, "live_schema_violation"},
     {Reason::kLiveIndexNotReady, "live_index_not_ready"},
+    {Reason::kLiveAppDisabled, "live_app_disabled"},
+    {Reason::kLiveAppExists, "live_app_exists"},
     {Reason::kRoleRequired, "role_required"},
     {Reason::kSetupRequired, "setup_required"},
     {Reason::kTokenMissing, "token_missing"},

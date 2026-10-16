@@ -13,7 +13,7 @@
 //! below the oldest retained snapshot, never inside the PITR window, and never past the newest
 //! portable snapshot (the fallback for an engine that cannot read the native one, §48 §6.5).
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -100,6 +100,59 @@ pub struct SnapshotEntry {
     pub nodes: u64,
     /// Edges in the snapshot.
     pub edges: u64,
+    /// Each link's progress at `offset` (R0.17, GR1 Task 18): a link's last record may be below
+    /// the trim point, so its target's state is kept here. Absent for a graph no link writes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<LinkProgress>,
+}
+
+/// A link's progress as a snapshot keeps it: a [`crate::changeset::LinkApply`] in JSON.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LinkProgress {
+    /// The link's id.
+    pub link: u64,
+    /// Its target's version.
+    pub version: u64,
+    /// The next source offset to apply, by partition.
+    pub applied_after: BTreeMap<u32, u64>,
+}
+
+impl LinkProgress {
+    /// Every link's progress, by link id.
+    #[must_use]
+    pub fn all(
+        links: &BTreeMap<loams_common::meta::LinkId, crate::changeset::LinkApply>,
+    ) -> Vec<Self> {
+        links
+            .values()
+            .map(|apply| Self {
+                link: apply.link.0,
+                version: apply.version,
+                applied_after: apply.applied_after.clone(),
+            })
+            .collect()
+    }
+
+    /// The progress kept by `entries`, by link id.
+    #[must_use]
+    pub fn by_link(
+        entries: &[Self],
+    ) -> BTreeMap<loams_common::meta::LinkId, crate::changeset::LinkApply> {
+        entries
+            .iter()
+            .map(|entry| {
+                let link = loams_common::meta::LinkId(entry.link);
+                (
+                    link,
+                    crate::changeset::LinkApply {
+                        link,
+                        version: entry.version,
+                        applied_after: entry.applied_after.clone(),
+                    },
+                )
+            })
+            .collect()
+    }
 }
 
 /// A graph's manifest (shared contract `GraphManifest`).
@@ -593,9 +646,15 @@ impl ManifestStore {
         let current_ulid = ulid_of(&current.key);
         let referenced = current.manifest.keys();
         let grace_ms = u64::try_from(grace.as_millis()).unwrap_or(u64::MAX);
+        // Objects an upgrade snapshot may name stay while it is kept (UP1
+        // Task 8).
+        let floor = loams_common::meta::snapshot_gc_floor(&*self.meta)
+            .await
+            .map_err(|err| unavailable("reading the upgrade snapshots", &err))?;
         let mut deleted = 0;
         for object in &objects {
-            let aged = object.last_modified_ms.saturating_add(grace_ms) <= current_written;
+            let aged = object.last_modified_ms.saturating_add(grace_ms) <= current_written
+                && !loams_common::meta::pinned_by(floor, object.last_modified_ms);
             let stale = if object.path.starts_with(&manifests) {
                 object.path != current.key
                     && matches!((ulid_of(&object.path), current_ulid), (Some(a), Some(b)) if a < b)
@@ -634,16 +693,26 @@ impl ManifestStore {
             .list(&prefix)
             .await
             .map_err(|err| unavailable("listing a purged graph's objects", &err))?;
+        // An upgrade snapshot taken while the graph lived may restore it:
+        // its objects stay while the snapshot is kept (UP1 Task 8).
+        let floor = loams_common::meta::snapshot_gc_floor(&*self.meta)
+            .await
+            .map_err(|err| unavailable("reading the upgrade snapshots", &err))?;
+        let mut deleted = 0;
         for object in &objects {
+            if loams_common::meta::pinned_by(floor, object.last_modified_ms) {
+                continue;
+            }
             self.store
                 .delete(&object.path)
                 .await
                 .map_err(|err| unavailable("deleting a purged graph's objects", &err))?;
+            deleted += 1;
         }
         if let Ok(mut cache) = self.cache.lock() {
             cache.remove(&graph);
         }
-        Ok(objects.len())
+        Ok(deleted)
     }
 }
 
@@ -673,6 +742,7 @@ mod tests {
             created_at_ms,
             nodes: 0,
             edges: 0,
+            links: Vec::new(),
         }
     }
 

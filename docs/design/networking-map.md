@@ -46,6 +46,8 @@ How people sign in, and how operators reach machines.
 | What | Where it is decided | State |
 |---|---|---|
 | Postgres: routing by endpoint (SNI or `options=endpoint=`) through the proxy and `wake_compute` | [§28](28-loams-postgres.md) (routing table), [§46](46-loams-postgres-production.md) | Preview (compose stack) |
+| Postgres front door in production: `loams-gateway` reads SNI (after `SSLRequest`, or from a direct-TLS ClientHello) and picks the namespace's PgDog; dedicated ports for clients without SNI; plaintext refused | [§57](57-loams-gateway.md) §7 (D1011, D1014–D1017); plan [GW1](../plans/2026-10-16-gw1-loams-gateway.md); PG2 Task 22 | Planned |
+| API, LLM and MCP gateways on the same core | [§57](57-loams-gateway.md) §12 (D1022) | Designed, not planned |
 | MySQL (Loams SQL): `loams-sqlgate`, TLS 1.2+ with SNI per database, branch from the role user or the SNI | [§47](47-loams-sql-production.md) §12 (D731) | Built; the release stack does not expose it yet |
 | SQL router across shards | [§31](31-loams-router-and-verification.md) §4–§7 | In progress (RT) |
 | Engine surfaces (native, Flight SQL, Qdrant, Elasticsearch, Connect) and their credentials | [§10](10-operations.md) §4 (the surface table); [§44](44-unified-api-and-sdks.md) | Preview |
@@ -71,8 +73,8 @@ plan of their own:
 
 | Item | Owner |
 |---|---|
-| Fuzz every parser that reads untrusted bytes **before** authentication (TLS ClientHello and SNI, the Postgres startup message, SCRAM), with size and time limits before auth | The router (RT) and the gates. Fuzzing already runs for the SQL gate and agentd RPC (CI) and for the Postgres fork (NF1 Task 6) |
-| PROXY protocol v2 at the L4 load balancer, so client IPs survive to per-IP limits and audit | CP1 (the BYOC and cluster ingress) |
+| Fuzz every parser that reads untrusted bytes **before** authentication (TLS ClientHello and SNI, the Postgres startup message, SCRAM), with size and time limits before auth | The router (RT) and the gates; `loams-gateway`'s startup classifier and replay buffer (GW1 Task 14, D1020). Fuzzing already runs for the SQL gate and agentd RPC (CI) and for the Postgres fork (NF1 Task 6) |
+| PROXY protocol v2 at the L4 load balancer, so client IPs survive to per-IP limits and audit | CP1 (the BYOC and cluster ingress); `loams-gateway` reads it (GW1 Task 12, Q901) |
 | Short-lived internal mTLS certificates (hours), issued and rotated by the control plane | CP1, with NET1 for tailnet-reached nodes |
 
 ## 6. Exposure: public URLs for private deployments (parked)

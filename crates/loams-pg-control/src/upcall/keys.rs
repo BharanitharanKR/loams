@@ -321,6 +321,61 @@ impl ComputeKeys {
         )
     }
 
+    /// The signing key's public half as a PEM `PUBLIC KEY` (SPKI), the
+    /// `pemfile` endpoint storage verifies its tokens with (Task 16).
+    pub fn public_key_pem(&self) -> String {
+        // SPKI for Ed25519 (RFC 8410): the algorithm, then the 32-byte key.
+        const PREFIX: [u8; 12] = [
+            0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00,
+        ];
+        // `x` is the base64url of the 32-byte key, set in `from_pkcs8` from
+        // the key itself: it always decodes.
+        #[allow(clippy::expect_used)]
+        let public = URL_SAFE_NO_PAD
+            .decode(&self.trusted[0].x)
+            .expect("`x` is valid base64url by construction");
+        let der = [PREFIX.as_slice(), &public].concat();
+        let b64 = base64::engine::general_purpose::STANDARD.encode(der);
+        format!("-----BEGIN PUBLIC KEY-----\n{b64}\n-----END PUBLIC KEY-----\n")
+    }
+
+    /// A token for endpoint storage (the fork's `endpoint_storage`,
+    /// `EndpointStorageClaims`): the compute of `endpoint` on the tenant's
+    /// timeline (hex ids) may read and write its file cache's state until
+    /// `exp_s` (seconds since the Unix epoch). EdDSA, as endpoint storage
+    /// requires; its claims are neither an upcall token's nor a
+    /// `compute_ctl` token's, so neither verifier takes it (Task 16).
+    ///
+    /// # Errors
+    ///
+    /// [`KeyError::Sign`].
+    pub fn issue_endpoint_storage_token(
+        &self,
+        tenant_id: &str,
+        timeline_id: &str,
+        endpoint_id: &str,
+        exp_s: u64,
+    ) -> Result<Secret<String>, KeyError> {
+        #[derive(Serialize)]
+        struct EndpointStorageClaims<'a> {
+            tenant_id: &'a str,
+            timeline_id: &'a str,
+            endpoint_id: &'a str,
+            exp: u64,
+        }
+        let mut header = Header::new(Algorithm::EdDSA);
+        header.kid = Some(self.kid().to_owned());
+        let claims = EndpointStorageClaims {
+            tenant_id,
+            timeline_id,
+            endpoint_id,
+            exp: exp_s,
+        };
+        jsonwebtoken::encode(&header, &claims, &self.signing)
+            .map(Secret::new)
+            .map_err(|_| KeyError::Sign)
+    }
+
     /// Checks an upcall token at `now_ms`: signed by a trusted key (named by
     /// its `kid`), for [`UPCALL_AUDIENCE`], not expired.
     ///
@@ -364,6 +419,82 @@ impl ComputeKeys {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// The Ed25519 key of an SPKI PEM, as `DecodingKey::from_ed_pem` reads
+    /// it (that needs jsonwebtoken's `use_pem`, which this crate leaves
+    /// off): the RFC 8410 prefix, then 32 bytes.
+    fn ed_pem(pem: &str) -> DecodingKey {
+        let body: String = pem.lines().filter(|l| !l.starts_with("-----")).collect();
+        let der = base64::engine::general_purpose::STANDARD
+            .decode(body)
+            .expect("base64");
+        assert_eq!(der.len(), 44, "an Ed25519 SPKI");
+        assert_eq!(
+            &der[..12],
+            &[
+                0x30, 0x2a, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x03, 0x21, 0x00
+            ]
+        );
+        DecodingKey::from_ed_der(&der[12..])
+    }
+
+    /// Endpoint storage reads the PEM with `DecodingKey::from_ed_pem` and
+    /// checks tokens with `Validation::new(EdDSA)` (the fork's
+    /// `endpoint_storage/src/lib.rs`); the upcall refuses its tokens.
+    #[test]
+    fn endpoint_storage_takes_our_tokens_and_only_them() {
+        let keys = ComputeKeys::generate().expect("a key");
+        let pem = keys.public_key_pem();
+        assert!(pem.starts_with("-----BEGIN PUBLIC KEY-----\n"), "{pem}");
+        let key = ed_pem(&pem);
+        let exp = 4_000_000_000;
+        let token = keys
+            .issue_endpoint_storage_token(
+                "cf0480929707ee75372337efaa5ecf96",
+                "112ded66422aa5e953e5440fa5427ac4",
+                "ep-01JZ0000000000000000000001",
+                exp,
+            )
+            .expect("a token");
+        let claims = jsonwebtoken::decode::<serde_json::Value>(
+            token.expose(),
+            &key,
+            &Validation::new(Algorithm::EdDSA),
+        )
+        .expect("endpoint storage's validation")
+        .claims;
+        assert_eq!(
+            claims,
+            serde_json::json!({
+                "tenant_id": "cf0480929707ee75372337efaa5ecf96",
+                "timeline_id": "112ded66422aa5e953e5440fa5427ac4",
+                "endpoint_id": "ep-01JZ0000000000000000000001",
+                "exp": exp,
+            })
+        );
+        assert!(keys.verify_upcall_token(token.expose(), 1).is_err());
+        // Deterministic: the same claims sign to the same token (the spec's
+        // bytes do not move between reads).
+        let again = keys
+            .issue_endpoint_storage_token(
+                "cf0480929707ee75372337efaa5ecf96",
+                "112ded66422aa5e953e5440fa5427ac4",
+                "ep-01JZ0000000000000000000001",
+                exp,
+            )
+            .expect("a token");
+        assert_eq!(token.expose(), again.expose());
+        // Another key's PEM does not verify it.
+        let other = ed_pem(&ComputeKeys::generate().expect("a key").public_key_pem());
+        assert!(
+            jsonwebtoken::decode::<serde_json::Value>(
+                token.expose(),
+                &other,
+                &Validation::new(Algorithm::EdDSA)
+            )
+            .is_err()
+        );
+    }
 
     #[test]
     fn a_key_round_trips_through_pkcs8() {

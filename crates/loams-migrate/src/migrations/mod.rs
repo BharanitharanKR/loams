@@ -4,10 +4,12 @@
 //! Task 10 `0001-safekeeper-volume`.
 
 mod m0000_adopt_preview_2;
+mod m0001_safekeeper_volume;
 
 pub use m0000_adopt_preview_2::AdoptPreview2;
+pub use m0001_safekeeper_volume::{SAFEKEEPER_VOLUME, SafekeeperVolume};
 
 use crate::migration::Migration;
 
 /// Every migration of this binary, oldest first.
-pub static MIGRATIONS: &[&dyn Migration] = &[&AdoptPreview2];
+pub static MIGRATIONS: &[&dyn Migration] = &[&AdoptPreview2, &SAFEKEEPER_VOLUME];

@@ -221,6 +221,60 @@ fn is_available(entry: &Package, served: Served) -> bool {
         }
 }
 
+/// The product features compiled into this binary, as `GetInstance.features`
+/// announces them (`feature.<name>`; UP1 Task 16, design §54 §13.1): a
+/// console feature-detects a product the build left out instead of calling
+/// it. Developer and test features (`failpoints`, `cluster-tests`) are not
+/// products and are not listed.
+const PRODUCT_FEATURES: &[(&str, bool)] = &[
+    ("es", cfg!(feature = "es")),
+    ("flight", cfg!(feature = "flight")),
+    ("qdrant", cfg!(feature = "qdrant")),
+    ("hnsw", cfg!(feature = "hnsw")),
+    ("live", cfg!(feature = "live")),
+    ("live-tikv", cfg!(feature = "live-tikv")),
+    ("tikv", cfg!(feature = "tikv")),
+    ("durable", cfg!(feature = "durable")),
+    ("durable-mysql", cfg!(feature = "durable-mysql")),
+    ("durable-tikv", cfg!(feature = "durable-tikv")),
+    ("graph", cfg!(feature = "graph")),
+    ("git", cfg!(feature = "git")),
+    ("postgres", cfg!(feature = "postgres")),
+    ("pgwire", cfg!(feature = "pgwire")),
+    ("mysql-wire", cfg!(feature = "mysql-wire")),
+    ("stream-grpc", cfg!(feature = "stream-grpc")),
+    ("sqldb", cfg!(feature = "sqldb")),
+    ("registry", cfg!(feature = "registry")),
+    ("buildcache", cfg!(feature = "buildcache")),
+];
+
+/// `GetInstance.features`: every product feature of the build
+/// (`feature.<name>`) and every role this server runs (`role.graph`,
+/// `role.live`, `role.house`).
+fn features(served: Served) -> impl Iterator<Item = (String, bool)> {
+    PRODUCT_FEATURES
+        .iter()
+        .map(|(name, on)| (format!("feature.{name}"), *on))
+        .chain([
+            ("role.graph".to_owned(), served.graph),
+            ("role.live".to_owned(), served.live),
+            ("role.house".to_owned(), served.house),
+        ])
+}
+
+/// `GetInstance.min_app_versions`: the oldest app per platform this release
+/// supports, from its entry in the release train (`release/upgrade-path.toml`,
+/// `[release.min_app_versions]`; design §54 §13.1).
+fn min_app_versions(
+    path: &loams_migrate::path::UpgradePath,
+    version: &str,
+) -> impl Iterator<Item = (String, String)> {
+    path.release(version)
+        .map(|r| r.min_app_versions.clone())
+        .unwrap_or_default()
+        .into_iter()
+}
+
 /// The catalogue as `GetInstance.services[]`.
 fn statuses(served: Served) -> Vec<ServiceStatus> {
     CATALOGUE
@@ -330,11 +384,16 @@ impl InstanceService for Instance {
             }],
             services: statuses(served),
             setup_required: self.setup_required().await,
+            features: features(served).collect(),
+            min_app_versions: min_app_versions(
+                loams_migrate::path::UpgradePath::compiled(),
+                env!("CARGO_PKG_VERSION"),
+            )
+            .collect(),
             // Empty until their plans land, not because they are off: `issuer`
             // and `jwks_uri` with the auth plan (MT), `tls_pins` and `push`
-            // with the phone plans (§37 §7), `min_app_versions` with release
-            // (CLI2), `key_rotation` with signing-key rotation. A client must treat an empty
-            // `features` map as "nothing announced", not "nothing enabled".
+            // with the phone plans (§37 §7), `key_rotation` with signing-key
+            // rotation.
             ..Default::default()
         })
     }
@@ -523,4 +582,101 @@ pub(crate) fn routes(state: &AppState, hot_default: bool) -> AxumRouter {
     // `application/json` is both the Connect protocol's and the REST one: inside
     // this router there is no ambiguity, outside it there is.
     super::connect_hot::layer(axum, hot_default)
+}
+
+#[cfg(test)]
+mod tests {
+    use std::collections::BTreeMap;
+
+    use super::*;
+
+    /// UP1 Task 16: the release train's `[release.min_app_versions]` is what
+    /// `GetInstance` serves, for this binary's release only.
+    #[test]
+    fn min_app_versions_filled_from_manifest() {
+        let path = loams_migrate::path::UpgradePath::parse(
+            r#"
+[[release]]
+version = "0.1.0-preview.3"
+from = "0.1.0-preview.2"
+[release.min_app_versions]
+desktop = "0.1.0-preview.2"
+ios = "0.1.0"
+
+[[release]]
+version = "0.1.0-preview.2"
+from = "fresh"
+"#,
+        )
+        .expect("parses");
+        let served: BTreeMap<String, String> = min_app_versions(&path, "0.1.0-preview.3").collect();
+        assert_eq!(
+            served,
+            BTreeMap::from([
+                ("desktop".to_owned(), "0.1.0-preview.2".to_owned()),
+                ("ios".to_owned(), "0.1.0".to_owned()),
+            ])
+        );
+        assert_eq!(min_app_versions(&path, "0.1.0-preview.2").count(), 0);
+        assert_eq!(min_app_versions(&path, "9.9.9").count(), 0);
+        // This binary's own entry, from the compiled train.
+        let compiled = loams_migrate::path::UpgradePath::compiled();
+        let own: BTreeMap<String, String> =
+            min_app_versions(compiled, env!("CARGO_PKG_VERSION")).collect();
+        assert_eq!(
+            own,
+            compiled
+                .release(env!("CARGO_PKG_VERSION"))
+                .map(|r| r.min_app_versions.clone())
+                .unwrap_or_default()
+        );
+    }
+
+    /// UP1 Task 16: one `feature.<name>` per compiled product feature, with
+    /// its state in this build, and one `role.<name>` per role.
+    #[test]
+    fn get_instance_reports_features() {
+        let served = Served {
+            graph: true,
+            live: false,
+            house: true,
+        };
+        let map: BTreeMap<String, bool> = features(served).collect();
+        assert_eq!(map["feature.es"], cfg!(feature = "es"));
+        assert_eq!(map["feature.durable"], cfg!(feature = "durable"));
+        assert_eq!(map["feature.postgres"], cfg!(feature = "postgres"));
+        assert!(map["role.graph"]);
+        assert!(!map["role.live"]);
+        assert!(map["role.house"]);
+        assert_eq!(map.len(), PRODUCT_FEATURES.len() + 3);
+        // Every product feature of Cargo.toml is listed; test-only ones are not.
+        let manifest = include_str!("../../Cargo.toml");
+        let section = manifest
+            .split("\n[features]\n")
+            .nth(1)
+            .and_then(|s| s.split("\n[").next())
+            .expect("[features]");
+        for line in section.lines() {
+            let Some((name, _)) = line
+                .split_once(" = ")
+                .filter(|(name, _)| !name.starts_with('#') && !name.contains(' '))
+            else {
+                continue;
+            };
+            if [
+                "default",
+                "failpoints",
+                "cluster-tests",
+                "postgres-kubernetes",
+            ]
+            .contains(&name)
+            {
+                continue;
+            }
+            assert!(
+                map.contains_key(&format!("feature.{name}")),
+                "feature {name} is not announced"
+            );
+        }
+    }
 }
