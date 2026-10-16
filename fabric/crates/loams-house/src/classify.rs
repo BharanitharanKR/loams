@@ -692,6 +692,12 @@ pub fn classify(sql: &str) -> Result<Classified, HouseError> {
         "SYSTEM" | "ATTACH" | "BACKUP" | "RESTORE" => {
             return Err(HouseError::from(deny::denied_statement(first)));
         }
+        // sqlparser reads no `ENGINE` or `POPULATE` in a materialized view; the
+        // House's own reader does (HS1 Task 16).
+        "CREATE" if second == "MATERIALIZED" => {
+            let view = crate::ddl::parse_create_mv(&text)?;
+            return known(Stmt::CreateMaterializedView { name: view.name }, None);
+        }
         "CREATE" => {
             if let Some(what) = denied_create(&text) {
                 return Err(HouseError::from(deny::denied_statement(what)));

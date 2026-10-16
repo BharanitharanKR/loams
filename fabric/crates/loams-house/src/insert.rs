@@ -157,6 +157,12 @@ pub async fn target(
     if !crate::identity::granted(user, &database, &name) {
         return Err(crate::identity::not_granted(user, &database, &name));
     }
+    if ddl::class_of(&table.metadata) == TableClass::Pipe {
+        return Err(HouseError::from(ChError::not_implemented(format!(
+            "INSERT INTO {database}.{name}: the table is a pipe, which reads its stream; \
+             write to the stream instead"
+        ))));
+    }
     if ddl::class_of(&table.metadata) == TableClass::External {
         return Err(HouseError::from(ChError::access_denied(format!(
             "INSERT INTO {database}.{name}: the table belongs to another writer (an external \
@@ -331,6 +337,8 @@ pub struct InsertContext<'a> {
     pub known: &'a HashSet<String>,
     /// The most one statement writes, as Arrow bytes.
     pub max_insert_bytes: u64,
+    /// The pipe records a materialized view's `SELECT` reads (HS1 Task 16).
+    pub pipe_batch: Option<&'a crate::pipes::PipeBatch>,
 }
 
 /// What an `INSERT` did.
@@ -768,6 +776,7 @@ async fn stage(
                 &analysis,
                 &internal,
                 &pairs,
+                ctx.pipe_batch,
             )
             .await?;
             let mut insert = execute(ctx, session, false, plan.sql, "TSV");
@@ -997,6 +1006,7 @@ pub async fn create_as(
             &analysis,
             &select,
             ctx.settings,
+            None,
         )
         .await?;
         let mut describe = Execute {

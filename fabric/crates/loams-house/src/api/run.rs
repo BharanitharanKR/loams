@@ -472,6 +472,7 @@ impl HouseApi {
                         limits: &config.session_limits,
                         known: &known,
                         max_insert_bytes: config.lake_insert_max_bytes,
+                        pipe_batch: None,
                     };
                     let inserted = match outcome {
                         gate::CatalogOutcome::Insert(target) => {
@@ -605,6 +606,7 @@ impl HouseApi {
                 &analysis,
                 &sql,
                 &st.settings,
+                None,
             )
             .await
             {

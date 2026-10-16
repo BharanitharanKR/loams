@@ -80,11 +80,11 @@ pub fn required(stmt: &Stmt) -> &'static [crate::identity::Scope] {
         | Stmt::Unsupported { .. } => &[Read],
         Stmt::Drop(drop) if drop.temporary => &[Read],
         Stmt::Insert(_) | Stmt::Optimize { .. } => &[Write],
-        Stmt::CreateTableAs { .. } => &[Ddl, Write],
+        // A materialized view writes into its target (HS1 Task 16).
+        Stmt::CreateTableAs { .. } | Stmt::CreateMaterializedView { .. } => &[Ddl, Write],
         Stmt::CreateDatabase { .. }
         | Stmt::CreateTable { .. }
         | Stmt::CreatePipe { .. }
-        | Stmt::CreateMaterializedView { .. }
         | Stmt::Drop(_)
         | Stmt::Truncate { .. }
         | Stmt::AlterAddColumns { .. }
@@ -126,11 +126,6 @@ fn later(stmt: &Stmt) -> Option<String> {
                     .to_string(),
             );
         }
-        Stmt::CreatePipe { .. } => (
-            "A pipe (LoamsStream, IggyTopic, S3Queue)",
-            "HS1 Tasks 16 and 18",
-        ),
-        Stmt::CreateMaterializedView { .. } => ("CREATE MATERIALIZED VIEW", "HS1 Task 17"),
         Stmt::Truncate { .. } => {
             return Some(
                 "TRUNCATE serves the catalog's lake tables only (not temporary tables)".to_string(),
@@ -225,7 +220,8 @@ pub async fn acquire_for(
 pub fn catalog_kind(stmt: &Stmt) -> Option<Kind> {
     Some(match stmt {
         Stmt::CreateDatabase { .. } => Kind::CreateDatabase,
-        Stmt::CreateTable { .. } => Kind::CreateTable,
+        Stmt::CreateTable { .. } | Stmt::CreatePipe { .. } => Kind::CreateTable,
+        Stmt::CreateMaterializedView { .. } => Kind::CreateMaterializedView,
         Stmt::Drop(drop) if !drop.temporary => Kind::Drop,
         Stmt::Undrop { .. } => Kind::Undrop,
         Stmt::Rename { .. } => Kind::Rename,
@@ -335,6 +331,11 @@ pub async fn catalog_answer(
             // A temporary table, or no table: as before (chDB, or `48`).
             None => Ok(CatalogOutcome::NotOurs),
             Some(table) => {
+                if crate::ddl::class_of(&table.metadata) == crate::ddl::TableClass::Pipe {
+                    return Err(HouseError::from(ChError::not_implemented(format!(
+                        "TRUNCATE {database}.{name}: the table is a pipe, which holds no rows"
+                    ))));
+                }
                 if crate::ddl::class_of(&table.metadata) == crate::ddl::TableClass::External {
                     return Err(HouseError::from(ChError::access_denied(format!(
                         "TRUNCATE {database}.{name}: the table belongs to another writer (an \
@@ -633,6 +634,7 @@ pub async fn read_plan(
     analysis: &loams_house_ipc::Analysis,
     sql: &str,
     settings: &[(String, String)],
+    batch: Option<&crate::pipes::PipeBatch>,
 ) -> Result<ReadPlan, HouseError> {
     crate::read::plan(
         ReadContext {
@@ -641,6 +643,7 @@ pub async fn read_plan(
             database,
             user: &user.user,
             grants: user.grants.as_ref(),
+            batch,
         },
         lease,
         analysis,

@@ -698,9 +698,27 @@ impl HouseService for HouseApi {
     ) -> ServiceResult<pb::ListPipesResponse> {
         let user = self.caller(&ctx)?;
         let request = request.to_owned_message();
-        let Some(pipes) = self.catalog.pipes(user.namespace) else {
-            return Err(not_yet("Pipes", catalog::PIPES_TASK));
+        let pipes = self
+            .catalog
+            .pipes(user.namespace)
+            .await
+            .map_err(|err| to_connect(&err))?;
+        let Some(pipes) = pipes else {
+            return Err(refuse(
+                ErrorCode::Unimplemented,
+                "not_implemented",
+                "Pipes need lake tables: this House was started without a catalog",
+                &[],
+            ));
         };
+        // Only the views the identity may touch (HS1 Task 20).
+        let pipes: Vec<pb::Pipe> = pipes
+            .into_iter()
+            .filter(|p| match p.name.split_once('.') {
+                Some((database, name)) => crate::identity::granted(&user, database, name),
+                None => true,
+            })
+            .collect();
         let (pipes, next_page_token) = page(pipes, request.page_size, &request.page_token)?;
         Response::ok(pb::ListPipesResponse {
             pipes,

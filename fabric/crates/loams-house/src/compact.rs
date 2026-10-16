@@ -236,7 +236,7 @@ pub async fn needs_compaction(
     let Some(table) = ctx.lake.load(ctx.user.namespace, database, name).await? else {
         return Ok(false);
     };
-    if ddl::class_of(&table.metadata) == ddl::TableClass::External {
+    if ddl::class_of(&table.metadata) != ddl::TableClass::Lake {
         return Ok(false);
     }
     let Some(snapshot) = table.metadata.current_snapshot() else {
@@ -299,6 +299,7 @@ async fn count_final(
             &analysis,
             &sql,
             &pinned,
+            None,
         )
         .await?;
         let out = lease
@@ -377,6 +378,7 @@ impl Scheduler {
                 limits: &self.config.session_limits,
                 known: &known,
                 max_insert_bytes: self.config.lake_insert_max_bytes,
+                pipe_batch: None,
             };
             let outcome = match needs_compaction(&ctx, &database, &name).await {
                 Ok(true) => compact(&ctx, &database, &name, false).await,
