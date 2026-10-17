@@ -382,7 +382,7 @@ describe('logic_matches_upstream_cases', () => {
         { ...idle, lastMessageAt: 2, lastSeenAt: 1 },
       ]) {
         const pill = resolveThreadStatusPill({ thread });
-        expect(pill?.colorClass).toMatch(/^text-(accent|info|danger|grow)$/);
+        expect(pill?.colorClass).toMatch(/^text-(accent-fg|info|danger|grow)$/);
         expect(pill?.dotClass).toMatch(/^bg-(accent|info|danger|grow)$/);
       }
     });

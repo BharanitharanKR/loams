@@ -648,7 +648,7 @@ function ComposerWithDaemon({
             {attachments.map((a) => (
               <Chip
                 key={a.id}
-                icon={<Paperclip size={12} aria-hidden="true" className="text-accent" />}
+                icon={<Paperclip size={12} aria-hidden="true" className="text-accent-fg" />}
                 label={`${a.name} · ${formatBytes(a.size)}`}
                 onRemove={() => uploads.remove(a.id)}
               />
@@ -908,7 +908,7 @@ function menuRow(item: ComposerMenuItem) {
         icon: item.isDir ? (
           <Folder size={14} aria-hidden="true" className="text-faint" />
         ) : (
-          <FileText size={14} aria-hidden="true" className="text-accent" />
+          <FileText size={14} aria-hidden="true" className="text-accent-fg" />
         ),
         title: item.path.split('/').pop() || item.path,
         detail: item.path,

@@ -139,7 +139,7 @@ function FileButton({
       type="button"
       onClick={() => onOpen(path)}
       title={`Open ${path}`}
-      className="min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-mono text-ink hover:text-accent hover:underline"
+      className="min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-mono text-ink hover:text-accent-fg hover:underline"
     >
       {path}
     </button>
@@ -277,7 +277,7 @@ function UserRow({ text }: { text: string }) {
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="mt-1 cursor-pointer border-0 bg-transparent p-0 text-xs text-accent"
+            className="mt-1 cursor-pointer border-0 bg-transparent p-0 text-xs text-accent-fg"
           >
             {expanded ? "Show less" : "Show more"}
           </button>

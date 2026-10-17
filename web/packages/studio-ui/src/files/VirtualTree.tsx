@@ -187,7 +187,7 @@ export function VirtualTree(props: {
               />
               <Icon
                 aria-hidden
-                className={cx("size-3.5 shrink-0", isDir ? "text-accent" : "text-muted")}
+                className={cx("size-3.5 shrink-0", isDir ? "text-accent-fg" : "text-muted")}
               />
               <span className="min-w-0 flex-1 truncate">{row.name}</span>
               {props.trailing?.(row)}

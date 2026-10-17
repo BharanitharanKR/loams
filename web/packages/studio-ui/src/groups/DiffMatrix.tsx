@@ -89,7 +89,7 @@ export function DiffMatrix({
                         aria-pressed={isSelected}
                         onClick={() => onSelect({ path: row.path, chatId: cell.chatId })}
                         className={cx(
-                          "flex w-full cursor-pointer items-center gap-1.5 rounded-none border-0 px-2 py-1 font-mono text-[0.74rem] tabular-nums",
+                          "flex w-full cursor-pointer items-center gap-1.5 rounded-sm border-0 px-2 py-1 font-mono text-[0.74rem] tabular-nums",
                           LEVEL_CLASS[cell.level],
                           isSelected && "outline-2 outline-accent -outline-offset-2",
                         )}

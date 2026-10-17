@@ -13,8 +13,6 @@
 
 // First, so the page never paints in the wrong theme.
 import './theme.js';
-import '@fontsource-variable/archivo/standard.css';
-import '@fontsource-variable/martian-mono';
 import '@loams/ui/styles.css';
 import '../tailwind.css';
 import './console.css';

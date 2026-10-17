@@ -449,7 +449,7 @@ export function resolveThreadStatusPill(input: {
   if (thread.pendingApprovals > 0) {
     return {
       label: "Pending Approval",
-      colorClass: "text-accent",
+      colorClass: "text-accent-fg",
       dotClass: "bg-accent",
       pulse: false,
     };
@@ -458,7 +458,7 @@ export function resolveThreadStatusPill(input: {
   if (thread.status === "awaiting-input") {
     return {
       label: "Awaiting Input",
-      colorClass: "text-accent",
+      colorClass: "text-accent-fg",
       dotClass: "bg-accent",
       pulse: false,
     };

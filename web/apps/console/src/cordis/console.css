@@ -12,8 +12,6 @@
 html {
   -webkit-text-size-adjust: 100%;
   scrollbar-color: var(--op-rule) transparent;
-  --loams-font-sans: "Archivo Variable", system-ui, sans-serif;
-  --loams-font-mono: "Martian Mono Variable", ui-monospace, monospace;
 }
 body {
   margin: 0;
@@ -119,7 +117,7 @@ code {
   border: 1px solid color-mix(in srgb, var(--op-accent) 45%, transparent);
   border-radius: var(--op-radius-pill);
   background: var(--op-accent-soft);
-  color: var(--op-accent);
+  color: var(--op-accent-fg);
   font-family: var(--loams-font-mono);
   font-size: 0.6rem;
   font-weight: 500;
@@ -374,7 +372,7 @@ code {
   color: var(--op-ink);
 }
 .lc-header .lc-icon-btn[aria-expanded="true"] svg {
-  color: var(--op-accent);
+  color: var(--op-accent-fg);
 }
 .lc-round-btn {
   display: inline-grid;

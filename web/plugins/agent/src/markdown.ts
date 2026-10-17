@@ -46,7 +46,7 @@ const marked = new Marked({
       const safe = safeHref(href);
       if (!safe) return inner;
       const t = title ? ` title="${escapeHtml(title)}"` : '';
-      return `<a href="${escapeHtml(safe)}"${t} class="text-accent underline">${inner}</a>`;
+      return `<a href="${escapeHtml(safe)}"${t} class="text-accent-fg underline">${inner}</a>`;
     },
     code({ text, lang }: Tokens.Code) {
       const label = (lang ?? '').trim().split(/\s+/)[0] ?? '';

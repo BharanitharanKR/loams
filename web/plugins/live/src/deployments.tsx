@@ -163,7 +163,7 @@ export function DeploymentsTable({
               aria-label={`Show functions of deployment ${d.id}`}
               className={
                 d.id === selected
-                  ? 'bg-transparent border-0 p-0 text-left cursor-pointer text-accent font-medium'
+                  ? 'bg-transparent border-0 p-0 text-left cursor-pointer text-accent-fg font-medium'
                   : 'bg-transparent border-0 p-0 text-left cursor-pointer text-ink'
               }
               onClick={() => onSelect(d.id)}

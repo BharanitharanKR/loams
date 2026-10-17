@@ -795,7 +795,7 @@ export function LivePage({
                       type="button"
                       className={
                         t.name === sel.table
-                          ? 'bg-transparent border-0 p-0 text-left cursor-pointer text-accent font-medium'
+                          ? 'bg-transparent border-0 p-0 text-left cursor-pointer text-accent-fg font-medium'
                           : 'bg-transparent border-0 p-0 text-left cursor-pointer text-ink'
                       }
                       onClick={() => setSel({ table: t.name, index: '', eq: '' })}

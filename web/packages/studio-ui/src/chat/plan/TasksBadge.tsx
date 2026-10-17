@@ -80,7 +80,7 @@ function TaskSegments({ steps }: { readonly steps: readonly TaskStep[] }) {
 function StepIcon({ status }: { status: TaskStep["status"] }) {
   if (status === "completed") return <CheckIcon className="size-3.5 text-grow" aria-hidden />;
   if (status === "inProgress")
-    return <CircleDotIcon className="size-3.5 text-accent" aria-hidden />;
+    return <CircleDotIcon className="size-3.5 text-accent-fg" aria-hidden />;
   return <CircleIcon className="size-3.5 text-faint" aria-hidden />;
 }
 

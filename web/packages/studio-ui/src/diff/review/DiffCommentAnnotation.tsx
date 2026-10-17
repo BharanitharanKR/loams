@@ -76,7 +76,7 @@ export function DiffCommentAnnotation({
         )}
         onPointerDown={(event) => event.stopPropagation()}
       >
-        <MessageCircleIcon className="mt-0.5 size-3.5 shrink-0 text-accent" aria-hidden="true" />
+        <MessageCircleIcon className="mt-0.5 size-3.5 shrink-0 text-accent-fg" aria-hidden="true" />
         <div className="min-w-0 flex-1">
           <div className="mb-0.5 flex flex-wrap items-center gap-1.5 text-[0.72rem] text-faint">
             <span>Line {rangeLabel}</span>

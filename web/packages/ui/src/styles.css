@@ -141,7 +141,7 @@
 }
 
 .loams-status-progress {
-  color: var(--op-accent);
+  color: var(--op-accent-fg);
   background: var(--op-accent-soft);
 }
 
@@ -511,7 +511,7 @@ textarea.loams-input {
 }
 
 .loams-notice-warn {
-  border-left-color: var(--op-accent);
+  border-left-color: var(--op-warn);
 }
 
 .loams-notice-danger {
@@ -547,7 +547,7 @@ textarea.loams-input {
 }
 
 .loams-snippet-prompt {
-  color: var(--op-accent);
+  color: var(--op-accent-fg);
   user-select: none;
 }
 
@@ -602,7 +602,7 @@ textarea.loams-input {
 
 .loams-avatar[data-kind="agent"] {
   border-radius: 4px;
-  color: var(--op-accent);
+  color: var(--op-accent-fg);
   background: var(--op-accent-soft);
   border-color: transparent;
 }
@@ -716,4 +716,24 @@ textarea.loams-input {
 
 .loams-sort:hover {
   color: var(--op-ink);
+}
+
+/* Forced colours (Review Focus 5): focus is an outline, not a shadow; status dots keep
+   a system colour and their text label. */
+@media (forced-colors: active) {
+  :focus-visible {
+    outline: 2px solid Highlight;
+    outline-offset: 2px;
+  }
+  .loams-status::before {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+  [data-status-dot] {
+    forced-color-adjust: none;
+    background: CanvasText;
+  }
+  .loams-btn {
+    border-color: ButtonText;
+  }
 }
