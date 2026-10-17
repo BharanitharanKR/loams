@@ -1,6 +1,6 @@
 # 59 — Console and Desktop Redesign, Part 1: the Foundation
 
-Status: **Approved direction** (owner, 2026-10-17) · details **Proposed** · 2026-10-17. Decisions **D1073–D1086**, questions **Q928–Q935** in the [decision log](13-decision-log.md). It amends the [console UI stack](console-ui-stack.md) (tokens and primitives) and the shell layout of [§19](19-console-identity-and-agents.md) and [§37](37-desktop-and-mobile-apps.md). It reuses [§53](53-studio-ade.md)'s T3 Code vendoring.
+Status: **Approved** (owner, 2026-10-17: the direction, the mockups and this spec) · 2026-10-17. Decisions **D1073–D1086**, questions **Q928–Q935** in the [decision log](13-decision-log.md). It amends the [console UI stack](console-ui-stack.md) (tokens and primitives) and the shell layout of [§19](19-console-identity-and-agents.md) and [§37](37-desktop-and-mobile-apps.md). It reuses [§53](53-studio-ade.md)'s T3 Code vendoring.
 
 ## 1. Owner direction (2026-10-17, binding)
 
@@ -213,20 +213,20 @@ The agent home's content (the composer, threads and starters as a product flow) 
 
 | ID | Decision | Status |
 |---|---|---|
-| D1073 | Tokens keep their names, take T3 Code-derived values (dark = B, light = A), and add the radius scale and the composer shadow | Approved direction (owner, 2026-10-17); values Proposed |
-| D1074 | Theme follows the OS, dark when there is no preference; a per-device choice; `.dark` on `<html>` | Proposed |
-| D1075 | System UI font and system monospace; monospace only for code, ids and SQL; the type scale | Proposed |
-| D1076 | Density (28/32/36 controls, 44 top bar) and motion off by default | Proposed |
-| D1077 | `@loams/ui` completes the T3 Code `components/ui` port with per-file provenance | Approved direction (owner, 2026-10-17: "copy as much code") |
-| D1078 | Six shell regions with slots: sidebar, top bar, main, inspector, drawer, palette | Approved direction (owner, mockups 2026-10-17) |
-| D1079 | Sidebar thread rows with live status, pin, reorder and archive | Approved direction |
-| D1080 | Navigation moves to sidebar Pages, the palette and Settings; routes kept | Proposed |
-| D1081 | The keyboard table; Ctrl on Windows and Linux | Proposed |
-| D1082 | Toasts; destructive confirmations; typed confirmation for production data | Proposed |
-| D1083 | Window style per OS, the top bar as the drag region, native chrome synced to the theme | Approved direction |
-| D1084 | Native menus, the splash, admin as pages | Proposed |
-| D1085 | OS notifications for approvals and finished runs; the update card in a toast with consent before download | Proposed |
-| D1086 | Rollout without a flag, in four PR steps | Proposed |
+| D1073 | Tokens keep their names, take T3 Code-derived values (dark = B, light = A), and add the radius scale and the composer shadow | Approved (owner, 2026-10-17) |
+| D1074 | Theme follows the OS, dark when there is no preference; a per-device choice; `.dark` on `<html>` | Approved (owner, 2026-10-17) |
+| D1075 | System UI font and system monospace; monospace only for code, ids and SQL; the type scale | Approved (owner, 2026-10-17) |
+| D1076 | Density (28/32/36 controls, 44 top bar) and motion off by default | Approved (owner, 2026-10-17) |
+| D1077 | `@loams/ui` completes the T3 Code `components/ui` port with per-file provenance | Approved (owner, 2026-10-17) |
+| D1078 | Six shell regions with slots: sidebar, top bar, main, inspector, drawer, palette | Approved (owner, 2026-10-17) |
+| D1079 | Sidebar thread rows with live status, pin, reorder and archive | Approved (owner, 2026-10-17) |
+| D1080 | Navigation moves to sidebar Pages, the palette and Settings; routes kept | Approved (owner, 2026-10-17) |
+| D1081 | The keyboard table; Ctrl on Windows and Linux | Approved (owner, 2026-10-17) |
+| D1082 | Toasts; destructive confirmations; typed confirmation for production data | Approved (owner, 2026-10-17) |
+| D1083 | Window style per OS, the top bar as the drag region, native chrome synced to the theme | Approved (owner, 2026-10-17) |
+| D1084 | Native menus, the splash, admin as pages | Approved (owner, 2026-10-17) |
+| D1085 | OS notifications for approvals and finished runs; the update card in a toast with consent before download | Approved (owner, 2026-10-17) |
+| D1086 | Rollout without a flag, in four PR steps | Approved (owner, 2026-10-17) |
 
 | ID | Question | Default |
 |---|---|---|
