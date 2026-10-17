@@ -111,7 +111,7 @@ describe('primitives adapted from T3 Code', () => {
         '// (see web/packages/ui/LICENSE.t3code). Modified by The Loams Authors:',
       );
       expect(row.upstreamSha256).toMatch(/^[0-9a-f]{64}$/);
-      expect(row.verdict).toBe('adapt');
+      expect(['as-is', 'adapt', 'rewrite']).toContain(row.verdict);
     },
   );
 

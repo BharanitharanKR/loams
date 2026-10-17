@@ -19,12 +19,3 @@ export function StatusTag({ status, children }: { status: Status; children?: Rea
     </span>
   );
 }
-
-/** A quiet mono label for ids, scopes and versions. */
-export function Badge({ children, title }: { children: ReactNode; title?: string }) {
-  return (
-    <span className="loams-badge" title={title}>
-      {children}
-    </span>
-  );
-}

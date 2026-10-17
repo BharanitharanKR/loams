@@ -18,7 +18,8 @@
   --op-raised: #f1efea;
   --op-rule: #ece8e2;
   --op-rule-soft: #efece7;
-  --op-input: #dcd7cf;
+  /* Field and toggle outlines: 3:1 on every surface (WCAG 1.4.11, T4-1). */
+  --op-input: #8a857c;
   --op-ink: #1d1b18;
   --op-muted: #6b665e;
   --op-faint: #716c64;
@@ -128,7 +129,7 @@
   --op-raised: rgb(255 255 255 / 0.04);
   --op-rule: rgb(255 255 255 / 0.06);
   --op-rule-soft: rgb(255 255 255 / 0.04);
-  --op-input: rgb(255 255 255 / 0.08);
+  --op-input: rgb(255 255 255 / 0.36);
   --op-ink: #f5f5f5;
   --op-muted: #a3a3a3;
   --op-faint: #8a8a8a;

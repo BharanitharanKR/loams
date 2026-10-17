@@ -142,6 +142,16 @@ describe.each([
     expect(ratio(text(t), parse(vars[fill] as string, vars))).toBeGreaterThanOrEqual(4.5);
   });
 
+  it('control outlines (--op-input) are 3:1 against every surface (WCAG 1.4.11, T4-1)', () => {
+    const failures = SURFACES.flatMap((s) =>
+      backdrops(s, vars)
+        .map(([label, bg]) => [label, ratio(over(text('--op-input'), bg), bg)] as const)
+        .filter(([, r]) => r < 3)
+        .map(([label, r]) => `${label}: ${r.toFixed(2)}`),
+    );
+    expect(failures).toEqual([]);
+  });
+
   it('the focus ring (the accent) is 3:1 against every surface', () => {
     for (const s of ['--op-bg', '--op-surface', '--op-window']) {
       expect(ratio(text('--op-accent'), parse(vars[s] as string, vars)), s).toBeGreaterThanOrEqual(
