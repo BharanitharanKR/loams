@@ -2,7 +2,6 @@
 //! recursive copies, digests and whole-directory replacement.
 
 use std::fs;
-use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 
 use sha2::{Digest, Sha256};
@@ -10,9 +9,22 @@ use sha2::{Digest, Sha256};
 use super::manifest::Component;
 use super::{SnapshotError, io};
 
+/// Sets `path`'s mode bits. Windows has none (a new file inherits its
+/// directory's ACL), so there this does nothing.
+#[cfg(unix)]
+fn set_mode(path: &Path, mode: u32) -> std::io::Result<()> {
+    use std::os::unix::fs::PermissionsExt as _;
+    fs::set_permissions(path, fs::Permissions::from_mode(mode))
+}
+
+#[cfg(not(unix))]
+fn set_mode(_path: &Path, _mode: u32) -> std::io::Result<()> {
+    Ok(())
+}
+
 pub(crate) fn private_dir(dir: &Path) -> Result<(), SnapshotError> {
     fs::create_dir_all(dir).map_err(|e| io(dir.display(), e))?;
-    fs::set_permissions(dir, fs::Permissions::from_mode(0o700)).map_err(|e| io(dir.display(), e))
+    set_mode(dir, 0o700).map_err(|e| io(dir.display(), e))
 }
 
 /// `dir` and its missing parents, each 0700 when this creates it.
@@ -27,7 +39,7 @@ pub(crate) fn private_dir_all(dir: &Path) -> Result<(), SnapshotError> {
 }
 
 pub(crate) fn private_file(path: &Path) -> Result<(), SnapshotError> {
-    fs::set_permissions(path, fs::Permissions::from_mode(0o600)).map_err(|e| io(path.display(), e))
+    set_mode(path, 0o600).map_err(|e| io(path.display(), e))
 }
 
 pub(crate) fn write_private(path: &Path, bytes: &[u8]) -> Result<(), SnapshotError> {
