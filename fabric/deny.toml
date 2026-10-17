@@ -50,6 +50,15 @@ allow-wildcard-paths = true
 # matched here (https://embarkstudios.github.io/cargo-deny/checks/cfg.html).
 deny = [{ name = "loam-platform", reason = "The OSS engine cannot depend on the private platform (D551)" }]
 
+# A known finding with no entry below, because the advisory database cargo-deny
+# reads does not fail on it (GitHub's advisory database reports it, so it shows
+# as a Dependabot alert). Revisit by 2026-11-30.
+#
+# * thrift 0.17.0, GHSA-2f9f-gq7v-9h6m (allocation of an excessive size; fixed in
+#   0.23.0). Only parquet 58.4.0 brings it, through iceberg 0.10.1 (loams-house-lake),
+#   which pins parquet 58; Fabric's own code is on parquet 59, which drops thrift.
+#   iceberg reads the metadata and data files of the lake tables the instance
+#   names. Lifted with an iceberg release on parquet 59 or later.
 [advisories]
 yanked = "deny"
 # Only fail on unmaintained crates we depend on directly; transitive ones are tracked upstream.
