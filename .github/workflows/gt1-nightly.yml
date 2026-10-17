@@ -1,6 +1,7 @@
 # GT1 nightly (docs/plans/2026-10-10-gt1-loams-git.md, Task 11): the
 # linearizability histories on 1024 seeds, and the bucket WAL bench in
-# memory and on RustFS. The bench's JSON lines are kept as an artifact.
+# memory and on RustFS, and a million workspaces listed in pages (Task 23).
+# The bench's JSON lines are kept as an artifact.
 name: Git nightly
 
 on:
@@ -37,6 +38,10 @@ jobs:
         run: cargo test -p loams-git --locked --test linearizable
       - name: store-backed suite
         run: cargo test -p loams-git --locked --test s3
+      - name: a million workspaces (Task 23)
+        env:
+          LOAMS_GIT_WS_SCALE: "1000000"
+        run: cargo test -p loams-git --locked --test ws_store million_workspaces_listing_pages
       - name: bench
         env:
           LOAMS_GIT_BENCH_S3: ${{ env.LOAMS_TEST_S3_URL }}

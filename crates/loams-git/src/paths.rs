@@ -166,6 +166,11 @@ impl RepoPaths {
         format!("{}/ws/{ws}/", self.root)
     }
 
+    /// `…/ws/`: every workspace's objects, for listings.
+    pub fn workspaces_prefix(&self) -> String {
+        format!("{}/ws/", self.root)
+    }
+
     /// `…/ws/<ws_id>/snap/`.
     pub fn ws_snapshot_prefix(&self, ws: &WsId) -> String {
         format!("{}snap/", self.ws_prefix(ws))
@@ -213,6 +218,13 @@ impl RepoPaths {
     /// `…/_ws_names/<owner>/`, for listings.
     pub fn ws_names_prefix(&self, owner: &Principal) -> String {
         format!("{}/_ws_names/{owner}/", self.root)
+    }
+
+    /// The name a workspace name record path `…_ws_names/<owner>/<name>.json`
+    /// holds.
+    pub fn parse_ws_name(path: &str) -> Option<WsName> {
+        let name = path.rsplit_once('/').map_or(path, |(_, name)| name);
+        WsName::parse(name.strip_suffix(".json")?).ok()
     }
 
     /// The tree aux record (entry sizes) of a tree (§19.5, D830).

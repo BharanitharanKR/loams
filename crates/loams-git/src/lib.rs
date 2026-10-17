@@ -2,8 +2,8 @@
 //!
 //! This crate holds the identifiers and object paths ([`ids`], [`paths`]),
 //! every limit the GT1 plan names ([`limits`]), the `loams.git.v1` on-disk
-//! formats ([`format`]), and, as later tasks land, the WAL, the ref log, the
-//! workspace store and the transport-free protocol module. It depends on
+//! formats ([`format`]), the WAL, the ref log, the workspace store ([`ws`]),
+//! and, as later tasks land, the transport-free protocol module. It depends on
 //! `loams-store`, `loams-cloudevents`, `loams-fs` and gitoxide crates only,
 //! and opens no listener.
 
@@ -32,6 +32,7 @@ pub mod sequencer;
 pub mod state;
 pub mod testing;
 pub mod wal;
+pub mod ws;
 
 pub use auth::{
     EnvAccess, EnvGrant, GitAccess, GitAuthError, GitAuthorizer, GitDenied, GitGrant, RepoMatch,
@@ -68,3 +69,7 @@ pub use reflog::{
 pub use sequencer::{BucketRefLog, GitEvent, SequencerConfig, config_digest};
 pub use state::{Check, IdemIndex, RepoState, StateError};
 pub use wal::{Appended, Hint, StoreWalStore, WalError, WalStore};
+pub use ws::{
+    BucketWorkspaceStore, CreateWs, MemWorkspaceStore, SnapAppended, WorkspaceStore, WsBase,
+    WsError, WsSummary,
+};

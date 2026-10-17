@@ -881,6 +881,8 @@ save: PUT ws/<ws_id>/snap/<n+1>.lws  If-None-Match: *
 - **Fork** (`ForkWorkspace(ws@n)`) writes the new workspace's snapshot 0 as a copy of snapshot `n`, with `fork` set and the source's packs referenced by the source's paths. GC counts those references (§19.4.5).
 - **Listing** pages through `_ws_names/<owner>/` (named workspaces) or `ws/` (all of them, for administrators and GC).
 
+**As built (GT1d, Task 23; `crates/loams-git/src/ws/`).** `WorkspaceStore` is implemented by `BucketWorkspaceStore` and `MemWorkspaceStore`. The name record is `{ws_id, created_unix_ms}` and the hint `{n, written_unix_ms}`. Create and fork are idempotent on a caller-chosen `ws_id`. An unnamed create or fork is one create-only PUT, and a named one is two. A fork copies snapshot `n` whole, with `fork` set and no label. Its `packs` name the source's packs by checksum, and readers find those packs under the source's prefix by following `fork`. `latest` reads the hint and probes forward, or lists `snap/` when there is no usable hint. Listing all workspaces skips past each workspace's objects (`ws/<ws_id>/~`). Plan rulings T23.1–T23.6.
+
 #### 19.4.5 Retention and GC (D836)
 
 | What | Rule |
