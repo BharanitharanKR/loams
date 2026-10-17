@@ -53,10 +53,7 @@ impl World {
             &bundle.join("compose.yaml"),
             "name: loams\n# 0.1.0\nservices: {}\n",
         );
-        write(
-            &bundle.join(".env.example"),
-            "LOAMS_VERSION=0.1.0\n",
-        );
+        write(&bundle.join(".env.example"), "LOAMS_VERSION=0.1.0\n");
         write(
             &root.path().join("bundle/loams-postgres-dev/compose.yaml"),
             "# 0.1.0 postgres\n",

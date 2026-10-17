@@ -208,7 +208,11 @@ async fn declared_preview2_with_decodable_data_is_adopted() {
     // Without a declared release the run refuses and marks it failed.
     let other = Preview2::new().await;
     let err = Runner::new(&migrations, train)
-        .run(&mut other.cx(None), V0_1_0, &RunOptions::new("migrate-adopt"))
+        .run(
+            &mut other.cx(None),
+            V0_1_0,
+            &RunOptions::new("migrate-adopt"),
+        )
         .await
         .unwrap_err();
     assert_eq!(err.code(), "migration_failed", "{err}");

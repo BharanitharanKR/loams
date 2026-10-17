@@ -104,8 +104,7 @@ fn check_json_matches_schema() {
         "CheckReport changed: rerun with LOAMS_UPDATE_SCHEMAS=1 and review the diff"
     );
     // A real report has exactly the schema's required properties.
-    let report =
-        check::report("0.1.0-preview.2", "0.1.0", &train(), &observed()).expect("report");
+    let report = check::report("0.1.0-preview.2", "0.1.0", &train(), &observed()).expect("report");
     let value = serde_json::to_value(&report).expect("json");
     let mut keys: Vec<&String> = value.as_object().expect("object").keys().collect();
     keys.sort();
@@ -135,8 +134,7 @@ fn codes(report: &CheckReport) -> Vec<&str> {
 fn check_reports_blockers() {
     let path = train();
     // Not adjacent: preview.1 is not 0.1.0's source, and the chain is named.
-    let report =
-        check::report("0.1.0-preview.1", "0.1.0", &path, &observed()).expect("report");
+    let report = check::report("0.1.0-preview.1", "0.1.0", &path, &observed()).expect("report");
     assert_eq!(codes(&report), ["upgrade_step_not_adjacent"]);
     assert!(
         report.blockers[0]
@@ -163,8 +161,7 @@ fn check_reports_blockers() {
     // A migration a run left failed.
     let mut failed_run = observed();
     failed_run.plan.as_mut().expect("plan")["steps"][0]["state"] = json!("failed");
-    let report =
-        check::report("0.1.0-preview.2", "0.1.0", &path, &failed_run).expect("r");
+    let report = check::report("0.1.0-preview.2", "0.1.0", &path, &failed_run).expect("r");
     assert_eq!(codes(&report), ["migration_incomplete"]);
     assert!(report.blockers[0].message.contains("0000-adopt-preview-2"));
     // An unhealthy stack.

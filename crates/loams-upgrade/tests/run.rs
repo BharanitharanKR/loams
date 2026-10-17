@@ -292,12 +292,7 @@ fn env_changes_keep_user_values() {
         0o600
     );
     // A value the user already set is kept.
-    let release = world
-        .bundle()
-        .path
-        .release("0.1.0")
-        .cloned()
-        .expect("p3");
+    let release = world.bundle().path.release("0.1.0").cloned().expect("p3");
     let text = loams_upgrade::install::env_with_changes(
         "LOAMS_UPGRADE_SNAPSHOT_DIR=/srv/snaps\nLOAMS_VERSION=0.1.0-preview.2\n",
         "0.1.0",
@@ -497,15 +492,7 @@ fn upgrade_output_has_no_env_values() {
         .join("bundle/release")
         .display()
         .to_string();
-    let args = cli(&[
-        "--dir",
-        &dir,
-        "--to",
-        "0.1.0",
-        "--bundle",
-        &bundle,
-        "--yes",
-    ]);
+    let args = cli(&["--dir", &dir, "--to", "0.1.0", "--bundle", &bundle, "--yes"]);
     let fake = scripted(Script::new(), false);
     let value = loams_upgrade::run_redacted(&args, &fake).expect("upgrade");
     assert!(!value.to_string().contains(SECRET), "{value}");
@@ -518,15 +505,7 @@ fn upgrade_output_has_no_env_values() {
         .join("bundle/release")
         .display()
         .to_string();
-    let args = cli(&[
-        "--dir",
-        &dir,
-        "--to",
-        "0.1.0",
-        "--bundle",
-        &bundle,
-        "--yes",
-    ]);
+    let args = cli(&["--dir", &dir, "--to", "0.1.0", "--bundle", &bundle, "--yes"]);
     let mut script = Script::new();
     script.insert(
         "migrate run".to_string(),
@@ -555,15 +534,7 @@ fn local_bundle_is_reported_unverified() {
         .join("bundle/release")
         .display()
         .to_string();
-    let args = cli(&[
-        "--dir",
-        &dir,
-        "--to",
-        "0.1.0",
-        "--bundle",
-        &bundle,
-        "--yes",
-    ]);
+    let args = cli(&["--dir", &dir, "--to", "0.1.0", "--bundle", &bundle, "--yes"]);
     let fake = scripted(Script::new(), false);
     let value = loams_upgrade::run_redacted(&args, &fake).expect("upgrade");
     assert_eq!(value["upgraded"][0]["bundle"], "local, unverified");
@@ -573,14 +544,7 @@ fn local_bundle_is_reported_unverified() {
     // Without --yes and without a terminal: confirmation_required.
     let world = World::new(ENV);
     let dir = world.stack_dir().display().to_string();
-    let args = cli(&[
-        "--dir",
-        &dir,
-        "--to",
-        "0.1.0",
-        "--bundle",
-        &bundle,
-    ]);
+    let args = cli(&["--dir", &dir, "--to", "0.1.0", "--bundle", &bundle]);
     let fake = scripted(Script::new(), false);
     if !std::io::IsTerminal::is_terminal(&std::io::stdin()) {
         let err = loams_upgrade::run_redacted(&args, &fake).unwrap_err();

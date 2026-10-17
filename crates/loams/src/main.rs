@@ -2906,15 +2906,7 @@ mod tests {
     #[test]
     fn upgrade_subcommands_parse() {
         for args in [
-            &[
-                "loams",
-                "upgrade",
-                "check",
-                "--dir",
-                "/s",
-                "--to",
-                "0.1.0",
-            ][..],
+            &["loams", "upgrade", "check", "--dir", "/s", "--to", "0.1.0"][..],
             &["loams", "upgrade", "status", "--output", "text"],
             &["loams", "upgrade", "snapshots", "list"],
             &[
