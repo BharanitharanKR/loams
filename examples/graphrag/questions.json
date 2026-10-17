@@ -1,0 +1,8 @@
+[
+  {"id": "q1", "question": "What language is the project that Ada Park leads written in?", "gold": ["ada-park", "kite", "rust"], "answer": "Rust", "facts": ["Ada Park leads Kite", "Kite is written in Rust"], "chunks": ["people#1", "kite#0"]},
+  {"id": "q2", "question": "Who maintains the project that Kite depends on?", "gold": ["kite", "tern", "chen-wei"], "answer": "Chen Wei", "facts": ["Kite depends on Tern", "Chen Wei maintains Tern"], "chunks": ["kite#0", "people#3"]},
+  {"id": "q3", "question": "Which team is the project that Ada Park leads part of?", "gold": ["ada-park", "kite", "platform-team"], "answer": "Platform Team", "facts": ["Ada Park leads Kite", "Kite is part of Platform Team"], "chunks": ["people#1", "kite#0"]},
+  {"id": "q4", "question": "Who leads Wren?", "gold": ["wren", "ben-ortiz"], "answer": "Ben Ortiz", "facts": ["Ben Ortiz leads Wren"], "chunks": ["people#2"]},
+  {"id": "q5", "question": "What language is Heron written in?", "gold": ["heron", "rust"], "answer": "Rust", "facts": ["Heron is written in Rust"], "chunks": ["heron#0"]},
+  {"id": "q6", "question": "Who maintains the library that Wren uses?", "gold": ["wren", "heron", "dara-holm"], "answer": "Dara Holm", "facts": ["Wren uses Heron", "Dara Holm maintains Heron"], "chunks": ["wren#0", "people#4"]}
+]

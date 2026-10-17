@@ -242,6 +242,8 @@ jobs:
               - "crates/loams/src/server.rs"
               - "crates/loams/tests/connect_graph.rs"
               - "connectors/licences.toml"
+              - "examples/graphrag/**"
+              - "bench/graph/**"
               - "fabric/Cargo.lock"
             # Shared pnpm tooling uses the root workspace and lockfile.
             pnpm-workspace: &pnpm-workspace
@@ -1951,6 +1953,29 @@ jobs:
         run: cargo test -p loams --features graph --locked --test connect_graph --test connect_api
       - name: loams answers feature_not_in_variant (default build)
         run: cargo test -p loams --locked --test connect_graph
+      # GR1 Task 23: the GraphRAG example end to end (`example_runs_end_to_end_in_ci`) and
+      # its harness (`harness_reports_recall_and_latency`) against `loams dev` with graph.
+      - name: build loams with graph
+        run: cargo build -p loams --features graph --locked
+      - name: start loams dev (graph)
+        run: |
+          nohup target/debug/loams dev --data-dir "$RUNNER_TEMP/loams-graphrag" \
+            --listen 127.0.0.1:18080 --no-qdrant --no-es \
+            > "$RUNNER_TEMP/loams-graphrag.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            curl -s -o /dev/null http://127.0.0.1:18080/ && exit 0
+            sleep 1
+          done
+          echo "loams dev did not answer on 18080 within 60 s"; exit 1
+      - name: GraphRAG example and harness
+        env:
+          LOAMS_URL: http://127.0.0.1:18080
+        run: |
+          python3 -m unittest discover -s examples/graphrag/tests -v
+          python3 -m unittest discover -s bench/graph/graphrag/tests -v
+      - name: loams log
+        if: failure()
+        run: tail -n 200 "$RUNNER_TEMP/loams-graphrag.log" || true
 
   # SQ1 Task 3: the gate's sans-I/O MySQL codec parses untrusted client
   # packets. Each cargo-fuzz target runs 60 s from its seed corpus; the same
@@ -2342,6 +2367,13 @@ jobs:
         run: |
           python3 scripts/ci/check-sdk-jobs.py --self-test
           python3 scripts/ci/check-sdk-jobs.py
+      # GR1 Task 23: the GraphRAG example's and harness's offline tests (the end-to-end
+      # tests skip without LOAMS_URL; the Graph job runs them against a server).
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: GraphRAG example and harness (offline)
+        run: |
+          python3 -m unittest discover -s examples/graphrag/tests
+          python3 -m unittest discover -s bench/graph/graphrag/tests
       - if: ${{ !cancelled() }} # report every check, not only the first failure
         name: the SignPath artifact guard self-test
         run: python3 scripts/ci/signpath-artifacts.py --self-test
