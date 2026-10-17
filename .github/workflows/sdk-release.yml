@@ -1,22 +1,26 @@
 name: Release SDKs
 
-# Publishes every Loams SDK from one release tag, each to its own registry, as a
-# preview (pre-release versions only).
+# Publishes every Loams SDK from one release tag, each to its own registry.
 #
-#   SDK         Registry               Name                     Version for v0.1.0-preview.2
-#   TypeScript  npm                    @loams/live, @loams/client  0.1.0-preview.2, dist-tag `preview`
-#   Python      PyPI                   loams                    0.1.0a2 (PEP 440)
-#   Rust        crates.io              loams-proto, loams-live-proto, loams   0.1.0-preview.2
-#   C#          NuGet                  Loams                    0.1.0-preview.2
-#   Go          proxy.golang.org       loams.dev/go             tag sdks/go/v0.1.0-preview.2
+#   SDK         Registry               Name                     Version for v0.1.0
+#   TypeScript  npm                    @loams/live, @loams/client  0.1.0, dist-tag `latest`
+#   Python      PyPI                   loams                    0.1.0 (PEP 440)
+#   Rust        crates.io              loams-proto, loams-live-proto, loams   0.1.0
+#   C#          NuGet                  Loams                    0.1.0
+#   Go          proxy.golang.org       loams.dev/go             tag sdks/go/v0.1.0
 #   Swift       SwiftPM (git)          github.com/ostrium-labs/loams   the release tag itself
 #   C++         GitHub release assets  loams-cpp-<v>.tar.gz     CMake config package inside
-#   Ruby        RubyGems               loams                    0.1.0.pre.2
-#   PHP         Packagist (split repo) loams/loams              tag v0.1.0-alpha.2 on ostrium-labs/loams-php
-#   Dart        pub.dev                loams                    0.1.0-preview.2
-#   Java        Maven Central          dev.loams:loams          0.1.0-preview.2
-#   Kotlin      Maven Central          dev.loams:loams-kotlin   0.1.0-preview.2
-#   Objective-C CocoaPods trunk        Loams (module LoamsObjC) 0.1.0-preview.2
+#   Ruby        RubyGems               loams                    0.1.0
+#   PHP         Packagist (split repo) loams/loams              tag v0.1.0 on ostrium-labs/loams-php
+#   Dart        pub.dev                loams                    0.1.0
+#   Java        Maven Central          dev.loams:loams          0.1.0
+#   Kotlin      Maven Central          dev.loams:loams-kotlin   0.1.0
+#   Objective-C CocoaPods trunk        Loams (module LoamsObjC) 0.1.0
+#
+# A pre-release tag (v0.1.0-preview.N, -rc.N) keeps its suffix in every
+# ecosystem's spelling (PyPI 0.1.0a2, RubyGems 0.1.0.pre.2, Composer
+# v0.1.0-alpha.2) and publishes to npm dist-tag `preview` or `next`, so it never
+# becomes `latest`; scripts/sdk/sdk-version.py has the mapping.
 #
 # How a run behaves:
 #
