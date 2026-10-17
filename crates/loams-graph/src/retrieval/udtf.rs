@@ -181,6 +181,9 @@ fn distinct(keys: &[PrimaryKey]) -> Vec<(PrimaryKey, Value)> {
 #[async_trait]
 impl GraphTables for LoamsGraphExpander {
     async fn neighbors(&self, call: NeighborsCall<'_>) -> Result<Vec<IncidentEdge>, ServiceError> {
+        call.caller
+            .authorize_read("graph_neighbors", call.namespace, call.graph)
+            .await?;
         if let Some(q) = &call.edge_filter {
             filter::check(q, "edge_filter")?;
         }
@@ -232,6 +235,9 @@ impl GraphTables for LoamsGraphExpander {
     }
 
     async fn degree(&self, call: DegreeCall<'_>) -> Result<Vec<(PrimaryKey, u64)>, ServiceError> {
+        call.caller
+            .authorize_read("graph_degree", call.namespace, call.graph)
+            .await?;
         let keys = distinct(&call.keys);
         let values: Vec<Value> = keys.iter().map(|(_, v)| v.clone()).collect();
         let mut consistency = Consistency::Strong;
@@ -270,6 +276,9 @@ impl GraphTables for LoamsGraphExpander {
     }
 
     async fn shortest_path(&self, call: PathCall<'_>) -> Result<Vec<PathStep>, ServiceError> {
+        call.caller
+            .authorize_read("graph_shortest_path", call.namespace, call.graph)
+            .await?;
         let mut consistency = Consistency::Strong;
         let label = call.label.as_deref();
         let ends = self
@@ -398,6 +407,14 @@ impl GraphTables for LoamsGraphExpander {
     }
 
     async fn algorithm(&self, call: AlgorithmCall<'_>) -> Result<Vec<AlgorithmRow>, ServiceError> {
+        let what = match call.spec {
+            AlgorithmSpec::PageRank { .. } => "pagerank",
+            AlgorithmSpec::Wcc => "wcc",
+            AlgorithmSpec::Leiden { .. } => "leiden",
+        };
+        call.caller
+            .authorize_read(what, call.namespace, call.graph)
+            .await?;
         let edge_types = call.edge_types.clone();
         let (algorithm, label) = match call.spec {
             AlgorithmSpec::PageRank {

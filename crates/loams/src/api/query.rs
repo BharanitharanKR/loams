@@ -14,6 +14,7 @@ use super::{ApiResult, AppState, parse_json, read_consistency, with_token};
 pub(super) async fn search(
     State(state): State<AppState>,
     ns: Result<Path<String>, PathRejection>,
+    principal: Option<axum::Extension<crate::auth::Principal>>,
     headers: HeaderMap,
     body: Result<Bytes, BytesRejection>,
 ) -> ApiResult {
@@ -22,7 +23,9 @@ pub(super) async fn search(
     // Date math (`now-30d`) is relative to the proposer's clock.
     let mut request = parse_query_body(body, state.meta.now_ms())?;
     request.consistency = read_consistency(&headers, Some(request.consistency))?;
-    let response = state.collections.search(&ns, request).await?;
+    // An `expand` reads its graph as the caller (GR1 R24.12).
+    let caller = super::graph_caller(&state.principals, principal.as_ref().map(|p| &p.0));
+    let response = state.collections.search_as(&ns, request, &caller).await?;
     let token = response.read_token.clone();
     Ok(with_token(axum::Json(response).into_response(), &token))
 }

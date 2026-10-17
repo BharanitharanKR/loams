@@ -427,6 +427,9 @@ type graph
 | `GetGraph`, `GetSchema`, `ListGraphs` | `can_read` (`ListGraphs` requires a namespace and filters that namespace's graphs with `filter_visible`; listing across namespaces would be a separate RPC, if one is ever needed. Controller ruling, GR1 Task 4 review M5) |
 | `CreateGraph` | `admin` on the namespace |
 | `UpdateGraph`, `DeleteGraph`, `RestoreGraph`, `ExportGraph`, `ImportGraph` | `can_admin`; protected environments (§19 §2) require the project `admin` role |
+| Not RPCs, a principal's reads: `Search` with `expand`, the SQL `graph_*` and algorithm (`pagerank`, `wcc`, `leiden`) table functions | `can_read` on each graph touched, or the whole request is `permission_denied` (need `reader`); GR1 R24.12 |
+
+Loams' own calls on no principal's behalf (links, algorithm write-backs, forwarded calls, maintenance) are not checked (GR1 R24.4, R24.12).
 
 ### 11.2 Classifying a statement
 

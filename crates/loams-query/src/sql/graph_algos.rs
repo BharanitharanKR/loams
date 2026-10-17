@@ -239,6 +239,7 @@ impl GraphBatch for Inner {
         let tables = self.scope.service.graph_tables().ok_or_else(unavailable)?;
         let rows = tables
             .algorithm(AlgorithmCall {
+                caller: &self.scope.caller,
                 namespace: self.scope.ns.as_str(),
                 graph: &self.call.graph,
                 edge_types: self.call.edge_types.clone(),

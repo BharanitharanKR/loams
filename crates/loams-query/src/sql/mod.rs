@@ -84,6 +84,8 @@ pub(crate) struct SqlScope {
     pub(crate) ns: String,
     pub(crate) consistency: ReadConsistency,
     pub(crate) hot: RequestHot,
+    /// Who the statement is for: the graph and algorithm functions check it (GR1 R24.12).
+    pub(crate) caller: crate::graph::GraphCaller,
 }
 
 impl fmt::Debug for SqlScope {
@@ -114,6 +116,7 @@ pub(crate) fn context(
     service: Arc<CollectionService>,
     ns: &str,
     consistency: ReadConsistency,
+    caller: crate::graph::GraphCaller,
 ) -> SessionContext {
     let hot = service.request_hot();
     let scope = SqlScope {
@@ -121,6 +124,7 @@ pub(crate) fn context(
         ns: ns.to_string(),
         consistency,
         hot,
+        caller,
     };
     let ctx = SessionContext::new_with_config(
         SessionConfig::new()

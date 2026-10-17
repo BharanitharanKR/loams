@@ -32,6 +32,15 @@ pub enum ServiceError {
         message: String,
         retry_after_ms: u64,
     },
+    /// The caller may not read what the request touches: a graph a search's `expand` or a SQL
+    /// graph function reads without the caller's `reader` relation on it (GR1 R24.12). `need`
+    /// is the relation it needed, `object` the refused object (`graph:<ns>/<name>`).
+    #[error("permission denied: {message}")]
+    PermissionDenied {
+        message: String,
+        need: String,
+        object: String,
+    },
 }
 
 /// The kinds a [`ServiceError::NotFound`] names; a body naming another kind
@@ -60,6 +69,7 @@ impl ServiceError {
             ServiceError::Timeout => "timeout",
             ServiceError::Internal(_) => "internal",
             ServiceError::ResourceExhausted { .. } => "resource_exhausted",
+            ServiceError::PermissionDenied { .. } => "permission_denied",
         }
     }
 
@@ -73,6 +83,7 @@ impl ServiceError {
             ServiceError::Timeout => 504,
             ServiceError::Internal(_) => 500,
             ServiceError::ResourceExhausted { .. } => 429,
+            ServiceError::PermissionDenied { .. } => 403,
         }
     }
 
@@ -87,8 +98,8 @@ impl ServiceError {
     }
 
     /// `{"error": code, "message": Display}`, plus `kind` and `name` for
-    /// `NotFound`, `field` for `SchemaViolation` and `retry_after_ms` for
-    /// `ResourceExhausted`.
+    /// `NotFound`, `field` for `SchemaViolation`, `retry_after_ms` for
+    /// `ResourceExhausted` and `need` and `object` for `PermissionDenied`.
     pub fn to_body(&self) -> Value {
         let mut body = json!({"error": self.code(), "message": self.to_string()});
         match self {
@@ -99,6 +110,10 @@ impl ServiceError {
             ServiceError::SchemaViolation { field, .. } => body["field"] = json!(field),
             ServiceError::ResourceExhausted { retry_after_ms, .. } => {
                 body["retry_after_ms"] = json!(retry_after_ms);
+            }
+            ServiceError::PermissionDenied { need, object, .. } => {
+                body["need"] = json!(need);
+                body["object"] = json!(object);
             }
             _ => {}
         }
@@ -142,6 +157,11 @@ impl ServiceError {
                     .get("retry_after_ms")
                     .and_then(Value::as_u64)
                     .unwrap_or_default(),
+            },
+            "permission_denied" => ServiceError::PermissionDenied {
+                message: detail("permission denied: "),
+                need: text("need").unwrap_or_default().to_string(),
+                object: text("object").unwrap_or_default().to_string(),
             },
             _ => return None,
         })

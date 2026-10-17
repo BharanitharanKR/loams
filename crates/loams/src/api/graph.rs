@@ -14,8 +14,10 @@
 //! Every RPC is authorized per graph (GR1 Task 24, §48 §11, D750): the principal the port's
 //! authentication layer admitted becomes a [`Caller`](loams_graph::authz::Caller), and
 //! [`graph_auth`](super::graph_auth)'s built-in RBAC answers its relation on the graph from the
-//! principal store's org and project roles. Loams' own calls into the runtime (a search's
-//! expansion, the SQL table functions, links, forwarded calls) are not RPCs and are not checked.
+//! principal store's org and project roles. A search's expansion and the SQL graph and algorithm
+//! table functions are not RPCs but are a principal's reads, checked the same way for `reader`
+//! through [`graph_caller`](super::graph_caller) (GR1 R24.12); Loams' own calls into
+//! the runtime on no principal's behalf (links, write-backs, forwarded calls) are not checked.
 //!
 //! A statement's deadline is the earlier of its own limit (`timeout_ms`, or the graph's) and the
 //! client's Connect timeout ([`GraphAdmin::for_call`](loams_graph::service::admin::GraphAdmin::for_call),

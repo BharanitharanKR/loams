@@ -125,6 +125,7 @@ fn status(error: ServiceError) -> Status {
         ServiceError::Timeout => Status::deadline_exceeded(error.to_string()),
         ServiceError::Internal(_) => Status::internal(error.to_string()),
         ServiceError::ResourceExhausted { .. } => Status::resource_exhausted(error.to_string()),
+        ServiceError::PermissionDenied { .. } => Status::permission_denied(error.to_string()),
     }
 }
 

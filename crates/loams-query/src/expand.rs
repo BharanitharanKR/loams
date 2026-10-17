@@ -200,6 +200,8 @@ pub struct ExpandStats {
 /// One expansion for a [`GraphExpander`].
 #[derive(Clone, Debug)]
 pub struct ExpandCall<'a> {
+    /// Who the expansion is for (GR1 R24.12).
+    pub caller: &'a crate::graph::GraphCaller,
     pub namespace: &'a str,
     pub expand: &'a Expand,
     /// The seeds' keys, in hit order; `None` for a hit without one.
@@ -235,11 +237,13 @@ pub struct Expanded {
 /// Runs expansions on graphs: Loams Graph's (`loams-graph`), when the server runs it.
 #[async_trait]
 pub trait GraphExpander: Send + Sync + std::fmt::Debug {
-    /// Expands `call`.
+    /// Expands `call`, after its caller's
+    /// [`authorize_read`](crate::graph::GraphCaller::authorize_read).
     ///
     /// # Errors
     ///
-    /// `InvalidArgument` or `NotFound` for the request, `Unavailable` when the graph is.
+    /// `PermissionDenied` for a caller who may not read the graph, `InvalidArgument` or
+    /// `NotFound` for the request, `Unavailable` when the graph is.
     async fn expand(&self, call: ExpandCall<'_>) -> Result<Expanded, ServiceError>;
 }
 
