@@ -339,7 +339,7 @@ export function ListPage({
   const active = tab === 'streams' ? streams : links;
 
   return (
-    <div className="lc-page max-w-[1180px]">
+    <div className="lc-page">
       <PageHead
         title="Streams & Links"
         subtitle="Append-only logs and the links that apply them to a target."

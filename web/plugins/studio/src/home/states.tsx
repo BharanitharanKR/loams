@@ -1,5 +1,6 @@
 // What Studio shows when it cannot reach a daemon yet (§53 §5.1, §6.3): on the
-// desktop, "Start the daemon"; on the web, "Connect an agentd host".
+// desktop, "Start the daemon"; on the web, that Studio needs a server with agentd
+// and where to connect one (the switch shows in every edition, owner 2026-10-17).
 
 import { Button, Empty } from '@loams/ui';
 import { useState } from 'react';
@@ -15,15 +16,16 @@ export function NotConnected({ agentd, reach }: { agentd: StudioAgentd; reach: R
   if (reach.state === 'no-host') {
     return (
       <Empty
-        title="Connect an agentd host"
+        title="Studio needs a Loams server with agentd"
         actions={
           <a className="loams-btn loams-btn-primary" href={`#${studioHref({ kind: 'settings' })}`}>
             Agentd hosts
           </a>
         }
       >
-        Studio in the browser works with a <code>loams-agentd</code> running on a machine you
-        control, reached over TLS with your sign-in. Studio settings says how to run one.
+        Connect one in Studio settings › Agentd hosts: a <code>loams-agentd</code> running on a
+        machine you control, reached over TLS with your sign-in. The settings page says how to run
+        one.
       </Empty>
     );
   }
