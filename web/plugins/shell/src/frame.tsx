@@ -370,7 +370,7 @@ export function UserMenu({
   );
 }
 
-/** The wordmark and the preview badge, at the top of the sidebar. */
+/** The wordmark, at the top of the sidebar. */
 export function Brand({
   home = '/',
   onClose,
@@ -384,12 +384,6 @@ export function Brand({
       <a href={`#${home}`} aria-label="Loams home" className="lc-brand-link">
         <Logo height={18} />
       </a>
-      <span
-        className="lc-preview"
-        title="Loams is in preview: interfaces and data formats may change between releases."
-      >
-        Preview
-      </span>
       {onClose && (
         <button
           type="button"

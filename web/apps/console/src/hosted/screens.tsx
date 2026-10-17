@@ -7,24 +7,12 @@ import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'rea
 import type { AuthMode } from '../runtime-config.js';
 import { checkHealth, type Health, isTailnetHost, parseEngineUrl } from './engine.js';
 
-export function PreviewBadge() {
-  return (
-    <span
-      className="lc-preview"
-      title="Loams is in preview: interfaces and data formats may change between releases."
-    >
-      Preview
-    </span>
-  );
-}
-
 function Frame({ title, children }: { title: string; children: ReactNode }) {
   return (
     <main className="lc-gate">
       <div className="lc-gate-card">
         <div className="lc-gate-brand">
           <Logo />
-          <PreviewBadge />
         </div>
         <h1>{title}</h1>
         {children}

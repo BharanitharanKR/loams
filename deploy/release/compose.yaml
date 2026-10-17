@@ -1,4 +1,4 @@
-# The Loams preview stack: everything a user runs themselves, on one machine
+# The Loams stack: everything a user runs themselves, on one machine
 # or a VM of their own (BYOC, see byoc/install.sh). Configure it in .env (copy
 # .env.example). Start the engine and its storage with
 #
@@ -188,7 +188,7 @@ services:
       LOAMS_HOUSE_ENDPOINT: ${LOAMS_HOUSE_ENDPOINT:-}
       LOAMS_HOUSE_CA: /var/lib/loams-house-link/house.crt
       LOAMS_HOUSE_KEY_FILE: /var/lib/loams-house-link/link.key
-      # Engine auth (preview): tailscale | oidc | apikey | off (loopback only).
+      # Engine auth: tailscale | oidc | apikey | off (loopback only).
       # tailscale trusts the Tailscale-User-Login headers that the sidecar's
       # `tailscale serve` proxy adds, on LOAMS_TAILSCALE_LISTEN only: a loopback
       # port of its own that is the serve target and nothing else.
@@ -324,7 +324,7 @@ services:
       TS_USERSPACE: "true"
       TS_AUTH_ONCE: "true"
       # https (Tailscale: MagicDNS + HTTPS certificates), or http for Headscale
-      # (coming soon, unsupported in 0.1.0-preview.2); see tailscale/serve-*.json.
+      # (coming soon, unsupported in 0.1.0); see tailscale/serve-*.json.
       TS_SERVE_CONFIG: /config/serve-${TS_SERVE_MODE:-https}.json
       TS_EXTRA_ARGS: --login-server=${TS_LOGIN_SERVER:-https://controlplane.tailscale.com} ${TS_EXTRA_ARGS:-}
     volumes:
@@ -334,7 +334,7 @@ services:
       loams:
         condition: service_started
 
-  # COMING SOON, unsupported in 0.1.0-preview.2: Headscale issues no ts.net
+  # COMING SOON, unsupported in 0.1.0: Headscale issues no ts.net
   # HTTPS certificates, so the hosted console cannot reach an engine on it.
   # A self-hosted tailnet control server (`--profile headscale`). Clients,
   # including the browser's device, must reach HEADSCALE_SERVER_URL, so on a VM

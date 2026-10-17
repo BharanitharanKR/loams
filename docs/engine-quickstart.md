@@ -1,7 +1,7 @@
 # Engine quick start
 
-Build the `loams` binary from source and try its APIs on one machine. To run the whole preview stack
-(engine, TiKV, TiDB, Postgres, House) instead, see [Running the preview](release/preview.md).
+Build the `loams` binary from source and try its APIs on one machine. To run the whole stack
+(engine, TiKV, TiDB, Postgres, House) instead, see [Running Loams](release/preview.md).
 
 ## Prerequisites
 
