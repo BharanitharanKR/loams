@@ -6,7 +6,7 @@
 // served, that client is the fixture-backed mock, and the page says so.
 
 import { NamespacePicker, PageHead } from '@loams/desktop-ui';
-import { Badge, Notice } from '@loams/ui';
+import { SampleDataBadge, SampleDataNotice } from '@loams/ui';
 import { useCallback, useState } from 'react';
 import type { GitClient, Repo, WorkspaceSummary } from './client.js';
 import { EnvView } from './EnvView.js';
@@ -54,14 +54,12 @@ export function GitPage(p: GitPageProps) {
       <PageHead
         title="Git"
         subtitle="Repositories, virtual workspaces and env secrets on the bucket."
-        badge={
-          p.preview ? <Badge title="Answers from built-in fixtures">preview</Badge> : undefined
-        }
+        badge={p.preview ? <SampleDataBadge /> : undefined}
       />
       {p.preview && (
-        <Notice title="Preview data">
-          This server does not serve loams.repos.v1 yet. The page shows built-in example data.
-        </Notice>
+        <SampleDataNotice>
+          This server does not serve loams.repos.v1 yet. Nothing here touches a repository.
+        </SampleDataNotice>
       )}
       <NamespacePicker ns={ns} onOpen={selectNs} storageKey={NAMESPACES_KEY} idPrefix="git" />
       <div className="grid items-start gap-6 xl:grid-cols-[220px_minmax(0,1fr)]">

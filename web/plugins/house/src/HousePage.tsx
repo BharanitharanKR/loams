@@ -18,6 +18,7 @@ import {
   Empty,
   isNotServed,
   Notice,
+  SampleDataNotice,
   Select,
 } from '@loams/ui';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
@@ -356,10 +357,9 @@ function Workspace({
         }
       />
       {sample && (
-        <Notice tone="warn" title="Sample data">
-          This page runs against a built-in sample House until the server serves {PACKAGE}. Nothing
-          you run here reaches a server.
-        </Notice>
+        <SampleDataNotice>
+          The server does not serve {PACKAGE} yet. Nothing you run here reaches a server.
+        </SampleDataNotice>
       )}
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="flex min-w-0 flex-col gap-4">

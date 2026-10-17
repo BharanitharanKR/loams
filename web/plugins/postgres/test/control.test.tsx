@@ -85,9 +85,9 @@ describe('branch tree', () => {
 });
 
 describe('control plane', () => {
-  it('lists the project, its branches and says it runs on preview data', async () => {
+  it('lists the project, its branches and says it runs on sample data', async () => {
     mount();
-    expect(await screen.findByText('Preview data')).toBeTruthy();
+    expect(await screen.findByText('Sample data')).toBeTruthy();
     await waitFor(() => expect(branchRow('br-feature')).toBeTruthy());
     expect(branchRow('br-feature').getAttribute('data-depth')).toBe('2');
     // The default branch is selected: its roles and databases load.

@@ -2,7 +2,7 @@
 // spec laid out on react-grid-layout (as dashboard-ui lays it out); each panel is a
 // @loams/charts LiveChart or a stat tile. Edits stay in a draft per dashboard until Save.
 
-import { Button, Empty, Field, Notice, Select } from '@loams/ui';
+import { Button, Empty, Field, Notice, SampleDataNotice, Select } from '@loams/ui';
 import type { DashboardSpec, Widget } from '@loams-core/types';
 import { type KeyboardEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type Layout, Responsive, WidthProvider } from 'react-grid-layout/legacy';
@@ -52,7 +52,7 @@ function groupOf(spec: DashboardSpec): MetricGroup | undefined {
   return first ? metricDef(first.metric)?.group : undefined;
 }
 
-export function MetricsPage({ client }: { client: MetricsClient }) {
+export function MetricsPage({ client, sample }: { client: MetricsClient; sample?: boolean }) {
   const [loaded, setLoaded] = useState<Loaded>({ phase: 'loading' });
   const [reload, setReload] = useState(0);
   const [selected, setSelected] = useState<string>(DEFAULT_DASHBOARDS[0]?.id ?? '');
@@ -300,6 +300,11 @@ export function MetricsPage({ client }: { client: MetricsClient }) {
           </Button>
         </div>
       </header>
+      {sample && (
+        <div className="mb-3">
+          <SampleDataNotice>The charts show generated values, not your metrics.</SampleDataNotice>
+        </div>
+      )}
 
       <div role="tablist" aria-label="Dashboards" className="mb-3 flex flex-wrap gap-1">
         {saved.map((d, i) => {
