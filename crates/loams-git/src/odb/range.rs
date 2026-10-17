@@ -776,6 +776,24 @@ impl RangeOdb {
         self
     }
 
+    /// A database of `packs` in `blobs` alone, with no snapshot or fork
+    /// parent: how an uploaded workspace pack is verified before it is
+    /// stored (Task 24). Its one layer is layer 0.
+    pub(crate) fn of_packs(
+        repo: RepoId,
+        blobs: Arc<dyn BlobStore>,
+        packs: &[pb::PackRef],
+    ) -> Result<Self, OdbError> {
+        Ok(Self {
+            repo,
+            seq: Seq::ZERO,
+            depth: 0,
+            layers: vec![Arc::new(Layer::new(blobs, packs)?)],
+            bases: Arc::default(),
+            counters: Arc::default(),
+        })
+    }
+
     /// This database with `layer` searched after every other: a
     /// workspace's packs (Task 17's `WsOdb`).
     pub(crate) fn with_top_layer(&self, layer: Layer) -> Self {

@@ -246,6 +246,7 @@ async fn ws_object_needs_ws_access() {
         WsView {
             owner: owner.clone(),
             packs: vec![ws_pack],
+            sources: Vec::new(),
         },
     );
 

@@ -8,8 +8,14 @@
 //! no lease service). [`WorkspaceStore`] is the contract;
 //! [`BucketWorkspaceStore`] keeps it on the bucket and [`MemWorkspaceStore`]
 //! in memory, for tests.
+//!
+//! A save builds the trees along its changed paths ([`TreeBuilder`]) and
+//! uploads the new objects as one workspace pack ([`put_workspace_pack`],
+//! Task 24).
 
+mod pack;
 mod store;
+mod tree_build;
 
 use std::fmt;
 use std::sync::Arc;
@@ -23,7 +29,12 @@ use crate::format::pb;
 use crate::format::snapshot::snapshot_commit;
 use crate::ids::{MountId, ObjectId, Principal, RefName, RepoId, Seq, SnapN, WsId, WsName};
 
+pub use pack::{
+    NoScan, PackScan, ScanRefusal, VerifiedPack, WsPackBlobs, WsPackError, check_pack_len,
+    fork_sources, put_workspace_pack, verify_workspace_pack,
+};
 pub use store::{BucketWorkspaceStore, MemWorkspaceStore};
+pub use tree_build::{Edit, FileMode, TreeBuildError, TreeBuilder};
 
 /// Where a new workspace starts (§19.4.4): its snapshot 0 has
 /// `base = head = commit` and `index_tree = worktree_tree = tree`.

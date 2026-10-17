@@ -41,6 +41,7 @@ const RPCS: &[(&str, &str, bool)] = &[
     ("ObjectService", "HasObjects", false),
     ("ObjectService", "Log", true),
     ("ObjectService", "DiffStat", false),
+    ("ObjectService", "PutWorkspacePack", true),
 ];
 
 /// A `loams` server on loopback, with its data directory.

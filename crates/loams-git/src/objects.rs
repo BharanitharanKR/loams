@@ -29,7 +29,7 @@ use bytes::Bytes;
 use futures::stream::{self, BoxStream, StreamExt};
 pub use gix_object::Kind;
 
-use crate::auth::{GitGrant, WsMatch};
+use crate::auth::{GitAccess, GitGrant, WsMatch};
 use crate::blob::BlobStore;
 use crate::derived::{DerivedError, DerivedStore, TreeAux, tree_aux};
 use crate::format::pb;
@@ -80,6 +80,10 @@ pub struct WsView {
     pub owner: Principal,
     /// Its packs, oldest first, as its latest snapshot names them.
     pub packs: Vec<pb::PackRef>,
+    /// The workspaces it was forked from, nearest first
+    /// ([`crate::ws::fork_sources`]): packs it names that are not under its
+    /// own prefix are under theirs (ruling T23.3). Empty when not a fork.
+    pub sources: Vec<WsId>,
 }
 
 /// Finds a workspace of a repository (ruling T18.1; the bucket's
@@ -141,7 +145,18 @@ pub fn grant_reads_workspace(grant: &GitGrant, ws: &WsId, view: &WsView) -> bool
     }
 }
 
-/// `repo_odb` with workspace `view`'s packs (in `ws_blobs`) searched last.
+/// Whether a git-listener token may write workspace `ws` (upload packs,
+/// save snapshots, take it over): Q750's default, as Task 24 rules it. The
+/// token must reach the workspace ([`grant_reads_workspace`]) with `Write`,
+/// and the workspace must be its principal's, unless its `WsMatch` is `All`.
+pub fn grant_writes_workspace(grant: &GitGrant, ws: &WsId, view: &WsView) -> bool {
+    grant.access >= GitAccess::Write
+        && grant_reads_workspace(grant, ws, view)
+        && (view.owner == grant.principal || grant.workspaces == WsMatch::All)
+}
+
+/// `repo_odb` with workspace `view`'s packs (in `ws_blobs`, a
+/// [`crate::ws::WsPackBlobs`] for a forked workspace) searched last.
 pub fn workspace_odb(
     repo_odb: &RangeOdb,
     ws_blobs: Arc<dyn BlobStore>,
