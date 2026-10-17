@@ -322,6 +322,10 @@ pub struct GitConfig {
     /// How often the `_git` mirror is repaired: whatever a crash left unmirrored is published
     /// (GT1 Task 15; default 1 h).
     pub mirror_repair_every: Duration,
+    /// Workspaces are read only by their owner and org admins (`--git-workspace-reads-owner`,
+    /// GT-Q13's alternative). Off by default: whoever may read a repository reads its
+    /// workspaces (GT1 Task 25).
+    pub workspace_reads_owner_only: bool,
 }
 
 #[cfg(feature = "git")]
@@ -335,6 +339,7 @@ impl Default for GitConfig {
             listen: None,
             tokens: None,
             mirror_repair_every: Duration::from_secs(3600),
+            workspace_reads_owner_only: false,
         }
     }
 }
@@ -1646,8 +1651,10 @@ impl GitRuntimeHandle {
             watch_heartbeat: config.watch_heartbeat,
             store: store.clone(),
             h1,
-            // Until the workspace store (GT1 Task 25, ruling T18.1).
-            workspaces: Arc::new(loams_git::objects::NoWorkspaces),
+            // The workspace store (GT1 Task 25, ruling T18.1).
+            workspaces: Arc::new(loams_git::ws::StoreWsLookup::new(store.clone())),
+            ws_saved: tokio::sync::broadcast::channel(256).0,
+            ws_reads_owner_only: config.workspace_reads_owner_only,
         });
         let stop = CancellationToken::new();
         let purge = {

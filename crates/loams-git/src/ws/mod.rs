@@ -11,9 +11,15 @@
 //!
 //! A save builds the trees along its changed paths ([`TreeBuilder`]) and
 //! uploads the new objects as one workspace pack ([`put_workspace_pack`],
-//! Task 24).
+//! Task 24). `WorkspaceService` (Task 25) checks a save's objects
+//! ([`check_save_objects`]), replays salvage ([`replay_salvage`]) and finds
+//! workspaces for object reads ([`StoreWsLookup`]).
 
+mod lookup;
 mod pack;
+mod pack_write;
+mod salvage;
+mod save;
 mod store;
 mod tree_build;
 
@@ -29,10 +35,14 @@ use crate::format::pb;
 use crate::format::snapshot::snapshot_commit;
 use crate::ids::{MountId, ObjectId, Principal, RefName, RepoId, Seq, SnapN, WsId, WsName};
 
+pub use lookup::{StoreWsLookup, view_of};
 pub use pack::{
     NoScan, PackScan, ScanRefusal, VerifiedPack, WsPackBlobs, WsPackError, WsPackUploads,
     check_pack_len, fork_sources, put_workspace_pack, verify_workspace_pack,
 };
+pub use pack_write::write_ws_pack;
+pub use salvage::{ReplayError, Replayed, replay_salvage};
+pub use save::{SaveCheckError, check_save_objects, commit_tree, empty_tree};
 pub use store::{BucketWorkspaceStore, MemWorkspaceStore};
 pub use tree_build::{Edit, FileMode, TreeBuildError, TreeBuilder};
 
@@ -113,6 +123,20 @@ impl WsSummary {
             None => self.ws_id.as_str(),
         }
     }
+}
+
+/// The label of the final snapshot `DeleteWorkspace` writes (§19.4.5): a
+/// workspace whose latest snapshot carries it is deleted, and only its
+/// purge (after `GC_GRACE`) remains.
+pub const DELETED_LABEL: &str = "deleted";
+
+/// One salvage record, `salvage/<mount>/<id>.lws` (§19.4.3).
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct SalvageRef {
+    /// The fenced mount whose unsaved state it holds.
+    pub mount: MountId,
+    /// Its id, a ULID generated when it was written.
+    pub id: Ulid,
 }
 
 /// Errors of a [`WorkspaceStore`].
@@ -239,6 +263,32 @@ pub trait WorkspaceStore: Send + Sync + fmt::Debug {
     /// As built (ruling T23.1): an addition to the plan's trait, as
     /// `WalStore` has `publish_hint`.
     async fn publish_hint(&self, repo: &RepoId, ws: &WsId, n: SnapN) -> Result<(), WsError>;
+    /// A page of at most `limit` of `ws`'s snapshot numbers, ascending,
+    /// after `after` (`ListSnapshots`, Task 25). Collected snapshots are not
+    /// listed.
+    async fn list_snapshots(
+        &self,
+        repo: &RepoId,
+        ws: &WsId,
+        after: Option<SnapN>,
+        limit: usize,
+    ) -> Result<Vec<SnapN>, WsError>;
+    /// A page of at most `limit` of `ws`'s salvage records, by mount and
+    /// then id, after `after` (`ListSalvage`, Task 25).
+    async fn list_salvage(
+        &self,
+        repo: &RepoId,
+        ws: &WsId,
+        after: Option<&SalvageRef>,
+        limit: usize,
+    ) -> Result<Vec<SalvageRef>, WsError>;
+    /// The unsaved state salvage record `salvage` holds, or `None`.
+    async fn get_salvage(
+        &self,
+        repo: &RepoId,
+        ws: &WsId,
+        salvage: &SalvageRef,
+    ) -> Result<Option<Arc<pb::WorkspaceSnapshot>>, WsError>;
 }
 
 /// Snapshot 0 of a new workspace (§19.4.4): it writes no data and copies
@@ -265,7 +315,7 @@ fn snapshot_zero(spec: &CreateWs, now_unix_ms: i64) -> Result<pb::WorkspaceSnaps
         .unwrap_or_default();
     snap.index_tree = tree.clone();
     snap.worktree_tree = tree;
-    seal(snap)
+    seal_snapshot(snap)
 }
 
 /// Snapshot 0 of a fork of `source` (snapshot `from.2` of `from.1`): the
@@ -304,7 +354,7 @@ fn fork_zero(
         }),
         ..source.clone()
     };
-    seal(snap)
+    seal_snapshot(snap)
 }
 
 /// The identity fields of a new workspace's snapshot 0.
@@ -331,8 +381,8 @@ fn identity(spec: &CreateWs, now_unix_ms: i64) -> pb::WorkspaceSnapshot {
     }
 }
 
-/// Sets the snapshot commit (Ruling 38).
-fn seal(mut snap: pb::WorkspaceSnapshot) -> Result<pb::WorkspaceSnapshot, WsError> {
+/// Sets the snapshot's `snapshot_commit` (Ruling 38) from its fields.
+pub fn seal_snapshot(mut snap: pb::WorkspaceSnapshot) -> Result<pb::WorkspaceSnapshot, WsError> {
     let (commit, _) = snapshot_commit(&snap).map_err(WsError::from_format)?;
     snap.snapshot_commit = commit.as_bytes().to_vec();
     Ok(snap)

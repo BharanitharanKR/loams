@@ -19,11 +19,16 @@ use serde_json::{Value, json};
 use tempfile::TempDir;
 
 #[cfg(feature = "git")]
+#[path = "../console_support/mod.rs"]
+mod console_support;
+#[cfg(feature = "git")]
 mod http;
 #[cfg(feature = "git")]
 mod objects;
 #[cfg(feature = "git")]
 mod repos;
+#[cfg(feature = "git")]
+mod workspaces;
 
 /// Every RPC of `RepoService`, with whether it streams.
 const RPCS: &[(&str, &str, bool)] = &[
@@ -42,6 +47,17 @@ const RPCS: &[(&str, &str, bool)] = &[
     ("ObjectService", "Log", true),
     ("ObjectService", "DiffStat", false),
     ("ObjectService", "PutWorkspacePack", true),
+    ("WorkspaceService", "CreateWorkspace", false),
+    ("WorkspaceService", "GetWorkspace", false),
+    ("WorkspaceService", "ListWorkspaces", false),
+    ("WorkspaceService", "ForkWorkspace", false),
+    ("WorkspaceService", "DeleteWorkspace", false),
+    ("WorkspaceService", "ListSnapshots", false),
+    ("WorkspaceService", "GetSnapshot", false),
+    ("WorkspaceService", "SaveSnapshot", false),
+    ("WorkspaceService", "WatchWorkspace", true),
+    ("WorkspaceService", "ListSalvage", false),
+    ("WorkspaceService", "RestoreSalvage", false),
 ];
 
 /// A `loams` server on loopback, with its data directory.
@@ -244,7 +260,11 @@ async fn catalogue_lists_repos_only_with_feature() {
         .unwrap_or_else(|| panic!("no loams.repos.v1 row: {info}"));
     assert_eq!(
         row["services"],
-        json!(["loams.repos.v1.RepoService", "loams.repos.v1.ObjectService"])
+        json!([
+            "loams.repos.v1.RepoService",
+            "loams.repos.v1.ObjectService",
+            "loams.repos.v1.WorkspaceService"
+        ])
     );
     assert_eq!(row["unstable"], json!(true));
     let served = cfg!(feature = "git");

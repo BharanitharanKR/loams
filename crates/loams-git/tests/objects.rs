@@ -262,7 +262,7 @@ async fn ws_object_needs_ws_access() {
 
     // Through the workspace it does.
     let view = lookup
-        .workspace(&repo, &ws)
+        .workspace(loams_git::NamespaceId(7), &repo, &ws)
         .await
         .expect("lookup")
         .expect("ws");
@@ -274,7 +274,7 @@ async fn ws_object_needs_ws_access() {
     let other = WsId::parse("w01j9z3m5q8x000000000000002").expect("ws id");
     assert!(
         lookup
-            .workspace(&repo, &other)
+            .workspace(loams_git::NamespaceId(7), &repo, &other)
             .await
             .expect("lookup")
             .is_none()

@@ -644,3 +644,151 @@ fn stores() -> Vec<Box<dyn WorkspaceStore>> {
         ),
     ]
 }
+
+/// `ListSnapshots` and `ListSalvage` read these (Task 25): snapshot numbers
+/// and salvage records in pages, on both stores.
+#[tokio::test]
+async fn snapshots_and_salvage_are_listed() {
+    for store in stores() {
+        let zero = store.create(spec("alice", None)).await.expect("create");
+        let ws = WsId::parse(&zero.ws_id).expect("ws id");
+        let last = save_chain(store.as_ref(), &zero, 4).await;
+        let first = store
+            .list_snapshots(&repo(), &ws, None, 2)
+            .await
+            .expect("list");
+        assert_eq!(first, vec![SnapN(0), SnapN(1)]);
+        let rest = store
+            .list_snapshots(&repo(), &ws, Some(SnapN(1)), 10)
+            .await
+            .expect("list");
+        assert_eq!(rest, vec![SnapN(2), SnapN(3), SnapN(4)]);
+        assert!(
+            store
+                .list_snapshots(&repo(), &WsId::generate(), None, 10)
+                .await
+                .expect("list")
+                .is_empty()
+        );
+
+        let (a, b) = (MountId::generate(), MountId::generate());
+        let mut held = Vec::new();
+        for (mount, tag) in [(&a, 1), (&b, 2), (&a, 3)] {
+            let unsaved = next(&last, mount, tag);
+            let id = store.salvage(&unsaved, mount).await.expect("salvage");
+            held.push((
+                loams_git::ws::SalvageRef {
+                    mount: mount.clone(),
+                    id,
+                },
+                unsaved,
+            ));
+        }
+        held.sort_by(|x, y| x.0.cmp(&y.0));
+        let page = store
+            .list_salvage(&repo(), &ws, None, 2)
+            .await
+            .expect("list");
+        let more = store
+            .list_salvage(&repo(), &ws, page.last(), 2)
+            .await
+            .expect("list");
+        let listed: Vec<_> = page.into_iter().chain(more).collect();
+        let want: Vec<_> = held.iter().map(|(r, _)| r.clone()).collect();
+        assert_eq!(listed, want);
+        for (salvage, unsaved) in &held {
+            let got = store
+                .get_salvage(&repo(), &ws, salvage)
+                .await
+                .expect("get")
+                .expect("held");
+            assert_eq!(*got, *unsaved);
+        }
+        let absent = loams_git::ws::SalvageRef {
+            mount: a.clone(),
+            id: ulid::Ulid::generate(),
+        };
+        assert!(
+            store
+                .get_salvage(&repo(), &ws, &absent)
+                .await
+                .expect("get")
+                .is_none()
+        );
+    }
+}
+
+/// The server's `WsLookup` (Task 25, ruling T24.6): a workspace's owner,
+/// latest packs and fork sources; a deleted or unknown one is not found.
+#[tokio::test]
+async fn store_lookup_follows_forks_and_hides_deleted() {
+    use loams_git::objects::WsLookup;
+    use loams_git::ws::{DELETED_LABEL, StoreWsLookup};
+
+    let raw = Store::in_memory();
+    let ws = bucket(raw.clone());
+    let lookup = StoreWsLookup::new(raw);
+    let zero = ws.create(spec("alice", None)).await.expect("create");
+    let source = WsId::parse(&zero.ws_id).expect("ws id");
+    let pack = pb::PackRef {
+        checksum: "ab".repeat(20),
+        object_count: 1,
+        pack_len: 32,
+        idx_offset: 32,
+        idx_len: 1072,
+        has_bitmap: false,
+    };
+    let saved = pb::WorkspaceSnapshot {
+        packs: vec![pack.clone()],
+        ..next(&zero, &MountId::generate(), 1)
+    };
+    ws.append(&saved).await.expect("append");
+    let view = lookup
+        .workspace(NS, &repo(), &source)
+        .await
+        .expect("lookup")
+        .expect("found");
+    assert_eq!(view.owner, principal("alice"));
+    assert_eq!(view.packs, vec![pack.clone()]);
+    assert!(view.sources.is_empty());
+
+    let fork = ws
+        .fork(
+            (&repo(), &source, SnapN(1)),
+            CreateWs {
+                base: None,
+                ..spec("bob", None)
+            },
+        )
+        .await
+        .expect("fork");
+    let forked = WsId::parse(&fork.ws_id).expect("ws id");
+    let view = lookup
+        .workspace(NS, &repo(), &forked)
+        .await
+        .expect("lookup")
+        .expect("found");
+    assert_eq!(view.owner, principal("bob"));
+    assert_eq!(view.packs, vec![pack]);
+    assert_eq!(view.sources, vec![source.clone()]);
+
+    let deleted = pb::WorkspaceSnapshot {
+        label: DELETED_LABEL.to_owned(),
+        ..next(&saved, &MountId::generate(), 2)
+    };
+    ws.append(&deleted).await.expect("append");
+    assert!(
+        lookup
+            .workspace(NS, &repo(), &source)
+            .await
+            .expect("lookup")
+            .is_none()
+    );
+    assert!(
+        lookup
+            .workspace(NS, &repo(), &WsId::generate())
+            .await
+            .expect("lookup")
+            .is_none()
+    );
+}

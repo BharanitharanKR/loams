@@ -16,7 +16,7 @@
 //!   the snapshot names when it is absent, unreadable or names a collected
 //!   snapshot.
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::BTreeMap;
 use std::ops::Bound;
 use std::sync::{Arc, Mutex, PoisonError};
 
@@ -28,8 +28,8 @@ use serde::{Deserialize, Serialize};
 use ulid::Ulid;
 
 use super::{
-    CreateWs, SnapAppended, WorkspaceStore, WsError, WsSummary, appended_ids, fork_zero, is_replay,
-    snapshot_zero,
+    CreateWs, SalvageRef, SnapAppended, WorkspaceStore, WsError, WsSummary, appended_ids,
+    fork_zero, is_replay, snapshot_zero,
 };
 use crate::clock::{Clock, SystemClock};
 use crate::format::pb;
@@ -518,6 +518,68 @@ impl WorkspaceStore for BucketWorkspaceStore {
             .await?;
         Ok(())
     }
+
+    async fn list_snapshots(
+        &self,
+        repo: &RepoId,
+        ws: &WsId,
+        after: Option<SnapN>,
+        limit: usize,
+    ) -> Result<Vec<SnapN>, WsError> {
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
+        let paths = self.paths(repo);
+        let prefix = paths.ws_snapshot_prefix(ws);
+        let after = after.map(|n| paths.ws_snapshot(ws, n));
+        let page = retry::retry(|| self.store.list_page(&prefix, after.as_deref(), limit)).await?;
+        Ok(page
+            .iter()
+            .filter_map(|info| RepoPaths::parse_ws_snapshot(&info.path))
+            .map(|(_, n)| n)
+            .collect())
+    }
+
+    async fn list_salvage(
+        &self,
+        repo: &RepoId,
+        ws: &WsId,
+        after: Option<&SalvageRef>,
+        limit: usize,
+    ) -> Result<Vec<SalvageRef>, WsError> {
+        if limit == 0 {
+            return Ok(Vec::new());
+        }
+        let paths = self.paths(repo);
+        let prefix = paths.ws_salvage_prefix(ws);
+        let after = after.map(|salvage| paths.ws_salvage(ws, &salvage.mount, salvage.id));
+        let page = retry::retry(|| self.store.list_page(&prefix, after.as_deref(), limit)).await?;
+        Ok(page
+            .iter()
+            .filter_map(|info| RepoPaths::parse_ws_salvage(&info.path))
+            .map(|(mount, id)| SalvageRef { mount, id })
+            .collect())
+    }
+
+    async fn get_salvage(
+        &self,
+        repo: &RepoId,
+        ws: &WsId,
+        salvage: &SalvageRef,
+    ) -> Result<Option<Arc<pb::WorkspaceSnapshot>>, WsError> {
+        let path = self.paths(repo).ws_salvage(ws, &salvage.mount, salvage.id);
+        let Some(bytes) = self.read_raw(&path).await? else {
+            return Ok(None);
+        };
+        let snap = decode_snapshot(&bytes).map_err(|err| WsError::corrupt(&path, err))?;
+        if snap.ws_id != ws.as_str() {
+            return Err(WsError::corrupt(
+                &path,
+                format!("holds a snapshot of {}", snap.ws_id),
+            ));
+        }
+        Ok(Some(Arc::new(snap)))
+    }
 }
 
 /// Answers a fork whose snapshot 0 is already stored: the same fork (a
@@ -554,7 +616,7 @@ struct MemState {
     /// the bucket names records, so listings come in the same order.
     names: BTreeMap<(String, String, String), (WsId, i64)>,
     /// (repository, workspace, mount, salvage id) → snapshot.
-    salvage: HashMap<(String, String, String, Ulid), Arc<pb::WorkspaceSnapshot>>,
+    salvage: BTreeMap<(String, String, String, Ulid), Arc<pb::WorkspaceSnapshot>>,
 }
 
 /// [`WorkspaceStore`] in memory, for tests and the in-process scale tests:
@@ -773,5 +835,79 @@ impl WorkspaceStore for MemWorkspaceStore {
 
     async fn publish_hint(&self, _: &RepoId, _: &WsId, _: SnapN) -> Result<(), WsError> {
         Ok(())
+    }
+    async fn list_snapshots(
+        &self,
+        repo: &RepoId,
+        ws: &WsId,
+        after: Option<SnapN>,
+        limit: usize,
+    ) -> Result<Vec<SnapN>, WsError> {
+        let lower = match after {
+            Some(n) => Bound::Excluded(n.0),
+            None => Bound::Unbounded,
+        };
+        Ok(self
+            .state()
+            .snaps
+            .get(&(repo.to_string(), ws.to_string()))
+            .map(|chain| {
+                chain
+                    .range((lower, Bound::Unbounded))
+                    .take(limit)
+                    .map(|(n, _)| SnapN(*n))
+                    .collect()
+            })
+            .unwrap_or_default())
+    }
+
+    async fn list_salvage(
+        &self,
+        repo: &RepoId,
+        ws: &WsId,
+        after: Option<&SalvageRef>,
+        limit: usize,
+    ) -> Result<Vec<SalvageRef>, WsError> {
+        let (repo, ws) = (repo.to_string(), ws.to_string());
+        let lower = match after {
+            Some(salvage) => Bound::Excluded((
+                repo.clone(),
+                ws.clone(),
+                salvage.mount.to_string(),
+                salvage.id,
+            )),
+            None => Bound::Included((repo.clone(), ws.clone(), String::new(), Ulid::nil())),
+        };
+        Ok(self
+            .state()
+            .salvage
+            .range((lower, Bound::Unbounded))
+            .take_while(|((r, w, _, _), _)| *r == repo && *w == ws)
+            .take(limit)
+            .filter_map(|((_, _, mount, id), _)| {
+                Some(SalvageRef {
+                    mount: MountId::parse(mount).ok()?,
+                    id: *id,
+                })
+            })
+            .collect())
+    }
+
+    async fn get_salvage(
+        &self,
+        repo: &RepoId,
+        ws: &WsId,
+        salvage: &SalvageRef,
+    ) -> Result<Option<Arc<pb::WorkspaceSnapshot>>, WsError> {
+        Ok(self
+            .state()
+            .salvage
+            .get(&(
+                repo.to_string(),
+                ws.to_string(),
+                salvage.mount.to_string(),
+                salvage.id,
+            ))
+            .cloned())
     }
 }
