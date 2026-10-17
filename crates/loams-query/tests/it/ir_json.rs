@@ -327,6 +327,17 @@ fn service_errors_round_trip_their_bodies() {
             "resource_exhausted",
             429,
         ),
+        (
+            ServiceError::PermissionDenied {
+                message: "Search.expand on graph:acme/kg needs reader: the caller holds no \
+                          relation on graph:acme/kg"
+                    .to_string(),
+                need: "reader".to_string(),
+                object: "graph:acme/kg".to_string(),
+            },
+            "permission_denied",
+            403,
+        ),
     ];
     for (err, code, status) in cases {
         assert_eq!(err.code(), code);
@@ -1300,6 +1311,13 @@ fn service_error() -> impl Strategy<Value = ServiceError> {
             ServiceError::ResourceExhausted {
                 message,
                 retry_after_ms,
+            }
+        }),
+        (".{0,8}", "[a-z_]{0,8}", ".{0,8}").prop_map(|(message, need, object)| {
+            ServiceError::PermissionDenied {
+                message,
+                need,
+                object,
             }
         }),
     ]

@@ -1860,6 +1860,7 @@ impl Flight {
         streams: Arc<dyn StreamProducer>,
         config: FlightConfig,
         guard: crate::auth::AuthLayerState,
+        graph_callers: loams_query::flight::GraphCallers,
     ) -> Self {
         let stop = CancellationToken::new();
         let puts = PutTasks::new();
@@ -1871,6 +1872,7 @@ impl Flight {
             stop.clone(),
             puts.clone(),
             guard,
+            graph_callers,
         ));
         Self {
             addr,
@@ -1904,6 +1906,7 @@ impl Flight {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn serve(
     listener: tokio::net::TcpListener,
     collections: Arc<CollectionService>,
@@ -1912,6 +1915,7 @@ async fn serve(
     stop: CancellationToken,
     puts: PutTasks,
     guard: crate::auth::AuthLayerState,
+    graph_callers: loams_query::flight::GraphCallers,
 ) {
     let served = serve_flight_sql_wrapped(
         listener,
@@ -1920,6 +1924,7 @@ async fn serve(
         config,
         stop,
         puts,
+        graph_callers,
         |routes| guard.wrap_grpc(routes),
     )
     .await;
@@ -2538,6 +2543,9 @@ impl Server {
             ));
         }
         let guard = crate::auth::AuthLayerState::new(auth.clone(), &[]);
+        // Whether requests are authenticated, for the wire listeners' graph caller below.
+        #[cfg(any(feature = "pgwire", feature = "mysql-wire"))]
+        let auth_enforced = auth.enforced();
         let main_guard =
             crate::auth::AuthLayerState::new(auth.clone(), crate::auth::layer::MAIN_PUBLIC_PATHS);
         let tailscale_guard = crate::auth::AuthLayerState::tailscale_target(
@@ -2897,12 +2905,27 @@ impl Server {
         if let Some((placement, remote)) = routing {
             collections.set_placement(placement, remote);
         }
+        // Who the PostgreSQL and MySQL wire sessions' graph reads are for (GR1 R24.12): they
+        // authenticate nobody (loopback only), so with authentication off it is the operator,
+        // as on the main port, and with it on nobody, who reads no graph.
+        #[cfg(any(feature = "pgwire", feature = "mysql-wire"))]
+        let wire_caller = {
+            let operator = (!auth_enforced).then(crate::auth::Auth::dev_loopback);
+            api::graph_caller(&principals, operator.as_ref())
+        };
         // Every fallible PostgreSQL step (the `pg_catalog` setup) runs here,
         // before the worker starts; the accept loop is spawned only after.
         #[cfg(feature = "pgwire")]
         let pg = match pg_listener {
             Some((bound, pg_config)) => {
-                match crate::pg::prepare(collections.clone(), bound, pg_config.clone()).await {
+                match crate::pg::prepare(
+                    collections.clone(),
+                    bound,
+                    pg_config.clone(),
+                    wire_caller.clone(),
+                )
+                .await
+                {
                     Ok(prepared) => Some(prepared),
                     Err(source) => {
                         collections.shutdown().await;
@@ -2926,7 +2949,7 @@ impl Server {
         // After every fallible step, like the PostgreSQL accept loop.
         #[cfg(feature = "mysql-wire")]
         let mysql_wire = mysql_listener.map(|(bound, mysql_config)| {
-            crate::mysql_wire::start(collections.clone(), bound, mysql_config)
+            crate::mysql_wire::start(collections.clone(), bound, mysql_config, wire_caller)
         });
         #[cfg(feature = "qdrant")]
         let qdrant = match qdrant_listeners {
@@ -3053,7 +3076,7 @@ impl Server {
             house,
             #[cfg(feature = "git")]
             git: git.as_ref().map(|g| g.runtime.clone()),
-            principals,
+            principals: principals.clone(),
             #[cfg(feature = "live")]
             live,
         };
@@ -3084,6 +3107,11 @@ impl Server {
                 meta: meta_store.clone(),
                 writer: writer.clone(),
             });
+            // Each statement's graph reads are its principal's (GR1 R24.12).
+            let principals = principals.clone();
+            let graph_callers: loams_query::flight::GraphCallers = Arc::new(move |extensions| {
+                api::graph_caller(&principals, extensions.get::<crate::auth::Principal>())
+            });
             Flight::start(
                 listener,
                 addr,
@@ -3091,6 +3119,7 @@ impl Server {
                 streams,
                 config.flight.clone(),
                 guard.clone(),
+                graph_callers,
             )
         });
         #[cfg(feature = "stream-grpc")]

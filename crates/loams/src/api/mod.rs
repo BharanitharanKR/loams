@@ -361,6 +361,25 @@ fn with_token(mut response: Response, token: &ConsistencyToken) -> Response {
 /// `loams-consistency-token` are the two request headers that survive the move
 /// to RPCs, and both are read by this one function so the two surfaces cannot
 /// disagree about what a header means.
+/// Who a request's graph reads are for (GR1 R24.12): its principal, checked for `reader` on each
+/// graph a search's `expand` or a SQL graph or algorithm function touches, by the same RBAC as
+/// `loams.graph.v1`'s RPCs ([`graph_auth`]). No principal reads no graph. Without the `graph`
+/// feature no graph is served, and the caller reads none.
+pub(crate) fn graph_caller(
+    principals: &crate::auth::Principals,
+    principal: Option<&crate::auth::Principal>,
+) -> loams_query::graph::GraphCaller {
+    #[cfg(feature = "graph")]
+    {
+        graph_auth::graph_caller(principals, principal)
+    }
+    #[cfg(not(feature = "graph"))]
+    {
+        let _ = (principals, principal);
+        loams_query::graph::GraphCaller::nobody()
+    }
+}
+
 pub(super) fn read_consistency(
     headers: &HeaderMap,
     body: Option<ReadConsistency>,

@@ -162,8 +162,8 @@ impl From<BytesRejection> for ApiError {
 
 impl From<ServiceError> for ApiError {
     /// `{status: http_status(), error: code(), message: Display}` plus
-    /// `kind` and `name` for `NotFound`, `field` for `SchemaViolation` and
-    /// `retry_after_ms` for `ResourceExhausted` (429 with `Retry-After`, the
+    /// `kind` and `name` for `NotFound`, `field` for `SchemaViolation`, `need` and `object` for
+    /// `PermissionDenied`, and `retry_after_ms` for `ResourceExhausted` (429 with `Retry-After`, the
     /// wait rounded up to seconds; Task 15 rule 5) (rule 3).
     fn from(err: ServiceError) -> Self {
         let status =
@@ -176,6 +176,10 @@ impl From<ServiceError> for ApiError {
             ServiceError::SchemaViolation { field, .. } => api = api.with("field", field),
             ServiceError::ResourceExhausted { retry_after_ms, .. } => {
                 api = api.with("retry_after_ms", retry_after_ms);
+            }
+            // A graph read refused (GR1 R24.12): the relation it needed and the graph.
+            ServiceError::PermissionDenied { need, object, .. } => {
+                api = api.with("need", need).with("object", object);
             }
             _ => {}
         }

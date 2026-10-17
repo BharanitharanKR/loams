@@ -25,6 +25,7 @@ use loams_collection::{
     SparseVector, SparseVectorSpec,
 };
 use loams_common::meta::AliasAction;
+use loams_query::graph::GraphCaller;
 use loams_query::sql::{
     CollectionProvider, RetrieverDescriptorUdf, SqlResult, rows_to_json, run_read_only,
 };
@@ -135,7 +136,7 @@ async fn with_kb() -> (Fixture, Arc<CollectionService>) {
 }
 
 async fn sql(service: &CollectionService, query: &str) -> Result<SqlResult, ServiceError> {
-    let ctx = service.sql_context(NS);
+    let ctx = service.sql_context(NS, GraphCaller::Internal);
     run_read_only(&ctx, query, &service.config().sql).await
 }
 
@@ -558,7 +559,7 @@ async fn pushed_down_filters_equal_unpushed_results() {
     write(&service, "pd", tail).await;
 
     let config = service.config().sql.clone();
-    let pushed = service.sql_context(NS);
+    let pushed = service.sql_context(NS, GraphCaller::Internal);
     let provider = pushed.table_provider("pd").await.expect("pd");
     let provider = (provider.as_ref() as &dyn Any)
         .downcast_ref::<CollectionProvider>()
@@ -865,7 +866,7 @@ async fn tables_resolve_by_name_alias_and_qualified_name() {
         )
         .await
         .expect("alias");
-    let ctx = service.sql_context(NS);
+    let ctx = service.sql_context(NS, GraphCaller::Internal);
     // Created after the context exists.
     service
         .create_collection(NS, "later", kb_schema(), None)

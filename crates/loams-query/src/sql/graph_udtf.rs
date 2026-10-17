@@ -517,6 +517,8 @@ impl Inner {
                     scope.service.clone(),
                     &scope.ns,
                     scope.consistency.clone(),
+                    // The key query is the same caller's: a graph function in it is checked too.
+                    scope.caller.clone(),
                 );
                 let result =
                     crate::sql::run_read_only(&ctx, sql, &scope.service.config().sql).await?;
@@ -546,6 +548,7 @@ impl Inner {
         let call = &self.call;
         let service = &self.scope.service;
         let ns = self.scope.ns.as_str();
+        let caller = &self.scope.caller;
         let keys = self.keys().await?;
         let schema = call.function.schema();
         let text = |values: Vec<String>| -> ArrayRef {
@@ -578,6 +581,7 @@ impl Inner {
                 let seeds: Vec<Option<PrimaryKey>> = keys.iter().cloned().map(Some).collect();
                 let expanded = expander
                     .expand(ExpandCall {
+                        caller,
                         namespace: ns,
                         expand: &expand,
                         seeds,
@@ -602,6 +606,7 @@ impl Inner {
                 let tables = service.graph_tables().ok_or_else(unavailable)?;
                 let edges = tables
                     .neighbors(NeighborsCall {
+                        caller,
                         namespace: ns,
                         graph: &call.graph,
                         keys,
@@ -633,6 +638,7 @@ impl Inner {
                 let tables = service.graph_tables().ok_or_else(unavailable)?;
                 let degrees = tables
                     .degree(DegreeCall {
+                        caller,
                         namespace: ns,
                         graph: &call.graph,
                         keys,
@@ -659,6 +665,7 @@ impl Inner {
                 })?;
                 let steps = tables
                     .shortest_path(PathCall {
+                        caller,
                         namespace: ns,
                         graph: &call.graph,
                         from,

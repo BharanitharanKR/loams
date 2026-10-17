@@ -118,9 +118,11 @@ pub fn start(
     service: Arc<CollectionService>,
     bound: MysqlListener,
     config: MysqlConfig,
+    caller: loams_query::graph::GraphCaller,
 ) -> MysqlHandle {
     let MysqlListener { listener, addr } = bound;
-    let context = Arc::new(service.sql_context(&config.namespace));
+    // Every session's graph reads are `caller`'s (GR1 R24.12): the listener authenticates nobody.
+    let context = Arc::new(service.sql_context(&config.namespace, caller));
     let sql_config = service.config().sql.clone();
     let shutdown = CancellationToken::new();
     let disconnect_clients = CancellationToken::new();

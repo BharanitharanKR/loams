@@ -86,6 +86,16 @@ fn every_service_error() -> Vec<(ServiceError, StatusCode, Code, &'static str)> 
             Code::ResourceExhausted,
             "Rate limiting exceeded: over budget",
         ),
+        (
+            ServiceError::PermissionDenied {
+                message: "expand on graph:acme/kg needs reader".into(),
+                need: "reader".into(),
+                object: "graph:acme/kg".into(),
+            },
+            StatusCode::FORBIDDEN,
+            Code::PermissionDenied,
+            "Forbidden: expand on graph:acme/kg needs reader",
+        ),
     ];
     for (err, ..) in &cases {
         match err {
@@ -96,7 +106,8 @@ fn every_service_error() -> Vec<(ServiceError, StatusCode, Code, &'static str)> 
             | ServiceError::Unavailable(_)
             | ServiceError::Timeout
             | ServiceError::Internal(_)
-            | ServiceError::ResourceExhausted { .. } => {}
+            | ServiceError::ResourceExhausted { .. }
+            | ServiceError::PermissionDenied { .. } => {}
         }
     }
     cases

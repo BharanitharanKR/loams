@@ -170,6 +170,7 @@ async fn expand(expander: &LoamsGraphExpander, case: &Value) -> Expanded {
         .collect();
     expander
         .expand(ExpandCall {
+            caller: &GraphCaller::Internal,
             namespace: "acme",
             expand: &expand,
             seeds,
@@ -297,6 +298,7 @@ async fn expand_respects_consistency_token() {
     let got = tokio::time::timeout(
         Duration::from_secs(20),
         expander.expand(ExpandCall {
+            caller: &GraphCaller::Internal,
             namespace: "acme",
             expand: &expand_req,
             seeds: vec![Some(PrimaryKey::Str("a".to_string()))],
@@ -316,6 +318,7 @@ async fn expand_respects_consistency_token() {
     assert!(
         expander
             .expand(ExpandCall {
+                caller: &GraphCaller::Internal,
                 namespace: "acme",
                 expand: &expand_req,
                 seeds: vec![Some(PrimaryKey::Str("a".to_string()))],
@@ -329,7 +332,7 @@ async fn expand_respects_consistency_token() {
 // GR1 Task 21: the graph table functions' backend
 // ---------------------------------------------------------------------------------------------
 
-use loams_query::graph::{DegreeCall, GraphTables, NeighborsCall, PathCall};
+use loams_query::graph::{DegreeCall, GraphCaller, GraphTables, NeighborsCall, PathCall};
 
 fn direction(case: &Value) -> ExpandDirection {
     match case["direction"].as_str().unwrap_or("both") {
@@ -367,6 +370,7 @@ async fn table(expander: &LoamsGraphExpander, case: &Value) -> Value {
         "neighbors" => {
             let rows = expander
                 .neighbors(NeighborsCall {
+                    caller: &GraphCaller::Internal,
                     namespace: "acme",
                     graph: "g",
                     keys: keys(case),
@@ -395,6 +399,7 @@ async fn table(expander: &LoamsGraphExpander, case: &Value) -> Value {
         "degree" => {
             let rows = expander
                 .degree(DegreeCall {
+                    caller: &GraphCaller::Internal,
                     namespace: "acme",
                     graph: "g",
                     keys: keys(case),
@@ -413,6 +418,7 @@ async fn table(expander: &LoamsGraphExpander, case: &Value) -> Value {
         _ => {
             let rows = expander
                 .shortest_path(PathCall {
+                    caller: &GraphCaller::Internal,
                     namespace: "acme",
                     graph: "g",
                     from: pk(&case["from"]).expect("from"),
@@ -474,6 +480,7 @@ async fn shortest_path_depth_bound() {
     .await;
     let expander = LoamsGraphExpander::new(admin.clone());
     let path = |max_hops: u8| PathCall {
+        caller: &GraphCaller::Internal,
         namespace: "acme",
         graph: "g",
         from: PrimaryKey::Str("a".to_string()),
@@ -933,5 +940,234 @@ mod algorithms {
             .await
             .expect_err("refused");
         assert_eq!(refused.code, connectrpc::ErrorCode::InvalidArgument);
+    }
+
+    /// GR1 R24.12 (amending R24.4): every read `loams-query` makes for a principal (a search's
+    /// `expand`, the SQL graph and algorithm functions) needs the principal's `reader` relation on
+    /// the graph, decided as an RPC's (fence, relation, scopes) and audited; a refusal is
+    /// `permission_denied` with need `reader` and nothing is read. Loams' own calls are not
+    /// checked: `GraphCaller::Internal`, and a write-back under an authorizer that allows nobody.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn principal_reads_need_reader() {
+        use loams_collection::PrimaryKey;
+        use loams_graph::authz::{self, Caller, CallerKind, PrincipalReads, Relation, StaticRbac};
+        use loams_graph::retrieval::LoamsGraphExpander;
+        use loams_query::ServiceError;
+        use loams_query::expand::{ExpandCall, ExpandDirection, GraphExpander};
+        use loams_query::graph::{
+            AlgorithmCall, AlgorithmSpec, DegreeCall, GraphCaller, GraphTables, NeighborsCall,
+            PathCall,
+        };
+
+        let cluster = cluster(AdjacencyConfig::default()).await;
+        // Loams itself (no caller) writes and administers, under an authorizer of nobody.
+        let admin = cluster
+            .node(1)
+            .admin
+            .clone()
+            .with_authorizer(Arc::new(StaticRbac::new()));
+        rings(&cluster, 0, 6).await;
+        let rbac: Arc<dyn authz::GraphAuthorizer> = Arc::new(
+            StaticRbac::new()
+                .grant("reader", "acme", Relation::Reader)
+                .grant("elsewhere", "other", Relation::Admin),
+        );
+        let principal =
+            |caller: Caller| PrincipalReads::new(rbac.clone(), caller).into_graph_caller();
+        let scoped = Caller {
+            scopes: Some(["collections:read".to_string()].into()),
+            ..Caller::new("reader", CallerKind::ApiKey)
+        };
+        let refused = [
+            (
+                "no relation",
+                principal(Caller::new("stranger", CallerKind::Session)),
+            ),
+            (
+                "another namespace's admin",
+                principal(Caller::new("elsewhere", CallerKind::Session)),
+            ),
+            ("a reader without a graph scope", principal(scoped)),
+            ("anonymous", principal(Caller::anonymous())),
+        ];
+        let reader = principal(Caller::new("reader", CallerKind::Session));
+        let expander = LoamsGraphExpander::new(admin.clone());
+        let key = |k: u64| PrimaryKey::U64(k);
+        let expand = loams_query::expand::Expand {
+            graph: "kg".to_string(),
+            from_field: None,
+            seed_label: None,
+            seeds: 1,
+            hops: 1,
+            direction: ExpandDirection::Out,
+            edge_types: Vec::new(),
+            edge_filter: None,
+            vertex_filter: None,
+            limit_per_seed: 50,
+            limit: 100,
+            select: None,
+            output: loams_query::expand::ExpandOutput::Nested,
+            consistency_token: None,
+        };
+        // Every read, for `caller`: what it is, and how many rows it answered.
+        let reads = |caller: GraphCaller| {
+            let (expander, expand) = (expander.clone(), expand.clone());
+            async move {
+                let mut out: Vec<(&'static str, Result<usize, ServiceError>)> = Vec::new();
+                let caller = &caller;
+                out.push((
+                    "expand",
+                    expander
+                        .expand(ExpandCall {
+                            caller,
+                            namespace: "acme",
+                            expand: &expand,
+                            seeds: vec![Some(key(0))],
+                        })
+                        .await
+                        .map(|e| e.reached.len()),
+                ));
+                out.push((
+                    "graph_neighbors",
+                    expander
+                        .neighbors(NeighborsCall {
+                            caller,
+                            namespace: "acme",
+                            graph: "kg",
+                            keys: vec![key(0)],
+                            label: None,
+                            direction: ExpandDirection::Out,
+                            edge_types: Vec::new(),
+                            edge_filter: None,
+                            limit_per_key: 100,
+                        })
+                        .await
+                        .map(|e| e.len()),
+                ));
+                out.push((
+                    "graph_degree",
+                    expander
+                        .degree(DegreeCall {
+                            caller,
+                            namespace: "acme",
+                            graph: "kg",
+                            keys: vec![key(0)],
+                            label: None,
+                            direction: ExpandDirection::Out,
+                            edge_types: Vec::new(),
+                        })
+                        .await
+                        .map(|d| d.len()),
+                ));
+                out.push((
+                    "graph_shortest_path",
+                    expander
+                        .shortest_path(PathCall {
+                            caller,
+                            namespace: "acme",
+                            graph: "kg",
+                            from: key(0),
+                            to: key(2),
+                            label: None,
+                            direction: ExpandDirection::Out,
+                            edge_types: Vec::new(),
+                            max_hops: 6,
+                        })
+                        .await
+                        .map(|p| p.len()),
+                ));
+                for (name, spec) in [
+                    (
+                        "pagerank",
+                        AlgorithmSpec::PageRank {
+                            label: None,
+                            damping: 0.85,
+                            max_iterations: 20,
+                            tolerance: 1e-6,
+                        },
+                    ),
+                    ("wcc", AlgorithmSpec::Wcc),
+                    (
+                        "leiden",
+                        AlgorithmSpec::Leiden {
+                            weight: None,
+                            resolution: 1.0,
+                            max_levels: 4,
+                            max_cluster_size: 1000,
+                            seed: 42,
+                        },
+                    ),
+                ] {
+                    out.push((
+                        name,
+                        expander
+                            .algorithm(AlgorithmCall {
+                                caller,
+                                namespace: "acme",
+                                graph: "kg",
+                                edge_types: Vec::new(),
+                                spec,
+                            })
+                            .await
+                            .map(|rows| rows.len()),
+                    ));
+                }
+                out
+            }
+        };
+        for (who, caller) in refused {
+            let before = authz::denials();
+            let answers = reads(caller).await;
+            assert_eq!(answers.len(), 7);
+            for (what, answer) in &answers {
+                match answer {
+                    Err(ServiceError::PermissionDenied {
+                        need,
+                        object,
+                        message,
+                    }) => {
+                        assert_eq!(need, "reader", "{who}: {what}");
+                        assert_eq!(object, "graph:acme/kg", "{who}: {what}");
+                        assert!(
+                            message.starts_with(&format!("{what} on graph:acme/kg")),
+                            "{message}"
+                        );
+                    }
+                    other => panic!("{who}: {what} is refused, got {other:?}"),
+                }
+            }
+            assert!(
+                authz::denials() >= before + 7,
+                "{who}: every refusal is counted"
+            );
+        }
+        // A reader, and Loams itself, read all of it, and alike.
+        let allowed = reads(reader).await;
+        let internal = reads(GraphCaller::Internal).await;
+        for ((what, a), (_, b)) in allowed.iter().zip(&internal) {
+            let a = a
+                .as_ref()
+                .unwrap_or_else(|err| panic!("reader: {what}: {err}"));
+            let b = b
+                .as_ref()
+                .unwrap_or_else(|err| panic!("internal: {what}: {err}"));
+            assert_eq!(a, b, "{what}");
+            assert!(*a > 0, "{what} answered rows");
+        }
+        // A write-back is Loams' own task: no principal, and the authorizer allows nobody.
+        let outcome = admin
+            .write_back(
+                "acme",
+                "kg",
+                &WriteBack {
+                    algorithm: Algorithm::Wcc {
+                        edge_types: Vec::new(),
+                    },
+                    field: "component".to_string(),
+                },
+            )
+            .await
+            .expect("an internal write-back");
+        assert_eq!(outcome.written, 6);
     }
 }
