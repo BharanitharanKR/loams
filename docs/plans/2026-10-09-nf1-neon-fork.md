@@ -1720,7 +1720,7 @@ Fork PRs ostrium-labs/loams-postgres#19 (`6212f59e`, the gate), #21 (a mode bit)
 
    Until the token has both, G3 fails, so **no release can be tagged**. That is deliberate: a release without Loams' integration is not a release.
 
-### Task 17 rulings (2026-10-16, in progress)
+### Task 17 rulings (2026-10-16 and 2026-10-17)
 
 Fork PR ostrium-labs/loams-postgres#20 (LP-0016) merged.
 
@@ -1752,3 +1752,27 @@ Fork PR ostrium-labs/loams-postgres#20 (LP-0016) merged.
    - release.
 
    17.12 and 16.16 follow on 2026-11-12, through the same workflow.
+6. **17.11's `heapam.c`: option (a) (owner, 2026-10-17).** The fork keeps its heap WAL record format and does not take upstream `c0d9864f`'s VM block references.
+   - **The premise holds.** The pageserver derives every VM clear from the records' `*_ALL_VISIBLE_CLEARED` and `XLH_LOCK_ALL_FROZEN_CLEARED` flags and stores it on the VM page itself. Computes WAL-log every VM page they evict, replicas clear the bits from the same flags, and nothing in Neon's storage model reads a WAL summary or a missing VM full-page image. The citations are in the fork's `docs/loams/pg17-vm-clear.md` (LP-0016).
+   - **The resolution.** `heapam.c` is a three-way merge of ours with REL_17_11's `heapam.c` minus `c0d9864f`. That also drops the two additions that would otherwise have merged into the fork's records without a conflict. Upstream's tests of the registration (`pg_walsummary` `t/002_blocks.pl`, `pg_combinebackup` `t/012_vm_consistency.pl`) are reverted with it.
+   - **The test.** `test_loams_vm_clear.py` runs the bug's scenario through the pageserver, the primary and a replica. It also guards the format: no heap record registers a VM block. It passes at 16.15 and at 17.11.
+7. **The recut (owner, 2026-10-17, option 1).**
+   - **Why.** Task 15's `loams/REL_<N>_STABLE` started at Neon's `REL_<N>_STABLE_neon` heads, 387 (16) and 475 (17) commits past the revisions `main` pins. That range holds Neon's own Postgres-side changes ("Remove unnecessary set_lwlsn_block_* hooks", "Move LastWrittenLsnLock to neon extension", `smgr_read_slru_segment` gone). Those pair with `pgxn/neon` changes Neon never published, so our `pgxn/neon` did not build at 16.15 (gate run https://github.com/ostrium-labs/loams-postgres/actions/runs/38991579525).
+   - **The new branches.** `loams/pg16` starts at `a42351fc` (16.9) and `loams/pg17` at `1e01fcea` (17.5), the revisions `main` pinned. Both were created through the API, each has the governance commit, and the existing `loams/**` rulesets protect them.
+   - **Retired, never deleted.** `loams/REL_16_STABLE`, `loams/REL_17_STABLE` and `loams/REL_18_STABLE` (`REL_18_STABLE_neon` has the same changes) are kept protected and marked superseded in the fork's `docs/loams/postgres-branches.md`. Task 24 chooses the base for 18.
+   - **The check.** `check-postgres-branches.py` now checks the new layout: each branch descends from its pinned base, the retired branches still exist, and the submodules track `loams/pg<N>`.
+   - **The merge job** uses `loams/pg<N>` and `loams/minor-pg<N>-<tag>`. On `promote` it reuses an existing minor branch (a hand resolution), so it never re-merges.
+8. **The merges (resolved by hand in an approved blobless clone, now deleted).**
+   - **16.15:** `loams/minor-pg16-REL_16_15` `23f0d68a`. Conflicts in `hash_xlog.c` (upstream's `XLogFlushBufferForRedoIfInit()`, with Neon's `!am_wal_redo_postgres` moved into the helper), `walsender.c`, `pgstat.c`, `pg_restore.c` and `002_pg_dump.pl`.
+   - **17.11:** `loams/minor-pg17-REL_17_11` `aef0fc52`. Conflicts in `heapam.c` (as in ruling 6), `hash_xlog.c`, `walsender.c`, `read_stream.c`, `postgres.c` and `pgstat.c`.
+   - **One fix with no textual conflict, in both merges:** upstream's new `_bt_get_endpoint()` call needs Neon's extra `parent` argument.
+   - Each resolution is recorded in its merge commit. Both minor branches were promoted: `loams/pg16` = `23f0d68a` and `loams/pg17` = `aef0fc52`, through `loams-postgres-merge.yml` with `promote`.
+9. **A storage fix the minors require.** Upstream `8ba61bc0` ("Set next multixid's offset when creating a new multixid", in 16.15 and 17.11) makes readers rely on the next multixid's offset being set. The pageserver did not set it: `test_pg_regress`'s basebackup comparison differed in `pg_multixact/offsets/0000` at both majors. `ingest_multixact_create` now follows upstream (fork `88b997ad`, LP-0016):
+   - a new `NeonWalRecord::MultixactOffsetCreatePair` when the next multixid is on the same page. It is added before the testing-only variant, so no serialized index moves.
+   - an offset record on the next page when that page exists;
+   - otherwise (WAL from an older minor) the next page is initialized with the offset, and its later zero-page record is skipped, as upstream's `pre_initialized_offsets_page`.
+
+   `test_multixact` joined G2.
+10. **Gated at both majors:** https://github.com/ostrium-labs/loams-postgres/actions/runs/38999301976. Every tier passed: G0, G1, and G2 at 21 tests per major (pg16, pg17). Fork PR ostrium-labs/loams-postgres#24 merged as `e69172aa`.
+11. **G3 and Q733.** With the owner's fix to `LOAMS_BOT_TOKEN` (it lacked access to `loams-postgres`), G3 runs end to end and posts `loams-gate / g3`. The first full run failed only in `decoder / WAL decoder`, and that was not the candidate: `dev`'s `crates/loams-wal-decoder/deny.toml` lacked the root's graspologic `allow-git` entry (`check-decoder-deny.py`), and Loams #707 fixed it. **Q733 is fully resolved.**
+12. **Next: `lp-2026.11.0`** (16.15 and 17.11; due 2026-11-19). The release builds the images and runs G0–G3 before tagging; 17.12 and 16.16 follow on 2026-11-12 through the same merge job.
