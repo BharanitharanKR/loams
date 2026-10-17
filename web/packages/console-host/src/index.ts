@@ -112,6 +112,8 @@ export {
   type Location,
   type PageProps,
   type PageSpec,
+  type PanelService,
+  type PanelState,
   type PlatformService,
   type RouterService,
   type RpcServices,

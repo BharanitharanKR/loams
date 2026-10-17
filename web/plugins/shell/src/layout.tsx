@@ -1,7 +1,8 @@
 // The console layout (design 59, D1078): the frame (frame.tsx) holds the sidebar
-// (sidebar.tsx), the top bar, which is the window's drag region, and the main region; the
-// agent dock stays on the right of main until Task 8 turns it into the inspector (D666).
-// Below 960px the sidebar is a sheet. Components get props and closures, never `ctx`.
+// (sidebar.tsx), the top bar, which is the window's drag region, and the main region, with
+// the inspector on its right and the drawer below it (regions.tsx). The agent is the
+// inspector's "Agent" tab (W10). Below 960px the sidebar and the inspector are sheets.
+// Components get props and closures, never `ctx`.
 
 import {
   capabilities,
@@ -9,29 +10,22 @@ import {
   localThemeStore,
   type Mode,
   type ModeService,
+  type PanelService,
   type SessionService,
   ThemeController,
   type ThemeService,
 } from '@loams/console-host';
-import { Slot, useSlot } from '@loams/slots';
+import { useSlot } from '@loams/slots';
 import { Toaster, ToastProvider, TooltipProvider } from '@loams/ui';
-import { PanelRight } from 'lucide-react';
-import {
-  type KeyboardEvent,
-  type PointerEvent,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from 'react';
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { AppearanceMenu } from './appearance.js';
 import { EngineTooOld } from './engine.js';
 import { MainRegion, Outlet, TopBar, UserMenu, useNarrow, useSidebarState } from './frame.js';
 import { MODE_LABEL, ModeSwitcher, useMode, useModeShortcut } from './mode-switcher.js';
 import { navSections, useLocation } from './nav.js';
 import { type ScopedCommand, ShellPalette } from './palette.js';
+import { DRAWER, INSPECTOR, PanelController } from './panel.js';
+import { PanelRegion, PanelToggles } from './regions.js';
 import type { HashRouter } from './router.js';
 import { ShellSidebar } from './sidebar.js';
 
@@ -44,83 +38,6 @@ export {
   SECTIONS,
   STUDIO_SECTIONS,
 } from './nav.js';
-
-export const DOCK_MIN = 320;
-export const DOCK_MAX = 720;
-export const DOCK_DEFAULT = 400;
-export const DOCK_KEY = 'loams.shell.dock';
-const DOCK_STEP = 24;
-
-const clampWidth = (n: number) => Math.min(DOCK_MAX, Math.max(DOCK_MIN, Math.round(n)));
-
-interface DockState {
-  open: boolean;
-  width: number;
-}
-
-function readDock(): DockState {
-  try {
-    const raw = JSON.parse(localStorage.getItem(DOCK_KEY) ?? 'null') as Partial<DockState> | null;
-    return {
-      open: raw?.open === true,
-      width: typeof raw?.width === 'number' ? clampWidth(raw.width) : DOCK_DEFAULT,
-    };
-  } catch {
-    return { open: false, width: DOCK_DEFAULT };
-  }
-}
-
-function useDock() {
-  const [dock, setDock] = useState<DockState>(readDock);
-  const update = useCallback((patch: Partial<DockState>) => {
-    setDock((prev) => {
-      const next = { ...prev, ...patch };
-      try {
-        localStorage.setItem(DOCK_KEY, JSON.stringify(next));
-      } catch {
-        // Storage blocked (private window): the dock still works this session.
-      }
-      return next;
-    });
-  }, []);
-  return [dock, update] as const;
-}
-
-function DockHandle({ width, onWidth }: { width: number; onWidth: (w: number) => void }) {
-  const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const move = (ev: globalThis.PointerEvent) => onWidth(window.innerWidth - ev.clientX);
-    const up = () => {
-      window.removeEventListener('pointermove', move);
-      window.removeEventListener('pointerup', up);
-    };
-    window.addEventListener('pointermove', move);
-    window.addEventListener('pointerup', up);
-  };
-  const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const grow = e.key === 'ArrowLeft' ? 1 : e.key === 'ArrowRight' ? -1 : 0;
-    if (grow) {
-      e.preventDefault();
-      onWidth(width + grow * DOCK_STEP);
-    } else if (e.key === 'Home') onWidth(DOCK_MIN);
-    else if (e.key === 'End') onWidth(DOCK_MAX);
-  };
-  return (
-    // biome-ignore lint/a11y/useSemanticElements: a focusable window splitter has no native element
-    <div
-      className="lc-dock-handle"
-      role="separator"
-      aria-orientation="vertical"
-      aria-label="Resize agent panel"
-      aria-valuemin={DOCK_MIN}
-      aria-valuemax={DOCK_MAX}
-      aria-valuenow={width}
-      tabIndex={0}
-      onPointerDown={onPointerDown}
-      onKeyDown={onKeyDown}
-    />
-  );
-}
 
 /**
  * Sends a visitor without a session to sign-in (or a fresh install to setup), as the
@@ -160,18 +77,19 @@ function Palette({
   router,
   mode,
   theme,
-  dock,
+  inspector,
   open,
   onOpenChange,
 }: {
   router: HashRouter;
   mode?: ModeService;
   theme: ThemeService;
-  dock?: { open: boolean; toggle: () => void };
+  inspector: PanelService;
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
 }) {
   const sections = useSlot('shell.nav.section');
+  const agent = useSlot('shell.inspector.tab').some((e) => e.meta?.id === 'agent');
   const legacy = useSlot('console.nav');
   const current = useMode(mode);
   const modesOf = (id: string) => mode?.modesOf(id) ?? ['console'];
@@ -214,16 +132,15 @@ function Palette({
       mode: current,
       run: () => theme.set(c),
     })),
-    ...(dock
+    ...(agent
       ? [
           {
-            id: 'dock',
-            title: dock.open ? 'Hide agent panel' : 'Show agent panel',
+            id: 'agent',
+            title: 'Open the agent',
             group: 'General',
-            keywords: ['agent', 'dock'],
-            shortcut: modKeys('J'),
+            keywords: ['agent', 'assistant', 'inspector'],
             mode: current,
-            run: dock.toggle,
+            run: () => inspector.open({ tab: 'agent' }),
           },
         ]
       : []),
@@ -245,6 +162,8 @@ export function Layout({
   flags,
   mode,
   theme: given,
+  inspector: givenInspector,
+  drawer: givenDrawer,
 }: {
   router: HashRouter;
   session: SessionService;
@@ -254,12 +173,18 @@ export function Layout({
   mode?: ModeService;
   /** System, Dark or Light (D1074); the platform provides it, and tests may leave it out. */
   theme?: ThemeService;
+  /** The right inspector and the bottom drawer (D1078); the shell's plugin provides them. */
+  inspector?: PanelService;
+  drawer?: PanelService;
 }) {
   const current = useMode(mode);
   useModeShortcut(mode);
-  const hasDock = useSlot('shell.dock.right').length > 0;
-  const [dock, setDock] = useDock();
   const theme = useMemo(() => given ?? new ThemeController(localThemeStore()), [given]);
+  const inspector = useMemo(
+    () => givenInspector ?? new PanelController(INSPECTOR),
+    [givenInspector],
+  );
+  const drawer = useMemo(() => givenDrawer ?? new PanelController(DRAWER), [givenDrawer]);
   const [side, setSide] = useSidebarState();
   const narrow = useNarrow();
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -270,16 +195,6 @@ export function Layout({
     [narrow, side.open, setSide],
   );
   const location = useLocation(router);
-  const open = hasDock && dock.open;
-  const toggle = useCallback(() => setDock({ open: !dock.open }), [dock.open, setDock]);
-  // The dock mounts on first open and then stays mounted (hidden, not removed) so the
-  // agent's chat state survives Ctrl/Cmd+J.
-  const [mounted, setMounted] = useState(open);
-  const toggleRef = useRef<HTMLButtonElement>(null);
-  const dockRef = useRef<HTMLElement>(null);
-  const wasOpen = useRef(open);
-  if (open && !mounted) setMounted(true);
-
   // biome-ignore lint/correctness/useExhaustiveDependencies: close the sheet per route
   useEffect(() => setSheetOpen(false), [location.path]);
 
@@ -297,31 +212,22 @@ export function Layout({
     return () => window.removeEventListener('keydown', onKey);
   }, [toggleSidebar]);
 
-  // Focus: into the element marked data-dock-autofocus (the composer) when the dock
-  // opens, back to the toggle when it closes.
+  // Mod+I toggles the inspector and Mod+J the drawer (D1081), except in rich text (italic)
+  // and a terminal (the shell program's keys); a plain field does not use them, so the
+  // agent's composer can still close its panel. Task 12 folds this into the keymap.
   useEffect(() => {
-    if (open === wasOpen.current) return;
-    wasOpen.current = open;
-    const dockEl = dockRef.current;
-    if (open) {
-      const target = dockEl?.querySelector<HTMLElement>('[data-dock-autofocus]');
-      (target ?? dockEl)?.focus();
-    } else {
-      toggleRef.current?.focus();
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!hasDock) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'j') {
-        e.preventDefault();
-        toggle();
-      }
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      const k = e.key.toLowerCase();
+      if (k !== 'i' && k !== 'j') return;
+      if (keepsPanelKeys(e.target)) return;
+      e.preventDefault();
+      if (k === 'i') inspector.toggle();
+      else drawer.toggle();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [hasDock, toggle]);
+  }, [inspector, drawer]);
 
   const gated = useGate(router, session);
   // An engine older than N−1, or without GetInstance, gets the upgrade page
@@ -346,7 +252,6 @@ export function Layout({
           className="lc-shell"
           data-mode={current}
           data-sidebar={sidebarOpen ? 'open' : 'closed'}
-          style={{ ['--lc-dock-width' as string]: `${dock.width}px` }}
         >
           <ShellSidebar
             router={router}
@@ -374,49 +279,16 @@ export function Layout({
                   <UserMenu session={session} router={router} local={flags?.features.local} />
                 </>
               }
-              trailing={
-                hasDock && (
-                  <button
-                    type="button"
-                    ref={toggleRef}
-                    className="lc-bar-btn"
-                    aria-expanded={open}
-                    aria-controls="lc-dock"
-                    aria-keyshortcuts="Control+J Meta+J"
-                    aria-label="Agent"
-                    title="Agent (Ctrl/Cmd+J)"
-                    onClick={toggle}
-                  >
-                    <PanelRight aria-hidden="true" size={16} strokeWidth={1.75} />
-                  </button>
-                )
-              }
+              trailing={<PanelToggles inspector={inspector} drawer={drawer} router={router} />}
             />
             <div className="lc-work">
               <div className="lc-work-row">
                 <main className="lc-main" id="lc-main">
                   <MainRegion router={router} mode={mode} />
                 </main>
-                {/* The agent dock stays here until Task 8 turns it into the inspector. */}
-                {hasDock && mounted && (
-                  <aside
-                    className="lc-dock"
-                    id="lc-dock"
-                    aria-label="Agent panel"
-                    ref={dockRef}
-                    tabIndex={-1}
-                    hidden={!open}
-                  >
-                    <DockHandle
-                      width={dock.width}
-                      onWidth={(w) => setDock({ width: clampWidth(w) })}
-                    />
-                    <div className="lc-dock-body">
-                      <Slot name="shell.dock.right" props={{}} />
-                    </div>
-                  </aside>
-                )}
+                <PanelRegion kind="inspector" panel={inspector} router={router} />
               </div>
+              <PanelRegion kind="drawer" panel={drawer} router={router} />
             </div>
           </div>
         </div>
@@ -424,7 +296,7 @@ export function Layout({
           router={router}
           mode={mode}
           theme={theme}
-          dock={hasDock ? { open, toggle } : undefined}
+          inspector={inspector}
           open={paletteOpen}
           onOpenChange={setPaletteOpen}
         />
@@ -442,4 +314,10 @@ function keepsKeys(target: EventTarget | null): boolean {
       'input, textarea, select, [contenteditable]:not([contenteditable="false"]), .xterm',
     ) !== null
   );
+}
+
+/** Rich text keeps Mod+I (italic) and a terminal keeps Mod+I and Mod+J. */
+function keepsPanelKeys(target: EventTarget | null): boolean {
+  if (!(target instanceof Element)) return false;
+  return target.closest('[contenteditable]:not([contenteditable="false"]), .xterm') !== null;
 }

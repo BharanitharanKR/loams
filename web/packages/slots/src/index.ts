@@ -5,6 +5,7 @@ export { Slot, SlotBoundary, SlotProvider, useSlot, useSlotRegistry } from './re
 export type {
   EnvironmentRef,
   PaletteCommand,
+  PanelTabProps,
   SlotComponent,
   SlotEntry,
   SlotKind,

@@ -1,6 +1,6 @@
 // @loams/plugin-shell: the layout (the `root` slot), the navigation (from
-// `console.nav`), the page outlet (`console.page`) and the `router` service
-// (§37 §5.4–§5.5). Components get props and closures, never `ctx`.
+// `console.nav`), the page outlet (`console.page`), and the `router`, `inspector` and
+// `drawer` services (§37 §5.4–§5.5, design 59 D1078). Components get props and closures, never `ctx`.
 
 import { type PluginModule, service } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
@@ -8,6 +8,7 @@ import type { SlotRegistry } from '@loams/slots';
 import { AppearanceSection } from './appearance.js';
 import { Layout } from './layout.js';
 import { syncModeWithRoute } from './mode-switcher.js';
+import { DRAWER, INSPECTOR, PanelController } from './panel.js';
 import { HashRouter } from './router.js';
 
 export {
@@ -46,6 +47,8 @@ export {
   ShellPalette,
   scopePalette,
 } from './palette.js';
+export { DRAWER, INSPECTOR, type PanelConfig, PanelController } from './panel.js';
+export { PanelRegion, PanelToggles, tabShows } from './regions.js';
 export { compile, HashRouter, type HashSource, windowHash } from './router.js';
 export { ShellSidebar } from './sidebar.js';
 
@@ -63,9 +66,22 @@ const plugin: PluginModule = {
     ctx.provide('router', router);
     // A route of the other mode switches the mode first (§53 §4.4).
     ctx.effect(() => syncModeWithRoute(router, mode), 'mode-route');
+    // The right inspector and the bottom drawer (D1078): `inspector.open({ tab, props })`.
+    const inspector = new PanelController(INSPECTOR);
+    const drawer = new PanelController(DRAWER);
+    ctx.provide('inspector', inspector);
+    ctx.provide('drawer', drawer);
     ctx.effect(() =>
       slots.register({ name: 'root', plugin: 'shell' }, () => (
-        <Layout router={router} session={session} flags={flags} mode={mode} theme={theme} />
+        <Layout
+          router={router}
+          session={session}
+          flags={flags}
+          mode={mode}
+          theme={theme}
+          inspector={inspector}
+          drawer={drawer}
+        />
       )),
     );
     // Settings › Appearance: the theme choice and panel motion (D1074, D1076).

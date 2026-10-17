@@ -62,6 +62,29 @@ export interface ThemeService {
   subscribe(listener: () => void): () => void;
 }
 
+/** An inspector's or the drawer's state (design 59, D1078). */
+export interface PanelState {
+  open: boolean;
+  /** The selected tab's id (its entry's `meta.id`). */
+  tab: string | undefined;
+  /** What `open({ tab, props })` passed for that tab; not persisted. */
+  props: Readonly<Record<string, unknown>>;
+  /** Width (inspector) or height (drawer) in pixels. */
+  size: number;
+}
+
+/** The shell's right inspector or bottom drawer (design 59, D1078); the shell provides both. */
+export interface PanelService {
+  state(): PanelState;
+  /** Opens the panel, on `tab` when given, passing `props` to that tab. */
+  open(o?: { tab?: string; props?: Record<string, unknown> }): void;
+  close(): void;
+  /** Closes the panel when it is open (on `tab`, when given); else opens it. */
+  toggle(tab?: string): void;
+  resize(size: number): void;
+  subscribe(listener: () => void): () => void;
+}
+
 /** `GetInstance`'s answer, as plugins gate on it (AP1a Ruling 6). */
 export interface FlagsService {
   edition: 'oss' | 'cloud' | 'byoc' | 'unknown';
@@ -183,6 +206,9 @@ export interface Services extends RpcServices, AgentdRpcServices {
   mode: ModeService;
   /** System, Dark or Light, per device (design 59, D1074); the platform provides it. */
   theme: ThemeService;
+  /** The shell's right inspector and bottom drawer (design 59, D1078). */
+  inspector: PanelService;
+  drawer: PanelService;
   /**
    * loams-agentd (§53 §6.2, SD1 Task 6; see agentd.ts): `agentd` always, from
    * `@loams/plugin-rpc`; `agentd.transport` and `rpc.agentd.*` while a daemon is
