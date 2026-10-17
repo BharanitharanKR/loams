@@ -59,6 +59,11 @@ ignore = [
     # requires every root ignore (this workspace does not depend on zip).
     # Remove both with the bump to zip 9.x, after 2026-10-27.
     { crate = "zip@7.2.0", reason = "yanked upstream with its whole major line; the replacement 9.0.3 is under 14 days old (revisit 2026-10-27)" },
+    # The root's entries, kept here because scripts/pg2/check-decoder-deny.py
+    # requires every root ignore (this workspace does not depend on zip).
+    { id = "RUSTSEC-2026-0367", reason = "zip SUID/SGID bit preservation: not reachable. Loams never calls ZipArchive::extract or ZipStreamReader::extract: archive_install.rs extracts entry by entry, rejects link and special-file entries, confines paths with enclosed_name, and never applies archive permission bits; remove with the zip 9.x bump on or after 2026-10-30 (zip 9.0.4 turns 14 days old)" },
+    { id = "RUSTSEC-2026-0368", reason = "zip symlink target escape in extract: not reachable. Loams never calls ZipArchive::extract or ZipStreamReader::extract: archive_install.rs extracts entry by entry, rejects link and special-file entries, confines paths with enclosed_name, and never applies archive permission bits; remove with the zip 9.x bump on or after 2026-10-30 (zip 9.0.4 turns 14 days old)" },
+    { id = "RUSTSEC-2026-0369", reason = "zip permissions applied through symlinks in extract: not reachable. Loams never calls ZipArchive::extract or ZipStreamReader::extract: archive_install.rs extracts entry by entry, rejects link and special-file entries, confines paths with enclosed_name, and never applies archive permission bits; remove with the zip 9.x bump on or after 2026-10-30 (zip 9.0.4 turns 14 days old)" },
 ]
 
 [sources]
@@ -73,5 +78,6 @@ allow-git = [
     "https://github.com/ostrium-labs/client-rust",
     "https://github.com/ostrium-labs/resonate",
     "https://github.com/ostrium-labs/grafeo",
+    "https://github.com/microsoft/graspologic-native",
     "https://github.com/ostrium-labs/loams-postgres",
 ]
