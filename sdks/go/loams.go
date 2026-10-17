@@ -302,6 +302,8 @@ type (
 	Transition             = livev1.Transition
 	ModifyQuerySetRequest  = livev1.ModifyQuerySetRequest
 	ModifyQuerySetResponse = livev1.ModifyQuerySetResponse
+	AuthenticateRequest    = livev1.AuthenticateRequest
+	AuthenticateResponse   = livev1.AuthenticateResponse
 	QueryRequest           = livev1.QueryRequest
 	QueryResponse          = livev1.QueryResponse
 	MutateRequest          = livev1.MutateRequest

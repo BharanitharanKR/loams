@@ -80,6 +80,16 @@ type LiveModule interface {
 	// Unstable is whether the package's wire contract may still change.
 	Unstable() bool
 
+	// Authenticate is `loams.live.v1.LiveService/Authenticate`, retried: manual.
+	// Replaces an open session's identity with this call's credential (LV1 Task
+	// 17): the request names the session, and the credential is the client's
+	// `TokenSource`, so to re-authenticate as another caller use a client built
+	// with that caller's source. The same caller only extends the session's
+	// expiry and the response's `Identity` is unchanged; a different caller
+	// (a sign-in or a sign-out) bumps it, and the next Transition reruns every
+	// query as the new caller. Compare `Identity` with the version you hold. An
+	// unknown session is `not_found`.
+	Authenticate(ctx context.Context, request *AuthenticateRequest, options ...CallOption) (*AuthenticateResponse, error)
 	// ModifyQuerySet is `loams.live.v1.LiveService/ModifyQuerySet`, retried:
 	// manual. Adds and removes queries in an open session; the next transition
 	// reflects the change.
@@ -268,6 +278,18 @@ func (m *liveAdminModule) DeleteApp(ctx context.Context, request *DeleteAppReque
 }
 
 type liveModule struct{ moduleInfo }
+
+func (m *liveModule) Authenticate(ctx context.Context, request *AuthenticateRequest, options ...CallOption) (*AuthenticateResponse, error) {
+	binding, err := m.binding("Authenticate")
+	if err != nil {
+		return nil, err
+	}
+	client, err := clientOf[livev1connect.LiveServiceClient](m.invoker, binding.Service)
+	if err != nil {
+		return nil, err
+	}
+	return Unary(m.invoker, ctx, binding, client.Authenticate, request, options...)
+}
 
 func (m *liveModule) ModifyQuerySet(ctx context.Context, request *ModifyQuerySetRequest, options ...CallOption) (*ModifyQuerySetResponse, error) {
 	binding, err := m.binding("ModifyQuerySet")

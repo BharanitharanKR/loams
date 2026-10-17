@@ -181,7 +181,7 @@ class Modules(private val client: LoamsClient) {
     val instance: ModuleFacade get() = ModuleFacade(client, "instance")
 
     /** `loams.live` — live sync: watch a query set over a server stream. Experimental. */
-    val live: ModuleFacade get() = ModuleFacade(client, "live")
+    val live: LiveModule get() = LiveModule(client)
 
     /**
      * `loams.live.admin` — the Live app directory (`createApp`, `listApps`, `getApp`,
@@ -201,13 +201,51 @@ class Modules(private val client: LoamsClient) {
 }
 
 /**
+ * `loams.live`, with the one call a session's owner makes on its own behalf.
+ *
+ * Everything else on the module is the generic [ModuleFacade] surface (`invoke`,
+ * `openStream`), so `live.openStream("watch", ...)` is how a watch is opened.
+ */
+class LiveModule(private val liveClient: LoamsClient) : ModuleFacade(liveClient, "live") {
+    /**
+     * Replaces an open watch session's identity with this call's credential
+     * (`loams.live.v1.LiveService/Authenticate`, LV1 Task 17).
+     *
+     * The credential is the client's own [TokenSource], so to re-authenticate as another
+     * caller, call this on a client built with that caller's source. The response's
+     * `identity` (a `uint64`, see [identityOf]) is the session's identity version after the
+     * call: the same caller only extends the session and leaves it unchanged, and a
+     * different caller (a sign-in or a sign-out) bumps it, after which the next transition
+     * reruns every query as the new caller. Compare it with the version you hold. An
+     * unknown session is `not_found`. Never retried: the request has no idempotency key.
+     */
+    fun authenticate(request: DynamicMessage, options: CallOptions? = null): DynamicMessage =
+        invoke("authenticate", request, options)
+
+    /** [authenticate] for the session [sessionId], building the request from the descriptor set. */
+    fun authenticate(sessionId: String, options: CallOptions? = null): DynamicMessage {
+        val descriptor = requireNotNull(Descriptors.message("loams.live.v1.AuthenticateRequest")) {
+            "the committed descriptor set carries no loams.live.v1.AuthenticateRequest"
+        }
+        val request = DynamicMessage.newBuilder(descriptor)
+            .setField(descriptor.findFieldByName("session_id"), sessionId)
+            .build()
+        return authenticate(request, options)
+    }
+
+    /** The identity version an [authenticate] response carries. */
+    fun identityOf(response: DynamicMessage): Long =
+        response.getField(response.descriptorForType.findFieldByName("identity")) as Long
+}
+
+/**
  * One module's calls, resolved by name.
  *
  * Every call goes through [LoamsClient.invoke] or [LoamsClient.openStream], which is the
  * same path the conformance driver uses for the RPCs that carry no module annotation —
  * so there is one implementation of a call and one set of conformance claims to hold up.
  */
-class ModuleFacade(private val client: LoamsClient, val module: String) {
+open class ModuleFacade(private val client: LoamsClient, val module: String) {
     /** The module's catalogue entry, as the descriptor set states it. */
     val binding: ModuleBinding get() = Facade.module(module)
 

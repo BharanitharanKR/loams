@@ -7,6 +7,7 @@ import dev.loams.Facade
 import dev.loams.IdempotencyLevel
 import dev.loams.ReasonRegistry
 import dev.loams.RetryClass
+import dev.loams.StaticTokenSource
 import dev.loams.test.Support.StubTransport
 
 /**
@@ -83,6 +84,62 @@ object LiveAdminTest {
 
         Harness.test("kotlin_live_admin_the_live_app_reasons_are_in_the_registry") {
             for (wire in listOf("live_app_disabled", "live_app_exists", "live_app_mismatch")) {
+                assertTrue(ReasonRegistry.fromWire(wire) != null, "$wire to be a known reason")
+            }
+        }
+        Harness.test("kotlin_live_authenticate_is_in_the_catalogue_unary_and_never_retried") {
+            val binding = Facade.binding("live", "authenticate")
+            assertEquals("loams.live.v1.LiveService/Authenticate", binding.rpc, "the rpc")
+            assertEquals(RetryClass.MANUAL, binding.retry, "the retry class")
+            assertTrue(!binding.takesIdempotencyKey, "authenticate to take no idempotency key")
+        }
+
+        Harness.test("kotlin_live_authenticate_sends_the_session_and_bearer_and_surfaces_both_outcomes") {
+            val binding = Facade.binding("live", "authenticate")
+            fun identity(version: Long): DynamicMessage = DynamicMessage.newBuilder(binding.response)
+                .setField(binding.response.findFieldByName("identity"), version)
+                .build()
+            // 4 is the version the session holds: the same caller answers 4 again (the
+            // expiry moved), another caller answers 5 (the identity changed).
+            val transport = StubTransport()
+            transport.answerMessage(binding.response, identity(4))
+            transport.answerMessage(binding.response, identity(5))
+            val live = transport.client(tokenSource = StaticTokenSource("Bearer tok-bob")).modules.live
+
+            val extended = live.authenticate("s1")
+            val changed = live.authenticate("s1")
+
+            assertEquals(4L, live.identityOf(extended), "the same caller leaves the version unchanged")
+            assertEquals(5L, live.identityOf(changed), "another caller bumps it")
+            assertEquals(
+                listOf("loams.live.v1.LiveService/Authenticate", "loams.live.v1.LiveService/Authenticate"),
+                transport.requests.map { it.rpc },
+                "the rpcs sent",
+            )
+            for (sent in transport.requests) {
+                assertEquals(
+                    "Bearer tok-bob",
+                    sent.headers.entries.first { it.key.equals("Authorization", ignoreCase = true) }.value,
+                    "the client's credential is the bearer",
+                )
+                val request = DynamicMessage.parseFrom(binding.request, sent.body)
+                assertEquals("s1", request.getField(binding.request.findFieldByName("session_id")), "the session id")
+            }
+        }
+
+        Harness.test("kotlin_live_authenticate_is_not_retried_and_session_reasons_are_known") {
+            val transport = StubTransport()
+            transport.answerConnectError(503, "unavailable", "restarting")
+            transport.answerConnectError(503, "unavailable", "restarting")
+            var failed = false
+            try {
+                transport.client(maxRetries = 3).modules.live.authenticate("s1")
+            } catch (expected: dev.loams.LoamsException) {
+                failed = true
+            }
+            assertTrue(failed, "authenticate to fail on a refusal")
+            assertEquals(1, transport.requests.size, "an unkeyed mutation is sent once")
+            for (wire in listOf("session_rotate", "token_expired", "token_revoked")) {
                 assertTrue(ReasonRegistry.fromWire(wire) != null, "$wire to be a known reason")
             }
         }

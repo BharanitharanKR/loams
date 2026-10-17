@@ -9,6 +9,8 @@ import dev.loams.gen.loams.instance.v1.GetInstanceRequest;
 import dev.loams.gen.loams.instance.v1.GetInstanceResponse;
 import dev.loams.gen.loams.instance.v1.WhoAmIRequest;
 import dev.loams.gen.loams.instance.v1.WhoAmIResponse;
+import dev.loams.gen.loams.live.v1.AuthenticateRequest;
+import dev.loams.gen.loams.live.v1.AuthenticateResponse;
 import dev.loams.gen.loams.live.v1.CreateAppRequest;
 import dev.loams.gen.loams.live.v1.CreateAppResponse;
 import dev.loams.gen.loams.live.v1.ListAppsRequest;
@@ -162,6 +164,26 @@ public final class Modules {
         /** Whether the package's wire contract may still change. */
         public boolean unstable() {
             return Modules.module("live").unstable();
+        }
+
+        /**
+         * {@code loams.live.v1.LiveService/Authenticate}, retried: manual.
+         *
+         * <p>Replaces an open session's identity with this call's credential (LV1 Task 17). The
+         * credential is the client's own {@link TokenSource}, so to re-authenticate as another
+         * caller, call this on a client built with that caller's source. The response's {@code
+         * identity} is the session's identity version after the call: the same caller only extends
+         * the session and leaves it unchanged, and a different caller (a sign-in or a sign-out)
+         * bumps it, after which the next transition reruns every query as the new caller. Compare
+         * it with the version you hold. An unknown session is {@code not_found}. Never retried: the
+         * request has no idempotency key.
+         */
+        public AuthenticateResponse authenticate(AuthenticateRequest request, CallOptions... options) {
+            return invoker.unary(
+                    binding("live", "Authenticate"),
+                    request,
+                    CallOptions.merge(options),
+                    AuthenticateResponse.parser());
         }
 
         /**

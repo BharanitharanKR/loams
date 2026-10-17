@@ -99,6 +99,10 @@ void LiveModule::Mutate(live_v1::MutateRequest* request, live_v1::MutateResponse
   client_->Unary(BindingFor("loams.live.v1.LiveService/Mutate"), *request, response, client_->Encoding());
 }
 
+void LiveModule::Authenticate(live_v1::AuthenticateRequest* request, live_v1::AuthenticateResponse* response) {
+  client_->Unary(BindingFor("loams.live.v1.LiveService/Authenticate"), *request, response, client_->Encoding());
+}
+
 MessageStream LiveModule::Watch(live_v1::WatchRequest* request) {
   // **No resume.** `loams.live.v1`'s cursor is a `StateVersion` on the
   // `Transition`, and `WatchRequest` has no resume field at all, so a stream that

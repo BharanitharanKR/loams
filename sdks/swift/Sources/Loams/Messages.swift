@@ -212,3 +212,6 @@ public let deleteAppRequestTypeName = "loams.live.v1.DeleteAppRequest"
 
 /// The proto type name of `loams.live.v1.LiveService/ModifyQuerySet`'s request.
 public let modifyQuerySetRequestTypeName = "loams.live.v1.ModifyQuerySetRequest"
+
+/// The proto type name of `loams.live.v1.LiveService/Authenticate`'s request.
+public let authenticateRequestTypeName = "loams.live.v1.AuthenticateRequest"

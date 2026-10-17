@@ -9,6 +9,10 @@
 // the `loams-live-app` header on the request and no argument puts none; the
 // mutations are never retried and the reads are; `ListApps` pages on `apps` and
 // `next_page_token`; and the `live_app_*` reasons are in the registry.
+//
+// It also covers `LiveService/Authenticate` (LV1 Task 17): the call is in the
+// catalogue, never retried, sends the session and the client's bearer, and
+// surfaces the identity version (extended: unchanged; changed: bumped).
 
 #include "support.hpp"
 
@@ -168,6 +172,58 @@ int main() {
     LOAMS_CHECK(ReasonFromString("live_app_disabled") == Reason::kLiveAppDisabled, "live_app_disabled");
     LOAMS_CHECK(ReasonFromString("live_app_exists") == Reason::kLiveAppExists, "live_app_exists");
     LOAMS_CHECK(ReasonFromString("live_app_mismatch") == Reason::kLiveAppMismatch, "live_app_mismatch");
+  }
+
+  // --- Authenticate: the session, the bearer, and both outcomes --------------------------
+  {
+    const std::string rpc = "loams.live.v1.LiveService/Authenticate";
+    LOAMS_CHECK(BindingFor(rpc).retry_class == RetryClass::kManual, "Authenticate is never retried");
+    LOAMS_CHECK(BindingFor(rpc).idempotency_field.empty(), "Authenticate takes no idempotency key");
+
+    // 4 is the version the session holds: the same caller answers 4 again (the expiry
+    // moved), another caller answers 5 (the identity changed).
+    ScriptedTransport transport;
+    transport.AddAnswer(Ok(R"({"identity":"4"})"));
+    transport.AddAnswer(Ok(R"({"identity":"5"})"));
+    Options options = JsonOptions(&transport);
+    options.token_source = StaticToken("tok-bob");
+    std::shared_ptr<Loams> loams = MakeLoams(options);
+
+    live::v1::AuthenticateRequest request;
+    request.set_session_id("s1");
+    live::v1::AuthenticateResponse extended;
+    live::v1::AuthenticateResponse changed;
+    loams->Live()->Authenticate(&request, &extended);
+    loams->Live()->Authenticate(&request, &changed);
+    LOAMS_CHECK_EQ(extended.identity(), std::uint64_t{4}, "the same caller leaves the version unchanged");
+    LOAMS_CHECK_EQ(changed.identity(), std::uint64_t{5}, "another caller bumps it");
+
+    const std::vector<HttpRequest> requests = transport.Requests();
+    LOAMS_REQUIRE(requests.size() == 2, "two calls, two requests");
+    for (const HttpRequest& sent : requests) {
+      LOAMS_CHECK(sent.url.find("/loams.live.v1.LiveService/Authenticate") != std::string::npos,
+                  "Authenticate should reach LiveService, went to " + sent.url);
+      LOAMS_CHECK_EQ(HeaderOf(sent, "authorization"), std::string("Bearer tok-bob"), "the client's bearer");
+      LOAMS_CHECK(sent.body.find("s1") != std::string::npos, "the session id is in the body");
+    }
+
+    ScriptedTransport down_transport;
+    ScriptedTransport::Answer down;
+    down.status = 503;
+    down.content_type = "application/json";
+    down.body = R"({"code":"unavailable","message":"the node is restarting"})";
+    down_transport.AddAnswer(down);
+    std::shared_ptr<Loams> failing = MakeLoams(JsonOptions(&down_transport));
+    LOAMS_CHECK_THROWS(failing->Live()->Authenticate(&request, &extended), UnavailableError,
+                       "an unavailable authenticate");
+    LOAMS_CHECK_EQ(down_transport.Requests().size(), std::size_t{1}, "Authenticate is sent once");
+  }
+
+  // --- the session's closing reasons ------------------------------------------------------
+  {
+    LOAMS_CHECK(ReasonFromString("session_rotate") == Reason::kSessionRotate, "session_rotate");
+    LOAMS_CHECK(ReasonFromString("token_expired") == Reason::kTokenExpired, "token_expired");
+    LOAMS_CHECK(ReasonFromString("token_revoked") == Reason::kTokenRevoked, "token_revoked");
   }
 
   return Finish("cpp_live_admin");

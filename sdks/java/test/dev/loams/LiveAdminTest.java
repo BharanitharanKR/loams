@@ -10,6 +10,9 @@ import dev.loams.facade.CallBinding;
 import dev.loams.facade.Facade;
 import dev.loams.facade.ModuleBinding;
 import dev.loams.facade.RetryClass;
+import dev.loams.facade.Streaming;
+import dev.loams.gen.loams.live.v1.AuthenticateRequest;
+import dev.loams.gen.loams.live.v1.AuthenticateResponse;
 import dev.loams.gen.loams.live.v1.CreateAppRequest;
 import dev.loams.gen.loams.live.v1.DeleteAppRequest;
 import dev.loams.gen.loams.live.v1.GetAppRequest;
@@ -99,6 +102,85 @@ public class LiveAdminTest {
     @Test
     public void theLiveAppReasonsAreInTheRegistry() {
         for (String reason : List.of("live_app_disabled", "live_app_exists", "live_app_mismatch")) {
+            assertNotNull(reason, dev.loams.facade.Reason.fromWire(reason));
+        }
+    }
+
+    @Test
+    public void authenticateIsInTheCatalogueUnaryAndNeverRetried() {
+        CallBinding call = Facade.binding("live", "Authenticate").orElseThrow();
+        assertEquals("loams.live.v1.LiveService/Authenticate", call.rpc());
+        assertEquals(RetryClass.MANUAL, call.retry());
+        assertEquals(Streaming.UNARY, call.streaming());
+        assertTrue(!call.takesIdempotencyKey());
+    }
+
+    @Test
+    public void authenticateSendsTheSessionAndBearerAndSurfacesBothOutcomes() throws IOException {
+        List<String> paths = new CopyOnWriteArrayList<>();
+        List<String> bearers = new CopyOnWriteArrayList<>();
+        List<String> sessions = new CopyOnWriteArrayList<>();
+        // 4 is the version the session holds: the same caller answers 4 again (the expiry
+        // moved), another caller answers 5 (the identity changed).
+        List<Long> answers = new CopyOnWriteArrayList<>(List.of(4L, 5L));
+        HttpServer server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
+        server.createContext(
+                "/",
+                exchange -> {
+                    byte[] in = exchange.getRequestBody().readAllBytes();
+                    paths.add(exchange.getRequestURI().getPath());
+                    bearers.add(exchange.getRequestHeaders().getFirst("Authorization"));
+                    String type = exchange.getRequestHeaders().getFirst("content-type");
+                    AuthenticateRequest.Builder request = AuthenticateRequest.newBuilder();
+                    if ("application/json".equals(type)) {
+                        com.google.protobuf.util.JsonFormat.parser().merge(new String(in), request);
+                    } else {
+                        request.mergeFrom(in);
+                    }
+                    sessions.add(request.getSessionId());
+                    AuthenticateResponse out =
+                            AuthenticateResponse.newBuilder().setIdentity(answers.remove(0)).build();
+                    byte[] body =
+                            "application/json".equals(type)
+                                    ? com.google.protobuf.util.JsonFormat.printer().print(out).getBytes()
+                                    : out.toByteArray();
+                    exchange.getResponseHeaders().set("content-type", type);
+                    exchange.sendResponseHeaders(200, body.length == 0 ? -1 : body.length);
+                    if (body.length > 0) {
+                        exchange.getResponseBody().write(body);
+                    }
+                    exchange.close();
+                });
+        server.start();
+        AuthenticateResponse extended;
+        AuthenticateResponse changed;
+        try {
+            Client client =
+                    Client.of(
+                            Options.builder()
+                                    .endpoint("http://127.0.0.1:" + server.getAddress().getPort())
+                                    .auth(TokenSources.staticToken("tok-bob"))
+                                    .build());
+            AuthenticateRequest request = AuthenticateRequest.newBuilder().setSessionId("s1").build();
+            extended = client.live().authenticate(request);
+            changed = client.live().authenticate(request);
+        } finally {
+            server.stop(0);
+        }
+        assertEquals(4L, extended.getIdentity());
+        assertEquals(5L, changed.getIdentity());
+        assertEquals(
+                List.of(
+                        "/loams.live.v1.LiveService/Authenticate",
+                        "/loams.live.v1.LiveService/Authenticate"),
+                paths);
+        assertEquals(List.of("Bearer tok-bob", "Bearer tok-bob"), bearers);
+        assertEquals(List.of("s1", "s1"), sessions);
+    }
+
+    @Test
+    public void theSessionReasonsAreInTheRegistry() {
+        for (String reason : List.of("session_rotate", "token_expired", "token_revoked")) {
             assertNotNull(reason, dev.loams.facade.Reason.fromWire(reason));
         }
     }

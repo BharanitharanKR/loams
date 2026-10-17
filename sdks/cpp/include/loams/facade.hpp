@@ -114,6 +114,17 @@ class LiveModule {
   /// standard variant arrives inside the envelope, after HTTP 200.
   MessageStream Watch(live_v1::WatchRequest* request);
 
+  /// `LiveService/Authenticate` (LV1 Task 17). Replaces an open session's identity
+  /// with this call's credential: `request->session_id()` names the session and the
+  /// credential is the client's own `Options::token_source`, so to re-authenticate as
+  /// another caller use a client built with that caller's source. `response->identity()`
+  /// is the session's identity version after the call: the same caller only extends the
+  /// session and leaves it unchanged, and a different caller (a sign-in or a sign-out)
+  /// bumps it, after which the next transition reruns every query as the new caller.
+  /// Compare it with the version you hold. An unknown session throws a `NotFoundError`.
+  /// Never retried: the request has no idempotency key.
+  void Authenticate(live_v1::AuthenticateRequest* request, live_v1::AuthenticateResponse* response);
+
   /// `LiveService/Query` in a chosen encoding, for the conformance suite.
   void QueryWith(live_v1::QueryRequest* request, live_v1::QueryResponse* response,
                  ContentType content_type);
