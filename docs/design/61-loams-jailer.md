@@ -262,7 +262,7 @@ The overseer gets a **reasoning-blind, paraphrased view**: the user's intent, th
 | D1099 | A circuit breaker (3 consecutive or 20 total denials → pause and ask a person) and hard budget stops. D-SF-14's kill switch by run, agent or org applies to Studio threads |
 | D1100 | The overseer's view is reasoning-blind and paraphrased. Stage 1 is SystemOne; stage 2 goes through the `llm` gateway, using a model from a different family than the harness where one is available. It ships in shadow mode |
 | D1101 | Sensor order: proxy and cgroup events, then Landlock audit, then gVisor seccheck (class C), then vsock to the guest agent (microVM), then an **optional privileged eBPF sensor (Aya), on servers only**. No VM introspection. seccomp user notify is never the boundary |
-| D1102 | eBPF kernel programs live in a separate crate licensed `GPL-2.0-only OR MIT`; userspace stays Apache-2.0. Confirm `cargo deny` accepts the OR expression. GPL or LGPL VM-introspection libraries are never linked. Tetragon, if used, runs as a separate unmodified process |
+| D1102 | **Approved by the owner, 2026-10-17.** eBPF kernel programs live in a separate crate licensed `GPL-2.0-only OR MIT`; userspace stays Apache-2.0. Confirm `cargo deny` accepts the OR expression. GPL or LGPL VM-introspection libraries are never linked. Tetragon, if used, runs as a separate unmodified process |
 | D1103 | Rollback is one operation, `Jailer::rollback(run)`: discard `agent/<session>` across Git, Postgres and collections, and restore the checkpoint or snapshot. Recorded as left behind |
 | D1104 | Verdict CloudEvents and a hash-chained log (§4.8) |
 | D1105 | Plan **JL1**, after SB1d and alongside Part 2: JL1a, the deterministic jailer in agentd; JL1b, the overseer in shadow mode; JL1c, gateway enforcement points (with §57's LLM and MCP plans); JL1d, gVisor and microVM sensors (with SB1e and SB1f); JL1e, eBPF |
@@ -272,8 +272,8 @@ The overseer gets a **reasoning-blind, paraphrased view**: the user's intent, th
 | ID | Question | Default |
 |---|---|---|
 | Q942 | The name collides with Firecracker's `jailer` (also used by SB1 Task 16) | Keep "Loams Jailer" for the product and crate; always write "Firecracker's jailer" in full |
-| Q943 | Harness credentials inside the sandbox: keep accepting this, or add TLS termination that injects credentials for the model-provider hosts only? | Accept it in SB1. JL1c routes API-key harnesses through the `llm` gateway with scoped Loams tokens. Provider-only TLS termination later, opt-in (D998 currently says no TLS interception) |
-| Q944 | May the overseer auto-allow without a person? | Yes, only for "ask" calls inside the effective capability, and only after the shadow-mode gate |
+| Q943 | ~~Harness credentials inside the sandbox: keep accepting this, or add TLS termination that injects credentials for the model-provider hosts only?~~ **Answered 2026-10-17 by the owner: the default.** | Accept it in SB1. JL1c routes API-key harnesses through the `llm` gateway with scoped Loams tokens. Provider-only TLS termination later, opt-in (D998 currently says no TLS interception) (**owner: the default, 2026-10-17**) |
+| Q944 | ~~May the overseer auto-allow without a person?~~ **Answered 2026-10-17 by the owner: the default.** | Yes, only for "ask" calls inside the effective capability, and only after the shadow-mode gate (**owner: the default, 2026-10-17**) |
 | Q945 | Overseer model: local only, or cloud? | SystemOne locally; a cloud stage 2 only with the instance's consent (D525: local only by default) |
 | Q946 | Is the eBPF sensor open core or private? | Open, optional, off by default (enforcement is open, D995) |
 | Q947 | Can Loams become the harness's own reviewer (Codex `approvals_reviewer`, Claude hooks)? | Use agentd's existing `can_use_tool` and approval streams; check whether Codex accepts an external reviewer (unverified) |
