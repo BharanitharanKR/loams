@@ -108,7 +108,7 @@ pins and its expected downtime (`scripts/release/upgrade-notes.sh`).
 
 ## Rules worth knowing
 
-- **One step at a time.** Each preview upgrades from the one before it only. From v0.1.0 on, a patch release
+- **One step at a time.** Each release upgrades from the one before it only. From v0.1.0 on, a patch release
   upgrades from any earlier patch of its minor line. `migrate` refuses any other source
   (`upgrade_step_not_adjacent`).
 - **Never by hand across preview.2 → 0.1.0.** `docker compose up` with the new bundle would recreate the

@@ -21,6 +21,14 @@ sdks/typescript/
 generated package — as a workspace dependency and share one lockfile. The
 generator inputs stay outside the workspace, next to `proto/`.
 
+## Install
+
+```sh
+npm i @loams/client        # and @loams/live for Live's stubs
+```
+
+`0.1.0` tracks Loams 0.1.0; in 0.x the API may change between minor versions. <!-- verify after publish -->
+
 ## Using it
 
 ```ts

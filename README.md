@@ -6,9 +6,9 @@
 
 Loams is an open-source, AI-native data platform in Rust. It keeps your data in *your* object-storage bucket (S3, GCS, Azure Blob, RustFS or a local directory) in open formats: Lance and Tantivy today, Iceberg next. Compute is stateless and holds only caches.
 
-> **Preview (v0.1.0-preview.2).** You run the stack yourself with Docker Compose, locally or on your own VMs, over your own Tailscale tailnet, and use the hosted console at [console.loams.dev](https://console.loams.dev). Not production ready: APIs, formats and flags can change between previews.
+> **0.1.0 — first release.** You run the stack yourself with Docker Compose, locally or on your own VMs, over your own Tailscale tailnet, and use the hosted console at [console.loams.dev](https://console.loams.dev). 0.x: APIs and on-disk formats may change between minor versions; upgrades are supported with `loams upgrade`.
 
-[Run the preview](docs/release/preview.md) · [Documentation](docs/README.md) · [Website](https://loams.dev) · [API reference](https://loams.dev/api-docs) · [Contributing](CONTRIBUTING.md)
+[Run Loams](docs/release/preview.md) · [Documentation](docs/README.md) · [Website](https://loams.dev) · [API reference](https://loams.dev/api-docs) · [Contributing](CONTRIBUTING.md)
 
 ## Why Loams
 
@@ -23,24 +23,25 @@ A typical AI application runs Elasticsearch, Qdrant, a graph database, Kafka and
 Read the [pitch](docs/design/00-pitch.md) and the [architecture](docs/design/01-architecture.md).
 
 <p align="center">
-  <img src="docs/assets/architecture.svg" alt="Loams architecture: clients reach a stateless gateway and router; behind it the retrieval engine, Live, Durable, the runtime and jobs, and Postgres; TiKV holds metadata and transactions; object storage holds all data in open formats." width="100%">
+  <img src="docs/assets/architecture.svg" alt="Loams architecture: clients reach the retrieval engine, Live, Durable and Postgres; a stateless gateway and router tier (planned) and the runtime and jobs (planned) are shown dashed; TiKV holds metadata and transactions; object storage holds all data in open formats." width="100%">
 </p>
 
-## What ships in the preview
+## What ships in 0.1.0
 
 | | |
 |---|---|
 | **Retrieval engine** | Collections, hybrid search, SQL, streams and links; native REST, Arrow Flight SQL, Qdrant and Elasticsearch APIs; Postgres and MySQL wire |
 | **Loams Live** | A reactive document database: transactions, indexes and live queries |
 | **Loams Graph** | GQL graphs, with writes on the Loams log and crash recovery |
-| **Loams House** | ClickHouse-compatible analytics with engine-level access control (opt-in profile) |
+| **Loams House** | Experimental. ClickHouse-compatible analytics with engine-level access control (opt-in profile) |
 | **Loams SQL / Postgres** | MySQL on a patched TiDB; Postgres on our Neon fork, storage on the bucket |
 | **Loams Durable** | Durable promises and tasks for agent runs (an embedded Resonate server) |
 | **Console, desktop, CLI** | Hosted web console; Loams Desktop and the `loams` CLI for Linux, macOS and Windows |
-| **Loams Studio** | An agentic development environment in the console's Studio mode: coding agents (Claude Code, Codex, opencode and others) in threads with a git worktree each, diff review, git actions, terminals, previews and parallel runs, all through the `loams-agentd` daemon. On by default in Loams Desktop; in the browser it runs against a remote `loams-agentd` and is behind a feature flag ([guides](docs/guides/studio/index.md)) |
-| **SDKs** | TypeScript, Python, Go, Rust, C#, C++ and Swift (more languages coming) |
+| **Loams Studio** | Experimental. An agentic development environment in the console's Studio mode: coding agents (Claude Code, Codex, opencode and others) in threads with a git worktree each, diff review, git actions, terminals, previews and parallel runs, all through the `loams-agentd` daemon. On by default in Loams Desktop; in the browser it runs against a remote `loams-agentd` and is behind a feature flag ([guides](docs/guides/studio/index.md)) |
+| **Loams Git** | Experimental. `git-remote-loams`, git's remote helper, ships with the `loams` CLI packages: `git clone`, `fetch` and `push` reach a Loams Git repository on a bucket, with no server in between |
+| **SDKs** | TypeScript, Python, Go, Rust, C#, C++ and Swift (more languages coming). Published to npm, PyPI, crates.io, NuGet and the Go proxy as `0.1.0`; Swift from the release tag, C++ as a release tarball <!-- verify after publish --> |
 
-**Coming next:** Loams Git (Git on the bucket), first-party connectors, graph expansion for GraphRAG, Iceberg analytics, Kafka wire, functions and jobs. The full status table is in [Running the preview](docs/release/preview.md); the plan is in the [roadmap](docs/design/12-roadmap-testing-risks.md).
+**Coming next:** Loams Git on the server (repositories in the release images), first-party connectors, graph expansion for GraphRAG, Iceberg analytics, Kafka wire, functions and jobs. The full status table is in [Running Loams](docs/release/preview.md); the plan is in the [roadmap](docs/design/12-roadmap-testing-risks.md).
 
 ## Quick start
 
@@ -53,7 +54,7 @@ cp .env.example .env        # set TS_AUTHKEY
 docker compose up -d
 ```
 
-Then open [console.loams.dev](https://console.loams.dev) on a device on the same tailnet and enter `https://loams.<your-tailnet>.ts.net`. Details, BYOC over SSH and auth modes: [Running the preview](docs/release/preview.md).
+Then open [console.loams.dev](https://console.loams.dev) on a device on the same tailnet and enter `https://loams.<your-tailnet>.ts.net`. Details, BYOC over SSH and auth modes: [Running Loams](docs/release/preview.md).
 
 Or build just the engine and run it on one machine:
 

@@ -168,9 +168,7 @@ export function validateManifest(pkg: unknown): PluginManifest {
     (typeof requires.engine !== 'string' ||
       !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(requires.engine))
   ) {
-    throw new ManifestError(
-      `${name}: "requires.engine" must be an engine version (0.1.0-preview.3)`,
-    );
+    throw new ManifestError(`${name}: "requires.engine" must be an engine version (0.1.0)`);
   }
   const server = block.server ?? null;
   if (server !== null) {
