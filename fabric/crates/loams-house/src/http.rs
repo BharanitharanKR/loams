@@ -126,9 +126,29 @@ pub struct HouseHandle {
     pipes: Option<JoinHandle<()>>,
     queues: Option<JoinHandle<()>>,
     views: Option<JoinHandle<()>>,
+    storage: Option<JoinHandle<()>>,
+    /// The usage hub and its quotas (HS1 Task 22).
+    usage: Arc<crate::usage::Usage>,
+    lake: Option<Arc<Lake>>,
 }
 
 impl HouseHandle {
+    /// Its usage hub, whose quotas both surfaces admit statements under (HS1
+    /// Task 22).
+    pub fn usage(&self) -> &Arc<crate::usage::Usage> {
+        &self.usage
+    }
+
+    /// Runs one storage round now, as of `at` (HS1 Task 22): one
+    /// `house.storage` per lake table, each namespace's total to its quota.
+    pub async fn storage_round(&self, at: std::time::SystemTime) {
+        if let Some(lake) = &self.lake {
+            crate::usage::StorageReporter::new(Arc::clone(lake), Arc::clone(&self.usage))
+                .round(at)
+                .await;
+        }
+    }
+
     /// The address it listens on (the port chosen, for `:0`).
     pub fn local_addr(&self) -> SocketAddr {
         self.addr
@@ -171,6 +191,9 @@ impl HouseHandle {
         }
         if let Some(compaction) = &self.compaction {
             compaction.abort();
+        }
+        if let Some(storage) = &self.storage {
+            storage.abort();
         }
     }
 }
@@ -306,7 +329,15 @@ async fn serve_all(
             sessions.sweep();
         }
     });
-    let admission = crate::admission::Admission::new(config.admission.clone());
+    // Quotas and usage (HS1 Task 22): one set of counters for both surfaces,
+    // fed by every lease's, insert's and storage round's events.
+    let quotas = crate::quota::Quotas::new(Arc::clone(&config.quotas));
+    let usage = crate::usage::Usage::new(Arc::clone(&config.usage), Arc::clone(&quotas));
+    pool.set_usage(Arc::clone(&usage));
+    if let Some(lake) = &lake {
+        lake.set_quotas(Arc::clone(&quotas));
+    }
+    let admission = crate::admission::Admission::with_quotas(config.admission.clone(), quotas);
     let processes = Arc::new(crate::watchdog::Processes::default());
     let api = ApiService(ConnectRpcService::new(
         HouseApi::new(
@@ -414,6 +445,14 @@ async fn serve_all(
         ),
         _ => None,
     };
+    // Each lake table's bytes, daily (HS1 Task 22).
+    let storage = match (&shared.lake, shared.config.storage_usage_interval) {
+        (Some(lake), every) if !every.is_zero() => Some(
+            crate::usage::StorageReporter::new(Arc::clone(lake), Arc::clone(&usage)).spawn(every),
+        ),
+        _ => None,
+    };
+    let handle_lake = shared.lake.clone();
     let accept = tokio::spawn(async move {
         loop {
             let Ok(permit) = Arc::clone(&permits).acquire_owned().await else {
@@ -479,6 +518,9 @@ async fn serve_all(
         pipes,
         queues,
         views,
+        storage,
+        usage,
+        lake: handle_lake,
     })
 }
 
@@ -1451,7 +1493,11 @@ async fn run(
             .unwrap_or_default();
         all.extend(settings.iter().cloned());
         let memory = crate::limits::statement_memory(&all, &config.session_limits);
-        match shared.admission.admit(&namespace, memory).await {
+        let access = match &classified {
+            Classified::Known { stmt, .. } => crate::quota::Access::of(stmt),
+            Classified::Unparsed { .. } => crate::quota::Access::Read,
+        };
+        match shared.admission.admit(&namespace, memory, access).await {
             Ok(ticket) => meta.held.ticket = Some(ticket),
             Err(err) => {
                 let close = !body.drain().await;

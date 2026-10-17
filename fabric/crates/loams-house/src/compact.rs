@@ -130,7 +130,8 @@ pub async fn compact(
         settings: &pinned,
         ..*ctx
     };
-    let lease = ctx.pool.acquire(&namespace.to_string()).await?;
+    let mut lease = ctx.pool.acquire(&namespace.to_string()).await?;
+    lease.account_as(compaction_of(database, name));
     let written = crate::insert::write_files(&pinned_ctx, lease, &target).await?;
 
     // The `replace`, on the snapshot that was read.
@@ -172,6 +173,15 @@ pub async fn compact(
         Ok(_) => Ok(Compacted::Committed(built.snapshot_id)),
         Err(CatalogError::Conflict { .. }) => Ok(Compacted::Abandoned),
         Err(err) => Err(err.into()),
+    }
+}
+
+/// A compaction's leases are `house.compaction`, not `house.query` (HS1 Task
+/// 22), whether the scheduler or an `OPTIMIZE` asked for it.
+fn compaction_of(database: &str, name: &str) -> crate::usage::Purpose {
+    crate::usage::Purpose::Compaction {
+        database: database.to_string(),
+        table: name.to_string(),
     }
 }
 
@@ -283,6 +293,7 @@ async fn count_final(
         quote_name(name)
     );
     let mut lease = ctx.pool.acquire(&ctx.user.namespace.to_string()).await?;
+    lease.account_as(compaction_of(database, name));
     let result = async {
         let analysis = lease
             .analyze(&sql, &[])

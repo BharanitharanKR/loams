@@ -127,6 +127,14 @@ pub struct HouseConfig {
     /// How often materialized views over lake tables catch up on commits no
     /// `INSERT` ran them for (HS1 Task 17): 5 s; zero turns it off.
     pub view_interval: Duration,
+    /// Where each namespace's quotas come from (HS1 Task 22): `[house.quotas]`
+    /// by default; none set, none limit.
+    pub quotas: std::sync::Arc<dyn crate::quota::QuotaSource>,
+    /// Where usage events go (HS1 Task 22, §27); nowhere by default.
+    pub usage: std::sync::Arc<dyn crate::usage::UsageObserver>,
+    /// How often every lake table's bytes are measured (`house.storage`, HS1
+    /// Task 22): daily; zero turns it off.
+    pub storage_usage_interval: Duration,
 }
 
 /// The House's link to the engine's stream API (HS1 Task 16, `[house.engine]`).
@@ -189,6 +197,9 @@ impl Default for HouseConfig {
             engine: None,
             pipe_interval: Duration::from_secs(1),
             view_interval: Duration::from_secs(5),
+            quotas: std::sync::Arc::new(crate::quota::ConfigQuotas::default()),
+            usage: std::sync::Arc::new(crate::usage::NoUsageObserver),
+            storage_usage_interval: crate::usage::DEFAULT_STORAGE_INTERVAL,
             default_buffer_size: 1024 * 1024,
             max_query_size: 256 * 1024,
             receive_timeout: Duration::from_secs(30),
@@ -475,6 +486,10 @@ pub struct HouseSection {
     /// `[house.engine]`: the engine whose streams pipes read (HS1 Task 16).
     #[serde(default)]
     pub engine: EngineSection,
+    /// `[house.quotas]`: every namespace's quotas, and per-namespace ones
+    /// (HS1 Task 22).
+    #[serde(default)]
+    pub quotas: crate::quota::QuotasSection,
 }
 
 /// `[house.engine]` (HS1 Task 16).
@@ -842,6 +857,11 @@ impl HouseFile {
                 crate::identity::Grants::parse(tables).map_err(bad)?;
             }
         }
+        file.house.quotas.to_quotas().map_err(|why| {
+            HouseError::from(ChError::bad_arguments(format!(
+                "the house configuration file: {why}"
+            )))
+        })?;
         for principal in &file.house.principals {
             principal.to_map().map_err(|why| {
                 HouseError::from(ChError::bad_arguments(format!(

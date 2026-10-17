@@ -102,6 +102,7 @@ pub mod limits;
 pub mod metrics;
 pub mod mv;
 pub mod pipes;
+pub mod quota;
 pub mod read;
 pub mod request;
 pub mod retention;
@@ -111,6 +112,7 @@ pub mod settings;
 pub mod system;
 pub mod tls;
 pub mod types;
+pub mod usage;
 pub mod views;
 pub mod watchdog;
 

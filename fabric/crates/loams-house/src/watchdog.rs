@@ -157,6 +157,12 @@ pub trait WorkerControl: Send + Sync + fmt::Debug {
     fn oom_killed(&self) -> bool {
         false
     }
+    /// The CPU time the worker has used so far, read from outside it (HS1
+    /// Task 22): its cgroup's `cpu.stat`, else `/proc/<pid>/stat`. `None` when
+    /// it cannot be measured (an in-process worker, or one already reaped).
+    fn cpu_time(&self) -> Option<Duration> {
+        None
+    }
 }
 
 /// Starts workers. One per pool.
@@ -235,6 +241,11 @@ impl WorkerShared {
     /// The worker's pid.
     pub fn pid(&self) -> u32 {
         self.control.pid()
+    }
+
+    /// The CPU time it has used so far ([`WorkerControl::cpu_time`]).
+    pub fn cpu_time(&self) -> Option<Duration> {
+        self.control.cpu_time()
     }
 
     /// The reason recorded for its death, if anyone recorded one.
@@ -956,6 +967,32 @@ pub fn oom_killed_in(cgroup: &Path) -> bool {
     })
 }
 
+/// `usage_usec` of a cgroup's `cpu.stat`: every process in it, every thread.
+pub fn cgroup_cpu(cgroup: &Path) -> Option<Duration> {
+    let stat = std::fs::read_to_string(cgroup.join("cpu.stat")).ok()?;
+    stat.lines()
+        .find_map(|line| line.strip_prefix("usage_usec "))
+        .and_then(|n| n.trim().parse::<u64>().ok())
+        .map(Duration::from_micros)
+}
+
+/// The kernel's `USER_HZ`, the unit of `/proc/<pid>/stat`'s CPU fields: 100 on
+/// every Linux ABI the House runs on.
+const USER_HZ: u64 = 100;
+
+/// `utime + stime` of `/proc/<pid>/stat` (fields 14 and 15, all threads),
+/// from the text after the command name, which may hold spaces and parentheses.
+pub fn proc_stat_cpu(stat: &str) -> Option<Duration> {
+    let (_, rest) = stat.rsplit_once(')')?;
+    let fields: Vec<&str> = rest.split_whitespace().collect();
+    // `rest` starts at field 3 (the state).
+    let utime: u64 = fields.get(11)?.parse().ok()?;
+    let stime: u64 = fields.get(12)?.parse().ok()?;
+    Some(Duration::from_millis(
+        utime.saturating_add(stime).saturating_mul(1000 / USER_HZ),
+    ))
+}
+
 impl ProcessControl {
     fn start(pid: Pid, dir: PathBuf, cgroup: Option<PathBuf>) -> Arc<Self> {
         let (exit, _) = watch::channel(None);
@@ -1046,6 +1083,21 @@ impl WorkerControl for ProcessControl {
         // the waiter's reading again, made before it removed the child.
         let seen = || self.oom.load(std::sync::atomic::Ordering::Acquire);
         seen() || self.cgroup.as_deref().is_some_and(oom_killed_in) || seen()
+    }
+
+    fn cpu_time(&self) -> Option<Duration> {
+        // Under the exit lock: a pid the waiter has seen exit may be reaped and
+        // recycled, and its numbers would be another process's.
+        let exited = self.exited();
+        if *exited {
+            return None;
+        }
+        self.cgroup.as_deref().and_then(cgroup_cpu).or_else(|| {
+            std::fs::read_to_string(format!("/proc/{}/stat", self.pid.as_raw()))
+                .ok()
+                .as_deref()
+                .and_then(proc_stat_cpu)
+        })
     }
 }
 

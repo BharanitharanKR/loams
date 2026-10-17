@@ -190,6 +190,9 @@ pub struct Lake {
     pipe_states: Arc<crate::pipes::PipeStates>,
     /// Pipes and materialized views per namespace (§49 §12, HS1 Task 21).
     object_caps: ObjectCaps,
+    /// The front's quotas (HS1 Task 22): the `pipes` quota, checked where
+    /// pipes are made. Set once, when the front starts serving.
+    quotas: std::sync::OnceLock<Arc<crate::quota::Quotas>>,
 }
 
 /// How many pipes and materialized views a namespace may hold (§49 §12: 32 and
@@ -247,7 +250,19 @@ impl Lake {
             committer: std::sync::OnceLock::new(),
             pipe_states: Arc::default(),
             object_caps: ObjectCaps::default(),
+            quotas: std::sync::OnceLock::new(),
         }
+    }
+
+    /// Holds the namespaces' pipes to `quotas` (HS1 Task 22). The first call
+    /// wins: one lake is served by one front.
+    pub fn set_quotas(&self, quotas: Arc<crate::quota::Quotas>) {
+        let _ = self.quotas.set(quotas);
+    }
+
+    /// The quotas its pipes are held to, once a front set them.
+    pub fn quotas(&self) -> Option<&Arc<crate::quota::Quotas>> {
+        self.quotas.get()
     }
 
     /// This front's state of the pipes' views (HS1 Task 16).

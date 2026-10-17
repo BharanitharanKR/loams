@@ -38,6 +38,8 @@
 //! | Connections, head, timeouts | 1 024; 128 KiB; `receive_timeout`, `send_timeout`, `keep_alive` | [`crate::config::HouseConfig`] | `431`/closed |
 //!
 //! `[house.limits]` in the front's TOML sets any of them ([`crate::config::LimitsSection`]).
+//! The per-namespace quotas of §49 §15 (rates, daily volumes, storage) are
+//! [`crate::quota`]'s, from `[house.quotas]`.
 
 use std::time::Duration;
 
