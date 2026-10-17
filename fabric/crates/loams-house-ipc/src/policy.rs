@@ -32,6 +32,14 @@ pub const ALLOWED_SETTINGS: &[&str] = &[
     "extremes",
 ];
 
+/// §49 §12's `max_bytes_to_read` per query, 1 TiB: the front's cap (`164` past
+/// it) and the worker profile's value and maximum (HS1 Task 21).
+pub const MAX_BYTES_TO_READ: u64 = 1024 * 1024 * 1024 * 1024;
+
+/// §49 §12's `max_result_bytes` per query, 10 GiB, held as
+/// [`MAX_BYTES_TO_READ`] is.
+pub const MAX_RESULT_BYTES: u64 = 10 * 1024 * 1024 * 1024;
+
 /// Prefixes allowed whole (§32 §8.5): output and input format options, and the
 /// CSV and TSV options, less the deny list's settings. `format_schema*` and
 /// `format_template_*` name files and are not here.

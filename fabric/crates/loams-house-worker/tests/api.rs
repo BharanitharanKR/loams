@@ -33,7 +33,15 @@ use loams_house_proto::loams::house::v1::HouseServiceClient;
 fn users() -> Vec<UserMap> {
     vec![
         UserMap::dev("alice", "secret", 2, false),
-        UserMap::dev("bob", "builder", 2, false),
+        // Not namespace 2's admin: another user's query is not bob's to cancel
+        // (HS1 Task 21).
+        UserMap {
+            scopes: loams_house::identity::Scopes {
+                admin: false,
+                ..loams_house::identity::Scopes::ALL
+            },
+            ..UserMap::dev("bob", "builder", 2, false)
+        },
         UserMap::dev("reader", "books", 2, true),
     ]
 }

@@ -190,6 +190,10 @@ struct Shared {
     api: ApiService,
     /// The catalog of lake tables (HS1 Task 10), when the House has one.
     lake: Option<Arc<Lake>>,
+    /// Namespace queues and node memory (§49 §12, HS1 Task 21).
+    admission: Arc<crate::admission::Admission>,
+    /// Running statements, both surfaces: `KILL QUERY` (HS1 Task 21).
+    processes: Arc<crate::watchdog::Processes>,
 }
 
 /// connect-rust's service for `loams.house.v1`, which has no `Debug` of its own.
@@ -283,8 +287,10 @@ async fn serve_all(
     let permits = Arc::new(Semaphore::new(config.max_connections.max(1)));
     let tls_permits = Arc::clone(&permits);
     let unpin_pool = pool.clone();
-    let sessions = SessionTable::new(
+    let sessions = SessionTable::with_user_caps(
         config.max_live_sessions,
+        config.max_sessions_per_user,
+        config.max_pinned_workers_per_user,
         Arc::new(move |worker: &str| unpin_pool.unpin(worker)),
     );
     // Sessions idle past their timeout end on a timer too, releasing their pinned
@@ -300,8 +306,20 @@ async fn serve_all(
             sessions.sweep();
         }
     });
+    let admission = crate::admission::Admission::new(config.admission.clone());
+    let processes = Arc::new(crate::watchdog::Processes::default());
     let api = ApiService(ConnectRpcService::new(
-        HouseApi::new(config.clone(), pool.clone(), catalog, lake.clone()).router(),
+        HouseApi::new(
+            config.clone(),
+            pool.clone(),
+            catalog,
+            lake.clone(),
+            crate::api::Governance {
+                admission: Arc::clone(&admission),
+                processes: Arc::clone(&processes),
+            },
+        )
+        .router(),
     ));
     let shared = Arc::new(Shared {
         spool: Arc::new(SpoolBudget::new(config.spool_budget_bytes)),
@@ -310,6 +328,8 @@ async fn serve_all(
         sessions,
         api,
         lake,
+        admission,
+        processes,
     });
     let tls_shared = Arc::clone(&shared);
     // Background compaction of the lake's tables (HS1 Task 13).
@@ -363,6 +383,7 @@ async fn serve_all(
                 listener,
                 shared.pool.clone(),
                 shared.lake.clone(),
+                Arc::clone(&shared.admission),
             )),
             Some(bound),
         ),
@@ -842,7 +863,7 @@ impl RequestBody {
 }
 
 /// What every response of a statement carries.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 struct Meta {
     query_id: String,
     format: String,
@@ -860,6 +881,16 @@ struct Meta {
     /// The statement's audit record (HS1 Task 20), written once, when the
     /// response's head is built.
     audit: Option<Arc<Audit>>,
+    /// Its admission and its process-list entry (HS1 Task 21), held until the
+    /// response ends.
+    held: Held,
+}
+
+/// What a statement holds while it runs (HS1 Task 21).
+#[derive(Debug, Default)]
+struct Held {
+    ticket: Option<crate::admission::Ticket>,
+    process: Option<crate::watchdog::ProcessGuard>,
 }
 
 /// A statement's audit record on its way to the sink.
@@ -989,6 +1020,184 @@ fn empty_ok(meta: &Meta) -> Response<HouseBody> {
     .unwrap_or_else(|_| fallback())
 }
 
+/// How long `KILL QUERY … SYNC` waits for the statement to be gone.
+const KILL_SYNC_WAIT: Duration = Duration::from_secs(10);
+
+/// `KILL QUERY WHERE query_id = '…'` (§49 §12, HS1 Task 21): kills the
+/// statement's worker and answers at once with ClickHouse's columns
+/// (`kill_status`, `query_id`, `user`, `query`); `SYNC` waits for it to be gone.
+/// Only the caller's namespace is seen, and another user's statement needs
+/// `house:admin` (`497`). No match is an empty result, as in ClickHouse.
+async fn kill_query(
+    shared: &Arc<Shared>,
+    meta: &Meta,
+    user: &UserMap,
+    kill: &crate::classify::KillQuery,
+) -> Response<HouseBody> {
+    use crate::classify::KillMode;
+    use crate::watchdog::KillRefusal;
+    let Some(layout) = KillLayout::of(&meta.format) else {
+        let err = HouseError::from(ChError::not_implemented(format!(
+            "KILL QUERY answers in TabSeparated, TSV, CSV or JSONEachRow (with names and \
+             types where they have them), not {}",
+            meta.format
+        )));
+        return meta.error(&err, &Progress::default(), false);
+    };
+    let killed = shared
+        .processes
+        .kill(&kill.query_id, user, kill.mode == KillMode::Test);
+    let rows = match killed {
+        Ok(mut killed) => {
+            if kill.mode == KillMode::Test {
+                // ClickHouse's status for a row it did not try to kill.
+                killed.status = "unknown_status";
+            } else if kill.mode == KillMode::Sync && killed.status == "waiting" {
+                let gone = tokio::time::timeout(KILL_SYNC_WAIT, async {
+                    while shared.processes.is_running(&kill.query_id) {
+                        tokio::time::sleep(Duration::from_millis(10)).await;
+                    }
+                })
+                .await;
+                if gone.is_ok() {
+                    killed.status = "finished";
+                }
+            }
+            vec![killed]
+        }
+        Err(KillRefusal::NotFound) => Vec::new(),
+        Err(KillRefusal::Denied) => {
+            let err = HouseError::from(ChError::access_denied(format!(
+                "{}: Not enough privileges to kill query {}: it is another user's, which needs \
+                 house:admin",
+                user.user, kill.query_id
+            )));
+            return meta.error(&err, &Progress::default(), false);
+        }
+    };
+    let body = layout.render(&rows);
+    meta.head(
+        StatusCode::OK,
+        content_type(&meta.format),
+        None,
+        &Progress::default(),
+        false,
+    )
+    .body(HouseBody::full(meta.encode_whole(&body)))
+    .unwrap_or_else(|_| fallback())
+}
+
+/// The formats `KILL QUERY` answers in, rendered by the front (no worker is
+/// asked: a namespace at its limits must still be able to kill).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum KillLayout {
+    Tsv { names: bool, types: bool },
+    Csv { names: bool },
+    JsonEachRow,
+}
+
+impl KillLayout {
+    const COLUMNS: [&'static str; 4] = ["kill_status", "query_id", "user", "query"];
+
+    fn of(format: &str) -> Option<Self> {
+        Some(match format {
+            "TabSeparated" | "TSV" => Self::Tsv {
+                names: false,
+                types: false,
+            },
+            "TabSeparatedWithNames" | "TSVWithNames" => Self::Tsv {
+                names: true,
+                types: false,
+            },
+            "TabSeparatedWithNamesAndTypes" | "TSVWithNamesAndTypes" => Self::Tsv {
+                names: true,
+                types: true,
+            },
+            "CSV" => Self::Csv { names: false },
+            "CSVWithNames" => Self::Csv { names: true },
+            "JSONEachRow" => Self::JsonEachRow,
+            _ => return None,
+        })
+    }
+
+    fn render(self, rows: &[crate::watchdog::Killed]) -> Vec<u8> {
+        let cells = |k: &crate::watchdog::Killed| {
+            [
+                k.status.to_string(),
+                k.query_id.clone(),
+                k.user.clone(),
+                k.query.clone(),
+            ]
+        };
+        let mut out = String::new();
+        match self {
+            Self::Tsv { names, types } => {
+                let line = |out: &mut String, cells: &[String]| {
+                    let escaped: Vec<String> = cells.iter().map(|c| tsv_escape(c)).collect();
+                    out.push_str(&escaped.join("\t"));
+                    out.push('\n');
+                };
+                if names {
+                    line(&mut out, &Self::COLUMNS.map(str::to_string));
+                }
+                if types {
+                    line(&mut out, &["String"; 4].map(str::to_string));
+                }
+                for row in rows {
+                    line(&mut out, &cells(row));
+                }
+            }
+            Self::Csv { names } => {
+                let line = |out: &mut String, cells: &[String]| {
+                    let quoted: Vec<String> = cells
+                        .iter()
+                        .map(|c| format!("\"{}\"", c.replace('"', "\"\"")))
+                        .collect();
+                    out.push_str(&quoted.join(","));
+                    out.push('\n');
+                };
+                if names {
+                    line(&mut out, &Self::COLUMNS.map(str::to_string));
+                }
+                for row in rows {
+                    line(&mut out, &cells(row));
+                }
+            }
+            Self::JsonEachRow => {
+                for row in rows {
+                    let object: serde_json::Map<String, serde_json::Value> = Self::COLUMNS
+                        .iter()
+                        .zip(cells(row))
+                        .map(|(k, v)| ((*k).to_string(), serde_json::Value::String(v)))
+                        .collect();
+                    out.push_str(&serde_json::Value::Object(object).to_string());
+                    out.push('\n');
+                }
+            }
+        }
+        out.into_bytes()
+    }
+}
+
+/// A `String` as ClickHouse's `TabSeparated` writes it.
+fn tsv_escape(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            '\\' => out.push_str("\\\\"),
+            '\t' => out.push_str("\\t"),
+            '\n' => out.push_str("\\n"),
+            '\r' => out.push_str("\\r"),
+            '\0' => out.push_str("\\0"),
+            '\x08' => out.push_str("\\b"),
+            '\x0c' => out.push_str("\\f"),
+            '\'' => out.push_str("\\'"),
+            other => out.push(other),
+        }
+    }
+    out
+}
+
 fn fallback() -> Response<HouseBody> {
     let mut response = Response::new(HouseBody::full(Bytes::from_static(b"internal error\n")));
     *response.status_mut() = StatusCode::INTERNAL_SERVER_ERROR;
@@ -1043,6 +1252,7 @@ async fn handle(shared: Arc<Shared>, request: Request<Incoming>) -> Response<Hou
                 worker: None,
                 snapshot: None,
                 audit: None,
+                held: Held::default(),
             };
             return meta.error(&err, &Progress::default(), true);
         }
@@ -1114,6 +1324,7 @@ async fn run(
         worker: None,
         snapshot: None,
         audit: None,
+        held: Held::default(),
     };
     // Every statement's audit record (HS1 Task 20): the claimed user and
     // principal now, the signed-in identity once known.
@@ -1179,6 +1390,15 @@ async fn run(
     } = prepared;
     let namespace = user.namespace.to_string();
 
+    // `KILL QUERY` (HS1 Task 21): the front's process list, before any queue.
+    if let Classified::Known {
+        stmt: Stmt::KillQuery(kill),
+        ..
+    } = &classified
+    {
+        return kill_query(shared, &meta, &user, kill).await;
+    }
+
     // The host functions answer the House's values, and what runs is what the
     // worker explains ([`gate::statement_text`]).
     let sql = gate::statement_text(&sql, &user.user);
@@ -1207,6 +1427,38 @@ async fn run(
         }
     };
     meta.affinity = session.as_ref().map(SessionGuard::affinity_key);
+
+    // The process list and admission (§49 §12, HS1 Task 21), for everything but
+    // what the front answers from the session alone.
+    let front_only = matches!(
+        &classified,
+        Classified::Known {
+            stmt: Stmt::Set(_) | Stmt::Use(_),
+            ..
+        }
+    );
+    if !front_only {
+        match shared.processes.register(&meta.query_id, &user, &sql) {
+            Ok(guard) => meta.held.process = Some(guard),
+            Err(err) => {
+                let close = !body.drain().await;
+                return meta.error(&err, &Progress::default(), close);
+            }
+        }
+        let mut all: Vec<(String, String)> = session
+            .as_ref()
+            .map(|guard| guard.state().settings.pairs().to_vec())
+            .unwrap_or_default();
+        all.extend(settings.iter().cloned());
+        let memory = crate::limits::statement_memory(&all, &config.session_limits);
+        match shared.admission.admit(&namespace, memory).await {
+            Ok(ticket) => meta.held.ticket = Some(ticket),
+            Err(err) => {
+                let close = !body.drain().await;
+                return meta.error(&err, &Progress::default(), close);
+            }
+        }
+    }
 
     // The catalog's statements (HS1 Task 10): DDL and `USE` are answered here;
     // `DESCRIBE`, `SHOW CREATE` and `EXISTS` of a catalog table become a read of
@@ -1305,6 +1557,10 @@ async fn run(
                     params: query_params,
                     settings: all,
                 };
+                // The front carries a lake write to its commit (HS1 Task 12).
+                if let Some(process) = &meta.held.process {
+                    process.uncancellable();
+                }
                 let response = lake_insert(
                     shared,
                     &mut meta,
@@ -1487,6 +1743,10 @@ async fn run(
         pool.release(lease, Outcome::Completed);
         let close = !body.drain().await;
         return meta.error(&err, &Progress::default(), close);
+    }
+    // `KILL QUERY` reaches it from now (one that came first kills it now).
+    if let Some(process) = &meta.held.process {
+        process.started(lease.kill_handle());
     }
     if has_input
         && let Err(err) = stream_input(&mut lease, &mut body, &mut decoder, first_data, None).await
@@ -1807,6 +2067,7 @@ async fn lake_insert(
         known: &known,
         max_insert_bytes: shared.config.lake_insert_max_bytes,
         pipe_batch: None,
+        admitted: meta.held.ticket.as_ref(),
     };
     let mut feed = BodyFeed {
         body,
@@ -2268,6 +2529,36 @@ mod tests {
             "text/plain; charset=UTF-8",
             "review M7"
         );
+    }
+
+    #[test]
+    fn kill_rows_render_like_clickhouse() {
+        let row = crate::watchdog::Killed {
+            status: "waiting",
+            query_id: "q1".to_string(),
+            user: "alice".to_string(),
+            query: "SELECT 'a\tb'".to_string(),
+        };
+        let tsv = KillLayout::of("TSVWithNames")
+            .expect("tsv")
+            .render(std::slice::from_ref(&row));
+        assert_eq!(
+            String::from_utf8(tsv).expect("utf-8"),
+            "kill_status\tquery_id\tuser\tquery\nwaiting\tq1\talice\tSELECT \\'a\\tb\\'\n"
+        );
+        let csv = KillLayout::of("CSV")
+            .expect("csv")
+            .render(std::slice::from_ref(&row));
+        assert_eq!(
+            String::from_utf8(csv).expect("utf-8"),
+            "\"waiting\",\"q1\",\"alice\",\"SELECT 'a\tb'\"\n"
+        );
+        let json = KillLayout::of("JSONEachRow").expect("json").render(&[row]);
+        let value: serde_json::Value = serde_json::from_slice(&json).expect("json");
+        assert_eq!(value["kill_status"], "waiting");
+        assert_eq!(value["query"], "SELECT 'a\tb'");
+        assert!(KillLayout::of("Pretty").is_none());
+        assert!(KillLayout::of("TSV").expect("tsv").render(&[]).is_empty());
     }
 
     #[test]

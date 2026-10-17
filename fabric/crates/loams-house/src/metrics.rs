@@ -13,7 +13,10 @@
 //! * `loams_house_pipe_committed_records_total{ns,pipe}` and
 //!   `loams_house_pipe_committed_rows_total{ns,pipe}`: what this front
 //!   committed for each;
-//! * `loams_house_pipe_errors{ns,pipe}`: 1 while its last run failed.
+//! * `loams_house_pipe_errors{ns,pipe}`: 1 while its last run failed;
+//! * `loams_house_queue_depth`, `loams_house_admitted_queries` and
+//!   `loams_house_admitted_memory_bytes`: §49 §12's admission (HS1 Task 21);
+//!   the queue depth is what Task 24's autoscaler reads.
 //!
 //! The rest of §15's list (queries, bytes, commits, cache, compaction) comes
 //! with the rest of Task 23.
@@ -27,7 +30,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpListener, TcpStream};
 use tokio::task::JoinHandle;
 
-use crate::admission::WorkerPool;
+use crate::admission::{Admission, WorkerPool};
 use crate::catalog::Lake;
 use crate::watchdog::ExitReason;
 
@@ -56,8 +59,29 @@ fn family(out: &mut String, name: &str, kind: &str, help: &str) {
 }
 
 /// The metrics, in the text exposition format.
-pub fn render(pool: &WorkerPool, lake: Option<&Lake>) -> String {
+pub fn render(pool: &WorkerPool, lake: Option<&Lake>, admission: &Admission) -> String {
     let mut out = String::new();
+    let admitted = admission.stats();
+    for (name, help, value) in [
+        (
+            "loams_house_queue_depth",
+            "Statements waiting for admission (§49 §12), every namespace.",
+            admitted.queued as u64,
+        ),
+        (
+            "loams_house_admitted_queries",
+            "Statements admitted and running, every namespace.",
+            admitted.running as u64,
+        ),
+        (
+            "loams_house_admitted_memory_bytes",
+            "The admitted statements' max_memory_usage, summed.",
+            admitted.memory,
+        ),
+    ] {
+        family(&mut out, name, "gauge", help);
+        let _ = writeln!(out, "{name} {value}");
+    }
     let stats = pool.stats();
     family(
         &mut out,
@@ -139,7 +163,12 @@ pub fn render(pool: &WorkerPool, lake: Option<&Lake>) -> String {
 }
 
 /// Serves `GET /metrics` on `listener` until the returned task is aborted.
-pub fn serve(listener: TcpListener, pool: WorkerPool, lake: Option<Arc<Lake>>) -> JoinHandle<()> {
+pub fn serve(
+    listener: TcpListener,
+    pool: WorkerPool,
+    lake: Option<Arc<Lake>>,
+    admission: Arc<Admission>,
+) -> JoinHandle<()> {
     tokio::spawn(async move {
         loop {
             let Ok((stream, _)) = listener.accept().await else {
@@ -148,10 +177,11 @@ pub fn serve(listener: TcpListener, pool: WorkerPool, lake: Option<Arc<Lake>>) -
             };
             let pool = pool.clone();
             let lake = lake.clone();
+            let admission = Arc::clone(&admission);
             tokio::spawn(async move {
                 let _ = tokio::time::timeout(
                     Duration::from_secs(10),
-                    answer(stream, &pool, lake.as_deref()),
+                    answer(stream, &pool, lake.as_deref(), &admission),
                 )
                 .await;
             });
@@ -159,7 +189,12 @@ pub fn serve(listener: TcpListener, pool: WorkerPool, lake: Option<Arc<Lake>>) -
     })
 }
 
-async fn answer(mut stream: TcpStream, pool: &WorkerPool, lake: Option<&Lake>) -> io::Result<()> {
+async fn answer(
+    mut stream: TcpStream,
+    pool: &WorkerPool,
+    lake: Option<&Lake>,
+    admission: &Admission,
+) -> io::Result<()> {
     let mut head = Vec::with_capacity(512);
     let mut buf = [0u8; 1024];
     while !head.windows(4).any(|w| w == b"\r\n\r\n") {
@@ -185,7 +220,13 @@ async fn answer(mut stream: TcpStream, pool: &WorkerPool, lake: Option<&Lake>) -
     let path = path.split('?').next().unwrap_or("");
     match (method, path) {
         ("GET", "/metrics") => {
-            respond(&mut stream, "200 OK", CONTENT_TYPE, &render(pool, lake)).await
+            respond(
+                &mut stream,
+                "200 OK",
+                CONTENT_TYPE,
+                &render(pool, lake, admission),
+            )
+            .await
         }
         ("GET", _) => respond(&mut stream, "404 Not Found", "text/plain", "not found\n").await,
         _ => {

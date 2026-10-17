@@ -39,7 +39,8 @@ pub const LOAMS_SETTINGS: &[&str] = &[
     "loams_tiering_freshness",
 ];
 
-/// The caps (FL2 Ruling 10).
+/// The per-query caps a setting may not pass (FL2 Ruling 10, §49 §12; the
+/// defaults are [`crate::limits`]'s table).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SessionLimits {
     /// `max_memory_usage`, at most 4 GiB (0, unlimited, is over it).
@@ -48,14 +49,20 @@ pub struct SessionLimits {
     pub max_execution_time_s: f64,
     /// `max_threads`, at most the node's cores (0 means "auto", which is allowed).
     pub max_threads: u64,
+    /// `max_bytes_to_read`, at most 1 TiB (0, unlimited, is over it; HS1 Task 21).
+    pub max_bytes_to_read: u64,
+    /// `max_result_bytes`, at most 10 GiB (0, unlimited, is over it; HS1 Task 21).
+    pub max_result_bytes: u64,
 }
 
 impl Default for SessionLimits {
     fn default() -> Self {
         Self {
-            max_memory_usage: 4 * 1024 * 1024 * 1024,
-            max_execution_time_s: 300.0,
+            max_memory_usage: crate::limits::MAX_MEMORY_USAGE,
+            max_execution_time_s: crate::limits::MAX_EXECUTION_TIME_S,
             max_threads: std::thread::available_parallelism().map_or(1, |n| n.get() as u64),
+            max_bytes_to_read: crate::limits::MAX_BYTES_TO_READ,
+            max_result_bytes: crate::limits::MAX_RESULT_BYTES,
         }
     }
 }
@@ -138,14 +145,19 @@ pub fn check(
                 }
             }
         }
-        "max_memory_usage" => {
+        "max_memory_usage" | "max_bytes_to_read" | "max_result_bytes" => {
+            let cap = match name {
+                "max_memory_usage" => limits.max_memory_usage,
+                "max_bytes_to_read" => limits.max_bytes_to_read,
+                _ => limits.max_result_bytes,
+            };
             let n = parse_size(value)
                 .ok_or_else(|| unparseable("a byte count such as 1000000000, 4G or 4Gi"))?;
             if n == 0 {
                 return Err(under(name, 1));
             }
-            if n > limits.max_memory_usage {
-                return Err(over(name, limits.max_memory_usage));
+            if n > cap {
+                return Err(over(name, cap));
             }
         }
         "max_execution_time" => {
@@ -444,6 +456,17 @@ mod tests {
             ("4Ki", Some(36)),
         ] {
             assert_eq!(code("max_threads", value), expected, "{value:?}");
+        }
+        // HS1 Task 21: §49 §12's read and result caps, held like memory.
+        for (name, at_cap, over_cap) in [
+            ("max_bytes_to_read", "1Ti", "1099511627777"),
+            ("max_result_bytes", "10Gi", "10737418241"),
+        ] {
+            assert_eq!(code(name, at_cap), None, "{name} at its cap");
+            assert_eq!(code(name, "1000"), None, "{name} under its cap");
+            assert_eq!(code(name, over_cap), Some(164), "{name} over its cap");
+            assert_eq!(code(name, "0"), Some(164), "{name} unlimited");
+            assert_eq!(code(name, "lots"), Some(36), "{name} unparseable");
         }
     }
 

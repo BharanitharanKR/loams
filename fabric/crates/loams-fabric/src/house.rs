@@ -226,6 +226,8 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
     }
     let mut pool = PoolConfig::default();
     house.pool.apply(&mut pool);
+    // The watchdog's cap is the front's `max_execution_time` cap (HS1 Task 21).
+    pool.max_execution_time = Duration::from_secs_f64(http.session_limits.max_execution_time_s);
 
     let catalog = match (&args.catalog, &house.catalog.url) {
         (Some(spec), _) => Some(spec.clone()),
@@ -527,7 +529,8 @@ async fn lake(
         .map_err(|err| bad(format!("--store {store_url:?}: {err}")))?;
     let mut lake = Lake::new(catalog, root)
         .with_store(files)
-        .with_retention(settings.http.snapshot_retention);
+        .with_retention(settings.http.snapshot_retention)
+        .with_object_caps(settings.http.object_caps);
     if let Some(cache) = cache {
         lake = lake.with_grants(Arc::new(cache.clone()) as Arc<dyn PrefixGrants>);
     }

@@ -118,35 +118,32 @@ fn later(stmt: &Stmt) -> Option<String> {
                 .to_string(),
         );
     }
-    let (what, task) = match stmt {
+    Some(match stmt {
         Stmt::CreateTableAs { .. } => {
-            return Some(
-                "CREATE TABLE … AS SELECT makes a lake table, and this House has no catalog \
+            "CREATE TABLE … AS SELECT makes a lake table, and this House has no catalog \
                  (start it with --catalog or --single-node)"
-                    .to_string(),
-            );
+                .to_string()
         }
         Stmt::Truncate { .. } => {
-            return Some(
-                "TRUNCATE serves the catalog's lake tables only (not temporary tables)".to_string(),
-            );
+            "TRUNCATE serves the catalog's lake tables only (not temporary tables)".to_string()
         }
         Stmt::Optimize { .. } => {
-            return Some(
-                "OPTIMIZE TABLE compacts lake tables, and this House has no catalog (start it \
+            "OPTIMIZE TABLE compacts lake tables, and this House has no catalog (start it \
                  with --catalog or --single-node)"
-                    .to_string(),
-            );
+                .to_string()
         }
-        Stmt::KillQuery(_) => ("KILL QUERY", "HS1 Task 21"),
+        // The HTTP front answers `KILL QUERY` before it gets here (HS1 Task 21);
+        // `loams.house.v1` has `CancelQuery` instead.
+        Stmt::KillQuery(_) => {
+            "KILL QUERY is served on the ClickHouse HTTP interface; loams.house.v1 \
+                 cancels a query with CancelQuery"
+                .to_string()
+        }
         Stmt::Unsupported { kind } => {
-            return Some(format!("{kind} is not on the House's ClickHouse surface"));
+            format!("{kind} is not on the House's ClickHouse surface")
         }
         _ => return None,
-    };
-    Some(format!(
-        "{what} is served from {task}; this House does not serve it yet"
-    ))
+    })
 }
 
 /// What the front answers itself: `Some(Ok)` for an empty success (`SET`, `USE`),
@@ -209,8 +206,13 @@ pub async fn acquire_for(
     }
     if pins {
         let lease = pool.acquire_and_pin(namespace).await?;
-        // Kept only if the statement succeeds (fix round 1, M1).
-        guard.pin_provisionally(lease.worker_id().to_string());
+        // Kept only if the statement succeeds (fix round 1, M1), and only within
+        // the user's cap (HS1 Task 21).
+        if let Err(err) = guard.pin_provisionally(lease.worker_id().to_string()) {
+            pool.unpin(lease.worker_id());
+            pool.release(lease, crate::admission::Outcome::Completed);
+            return Err(err);
+        }
         return Ok(lease);
     }
     pool.acquire(namespace).await

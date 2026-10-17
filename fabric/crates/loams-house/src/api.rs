@@ -59,7 +59,7 @@ pub use catalog::{ApiCatalog, FixtureCatalog, LakeCatalog};
 
 use crate::catalog::Lake;
 use frames::Caps;
-use run::{Output, Running, Statement, sorted};
+use run::{Output, Statement, sorted};
 
 use crate::admission::WorkerPool;
 use crate::auth;
@@ -102,7 +102,17 @@ pub struct HouseApi {
     catalog: Arc<dyn ApiCatalog>,
     /// The catalog of lake tables (HS1 Task 10), when the House has one.
     lake: Option<Arc<Lake>>,
-    running: Arc<Running>,
+    governance: Governance,
+}
+
+/// What the API shares with the front's HTTP interface (HS1 Task 21): its
+/// admission and its process list.
+#[derive(Debug, Clone)]
+pub struct Governance {
+    /// Namespace queues and node memory.
+    pub admission: Arc<crate::admission::Admission>,
+    /// Running statements, both surfaces.
+    pub processes: Arc<crate::watchdog::Processes>,
 }
 
 impl HouseApi {
@@ -113,13 +123,14 @@ impl HouseApi {
         pool: WorkerPool,
         catalog: Arc<dyn ApiCatalog>,
         lake: Option<Arc<Lake>>,
+        governance: Governance,
     ) -> Arc<Self> {
         Arc::new(Self {
             config,
             pool,
             catalog,
             lake,
-            running: Arc::new(Running::default()),
+            governance,
         })
     }
 
@@ -436,7 +447,34 @@ impl HouseService for HouseApi {
         if request.query_id.is_empty() {
             return Err(invalid("query_id", "query_id is empty"));
         }
-        self.running.cancel(&request.query_id, &user)?;
+        // One process list for both surfaces (HS1 Task 21): the caller's own,
+        // or any of its namespace's with `house:admin`.
+        match self
+            .governance
+            .processes
+            .kill(&request.query_id, &user, false)
+        {
+            Ok(_) => {}
+            Err(crate::watchdog::KillRefusal::NotFound) => {
+                return Err(refuse(
+                    ErrorCode::NotFound,
+                    "house_query_not_found",
+                    format!("No running query has the id {}", request.query_id),
+                    &[("query_id", request.query_id.clone())],
+                ));
+            }
+            Err(crate::watchdog::KillRefusal::Denied) => {
+                return Err(refuse(
+                    ErrorCode::PermissionDenied,
+                    "house_access_denied",
+                    format!(
+                        "Query {} is another user's: cancelling it needs house:admin",
+                        request.query_id
+                    ),
+                    &[("query_id", request.query_id.clone())],
+                ));
+            }
+        }
         Response::ok(pb::CancelQueryResponse::default())
     }
 

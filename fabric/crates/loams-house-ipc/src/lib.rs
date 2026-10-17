@@ -258,6 +258,10 @@ pub enum SandboxProbe {
     UnixConnect(String),
     /// `kill(pid, 0)`: whether a signal could reach this process.
     Signal(u32),
+    /// Allocate and touch this many bytes, natively, and hold them while
+    /// answering: a cgroup's `memory.max` below it makes the kernel's OOM killer
+    /// end the worker (HS1 Task 21's `oom` exit).
+    Allocate(u64),
 }
 
 /// What a worker says when it is ready to be bound.

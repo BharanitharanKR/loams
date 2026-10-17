@@ -152,6 +152,11 @@ pub trait WorkerControl: Send + Sync + fmt::Debug {
     fn terminate(&self);
     /// The exit, once it has happened: `exited with 0`, `killed by SIGKILL`, …
     fn exit(&self) -> watch::Receiver<Option<String>>;
+    /// Whether the kernel's OOM killer ended it in its cgroup (`oom_kill` in the
+    /// cgroup's `memory.events`, HS1 Task 21). `false` without a cgroup.
+    fn oom_killed(&self) -> bool {
+        false
+    }
 }
 
 /// Starts workers. One per pool.
@@ -239,13 +244,26 @@ impl WorkerShared {
 
     /// Records `reason` unless one is already recorded, and returns the one that
     /// stands. The first reason wins: a cancel that raced a timeout stays a cancel.
+    /// A death nobody asked for is `oom` when the cgroup's OOM killer did it.
     pub fn record(&self, reason: ExitReason) -> ExitReason {
+        let reason = self.unasked(reason);
         *self.state().reason.get_or_insert(reason)
+    }
+
+    /// `crash` is `oom` when the worker's cgroup says its OOM killer ended it
+    /// (HS1 Task 21; R2.8, R6.5).
+    fn unasked(&self, reason: ExitReason) -> ExitReason {
+        if reason == ExitReason::Crash && self.control.oom_killed() {
+            ExitReason::Oom
+        } else {
+            reason
+        }
     }
 
     /// Records `reason` and ends the worker, whatever the epoch: the pool's own
     /// retirement.
     pub fn kill(&self, reason: ExitReason) -> ExitReason {
+        let reason = self.unasked(reason);
         let mut state = self.state();
         let reason = *state.reason.get_or_insert(reason);
         self.control.terminate();
@@ -352,6 +370,191 @@ pub struct Deadline {
 impl Drop for Deadline {
     fn drop(&mut self) {
         self.task.abort();
+    }
+}
+
+/// The front's running statements, by query id, on both surfaces (ClickHouse
+/// HTTP and `loams.house.v1`): what `KILL QUERY` and `CancelQuery` find (§49
+/// §12, HS1 Task 21; R8.8).
+#[derive(Debug, Default)]
+pub struct Processes {
+    queries: Mutex<std::collections::HashMap<String, Process>>,
+}
+
+#[derive(Debug)]
+struct Process {
+    user: String,
+    namespace: u64,
+    query: String,
+    /// The current statement's handle, once it has started.
+    kill: Option<KillHandle>,
+    /// Asked to stop: killed when it starts, if it had not yet.
+    cancelled: bool,
+    /// A write the front carries to its commit itself: not killable.
+    cancellable: bool,
+}
+
+/// Why a kill found nothing it may kill.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum KillRefusal {
+    /// No running statement has the id in the caller's namespace (another
+    /// namespace's statements are not even seen).
+    NotFound,
+    /// It is another user's, and the caller lacks `house:admin`.
+    Denied,
+}
+
+/// What `KILL QUERY` did to one statement: the row ClickHouse answers.
+#[derive(Clone, Debug)]
+pub struct Killed {
+    /// `kill_status`: `waiting` (asked; it ends at once or when it starts),
+    /// `finished` (`SYNC`: it is gone) or `cant_cancel`.
+    pub status: &'static str,
+    /// The statement's id.
+    pub query_id: String,
+    /// Its user.
+    pub user: String,
+    /// Its text.
+    pub query: String,
+}
+
+impl Processes {
+    fn lock(&self) -> MutexGuard<'_, std::collections::HashMap<String, Process>> {
+        self.queries
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Records a statement as running until the guard drops. An id already
+    /// running is refused (ClickHouse's `216`, which is not in the House's
+    /// codes: `36`, as R3.4 does for the House's own refusals).
+    pub fn register(
+        self: &Arc<Self>,
+        query_id: &str,
+        user: &crate::config::UserMap,
+        query: &str,
+    ) -> Result<ProcessGuard, HouseError> {
+        let mut queries = self.lock();
+        if queries.contains_key(query_id) {
+            return Err(HouseError::from(ChError::bad_arguments(format!(
+                "Query with id = {query_id} is already running"
+            ))));
+        }
+        queries.insert(
+            query_id.to_string(),
+            Process {
+                user: user.user.clone(),
+                namespace: user.namespace,
+                query: query.to_string(),
+                kill: None,
+                cancelled: false,
+                cancellable: true,
+            },
+        );
+        Ok(ProcessGuard {
+            processes: Arc::clone(self),
+            query_id: query_id.to_string(),
+        })
+    }
+
+    /// Whether statement `query_id` is still running.
+    pub fn is_running(&self, query_id: &str) -> bool {
+        self.lock().contains_key(query_id)
+    }
+
+    /// Statements running now.
+    pub fn len(&self) -> usize {
+        self.lock().len()
+    }
+
+    /// Whether none is running.
+    pub fn is_empty(&self) -> bool {
+        self.lock().is_empty()
+    }
+
+    /// Kills statement `query_id` for `by` (§49 §12): its own namespace only,
+    /// and another user's only with `house:admin`. A statement that has not
+    /// started is killed when it starts. With `test`, nothing is killed
+    /// (`KILL QUERY … TEST`): the row says what would be.
+    pub fn kill(
+        &self,
+        query_id: &str,
+        by: &crate::config::UserMap,
+        test: bool,
+    ) -> Result<Killed, KillRefusal> {
+        let mut queries = self.lock();
+        let Some(query) = queries
+            .get_mut(query_id)
+            .filter(|q| q.namespace == by.namespace)
+        else {
+            return Err(KillRefusal::NotFound);
+        };
+        if query.user != by.user && !by.scopes.admin {
+            return Err(KillRefusal::Denied);
+        }
+        let mut killed = Killed {
+            status: "waiting",
+            query_id: query_id.to_string(),
+            user: query.user.clone(),
+            query: query.query.clone(),
+        };
+        if !query.cancellable {
+            killed.status = "cant_cancel";
+            return Ok(killed);
+        }
+        if !test {
+            query.cancelled = true;
+            if let Some(kill) = &query.kill {
+                let _ = kill.kill(ExitReason::Cancel);
+            }
+        }
+        Ok(killed)
+    }
+}
+
+/// A running statement's entry in [`Processes`]; dropping it removes the entry.
+#[derive(Debug)]
+pub struct ProcessGuard {
+    processes: Arc<Processes>,
+    query_id: String,
+}
+
+impl ProcessGuard {
+    /// Whether the statement was killed before it got this far.
+    pub fn cancelled(&self) -> bool {
+        self.processes
+            .lock()
+            .get(&self.query_id)
+            .is_some_and(|q| q.cancelled)
+    }
+
+    /// The statement started on a worker: later kills reach it, and an earlier
+    /// one does now.
+    pub fn started(&self, kill: Option<KillHandle>) {
+        let mut queries = self.processes.lock();
+        if let Some(query) = queries.get_mut(&self.query_id) {
+            if query.cancelled
+                && let Some(kill) = &kill
+            {
+                let _ = kill.kill(ExitReason::Cancel);
+            }
+            query.kill = kill;
+        }
+    }
+
+    /// The statement is a lake write the front carries to its commit: `KILL
+    /// QUERY` answers `cant_cancel` (its worker stops at the statement's
+    /// deadline like any other).
+    pub fn uncancellable(&self) {
+        if let Some(query) = self.processes.lock().get_mut(&self.query_id) {
+            query.cancellable = false;
+        }
+    }
+}
+
+impl Drop for ProcessGuard {
+    fn drop(&mut self) {
+        self.processes.lock().remove(&self.query_id);
     }
 }
 
@@ -735,6 +938,22 @@ struct ProcessControl {
     /// under this lock, so it never signals a reaped, possibly recycled, pid.
     exited: Mutex<bool>,
     exit: watch::Sender<Option<String>>,
+    /// The worker's cgroup child, when the front made one.
+    cgroup: Option<PathBuf>,
+    /// Its `memory.events` counted an OOM kill, read by the waiter before it
+    /// removes the child.
+    oom: std::sync::atomic::AtomicBool,
+}
+
+/// Whether a cgroup's `memory.events` counts an OOM kill (`oom_kill N`, N > 0).
+pub fn oom_killed_in(cgroup: &Path) -> bool {
+    std::fs::read_to_string(cgroup.join("memory.events")).is_ok_and(|events| {
+        events.lines().any(|line| {
+            line.strip_prefix("oom_kill ")
+                .and_then(|n| n.trim().parse::<u64>().ok())
+                .is_some_and(|n| n > 0)
+        })
+    })
 }
 
 impl ProcessControl {
@@ -744,11 +963,13 @@ impl ProcessControl {
             pid,
             exited: Mutex::new(false),
             exit,
+            cgroup,
+            oom: std::sync::atomic::AtomicBool::new(false),
         });
         let waiter = Arc::clone(&control);
         let spawned = std::thread::Builder::new()
             .name(format!("house-worker-wait-{pid}"))
-            .spawn(move || waiter.wait(&dir, cgroup.as_deref()));
+            .spawn(move || waiter.wait(&dir));
         if spawned.is_err() {
             // No waiter: kill it rather than leave an unsupervised worker.
             let _ = kill(pid, Signal::SIGKILL);
@@ -764,7 +985,7 @@ impl ProcessControl {
 
     /// Waits for the exit without reaping, records it, then reaps and removes the
     /// worker's private directory and its cgroup.
-    fn wait(&self, dir: &Path, cgroup: Option<&Path>) {
+    fn wait(&self, dir: &Path) {
         let status = loop {
             match waitid(
                 Id::Pid(self.pid),
@@ -778,7 +999,11 @@ impl ProcessControl {
         *self.exited() = true;
         let _ = waitpid(self.pid, None);
         let _ = std::fs::remove_dir_all(dir);
-        if let Some(cgroup) = cgroup {
+        if let Some(cgroup) = &self.cgroup {
+            // Read before the child goes (HS1 Task 21).
+            if oom_killed_in(cgroup) {
+                self.oom.store(true, std::sync::atomic::Ordering::Release);
+            }
             sandbox::remove(cgroup);
         }
         self.exit.send_replace(Some(status));
@@ -813,6 +1038,14 @@ impl WorkerControl for ProcessControl {
 
     fn exit(&self) -> watch::Receiver<Option<String>> {
         self.exit.subscribe()
+    }
+
+    fn oom_killed(&self) -> bool {
+        // The waiter's reading, else the child's own file while it is still
+        // there (the lease may see the socket end before the waiter runs), else
+        // the waiter's reading again, made before it removed the child.
+        let seen = || self.oom.load(std::sync::atomic::Ordering::Acquire);
+        seen() || self.cgroup.as_deref().is_some_and(oom_killed_in) || seen()
     }
 }
 

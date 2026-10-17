@@ -181,6 +181,10 @@ pub const MAX_QUERY_MEMORY: u64 = 4 * 1024 * 1024 * 1024;
 /// 10); also the profile's value, for the same reason.
 pub const MAX_EXECUTION_TIME_S: u64 = 300;
 
+/// §49 §12's read and result caps (HS1 Task 21): the profile's values and
+/// maxima, so `0` is a change the constraint sees.
+pub use loams_house_ipc::policy::{MAX_BYTES_TO_READ, MAX_RESULT_BYTES};
+
 /// The smallest `max_execution_time`: one microsecond, ClickHouse's unit. The
 /// constraint is checked after the engine's conversion, so a value that truncates
 /// to 0 (unlimited) is under it (measured, fix round 1).

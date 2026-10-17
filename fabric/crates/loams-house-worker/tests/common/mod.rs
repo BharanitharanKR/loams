@@ -121,3 +121,26 @@ impl Drop for Scratch {
         let _ = std::fs::remove_dir_all(&self.0);
     }
 }
+
+/// A cgroup v2 directory this test may delegate to workers: a fresh sibling of
+/// the test's own cgroup, when the parent is writable and has the controllers.
+#[cfg(target_os = "linux")]
+pub fn delegated_cgroup(test: &str) -> Result<PathBuf, String> {
+    let ours = std::fs::read_to_string("/proc/self/cgroup").map_err(|e| e.to_string())?;
+    let path = ours
+        .lines()
+        .find_map(|line| line.strip_prefix("0::"))
+        .ok_or("not on cgroup v2")?;
+    let mine = std::path::Path::new("/sys/fs/cgroup").join(path.trim_start_matches('/'));
+    let parent = mine.parent().ok_or("no parent cgroup")?;
+    let controllers = std::fs::read_to_string(parent.join("cgroup.subtree_control"))
+        .map_err(|e| e.to_string())?;
+    for needed in ["memory", "cpu", "pids"] {
+        if !controllers.split_whitespace().any(|c| c == needed) {
+            return Err(format!("{} does not delegate {needed}", parent.display()));
+        }
+    }
+    let root = parent.join(format!("loams-house-{test}-{}", std::process::id()));
+    std::fs::create_dir(&root).map_err(|e| format!("{}: {e}", root.display()))?;
+    Ok(root)
+}
