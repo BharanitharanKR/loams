@@ -39,7 +39,7 @@
       "upstreamPath": "apps/web/src/components/ui/badge.tsx",
       "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
       "upstreamSha256": "fa4900e3ad6e170801633a31d7866dc2dd660fd5e992a825fb5404a87d0f226f",
-      "localSha256": "8e7eacf459f0dc9cfc7841ff13384b0231d24f6fb55e611416bc6c1a8adef567",
+      "localSha256": "7d403d849fc3f2db74176b5e05d1fee92c3a7811787289093d9c92555bdf4257",
       "verdict": "adapt",
       "group": "k"
     },

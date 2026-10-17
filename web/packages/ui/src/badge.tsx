@@ -8,12 +8,12 @@ import { useRender } from '@base-ui/react/use-render';
 import { cx } from './cx';
 
 const VARIANT = {
-  neutral: 'bg-raised text-muted',
-  accent: 'bg-accent-soft text-accent-fg',
-  success: 'bg-grow-soft text-grow',
-  warning: 'bg-warn-soft text-warn',
-  danger: 'bg-danger-soft text-danger',
-  info: 'bg-info-soft text-info',
+  neutral: 'border-transparent bg-raised text-muted',
+  accent: 'border-transparent bg-accent-soft text-accent-fg',
+  success: 'border-transparent bg-grow-soft text-grow',
+  warning: 'border-transparent bg-warn-soft text-warn',
+  danger: 'border-transparent bg-danger-soft text-danger',
+  info: 'border-transparent bg-info-soft text-info',
   outline: 'border-rule bg-transparent text-ink',
 } as const;
 
@@ -40,7 +40,7 @@ export function Badge({
   const defaults = {
     className: cx(
       'loams-badge relative inline-flex shrink-0 items-center justify-center gap-1 whitespace-nowrap',
-      'rounded-xs border border-transparent font-medium [&_svg]:size-3 [&_svg]:shrink-0',
+      'rounded-xs border font-medium [&_svg]:size-3 [&_svg]:shrink-0',
       VARIANT[variant],
       SIZE[size],
       className,
