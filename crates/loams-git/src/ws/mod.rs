@@ -15,7 +15,9 @@
 //! ([`check_save_objects`]), replays salvage ([`replay_salvage`]) and finds
 //! workspaces for object reads ([`StoreWsLookup`]).
 
+mod edits;
 mod lookup;
+pub mod merge3;
 mod pack;
 mod pack_write;
 mod salvage;
@@ -35,7 +37,12 @@ use crate::format::pb;
 use crate::format::snapshot::snapshot_commit;
 use crate::ids::{MountId, ObjectId, Principal, RefName, RepoId, Seq, SnapN, WsId, WsName};
 
+pub use edits::{
+    DIFF_CONTEXT, EditError, Edited, EnvHooks, EnvRefusal, FileEdit, FileRead, NoEnv, Rebased,
+    Rendered, apply_edits, changed_paths, file_patch, is_env_path, read_file, rebase_trees,
+};
 pub use lookup::{StoreWsLookup, view_of};
+pub use merge3::{Merge3, MergeLabels, merge3};
 pub use pack::{
     NoScan, PackScan, ScanRefusal, VerifiedPack, WsPackBlobs, WsPackError, WsPackUploads,
     check_pack_len, fork_sources, put_workspace_pack, verify_workspace_pack,

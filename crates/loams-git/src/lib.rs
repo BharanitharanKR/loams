@@ -13,6 +13,7 @@ pub mod catalog;
 pub mod checkpointer;
 pub mod clock;
 pub mod derived;
+pub mod diff;
 pub mod error;
 pub mod fork;
 pub mod format;

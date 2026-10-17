@@ -19,21 +19,21 @@ use super::console_support::{Client, SETUP_TOKEN, TestAuthenticator};
 use super::objects::{history, load, rev};
 use super::{Running, frames, reason};
 
-const WS: &str = "/loams.repos.v1.WorkspaceService";
-const OBJECTS: &str = "/loams.repos.v1.ObjectService";
+pub(crate) const WS: &str = "/loams.repos.v1.WorkspaceService";
+pub(crate) const OBJECTS: &str = "/loams.repos.v1.ObjectService";
 /// Every save's time: whole seconds, as the snapshot commit keeps them.
 const SAVED_AT: &str = "2026-10-17T00:00:00Z";
 const SAVED_AT_MS: i64 = 1_792_195_200_000;
 
 /// A caller of the main port: no credential (the operator on loopback) or a bearer.
 #[derive(Clone)]
-struct Caller {
+pub(crate) struct Caller {
     base: String,
     bearer: Option<String>,
 }
 
 impl Caller {
-    fn of(running: &Running, bearer: Option<&str>) -> Self {
+    pub(crate) fn of(running: &Running, bearer: Option<&str>) -> Self {
         Self {
             base: running.base.clone(),
             bearer: bearer.map(str::to_owned),
@@ -51,7 +51,7 @@ impl Caller {
         request
     }
 
-    async fn call(&self, rpc: &str, body: &Value) -> (reqwest::StatusCode, Value) {
+    pub(crate) async fn call(&self, rpc: &str, body: &Value) -> (reqwest::StatusCode, Value) {
         let response = self
             .post(rpc, "application/json", body.to_string().into_bytes())
             .send()
@@ -65,14 +65,14 @@ impl Caller {
         )
     }
 
-    async fn ok(&self, rpc: &str, body: &Value) -> Value {
+    pub(crate) async fn ok(&self, rpc: &str, body: &Value) -> Value {
         let (status, answer) = self.call(rpc, body).await;
         assert_eq!(status, reqwest::StatusCode::OK, "{rpc}: {answer}");
         answer
     }
 
     /// The `ErrorInfo.reason` of a refused unary call.
-    async fn refused(&self, rpc: &str, body: &Value) -> String {
+    pub(crate) async fn refused(&self, rpc: &str, body: &Value) -> String {
         let (status, answer) = self.call(rpc, body).await;
         assert_ne!(status, reqwest::StatusCode::OK, "{rpc}: {answer}");
         reason(&answer)
@@ -80,7 +80,7 @@ impl Caller {
 
     /// A streaming call (one request message), read to its end: the messages and the end
     /// message's error, if any.
-    async fn stream(&self, rpc: &str, body: &Value) -> (Vec<Value>, Value) {
+    pub(crate) async fn stream(&self, rpc: &str, body: &Value) -> (Vec<Value>, Value) {
         let payload = body.to_string().into_bytes();
         let mut framed = vec![0u8];
         framed.extend_from_slice(&u32::try_from(payload.len()).expect("small").to_be_bytes());
@@ -122,7 +122,12 @@ impl Caller {
 }
 
 /// Runs git in `dir` with `env`; its stdout, trimmed.
-fn git_env(dir: &std::path::Path, env: &[(&str, &str)], args: &[&str], stdin: &[u8]) -> String {
+pub(crate) fn git_env(
+    dir: &std::path::Path,
+    env: &[(&str, &str)],
+    args: &[&str],
+    stdin: &[u8],
+) -> String {
     let mut child = Command::new("git")
         .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
         .args(args)
@@ -153,7 +158,7 @@ fn git_env(dir: &std::path::Path, env: &[(&str, &str)], args: &[&str], stdin: &[
 
 /// The tree of `main` with `files` written (and `removed` gone), built in a scratch index of
 /// the history checkout; its id.
-fn tree_with(dir: &TempDir, files: &[(&str, &str)], removed: &[&str]) -> String {
+pub(crate) fn tree_with(dir: &TempDir, files: &[(&str, &str)], removed: &[&str]) -> String {
     let index = dir.path().join(".git/ws-index");
     let _ = std::fs::remove_file(&index);
     let index = index.to_str().expect("utf-8").to_owned();
@@ -280,15 +285,15 @@ async fn save(
         .await
 }
 
-fn mount(n: u8) -> String {
+pub(crate) fn mount(n: u8) -> String {
     format!("m01j9z3m5q8x0000000000000{n:02}")
 }
 
-async fn create_ws(caller: &Caller, body: Value) -> Value {
+pub(crate) async fn create_ws(caller: &Caller, body: Value) -> Value {
     caller.ok(&format!("{WS}/CreateWorkspace"), &body).await["snapshot"].clone()
 }
 
-fn n_of(snapshot: &Value) -> u64 {
+pub(crate) fn n_of(snapshot: &Value) -> u64 {
     match &snapshot["n"] {
         Value::String(s) => s.parse().expect("n"),
         Value::Number(n) => n.as_u64().expect("n"),

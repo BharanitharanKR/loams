@@ -20,10 +20,14 @@ syntax = "proto3";
 // an org admin, or the operator (`permission_denied`). A workspace's reads
 // carry no `consistency_token`: the snapshot number orders them.
 //
+// Agents that do not mount a workspace read, edit, diff and rebase it with
+// `ReadFiles`, `ApplyEdits`, `Diff` and `Rebase` (§36 §19.11, GT1 Task 26).
+//
 // Reasons: `workspace_not_found`, `workspace_fenced` (aborted),
 // `workspace_name_taken` (already_exists), `object_missing`
 // (failed_precondition), `fork_too_deep`, `idempotency_key_reused`,
-// `permission_denied`, `invalid_argument` and `internal`.
+// `env_unsealed`, `failed_precondition`, `permission_denied`,
+// `invalid_argument` and `internal`.
 package loams.repos.v1;
 
 import "google/protobuf/timestamp.proto";
@@ -92,6 +96,35 @@ service WorkspaceService {
   // entry, and paths both changed keep the latest entry and are recorded as
   // conflicts.
   rpc RestoreSalvage(RestoreSalvageRequest) returns (RestoreSalvageResponse);
+  // Files of a snapshot's worktree (the latest, or `n`), in the order
+  // asked, at most 1,000 paths. A file's contents arrive in messages of at
+  // most 1 MiB, each naming the path and where its `data` starts. Files
+  // under `env/` are rendered for the caller: values it may not read show
+  // as `<redacted>` (until env sealing is served, every value).
+  rpc ReadFiles(ReadFilesRequest) returns (stream ReadFilesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Writes, deletes and renames files of the worktree (and the index, with
+  // `stage`) as one new snapshot, `expect_n + 1`, whose new objects the
+  // server stores as one workspace pack. Fenced on `expect_n`: when another
+  // snapshot holds `expect_n + 1` the call is `workspace_fenced`, unless it
+  // is this call's retry. At most 10,000 edits. A write under `env/` is
+  // refused (`env_unsealed`) until the server seals env files.
+  rpc ApplyEdits(ApplyEditsRequest) returns (ApplyEditsResponse);
+  // A snapshot's worktree (the latest, or `n`) against HEAD, the base, the
+  // index or a commit, as `git diff --no-renames --no-indent-heuristic`
+  // prints it: one file after another, a long patch spanning messages.
+  rpc Diff(DiffRequest) returns (stream DiffResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Moves the workspace's changes onto `track`'s tip (or `onto`) as a new
+  // snapshot, merging only the paths both sides changed; what does not
+  // merge cleanly is written with conflict markers and recorded in the
+  // snapshot's conflicts. A workspace with unresolved conflicts or local
+  // commits is refused (`failed_precondition`, metadata `condition`
+  // `conflicts` or `local_commits`). Rebasing onto the base the workspace has answers its latest
+  // snapshot.
+  rpc Rebase(RebaseRequest) returns (RebaseResponse);
 }
 
 // How a path differs among HEAD, the index and the worktree.
@@ -374,5 +407,142 @@ message RestoreSalvageResponse {
   // The new snapshot.
   Snapshot snapshot = 1;
   // The paths both sides changed, now among the snapshot's conflicts.
+  repeated string conflicts = 2;
+}
+
+message ReadFilesRequest {
+  string namespace = 1;
+  string name = 2;
+  string workspace = 3;
+  // The snapshot read; unset is the latest.
+  optional uint64 n = 4;
+  // Repository paths, "/"-separated.
+  repeated string paths = 5;
+}
+
+// One file, or the next part of one.
+message ReadFilesResponse {
+  string path = 1;
+  // Whether anything is at the path; the fields below are empty when not.
+  bool found = 2;
+  // git's mode: 100644, 100755, 120000 (a symlink, whose contents are its
+  // target), 160000 (a submodule) or 40000 (a directory; no contents).
+  uint32 mode = 3;
+  string oid = 4;
+  // The contents' length in bytes, as shown (an env file's rendered
+  // length).
+  uint64 size = 5;
+  // Where `data` starts in the contents.
+  uint64 offset = 6;
+  bytes data = 7;
+  // An env file whose values were withheld.
+  bool redacted = 8;
+}
+
+// The kinds of file `ApplyEdits` writes.
+enum WorkspaceFileMode {
+  // A regular file.
+  WORKSPACE_FILE_MODE_UNSPECIFIED = 0;
+  WORKSPACE_FILE_MODE_REGULAR = 1;
+  WORKSPACE_FILE_MODE_EXECUTABLE = 2;
+  // A symbolic link; the contents are its target.
+  WORKSPACE_FILE_MODE_SYMLINK = 3;
+}
+
+// Writes a file, replacing what is at the path (a directory too).
+message FileWrite {
+  string path = 1;
+  bytes content = 2;
+  WorkspaceFileMode mode = 3;
+}
+
+// Deletes a file, or a directory and everything below it.
+message FileDelete {
+  string path = 1;
+}
+
+// Moves a file to a new path, replacing what is there.
+message FileRename {
+  string old_path = 1;
+  string new_path = 2;
+}
+
+// One edit; edits apply in order.
+message WorkspaceEdit {
+  oneof edit {
+    FileWrite write = 1;
+    FileDelete delete = 2;
+    FileRename rename = 3;
+  }
+}
+
+message ApplyEditsRequest {
+  string namespace = 1;
+  string name = 2;
+  string workspace = 3;
+  // The snapshot the edits apply to; the new one is `expect_n + 1`.
+  uint64 expect_n = 4;
+  repeated WorkspaceEdit edits = 5;
+  // Also stage the edits (as `git add` of every path they touch), which
+  // resolves conflicts at those paths.
+  bool stage = 6;
+  // The mount writing the new snapshot, when known.
+  string writer = 7;
+  string idempotency_key = 15;
+}
+
+message ApplyEditsResponse {
+  Snapshot snapshot = 1;
+}
+
+// What `Diff` compares the worktree with.
+enum DiffAgainst {
+  // HEAD.
+  DIFF_AGAINST_UNSPECIFIED = 0;
+  // HEAD's tree (the empty tree when unborn): `git diff HEAD`.
+  DIFF_AGAINST_HEAD = 1;
+  // The commit the workspace was last rebased onto.
+  DIFF_AGAINST_BASE = 2;
+  // The index: `git diff`.
+  DIFF_AGAINST_INDEX = 3;
+  // `commit`.
+  DIFF_AGAINST_COMMIT = 4;
+}
+
+message DiffRequest {
+  string namespace = 1;
+  string name = 2;
+  string workspace = 3;
+  // The snapshot diffed; unset is the latest.
+  optional uint64 n = 4;
+  DiffAgainst against = 5;
+  // The commit, with `DIFF_AGAINST_COMMIT`.
+  string commit = 6;
+  // Literal paths (a path matches itself and what is below it); empty is
+  // every path.
+  repeated string paths = 7;
+}
+
+// One file's patch, or the next part of one.
+message DiffResponse {
+  string path = 1;
+  bytes patch = 2;
+}
+
+message RebaseRequest {
+  string namespace = 1;
+  string name = 2;
+  string workspace = 3;
+  // The commit to rebase onto; empty is `track`'s tip.
+  string onto = 4;
+  // The mount writing the new snapshot, when known.
+  string writer = 5;
+  string idempotency_key = 15;
+}
+
+message RebaseResponse {
+  Snapshot snapshot = 1;
+  // The paths that did not merge cleanly, now among the snapshot's
+  // conflicts.
   repeated string conflicts = 2;
 }

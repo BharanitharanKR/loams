@@ -29,6 +29,8 @@ mod objects;
 mod repos;
 #[cfg(feature = "git")]
 mod workspaces;
+#[cfg(feature = "git")]
+mod ws_edits;
 
 /// Every RPC of `RepoService`, with whether it streams.
 const RPCS: &[(&str, &str, bool)] = &[
@@ -58,6 +60,10 @@ const RPCS: &[(&str, &str, bool)] = &[
     ("WorkspaceService", "WatchWorkspace", true),
     ("WorkspaceService", "ListSalvage", false),
     ("WorkspaceService", "RestoreSalvage", false),
+    ("WorkspaceService", "ReadFiles", true),
+    ("WorkspaceService", "ApplyEdits", false),
+    ("WorkspaceService", "Diff", true),
+    ("WorkspaceService", "Rebase", false),
 ];
 
 /// A `loams` server on loopback, with its data directory.
