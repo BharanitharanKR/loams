@@ -9,6 +9,7 @@ use loams_kv::TikvConfig;
 use loams_kv::{EmbeddedConfig, StoreConfig};
 
 use crate::apps::{AppsOptions, Layout};
+use crate::forward::ForwardConfig;
 use crate::origins::AppOrigins;
 use crate::session::SessionConfig;
 use crate::subs::SubsConfig;
@@ -88,6 +89,9 @@ pub struct LiveConfig {
     /// directory. The server hands a clone to its CORS layer before Live
     /// starts.
     pub app_origins: AppOrigins,
+    /// How this node takes part in a cluster of Live nodes (LV1 plan Task
+    /// 24): the URL its peers forward session calls to, and its timings.
+    pub forward: ForwardConfig,
 }
 
 /// Where a deployment's functions run (`[live] isolation`, design §45
@@ -190,6 +194,7 @@ impl LiveConfig {
             apps: AppsOptions::default(),
             idle_after: DEFAULT_IDLE_AFTER,
             app_origins: AppOrigins::default(),
+            forward: ForwardConfig::default(),
         }
     }
 }

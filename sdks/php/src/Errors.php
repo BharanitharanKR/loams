@@ -102,6 +102,8 @@ class LiveLimitExceededException extends LoamsException {}
 class LiveAppMismatchException extends LoamsException {}
 class LiveOriginNotAllowedException extends LoamsException {}
 class SessionRotateException extends LoamsException {}
+class SessionGoneException extends LoamsException {}
+class NodeDrainingException extends LoamsException {}
 class RoleRequiredException extends LoamsException {}
 class SetupRequiredException extends LoamsException {}
 class TokenMissingException extends LoamsException {}
@@ -212,6 +214,8 @@ class ErrorParser
         'live_app_mismatch' => LiveAppMismatchException::class,
         'live_origin_not_allowed' => LiveOriginNotAllowedException::class,
         'session_rotate' => SessionRotateException::class,
+        'session_gone' => SessionGoneException::class,
+        'node_draining' => NodeDrainingException::class,
         'role_required' => RoleRequiredException::class,
         'setup_required' => SetupRequiredException::class,
         'token_missing' => TokenMissingException::class,

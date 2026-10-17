@@ -89,6 +89,8 @@ public enum Reason {
     LIVE_APP_MISMATCH("live_app_mismatch"),
     LIVE_ORIGIN_NOT_ALLOWED("live_origin_not_allowed"),
     SESSION_ROTATE("session_rotate"),
+    SESSION_GONE("session_gone"),
+    NODE_DRAINING("node_draining"),
     ROLE_REQUIRED("role_required"),
     SETUP_REQUIRED("setup_required"),
     TOKEN_MISSING("token_missing"),

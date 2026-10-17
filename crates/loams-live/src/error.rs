@@ -47,6 +47,9 @@ pub const LIVE_REASONS: &[&str] = &[
     // Session identity (LV1 plan Task 17).
     crate::auth::reason::TOKEN_REVOKED,
     crate::session::SESSION_ROTATE,
+    // Several nodes (LV1 plan Task 24).
+    crate::forward::SESSION_GONE,
+    crate::forward::NODE_DRAINING,
 ];
 
 /// Why a Loams Live operation failed. Each variant maps to one
@@ -104,6 +107,16 @@ pub enum LiveError {
     /// `UNAVAILABLE`, reason `session_rotate`; the client resumes.
     #[error("unavailable: {0}")]
     SessionRotated(String),
+    /// A session call for a session no node holds any more: its owner is
+    /// gone or ended it (LV1 plan Task 24, design §45 §9): `NOT_FOUND`,
+    /// reason `session_gone`; the client resumes.
+    #[error("not found: {0}")]
+    SessionGone(String),
+    /// A call to, or a stream of, a node that is shutting down (LV1 plan
+    /// Task 24): `UNAVAILABLE`, reason `node_draining`; the client resumes
+    /// on another node.
+    #[error("unavailable: {0}")]
+    NodeDraining(String),
     /// `CreateApp` with a name another app has (LV1 plan Task 13):
     /// `FAILED_PRECONDITION`, reason `live_app_exists`.
     #[error("failed precondition: {0}")]
@@ -198,7 +211,9 @@ impl LiveError {
             | LiveError::NotLoopback(_)
             | LiveError::IsolationRequired
             | LiveError::IsolationUnavailable => pb::ErrorCode::ERROR_CODE_INVALID_ARGUMENT,
-            LiveError::NotFound(_) => pb::ErrorCode::ERROR_CODE_NOT_FOUND,
+            LiveError::NotFound(_) | LiveError::SessionGone(_) => {
+                pb::ErrorCode::ERROR_CODE_NOT_FOUND
+            }
             LiveError::FailedPrecondition(_)
             | LiveError::AppDisabled(_)
             | LiveError::AppExists(_)
@@ -208,9 +223,9 @@ impl LiveError {
             | LiveError::DeployConflict(_)
             | LiveError::JournalTrimmed { .. } => pb::ErrorCode::ERROR_CODE_FAILED_PRECONDITION,
             LiveError::LimitExceeded { .. } => pb::ErrorCode::ERROR_CODE_RESOURCE_EXHAUSTED,
-            LiveError::AuthUnavailable(_) | LiveError::SessionRotated(_) => {
-                pb::ErrorCode::ERROR_CODE_UNAVAILABLE
-            }
+            LiveError::AuthUnavailable(_)
+            | LiveError::SessionRotated(_)
+            | LiveError::NodeDraining(_) => pb::ErrorCode::ERROR_CODE_UNAVAILABLE,
             LiveError::Corrupt(_) | LiveError::Internal(_) => pb::ErrorCode::ERROR_CODE_INTERNAL,
             LiveError::FunctionError(_) | LiveError::WorkerCrashed(_) => {
                 pb::ErrorCode::ERROR_CODE_FUNCTION_ERROR
@@ -247,6 +262,8 @@ impl LiveError {
             LiveError::Unauthenticated { reason, .. } => Some(reason),
             LiveError::AuthUnavailable(_) => Some(crate::auth::reason::AUTH_UNAVAILABLE),
             LiveError::SessionRotated(_) => Some(crate::session::SESSION_ROTATE),
+            LiveError::SessionGone(_) => Some(crate::forward::SESSION_GONE),
+            LiveError::NodeDraining(_) => Some(crate::forward::NODE_DRAINING),
             _ => None,
         }
     }

@@ -877,10 +877,22 @@ struct LiveArgs {
     /// --live-isolation isolated).
     #[arg(long, value_enum, default_value_t = LiveTenancy::Single)]
     live_tenancy: LiveTenancy,
+    /// This Live node's id, unique among the Live nodes of one store: the
+    /// prefix of its session ids and its journal consumer (LV1 Task 24).
+    #[arg(long, default_value = "1", value_parser = parse_live_node)]
+    live_node: String,
+    /// The base URL other Live nodes of the store forward this node's
+    /// session calls to (its main port, for example
+    /// https://live-2.internal:7700) [default: http://<Live's own listener>].
+    #[arg(long, value_parser = parse_live_advertise)]
+    live_advertise: Option<String>,
     /// Serve no Loams Live API.
     #[arg(
         long,
-        conflicts_with_all = ["live_listen", "live_store", "live_pd", "live_keyspace", "live_app"]
+        conflicts_with_all = [
+            "live_listen", "live_store", "live_pd", "live_keyspace", "live_app",
+            "live_advertise"
+        ]
     )]
     no_live: bool,
 }
@@ -950,6 +962,22 @@ fn parse_live_tikv_alias(value: &str) -> Result<String, String> {
     }
 }
 
+/// `--live-node`: 1 to 64 ASCII letters, digits, `.`, `_` or `-`.
+#[cfg(feature = "live")]
+fn parse_live_node(value: &str) -> Result<String, String> {
+    loams_live::forward::check_node_id(value)
+        .map(|()| value.to_string())
+        .map_err(|e| e.to_string())
+}
+
+/// `--live-advertise`: an http:// or https:// base URL.
+#[cfg(feature = "live")]
+fn parse_live_advertise(value: &str) -> Result<String, String> {
+    loams_live::forward::check_url(value)
+        .map(|()| value.trim_end_matches('/').to_string())
+        .map_err(|e| e.to_string())
+}
+
 /// `--live-store`: `embedded` or `tikv://<pd>[,<pd>][/<keyspace>]`; the
 /// latter only in a build with the live-tikv feature.
 #[cfg(feature = "live")]
@@ -1012,6 +1040,8 @@ impl LiveArgs {
             );
         }
         live.listen = self.live_listen.unwrap_or(LIVE_LISTEN_DEFAULT);
+        live.node = self.live_node.clone();
+        live.forward.advertise = self.live_advertise.clone();
         live.subs.tick_read_lag = Duration::from_millis(self.live_tick_read_lag_ms);
         live.isolation = match self.live_isolation {
             LiveIsolation::InProcess => loams_live::Isolation::InProcess,

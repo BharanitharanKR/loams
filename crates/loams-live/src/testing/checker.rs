@@ -99,6 +99,9 @@ pub struct Report {
     /// Sessions whose identity an `Authenticate` replaced (LV1 plan Task
     /// 17).
     pub identity_changes: usize,
+    /// Live nodes killed, their sessions resumed on the survivor (LV1 plan
+    /// Task 24).
+    pub node_kills: usize,
     /// Deploys and rollbacks of the workload that activated (the first
     /// deployment, before the sessions open, not counted).
     pub activations: usize,
@@ -591,11 +594,64 @@ pub async fn run_reactive_checker(store: Store, w: Workload) -> Report {
     report
 }
 
-/// The task (of the LV1 plan) that wires `d`, when it is not wired yet.
+/// A Live node over `engine`: its subscription manager and sessions (whose
+/// ids start with `id`), until `stop`.
+fn node(engine: &AppEngine, id: &str, stop: CancellationToken) -> (Arc<Subscriptions>, Sessions) {
+    let subs = Arc::new(Subscriptions::spawn_for(
+        engine,
+        SubsConfig {
+            // Off: a missed invalidation must stay visible.
+            safety_rerun: Duration::from_secs(24 * 3600),
+            ..SubsConfig::default()
+        },
+        stop.clone(),
+    ));
+    let resolver = engine.clone();
+    let sessions = Sessions::new(
+        subs.clone(),
+        Arc::new(move |name: &str| deploy::resolve(&resolver, name)),
+        SessionConfig::default(),
+        id.into(),
+        stop,
+    );
+    (subs, sessions)
+}
+
+/// Records every tick `subs` publishes into `ticks` until `stop`.
+fn record_ticks(
+    subs: &Subscriptions,
+    ticks: &Arc<Mutex<Vec<(u64, Instant)>>>,
+    lagged: &Arc<AtomicU64>,
+    stop: &CancellationToken,
+) -> JoinHandle<()> {
+    let (ticks, lagged, stop) = (ticks.clone(), lagged.clone(), stop.clone());
+    let mut updates = subs.updates();
+    tokio::spawn(async move {
+        loop {
+            let tick = tokio::select! {
+                () = stop.cancelled() => return,
+                tick = updates.recv() => tick,
+            };
+            match tick {
+                Ok(tick) => ticks
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .push((tick.at.0, Instant::now())),
+                Err(RecvError::Lagged(n)) => {
+                    lagged.fetch_add(n, Ordering::SeqCst);
+                }
+                Err(RecvError::Closed) => return,
+            }
+        }
+    })
+}
+
+/// The task (of the LV1 plan) that wires `d`, when it is not wired yet
+/// (every disturbance is, since Task 24; a new one names its task here).
 fn unwired(d: Disturbance) -> Option<&'static str> {
     match d {
-        Disturbance::NodeKill { .. } => Some("Task 24"),
-        Disturbance::IdentityChange { .. }
+        Disturbance::NodeKill { .. }
+        | Disturbance::IdentityChange { .. }
         | Disturbance::Deploy { .. }
         | Disturbance::Rollback { .. }
         | Disturbance::AddIndex { .. }
@@ -709,49 +765,24 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
     // An early return (a `?` below) stops the manager, the sessions, the
     // tick recorder and the consumers (their tokens are children) too.
     let _stop_all = shutdown.clone().drop_guard();
-    let subs = Arc::new(Subscriptions::spawn_for(
-        &engine,
-        SubsConfig {
-            // Off: a missed invalidation must stay visible.
-            safety_rerun: Duration::from_secs(24 * 3600),
-            ..SubsConfig::default()
-        },
-        shutdown.clone(),
-    ));
-    let resolver = engine.clone();
-    let sessions = Sessions::new(
-        subs.clone(),
-        Arc::new(move |name: &str| deploy::resolve(&resolver, name)),
-        SessionConfig::default(),
-        APP.into(),
-        shutdown.clone(),
-    );
+    // The node the sessions open on; with a `NodeKill`, a second node on
+    // the same store, where they resume when the first one dies (LV1 plan
+    // Task 24).
+    let first = shutdown.child_token();
+    let (mut subs, mut sessions) = node(&engine, "1", first.clone());
+    let mut survivor = disturb
+        .iter()
+        .any(|d| matches!(d, Disturbance::NodeKill { .. }))
+        .then(|| node(&engine, "2", shutdown.child_token()));
 
-    // Every tick, as it is published (before any session opens).
+    // Every tick, as it is published (before any session opens), on every
+    // node.
     let ticks = Arc::new(Mutex::new(Vec::<(u64, Instant)>::new()));
     let ticks_lagged = Arc::new(AtomicU64::new(0));
-    let recorder = {
-        let (ticks, lagged, stop) = (ticks.clone(), ticks_lagged.clone(), shutdown.clone());
-        let mut updates = subs.updates();
-        tokio::spawn(async move {
-            loop {
-                let tick = tokio::select! {
-                    () = stop.cancelled() => return,
-                    tick = updates.recv() => tick,
-                };
-                match tick {
-                    Ok(tick) => ticks
-                        .lock()
-                        .unwrap_or_else(std::sync::PoisonError::into_inner)
-                        .push((tick.at.0, Instant::now())),
-                    Err(RecvError::Lagged(n)) => {
-                        lagged.fetch_add(n, Ordering::SeqCst);
-                    }
-                    Err(RecvError::Closed) => return,
-                }
-            }
-        })
-    };
+    let mut recorders = vec![record_ticks(&subs, &ticks, &ticks_lagged, &shutdown)];
+    if let Some((other, _)) = &survivor {
+        recorders.push(record_ticks(other, &ticks, &ticks_lagged, &shutdown));
+    }
 
     let mut watchers = Vec::new();
     for index in 0..w.sessions {
@@ -838,6 +869,24 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
         }
         match d {
             Disturbance::DropInvalidation { .. } => subs.drop_next_batch(),
+            // The sessions' node dies; every client resumes on the other.
+            Disturbance::NodeKill { .. } => {
+                let Some((other, others)) = survivor.take() else {
+                    report.violations.push(Violation::new(
+                        ViolationKind::Workload,
+                        None,
+                        format!("{d:?}: the checker runs two nodes, so one kill; skipped"),
+                    ));
+                    continue;
+                };
+                first.cancel();
+                (subs, sessions) = (other, others);
+                for watcher in &mut watchers {
+                    resume(watcher, &sessions, &shutdown).await?;
+                    report.resumes += 1;
+                }
+                report.node_kills += 1;
+            }
             Disturbance::Disconnect { .. } => {
                 for watcher in &mut watchers {
                     resume(watcher, &sessions, &shutdown).await?;
@@ -901,7 +950,6 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
                     .map_err(|e| format!("rolling back to version {n}: {e}"))?;
                 report.activations += 1;
             }
-            _ => {}
         }
     }
     for writer in writers {
@@ -961,12 +1009,16 @@ async fn run(store: Store, w: &Workload, report: &mut Report) -> Result<(), Stri
         let consumer = std::mem::replace(&mut watcher.consumer, tokio::spawn(async {}));
         let _ = consumer.await;
     }
-    let _ = recorder.await;
-    let ticks = std::mem::take(
+    for recorder in recorders {
+        let _ = recorder.await;
+    }
+    let mut ticks = std::mem::take(
         &mut *ticks
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner),
     );
+    // Two nodes' ticks interleave; `late_ticks` reads them in ts order.
+    ticks.sort_by_key(|&(ts, arrived)| (ts, arrived));
     report.ticks = ticks.len();
     let lagged = ticks_lagged.load(Ordering::SeqCst);
     if lagged > 0 {

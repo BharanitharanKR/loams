@@ -155,6 +155,13 @@ See [docs/release/upgrades.md](docs/release/upgrades.md).
   across users. A session closes with `unauthenticated` (`token_expired`) 60 s after its token
   expires, with `token_revoked` when its API key is revoked or its member removed, and with
   `unavailable` (`session_rotate`, new) after 24 h; clients resume (LV1 Task 17).
+- **Several Loams Live nodes serve one store.** Give each node its own `--live-node` and the
+  URL its peers reach it at (`--live-advertise`, its main port). A `ModifyQuerySet` or
+  `Authenticate` that lands on a node that does not hold the session is forwarded to the one
+  that does, with the caller's own credential, so a load balancer needs no session affinity; a
+  session whose node is gone is `not_found` (`session_gone`, new) and the client resumes it. On
+  `SIGTERM` a node drains: `/ready` answers `503`, its streams close and new calls are refused
+  with `unavailable` (`node_draining`, new), and running mutations finish first (LV1 Task 24).
 
 ## [0.1.0-preview.2] - unreleased
 

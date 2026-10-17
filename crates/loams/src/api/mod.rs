@@ -388,6 +388,15 @@ async fn health() -> StatusCode {
 }
 
 async fn ready(State(state): State<AppState>) -> StatusCode {
+    // A draining Live node leaves the load balancer first (LV1 plan Task 24).
+    #[cfg(feature = "live")]
+    if state
+        .live
+        .as_ref()
+        .is_some_and(loams_live::LiveRoutes::draining)
+    {
+        return StatusCode::SERVICE_UNAVAILABLE;
+    }
     if state.meta.is_ready() {
         StatusCode::OK
     } else {

@@ -25,9 +25,15 @@
 //! A server serves many apps (LV1 plan Task 13, D690): each call names its
 //! app with the `loams-live-app` header (the server's own app without it),
 //! and [`Engines`] runs that app's engine, starting it on first use.
+//!
+//! Several servers serve one store as a cluster (LV1 plan Task 24, design
+//! §45 §9): each registers as a node ([`crate::forward`]), a session call
+//! for another node's session is forwarded to it, and
+//! [`LiveHandle::drain`] takes a node out of service.
 
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::time::Duration;
 
 use connectrpc::{
@@ -37,6 +43,7 @@ use connectrpc::{
 use futures::StreamExt;
 use loams_kv::Store;
 use loams_proto::loams::errors::v1::ErrorInfo;
+use tokio::sync::Notify;
 use tokio::task::JoinHandle;
 use tokio_util::sync::CancellationToken;
 
@@ -46,6 +53,7 @@ use crate::auth::Caller;
 use crate::authz::{self, ScopeAuthorizer};
 use crate::deploy::{self, Runtime};
 use crate::engines::{AppRuntime, Engines};
+use crate::forward::{FORWARDED_HEADER, Nodes, Route};
 use crate::logs::{CallInfo, REQUEST_ID_HEADER, Ring};
 use crate::pb::{self, LiveAdminServiceExt, LiveService, LiveServiceExt};
 use crate::session::{Outbox, SESSION_HEADER, Start, args_of, chunks, ts_of};
@@ -79,8 +87,99 @@ pub struct LiveHandle {
     pub addr: SocketAddr,
     engines: Engines,
     routes: LiveRoutes,
+    node: Arc<Node>,
     stop: CancellationToken,
     serve: JoinHandle<()>,
+}
+
+/// This server as a node of a cluster (LV1 plan Task 24): its record, its
+/// heartbeat, and whether it is draining.
+#[derive(Debug)]
+struct Node {
+    nodes: Nodes,
+    draining: AtomicBool,
+    /// Mutations running now, which draining waits for.
+    inflight: AtomicUsize,
+    idle: Notify,
+    heartbeat: Mutex<Option<(CancellationToken, JoinHandle<()>)>>,
+}
+
+/// Counts one in-flight mutation of `node` while it lives.
+struct InFlight<'a>(&'a Node);
+
+impl<'a> InFlight<'a> {
+    fn new(node: &'a Node) -> Self {
+        node.inflight.fetch_add(1, Ordering::SeqCst);
+        InFlight(node)
+    }
+}
+
+impl Drop for InFlight<'_> {
+    fn drop(&mut self) {
+        if self.0.inflight.fetch_sub(1, Ordering::SeqCst) == 1 {
+            self.0.idle.notify_waiters();
+        }
+    }
+}
+
+impl Node {
+    fn is_draining(&self) -> bool {
+        self.draining.load(Ordering::SeqCst)
+    }
+
+    /// Refuses a call to a draining node (`node_draining`).
+    fn admit(&self) -> Result<(), LiveError> {
+        if self.is_draining() {
+            return Err(draining());
+        }
+        Ok(())
+    }
+
+    /// Waits until no mutation runs, at most `grace`; whether none does.
+    async fn settle(&self, grace: Duration) -> bool {
+        let wait = async {
+            loop {
+                let idle = self.idle.notified();
+                if self.inflight.load(Ordering::SeqCst) == 0 {
+                    return;
+                }
+                idle.await;
+            }
+        };
+        tokio::time::timeout(grace, wait).await.is_ok()
+    }
+
+    async fn stop_heartbeat(&self) {
+        let beat = self
+            .heartbeat
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner)
+            .take();
+        if let Some((stop, task)) = beat {
+            stop.cancel();
+            let _ = task.await;
+        }
+    }
+}
+
+fn draining() -> LiveError {
+    LiveError::NodeDraining("this Live node is shutting down; resume on another node".into())
+}
+
+/// Refreshes `node`'s record every heartbeat until `stop`.
+async fn heartbeat_loop(node: Arc<Node>, stop: CancellationToken) {
+    let mut every = tokio::time::interval(node.nodes.config().heartbeat);
+    every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    every.tick().await;
+    loop {
+        tokio::select! {
+            () = stop.cancelled() => return,
+            _ = every.tick() => {}
+        }
+        if let Err(e) = node.nodes.heartbeat().await {
+            tracing::warn!(error = %e, node = node.nodes.me(), "refreshing this Live node's record failed");
+        }
+    }
 }
 
 impl LiveServer {
@@ -123,6 +222,9 @@ impl LiveServer {
         let listen = config.listen;
         let app_name = config.app.clone();
         let max_transition_bytes = config.session.max_transition_bytes;
+        let node_id = config.node.clone();
+        let forward = config.forward.clone();
+        crate::forward::check_node_id(&node_id)?;
         let engines = Engines::start(config, runtime, stop.clone()).await?;
         let bound = async {
             let listener = tokio::net::TcpListener::bind(listen)
@@ -140,9 +242,40 @@ impl LiveServer {
                 return Err(e);
             }
         };
+        // This node in the cluster (LV1 plan Task 24), before it serves.
+        let registered = async {
+            let url = forward
+                .advertise
+                .clone()
+                .unwrap_or_else(|| format!("http://{addr}"));
+            let nodes = Nodes::new(engines.apps().store().clone(), &node_id, url, forward)?;
+            nodes.register().await?;
+            Ok::<_, LiveError>(nodes)
+        };
+        let nodes = match registered.await {
+            Ok(nodes) => nodes,
+            Err(e) => {
+                engines.shutdown().await;
+                return Err(e);
+            }
+        };
+        let node = Arc::new(Node {
+            nodes,
+            draining: AtomicBool::new(false),
+            inflight: AtomicUsize::new(0),
+            idle: Notify::new(),
+            heartbeat: Mutex::new(None),
+        });
+        let beat_stop = stop.child_token();
+        let beat = tokio::spawn(heartbeat_loop(node.clone(), beat_stop.clone()));
+        *node
+            .heartbeat
+            .lock()
+            .unwrap_or_else(PoisonError::into_inner) = Some((beat_stop, beat));
         let service = Live {
             engines: engines.clone(),
             max_transition_bytes,
+            node: node.clone(),
         };
         let admin = Admin {
             engines: engines.clone(),
@@ -178,6 +311,7 @@ impl LiveServer {
             addr,
             engines,
             routes,
+            node,
             stop,
             serve,
         })
@@ -216,9 +350,46 @@ impl LiveHandle {
         self.routes.clone()
     }
 
-    /// Stops serving: ends every session's stream, stops every app's
+    /// This node's id in the cluster (`LiveConfig::node`).
+    pub fn node(&self) -> &str {
+        self.node.nodes.me()
+    }
+
+    /// The URL other nodes forward this node's session calls to.
+    pub fn advertised(&self) -> &str {
+        self.node.nodes.url()
+    }
+
+    /// Takes this node out of service (LV1 plan Task 24, design §45 §9):
+    /// [`LiveRoutes::draining`] turns true (the engine's readiness goes
+    /// false), its record leaves the cluster (other nodes answer its
+    /// sessions' calls `session_gone`), every stream closes with
+    /// `UNAVAILABLE`, reason `node_draining`, and so does every new
+    /// `LiveService` call; then it waits up to the drain grace for the
+    /// mutations already running. It keeps serving otherwise; a second
+    /// call returns at once.
+    pub async fn drain(&self) {
+        if self.node.draining.swap(true, Ordering::SeqCst) {
+            return;
+        }
+        self.node.stop_heartbeat().await;
+        if let Err(e) = self.node.nodes.deregister().await {
+            tracing::warn!(error = %e, node = self.node(), "removing this Live node's record failed; it expires");
+        }
+        self.engines.close_sessions(&draining());
+        let grace = self.node.nodes.config().drain_grace;
+        if !self.node.settle(grace).await {
+            tracing::warn!(
+                ?grace,
+                "Live mutations were still running when the drain grace ended"
+            );
+        }
+    }
+
+    /// Stops serving: [drains](Self::drain) the node, stops every app's
     /// manager and janitor, and waits up to 10 s for in-flight requests.
     pub async fn stop(self) {
+        self.drain().await;
         self.stop.cancel();
         let mut serve = self.serve;
         if tokio::time::timeout(STOP_GRACE, &mut serve).await.is_err() {
@@ -240,6 +411,12 @@ pub struct LiveRoutes {
 }
 
 impl LiveRoutes {
+    /// Whether this server is draining ([`LiveHandle::drain`]): the
+    /// engine's readiness answers `503` from then on.
+    pub fn draining(&self) -> bool {
+        self.live.node.is_draining()
+    }
+
     /// Closes the sessions of `principal` (an API key's `apikey:<id>`, a
     /// person's id) in every app this server runs: its credential was
     /// revoked (LV1 plan Task 17).
@@ -313,6 +490,17 @@ fn reflection(rpc: connectrpc::Router) -> connectrpc::Router {
 struct Live {
     engines: Engines,
     max_transition_bytes: usize,
+    node: Arc<Node>,
+}
+
+impl Live {
+    /// Where a call for session `session_id` goes (LV1 plan Task 24): this
+    /// node, or the owner it is forwarded to.
+    async fn route(&self, ctx: &RequestContext, session_id: &str) -> Result<Route, LiveError> {
+        self.node.admit()?;
+        let forwarded = ctx.header(FORWARDED_HEADER).is_some();
+        self.node.nodes.route(session_id, forwarded).await
+    }
 }
 
 /// The app a request addresses (its `loams-live-app` header, else the
@@ -502,6 +690,7 @@ impl LiveService for Live {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::WatchRequest>,
     ) -> ServiceResult<ServiceStream<pb::Transition>> {
+        self.node.admit().map_err(|e| connect_error(&e))?;
         let (app, caller) = app_of(&self.engines, &ctx)
             .await
             .map_err(|e| connect_error(&e))?;
@@ -531,10 +720,27 @@ impl LiveService for Live {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::ModifyQuerySetRequest>,
     ) -> ServiceResult<pb::ModifyQuerySetResponse> {
+        let req = request.to_owned_message();
+        let route = self
+            .route(&ctx, &req.session_id)
+            .await
+            .map_err(|e| connect_error(&e))?;
+        if let Route::Remote { node, record } = route {
+            let answer = self
+                .node
+                .nodes
+                .forward(
+                    (&node, &record),
+                    pb::LIVE_SERVICE_MODIFY_QUERY_SET_SPEC.procedure,
+                    &ctx,
+                    &req,
+                )
+                .await?;
+            return Ok(Response::new(answer));
+        }
         let (app, caller) = app_of(&self.engines, &ctx)
             .await
             .map_err(|e| connect_error(&e))?;
-        let req = request.to_owned_message();
         let added = req.changes.iter().filter_map(|c| match &c.change {
             Some(pb::__buffa::oneof::query_set_change::Change::Add(spec)) => Some(&**spec),
             _ => None,
@@ -552,10 +758,27 @@ impl LiveService for Live {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::AuthenticateRequest>,
     ) -> ServiceResult<pb::AuthenticateResponse> {
+        let req = request.to_owned_message();
+        let route = self
+            .route(&ctx, &req.session_id)
+            .await
+            .map_err(|e| connect_error(&e))?;
+        if let Route::Remote { node, record } = route {
+            let answer = self
+                .node
+                .nodes
+                .forward(
+                    (&node, &record),
+                    pb::LIVE_SERVICE_AUTHENTICATE_SPEC.procedure,
+                    &ctx,
+                    &req,
+                )
+                .await?;
+            return Ok(Response::new(answer));
+        }
         let (app, caller) = app_of(&self.engines, &ctx)
             .await
             .map_err(|e| connect_error(&e))?;
-        let req = request.to_owned_message();
         let name = app.name().to_string();
         let check: crate::session::Check = Arc::new(move |caller, f, args| {
             authz::check_call(&ScopeAuthorizer, caller, &name, f, args)
@@ -579,6 +802,7 @@ impl LiveService for Live {
         let req = request.to_owned_message();
         let request_id = Ring::request_id();
         let run = async {
+            self.node.admit()?;
             let (app, caller) = app_of(&self.engines, &ctx).await?;
             let f = deploy::resolve(app.engine(), &req.function)?;
             let args = args_of(req.args.into_option())?;
@@ -619,7 +843,11 @@ impl LiveService for Live {
     ) -> ServiceResult<pb::MutateResponse> {
         let req = request.to_owned_message();
         let request_id = Ring::request_id();
+        // Counted before the draining check, so a drain that starts after it
+        // waits for this mutation.
+        let _inflight = InFlight::new(&self.node);
         let run = async {
+            self.node.admit()?;
             let (app, caller) = app_of(&self.engines, &ctx).await?;
             let f = deploy::resolve(app.engine(), &req.function)?;
             let args = args_of(req.args.into_option())?;

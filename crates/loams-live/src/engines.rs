@@ -342,6 +342,20 @@ impl Engines {
         }
     }
 
+    /// Closes every session, in every app running here, with `error`, and
+    /// refuses new ones with it (a draining node, LV1 plan Task 24).
+    pub fn close_sessions(&self, error: &LiveError) {
+        let runtimes: Vec<Arc<AppRuntime>> = self
+            .running_map()
+            .values()
+            .filter_map(|slot| slot.get().cloned())
+            .chain(std::iter::once(self.inner.default.clone()))
+            .collect();
+        for runtime in runtimes {
+            runtime.sessions().close_all(error.clone());
+        }
+    }
+
     /// The engine of the app a request addresses: `app` (the
     /// `loams-live-app` header) or, without it, the server's own app;
     /// started when it does not run here yet. Refused for an unknown app

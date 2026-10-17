@@ -1187,11 +1187,14 @@ impl LiveRuntime {
     /// 10), which names the caller for the admin service.
     #[cfg_attr(not(feature = "live-tikv"), allow(unused_variables))]
     async fn start(
-        config: loams_live::LiveConfig,
+        mut config: loams_live::LiveConfig,
         bundles: Store,
         own_gc: bool,
         auth: Arc<crate::auth::Auth>,
     ) -> Result<Self, ServerError> {
+        // A node that authenticates its callers forwards session calls only
+        // to nodes that do too (LV1 plan Task 24).
+        config.forward.authenticated = auth.enforced();
         let loader = loams_live_js::JsLoader::new(loams_live_js::JsConfig {
             isolation: config.isolation,
             ..loams_live_js::JsConfig::default()

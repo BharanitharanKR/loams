@@ -180,24 +180,30 @@ async fn reactive_checker_resume_converges(store: TestStore) {
 }
 live_test!(reactive_checker_resume_converges);
 
-/// A disturbance a later task wires is reported, not silently skipped, and
-/// a disturbance past the workload's last op is a workload error.
+/// Every disturbance is wired now (LV1 plan Task 24 wired the last,
+/// `NodeKill`); one the checker cannot apply is reported, not silently
+/// skipped: a second `NodeKill` (it runs two nodes) and a disturbance past
+/// the workload's last op are workload errors.
 async fn reactive_checker_reports_unwired_disturbances(store: TestStore) {
     let w = Workload {
         seed: 1,
         sessions: 1,
         tables: 1,
         ops: 20,
-        disturb: vec![Disturbance::NodeKill { at_op: 5 }],
+        disturb: vec![
+            Disturbance::NodeKill { at_op: 5 },
+            Disturbance::NodeKill { at_op: 10 },
+        ],
     };
     let report = run_reactive_checker(store.fresh_root().await.store(), w).await;
     let kinds: Vec<ViolationKind> = report.violations.iter().map(|v| v.kind).collect();
-    assert_eq!(kinds, [ViolationKind::Unwired], "{:?}", report.violations);
+    assert_eq!(kinds, [ViolationKind::Workload], "{:?}", report.violations);
     assert!(
-        report.violations[0].detail.contains("Task 24"),
+        report.violations[0].detail.contains("one kill"),
         "{:?}",
         report.violations
     );
+    assert_eq!(report.node_kills, 1);
 
     let w = Workload {
         seed: 1,
@@ -237,6 +243,31 @@ async fn reactive_checker_with_identity_changes(store: TestStore) {
     assert!(report.checked > 0, "nothing checked");
 }
 live_test!(reactive_checker_with_identity_changes);
+
+/// LV1 plan Task 24: the node every session runs on dies in the middle of
+/// the workload, and every client resumes on the other node of the same
+/// store; no session ever shows a result that differs from a fresh
+/// evaluation, and every one reaches the last commit.
+async fn reactive_checker_with_node_kill(store: TestStore) {
+    let w = Workload {
+        seed: 13,
+        sessions: 3,
+        tables: 2,
+        ops: 300,
+        disturb: vec![Disturbance::NodeKill { at_op: 120 }],
+    };
+    let report = run_reactive_checker(store.fresh_root().await.store(), w).await;
+    assert!(
+        report.violations.is_empty(),
+        "{} violations, the first:\n{}",
+        report.violations.len(),
+        first(&report)
+    );
+    assert_eq!(report.node_kills, 1);
+    assert_eq!(report.resumes, 3, "every session resumes on the survivor");
+    assert!(report.checked > 0, "nothing checked");
+}
+live_test!(reactive_checker_with_node_kill);
 
 /// Every mutation of the workload carries an idempotency key (one per op,
 /// kept across its retries), so a retry after an unknown outcome replays

@@ -730,6 +730,18 @@
       "standIn": null
     },
     {
+      "reason": "session_gone",
+      "code": "not_found",
+      "why": "Needs a second Live node whose session a call names; the recorder runs one engine (LV1 Task 24).",
+      "standIn": null
+    },
+    {
+      "reason": "node_draining",
+      "code": "unavailable",
+      "why": "Needs an engine shutting down while the recorder calls it (LV1 Task 24).",
+      "standIn": null
+    },
+    {
       "reason": "live_function_error",
       "code": "unknown",
       "why": "Needs a deployed function that throws; the recorder deploys nothing (LV1 Task 19).",
