@@ -150,6 +150,38 @@ impl WorkspaceService for WorkspacesAbsent {
     ) -> ServiceResult<pb::RestoreSalvageResponse> {
         Err(absent("RestoreSalvage"))
     }
+
+    async fn read_files(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, pb::ReadFilesRequest>,
+    ) -> ServiceResult<ServiceStream<pb::ReadFilesResponse>> {
+        Err(absent("ReadFiles"))
+    }
+
+    async fn apply_edits(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, pb::ApplyEditsRequest>,
+    ) -> ServiceResult<pb::ApplyEditsResponse> {
+        Err(absent("ApplyEdits"))
+    }
+
+    async fn diff(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, pb::DiffRequest>,
+    ) -> ServiceResult<ServiceStream<pb::DiffResponse>> {
+        Err(absent("Diff"))
+    }
+
+    async fn rebase(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, pb::RebaseRequest>,
+    ) -> ServiceResult<pb::RebaseResponse> {
+        Err(absent("Rebase"))
+    }
 }
 
 #[cfg(feature = "git")]
@@ -166,18 +198,22 @@ mod served {
     use loams_git::catalog::RepoRecord;
     use loams_git::format::pb as gitpb;
     use loams_git::format::snapshot::snapshot_commit;
-    use loams_git::limits::{HINT_EVERY, MAX_FENCE_RETRIES, MAX_FORK_DEPTH};
+    use loams_git::history::{Pathspec, TreeReader};
+    use loams_git::limits::{
+        HINT_EVERY, MAX_EDITS, MAX_FENCE_RETRIES, MAX_FORK_DEPTH, MAX_READ_PATHS,
+    };
     use loams_git::objects::{Kind, WsView};
     use loams_git::odb::RangeOdb;
     use loams_git::ws::{
-        BucketWorkspaceStore, DELETED_LABEL, NoScan, ReplayError, SalvageRef, SaveCheckError,
-        SnapAppended, WorkspaceStore, WsBase, WsError, WsPackBlobs, check_save_objects,
-        commit_tree, empty_tree, fork_sources, put_workspace_pack, replay_salvage, seal_snapshot,
-        view_of, write_ws_pack,
+        BucketWorkspaceStore, DELETED_LABEL, EditError, FileEdit, FileMode, MergeLabels, NoEnv,
+        NoScan, ReplayError, SalvageRef, SaveCheckError, SnapAppended, WorkspaceStore, WsBase,
+        WsError, WsPackBlobs, WsPackError, apply_edits, changed_paths, check_save_objects,
+        commit_tree, empty_tree, file_patch, fork_sources, put_workspace_pack, read_file,
+        rebase_trees, replay_salvage, seal_snapshot, view_of, write_ws_pack,
     };
     use loams_git::{
-        BlobId, CreateWs, GitAccess, MountId, Principal, RefName, RefSnapshot, RepoPaths, SnapN,
-        StoreBlobStore, WsId, WsName,
+        BlobId, CreateWs, GitAccess, MountId, Principal, RefName, RefSnapshot, RepoPath, RepoPaths,
+        SnapN, StoreBlobStore, WsId, WsName,
     };
     use loams_proto::loams::repos::v1 as pb;
     use loams_proto::loams::repos::v1::__buffa::oneof::watch_workspace_response;
@@ -188,7 +224,7 @@ mod served {
 
     use crate::api::connect::refuse;
     use crate::api::objects::{
-        internal, odb_error, open_odb, pack_pb, parse_oid, workspace_not_found,
+        internal, odb_error, open_odb, pack_pb, parse_oid, workspace_not_found, ws_pack_error,
     };
     use crate::api::repos::served::{
         ReposServed, idem_key, invalid, key_reused, now_ms, page_size, repo_name, timestamp,
@@ -204,6 +240,10 @@ mod served {
     const WATCH_BUFFER: usize = 16;
     /// How often a `WatchWorkspace` stream looks for saves made through other nodes.
     const WATCH_POLL: Duration = HINT_EVERY;
+    /// Messages a `ReadFiles` or `Diff` stream buffers before its producer waits.
+    const STREAM_BUFFER: usize = 16;
+    /// The most file or patch bytes in one `ReadFiles` or `Diff` message (ruling T26.3).
+    const CHUNK_BYTES: usize = 1024 * 1024;
 
     /// `WorkspaceService`, served.
     #[derive(Debug)]
@@ -646,6 +686,112 @@ mod served {
         out
     }
 
+    fn edit_error(err: EditError) -> ConnectError {
+        match err {
+            EditError::Invalid { index, reason } => invalid(&format!("edits[{index}]"), reason),
+            err @ EditError::TooMany { .. } => invalid("edits", err.to_string()),
+            EditError::Env(refusal) => refuse(
+                ErrorCode::InvalidArgument,
+                "env_unsealed",
+                refusal.to_string(),
+                &[("path", refusal.path.clone())],
+            ),
+            err @ EditError::Snapshot(_) => internal("a corrupt snapshot", &err),
+            EditError::Odb(err) => odb_error(err),
+            EditError::Build(loams_git::ws::TreeBuildError::Odb(err)) => odb_error(err),
+            EditError::Build(err) => invalid("edits", err.to_string()),
+        }
+    }
+
+    /// A snapshot's tree field.
+    fn tree_of(bytes: &[u8], field: &str) -> Result<loams_git::ObjectId, ConnectError> {
+        loams_git::ObjectId::try_from(bytes).map_err(|_| {
+            internal(
+                "a corrupt snapshot",
+                &format!("{field} is not an object id"),
+            )
+        })
+    }
+
+    fn repo_path(field: &str, value: &str) -> Result<RepoPath, ConnectError> {
+        RepoPath::parse(value).map_err(|err| invalid(field, err.to_string()))
+    }
+
+    /// Edit `index` of an `ApplyEdits` request.
+    fn file_edit(index: usize, edit: &pb::WorkspaceEdit) -> Result<FileEdit, ConnectError> {
+        use loams_proto::loams::repos::v1::__buffa::oneof::workspace_edit::Edit;
+        let field = |name: &str| format!("edits[{index}].{name}");
+        match &edit.edit {
+            Some(Edit::Write(write)) => Ok(FileEdit::Write {
+                path: repo_path(&field("write.path"), &write.path)?,
+                mode: match &write.mode {
+                    EnumValue::Known(
+                        pb::WorkspaceFileMode::WORKSPACE_FILE_MODE_UNSPECIFIED
+                        | pb::WorkspaceFileMode::WORKSPACE_FILE_MODE_REGULAR,
+                    ) => FileMode::Regular,
+                    EnumValue::Known(pb::WorkspaceFileMode::WORKSPACE_FILE_MODE_EXECUTABLE) => {
+                        FileMode::Executable
+                    }
+                    EnumValue::Known(pb::WorkspaceFileMode::WORKSPACE_FILE_MODE_SYMLINK) => {
+                        FileMode::Symlink
+                    }
+                    EnumValue::Unknown(_) => {
+                        return Err(invalid(&field("write.mode"), "an unknown mode"));
+                    }
+                },
+                data: write.content.clone().into(),
+            }),
+            Some(Edit::Delete(delete)) => Ok(FileEdit::Delete {
+                path: repo_path(&field("delete.path"), &delete.path)?,
+            }),
+            Some(Edit::Rename(rename)) => Ok(FileEdit::Rename {
+                from: repo_path(&field("rename.old_path"), &rename.old_path)?,
+                to: repo_path(&field("rename.new_path"), &rename.new_path)?,
+            }),
+            None => Err(invalid(
+                &field("edit"),
+                "an edit writes, deletes or renames",
+            )),
+        }
+    }
+
+    /// The snapshot after `on` with these trees and conflicts, written by `principal` now
+    /// (the status hint dropped: readers diff the trees), sealed.
+    fn successor(
+        on: &gitpb::WorkspaceSnapshot,
+        worktree: loams_git::ObjectId,
+        index: loams_git::ObjectId,
+        conflicts: Vec<gitpb::Conflict>,
+        principal: &Principal,
+        writer: Option<&MountId>,
+    ) -> Result<gitpb::WorkspaceSnapshot, ConnectError> {
+        seal_snapshot(gitpb::WorkspaceSnapshot {
+            n: on.n + 1,
+            worktree_tree: worktree.as_bytes().to_vec(),
+            index_tree: index.as_bytes().to_vec(),
+            changed: Vec::new(),
+            changed_overflow: true,
+            conflicts,
+            writer: writer.map(ToString::to_string).unwrap_or_default(),
+            principal: principal.to_string(),
+            created_unix_ms: now_ms(),
+            label: String::new(),
+            takeover: None,
+            ..on.clone()
+        })
+        .map_err(ws_error)
+    }
+
+    /// Whether a stored snapshot made the change `next` makes (a retried call's).
+    fn same_change(stored: &gitpb::WorkspaceSnapshot, next: &gitpb::WorkspaceSnapshot) -> bool {
+        stored.n == next.n
+            && stored.worktree_tree == next.worktree_tree
+            && stored.index_tree == next.index_tree
+            && stored.conflicts == next.conflicts
+            && stored.head == next.head
+            && stored.principal == next.principal
+    }
+
     impl WorkspacesServed {
         fn store(&self, record: &RepoRecord) -> BucketWorkspaceStore {
             BucketWorkspaceStore::new(self.repos.git.store.clone(), record.ns)
@@ -700,6 +846,79 @@ mod served {
             open_odb(&self.repos.git, record, snapshot, Some((ws, view)))
                 .await
                 .map_err(|reason| unavailable("opening the workspace's objects", &reason))
+        }
+
+        /// Snapshot `n` (the latest when `None`) of workspace `ws`.
+        async fn snapshot_at(
+            &self,
+            record: &RepoRecord,
+            ws: &WsId,
+            latest: &Arc<gitpb::WorkspaceSnapshot>,
+            n: Option<u64>,
+        ) -> Result<Arc<gitpb::WorkspaceSnapshot>, ConnectError> {
+            match n {
+                None => Ok(Arc::clone(latest)),
+                Some(n) if n == latest.n => Ok(Arc::clone(latest)),
+                Some(n) => self
+                    .store(record)
+                    .get(&record.repo_id, ws, SnapN(n))
+                    .await
+                    .map_err(ws_error)?
+                    .ok_or_else(|| {
+                        refuse(
+                            ErrorCode::NotFound,
+                            "workspace_not_found",
+                            format!("workspace {ws} has no snapshot {n}"),
+                            &[("workspace", ws.to_string()), ("n", n.to_string())],
+                        )
+                    }),
+            }
+        }
+
+        /// The repository's objects with the packs of `snap` and of `latest` searched last.
+        async fn snapshot_odb(
+            &self,
+            ns_name: &str,
+            record: &RepoRecord,
+            ws: &WsId,
+            latest: &gitpb::WorkspaceSnapshot,
+            snap: &gitpb::WorkspaceSnapshot,
+        ) -> Result<RangeOdb, ConnectError> {
+            let store = self.store(record);
+            let view = WsView {
+                packs: union_packs(&latest.packs, [snap.packs.as_slice()]),
+                ..view_of(&store, &record.repo_id, latest)
+                    .await
+                    .map_err(ws_error)?
+            };
+            let repo = self.repo_snapshot(ns_name, record).await?;
+            self.odb(record, &repo, ws, &view).await
+        }
+
+        /// Stores `objects` and `next`'s snapshot commit as one workspace pack (scanned as an
+        /// upload is); `packs` with it added.
+        async fn store_objects(
+            &self,
+            record: &RepoRecord,
+            ws: &WsId,
+            next: &gitpb::WorkspaceSnapshot,
+            mut objects: Vec<(Kind, bytes::Bytes)>,
+            packs: &[gitpb::PackRef],
+        ) -> Result<Vec<gitpb::PackRef>, ConnectError> {
+            let (_, commit_body) =
+                snapshot_commit(next).map_err(|err| internal("the snapshot commit", &err))?;
+            objects.push((Kind::Commit, commit_body));
+            let (_, _, lpk) =
+                write_ws_pack(objects).map_err(|err| internal("writing the objects", &err))?;
+            let paths = RepoPaths::new(record.ns, &record.repo_id);
+            let blobs = StoreBlobStore::workspace(self.repos.git.store.clone(), &paths, ws);
+            let (verified, _) = put_workspace_pack(&record.repo_id, &blobs, lpk, &NoScan)
+                .await
+                .map_err(|err| match err {
+                    err @ WsPackError::Refused(_) => ws_pack_error(err),
+                    err => internal("storing the objects", &err),
+                })?;
+            Ok(union_packs(packs, [std::slice::from_ref(&verified.pack)]))
         }
 
         /// Appends `snap`, then publishes the hint and tells this node's watchers.
@@ -1413,6 +1632,397 @@ mod served {
                 ErrorCode::Aborted,
                 "workspace_fenced",
                 "the workspace kept changing while the salvage was restored; retry",
+                &[],
+            ))
+        }
+
+        async fn read_files(
+            &self,
+            ctx: RequestContext,
+            request: ServiceRequest<'_, pb::ReadFilesRequest>,
+        ) -> ServiceResult<ServiceStream<pb::ReadFilesResponse>> {
+            let req = request.to_owned_message();
+            let record = self
+                .repo(&ctx, GitAccess::Read, &req.namespace, &req.name)
+                .await?;
+            let (ws, latest) = self.latest(&record, &req.workspace).await?;
+            may_read_workspace(&self.repos, &ctx, &latest.owner).await?;
+            if req.paths.len() > MAX_READ_PATHS {
+                return Err(invalid(
+                    "paths",
+                    format!("at most {MAX_READ_PATHS} paths in one call"),
+                ));
+            }
+            let paths = req
+                .paths
+                .iter()
+                .map(|p| RepoPath::parse(p).map_err(|err| invalid("paths", err.to_string())))
+                .collect::<Result<Vec<_>, _>>()?;
+            let snap = self.snapshot_at(&record, &ws, &latest, req.n).await?;
+            let tree = tree_of(&snap.worktree_tree, "worktree_tree")?;
+            let odb = self
+                .snapshot_odb(&req.namespace, &record, &ws, &latest, &snap)
+                .await?;
+            let (tx, mut rx) = mpsc::channel(STREAM_BUFFER);
+            tokio::spawn(async move {
+                let reader = TreeReader::new(&odb);
+                for (path, name) in paths.iter().zip(&req.paths) {
+                    let read = match read_file(&reader, tree, path, &NoEnv).await {
+                        Ok(read) => read,
+                        Err(err) => {
+                            let _ = tx.send(Err(edit_error(err))).await;
+                            return;
+                        }
+                    };
+                    let head = pb::ReadFilesResponse {
+                        path: name.clone(),
+                        found: read.entry.is_some(),
+                        mode: read.entry.map_or(0, |(mode, _)| mode),
+                        oid: read
+                            .entry
+                            .map(|(_, oid)| oid.to_string())
+                            .unwrap_or_default(),
+                        size: read.data.as_ref().map_or(0, |d| d.len() as u64),
+                        redacted: read.redacted,
+                        ..Default::default()
+                    };
+                    let data = read.data.unwrap_or_default();
+                    let mut offset = 0;
+                    loop {
+                        let end = (offset + CHUNK_BYTES).min(data.len());
+                        let message = pb::ReadFilesResponse {
+                            offset: offset as u64,
+                            data: data.slice(offset..end).to_vec(),
+                            ..head.clone()
+                        };
+                        if tx.send(Ok(message)).await.is_err() {
+                            return;
+                        }
+                        offset = end;
+                        if offset >= data.len() {
+                            break;
+                        }
+                    }
+                }
+            });
+            Response::ok(
+                Box::pin(futures::stream::poll_fn(move |cx| rx.poll_recv(cx)))
+                    as ServiceStream<pb::ReadFilesResponse>,
+            )
+        }
+
+        async fn apply_edits(
+            &self,
+            ctx: RequestContext,
+            request: ServiceRequest<'_, pb::ApplyEditsRequest>,
+        ) -> ServiceResult<pb::ApplyEditsResponse> {
+            let req = request.to_owned_message();
+            let record = self
+                .repo(&ctx, GitAccess::Write, &req.namespace, &req.name)
+                .await?;
+            idem_key(&req.idempotency_key)?;
+            let principal = caller_principal(&ctx)?;
+            let writer_id = writer(&req.writer)?;
+            let (ws, latest) = self.latest(&record, &req.workspace).await?;
+            may_write_workspace(&self.repos, &ctx, &latest.owner).await?;
+            if req.edits.len() > MAX_EDITS {
+                return Err(invalid(
+                    "edits",
+                    format!("at most {MAX_EDITS} edits in one call"),
+                ));
+            }
+            let edits = req
+                .edits
+                .iter()
+                .enumerate()
+                .map(|(i, edit)| file_edit(i, edit))
+                .collect::<Result<Vec<_>, _>>()?;
+            let n = req.expect_n;
+            if latest.n < n {
+                return Err(invalid(
+                    "expect_n",
+                    format!("the latest snapshot is {}", latest.n),
+                ));
+            }
+            if latest.n > n + 1 {
+                return Err(fenced(&latest, None));
+            }
+            let store = self.store(&record);
+            // The snapshot the edits apply to: the latest, or the one before it when this
+            // may be a retry of a call that saved.
+            let on = if latest.n == n {
+                Arc::clone(&latest)
+            } else {
+                store
+                    .get(&record.repo_id, &ws, SnapN(n))
+                    .await
+                    .map_err(ws_error)?
+                    .ok_or_else(|| fenced(&latest, None))?
+            };
+            let odb = self
+                .snapshot_odb(&req.namespace, &record, &ws, &latest, &on)
+                .await?;
+            let edited = apply_edits(&odb, &on, edits, req.stage, &NoEnv)
+                .await
+                .map_err(edit_error)?;
+            let mut conflicts = on.conflicts.clone();
+            if req.stage {
+                conflicts.retain(|c| !edited.touched.iter().any(|p| p.as_str() == c.path));
+            }
+            let mut next = successor(
+                &on,
+                edited.worktree_tree,
+                edited.index_tree,
+                conflicts,
+                &principal,
+                writer_id.as_ref(),
+            )?;
+            if latest.n == n + 1 {
+                // A retry answers the snapshot its first attempt saved; anything else lost
+                // the race.
+                return if same_change(&latest, &next) {
+                    Response::ok(pb::ApplyEditsResponse {
+                        snapshot: MessageField::some(snapshot_pb(&latest)),
+                        ..Default::default()
+                    })
+                } else {
+                    Err(fenced(&latest, None))
+                };
+            }
+            next.packs = self
+                .store_objects(&record, &ws, &next, edited.objects, &on.packs)
+                .await?;
+            match self.append(&store, &record, &ws, &next).await? {
+                SnapAppended::Committed { .. } => Response::ok(pb::ApplyEditsResponse {
+                    snapshot: MessageField::some(snapshot_pb(&next)),
+                    ..Default::default()
+                }),
+                SnapAppended::Fenced { existing } if same_change(&existing, &next) => {
+                    Response::ok(pb::ApplyEditsResponse {
+                        snapshot: MessageField::some(snapshot_pb(&existing)),
+                        ..Default::default()
+                    })
+                }
+                SnapAppended::Fenced { existing } => Err(fenced(&existing, None)),
+            }
+        }
+
+        async fn diff(
+            &self,
+            ctx: RequestContext,
+            request: ServiceRequest<'_, pb::DiffRequest>,
+        ) -> ServiceResult<ServiceStream<pb::DiffResponse>> {
+            let req = request.to_owned_message();
+            let record = self
+                .repo(&ctx, GitAccess::Read, &req.namespace, &req.name)
+                .await?;
+            let (ws, latest) = self.latest(&record, &req.workspace).await?;
+            may_read_workspace(&self.repos, &ctx, &latest.owner).await?;
+            let spec =
+                Pathspec::parse(&req.paths).map_err(|err| invalid("paths", err.to_string()))?;
+            let snap = self.snapshot_at(&record, &ws, &latest, req.n).await?;
+            let new = tree_of(&snap.worktree_tree, "worktree_tree")?;
+            let odb = self
+                .snapshot_odb(&req.namespace, &record, &ws, &latest, &snap)
+                .await?;
+            let tree_of_commit = |bytes: Vec<u8>, field: &'static str| {
+                let odb = &odb;
+                async move {
+                    if bytes.is_empty() {
+                        return Ok(empty_tree());
+                    }
+                    let oid = loams_git::ObjectId::try_from(bytes.as_slice())
+                        .map_err(|_| internal("a snapshot commit id", &field))?;
+                    commit_tree(odb, field, &oid)
+                        .await
+                        .map_err(save_check_error)
+                }
+            };
+            let against = match &req.against {
+                EnumValue::Known(pb::DiffAgainst::DIFF_AGAINST_BASE) => {
+                    tree_of_commit(snap.base.clone(), "base").await?
+                }
+                EnumValue::Known(pb::DiffAgainst::DIFF_AGAINST_INDEX) => {
+                    tree_of(&snap.index_tree, "index_tree")?
+                }
+                EnumValue::Known(pb::DiffAgainst::DIFF_AGAINST_COMMIT) => {
+                    let commit = parse_oid("commit", &req.commit)?;
+                    tree_of_commit(commit.as_bytes().to_vec(), "commit").await?
+                }
+                EnumValue::Known(
+                    pb::DiffAgainst::DIFF_AGAINST_HEAD | pb::DiffAgainst::DIFF_AGAINST_UNSPECIFIED,
+                ) => tree_of_commit(snap.head.clone(), "head").await?,
+                EnumValue::Unknown(_) => return Err(invalid("against", "an unknown value")),
+            };
+            let (tx, mut rx) = mpsc::channel(STREAM_BUFFER);
+            tokio::spawn(async move {
+                let reader = TreeReader::new(&odb);
+                let changes = match changed_paths(&reader, against, new, &spec).await {
+                    Ok(changes) => changes,
+                    Err(err) => {
+                        let _ = tx.send(Err(edit_error(err))).await;
+                        return;
+                    }
+                };
+                for change in changes {
+                    let patch = match file_patch(&odb, &change).await {
+                        Ok(patch) => patch,
+                        Err(err) => {
+                            let _ = tx.send(Err(edit_error(err))).await;
+                            return;
+                        }
+                    };
+                    let path = String::from_utf8_lossy(&change.path).into_owned();
+                    for part in patch.chunks(CHUNK_BYTES) {
+                        let message = pb::DiffResponse {
+                            path: path.clone(),
+                            patch: part.to_vec(),
+                            ..Default::default()
+                        };
+                        if tx.send(Ok(message)).await.is_err() {
+                            return;
+                        }
+                    }
+                }
+            });
+            Response::ok(
+                Box::pin(futures::stream::poll_fn(move |cx| rx.poll_recv(cx)))
+                    as ServiceStream<pb::DiffResponse>,
+            )
+        }
+
+        async fn rebase(
+            &self,
+            ctx: RequestContext,
+            request: ServiceRequest<'_, pb::RebaseRequest>,
+        ) -> ServiceResult<pb::RebaseResponse> {
+            let req = request.to_owned_message();
+            let record = self
+                .repo(&ctx, GitAccess::Write, &req.namespace, &req.name)
+                .await?;
+            idem_key(&req.idempotency_key)?;
+            let principal = caller_principal(&ctx)?;
+            let writer_id = writer(&req.writer)?;
+            let onto_asked = if req.onto.is_empty() {
+                None
+            } else {
+                Some(parse_oid("onto", &req.onto)?)
+            };
+            let store = self.store(&record);
+            for _ in 0..MAX_FENCE_RETRIES {
+                let (ws, latest) = self.latest(&record, &req.workspace).await?;
+                may_write_workspace(&self.repos, &ctx, &latest.owner).await?;
+                if !latest.conflicts.is_empty() {
+                    return Err(refuse(
+                        ErrorCode::FailedPrecondition,
+                        "workspace_conflicted",
+                        "resolve the workspace's conflicts before rebasing it",
+                        &[
+                            ("workspace", ws.to_string()),
+                            ("conflicts", latest.conflicts.len().to_string()),
+                        ],
+                    ));
+                }
+                if latest.head != latest.base {
+                    return Err(refuse(
+                        ErrorCode::FailedPrecondition,
+                        "workspace_has_commits",
+                        "the workspace has local commits; rebase them with git, or land them",
+                        &[("workspace", ws.to_string())],
+                    ));
+                }
+                let repo = self.repo_snapshot(&req.namespace, &record).await?;
+                let (onto, theirs) = match onto_asked {
+                    Some(onto) => (onto, onto.to_hex_with_len(7).to_string()),
+                    None => {
+                        let track = RefName::parse(&latest.track).map_err(|_| {
+                            invalid("onto", "the workspace tracks no branch; name a commit")
+                        })?;
+                        let tip = repo.refs.get(&track).copied().ok_or_else(|| {
+                            invalid("onto", format!("{track} has no commit; name one"))
+                        })?;
+                        (tip, track.to_string())
+                    }
+                };
+                if onto.as_bytes() == latest.base.as_slice() {
+                    return Response::ok(pb::RebaseResponse {
+                        snapshot: MessageField::some(snapshot_pb(&latest)),
+                        ..Default::default()
+                    });
+                }
+                let view = view_of(&store, &record.repo_id, &latest)
+                    .await
+                    .map_err(ws_error)?;
+                let odb = self.odb(&record, &repo, &ws, &view).await?;
+                let onto_tree = commit_tree(&odb, "onto", &onto)
+                    .await
+                    .map_err(save_check_error)?;
+                let base_tree = if latest.base.is_empty() {
+                    empty_tree()
+                } else {
+                    let base = loams_git::ObjectId::try_from(latest.base.as_slice())
+                        .map_err(|_| internal("the workspace's base", &"not an object id"))?;
+                    commit_tree(&odb, "base", &base)
+                        .await
+                        .map_err(save_check_error)?
+                };
+                let labels = MergeLabels {
+                    ours: "workspace",
+                    base: "base",
+                    theirs: &theirs,
+                };
+                let rebased = rebase_trees(
+                    &odb,
+                    base_tree,
+                    onto_tree,
+                    tree_of(&latest.worktree_tree, "worktree_tree")?,
+                    tree_of(&latest.index_tree, "index_tree")?,
+                    labels,
+                )
+                .await
+                .map_err(edit_error)?;
+                let conflict_paths: Vec<String> =
+                    rebased.conflicts.iter().map(|c| c.path.clone()).collect();
+                let moved = onto.as_bytes().to_vec();
+                let mut refs = latest.refs.clone();
+                for local in &mut refs {
+                    if local.name == latest.head_ref {
+                        local.oid = moved.clone();
+                    }
+                }
+                let mut next = successor(
+                    &gitpb::WorkspaceSnapshot {
+                        base: moved.clone(),
+                        base_seq: repo.seq.0,
+                        head: moved,
+                        refs,
+                        ..(*latest).clone()
+                    },
+                    rebased.worktree_tree,
+                    rebased.index_tree,
+                    rebased.conflicts,
+                    &principal,
+                    writer_id.as_ref(),
+                )?;
+                next.packs = self
+                    .store_objects(&record, &ws, &next, rebased.objects, &latest.packs)
+                    .await?;
+                match self.append(&store, &record, &ws, &next).await? {
+                    SnapAppended::Committed { .. } => {
+                        return Response::ok(pb::RebaseResponse {
+                            snapshot: MessageField::some(snapshot_pb(&next)),
+                            conflicts: conflict_paths,
+                            ..Default::default()
+                        });
+                    }
+                    // Another save took the number: rebase the new latest.
+                    SnapAppended::Fenced { .. } => {}
+                }
+            }
+            Err(refuse(
+                ErrorCode::Aborted,
+                "workspace_fenced",
+                "the workspace kept changing while it was rebased; retry",
                 &[],
             ))
         }

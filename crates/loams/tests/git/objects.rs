@@ -75,6 +75,14 @@ pub(crate) fn rev(dir: &TempDir, name: &str) -> String {
 /// Creates `acme/web`, stores `dir`'s history as one pack and points `main` at it; the
 /// consistency token of that commit.
 pub(crate) async fn load(running: &Running, dir: &TempDir) -> String {
+    load_ids(running, dir).await.0
+}
+
+/// [`load`], with the namespace's and the repository's ids.
+pub(crate) async fn load_ids(
+    running: &Running,
+    dir: &TempDir,
+) -> (String, loams_git::NamespaceId, loams_git::RepoId) {
     let ns = namespace_id(running).await;
     let (status, created) = running
         .connect(
@@ -84,18 +92,35 @@ pub(crate) async fn load(running: &Running, dir: &TempDir) -> String {
         .await;
     assert_eq!(status, reqwest::StatusCode::OK, "{created}");
     let repo_id = created["repo"]["repoId"].as_str().expect("id").to_owned();
+    let repo = loams_git::RepoId::parse(&repo_id).expect("repo id");
+    let token = move_main(running, ns, &repo, dir, None).await;
+    (token, ns, repo)
+}
+
+/// Stores the objects `dir`'s `main` reaches beyond `old` (all, without one) as one pack and
+/// moves `main` from `old` to it; the consistency token of that commit.
+pub(crate) async fn move_main(
+    running: &Running,
+    ns: loams_git::NamespaceId,
+    repo: &loams_git::RepoId,
+    dir: &TempDir,
+    old: Option<&str>,
+) -> String {
+    let revs = match old {
+        Some(old) => format!("main\n^{old}\n"),
+        None => "main\n".to_owned(),
+    };
     let printed = git(
         dir.path(),
         &["pack-objects", "--revs", "-q", "out"],
-        Some("main\n"),
+        Some(&revs),
     );
     let name = printed.trim();
     let pack = std::fs::read(dir.path().join(format!("out-{name}.pack"))).expect("pack");
     let idx = std::fs::read(dir.path().join(format!("out-{name}.idx"))).expect("idx");
     let (id, pack_ref, bundle) = LpkWriter::from_parts(pack.into(), idx.into()).expect("lpk");
-    let repo = loams_git::RepoId::parse(&repo_id).expect("repo id");
     let store = running.bucket();
-    let paths = loams_git::RepoPaths::new(ns, &repo);
+    let paths = loams_git::RepoPaths::new(ns, repo);
     let blobs = StoreBlobStore::new(store.clone(), paths.clone());
     blobs.put(&id, bundle).await.expect("put pack");
     let log = loams_git::BucketRefLog::open(
@@ -107,13 +132,17 @@ pub(crate) async fn load(running: &Running, dir: &TempDir) -> String {
     .await
     .expect("open");
     let head = ObjectId::from_hex(rev(dir, "main").as_bytes()).expect("oid");
+    let expect = match old {
+        Some(old) => Expect::Oid(ObjectId::from_hex(old.as_bytes()).expect("oid")),
+        None => Expect::Absent,
+    };
     let receipt = log
         .commit(RefTxn {
-            key: IdemKey::parse("load-1").expect("key"),
+            key: IdemKey::parse(&format!("load-{head}")).expect("key"),
             request_digest: [1; 32],
             updates: vec![RefUpdate {
                 name: RefName::parse("refs/heads/main").expect("ref"),
-                expect: Expect::Absent,
+                expect,
                 new: Some(head),
             }],
             packs: vec![pack_ref as gitpb::PackRef],
@@ -124,7 +153,7 @@ pub(crate) async fn load(running: &Running, dir: &TempDir) -> String {
         })
         .await
         .expect("commit");
-    format!("git:{repo_id}:{}", receipt.seq.0)
+    format!("git:{}:{}", repo, receipt.seq.0)
 }
 
 /// Creates namespace `acme`; its id.
