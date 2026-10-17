@@ -30,8 +30,8 @@ use crate::format::snapshot::snapshot_commit;
 use crate::ids::{MountId, ObjectId, Principal, RefName, RepoId, Seq, SnapN, WsId, WsName};
 
 pub use pack::{
-    NoScan, PackScan, ScanRefusal, VerifiedPack, WsPackBlobs, WsPackError, check_pack_len,
-    fork_sources, put_workspace_pack, verify_workspace_pack,
+    NoScan, PackScan, ScanRefusal, VerifiedPack, WsPackBlobs, WsPackError, WsPackUploads,
+    check_pack_len, fork_sources, put_workspace_pack, verify_workspace_pack,
 };
 pub use store::{BucketWorkspaceStore, MemWorkspaceStore};
 pub use tree_build::{Edit, FileMode, TreeBuildError, TreeBuilder};

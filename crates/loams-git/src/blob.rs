@@ -571,21 +571,34 @@ impl LpkWriter {
     /// its `PackRef`. Checks that `idx` is a version 2 idx of `pack`: the
     /// same object count and the pack's checksum in the idx trailer.
     pub fn from_parts(pack: Bytes, idx: Bytes) -> Result<(BlobId, pb::PackRef, Bytes), BlobError> {
+        let (id, pack_ref) = Self::check_parts(&pack, &idx)?;
+        let footer = encode_footer(&pack, &idx);
+        let mut bundle = BytesMut::with_capacity(pack.len() + idx.len() + LPK_FOOTER_LEN);
+        bundle.extend_from_slice(&pack);
+        bundle.extend_from_slice(&idx);
+        bundle.extend_from_slice(&footer);
+        Ok((id, pack_ref, bundle.freeze()))
+    }
+
+    /// The checks of [`LpkWriter::from_parts`] without building the bundle:
+    /// its blob id and `PackRef` (Task 24 verifies an uploaded bundle in
+    /// place).
+    pub fn check_parts(pack: &[u8], idx: &[u8]) -> Result<(BlobId, pb::PackRef), BlobError> {
         let invalid = |reason: String| BlobError::InvalidPack(reason);
-        let checksum = pack_checksum(&pack).map_err(|err| invalid(err.to_string()))?;
-        let pack_version = be_u32(&pack, 4);
+        let checksum = pack_checksum(pack).map_err(|err| invalid(err.to_string()))?;
+        let pack_version = be_u32(pack, 4);
         if !(2..=3).contains(&pack_version) {
             return Err(invalid(format!("pack version {pack_version}")));
         }
-        let count = be_u32(&pack, 8);
+        let count = be_u32(pack, 8);
         if idx.len() < IDX_HEADER_LEN + IDX_TRAILER_LEN || idx[..4] != IDX_MAGIC {
             return Err(invalid("not a version 2 idx".into()));
         }
-        let idx_version = be_u32(&idx, 4);
+        let idx_version = be_u32(idx, 4);
         if idx_version != 2 {
             return Err(invalid(format!("idx version {idx_version}")));
         }
-        let fanout: Vec<u32> = (0..256).map(|i| be_u32(&idx, 8 + i * 4)).collect();
+        let fanout: Vec<u32> = (0..256).map(|i| be_u32(idx, 8 + i * 4)).collect();
         if fanout.windows(2).any(|w| w[0] > w[1]) {
             return Err(invalid("idx fan-out is not monotonic".into()));
         }
@@ -613,11 +626,6 @@ impl LpkWriter {
         if idx[trailer..trailer + 20] != *checksum.as_bytes() {
             return Err(invalid("the idx names another pack".into()));
         }
-        let footer = encode_footer(&pack, &idx);
-        let mut bundle = BytesMut::with_capacity(pack.len() + idx.len() + LPK_FOOTER_LEN);
-        bundle.extend_from_slice(&pack);
-        bundle.extend_from_slice(&idx);
-        bundle.extend_from_slice(&footer);
         let pack_ref = pb::PackRef {
             checksum: checksum.to_hex().to_string(),
             object_count: u64::from(count),
@@ -626,7 +634,7 @@ impl LpkWriter {
             idx_len: idx.len() as u64,
             has_bitmap: false,
         };
-        Ok((BlobId::from_checksum(&checksum), pack_ref, bundle.freeze()))
+        Ok((BlobId::from_checksum(&checksum), pack_ref))
     }
 }
 

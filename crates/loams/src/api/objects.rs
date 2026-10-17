@@ -153,12 +153,15 @@ mod served {
         LogEntry, LogFields, LogQuery, Pathspec, Signature, blame, diff_stat, grep, log,
         resolve_tree,
     };
+    use loams_git::limits::{RECEIVE_IDLE_TIMEOUT, UPLOAD_DEADLINE};
     use loams_git::objects::{
         Kind, ObjectRead, ObjectsError, WsView, bitmap, get_objects, get_trees,
         grant_reads_workspace, has_objects, loose_object, workspace_odb,
     };
     use loams_git::odb::{OdbError, RangeOdb};
-    use loams_git::ws::{NoScan, WsPackBlobs, WsPackError, check_pack_len, put_workspace_pack};
+    use loams_git::ws::{
+        NoScan, WsPackBlobs, WsPackError, WsPackUploads, check_pack_len, put_workspace_pack,
+    };
     use loams_git::{
         BlobError, DerivedStore, ForkError, GitAccess, GitGrant, NamespaceId, ObjectId, ReadAt,
         RefSnapshot, RepoPath, RepoPaths, StoreBlobStore, WsId, open_fork_range_odb,
@@ -177,6 +180,11 @@ mod served {
     const CHUNK: usize = 1024 * 1024;
     /// The `Cache-Control` of the object route: objects are immutable (§19.5.1).
     const IMMUTABLE: &str = "private, max-age=31536000, immutable";
+
+    /// The `PutWorkspacePack` uploads this node verifies at once (`MAX_WS_PACK_UPLOADS`,
+    /// ruling T24.7).
+    static PACK_UPLOADS: std::sync::LazyLock<WsPackUploads> =
+        std::sync::LazyLock::new(WsPackUploads::default);
 
     /// `ObjectService`, served.
     #[derive(Debug)]
@@ -915,8 +923,34 @@ mod served {
                 return Err(workspace_not_found(&first.workspace));
             };
             self.may_write(&ctx, &view).await?;
+            // Each upload holds its bundle in memory: a node verifies a few at once, and a
+            // stream that stalls or runs past the upload deadline is dropped.
+            let _permit = PACK_UPLOADS.try_acquire().ok_or_else(|| {
+                refuse(
+                    ErrorCode::ResourceExhausted,
+                    "resource_exhausted",
+                    "this node is verifying as many workspace packs as it takes; retry",
+                    &[("retry_after_ms", "1000".to_owned())],
+                )
+            })?;
+            let deadline = tokio::time::Instant::now() + UPLOAD_DEADLINE;
             let mut lpk = BytesMut::from(&first.data[..]);
-            while let Some(message) = requests.next().await {
+            check_pack_len(lpk.len() as u64).map_err(ws_pack_error)?;
+            loop {
+                let wait = deadline
+                    .saturating_duration_since(tokio::time::Instant::now())
+                    .min(RECEIVE_IDLE_TIMEOUT);
+                let Ok(next) = tokio::time::timeout(wait, requests.next()).await else {
+                    return Err(refuse(
+                        ErrorCode::DeadlineExceeded,
+                        "deadline_exceeded",
+                        "the upload stalled or ran past its deadline",
+                        &[],
+                    ));
+                };
+                let Some(message) = next else {
+                    break;
+                };
                 let message = message?.to_owned_message();
                 check_pack_len((lpk.len() + message.data.len()) as u64).map_err(ws_pack_error)?;
                 lpk.extend_from_slice(&message.data);

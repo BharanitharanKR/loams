@@ -36,7 +36,7 @@ use crate::blob::{BlobError, BlobId, BlobStore, LpkWriter, Put, StoreBlobStore};
 use crate::format::lpk::{LPK_FOOTER_LEN, decode_footer};
 use crate::format::pb;
 use crate::ids::{ObjectId, RepoId, SnapN, WsId};
-use crate::limits::{MAX_FORK_DEPTH, MAX_PACK_BYTES};
+use crate::limits::{MAX_FORK_DEPTH, MAX_PACK_BYTES, MAX_WS_PACK_UPLOADS};
 use crate::odb::{Location, OdbError, RangeOdb};
 use crate::paths::RepoPaths;
 
@@ -128,6 +128,35 @@ pub fn check_pack_len(len: u64) -> Result<(), WsPackError> {
     Ok(())
 }
 
+/// The uploads one node verifies at once (`MAX_WS_PACK_UPLOADS`): each
+/// holds a whole bundle in memory, so the server takes a permit before it
+/// reads a byte and refuses the call when none is free (ruling T24.7).
+#[derive(Debug)]
+pub struct WsPackUploads {
+    permits: Arc<tokio::sync::Semaphore>,
+}
+
+impl Default for WsPackUploads {
+    fn default() -> Self {
+        Self::new(MAX_WS_PACK_UPLOADS)
+    }
+}
+
+impl WsPackUploads {
+    /// At most `max` uploads at once.
+    pub fn new(max: usize) -> Self {
+        Self {
+            permits: Arc::new(tokio::sync::Semaphore::new(max)),
+        }
+    }
+
+    /// A permit, held for the upload's life, or `None` when every one is
+    /// taken.
+    pub fn try_acquire(&self) -> Option<tokio::sync::OwnedSemaphorePermit> {
+        Arc::clone(&self.permits).try_acquire_owned().ok()
+    }
+}
+
 /// Verifies `lpk` (see the module docs), offering every object to `scan`;
 /// `repo` names the repository in errors only.
 pub async fn verify_workspace_pack(
@@ -153,9 +182,9 @@ pub async fn verify_workspace_pack(
     }
     let pack = lpk.slice(..footer.pack_len as usize);
     let idx = lpk.slice(footer.pack_len as usize..(footer.pack_len + footer.idx_len) as usize);
-    let (id, pack_ref, bundle) =
-        LpkWriter::from_parts(pack.clone(), idx.clone()).map_err(|err| invalid(&err))?;
-    if bundle != *lpk {
+    let (id, pack_ref) = LpkWriter::check_parts(&pack, &idx).map_err(|err| invalid(&err))?;
+    // The footer's CRC32C covers `pack ‖ idx`, as `encode_footer` writes it.
+    if crate::format::crc32c_of(&[&pack, &idx]) != footer.crc32c {
         return Err(invalid(&"the footer's CRC32C does not match its sections"));
     }
     check_trailer(&pack, "pack")?;

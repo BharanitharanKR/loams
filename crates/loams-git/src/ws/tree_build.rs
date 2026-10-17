@@ -141,10 +141,7 @@ impl TreeBuilder {
         let mut root = read_dir(odb, base_tree).await?;
         for (path, edit) in edits {
             if path.as_str().is_empty() {
-                return Err(TreeBuildError::Invalid {
-                    path: String::new(),
-                    reason: "the root is a directory; edit paths below it".into(),
-                });
+                return Err(root_edit());
             }
             let parts: Vec<&[u8]> = path.as_str().split('/').map(str::as_bytes).collect();
             match edit {
@@ -160,6 +157,13 @@ impl TreeBuilder {
         let mut seen = std::collections::HashSet::new();
         let root_oid = encode(root, &mut written, &mut seen)?;
         Ok((root_oid, written))
+    }
+}
+
+fn root_edit() -> TreeBuildError {
+    TreeBuildError::Invalid {
+        path: String::new(),
+        reason: "the root is a directory; edit paths below it".into(),
     }
 }
 
@@ -221,6 +225,7 @@ async fn enter<'a>(
     }
     match dir.entries.get_mut(name) {
         Some(Node::Dir(sub)) => Ok(Some(sub)),
+        // Every arm above that did not return left a `Node::Dir` here.
         _ => unreachable!("the entry was just made a directory"),
     }
 }
@@ -232,9 +237,13 @@ async fn write_path(
     mode: u32,
     oid: ObjectId,
 ) -> Result<(), TreeBuildError> {
-    let (last, parents) = parts.split_last().expect("a path has a segment");
+    let Some((last, parents)) = parts.split_last() else {
+        return Err(root_edit());
+    };
     let mut dir = root;
     for name in parents {
+        // `enter` with `create` always makes the entry a directory, so it
+        // never answers `None`.
         dir = enter(odb, dir, name, true)
             .await?
             .expect("enter creates the directory");
@@ -248,7 +257,9 @@ async fn remove_path(
     root: &mut Dir,
     parts: &[&[u8]],
 ) -> Result<(), TreeBuildError> {
-    let (last, parents) = parts.split_last().expect("a path has a segment");
+    let Some((last, parents)) = parts.split_last() else {
+        return Err(root_edit());
+    };
     let mut dir = root;
     for name in parents {
         match enter(odb, dir, name, false).await? {

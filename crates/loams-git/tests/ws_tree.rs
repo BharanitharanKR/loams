@@ -14,12 +14,12 @@ use async_trait::async_trait;
 use bytes::Bytes;
 use loams_git::blob::Put;
 use loams_git::format::pb;
-use loams_git::limits::MAX_PACK_BYTES;
+use loams_git::limits::{MAX_PACK_BYTES, MAX_WS_PACK_UPLOADS};
 use loams_git::objects::{WsView, grant_writes_workspace};
 use loams_git::odb::{ObjectDb, OdbError, RangeOdb, WsOdb};
 use loams_git::ws::{
     Edit, FileMode, NoScan, PackScan, ScanRefusal, TreeBuilder, WsPackBlobs, WsPackError,
-    check_pack_len, fork_sources, put_workspace_pack,
+    WsPackUploads, check_pack_len, fork_sources, put_workspace_pack,
 };
 use loams_git::{
     BlobId, BlobStore, CreateWs, GitAccess, GitGrant, LpkWriter, MemWorkspaceStore, MountId,
@@ -615,6 +615,15 @@ async fn put_ws_pack_rejects_bad_hash() {
     )
     .await
     .expect("a self-contained pack");
+
+    // `MAX_WS_PACK_UPLOADS` permits at once, then none until one ends.
+    let uploads = WsPackUploads::default();
+    let held: Vec<_> = (0..MAX_WS_PACK_UPLOADS)
+        .map(|_| uploads.try_acquire().expect("a permit"))
+        .collect();
+    assert!(uploads.try_acquire().is_none(), "one past the limit");
+    drop(held);
+    assert!(uploads.try_acquire().is_some());
 
     // `MAX_PACK_BYTES`, at the limit and one past it.
     assert!(check_pack_len(MAX_PACK_BYTES).is_ok());
