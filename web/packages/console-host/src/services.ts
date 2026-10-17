@@ -24,6 +24,7 @@ import type { ComponentType } from 'react';
 import type { ActionRegistry } from './actions.js';
 import type { AgentdRpcServices, AgentdService } from './agentd.js';
 import type { ModeService } from './mode.js';
+import type { ThemeChoice } from './theme.js';
 
 /** What differs between the shells the console runs in (today: the browser). */
 export interface PlatformService {
@@ -51,6 +52,14 @@ export interface PlatformService {
    * (the desktop's local engine became ready). The host re-reads `flags` then.
    */
   onInstanceStale?(callback: () => void): () => void;
+}
+
+/** The theme choice and what it resolves to (design 59, D1074); the platform provides it. */
+export interface ThemeService {
+  readonly choice: ThemeChoice;
+  readonly dark: boolean;
+  set(choice: ThemeChoice): void;
+  subscribe(listener: () => void): () => void;
 }
 
 /** `GetInstance`'s answer, as plugins gate on it (AP1a Ruling 6). */
@@ -172,6 +181,8 @@ export interface Services extends RpcServices, AgentdRpcServices {
   actions: ActionRegistry;
   /** Console or Studio (§53 §4.2); the host provides it. */
   mode: ModeService;
+  /** System, Dark or Light, per device (design 59, D1074); the platform provides it. */
+  theme: ThemeService;
   /**
    * loams-agentd (§53 §6.2, SD1 Task 6; see agentd.ts): `agentd` always, from
    * `@loams/plugin-rpc`; `agentd.transport` and `rpc.agentd.*` while a daemon is

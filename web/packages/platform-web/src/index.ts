@@ -11,7 +11,12 @@
 
 import type { Transport } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
-import type { PlatformService, PluginModule } from '@loams/console-host';
+import {
+  localThemeStore,
+  type PlatformService,
+  type PluginModule,
+  ThemeController,
+} from '@loams/console-host';
 import type { Context } from '@loams/cordis';
 
 export interface WebPlatformOptions {
@@ -88,6 +93,8 @@ export function createWebPlatform(options: WebPlatformOptions = {}): PluginModul
         },
       };
       ctx.provide('platform', platform);
+      // System, Dark or Light, kept in this browser (D1074).
+      ctx.provide('theme', new ThemeController(localThemeStore()));
       ctx.provide(
         'transport',
         options.transport ?? createConnectTransport({ baseUrl, useBinaryFormat: true, fetch }),

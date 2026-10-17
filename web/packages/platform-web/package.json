@@ -20,7 +20,8 @@
       "inject": [],
       "provides": [
         "platform",
-        "transport"
+        "transport",
+        "theme"
       ],
       "slots": [],
       "permissions": [],

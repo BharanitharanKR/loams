@@ -127,9 +127,17 @@ export interface ConnectorValidation {
 	errors: { path: string; message: string }[];
 }
 
+/** The theme choice (D1074): System follows the OS, Dark and Light are explicit. */
+export type ThemeChoice = "system" | "dark" | "light";
+
 export interface LoamsDesktopApi {
 	version: string;
 	platform: DesktopPlatform;
+	/** D1074: the saved choice (passed at window creation) and its setter; `dark` drives the chrome. */
+	theme: {
+		initial: ThemeChoice;
+		set(choice: ThemeChoice, dark: boolean): Promise<void>;
+	};
 	servers: {
 		list(): Promise<{ servers: ServerEntry[]; activeId: string }>;
 		add(e: Omit<ServerEntry, "id">): Promise<IpcResult<ServerEntry>>;
@@ -281,6 +289,7 @@ export interface LoamsDesktopApi {
 	};
 }
 export const CH = {
+	themeSet: "theme:set",
 	serversList: "servers:list",
 	serversAdd: "servers:add",
 	serversRemove: "servers:remove",

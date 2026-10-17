@@ -22,7 +22,8 @@
         "slots",
         "session",
         "flags",
-        "mode"
+        "mode",
+        "theme"
       ],
       "provides": [
         "router"
@@ -36,7 +37,8 @@
         "shell.dock.right",
         "shell.header.server",
         "shell.nav.context",
-        "palette.command"
+        "palette.command",
+        "console.settings.section"
       ],
       "permissions": [],
       "requires": {

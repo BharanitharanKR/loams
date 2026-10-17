@@ -120,8 +120,21 @@ export {
   type SessionGate,
   type SessionService,
   service,
+  type ThemeService,
   watch,
 } from './services.js';
+export {
+  applyTheme,
+  localThemeStore,
+  MOTION_KEY,
+  parseThemeChoice,
+  resolveDark,
+  THEME_KEY,
+  type ThemeChoice,
+  ThemeController,
+  type ThemeEnv,
+  type ThemeStore,
+} from './theme.js';
 export { CORE_PLUGINS, DEFAULT_TRUSTED_PUBLISHERS, type PluginSource, tierOf } from './tiers.js';
 
 /** The console host's semver; plugins declare `requires.console` against it. */

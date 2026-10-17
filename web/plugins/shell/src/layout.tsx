@@ -1,18 +1,21 @@
 // The console layout, in the original console's look (web/apps/console/src/shell.tsx):
 // a sidebar with the brand, the environment switcher and the product nav grouped by
 // section; a top bar with breadcrumbs, the server switcher and overlays, the agent
-// toggle, the theme toggle and the account menu; the page; and a resizable dock on
+// toggle, the appearance menu and the account menu; the page; and a resizable dock on
 // the right (D666). Below 960px the sidebar is a drawer. Components get props and
 // closures, never `ctx`.
 
 import {
   capabilities,
   type FlagsService,
+  localThemeStore,
   MODE_HOME,
   type Mode,
   type ModeService,
   modeOfPath,
   type SessionService,
+  ThemeController,
+  type ThemeService,
 } from '@loams/console-host';
 import { Slot, SlotBoundary, type SlotEntry, useSlot } from '@loams/slots';
 import {
@@ -28,25 +31,18 @@ import {
   Toaster,
   ToastProvider,
 } from '@loams/ui';
-import {
-  BookOpen,
-  ChevronsUpDown,
-  LogOut,
-  Menu as MenuIcon,
-  Moon,
-  PanelRight,
-  Sun,
-  X,
-} from 'lucide-react';
+import { BookOpen, ChevronsUpDown, LogOut, Menu as MenuIcon, PanelRight, X } from 'lucide-react';
 import {
   type KeyboardEvent,
   type PointerEvent,
   useCallback,
   useEffect,
+  useMemo,
   useRef,
   useState,
   useSyncExternalStore,
 } from 'react';
+import { AppearanceMenu } from './appearance.js';
 import { EngineTooOld } from './engine.js';
 import { iconFor } from './icons.js';
 import { MODE_LABEL, ModeSwitcher, useMode, useModeShortcut } from './mode-switcher.js';
@@ -57,7 +53,6 @@ export const DOCK_MIN = 320;
 export const DOCK_MAX = 720;
 export const DOCK_DEFAULT = 400;
 export const DOCK_KEY = 'loams.shell.dock';
-export const THEME_KEY = 'loams-theme';
 const DOCK_STEP = 24;
 
 /** The nav sections, in display order. Anything else follows them. */
@@ -362,22 +357,6 @@ function useDock() {
   return [dock, update] as const;
 }
 
-/** Light by default; the choice is kept under the same key the original console uses. */
-export function useTheme(): [boolean, () => void] {
-  const [dark, setDark] = useState(() => document.documentElement.classList.contains('dark'));
-  const toggle = () => {
-    const next = !dark;
-    document.documentElement.classList.toggle('dark', next);
-    try {
-      localStorage.setItem(THEME_KEY, next ? 'dark' : 'light');
-    } catch {
-      // Private mode: the choice lasts for this page only.
-    }
-    setDark(next);
-  };
-  return [dark, toggle];
-}
-
 function DockHandle({ width, onWidth }: { width: number; onWidth: (w: number) => void }) {
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -569,14 +548,12 @@ function modKeys(...keys: string[]): string[] {
 function Palette({
   router,
   mode,
-  dark,
-  toggleTheme,
+  theme,
   dock,
 }: {
   router: HashRouter;
   mode?: ModeService;
-  dark: boolean;
-  toggleTheme: () => void;
+  theme: ThemeService;
   dock?: { open: boolean; toggle: () => void };
 }) {
   const sections = useSlot('shell.nav.section');
@@ -614,14 +591,14 @@ function Palette({
           },
         ]
       : []),
-    {
-      id: 'theme',
-      title: dark ? 'Use light theme' : 'Use dark theme',
-      group: 'General',
-      keywords: ['appearance', 'theme'],
+    ...(['system', 'dark', 'light'] as const).map((c) => ({
+      id: `theme:${c}`,
+      title: `Theme: ${c === 'system' ? 'System' : c === 'dark' ? 'Dark' : 'Light'}`,
+      group: 'Appearance',
+      keywords: ['appearance', 'theme', 'colour', 'dark mode'],
       mode: current,
-      run: toggleTheme,
-    },
+      run: () => theme.set(c),
+    })),
     ...(dock
       ? [
           {
@@ -650,6 +627,7 @@ export function Layout({
   session,
   flags,
   mode,
+  theme: given,
 }: {
   router: HashRouter;
   session: SessionService;
@@ -657,12 +635,14 @@ export function Layout({
   flags?: FlagsService;
   /** Console or Studio (§53 §4.2): filters the nav and the header, and drives the switcher. */
   mode?: ModeService;
+  /** System, Dark or Light (D1074); the platform provides it, and tests may leave it out. */
+  theme?: ThemeService;
 }) {
   const current = useMode(mode);
   useModeShortcut(mode);
   const hasDock = useSlot('shell.dock.right').length > 0;
   const [dock, setDock] = useDock();
-  const [dark, toggleTheme] = useTheme();
+  const theme = useMemo(() => given ?? new ThemeController(localThemeStore()), [given]);
   const [drawer, setDrawer] = useState(false);
   const location = useLocation(router);
   const open = hasDock && dock.open;
@@ -788,19 +768,7 @@ export function Layout({
                   <span className="lc-icon-btn-text">Agent</span>
                 </button>
               )}
-              <button
-                type="button"
-                className="lc-round-btn"
-                onClick={toggleTheme}
-                aria-label={dark ? 'Use light theme' : 'Use dark theme'}
-                title={dark ? 'Use light theme' : 'Use dark theme'}
-              >
-                {dark ? (
-                  <Sun size={16} aria-hidden="true" />
-                ) : (
-                  <Moon size={16} aria-hidden="true" />
-                )}
-              </button>
+              <AppearanceMenu theme={theme} />
               <UserMenu session={session} router={router} local={flags?.features.local} />
             </div>
           </header>
@@ -829,8 +797,7 @@ export function Layout({
       <Palette
         router={router}
         mode={mode}
-        dark={dark}
-        toggleTheme={toggleTheme}
+        theme={theme}
         dock={hasDock ? { open, toggle } : undefined}
       />
       <Toaster />

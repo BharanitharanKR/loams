@@ -7,13 +7,14 @@ import {
 	BrowserWindow,
 	crashReporter,
 	Notification,
+	nativeTheme,
 	safeStorage,
 	screen,
 	session,
 	shell,
 } from "electron";
 import { CH, type EngineState } from "../shared/contracts";
-import { VERSION_ARG } from "../shared/version";
+import { THEME_ARG, VERSION_ARG } from "../shared/version";
 import { registerChatIpc } from "./agent/ipc.electron";
 import type { ChatService } from "./agent/service";
 import { registerTools } from "./agent/tools";
@@ -52,6 +53,7 @@ import {
 	readLiveStore,
 	readNotifyPrefs,
 	readSetting,
+	readThemeChoice,
 	writeSetting,
 } from "./settings";
 import { getMainWindow, setMainWindow } from "./shell/main-window";
@@ -69,6 +71,7 @@ import {
 	shouldNotify,
 	studioTrayRoute,
 } from "./shell/studio-tray-model";
+import { registerThemeIpc } from "./shell/theme-ipc.electron";
 import { createTray, type TrayHandle } from "./shell/tray.electron";
 import { closeAction, TRAY_ROUTES } from "./shell/tray-model";
 import {
@@ -153,7 +156,10 @@ function createWindow(): BrowserWindow {
 			nodeIntegration: false,
 			webSecurity: true,
 			webviewTag: false,
-			additionalArguments: [`${VERSION_ARG}${app.getVersion()}`],
+			additionalArguments: [
+				`${VERSION_ARG}${app.getVersion()}`,
+				`${THEME_ARG}${readThemeChoice(settingsFile())}`,
+			],
 		},
 	});
 	secureWindow(win);
@@ -204,6 +210,9 @@ const singleInstance = initSingleInstance({
 	onPrimary: () => {
 		void app.whenReady().then(async () => {
 			app.setAppUserModelId("dev.loams.desktop");
+			// The theme choice (D1074): OS dialogs and menus follow it; Task 13 syncs the chrome.
+			nativeTheme.themeSource = readThemeChoice(settingsFile());
+			registerThemeIpc({ settingsFile, onTheme: () => {} });
 			registry = new ServerRegistry(
 				join(app.getPath("userData"), "servers.json"),
 				{ devDemo: !app.isPackaged },

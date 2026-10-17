@@ -6,7 +6,7 @@ import {
 	type StackId,
 	type StackState,
 } from "../shared/contracts";
-import { versionFromArgv } from "../shared/version";
+import { themeFromArgv, versionFromArgv } from "../shared/version";
 
 const invoke = <T>(ch: string, ...args: unknown[]): Promise<T> =>
 	ipcRenderer.invoke(ch, ...args) as Promise<T>;
@@ -24,6 +24,11 @@ const api: LoamsDesktopApi = {
 	// preload has no app.getVersion() and process.env does not carry it.
 	version: versionFromArgv(process.argv),
 	platform: process.platform,
+	// The saved theme choice, passed like the version (D1074).
+	theme: {
+		initial: themeFromArgv(process.argv),
+		set: (choice, dark) => invoke(CH.themeSet, choice, dark),
+	},
 	servers: {
 		list: () => invoke(CH.serversList),
 		add: (e) => invoke(CH.serversAdd, e),
