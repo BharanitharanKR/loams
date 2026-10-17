@@ -194,6 +194,8 @@ The agent home's content (the composer, threads and starters as a product flow) 
 
 ## 9. Relation to Parts 2–4
 
+> **Added 2026-10-17:** Part 2 also takes [§60](60-places-and-harness-composition.md)'s proposals: the composer's scope chips select a **Place** (D1087), the inspector shows its effective capability and what the agent left behind (D1089), and the Endo-derived items (D1093) are mid-thread harness switching, "Dig In" and scheduled prompts.
+
 - **Part 2, the agent home,** fills `shell.main`'s home route. It brings:
   - the composer with scope chips (project, branch, access mode: read-only / propose / apply, and model);
   - the starters;

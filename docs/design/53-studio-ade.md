@@ -807,3 +807,6 @@ SOFTWARE.
 ## Appendix A: the vendoring inventory
 
 The inventory is in [studio-vendor-inventory.md](studio-vendor-inventory.md).
+
+
+> **See also (2026-10-17):** [§60 Places and Harness Composition](60-places-and-harness-composition.md). Studio already has much of what Endo offers (harnesses on the user's own subscriptions, run groups, forks); §60 proposes Places, composition rules, what an agent left behind, and durable agent workflows (D1087–D1093).

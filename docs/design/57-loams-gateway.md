@@ -399,3 +399,6 @@ The protocol gateway's commercial adapters (OpenRTB, partner APIs, §34) stay in
 - PostgreSQL `REL_17_STABLE`: `src/interfaces/libpq/fe-secure-openssl.c` (ALPN required for `sslnegotiation=direct`) and `src/backend/libpq/be-secure-openssl.c` (the server's ALPN callback); the protocol's `SSLRequest`, `GSSENCRequest` and `CancelRequest` codes.
 - Pingora 0.9.0 (crates.io, 2026-09-09, Apache-2.0); `pingora_core::apps::ServerApp`; rama 0.4.0 (2026-08-19, MIT OR Apache-2.0).
 - MCP specification 2026-07-28 (§15 §10).
+
+
+> **See also (2026-10-17):** [§60](60-places-and-harness-composition.md) D1091 proposes cascades for the LLM module: typed triage with a confidence, threshold escalation, a verifier, and deterministic routes.
