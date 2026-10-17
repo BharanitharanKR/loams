@@ -40,6 +40,7 @@ pub mod deploy;
 pub mod docs;
 pub mod engines;
 mod error;
+pub mod forward;
 pub mod ids;
 pub mod journal;
 pub mod keys;

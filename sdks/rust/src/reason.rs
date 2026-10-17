@@ -165,6 +165,10 @@ pub enum Reason {
     LiveOriginNotAllowed,
     /// A Live session reached its maximum age; resume it.
     SessionRotate,
+    /// No Live node holds the session any more; resume it.
+    SessionGone,
+    /// The Live node is shutting down; resume on another node.
+    NodeDraining,
     /// The caller's org role is below the one the admin RPC needs, or the caller is not in the org.
     RoleRequired,
     /// First-run setup has not created the org yet.
@@ -300,6 +304,8 @@ impl Reason {
         Reason::LiveAppMismatch,
         Reason::LiveOriginNotAllowed,
         Reason::SessionRotate,
+        Reason::SessionGone,
+        Reason::NodeDraining,
         Reason::RoleRequired,
         Reason::SetupRequired,
         Reason::TokenMissing,
@@ -406,6 +412,8 @@ impl Reason {
             Reason::LiveAppMismatch => "live_app_mismatch",
             Reason::LiveOriginNotAllowed => "live_origin_not_allowed",
             Reason::SessionRotate => "session_rotate",
+            Reason::SessionGone => "session_gone",
+            Reason::NodeDraining => "node_draining",
             Reason::RoleRequired => "role_required",
             Reason::SetupRequired => "setup_required",
             Reason::TokenMissing => "token_missing",
@@ -522,6 +530,7 @@ impl Reason {
             | Reason::ProjectNotFound
             | Reason::RepoNotFound
             | Reason::WorkspaceNotFound
+            | Reason::SessionGone
             | Reason::NotFound => Code::NotFound,
             Reason::NotImplemented
             | Reason::FeatureNotInVariant
@@ -543,6 +552,7 @@ impl Reason {
             | Reason::SequencerUnavailable
             | Reason::AuthUnavailable
             | Reason::SessionRotate
+            | Reason::NodeDraining
             | Reason::Unavailable => Code::Unavailable,
             Reason::HouseTimeout | Reason::LiveFunctionTimeout | Reason::DeadlineExceeded => {
                 Code::DeadlineExceeded
@@ -594,7 +604,7 @@ mod tests {
 
     #[test]
     fn every_reason_round_trips_through_its_wire_form() {
-        assert!(Reason::ALL.len() >= 100, "the registry has 100 rows");
+        assert!(Reason::ALL.len() >= 102, "the registry has 102 rows");
         for reason in Reason::ALL {
             assert_eq!(Reason::parse(reason.as_str()), Some(*reason));
         }

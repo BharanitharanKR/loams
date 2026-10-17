@@ -542,6 +542,8 @@ enum Cmd {
     },
     /// The credential of principal `.0` was revoked.
     Revoke(String),
+    /// The node is draining (LV1 plan Task 24): close with this error.
+    Close(LiveError),
 }
 
 /// Whether a caller may run a query function with these arguments (the
@@ -573,6 +575,8 @@ struct Inner {
     node: String,
     shutdown: CancellationToken,
     map: Mutex<HashMap<String, mpsc::UnboundedSender<Cmd>>>,
+    /// Set by [`Sessions::close_all`]: new sessions are refused with it.
+    closing: Mutex<Option<LiveError>>,
     trace: Mutex<Option<mpsc::UnboundedSender<TransitionDeployments>>>,
 }
 
@@ -604,6 +608,7 @@ impl Sessions {
                 node,
                 shutdown,
                 map: Mutex::default(),
+                closing: Mutex::default(),
                 trace: Mutex::default(),
             }),
         }
@@ -661,7 +666,15 @@ impl Sessions {
             self.inner.config.blocked_limit,
         ));
         let (tx, rx) = mpsc::unbounded_channel();
-        self.map().insert(id.clone(), tx);
+        {
+            // Under the map's lock, so a session is either refused here or
+            // reached by `close_all`.
+            let mut map = self.map();
+            if let Some(e) = self.closing().clone() {
+                return Err(e);
+            }
+            map.insert(id.clone(), tx);
+        }
         let now = tokio::time::Instant::now();
         let task = SessionTask {
             expires: expiry(&caller, self.inner.config.expiry_leeway),
@@ -688,18 +701,35 @@ impl Sessions {
     /// Applies a `ModifyQuerySet` to its session; answers once the
     /// Transition that reflects it is queued.
     pub async fn modify(&self, req: pb::ModifyQuerySetRequest) -> Result<(), LiveError> {
-        let tx = self.map().get(&req.session_id).cloned().ok_or_else(|| {
-            LiveError::NotFound(format!(
-                "session {:?} is not open on this node",
-                req.session_id
-            ))
-        })?;
+        let tx = self.sender(&req.session_id)?;
         let (reply, answer) = oneshot::channel();
-        tx.send(Cmd::Modify { req, reply })
-            .map_err(|_| LiveError::NotFound("the session has ended".into()))?;
-        answer
-            .await
-            .map_err(|_| LiveError::NotFound("the session has ended".into()))?
+        tx.send(Cmd::Modify { req, reply }).map_err(|_| ended())?;
+        answer.await.map_err(|_| ended())?
+    }
+
+    /// The command queue of open session `session_id`; an unknown one is
+    /// `session_gone` (LV1 plan Task 24): the client resumes.
+    fn sender(&self, session_id: &str) -> Result<mpsc::UnboundedSender<Cmd>, LiveError> {
+        self.map().get(session_id).cloned().ok_or_else(|| {
+            LiveError::SessionGone(format!("session {session_id:?} is not open on this node"))
+        })
+    }
+
+    fn closing(&self) -> MutexGuard<'_, Option<LiveError>> {
+        self.inner
+            .closing
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// Closes every open session's stream with `error` and refuses new ones
+    /// with it from now on (a draining node, LV1 plan Task 24).
+    pub fn close_all(&self, error: LiveError) {
+        let map = self.map();
+        *self.closing() = Some(error.clone());
+        for tx in map.values() {
+            let _ = tx.send(Cmd::Close(error.clone()));
+        }
     }
 
     /// Replaces the identity of session `session_id` with `caller` (LV1
@@ -713,19 +743,15 @@ impl Sessions {
         caller: Caller,
         check: Check,
     ) -> Result<u64, LiveError> {
-        let tx = self.map().get(session_id).cloned().ok_or_else(|| {
-            LiveError::NotFound(format!("session {session_id:?} is not open on this node"))
-        })?;
+        let tx = self.sender(session_id)?;
         let (reply, answer) = oneshot::channel();
         tx.send(Cmd::Authenticate {
             caller: Box::new(caller),
             check,
             reply,
         })
-        .map_err(|_| LiveError::NotFound("the session has ended".into()))?;
-        answer
-            .await
-            .map_err(|_| LiveError::NotFound("the session has ended".into()))?
+        .map_err(|_| ended())?;
+        answer.await.map_err(|_| ended())?
     }
 
     /// Closes every session running as `principal` (an API key's
@@ -745,6 +771,11 @@ impl Sessions {
             let _ = tx.send(Cmd::Committed(commit_ts));
         }
     }
+}
+
+/// A session that ended while a call for it waited.
+fn ended() -> LiveError {
+    LiveError::SessionGone("the session has ended; resume it".into())
 }
 
 fn check_set(config: &SessionConfig, set: &pb::QuerySet) -> Result<(), LiveError> {
@@ -965,6 +996,10 @@ impl SessionTask {
                     Some(Cmd::Authenticate { caller, check, reply }) => {
                         let result = self.authenticate(*caller, &check).await;
                         let _ = reply.send(result);
+                    }
+                    Some(Cmd::Close(error)) => {
+                        self.outbox.close(Some(error));
+                        return;
                     }
                     Some(Cmd::Revoke(principal)) => {
                         if principal == self.caller.id {

@@ -259,6 +259,10 @@ enum class Reason {
 
     /** `session_rotate` (docs/api/reasons.md). */
     SESSION_ROTATE,
+    /** `session_gone` (docs/api/reasons.md). */
+    SESSION_GONE,
+    /** `node_draining` (docs/api/reasons.md). */
+    NODE_DRAINING,
 
     /** The caller's org role is below the one the admin RPC needs, or the caller is not in the org. */
     ROLE_REQUIRED,
@@ -446,6 +450,8 @@ object ReasonRegistry {
         Reason.LIVE_APP_MISMATCH,
         Reason.LIVE_ORIGIN_NOT_ALLOWED,
         Reason.SESSION_ROTATE,
+        Reason.SESSION_GONE,
+        Reason.NODE_DRAINING,
         Reason.ROLE_REQUIRED,
         Reason.SETUP_REQUIRED,
         Reason.TOKEN_MISSING,
@@ -549,6 +555,8 @@ object ReasonRegistry {
         Reason.LIVE_APP_MISMATCH to "live_app_mismatch",
         Reason.LIVE_ORIGIN_NOT_ALLOWED to "live_origin_not_allowed",
         Reason.SESSION_ROTATE to "session_rotate",
+        Reason.SESSION_GONE to "session_gone",
+        Reason.NODE_DRAINING to "node_draining",
         Reason.ROLE_REQUIRED to "role_required",
         Reason.SETUP_REQUIRED to "setup_required",
         Reason.TOKEN_MISSING to "token_missing",
@@ -659,6 +667,8 @@ object ReasonRegistry {
         Reason.LIVE_APP_MISMATCH to Code.PERMISSION_DENIED,
         Reason.LIVE_ORIGIN_NOT_ALLOWED to Code.PERMISSION_DENIED,
         Reason.SESSION_ROTATE to Code.UNAVAILABLE,
+        Reason.SESSION_GONE to Code.NOT_FOUND,
+        Reason.NODE_DRAINING to Code.UNAVAILABLE,
         Reason.ROLE_REQUIRED to Code.PERMISSION_DENIED,
         Reason.SETUP_REQUIRED to Code.FAILED_PRECONDITION,
         Reason.TOKEN_MISSING to Code.UNAUTHENTICATED,

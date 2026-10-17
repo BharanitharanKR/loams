@@ -324,6 +324,12 @@ public enum Reason
     /// <summary>A Live session reached its maximum age; resume it.</summary>
     SessionRotate = 100,
 
+    /// <summary>No Live node holds the session any more; resume it.</summary>
+    SessionGone = 101,
+
+    /// <summary>The Live node is shutting down; resume on another node.</summary>
+    NodeDraining = 102,
+
     /// <summary>A malformed field or an unparseable value.</summary>
     InvalidArgument = 15,
 
@@ -460,6 +466,8 @@ public static class ReasonRegistry
         Reason.LiveAppMismatch,
         Reason.LiveOriginNotAllowed,
         Reason.SessionRotate,
+        Reason.SessionGone,
+        Reason.NodeDraining,
         Reason.RoleRequired,
         Reason.SetupRequired,
         Reason.TokenMissing,
@@ -565,6 +573,8 @@ public static class ReasonRegistry
             [Reason.LiveAppMismatch] = "live_app_mismatch",
             [Reason.LiveOriginNotAllowed] = "live_origin_not_allowed",
             [Reason.SessionRotate] = "session_rotate",
+            [Reason.SessionGone] = "session_gone",
+            [Reason.NodeDraining] = "node_draining",
             [Reason.RoleRequired] = "role_required",
             [Reason.SetupRequired] = "setup_required",
             [Reason.TokenMissing] = "token_missing",
@@ -695,6 +705,8 @@ public static class ReasonRegistry
             [Reason.LiveAppMismatch] = Code.PermissionDenied,
             [Reason.LiveOriginNotAllowed] = Code.PermissionDenied,
             [Reason.SessionRotate] = Code.Unavailable,
+            [Reason.SessionGone] = Code.NotFound,
+            [Reason.NodeDraining] = Code.Unavailable,
             [Reason.RoleRequired] = Code.PermissionDenied,
             [Reason.SetupRequired] = Code.FailedPrecondition,
             [Reason.TokenMissing] = Code.Unauthenticated,
