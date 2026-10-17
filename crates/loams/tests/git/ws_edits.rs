@@ -298,7 +298,7 @@ async fn rebase_same_path_conflict_is_recorded() {
     let _ = tip;
     assert_eq!(
         op.refused(&format!("{WS}/Rebase"), &rebase).await,
-        "workspace_conflicted"
+        "failed_precondition"
     );
     // Staging the resolution clears the conflict.
     let n = n_of(&rebased["snapshot"]);

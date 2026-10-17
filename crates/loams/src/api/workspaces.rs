@@ -1915,9 +1915,10 @@ mod served {
                 if !latest.conflicts.is_empty() {
                     return Err(refuse(
                         ErrorCode::FailedPrecondition,
-                        "workspace_conflicted",
+                        "failed_precondition",
                         "resolve the workspace's conflicts before rebasing it",
                         &[
+                            ("condition", "conflicts".to_owned()),
                             ("workspace", ws.to_string()),
                             ("conflicts", latest.conflicts.len().to_string()),
                         ],
@@ -1926,9 +1927,12 @@ mod served {
                 if latest.head != latest.base {
                     return Err(refuse(
                         ErrorCode::FailedPrecondition,
-                        "workspace_has_commits",
+                        "failed_precondition",
                         "the workspace has local commits; rebase them with git, or land them",
-                        &[("workspace", ws.to_string())],
+                        &[
+                            ("condition", "local_commits".to_owned()),
+                            ("workspace", ws.to_string()),
+                        ],
                     ));
                 }
                 let repo = self.repo_snapshot(&req.namespace, &record).await?;

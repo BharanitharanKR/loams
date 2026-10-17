@@ -26,9 +26,8 @@ syntax = "proto3";
 // Reasons: `workspace_not_found`, `workspace_fenced` (aborted),
 // `workspace_name_taken` (already_exists), `object_missing`
 // (failed_precondition), `fork_too_deep`, `idempotency_key_reused`,
-// `env_unsealed`, `workspace_conflicted` and `workspace_has_commits`
-// (failed_precondition), `permission_denied`, `invalid_argument` and
-// `internal`.
+// `env_unsealed`, `failed_precondition`, `permission_denied`,
+// `invalid_argument` and `internal`.
 package loams.repos.v1;
 
 import "google/protobuf/timestamp.proto";
@@ -121,9 +120,9 @@ service WorkspaceService {
   // Moves the workspace's changes onto `track`'s tip (or `onto`) as a new
   // snapshot, merging only the paths both sides changed; what does not
   // merge cleanly is written with conflict markers and recorded in the
-  // snapshot's conflicts. A workspace with unresolved conflicts
-  // (`workspace_conflicted`) or local commits (`workspace_has_commits`) is
-  // refused. Rebasing onto the base the workspace has answers its latest
+  // snapshot's conflicts. A workspace with unresolved conflicts or local
+  // commits is refused (`failed_precondition`, metadata `condition`
+  // `conflicts` or `local_commits`). Rebasing onto the base the workspace has answers its latest
   // snapshot.
   rpc Rebase(RebaseRequest) returns (RebaseResponse);
 }
