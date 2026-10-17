@@ -282,7 +282,7 @@ mod served {
             }
             HistoryError::Derived(DerivedError::BlameUnsupported(reason)) => refuse(
                 ErrorCode::Unimplemented,
-                "blame_unsupported",
+                "not_implemented",
                 format!("blame is not served for this file ({reason}); run git blame"),
                 &[],
             ),

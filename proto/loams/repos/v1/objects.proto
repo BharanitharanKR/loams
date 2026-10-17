@@ -55,7 +55,7 @@ service ObjectService {
   // Which commit wrote each line of a file, as `git blame --porcelain`
   // attributes them (renames followed). Computed once per file and commit
   // and stored. A file whose history the server cannot walk answers
-  // `blame_unsupported`, and the shim runs git.
+  // `not_implemented`, and the shim runs git.
   rpc Blame(BlameRequest) returns (BlameResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }

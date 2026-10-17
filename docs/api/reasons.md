@@ -39,7 +39,7 @@ The rules, in the order they bite:
 | `pairing_used` | failed_precondition | the pairing grant (MT) | |
 | `device_revoked` | unauthenticated | every RPC from a revoked device | |
 | `push_target_unknown` | not_found | UnregisterPushTarget | |
-| `not_implemented` | unimplemented | a stub handler whose service has not landed yet | |
+| `not_implemented` | unimplemented | a stub handler whose service has not landed yet; ObjectService Blame for a file whose history the server's blame walk cannot follow (in `gix-blame` 0.18, a path that was a directory, or below one, in an ancestor), so the shim runs `git blame` instead (GT1 Task 21, ruling T21.1) | |
 | `feature_not_in_variant` | unimplemented | any RPC of a catalogue package whose engine is not in this build variant (§44 §4, §30 §9) | `variant` |
 | `house_not_configured` | unimplemented | any `loams.house.v1` RPC on a server with no `[house] endpoint` (`--house-endpoint`): the main port has no Loams House front to proxy to (HS1 Task 7, §49 §18.1). A front that is configured but unreachable answers `unavailable` | |
 | `house_syntax_error` | invalid_argument | `loams.house.v1` ExecuteQuery, ExplainQuery, PreviewTable: ClickHouse's `62 SYNTAX_ERROR` — a statement that does not parse, more than one statement, or a form outside the House's surface (HS1 Task 8, §49 §18.2) | `clickhouse_code`, `clickhouse_name` |
@@ -79,7 +79,6 @@ The rules, in the order they bite:
 | `workspace_read_only` | failed_precondition | a write to a workspace mounted or opened read-only, or to a past snapshot | `workspace` |
 | `workspace_name_taken` | already_exists | CreateWorkspace, ForkWorkspace: the owner already has a workspace of that name | `workspace` |
 | `object_missing` | failed_precondition | SaveSnapshot, PushWorkspace, PutWorkspacePack: a snapshot or push names an object that is neither uploaded nor in the repository (§19.5.2); GetTrees: the root, or an object a tree names, is not held (GT1 Task 18) | `oid` |
-| `blame_unsupported` | unimplemented | ObjectService Blame: a file whose history the server's blame walk cannot follow (in `gix-blame` 0.18, a path that was a directory, or below one, in an ancestor); the shim runs `git blame` instead (GT1 Task 21, ruling T21.1) | |
 | `secret_detected` | failed_precondition | ApplyEdits, PushWorkspace, receive-pack: the leak scanner found a credential outside `env/` (§19.13.9) | `path`, `rule` |
 | `env_unsealed` | invalid_argument | ApplyEdits, PushWorkspace, receive-pack: an `env/` file holds a plaintext value (§19.13.2) | `path` |
 | `env_access_denied` | permission_denied | `EnvService` Open, GetLiveSet, Seal: the credential has no grant for the environment (§19.13.7) | `environment` |
