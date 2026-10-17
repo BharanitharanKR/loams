@@ -39,6 +39,8 @@ REPO = Path(__file__).resolve().parents[3]
 EXAMPLE = REPO / "examples" / "graphrag"
 
 FORMAT = "loams.bench.graphrag/1"
+# The chunks the naive reference retrieves per question.
+NAIVE_CHUNKS = 3
 
 Mode = Callable[[str], Sequence[str]]
 
@@ -123,7 +125,7 @@ def measure(
     return report
 
 
-def loams_modes(url: str, namespace: str, index: bool, corpus: Path | None = None, k: int = 10) -> dict[str, Mode]:
+def loams_modes(url: str, namespace: str, index: bool, corpus: Path | None = None) -> dict[str, Mode]:
     """The `graph` and `naive` modes over a running Loams, with the GraphRAG example's
     pipeline; `index` writes the corpus first (into a namespace that must not exist)."""
     sys.path.insert(0, str(EXAMPLE))
@@ -137,7 +139,7 @@ def loams_modes(url: str, namespace: str, index: bool, corpus: Path | None = Non
         return rag.retrieve(question).entities
 
     def naive(question: str) -> list[str]:
-        chunks = graphrag.retrieve_naive(rag.loams, namespace, rag.embedder, question, k=3)
+        chunks = graphrag.retrieve_naive(rag.loams, namespace, rag.embedder, question, k=NAIVE_CHUNKS)
         return built.chunk_entities(chunks)
 
     return {"graph": graph, "naive": naive}
@@ -156,7 +158,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--out", type=Path, help="write the JSON report here (default: stdout)")
     args = parser.parse_args(argv)
 
-    available = loams_modes(args.url, args.namespace, args.index, args.corpus, args.k)
+    available = loams_modes(args.url, args.namespace, args.index, args.corpus)
     chosen = {m: available[m] for m in args.modes.split(",")}
     report = measure(chosen, Question.load(args.questions), args.k, args.repeats)
     report["dataset"] = {"corpus": str(args.corpus), "questions": str(args.questions)}
