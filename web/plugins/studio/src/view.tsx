@@ -1,13 +1,13 @@
-// One Studio page: the layout of §53 §5.1 around the route's view. Without a
-// daemon every route but Settings shows how to get one (`NotConnected`).
+// One Studio page: the route's view in the shell's main region (design 59). The sidebar's
+// thread list, the thread's panels (inspector tabs) and its terminal (a drawer tab) are the
+// shell's regions now (regions.tsx). Without a daemon every route but Settings shows how to
+// get one (`NotConnected`).
 
+import type { PanelService } from '@loams/console-host';
 import { AgentdScope } from '@loams/console-host/query';
-import { Empty, Spinner, Tabs } from '@loams/ui';
+import { Empty, Spinner } from '@loams/ui';
 import { lazy, Suspense, useEffect, useState } from 'react';
 import type { StudioAgentd } from './agentd.js';
-import type { StudioFactory } from './factory.js';
-import type { GitActionBus } from './git/bus.js';
-import { StudioGitTools } from './git/GitToolbar.js';
 import { Home, ProjectPage } from './home/Home.js';
 import { NotConnected } from './home/states.js';
 import { StudioLayout } from './layout/StudioLayout.js';
@@ -18,16 +18,13 @@ import {
   useStudioKeybindings,
 } from './palette/commands.js';
 import { PreviewTab } from './preview/PreviewTab.js';
-import { useProjects, useReach } from './projects/queries.js';
-import { PANELS, type Panel, type StudioRoute, studioHref } from './routes.js';
+import { useReach } from './projects/queries.js';
+import { type Panel, type StudioRoute, studioHref } from './routes.js';
 import { SettingsPage } from './settings/Settings.js';
-import { FactoryGroup } from './sidebar/Factory.js';
-import { StudioSidebar } from './sidebar/Sidebar.js';
 import { useNewThread } from './sidebar/useThreadActions.js';
 import { DraftCard } from './thread/FactoryLinks.js';
 import { DiffTab } from './thread/LazyDiffTab.js';
 import { FilesTab } from './thread/LazyFilesTab.js';
-import { ThreadTerminalDrawer } from './thread/TerminalDrawer.js';
 
 // The thread page carries the markdown and highlighting stack: loaded on first use (SD1 Task 18).
 const ThreadPage = lazy(() =>
@@ -47,8 +44,11 @@ const PANEL_LABEL: Record<Panel, string> = {
   plan: 'Plan',
 };
 
-/** The thread's right-hand panel: its tabs are routes (`?panel=`). */
-function ThreadPanel({
+/**
+ * One of the thread's panels, the body of its inspector tab (design 59): the shell draws the
+ * tab strip, and a `?panel=` link opens the matching tab.
+ */
+export function ThreadPanelBody({
   agentd,
   route,
   navigate,
@@ -60,14 +60,9 @@ function ThreadPanel({
   openExternal?: (url: string) => Promise<void>;
 }) {
   const panel = route.panel ?? 'diff';
+  // The inspector tab is edge to edge; the panel keeps the gutter its old column had.
   return (
-    <div className="flex min-h-0 flex-1 flex-col px-3 pt-1">
-      <Tabs
-        label="Thread panel"
-        value={panel}
-        onValueChange={(p) => navigate(studioHref({ ...route, panel: p }))}
-        tabs={PANELS.map((p) => ({ value: p, label: PANEL_LABEL[p] }))}
-      />
+    <div className="flex min-h-0 flex-1 flex-col px-3 pt-2" data-studio-panel={panel}>
       {panel === 'diff' ? (
         <DiffTab
           threadId={route.threadId}
@@ -90,30 +85,6 @@ function ThreadPanel({
       )}
     </div>
   );
-}
-
-function Title({ agentd, route }: { agentd: StudioAgentd; route: StudioRoute }) {
-  const projects = useProjects(agentd);
-  switch (route.kind) {
-    case 'home':
-      return <>Home</>;
-    case 'project':
-      return <>{projects.data?.find((p) => p.id === route.projectId)?.name ?? 'Project'}</>;
-    case 'thread':
-      return (
-        <>
-          Thread <code>{route.threadId}</code>
-        </>
-      );
-    case 'group':
-      return (
-        <>
-          Run group <code>{route.groupId}</code>
-        </>
-      );
-    case 'settings':
-      return <>Settings</>;
-  }
 }
 
 function Body({
@@ -169,14 +140,14 @@ function Body({
         </Suspense>
       );
     case 'settings':
-      return <SettingsPage agentd={agentd} keys={keys} />;
+      return <SettingsPage agentd={agentd} keys={keys} navigate={navigate} />;
   }
 }
 
 /**
  * The route's commands (SD1 Task 24): a new thread, settings, history, and on a thread
- * its panels. Showing a panel that is already shown hides the panel, as upstream's
- * toggles do.
+ * its panels. Showing a panel whose inspector tab is already shown hides the inspector, as
+ * upstream's toggles do.
  */
 function useStudioRouteCommands(
   agentd: StudioAgentd,
@@ -184,6 +155,7 @@ function useStudioRouteCommands(
   route: StudioRoute,
   navigate: (to: string) => void,
   connected: boolean,
+  inspector: PanelService | undefined,
 ): void {
   const { commands } = keys;
   // A thread in the project in view, else the home page to pick one (SD1 Task 17).
@@ -194,31 +166,49 @@ function useStudioRouteCommands(
   const thread = route.kind === 'thread' && connected ? route : undefined;
   const show = (panel: Panel) => () => {
     if (!thread) return;
-    if ((thread.panel ?? 'diff') === panel) {
-      commands.run('rightPanel.toggle');
+    const tab = `studio.${panel}`;
+    const s = inspector?.state();
+    if (s?.open && s.tab === tab) {
+      inspector?.close();
       return;
     }
     navigate(studioHref({ ...thread, panel }));
-    commands.run('rightPanel.show');
+    // The link may already name the panel (the inspector was closed since): open it here too.
+    inspector?.open({ tab, props: {} });
   };
   useStudioCommand(commands, 'diff.toggle', thread ? show('diff') : undefined);
   useStudioCommand(commands, 'files.toggle', thread ? show('files') : undefined);
   useStudioCommand(commands, 'preview.toggle', thread ? show('preview') : undefined);
 }
 
+/**
+ * Studio's commands and keybindings on a page of its own or in the shell's home slot
+ * (regions.tsx): one place, so Mod+N and the palette's commands work on both.
+ */
+export function useStudioPageKeys(o: {
+  agentd: StudioAgentd;
+  keys: StudioKeys;
+  route: StudioRoute;
+  navigate: (to: string) => void;
+  connected: boolean;
+  inspector?: PanelService | undefined;
+}): void {
+  const { agentd, keys, route, navigate, connected, inspector } = o;
+  useStudioRouteCommands(agentd, keys, route, navigate, connected, inspector);
+  useStudioKeybindings(keys, { threadOpen: route.kind === 'thread' && connected });
+}
+
 function StudioPage({
   agentd,
-  factory,
   route,
   navigate,
   hostParam,
   keys: given,
   openExternal,
-  gitBus,
+  inspector,
+  drawer,
 }: {
   agentd: StudioAgentd;
-  /** The software factory (§53 §5.9): the desktop's bridge; none on the web until SF1. */
-  factory?: StudioFactory;
   route: StudioRoute;
   navigate: (to: string) => void;
   /** Web: `?host=<id>` selects a registered agentd host, by id only (§53 §4.4). */
@@ -227,8 +217,10 @@ function StudioPage({
   keys?: StudioKeys;
   /** Opens an http(s) link outside Studio (the platform's; a terminal's links, SD1 Task 22). */
   openExternal?: (url: string) => Promise<void>;
-  /** The git toolbar's link to the palette (SD1 Task 23, T24-6). */
-  gitBus?: GitActionBus;
+  /** The shell's inspector: the thread's panels are its tabs (design 59). */
+  inspector?: PanelService;
+  /** The shell's drawer: the thread's terminal is its tab (design 59). */
+  drawer?: PanelService;
 }) {
   useEffect(() => {
     if (hostParam) agentd.hosts?.select(hostParam);
@@ -238,49 +230,18 @@ function StudioPage({
   const thread = route.kind === 'thread' ? route : undefined;
   const [own] = useState(() => createStudioKeys({ edition: agentd.kind }));
   const keys = given ?? own;
-  useStudioRouteCommands(agentd, keys, route, navigate, connected);
-  useStudioKeybindings(keys, { threadOpen: thread !== undefined && connected });
+  useStudioPageKeys({ agentd, keys, route, navigate, connected, inspector });
+  // A `?panel=` link (a file link from the terminal or the diff, the palette) opens that tab,
+  // again whenever the link changes (another file in the Files tab).
+  const link = thread?.panel ? studioHref(thread) : undefined;
+  const linkPanel = thread?.panel;
+  useEffect(() => {
+    if (!link || !linkPanel) return;
+    if (linkPanel === 'terminal') drawer?.open({ tab: 'studio.terminal' });
+    else inspector?.open({ tab: `studio.${linkPanel}`, props: {} });
+  }, [link, linkPanel, inspector, drawer]);
   return (
-    <StudioLayout
-      title={<Title agentd={agentd} route={route} />}
-      sidebar={
-        <StudioSidebar agentd={agentd} route={route} navigate={navigate} keys={keys}>
-          {factory && <FactoryGroup factory={factory} />}
-        </StudioSidebar>
-      }
-      commands={keys.commands}
-      tools={
-        connected ? (
-          <StudioGitTools
-            agentd={agentd}
-            route={route}
-            factory={factory}
-            bus={gitBus}
-            openTerminal={() => keys.commands.run('terminal.toggle')}
-          />
-        ) : undefined
-      }
-      panel={
-        thread && connected ? (
-          <ThreadPanel
-            agentd={agentd}
-            route={thread}
-            navigate={navigate}
-            {...(openExternal ? { openExternal } : {})}
-          />
-        ) : undefined
-      }
-      drawer={
-        thread && connected ? (
-          <ThreadTerminalDrawer
-            threadId={thread.threadId}
-            keys={keys}
-            navigate={navigate}
-            {...(openExternal ? { openExternal } : {})}
-          />
-        ) : undefined
-      }
-    >
+    <StudioLayout commands={keys.commands} inspector={inspector} drawer={drawer}>
       {connected ? (
         <Body
           agentd={agentd}

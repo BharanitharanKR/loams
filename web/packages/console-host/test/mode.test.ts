@@ -171,7 +171,8 @@ describe('the mode service', () => {
     const { mode, applied } = await start({ storage: memoryStorage({ [MODE_KEY]: 'studio' }) });
     expect(mode.available).toEqual(['console', 'studio']);
     expect(mode.current).toBe('studio');
-    expect(applied.sort()).toEqual(['both', 'shell', 'studio']);
+    // Design 59 (W10): Console's plugins load at boot too, after Studio's.
+    expect(applied.sort()).toEqual(['both', 'pages', 'shell', 'studio']);
   });
 
   it('desktop_opens_studio_on_first_run', async () => {
@@ -255,27 +256,25 @@ describe('the mode service', () => {
 });
 
 describe('lazy loading by mode', () => {
-  it('other_mode_plugins_load_on_first_entry', async () => {
-    const { handle, mode, applied } = await start();
+  it('other_mode_plugins_load_at_boot_after_the_boot_mode (design 59, W10)', async () => {
+    const { handle, mode, applied, navigated } = await start();
     expect(mode.current).toBe('console');
-    expect(applied.sort()).toEqual(['both', 'pages', 'shell']);
-    const studio = handle.plugins().find((p) => p.id === 'studio');
-    expect(studio?.status).toBe('deferred');
-    // A deferred row is not "stuck": the pending sweep ignores it.
+    await settle();
+    // Studio's plugins load in Console too (its threads show in the shell's sidebar), without
+    // switching the mode or navigating.
+    expect(applied.sort()).toEqual(['both', 'pages', 'shell', 'studio']);
+    expect(mode.current).toBe('console');
+    expect(navigated).toEqual([]);
+    expect(handle.plugins().find((p) => p.id === 'studio')?.status).toBe('active');
     expect(handle.pending().map((p) => p.id)).not.toContain('studio');
 
-    mode.set('studio');
-    await settle();
-    expect(applied.filter((a) => a === 'studio')).toHaveLength(1);
-    expect(handle.plugins().find((p) => p.id === 'studio')?.status).toBe('active');
-    // Console's plugins stay loaded in Studio.
-    expect(handle.plugins().find((p) => p.id === 'pages')?.status).toBe('active');
-
     // Later switches neither dispose nor re-apply anything.
+    mode.set('studio');
     mode.set('console');
     mode.set('studio');
     await settle();
     expect(applied.filter((a) => a === 'studio')).toHaveLength(1);
+    expect(handle.plugins().find((p) => p.id === 'pages')?.status).toBe('active');
   });
 
   it('switch_keeps_fibers', async () => {

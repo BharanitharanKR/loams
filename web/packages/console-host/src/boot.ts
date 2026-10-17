@@ -450,6 +450,9 @@ export async function boot(options: BootOptions): Promise<ConsoleHandle> {
     }
     await load(record);
   }
+  // Design 59 (W10): the shell's sidebar shows Studio's threads in Console mode too, so every
+  // available mode's plugins load at boot, after the boot mode's are applied.
+  for (const m of available) if (m !== bootMode) mode.prepare(m);
 
   if (thirdParty.length > 0) {
     const { sandboxHostPlugin } = await import('./sandbox-host.js');

@@ -5,7 +5,9 @@
 //   in the thread's menu), its run groups with their members, then the rest, newest first;
 // - status badges (pending approval, awaiting input, working with its time, errored, an
 //   unread completion), the worktree a thread runs in, and its run group;
-// - search by title or branch, and archived threads on request;
+// - search by title or branch; archived threads are in Studio's settings (design 59, D1079);
+// - in the shell's sidebar (design 59, D1078): 28px rows, and each project shows its first
+//   `THREADS_SHOWN` unpinned threads until "Show n more" (Review Focus 2);
 // - the thread menu (right-click, or the row's "More" button): pin, move, rename, fork,
 //   copy, archive, and delete, which offers to remove the thread's worktree only when no
 //   other thread uses it (`getOrphanedWorktreePathForThread`); and "Clean up worktrees";
@@ -74,7 +76,6 @@ import {
   MenuSeparator,
 } from '@loams/ui';
 import {
-  Archive,
   ChevronDown,
   ChevronRight,
   FolderGit2,
@@ -105,10 +106,15 @@ import { type StudioRoute, studioHref } from '../routes.js';
 import { useSidebarData } from './data.js';
 import { type ThreadActions, useThreadActions, type WorktreeTarget } from './useThreadActions.js';
 
+/** One sidebar row (design 59, D1076): 28px, one line, the selected row a chip. */
 const ROW =
-  'flex min-w-0 flex-1 items-center gap-2 rounded-sm px-2 py-1.5 text-[0.86rem] text-muted no-underline ' +
-  'outline-none hover:bg-raised hover:text-ink focus-visible:outline-2 focus-visible:-outline-offset-2 ' +
-  'focus-visible:outline-accent aria-[current=page]:bg-raised aria-[current=page]:text-ink';
+  'flex h-7 min-w-0 flex-1 items-center gap-2 rounded-md px-2 text-small text-muted no-underline ' +
+  'outline-none hover:bg-row-hover hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 ' +
+  'focus-visible:outline-accent aria-[current=page]:bg-row-selected aria-[current=page]:text-ink ' +
+  'aria-[current=page]:shadow-chip';
+
+/** A project's unpinned threads shown before "Show n more" (Review Focus 2). */
+export const THREADS_SHOWN = 10;
 
 const ICON_BUTTON =
   'inline-grid size-6 shrink-0 cursor-pointer place-items-center rounded-sm border-0 bg-transparent ' +
@@ -334,7 +340,11 @@ function ProjectSection({
   threadsKnown: boolean;
   onNewThread?: () => void;
 }) {
-  const { project, pinned, groups, threads, status } = rows;
+  const { project, pinned, groups, threads: all, status } = rows;
+  const [expanded, setExpanded] = useState(false);
+  // The first THREADS_SHOWN, and the open thread wherever it is in the list.
+  const threads = expanded ? all : all.filter((t, i) => i < THREADS_SHOWN || rowProps(t).active);
+  const more = all.length - threads.length;
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
   const pinnedOrder = pinned.map((t) => t.id);
   const items: SidebarListItem[] = [
@@ -421,9 +431,7 @@ function ProjectSection({
           aria-label={`${name} threads`}
           className="m-0 flex list-none flex-col gap-px p-0 ps-5"
         >
-          {empty && threadsKnown && (
-            <li className="px-2 py-1 text-[0.8rem] text-faint">No threads</li>
-          )}
+          {empty && threadsKnown && <li className="px-2 py-1 text-small text-faint">No threads</li>}
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={onDragEnd}>
             <SortableContext
               items={items.map(sidebarListItemId)}
@@ -448,6 +456,21 @@ function ProjectSection({
               ))}
             </SortableContext>
           </DndContext>
+          {more > 0 && (
+            <li className="flex list-none">
+              <button
+                type="button"
+                className={cx(
+                  ROW,
+                  'cursor-pointer border-0 bg-transparent text-left font-[inherit] text-faint',
+                )}
+                onClick={() => setExpanded(true)}
+              >
+                <span aria-hidden="true" className="size-3.5 shrink-0" />
+                Show {more} more
+              </button>
+            </li>
+          )}
         </ul>
       )}
     </li>
@@ -663,7 +686,6 @@ export function StudioSidebar({
   const [cloning, setCloning] = useState(false);
   const [data, applyPins] = useSidebarData(agentd, ready ? projects.data : undefined);
   const [query, setQuery] = useState('');
-  const [showArchived, setShowArchived] = useState(false);
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(new Set());
   const [renaming, setRenaming] = useState<SidebarThread | null>(null);
   const [deleting, setDeleting] = useState<SidebarThread | null>(null);
@@ -692,9 +714,10 @@ export function StudioSidebar({
         groups: data.groups,
         pinnedIds: data.pinnedIds,
         query,
-        showArchived,
+        // Archived threads are in Studio's settings (settings/Archived.tsx, D1079).
+        showArchived: false,
       }),
-    [projectRefs, data.threads, data.groups, data.pinnedIds, query, showArchived],
+    [projectRefs, data.threads, data.groups, data.pinnedIds, query],
   );
   const groupById = useMemo(() => new Map(data.groups.map((g) => [g.id, g])), [data.groups]);
   const actions = useThreadActions({
@@ -890,11 +913,10 @@ export function StudioSidebar({
     () => orphanedWorktrees(projectRefs, data.worktrees, data.threads),
     [projectRefs, data.worktrees, data.threads],
   );
-  const archivedCount = data.threads.filter((t) => t.archived).length;
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-rule-soft pr-2 pl-4">
+      <div className="flex h-7 shrink-0 items-center justify-between gap-2 pr-1 pl-2">
         <h2 className="m-0 text-micro font-medium text-faint">Projects</h2>
         <Button
           variant="quiet"
@@ -909,7 +931,7 @@ export function StudioSidebar({
         </Button>
       </div>
       {ready && data.state === 'ready' && (
-        <div className="shrink-0 px-2 pt-2">
+        <div className="shrink-0 pt-1 pb-1">
           <InputGroup className="h-8">
             <InputGroupAddon>
               <Search aria-hidden="true" className="size-3.5" />
@@ -926,18 +948,14 @@ export function StudioSidebar({
                   setQuery('');
                 }
               }}
-              className="text-[0.84rem]"
+              className="text-small"
             />
           </InputGroup>
         </div>
       )}
-      <nav
-        aria-label="Projects"
-        className="min-h-0 flex-1 overflow-auto py-2"
-        onKeyDown={onRowsKeyDown}
-      >
+      <nav aria-label="Projects" className="py-1" onKeyDown={onRowsKeyDown}>
         {ready && projects.isSuccess && (projects.data.length > 0 || model.projects.length > 0) && (
-          <ul className="m-0 flex list-none flex-col gap-1 p-0 px-1">
+          <ul className="m-0 flex list-none flex-col gap-1 p-0">
             {model.projects.map((rows) => {
               const id = rows.project?.id ?? '';
               const project = rows.project;
@@ -969,41 +987,38 @@ export function StudioSidebar({
           </ul>
         )}
         {ready && projects.isSuccess && query && model.projects.length === 0 && (
-          <p className="m-0 px-4 py-2 text-[0.84rem] text-faint">No threads match "{query}".</p>
+          <p className="m-0 px-2 py-1.5 text-small text-faint">No threads match "{query}".</p>
         )}
         {ready && projects.isPending && (
-          <p className="m-0 px-4 py-2 text-[0.84rem] text-faint">Loading…</p>
+          <p className="m-0 px-2 py-1.5 text-small text-faint">Loading…</p>
         )}
         {ready &&
           projects.isSuccess &&
           projects.data.length === 0 &&
           model.projects.length === 0 && (
-            <p className="m-0 px-4 py-2 text-[0.84rem] text-faint">No projects yet.</p>
+            <p className="m-0 px-2 py-1.5 text-small text-faint">No projects yet.</p>
           )}
         {ready && projects.isError && (
-          <p role="alert" className="m-0 px-4 py-2 text-[0.84rem] text-danger">
+          <p role="alert" className="m-0 px-2 py-1.5 text-small text-danger">
             Could not list projects: {projects.error.message}
           </p>
         )}
         {ready && data.state === 'error' && (
-          <p role="alert" className="m-0 px-4 py-2 text-[0.84rem] text-danger">
+          <p role="alert" className="m-0 px-2 py-1.5 text-small text-danger">
             Could not list threads: {data.error}
           </p>
         )}
         {ready && data.state === 'loading' && projects.isSuccess && projects.data.length > 0 && (
-          <p className="m-0 px-4 py-1 text-[0.8rem] text-faint">Loading threads…</p>
+          <p className="m-0 px-2 py-1 text-small text-faint">Loading threads…</p>
         )}
-        {!ready && <p className="m-0 px-4 py-2 text-[0.84rem] text-faint">Not connected.</p>}
+        {!ready && <p className="m-0 px-2 py-1.5 text-small text-faint">Not connected.</p>}
         {add.isError && !cloning && (
-          <p role="alert" className="m-0 px-4 py-2 text-[0.84rem] text-danger">
+          <p role="alert" className="m-0 px-2 py-1.5 text-small text-danger">
             Could not add the project: {add.error?.message}
           </p>
         )}
         {actions.error && (
-          <p
-            role="alert"
-            className="m-0 flex items-start gap-2 px-4 py-2 text-[0.84rem] text-danger"
-          >
+          <p role="alert" className="m-0 flex items-start gap-2 px-2 py-1.5 text-small text-danger">
             <span className="min-w-0 flex-1">{actions.error}</span>
             <button
               type="button"
@@ -1017,34 +1032,18 @@ export function StudioSidebar({
         )}
       </nav>
       {children}
-      <div className="flex shrink-0 flex-col gap-0.5 border-t border-rule-soft p-2">
+      <div className="flex shrink-0 flex-col gap-px pt-1">
         {ready && data.state === 'ready' && (
-          <>
-            {archivedCount > 0 && (
-              <button
-                type="button"
-                aria-pressed={showArchived}
-                onClick={() => setShowArchived((v) => !v)}
-                className="flex cursor-pointer items-center gap-2.5 rounded-sm border-0 bg-transparent px-2.5 py-1.5 text-left font-[inherit] text-[0.86rem] text-muted hover:bg-raised hover:text-ink aria-pressed:text-ink"
-              >
-                <Archive size={15} strokeWidth={1.75} aria-hidden="true" />
-                {showArchived ? 'Hide archived' : `Show archived (${archivedCount})`}
-              </button>
-            )}
-            <button
-              type="button"
-              onClick={() => setCleaning(true)}
-              className="flex cursor-pointer items-center gap-2.5 rounded-sm border-0 bg-transparent px-2.5 py-1.5 text-left font-[inherit] text-[0.86rem] text-muted hover:bg-raised hover:text-ink"
-            >
-              <Trash2 size={15} strokeWidth={1.75} aria-hidden="true" />
-              Clean up worktrees
-            </button>
-          </>
+          <button
+            type="button"
+            onClick={() => setCleaning(true)}
+            className={cx(ROW, 'cursor-pointer border-0 bg-transparent text-left font-[inherit]')}
+          >
+            <Trash2 size={15} strokeWidth={1.75} aria-hidden="true" />
+            Clean up worktrees
+          </button>
         )}
-        <a
-          href={`#${studioHref({ kind: 'settings' })}`}
-          className="flex items-center gap-2.5 rounded-sm px-2.5 py-1.5 text-[0.86rem] text-muted no-underline hover:bg-raised hover:text-ink"
-        >
+        <a href={`#${studioHref({ kind: 'settings' })}`} className={ROW}>
           <Settings size={15} strokeWidth={1.75} aria-hidden="true" />
           Studio settings
         </a>

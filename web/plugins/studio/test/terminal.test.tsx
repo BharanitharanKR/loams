@@ -24,8 +24,8 @@ import {
   ThreadTerminalDrawer,
 } from '../src/thread/TerminalDrawer.js';
 import { takeTerminalContexts, terminalContexts } from '../src/thread/terminalContexts.js';
-import { StudioView } from '../src/view.js';
 import { wrap } from './fakes.js';
+import { StudioInShell } from './shell.js';
 
 const LINUX = 'Linux x86_64';
 const READY = { state: 'ready' } as const;
@@ -249,7 +249,7 @@ describe('the toggle (Ctrl+`, T24-4)', () => {
     const keys = createStudioKeys({ edition: 'desktop', platform: LINUX });
     render(
       wrap(
-        <StudioView
+        <StudioInShell
           agentd={studioAgentd(service)}
           route={{ kind: 'thread', threadId: 'c_1', panel: 'diff' }}
           navigate={vi.fn()}
@@ -258,14 +258,15 @@ describe('the toggle (Ctrl+`, T24-4)', () => {
       ),
     );
     await screen.findByRole('tab', { name: 'Diff' });
-    expect(screen.queryByRole('region', { name: 'Terminal' })).toBeNull();
+    // The terminal is the shell drawer's tab (design 59).
+    expect(screen.queryByRole('region', { name: 'Drawer' })).toBeNull();
 
     fireEvent.keyDown(document.body, { key: '`', code: 'Backquote', ctrlKey: true });
-    await screen.findByRole('region', { name: 'Terminal' });
+    await screen.findByRole('region', { name: 'Drawer' });
     await waitFor(() => expect(daemon.calls).toContain('OpenTerminal:c_1:80x24'));
 
     fireEvent.keyDown(document.body, { key: '`', code: 'Backquote', ctrlKey: true });
-    await waitFor(() => expect(screen.queryByRole('region', { name: 'Terminal' })).toBeNull());
+    await waitFor(() => expect(screen.queryByRole('region', { name: 'Drawer' })).toBeNull());
     // Hiding the drawer leaves the shell running.
     expect(daemon.calls.some((c) => c.startsWith('CloseTerminal'))).toBe(false);
   });

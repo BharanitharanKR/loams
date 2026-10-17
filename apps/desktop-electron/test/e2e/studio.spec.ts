@@ -31,6 +31,7 @@ import {
 	go,
 	hashOf,
 	modes,
+	openInspectorTab,
 	projectHref,
 	startThread,
 	timeline,
@@ -146,6 +147,8 @@ test.describe("studio on the desktop edition", () => {
 
 	test("thread_runs_and_shows_diff", async () => {
 		threadId = await startThread(page, agentd.repo, "Please edit the notes");
+		// The diff is the shell inspector's Diff tab (design 59).
+		await openInspectorTab(page, "Diff");
 		await expectMockEdit(page, 1);
 		await expect(page.getByRole("main")).toContainText(/Mock\s*full-access/);
 		expect(agentd.git(["status", "--porcelain"])).toBe("");
@@ -184,7 +187,8 @@ test.describe("studio on the desktop edition", () => {
 	});
 
 	test("terminal_round_trip", async () => {
-		await page.getByRole("button", { name: "Show terminal" }).click();
+		// The terminal is the shell drawer's tab (design 59).
+		await page.getByRole("button", { name: "Show drawer" }).click();
 		const terminal = page.locator(".xterm").first();
 		await expect(terminal).toBeVisible({ timeout: 30_000 });
 		await terminal.click();
