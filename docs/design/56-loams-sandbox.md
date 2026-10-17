@@ -941,3 +941,6 @@ Read on 2026-10-15 unless noted.
 - In-repository:
   - §15, §24, §45, §49 and HS1 (R1.10, R1.11, R6.1, R6.6, R-ACL.1), §50, §53;
   - the code paths in §3.
+
+
+> **See also (2026-10-17):** [§61 Loams Jailer](61-loams-jailer.md) builds on this sandbox: it adds `pause`, `resume`, `set_net_policy`, `set_limits` and a `SandboxEvent` stream (D1096), plus sensors and actuators per adapter (§61 §4.6).
