@@ -20,9 +20,11 @@ name: Release GitHub
 #      so without this step neither would run (v0.1.0-preview.1 had to be
 #      packaged by hand).
 #
-# Everything is a preview: a tag such as v0.1.0-preview.1 gives images
-# :0.1.0-preview.1 and :preview (never :latest; release-images.yml owns the
-# tags), and a pre-release on GitHub, also when the release already existed.
+# A tag such as v0.1.0-preview.1 gives images :0.1.0-preview.1 and :preview
+# (never :latest) and a pre-release on GitHub, also when the release already
+# existed. A tag with no `-` (v0.1.0) gives :0.1.0, :0.1 and :latest and a
+# normal, "Latest" release. release-images.yml owns the tags and
+# scripts/release/channel.sh the rule.
 # This workflow pushes no image and moves no tag; it only adds attestations.
 on:
   workflow_run:
@@ -61,6 +63,10 @@ jobs:
       tag: ${{ steps.guard.outputs.tag }}
       version: ${{ steps.guard.outputs.version }}
       sha: ${{ steps.guard.outputs.sha }}
+      prerelease: ${{ steps.channel.outputs.prerelease }}
+      latest_flag: ${{ steps.channel.outputs.latest_flag }}
+      title: ${{ steps.channel.outputs.title }}
+      alias_note: ${{ steps.channel.outputs.alias_note }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -91,6 +97,13 @@ jobs:
             echo "sha=$sha"
           } >> "$GITHUB_OUTPUT"
           echo "$TAG at $sha"
+      # No `-` in the version: a normal release and "Latest". A `-preview.N` or
+      # `-rc.N`: a pre-release, never "Latest". scripts/release/channel.sh owns the rule.
+      - name: the release channel
+        id: channel
+        env:
+          VERSION: ${{ steps.guard.outputs.version }}
+        run: scripts/release/channel.sh "$VERSION" | tee -a "$GITHUB_OUTPUT"
 
   attest:
     name: Provenance and SBOM (${{ matrix.image }})
@@ -123,9 +136,11 @@ jobs:
           docker buildx imagetools inspect "$IMAGE:$VERSION"
           digest=$(docker buildx imagetools inspect "$IMAGE:$VERSION" --format '{{json .Manifest}}' | jq -r .digest)
           [[ "$digest" == sha256:* ]] || { echo "no digest for $IMAGE:$VERSION"; exit 1; }
-          # :preview must be this release; release-images.yml moved it.
-          preview=$(docker buildx imagetools inspect "$IMAGE:preview" --format '{{json .Manifest}}' | jq -r .digest)
-          [ "$preview" = "$digest" ] || echo "::warning::$IMAGE:preview is $preview, not $VERSION ($digest): a newer tag moved it"
+          # The rolling tag (:preview, or :latest for a stable release) must be
+          # this release; release-images.yml moved it.
+          rolling=preview; [[ "$VERSION" == *-* ]] || rolling=latest
+          moved=$(docker buildx imagetools inspect "$IMAGE:$rolling" --format '{{json .Manifest}}' | jq -r .digest)
+          [ "$moved" = "$digest" ] || echo "::warning::$IMAGE:$rolling is $moved, not $VERSION ($digest): a newer tag moved it"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
       - name: SBOM (SPDX)
         uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26 # v0.24.2
@@ -153,7 +168,7 @@ jobs:
   # includes (deploy/loams-postgres-dev), in the layout byoc/install.sh copies
   # to a VM, with .env.example pinned to this release's image tag.
   release:
-    name: GitHub pre-release and assets
+    name: GitHub release and assets
     needs: [guard, attest]
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -212,25 +227,36 @@ jobs:
             --mtime="$mtime" -czf "$OUT/$name.tar.gz" "$name"
           (cd "$OUT" && sha256sum -- * > SHA256SUMS)
           ls -l "$OUT"; cat "$OUT/SHA256SUMS"
-      - name: create the pre-release if needed, keep it a pre-release, attach
+      - name: create the release if needed, keep its channel, attach
         id: publish
         env:
           GH_TOKEN: ${{ github.token }}
           TAG: ${{ needs.guard.outputs.tag }}
           VERSION: ${{ needs.guard.outputs.version }}
+          PRERELEASE: ${{ needs.guard.outputs.prerelease }}
+          LATEST_FLAG: ${{ needs.guard.outputs.latest_flag }}
+          TITLE: ${{ needs.guard.outputs.title }}
+          ALIAS_NOTE: ${{ needs.guard.outputs.alias_note }}
           REGISTRY: ${{ env.REGISTRY }}
           OUT: ${{ runner.temp }}/assets
         run: |
           set -euo pipefail
+          if [ "$PRERELEASE" = true ]; then
+            channel_flags=(--prerelease "$LATEST_FLAG")
+            intro="Loams $VERSION (preview)."
+          else
+            channel_flags=("$LATEST_FLAG")
+            intro="Loams $VERSION."
+          fi
           dispatch_cli=true
           if ! gh release view "$TAG" -R "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
             notes="$RUNNER_TEMP/notes.md"
             {
-              echo "Loams $VERSION (preview). Run it yourself with Docker Compose: see deploy/release/README.md in the attached bundle."
+              echo "$intro Run it yourself with Docker Compose: see deploy/release/README.md in the attached bundle."
               echo
               echo "Images (linux/amd64, linux/arm64; provenance and SBOM attested, verify with \`gh attestation verify oci://<image> -R $GITHUB_REPOSITORY\`):"
               for image in loams loams-fabric loams-agentd loams-pg-control; do
-                echo "- \`$REGISTRY/$image:$VERSION\` (also \`:preview\`)"
+                echo "- \`$REGISTRY/$image:$VERSION\` ($ALIAS_NOTE)"
               done
               # The generated "Upgrading" section (design §54 §11.3, D942).
               if [ -f "$RUNNER_TEMP/src/release/upgrade-path.toml" ]; then
@@ -238,14 +264,18 @@ jobs:
                 python3 "$RUNNER_TEMP/src/scripts/release/upgrade_path.py" notes "$VERSION" --root "$RUNNER_TEMP/src"
               fi
             } > "$notes"
-            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag --prerelease --latest=false \
-              --title "Loams $VERSION (preview)" --notes-file "$notes"
+            gh release create "$TAG" -R "$GITHUB_REPOSITORY" --verify-tag "${channel_flags[@]}" \
+              --title "$TITLE" --notes-file "$notes"
           else
             draft=$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json isDraft -q .isDraft)
             [ "$draft" = true ] || dispatch_cli=false
-            # A release drafted by hand for this tag is published, and stays a
-            # preview: never the repository's "Latest" release.
-            gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+            # A release drafted by hand for this tag is published in its channel:
+            # a preview is never the repository's "Latest" release, a stable one is.
+            if [ "$PRERELEASE" = true ]; then
+              gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --prerelease --latest=false
+            else
+              gh release edit "$TAG" -R "$GITHUB_REPOSITORY" --draft=false --prerelease=false --latest
+            fi
           fi
           gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber "$OUT"/*
           echo "dispatch_cli=$dispatch_cli" >> "$GITHUB_OUTPUT"

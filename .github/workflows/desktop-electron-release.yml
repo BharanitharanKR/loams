@@ -735,7 +735,7 @@ jobs:
           ls -l
 
       # The product release is created by release-github.yml; this only adds the desktop files and a
-      # section of notes, once. A published product release is updated in place (it is a preview).
+      # section of notes, once. A published product release is updated in place.
       - name: attach to the product release
         if: env.MODE == 'product'
         env:
