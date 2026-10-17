@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Starts the local-e2e stack: the release compose bundle from this checkout,
+# copied to $E2E_HOME/stack (as byoc/install.sh copies it to a VM), with
+# compose.override.yaml from this directory, on the local-e2e Podman store.
+#
+#   scripts/local-e2e/up.sh            # house + postgres-control profiles
+#   scripts/local-e2e/up.sh --no-pg    # without the Postgres control plane
+#   scripts/local-e2e/up.sh infra      # only the stack directory and the services
+#                                      # that need no Loams image (pd, tikv, tidb,
+#                                      # rustfs, the Neon storage)
+#
+# Idempotent: an existing .env, secrets/ and volumes are kept.
+set -euo pipefail
+here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+. "$here/env.sh"
+root="$(cd "$here/../.." && pwd)"
+profiles=(--profile house --profile postgres-control)
+mode="${1:-all}"
+[[ "$mode" == "--no-pg" ]] && profiles=(--profile house)
+
+# 1. The Podman API on the e2e store (a transient user unit).
+if ! systemctl --user is-active -q loams-e2e-podman; then
+  mkdir -p "$E2E_PODMAN_ROOT"
+  systemd-run --user --unit=loams-e2e-podman --description='Loams local-e2e Podman API' \
+    podman --root "$E2E_PODMAN_ROOT" --runroot "$E2E_PODMAN_RUNROOT" system service --time=0 \
+    "unix://$E2E_PODMAN_SOCK"
+  for _ in $(seq 50); do [[ -S "$E2E_PODMAN_SOCK" ]] && break; sleep 0.2; done
+fi
+export DOCKER_HOST="unix://$E2E_PODMAN_SOCK"
+
+# 2. The images (build-binaries.sh, then build-images.sh, when missing).
+if [[ "$mode" != infra ]]; then
+  for image in loams loams-fabric loams-agentd loams-pg-control; do
+    if ! epodman image exists "$E2E_REGISTRY/$image:$E2E_VERSION"; then
+      [[ -x "$E2E_HOME/bin/$image" || -x "$E2E_HOME/bin/loams-engine" ]] || "$here/build-binaries.sh"
+      "$here/build-images.sh" "$image"
+    fi
+  done
+fi
+
+# 3. The stack directory: this checkout's bundle, plus the override.
+stack="$E2E_HOME/stack"
+mkdir -p "$stack"
+rsync -a --delete --exclude .env --exclude secrets/ --exclude compose.override.yaml \
+  "$root/deploy/release/" "$stack/release/"
+rsync -a --delete "$root/deploy/loams-postgres-dev/" "$stack/loams-postgres-dev/"
+cp "$here/compose.override.yaml" "$stack/release/compose.override.yaml"
+mkdir -p "$stack/release/secrets"
+cd "$stack/release"
+if [[ ! -f .env ]]; then
+  cp .env.example .env
+  cat >> .env <<ENV
+
+# --- local-e2e (scripts/local-e2e/up.sh) ---------------------------------------
+LOAMS_REGISTRY=$E2E_REGISTRY
+LOAMS_VERSION=$E2E_VERSION
+LOAMS_AUTH_MODE=off
+LOAMS_CORS_ORIGINS=http://127.0.0.1:5190,http://localhost:5190
+LOAMS_BUCKET=s3://loams-engine/stack
+LOAMS_HOUSE_ENDPOINT=https://house:8443
+HOUSE_PRINCIPALS=dev-loopback=read+write+ddl+admin
+CONTAINER_SOCKET=$E2E_PODMAN_SOCK
+CONTAINER_SOCKET_GID=0
+ENV
+fi
+if [[ ! -f secrets/engine.env ]]; then
+  cat > secrets/engine.env <<ENV
+# The engine's S3 settings for LOAMS_BUCKET (RustFS from the Postgres stack).
+AWS_ACCESS_KEY_ID=rustfsadmin
+AWS_SECRET_ACCESS_KEY=rustfsadmin
+AWS_REGION=us-east-1
+AWS_ENDPOINT=http://rustfs:9000
+AWS_ALLOW_HTTP=true
+ENV
+  chmod 0644 secrets/engine.env
+fi
+
+if [[ "$mode" == infra ]]; then
+  ecompose up -d pd tikv tidb rustfs e2e-bucket create-bucket storage_broker pageserver safekeeper1
+  ecompose ps
+  exit 0
+fi
+
+# 4. pg-control's API key (README "Postgres control plane"), once.
+if [[ ! -s secrets/pg-api-keys.json ]]; then
+  echo '{"keys": []}' > secrets/pg-api-keys.json
+  out="$(ecompose run --rm --no-deps -T pg-control pg-api-key \
+          --subject e2e@localhost --grant admin:namespace:default)"
+  python3 -I -c 'import json,sys; d=json.loads(sys.argv[1]); print(json.dumps({"keys":[d["entry"]]}))' "$out" \
+    > secrets/pg-api-keys.json
+  python3 -I -c 'import json,sys; print(json.loads(sys.argv[1])["api_key"])' "$out" > "$E2E_HOME/pg-api-key"
+  chmod 0644 secrets/pg-api-keys.json; chmod 0600 "$E2E_HOME/pg-api-key"
+fi
+
+# 5. Up.
+ecompose "${profiles[@]}" up -d
+ecompose "${profiles[@]}" ps

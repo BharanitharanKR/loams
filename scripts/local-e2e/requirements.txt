@@ -1,0 +1,8 @@
+qdrant-client==1.15.1
+elasticsearch==8.19.3
+pyarrow==21.0.0
+adbc-driver-flightsql
+adbc-driver-manager
+psycopg[binary]==3.2.3
+PyMySQL==1.1.1
+numpy==2.1.3

@@ -1,0 +1,34 @@
+# local-e2e: deploy/release/Containerfile.loams-agentd without its build stage. The
+# binaries come from the build context (scripts/local-e2e/build-binaries.sh,
+# a release build on the host with the same features); the runtime stage below
+# is the release file's, verbatim but for the COPY of the binaries.
+ARG RUNTIME_IMAGE=docker.io/library/debian:trixie-slim
+
+FROM ${RUNTIME_IMAGE}
+ARG VERSION=dev
+ARG REVISION=unknown
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates git openssh-client tini \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 10001 loams \
+ && useradd --system --uid 10001 --gid loams --create-home --home-dir /home/loams --shell /usr/sbin/nologin loams \
+ && install -d -m 0700 -o loams -g loams /home/loams/agentd
+COPY loams-agentd /usr/local/bin/loams-agentd
+LABEL org.opencontainers.image.title="loams-agentd" \
+      org.opencontainers.image.description="Loams agent daemon (preview, optional)" \
+      org.opencontainers.image.source="https://github.com/ostrium-labs/loams" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.licenses="Apache-2.0"
+# The daemon keeps its token, lock, discovery file and store beside its
+# config.toml, in a directory it makes owner-only, so that directory must be
+# its own and writable: /home/loams/agentd (in the data volume). A deployment
+# mounts its config.toml there read-only, and anything else it names (TLS
+# files) under /etc/loams-agentd (SD1 Task 30).
+ENV LOAMS_AGENTD_CONFIG=/home/loams/agentd/config.toml
+USER 10001:10001
+WORKDIR /home/loams
+HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
+  CMD ["/usr/local/bin/loams-agentd", "status"]
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/loams-agentd"]
+CMD ["run"]

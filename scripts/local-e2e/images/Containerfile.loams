@@ -1,0 +1,37 @@
+# local-e2e: deploy/release/Containerfile.loams without its build stage. The
+# binaries come from the build context (scripts/local-e2e/build-binaries.sh,
+# a release build on the host with the same features); the runtime stage below
+# is the release file's, verbatim but for the COPY of the binaries.
+ARG RUNTIME_IMAGE=docker.io/library/debian:trixie-slim
+
+FROM ${RUNTIME_IMAGE}
+ARG VERSION=dev
+ARG REVISION=unknown
+# `migrate` also mounts the House's, pg-control's and the snapshots' volumes
+# (design §54 §6.4, §7.3): a volume first mounted by this image takes the
+# owners of these directories, so the House and pg-control (the same uid)
+# still own theirs.
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl tini \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 10001 loams \
+ && useradd --system --uid 10001 --gid loams --home-dir /var/lib/loams --shell /usr/sbin/nologin loams \
+ && install -d -o loams -g loams -m 0750 /var/lib/loams /var/lib/loams/bucket /var/lib/loams/graph \
+ && install -d -o loams -g loams -m 0750 /var/lib/loams-house \
+ && install -d -o loams -g loams -m 0700 /var/lib/loams-pg-control /var/lib/loams-upgrade-snapshots
+COPY loams-engine /usr/local/bin/loams
+LABEL org.opencontainers.image.title="loams" \
+      org.opencontainers.image.description="Loams engine (preview)" \
+      org.opencontainers.image.source="https://github.com/ostrium-labs/loams" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.licenses="Apache-2.0"
+USER 10001:10001
+WORKDIR /var/lib/loams
+VOLUME ["/var/lib/loams"]
+EXPOSE 8080
+HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:8080/health || exit 1
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/loams"]
+CMD ["standalone", "--bucket", "file:///var/lib/loams/bucket", "--data-dir", "/var/lib/loams", \
+     "--listen", "127.0.0.1:8080", "--graph-data-dir", "/var/lib/loams/graph"]

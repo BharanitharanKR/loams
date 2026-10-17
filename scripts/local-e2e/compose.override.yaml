@@ -1,0 +1,129 @@
+# local-e2e: the release stack (deploy/release/compose.yaml) on one machine with
+# no tailnet, for testing the console and the desktop app against real data.
+# up.sh copies it into the stack directory as compose.override.yaml, next to
+# the release compose file, the way the upgrade gate's CI override is used
+# (deploy/release/ci/compose.upgrade.yaml).
+#
+# What it changes, and why:
+#
+# - Auth `off` (LOAMS_AUTH_MODE=off in .env, the documented laptop-only mode,
+#   docs/release/preview.md "Without a tailnet"): the engine refuses to start
+#   unless every listener is loopback, so it keeps its loopback listeners and
+#   `loams-forward`, a socat sidecar in its network namespace (the place the
+#   Tailscale sidecar would be), forwards host ports on 127.0.0.1 to them. The
+#   engine sees loopback peers. NOTE: like the tailscale sidecar, anything that
+#   can reach the forwarder is "the developer": the published ports bind
+#   127.0.0.1 only, but containers on the compose network can reach
+#   loams:18080 too. Never run this on a shared machine.
+# - The bucket is S3 (RustFS from the included Postgres stack), bucket
+#   `loams-engine`, so the s3:// path is exercised; `e2e-bucket` creates it.
+# - The engine also serves its Postgres and MySQL wire listeners (the release
+#   compose file does not turn them on).
+# - No Tailscale sidecars; the House's plaintext ClickHouse port is forwarded
+#   to the host by `house-forward` (its tailnet sidecar's place), TiDB's MySQL
+#   port is published on 127.0.0.1, and compute1 (which needs a tenant and a
+#   timeline by hand) is off: pg-control provisions the computes.
+#
+# Host ports (all 127.0.0.1):
+#   18080 engine main port (Connect, REST, gRPC-Web, Live)   18082 Flight SQL
+#   16333 Qdrant REST   16334 Qdrant gRPC   19200 Elasticsearch   18001 Durable
+#   15432 Postgres wire (collections)   13306 MySQL wire (collections)
+#   18123 House ClickHouse HTTP   14000 TiDB (Loams SQL)   7680 pg-control
+#   19000 RustFS S3   9898 pageserver   7676 safekeeper   55500-55999 computes
+services:
+  e2e-bucket:
+    image: ${NEON_IMAGE:-ghcr.io/ostrium-labs/loams-postgres-storage@sha256:fc99d2ea577263590fc9fa0b4c6ed122637b4a357a6f75a3d1478c537ba6347a}
+    depends_on: [rustfs]
+    restart: "no"
+    environment:
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        until curl -sf -o /dev/null -H "x-amz-content-sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        --aws-sigv4 aws:amz:us-east-1:s3 --user "$${AWS_ACCESS_KEY_ID}:$${AWS_SECRET_ACCESS_KEY}"
+        -X PUT http://rustfs:9000/loams-engine
+        || curl -sf -o /dev/null -H "x-amz-content-sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        --aws-sigv4 aws:amz:us-east-1:s3 --user "$${AWS_ACCESS_KEY_ID}:$${AWS_SECRET_ACCESS_KEY}"
+        -I http://rustfs:9000/loams-engine;
+        do echo waiting for rustfs; sleep 1; done; echo bucket loams-engine ready
+
+  rustfs:
+    ports: !override
+      - 127.0.0.1:19000:9000
+
+  migrate:
+    depends_on:
+      e2e-bucket:
+        condition: service_completed_successfully
+
+  loams:
+    command:
+      - standalone
+      - --bucket=${LOAMS_BUCKET:-file:///var/lib/loams/bucket}
+      - --data-dir=/var/lib/loams
+      - --listen=${LOAMS_LISTEN:-127.0.0.1:8080}
+      - --flight-sql-listen=127.0.0.1:8082
+      - --graph-data-dir=/var/lib/loams/graph
+      - --meta=tikv://pd:2379/loams_meta
+      - --live-store=tikv://pd:2379/loams_live_dev
+      - --pg-listen=127.0.0.1:5432
+      - --pg-namespace=${E2E_WIRE_NAMESPACE:-e2e}
+      - --mysql-listen=127.0.0.1:3306
+      - --mysql-namespace=${E2E_WIRE_NAMESPACE:-e2e}
+    ports:
+      - 127.0.0.1:18080:18080
+      - 127.0.0.1:18082:18082
+      - 127.0.0.1:16333:16333
+      - 127.0.0.1:16334:16334
+      - 127.0.0.1:19200:19200
+      - 127.0.0.1:18001:18001
+      - 127.0.0.1:15432:15432
+      - 127.0.0.1:13306:13306
+    depends_on:
+      e2e-bucket:
+        condition: service_completed_successfully
+
+  # The host's door to the engine's loopback listeners (see the header).
+  loams-forward:
+    restart: unless-stopped
+    image: docker.io/alpine/socat:1.8.0.3
+    network_mode: service:loams
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        fwd() { socat TCP-LISTEN:$$1,fork,reuseaddr,bind=0.0.0.0 TCP:127.0.0.1:$$2 & }
+        fwd 18080 8080; fwd 18082 8082; fwd 16333 6333; fwd 16334 6334; fwd 19200 9200
+        fwd 18001 8001; fwd 15432 5432; fwd 13306 3306
+        wait
+    depends_on:
+      loams:
+        condition: service_started
+
+  tailscale:
+    profiles: [disabled]
+  house-tailscale:
+    profiles: [disabled]
+
+  house:
+    ports:
+      - 127.0.0.1:18123:18123
+
+  house-forward:
+    restart: unless-stopped
+    profiles: [house]
+    image: docker.io/alpine/socat:1.8.0.3
+    network_mode: service:house
+    entrypoint: ["/bin/sh", "-c"]
+    command: ["exec socat TCP-LISTEN:18123,fork,reuseaddr,bind=0.0.0.0 TCP:127.0.0.1:8123"]
+    depends_on:
+      house:
+        condition: service_started
+
+  tidb:
+    ports:
+      - 127.0.0.1:14000:4000
+
+  compute1:
+    profiles: [disabled]

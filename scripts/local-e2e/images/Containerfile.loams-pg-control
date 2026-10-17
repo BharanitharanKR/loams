@@ -1,0 +1,47 @@
+# local-e2e: deploy/release/Containerfile.loams-pg-control without its build stage. The
+# binaries come from the build context (scripts/local-e2e/build-binaries.sh,
+# a release build on the host with the same features); the runtime stage below
+# is the release file's, verbatim but for the COPY of the binaries.
+ARG RUNTIME_IMAGE=docker.io/library/debian:trixie-slim
+
+FROM ${RUNTIME_IMAGE} AS compose
+ARG TARGETARCH
+ARG COMPOSE_VERSION=v5.5.1
+ARG COMPOSE_SHA256_AMD64=db1889184726840f75c4f9c001048430d4f25b3be3cb084d3ddd762bc0aed576
+ARG COMPOSE_SHA256_ARM64=732e3a84c1a0f67256ce80bc2598a24546b10ca05f9faa97efceb1171ece2ef7
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl \
+ && rm -rf /var/lib/apt/lists/* \
+ && case "${TARGETARCH:-amd64}" in \
+      amd64) arch=x86_64; sum="$COMPOSE_SHA256_AMD64" ;; \
+      arm64) arch=aarch64; sum="$COMPOSE_SHA256_ARM64" ;; \
+      *) echo "no docker-compose pin for $TARGETARCH" >&2; exit 1 ;; \
+    esac \
+ && curl -fsSL -o /docker-compose \
+      "https://github.com/docker/compose/releases/download/${COMPOSE_VERSION}/docker-compose-linux-${arch}" \
+ && echo "${sum}  /docker-compose" | sha256sum -c - \
+ && chmod 0755 /docker-compose
+
+FROM ${RUNTIME_IMAGE}
+ARG VERSION=dev
+ARG REVISION=unknown
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl tini \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 10001 loams \
+ && useradd --system --uid 10001 --gid loams --home-dir /var/lib/loams-pg-control --shell /usr/sbin/nologin loams \
+ && install -d -o loams -g loams -m 0700 /var/lib/loams-pg-control /var/lib/loams-pg-runner /run/pg-runner \
+ && install -d -o loams -g loams -m 0755 /run/endpoint-storage
+COPY loams-pg-control /usr/local/bin/loams
+COPY --from=compose /docker-compose /usr/local/bin/docker-compose
+LABEL org.opencontainers.image.title="loams-pg-control" \
+      org.opencontainers.image.description="Loams Postgres control plane and compute runner (preview)" \
+      org.opencontainers.image.source="https://github.com/ostrium-labs/loams" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.licenses="Apache-2.0"
+USER 10001:10001
+WORKDIR /var/lib/loams-pg-control
+EXPOSE 7680 7690 7691
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/loams"]
+CMD ["pg-control", "--help"]

@@ -1,0 +1,39 @@
+# local-e2e: deploy/release/Containerfile.loams-fabric without its build stage. The
+# binaries come from the build context (scripts/local-e2e/build-binaries.sh,
+# a release build on the host with the same features); the runtime stage below
+# is the release file's, verbatim but for the COPY of the binaries.
+ARG RUNTIME_IMAGE=docker.io/library/debian:trixie-slim
+
+FROM ${RUNTIME_IMAGE}
+ARG VERSION=dev
+ARG REVISION=unknown
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends ca-certificates curl tini \
+ && rm -rf /var/lib/apt/lists/* \
+ && groupadd --system --gid 10001 loams \
+ && useradd --system --uid 10001 --gid loams --home-dir /var/lib/loams-house --shell /usr/sbin/nologin loams \
+ && install -d -o loams -g loams -m 0750 /var/lib/loams-house
+COPY loams-fabric loams-house-worker /usr/local/bin/
+COPY libchdb.so /usr/local/lib/
+RUN ldconfig
+LABEL org.opencontainers.image.title="loams-fabric" \
+      org.opencontainers.image.description="Loams Fabric: the House front and its chDB workers (preview)" \
+      org.opencontainers.image.source="https://github.com/ostrium-labs/loams" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${REVISION}" \
+      org.opencontainers.image.licenses="Apache-2.0"
+USER 10001:10001
+WORKDIR /var/lib/loams-house
+VOLUME ["/var/lib/loams-house"]
+EXPOSE 8123
+HEALTHCHECK --interval=10s --timeout=3s --start-period=20s --retries=3 \
+  CMD curl -fsS http://127.0.0.1:8123/ping || exit 1
+ENTRYPOINT ["/usr/bin/tini", "--", "/usr/local/bin/loams-fabric"]
+# Workers run sealed (L3). `pods` (Landlock with TCP rules, Linux 6.7 or later,
+# and seccomp) needs no privilege, so it works under Docker's and Podman's
+# default profiles; the container's own network is the network boundary, as a
+# pod's NetworkPolicy is in Kubernetes (compose.yaml gives the House a network
+# of its own). `--sandbox netns` also works where the container may create
+# unprivileged user namespaces (Podman's default). A worker whose sandbox
+# cannot be put in force refuses to boot.
+CMD ["house", "--single-node", "--data-dir", "/var/lib/loams-house", "--sandbox", "pods"]
