@@ -2,8 +2,8 @@ syntax = "proto3";
 
 // Loams Git: `ObjectService`, lazy object reads for workspaces and their
 // clients (design §36 §19.5, §19.8, §19.10, D829, D830, D833; plan GT1
-// Tasks 18 and 20). This file holds the object reads and the history
-// queries `Log` and `DiffStat`; Tasks 21 and 24 add `Blame`, `Grep` and
+// Tasks 18, 20 and 21). This file holds the object reads and the history
+// queries `Log`, `DiffStat`, `Blame` and `Grep`; Task 24 adds
 // `PutWorkspacePack`. See `repos.proto` for the package's rules.
 //
 // Every request names its repository as `RepoService` does (`namespace`,
@@ -50,6 +50,19 @@ service ObjectService {
   // Per-file added and removed lines between two trees, as
   // `git diff --numstat --no-renames` counts them.
   rpc DiffStat(DiffStatRequest) returns (DiffStatResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // Which commit wrote each line of a file, as `git blame --porcelain`
+  // attributes them (renames followed). Computed once per file and commit
+  // and stored. A file whose history the server cannot walk answers
+  // `blame_unsupported`, and the shim runs git.
+  rpc Blame(BlameRequest) returns (BlameResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
+  // `git grep` over a commit's or tree's regular files: one message per file
+  // with a match, in path order. Stops after 30 s or 10,000 matching lines
+  // (files, with `files_only`), and says which.
+  rpc Grep(GrepRequest) returns (stream GrepResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
 }
@@ -238,4 +251,112 @@ message FileStat {
   // Both unset for a binary file (`-` in `--numstat`).
   optional uint64 added = 2;
   optional uint64 removed = 3;
+}
+
+message BlameRequest {
+  string namespace = 1;
+  string name = 2;
+  // A revision as `LogRequest.revs` names one (a tag is peeled to its
+  // commit); empty is `HEAD`.
+  string rev = 3;
+  // The file's path.
+  string path = 4;
+  // Lines, 1-based and inclusive (`git blame -L a,b`); both unset is the
+  // whole file. An end past the last line is cut to it; a start past it is
+  // `invalid_argument`.
+  optional uint32 start_line = 5;
+  optional uint32 end_line = 6;
+  string consistency_token = 14;
+}
+
+message BlameResponse {
+  // The commit blamed at, and the file's blob there (read it with
+  // `GetObjects` for the lines' text).
+  string commit = 1;
+  string blob = 2;
+  // Lines in the file.
+  uint32 lines = 3;
+  // The runs of the asked lines, in order.
+  repeated BlameHunk hunks = 4;
+  // Every commit a run names, in the order they first appear.
+  repeated BlameCommit commits = 5;
+  string consistency_token = 14;
+}
+
+message BlameHunk {
+  // The run's first line in the file, and in the commit that wrote it
+  // (both 1-based), and its length.
+  uint32 start_line = 1;
+  uint32 source_line = 2;
+  uint32 lines = 3;
+  string commit = 4;
+  // The path in `commit`, when the file was renamed since; else empty.
+  bytes source_path = 5;
+  // The parent `commit` was compared against and the path there
+  // (porcelain's `previous`); empty when `commit` added the file.
+  string previous = 6;
+  bytes previous_path = 7;
+}
+
+message BlameCommit {
+  string oid = 1;
+  Signature author = 2;
+  Signature committer = 3;
+  // The subject: the message's first paragraph on one line.
+  bytes summary = 4;
+  // A root commit (porcelain's `boundary`).
+  bool boundary = 5;
+}
+
+message GrepRequest {
+  string namespace = 1;
+  string name = 2;
+  // A workspace whose packs are read after the repository's, or empty.
+  string workspace = 3;
+  // A commit, tag or tree, as `DiffStatRequest` names them; empty is `HEAD`.
+  string rev = 4;
+  // Patterns (`-e`), any of which matches; at least one, at most 64.
+  // POSIX basic expressions by default; back-references, and patterns that
+  // match an empty line, are `invalid_argument`.
+  repeated string patterns = 5;
+  // Literal paths, as `LogRequest.paths`.
+  repeated string paths = 6;
+  bool ignore_case = 7;       // -i
+  bool word = 8;              // -w
+  bool fixed_strings = 9;     // -F
+  bool extended = 10;         // -E
+  bool files_only = 11;       // -l
+  // The most matching lines (files, with `files_only`); unset or over
+  // 10,000 is 10,000.
+  optional uint32 max_matches = 12;
+  string consistency_token = 14;
+}
+
+message GrepResponse {
+  // A file with a match; unset on the last message.
+  GrepFile file = 1;
+  // On the last message: the search stopped at the match limit, or at the
+  // deadline. Files after it were not searched.
+  bool truncated = 2;
+  bool deadline_exceeded = 3;
+  // Whether this is the last message.
+  bool done = 4;
+  string consistency_token = 14;
+}
+
+message GrepFile {
+  bytes path = 1;
+  string blob = 2;
+  // A NUL in the first 8,000 bytes: git prints `Binary file <path> matches`
+  // and `lines` is empty.
+  bool binary = 3;
+  // Empty with `files_only`.
+  repeated GrepLine lines = 4;
+}
+
+message GrepLine {
+  // 1-based.
+  uint64 number = 1;
+  // Without its newline.
+  bytes line = 2;
 }

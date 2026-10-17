@@ -3,9 +3,10 @@
 #![allow(refining_impl_trait)]
 
 //! `loams.repos.v1.ObjectService` on the main port and the immutable object route on the git
-//! listener (Loams Git, GT1 Tasks 18 and 20; design §36 §19.5.1, §19.8, D829, D830, D833).
+//! listener (Loams Git, GT1 Tasks 18, 20 and 21; design §36 §19.5.1, §19.8, D829, D830, D833).
 //!
-//! With the `git` feature `GetObjects`, `GetTrees`, `HasObjects`, `Log` and `DiffStat` are
+//! With the `git` feature `GetObjects`, `GetTrees`, `HasObjects`, `Log`, `DiffStat`, `Blame` and
+//! `Grep` are
 //! served over the repository's packs (`loams_git::odb::RangeOdb`, through the server's H1 cache) and, when a
 //! request names a workspace, the workspace's packs after them. Callers need the org role
 //! `member`, as for every `RepoService` read; whoever may read a repository may read its
@@ -98,6 +99,22 @@ impl ObjectService for ObjectsAbsent {
     ) -> ServiceResult<pb::DiffStatResponse> {
         Err(absent("DiffStat"))
     }
+
+    async fn blame(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, pb::BlameRequest>,
+    ) -> ServiceResult<pb::BlameResponse> {
+        Err(absent("Blame"))
+    }
+
+    async fn grep(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, pb::GrepRequest>,
+    ) -> ServiceResult<ServiceStream<pb::GrepResponse>> {
+        Err(absent("Grep"))
+    }
 }
 
 #[cfg(feature = "git")]
@@ -118,8 +135,9 @@ mod served {
     use loams_git::catalog::RepoRecord;
     use loams_git::derived::DerivedError;
     use loams_git::history::{
-        ChangeKind, ChangedPath, HistoryError, LogEntry, LogFields, LogQuery, Pathspec, Signature,
-        diff_stat, log, resolve_tree,
+        BlameQuery, ChangeKind, ChangedPath, GrepFile, GrepFlags, GrepQuery, HistoryError,
+        LogEntry, LogFields, LogQuery, Pathspec, Signature, blame, diff_stat, grep, log,
+        resolve_tree,
     };
     use loams_git::objects::{
         Kind, ObjectRead, ObjectsError, WsView, bitmap, get_objects, get_trees,
@@ -128,7 +146,7 @@ mod served {
     use loams_git::odb::{OdbError, RangeOdb};
     use loams_git::{
         DerivedStore, ForkError, GitAccess, GitGrant, NamespaceId, ObjectId, ReadAt, RefSnapshot,
-        RepoPaths, StoreBlobStore, WsId, open_fork_range_odb,
+        RepoPath, RepoPaths, StoreBlobStore, WsId, open_fork_range_odb,
     };
     use loams_proto::loams::repos::v1 as pb;
     use loams_proto::loams::repos::v1::ObjectService;
@@ -138,7 +156,7 @@ mod served {
     use crate::api::repos::GitRuntime;
     use crate::api::repos::served::{ReposServed, invalid, repo_name, token, unavailable};
 
-    /// Commits a `Log` stream buffers before its walk waits.
+    /// Commits a `Log` stream (files a `Grep` stream) buffers before its walk waits.
     const LOG_BUFFER: usize = 64;
     /// The largest `data` of one `GetObjectsResponse`; larger objects come in chunks.
     const CHUNK: usize = 1024 * 1024;
@@ -257,6 +275,17 @@ mod served {
             HistoryError::TooMany { what, max, got } => {
                 invalid(what, format!("{got} {what}; at most {max} per call"))
             }
+            HistoryError::Path { path, reason } => invalid("path", format!("{path:?}: {reason}")),
+            HistoryError::Lines { reason } => invalid("start_line", reason),
+            HistoryError::Pattern { pattern, reason } => {
+                invalid("patterns", format!("pattern {pattern:?}: {reason}"))
+            }
+            HistoryError::Derived(DerivedError::BlameUnsupported(reason)) => refuse(
+                ErrorCode::Unimplemented,
+                "blame_unsupported",
+                format!("blame is not served for this file ({reason}); run git blame"),
+                &[],
+            ),
             HistoryError::Odb(err) => odb_error(err),
             HistoryError::Derived(DerivedError::Odb(err)) => odb_error(err),
             HistoryError::Derived(DerivedError::Store(err)) => {
@@ -638,6 +667,168 @@ mod served {
                 consistency_token: token(&record.repo_id, snapshot.seq),
                 ..Default::default()
             })
+        }
+
+        async fn blame(
+            &self,
+            ctx: RequestContext,
+            request: ServiceRequest<'_, pb::BlameRequest>,
+        ) -> ServiceResult<pb::BlameResponse> {
+            let req = request.to_owned_message();
+            let path =
+                RepoPath::parse(&req.path).map_err(|err| invalid("path", err.to_string()))?;
+            if path.as_str().is_empty() {
+                return Err(invalid("path", "a file is needed"));
+            }
+            let lines = match (req.start_line, req.end_line) {
+                (None, None) => None,
+                (Some(start), Some(end)) => Some(start..=end),
+                (Some(start), None) => Some(start..=u32::MAX),
+                (None, Some(end)) => Some(1..=end),
+            };
+            // The blame walks repository commits only, as `Log` does.
+            let (record, snapshot, odb) = self
+                .open(&ctx, &req.namespace, &req.name, "", &req.consistency_token)
+                .await?;
+            let derived = self.derived(&record);
+            let query = BlameQuery {
+                rev: req.rev.clone(),
+                path,
+                lines,
+            };
+            let answer = blame(&odb, &derived, &snapshot, &query)
+                .await
+                .map_err(history_error)?;
+            let bytes = |path: Option<Vec<u8>>| path.unwrap_or_default();
+            Response::ok(pb::BlameResponse {
+                commit: answer.commit.to_string(),
+                blob: answer.blob.to_string(),
+                lines: answer.lines,
+                hunks: answer
+                    .hunks
+                    .into_iter()
+                    .map(|hunk| pb::BlameHunk {
+                        start_line: hunk.start + 1,
+                        source_line: hunk.source_start + 1,
+                        lines: hunk.len,
+                        commit: hunk.commit.to_string(),
+                        source_path: bytes(hunk.source_path),
+                        previous: hunk
+                            .previous
+                            .as_ref()
+                            .map(|(oid, _)| oid.to_string())
+                            .unwrap_or_default(),
+                        previous_path: bytes(hunk.previous.map(|(_, path)| path)),
+                        ..Default::default()
+                    })
+                    .collect(),
+                commits: answer
+                    .commits
+                    .into_iter()
+                    .map(|commit| pb::BlameCommit {
+                        oid: commit.oid.to_string(),
+                        author: MessageField::some(signature_pb(commit.author)),
+                        committer: MessageField::some(signature_pb(commit.committer)),
+                        summary: commit.summary,
+                        boundary: commit.boundary,
+                        ..Default::default()
+                    })
+                    .collect(),
+                consistency_token: token(&record.repo_id, snapshot.seq),
+                ..Default::default()
+            })
+        }
+
+        async fn grep(
+            &self,
+            ctx: RequestContext,
+            request: ServiceRequest<'_, pb::GrepRequest>,
+        ) -> ServiceResult<ServiceStream<pb::GrepResponse>> {
+            let req = request.to_owned_message();
+            let mut query = GrepQuery::new(req.rev.clone(), req.patterns.clone());
+            query.pathspec = Pathspec::parse(&req.paths).map_err(history_error)?;
+            query.flags = GrepFlags {
+                ignore_case: req.ignore_case,
+                word: req.word,
+                fixed: req.fixed_strings,
+                extended: req.extended,
+                files_only: req.files_only,
+            };
+            if let Some(max) = req.max_matches {
+                query.max_matches = query.max_matches.min(max as usize);
+            }
+            // Refuse a bad pattern before the stream starts.
+            loams_git::history::grep::matcher(&query.patterns, query.flags)
+                .map_err(history_error)?;
+            let (record, snapshot, odb) = self
+                .open(
+                    &ctx,
+                    &req.namespace,
+                    &req.name,
+                    &req.workspace,
+                    &req.consistency_token,
+                )
+                .await?;
+            let at = token(&record.repo_id, snapshot.seq);
+            let (tx, mut rx) = mpsc::channel::<Result<pb::GrepResponse, ConnectError>>(LOG_BUFFER);
+            tokio::spawn(async move {
+                let (files_tx, mut files_rx) = mpsc::channel::<GrepFile>(LOG_BUFFER);
+                let forward = {
+                    let tx = tx.clone();
+                    let at = at.clone();
+                    async move {
+                        while let Some(file) = files_rx.recv().await {
+                            let message = pb::GrepResponse {
+                                file: MessageField::some(grep_file_pb(file)),
+                                consistency_token: at.clone(),
+                                ..Default::default()
+                            };
+                            if tx.send(Ok(message)).await.is_err() {
+                                return;
+                            }
+                        }
+                    }
+                };
+                let search = async move {
+                    let result = grep(&odb, &snapshot, &query, &files_tx).await;
+                    drop(files_tx);
+                    result
+                };
+                let (result, ()) = tokio::join!(search, forward);
+                let last = match result {
+                    Ok(stats) => Ok(pb::GrepResponse {
+                        truncated: stats.truncated,
+                        deadline_exceeded: stats.deadline_exceeded,
+                        done: true,
+                        consistency_token: at,
+                        ..Default::default()
+                    }),
+                    Err(err) => Err(history_error(err)),
+                };
+                let _ = tx.send(last).await;
+            });
+            Response::ok(
+                Box::pin(futures::stream::poll_fn(move |cx| rx.poll_recv(cx)))
+                    as ServiceStream<pb::GrepResponse>,
+            )
+        }
+    }
+
+    fn grep_file_pb(file: GrepFile) -> pb::GrepFile {
+        pb::GrepFile {
+            path: file.path,
+            blob: file.blob.to_string(),
+            binary: file.binary,
+            lines: file
+                .lines
+                .into_iter()
+                .map(|line| pb::GrepLine {
+                    number: line.number,
+                    line: line.line.to_vec(),
+                    ..Default::default()
+                })
+                .collect(),
+            ..Default::default()
         }
     }
 

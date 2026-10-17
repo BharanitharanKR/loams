@@ -116,6 +116,17 @@ gix-pack = { version = "=0.75.0", default-features = false, features = ["sha1"] 
 gix-zlib = { version = "=0.2.0", default-features = false }
 # The commit-graph reader of `derived/graph/` layers (GT1 Task 20).
 gix-commitgraph = { version = "=0.40.0", default-features = false }
+# Blame (GT1 Task 21): `gix-blame` and the blob diff it runs on, same train.
+gix-blame = { version = "=0.18.0", default-features = false, features = ["sha1"] }
+gix-diff = { version = "=0.68.0", default-features = false, features = ["blob"] }
+gix-attributes = { version = "=0.36.0" }
+gix-error = { version = "=0.4.0" }
+gix-filter = { version = "=0.35.0", default-features = false }
+gix-worktree = { version = "=0.57.0", default-features = false, features = ["attributes"] }
+# Grep (GT1 Task 21): ripgrep's library crates. Unlicense OR MIT.
+grep-matcher = "=0.1.9"
+grep-regex = "=0.1.14"
+grep-searcher = "=0.1.17"
 hex = "0.4"
 # Live pagination cursors are HMAC-SHA256 tagged with the app's key (LV1
 # Task 4); 0.13 is the line on sha2 0.11's digest.

@@ -79,6 +79,7 @@ The rules, in the order they bite:
 | `workspace_read_only` | failed_precondition | a write to a workspace mounted or opened read-only, or to a past snapshot | `workspace` |
 | `workspace_name_taken` | already_exists | CreateWorkspace, ForkWorkspace: the owner already has a workspace of that name | `workspace` |
 | `object_missing` | failed_precondition | SaveSnapshot, PushWorkspace, PutWorkspacePack: a snapshot or push names an object that is neither uploaded nor in the repository (§19.5.2); GetTrees: the root, or an object a tree names, is not held (GT1 Task 18) | `oid` |
+| `blame_unsupported` | unimplemented | ObjectService Blame: a file whose history the server's blame walk cannot follow (in `gix-blame` 0.18, a path that was a directory, or below one, in an ancestor); the shim runs `git blame` instead (GT1 Task 21, ruling T21.1) | |
 | `secret_detected` | failed_precondition | ApplyEdits, PushWorkspace, receive-pack: the leak scanner found a credential outside `env/` (§19.13.9) | `path`, `rule` |
 | `env_unsealed` | invalid_argument | ApplyEdits, PushWorkspace, receive-pack: an `env/` file holds a plaintext value (§19.13.2) | `path` |
 | `env_access_denied` | permission_denied | `EnvService` Open, GetLiveSet, Seal: the credential has no grant for the environment (§19.13.7) | `environment` |
