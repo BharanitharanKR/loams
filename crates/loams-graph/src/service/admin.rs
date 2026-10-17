@@ -150,8 +150,15 @@ pub struct GraphAdmin {
     /// the server's collections.
     documents: Option<Arc<dyn crate::retrieval::algos::DocumentPatcher>>,
     /// This call came from another node (`GraphForward`): it is served here or refused, never
-    /// forwarded again.
+    /// forwarded again. The node it came from authorized it (GR1 R24.4).
     forwarded: bool,
+    /// Who may do what to which graph (GR1 Task 24, §48 §11). `None`: every call is allowed
+    /// (an embedder or a test without authorization); the server always sets one.
+    authorizer: Option<Arc<dyn crate::authz::GraphAuthorizer>>,
+    /// The caller this handle serves ([`GraphAdmin::for_caller`]). `None` is a call Loams makes
+    /// itself (a search's expansion, a table function, a link, a write-back, a forwarded call),
+    /// which is not checked here; every RPC handler sets one.
+    caller: Option<Arc<crate::authz::Caller>>,
     /// When open graphs are evicted (GR1 Task 14).
     evict_policy: EvictPolicy,
     /// The graphs this node evicted and its rehydrations, shared by every clone (GR1 Task 14).
@@ -278,6 +285,16 @@ fn shutting_down() -> ConnectError {
     )
 }
 
+/// A statement's gate verdict (`None`: refused by the gate) and the access it needs.
+type Classified = (Option<crate::classify::Verdict>, crate::Access);
+
+/// Whether a statement only reads, as the server's gate classified it (`verdict`): only a read
+/// may be served by a follower (GR1 Task 15). A statement the gate refused goes to the owner,
+/// which answers the refusal.
+fn reads(verdict: Option<&crate::classify::Verdict>) -> bool {
+    verdict.is_some_and(|verdict| verdict.access == crate::Access::Read)
+}
+
 /// A short operation id: `op-` and 26 hex characters (D146).
 fn operation_id() -> String {
     let hex = format!("{:032x}", u128::from(ulid::Ulid::generate()));
@@ -312,6 +329,8 @@ impl GraphAdmin {
             indexer: None,
             documents: None,
             forwarded: false,
+            authorizer: None,
+            caller: None,
             evict_policy: EvictPolicy::default(),
             evictor: Arc::default(),
             replicas: None,
@@ -521,6 +540,119 @@ impl GraphAdmin {
     #[must_use]
     pub fn namespace_statements(&self) -> usize {
         self.namespaces.per_namespace()
+    }
+
+    /// The same admin with `authorizer` deciding every RPC a caller makes (GR1 Task 24).
+    #[must_use]
+    pub fn with_authorizer(mut self, authorizer: Arc<dyn crate::authz::GraphAuthorizer>) -> Self {
+        self.authorizer = Some(authorizer);
+        self
+    }
+
+    /// The authorizer, if any.
+    #[must_use]
+    pub fn authorizer(&self) -> Option<&Arc<dyn crate::authz::GraphAuthorizer>> {
+        self.authorizer.as_ref()
+    }
+
+    /// This admin for one RPC of `caller`: each call checks what the caller may do before it
+    /// reads or changes anything (GR1 Task 24).
+    #[must_use]
+    pub fn for_caller(&self, caller: crate::authz::Caller) -> Self {
+        Self {
+            caller: Some(Arc::new(caller)),
+            ..self.clone()
+        }
+    }
+
+    /// Checks that this handle's caller may make `rpc` on `graph` of `namespace` (or on the
+    /// namespace): always allowed without an authorizer, without a caller (a call Loams makes),
+    /// and for a call another node forwarded, which that node authorized.
+    async fn check(
+        &self,
+        rpc: &str,
+        namespace: &str,
+        graph: Option<&str>,
+        need: crate::authz::Need,
+    ) -> Result<(), ConnectError> {
+        let (Some(authorizer), Some(caller), false) =
+            (&self.authorizer, &self.caller, self.forwarded)
+        else {
+            return Ok(());
+        };
+        crate::authz::authorize(authorizer.as_ref(), caller, rpc, namespace, graph, need)
+            .await
+            .map(|_| ())
+    }
+
+    /// Whether this handle checks its caller (an authorizer, a caller, not forwarded).
+    fn checks(&self) -> bool {
+        self.authorizer.is_some() && self.caller.is_some() && !self.forwarded
+    }
+
+    /// Audits an allowed lifecycle change by this handle's caller.
+    fn audit(&self, rpc: &str, namespace: &str, graph: &str) {
+        if let (true, Some(caller)) = (self.checks(), &self.caller) {
+            crate::authz::audit_allowed(caller, rpc, namespace, graph);
+        }
+    }
+
+    /// The gate's verdicts on `statements`, as the server's gate classifies them, each with the
+    /// access it needs: the verdict's, or, for a statement the gate refuses (the serving node
+    /// answers the refusal), the keyword guard's, which never calls a write a read. The gate
+    /// parses, so it runs off the async runtime.
+    async fn verdicts(&self, statements: Vec<String>) -> Vec<Classified> {
+        let limits = self.limits;
+        let count = statements.len();
+        blocking(move || {
+            Ok(statements
+                .iter()
+                .map(|statement| {
+                    match crate::classify::gate_verdict(statement, pb::QueryLanguage::Gql, &limits)
+                    {
+                        Ok(verdict) => (Some(verdict), verdict.access),
+                        Err(_) => (
+                            None,
+                            crate::classify::classify(statement, pb::QueryLanguage::Gql),
+                        ),
+                    }
+                })
+                .collect())
+        })
+        .await
+        .unwrap_or_else(|_| vec![(None, crate::Access::Admin); count])
+    }
+
+    /// What running `statements` needs (§48 §11.1): the strongest access among them, and
+    /// `reader` for none.
+    fn need_of(classified: &[Classified]) -> crate::authz::Need {
+        let access = classified
+            .iter()
+            .map(|(_, access)| *access)
+            .max()
+            .unwrap_or(crate::Access::Read);
+        crate::authz::Need::statement(access)
+    }
+
+    /// Checks a statement call: the verdict decides the need. Answers the verdict, for routing.
+    async fn check_statement(
+        &self,
+        rpc: &str,
+        namespace: &str,
+        graph: &str,
+        statement: &str,
+        classify: bool,
+    ) -> Result<Option<crate::classify::Verdict>, ConnectError> {
+        if !classify && !self.checks() {
+            return Ok(None);
+        }
+        let classified = self.verdicts(vec![statement.to_string()]).await;
+        self.check(rpc, namespace, Some(graph), Self::need_of(&classified))
+            .await?;
+        Ok(classified
+            .into_iter()
+            .next()
+            .and_then(|(verdict, _)| verdict))
     }
 
     /// This admin for one call whose client set its own deadline (Connect's timeout header):
@@ -1208,6 +1340,15 @@ impl GraphAdmin {
         &self,
         req: pb::CreateGraphRequest,
     ) -> Result<pb::Graph, ConnectError> {
+        // `admin` on the namespace, which also creates the namespace when it does not exist
+        // (Task 4 review M6; GR1 R24.3).
+        self.check(
+            "CreateGraph",
+            &req.namespace,
+            None,
+            crate::authz::Need::At(crate::authz::Relation::Admin),
+        )
+        .await?;
         crate::engine::validate_names(&req.namespace, &req.name).map_err(map_engine)?;
         check_replicas(req.replicas)?;
         let (mode, mapping) = self.mode_of(&req).await?;
@@ -1225,6 +1366,7 @@ impl GraphAdmin {
             .create(&req.namespace, &req.name, new)
             .await
             .map_err(map_catalog)?;
+        self.audit("CreateGraph", &req.namespace, &req.name);
         Ok(self.message(&meta))
     }
 
@@ -1335,6 +1477,13 @@ impl GraphAdmin {
     ///
     /// `INVALID_ARGUMENT`, `NOT_FOUND` or `UNAVAILABLE`.
     pub async fn get_graph(&self, req: pb::GetGraphRequest) -> Result<pb::Graph, ConnectError> {
+        self.check(
+            "GetGraph",
+            &req.namespace,
+            Some(&req.name),
+            crate::authz::Need::At(crate::authz::Relation::Reader),
+        )
+        .await?;
         let meta = self
             .catalog
             .get_by_name(&req.namespace, &req.name)
@@ -1357,8 +1506,24 @@ impl GraphAdmin {
             .list(&req.namespace, req.page_size, &req.page_token)
             .await
             .map_err(map_catalog)?;
+        // Only the graphs the caller may read (controller ruling M5; GR1 Task 24). A page may
+        // then hold fewer than `page_size` graphs, which AIP-158 allows; the token still moves
+        // past every graph of the page.
+        let graphs = match (&self.authorizer, &self.caller) {
+            (Some(authorizer), Some(caller)) if self.checks() => {
+                crate::authz::filter_visible(
+                    authorizer.as_ref(),
+                    caller,
+                    &req.namespace,
+                    page.graphs,
+                    |g: &GraphMeta| g.name.as_str(),
+                )
+                .await?
+            }
+            _ => page.graphs,
+        };
         Ok(pb::ListGraphsResponse {
-            graphs: page.graphs.iter().map(|g| self.message(g)).collect(),
+            graphs: graphs.iter().map(|g| self.message(g)).collect(),
             next_page_token: page.next_page_token.unwrap_or_default(),
             ..Default::default()
         })
@@ -1376,6 +1541,13 @@ impl GraphAdmin {
         req: pb::UpdateGraphRequest,
     ) -> Result<pb::Graph, ConnectError> {
         let graph = req.graph.as_option().cloned().unwrap_or_default();
+        self.check(
+            "UpdateGraph",
+            &graph.namespace,
+            Some(&graph.name),
+            crate::authz::Need::Destroy,
+        )
+        .await?;
         let mut paths: Vec<String> = req
             .update_mask
             .as_option()
@@ -1425,6 +1597,7 @@ impl GraphAdmin {
             )
             .await
             .map_err(map_catalog)?;
+        self.audit("UpdateGraph", &graph.namespace, &graph.name);
         Ok(self.message(&meta))
     }
 
@@ -1439,12 +1612,20 @@ impl GraphAdmin {
         &self,
         req: pb::DeleteGraphRequest,
     ) -> Result<ops::Operation, ConnectError> {
+        self.check(
+            "DeleteGraph",
+            &req.namespace,
+            Some(&req.name),
+            crate::authz::Need::Destroy,
+        )
+        .await?;
         let key = check_key("idempotency_key", &req.idempotency_key)?;
         let meta = self
             .catalog
             .mark_deleting(&req.namespace, &req.name, key)
             .await
             .map_err(map_catalog)?;
+        self.audit("DeleteGraph", &req.namespace, &req.name);
         if let Some(open) = self.open_graph(&req.namespace, &req.name)
             && open.id().is_some_and(|id| id.to_string() == meta.id)
         {
@@ -1490,6 +1671,13 @@ impl GraphAdmin {
         &self,
         req: pb::GetSchemaRequest,
     ) -> Result<pb::GraphSchema, ConnectError> {
+        self.check(
+            "GetSchema",
+            &req.namespace,
+            Some(&req.name),
+            crate::authz::Need::At(crate::authz::Relation::Reader),
+        )
+        .await?;
         if let Some(owner) = self.owner_elsewhere(&req.namespace, &req.name).await? {
             return self
                 .forward(&owner, ForwardMethod::GetSchema, &req, 0)
@@ -1546,7 +1734,16 @@ impl GraphAdmin {
         let (namespace, name, timeout) = (req.namespace.clone(), req.graph.clone(), req.timeout_ms);
         let consistency =
             Consistency::from_proto(req.consistency.as_option()).map_err(map_engine)?;
-        let reads = consistency.any_replica() && self.reads(&req.statement).await;
+        let verdict = self
+            .check_statement(
+                "Execute",
+                &namespace,
+                &name,
+                &req.statement,
+                consistency.any_replica(),
+            )
+            .await?;
+        let reads = consistency.any_replica() && reads(verdict.as_ref());
         let serve = match self.route(&namespace, &name, consistency, reads).await? {
             Route::There(owner) => {
                 return self
@@ -1581,7 +1778,16 @@ impl GraphAdmin {
         );
         let consistency =
             Consistency::from_proto(request.consistency.as_option()).map_err(map_engine)?;
-        let reads = consistency.any_replica() && self.reads(&request.statement).await;
+        let verdict = self
+            .check_statement(
+                "ExecuteStream",
+                &namespace,
+                &name,
+                &request.statement,
+                consistency.any_replica(),
+            )
+            .await?;
+        let reads = consistency.any_replica() && reads(verdict.as_ref());
         let route = self.route(&namespace, &name, consistency, reads).await?;
         if let Route::There(owner) = route {
             let body = self
@@ -1624,6 +1830,17 @@ impl GraphAdmin {
         req: pb::ExecuteBatchRequest,
     ) -> Result<pb::ExecuteBatchResponse, ConnectError> {
         let (namespace, name, timeout) = (req.namespace.clone(), req.graph.clone(), req.timeout_ms);
+        if self.checks() {
+            let statements = req.statements.iter().map(|s| s.statement.clone()).collect();
+            let verdicts = self.verdicts(statements).await;
+            self.check(
+                "ExecuteBatch",
+                &namespace,
+                Some(&name),
+                Self::need_of(&verdicts),
+            )
+            .await?;
+        }
         if let Some(owner) = self.owner_elsewhere(&namespace, &name).await? {
             return self
                 .forward(&owner, ForwardMethod::ExecuteBatch, &req, timeout)
@@ -1644,8 +1861,18 @@ impl GraphAdmin {
         let (namespace, name, timeout) = (req.namespace.clone(), req.graph.clone(), req.timeout_ms);
         let consistency =
             Consistency::from_proto(req.consistency.as_option()).map_err(map_engine)?;
-        // An EXPLAIN only plans; a PROFILE runs the statement, so it must read.
-        let reads = consistency.any_replica() && (!req.profile || self.reads(&req.statement).await);
+        // An EXPLAIN only plans; a PROFILE runs the statement, so it must read. Either needs what
+        // the statement needs (§48 §11.1).
+        let verdict = self
+            .check_statement(
+                "Explain",
+                &namespace,
+                &name,
+                &req.statement,
+                consistency.any_replica() && req.profile,
+            )
+            .await?;
+        let reads = consistency.any_replica() && (!req.profile || reads(verdict.as_ref()));
         let serve = match self.route(&namespace, &name, consistency, reads).await? {
             Route::There(owner) => {
                 return self
@@ -1658,21 +1885,6 @@ impl GraphAdmin {
             data::explain_on(graph, req, limits)
         })
         .await
-    }
-
-    /// Whether `statement` only reads, as the server's gate classifies it: only a read may be
-    /// served by a follower (GR1 Task 15). A statement the gate refuses goes to the owner, which
-    /// answers the refusal. The gate parses the statement, so it runs off the async runtime.
-    async fn reads(&self, statement: &str) -> bool {
-        let (statement, limits) = (statement.to_string(), self.limits);
-        blocking(move || {
-            Ok(
-                crate::classify::gate_verdict(&statement, pb::QueryLanguage::Gql, &limits)
-                    .is_ok_and(|verdict| verdict.access == crate::Access::Read),
-            )
-        })
-        .await
-        .unwrap_or(false)
     }
 
     /// Where a data-plane call on `namespace/name` runs (GR1 Task 15; §48 §7.2).
@@ -2043,6 +2255,7 @@ impl GraphAdmin {
         }
         let this = Self {
             forwarded: true,
+            caller: None,
             ..self.clone()
         };
         Ok(match method {
