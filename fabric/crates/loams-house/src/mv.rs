@@ -333,6 +333,7 @@ impl ViewRunner {
             };
             let next = BTreeMap::from([(key.clone(), snapshot_id.to_string())]);
             let files = self.added(&source, snapshot_id).await?;
+            let mut written_counts = (0, 0);
             let outcome = if files.is_empty() {
                 crate::pipes::commit_cursor(io, &target.ident, &read, &next, Vec::new(), Vec::new())
                     .await?
@@ -351,6 +352,7 @@ impl ViewRunner {
                 };
                 match self.writer.write(namespace, view, &target, &make).await {
                     Ok(written) => {
+                        written_counts = (written.rows, written.input_bytes);
                         crate::pipes::commit_cursor(
                             io,
                             &target.ident,
@@ -381,6 +383,8 @@ impl ViewRunner {
             match outcome {
                 Ran::Committed { .. } => {
                     applied += 1;
+                    self.writer
+                        .report_insert(namespace, view, written_counts.0, written_counts.1);
                     committer.mark_dirty(&target.ident);
                 }
                 // Another front applied it: go on from where it got to.

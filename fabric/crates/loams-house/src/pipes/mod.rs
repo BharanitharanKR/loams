@@ -486,14 +486,19 @@ pub async fn create_pipe(
             serde_json::to_string(&stmt.settings).map_err(|e| bad(e.to_string()))?,
         );
     }
-    // §49 §12: pipes per namespace (HS1 Task 21).
+    // §49 §12: pipes per namespace (HS1 Task 21), and its `pipes` quota (§49
+    // §15, HS1 Task 22).
     let cap = lake.object_caps().pipes;
-    if lake.load(namespace, database, &stmt.name).await?.is_none()
-        && pipes(lake, namespace).await?.len() >= cap
-    {
-        return Err(bad(format!(
-            "Too many pipes: a namespace holds at most {cap}"
-        )));
+    if lake.load(namespace, database, &stmt.name).await?.is_none() {
+        let existing = pipes(lake, namespace).await?.len();
+        if existing >= cap {
+            return Err(bad(format!(
+                "Too many pipes: a namespace holds at most {cap}"
+            )));
+        }
+        if let Some(quotas) = lake.quotas() {
+            quotas.check_pipes(&namespace.to_string(), existing)?;
+        }
     }
     lake.create_table(namespace, database, creation, stmt.if_not_exists)
         .await?;
@@ -1147,13 +1152,15 @@ impl PipeRunner {
             }
             self.hook(Step::Written, view).await?;
         }
-        let (files, written_rows) = match written {
-            Some(w) => (w.data_files, w.rows),
-            None => (Vec::new(), 0),
+        let (files, written_rows, written_bytes) = match written {
+            Some(w) => (w.data_files, w.rows, w.input_bytes),
+            None => (Vec::new(), 0, 0),
         };
         self.hook(Step::BeforeCommit, view).await?;
         let outcome = commit(io, &target.ident, view, &cursor, &next, files).await;
         if let Ok(Ran::Committed { .. }) = &outcome {
+            self.writer
+                .report_insert(namespace, view, written_rows, written_bytes);
             self.hook(Step::Committed, view).await?;
             committer.mark_dirty(&target.ident);
             // The target's own views (HS1 Task 17); their errors are theirs.
@@ -1194,6 +1201,27 @@ pub struct ViewWriter {
 }
 
 impl ViewWriter {
+    /// `house.insert` for `rows` (`bytes` as the worker produced them) a pipe
+    /// or a materialized view committed into `database.table` (HS1 Task 22).
+    pub fn report_insert(&self, namespace: u64, view: &MaterializedView, rows: u64, bytes: u64) {
+        if rows == 0 {
+            return;
+        }
+        if let Some(usage) = self.pool.usage() {
+            usage.emit(crate::usage::UsageEvent::Insert(
+                crate::usage::InsertUsage {
+                    namespace: namespace.to_string(),
+                    query_id: String::new(),
+                    database: view.target_database.clone(),
+                    table: view.target.clone(),
+                    rows,
+                    bytes,
+                    at: std::time::SystemTime::now(),
+                },
+            ));
+        }
+    }
+
     /// The view's `SELECT` over the batch, written as files of `target`.
     /// `batch` makes the batch's view from the worker's bucket endpoint.
     pub async fn write(

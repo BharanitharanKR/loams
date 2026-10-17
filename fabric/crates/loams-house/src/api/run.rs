@@ -51,11 +51,12 @@ impl HouseApi {
         &self,
         user: &UserMap,
         settings: &[(String, String)],
+        access: crate::quota::Access,
     ) -> Result<crate::admission::Ticket, ConnectError> {
         let memory = crate::limits::statement_memory(settings, &self.config.session_limits);
         self.governance
             .admission
-            .admit(&user.namespace.to_string(), memory)
+            .admit(&user.namespace.to_string(), memory, access)
             .await
             .map_err(|err| to_connect(&err))
     }
@@ -375,7 +376,9 @@ impl HouseApi {
                     let running = self.register(&st.query_id, user, &st.sql)?;
                     // The front carries a lake write to its commit (HS1 Task 12).
                     running.uncancellable();
-                    let ticket = self.admit(user, &st.settings).await?;
+                    let ticket = self
+                        .admit(user, &st.settings, crate::quota::Access::Write)
+                        .await?;
                     let started = Instant::now();
                     let lease = self
                         .pool
@@ -512,7 +515,11 @@ impl HouseApi {
             format: spec.format,
         });
         let running = self.register(&st.query_id, user, &st.sql)?;
-        let ticket = self.admit(user, &st.settings).await?;
+        let access = match &classified {
+            Classified::Known { stmt, .. } => crate::quota::Access::of(stmt),
+            Classified::Unparsed { .. } => crate::quota::Access::Read,
+        };
+        let ticket = self.admit(user, &st.settings, access).await?;
         let started = Instant::now();
 
         let mut lease = self

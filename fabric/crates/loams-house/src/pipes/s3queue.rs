@@ -718,12 +718,14 @@ impl QueueRunner {
 
         let mut files = Vec::new();
         let mut rows = 0;
+        let mut bytes = 0;
         if !listed.keys.is_empty() {
             let root = lake.root().clone();
             let make = |endpoint: &str| batch(pipe, source, &listed.keys, endpoint, &root);
             let written = self.writer.write(namespace, view, &target, &make).await?;
             files = written.data_files;
             rows = written.rows;
+            bytes = written.input_bytes;
             self.hook(Step::Written, view).await?;
         }
         self.hook(Step::BeforeCommit, view).await?;
@@ -745,6 +747,7 @@ impl QueueRunner {
         }
         let outcome = commit_cursor(io, &target.ident, &read, &next, summary, files).await?;
         if let Ran::Committed { .. } = outcome {
+            self.writer.report_insert(namespace, view, rows, bytes);
             self.hook(Step::Committed, view).await?;
             committer.mark_dirty(&target.ident);
             // The target's own views (HS1 Task 17); their errors are theirs.

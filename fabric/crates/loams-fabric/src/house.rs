@@ -215,6 +215,9 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
         ..HouseConfig::default()
     };
     house.limits.apply(&mut http);
+    // Namespace quotas (HS1 Task 22): `[house.quotas]` until the control plane
+    // serves them.
+    http.quotas = std::sync::Arc::new(house.quotas.to_quotas().map_err(bad)?);
     http.admin_listen = Some(admin_listen);
     // The engine whose streams pipes read (HS1 Task 16).
     http.engine = house.engine.link().map_err(bad)?;

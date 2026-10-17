@@ -540,7 +540,36 @@ impl From<HouseError> for Stop {
 
 /// Runs an `INSERT` into a lake table on `lease` (see the module docs); the
 /// lease is released or killed here. `feed` sends a streamed source's data.
+///
+/// Rows written are a `house.insert` usage event (HS1 Task 22), whichever
+/// surface or pipe wrote them.
 pub async fn run(
+    ctx: &InsertContext<'_>,
+    lease: WorkerLease,
+    target: Target,
+    feed: Option<&mut (dyn Feed + '_)>,
+) -> Result<Inserted, HouseError> {
+    let (database, table) = (target.database.clone(), target.name.clone());
+    let inserted = write_and_commit(ctx, lease, target, feed).await?;
+    if inserted.written_rows > 0
+        && let Some(usage) = ctx.pool.usage()
+    {
+        usage.emit(crate::usage::UsageEvent::Insert(
+            crate::usage::InsertUsage {
+                namespace: ctx.namespace.to_string(),
+                query_id: ctx.query_id.to_string(),
+                database,
+                table,
+                rows: inserted.written_rows,
+                bytes: inserted.written_bytes,
+                at: std::time::SystemTime::now(),
+            },
+        ));
+    }
+    Ok(inserted)
+}
+
+async fn write_and_commit(
     ctx: &InsertContext<'_>,
     lease: WorkerLease,
     target: Target,
