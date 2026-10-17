@@ -12,7 +12,7 @@ function dotFor(server: ServerEntry | undefined, engine: EngineState | undefined
   return { tone: tone[engine.phase], title: PHASE_LABEL[engine.phase] };
 }
 
-/** The header server switcher (`shell.header.server`). */
+/** The server switcher under the sidebar brand (`shell.sidebar.server`). */
 export function Switcher({
   desktop,
   navigate,

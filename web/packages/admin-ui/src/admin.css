@@ -509,7 +509,7 @@
   place-items: center;
   align-content: center;
   gap: 16px;
-  min-height: 100svh;
+  min-height: 100svh; /* viewport-ok: bare page (sign-in) */
   padding: 32px 16px;
   background:
     radial-gradient(

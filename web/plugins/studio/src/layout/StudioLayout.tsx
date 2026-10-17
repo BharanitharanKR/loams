@@ -221,7 +221,7 @@ export function StudioLayout({
   );
 
   return (
-    <div className="flex h-[calc(100svh-var(--top,56px))] min-h-0 bg-bg" data-studio-layout>
+    <div className="flex h-full min-h-0 bg-bg" data-studio-layout>
       {wide && (
         <>
           <div

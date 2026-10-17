@@ -3413,7 +3413,7 @@ git commit -s -m "feat(ui): stacked toasts, destructive and typed confirmation (
 - Modify: `web/plugins/shell/src/layout.tsx` (the `Layout` body), `src/palette.tsx` (`ShellPalette` takes optional `open`/`onOpenChange`), `src/index.tsx` (exports), `package.json` (`loams.plugin.slots`)
 - Modify: `web/apps/console/src/cordis/console.css:38-598` (the `/* Frame */` section; `--top: 44px`)
 - Modify: `web/plugins/desktop-servers/src/index.tsx:35`, `web/apps/console/src/hosted/edition.tsx:174` (`shell.header.server` → `shell.sidebar.server`)
-- Modify: `web/plugins/factory/src/embedded.tsx:157`, `web/plugins/studio/src/layout/StudioLayout.tsx:224` (fill the region), `web/packages/admin-ui/src/admin.css:516` (marker)
+- Modify: `web/plugins/factory/src/embedded.tsx:157`, `web/plugins/studio/src/layout/StudioLayout.tsx:224` (fill the region), `web/packages/admin-ui/src/admin.css:512` (marker; T7-1)
 - Create: `web/plugins/shell/test/frame.test.tsx`, `web/plugins/shell/test/viewport.test.ts` (Review Focus 4)
 - Modify: `web/plugins/shell/test/layout.test.tsx` (header and sidebar assertions move to `frame.test.tsx`)
 
@@ -3592,7 +3592,7 @@ pnpm --filter @loams/plugin-shell exec vitest run test/frame.test.tsx test/viewp
 pnpm --filter @loams/slots test
 ```
 
-Expected: FAIL. The viewport test lists `plugins/factory/src/embedded.tsx:157`, `plugins/studio/src/layout/StudioLayout.tsx:224` and `packages/admin-ui/src/admin.css:516`. The frame test fails with `Cannot find module '../src/frame.js'`. The slots test fails with `unknown slot shell.sidebar.server`.
+Expected: FAIL. The viewport test lists `plugins/factory/src/embedded.tsx:157`, `plugins/studio/src/layout/StudioLayout.tsx:224` and `packages/admin-ui/src/admin.css:512`. The frame test fails with `Cannot find module '../src/frame.js'`. The slots test fails with `unknown slot shell.sidebar.server`.
 
 - [ ] **Step 3: Declare the slots**
 
@@ -4091,7 +4091,7 @@ The old `.lc-dock*` rules stay until Task 8, with `top: var(--top)` removed and 
 - `web/plugins/desktop-servers/src/index.tsx:35` and `web/apps/console/src/hosted/edition.tsx:174`: change `name: 'shell.header.server'` to `name: 'shell.sidebar.server'`. Studio's own header entry moves in Task 9.
 - `web/plugins/factory/src/embedded.tsx:157`: delete `style={{ height: 'calc(100vh - 190px)' }}` and add `flex-1` to the placeholder's class list. Give the wrapper `<div>` above it `flex h-full min-h-0 flex-col`.
 - `web/plugins/studio/src/layout/StudioLayout.tsx:224`: `h-[calc(100svh-var(--top,56px))]` → `h-full`.
-- `web/packages/admin-ui/src/admin.css:516`: append the marker `/* viewport-ok: bare page (sign-in) */` to `min-height: 100svh;`.
+- `web/packages/admin-ui/src/admin.css:512`: append the marker `/* viewport-ok: bare page (sign-in) */` to `min-height: 100svh;`.
 
 - [ ] **Step 7: Run the tests**
 
@@ -4578,7 +4578,7 @@ export function PanelToggles({ inspector, drawer, router }: { inspector: PanelSe
       {drawerTabs > 0 && (
         <button
           type="button"
-          className="lc-icon-btn"
+          className="lc-bar-btn"
           aria-pressed={d.open}
           aria-label={d.open ? 'Hide drawer' : 'Show drawer'}
           aria-keyshortcuts="Control+J Meta+J"
@@ -4591,7 +4591,7 @@ export function PanelToggles({ inspector, drawer, router }: { inspector: PanelSe
       {inspectorTabs > 0 && (
         <button
           type="button"
-          className="lc-icon-btn"
+          className="lc-bar-btn"
           aria-pressed={i.open}
           aria-label={i.open ? 'Hide inspector' : 'Show inspector'}
           aria-keyshortcuts="Control+I Meta+I"
@@ -4612,7 +4612,7 @@ In `layout.tsx`:
 1. Delete `DOCK_*`, `readDock`, `useDock`, `DockHandle`, `clampWidth`, the focus effect and the ⌘J `useEffect`.
 2. Add `inspector?: PanelService; drawer?: PanelService` to `Layout`'s props, defaulting to `useMemo(() => new PanelController(INSPECTOR), [])` and the same for `DRAWER`.
 3. In the work card, render `<PanelRegion kind="inspector" panel={inspector} router={router} />` after `<main>` in `.lc-work-row`, and `<PanelRegion kind="drawer" panel={drawer} router={router} />` after `.lc-work-row`.
-4. Pass `trailing={<PanelToggles inspector={inspector} drawer={drawer} router={router} />}` to `TopBar`.
+4. Pass `trailing={<PanelToggles inspector={inspector} drawer={drawer} router={router} />}` to `TopBar`, in place of Task 7's Agent dock toggle (T7-4).
 5. Add a temporary key listener, which Task 12 replaces with the keymap:
 
 ```tsx
@@ -6214,7 +6214,7 @@ git commit -s -m "feat(shell): palette sources for projects, branches, tables an
 
 **Files:**
 - Create: `web/plugins/shell/src/keys.ts`, `web/plugins/shell/src/keyboard.tsx`
-- Modify: `web/plugins/shell/src/layout.tsx` (Task 8's temporary listener and the palette's own Mod+K listener are removed; `useShellKeys` mounts), `src/palette.tsx` (`isPaletteShortcut` kept as an export, delegating to `matchShellKey`), `src/mode-switcher.tsx` (`useModeShortcut` stays: ⌘⇧M is D900's)
+- Modify: `web/plugins/shell/src/layout.tsx` (Task 7's Mod+B listener with `keepsKeys`, Task 8's temporary listener and the palette's own Mod+K listener are removed; `useShellKeys` mounts), `src/palette.tsx` (`isPaletteShortcut` kept as an export, delegating to `matchShellKey`), `src/mode-switcher.tsx` (`useModeShortcut` stays: ⌘⇧M is D900's)
 - Modify: `web/packages/studio-ui/src/keybindings/shared.ts:206-225` (the chords the shell owns are removed from `DEFAULT_KEYBINDINGS`), `src/keybindings/settings.ts:27-31` (`SHELL_KEYBINDINGS` lists D1081)
 - Modify: `web/plugins/studio/src/palette/commands.ts:70-80` (`listenShellCommands` runs `thread.jump.N` and `thread.next` too)
 - Modify: `web/packages/platform-electron/src/index.ts:205-234` (`wireShellCommands` forwards the new menu commands, Task 14)
@@ -6543,7 +6543,7 @@ export function useShellKeys(o: ShellKeysOptions): void {
 Base UI dialogs, menus and the palette handle Escape themselves and stop it, so `e.defaultPrevented` keeps the shell out of their way. The shell's `overlay.close` only closes the narrow sidebar sheet or the narrow inspector sheet.
 
 In `Layout`:
-1. Delete Task 8's temporary listener and `ShellPalette`'s own Mod+K `useEffect`.
+1. Delete Task 7's Mod+B `useEffect` and its `keepsKeys` helper (T7-5), Task 8's temporary listener and `ShellPalette`'s own Mod+K `useEffect`.
 2. Call:
 
 ```tsx
@@ -8654,3 +8654,9 @@ The owner accepted every recommendation ("yes accept all, run it that way"):
 | T6-2 | The plan's `Toaster` was a plain `flex-col-reverse` column, which drops the stack that `buildVisibleToastLayout` exists for. | `web/packages/ui/src/toast.tsx` | 6, 16 | `Toaster` keeps upstream's stack at the bottom right only: the newest toast in front, older ones peeking 12px behind it at 90%, 80%… scale, spread out while the pointer or focus is on the stack (Base UI's `data-expanded`); swipe right or down dismisses. The transforms run on `--op-panel-duration` (0 unless Motion is on, D1076), opacity and height on `--op-duration`. The dismiss button is upstream's corner button (it calls `data.onClose`), hidden on the toasts behind the front one until the stack spreads. Width is `min(360px, 100vw - 32px)`, the surface `rounded-lg border-rule bg-surface shadow-pop`. `Toast.Title` is an `<h2>` and `Toast.Description` a `<p>`, and the console has no preflight, so both carry `m-0 text-body`. `ToastData` also keeps `actionLayout`, `actionVariant`, `secondaryActionVariant` (as Loams `ButtonVariant`s) and `expandableLabels`, which `stackedToast` needs; `additionalActions`, `expandableDescriptionTrigger`, the anchored toasts and the copy-error button are dropped (the row's note names them). `type: 'danger'` is normalised by `useToast` and by the `Toaster` itself, so `toastManager.add({ type: 'danger' })` from outside React (Task 16) also shows as an error. `useToast()` returns a memoised `ToastApi` (`add`, `close`, `update`), stable across renders, so Task 16's `[toast]` effect dependency does not re-run on every toast. `ToastProvider` always uses `toastManager` (a `toastManager` prop is ignored). |
 | T6-3 | `sidebar-state.ts` is vendored `as-is` in double quotes; `biome check --write` rewrote it to single quotes, which breaks the as-is hash. | `web/biome.json` | 6 | A Biome override keeps double quotes for `packages/ui/src/sidebar-state.ts`, as for `studio-ui`. |
 | T6-4 | `InputControl` and `TextareaControl` (Task 4) left the native `<input>`/`<textarea>` with the browser's border, face, size and colour, because the console has no preflight: the typed confirmation showed a second border inside the outline, and `font="mono"` never reached the text. No page used them yet outside `@loams/ui`. | `web/packages/ui/src/{input,textarea}.tsx` | 6 | The inner control is `border-0 font-[inherit] text-inherit` and takes the box's text size (`text-[length:inherit]`, or `text-small` at `sm`/`compact`, one value per T5-2). Both provenance rows' `localSha256` were refreshed. Toasts (every type, an action and a secondary action, collapsed and spread) and the typed confirmation (empty and filled) were checked in dark and light. |
+| T7-1 | `admin.css`'s sign-in `min-height: 100svh` is at line 512, not 516. The hosted edition's manifest (`apps/console/src/hosted/edition.tsx:79`) also lists `shell.header.server`, and `plugins/desktop-servers/package.json` declares it. | Task 7 | 7 | The marker is on line 512. Both manifests now declare `shell.sidebar.server`. |
+| T7-2 | Four of Step 1's test lines fail for test reasons. The test's session returned a new principal object per call, so `UserMenu`'s `useSyncExternalStore` looped ("Maximum update depth"). jsdom's `URL` is not Node's, so `readFileSync(new URL(…))` threw. Biome wraps the long `.lc-topbar :is(…)` selector onto two lines, which the regex's single space missed. Base UI's scroll area (now in the sidebar) calls `Element.getAnimations`, which jsdom lacks; this also broke `apps/console/test/modes.test.ts`. A second `separator` (the sidebar's) made `layout.test.tsx`'s unnamed `getByRole('separator')` ambiguous. | `plugins/shell/test`, `apps/console/test/modes.test.ts` | 7 | The test keeps one principal object, resolves the stylesheet with `fileURLToPath`, and matches `\.lc-topbar\s+:is(`. `plugins/shell` gains `test/setup.ts` (a `setupFiles` entry: `getAnimations` and `ResizeObserver` stubs) and `@types/node` 24.13.6 as a devDependency (already in the lockfile for other packages). `modes.test.ts` stubs `getAnimations`. The dock test names its separator ("Resize agent panel"). `layout.test.tsx`'s "Open navigation" drawer test is gone; `frame.test.tsx` adds "toggles the sidebar with Mod+B, but not while typing", "is a sheet below 960px, opened from the top bar" and "opens the palette from the top bar". |
+| T7-3 | Small changes to the plan's code. `HeaderContext` is not moved: `TopBar`'s `Entries` renders `shell.header.server` the same way. `Brand`'s close button is optional and the frame passes none (the sheet has its own close button, and the top bar toggles the column). `@loams/ui`'s `Sidebar` takes no `id`, so the column sits in a `display: contents` `<div id="lc-side">` for the toggle's `aria-controls`. `nav.ts` also carries `ORG_SECTIONS`, `NavItem`, `LEGACY`, `isActive`, `useLocation` and `useModeFilter`, which the frame and the sidebar share. On the home route `MainRegion` sets the window title to "Loams" (the outlet that names it is not mounted there). | `plugins/shell/src` | 8–10 | As built. `index.tsx` exports `SIDEBAR`, `readSidebar`, `useSidebarState`, `useNarrow`, `runShellCommand`, `TopBar`, `MainRegion`, `ShellSidebar` and the nav model from `nav.ts`. |
+| T7-4 | The plan's `Layout` dropped the Agent dock toggle from the bar, but the dock stays until Task 8 and its tests must keep passing. | `plugins/shell/src/layout.tsx` | 8 | The dock toggle is `TopBar`'s `trailing`: a 28px icon button (`.lc-bar-btn`, `aria-label="Agent"`), without the old "Agent" text. Task 8 passes `PanelToggles` there instead; its toggles now use `.lc-bar-btn`, which styles `aria-pressed="true"` as on. |
+| T7-5 | D1078 makes the sidebar collapsible with ⌘B, but the keymap comes only in Task 12, and a plain listener would take bold from the rich-text composer (Review Focus 1). | `plugins/shell/src/layout.tsx` | 12 | A temporary Mod+B listener toggles the sidebar unless the target is a field, `contenteditable` or an `.xterm` terminal (`keepsKeys`). Task 12 deletes it with Task 8's listener; its text says so. |
+| T7-6 | Step 5 replaces console.css lines 40–590 wholesale, but that range also holds rules pages use (`.lc-page`, `.lc-page-head`, `.lc-muted`, `.lc-cards`, `.lc-actions`, `.lc-icon-btn`, `.lc-chip`, `.lc-round-btn`, `.lc-bare`, `.loams-boot`). The plan's `.lc-main` had no gutter, so every Console page would touch the card's edge. A page's absolutely placed `sr-only` label (SQL) had no positioned ancestor inside the scroller, so it stretched the document by 155px. | `apps/console/src/cordis/console.css` | 8 | Those rules stay, on the type scale and the radius steps. `.lc-main` is `position: relative` with a 24/20/56px gutter (20/12/48 under 960px), and its children keep the 1180px measure (Studio's are `max-width: none`; a Console page in Studio keeps the 20px gutter). The rise-in animation on `.lc-main > *` is gone (motion off, D1076). Under 960px the card is edge to edge whether or not the sheet is open. In the sidebar the desktop server switcher is full width and its menu stays inside the column; the hosted edition's engine row wraps. The splitter between the sidebar and the card is invisible until hovered or focused. Checked through `?desktop` (Connectors, SQL, Deployments, Studio) and `?demo` (Status, Deployments) in dark and light, at 1440px and 800px: the top bar is 44px, the sidebar 232px and dragging it stops at 200 and 320, Ctrl+B collapses it, Ctrl+K opens the palette, below 960px it is a sheet, no page scrolls the document or sideways, and Studio fills the card with one scroller per column. |

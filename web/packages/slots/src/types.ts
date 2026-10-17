@@ -32,13 +32,25 @@ export interface SlotMap {
   'shell.nav.section': { kind: 'list'; props: Record<string, never> };
   /** The right dock (the agent panel); one plugin owns it. Empty hides the dock and its toggle. */
   'shell.dock.right': { kind: 'single'; props: Record<string, never> };
-  /** The server switcher, in the header. */
+  /** The header's context controls (Studio's project, branch and host until Task 9). */
   'shell.header.server': { kind: 'list'; props: Record<string, never> };
   /**
    * The sidebar's context above the nav: the project switcher and the open project's
    * pages (API2 Task 10). While it has an entry, it replaces the environment switcher.
    */
   'shell.nav.context': { kind: 'list'; props: Record<string, never> };
+  /** The server indicator under the brand (design 59 D1078): the desktop's server switcher. */
+  'shell.sidebar.server': { kind: 'list'; props: Record<string, never> };
+  /** Projects and their threads (Studio's sidebar, W6); empty hides the section. */
+  'shell.sidebar.threads': { kind: 'list'; props: Record<string, never> };
+  /** The top bar's start: the project and branch pills. Entries filter by `meta.mode`. */
+  'shell.topbar.left': { kind: 'list'; props: Record<string, never> };
+  /** The top bar's middle, before the palette hint. Entries filter by `meta.mode`. */
+  'shell.topbar.center': { kind: 'list'; props: Record<string, never> };
+  /** The top bar's end, before the inspector and drawer toggles. */
+  'shell.topbar.right': { kind: 'list'; props: Record<string, never> };
+  /** The agent home (Part 2 fills it; W11). Rendered on the mode's home route with its params. */
+  'shell.home': { kind: 'single'; props: { params: Record<string, string> } };
   /**
    * Commands for the shell's palette (§53 §4.5, §5.10; SD1 Task 24). An entry renders
    * nothing: while the palette is open it is mounted with the query and calls `publish`

@@ -63,12 +63,6 @@ const section = (
 
 beforeEach(() => {
   localStorage.clear();
-  // The Logo's grain canvas observes its size; jsdom has no ResizeObserver.
-  globalThis.ResizeObserver ??= class {
-    observe() {}
-    unobserve() {}
-    disconnect() {}
-  };
 });
 afterEach(cleanup);
 
@@ -104,16 +98,6 @@ describe('shell chrome', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: /Light/ }));
     expect(localStorage.getItem(THEME_KEY)).toBe('light');
     expect(document.documentElement.classList.contains('dark')).toBe(false);
-  });
-
-  it('opens the nav drawer from the menu button and closes it again', () => {
-    setup();
-    const open = screen.getByRole('button', { name: 'Open navigation' });
-    expect(open.getAttribute('aria-expanded')).toBe('false');
-    fireEvent.click(open);
-    expect(document.getElementById('lc-side')?.hasAttribute('data-open')).toBe(true);
-    fireEvent.click(screen.getAllByRole('button', { name: 'Close navigation' })[0] as HTMLElement);
-    expect(document.getElementById('lc-side')?.hasAttribute('data-open')).toBe(false);
   });
 
   it('switches the session environment from the sidebar', async () => {
@@ -271,7 +255,7 @@ describe('shell layout', () => {
       slots.register({ name: 'shell.dock.right', plugin: 'agent' }, () => <p>chat</p>);
     });
     fireEvent.click(screen.getByRole('button', { name: /agent/i }));
-    const handle = screen.getByRole('separator');
+    const handle = screen.getByRole('separator', { name: 'Resize agent panel' });
     expect(Number(handle.getAttribute('aria-valuenow'))).toBe(DOCK_DEFAULT);
     expect(handle.getAttribute('aria-valuemin')).toBe(String(DOCK_MIN));
     expect(handle.getAttribute('aria-valuemax')).toBe(String(DOCK_MAX));
@@ -288,15 +272,19 @@ describe('shell layout', () => {
     // A fresh mount restores it, and a corrupt value falls back and clamps.
     cleanup();
     setupWithDock();
-    expect(screen.getByRole('separator').getAttribute('aria-valuenow')).toBe(String(saved.width));
+    expect(
+      screen.getByRole('separator', { name: 'Resize agent panel' }).getAttribute('aria-valuenow'),
+    ).toBe(String(saved.width));
     cleanup();
     localStorage.setItem(DOCK_KEY, JSON.stringify({ open: true, width: 99999 }));
     setupWithDock();
-    expect(screen.getByRole('separator').getAttribute('aria-valuenow')).toBe(String(DOCK_MAX));
+    expect(
+      screen.getByRole('separator', { name: 'Resize agent panel' }).getAttribute('aria-valuenow'),
+    ).toBe(String(DOCK_MAX));
     cleanup();
     localStorage.setItem(DOCK_KEY, '{nope');
     setupWithDock();
-    expect(screen.queryByRole('separator')).toBeNull();
+    expect(screen.queryByRole('separator', { name: 'Resize agent panel' })).toBeNull();
   });
 });
 

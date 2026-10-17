@@ -1,0 +1,415 @@
+// The shell's frame (design 59, D1078): the sidebar column, the 44px top bar, which is the
+// window's drag region (D1083), and the main region, which renders the home slot on the
+// mode's home and a page everywhere else. The work area (main, and the inspector and drawer
+// from Task 8) is a card on the window. Components get props and closures, never `ctx`.
+
+import {
+  type FlagsService,
+  MODE_HOME,
+  type ModeService,
+  type SessionService,
+  SHELL_COMMAND_EVENT,
+} from '@loams/console-host';
+import { Slot, SlotBoundary, useSlot } from '@loams/slots';
+import {
+  Avatar,
+  Badge,
+  Empty,
+  Kbd,
+  KbdGroup,
+  Logo,
+  Menu,
+  MenuItem,
+  MenuLabel,
+  MenuSeparator,
+} from '@loams/ui';
+import { LogOut, PanelLeft, X } from 'lucide-react';
+import { type ReactNode, useCallback, useEffect, useState, useSyncExternalStore } from 'react';
+import { useMode } from './mode-switcher.js';
+import { inMode, isActive, navSections, useLocation, useModeFilter } from './nav.js';
+import type { Crumb, HashRouter } from './router.js';
+
+/** The sidebar's saved state, limits and default width (D1078: 232px, 200–320). */
+export const SIDEBAR = { key: 'loams.shell.sidebar', min: 200, max: 320, size: 232 } as const;
+
+export interface SidebarState {
+  open: boolean;
+  width: number;
+}
+
+const clampSidebar = (n: number) => Math.min(SIDEBAR.max, Math.max(SIDEBAR.min, Math.round(n)));
+
+/** The saved sidebar state; open at 232px when nothing (or nothing readable) is saved. */
+export function readSidebar(): SidebarState {
+  try {
+    const raw = JSON.parse(
+      localStorage.getItem(SIDEBAR.key) ?? 'null',
+    ) as Partial<SidebarState> | null;
+    return {
+      open: raw?.open !== false,
+      width: typeof raw?.width === 'number' ? clampSidebar(raw.width) : SIDEBAR.size,
+    };
+  } catch {
+    return { open: true, width: SIDEBAR.size };
+  }
+}
+
+/** The sidebar's open state and width, saved per device. */
+export function useSidebarState(): [SidebarState, (patch: Partial<SidebarState>) => void] {
+  const [state, setState] = useState(readSidebar);
+  const update = useCallback((patch: Partial<SidebarState>) => {
+    setState((prev) => {
+      const next = { ...prev, ...patch, width: clampSidebar(patch.width ?? prev.width) };
+      try {
+        localStorage.setItem(SIDEBAR.key, JSON.stringify(next));
+      } catch {
+        // Storage blocked: the sidebar still works this session.
+      }
+      return next;
+    });
+  }, []);
+  return [state, update];
+}
+
+const NARROW = '(max-width: 959px)';
+
+/** Under 960px the sidebar is a sheet (and, from Task 8, the inspector an overlay). */
+export function useNarrow(): boolean {
+  return useSyncExternalStore(
+    (cb) => {
+      const mq = globalThis.matchMedia?.(NARROW);
+      mq?.addEventListener?.('change', cb);
+      return () => mq?.removeEventListener?.('change', cb);
+    },
+    () => globalThis.matchMedia?.(NARROW).matches ?? false,
+    () => false,
+  );
+}
+
+/** Sends a shell command to whoever handles it (Studio's `chat.new`); else runs `fallback`. */
+export function runShellCommand(
+  detail: string,
+  fallback: () => void,
+  target: EventTarget = globalThis,
+): void {
+  const event = new CustomEvent(SHELL_COMMAND_EVENT, { detail, cancelable: true });
+  target.dispatchEvent(event);
+  if (!event.defaultPrevented) fallback();
+}
+
+function isMac(): boolean {
+  try {
+    return /mac|iphone|ipad|ipod/i.test(navigator.platform);
+  } catch {
+    // No navigator (tests, workers): the Ctrl spelling.
+    return false;
+  }
+}
+
+type BarSlot =
+  | 'shell.topbar.left'
+  | 'shell.topbar.center'
+  | 'shell.topbar.right'
+  | 'shell.header.server';
+
+/** A top bar slot's entries of the current mode. */
+function Entries({ name, mode }: { name: BarSlot; mode?: ModeService }) {
+  const entries = useSlot(name);
+  const filter = useModeFilter(mode);
+  return (
+    <>
+      {entries
+        .filter((e) => inMode(e, filter))
+        .map((entry) => {
+          const Entry = entry.component;
+          return (
+            <SlotBoundary key={entry.id} plugin={entry.plugin}>
+              <Entry />
+            </SlotBoundary>
+          );
+        })}
+    </>
+  );
+}
+
+/**
+ * The top bar (D1078, D1083): the sidebar toggle, the context pills and the breadcrumbs,
+ * the palette hint, and the tools. The bar is the window's drag region; its controls are
+ * `no-drag` (console.css), and `--lc-traffic` / `--lc-wco-end` keep the OS window controls
+ * clear (Task 13 sets them).
+ */
+export function TopBar({
+  router,
+  flags,
+  mode,
+  sidebarOpen,
+  onToggleSidebar,
+  onOpenPalette,
+  tools,
+  trailing,
+}: {
+  router: HashRouter;
+  flags?: FlagsService;
+  mode?: ModeService;
+  sidebarOpen: boolean;
+  onToggleSidebar: () => void;
+  onOpenPalette: () => void;
+  /** The mode switcher, the appearance menu and the account (Layout's). */
+  tools: ReactNode;
+  /** The inspector and drawer toggles (Task 8). */
+  trailing?: ReactNode;
+}) {
+  const mac = isMac();
+  return (
+    <header className="lc-topbar" data-drag-region="">
+      <button
+        type="button"
+        className="lc-bar-btn lc-sidebar-toggle"
+        aria-label={sidebarOpen ? 'Hide sidebar' : 'Show sidebar'}
+        aria-controls="lc-side"
+        aria-expanded={sidebarOpen}
+        aria-keyshortcuts="Control+B Meta+B"
+        title={`${sidebarOpen ? 'Hide' : 'Show'} sidebar (${mac ? '⌘' : 'Ctrl+'}B)`}
+        onClick={onToggleSidebar}
+      >
+        <PanelLeft size={16} strokeWidth={1.75} aria-hidden="true" />
+      </button>
+      <div className="lc-topbar-start">
+        <Entries name="shell.topbar.left" mode={mode} />
+        <Entries name="shell.header.server" mode={mode} />
+        <Crumbs router={router} flags={flags} mode={mode} />
+      </div>
+      <div className="lc-topbar-center">
+        <Entries name="shell.topbar.center" mode={mode} />
+        <button
+          type="button"
+          className="lc-palette-hint"
+          aria-label="Search or run a command"
+          aria-keyshortcuts="Control+K Meta+K"
+          onClick={onOpenPalette}
+        >
+          <span className="lc-palette-hint-text">Search or run a command</span>
+          <KbdGroup aria-hidden="true">
+            <Kbd>{mac ? '⌘' : 'Ctrl'}</Kbd>
+            <Kbd>K</Kbd>
+          </KbdGroup>
+        </button>
+      </div>
+      <div className="lc-topbar-end">
+        <Entries name="shell.topbar.right" mode={mode} />
+        <div className="lc-overlays">
+          <Slot name="shell.overlay" props={{}} />
+        </div>
+        {tools}
+        {trailing}
+      </div>
+    </header>
+  );
+}
+
+/** The home slot on the mode's home route (W11); the page outlet everywhere else. */
+export function MainRegion({ router, mode }: { router: HashRouter; mode?: ModeService }) {
+  const location = useLocation(router);
+  const current = useMode(mode);
+  const filter = useModeFilter(mode);
+  // Studio's home entry is `meta.mode: 'studio'`, so Console's "/" stays the Overview page.
+  const hasHome = useSlot('shell.home').some((e) => inMode(e, filter));
+  const home = hasHome && location.path === MODE_HOME[current];
+  useEffect(() => {
+    if (home) document.title = 'Loams';
+  }, [home]);
+  if (home) {
+    return (
+      <div className="lc-home">
+        <Slot name="shell.home" props={{ params: location.params }} />
+      </div>
+    );
+  }
+  return <Outlet router={router} />;
+}
+
+/** The page's place: instance, section, page; the last crumb is the current page. */
+export function Crumbs({
+  router,
+  flags,
+  mode,
+}: {
+  router: HashRouter;
+  flags?: FlagsService;
+  mode?: ModeService;
+}) {
+  const sections = useSlot('shell.nav.section');
+  const legacy = useSlot('console.nav');
+  const location = useLocation(router);
+  const trail = useSyncExternalStore(router.subscribe, () => router.trail());
+  const filter = useModeFilter(mode);
+  const title = location.pageId ? router.title() : undefined;
+  if (trail && trail.length > 0) return <Trail crumbs={trail} />;
+  let group: string | undefined;
+  let home: { label: string; href: string } | undefined;
+  for (const [g, items] of navSections(sections, legacy, filter)) {
+    const hit = items
+      .filter((i) => isActive(location.path, i.href))
+      .sort((a, b) => b.href.length - a.href.length)[0];
+    if (hit && (!home || hit.href.length > home.href.length)) {
+      group = g;
+      home = { label: hit.label, href: hit.href };
+    }
+  }
+  const crumbs: { label: string; href?: string }[] = [
+    filter?.mode === 'studio'
+      ? { label: 'Studio', href: MODE_HOME.studio }
+      : { label: flags?.instanceName || 'Loams', href: '/' },
+  ];
+  const root = crumbs[0] as { label: string; href: string };
+  // In Studio the root crumb is the mode's home, so its section and home page are not repeated.
+  if (group && group !== root.label) crumbs.push({ label: group });
+  if (home && home.href !== location.path && home.href !== root.href) {
+    crumbs.push({ label: home.label, href: home.href });
+  }
+  const last = title ?? home?.label ?? 'Not found';
+  if (location.path !== root.href || last !== root.label) crumbs.push({ label: last });
+  return <Trail crumbs={crumbs} />;
+}
+
+export function Trail({ crumbs }: { crumbs: Crumb[] }) {
+  return (
+    <nav aria-label="Breadcrumb" className="lc-trail">
+      <ol>
+        {crumbs.map((c, i) => {
+          const last = i === crumbs.length - 1;
+          return (
+            // biome-ignore lint/suspicious/noArrayIndexKey: crumbs are positional
+            <li key={i} aria-current={last ? 'page' : undefined}>
+              {!last && c.href ? <a href={`#${c.href}`}>{c.label}</a> : <span>{c.label}</span>}
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
+  );
+}
+
+/** The current page, or "Nothing here" when no plugin serves the path. */
+export function Outlet({ router }: { router: HashRouter }) {
+  const location = useLocation(router);
+  const trail = useSyncExternalStore(router.subscribe, () => router.trail());
+  const title = trail?.at(-1)?.label ?? (location.pageId ? router.title() : undefined);
+  useEffect(() => {
+    document.title = title ? `${title} · Loams` : 'Loams';
+  }, [title]);
+  if (!location.pageId) {
+    return (
+      <Empty title="Nothing here">
+        No plugin serves <code>{location.path}</code>. It may be disabled, or waiting for an API
+        this instance does not serve.
+      </Empty>
+    );
+  }
+  return (
+    <Slot
+      name="console.page"
+      slotKey={location.pageId}
+      props={{ params: location.params }}
+      fallback={<Empty title="Loading…" />}
+    />
+  );
+}
+
+const KIND_LABEL: Record<number, string> = { 1: 'User', 2: 'Service account', 3: 'Agent' };
+
+const ROLE_LABEL: Record<number, string> = { 1: 'owner', 2: 'admin', 3: 'member' };
+
+export function UserMenu({
+  session,
+  router,
+  local,
+}: {
+  session: SessionService;
+  router: HashRouter;
+  /** The desktop's own engine: there is no session to end. */
+  local?: boolean;
+}) {
+  useSyncExternalStore(session.subscribe, () => session.principal());
+  const account = useSyncExternalStore(session.subscribe, () => session.account?.());
+  const who = session.principal();
+  if (!who && !account) return null;
+  const name = account?.user?.name || who?.displayName || 'Signed in';
+  const email = account?.user?.email || who?.email;
+  const role = account ? ROLE_LABEL[account.role] : undefined;
+  const signOut = session.signOut && !local ? session.signOut : undefined;
+  return (
+    <Menu
+      label="Account"
+      trigger={
+        <button type="button" className="lc-user-btn" aria-label={`Account: ${name}`}>
+          <Avatar name={name} size={28} />
+        </button>
+      }
+    >
+      <MenuLabel>
+        <strong className="text-ink">{name}</strong>
+        {email && <span>{email}</span>}
+        <span>
+          <Badge>{role ?? (who ? KIND_LABEL[who.kind] : undefined) ?? 'Signed in'}</Badge>
+        </span>
+      </MenuLabel>
+      {signOut && (
+        <>
+          <MenuSeparator />
+          <MenuItem
+            onSelect={() => {
+              void signOut().then(() => router.navigate('/sign-in'));
+            }}
+          >
+            <LogOut size={15} aria-hidden="true" /> Sign out
+          </MenuItem>
+        </>
+      )}
+    </Menu>
+  );
+}
+
+/** The wordmark, the edition and the preview badge, at the top of the sidebar. */
+export function Brand({
+  flags,
+  home = '/',
+  onClose,
+}: {
+  flags?: FlagsService;
+  home?: string;
+  /** A close button after the badges (none in the frame: the sheet and the top bar close it). */
+  onClose?: () => void;
+}) {
+  const edition = flags?.features.desktop
+    ? 'Desktop'
+    : flags?.edition === 'cloud'
+      ? 'Cloud'
+      : flags?.edition === 'byoc'
+        ? 'BYOC'
+        : 'OSS';
+  return (
+    <div className="lc-brand">
+      <a href={`#${home}`} aria-label="Loams home" className="lc-brand-link">
+        <Logo height={18} />
+      </a>
+      <Badge>{edition}</Badge>
+      <span
+        className="lc-preview"
+        title="Loams is in preview: interfaces and data formats may change between releases."
+      >
+        Preview
+      </span>
+      {onClose && (
+        <button
+          type="button"
+          className="lc-side-close"
+          aria-label="Close navigation"
+          onClick={onClose}
+        >
+          <X size={18} aria-hidden="true" />
+        </button>
+      )}
+    </div>
+  );
+}
