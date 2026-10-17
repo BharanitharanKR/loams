@@ -1008,6 +1008,18 @@ Living document. Newest decisions at the bottom of each table.
 | D1091 | 2026-10-17 | **Cascades in the LLM gateway:** typed triage with a confidence, threshold escalation, an optional verifier, and deterministic routes, each step logged with model, price and confidence ([§60](60-places-and-harness-composition.md) §3; with §57's LLM module) | The essay's "engineered intelligence" | Proposed |
 | D1092 | 2026-10-17 | **No new harness language now:** Places, roles and composition are data (proto and YAML) checked by OpenFGA plus a policy check; watch DSPy, BAML and any standard ([§60](60-places-and-harness-composition.md) §3) | New languages that try to replace the incumbent fail (§58) | Proposed |
 | D1093 | 2026-10-17 | **Part 2 Studio UX from Endo:** switch harness or model in the middle of a thread, "Dig In" (fork from a selection), and scheduled prompts ([§60](60-places-and-harness-composition.md) §3) | Small wins for the agent home | Proposed |
+| D1094 | 2026-10-17 | **The Loams Jailer is a layered supervisor:** a deterministic PDP plus sensors and actuators, plus an LLM overseer. The deterministic layer and the §56 sandbox are the only boundary; the overseer may only tighten, except auto-allowing "ask" calls inside the effective capability ([§61](61-loams-jailer.md) §5) | Owner 2026-10-17: "a jailer agent that oversees the sandbox", with KVM, syscall and eBPF tools; research shows LLM monitors fail under adaptive attack | Proposed |
+| D1095 | 2026-10-17 | **Where it runs:** in agentd (desktop and remote) and in the node supervisor (workspaces, functions). The gateways (`llm`, `mcp`, Data API, Git push) are enforcement points that call it. Crate `crates/loams-jailer`, Apache-2.0, no `unsafe` ([§61](61-loams-jailer.md) §4.2) | It runs where the sandbox's parent runs | Proposed |
+| D1096 | 2026-10-17 | **`loams-sandbox` gains `pause`/`resume`/`set_net_policy`/`set_limits` and a `SandboxEvent` stream** (SB1 Tasks 7, 8, 16) ([§61](61-loams-jailer.md) §5) | Avoid retrofitting SB1 | Proposed |
+| D1097 | 2026-10-17 | **A trifecta check on Place entry and one-way taint** (extends D1087/D1088) ([§61](61-loams-jailer.md) §4.5) | The lethal trifecta; Agents Rule of Two | Proposed |
+| D1098 | 2026-10-17 | **`ToolRisk` gains `Egress`, and fetch tools move out of `Read`** in `approvals.rs` ([§61](61-loams-jailer.md) §5) | A GET with data in the URL is exfiltration | Proposed |
+| D1099 | 2026-10-17 | **A circuit breaker** (3 consecutive or 20 total denials → pause and ask a person), **hard budget stops**, and D-SF-14's kill switch applied to Studio threads ([§61](61-loams-jailer.md) §4.5) | Claude Code and Codex practice | Proposed |
+| D1100 | 2026-10-17 | **The overseer is reasoning-blind and paraphrased:** stage 1 is SystemOne locally, stage 2 goes through the `llm` gateway with a model from another family; it ships in shadow mode ([§61](61-loams-jailer.md) §4.7) | Defence against injection aimed at the monitor | Proposed |
+| D1101 | 2026-10-17 | **Sensor order:** proxy and cgroup events, Landlock audit, gVisor seccheck, vsock guest agent, then optional privileged eBPF (Aya), servers only. No VM introspection; seccomp user notify is never the boundary ([§61](61-loams-jailer.md) §4.6) | Practical on each OS; TOCTOU | Proposed |
+| D1102 | 2026-10-17 | **eBPF kernel programs in a separate crate licensed `GPL-2.0-only OR MIT`; userspace Apache-2.0;** confirm cargo-deny accepts it; never link GPL VMI libraries; Tetragon only as a separate process ([§61](61-loams-jailer.md) §2.4) | eBPF licensing rules | Proposed |
+| D1103 | 2026-10-17 | **One `Jailer::rollback(run)`** across Git, Postgres and collection branches plus checkpoints and snapshots, recorded as left behind ([§61](61-loams-jailer.md) §4.4) | Rollback exists in pieces today | Proposed |
+| D1104 | 2026-10-17 | **Verdict CloudEvents (`io.loams.dev.jailer.verdict.v1`) and a hash-chained log** ([§61](61-loams-jailer.md) §4.8) | Audit | Proposed |
+| D1105 | 2026-10-17 | **Plan JL1** after SB1d, alongside Part 2: JL1a deterministic jailer in agentd, JL1b overseer in shadow mode, JL1c gateway enforcement points, JL1d gVisor and microVM sensors, JL1e eBPF ([§61](61-loams-jailer.md) §5) | Order of value | Proposed |
 
 ## Open questions
 
@@ -1634,6 +1646,13 @@ Living document. Newest decisions at the bottom of each table.
 | Q939 | Do places learn from visitors? Default: not automatically; a suggested change to a place is left behind and needs approval ([§60](60-places-and-harness-composition.md) §5) | Owner | Part 2 |
 | Q940 | Can an agent rewrite its own harness or Place? Default: only inside the enclosing place's limits, as a proposal a person approves ([§60](60-places-and-harness-composition.md) §5) | Owner | Part 2 |
 | Q941 | Borrow code from Endo? Default: no; it is built on Effect, which the console stack excludes; ideas only ([§60](60-places-and-harness-composition.md) §5) | Eng | Part 2 |
+| Q942 | The name collides with Firecracker's `jailer`? Default: keep "Loams Jailer"; always write "Firecracker's jailer" ([§61](61-loams-jailer.md) §6) | Owner | JL1 |
+| Q943 | Harness credentials inside the sandbox: keep accepting this, or add provider-only TLS termination that injects credentials? Default: accept in SB1; JL1c routes API-key harnesses through the `llm` gateway; provider-only TLS termination later, opt-in ([§61](61-loams-jailer.md) §6) | Owner | JL1c |
+| Q944 | May the overseer auto-allow without a person? Default: only "ask" calls inside the effective capability, after the shadow-mode gate ([§61](61-loams-jailer.md) §6) | Owner | JL1b |
+| Q945 | Overseer model local or cloud? Default: SystemOne locally; cloud stage 2 only with consent ([§61](61-loams-jailer.md) §6) | Owner | JL1b |
+| Q946 | Is the eBPF sensor open core or private? Default: open, optional, off by default ([§61](61-loams-jailer.md) §6) | Owner | JL1e |
+| Q947 | Can Loams be the harness's own reviewer (Codex `approvals_reviewer`, Claude hooks)? Default: use agentd's `can_use_tool` and approval streams; check Codex ([§61](61-loams-jailer.md) §6) | Eng | JL1a |
+| Q948 | Overseer cost? Default: stage 2 on at most 5% of calls, counted in the run budget ([§61](61-loams-jailer.md) §6) | Eng | JL1b |
 
 ## Owner actions pending (2026-10-02)
 

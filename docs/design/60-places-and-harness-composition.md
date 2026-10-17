@@ -143,3 +143,6 @@ Part 2 (the agent home) takes three small items from Endo:
 - Jason Duncan, "The Harness Is an Object: Notes toward composing intelligence", X article, 2026-10-16, text supplied by the owner. It cites Josh Rosen, "Composable Models".
 - Meta-harness context (secondary sources): <https://codex.danielvaughan.com/2026/07/27/meta-harness-pattern-orchestrating-codex-claude-code-pi-sub-agents/>, <https://codepick.dev/en/guides/meta-harness-2026/>.
 - Prior work cited by the essay: DSPy, LMQL, BAML, LangGraph; object-capability security; context-oriented programming.
+
+
+> **See also (2026-10-17):** [§61](61-loams-jailer.md) D1097 adds a trifecta check on Place entry and one-way taint.
