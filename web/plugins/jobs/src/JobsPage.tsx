@@ -17,6 +17,7 @@ import {
   formatNumber,
   Notice,
   Primary,
+  SampleDataNotice,
   Select,
   Stat,
   Stats,
@@ -76,10 +77,9 @@ export function JobsPage({ client, preview, namespace, initialTab }: JobsPagePro
         }
       />
       {preview && (
-        <Notice title="Sample data">
-          This server does not serve {JOBS_PACKAGE} yet, so the page shows sample queues and jobs.
-          Retry and discard change only the sample.
-        </Notice>
+        <SampleDataNotice>
+          This server does not serve {JOBS_PACKAGE} yet. Retry and discard change only the sample.
+        </SampleDataNotice>
       )}
       <Tabs
         key={ns}

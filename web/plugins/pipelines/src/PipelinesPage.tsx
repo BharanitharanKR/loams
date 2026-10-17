@@ -4,7 +4,7 @@
 // deploy, and once running, live throughput and lag per node from @loams/charts.
 
 import { PageHead } from '@loams/desktop-ui';
-import { Badge, Button, Card, Empty, Input, Notice, StatusTag } from '@loams/ui';
+import { Badge, Button, Card, Empty, Input, Notice, SampleDataNotice, StatusTag } from '@loams/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Canvas, type Live } from './Canvas.js';
 import { ConfigPanel } from './ConfigPanel.js';
@@ -33,11 +33,13 @@ export interface PipelinesPageProps {
   client: PipelinesClient;
   /** The graph the page opens with; an empty one by default. */
   initial?: PipelineGraph;
+  /** The client is a fixture: the page says so. */
+  sample?: boolean;
 }
 
 const secretKey = (nodeId: string, key: string) => `${nodeId}/${key}`;
 
-export function PipelinesPage({ client, initial }: PipelinesPageProps) {
+export function PipelinesPage({ client, initial, sample }: PipelinesPageProps) {
   const [load, setLoad] = useState<CatalogLoad>({ state: 'loading' });
   const [graph, setGraph] = useState<PipelineGraph>(initial ?? emptyGraph());
   const [selectedId, setSelectedId] = useState<string | undefined>();
@@ -305,6 +307,11 @@ export function PipelinesPage({ client, initial }: PipelinesPageProps) {
   return (
     <div className="lc-page">
       {head}
+      {sample && (
+        <SampleDataNotice>
+          Deploying here starts nothing; the run and its metrics are simulated.
+        </SampleDataNotice>
+      )}
       <p className="sr-only" role="status" aria-live="polite">
         {announce}
       </p>
