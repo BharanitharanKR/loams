@@ -102,7 +102,6 @@ export function ComboboxInput({
     <div className="relative w-full text-ink has-disabled:opacity-60 not-has-[>*.w-full]:w-fit">
       {startAddon && (
         <div
-          aria-hidden="true"
           className="pointer-events-none absolute inset-y-0 start-px z-10 flex items-center ps-3 text-muted [&_svg]:size-4"
           data-slot="combobox-start-addon"
         >
@@ -192,7 +191,8 @@ export function ComboboxPopup({
   anchor?: ComboboxPrimitive.Positioner.Props['anchor'];
 }) {
   const { chipsRef, multiple } = React.use(ComboboxContext);
-  const anchor = anchorProp ?? (multiple ? chipsRef : undefined);
+  // Chips are not vendored, so the chips ref anchors only once something attaches it.
+  const anchor = anchorProp ?? (multiple && chipsRef?.current ? chipsRef : undefined);
 
   return (
     <ComboboxPrimitive.Portal>

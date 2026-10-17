@@ -7,6 +7,7 @@ import { mergeProps } from '@base-ui/react/merge-props';
 import { Select as SelectPrimitive } from '@base-ui/react/select';
 import { useRender } from '@base-ui/react/use-render';
 import type { ReactNode } from 'react';
+import { nativeButton } from './button';
 import { cx, type WithClass } from './cx';
 
 export const SelectRoot = SelectPrimitive.Root;
@@ -99,7 +100,7 @@ export function SelectButton({
   const defaults = {
     className: cx(TRIGGER_BASE, TRIGGER_VARIANT.default, TRIGGER_SIZE[size], className),
     'data-slot': 'select-trigger',
-    type: render ? undefined : ('button' as const),
+    type: nativeButton(render) ? ('button' as const) : undefined,
   };
   return useRender({
     defaultTagName: 'button',

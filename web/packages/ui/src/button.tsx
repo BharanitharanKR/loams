@@ -5,6 +5,7 @@
 
 import { mergeProps } from '@base-ui/react/merge-props';
 import { useRender } from '@base-ui/react/use-render';
+import { isValidElement } from 'react';
 import { cx } from './cx';
 
 export type ButtonVariant = 'primary' | 'secondary' | 'quiet' | 'danger' | 'danger-solid' | 'link';
@@ -28,13 +29,18 @@ export type ButtonProps = useRender.ComponentProps<'button'> & {
   size?: ButtonSize;
 };
 
+/** True when the button renders as a <button>: its own, or a `render` that is one. */
+export function nativeButton(render: unknown): boolean {
+  return !render || (isValidElement(render) && render.type === 'button');
+}
+
 /** The one action control. `type` defaults to "button"; `render` swaps the element. */
 export function Button({ variant, size, className, render, ...props }: ButtonProps) {
   const defaults = {
     className: buttonClass({ variant, size, className }),
     'data-slot': 'button',
     'data-variant': variant ?? 'secondary',
-    type: render ? undefined : ('button' as const),
+    type: nativeButton(render) ? ('button' as const) : undefined,
   };
   return useRender({
     defaultTagName: 'button',

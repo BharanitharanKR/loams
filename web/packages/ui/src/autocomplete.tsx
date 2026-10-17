@@ -33,7 +33,6 @@ export function AutocompleteInput({
     <div className="relative w-full text-ink has-disabled:opacity-60 not-has-[>*.w-full]:w-fit">
       {startAddon && (
         <div
-          aria-hidden="true"
           className="pointer-events-none absolute inset-y-0 start-px z-10 flex items-center ps-3 text-muted has-[button]:pointer-events-auto [&_svg]:size-4"
           data-slot="autocomplete-start-addon"
         >

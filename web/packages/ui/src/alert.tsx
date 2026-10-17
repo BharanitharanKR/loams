@@ -6,6 +6,7 @@
 import {
   Children,
   type ComponentProps,
+  Fragment,
   isValidElement,
   type ReactElement,
   type ReactNode,
@@ -59,16 +60,23 @@ export function Alert({
   const content: ReactNode[] = [];
   const action: ReactNode[] = [];
 
-  Children.forEach(children, (child) => {
-    if (!isValidElement(child)) {
-      content.push(child);
-      return;
-    }
-    const slot = alertChildSlot(child);
-    if (slot === 'alert-action') action.push(child);
-    else if (slot === 'alert-title' || slot === 'alert-description') content.push(child);
-    else icon.push(child);
-  });
+  // Fragments are opened, so <>{title}{description}</> sorts like its children.
+  const sort = (nodes: ReactNode): void =>
+    Children.forEach(nodes, (child) => {
+      if (!isValidElement(child)) {
+        content.push(child);
+        return;
+      }
+      if (child.type === Fragment) {
+        sort((child.props as { children?: ReactNode }).children);
+        return;
+      }
+      const slot = alertChildSlot(child);
+      if (slot === 'alert-action') action.push(child);
+      else if (slot === 'alert-title' || slot === 'alert-description') content.push(child);
+      else icon.push(child);
+    });
+  sort(children);
 
   return (
     <div

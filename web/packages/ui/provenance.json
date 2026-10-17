@@ -20,7 +20,7 @@
       "upstreamPath": "apps/web/src/components/ui/alert.tsx",
       "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
       "upstreamSha256": "235ee3a3f9961123d109450431a3e42f3e9471062c93e4958688d6c90f2c0fd5",
-      "localSha256": "5027fb465777f58bac378ac12cf832e2e141e29d305781ef273ce01ac69dc845",
+      "localSha256": "8b9a9d301329057a3b984055196dcf733521610972483c476aac245ec6ec0c77",
       "verdict": "adapt",
       "group": "k"
     },
@@ -29,7 +29,7 @@
       "upstreamPath": "apps/web/src/components/ui/autocomplete.tsx",
       "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
       "upstreamSha256": "d0a446b3bd58aace62752438dbfa11d8e3727fa839da3107518e0f78e29dab45",
-      "localSha256": "3cc25493fbe8c8129b409cef8342468d8c1467875700e419cd188ccb56baad69",
+      "localSha256": "373342095c26aff86f28b1370156b5f6270b10716c212c9b827fdc5bbe4c1537",
       "verdict": "adapt",
       "group": "k",
       "note": "the virtualised lists are dropped; long lists use VirtualList"
@@ -48,7 +48,7 @@
       "upstreamPath": "apps/web/src/components/ui/button.tsx",
       "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
       "upstreamSha256": "90e714b31089a9a7136a372000eabf2d3056cced072dc5aa3583edef8a078aa6",
-      "localSha256": "5cca74fec70227a31a85a730b39d74fe0a087b4e7ff29f1c81b30c510cf3bce0",
+      "localSha256": "4a0da083d984ae72be37fc5ad57da6a163fd0ae27efd3a5b6b8bf6d7f553f01c",
       "verdict": "adapt",
       "group": "k",
       "note": "the cva table became the Loams .loams-btn classes in styles.css; Loams variant and size names kept; InlineButton dropped"
@@ -85,7 +85,7 @@
       "upstreamPath": "apps/web/src/components/ui/combobox.tsx",
       "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
       "upstreamSha256": "ee3e5a18c64b4941823985b30660e60e814d4f8c9fb52df9f31a4c5b2c4db725",
-      "localSha256": "7235e81e5cbd9b74a11cbb58e70497469361fb0b855e2b08cd280d94daa2b9b8",
+      "localSha256": "93f02142c337da6ad5a6a16c767cb9f2f08203c2f5ec1650c7c0b79be8873ec4",
       "verdict": "adapt",
       "group": "k",
       "note": "the virtualised lists are dropped; long lists use VirtualList"
@@ -197,7 +197,7 @@
       "upstreamPath": "apps/web/src/components/ui/select.tsx",
       "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
       "upstreamSha256": "510d1e050931661dda3c27776a48a942bcce6775b1bfcfbeb5c3e740a1efbff0",
-      "localSha256": "bc0a40634805aa2db5115b53da6892b792a134de180f0f13a1359d14f3846527",
+      "localSha256": "642b5ffca3c2ec3b3a06078ff9ddf71a2e7b6dd70d8c7ab6c3735932db206d4b",
       "verdict": "adapt",
       "group": "k"
     },
