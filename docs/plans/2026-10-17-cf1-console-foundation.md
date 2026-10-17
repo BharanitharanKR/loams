@@ -51,7 +51,7 @@ The spec and the code disagree, or the spec is silent, in these places. Each rul
 | # | Finding | Ruling |
 |---|---|---|
 | W1 | Light muted text `#8a857c` (D1073) is 3.67:1 on white and 3.28:1 on the window. That fails the AA rule the same section requires. | `--op-muted` is `#6b665e` (5.7 on white, 4.96 on raised) and `--op-faint` is `#716c64` (≥ 4.53 on every light surface). `#8a857c` is not used for text. |
-| W2 | The dark accent `oklch(0.571 0.21 264)` is 4.26:1 as text on the canvas, which fails AA. White on it is 4.64:1, which passes. | `--op-accent` keeps the spec value for fills, selection and focus (3:1 for UI is met). A new `--op-accent-fg` (dark `oklch(0.72 0.14 264)`, light = the accent) is the accent as text. `text-accent` is banned by `colours.test.ts`, and its 34 uses move to `text-accent-fg` in Task 1. |
+| W2 | The dark accent `oklch(0.571 0.21 264)` is 4.26:1 as text on the canvas, which fails AA. White on it is 4.64:1, which passes. | `--op-accent` keeps the spec value for fills, selection and focus (3:1 for UI is met). A new `--op-accent-fg` (dark `oklch(0.72 0.14 264)`, light = the accent) is the accent as text. `text-accent` is banned by `colours.test.ts`, and its 33 uses (T0-2) move to `text-accent-fg` in Task 1. |
 | W3 | Ochre carried the meaning "warning" in `.loams-notice-warn`. Amber is a state colour (D1073), and there is no warn token. | New `--op-warn` and `--op-warn-soft` tokens (dark `#fbbf24`, light `#92400e`). |
 | W4 | The light theme gives borders but not input outlines. Dark inputs are white at 8%. | New `--op-input` (dark `rgb(255 255 255 / 0.08)`, light `#dcd7cf`). |
 | W5 | Today `rounded-none` maps to `--op-radius` (0). D1073 moves `--op-radius` to 10px. | Tailwind `rounded-none` becomes a literal `0`. The new steps are `rounded-xs`/`sm`/`md`/`lg`/`xl`/`pill`, and `rounded-panel` is `--op-radius`. The nine call sites that meant "the panel corner" move to a step in Task 1. |
@@ -384,7 +384,7 @@ Settings keys: `ui.theme` (a `ThemeChoice`, default `system`) and `update.skippe
 - Consumes: `origin/dev` at the commit the task starts from; the local clones `~/Documents/research/t3code` (33aa4614) and `~/Documents/research/dsh-desktop` (bc732f5), read-only.
 - Produces: findings, each with paths and the task that absorbs it. No code.
 
-- [ ] **Step 1: Confirm the anchors this plan names still hold**
+- [x] **Step 1: Confirm the anchors this plan names still hold**
 
 Run each of these. Record any difference as a `T0-*` row.
 
@@ -394,13 +394,13 @@ git log -1 --format='%H %cd' origin/dev
 grep -n "export const MIN_HEIGHT" apps/desktop-electron/src/main/shell/window-state.ts      # expect 600
 grep -n "SLOT_KINDS" -A14 web/packages/slots/src/registry.ts | grep -c "'"                  # expect 12 slots
 grep -rn "name: 'shell.dock.right'" web/plugins --include='*.tsx'                           # expect plugins/agent only
-grep -rn "text-accent\b" web/plugins web/packages web/apps/console/src --include='*.tsx' | wc -l   # expect 34
-grep -rln "Adapted from dataelement/dsh-desktop" apps/desktop-electron                      # expect 8 files
+grep -rnoE "text-accent([^-a-z0-9]|$)" web/plugins web/packages web/apps/console/src --include='*.tsx' --include='*.ts' | wc -l   # expect 33 (T0-2)
+grep -rln "Adapted from dataelement/dsh-desktop" apps/desktop-electron --exclude=NOTICE     # expect 8 files (T0-3)
 git -C ~/Documents/research/t3code rev-parse HEAD                                          # expect 33aa4614783e856977a5f0b856dc65ebc1ce6794
 git -C ~/Documents/research/dsh-desktop rev-parse --short=7 HEAD                            # expect bc732f5
 ```
 
-- [ ] **Step 2: Diff the twelve already-vendored primitives between the two T3 Code commits**
+- [x] **Step 2: Diff the twelve already-vendored primitives between the two T3 Code commits**
 
 The twelve primitives in `web/packages/ui/provenance.json` came from `6524a8d4`. Design 59 vendors at `33aa4614`. For each row, compare the upstream file at the old commit (recorded `upstreamSha256`) with the file in the local clone:
 
@@ -416,7 +416,7 @@ console.log((now===r.upstreamSha256?"same   ":"changed")+" "+r.upstreamPath);}'
 
 Expected: a list of `same` or `changed` rows. A `changed` row is not re-vendored in this plan; record it, since Tasks 4–6 restyle those files on the new tokens anyway.
 
-- [ ] **Step 3: Check the dependency ages and licences**
+- [x] **Step 3: Check the dependency ages and licences**
 
 ```bash
 npm view @axe-core/playwright@4.10.2 time.4.10.2 license
@@ -425,7 +425,7 @@ npm view gifenc@1.0.3 time.1.0.3 license
 
 Expected: both published more than 14 days before today, MIT or MPL-2.0 (axe-core is MPL-2.0; record it, and confirm `scripts/ci/npm-licences.mjs` allows MPL-2.0 for a devDependency; if not, record the exception Task 17 needs).
 
-- [ ] **Step 4: Record and commit**
+- [x] **Step 4: Record and commit**
 
 Add the `T0-*` rows to "Rulings made during execution" (`| T0-1 | Finding | Where | Absorbed by | Ruling |`).
 
@@ -446,7 +446,7 @@ git commit -s -m "docs(cf1): task 0 reconciliation"
 - Modify: `web/apps/console/package.json` (drop `@fontsource-variable/archivo` and `@fontsource-variable/martian-mono`)
 - Modify: `web/packages/ui/src/styles.css:513-515` (`.loams-notice-warn`) and add the forced-colours block at the end
 - Modify: `web/packages/charts/src/theme.ts:38-39`
-- Modify: the 34 `text-accent` sites and every `color: var(--op-accent)` CSS rule (listed by the new test)
+- Modify: the 33 `text-accent` sites and the 5 `color: var(--op-accent)` CSS rules (listed by the new test; T0-2)
 - Modify: the `rounded-none` sites `plugins/pipelines/src/Palette.tsx:84`, `plugins/studio/src/notifications/NotificationsBell.tsx:57`, `packages/studio-ui/src/approvals/Question.tsx:164,198,221`, `packages/studio-ui/src/groups/DiffMatrix.tsx:92`, `packages/studio-ui/src/markdown/Markdown.tsx:149,335`, `packages/ui/src/skeleton.tsx:11`
 - Modify: `NOTICE:40-45`, `scripts/ci/npm-licences.exceptions.json`, `web/README.md:86,90`, `web/packages/ui/README.md` ("Fonts"), `docs/design/console-ui-stack.md` (decision 1)
 - Create: `web/packages/ui/test/contrast.test.ts`
@@ -744,7 +744,7 @@ pnpm --filter @loams/ui exec vitest run test/contrast.test.ts test/colours.test.
 pnpm --filter @loams/console exec vitest run test/tailwind.test.ts
 ```
 
-Expected: FAIL. `contrast.test.ts` fails "has the radius scale" (`--op-radius` is `0`), the accent values, and "forced colours" (`a forced-colors block: expected -1 to be greater than -1`). `colours.test.ts` lists 34 `text-accent` hits. `tailwind.test.ts` fails on `--radius-none: 0px;`.
+Expected: FAIL. `contrast.test.ts` fails "has the radius scale" (`--op-radius` is `0`), the accent values, and "forced colours" (`a forced-colors block: expected -1 to be greater than -1`). `colours.test.ts` lists 38 hits: 33 `text-accent` and 5 `color: var(--op-accent)` (T0-2). `tailwind.test.ts` fails on `--radius-none: 0px;`.
 
 - [ ] **Step 4: Write the tokens**
 
@@ -8280,7 +8280,7 @@ git commit -s -m "feat(desktop): the update toast with consent and skip, and OS 
 - Modify: `web/plugins/studio/src/sidebar/Sidebar.tsx` (`data-elapsed` on `WorkingDuration`, so screenshots mask the ticking time)
 - Modify: `.github/workflows/ci.yml` (the `web` job runs the screens and axe)
 - Create: `apps/desktop-electron/test/e2e/chrome.spec.ts` (+ `test/e2e/chrome.spec.ts-snapshots/` baselines)
-- Modify: `scripts/ci/npm-licences.exceptions.json` only if Task 0 found that `axe-core` (MPL-2.0) needs an entry
+- Do not modify `scripts/ci/npm-licences.exceptions.json`: Task 0 found that `@axe-core/playwright` and `axe-core` (MPL-2.0) need no entry (T0-5)
 
 **Interfaces:**
 - Consumes: everything in CF1a–CF1d; `/?desktop` (the dev desktop preview with `fake-agentd.ts`; thread `demo-login`) and `/?demo` (W17).
@@ -8615,3 +8615,8 @@ The owner accepted every recommendation ("yes accept all, run it that way"):
 
 | # | Finding | Where | Absorbed by | Ruling |
 |---|---|---|---|---|
+| T0-1 | Anchors re-checked on `origin/dev` at `99c42834` (2026-10-17, the merge of #708). Nothing under `web/`, `apps/`, `scripts/`, `NOTICE` or the lockfile changed since `d8a810e3`, where the plan's anchors were read. `MIN_HEIGHT` is 600; `SLOT_KINDS` has 12 slots; `shell.dock.right` is registered only by `plugins/agent` (plus `plugins/shell/test/layout.test.tsx`); T3 Code is at `33aa4614…`, dsh-desktop at `bc732f5`; `NOTICE:40-45`, `web/README.md:86,90`, `MODE_HOME`, `shouldNotify`/`onNotice`, and the two viewport-sized pages (`plugins/factory/src/embedded.tsx`, `plugins/studio/src/layout/StudioLayout.tsx`) are where the plan says. Tech Stack versions match the catalog and `apps/desktop-electron/package.json`. Every T3 Code and dsh-desktop upstream path the plan cites exists in the local clones (T3 Code has no `ui/tabs.tsx`, which matches "Loams Tabs, not vendored"). | Step 1 | — | The plan holds as written, apart from T0-2 to T0-5. |
+| T0-2 | Step 1's `text-accent\b` grep printed 31 on `.tsx` only, and with `.ts` it also counts `text-accent-ink` (`plugins/metrics/src/MetricsPage.tsx:325`), because `\b` matches before `-`. The test's own regex (`/\btext-accent(?![-\w])/`) over its file set finds **33** sites (30 in `.tsx`, 3 in `.ts`: `plugins/agent/src/markdown.ts`, `studio-ui/src/thread-list/logic.ts` ×2), plus **5** CSS rules `color: var(--op-accent)` (`packages/ui/src/styles.css:144,550,605`, `apps/console/src/cordis/console.css:122,377`). The plan said 34. | `web/` | 1 | W2 and Task 1 now say 33 sites and 5 CSS rules; the failing test in Task 1 Step 3 lists 38 hits. Step 7's `sed` already leaves `text-accent-ink` alone. Step 1's grep is corrected. |
+| T0-3 | `grep -rln "Adapted from dataelement/dsh-desktop" apps/desktop-electron` prints 9 paths: the 8 adapted files and `apps/desktop-electron/NOTICE`, which quotes the header. The 8 files cite 7 distinct upstream paths (`src/main/runtime/harness-runtime.ts` backs both `engine/ports.ts` and `engine/supervisor.ts`); all 7 exist at `bc732f5`. | `apps/desktop-electron` | 15 | Step 1's grep excludes `NOTICE`. Task 15's `provenance.json` gets 8 "adapted before CF1" rows (W19), two of them with the same upstream path and hash. |
+| T0-4 | Of the 12 rows in `web/packages/ui/provenance.json` (all at `6524a8d4`), 3 are unchanged at `33aa4614` (`kbd.tsx`, `spinner.tsx`, `toggle-group.tsx`) and 9 changed: `collapsible.tsx`, `CommandPalette.logic.ts` (→ `command-rank.ts`), `command.tsx`, `input-group.tsx`, `middle-truncate.tsx`, `scroll-area.tsx`, `sidebar.tsx`, `skeleton.tsx`, `switch.tsx`. The local T3 Code clone is shallow (one commit), so the size of each change cannot be diffed locally. | `web/packages/ui` | 4–6 | As the plan says: not re-vendored; the existing rows stay at `6524a8d4` (W18). An implementer who touches one of the 9 files reads the `33aa4614` file before restyling it, and does not change its provenance row. |
+| T0-5 | `@axe-core/playwright@4.10.2`: MPL-2.0, published 2025-06-03, no dependencies besides `axe-core ~4.10.3` (resolves to 4.10.3, MPL-2.0, published 2025-03-05) and the peer `playwright-core >= 1.0.0` (the catalog has 1.63.0). `gifenc@1.0.3`: MIT, published 2021-03-07, no dependencies. All are well past the 14-day rule. MPL-2.0 is on `deny.toml`'s allow list, and `scripts/ci/npm-licences.mjs` checks only production dependencies (`pnpm licenses list --prod`), so a devDependency is not scanned at all. dsh-desktop's `scripts/generate-loader-gifs.mjs` does `require('sharp')`, which confirms W14. | `scripts/ci`, Tasks 15, 17 | 17 | No exception entry: the gate allows MPL-2.0 and never sees a devDependency, so an entry would be dead data. This meets owner answer 6 (axe is allowed as a test-only dev dependency) without changing the gate. Task 17 leaves `npm-licences.exceptions.json` alone, and its file list now says so. |
