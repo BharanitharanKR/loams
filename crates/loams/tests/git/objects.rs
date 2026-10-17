@@ -242,6 +242,44 @@ async fn object_service_reads_objects_trees_and_presence() {
     running.shutdown().await;
 }
 
+/// `PutWorkspacePack` (GT1 Task 24) names a workspace the repository has; the server's
+/// workspace lookup has none until the workspace service (Task 25), so the pack checks and the
+/// write rule are covered in `loams-git` (`tests/ws_tree.rs`).
+#[tokio::test]
+async fn put_ws_pack_names_a_workspace() {
+    let Some(dir) = history() else {
+        return;
+    };
+    let running = Running::start().await;
+    load(&running, &dir).await;
+    let rpc = format!("{SVC}/PutWorkspacePack");
+    let data = STANDARD.encode(b"not a pack");
+    for (workspace, code, want) in [
+        ("", "invalid_argument", "invalid_argument"),
+        (
+            "w01j9z3m5q8x000000000000001",
+            "not_found",
+            "workspace_not_found",
+        ),
+    ] {
+        let (_, messages) = running
+            .connect_stream(
+                &rpc,
+                &json!({"namespace": "acme", "name": "web", "workspace": workspace,
+                        "data": data}),
+            )
+            .await;
+        let (_, end) = messages
+            .into_iter()
+            .find(|(flags, _)| flags & 0x02 != 0)
+            .expect("an end-of-stream message");
+        let error = &end["error"];
+        assert_eq!(error["code"], code, "{workspace:?}: {error}");
+        assert_eq!(reason(error), want, "{workspace:?}");
+    }
+    running.shutdown().await;
+}
+
 #[tokio::test]
 async fn object_route_is_immutable_cacheable() {
     let Some(dir) = history() else {

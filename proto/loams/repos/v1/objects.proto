@@ -2,8 +2,8 @@ syntax = "proto3";
 
 // Loams Git: `ObjectService`, lazy object reads for workspaces and their
 // clients (design §36 §19.5, §19.8, §19.10, D829, D830, D833; plan GT1
-// Tasks 18, 20 and 21). This file holds the object reads and the history
-// queries `Log`, `DiffStat`, `Blame` and `Grep`; Task 24 adds
+// Tasks 18, 20, 21 and 24). This file holds the object reads, the history
+// queries `Log`, `DiffStat`, `Blame` and `Grep`, and the upload
 // `PutWorkspacePack`. See `repos.proto` for the package's rules.
 //
 // Every request names its repository as `RepoService` does (`namespace`,
@@ -65,6 +65,19 @@ service ObjectService {
   rpc Grep(GrepRequest) returns (stream GrepResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
+  // Uploads the objects a workspace made as one pack bundle (`.lpk`: the
+  // pack, its version 2 idx, and the 32-byte footer; §36 §4.3) and stores
+  // it create-only under the workspace, named by its checksum (§19.5.2).
+  // The first message names the repository and the workspace; every
+  // message carries the bundle's next bytes. Before anything is stored,
+  // every object must hash to the id the idx gives it and parse as its
+  // kind, the idx must name every entry of the pack once, no delta may
+  // have its base outside the pack, and the bundle is at most 2 GiB
+  // (`invalid_argument` otherwise). Writing needs the workspace's owner or
+  // an org admin (`permission_denied`). Storing a pack again answers the
+  // same `pack` with `existed` set. The snapshot that names the pack is the
+  // commit point; a pack no snapshot names is collected after an hour.
+  rpc PutWorkspacePack(stream PutWorkspacePackRequest) returns (PutWorkspacePackResponse);
 }
 
 // An object's kind.
@@ -359,4 +372,36 @@ message GrepLine {
   uint64 number = 1;
   // Without its newline.
   bytes line = 2;
+}
+
+message PutWorkspacePackRequest {
+  // Set on the first message; ignored on the others.
+  string namespace = 1;
+  string name = 2;
+  // The workspace ("w" + 26 lowercase ULID characters); required.
+  string workspace = 3;
+  // The bundle's next bytes.
+  bytes data = 4;
+  // Accepted for the package's rules; the upload is idempotent on its
+  // content, so a retry needs no key.
+  string idempotency_key = 15;
+}
+
+message PutWorkspacePackResponse {
+  // The stored pack, as a snapshot's `packs` names it.
+  PackRef pack = 1;
+  // The workspace already held this pack.
+  bool existed = 2;
+}
+
+// A pack bundle in a repository's or workspace's pack set.
+message PackRef {
+  // The pack's SHA-1 trailer, 40 lowercase hex digits: its name.
+  string checksum = 1;
+  uint64 object_count = 2;
+  // Bytes of the pack section, which starts at offset 0.
+  uint64 pack_len = 3;
+  // Where the idx section starts, and its bytes.
+  uint64 idx_offset = 4;
+  uint64 idx_len = 5;
 }

@@ -3,20 +3,23 @@
 #![allow(refining_impl_trait)]
 
 //! `loams.repos.v1.ObjectService` on the main port and the immutable object route on the git
-//! listener (Loams Git, GT1 Tasks 18, 20 and 21; design §36 §19.5.1, §19.8, D829, D830, D833).
+//! listener (Loams Git, GT1 Tasks 18, 20, 21 and 24; design §36 §19.5, §19.8, D829, D830, D833).
 //!
 //! With the `git` feature `GetObjects`, `GetTrees`, `HasObjects`, `Log`, `DiffStat`, `Blame` and
 //! `Grep` are
 //! served over the repository's packs (`loams_git::odb::RangeOdb`, through the server's H1 cache) and, when a
 //! request names a workspace, the workspace's packs after them. Callers need the org role
 //! `member`, as for every `RepoService` read; whoever may read a repository may read its
-//! workspaces (GT-Q13's default, ruling T18.2). Without the feature every RPC answers
+//! workspaces (GT-Q13's default, ruling T18.2). `PutWorkspacePack` (Task 24) stores a workspace
+//! pack after `loams_git::ws::put_workspace_pack` has verified it; writing a workspace needs its
+//! owner or an org admin (Q750's default). Without the feature every RPC answers
 //! `feature_not_in_variant`.
 
 use std::sync::Arc;
 
 use connectrpc::{
-    ConnectError, RequestContext, Router, ServiceRequest, ServiceResult, ServiceStream,
+    ConnectError, InboundStream, RequestContext, Router, ServiceRequest, ServiceResult,
+    ServiceStream,
 };
 use loams_proto::loams::repos::v1 as pb;
 use loams_proto::loams::repos::v1::{ObjectService, ObjectServiceExt};
@@ -115,6 +118,14 @@ impl ObjectService for ObjectsAbsent {
     ) -> ServiceResult<ServiceStream<pb::GrepResponse>> {
         Err(absent("Grep"))
     }
+
+    async fn put_workspace_pack(
+        &self,
+        _ctx: RequestContext,
+        _requests: InboundStream<pb::PutWorkspacePackRequest>,
+    ) -> ServiceResult<pb::PutWorkspacePackResponse> {
+        Err(absent("PutWorkspacePack"))
+    }
 }
 
 #[cfg(feature = "git")]
@@ -127,26 +138,33 @@ mod served {
     use axum::http::{HeaderValue, StatusCode, header};
     use axum::response::{IntoResponse, Response as HttpResponse};
     use buffa::{EnumValue, MessageField};
+    use bytes::BytesMut;
     use connectrpc::{
-        ConnectError, ErrorCode, RequestContext, Response, ServiceRequest, ServiceResult,
-        ServiceStream,
+        ConnectError, ErrorCode, InboundStream, RequestContext, Response, ServiceRequest,
+        ServiceResult, ServiceStream,
     };
     use futures::StreamExt;
+    use loams_git::blob::Put;
     use loams_git::catalog::RepoRecord;
     use loams_git::derived::DerivedError;
+    use loams_git::format::pb as gitpb;
     use loams_git::history::{
         BlameQuery, ChangeKind, ChangedPath, GrepFile, GrepFlags, GrepQuery, HistoryError,
         LogEntry, LogFields, LogQuery, Pathspec, Signature, blame, diff_stat, grep, log,
         resolve_tree,
     };
+    use loams_git::limits::{RECEIVE_IDLE_TIMEOUT, UPLOAD_DEADLINE};
     use loams_git::objects::{
         Kind, ObjectRead, ObjectsError, WsView, bitmap, get_objects, get_trees,
         grant_reads_workspace, has_objects, loose_object, workspace_odb,
     };
     use loams_git::odb::{OdbError, RangeOdb};
+    use loams_git::ws::{
+        NoScan, WsPackBlobs, WsPackError, WsPackUploads, check_pack_len, put_workspace_pack,
+    };
     use loams_git::{
-        DerivedStore, ForkError, GitAccess, GitGrant, NamespaceId, ObjectId, ReadAt, RefSnapshot,
-        RepoPath, RepoPaths, StoreBlobStore, WsId, open_fork_range_odb,
+        BlobError, DerivedStore, ForkError, GitAccess, GitGrant, NamespaceId, ObjectId, ReadAt,
+        RefSnapshot, RepoPath, RepoPaths, StoreBlobStore, WsId, open_fork_range_odb,
     };
     use loams_proto::loams::repos::v1 as pb;
     use loams_proto::loams::repos::v1::ObjectService;
@@ -162,6 +180,11 @@ mod served {
     const CHUNK: usize = 1024 * 1024;
     /// The `Cache-Control` of the object route: objects are immutable (§19.5.1).
     const IMMUTABLE: &str = "private, max-age=31536000, immutable";
+
+    /// The `PutWorkspacePack` uploads this node verifies at once (`MAX_WS_PACK_UPLOADS`,
+    /// ruling T24.7).
+    static PACK_UPLOADS: std::sync::LazyLock<WsPackUploads> =
+        std::sync::LazyLock::new(WsPackUploads::default);
 
     /// `ObjectService`, served.
     #[derive(Debug)]
@@ -190,8 +213,8 @@ mod served {
             return Ok(odb);
         };
         let paths = RepoPaths::new(record.ns, &record.repo_id);
-        let blobs = StoreBlobStore::workspace(git.store.clone(), &paths, ws)
-            .with_range_cache(git.h1.clone());
+        // A fork's packs may lie under its sources' prefixes (ruling T23.3).
+        let blobs = WsPackBlobs::new(&git.store, &paths, ws, &view.sources, Some(&git.h1));
         workspace_odb(&odb, Arc::new(blobs), view).map_err(|err| failed(&err))
     }
 
@@ -292,6 +315,38 @@ mod served {
                 unavailable("the commit graph", &err)
             }
             HistoryError::Derived(err) => internal("a corrupt commit graph", &err),
+        }
+    }
+
+    fn ws_pack_error(err: WsPackError) -> ConnectError {
+        match err {
+            err @ (WsPackError::TooLarge { .. }
+            | WsPackError::Invalid(_)
+            | WsPackError::BadHash { .. }) => invalid("data", err.to_string()),
+            WsPackError::Refused(refusal) => refuse(
+                ErrorCode::FailedPrecondition,
+                "secret_detected",
+                format!(
+                    "object {} matches the secret scanner's rule {}",
+                    refusal.oid, refusal.rule
+                ),
+                &[("rule", refusal.rule.clone())],
+            ),
+            WsPackError::Blob(err @ BlobError::Mismatch { .. }) => {
+                internal("another pack is stored under this pack's name", &err)
+            }
+            WsPackError::Blob(err) => unavailable("storing the workspace pack", &err),
+        }
+    }
+
+    fn pack_pb(pack: &gitpb::PackRef) -> pb::PackRef {
+        pb::PackRef {
+            checksum: pack.checksum.clone(),
+            object_count: pack.object_count,
+            pack_len: pack.pack_len,
+            idx_offset: pack.idx_offset,
+            idx_len: pack.idx_len,
+            ..Default::default()
         }
     }
 
@@ -462,6 +517,39 @@ mod served {
     }
 
     impl ObjectsServed {
+        /// Refuses a caller who may not write workspace `view` (Q750's default): its owner, an
+        /// org admin and the operator may.
+        async fn may_write(&self, ctx: &RequestContext, view: &WsView) -> Result<(), ConnectError> {
+            let principal = ctx
+                .extensions()
+                .get::<crate::auth::Principal>()
+                .ok_or_else(|| {
+                    refuse(
+                        ErrorCode::Unauthenticated,
+                        crate::auth::reason::TOKEN_MISSING,
+                        "this RPC needs a credential",
+                        &[],
+                    )
+                })?;
+            if principal.subject == view.owner.as_str() {
+                return Ok(());
+            }
+            crate::api::git_auth::authorize_caller(
+                &self.repos.principals,
+                principal,
+                GitAccess::Admin,
+            )
+            .await
+            .map_err(|_| {
+                refuse(
+                    ErrorCode::PermissionDenied,
+                    "permission_denied",
+                    "only the workspace's owner or an org admin may write it",
+                    &[],
+                )
+            })
+        }
+
         fn derived(&self, record: &RepoRecord) -> DerivedStore {
             DerivedStore::new(
                 self.repos.git.store.clone(),
@@ -811,6 +899,73 @@ mod served {
                 Box::pin(futures::stream::poll_fn(move |cx| rx.poll_recv(cx)))
                     as ServiceStream<pb::GrepResponse>,
             )
+        }
+
+        async fn put_workspace_pack(
+            &self,
+            ctx: RequestContext,
+            mut requests: InboundStream<pb::PutWorkspacePackRequest>,
+        ) -> ServiceResult<pb::PutWorkspacePackResponse> {
+            self.repos.require(&ctx, GitAccess::Write).await?;
+            let first = requests
+                .next()
+                .await
+                .ok_or_else(|| invalid("workspace", "an upload needs at least one message"))??
+                .to_owned_message();
+            if first.workspace.is_empty() {
+                return Err(invalid("workspace", "a workspace is required"));
+            }
+            let name = repo_name("name", &first.name)?;
+            let ns = self.repos.namespace(&first.namespace, false).await?;
+            let record = self.repos.active(ns, &name).await?;
+            let Some((ws, view)) = workspace(&self.repos.git, &record, &first.workspace).await?
+            else {
+                return Err(workspace_not_found(&first.workspace));
+            };
+            self.may_write(&ctx, &view).await?;
+            // Each upload holds its bundle in memory: a node verifies a few at once, and a
+            // stream that stalls or runs past the upload deadline is dropped.
+            let _permit = PACK_UPLOADS.try_acquire().ok_or_else(|| {
+                refuse(
+                    ErrorCode::ResourceExhausted,
+                    "resource_exhausted",
+                    "this node is verifying as many workspace packs as it takes; retry",
+                    &[("retry_after_ms", "1000".to_owned())],
+                )
+            })?;
+            let deadline = tokio::time::Instant::now() + UPLOAD_DEADLINE;
+            let mut lpk = BytesMut::from(&first.data[..]);
+            check_pack_len(lpk.len() as u64).map_err(ws_pack_error)?;
+            loop {
+                let wait = deadline
+                    .saturating_duration_since(tokio::time::Instant::now())
+                    .min(RECEIVE_IDLE_TIMEOUT);
+                let Ok(next) = tokio::time::timeout(wait, requests.next()).await else {
+                    return Err(refuse(
+                        ErrorCode::DeadlineExceeded,
+                        "deadline_exceeded",
+                        "the upload stalled or ran past its deadline",
+                        &[],
+                    ));
+                };
+                let Some(message) = next else {
+                    break;
+                };
+                let message = message?.to_owned_message();
+                check_pack_len((lpk.len() + message.data.len()) as u64).map_err(ws_pack_error)?;
+                lpk.extend_from_slice(&message.data);
+            }
+            let paths = RepoPaths::new(record.ns, &record.repo_id);
+            let blobs = StoreBlobStore::workspace(self.repos.git.store.clone(), &paths, &ws);
+            let (verified, put) =
+                put_workspace_pack(&record.repo_id, &blobs, lpk.freeze(), &NoScan)
+                    .await
+                    .map_err(ws_pack_error)?;
+            Response::ok(pb::PutWorkspacePackResponse {
+                pack: MessageField::some(pack_pb(&verified.pack)),
+                existed: put == Put::Existed,
+                ..Default::default()
+            })
         }
     }
 

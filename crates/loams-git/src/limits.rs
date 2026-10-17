@@ -121,6 +121,11 @@ pub const GREP_DEADLINE: Duration = Duration::from_secs(30);
 pub const GREP_MAX_MATCHES: usize = 10_000;
 /// Patterns (`-e`) in one `Grep` call (§36 §19.8).
 pub const MAX_GREP_PATTERNS: usize = 64;
+/// `PutWorkspacePack` uploads one node buffers and verifies at once; past
+/// it a call is refused `resource_exhausted` before any byte is read, so a
+/// node holds at most this many bundles of up to `MAX_PACK_BYTES`
+/// (§36 §19.5.2; plan GT1 ruling T24.7).
+pub const MAX_WS_PACK_UPLOADS: usize = 4;
 
 /// One limit as the limits table prints it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -192,4 +197,5 @@ pub const LIMITS: &[Limit] = &[
     limit("GREP_DEADLINE", "30 s", "§36 §19.8"),
     limit("GREP_MAX_MATCHES", "10,000", "§36 §19.8"),
     limit("MAX_GREP_PATTERNS", "64", "§36 §19.8"),
+    limit("MAX_WS_PACK_UPLOADS", "4", "§36 §19.5.2"),
 ];
