@@ -1087,12 +1087,10 @@ jobs:
         with:
           ref: ${{ needs.plan.outputs.ref }}
           persist-credentials: false
-      - name: the SwiftPM build and suite the pod's sources come from
-        working-directory: sdks/objc
-        run: |
-          swift build
-          swift test --disable-swift-testing
+      # ci.yml's sdk-objc job runs the SwiftPM suite these sources come from;
+      # here only what CocoaPods builds is checked.
       - name: pod lib lint
+        timeout-minutes: 25
         env:
           VERSION: ${{ needs.plan.outputs.semver }}
         run: |
