@@ -142,6 +142,10 @@ code {
 .lc-side-threads {
   padding: 0 8px 8px;
 }
+/* Q934: without a reachable agentd the thread list renders nothing, and the sidebar has Pages only. */
+.lc-side-threads:empty {
+  display: none;
+}
 
 /* The environment switcher, like the original's project switcher. */
 .lc-switcher {
@@ -664,6 +668,10 @@ code {
 .lc-panel-tabs {
   flex: none;
   padding: 0 8px;
+  /* Five tabs (Studio's four and the agent's) are wider than a 280px inspector: scroll them. */
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: thin;
 }
 .lc-panel-tab {
   display: flex;

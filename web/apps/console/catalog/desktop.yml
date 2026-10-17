@@ -7,7 +7,7 @@
 # Studio on the desktop also takes the desktop bridge (the folder picker and the
 # factory); it reaches loams-agentd through `agentd` (SD1 Task 6).
 - id: studio
-  inject: [router, slots, mode, platform, flags, agentd, desktop]
+  inject: [router, slots, mode, platform, flags, agentd, inspector, drawer, desktop]
 - insert:
     - id: desktop-servers
       name: '@loams/plugin-desktop-servers'

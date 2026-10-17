@@ -9,8 +9,8 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StudioAgentd } from '../src/agentd.js';
 import { hostedAgentd } from '../src/hosts/agentd.js';
-import { StudioView } from '../src/view.js';
 import { wrap } from './fakes.js';
+import { StudioInShell } from './shell.js';
 
 const URL_A = 'https://devbox.example.ts.net:8443';
 const URL_B = 'https://buildbox.example.ts.net:8443';
@@ -100,7 +100,12 @@ describe('the hosted agentd', () => {
 
     render(
       wrap(
-        <StudioView agentd={agentd} route={{ kind: 'home' }} navigate={vi.fn()} hostParam={b.id} />,
+        <StudioInShell
+          agentd={agentd}
+          route={{ kind: 'home' }}
+          navigate={vi.fn()}
+          hostParam={b.id}
+        />,
       ),
     );
     await waitFor(() => expect(agentd.hosts.selected()?.id).toBe(b.id));
@@ -117,7 +122,7 @@ describe('the hosted agentd', () => {
 
 describe('Settings › Agentd hosts', () => {
   function showSettings(agentd = hostedAgentd({ transportFor: fakeClients().transportFor })) {
-    render(wrap(<StudioView agentd={agentd} route={{ kind: 'settings' }} navigate={vi.fn()} />));
+    render(wrap(<StudioInShell agentd={agentd} route={{ kind: 'settings' }} navigate={vi.fn()} />));
     return agentd;
   }
 

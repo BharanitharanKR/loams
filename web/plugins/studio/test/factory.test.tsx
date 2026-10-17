@@ -2,16 +2,19 @@
 // Factory group, the thread draft a factory app hands over, the thread toolbar's
 // Forgejo PR, and links only on the web until SF1.
 
+import type { ModeService } from '@loams/console-host';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { cleanup, render, screen, within } from '@testing-library/react';
+import { act, cleanup, render, screen, within } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { desktopFactory, type StudioFactory } from '../src/factory.js';
+import { createStudioKeys } from '../src/palette/commands.js';
+import { StudioThreads } from '../src/regions.js';
 import { routeOf, studioHref } from '../src/routes.js';
 import { FactoryGroup } from '../src/sidebar/Factory.js';
 import { BranchPr } from '../src/thread/FactoryLinks.js';
-import { StudioView } from '../src/view.js';
 import { desktopFake as desktopAgentd, webFake } from './fakes.js';
+import { StudioInShell } from './shell.js';
 
 function wrap(children: ReactNode) {
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -111,7 +114,7 @@ describe('the Factory group', () => {
     const { agentd } = desktopAgentd({ folder: null });
     render(
       wrap(
-        <StudioView
+        <StudioInShell
           agentd={agentd}
           factory={desktopFake().factory}
           route={{ kind: 'home' }}
@@ -122,10 +125,55 @@ describe('the Factory group', () => {
     expect(await screen.findByRole('navigation', { name: 'Factory' })).toBeTruthy();
   });
 
+  it('shows in Studio mode only; the threads show in both (design 59, W10)', async () => {
+    const { agentd } = desktopAgentd({ folder: null });
+    const listeners = new Set<() => void>();
+    let current: 'console' | 'studio' = 'console';
+    const mode: ModeService = {
+      get current() {
+        return current;
+      },
+      available: ['console', 'studio'],
+      set: () => {},
+      onChange: (cb) => {
+        const listener = () => cb(current);
+        listeners.add(listener);
+        return () => {
+          listeners.delete(listener);
+        };
+      },
+      modesOf: () => ['studio'],
+    };
+    const router = {
+      current: () => ({ path: '/', params: {} }),
+      subscribe: () => () => {},
+      navigate: vi.fn(),
+      page: () => () => {},
+    };
+    render(
+      wrap(
+        <StudioThreads
+          agentd={agentd}
+          factory={desktopFake().factory}
+          router={router}
+          keys={createStudioKeys()}
+          mode={mode}
+        />,
+      ),
+    );
+    expect(await screen.findByRole('navigation', { name: 'Projects' })).toBeTruthy();
+    expect(screen.queryByRole('navigation', { name: 'Factory' })).toBeNull();
+    current = 'studio';
+    act(() => {
+      for (const l of listeners) l();
+    });
+    expect(await screen.findByRole('navigation', { name: 'Factory' })).toBeTruthy();
+  });
+
   it('web_factory_links_only_without_sf1', async () => {
     // Without SF1 the browser has no factory source: no Factory group at all.
     render(
-      wrap(<StudioView agentd={webFake().agentd} route={{ kind: 'home' }} navigate={vi.fn()} />),
+      wrap(<StudioInShell agentd={webFake().agentd} route={{ kind: 'home' }} navigate={vi.fn()} />),
     );
     await screen.findByText('Connect an agentd host');
     expect(screen.queryByRole('navigation', { name: 'Factory' })).toBeNull();
@@ -174,7 +222,7 @@ describe('the thread draft', () => {
     });
     expect(routeOf('home', studioQuery(studioHref(route)))).toEqual(route);
     const { agentd } = desktopAgentd({ folder: null });
-    render(wrap(<StudioView agentd={agentd} route={route} navigate={vi.fn()} />));
+    render(wrap(<StudioInShell agentd={agentd} route={route} navigate={vi.fn()} />));
     const card = await screen.findByRole('region', { name: 'New thread from Plane' });
     expect(within(card).getByText('MKT-42: Fix the login redirect')).toBeTruthy();
     expect(within(card).getByText('mkt-42-fix-the-login-redirect')).toBeTruthy();

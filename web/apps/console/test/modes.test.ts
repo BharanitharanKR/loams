@@ -125,9 +125,12 @@ describe('catalogs', () => {
     const base = parseCatalog(baseCatalog);
     expect(base.find((r) => r.id === 'studio')).toMatchObject({
       name: '@loams/plugin-studio',
-      inject: ['router', 'slots', 'mode', 'platform', 'flags', 'agentd'],
+      // Design 59 (Task 9): the shell's inspector and drawer hold Studio's thread tabs.
+      inject: ['router', 'slots', 'mode', 'platform', 'flags', 'agentd', 'inspector', 'drawer'],
     });
     const desktop = parsePatch(desktopYml).find((r) => 'id' in r && r.id === 'studio');
-    expect(desktop).toMatchObject({ inject: expect.arrayContaining(['agentd', 'desktop']) });
+    expect(desktop).toMatchObject({
+      inject: expect.arrayContaining(['agentd', 'inspector', 'drawer', 'desktop']),
+    });
   });
 });

@@ -1,6 +1,6 @@
-// The header's Studio context (§53 §4.2, §4.5): the project and branch of the page,
-// on the web the agentd host, and the daemon's notifications (SD1 Task 14). The shell shows it only in Studio mode (the
-// plugin is `modes: ["studio"]`).
+// The top bar's Studio context (§53 §4.2, §4.5; design 59 `shell.topbar.left`): the project
+// and branch of the page, on the web the agentd host, and the daemon's notifications (SD1
+// Task 14). The entry is `meta.mode: 'studio'`, so the shell shows it only in Studio mode.
 
 import type { RouterService } from '@loams/console-host';
 import { AgentdScope } from '@loams/console-host/query';

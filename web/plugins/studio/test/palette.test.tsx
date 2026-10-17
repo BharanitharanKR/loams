@@ -15,8 +15,8 @@ import { createStudioKeys, type StudioKeys } from '../src/palette/commands.js';
 import { StudioPalette } from '../src/palette/StudioPalette.js';
 import { pendingPaletteSource, type StudioPaletteSource } from '../src/palette/source.js';
 import { SETTINGS_KEY } from '../src/settings/Settings.js';
-import { StudioView } from '../src/view.js';
 import { desktopFake } from './fakes.js';
+import { StudioInShell } from './shell.js';
 
 const LINUX = 'Linux x86_64';
 
@@ -214,7 +214,7 @@ describe("Studio's keybindings in the view", () => {
     const navigate = vi.fn();
     render(
       wrap(
-        <StudioView
+        <StudioInShell
           agentd={agentdReady()}
           route={{ kind: 'thread', threadId: 'c_1', panel: 'diff' }}
           navigate={navigate}
@@ -235,15 +235,17 @@ describe("Studio's keybindings in the view", () => {
   it('Mod+D on the shown diff hides the panel, and not while typing in a terminal', async () => {
     showThread(keysFor());
     await screen.findByRole('tab', { name: 'Diff' });
-    expect(screen.getByRole('complementary', { name: 'Panel' })).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: 'Inspector' })).toBeTruthy();
     const terminal = document.createElement('div');
     terminal.setAttribute('data-terminal', '');
     terminal.tabIndex = 0;
     document.body.append(terminal);
     fireEvent.keyDown(terminal, { key: 'd', code: 'KeyD', ctrlKey: true });
-    expect(screen.queryByRole('complementary', { name: 'Panel' })).toBeTruthy();
+    expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeTruthy();
     fireEvent.keyDown(document.body, { key: 'd', code: 'KeyD', ctrlKey: true });
-    await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Panel' })).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull(),
+    );
     terminal.remove();
   });
 
@@ -252,7 +254,7 @@ describe("Studio's keybindings in the view", () => {
     const keys = keysFor();
     render(
       wrap(
-        <StudioView
+        <StudioInShell
           agentd={agentdReady()}
           route={{ kind: 'settings' }}
           navigate={navigate}

@@ -134,6 +134,16 @@ export class ModeController implements ModeService {
     this.o.navigate(opts.navigate ?? MODE_HOME[mode]);
   }
 
+  /**
+   * Loads a mode's plugins without switching to it (design 59, W10): Studio's threads show in
+   * the shell's sidebar in both modes. An unavailable mode (the web's `studio` gate) is left alone.
+   */
+  prepare(mode: Mode): void {
+    if (!this.o.available.includes(mode) || this.#entered.has(mode)) return;
+    this.#entered.add(mode);
+    this.o.enter(mode);
+  }
+
   onChange(cb: (mode: Mode) => void): () => void {
     this.#listeners.add(cb);
     return () => this.#listeners.delete(cb);
