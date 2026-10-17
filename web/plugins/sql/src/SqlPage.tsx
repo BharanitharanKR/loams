@@ -1,6 +1,6 @@
 // `/sql`: the Loams SQL page (§47, SQ1). Databases on the left; the selected database's
 // lifecycle (suspend, resume), its branches, the connection panel and an SQL editor on
-// the right. It supersedes the local WeSQL page (web/plugins/wesql).
+// the right.
 
 import { PageHead } from '@loams/desktop-ui';
 import { Badge, Button, Empty, formatBytes, Notice } from '@loams/ui';

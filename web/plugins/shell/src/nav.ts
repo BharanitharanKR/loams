@@ -34,7 +34,7 @@ export interface NavItem {
 /**
  * Where the pages that predate `shell.nav.section` (registered through
  * `router.page(... nav)`) land, by path. Orders sit in the bands the product
- * pages leave free: Data 0 Overview, 10 Data, 20 Postgres, 30 WeSQL, 40 Live.
+ * pages leave free: Data 0 Overview, 10 Data, 20 Postgres, 40 Live.
  */
 export const LEGACY: Record<string, Pick<NavItem, 'group' | 'icon' | 'order'>> = {
   '/': { group: 'Data', icon: 'overview', order: 0 },

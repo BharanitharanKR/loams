@@ -57,7 +57,7 @@ export function ShellSidebar({
   const body = (
     <>
       <SidebarHeader className="lc-side-head">
-        <Brand flags={flags} home={MODE_HOME[current]} />
+        <Brand home={MODE_HOME[current]} />
         <Slot name="shell.sidebar.server" props={{}} />
         <button
           type="button"

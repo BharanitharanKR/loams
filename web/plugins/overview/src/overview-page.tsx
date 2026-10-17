@@ -107,7 +107,6 @@ export function OverviewPage({
   const connectors = useLoad(() => loadConnectors(desktop), tick);
   const factory = useLoad(() => desktop.factory.list(), tick);
   const postgres = useStack(desktop, 'postgres', tick);
-  const wesql = useStack(desktop, 'wesql', tick);
 
   return (
     <div className="lc-page">
@@ -132,7 +131,6 @@ export function OverviewPage({
           state={postgres}
           local={isLocal}
         />
-        <StackCard id="wesql" title="WeSQL" href="/wesql" state={wesql} local={isLocal} />
         <LiveCard engine={engine} local={isLocal} />
         <DurableCard where={where} load={durable} local={isLocal} />
         <StreamsCard where={where} load={streams} />

@@ -231,7 +231,7 @@ describe('local stacks section', () => {
     expect(screen.getByText('Container runtime: found.')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Stop Postgres' }));
     await waitFor(() => expect(calls).toContain('stop:postgres'));
-    fireEvent.click(screen.getByRole('button', { name: 'Start WeSQL' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Start MySQL (dev)' }));
     expect(await screen.findByText('wesql: image pull failed')).toBeTruthy();
   });
 });

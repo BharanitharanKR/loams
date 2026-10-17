@@ -41,8 +41,6 @@
       name: '@loams/plugin-agent'
     - id: postgres
       name: '@loams/plugin-postgres'
-    - id: wesql
-      name: '@loams/plugin-wesql'
     - id: sql
       name: '@loams/plugin-sql'
     - id: desktop-agentd

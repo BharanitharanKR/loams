@@ -66,10 +66,10 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('shell chrome', () => {
-  it('shows the Loams wordmark, the edition, a readable preview badge and the version', () => {
+  it('shows the Loams wordmark, a readable preview badge and the version', () => {
     setup('/', flags);
     expect(screen.getByRole('img', { name: 'Loams' })).toBeTruthy();
-    expect(screen.getByText('OSS')).toBeTruthy();
+    expect(screen.queryByText('OSS')).toBeNull();
     expect(screen.getByText('Preview').className).toBe('lc-preview');
     expect(screen.getByText('Loams 0.1.0-preview.3')).toBeTruthy();
   });

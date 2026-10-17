@@ -685,7 +685,7 @@ function fakeSql(sql: string): IpcResult<SqlResult> | undefined {
 
 // ---- Overview and Settings preview (Task 30) ----
 
-/** The preview's stacks: Postgres running, WeSQL stopped, TiKV without a runtime. Start and stop work. */
+/** The preview's stacks: Postgres running, MySQL (dev) stopped, TiKV without a runtime. Start and stop work. */
 function previewStacks(): LoamsDesktopApi['stacks'] {
   const states: Record<StackId, StackState> = {
     postgres: {

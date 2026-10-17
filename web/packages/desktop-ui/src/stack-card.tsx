@@ -5,7 +5,7 @@ import { useStack } from './use-stack.js';
 
 const LABEL: Record<StackId, string> = {
   postgres: 'Postgres (Neon)',
-  wesql: 'WeSQL',
+  wesql: 'MySQL (dev)',
   tikv: 'TiKV',
 };
 
