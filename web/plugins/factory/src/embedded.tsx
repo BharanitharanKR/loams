@@ -116,7 +116,7 @@ export function EmbeddedApp({
     );
   }
   return (
-    <div className="flex flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="m-0 mr-auto flex items-center gap-3 text-lg font-medium">
           {label} {info && <HealthPill health={info.health} />}
@@ -153,8 +153,7 @@ export function EmbeddedApp({
         ref={slot}
         data-embedded-placeholder=""
         title={`${label} app`}
-        className="box-border flex min-h-80 items-center justify-center border border-rule bg-surface text-sm text-muted"
-        style={{ height: 'calc(100vh - 190px)' }}
+        className="box-border flex min-h-80 flex-1 items-center justify-center border border-rule bg-surface text-sm text-muted"
       />
     </div>
   );

@@ -146,6 +146,8 @@ export function ShellPalette({
   modes,
   nav,
   general,
+  open: given,
+  onOpenChange,
 }: {
   /** The current and available modes; absent, everything is Console's. */
   modes?: PaletteModes;
@@ -153,8 +155,21 @@ export function ShellPalette({
   nav: (mode: Mode) => ScopedCommand[];
   /** The shell's own commands (switch mode, theme, agent panel), in the current mode. */
   general: ScopedCommand[];
+  /** Open state, when the caller owns it (the top bar's search button opens it too). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [own, setOwn] = useState(false);
+  const open = given ?? own;
+  const openRef = useRef(open);
+  openRef.current = open;
+  const setOpen = useCallback(
+    (next: boolean) => {
+      if (onOpenChange) onOpenChange(next);
+      if (given === undefined) setOwn(next);
+    },
+    [given, onOpenChange],
+  );
   const [query, setQuery] = useState('');
   const entries = useSlot('palette.command');
   const toast = useToast();
@@ -165,11 +180,11 @@ export function ShellPalette({
     const onKey = (e: KeyboardEvent) => {
       if (!isPaletteShortcut(e)) return;
       e.preventDefault();
-      setOpen((was) => !was);
+      setOpen(!openRef.current);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [setOpen]);
 
   useEffect(() => {
     if (open) return;

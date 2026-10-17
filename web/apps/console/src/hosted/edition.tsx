@@ -76,7 +76,7 @@ export const hostedManifest = {
       tier: 'first-party',
       inject: ['slots'],
       provides: [],
-      slots: ['shell.header.server'],
+      slots: ['shell.sidebar.server'],
       permissions: [],
       requires: { console: '^0.1.0' },
       editions: ['oss', 'cloud'],
@@ -171,7 +171,7 @@ export function hostedPlugin(session: HostedSession): PluginModule {
     apply(ctx: Context) {
       const slots = service(ctx, 'slots');
       ctx.effect(() =>
-        slots.register({ name: 'shell.header.server', plugin: 'console-hosted' }, () => (
+        slots.register({ name: 'shell.sidebar.server', plugin: 'console-hosted' }, () => (
           <HostedHeader session={session} />
         )),
       );

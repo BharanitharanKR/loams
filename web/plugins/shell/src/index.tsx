@@ -18,12 +18,16 @@ export {
   useThemeState,
 } from './appearance.js';
 export {
-  inMode,
-  Layout,
-  type ModeFilter,
-  navSections,
-  SECTIONS,
-} from './layout.js';
+  MainRegion,
+  readSidebar,
+  runShellCommand,
+  SIDEBAR,
+  type SidebarState,
+  TopBar,
+  useNarrow,
+  useSidebarState,
+} from './frame.js';
+export { Layout } from './layout.js';
 export {
   MODE_LABEL,
   ModeSwitcher,
@@ -32,6 +36,7 @@ export {
   useModeShortcut,
 } from './mode-switcher.js';
 
+export { inMode, type ModeFilter, navSections, SECTIONS, STUDIO_SECTIONS } from './nav.js';
 export {
   isPaletteShortcut,
   type PaletteModes,
@@ -42,6 +47,7 @@ export {
   scopePalette,
 } from './palette.js';
 export { compile, HashRouter, type HashSource, windowHash } from './router.js';
+export { ShellSidebar } from './sidebar.js';
 
 const plugin: PluginModule = {
   name: 'shell',

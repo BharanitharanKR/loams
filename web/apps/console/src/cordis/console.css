@@ -1,8 +1,7 @@
 /*
- * The console's layout, in the original React console's look (its app.css, retired
- * with that console in API2 Task 10):
- * a sidebar of sections, a slim top bar with breadcrumbs, square panels on
- * the ground. Every colour, shadow and radius is a @loams/ui token.
+ * The console's layout (design 59, D1078): the window holds a sidebar and a 44px top bar,
+ * which is the desktop window's drag region; the work area is a rounded card on it.
+ * Every colour, shadow and radius is a @loams/ui token.
  */
 *,
 *::before,
@@ -36,71 +35,58 @@ code {
   color: var(--op-accent-ink);
 }
 
-/* Frame ---------------------------------------------------------------------- */
+/* Frame (design 59, D1078) --------------------------------------------------- */
 
+/* The window holds the sidebar and the top bar; the work area (main, and from Task 8 the
+   inspector and the drawer) is a card on it. Only the work area scrolls. */
 .lc-shell {
-  --side: 256px;
-  --top: 56px;
-  display: grid;
-  min-height: 100svh;
+  --top: var(--op-topbar);
+  --lc-traffic: 0px; /* macOS traffic lights (Task 13) */
+  --lc-wco-end: 0px; /* Windows/Linux title bar controls (Task 13) */
+  display: flex;
+  height: 100svh; /* viewport-ok: the shell itself */
+  overflow: hidden;
+  background: var(--op-window);
+  color: var(--op-ink);
+  font-size: var(--op-text-body);
 }
-@media (min-width: 960px) {
-  .lc-shell {
-    grid-template-columns: var(--side) minmax(0, 1fr);
-    /* The sidebar's ground runs the full height of the page, however long. */
-    background: linear-gradient(
-      90deg,
-      var(--op-surface) 0 calc(var(--side) - 1px),
-      var(--op-rule-soft) calc(var(--side) - 1px) var(--side),
-      var(--op-bg) var(--side)
-    );
-  }
-}
+
+/* Sidebar -------------------------------------------------------------------- */
+
 .lc-side {
-  position: sticky;
-  top: 0;
-  z-index: 40;
+  background: var(--op-window);
+}
+/* The splitter between the sidebar and the work card: invisible until hovered or focused. */
+#lc-side > [data-slot="resize-handle"] {
+  background: transparent;
+}
+#lc-side > [data-slot="resize-handle"]:hover,
+#lc-side > [data-slot="resize-handle"]:focus-visible {
+  background: var(--op-accent);
+}
+/* Narrow windows: the same sidebar in a sheet. */
+.lc-side-sheet {
   display: flex;
   flex-direction: column;
-  height: 100svh;
-  background: var(--op-surface);
-  border-right: 1px solid var(--op-rule-soft);
+  height: 100%;
+  min-height: 0;
 }
-@media (max-width: 959px) {
-  .lc-side {
-    position: fixed;
-    z-index: 60;
-    left: 0;
-    width: min(86vw, 300px);
-    transform: translateX(-100%);
-    visibility: hidden;
-    transition:
-      transform 260ms var(--op-ease),
-      visibility 0s linear 260ms;
-  }
-  .lc-side[data-open] {
-    transform: none;
-    visibility: visible;
-    transition: transform 260ms var(--op-ease);
-    box-shadow: var(--op-shadow-modal);
-  }
+.lc-side-head {
+  gap: 2px;
+  padding: 0 8px 8px;
+  border-bottom: 0;
 }
-.lc-scrim {
-  position: fixed;
-  inset: 0;
-  z-index: 55;
-  border: 0;
-  background: var(--op-scrim);
-}
-
 .lc-brand {
   display: flex;
   flex: none;
   align-items: center;
   gap: 8px;
-  height: var(--top);
-  padding: 0 16px;
-  border-bottom: 1px solid var(--op-rule-soft);
+  height: var(--op-topbar);
+  padding: 0 8px;
+}
+/* Open beside the macOS traffic lights, the brand starts after them. */
+.lc-shell[data-sidebar="open"] .lc-brand {
+  padding-inline-start: calc(8px + var(--lc-traffic));
 }
 .lc-brand-link {
   display: inline-flex;
@@ -122,61 +108,73 @@ code {
   font-weight: 500;
   white-space: nowrap;
 }
-.lc-side-close,
-.lc-menu-btn {
-  display: none;
+.lc-side-close {
+  display: inline-grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: var(--op-control-compact);
+  height: var(--op-control-compact);
+  margin-left: auto;
   padding: 0;
-  border: 1px solid var(--op-rule);
-  border-radius: var(--op-radius-pill);
+  border: 0;
+  border-radius: var(--op-radius-md);
   background: none;
   color: var(--op-muted);
   cursor: pointer;
 }
-.lc-side-close {
-  margin-left: auto;
+.lc-new-thread {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--op-row);
+  padding: 0 8px;
   border: 0;
+  border-radius: var(--op-radius-md);
+  background: none;
+  color: var(--op-ink);
+  font: inherit;
+  font-size: var(--op-text-small);
+  font-weight: 500;
+  cursor: pointer;
 }
-@media (max-width: 959px) {
-  .lc-side-close,
-  .lc-menu-btn {
-    display: inline-grid;
-  }
+.lc-new-thread:hover {
+  background: var(--op-row-hover);
+}
+.lc-side-threads {
+  padding: 0 8px 8px;
 }
 
 /* The environment switcher, like the original's project switcher. */
 .lc-switcher {
   flex: none;
-  margin: 12px 12px 4px;
+  margin: 4px 8px;
 }
 .lc-switcher-trigger {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   width: 100%;
-  padding: 7px 10px;
-  border: 1px solid var(--op-rule-soft);
-  border-radius: var(--op-radius-sm);
+  height: var(--op-control);
+  padding: 0 8px;
+  border: 1px solid var(--op-rule);
+  border-radius: var(--op-radius-md);
   background: var(--op-bg);
   color: var(--op-ink);
   font: inherit;
-  font-size: 0.9rem;
-  font-weight: 520;
+  font-size: var(--op-text-small);
+  font-weight: 500;
   cursor: pointer;
 }
 .lc-switcher-trigger:hover {
-  border-color: var(--op-rule);
+  border-color: var(--op-input);
 }
 .lc-switcher-mark {
   display: grid;
   flex: none;
   place-items: center;
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: var(--op-radius-sm);
-  font-size: 0.72rem;
+  font-size: var(--op-text-micro);
   font-weight: 600;
   color: var(--op-accent-ink);
   background: var(--op-accent);
@@ -185,24 +183,22 @@ code {
 /* Nav ------------------------------------------------------------------------ */
 
 .lc-nav {
-  flex: 1;
-  overflow-y: auto;
-  padding: 10px 12px;
+  padding: 4px 8px 12px;
 }
 .lc-nav-group + .lc-nav-group {
-  margin-top: 18px;
+  margin-top: 12px;
 }
 /* The instance-wide sections sit apart, as the original's Organization half does. */
 .lc-nav-group:not([data-scope]) + .lc-nav-group[data-scope="org"] {
-  margin-top: 22px;
-  padding-top: 16px;
-  border-top: 1px solid var(--op-rule-soft);
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--op-rule);
 }
 .lc-nav-heading {
-  margin: 0 0 6px;
-  padding: 0 10px;
-  font-size: 0.64rem;
-  font-weight: 400;
+  margin: 0;
+  padding: 4px 8px;
+  font-size: var(--op-text-micro);
+  font-weight: 500;
   color: var(--op-faint);
   white-space: nowrap;
   overflow: hidden;
@@ -217,19 +213,18 @@ code {
 }
 .lc-nav a,
 .lc-side-foot a {
-  position: relative;
   display: flex;
   align-items: center;
-  gap: 10px;
-  height: 32px;
-  padding: 0 10px;
-  border-radius: var(--op-radius-sm);
-  font-size: 0.88rem;
+  gap: 8px;
+  height: var(--op-row);
+  padding: 0 8px;
+  border-radius: var(--op-radius-md);
+  font-size: var(--op-text-body);
   color: var(--op-muted);
   text-decoration: none;
   transition:
-    background-color 140ms ease,
-    color 140ms ease;
+    background-color var(--op-duration) ease,
+    color var(--op-duration) ease;
 }
 .lc-nav a svg {
   flex: none;
@@ -241,79 +236,150 @@ code {
   white-space: nowrap;
 }
 .lc-nav a:hover,
-.lc-side-foot a:hover,
+.lc-side-foot a:hover {
+  color: var(--op-ink);
+  background: var(--op-row-hover);
+}
+/* The current page: a white chip in light, a soft fill in dark. */
 .lc-nav a[aria-current="page"] {
   color: var(--op-ink);
-  background: var(--op-raised);
-}
-/* The seed marks where you are. */
-.lc-nav a[aria-current="page"]::before {
-  content: "";
-  position: absolute;
-  left: -12px;
-  top: 10px;
-  width: 3px;
-  height: 12px;
-  background: var(--op-accent);
+  background: var(--op-row-selected);
+  box-shadow: var(--op-shadow-chip);
 }
 .lc-side-foot {
-  display: grid;
-  flex: none;
-  gap: 2px;
-  padding: 10px 12px 14px;
-  border-top: 1px solid var(--op-rule-soft);
+  gap: 0;
+  padding: 8px;
+  border-top: 0;
 }
 .lc-side-version {
-  padding: 6px 10px 0;
-  font-size: 0.64rem;
+  padding: 4px 8px 0;
+  font-size: var(--op-text-micro);
   color: var(--op-faint);
 }
 
-/* Top bar -------------------------------------------------------------------- */
+/* Top bar (the window's drag region, D1083) ---------------------------------- */
 
 .lc-body {
   display: flex;
+  flex: 1;
   flex-direction: column;
   min-width: 0;
-  min-height: 100svh;
 }
-.lc-header {
-  position: sticky;
-  top: 0;
-  z-index: 30;
+.lc-topbar {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  height: var(--op-topbar);
+  padding: 0 calc(12px + var(--lc-wco-end)) 0 8px;
+  -webkit-app-region: drag;
+  user-select: none;
+}
+.lc-shell[data-sidebar="closed"] .lc-topbar {
+  padding-inline-start: calc(8px + var(--lc-traffic));
+}
+.lc-topbar
+  :is(button, a, input, select, textarea, [role="button"], [role="combobox"], [data-no-drag]) {
+  -webkit-app-region: no-drag;
+}
+.lc-topbar-start,
+.lc-topbar-end {
   display: flex;
   align-items: center;
-  gap: 12px;
-  height: var(--top);
-  padding: 0 28px;
-  border-bottom: 1px solid var(--op-rule-soft);
-  background: color-mix(in srgb, var(--op-bg) 88%, transparent);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  gap: 6px;
+  min-width: 0;
 }
-@media (max-width: 959px) {
-  .lc-header {
-    padding: 0 16px;
-  }
+.lc-topbar-start {
+  flex: 1;
+}
+.lc-topbar-end {
+  flex: none;
+}
+.lc-topbar-center {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.lc-bar-btn {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: var(--op-control-compact);
+  height: var(--op-control-compact);
+  padding: 0;
+  border: 0;
+  border-radius: var(--op-radius-md);
+  background: none;
+  color: var(--op-muted);
+  cursor: pointer;
+  transition:
+    background-color var(--op-duration) ease,
+    color var(--op-duration) ease;
+}
+/* A panel toggle that is on (the agent dock now; the inspector and drawer from Task 8). */
+.lc-bar-btn:hover,
+.lc-bar-btn[aria-pressed="true"],
+.lc-bar-btn[aria-expanded="true"]:not(.lc-sidebar-toggle) {
+  background: var(--op-row-hover);
+  color: var(--op-ink);
+}
+.lc-bar-btn[aria-pressed="true"] svg,
+.lc-bar-btn[aria-expanded="true"]:not(.lc-sidebar-toggle) svg {
+  color: var(--op-accent-fg);
+}
+.lc-palette-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: min(320px, 28vw);
+  height: var(--op-control-compact);
+  padding: 0 4px 0 10px;
+  border: 1px solid var(--op-rule);
+  border-radius: var(--op-radius-md);
+  background: var(--op-bg);
+  color: var(--op-muted);
+  font: inherit;
+  font-size: var(--op-text-small);
+  cursor: pointer;
+}
+.lc-palette-hint:hover {
+  border-color: var(--op-input);
+  color: var(--op-ink);
+}
+.lc-palette-hint-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .lc-trail {
   min-width: 0;
+  padding-left: 4px;
 }
 .lc-trail ol {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   margin: 0;
   padding: 0;
   list-style: none;
-  font-size: 0.86rem;
+  font-size: var(--op-text-body);
   color: var(--op-muted);
   white-space: nowrap;
   overflow: hidden;
 }
+.lc-trail li {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 .lc-trail li + li::before {
   content: "/";
-  margin-right: 8px;
+  margin-right: 6px;
   color: var(--op-faint);
 }
 .lc-trail a {
@@ -332,58 +398,49 @@ code {
     display: none;
   }
 }
-.lc-header-tools {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-left: auto;
-}
-.lc-header-start,
 .lc-overlays {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
+/* A pill button in a page or a plugin's header control. */
 .lc-icon-btn {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  height: 32px;
-  padding: 0 12px;
+  gap: 6px;
+  height: var(--op-control-compact);
+  padding: 0 10px;
   border: 1px solid var(--op-rule);
-  border-radius: var(--op-radius-pill);
+  border-radius: var(--op-radius-md);
   background: var(--op-bg);
   color: var(--op-muted);
   font: inherit;
-  font-size: 0.84rem;
+  font-size: var(--op-text-small);
   cursor: pointer;
   transition:
-    background-color 140ms ease,
-    color 140ms ease;
+    background-color var(--op-duration) ease,
+    color var(--op-duration) ease;
 }
 .lc-icon-btn:hover,
 .lc-icon-btn[aria-expanded="true"] {
   background: var(--op-raised);
   color: var(--op-ink);
 }
-.lc-header .lc-icon-btn[aria-expanded="true"] svg {
-  color: var(--op-accent-fg);
-}
 .lc-round-btn {
   display: inline-grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: var(--op-control-compact);
+  height: var(--op-control-compact);
   padding: 0;
   border: 0;
-  border-radius: var(--op-radius-pill);
+  border-radius: var(--op-radius-md);
   background: none;
   color: var(--op-muted);
   cursor: pointer;
 }
 .lc-round-btn:hover {
   color: var(--op-ink);
-  background: var(--op-raised);
+  background: var(--op-row-hover);
 }
 .lc-user-btn {
   display: inline-flex;
@@ -396,13 +453,13 @@ code {
 .lc-chip {
   display: inline-flex;
   align-items: center;
-  height: 28px;
-  padding: 0 12px;
+  height: var(--op-control-compact);
+  padding: 0 10px;
   border: 1px solid var(--op-rule);
   border-radius: var(--op-radius-pill);
   background: var(--op-accent-soft);
   color: var(--op-ink);
-  font-size: 0.8rem;
+  font-size: var(--op-text-small);
   text-decoration: none;
 }
 .lc-chip:hover {
@@ -420,10 +477,8 @@ code {
   }
 }
 @media (max-width: 480px) {
-  .lc-header {
-    gap: 8px;
-  }
-  .lc-header-tools {
+  .lc-topbar,
+  .lc-topbar-end {
     gap: 4px;
   }
   .lc-chip {
@@ -442,31 +497,61 @@ code {
   }
 }
 
-/* Content -------------------------------------------------------------------- */
+/* Main: the work card -------------------------------------------------------- */
 
-.lc-content {
+.lc-work {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin: 0 8px 8px 0;
+  overflow: hidden;
+  border: 1px solid var(--op-rule);
+  border-radius: var(--op-radius-lg);
+  background: var(--op-bg);
+}
+.lc-shell[data-sidebar="closed"] .lc-work {
+  margin-left: 8px;
+}
+.lc-work-row {
   display: flex;
   flex: 1;
   min-height: 0;
 }
 .lc-main {
+  /* The containing block of a page's absolutely placed parts (sr-only labels), so they
+     scroll with the page instead of stretching the document. */
+  position: relative;
   flex: 1;
   min-width: 0;
+  overflow: auto;
+  padding: 24px 20px 56px;
+}
+/* The page keeps its measure inside a wide card. */
+.lc-main > :not(.lc-home) {
   max-width: 1180px;
-  padding: 32px 28px 72px;
+}
+.lc-home {
+  display: grid;
+  min-height: 100%;
+  place-items: center;
+  padding: 24px 20px;
 }
 @media (max-width: 959px) {
-  .lc-main {
-    padding: 24px 16px 56px;
+  /* Edge to edge whether or not the sheet is open. */
+  .lc-shell[data-sidebar] .lc-work {
+    margin: 0;
+    border-width: 1px 0 0;
+    border-radius: 0;
   }
-}
-.lc-main > * {
-  animation: lc-rise 420ms var(--op-ease) both;
-}
-@keyframes lc-rise {
-  from {
-    opacity: 0;
-    transform: translateY(8px);
+  .lc-main {
+    padding: 20px 12px 48px;
+  }
+  .lc-palette-hint {
+    width: auto;
+  }
+  .lc-palette-hint-text {
+    display: none;
   }
 }
 .lc-page {
@@ -479,24 +564,23 @@ code {
 }
 .lc-page-head h1 {
   margin: 0;
-  font-size: 1.75rem;
-  line-height: 1.15;
-  letter-spacing: -0.02em;
-  font-weight: 560;
-  font-stretch: 112%;
+  font-size: var(--op-text-hero);
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  font-weight: 600;
 }
 .lc-page-head p {
   max-width: 68ch;
   margin: 8px 0 0;
-  font-size: 0.94rem;
+  font-size: var(--op-text-emphasis);
   line-height: 1.6;
   color: var(--op-muted);
 }
 .lc-page > h2,
 .lc-page-head h2 {
   margin: 16px 0 0;
-  font-size: 1rem;
-  font-weight: 540;
+  font-size: var(--op-text-section);
+  font-weight: 600;
 }
 .lc-muted {
   margin: 4px 0 0;
@@ -542,17 +626,14 @@ code {
   color: var(--op-muted);
 }
 
-/* The agent dock ------------------------------------------------------------- */
+/* The agent dock (until Task 8 makes it the inspector) ----------------------- */
 
 .lc-dock {
-  position: sticky;
-  top: var(--top);
-  align-self: flex-start;
+  position: relative;
   flex: none;
   width: var(--lc-dock-width, 400px);
-  height: calc(100svh - var(--top));
-  margin-left: auto;
-  border-left: 1px solid var(--op-rule-soft);
+  height: 100%;
+  border-left: 1px solid var(--op-rule);
   background: var(--op-surface);
 }
 .lc-dock[hidden] {
@@ -584,14 +665,8 @@ code {
     right: 0;
     bottom: 0;
     z-index: 50;
+    height: calc(100% - var(--top));
     max-width: 100vw;
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .lc-main > *,
-  .lc-side {
-    animation: none;
-    transition: none;
   }
 }
 
@@ -1147,15 +1222,39 @@ button.lc-hosted-engine {
   padding: 0;
 }
 .lc-shell[data-mode="studio"] .lc-main > * {
-  animation: none;
+  max-width: none;
 }
 /* A Console-style page shown in Studio (the factory's, SD1 Task 27) keeps the page gutter. */
 .lc-shell[data-mode="studio"] .lc-main .lc-page {
-  max-width: 1236px;
-  padding: 32px 28px 72px;
+  max-width: 1220px;
+  padding: 24px 20px 56px;
 }
 @media (max-width: 959px) {
   .lc-shell[data-mode="studio"] .lc-main .lc-page {
-    padding: 24px 16px 56px;
+    padding: 20px 12px 48px;
   }
+}
+
+/* The server indicator in the sidebar (shell.sidebar.server, D1078): full width, and its
+   menu stays inside the sidebar column. */
+.lc-side-head .lc-server-switch > .lc-icon-btn {
+  width: 100%;
+  border-color: var(--op-rule);
+  background: transparent;
+}
+.lc-side-head .lc-server-switch > .lc-icon-btn > span:not(.lc-dot) {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-align: left;
+  text-overflow: ellipsis;
+}
+.lc-side-head .lc-server-menu {
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 0;
+}
+.lc-side-head .lc-hosted {
+  gap: 6px 8px;
+  padding: 0 4px;
 }

@@ -14,6 +14,8 @@ let dispose: (() => Promise<void>) | undefined;
 beforeEach(() => {
   localStorage.clear();
   window.location.hash = '';
+  // The shell's sidebar scrolls in Base UI's scroll area, which jsdom cannot animate.
+  Element.prototype.getAnimations ??= () => [];
   globalThis.ResizeObserver ??= class {
     observe() {}
     unobserve() {}
