@@ -666,8 +666,8 @@ impl ServerConfig {
     }
 
     /// Loams Graph (GR1 Task 5): graphs need a data directory unless they are explicitly
-    /// ephemeral, and with no authorizer before MT1 (D750) graph RPCs are served on a loopback
-    /// address only.
+    /// ephemeral, and graph RPCs are authorized per graph from the admitted principal (GR1
+    /// Task 24, D750), so without authentication they are served on a loopback address only.
     #[cfg(feature = "graph")]
     fn validate_graph(&self) -> Result<(), ServerError> {
         if !self.serves_graph() {
@@ -676,9 +676,9 @@ impl ServerConfig {
         if self.graph.data_dir.is_none() && !self.graph.ephemeral {
             return Err(ServerError::GraphNeedsDataDir);
         }
-        // Authenticated principals stand in for D750's authorizer until MT1:
-        // the preview engine is single-tenant, so everyone admitted is its
-        // owner.
+        // The graph authorizer reads the admitted principal's roles (GR1 Task
+        // 24): with authentication off everyone is the operator, which only a
+        // loopback listener may serve.
         if !self.listen.ip().is_loopback() && !self.auth.enforced() {
             return Err(ServerError::GraphListenNotLoopback { addr: self.listen });
         }
@@ -796,11 +796,13 @@ pub enum ServerError {
          --no-graph"
     )]
     GraphNeedsDataDir,
-    /// Graph RPCs on a non-loopback address before the authorizer exists (D750, until MT1).
+    /// Graph RPCs on a non-loopback address without authentication (D750): every caller would
+    /// be the operator.
     #[cfg(feature = "graph")]
     #[error(
-        "--listen {addr} is not a loopback address, and Loams Graph has no authorizer until the \
-         unified auth plan (D750, MT1); listen on a loopback address or pass --no-graph"
+        "--listen {addr} is not a loopback address, and authentication is off, so every Loams \
+         Graph caller would be the operator (D750); turn authentication on, listen on a loopback \
+         address, or pass --no-graph"
     )]
     GraphListenNotLoopback { addr: SocketAddr },
     /// `--git-listen` is not a loopback address (GT1 Task 16, D111): the git listener's tokens

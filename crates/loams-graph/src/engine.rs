@@ -1048,7 +1048,8 @@ impl Graph {
     /// schema DDL outright.
     ///
     /// Schema DDL (`Access::Admin`: node, edge and graph types, indexes, constraints, schemas,
-    /// procedures) is not served until Task 24 (fix round 2). Grafeo's `Session::execute`, which
+    /// procedures) is not served yet (fix round 2; GR1 R24.6): Task 24 gives it to the graph's
+    /// `admin` only, and it runs once a portable snapshot carries schema changes. Grafeo's `Session::execute`, which
     /// a statement without parameters takes for the engine's time limit, runs it directly, with
     /// no Loams authorisation and outside CDC; the parameterised path is refused the same way so
     /// the answer does not depend on the bindings.
@@ -1061,11 +1062,19 @@ impl Graph {
         #[cfg(feature = "failpoints")]
         fail::fail_point!("loams_graph::gate");
         let verdict = gate_verdict(statement, QueryLanguage::Gql, limits)?;
+        if let Some(engine) = verdict.engine
+            && engine != verdict.guard
+        {
+            crate::authz::note_disagreement(statement, verdict.guard, engine);
+        }
         let access = verdict.access;
         if access == Access::Admin {
             return Err(GraphError::StatementNotAllowed {
                 file_access: false,
-                what: "schema DDL is not served until Task 24".to_string(),
+                what: "schema DDL is not served yet: it needs the graph's admin relation (GR1 \
+                       Task 24), and runs once a schema change is carried by every snapshot \
+                       (R24.6)"
+                    .to_string(),
             });
         }
         if self.spec.linked && access != Access::Read {
