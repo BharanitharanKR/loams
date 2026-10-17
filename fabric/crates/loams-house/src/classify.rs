@@ -88,13 +88,34 @@ pub enum Stmt {
     Set(Vec<(String, String)>),
     /// `OPTIMIZE TABLE` (HS1 Task 13).
     Optimize { name: String },
-    /// `KILL QUERY WHERE query_id = '…'` (HS1 Task 21).
-    KillQuery(String),
+    /// `KILL QUERY WHERE query_id = '…' [SYNC|ASYNC|TEST]` (HS1 Task 21).
+    KillQuery(KillQuery),
     /// `EXPLAIN …`: chDB answers.
     Explain { text: String },
     /// Parsed, but not on the surface (access DDL, `SYSTEM`, views, other
     /// `ALTER`s): `48`.
     Unsupported { kind: String },
+}
+
+/// `KILL QUERY WHERE query_id = '…'` (HS1 Task 21, §49 §12): the one condition
+/// the House serves.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct KillQuery {
+    /// The statement to kill.
+    pub query_id: String,
+    /// `ASYNC` (the default), `SYNC` or `TEST`.
+    pub mode: KillMode,
+}
+
+/// How `KILL QUERY` waits.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum KillMode {
+    /// Answers once the kill is sent (`waiting`).
+    Async,
+    /// Answers once the statement's worker is gone (`finished`).
+    Sync,
+    /// Kills nothing; answers what it would kill.
+    Test,
 }
 
 /// An `INSERT`'s head.
@@ -569,6 +590,32 @@ pub fn creates_shared_object(text: &str) -> bool {
     next.is_some_and(|word| word != "TEMPORARY")
 }
 
+/// `KILL QUERY WHERE query_id = '<id>' [SYNC|ASYNC|TEST]`, from its tokens;
+/// `None` for any other form (`ON CLUSTER`, another condition).
+fn kill_query(text: &str, toks: &[(String, Token)]) -> Option<KillQuery> {
+    let rest: Vec<&(String, Token)> = toks.iter().skip(2).collect();
+    let [where_, column, eq, literal, tail @ ..] = rest.as_slice() else {
+        return None;
+    };
+    if where_.0 != "WHERE" || column.0 != "QUERY_ID" || eq.0 != "=" || literal.1.word {
+        return None;
+    }
+    let raw = &text[literal.1.start..literal.1.end];
+    let inner = raw.strip_prefix('\'')?.strip_suffix('\'')?;
+    let query_id = inner
+        .replace("\\\\", "\\")
+        .replace("\\'", "'")
+        .replace("''", "'");
+    let mode = match tail {
+        [] => KillMode::Async,
+        [(word, _)] if word == "ASYNC" => KillMode::Async,
+        [(word, _)] if word == "SYNC" => KillMode::Sync,
+        [(word, _)] if word == "TEST" => KillMode::Test,
+        _ => return None,
+    };
+    Some(KillQuery { query_id, mode })
+}
+
 /// Engines that make a `CREATE TABLE` a pipe.
 const PIPE_ENGINES: &[&str] = &["LoamsStream", "IggyTopic", "S3Queue"];
 
@@ -680,12 +727,16 @@ pub fn classify(sql: &str) -> Result<Classified, HouseError> {
             );
         }
         "KILL" if second == "QUERY" => {
-            let id = toks
-                .iter()
-                .find(|(_, t)| !t.word && matches!(text.as_bytes()[t.start], b'\'' | b'"'))
-                .map(|(_, t)| text[t.start + 1..t.end.saturating_sub(1)].to_string())
-                .unwrap_or_default();
-            return known(Stmt::KillQuery(id), None);
+            return match kill_query(&text, &toks) {
+                Some(kill) => known(Stmt::KillQuery(kill), format),
+                None => known(
+                    Stmt::Unsupported {
+                        kind: "KILL QUERY with a condition other than `WHERE query_id = '…'`"
+                            .to_string(),
+                    },
+                    None,
+                ),
+            };
         }
         // The deny list's statements (HS1 Task 5, §49 §13.2): `344`, before any
         // worker is asked.
@@ -1051,8 +1102,38 @@ mod tests {
         assert_eq!(stmt("USE db1"), Stmt::Use("db1".to_string()));
         assert_eq!(
             stmt("KILL QUERY WHERE query_id = 'q-1'"),
-            Stmt::KillQuery("q-1".to_string())
+            Stmt::KillQuery(KillQuery {
+                query_id: "q-1".to_string(),
+                mode: KillMode::Async
+            })
         );
+        assert_eq!(
+            stmt("kill query where query_id='it''s' SYNC"),
+            Stmt::KillQuery(KillQuery {
+                query_id: "it's".to_string(),
+                mode: KillMode::Sync
+            })
+        );
+        assert_eq!(
+            stmt("KILL QUERY WHERE query_id = 'q' TEST"),
+            Stmt::KillQuery(KillQuery {
+                query_id: "q".to_string(),
+                mode: KillMode::Test
+            })
+        );
+        for other in [
+            "KILL QUERY WHERE user = 'x'",
+            "KILL QUERY WHERE 1",
+            "KILL QUERY ON CLUSTER c WHERE query_id = 'q'",
+            "KILL QUERY WHERE query_id = 'q' OR 1",
+            "KILL QUERY WHERE query_id = 'q' SYNC TEST",
+        ] {
+            assert!(
+                matches!(stmt(other), Stmt::Unsupported { .. }),
+                "{other}: {:?}",
+                stmt(other)
+            );
+        }
         assert!(matches!(
             stmt("CREATE TEMPORARY TABLE t (n UInt8) ENGINE = Memory"),
             Stmt::CreateTemporaryTable { .. }

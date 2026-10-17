@@ -34,10 +34,11 @@ function panel(): PanelService & { calls: unknown[] } {
     subscribe: () => () => {},
   };
 }
-const threadLinks = (list: HTMLElement) =>
-  within(list)
-    .getAllByRole('link')
-    .filter((a) => a.getAttribute('href')?.startsWith('#/studio/t/'));
+// A selector, not getAllByRole: role queries over hundreds of links take seconds on a busy CI
+// runner (T9-8).
+const threadLinks = (list: HTMLElement) => [
+  ...list.querySelectorAll<HTMLAnchorElement>('a[href^="#/studio/t/"]'),
+];
 
 beforeEach(() => {
   localStorage.clear();
@@ -79,7 +80,7 @@ describe('the sidebar thread list (Review Focus 2)', () => {
     fireEvent.click(within(list).getByRole('button', { name: `Show ${250 - THREADS_SHOWN} more` }));
     await waitFor(() => expect(threadLinks(list)).toHaveLength(250));
     expect(within(list).queryByRole('button', { name: /^Show \d+ more$/ })).toBeNull();
-  });
+  }, 20_000); // 400 threads, 250 of them rendered; a busy CI runner took over 5 s (T9-8)
 
   it('keeps the open thread in view when it is past the cap', async () => {
     const chats = Array.from({ length: 30 }, (_, i) => ({

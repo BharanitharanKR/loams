@@ -215,6 +215,9 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
         ..HouseConfig::default()
     };
     house.limits.apply(&mut http);
+    // Namespace quotas (HS1 Task 22): `[house.quotas]` until the control plane
+    // serves them.
+    http.quotas = std::sync::Arc::new(house.quotas.to_quotas().map_err(bad)?);
     http.admin_listen = Some(admin_listen);
     // The engine whose streams pipes read (HS1 Task 16).
     http.engine = house.engine.link().map_err(bad)?;
@@ -226,6 +229,8 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
     }
     let mut pool = PoolConfig::default();
     house.pool.apply(&mut pool);
+    // The watchdog's cap is the front's `max_execution_time` cap (HS1 Task 21).
+    pool.max_execution_time = Duration::from_secs_f64(http.session_limits.max_execution_time_s);
 
     let catalog = match (&args.catalog, &house.catalog.url) {
         (Some(spec), _) => Some(spec.clone()),
@@ -527,7 +532,8 @@ async fn lake(
         .map_err(|err| bad(format!("--store {store_url:?}: {err}")))?;
     let mut lake = Lake::new(catalog, root)
         .with_store(files)
-        .with_retention(settings.http.snapshot_retention);
+        .with_retention(settings.http.snapshot_retention)
+        .with_object_caps(settings.http.object_caps);
     if let Some(cache) = cache {
         lake = lake.with_grants(Arc::new(cache.clone()) as Arc<dyn PrefixGrants>);
     }

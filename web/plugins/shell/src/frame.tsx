@@ -370,30 +370,20 @@ export function UserMenu({
   );
 }
 
-/** The wordmark, the edition and the preview badge, at the top of the sidebar. */
+/** The wordmark and the preview badge, at the top of the sidebar. */
 export function Brand({
-  flags,
   home = '/',
   onClose,
 }: {
-  flags?: FlagsService;
   home?: string;
   /** A close button after the badges (none in the frame: the sheet and the top bar close it). */
   onClose?: () => void;
 }) {
-  const edition = flags?.features.desktop
-    ? 'Desktop'
-    : flags?.edition === 'cloud'
-      ? 'Cloud'
-      : flags?.edition === 'byoc'
-        ? 'BYOC'
-        : 'OSS';
   return (
     <div className="lc-brand">
       <a href={`#${home}`} aria-label="Loams home" className="lc-brand-link">
         <Logo height={18} />
       </a>
-      <Badge>{edition}</Badge>
       <span
         className="lc-preview"
         title="Loams is in preview: interfaces and data formats may change between releases."

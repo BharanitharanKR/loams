@@ -500,35 +500,12 @@ async fn worker_cannot_write_outside_tmp() {
     pool.release(lease, Outcome::Completed);
 }
 
-/// A cgroup v2 directory this test may delegate to workers: a fresh sibling of
-/// the test's own cgroup, when the parent is writable and has the controllers.
-#[cfg(target_os = "linux")]
-fn delegated_cgroup() -> Result<PathBuf, String> {
-    let ours = std::fs::read_to_string("/proc/self/cgroup").map_err(|e| e.to_string())?;
-    let path = ours
-        .lines()
-        .find_map(|line| line.strip_prefix("0::"))
-        .ok_or("not on cgroup v2")?;
-    let mine = Path::new("/sys/fs/cgroup").join(path.trim_start_matches('/'));
-    let parent = mine.parent().ok_or("no parent cgroup")?;
-    let controllers = std::fs::read_to_string(parent.join("cgroup.subtree_control"))
-        .map_err(|e| e.to_string())?;
-    for needed in ["memory", "cpu", "pids"] {
-        if !controllers.split_whitespace().any(|c| c == needed) {
-            return Err(format!("{} does not delegate {needed}", parent.display()));
-        }
-    }
-    let root = parent.join(format!("loams-house-test-{}", std::process::id()));
-    std::fs::create_dir(&root).map_err(|e| format!("{}: {e}", root.display()))?;
-    Ok(root)
-}
-
 /// Each worker joins a cgroup child the front made, with §49 §12's limits, and
 /// the child goes when the worker does.
 #[cfg(target_os = "linux")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn cgroup_limits_applied() {
-    let root = match delegated_cgroup() {
+    let root = match common::delegated_cgroup("sandbox") {
         Ok(root) => root,
         Err(why) => {
             eprintln!("cgroup_limits_applied: skipped: no delegated cgroup here ({why})");

@@ -531,9 +531,12 @@ code {
   overflow: auto;
   padding: 24px 20px 56px;
 }
-/* The page keeps its measure inside a wide card. */
+/* A page uses the card's width (owner feedback 2026-10-17, design 59): tables and grids
+   fill it, up to 1600px on a very wide window, centred there. Prose keeps its own
+   measure (`.lc-page-head p`, 68ch). */
 .lc-main > :not(.lc-home) {
-  max-width: 1180px;
+  max-width: 1600px;
+  margin-inline: auto;
 }
 .lc-home {
   display: grid;
@@ -561,7 +564,6 @@ code {
 .lc-page {
   display: grid;
   gap: 16px;
-  max-width: 1180px;
 }
 .lc-page-head {
   margin-bottom: 8px;
@@ -842,9 +844,6 @@ code {
 }
 
 /* Data Studio (plugin-data-studio). */
-.ds-page {
-  max-width: 1180px;
-}
 .ds-head {
   display: flex;
   justify-content: space-between;

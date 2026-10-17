@@ -37,6 +37,8 @@ pub mod git_auth;
 #[cfg(feature = "git")]
 pub mod git_events;
 pub(crate) mod graph;
+#[cfg(feature = "graph")]
+pub(crate) mod graph_auth;
 pub mod hot;
 pub mod house_proxy;
 pub mod internal;

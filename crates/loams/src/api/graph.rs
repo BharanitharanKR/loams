@@ -11,6 +11,12 @@
 //! tell "not in this build" from a missing route, and reflection never lists a service no route
 //! answers.
 //!
+//! Every RPC is authorized per graph (GR1 Task 24, §48 §11, D750): the principal the port's
+//! authentication layer admitted becomes a [`Caller`](loams_graph::authz::Caller), and
+//! [`graph_auth`](super::graph_auth)'s built-in RBAC answers its relation on the graph from the
+//! principal store's org and project roles. Loams' own calls into the runtime (a search's
+//! expansion, the SQL table functions, links, forwarded calls) are not RPCs and are not checked.
+//!
 //! A statement's deadline is the earlier of its own limit (`timeout_ms`, or the graph's) and the
 //! client's Connect timeout ([`GraphAdmin::for_call`](loams_graph::service::admin::GraphAdmin::for_call),
 //! GR1 Task 6).
@@ -58,8 +64,14 @@ pub(crate) fn served(state: &AppState) -> bool {
 pub(super) fn register(router: Router, state: &AppState) -> Router {
     #[cfg(feature = "graph")]
     if let Some(admin) = &state.graph {
+        // Every RPC is checked against the principal store's roles (GR1 Task 24, D750); the
+        // runtime's own admin, which Loams' internal callers use, stays unchecked.
+        let admin = admin
+            .as_ref()
+            .clone()
+            .with_authorizer(super::graph_auth::authorizer(&state.principals));
         let served = Arc::new(Served {
-            admin: Arc::clone(admin),
+            admin: Arc::new(admin),
         });
         let router = GraphAdminServiceExt::register(Arc::clone(&served), router);
         return GraphServiceExt::register(served, router);
@@ -203,48 +215,82 @@ struct Served {
 }
 
 #[cfg(feature = "graph")]
+impl Served {
+    /// The admin for one call: the caller the authentication layer admitted (anonymous without
+    /// one, which reaches nothing; GR1 Task 24) and the client's deadline.
+    fn admin_for(&self, ctx: &RequestContext) -> loams_graph::service::admin::GraphAdmin {
+        let caller = super::graph_auth::caller_of(ctx.extensions().get::<crate::auth::Principal>());
+        self.admin.for_call(ctx.deadline()).for_caller(caller)
+    }
+}
+
+#[cfg(feature = "graph")]
 impl GraphAdminService for Served {
     async fn get_engine_info(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::GetEngineInfoRequest>,
     ) -> ServiceResult<pb::EngineInfo> {
-        Response::ok(self.admin.get_engine_info(request.to_owned_message()).await)
+        Response::ok(
+            self.admin_for(&ctx)
+                .get_engine_info(request.to_owned_message())
+                .await,
+        )
     }
     async fn create_graph(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::CreateGraphRequest>,
     ) -> ServiceResult<pb::Graph> {
-        Response::ok(self.admin.create_graph(request.to_owned_message()).await?)
+        Response::ok(
+            self.admin_for(&ctx)
+                .create_graph(request.to_owned_message())
+                .await?,
+        )
     }
     async fn get_graph(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::GetGraphRequest>,
     ) -> ServiceResult<pb::Graph> {
-        Response::ok(self.admin.get_graph(request.to_owned_message()).await?)
+        Response::ok(
+            self.admin_for(&ctx)
+                .get_graph(request.to_owned_message())
+                .await?,
+        )
     }
     async fn list_graphs(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::ListGraphsRequest>,
     ) -> ServiceResult<pb::ListGraphsResponse> {
-        Response::ok(self.admin.list_graphs(request.to_owned_message()).await?)
+        Response::ok(
+            self.admin_for(&ctx)
+                .list_graphs(request.to_owned_message())
+                .await?,
+        )
     }
     async fn update_graph(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::UpdateGraphRequest>,
     ) -> ServiceResult<pb::Graph> {
-        Response::ok(self.admin.update_graph(request.to_owned_message()).await?)
+        Response::ok(
+            self.admin_for(&ctx)
+                .update_graph(request.to_owned_message())
+                .await?,
+        )
     }
     async fn delete_graph(
         &self,
-        _ctx: RequestContext,
+        ctx: RequestContext,
         request: ServiceRequest<'_, pb::DeleteGraphRequest>,
     ) -> ServiceResult<Operation> {
-        Response::ok(self.admin.delete_graph(request.to_owned_message()).await?)
+        Response::ok(
+            self.admin_for(&ctx)
+                .delete_graph(request.to_owned_message())
+                .await?,
+        )
     }
     async fn get_schema(
         &self,
@@ -252,8 +298,7 @@ impl GraphAdminService for Served {
         request: ServiceRequest<'_, pb::GetSchemaRequest>,
     ) -> ServiceResult<pb::GraphSchema> {
         Response::ok(
-            self.admin
-                .for_call(ctx.deadline())
+            self.admin_for(&ctx)
                 .get_schema(request.to_owned_message())
                 .await?,
         )
@@ -320,7 +365,7 @@ impl GraphService for Served {
     ) -> ServiceResult<pb::ExecuteResponse> {
         let mut request = request.to_owned_message();
         apply_token_header(&ctx, &mut request.consistency)?;
-        let answer = self.admin.for_call(ctx.deadline()).execute(request).await?;
+        let answer = self.admin_for(&ctx).execute(request).await?;
         let token = answer.consistency_token.clone();
         Ok(with_token(answer, &token))
     }
@@ -332,8 +377,7 @@ impl GraphService for Served {
         // A batch is the owner's (it has no consistency of its own), so a request header has
         // nothing to change; the answer's token is in the header too.
         let answer = self
-            .admin
-            .for_call(ctx.deadline())
+            .admin_for(&ctx)
             .execute_batch(request.to_owned_message())
             .await?;
         let token = answer.consistency_token.clone();
@@ -346,7 +390,7 @@ impl GraphService for Served {
     ) -> ServiceResult<pb::Plan> {
         let mut request = request.to_owned_message();
         apply_token_header(&ctx, &mut request.consistency)?;
-        Response::ok(self.admin.for_call(ctx.deadline()).explain(request).await?)
+        Response::ok(self.admin_for(&ctx).explain(request).await?)
     }
 
     async fn execute_stream(
@@ -362,12 +406,7 @@ impl GraphService for Served {
             apply_token_header(&ctx, &mut inner.consistency)?;
             request.request = inner.into();
         }
-        Response::ok(
-            self.admin
-                .for_call(ctx.deadline())
-                .execute_stream(request)
-                .await?,
-        )
+        Response::ok(self.admin_for(&ctx).execute_stream(request).await?)
     }
 }
 

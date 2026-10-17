@@ -175,7 +175,7 @@ describe('the Factory group', () => {
     render(
       wrap(<StudioInShell agentd={webFake().agentd} route={{ kind: 'home' }} navigate={vi.fn()} />),
     );
-    await screen.findByText('Connect an agentd host');
+    await screen.findByText('Studio needs a Loams server with agentd');
     expect(screen.queryByRole('navigation', { name: 'Factory' })).toBeNull();
     cleanup();
     // A links-only source (D922): each app opens in a new tab; no panels or embeds.

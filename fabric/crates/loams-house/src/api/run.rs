@@ -2,8 +2,7 @@
 //! a worker, the header, and the frames a result streams as ([`super`]'s docs say
 //! what each step is for).
 
-use std::collections::{HashMap, VecDeque};
-use std::sync::{Arc, Mutex};
+use std::collections::VecDeque;
 use std::time::{Duration, Instant};
 
 use connectrpc::{ConnectError, ErrorCode};
@@ -16,7 +15,7 @@ use loams_house_proto::loams::house::v1::__buffa::oneof::{
 use super::frames::{self, ArrowFramer, Caps, Column, Framer, JsonFramer};
 use super::{
     DRAIN_BUDGET, EXPLAIN_MAX_BYTES, HouseApi, KILL_GRACE, MAX_TIMEOUT_MS, invalid,
-    read_only_refusal, read_only_user_refusal, refuse, to_connect,
+    read_only_refusal, read_only_user_refusal, to_connect,
 };
 use crate::admission::{Event, Outcome, WorkerLease, WorkerPool};
 use crate::classify::{Classified, Expect, Stmt, check_text, classify};
@@ -25,122 +24,41 @@ use crate::deny;
 use crate::errors::{ChError, HouseError};
 use crate::gate;
 use crate::request;
-use crate::watchdog::{Deadline, ExitReason, KillHandle};
+use crate::watchdog::{Deadline, ExitReason};
 
-// ---------------------------------------------------------------------------
-// Running queries
-// ---------------------------------------------------------------------------
+/// A statement's entry in the front's process list (HS1 Task 21: one list for
+/// both surfaces, which `CancelQuery` and `KILL QUERY` both read).
+type RunningGuard = crate::watchdog::ProcessGuard;
 
-/// The API's running queries, by id, for `CancelQuery`.
-#[derive(Debug, Default)]
-pub(super) struct Running {
-    queries: Mutex<HashMap<String, RunningQuery>>,
-}
-
-#[derive(Debug)]
-struct RunningQuery {
-    user: String,
-    namespace: u64,
-    /// The current statement's handle, once it has started.
-    kill: Option<KillHandle>,
-    /// Asked to stop: killed when it starts, if it had not yet.
-    cancelled: bool,
-}
-
-/// A running query's entry; dropping it removes the entry.
-#[derive(Debug)]
-struct RunningGuard {
-    running: Arc<Running>,
-    query_id: String,
-}
-
-impl Running {
-    fn lock(&self) -> std::sync::MutexGuard<'_, HashMap<String, RunningQuery>> {
-        self.queries
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
-    }
-
+impl HouseApi {
+    /// Enters `st` into the process list: an id already running is
+    /// `invalid_argument` (R8.8).
     fn register(
-        self: &Arc<Self>,
+        &self,
         query_id: &str,
         user: &UserMap,
+        sql: &str,
     ) -> Result<RunningGuard, ConnectError> {
-        let mut queries = self.lock();
-        if queries.contains_key(query_id) {
-            return Err(invalid(
-                "query_id",
-                format!("Query with id = {query_id} is already running"),
-            ));
-        }
-        queries.insert(
-            query_id.to_string(),
-            RunningQuery {
-                user: user.user.clone(),
-                namespace: user.namespace,
-                kill: None,
-                cancelled: false,
-            },
-        );
-        Ok(RunningGuard {
-            running: Arc::clone(self),
-            query_id: query_id.to_string(),
-        })
+        self.governance
+            .processes
+            .register(query_id, user, sql)
+            .map_err(|err| invalid("query_id", err.message().to_string()))
     }
 
-    pub(super) fn cancel(&self, query_id: &str, user: &UserMap) -> Result<(), ConnectError> {
-        let mut queries = self.lock();
-        let Some(query) = queries.get_mut(query_id) else {
-            return Err(refuse(
-                ErrorCode::NotFound,
-                "house_query_not_found",
-                format!("No running query has the id {query_id}"),
-                &[("query_id", query_id.to_string())],
-            ));
-        };
-        // Until HS1 Task 20's `house:admin` scope, a caller cancels only its own.
-        if query.user != user.user || query.namespace != user.namespace {
-            return Err(refuse(
-                ErrorCode::PermissionDenied,
-                "house_access_denied",
-                format!("Query {query_id} is not yours to cancel"),
-                &[("query_id", query_id.to_string())],
-            ));
-        }
-        query.cancelled = true;
-        if let Some(kill) = &query.kill {
-            let _ = kill.kill(ExitReason::Cancel);
-        }
-        Ok(())
-    }
-}
-
-impl RunningGuard {
-    /// Whether the query was cancelled before it got this far.
-    fn cancelled(&self) -> bool {
-        self.running
-            .lock()
-            .get(&self.query_id)
-            .is_some_and(|q| q.cancelled)
-    }
-
-    /// The statement started: later cancels kill it, and an earlier one does now.
-    fn started(&self, kill: Option<KillHandle>) {
-        let mut queries = self.running.lock();
-        if let Some(query) = queries.get_mut(&self.query_id) {
-            if query.cancelled
-                && let Some(kill) = &kill
-            {
-                let _ = kill.kill(ExitReason::Cancel);
-            }
-            query.kill = kill;
-        }
-    }
-}
-
-impl Drop for RunningGuard {
-    fn drop(&mut self) {
-        self.running.lock().remove(&self.query_id);
+    /// Admits a statement with `settings` under the namespace queues and node
+    /// memory (§49 §12, HS1 Task 21).
+    async fn admit(
+        &self,
+        user: &UserMap,
+        settings: &[(String, String)],
+        access: crate::quota::Access,
+    ) -> Result<crate::admission::Ticket, ConnectError> {
+        let memory = crate::limits::statement_memory(settings, &self.config.session_limits);
+        self.governance
+            .admission
+            .admit(&user.namespace.to_string(), memory, access)
+            .await
+            .map_err(|err| to_connect(&err))
     }
 }
 
@@ -188,6 +106,8 @@ struct Started {
     framer: Framer,
     running: RunningGuard,
     deadline: Option<Deadline>,
+    /// Its admission (HS1 Task 21), held until the result ends.
+    ticket: Option<crate::admission::Ticket>,
     started: Instant,
     /// What an `INSERT` into a lake table wrote, which the front ran to its
     /// commit before answering (HS1 Task 12).
@@ -423,13 +343,14 @@ impl HouseApi {
             .map_err(|err| to_connect(&err))?;
             match outcome {
                 gate::CatalogOutcome::Done => {
-                    let running = self.running.register(&st.query_id, user)?;
+                    let running = self.register(&st.query_id, user, &st.sql)?;
                     return Ok(Started {
                         lease: None,
                         header: Some(Vec::new()),
                         framer: Framer::Json(JsonFramer::new(st.caps, false)),
                         running,
                         deadline: None,
+                        ticket: None,
                         started: Instant::now(),
                         inserted: None,
                     });
@@ -452,7 +373,12 @@ impl HouseApi {
                             "this House has no catalog",
                         ))));
                     };
-                    let running = self.running.register(&st.query_id, user)?;
+                    let running = self.register(&st.query_id, user, &st.sql)?;
+                    // The front carries a lake write to its commit (HS1 Task 12).
+                    running.uncancellable();
+                    let ticket = self
+                        .admit(user, &st.settings, crate::quota::Access::Write)
+                        .await?;
                     let started = Instant::now();
                     let lease = self
                         .pool
@@ -473,6 +399,7 @@ impl HouseApi {
                         known: &known,
                         max_insert_bytes: config.lake_insert_max_bytes,
                         pipe_batch: None,
+                        admitted: Some(&ticket),
                     };
                     let inserted_into = match &outcome {
                         gate::CatalogOutcome::Insert(target) => {
@@ -527,6 +454,7 @@ impl HouseApi {
                         framer: Framer::Json(JsonFramer::new(st.caps, false)),
                         running,
                         deadline: None,
+                        ticket: Some(ticket),
                         started,
                         inserted: Some(inserted),
                     });
@@ -548,13 +476,14 @@ impl HouseApi {
                     Some(Ok(())) => {
                         // `SET` and `USE` keep nothing without a session: an empty
                         // result, as in ClickHouse.
-                        let running = self.running.register(&st.query_id, user)?;
+                        let running = self.register(&st.query_id, user, &st.sql)?;
                         return Ok(Started {
                             lease: None,
                             header: Some(Vec::new()),
                             framer: Framer::Json(JsonFramer::new(st.caps, false)),
                             running,
                             deadline: None,
+                            ticket: None,
                             started: Instant::now(),
                             inserted: None,
                         });
@@ -585,7 +514,12 @@ impl HouseApi {
             insert: deny::rewrite_host_functions(&spec.insert, &gate::host_values(&user.user)),
             format: spec.format,
         });
-        let running = self.running.register(&st.query_id, user)?;
+        let running = self.register(&st.query_id, user, &st.sql)?;
+        let access = match &classified {
+            Classified::Known { stmt, .. } => crate::quota::Access::of(stmt),
+            Classified::Unparsed { .. } => crate::quota::Access::Read,
+        };
+        let ticket = self.admit(user, &st.settings, access).await?;
         let started = Instant::now();
 
         let mut lease = self
@@ -789,6 +723,7 @@ impl HouseApi {
             framer,
             running,
             deadline,
+            ticket: Some(ticket),
             started,
             inserted: None,
         })
@@ -823,6 +758,7 @@ impl HouseApi {
             lease,
             running,
             deadline,
+            ticket,
             ..
         } = self.start(user, st).await?;
         let Some(mut lease) = lease else {
@@ -848,7 +784,7 @@ impl HouseApi {
             }
         };
         self.pool.release(lease, Outcome::Completed);
-        drop((running, deadline));
+        drop((running, deadline, ticket));
         result
     }
 }
@@ -917,6 +853,7 @@ struct Run {
     inserted: Option<crate::insert::Inserted>,
     _running: RunningGuard,
     _deadline: Option<Deadline>,
+    _ticket: Option<crate::admission::Ticket>,
 }
 
 impl Run {
@@ -927,6 +864,7 @@ impl Run {
             framer,
             running,
             deadline,
+            ticket,
             started,
             inserted,
         } = started;
@@ -952,6 +890,7 @@ impl Run {
             inserted,
             _running: running,
             _deadline: deadline,
+            _ticket: ticket,
         };
         run.send_header_if_known();
         if front_only {

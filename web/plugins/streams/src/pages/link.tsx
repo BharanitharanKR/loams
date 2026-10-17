@@ -74,7 +74,7 @@ export function LinkPage({
   );
   const back = `/streams/${encodeURIComponent(ns)}/links`;
   return (
-    <div className="lc-page max-w-[1180px]">
+    <div className="lc-page">
       <PageHead
         crumbs={
           <>

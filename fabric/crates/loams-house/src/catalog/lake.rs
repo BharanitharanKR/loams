@@ -188,6 +188,30 @@ pub struct Lake {
     committer: std::sync::OnceLock<Arc<crate::commit::Committer>>,
     /// This front's state of the pipes' views (HS1 Task 16).
     pipe_states: Arc<crate::pipes::PipeStates>,
+    /// Pipes and materialized views per namespace (§49 §12, HS1 Task 21).
+    object_caps: ObjectCaps,
+    /// The front's quotas (HS1 Task 22): the `pipes` quota, checked where
+    /// pipes are made. Set once, when the front starts serving.
+    quotas: std::sync::OnceLock<Arc<crate::quota::Quotas>>,
+}
+
+/// How many pipes and materialized views a namespace may hold (§49 §12: 32 and
+/// 64; `36` past either).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ObjectCaps {
+    /// Pipes per namespace.
+    pub pipes: usize,
+    /// Materialized views per namespace.
+    pub views: usize,
+}
+
+impl Default for ObjectCaps {
+    fn default() -> Self {
+        Self {
+            pipes: crate::limits::MAX_PIPES_PER_NAMESPACE,
+            views: crate::limits::MAX_VIEWS_PER_NAMESPACE,
+        }
+    }
 }
 
 impl fmt::Debug for Lake {
@@ -225,7 +249,20 @@ impl Lake {
             store: None,
             committer: std::sync::OnceLock::new(),
             pipe_states: Arc::default(),
+            object_caps: ObjectCaps::default(),
+            quotas: std::sync::OnceLock::new(),
         }
+    }
+
+    /// Holds the namespaces' pipes to `quotas` (HS1 Task 22). The first call
+    /// wins: one lake is served by one front.
+    pub fn set_quotas(&self, quotas: Arc<crate::quota::Quotas>) {
+        let _ = self.quotas.set(quotas);
+    }
+
+    /// The quotas its pipes are held to, once a front set them.
+    pub fn quotas(&self) -> Option<&Arc<crate::quota::Quotas>> {
+        self.quotas.get()
     }
 
     /// This front's state of the pipes' views (HS1 Task 16).
@@ -302,6 +339,17 @@ impl Lake {
     /// gives a table dropped after a catalog's restore point the same one).
     pub fn dropped_name(table_uuid: &uuid::Uuid, dropped_at_ms: u64) -> String {
         format!("t_{}_{dropped_at_ms}", table_uuid.simple())
+    }
+
+    /// How many pipes and materialized views a namespace may hold.
+    pub fn with_object_caps(mut self, caps: ObjectCaps) -> Self {
+        self.object_caps = caps;
+        self
+    }
+
+    /// [`Lake::with_object_caps`]'s caps.
+    pub fn object_caps(&self) -> ObjectCaps {
+        self.object_caps
     }
 
     /// How long `UNDROP TABLE` can bring a table back.

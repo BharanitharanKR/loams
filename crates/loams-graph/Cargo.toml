@@ -101,6 +101,8 @@ loams-meta.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 loams-graph = { path = ".", features = ["test-hooks"] }
+# `denials_are_audited` reads the audit lines (GR1 Task 24).
+tracing-subscriber.workspace = true
 # `licences_cover_every_grafeo_crate` reads `Cargo.lock` and `connectors/licences.toml`.
 toml.workspace = true
 # `proto_has_no_path_fields` walks `loams_proto::FILE_DESCRIPTOR_SET`.

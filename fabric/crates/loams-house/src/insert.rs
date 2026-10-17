@@ -339,6 +339,9 @@ pub struct InsertContext<'a> {
     pub max_insert_bytes: u64,
     /// The pipe records a materialized view's `SELECT` reads (HS1 Task 16).
     pub pipe_batch: Option<&'a crate::pipes::PipeBatch>,
+    /// The statement's admission (HS1 Task 21): its memory goes back once the
+    /// worker's part is done, since the write then only waits for its commit.
+    pub admitted: Option<&'a crate::admission::Ticket>,
 }
 
 /// What an `INSERT` did.
@@ -537,7 +540,36 @@ impl From<HouseError> for Stop {
 
 /// Runs an `INSERT` into a lake table on `lease` (see the module docs); the
 /// lease is released or killed here. `feed` sends a streamed source's data.
+///
+/// Rows written are a `house.insert` usage event (HS1 Task 22), whichever
+/// surface or pipe wrote them.
 pub async fn run(
+    ctx: &InsertContext<'_>,
+    lease: WorkerLease,
+    target: Target,
+    feed: Option<&mut (dyn Feed + '_)>,
+) -> Result<Inserted, HouseError> {
+    let (database, table) = (target.database.clone(), target.name.clone());
+    let inserted = write_and_commit(ctx, lease, target, feed).await?;
+    if inserted.written_rows > 0
+        && let Some(usage) = ctx.pool.usage()
+    {
+        usage.emit(crate::usage::UsageEvent::Insert(
+            crate::usage::InsertUsage {
+                namespace: ctx.namespace.to_string(),
+                query_id: ctx.query_id.to_string(),
+                database,
+                table,
+                rows: inserted.written_rows,
+                bytes: inserted.written_bytes,
+                at: std::time::SystemTime::now(),
+            },
+        ));
+    }
+    Ok(inserted)
+}
+
+async fn write_and_commit(
     ctx: &InsertContext<'_>,
     lease: WorkerLease,
     target: Target,
@@ -630,6 +662,9 @@ async fn write_staged(
     match stage(ctx, &mut lease, target, &session, feed).await {
         Ok(written) => {
             ctx.pool.release(lease, Outcome::Completed);
+            if let Some(ticket) = ctx.admitted {
+                ticket.release_memory();
+            }
             Ok(written)
         }
         Err(stop) => {

@@ -32,7 +32,7 @@ export const KINDS: Readonly<Record<ServiceKind, KindInfo>> = {
     kind: 'sql-database',
     label: 'Loams SQL database',
     blurb: 'A MySQL-compatible Loams SQL database.',
-    page: '/wesql',
+    page: '/sql',
     product: 'Loams SQL',
     metric: { name: 'Queries', unit: '/s' },
     glyph: 'SQL',

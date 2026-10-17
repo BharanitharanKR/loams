@@ -120,6 +120,8 @@ pub struct OdbStats {
     pub base_hits: u64,
     /// Lookups the multi-pack index answered.
     pub midx_hits: u64,
+    /// Blobs read whole (`rebase_reads_only_changed_paths` counts them).
+    pub blob_reads: u64,
 }
 
 #[derive(Debug, Default)]
@@ -128,6 +130,7 @@ struct Counters {
     prefix_inflates: AtomicU64,
     base_hits: AtomicU64,
     midx_hits: AtomicU64,
+    blob_reads: AtomicU64,
 }
 
 /// A source of byte ranges of one immutable object: how a multi-pack
@@ -837,6 +840,7 @@ impl RangeOdb {
             prefix_inflates: self.counters.prefix_inflates.load(Ordering::Relaxed),
             base_hits: self.counters.base_hits.load(Ordering::Relaxed),
             midx_hits: self.counters.midx_hits.load(Ordering::Relaxed),
+            blob_reads: self.counters.blob_reads.load(Ordering::Relaxed),
         }
     }
 
@@ -1110,6 +1114,9 @@ impl RangeOdb {
             if !chain.is_empty() {
                 lock(&self.bases).insert(at, kind, data.clone());
             }
+        }
+        if kind == Kind::Blob {
+            self.counters.blob_reads.fetch_add(1, Ordering::Relaxed);
         }
         Ok((kind, data))
     }

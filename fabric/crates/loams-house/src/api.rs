@@ -59,7 +59,7 @@ pub use catalog::{ApiCatalog, FixtureCatalog, LakeCatalog};
 
 use crate::catalog::Lake;
 use frames::Caps;
-use run::{Output, Running, Statement, sorted};
+use run::{Output, Statement, sorted};
 
 use crate::admission::WorkerPool;
 use crate::auth;
@@ -102,7 +102,17 @@ pub struct HouseApi {
     catalog: Arc<dyn ApiCatalog>,
     /// The catalog of lake tables (HS1 Task 10), when the House has one.
     lake: Option<Arc<Lake>>,
-    running: Arc<Running>,
+    governance: Governance,
+}
+
+/// What the API shares with the front's HTTP interface (HS1 Task 21): its
+/// admission and its process list.
+#[derive(Debug, Clone)]
+pub struct Governance {
+    /// Namespace queues and node memory.
+    pub admission: Arc<crate::admission::Admission>,
+    /// Running statements, both surfaces.
+    pub processes: Arc<crate::watchdog::Processes>,
 }
 
 impl HouseApi {
@@ -113,13 +123,14 @@ impl HouseApi {
         pool: WorkerPool,
         catalog: Arc<dyn ApiCatalog>,
         lake: Option<Arc<Lake>>,
+        governance: Governance,
     ) -> Arc<Self> {
         Arc::new(Self {
             config,
             pool,
             catalog,
             lake,
-            running: Arc::new(Running::default()),
+            governance,
         })
     }
 
@@ -231,7 +242,25 @@ fn clickhouse_metadata(err: &HouseError) -> [(&'static str, String); 2] {
 
 /// A House error as a Connect error: [`reason_for`] its code, the message, and
 /// `clickhouse_code` and `clickhouse_name` in `metadata`.
+///
+/// A namespace quota's refusal (HS1 Task 22, `202` or `164`) is
+/// `resource_exhausted`, `house_quota_exceeded`, with the `quota` and its
+/// `limit` in `metadata` too.
 pub fn to_connect(err: &HouseError) -> ConnectError {
+    if let Some((quota, limit)) = crate::quota::refusal_parts(err.message()) {
+        let [code, name] = clickhouse_metadata(err);
+        return refuse(
+            ErrorCode::ResourceExhausted,
+            crate::quota::QUOTA_EXCEEDED,
+            err.message(),
+            &[
+                code,
+                name,
+                ("quota", quota.to_string()),
+                ("limit", limit.to_string()),
+            ],
+        );
+    }
     let (code, reason) = reason_for(err.code());
     refuse(code, reason, err.message(), &clickhouse_metadata(err))
 }
@@ -436,7 +465,34 @@ impl HouseService for HouseApi {
         if request.query_id.is_empty() {
             return Err(invalid("query_id", "query_id is empty"));
         }
-        self.running.cancel(&request.query_id, &user)?;
+        // One process list for both surfaces (HS1 Task 21): the caller's own,
+        // or any of its namespace's with `house:admin`.
+        match self
+            .governance
+            .processes
+            .kill(&request.query_id, &user, false)
+        {
+            Ok(_) => {}
+            Err(crate::watchdog::KillRefusal::NotFound) => {
+                return Err(refuse(
+                    ErrorCode::NotFound,
+                    "house_query_not_found",
+                    format!("No running query has the id {}", request.query_id),
+                    &[("query_id", request.query_id.clone())],
+                ));
+            }
+            Err(crate::watchdog::KillRefusal::Denied) => {
+                return Err(refuse(
+                    ErrorCode::PermissionDenied,
+                    "house_access_denied",
+                    format!(
+                        "Query {} is another user's: cancelling it needs house:admin",
+                        request.query_id
+                    ),
+                    &[("query_id", request.query_id.clone())],
+                ));
+            }
+        }
         Response::ok(pb::CancelQueryResponse::default())
     }
 
@@ -895,6 +951,42 @@ mod tests {
                 code.as_str()
             );
         }
+    }
+
+    /// A quota's refusal (HS1 Task 22) is `house_quota_exceeded` whatever its
+    /// ClickHouse code, with the quota and its limit.
+    #[test]
+    fn quota_refusals_are_house_quota_exceeded() {
+        use base64::Engine as _;
+        use buffa::Message as _;
+        for code in [202, 164] {
+            let err = crate::quota::refusal(code, "scan_bytes_per_day", 1000, "used");
+            let connect = to_connect(&err);
+            assert_eq!(connect.code, ErrorCode::ResourceExhausted);
+            let detail = connect
+                .details
+                .iter()
+                .find(|d| d.type_url.ends_with("loams.errors.v1.ErrorInfo"))
+                .expect("an ErrorInfo");
+            let value = detail.value.as_deref().expect("a value");
+            let bytes = base64::engine::general_purpose::STANDARD_NO_PAD
+                .decode(value.trim_end_matches('='))
+                .expect("base64");
+            let info = ErrorInfo::decode_from_slice(&bytes).expect("decodes");
+            assert_eq!(info.reason, "house_quota_exceeded");
+            assert_eq!(
+                info.metadata.get("quota").map(String::as_str),
+                Some("scan_bytes_per_day")
+            );
+            assert_eq!(info.metadata.get("limit").map(String::as_str), Some("1000"));
+            assert_eq!(
+                info.metadata.get("clickhouse_code").map(String::as_str),
+                Some(code.to_string().as_str())
+            );
+        }
+        // Admission's own 202 stays `house_too_many_queries`.
+        let busy = HouseError::from(ChError::too_many_simultaneous_queries("busy"));
+        assert!(crate::quota::refusal_parts(busy.message()).is_none());
     }
 
     #[test]

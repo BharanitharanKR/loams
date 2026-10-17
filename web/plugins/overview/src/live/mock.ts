@@ -26,7 +26,7 @@ export const KPIS: Kpi[] = [
   { id: 'storage', label: 'Storage', unit: 'bytes', better: 'lower' },
 ];
 
-export const PRODUCTS: Product[] = ['Postgres', 'WeSQL', 'Streams', 'Durable', 'Live'];
+export const PRODUCTS: Product[] = ['Postgres', 'Loams SQL', 'Streams', 'Durable', 'Live'];
 
 const GB = 1e9;
 
@@ -41,7 +41,7 @@ const KPI_SHAPE: Record<KpiId, { base: number; swing: number; noise: number }> =
 /** Per-product usage baselines: CPU cores, memory bytes, storage bytes. */
 const USAGE_BASE: Record<Product, Record<Resource, number>> = {
   Postgres: { cpu: 1.6, memory: 3.2 * GB, storage: 18 * GB },
-  WeSQL: { cpu: 1.1, memory: 2.4 * GB, storage: 11 * GB },
+  'Loams SQL': { cpu: 1.1, memory: 2.4 * GB, storage: 11 * GB },
   Streams: { cpu: 0.8, memory: 1.5 * GB, storage: 6 * GB },
   Durable: { cpu: 0.4, memory: 0.9 * GB, storage: 2 * GB },
   Live: { cpu: 0.3, memory: 0.6 * GB, storage: 1 * GB },

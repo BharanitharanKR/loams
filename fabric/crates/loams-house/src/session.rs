@@ -140,6 +140,10 @@ pub type Unpin = Arc<dyn Fn(&str) + Send + Sync>;
 pub struct SessionTable {
     sessions: Mutex<HashMap<Key, Arc<Slot>>>,
     max_live: usize,
+    /// Live sessions per user (HS1 Task 21; Task 4's I5).
+    max_per_user: usize,
+    /// Workers one user's sessions may pin (HS1 Task 21; Task 4's I5).
+    max_pins_per_user: usize,
     unpin: Unpin,
 }
 
@@ -155,9 +159,22 @@ impl std::fmt::Debug for SessionTable {
 impl SessionTable {
     /// An empty table; `unpin` releases a pinned worker when its session ends.
     pub fn new(max_live: usize, unpin: Unpin) -> Arc<Self> {
+        Self::with_user_caps(max_live, usize::MAX, usize::MAX, unpin)
+    }
+
+    /// [`SessionTable::new`], with at most `max_per_user` live sessions and
+    /// `max_pins_per_user` pinned workers per user (`202` past either).
+    pub fn with_user_caps(
+        max_live: usize,
+        max_per_user: usize,
+        max_pins_per_user: usize,
+        unpin: Unpin,
+    ) -> Arc<Self> {
         Arc::new(Self {
             sessions: Mutex::new(HashMap::new()),
             max_live,
+            max_per_user,
+            max_pins_per_user,
             unpin,
         })
     }
@@ -218,6 +235,15 @@ impl SessionTable {
                     if map.len() >= self.max_live {
                         return Err(HouseError::from(ChError::too_many_simultaneous_queries(
                             format!("Too many sessions: at most {} are live", self.max_live),
+                        )));
+                    }
+                    let users = map.keys().filter(|(u, _)| u == user).count();
+                    if users >= self.max_per_user {
+                        return Err(HouseError::from(ChError::too_many_simultaneous_queries(
+                            format!(
+                                "Too many sessions for user {user}: at most {} are live",
+                                self.max_per_user
+                            ),
                         )));
                     }
                     let slot = Arc::new(Slot {
@@ -300,9 +326,35 @@ impl SessionGuard {
     /// pin lasts only if [`SessionGuard::confirm_pin`] is called before the guard
     /// drops; otherwise (the statement failed, so the session still has no
     /// temporary table) the worker is unpinned (fix round 1, M1).
-    pub fn pin_provisionally(&mut self, worker: String) {
-        self.state().pinned = Some(worker.clone());
+    ///
+    /// `202` when the user's other sessions already pin `max_pins_per_user`
+    /// workers (HS1 Task 21); the caller then gives the worker back.
+    pub fn pin_provisionally(&mut self, worker: String) -> Result<(), HouseError> {
+        {
+            // Counted and set under the map's lock, so two sessions of one user
+            // pinning at once cannot both pass.
+            let map = self.table.map();
+            let pinned = map
+                .iter()
+                .filter(|((user, _), slot)| {
+                    *user == self.key.0
+                        && !Arc::ptr_eq(slot, &self.slot)
+                        && slot.state().pinned.is_some()
+                })
+                .count();
+            if pinned >= self.table.max_pins_per_user {
+                return Err(HouseError::from(ChError::too_many_simultaneous_queries(
+                    format!(
+                        "Too many pinned workers for user {}: its sessions' temporary tables \
+                         hold {pinned} (at most {})",
+                        self.key.0, self.table.max_pins_per_user
+                    ),
+                )));
+            }
+            self.slot.state().pinned = Some(worker.clone());
+        }
         self.provisional = Some(worker);
+        Ok(())
     }
 
     /// The statement that pinned the worker succeeded: the pin stays.
@@ -419,7 +471,7 @@ mod tests {
         let unpinned = Arc::new(Mutex::new(Vec::new()));
         let table = table(Arc::clone(&unpinned));
         let mut failed = table.checkout("alice", 1, &params("p", &[])).expect("new");
-        failed.pin_provisionally("w1".to_string());
+        failed.pin_provisionally("w1".to_string()).expect("pins");
         drop(failed);
         assert_eq!(
             unpinned.lock().expect("lock").as_slice(),
@@ -429,7 +481,7 @@ mod tests {
             .checkout("alice", 1, &params("p", &[]))
             .expect("again");
         assert_eq!(ok.state().pinned, None, "the failed pin is gone");
-        ok.pin_provisionally("w2".to_string());
+        ok.pin_provisionally("w2".to_string()).expect("pins");
         ok.confirm_pin();
         drop(ok);
         assert_eq!(unpinned.lock().expect("lock").len(), 1);
@@ -437,6 +489,36 @@ mod tests {
             .checkout("alice", 1, &params("p", &[]))
             .expect("again");
         assert_eq!(held.state().pinned.as_deref(), Some("w2"));
+    }
+
+    /// HS1 Task 21 (Task 4's I5): a user holds at most its own share of the
+    /// live sessions and of the pinned workers; other users are not held up.
+    #[test]
+    fn per_user_caps_on_sessions_and_pins() {
+        let table = SessionTable::with_user_caps(16, 2, 1, Arc::new(|_: &str| {}));
+        let mut first = table.checkout("alice", 1, &params("a", &[])).expect("1");
+        let mut second = table.checkout("alice", 1, &params("b", &[])).expect("2");
+        assert_eq!(
+            table
+                .checkout("alice", 1, &params("c", &[]))
+                .expect_err("third")
+                .code(),
+            202
+        );
+        let mut bob = table.checkout("bob", 1, &params("a", &[])).expect("bob's");
+        first
+            .pin_provisionally("w1".to_string())
+            .expect("first pin");
+        first.confirm_pin();
+        let err = second
+            .pin_provisionally("w2".to_string())
+            .expect_err("second pin");
+        assert_eq!(err.code(), 202, "{err}");
+        assert_eq!(second.state().pinned, None);
+        bob.pin_provisionally("w3".to_string())
+            .expect("bob's own pin");
+        // A session re-pinning (its worker died) does not count itself.
+        first.pin_provisionally("w4".to_string()).expect("re-pin");
     }
 
     /// Fix round 1, M2: a session is marked busy under the map's lock, so a sweep

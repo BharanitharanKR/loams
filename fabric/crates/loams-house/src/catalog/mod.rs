@@ -32,7 +32,7 @@ use loams_house_lake::{NamespaceIdent, TableCreation, TableIdent, TableRequireme
 
 pub use lake::{
     DEFAULT_RETENTION, DROPPED, DROPPED_AT_MS, DROPPED_DATABASE, DROPPED_NAME, DatabaseInfo, Lake,
-    LakeRoot, PrefixGrants, RESERVED_PREFIX, register_all,
+    LakeRoot, ObjectCaps, PrefixGrants, RESERVED_PREFIX, register_all,
 };
 pub use local::{CATALOG_USER_VERSION, LocalCatalog};
 pub use mem::MemCatalog;

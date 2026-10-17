@@ -141,6 +141,8 @@ pub struct Verdict {
     /// The engine's own classification, or `None` when its translator could not parse the
     /// statement.
     pub engine: Option<Access>,
+    /// The keyword guard's classification ([`classify`]).
+    pub guard: Access,
 }
 
 impl Verdict {
@@ -198,10 +200,12 @@ pub fn gate_verdict(
         Ok(engine) => Ok(Verdict {
             access: guard.max(engine),
             engine: Some(engine),
+            guard,
         }),
         Err(GraphError::Engine { .. }) => Ok(Verdict {
             access: guard,
             engine: None,
+            guard,
         }),
         Err(refused) => Err(refused),
     }

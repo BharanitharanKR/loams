@@ -132,7 +132,7 @@ impl ObjectService for ObjectsAbsent {
 #[cfg(feature = "git")]
 pub(crate) use served::{
     ObjectRoute, internal, odb_error, open_odb, pack_pb, parse_oid, serve_object,
-    workspace_not_found,
+    workspace_not_found, ws_pack_error,
 };
 
 #[cfg(feature = "git")]
@@ -327,7 +327,7 @@ mod served {
         }
     }
 
-    fn ws_pack_error(err: WsPackError) -> ConnectError {
+    pub(crate) fn ws_pack_error(err: WsPackError) -> ConnectError {
         match err {
             err @ (WsPackError::TooLarge { .. }
             | WsPackError::Invalid(_)

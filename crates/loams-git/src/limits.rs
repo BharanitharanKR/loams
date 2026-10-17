@@ -126,6 +126,11 @@ pub const MAX_GREP_PATTERNS: usize = 64;
 /// node holds at most this many bundles of up to `MAX_PACK_BYTES`
 /// (§36 §19.5.2; plan GT1 ruling T24.7).
 pub const MAX_WS_PACK_UPLOADS: usize = 4;
+/// Edits (writes, deletes, renames) in one `ApplyEdits` call (§36 §19.10;
+/// plan GT1 ruling T26.3).
+pub const MAX_EDITS: usize = 10_000;
+/// Paths in one `ReadFiles` call (§36 §19.10; plan GT1 ruling T26.3).
+pub const MAX_READ_PATHS: usize = 1_000;
 
 /// One limit as the limits table prints it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -198,4 +203,6 @@ pub const LIMITS: &[Limit] = &[
     limit("GREP_MAX_MATCHES", "10,000", "§36 §19.8"),
     limit("MAX_GREP_PATTERNS", "64", "§36 §19.8"),
     limit("MAX_WS_PACK_UPLOADS", "4", "§36 §19.5.2"),
+    limit("MAX_EDITS", "10,000", "§36 §19.10"),
+    limit("MAX_READ_PATHS", "1,000", "§36 §19.10"),
 ];

@@ -210,6 +210,11 @@ impl Lakehouse {
 }
 
 async fn lakehouse(test: &str) -> Lakehouse {
+    lakehouse_with(test, |lake| lake).await
+}
+
+/// [`lakehouse`], with its lake adjusted.
+async fn lakehouse_with(test: &str, adjust: impl FnOnce(Lake) -> Lake) -> Lakehouse {
     let dir = tmp_root(&format!("{test}-bucket"));
     let url = format!("file://{}", dir.display());
     let store = Store::from_url(&url, Vec::<(String, String)>::new()).expect("store");
@@ -223,11 +228,11 @@ async fn lakehouse(test: &str) -> Lakehouse {
     let pool = WorkerPool::start(small(2), Arc::new(launcher))
         .await
         .expect("the pool starts");
-    let lake = Arc::new(
+    let lake = Arc::new(adjust(
         Lake::new(catalog.clone() as Arc<dyn HouseCatalog>, LakeRoot::local())
             .with_store(store.clone())
             .with_grants(Arc::new(proxy) as Arc<dyn PrefixGrants>),
-    );
+    ));
     let config = HouseConfig {
         listen: "127.0.0.1:0".parse().expect("addr"),
         users: vec![
@@ -1032,4 +1037,51 @@ async fn s3queue_outside_prefix_is_344() {
         "CREATE TABLE q (a String) ENGINE = S3Queue('ns/2/in/*.csv', 'CSV')",
     )
     .await;
+}
+
+/// §49 §12 (HS1 Task 21): a namespace holds at most so many pipes and
+/// materialized views; one more is `36`, and `IF NOT EXISTS` of one it has is
+/// still fine.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn pipes_and_views_per_namespace_are_capped() {
+    let house = lakehouse_with("object-caps", |lake| {
+        lake.with_object_caps(loams_house::catalog::ObjectCaps { pipes: 1, views: 1 })
+    })
+    .await;
+    let addr = house.handle.local_addr();
+    let pipe = "CREATE TABLE q (k UInt64) ENGINE = LoamsStream('orders', 'JSONEachRow')";
+    ok(addr, pipe).await;
+    ok(
+        addr,
+        "CREATE TABLE IF NOT EXISTS q (k UInt64) ENGINE = LoamsStream('orders', 'JSONEachRow')",
+    )
+    .await;
+    assert_eq!(
+        code(
+            addr,
+            "CREATE TABLE q2 (k UInt64) ENGINE = LoamsStream('orders', 'JSONEachRow')"
+        )
+        .await
+        .as_deref(),
+        Some("36")
+    );
+    ok(
+        addr,
+        "CREATE TABLE t (k UInt64) ENGINE = MergeTree ORDER BY k",
+    )
+    .await;
+    ok(addr, "CREATE MATERIALIZED VIEW mv TO t AS SELECT k FROM q").await;
+    let second = post(
+        addr,
+        ("alice", "a"),
+        "CREATE MATERIALIZED VIEW mv2 TO t AS SELECT k FROM q",
+    )
+    .await;
+    assert_eq!(
+        second.header("X-ClickHouse-Exception-Code"),
+        Some("36"),
+        "{}",
+        second.text()
+    );
+    assert!(second.text().contains("at most 1"), "{}", second.text());
 }
