@@ -19,7 +19,18 @@
 //! * **Limits.** At most `max_workers` per node and `max_workers_per_namespace`
 //!   per namespace. A namespace at its limit waits; a node at its limit retires
 //!   another namespace's idle worker, or waits. Waiting past `acquire_timeout`
-//!   answers `202 TOO_MANY_SIMULTANEOUS_QUERIES` (§49 §12's queue is Task 21's).
+//!   answers `202 TOO_MANY_SIMULTANEOUS_QUERIES`.
+//! * **The watchdog** (§49 §12, HS1 Task 21). Every statement a lease starts is
+//!   killed as `timeout` (`159`) at its `max_execution_time` plus
+//!   [`crate::limits::WATCHDOG_GRACE`], whatever chDB does about its own limit;
+//!   a statement with streamed input from the end of its input.
+//!
+//! # Admission (§49 §12, HS1 Task 21)
+//!
+//! Before a statement takes a worker, [`Admission::admit`] holds it to its
+//! namespace's running cap (16), queueing up to 64 for at most 30 s, and to the
+//! node's memory: the `max_memory_usage` of every admitted statement sums to at
+//! most 85 % of the node's memory. Past the queue or its wait: `202`.
 
 use std::collections::BTreeMap;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -38,7 +49,7 @@ use tokio::sync::Notify;
 use tokio::time::Instant;
 
 use crate::errors::{ChError, HouseError};
-use crate::watchdog::{ExitReason, KillHandle, Launcher, WorkerShared};
+use crate::watchdog::{Deadline, ExitReason, KillHandle, Launcher, WorkerShared};
 
 /// The most bytes [`WorkerLease::run`] collects (R2.11, M6).
 pub const RUN_MAX_BYTES: usize = 64 * 1024 * 1024;
@@ -71,6 +82,9 @@ pub struct PoolConfig {
     pub isolation_class: String,
     /// The temporary-directory quota `Bind` names.
     pub temp_dir_quota_bytes: u64,
+    /// The `max_execution_time` cap: what the watchdog allows a statement that
+    /// sets none (§49 §12: 300 s, the worker profile's value).
+    pub max_execution_time: Duration,
 }
 
 impl Default for PoolConfig {
@@ -89,6 +103,7 @@ impl Default for PoolConfig {
             reap_every: Duration::from_secs(1),
             isolation_class: "shared".to_string(),
             temp_dir_quota_bytes: 1024 * 1024 * 1024,
+            max_execution_time: Duration::from_secs_f64(crate::limits::MAX_EXECUTION_TIME_S),
         }
     }
 }
@@ -217,6 +232,11 @@ pub struct WorkerLease {
     worker: Option<Worker>,
     namespace: String,
     query_id: String,
+    /// The running statement's watchdog (HS1 Task 21), disarmed when it ends.
+    watchdog: Option<Deadline>,
+    /// A statement with streamed input: its execution time, armed at the end of
+    /// its input.
+    armed_after_input: Option<Duration>,
 }
 
 /// What a running statement produces, in order.
@@ -633,6 +653,8 @@ impl WorkerPool {
                 worker: Some(worker),
                 namespace: namespace.to_string(),
                 query_id: String::new(),
+                watchdog: None,
+                armed_after_input: None,
             });
         }
     }
@@ -767,6 +789,8 @@ impl WorkerPool {
                     worker: Some(worker),
                     namespace: namespace.to_string(),
                     query_id: String::new(),
+                    watchdog: None,
+                    armed_after_input: None,
                 }));
             }
             // Lent out (a statement of the same session still finishing): wait.
@@ -944,6 +968,14 @@ impl WorkerLease {
     pub async fn start(&mut self, execute: Execute) -> Result<(), HouseError> {
         self.query_id = execute.query_id.clone();
         let query_id = self.query_id.clone();
+        let cap = self.pool.upgrade().map_or(
+            Duration::from_secs_f64(crate::limits::MAX_EXECUTION_TIME_S),
+            |p| p.config.max_execution_time,
+        );
+        let execution = crate::limits::statement_execution_time(&execute, cap);
+        let streams_input = execute.input.is_some();
+        self.watchdog = None;
+        self.armed_after_input = None;
         let worker = self.worker()?;
         if worker.in_flight {
             return Err(network(format!(
@@ -954,8 +986,20 @@ impl WorkerLease {
         worker.queries += 1;
         // A new statement: a handle taken for the previous one goes stale.
         worker.shared.bump_epoch();
+        let handle = KillHandle::new(Arc::clone(&worker.shared));
         match FrameCodec::write_async(&mut worker.writer, &Frame::Execute(execute)).await {
-            Ok(()) => Ok(()),
+            Ok(()) => {
+                // The watchdog (§49 §12): from now, or from the end of the input.
+                if streams_input {
+                    self.armed_after_input = Some(execution);
+                } else {
+                    self.watchdog = Some(handle.kill_at(
+                        Instant::now() + execution + crate::limits::WATCHDOG_GRACE,
+                        ExitReason::Timeout,
+                    ));
+                }
+                Ok(())
+            }
             Err(CodecError::Io(_)) => Err(self.died()),
             Err(err) => {
                 // Nothing was written: the frame could not be encoded (review I4).
@@ -979,9 +1023,18 @@ impl WorkerLease {
         Ok(())
     }
 
-    /// Ends the statement's `INSERT` body.
+    /// Ends the statement's `INSERT` body; its watchdog starts now.
     pub async fn end_input(&mut self) -> Result<(), HouseError> {
-        self.send_body(Frame::InputEnd).await
+        self.send_body(Frame::InputEnd).await?;
+        if let Some(execution) = self.armed_after_input.take()
+            && let Some(handle) = self.kill_handle()
+        {
+            self.watchdog = Some(handle.kill_at(
+                Instant::now() + execution + crate::limits::WATCHDOG_GRACE,
+                ExitReason::Timeout,
+            ));
+        }
+        Ok(())
     }
 
     async fn send_body(&mut self, frame: Frame) -> Result<(), HouseError> {
@@ -998,6 +1051,16 @@ impl WorkerLease {
     /// The next event of the running statement. An engine error is the statement's
     /// answer; a worker that dies answers with its [`ExitReason::client_error`].
     pub async fn next_event(&mut self) -> Result<Event, HouseError> {
+        let event = self.next_event_inner().await;
+        if matches!(event, Ok(Event::Done(_)) | Err(_)) {
+            // The statement is over: its watchdog with it.
+            self.watchdog = None;
+            self.armed_after_input = None;
+        }
+        event
+    }
+
+    async fn next_event_inner(&mut self) -> Result<Event, HouseError> {
         let worker = self.worker()?;
         if !worker.in_flight {
             return Err(network(
@@ -1223,5 +1286,322 @@ impl Drop for WorkerLease {
                 worker.shared.kill(ExitReason::Cancel);
             }
         }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Admission (§49 §12, HS1 Task 21)
+// ---------------------------------------------------------------------------
+
+/// The front's admission: per-namespace queues and node memory (§49 §12). One per
+/// front, shared by both surfaces.
+#[derive(Debug)]
+pub struct Admission {
+    limits: crate::limits::AdmissionLimits,
+    state: Mutex<AdmissionState>,
+    changed: Notify,
+}
+
+#[derive(Debug, Default)]
+struct AdmissionState {
+    /// Running and queued statements, by namespace.
+    namespaces: std::collections::HashMap<String, NamespaceLoad>,
+    /// The admitted statements' `max_memory_usage`, summed.
+    memory: u64,
+    /// Admitted statements.
+    running: usize,
+}
+
+#[derive(Debug, Default, Clone, Copy)]
+struct NamespaceLoad {
+    running: usize,
+    queued: usize,
+}
+
+/// What [`Admission`] holds now.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AdmissionStats {
+    /// Admitted statements, every namespace.
+    pub running: usize,
+    /// Waiting statements, every namespace (`loams_house_queue_depth`).
+    pub queued: usize,
+    /// The admitted statements' memory caps, summed.
+    pub memory: u64,
+}
+
+/// One admitted statement; dropping it lets the next in.
+#[derive(Debug)]
+pub struct Ticket {
+    admission: Arc<Admission>,
+    namespace: String,
+    /// The memory it still holds of the node's budget.
+    memory: AtomicU64,
+}
+
+impl Ticket {
+    /// Gives the statement's memory back to the node while it keeps its place
+    /// in its namespace: a lake write whose worker is done and which only waits
+    /// for its commit.
+    pub fn release_memory(&self) {
+        let memory = self.memory.swap(0, Ordering::AcqRel);
+        if memory > 0 {
+            {
+                let mut state = self.admission.lock();
+                state.memory = state.memory.saturating_sub(memory);
+            }
+            self.admission.changed.notify_waiters();
+        }
+    }
+}
+
+impl Drop for Ticket {
+    fn drop(&mut self) {
+        {
+            let mut state = self.admission.lock();
+            let memory = self.memory.swap(0, Ordering::AcqRel);
+            state.memory = state.memory.saturating_sub(memory);
+            state.running = state.running.saturating_sub(1);
+            if let Some(load) = state.namespaces.get_mut(&self.namespace) {
+                load.running = load.running.saturating_sub(1);
+                if load.running == 0 && load.queued == 0 {
+                    state.namespaces.remove(&self.namespace);
+                }
+            }
+        }
+        self.admission.changed.notify_waiters();
+    }
+}
+
+/// Takes a queue place, and gives it back however the wait ends.
+struct QueuePlace<'a> {
+    admission: &'a Admission,
+    namespace: &'a str,
+    /// Still to give back (false once admission took it back under its lock).
+    held: bool,
+}
+
+impl Drop for QueuePlace<'_> {
+    fn drop(&mut self) {
+        if !self.held {
+            return;
+        }
+        let mut state = self.admission.lock();
+        if let Some(load) = state.namespaces.get_mut(self.namespace) {
+            load.queued = load.queued.saturating_sub(1);
+            if load.running == 0 && load.queued == 0 {
+                state.namespaces.remove(self.namespace);
+            }
+        }
+    }
+}
+
+impl Admission {
+    /// Admission under `limits`.
+    pub fn new(limits: crate::limits::AdmissionLimits) -> Arc<Self> {
+        Arc::new(Self {
+            limits,
+            state: Mutex::new(AdmissionState::default()),
+            changed: Notify::new(),
+        })
+    }
+
+    /// Its limits.
+    pub fn limits(&self) -> &crate::limits::AdmissionLimits {
+        &self.limits
+    }
+
+    fn lock(&self) -> MutexGuard<'_, AdmissionState> {
+        self.state
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+
+    /// What it holds now.
+    pub fn stats(&self) -> AdmissionStats {
+        let state = self.lock();
+        AdmissionStats {
+            running: state.running,
+            queued: state.namespaces.values().map(|l| l.queued).sum(),
+            memory: state.memory,
+        }
+    }
+
+    /// Admits one statement of `namespace` that may use `memory` bytes: at once
+    /// when the namespace runs fewer than its cap and the node's admitted memory
+    /// has room for it (a statement alone on the node is always admitted, so a
+    /// cap larger than the budget still runs); else it queues, if the namespace's
+    /// queue has room, until both hold or `queue_timeout` passes. `202` past the
+    /// queue or the wait.
+    pub async fn admit(
+        self: &Arc<Self>,
+        namespace: &str,
+        memory: u64,
+    ) -> Result<Ticket, HouseError> {
+        let deadline = Instant::now() + self.limits.queue_timeout;
+        let mut place: Option<QueuePlace<'_>> = None;
+        loop {
+            // Registered before the check, so a release between the check and the
+            // wait is not missed.
+            let changed = self.changed.notified();
+            tokio::pin!(changed);
+            changed.as_mut().enable();
+            {
+                let mut state = self.lock();
+                let load = state.namespaces.get(namespace).copied().unwrap_or_default();
+                let fits = state.running == 0
+                    || state.memory.saturating_add(memory) <= self.limits.node_memory_budget;
+                if load.running < self.limits.max_running_per_namespace && fits {
+                    state.memory = state.memory.saturating_add(memory);
+                    state.running += 1;
+                    let entry = state.namespaces.entry(namespace.to_string()).or_default();
+                    entry.running += 1;
+                    if let Some(mut place) = place.take() {
+                        // The place is given back here, under the same lock.
+                        place.held = false;
+                        entry.queued = entry.queued.saturating_sub(1);
+                    }
+                    drop(state);
+                    return Ok(Ticket {
+                        admission: Arc::clone(self),
+                        namespace: namespace.to_string(),
+                        memory: AtomicU64::new(memory),
+                    });
+                }
+                if place.is_none() {
+                    if load.queued >= self.limits.max_queued_per_namespace {
+                        return Err(HouseError::from(ChError::too_many_simultaneous_queries(
+                            format!(
+                                "Too many simultaneous queries in this namespace: {} running \
+                                 and {} queued (at most {} and {})",
+                                load.running,
+                                load.queued,
+                                self.limits.max_running_per_namespace,
+                                self.limits.max_queued_per_namespace
+                            ),
+                        )));
+                    }
+                    state
+                        .namespaces
+                        .entry(namespace.to_string())
+                        .or_default()
+                        .queued += 1;
+                    place = Some(QueuePlace {
+                        admission: self,
+                        namespace,
+                        held: true,
+                    });
+                }
+            }
+            if tokio::time::timeout_at(deadline, changed).await.is_err() {
+                let waited = self.limits.queue_timeout;
+                let state = self.lock();
+                let load = state.namespaces.get(namespace).copied().unwrap_or_default();
+                let why = if load.running >= self.limits.max_running_per_namespace {
+                    format!(
+                        "{} queries of this namespace are running (at most {})",
+                        load.running, self.limits.max_running_per_namespace
+                    )
+                } else {
+                    format!(
+                        "the node's memory is admitted to other queries ({} of {} bytes; this \
+                         one needs {memory})",
+                        state.memory, self.limits.node_memory_budget
+                    )
+                };
+                return Err(HouseError::from(ChError::too_many_simultaneous_queries(
+                    format!("Too many simultaneous queries: waited {waited:?} because {why}"),
+                )));
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod admission_tests {
+    use super::*;
+    use crate::limits::AdmissionLimits;
+
+    fn with_limits(running: usize, queued: usize, wait_ms: u64, memory: u64) -> Arc<Admission> {
+        Admission::new(AdmissionLimits {
+            max_running_per_namespace: running,
+            max_queued_per_namespace: queued,
+            queue_timeout: Duration::from_millis(wait_ms),
+            node_memory_budget: memory,
+        })
+    }
+
+    /// A namespace's statements past its running cap queue, past its queue answer
+    /// `202` at once, and a queued one past its wait answers `202`; another
+    /// namespace is not held up.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn queue_then_202() {
+        let admission = with_limits(2, 1, 300, u64::MAX);
+        let a = admission.admit("ns1", 1).await.expect("first");
+        let _b = admission.admit("ns1", 1).await.expect("second");
+        // The third queues and gets in when one ends.
+        let queued = tokio::spawn({
+            let admission = Arc::clone(&admission);
+            async move { admission.admit("ns1", 1).await }
+        });
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(admission.stats().queued, 1);
+        // The queue is full: the fourth is 202 at once.
+        let started = Instant::now();
+        let full = admission.admit("ns1", 1).await.expect_err("queue full");
+        assert_eq!(full.code(), 202, "{full}");
+        assert!(started.elapsed() < Duration::from_millis(100));
+        // Another namespace runs.
+        let _other = admission.admit("ns2", 1).await.expect("another namespace");
+        drop(a);
+        let third = queued
+            .await
+            .expect("task")
+            .expect("admitted after a release");
+        assert_eq!(admission.stats().queued, 0);
+        // Nothing ends now: the next waits its 300 ms and is 202.
+        let started = Instant::now();
+        let waited = admission.admit("ns1", 1).await.expect_err("waited");
+        assert_eq!(waited.code(), 202, "{waited}");
+        assert!(waited.message().contains("running"), "{waited}");
+        assert!(started.elapsed() >= Duration::from_millis(300));
+        assert_eq!(
+            admission.stats().queued,
+            0,
+            "a timed-out wait leaves the queue"
+        );
+        drop(third);
+        assert_eq!(admission.stats().running, 2);
+    }
+
+    /// Admitted statements' memory caps sum to at most the node's budget; one
+    /// statement alone always runs.
+    #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+    async fn node_admission_by_memory() {
+        let admission = with_limits(16, 64, 300, 10);
+        let big = admission.admit("ns1", 8).await.expect("fits");
+        // Another namespace's 4 does not fit beside the 8: queued, then 202.
+        let err = admission.admit("ns2", 4).await.expect_err("no memory");
+        assert_eq!(err.code(), 202, "{err}");
+        assert!(err.message().contains("memory"), "{err}");
+        let _small = admission.admit("ns2", 2).await.expect("2 fits");
+        // Queued until the big one ends.
+        let waiting = tokio::spawn({
+            let admission = Arc::clone(&admission);
+            async move { admission.admit("ns3", 4).await }
+        });
+        tokio::time::sleep(Duration::from_millis(50)).await;
+        assert_eq!(admission.stats().memory, 10);
+        drop(big);
+        let four = waiting.await.expect("task").expect("admitted");
+        assert_eq!(admission.stats().memory, 6);
+        // A write waiting for its commit gives its memory back, not its place.
+        four.release_memory();
+        assert_eq!(admission.stats().memory, 2);
+        assert_eq!(admission.stats().running, 2);
+        drop(four);
+        assert_eq!(admission.stats().memory, 2);
+        // A statement larger than the budget runs alone.
+        let lone = with_limits(16, 64, 100, 10);
+        let _huge = lone.admit("ns", 64).await.expect("alone on the node");
     }
 }

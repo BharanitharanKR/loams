@@ -379,6 +379,7 @@ impl Scheduler {
                 known: &known,
                 max_insert_bytes: self.config.lake_insert_max_bytes,
                 pipe_batch: None,
+                admitted: None,
             };
             let outcome = match needs_compaction(&ctx, &database, &name).await {
                 Ok(true) => compact(&ctx, &database, &name, false).await,

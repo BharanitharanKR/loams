@@ -339,6 +339,9 @@ pub struct InsertContext<'a> {
     pub max_insert_bytes: u64,
     /// The pipe records a materialized view's `SELECT` reads (HS1 Task 16).
     pub pipe_batch: Option<&'a crate::pipes::PipeBatch>,
+    /// The statement's admission (HS1 Task 21): its memory goes back once the
+    /// worker's part is done, since the write then only waits for its commit.
+    pub admitted: Option<&'a crate::admission::Ticket>,
 }
 
 /// What an `INSERT` did.
@@ -630,6 +633,9 @@ async fn write_staged(
     match stage(ctx, &mut lease, target, &session, feed).await {
         Ok(written) => {
             ctx.pool.release(lease, Outcome::Completed);
+            if let Some(ticket) = ctx.admitted {
+                ticket.release_memory();
+            }
             Ok(written)
         }
         Err(stop) => {

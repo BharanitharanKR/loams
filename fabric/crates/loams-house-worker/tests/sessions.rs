@@ -249,6 +249,49 @@ async fn setting_over_cap_is_164() {
             .status,
         200
     );
+    // HS1 Task 21: §49 §12's read and result caps, on every route: URL, `SET`,
+    // and a `SETTINGS` clause, which the worker profile's constraint refuses.
+    let read = in_session(
+        addr,
+        "alice",
+        "s",
+        "SELECT 1",
+        &[("max_bytes_to_read", "2Ti")],
+    )
+    .await;
+    assert_eq!(code(&read), Some("164"), "{}", read.text());
+    assert!(
+        read.text()
+            .contains("max_bytes_to_read shouldn't be greater than 1099511627776"),
+        "{}",
+        read.text()
+    );
+    let result = in_session(addr, "alice", "s", "SET max_result_bytes = '11Gi'", &[]).await;
+    assert_eq!(code(&result), Some("164"), "{}", result.text());
+    let unlimited = in_session(addr, "alice", "s", "SET max_bytes_to_read = 0", &[]).await;
+    assert_eq!(code(&unlimited), Some("164"), "{}", unlimited.text());
+    let clause = in_session(
+        addr,
+        "alice",
+        "s",
+        "SELECT 1 SETTINGS max_result_bytes = 20000000000",
+        &[],
+    )
+    .await;
+    assert_eq!(code(&clause), Some("452"), "{}", clause.text());
+    let within = in_session(
+        addr,
+        "alice",
+        "s",
+        "SELECT getSetting('max_result_bytes'), getSetting('max_bytes_to_read')",
+        &[("max_result_bytes", "1Gi")],
+    )
+    .await;
+    assert_eq!(
+        within.text(),
+        "1073741824\t1099511627776\n",
+        "the profile's default"
+    );
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
@@ -448,7 +491,8 @@ async fn owned_statements_of_later_tasks_are_48() {
         ("BACKUP TABLE t TO Disk('default', 'b')", "RestoreTable"),
         ("RESTORE TABLE t FROM Disk('default', 'b')", "RestoreTable"),
         ("OPTIMIZE TABLE t FINAL", "has no catalog"),
-        ("KILL QUERY WHERE query_id = 'x'", "Task 21"),
+        // HS1 Task 21 serves `KILL QUERY WHERE query_id = '…'` only.
+        ("KILL QUERY WHERE user = 'x'", "KILL QUERY with a condition"),
         ("UNDROP TABLE t", "has no catalog"),
     ] {
         let response = in_session(addr, "alice", "l", sql, &[]).await;

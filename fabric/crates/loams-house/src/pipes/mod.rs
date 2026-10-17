@@ -486,9 +486,31 @@ pub async fn create_pipe(
             serde_json::to_string(&stmt.settings).map_err(|e| bad(e.to_string()))?,
         );
     }
+    // §49 §12: pipes per namespace (HS1 Task 21).
+    let cap = lake.object_caps().pipes;
+    if lake.load(namespace, database, &stmt.name).await?.is_none()
+        && pipes(lake, namespace).await?.len() >= cap
+    {
+        return Err(bad(format!(
+            "Too many pipes: a namespace holds at most {cap}"
+        )));
+    }
     lake.create_table(namespace, database, creation, stmt.if_not_exists)
         .await?;
     Ok(())
+}
+
+/// The materialized views of a namespace, over pipes and lake tables.
+async fn view_count(lake: &Lake, namespace: u64) -> Result<usize, HouseError> {
+    let mut count = 0;
+    for database in lake.databases(namespace).await? {
+        for name in lake.table_names(namespace, &database.name).await? {
+            if let Some(table) = lake.load(namespace, &database.name, &name).await? {
+                count += views_of(&table).len();
+            }
+        }
+    }
+    Ok(count)
 }
 
 /// `CREATE MATERIALIZED VIEW mv TO t AS SELECT … FROM q`, `q` a pipe.
@@ -544,6 +566,13 @@ pub async fn create_materialized_view(
                 stmt.name
             ))))
         };
+    }
+    // §49 §12: materialized views per namespace (HS1 Task 21).
+    let cap = lake.object_caps().views;
+    if view_count(lake, namespace).await? >= cap {
+        return Err(bad(format!(
+            "Too many materialized views: a namespace holds at most {cap}"
+        )));
     }
     let Some((source_db, source)) = stmt.source.clone() else {
         return Err(not_implemented(
@@ -1255,6 +1284,7 @@ impl ViewWriter {
             known: &known,
             max_insert_bytes: self.max_insert_bytes,
             pipe_batch: Some(&batch),
+            admitted: None,
         };
         crate::insert::write_files(&ctx, lease, &insert).await
     }

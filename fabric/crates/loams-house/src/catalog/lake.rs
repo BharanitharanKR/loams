@@ -188,6 +188,27 @@ pub struct Lake {
     committer: std::sync::OnceLock<Arc<crate::commit::Committer>>,
     /// This front's state of the pipes' views (HS1 Task 16).
     pipe_states: Arc<crate::pipes::PipeStates>,
+    /// Pipes and materialized views per namespace (§49 §12, HS1 Task 21).
+    object_caps: ObjectCaps,
+}
+
+/// How many pipes and materialized views a namespace may hold (§49 §12: 32 and
+/// 64; `36` past either).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ObjectCaps {
+    /// Pipes per namespace.
+    pub pipes: usize,
+    /// Materialized views per namespace.
+    pub views: usize,
+}
+
+impl Default for ObjectCaps {
+    fn default() -> Self {
+        Self {
+            pipes: crate::limits::MAX_PIPES_PER_NAMESPACE,
+            views: crate::limits::MAX_VIEWS_PER_NAMESPACE,
+        }
+    }
 }
 
 impl fmt::Debug for Lake {
@@ -225,6 +246,7 @@ impl Lake {
             store: None,
             committer: std::sync::OnceLock::new(),
             pipe_states: Arc::default(),
+            object_caps: ObjectCaps::default(),
         }
     }
 
@@ -302,6 +324,17 @@ impl Lake {
     /// gives a table dropped after a catalog's restore point the same one).
     pub fn dropped_name(table_uuid: &uuid::Uuid, dropped_at_ms: u64) -> String {
         format!("t_{}_{dropped_at_ms}", table_uuid.simple())
+    }
+
+    /// How many pipes and materialized views a namespace may hold.
+    pub fn with_object_caps(mut self, caps: ObjectCaps) -> Self {
+        self.object_caps = caps;
+        self
+    }
+
+    /// [`Lake::with_object_caps`]'s caps.
+    pub fn object_caps(&self) -> ObjectCaps {
+        self.object_caps
     }
 
     /// How long `UNDROP TABLE` can bring a table back.

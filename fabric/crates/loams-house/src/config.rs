@@ -85,6 +85,15 @@ pub struct HouseConfig {
     pub session_limits: crate::settings::SessionLimits,
     /// Sessions live at once (FL2 Ruling 10).
     pub max_live_sessions: usize,
+    /// Sessions one user may hold at once (HS1 Task 21; Task 4's I5).
+    pub max_sessions_per_user: usize,
+    /// Workers one user's sessions may pin (HS1 Task 21; Task 4's I5).
+    pub max_pinned_workers_per_user: usize,
+    /// The namespace queues and node memory admission (§49 §12, HS1 Task 21).
+    pub admission: crate::limits::AdmissionLimits,
+    /// Pipes and materialized views per namespace (§49 §12, HS1 Task 21); the
+    /// lake holds them ([`crate::catalog::Lake::with_object_caps`]).
+    pub object_caps: crate::catalog::ObjectCaps,
     /// The TLS listener (8443, HS1 Task 20), which may face other hosts:
     /// where it listens and its rustls configuration ([`crate::tls`]).
     pub tls: Option<TlsListener>,
@@ -192,6 +201,10 @@ impl Default for HouseConfig {
             body_limits: crate::compress::BodyLimits::default(),
             session_limits: crate::settings::SessionLimits::default(),
             max_live_sessions: crate::session::MAX_LIVE_SESSIONS,
+            max_sessions_per_user: crate::limits::MAX_SESSIONS_PER_USER,
+            max_pinned_workers_per_user: crate::limits::MAX_PINNED_WORKERS_PER_USER,
+            admission: crate::limits::AdmissionLimits::default(),
+            object_caps: crate::catalog::ObjectCaps::default(),
         }
     }
 }
@@ -643,6 +656,28 @@ pub struct LimitsSection {
     pub max_execution_time_s: Option<f64>,
     /// The `max_threads` cap (§49 §12).
     pub max_threads: Option<u64>,
+    /// The `max_bytes_to_read` cap (§49 §12); the worker profile's is 1 TiB.
+    pub max_bytes_to_read: Option<u64>,
+    /// The `max_result_bytes` cap (§49 §12); the worker profile's is 10 GiB.
+    pub max_result_bytes: Option<u64>,
+    /// [`HouseConfig::max_sessions_per_user`].
+    pub max_sessions_per_user: Option<usize>,
+    /// [`HouseConfig::max_pinned_workers_per_user`].
+    pub max_pinned_workers_per_user: Option<usize>,
+    /// Statements running at once per namespace (§49 §12: 16).
+    pub max_running_per_namespace: Option<usize>,
+    /// Statements queued per namespace (§49 §12: 64).
+    pub max_queued_per_namespace: Option<usize>,
+    /// How long a queued statement waits before `202`, in milliseconds (§49
+    /// §12: 30 000).
+    pub queue_timeout_ms: Option<u64>,
+    /// The node's memory, in bytes, of which admitted statements' caps may use
+    /// 85 % (default: the front's cgroup limit, else the machine's memory).
+    pub node_memory_bytes: Option<u64>,
+    /// Pipes per namespace (§49 §12: 32).
+    pub max_pipes_per_namespace: Option<usize>,
+    /// Materialized views per namespace (§49 §12: 64).
+    pub max_views_per_namespace: Option<usize>,
 }
 
 impl LimitsSection {
@@ -668,6 +703,33 @@ impl LimitsSection {
         set(&mut caps.max_memory_usage, self.max_memory_usage);
         set(&mut caps.max_execution_time_s, self.max_execution_time_s);
         set(&mut caps.max_threads, self.max_threads);
+        set(&mut caps.max_bytes_to_read, self.max_bytes_to_read);
+        set(&mut caps.max_result_bytes, self.max_result_bytes);
+        set(
+            &mut config.max_sessions_per_user,
+            self.max_sessions_per_user,
+        );
+        set(
+            &mut config.max_pinned_workers_per_user,
+            self.max_pinned_workers_per_user,
+        );
+        let admission = &mut config.admission;
+        set(
+            &mut admission.max_running_per_namespace,
+            self.max_running_per_namespace,
+        );
+        set(
+            &mut admission.max_queued_per_namespace,
+            self.max_queued_per_namespace,
+        );
+        set(&mut admission.queue_timeout, self.queue_timeout_ms.map(ms));
+        set(
+            &mut admission.node_memory_budget,
+            self.node_memory_bytes
+                .map(crate::limits::node_memory_budget),
+        );
+        set(&mut config.object_caps.pipes, self.max_pipes_per_namespace);
+        set(&mut config.object_caps.views, self.max_views_per_namespace);
     }
 }
 
