@@ -415,3 +415,95 @@ async fn log_and_diffstat_are_served() {
     assert_eq!(end["error"]["code"], "invalid_argument", "{messages:?}");
     running.shutdown().await;
 }
+
+#[tokio::test]
+async fn blame_and_grep_are_served() {
+    let Some(dir) = history() else {
+        return;
+    };
+    std::fs::write(dir.path().join("README.md"), "hello\nworld\n").expect("write");
+    git(dir.path(), &["commit", "-q", "-am", "two"], None);
+    let running = Running::start().await;
+    let token = load(&running, &dir).await;
+    let (first, second) = (rev(&dir, "main~1"), rev(&dir, "main"));
+
+    let (status, answer) = running
+        .connect(
+            &format!("{SVC}/Blame"),
+            &json!({"namespace": "acme", "name": "web", "rev": "main", "path": "README.md",
+                    "consistencyToken": token}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{answer}");
+    assert_eq!(answer["commit"], second);
+    assert_eq!(answer["lines"], 2);
+    let hunks = answer["hunks"].as_array().expect("hunks");
+    assert_eq!(hunks.len(), 2, "{answer}");
+    assert_eq!(hunks[0]["commit"], first);
+    assert_eq!(hunks[0]["startLine"], 1);
+    assert_eq!(hunks[1]["commit"], second);
+    assert_eq!(hunks[1]["previous"], first);
+    let commits = answer["commits"].as_array().expect("commits");
+    assert_eq!(commits.len(), 2);
+    assert_eq!(commits[0]["boundary"], true);
+
+    // A line range, and a path that is not a file.
+    let (status, ranged) = running
+        .connect(
+            &format!("{SVC}/Blame"),
+            &json!({"namespace": "acme", "name": "web", "path": "README.md",
+                    "startLine": 2, "endLine": 9}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK, "{ranged}");
+    assert_eq!(ranged["hunks"].as_array().expect("hunks").len(), 1);
+    let (status, error) = running
+        .connect(
+            &format!("{SVC}/Blame"),
+            &json!({"namespace": "acme", "name": "web", "path": "src"}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::BAD_REQUEST, "{error}");
+    assert_eq!(reason(&error), "invalid_argument");
+
+    let (status, messages) = running
+        .connect_stream(
+            &format!("{SVC}/Grep"),
+            &json!({"namespace": "acme", "name": "web", "rev": "main",
+                    "patterns": ["l\\+"], "consistencyToken": token}),
+        )
+        .await;
+    assert_eq!(status, reqwest::StatusCode::OK);
+    let bodies: Vec<&Value> = messages
+        .iter()
+        .filter(|(flags, _)| flags & 0x02 == 0)
+        .map(|(_, m)| m)
+        .collect();
+    let files: Vec<String> = bodies
+        .iter()
+        .filter(|m| !m["file"].is_null())
+        .map(|m| {
+            let path = STANDARD
+                .decode(m["file"]["path"].as_str().expect("path"))
+                .expect("b64");
+            String::from_utf8(path).expect("utf-8")
+        })
+        .collect();
+    assert_eq!(files, ["README.md", "src/lib.rs"], "{messages:?}");
+    let last = bodies.last().expect("a last message");
+    assert_eq!(last["done"], true, "{messages:?}");
+
+    // A back-reference is refused before the stream starts.
+    let (status, error) = running
+        .connect_stream(
+            &format!("{SVC}/Grep"),
+            &json!({"namespace": "acme", "name": "web", "patterns": ["\\(a\\)\\1"]}),
+        )
+        .await;
+    let (_, end) = error.last().expect("an end-of-stream message");
+    assert!(
+        status == reqwest::StatusCode::BAD_REQUEST || end["error"]["code"] == "invalid_argument",
+        "{error:?}"
+    );
+    running.shutdown().await;
+}

@@ -1,4 +1,4 @@
-//! Derived data (§36 §19.5.1, D830; plan GT1 Tasks 19–21): immutable
+//! Derived data (§36 §19.5.1, §19.8, D830, D833; plan GT1 Tasks 19–21): immutable
 //! objects under a repository's `derived/`, keyed by the object id they
 //! describe, computed on first use and shared by every reader.
 //!
@@ -7,6 +7,7 @@
 //! the winner back. Reads go through the H1 cache when there is one. A
 //! derived object can be deleted at any time: it is computed again.
 
+pub mod blame;
 pub mod bloom;
 pub mod graph;
 pub mod tree_aux;
@@ -21,6 +22,9 @@ use crate::odb::OdbError;
 use crate::paths::RepoPaths;
 use crate::retry;
 
+pub use blame::{
+    BlameAnswer, BlameCommit, BlameHunk, BlameQuery, BlameStats, FileBlame, blame, file_blame,
+};
 pub use graph::{GraphCommit, GraphView, graph_view};
 pub use tree_aux::{AuxEntry, TreeAux, tree_aux};
 
@@ -43,6 +47,13 @@ pub enum DerivedError {
     /// A derived object that does not decode, written by this computation.
     #[error(transparent)]
     Format(#[from] FormatError),
+    /// `gix-blame` failed on objects that read correctly.
+    #[error("blame: {0}")]
+    Blame(String),
+    /// A file whose history `gix-blame` cannot walk (ruling T21.1); git
+    /// blames it.
+    #[error("blame is not served for this file: {0}")]
+    BlameUnsupported(String),
     /// The object store failed (after retries, when transient).
     #[error(transparent)]
     Store(#[from] StoreError),

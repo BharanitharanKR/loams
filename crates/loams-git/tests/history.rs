@@ -7,13 +7,18 @@ use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Write as _;
 use std::sync::Arc;
 
+use loams_git::derived::DerivedError;
 use loams_git::derived::graph::{GraphView, Layer, graph_view};
 use loams_git::history::{
-    ChangeKind, LogEntry, LogFields, LogQuery, LogStats, Pathspec, diff_stat, log, resolve_tree,
+    BlameAnswer, BlameQuery, ChangeKind, GrepFile, GrepFlags, GrepQuery, GrepStats, HistoryError,
+    LogEntry, LogFields, LogQuery, LogStats, Pathspec, blame, diff_stat, grep, log, resolve_tree,
 };
-use loams_git::odb::RangeOdb;
-use loams_git::{DerivedStore, ObjectId, RefName, RefSnapshot, RepoPaths, Seq, StoreBlobStore};
-use loams_store::{Op, Store};
+use loams_git::limits::{GREP_MAX_MATCHES, MAX_GREP_PATTERNS};
+use loams_git::odb::{ObjectDb, RangeOdb};
+use loams_git::{
+    DerivedStore, ObjectId, RefName, RefSnapshot, RepoPath, RepoPaths, Seq, StoreBlobStore,
+};
+use loams_store::{Fault, Op, Store};
 use rand::rngs::StdRng;
 use rand::{Rng, SeedableRng};
 use tokio::sync::mpsc;
@@ -58,6 +63,10 @@ struct History {
     heads: Vec<usize>,
     time: i64,
     tags: usize,
+    /// Each path's lines come from its own vocabulary, and files are
+    /// sometimes renamed (the blame corpus, ruling T21.1).
+    vocab: bool,
+    renames: usize,
 }
 
 impl History {
@@ -76,16 +85,28 @@ impl History {
                 } else {
                     0o100644
                 };
-                (mode, self.text())
+                (mode, self.text(path))
             }
         }
     }
 
-    fn text(&mut self) -> Vec<u8> {
+    /// A word for a line of `path`.
+    fn word(&mut self, path: &str) -> String {
+        let word = WORDS[self.rng.random_range(0..WORDS.len())];
+        if self.vocab {
+            let tag: u32 = path.bytes().map(u32::from).sum();
+            format!("{word}-{tag}")
+        } else {
+            word.to_owned()
+        }
+    }
+
+    fn text(&mut self, path: &str) -> Vec<u8> {
         let lines = self.rng.random_range(0..12);
         let mut out = String::new();
         for _ in 0..lines {
-            out.push_str(WORDS[self.rng.random_range(0..WORDS.len())]);
+            let word = self.word(path);
+            out.push_str(&word);
             out.push('\n');
         }
         if self.rng.random_bool(0.1) {
@@ -95,18 +116,21 @@ impl History {
     }
 
     /// Edits a few lines of `old`, so diffs have context.
-    fn edit(&mut self, old: &[u8]) -> Vec<u8> {
+    fn edit(&mut self, path: &str, old: &[u8]) -> Vec<u8> {
         let text = String::from_utf8_lossy(old).to_string();
         let mut lines: Vec<String> = text.lines().map(str::to_owned).collect();
         for _ in 0..self.rng.random_range(1..4) {
             let at = self.rng.random_range(0..=lines.len());
             match self.rng.random_range(0..3) {
-                0 => lines.insert(at, WORDS[self.rng.random_range(0..WORDS.len())].into()),
+                0 => {
+                    let word = self.word(path);
+                    lines.insert(at, word);
+                }
                 1 if at < lines.len() => {
                     lines.remove(at);
                 }
                 _ if at < lines.len() => {
-                    lines[at] = WORDS[self.rng.random_range(0..WORDS.len())].into();
+                    lines[at] = self.word(path);
                 }
                 _ => lines.push("tail".into()),
             }
@@ -123,12 +147,31 @@ impl History {
             if self.rng.random_bool(0.1) {
                 // A file becomes a directory, or back.
                 if files.remove("conf").is_some() {
-                    let content = self.text();
+                    let content = self.text("conf/a");
                     files.insert("conf/a".into(), (0o100644, content));
                 } else {
                     files.retain(|path, _| !path.starts_with("conf/"));
-                    let content = self.text();
+                    let content = self.text("conf");
                     files.insert("conf".into(), (0o100644, content));
+                }
+                continue;
+            }
+            if self.vocab && self.rng.random_bool(0.08) {
+                // A text file is renamed.
+                let movable: Vec<String> = files
+                    .iter()
+                    .filter(|(path, (mode, content))| {
+                        *mode == 0o100644 && !path.starts_with("conf") && !content.contains(&0)
+                    })
+                    .map(|(path, _)| path.clone())
+                    .collect();
+                if !movable.is_empty() {
+                    let from = movable[self.rng.random_range(0..movable.len())].clone();
+                    // Unedited: git's and gix's rename scores differ for
+                    // edited files near the threshold (ruling T21.1).
+                    let (mode, content) = files.remove(&from).expect("listed");
+                    self.renames += 1;
+                    files.insert(format!("moved/{}.txt", self.renames), (mode, content));
                 }
                 continue;
             }
@@ -138,7 +181,7 @@ impl History {
                     files.remove(path);
                 }
                 Some((mode, old)) if mode == 0o100644 && self.rng.random_bool(0.7) => {
-                    let new = self.edit(&old);
+                    let new = self.edit(path, &old);
                     files.insert(path.into(), (mode, new));
                 }
                 _ => {
@@ -206,7 +249,9 @@ impl History {
     }
 
     /// A history of up to `steps` operations from `seed`.
-    fn generate(seed: u64, steps: usize) -> Self {
+    /// A history of up to `steps` operations from `seed`; with `vocab`,
+    /// per-path vocabularies and renames.
+    fn generate_with(seed: u64, steps: usize, vocab: bool) -> Self {
         let mut h = Self {
             rng: StdRng::seed_from_u64(seed),
             stream: Vec::new(),
@@ -214,6 +259,8 @@ impl History {
             heads: Vec::new(),
             time: 1_760_000_000,
             tags: 0,
+            vocab,
+            renames: 0,
         };
         let mut files = Files::new();
         h.mutate(&mut files);
@@ -326,8 +373,13 @@ impl History {
 
 /// A repository holding seeded history `seed`.
 fn seeded(test: &str, seed: u64, steps: usize) -> Option<(GitRepo, History)> {
+    seeded_with(test, seed, steps, false)
+}
+
+/// As [`seeded`], with per-path vocabularies and renames when `vocab`.
+fn seeded_with(test: &str, seed: u64, steps: usize, vocab: bool) -> Option<(GitRepo, History)> {
     let git = GitRepo::init(test)?;
-    let history = History::generate(seed, steps);
+    let history = History::generate_with(seed, steps, vocab);
     git.git(&["fast-import", "--quiet"], Some(&history.stream));
     git.git(&["symbolic-ref", "HEAD", "refs/heads/main"], None);
     Some((git, history))
@@ -950,5 +1002,554 @@ fn pathspec_refuses_globs() {
     let spec: BTreeSet<&str> = ["*.rs", "src/*", ":(glob)x"].into();
     for item in spec {
         assert!(Pathspec::parse(&[item.to_owned()]).is_err(), "{item}");
+    }
+}
+
+// --- Blame (Task 21) ----------------------------------------------------
+
+/// `answer` as `git blame --porcelain` prints it, with `content` the
+/// blamed file.
+fn porcelain(answer: &BlameAnswer, path: &str, content: &[u8]) -> String {
+    let lines: Vec<&[u8]> = content.split_inclusive(|b| *b == b'\n').collect();
+    let mut out = String::new();
+    let mut shown: BTreeSet<ObjectId> = BTreeSet::new();
+    for hunk in &answer.hunks {
+        let commit = answer
+            .commits
+            .iter()
+            .find(|c| c.oid == hunk.commit)
+            .expect("the hunk's commit");
+        for i in 0..hunk.len {
+            let (source, final_line) = (hunk.source_start + i + 1, hunk.start + i + 1);
+            if i == 0 {
+                writeln!(out, "{} {source} {final_line} {}", hunk.commit, hunk.len).expect("write");
+                if shown.insert(hunk.commit) {
+                    for (who, sig) in [("author", &commit.author), ("committer", &commit.committer)]
+                    {
+                        writeln!(out, "{who} {}", String::from_utf8_lossy(&sig.name)).expect("w");
+                        writeln!(out, "{who}-mail <{}>", String::from_utf8_lossy(&sig.email))
+                            .expect("w");
+                        writeln!(out, "{who}-time {}", sig.time).expect("w");
+                        writeln!(out, "{who}-tz {}", sig.tz).expect("w");
+                    }
+                    writeln!(out, "summary {}", String::from_utf8_lossy(&commit.summary))
+                        .expect("w");
+                    if commit.boundary {
+                        out.push_str("boundary\n");
+                    }
+                    if let Some((prev, prev_path)) = &hunk.previous {
+                        writeln!(
+                            out,
+                            "previous {prev} {}",
+                            String::from_utf8_lossy(prev_path)
+                        )
+                        .expect("w");
+                    }
+                    let name = hunk
+                        .source_path
+                        .as_deref()
+                        .map(|p| String::from_utf8_lossy(p).to_string())
+                        .unwrap_or_else(|| path.to_owned());
+                    writeln!(out, "filename {name}").expect("w");
+                }
+            } else {
+                writeln!(out, "{} {source} {final_line}", hunk.commit).expect("write");
+            }
+            let line = lines[(hunk.start + i) as usize];
+            out.push('\t');
+            out.push_str(&String::from_utf8_lossy(
+                line.strip_suffix(b"\n").unwrap_or(line),
+            ));
+            out.push('\n');
+        }
+    }
+    out
+}
+
+async fn run_blame(
+    (odb, derived, snapshot): &(RangeOdb, DerivedStore, RefSnapshot),
+    rev: &str,
+    path: &str,
+    lines: Option<std::ops::RangeInclusive<u32>>,
+) -> (BlameAnswer, String) {
+    let query = BlameQuery {
+        rev: rev.to_owned(),
+        path: RepoPath::parse(path).expect("path"),
+        lines,
+    };
+    let answer = blame(odb, derived, snapshot, &query).await.expect("blame");
+    let (_, content) = odb.read(&answer.blob).await.expect("blob");
+    let text = porcelain(&answer, path, &content);
+    (answer, text)
+}
+
+/// The text files of `files` (blame is asked of text, as people do).
+fn text_files(files: &Files) -> Vec<String> {
+    files
+        .iter()
+        .filter(|(_, (mode, content))| *mode != 0o120000 && !content.contains(&0))
+        .map(|(path, _)| path.clone())
+        .collect()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn blame_porcelain_matches_git() {
+    let mut checked = 0;
+    let mut ranges = 0;
+    let (mut commits, mut merges, mut previous, mut unsupported) = (0, 0, 0, 0);
+    let mut seed = 0;
+    while checked < 50 {
+        let Some((git, history)) = seeded_with("blame_porcelain_matches_git", seed, 150, true)
+        else {
+            return;
+        };
+        let (_, store) = faulty_store();
+        let loaded = load(&git, 68, store, 1).await;
+        let mut rng = StdRng::seed_from_u64(seed ^ 0xb1a3e);
+        let branches = history.branches();
+        let branch = branches[rng.random_range(0..branches.len())].clone();
+        let tip = history.heads[branches.iter().position(|b| *b == branch).expect("b")];
+        for path in text_files(&history.commits[tip]) {
+            let query = BlameQuery {
+                rev: branch.clone(),
+                path: RepoPath::parse(&path).expect("path"),
+                lines: None,
+            };
+            if let Err(err) = blame(&loaded.0, &loaded.1, &loaded.2, &query).await {
+                // A file `gix-blame` cannot walk is refused, never answered
+                // wrongly (ruling T21.1).
+                assert!(
+                    matches!(
+                        err,
+                        HistoryError::Derived(DerivedError::BlameUnsupported(_))
+                    ),
+                    "seed {seed}: blame {branch} -- {path}: {err:?}"
+                );
+                unsupported += 1;
+                continue;
+            }
+            let (answer, ours) = run_blame(&loaded, &branch, &path, None).await;
+            let theirs = git.git(&["blame", "--porcelain", &branch, "--", &path], None);
+            assert_eq!(
+                ours,
+                String::from_utf8_lossy(&theirs),
+                "seed {seed}: blame {branch} -- {path}"
+            );
+            checked += 1;
+            commits += answer.commits.len();
+            previous += answer.hunks.iter().filter(|h| h.previous.is_some()).count();
+            merges += answer
+                .hunks
+                .iter()
+                .filter(|h| {
+                    git.git(
+                        &["rev-list", "--parents", "-n1", &h.commit.to_string()],
+                        None,
+                    )
+                    .split(|b| *b == b' ')
+                    .count()
+                        > 2
+                })
+                .count();
+            if answer.lines >= 2 && rng.random_bool(0.5) {
+                let a = rng.random_range(1..=answer.lines);
+                let b = rng.random_range(a..=answer.lines + 2);
+                let (_, ours) = run_blame(&loaded, &branch, &path, Some(a..=b)).await;
+                let range = format!("{a},{b}");
+                let theirs = git.git(
+                    &["blame", "--porcelain", "-L", &range, &branch, "--", &path],
+                    None,
+                );
+                assert_eq!(
+                    ours,
+                    String::from_utf8_lossy(&theirs),
+                    "seed {seed}: blame -L {range} {branch} -- {path}"
+                );
+                ranges += 1;
+            }
+        }
+        seed += 1;
+    }
+    eprintln!(
+        "blame: {checked} files over {seed} histories, {ranges} ranges, {commits} commits, {merges} merge-blamed, {previous} previous, {unsupported} unsupported"
+    );
+    assert!(ranges > 5, "line ranges were checked ({ranges})");
+    assert!(merges > 0, "lines are blamed on merges ({merges})");
+    assert!(
+        unsupported * 5 < checked,
+        "most files are served ({unsupported} refused of {checked})"
+    );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn blame_is_cached() {
+    let Some((git, history)) = seeded("blame_is_cached", 7, 30) else {
+        return;
+    };
+    let (faulty, store) = faulty_store();
+    let loaded = load(&git, 69, store, 1).await;
+    let path = text_files(&history.commits[history.heads[0]])
+        .into_iter()
+        .next()
+        .expect("a text file");
+    let (first, text) = run_blame(&loaded, "main", &path, None).await;
+    assert!(!first.stats.cached);
+    let commit = git.rev("main");
+    let key = loaded
+        .1
+        .paths()
+        .derived_blame(&commit, &RepoPath::parse(&path).expect("path"));
+    assert!(
+        loaded.1.get(&key).await.expect("get").is_some(),
+        "stored at {key}"
+    );
+    let puts = faulty.calls(Op::PutCreate);
+    let (second, again) = run_blame(&loaded, "main", &path, None).await;
+    assert!(second.stats.cached, "the second blame reads the stored one");
+    assert_eq!(second.stats.commits_traversed, 0);
+    assert_eq!(faulty.calls(Op::PutCreate), puts, "nothing is stored again");
+    assert_eq!(text, again);
+    // A corrupt stored blame is recomputed, and the answer is the same.
+    let (_, store2) = faulty_store();
+    let loaded2 = load(&git, 69, store2.clone(), 1).await;
+    store2
+        .put(&key, bytes::Bytes::from_static(b"LGITBLAMgarbage"))
+        .await
+        .expect("put");
+    let (third, text3) = run_blame(&loaded2, "main", &path, None).await;
+    assert!(!third.stats.cached);
+    assert_eq!(text, text3);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn blame_refuses_what_is_not_a_file() {
+    let Some((git, _)) = seeded("blame_refuses_what_is_not_a_file", 3, 10) else {
+        return;
+    };
+    let (_, store) = faulty_store();
+    let (odb, derived, snapshot) = load(&git, 70, store, 1).await;
+    for path in ["missing/file", "src"] {
+        let query = BlameQuery {
+            rev: "main".into(),
+            path: RepoPath::parse(path).expect("path"),
+            lines: None,
+        };
+        let err = blame(&odb, &derived, &snapshot, &query).await;
+        assert!(
+            matches!(err, Err(HistoryError::Path { .. })),
+            "{path}: {err:?}"
+        );
+    }
+}
+
+// --- Grep (Task 21) -----------------------------------------------------
+
+async fn run_grep(
+    odb: &RangeOdb,
+    snapshot: &RefSnapshot,
+    query: &GrepQuery,
+) -> (Vec<GrepFile>, GrepStats) {
+    let (tx, mut rx) = mpsc::channel(16);
+    let collect = async {
+        let mut out = Vec::new();
+        while let Some(file) = rx.recv().await {
+            out.push(file);
+        }
+        out
+    };
+    let (stats, files) = tokio::join!(
+        async {
+            let stats = grep(odb, snapshot, query, &tx).await;
+            drop(tx);
+            stats
+        },
+        collect
+    );
+    (files, stats.expect("grep"))
+}
+
+/// `files` as `git grep -n` (or `-l`) prints them for `rev`.
+fn grep_output(rev: &str, files: &[GrepFile], files_only: bool) -> String {
+    let mut out = String::new();
+    for file in files {
+        let path = String::from_utf8_lossy(&file.path);
+        if files_only {
+            writeln!(out, "{rev}:{path}").expect("write");
+        } else if file.binary {
+            writeln!(out, "Binary file {rev}:{path} matches").expect("write");
+        } else {
+            for line in &file.lines {
+                writeln!(
+                    out,
+                    "{rev}:{path}:{}:{}",
+                    line.number,
+                    String::from_utf8_lossy(&line.line)
+                )
+                .expect("write");
+            }
+        }
+    }
+    out
+}
+
+const BASIC: &[&str] = &[
+    "alph",
+    "^beta",
+    "a$",
+    "e.a",
+    "t\\(h\\|o\\)",
+    "z*eta",
+    "[ab]eta",
+    "[[:upper:]]",
+    "x\\{0,1\\}eta",
+    "a+",
+    "ta\\>",
+    "\\<eta",
+    "new",
+    "[^a-z]",
+    "o\\?n",
+    "target-1",
+    "\\.",
+];
+const EXTENDED: &[&str] = &[
+    "(alpha|beta)$",
+    "e+t",
+    "^(z|th)eta",
+    "p{2}",
+    "[^a-z]",
+    "ta\\b",
+    "^.{4}$",
+    "o?ne",
+    "a|tail",
+];
+const FIXED: &[&str] = &["eta", "a.b", "*", "no newline", "ALPHA", "[x"];
+const WORD: &[&str] = &["eta", "alpha", "new", "a", "tail"];
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn grep_matches_git_grep() {
+    let mut matched = 0;
+    for seed in 0..40 {
+        let Some((git, history)) = seeded("grep_matches_git_grep", seed, 20) else {
+            return;
+        };
+        let (_, store) = faulty_store();
+        let (odb, _, snapshot) = load(&git, 71, store, 1).await;
+        let mut rng = StdRng::seed_from_u64(seed ^ 0x9e3);
+        let branches = history.branches();
+        for _ in 0..8 {
+            let rev = branches[rng.random_range(0..branches.len())].clone();
+            let mut flags = GrepFlags {
+                ignore_case: rng.random_bool(0.3),
+                word: rng.random_bool(0.25),
+                files_only: rng.random_bool(0.25),
+                ..GrepFlags::default()
+            };
+            let kind = rng.random_range(0..3);
+            let pool = match kind {
+                0 => BASIC,
+                1 => {
+                    flags.extended = true;
+                    EXTENDED
+                }
+                _ => {
+                    flags.fixed = true;
+                    FIXED
+                }
+            };
+            let pool = if flags.word { WORD } else { pool };
+            let mut patterns = vec![pool[rng.random_range(0..pool.len())].to_owned()];
+            if rng.random_bool(0.2) {
+                patterns.push(pool[rng.random_range(0..pool.len())].to_owned());
+            }
+            let spec: Vec<String> = if rng.random_bool(0.3) {
+                vec![SPECS[rng.random_range(0..SPECS.len())].to_owned()]
+            } else {
+                Vec::new()
+            };
+            let mut query = GrepQuery::new(rev.clone(), patterns.clone());
+            query.flags = flags;
+            query.pathspec = Pathspec::parse(&spec).expect("spec");
+            let (files, stats) = run_grep(&odb, &snapshot, &query).await;
+            assert!(!stats.truncated && !stats.deadline_exceeded);
+            matched += files.len();
+            let mut args = vec!["grep".to_owned()];
+            for (on, flag) in [
+                (flags.ignore_case, "-i"),
+                (flags.word, "-w"),
+                (flags.extended, "-E"),
+                (flags.fixed, "-F"),
+            ] {
+                if on {
+                    args.push(flag.into());
+                }
+            }
+            args.push(if flags.files_only { "-l" } else { "-n" }.into());
+            for pattern in &patterns {
+                args.push("-e".into());
+                args.push(pattern.clone());
+            }
+            args.push(rev.clone());
+            args.push("--".into());
+            args.extend(spec.iter().cloned());
+            let args: Vec<&str> = args.iter().map(String::as_str).collect();
+            let theirs = git.git_lenient(&args);
+            assert_eq!(
+                grep_output(&rev, &files, flags.files_only),
+                String::from_utf8_lossy(&theirs),
+                "seed {seed}: git {args:?}"
+            );
+        }
+    }
+    assert!(matched > 100, "the patterns match ({matched} files)");
+}
+
+/// A repository with one commit of `files` (path, content), loaded.
+async fn grep_repo(
+    test: &str,
+    files: &[(String, Vec<u8>)],
+    byte: u8,
+) -> Option<(
+    GitRepo,
+    Arc<loams_store::FaultyStore>,
+    RangeOdb,
+    RefSnapshot,
+)> {
+    let git = GitRepo::init(test)?;
+    for (path, content) in files {
+        let at = git.path().join(path);
+        std::fs::create_dir_all(at.parent().expect("parent")).expect("mkdir");
+        std::fs::write(at, content).expect("write");
+    }
+    git.git(&["add", "-A", "."], None);
+    git.git(&["commit", "-q", "-m", "files"], None);
+    let (faulty, store) = faulty_store();
+    let (odb, _, snapshot) = load(&git, byte, store, 1).await;
+    Some((git, faulty, odb, snapshot))
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn grep_deadline_returns_partial_with_flag() {
+    // Incompressible files, so each blob is its own range read.
+    let mut rng = StdRng::seed_from_u64(21);
+    let files: Vec<(String, Vec<u8>)> = (0..200)
+        .map(|i| {
+            let mut content: Vec<u8> = (0..70_000)
+                .map(|_| b"abcdefghijklmnopqrstuvwxyz"[rng.random_range(0..26)])
+                .collect();
+            content.extend_from_slice(b"\nneedle\n");
+            (format!("f{i:03}.txt"), content)
+        })
+        .collect();
+    let Some((_git, faulty, odb, snapshot)) =
+        grep_repo("grep_deadline_returns_partial_with_flag", &files, 72).await
+    else {
+        return;
+    };
+    let mut query = GrepQuery::new("HEAD", vec!["needle".into()]);
+    // A first search reads the idx fan-outs, which stay in memory.
+    let (all, _) = run_grep(&odb, &snapshot, &query).await;
+    assert_eq!(all.len(), files.len());
+    for _ in 0..2000 {
+        faulty.inject(Op::Get, Fault::Delay(std::time::Duration::from_millis(100)));
+    }
+    query.deadline = std::time::Duration::from_secs(2);
+    let (found, stats) = run_grep(&odb, &snapshot, &query).await;
+    faulty.clear();
+    assert!(stats.deadline_exceeded, "{stats:?}");
+    assert!(
+        !found.is_empty() && found.len() < files.len(),
+        "a partial answer: {} of {}",
+        found.len(),
+        files.len()
+    );
+    for (i, file) in found.iter().enumerate() {
+        assert_eq!(file.path, format!("f{i:03}.txt").into_bytes(), "path order");
+        assert_eq!(file.lines.len(), 1);
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn grep_skips_binary_like_git() {
+    let mut late = vec![b'x'; 9000];
+    late.extend_from_slice(b"\0needle\n");
+    let files = vec![
+        (
+            "bin.dat".to_owned(),
+            b"\0\x01needle\nneedle again\n".to_vec(),
+        ),
+        ("late-nul.txt".to_owned(), late),
+        ("text.txt".to_owned(), b"a needle\nno\n".to_vec()),
+        ("other.bin".to_owned(), b"\0nothing here\n".to_vec()),
+    ];
+    let Some((git, _, odb, snapshot)) = grep_repo("grep_skips_binary_like_git", &files, 73).await
+    else {
+        return;
+    };
+    for files_only in [false, true] {
+        let mut query = GrepQuery::new("HEAD", vec!["needle".into()]);
+        query.flags.files_only = files_only;
+        let (found, _) = run_grep(&odb, &snapshot, &query).await;
+        let bin = found
+            .iter()
+            .find(|f| f.path == b"bin.dat")
+            .expect("bin.dat matches");
+        assert!(bin.binary && bin.lines.is_empty());
+        let late = found
+            .iter()
+            .find(|f| f.path == b"late-nul.txt")
+            .expect("late NUL");
+        assert!(
+            !late.binary,
+            "a NUL past 8,000 bytes is text, as git decides"
+        );
+        let flag = if files_only { "-l" } else { "-n" };
+        let theirs = git.git_lenient(&["grep", flag, "-e", "needle", "HEAD"]);
+        assert_eq!(
+            grep_output("HEAD", &found, files_only),
+            String::from_utf8_lossy(&theirs)
+        );
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn grep_stops_at_max_matches() {
+    let lines = |n: usize| "hit\n".repeat(n).into_bytes();
+    let files = vec![
+        ("at.txt".to_owned(), lines(GREP_MAX_MATCHES)),
+        ("past.txt".to_owned(), lines(1)),
+    ];
+    let Some((_git, _, odb, snapshot)) = grep_repo("grep_stops_at_max_matches", &files, 74).await
+    else {
+        return;
+    };
+    let mut query = GrepQuery::new("HEAD", vec!["hit".into()]);
+    query.pathspec = Pathspec::parse(&["at.txt".into()]).expect("spec");
+    let (found, stats) = run_grep(&odb, &snapshot, &query).await;
+    assert_eq!(found[0].lines.len(), GREP_MAX_MATCHES);
+    assert!(!stats.truncated, "at the limit");
+    query.pathspec = Pathspec::all();
+    let (found, stats) = run_grep(&odb, &snapshot, &query).await;
+    assert!(stats.truncated, "one past the limit");
+    assert_eq!(stats.matches, GREP_MAX_MATCHES as u64);
+    assert_eq!(found.len(), 1, "past.txt is not answered");
+}
+
+#[tokio::test]
+async fn grep_refuses_what_it_cannot_answer_like_git() {
+    let at: Vec<String> = (0..MAX_GREP_PATTERNS).map(|i| format!("p{i}")).collect();
+    assert!(loams_git::history::grep::matcher(&at, GrepFlags::default()).is_ok());
+    let past: Vec<String> = (0..=MAX_GREP_PATTERNS).map(|i| format!("p{i}")).collect();
+    assert!(matches!(
+        loams_git::history::grep::matcher(&past, GrepFlags::default()),
+        Err(HistoryError::TooMany { .. })
+    ));
+    for pattern in ["\\(a\\)\\1", "x\\", "^$", "x*"] {
+        assert!(
+            matches!(
+                loams_git::history::grep::matcher(&[pattern.to_owned()], GrepFlags::default()),
+                Err(HistoryError::Pattern { .. })
+            ),
+            "{pattern}"
+        );
     }
 }

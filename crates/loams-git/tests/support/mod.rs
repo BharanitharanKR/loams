@@ -86,6 +86,24 @@ impl GitRepo {
         out.stdout
     }
 
+    /// Runs git and returns its stdout when it exits 0 or 1 (`git grep`
+    /// exits 1 when nothing matches); panics otherwise.
+    pub fn git_lenient(&self, args: &[&str]) -> Vec<u8> {
+        let out = Command::new("git")
+            .args(args)
+            .current_dir(self.path())
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .env("HOME", self.path())
+            .stderr(Stdio::inherit())
+            .output()
+            .expect("git runs");
+        assert!(
+            matches!(out.status.code(), Some(0 | 1)),
+            "git {args:?} failed"
+        );
+        out.stdout
+    }
+
     /// Writes `files` and commits them; returns the commit id.
     pub fn commit(&self, files: &[(&str, &str)], message: &str) -> ObjectId {
         for (name, text) in files {

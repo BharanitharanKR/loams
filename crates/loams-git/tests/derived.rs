@@ -5,10 +5,11 @@ mod support;
 use std::collections::BTreeMap;
 use std::sync::Arc;
 
+use loams_git::derived::blame::{BLAME_END, BLAME_MAGIC, decode_blame, encode_blame};
 use loams_git::derived::tree_aux::{
     TREE_AUX_END, TREE_AUX_MAGIC, decode_tree_aux, encode_tree_aux,
 };
-use loams_git::derived::{AuxEntry, TreeAux, tree_aux};
+use loams_git::derived::{AuxEntry, BlameHunk, FileBlame, TreeAux, tree_aux};
 use loams_git::format::FormatError;
 use loams_git::odb::RangeOdb;
 use loams_git::{DerivedStore, ObjectId, RefSnapshot, RepoPaths, Seq, StoreBlobStore};
@@ -294,4 +295,78 @@ async fn derived_deleted_is_recomputed() {
         .expect("put garbage");
     let third = tree_aux(&odb, &derived, &root).await.expect("third");
     assert_eq!(third, first);
+}
+
+fn golden_blame() -> FileBlame {
+    let id = |byte: u8| ObjectId::try_from(&[byte; 20][..]).expect("oid");
+    FileBlame {
+        commit: id(0xc1),
+        path: b"src/lib.rs".to_vec(),
+        blob: id(0xb1),
+        lines: 5,
+        hunks: vec![
+            BlameHunk {
+                start: 0,
+                source_start: 0,
+                len: 2,
+                commit: id(0x01),
+                source_path: Some(b"lib.rs".to_vec()),
+                previous: None,
+            },
+            BlameHunk {
+                start: 2,
+                source_start: 1,
+                len: 3,
+                commit: id(0xc1),
+                source_path: None,
+                previous: Some((id(0x01), b"src/lib.rs".to_vec())),
+            },
+        ],
+    }
+}
+
+#[test]
+fn golden_blame_v1() {
+    let fresh = encode_blame(&golden_blame()).to_vec();
+    let path =
+        std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/golden/blame_v1.lbl");
+    if std::env::var_os("LOAMS_GIT_BLESS").is_some() {
+        std::fs::write(&path, &fresh).expect("write golden file");
+    }
+    let golden = std::fs::read(&path).expect("read the golden file");
+    assert_eq!(&golden[..8], BLAME_MAGIC);
+    assert_eq!(&golden[golden.len() - 8..], BLAME_END);
+    assert_eq!(decode_blame(&golden), Ok(golden_blame()));
+    assert_eq!(
+        fresh, golden,
+        "encoding reproduces the golden file byte for byte"
+    );
+    for at in [
+        0,
+        11,
+        29,
+        golden.len() / 2,
+        golden.len() - 10,
+        golden.len() - 1,
+    ] {
+        let mut bad = golden.clone();
+        bad[at] ^= 0x01;
+        assert!(
+            matches!(decode_blame(&bad), Err(FormatError::Corrupt { .. })),
+            "byte {at}"
+        );
+    }
+    let mut v2 = golden.clone();
+    v2[8..10].copy_from_slice(&2u16.to_le_bytes());
+    assert_eq!(
+        decode_blame(&v2),
+        Err(FormatError::UnknownVersion { found: 2 })
+    );
+    // Hunks that leave a line out are refused.
+    let mut gap = golden_blame();
+    gap.hunks[1].start = 3;
+    assert!(matches!(
+        decode_blame(&encode_blame(&gap)),
+        Err(FormatError::Corrupt { .. })
+    ));
 }

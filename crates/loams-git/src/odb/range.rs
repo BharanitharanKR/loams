@@ -659,6 +659,7 @@ impl BaseCache {
 
 /// An [`ObjectDb`] that reads a snapshot's packs by range (plan GT1
 /// Task 17), with fork fall-through.
+#[derive(Clone)]
 pub struct RangeOdb {
     repo: RepoId,
     seq: Seq,

@@ -1,6 +1,7 @@
 //! History on the server (§36 §19.8, D833; plan GT1 Tasks 20–21): `Log`
-//! and `DiffStat` over the commit graph ([`crate::derived::graph`]) and tree
-//! diffs, without a transport.
+//! and `DiffStat` over the commit graph ([`crate::derived::graph`]) and
+//! tree diffs, `Blame` ([`crate::derived::blame`]) and `Grep` ([`grep`]),
+//! without a transport.
 //!
 //! This module holds what both share: [`Pathspec`] (literal paths only),
 //! [`TreeReader`] (parsed trees, cached per request and counted), the
@@ -8,6 +9,7 @@
 //! ([`resolve_rev`]).
 
 pub mod diffstat;
+pub mod grep;
 pub mod log;
 
 use std::cmp::Ordering;
@@ -24,7 +26,9 @@ use crate::limits::MAX_HISTORY_PATHS;
 use crate::odb::{ObjectDb, OdbError, RangeOdb};
 use crate::reflog::RefSnapshot;
 
+pub use crate::derived::blame::{BlameAnswer, BlameCommit, BlameHunk, BlameQuery, blame};
 pub use diffstat::{FileStat, diff_stat};
+pub use grep::{GrepFile, GrepFlags, GrepLine, GrepQuery, GrepStats, grep};
 pub use log::{ChangeKind, ChangedPath, LogEntry, LogFields, LogQuery, LogStats, Signature, log};
 
 /// Errors of the history queries.
@@ -43,6 +47,28 @@ pub enum HistoryError {
     Rev {
         /// The revision.
         rev: String,
+        /// Why it is refused.
+        reason: String,
+    },
+    /// A path that is not a file at the revision asked about.
+    #[error("path {path:?}: {reason}")]
+    Path {
+        /// The path.
+        path: String,
+        /// Why it is refused.
+        reason: String,
+    },
+    /// A line range that does not fit the file.
+    #[error("lines: {reason}")]
+    Lines {
+        /// Why it is refused.
+        reason: String,
+    },
+    /// A grep pattern that does not compile, or uses what is not served.
+    #[error("pattern {pattern:?}: {reason}")]
+    Pattern {
+        /// The pattern.
+        pattern: String,
         /// Why it is refused.
         reason: String,
     },
@@ -314,7 +340,7 @@ fn tree_order(a: &TreeEntry, b: &TreeEntry) -> Ordering {
     next(a).cmp(&next(b))
 }
 
-fn join(prefix: &[u8], name: &[u8]) -> Vec<u8> {
+pub(crate) fn join(prefix: &[u8], name: &[u8]) -> Vec<u8> {
     if prefix.is_empty() {
         return name.to_vec();
     }

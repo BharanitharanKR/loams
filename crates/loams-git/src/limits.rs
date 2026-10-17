@@ -113,6 +113,14 @@ pub const MAX_GRAPH_LAYERS: usize = 16;
 pub const MAX_LOG_REVS: usize = 64;
 /// Pathspecs in one `Log` or `DiffStat` call (§36 §19.8).
 pub const MAX_HISTORY_PATHS: usize = 64;
+/// How long one `Grep` call searches; past it the answer is what was found,
+/// flagged `deadline_exceeded` (§36 §19.8).
+pub const GREP_DEADLINE: Duration = Duration::from_secs(30);
+/// Matching lines (or, with `-l`, files) one `Grep` call answers; past it
+/// the answer is flagged `truncated` (§36 §19.8).
+pub const GREP_MAX_MATCHES: usize = 10_000;
+/// Patterns (`-e`) in one `Grep` call (§36 §19.8).
+pub const MAX_GREP_PATTERNS: usize = 64;
 
 /// One limit as the limits table prints it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -181,4 +189,7 @@ pub const LIMITS: &[Limit] = &[
     limit("MAX_GRAPH_LAYERS", "16", "§36 §19.8"),
     limit("MAX_LOG_REVS", "64", "§36 §19.8"),
     limit("MAX_HISTORY_PATHS", "64", "§36 §19.8"),
+    limit("GREP_DEADLINE", "30 s", "§36 §19.8"),
+    limit("GREP_MAX_MATCHES", "10,000", "§36 §19.8"),
+    limit("MAX_GREP_PATTERNS", "64", "§36 §19.8"),
 ];
