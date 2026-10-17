@@ -10,7 +10,7 @@ authors.workspace = true
 # loams-meta-tikv dependencies are part of the published manifest, and all
 # three are `publish = false` (the first two on git dependencies that no
 # registry can resolve), so crates.io would ship a crate nobody can build.
-# Publishing the binary is D294's `cargo install loams`; it waits on the
+# Publishing the binary is D294's install, as `cargo install loams-server` (D1106); it waits on the
 # release pipeline's Task 9 and this flag comes off in the PR that does it.
 # See docs/release/publishing.md.
 publish = false

@@ -98,7 +98,7 @@ structural, not a judgement about their API:
 - `loams-safekeeper`: same shape through its `tikv` feature and `loams-tikv`.
 
 Both flags are one line each, and both come off in the change that publishes
-the binary (D294's `cargo install loams`) or the first release after the forks
+the binary (D294's install, published as `loams-server`, D1106) or the first release after the forks
 are vendored. This page is where that promise is written down; the crate
 comments say it in place.
 
