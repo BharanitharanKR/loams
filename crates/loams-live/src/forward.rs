@@ -262,11 +262,13 @@ impl Nodes {
         now_ms.saturating_sub(record.heartbeat_ms) <= ttl
     }
 
-    /// Registers this node. Refused while another process runs under the
-    /// same id somewhere else (a fresh record of another incarnation at
-    /// another URL): two nodes with one id would take each other's
-    /// sessions' calls and journal checkpoints.
-    pub async fn register(&self) -> Result<(), LiveError> {
+    /// Registers this node. Answers the URL of another run under the same
+    /// id whose record was still fresh at another URL, which this one
+    /// replaces: a node restarted after a crash on a new port (whose old
+    /// record has not expired yet), or a second process given the same id
+    /// by mistake, which is logged, since two nodes with one id take each
+    /// other's sessions' calls and journal checkpoints.
+    pub async fn register(&self) -> Result<Option<String>, LiveError> {
         let now = self.now_ms().await?;
         let key = node_key(&self.me);
         let mine = NodeRecord {
@@ -275,13 +277,14 @@ impl Nodes {
         };
         let value = encode(&mine)?;
         let ttl = self.config.node_ttl;
-        let me = self.me.clone();
-        self.store
+        let replaced = self
+            .store
             .run(txn_options("live.nodes.register"), move |txn| {
-                let (key, value, me) = (key.clone(), value.clone(), me.clone());
+                let (key, value) = (key.clone(), value.clone());
                 let mine = mine.clone();
                 Box::pin(async move {
                     let body = async {
+                        let mut replaced = None;
                         if let Some(bytes) = txn.get(&key).await? {
                             let other = decode(&bytes)?;
                             let ttl_ms = u64::try_from(ttl.as_millis()).unwrap_or(u64::MAX);
@@ -290,21 +293,26 @@ impl Nodes {
                                 && other.incarnation != mine.incarnation
                                 && other.url != mine.url
                             {
-                                return Err(LiveError::FailedPrecondition(format!(
-                                    "live node {me:?} already runs at {}; give each Live node \
-                                     its own --live-node",
-                                    other.url
-                                )));
+                                replaced = Some(other.url);
                             }
                         }
                         txn.put(&key, value).await?;
-                        Ok(())
+                        Ok(replaced)
                     };
                     lift(body.await)
                 })
             })
             .await?
-            .value
+            .value?;
+        if let Some(url) = &replaced {
+            tracing::warn!(
+                node = %self.me,
+                previous = %url,
+                "this Live node's id was registered at another URL moments ago: a restart, or \
+                 another node with the same --live-node (give each Live node its own)"
+            );
+        }
+        Ok(replaced)
     }
 
     /// Refreshes this node's record.

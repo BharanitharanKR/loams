@@ -448,35 +448,39 @@ async fn dead_owner_gives_session_gone(store: TestStore) {
 }
 live_test!(dead_owner_gives_session_gone);
 
-/// A second process cannot take a node id that a running node holds at
-/// another URL; it can take its own id again (a restart at the same URL).
-async fn a_node_id_in_use_is_refused(store: TestStore) {
+/// A node registering under an id whose record is still fresh at another
+/// URL (a restart after a crash, on a new port) takes it over and is told
+/// which URL it replaced (the server logs it); at the same URL it simply
+/// takes its id back.
+async fn a_node_id_in_use_is_taken_over(store: TestStore) {
     let bundles = loams_store::Store::in_memory();
     let a = server(&store, &bundles, "a", ForwardConfig::default()).await;
     let system = a.engines().apps().store().clone();
-    let other = Nodes::new(
-        system.clone(),
-        "a",
-        "http://127.0.0.1:1".into(),
-        ForwardConfig::default(),
-    )
-    .expect("a node");
-    let e = other.register().await.expect_err("node a runs elsewhere");
-    assert!(e.to_string().contains("--live-node"), "{e}");
     let same_url = Nodes::new(
-        system,
+        system.clone(),
         "a",
         a.advertised().to_string(),
         ForwardConfig::default(),
     )
     .expect("a node");
-    same_url
-        .register()
-        .await
-        .expect("a restart at the same URL");
+    assert_eq!(same_url.register().await.expect("registers"), None);
+    let other = Nodes::new(
+        system,
+        "a",
+        "http://127.0.0.1:1".into(),
+        ForwardConfig::default(),
+    )
+    .expect("a node");
+    assert_eq!(
+        other.register().await.expect("registers"),
+        Some(a.advertised().to_string()),
+        "the run it replaced"
+    );
+    let record = other.lookup("a").await.expect("a lookup").expect("fresh");
+    assert_eq!(record.url, "http://127.0.0.1:1");
     a.stop().await;
 }
-live_test!(a_node_id_in_use_is_refused);
+live_test!(a_node_id_in_use_is_taken_over);
 
 /// A deploy on node A reaches node B's sessions through the journal, and
 /// both nodes switch at one timestamp: every version-1 result on either
