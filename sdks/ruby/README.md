@@ -8,16 +8,16 @@
 ## Install
 
 ```sh
-gem install loams --pre
+gem install loams
 ```
 
-or, in a `Gemfile`, pin the preview exactly:
+or, in a `Gemfile`, pin the version exactly:
 
 ```ruby
-gem "loams", "0.1.0.pre.2"
+gem "loams", "0.1.0"
 ```
 
-RubyGems spells the `v0.1.0-preview.2` release as `0.1.0.pre.2`. The gem needs
+A prerelease tag such as `v0.1.0-preview.2` is spelled `0.1.0.pre.2` on RubyGems and needs `--pre`. The gem needs
 Ruby 3.1 or newer and `google-protobuf` 4.x.
 
 ## Use

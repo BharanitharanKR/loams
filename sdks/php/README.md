@@ -8,12 +8,12 @@
 ## Install
 
 ```sh
-composer require loams/loams:0.1.0-alpha.2
+composer require loams/loams:0.1.0
 ```
 
 The package is `loams/loams` on Packagist. Composer has no `preview` stability,
-so the `v0.1.0-preview.2` release is tagged `v0.1.0-alpha.2` there. A project
-whose `minimum-stability` is `stable` must name the exact version (or add
+so a prerelease such as `v0.1.0-preview.2` is tagged `v0.1.0-alpha.2` there, and
+a project whose `minimum-stability` is `stable` must name it exactly (or add
 `@alpha`). It needs PHP 8.2 or newer.
 
 Packagist reads the read-only split repository

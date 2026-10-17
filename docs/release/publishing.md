@@ -2,8 +2,10 @@
 
 Status (2026-10-17): **container images publish on every tag. The SDK release
 workflow is ready for thirteen SDKs, and it publishes nothing until the owner
-turns on each registry.** Every SDK goes out as a preview, as a pre-release
-version, under the name `loams` (or that registry's spelling of it).
+turns on each registry.** Every SDK goes out under the name `loams`, or that
+registry's spelling of it. The `v0.1.0-preview.N` tags publish pre-release
+versions. `v0.1.0` is a normal release (owner, 2026-10-17), and the SDK READMEs
+still call the APIs a preview until 1.0.
 [`.github/workflows/sdk-release.yml`](../../.github/workflows/sdk-release.yml)
 does the publishing. This page is the owner's checklist for each registry: the
 exact trusted-publisher fields, secrets and variables. It is written for
@@ -12,21 +14,21 @@ exact trusted-publisher fields, secrets and variables. It is written for
 
 ## What exists today
 
-| SDK | Registry and name | Version for `v0.1.0-preview.2` | Credential | Gate variable | Environment |
+| SDK | Registry and name | Version for `v0.1.0` (for `v0.1.0-preview.2`) | Credential | Gate variable | Environment |
 |---|---|---|---|---|---|
-| TypeScript | npm `@loams/live`, `@loams/client` (dist-tag `preview`) | `0.1.0-preview.2` | trusted publishing; bootstrap secret `NPM_TOKEN` | `SDK_PUBLISH_NPM` | `npm` |
-| Python | PyPI `loams` | `0.1.0a2` | trusted publishing | `SDK_PUBLISH_PYPI` | `pypi` |
-| Rust | crates.io `loams-proto`, `loams-live-proto`, `loams` | `0.1.0-preview.2` | trusted publishing; bootstrap secret `CARGO_REGISTRY_TOKEN` | `SDK_PUBLISH_CRATES` | `crates-io` |
-| C# | NuGet `Loams` | `0.1.0-preview.2` | trusted publishing (`NuGet/login`), variable `NUGET_USER` | `SDK_PUBLISH_NUGET` | `nuget` |
-| Go | `loams.dev/go` through proxy.golang.org | tag `sdks/go/v0.1.0-preview.2` | `GITHUB_TOKEN`, plus the `go-import` tag on loams.dev | `SDK_PUBLISH_GO` | none |
+| TypeScript | npm `@loams/live`, `@loams/client` | `0.1.0`, dist-tag `latest` (`0.1.0-preview.2`, dist-tag `preview`) | trusted publishing; bootstrap secret `NPM_TOKEN` | `SDK_PUBLISH_NPM` | `npm` |
+| Python | PyPI `loams` | `0.1.0` (`0.1.0a2`) | trusted publishing | `SDK_PUBLISH_PYPI` | `pypi` |
+| Rust | crates.io `loams-proto`, `loams-live-proto`, `loams` | `0.1.0` (`0.1.0-preview.2`) | trusted publishing; bootstrap secret `CARGO_REGISTRY_TOKEN` | `SDK_PUBLISH_CRATES` | `crates-io` |
+| C# | NuGet `Loams` | `0.1.0` (`0.1.0-preview.2`) | trusted publishing (`NuGet/login`), variable `NUGET_USER` | `SDK_PUBLISH_NUGET` | `nuget` |
+| Go | `loams.dev/go` through proxy.golang.org | tag `sdks/go/v0.1.0` (`sdks/go/v0.1.0-preview.2`) | `GITHUB_TOKEN`, plus the `go-import` tag on loams.dev | `SDK_PUBLISH_GO` | none |
 | Swift | SwiftPM, this repository | the release tag | none | none | none |
-| C++ | GitHub release assets `loams-cpp-<v>.tar.gz` | `0.1.0-preview.2` | `GITHUB_TOKEN` | `SDK_PUBLISH_CPP` | none |
-| Ruby | RubyGems `loams` | `0.1.0.pre.2` | trusted publishing | `SDK_PUBLISH_RUBYGEMS` | `rubygems` |
-| PHP | Packagist `loams/loams`, read from the split repository `ostrium-labs/loams-php` | tag `v0.1.0-alpha.2` | deploy key secret `PACKAGIST_SPLIT_DEPLOY_KEY` | `SDK_PUBLISH_PACKAGIST` | `packagist` |
-| Dart | pub.dev `loams` | `0.1.0-preview.2` | trusted publishing, on a tag push only | `SDK_PUBLISH_PUBDEV` | `pub.dev` |
-| Java | Maven Central `dev.loams:loams` | `0.1.0-preview.2` | secrets `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`; GPG `LOAMS_GPG_PRIVATE_KEY` | `SDK_PUBLISH_MAVEN` | `maven-central` |
-| Kotlin | Maven Central `dev.loams:loams-kotlin` | `0.1.0-preview.2` | same as Java | `SDK_PUBLISH_MAVEN` | `maven-central` |
-| Objective-C | CocoaPods `Loams` (module `LoamsObjC`) | `0.1.0-preview.2` | secret `COCOAPODS_TRUNK_TOKEN` | `SDK_PUBLISH_COCOAPODS` | `cocoapods` |
+| C++ | GitHub release assets `loams-cpp-<v>.tar.gz` | `0.1.0` (`0.1.0-preview.2`) | `GITHUB_TOKEN` | `SDK_PUBLISH_CPP` | none |
+| Ruby | RubyGems `loams` | `0.1.0` (`0.1.0.pre.2`) | trusted publishing | `SDK_PUBLISH_RUBYGEMS` | `rubygems` |
+| PHP | Packagist `loams/loams`, read from the split repository `ostrium-labs/loams-php` | tag `v0.1.0` (`v0.1.0-alpha.2`) | deploy key secret `PACKAGIST_SPLIT_DEPLOY_KEY` | `SDK_PUBLISH_PACKAGIST` | `packagist` |
+| Dart | pub.dev `loams` | `0.1.0` (`0.1.0-preview.2`) | trusted publishing, on a tag push only | `SDK_PUBLISH_PUBDEV` | `pub.dev` |
+| Java | Maven Central `dev.loams:loams` | `0.1.0` (`0.1.0-preview.2`) | secrets `MAVEN_CENTRAL_USERNAME`, `MAVEN_CENTRAL_PASSWORD`; GPG `LOAMS_GPG_PRIVATE_KEY` | `SDK_PUBLISH_MAVEN` | `maven-central` |
+| Kotlin | Maven Central `dev.loams:loams-kotlin` | `0.1.0` (`0.1.0-preview.2`) | same as Java | `SDK_PUBLISH_MAVEN` | `maven-central` |
+| Objective-C | CocoaPods `Loams` (module `LoamsObjC`) | `0.1.0` (`0.1.0-preview.2`) | secret `COCOAPODS_TRUNK_TOKEN` | `SDK_PUBLISH_COCOAPODS` | `cocoapods` |
 
 How it behaves:
 
@@ -61,7 +63,7 @@ How it behaves:
   dispatch on the tag passes the gate.
 - **A release builds the workflow and the packaging as they are at the tag.**
   `v0.1.0-preview.2` predates the Ruby, PHP, Dart, Java, Kotlin and
-  Objective-C packaging, so those six SDKs can publish from the next tag at the
+  Objective-C packaging, so those six SDKs can publish from `v0.1.0` at the
   earliest. To reserve a name sooner, upload once by hand from `dev`, as
   described per registry below.
 - **Composer cannot read `preview`.** It knows `alpha`, `beta` and `RC`, so
@@ -141,7 +143,7 @@ repository is `ostrium-labs` and the repository is `loams`.
    - Environment: `rubygems`
    Leave the two reusable-workflow fields empty.
 2. Set the variable `SDK_PUBLISH_RUBYGEMS=true`. The first push creates the gem and turns the pending publisher into a normal one. No secret is needed.
-3. To reserve the name now, before a tag carries the gemspec: `cd sdks/ruby && gem build loams.gemspec && gem push loams-0.1.0.pre.2.gem`, from `dev` and with MFA.
+3. To reserve the name now, before a tag carries the gemspec: `cd sdks/ruby && gem build loams.gemspec && gem push loams-0.1.0.gem`, from `dev` and with MFA.
 
 ### Packagist (`loams/loams`)
 

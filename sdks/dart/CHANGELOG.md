@@ -1,5 +1,5 @@
 # Changelog
 
-## 0.1.0-preview.2
+## 0.1.0
 
-- First preview on pub.dev. Pre-release: the API can change between previews.
+- First release on pub.dev, as a preview: the API can change before 1.0.
