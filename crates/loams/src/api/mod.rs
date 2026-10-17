@@ -48,6 +48,7 @@ mod query;
 pub mod repos;
 mod sql;
 pub mod streams;
+pub(crate) mod workspaces;
 
 use std::collections::HashMap;
 use std::str::FromStr;

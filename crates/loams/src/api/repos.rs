@@ -9,8 +9,8 @@
 //! like every RPC of the main port. Without it every RPC answers `unimplemented` with the reason
 //! `feature_not_in_variant` ([`ReposAbsent`]), so a caller can tell "not in this build" from a
 //! missing route, and reflection lists a service a route answers. The package's other services
-//! (`WorkspaceService`, `ObjectService`, `EnvService`) have no RPCs until GT1 Tasks 25, 18 and
-//! 61 fill their stub files in.
+//! are `ObjectService` (GT1 Task 18, `super::objects`), `WorkspaceService` (Task 25,
+//! `super::workspaces`) and `EnvService` (Task 61).
 
 use std::sync::Arc;
 
@@ -196,9 +196,15 @@ pub(crate) mod served {
         pub(crate) store: loams_store::Store,
         /// The H1 range cache over `store` that object reads go through.
         pub(crate) h1: loams_cache::RangeCache,
-        /// Finds workspaces for object reads: `NoWorkspaces` until the workspace store
+        /// Finds workspaces for object reads: `loams_git::ws::StoreWsLookup` over `store`
         /// (GT1 Task 25, ruling T18.1).
         pub(crate) workspaces: Arc<dyn loams_git::objects::WsLookup>,
+        /// Tells this node's `WatchWorkspace` streams that a workspace saved (repository and
+        /// workspace ids); streams also poll, for saves through other nodes.
+        pub(crate) ws_saved: tokio::sync::broadcast::Sender<(RepoId, loams_git::WsId)>,
+        /// Workspaces are read only by their owner and org admins (GT-Q13's alternative);
+        /// `false`, the default, lets whoever reads the repository read them.
+        pub(crate) ws_reads_owner_only: bool,
     }
 
     /// `RepoService`, served.
@@ -276,7 +282,7 @@ pub(crate) mod served {
         }
     }
 
-    fn key_reused() -> ConnectError {
+    pub(crate) fn key_reused() -> ConnectError {
         refuse(
             ErrorCode::FailedPrecondition,
             "idempotency_key_reused",
@@ -344,7 +350,7 @@ pub(crate) mod served {
         }
     }
 
-    fn timestamp(ms: i64) -> Timestamp {
+    pub(crate) fn timestamp(ms: i64) -> Timestamp {
         Timestamp {
             seconds: ms.div_euclid(1000),
             nanos: i32::try_from(ms.rem_euclid(1000) * 1_000_000).unwrap_or(0),
@@ -352,7 +358,7 @@ pub(crate) mod served {
         }
     }
 
-    fn now_ms() -> i64 {
+    pub(crate) fn now_ms() -> i64 {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
@@ -391,7 +397,7 @@ pub(crate) mod served {
         RepoName::parse(value).map_err(|err| invalid(field, err.to_string()))
     }
 
-    fn idem_key(value: &str) -> Result<Option<IdemKey>, ConnectError> {
+    pub(crate) fn idem_key(value: &str) -> Result<Option<IdemKey>, ConnectError> {
         if value.is_empty() {
             return Ok(None);
         }
@@ -577,7 +583,10 @@ pub(crate) mod served {
     }
 
     /// A page size from a request: `default` for 0, `invalid_argument` past `max` or below 0.
-    fn page_size(value: i32, (default, max): (usize, usize)) -> Result<usize, ConnectError> {
+    pub(crate) fn page_size(
+        value: i32,
+        (default, max): (usize, usize),
+    ) -> Result<usize, ConnectError> {
         match usize::try_from(value) {
             Ok(0) => Ok(default),
             Ok(n) if n <= max => Ok(n),

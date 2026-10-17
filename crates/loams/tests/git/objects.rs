@@ -23,7 +23,7 @@ const SVC: &str = "/loams.repos.v1.ObjectService";
 const TOKEN: &str = "lgt_acme_read_0123456789";
 
 /// Runs git in `dir`; its stdout.
-fn git(dir: &std::path::Path, args: &[&str], stdin: Option<&str>) -> String {
+pub(crate) fn git(dir: &std::path::Path, args: &[&str], stdin: Option<&str>) -> String {
     let mut child = Command::new("git")
         .args(["-c", "user.name=t", "-c", "user.email=t@example.com"])
         .args(args)
@@ -52,7 +52,7 @@ fn git(dir: &std::path::Path, args: &[&str], stdin: Option<&str>) -> String {
 }
 
 /// A git repository with a small history; `None` without git.
-fn history() -> Option<TempDir> {
+pub(crate) fn history() -> Option<TempDir> {
     Command::new("git").arg("--version").output().ok()?;
     let dir = TempDir::new().expect("dir");
     let path = dir.path();
@@ -66,7 +66,7 @@ fn history() -> Option<TempDir> {
     Some(dir)
 }
 
-fn rev(dir: &TempDir, name: &str) -> String {
+pub(crate) fn rev(dir: &TempDir, name: &str) -> String {
     git(dir.path(), &["rev-parse", name], None)
         .trim()
         .to_owned()
@@ -74,7 +74,7 @@ fn rev(dir: &TempDir, name: &str) -> String {
 
 /// Creates `acme/web`, stores `dir`'s history as one pack and points `main` at it; the
 /// consistency token of that commit.
-async fn load(running: &Running, dir: &TempDir) -> String {
+pub(crate) async fn load(running: &Running, dir: &TempDir) -> String {
     let ns = namespace_id(running).await;
     let (status, created) = running
         .connect(

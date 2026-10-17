@@ -210,6 +210,26 @@ impl RepoPaths {
         )
     }
 
+    /// `…/ws/<ws_id>/salvage/`, for listings.
+    pub fn ws_salvage_prefix(&self, ws: &WsId) -> String {
+        format!("{}salvage/", self.ws_prefix(ws))
+    }
+
+    /// The mount and id of a salvage path
+    /// `…ws/<ws_id>/salvage/<mount_id>/<ulid>.lws`.
+    pub fn parse_ws_salvage(path: &str) -> Option<(MountId, Ulid)> {
+        let (_, rest) = path.rsplit_once("/salvage/")?;
+        let (mount, name) = rest.split_once('/')?;
+        let mount = MountId::parse(mount).ok()?;
+        let id = name.strip_suffix(".lws")?;
+        // Only the lowercase spelling `ws_salvage` writes.
+        if id.bytes().any(|b| b.is_ascii_uppercase()) {
+            return None;
+        }
+        let id = Ulid::from_string(id).ok()?;
+        Some((mount, id))
+    }
+
     /// The name record of `owner`'s workspace `name` (§19.4.1).
     pub fn ws_name(&self, owner: &Principal, name: &WsName) -> String {
         format!("{}{name}.json", self.ws_names_prefix(owner))

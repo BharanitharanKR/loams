@@ -230,6 +230,10 @@ struct Native {
     /// its grant (namespace, repositories, access, branch prefixes).
     #[arg(long)]
     git_tokens: Option<PathBuf>,
+    /// Lets only a workspace's owner and org admins read it (feature `git`); by default
+    /// whoever may read a repository reads its workspaces.
+    #[arg(long)]
+    git_workspace_reads_owner: bool,
     /// Loams Graph's data directory (feature `graph`): graphs live under
     /// <DIR>/graphs/<graph_id>/ [default: <data-dir>/graph for dev; required
     /// for standalone unless --graph-ephemeral or --no-graph].
@@ -578,11 +582,15 @@ impl Native {
         {
             config.git.listen = self.git_listen;
             config.git.tokens = self.git_tokens.clone();
+            config.git.workspace_reads_owner_only = self.git_workspace_reads_owner;
         }
         #[cfg(not(feature = "git"))]
         {
             let _ = config;
-            if self.git_listen.is_some() || self.git_tokens.is_some() {
+            if self.git_listen.is_some()
+                || self.git_tokens.is_some()
+                || self.git_workspace_reads_owner
+            {
                 tracing::warn!("this build has no Loams Git (the git feature is off)");
             }
         }

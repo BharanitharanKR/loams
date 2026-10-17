@@ -10,7 +10,8 @@
 //! served over the repository's packs (`loams_git::odb::RangeOdb`, through the server's H1 cache) and, when a
 //! request names a workspace, the workspace's packs after them. Callers need the org role
 //! `member`, as for every `RepoService` read; whoever may read a repository may read its
-//! workspaces (GT-Q13's default, ruling T18.2). `PutWorkspacePack` (Task 24) stores a workspace
+//! workspaces (GT-Q13's default, ruling T18.2), unless the server limits workspace reads to
+//! owners (`--git-workspace-reads-owner`, GT1 Task 25). `PutWorkspacePack` (Task 24) stores a workspace
 //! pack after `loams_git::ws::put_workspace_pack` has verified it; writing a workspace needs its
 //! owner or an org admin (Q750's default). Without the feature every RPC answers
 //! `feature_not_in_variant`.
@@ -129,7 +130,10 @@ impl ObjectService for ObjectsAbsent {
 }
 
 #[cfg(feature = "git")]
-pub(crate) use served::{ObjectRoute, serve_object};
+pub(crate) use served::{
+    ObjectRoute, internal, odb_error, open_odb, pack_pb, parse_oid, serve_object,
+    workspace_not_found,
+};
 
 #[cfg(feature = "git")]
 mod served {
@@ -173,6 +177,7 @@ mod served {
     use crate::api::connect::refuse;
     use crate::api::repos::GitRuntime;
     use crate::api::repos::served::{ReposServed, invalid, repo_name, token, unavailable};
+    use crate::api::workspaces::{may_read_workspace, may_write_workspace};
 
     /// Commits a `Log` stream (files a `Grep` stream) buffers before its walk waits.
     const LOG_BUFFER: usize = 64;
@@ -228,14 +233,18 @@ mod served {
             return Ok(None);
         }
         let ws = WsId::parse(value).map_err(|err| invalid("workspace", err.to_string()))?;
-        match git.workspaces.workspace(&record.repo_id, &ws).await {
+        match git
+            .workspaces
+            .workspace(record.ns, &record.repo_id, &ws)
+            .await
+        {
             Ok(Some(view)) => Ok(Some((ws, view))),
             Ok(None) => Err(workspace_not_found(value)),
             Err(err) => Err(unavailable("the workspace lookup", &err)),
         }
     }
 
-    fn workspace_not_found(ws: &str) -> ConnectError {
+    pub(crate) fn workspace_not_found(ws: &str) -> ConnectError {
         refuse(
             ErrorCode::NotFound,
             "workspace_not_found",
@@ -253,12 +262,12 @@ mod served {
         )
     }
 
-    fn internal(what: &str, err: &dyn std::fmt::Display) -> ConnectError {
+    pub(crate) fn internal(what: &str, err: &dyn std::fmt::Display) -> ConnectError {
         tracing::error!(error = %err, "{what}");
         refuse(ErrorCode::Internal, "internal", what.to_owned(), &[])
     }
 
-    fn odb_error(err: OdbError) -> ConnectError {
+    pub(crate) fn odb_error(err: OdbError) -> ConnectError {
         match err {
             OdbError::NotFound(oid) => object_missing(&oid),
             OdbError::Blob(err) => unavailable("reading packs", &err),
@@ -339,7 +348,7 @@ mod served {
         }
     }
 
-    fn pack_pb(pack: &gitpb::PackRef) -> pb::PackRef {
+    pub(crate) fn pack_pb(pack: &gitpb::PackRef) -> pb::PackRef {
         pb::PackRef {
             checksum: pack.checksum.clone(),
             object_count: pack.object_count,
@@ -432,7 +441,7 @@ mod served {
         values.iter().map(|value| parse_oid(field, value)).collect()
     }
 
-    fn parse_oid(field: &str, value: &str) -> Result<ObjectId, ConnectError> {
+    pub(crate) fn parse_oid(field: &str, value: &str) -> Result<ObjectId, ConnectError> {
         let hex = value.len() == 40
             && value
                 .bytes()
@@ -504,6 +513,9 @@ mod served {
             let record = self.repos.active(ns, &name).await?;
             let (_, snapshot) = self.repos.read(ns_name, &record, consistency).await?;
             let ws_view = workspace(&self.repos.git, &record, ws).await?;
+            if let Some((_, view)) = &ws_view {
+                may_read_workspace(&self.repos, ctx, view.owner.as_str()).await?;
+            }
             let odb = open_odb(
                 &self.repos.git,
                 &record,
@@ -520,34 +532,7 @@ mod served {
         /// Refuses a caller who may not write workspace `view` (Q750's default): its owner, an
         /// org admin and the operator may.
         async fn may_write(&self, ctx: &RequestContext, view: &WsView) -> Result<(), ConnectError> {
-            let principal = ctx
-                .extensions()
-                .get::<crate::auth::Principal>()
-                .ok_or_else(|| {
-                    refuse(
-                        ErrorCode::Unauthenticated,
-                        crate::auth::reason::TOKEN_MISSING,
-                        "this RPC needs a credential",
-                        &[],
-                    )
-                })?;
-            if principal.subject == view.owner.as_str() {
-                return Ok(());
-            }
-            crate::api::git_auth::authorize_caller(
-                &self.repos.principals,
-                principal,
-                GitAccess::Admin,
-            )
-            .await
-            .map_err(|_| {
-                refuse(
-                    ErrorCode::PermissionDenied,
-                    "permission_denied",
-                    "only the workspace's owner or an org admin may write it",
-                    &[],
-                )
-            })
+            may_write_workspace(&self.repos, ctx, view.owner.as_str()).await
         }
 
         fn derived(&self, record: &RepoRecord) -> DerivedStore {
@@ -1026,7 +1011,11 @@ mod served {
                 let Ok(ws) = WsId::parse(value) else {
                     return not_found();
                 };
-                match git.workspaces.workspace(&route.record.repo_id, &ws).await {
+                match git
+                    .workspaces
+                    .workspace(route.ns, &route.record.repo_id, &ws)
+                    .await
+                {
                     Ok(Some(view)) if grant_reads_workspace(route.grant, &ws, &view) => {
                         Some((ws, view))
                     }

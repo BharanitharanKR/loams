@@ -15,9 +15,9 @@
 //!
 //! **Workspaces** (ruling T18.1). Objects in a workspace's packs are read
 //! only through that workspace: the caller names it, [`WsLookup`] answers
-//! its owner and packs, and the caller's access decides. Until the
-//! workspace store (Tasks 22–25) the server's lookup is [`NoWorkspaces`];
-//! [`MemWsLookup`] serves tests.
+//! its owner and packs, and the caller's access decides. The server's
+//! lookup is [`crate::ws::StoreWsLookup`], over the workspace store (Task
+//! 25); [`NoWorkspaces`] knows none and [`MemWsLookup`] serves tests.
 
 use std::collections::{BTreeMap, VecDeque};
 use std::fmt;
@@ -33,7 +33,7 @@ use crate::auth::{GitAccess, GitGrant, WsMatch};
 use crate::blob::BlobStore;
 use crate::derived::{DerivedError, DerivedStore, TreeAux, tree_aux};
 use crate::format::pb;
-use crate::ids::{ObjectId, Principal, RepoId, WsId};
+use crate::ids::{NamespaceId, ObjectId, Principal, RepoId, WsId};
 use crate::limits::FETCH_BATCH_OIDS;
 use crate::odb::{Location, ObjectDb, OdbError, RangeOdb, WsOdb};
 
@@ -87,21 +87,31 @@ pub struct WsView {
 }
 
 /// Finds a workspace of a repository (ruling T18.1; the bucket's
-/// implementation arrives with the workspace store, Task 25).
+/// implementation is [`crate::ws::StoreWsLookup`], Task 25).
 #[async_trait]
 pub trait WsLookup: Send + Sync + fmt::Debug {
-    /// The workspace, or `None` when the repository has none of that id.
-    async fn workspace(&self, repo: &RepoId, ws: &WsId) -> Result<Option<WsView>, ObjectsError>;
+    /// The workspace, or `None` when repository `repo` of namespace `ns`
+    /// has none of that id (or it was deleted).
+    async fn workspace(
+        &self,
+        ns: NamespaceId,
+        repo: &RepoId,
+        ws: &WsId,
+    ) -> Result<Option<WsView>, ObjectsError>;
 }
 
-/// The lookup of a server without workspaces yet: every workspace is
-/// unknown.
+/// A lookup that knows no workspace: every workspace is unknown.
 #[derive(Clone, Copy, Debug, Default)]
 pub struct NoWorkspaces;
 
 #[async_trait]
 impl WsLookup for NoWorkspaces {
-    async fn workspace(&self, _: &RepoId, _: &WsId) -> Result<Option<WsView>, ObjectsError> {
+    async fn workspace(
+        &self,
+        _: NamespaceId,
+        _: &RepoId,
+        _: &WsId,
+    ) -> Result<Option<WsView>, ObjectsError> {
         Ok(None)
     }
 }
@@ -124,7 +134,13 @@ impl MemWsLookup {
 
 #[async_trait]
 impl WsLookup for MemWsLookup {
-    async fn workspace(&self, repo: &RepoId, ws: &WsId) -> Result<Option<WsView>, ObjectsError> {
+    /// Keyed by repository and workspace: the namespace is not compared.
+    async fn workspace(
+        &self,
+        _: NamespaceId,
+        repo: &RepoId,
+        ws: &WsId,
+    ) -> Result<Option<WsView>, ObjectsError> {
         Ok(self
             .workspaces
             .lock()
