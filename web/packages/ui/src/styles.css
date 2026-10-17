@@ -655,6 +655,16 @@ textarea.loams-input {
 
 /* Dialog ---------------------------------------------------------------------------------- */
 
+/* Dialog glass (D1073): 80% opacity over a 14px blur; dark adds a 4% white inset. */
+.loams-dialog-glass {
+  background: color-mix(in srgb, var(--op-surface) var(--op-glass), transparent);
+  -webkit-backdrop-filter: blur(var(--op-blur)) saturate(1.1);
+  backdrop-filter: blur(var(--op-blur)) saturate(1.1);
+  border: 1px solid var(--op-rule);
+  box-shadow: var(--op-dialog-highlight), var(--op-shadow-modal);
+}
+
+/* The scrim: dialogs, sheets and the command palette. */
 .loams-dialog-scrim {
   position: fixed;
   inset: 0;
@@ -662,33 +672,14 @@ textarea.loams-input {
   background: var(--op-scrim);
 }
 
+.loams-dialog-backdrop {
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+
+/* The Loams Dialog's frame: the body scrolls, the head and foot stay. */
 .loams-dialog {
-  position: fixed;
-  z-index: 71;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  display: flex;
-  flex-direction: column;
-  overflow: auto;
-  width: min(520px, calc(100vw - 32px));
-  max-height: calc(100dvh - 64px);
-  padding: 0;
-  border: 1px solid var(--op-rule);
-  color: var(--op-ink);
-  background: var(--op-bg);
-  box-shadow: var(--op-shadow-modal);
-}
-
-.loams-dialog[data-open] {
-  animation: loams-dialog-rise 240ms var(--op-ease) both;
-}
-
-@keyframes loams-dialog-rise {
-  from {
-    opacity: 0;
-    transform: translate(-50%, calc(-50% + 8px));
-  }
+  max-height: calc(100dvh - 32px);
 }
 
 .loams-dialog-head {
@@ -696,29 +687,30 @@ textarea.loams-input {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 14px 18px;
-  border-bottom: 1px solid var(--op-rule-soft);
+  padding: 16px 20px 8px;
 }
 
 .loams-dialog-head h2 {
   margin: 0;
-  font-size: 1.05rem;
-  font-weight: 560;
+  font-size: var(--op-text-section);
+  font-weight: 600;
 }
 
 .loams-dialog-body {
   display: grid;
   gap: 16px;
-  padding: 18px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 8px 20px 16px;
+  font-size: var(--op-text-body);
 }
 
 .loams-dialog-foot {
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding: 12px 18px;
+  padding: 12px 20px;
   border-top: 1px solid var(--op-rule-soft);
-  background: var(--op-surface);
 }
 
 @keyframes loams-rise {
@@ -730,8 +722,7 @@ textarea.loams-input {
 
 @media (prefers-reduced-motion: reduce) {
   .loams-status-progress::before,
-  .loams-meter > span[aria-hidden],
-  .loams-dialog[data-open] {
+  .loams-meter > span[aria-hidden] {
     animation: none;
   }
 }

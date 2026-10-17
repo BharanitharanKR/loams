@@ -67,22 +67,29 @@ export function SelectTrigger({
   className,
   size = 'default',
   variant = 'default',
+  unstyled = false,
   children,
   icon,
   ...props
 }: WithClass<SelectPrimitive.Trigger.Props> & {
   size?: SelectTriggerSize;
   variant?: SelectTriggerVariant;
+  /** Leaves the look to `className` alone (SelectMenu's callers that bring their own). */
+  unstyled?: boolean;
   icon?: ReactNode;
 }) {
   return (
     <SelectPrimitive.Trigger
-      className={cx(TRIGGER_BASE, TRIGGER_VARIANT[variant], TRIGGER_SIZE[size], className)}
+      className={
+        unstyled
+          ? className
+          : cx(TRIGGER_BASE, TRIGGER_VARIANT[variant], TRIGGER_SIZE[size], className)
+      }
       data-slot="select-trigger"
       {...props}
     >
       {children}
-      <SelectPrimitive.Icon data-slot="select-icon">
+      <SelectPrimitive.Icon className="flex" data-slot="select-icon">
         {icon ?? <ChevronDown className="-me-1 size-3 text-muted" />}
       </SelectPrimitive.Icon>
     </SelectPrimitive.Trigger>
@@ -249,5 +256,71 @@ export function SelectGroupLabel({
       data-slot="select-group-label"
       {...props}
     />
+  );
+}
+
+/* The Loams wrapper ------------------------------------------------------------------- */
+
+export interface Option<V extends string = string> {
+  value: V;
+  label: ReactNode;
+  disabled?: boolean;
+}
+
+/**
+ * A select on Base UI: a styled list that matches the menus, for choices that need
+ * more than plain text. The native `Select` (field.tsx) stays for plain forms.
+ */
+export function SelectMenu<V extends string>({
+  value,
+  onValueChange,
+  options,
+  label,
+  placeholder = 'Choose…',
+  className,
+  leading,
+  icon,
+}: {
+  value: V | null;
+  onValueChange: (value: V) => void;
+  options: Option<V>[];
+  /** The visible or accessible label. */
+  label: string;
+  placeholder?: string;
+  /** Classes for the trigger, in place of the default control look. */
+  className?: string;
+  /** Shown before the value in the trigger (a mark, a dot). */
+  leading?: ReactNode;
+  /** The trigger's affordance; a chevron by default. */
+  icon?: ReactNode;
+}) {
+  return (
+    <SelectRoot
+      value={value}
+      onValueChange={(v) => v !== null && onValueChange(v as V)}
+      items={options.map((o) => ({ value: o.value, label: o.label }))}
+    >
+      <SelectTrigger
+        className={className}
+        unstyled={className !== undefined}
+        size="lg"
+        aria-label={label}
+        icon={
+          <span className="flex text-faint" aria-hidden="true">
+            {icon ?? <ChevronDown className="size-3" />}
+          </span>
+        }
+      >
+        {leading}
+        <SelectValue placeholder={placeholder} className="min-w-0 text-left" />
+      </SelectTrigger>
+      <SelectPopup sideOffset={4} alignItemWithTrigger={false}>
+        {options.map((o) => (
+          <SelectItem key={o.value} value={o.value} disabled={o.disabled}>
+            {o.label}
+          </SelectItem>
+        ))}
+      </SelectPopup>
+    </SelectRoot>
   );
 }

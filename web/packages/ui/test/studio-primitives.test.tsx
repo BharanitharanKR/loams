@@ -16,6 +16,7 @@ import {
   CollapsibleTrigger,
   type CommandItem,
   CommandPalette,
+  Dialog,
   InputControl,
   InputGroup,
   InputGroupAddon,
@@ -23,8 +24,25 @@ import {
   Kbd,
   KbdGroup,
   Menu,
+  MenuCheckboxItem,
+  MenuGroupLabel,
   MenuItem,
+  MenuPart,
+  MenuPartSeparator,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuRoot,
+  MenuShortcut,
+  MenuTrigger,
   MiddleTruncate,
+  PopoverPopup,
+  PopoverRoot,
+  PopoverTitle,
+  PopoverTrigger,
+  PreviewCard,
+  PreviewCardPopup,
+  PreviewCardTrigger,
   ResizeHandle,
   ScrollArea,
   Separator,
@@ -43,6 +61,10 @@ import {
   splitForMiddleTruncate,
   Toggle,
   ToggleGroup,
+  TooltipPopup,
+  TooltipProvider,
+  TooltipRoot,
+  TooltipTrigger,
 } from '../src';
 
 afterEach(cleanup);
@@ -193,6 +215,69 @@ const SPECIMENS: [string, () => ReactElement][] = [
     ),
   ],
   ['Separator', () => <Separator />],
+  [
+    'Dialog',
+    () => (
+      <Dialog open onClose={() => {}} title="t" footer={<Button>ok</Button>}>
+        b
+      </Dialog>
+    ),
+  ],
+  [
+    'PopoverPopup',
+    () => (
+      <PopoverRoot open>
+        <PopoverTrigger>Filters</PopoverTrigger>
+        <PopoverPopup>
+          <PopoverTitle>Filters</PopoverTitle>
+          body
+        </PopoverPopup>
+      </PopoverRoot>
+    ),
+  ],
+  [
+    'MenuPopup',
+    () => (
+      <MenuRoot open>
+        <MenuTrigger>Sort</MenuTrigger>
+        <MenuPopup>
+          <MenuRadioGroup value="name">
+            <MenuGroupLabel>Order</MenuGroupLabel>
+            <MenuRadioItem value="name">Name</MenuRadioItem>
+            <MenuRadioItem value="date">Date</MenuRadioItem>
+          </MenuRadioGroup>
+          <MenuPartSeparator />
+          <MenuCheckboxItem checked>Archived</MenuCheckboxItem>
+          <MenuCheckboxItem checked variant="switch">
+            Live
+          </MenuCheckboxItem>
+          <MenuPart variant="danger">
+            Delete <MenuShortcut>⌘⌫</MenuShortcut>
+          </MenuPart>
+        </MenuPopup>
+      </MenuRoot>
+    ),
+  ],
+  [
+    'TooltipPopup',
+    () => (
+      <TooltipProvider>
+        <TooltipRoot open>
+          <TooltipTrigger render={<button type="button">i</button>} />
+          <TooltipPopup>Inspector</TooltipPopup>
+        </TooltipRoot>
+      </TooltipProvider>
+    ),
+  ],
+  [
+    'PreviewCardPopup',
+    () => (
+      <PreviewCard open>
+        <PreviewCardTrigger href="#/data">orders</PreviewCardTrigger>
+        <PreviewCardPopup>12 columns</PreviewCardPopup>
+      </PreviewCard>
+    ),
+  ],
 ];
 
 describe('renders_with_tokens_only', () => {

@@ -6,6 +6,19 @@ export {
   type AlertVariant,
 } from './alert';
 export {
+  AlertDialog,
+  AlertDialogBackdrop,
+  AlertDialogClose,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogPopup,
+  AlertDialogPortal,
+  AlertDialogRoot,
+  AlertDialogTitle,
+  AlertDialogViewport,
+} from './alert-dialog';
+export {
   Autocomplete,
   AutocompleteClear,
   AutocompleteCollection,
@@ -40,6 +53,7 @@ export { CheckboxControl } from './checkbox';
 export { Collapsible, CollapsiblePanel, CollapsibleTrigger } from './collapsible';
 export { CollapsibleSectionHeader, SectionHeaderStatus } from './collapsible-section-header';
 export {
+  Combobox,
   ComboboxClear,
   ComboboxEmpty,
   ComboboxInput,
@@ -63,6 +77,27 @@ export {
 export { cx } from './cx';
 export { DataTable, type SortableColumn, VirtualList } from './data-table';
 export {
+  Dialog,
+  DialogBackdrop,
+  DialogClose,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogPortal,
+  DialogRoot,
+  DialogTitle,
+  DialogTrigger,
+  DialogViewport,
+} from './dialog';
+export {
+  DIALOG_BACKDROP_CLASS,
+  DIALOG_MOBILE_SHEET_CLASS,
+  DIALOG_POPUP_CLASS,
+  DIALOG_VIEWPORT_CLASS,
+} from './dialog-styles';
+export {
   Empty,
   EmptyContent,
   EmptyDescription,
@@ -78,6 +113,28 @@ export { InputControl, type InputControlProps } from './input';
 export { InputGroup, InputGroupAddon, InputGroupInput } from './input-group';
 export { Kbd, KbdGroup } from './kbd';
 export { Logo, Mark, Wordmark } from './logo';
+export {
+  Menu,
+  MenuCheckboxItem,
+  MenuGroup,
+  MenuGroupLabel,
+  MenuItem,
+  MenuItemLabel,
+  MenuLabel,
+  MenuPart,
+  MenuPartSeparator,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuRadioItemIndicator,
+  MenuRoot,
+  MenuSeparator,
+  MenuShortcut,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from './menu';
 export { MiddleTruncate, splitForMiddleTruncate } from './middle-truncate';
 export {
   Avatar,
@@ -97,33 +154,25 @@ export {
   NumberFieldInput,
 } from './number-field';
 export {
-  AlertDialog,
-  Combobox,
-  Dialog,
-  Menu,
-  MenuItem,
-  MenuLabel,
-  MenuSeparator,
-  type Option,
   Popover,
-  SelectMenu,
-  Sheet,
-  type Tab,
-  Tabs,
-  Toaster,
-  ToastProvider,
-  Tooltip,
-  TooltipProvider,
-  useToast,
-} from './overlay';
+  PopoverClose,
+  PopoverCreateHandle,
+  PopoverPopup,
+  PopoverRoot,
+  PopoverTitle,
+  PopoverTrigger,
+} from './popover';
+export { PreviewCard, PreviewCardPopup, PreviewCardTrigger } from './preview-card';
 export { Radio, RadioGroup, RadioGroupItem } from './radio-group';
 export { ScrollArea } from './scroll-area';
 export { Segmented, type SegmentedOption } from './segmented';
 export {
+  type Option,
   SelectButton,
   SelectGroup,
   SelectGroupLabel,
   SelectItem,
+  SelectMenu,
   SelectPopup,
   SelectRoot,
   SelectTrigger,
@@ -132,6 +181,18 @@ export {
   SelectValue,
 } from './select';
 export { Separator } from './separator';
+export {
+  Sheet,
+  SheetBackdrop,
+  SheetDescription,
+  SheetHeader,
+  SheetPopup,
+  SheetPortal,
+  SheetRoot,
+  type SheetSide,
+  SheetTitle,
+  SheetViewport,
+} from './sheet';
 export {
   ResizeHandle,
   Sidebar,
@@ -159,5 +220,15 @@ export {
   TableRoot,
   TableRow,
 } from './table';
+export { type Tab, Tabs } from './tabs';
 export { TextareaControl, type TextareaControlProps } from './textarea';
+export { Toaster, ToastProvider, useToast } from './toast';
 export { Toggle, ToggleGroup } from './toggle-group';
+export {
+  Tooltip,
+  TooltipPopup,
+  TooltipProvider,
+  TooltipRoot,
+  TooltipScrollDismissArea,
+  TooltipTrigger,
+} from './tooltip';
