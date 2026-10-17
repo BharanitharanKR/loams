@@ -109,6 +109,16 @@ describe('the preview fake agentd', () => {
     }
   });
 
+  it('writes are refused, since the demo data does not change', async () => {
+    const review = createClient(ReviewService, transport);
+    await expect(
+      review.deleteReviewComment({ checkoutId: 'demo:~/src/loams', id: 'x' }),
+    ).rejects.toThrow(/read-only/);
+    await expect(
+      createClient(ApprovalService, transport).resolveApproval({ callId: 'demo-ap-0' }),
+    ).rejects.toThrow(/read-only/);
+  });
+
   it('the Diff panel has a patch and a review comment', async () => {
     const { diff } = await createClient(DiffService, transport).getCheckoutDiff({
       cwd: '~/src/loams',

@@ -6,7 +6,7 @@
 // Connect router with sample projects and threads. Nothing else is intercepted, and no
 // daemon, file or network is touched.
 
-import { type ConnectRouter, createConnectRouter } from '@connectrpc/connect';
+import { Code, ConnectError, type ConnectRouter, createConnectRouter } from '@connectrpc/connect';
 import { createFetchHandler } from '@connectrpc/connect/protocol';
 import {
   ApprovalRisk,
@@ -346,6 +346,14 @@ const bash = (command: string) => ({
   },
 });
 
+/** The demo data is fixed: a write says so instead of reporting a change that did not happen. */
+function readOnly(): never {
+  throw new ConnectError(
+    'The preview is read-only: this change is not kept.',
+    Code.FailedPrecondition,
+  );
+}
+
 export interface FakeAgentdOptions {
   /** The gap between a transcript's frames (ms). */
   transcriptGapMs?: number;
@@ -551,7 +559,7 @@ export function fakeAgentdRoutes(router: ConnectRouter, o: FakeAgentdOptions = {
             },
             ctx.signal,
           ),
-        resolveApproval: () => ({}),
+        resolveApproval: readOnly,
       })
       .service(DiffService, {
         getCheckoutDiff: (req) => ({ diff: checkoutDiff(req.cwd) }),
@@ -574,9 +582,9 @@ export function fakeAgentdRoutes(router: ConnectRouter, o: FakeAgentdOptions = {
             { frame: { case: 'reset', value: { comments: reviewComments(req.checkoutId) } } },
             ctx.signal,
           ),
-        upsertReviewComment: (req) => ({ id: req.comment?.id ?? 'demo-comment' }),
-        deleteReviewComment: (req) => ({ id: req.id }),
-        resolveReviewComment: (req) => ({ id: req.id }),
+        upsertReviewComment: readOnly,
+        deleteReviewComment: readOnly,
+        resolveReviewComment: readOnly,
       })
   );
 }
