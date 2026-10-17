@@ -42,7 +42,7 @@ function setup(start = '/', flags?: FlagsService, s: SessionService = session) {
 const flags = {
   edition: 'oss',
   instanceName: 'Acme Loams',
-  serverVersion: '0.1.0-preview.3',
+  serverVersion: '0.1.0',
   features: {},
   apiVersions: [],
   has: () => false,
@@ -66,12 +66,12 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('shell chrome', () => {
-  it('shows the Loams wordmark, a readable preview badge and the version', () => {
+  it('shows the Loams wordmark and the version, with no preview badge', () => {
     setup('/', flags);
     expect(screen.getByRole('img', { name: 'Loams' })).toBeTruthy();
     expect(screen.queryByText('OSS')).toBeNull();
-    expect(screen.getByText('Preview').className).toBe('lc-preview');
-    expect(screen.getByText('Loams 0.1.0-preview.3')).toBeTruthy();
+    expect(screen.queryByText('Preview')).toBeNull();
+    expect(screen.getByText('Loams 0.1.0')).toBeTruthy();
   });
 
   it('breadcrumbs name the instance, the section and the page', () => {

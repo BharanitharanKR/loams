@@ -94,20 +94,6 @@ code {
   color: var(--op-ink);
   text-decoration: none;
 }
-/* Preview: every Loams surface ships as a preview release. */
-.lc-preview {
-  display: inline-flex;
-  align-items: center;
-  height: 18px;
-  padding: 0 7px;
-  border: 1px solid color-mix(in srgb, var(--op-accent) 45%, transparent);
-  border-radius: var(--op-radius-pill);
-  background: var(--op-accent-soft);
-  color: var(--op-accent-fg);
-  font-size: var(--op-text-micro);
-  font-weight: 500;
-  white-space: nowrap;
-}
 .lc-side-close {
   display: inline-grid;
   place-items: center;

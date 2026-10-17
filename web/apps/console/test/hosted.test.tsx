@@ -126,7 +126,7 @@ describe('Connect your engine', () => {
     render(
       <ConnectScreen modes={AUTH_MODES} initialMode="apikey" check={check} onConnect={onConnect} />,
     );
-    expect(screen.getByText('Preview')).toBeTruthy();
+    expect(screen.queryByText('Preview')).toBeNull();
     expect(screen.getByText(/needs Tailscale running/)).toBeTruthy();
     const connect = screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement;
     expect(connect.disabled).toBe(true);
@@ -248,7 +248,7 @@ describe('the browser edition', () => {
     const status = Object.fromEntries(handle.plugins().map((p) => [p.id, p.status]));
     expect(status).toMatchObject({ live: 'active', graph: 'active', house: 'active' });
 
-    expect(root.querySelector('.lc-side .lc-preview')?.textContent).toBe('Preview');
+    expect(root.querySelector('.lc-side .lc-preview')).toBeNull();
     await waitFor(() => expect(root.textContent).toContain('loams.tail1.ts.net'));
     const toggle = root.querySelector('.lc-hosted-demo input') as HTMLInputElement;
     expect(toggle.checked).toBe(false);

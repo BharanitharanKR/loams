@@ -205,9 +205,9 @@ is ready to be installed from it, not when an issue lists it.
 
 ## Container images (`ghcr.io`)
 
-The preview's images, the contract the compose stack in
+The release images, the contract the compose stack in
 [`deploy/release/compose.yaml`](../../deploy/release/compose.yaml) and
-[the preview guide](preview.md) rely on:
+[Running Loams](preview.md) rely on:
 
 | Image | Containerfile | Contents |
 |---|---|---|
@@ -234,8 +234,8 @@ The preview's images, the contract the compose stack in
   [`release/sqldb-images.toml`](../../release/sqldb-images.toml), and the Postgres stack's images
   are pinned by digest in
   [`deploy/pins/loams-postgres-images.toml`](../../deploy/pins/loams-postgres-images.toml).
-- **Not yet.** No attestation or cosign signature is attached to the images in the
-  preview, and the Loams images are not promised to be multi-architecture.
+- **Not yet.** No attestation or cosign signature is attached to the images in
+  0.1.0, and the Loams images are not promised to be multi-architecture.
 
 ### Third-party pins (design §54 §9.2)
 

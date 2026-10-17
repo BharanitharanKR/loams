@@ -2,9 +2,8 @@
 
 # Loams SDK for Python
 
-> **Preview.** `0.1.0a*` releases track the Loams preview server and may change
-> between previews. pip skips prereleases unless asked: `pip install --pre loams`,
-> or pin the exact version (`loams==0.1.0a2`).
+> **0.1.0.** `loams` 0.1.0 tracks Loams 0.1.0. In 0.x the API may change between
+> minor versions: pin `loams~=0.1.0` to stay on the 0.1 line.
 
 One `Loams` object over one Loams instance, speaking the unified Connect API.
 The module surface is generated from `proto/` by `scripts/sdk/gen.sh python`;
@@ -17,9 +16,9 @@ the runtime below it is hand-written and obeys the contract in
 pip install loams
 ```
 
-Not on PyPI yet. The distribution name is reserved but publishing is blocked
-until registry ownership is confirmed (D400), so for now install from a
-checkout:
+<!-- verify after publish -->
+
+From a checkout instead:
 
 ```
 uv sync --all-extras --dev     # from sdks/python

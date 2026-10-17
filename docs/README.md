@@ -15,7 +15,7 @@ Build, understand, and contribute to Loams: hybrid retrieval on object storage, 
 | Work across engine, apps, and plugins | [Monorepo guide](monorepo.md) |
 | Integrate an API or SDK | [Route map](api/route-map.md), [error reasons](api/reasons.md), and [SDK runtime contract](sdk/runtime-contract.md) |
 | Contribute a change | [Contributing](../CONTRIBUTING.md), [implementation plans](plans/README.md), and [wiki](wiki/Home.md) |
-| Run the preview | [Running the preview](release/preview.md): Docker Compose, a tailnet, the hosted or self-deployed console |
+| Run Loams | [Running Loams](release/preview.md): Docker Compose, a tailnet, the hosted or self-deployed console |
 | Use Loams Studio, the agentic development environment | [Studio guides](guides/studio/index.md), including [a remote agentd](guides/studio/remote-agentd.md) for the browser |
 | Package or release Loams | [Packaging](release/packaging.md), [publishing](release/publishing.md), and [signing](release/signing.md) |
 | Build a plugin | [Plugin documentation](../plugins/docs/README.md) and [marketplace publishing](marketplace/publishing.md) |
@@ -37,7 +37,7 @@ Additional references: [remote browser provider](remote-browser-provider.md), [a
 
 ## Read status in context
 
-The code and [feature status table](release/preview.md#feature-status) describe current implementation. Design documents explain intended behavior; plans and reviews are dated snapshots and may describe work that has since landed. A proposal is not a shipped feature. Loams has no stable release; verify flags with the binary from your checkout and keep the selected source ref with any deployment instructions.
+The code and [feature status table](release/preview.md#feature-status) describe current implementation. Design documents explain intended behavior; plans and reviews are dated snapshots and may describe work that has since landed. A proposal is not a shipped feature. Loams is at 0.x (0.1.0): APIs and on-disk formats may change between minor versions; verify flags with the binary from your checkout and keep the selected source ref with any deployment instructions.
 
 The public site at [loams.dev/docs](https://loams.dev/docs) combines reader guides with generated copies of `docs/design`. Update design originals here; the website syncs them with `LOAMS_REPO`, `LOAMS_REF`, or `LOAMS_DESIGN_DIR`.
 
