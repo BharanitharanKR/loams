@@ -2846,7 +2846,7 @@ mod tests {
                 "--declared-release",
                 "0.1.0-preview.2",
                 "--target-release",
-                "0.1.0-preview.3",
+                "0.1.0",
                 "--no-snapshot-i-accept-data-loss",
                 "--output",
                 "json",
@@ -2906,15 +2906,7 @@ mod tests {
     #[test]
     fn upgrade_subcommands_parse() {
         for args in [
-            &[
-                "loams",
-                "upgrade",
-                "check",
-                "--dir",
-                "/s",
-                "--to",
-                "0.1.0-preview.3",
-            ][..],
+            &["loams", "upgrade", "check", "--dir", "/s", "--to", "0.1.0"][..],
             &["loams", "upgrade", "status", "--output", "text"],
             &["loams", "upgrade", "snapshots", "list"],
             &[
@@ -2933,7 +2925,7 @@ mod tests {
                 "loams",
                 "upgrade",
                 "--to",
-                "0.1.0-preview.3",
+                "0.1.0",
                 "--no-auto-rollback",
                 "--keep-snapshot",
             ],
