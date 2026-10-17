@@ -27,6 +27,10 @@
       "javascript": { "formatter": { "quoteStyle": "double" } }
     },
     {
+      "includes": ["packages/ui/src/sidebar-state.ts"],
+      "javascript": { "formatter": { "quoteStyle": "double" } }
+    },
+    {
       "includes": [
         "packages/studio-ui/src/lib/observeResize.ts",
         "packages/studio-ui/src/lib/AnimatedHeight.tsx"

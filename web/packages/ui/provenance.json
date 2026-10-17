@@ -170,7 +170,7 @@
       "upstreamPath": "apps/web/src/components/ui/input.tsx",
       "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
       "upstreamSha256": "3da4013e812d00d8a3f9795825625ab098bf4e14c360b20fcd653ca1f8b77f57",
-      "localSha256": "33a1580a0b47677cff546f5381e2da10b5cf1371a3fd9f27083b66499eb73c00",
+      "localSha256": "721ec6981627054b59f870a042fac484572d35dc59cca04892d85c518ba037c2",
       "verdict": "adapt",
       "group": "k"
     },
@@ -274,6 +274,15 @@
       "group": "k"
     },
     {
+      "path": "src/sidebar-state.ts",
+      "upstreamPath": "apps/web/src/components/ui/sidebarState.ts",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "7df8c15b49ae00424835e87682051243a402b91b13882d55908cedc59831b150",
+      "localSha256": "fad6dea8969348692f890b7ed50aad8f6a7bf171b82bc24d06a2db3850f0212f",
+      "verdict": "as-is",
+      "group": "k"
+    },
+    {
       "path": "src/sidebar.tsx",
       "upstreamPath": "apps/web/src/components/ui/sidebar.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
@@ -325,9 +334,29 @@
       "upstreamPath": "apps/web/src/components/ui/textarea.tsx",
       "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
       "upstreamSha256": "4ad2ca0bb70943eec4825bedaeb76ea9816d48de1a79ce969c1d1cdce8affc01",
-      "localSha256": "ebe3f0759195b60182502868b35f60ec668dd25d6f84ab04ffda910932631786",
+      "localSha256": "dcfdf09916bd4b14f7168c7ecae6077734020ebc82018862965e3fdcade7da38",
       "verdict": "adapt",
       "group": "k"
+    },
+    {
+      "path": "src/toast-helpers.ts",
+      "upstreamPath": "apps/web/src/components/ui/toastHelpers.ts",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "6d2488ce290235e9ccba200c650cf789dcfb49d5d5432dfae602992ee5869052",
+      "localSha256": "e8ee7a10d0db5666ed8ff49c6fce0d749a7d98d44e378990ee583325eaa84b27",
+      "verdict": "adapt",
+      "group": "k",
+      "note": "stackedThreadToast is stackedToast, over ToastData"
+    },
+    {
+      "path": "src/toast.tsx",
+      "upstreamPath": "apps/web/src/components/ui/toast.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "27c0b8096adf87ad6ac1d26cbd0c0d64333a264545599497335899023f2fcc03",
+      "localSha256": "14d92c90f720429335af42b64ae782422b27a660146829e9f413019df6851d1f",
+      "verdict": "adapt",
+      "group": "k",
+      "note": "merges apps/web/src/components/ui/toast.logic.ts (buildVisibleToastLayout, hasVisibleToastAction, shouldHideCollapsedToastContent); always bottom right; anchored toasts, the thread filter, the copy-error button, additionalActions and expandableDescriptionTrigger dropped; ThreadToastData is ToastData"
     },
     {
       "path": "src/toggle-group.tsx",

@@ -31,8 +31,8 @@ export function TextareaControl({
         render={(defaultProps) => (
           <textarea
             className={cx(
-              'field-sizing-content min-h-18 max-h-64 w-full rounded-[inherit] bg-transparent px-3 py-2 outline-none wrap-anywhere placeholder:text-faint',
-              size === 'sm' && 'min-h-16 px-2.5 py-1.5 text-small',
+              'field-sizing-content min-h-18 max-h-64 w-full rounded-[inherit] border-0 bg-transparent px-3 py-2 font-[inherit] text-inherit outline-none wrap-anywhere placeholder:text-faint',
+              size === 'sm' ? 'min-h-16 px-2.5 py-1.5 text-small' : 'text-[length:inherit]',
               size === 'lg' && 'min-h-20 py-2.5',
             )}
             data-slot="textarea"
