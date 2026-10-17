@@ -49,6 +49,21 @@ allow-wildcard-paths = true
 # matched here (https://embarkstudios.github.io/cargo-deny/checks/cfg.html).
 deny = [{ name = "loam-platform", reason = "The OSS engine cannot depend on the private platform (D551)" }]
 
+# Known findings with no entry below, because the advisory database cargo-deny
+# reads does not fail on them (GitHub's advisory database reports them, so they
+# show as Dependabot alerts). Revisit both by 2026-11-30.
+#
+# * thrift 0.17.0, GHSA-2f9f-gq7v-9h6m (allocation of an excessive size; fixed in
+#   0.23.0). Only parquet 58.4.0 brings it, which asks for thrift `^0.17`, and only
+#   loams-graph uses parquet: portable snapshots (snapshot/portable.rs) that Loams
+#   writes under the graph's own store prefix and reads back on restore. parquet
+#   59 drops thrift, but it needs arrow 59 while the workspace (and DataFusion) is
+#   on arrow 58; lifted with the workspace's move to arrow 59 or later.
+# * rand 0.7.3, GHSA-cq8v-f236-94qc / RUSTSEC-2026-0097 (unsound with a custom
+#   logger that calls thread_rng). No 0.7.x release is fixed. It comes only through
+#   qdrant-edge 0.8.0 > permutation_iterator 0.1.2 (loams-hnsw), which asks for
+#   rand `^0.7`, and it is built without its `log` feature, which the advisory
+#   needs, so it is not reachable. Lifted when qdrant-edge drops permutation_iterator.
 [advisories]
 yanked = "deny"
 # Only fail on unmaintained crates we depend on directly; transitive ones are tracked upstream.

@@ -1,8 +1,6 @@
 name: Release SDKs
 
-# Publishes the seven supported SDKs from one release tag, each to its own
-# registry. The other SDKs under sdks/ (Java, Kotlin, Ruby, PHP,
-# Dart, Objective-C) are "coming soon" and are not built here.
+# Publishes every Loams SDK from one release tag, each to its own registry.
 #
 #   SDK         Registry               Name                     Version for v0.1.0
 #   TypeScript  npm                    @loams/live, @loams/client  0.1.0, dist-tag `latest`
@@ -10,12 +8,19 @@ name: Release SDKs
 #   Rust        crates.io              loams-proto, loams-live-proto, loams   0.1.0
 #   C#          NuGet                  Loams                    0.1.0
 #   Go          proxy.golang.org       loams.dev/go             tag sdks/go/v0.1.0
-#
-# A pre-release tag (v0.1.0-preview.N, -rc.N) keeps its suffix in every
-# ecosystem's spelling and publishes to npm dist-tag `preview` or `next`, so it
-# never becomes `latest`; scripts/sdk/sdk-version.py has the mapping.
 #   Swift       SwiftPM (git)          github.com/ostrium-labs/loams   the release tag itself
 #   C++         GitHub release assets  loams-cpp-<v>.tar.gz     CMake config package inside
+#   Ruby        RubyGems               loams                    0.1.0
+#   PHP         Packagist (split repo) loams/loams              tag v0.1.0 on ostrium-labs/loams-php
+#   Dart        pub.dev                loams                    0.1.0
+#   Java        Maven Central          dev.loams:loams          0.1.0
+#   Kotlin      Maven Central          dev.loams:loams-kotlin   0.1.0
+#   Objective-C CocoaPods trunk        Loams (module LoamsObjC) 0.1.0
+#
+# A pre-release tag (v0.1.0-preview.N, -rc.N) keeps its suffix in every
+# ecosystem's spelling (PyPI 0.1.0a2, RubyGems 0.1.0.pre.2, Composer
+# v0.1.0-alpha.2) and publishes to npm dist-tag `preview` or `next`, so it never
+# becomes `latest`; scripts/sdk/sdk-version.py has the mapping.
 #
 # How a run behaves:
 #
@@ -26,16 +31,19 @@ name: Release SDKs
 #     still report.
 #   * A `v*` tag push, or a manual run with `dry_run: false`, then publishes. Each
 #     registry's publish job runs only when its repository variable
-#     `SDK_PUBLISH_<REGISTRY>` is `true` (NPM, PYPI, CRATES, NUGET, GO, CPP). The
+#     `SDK_PUBLISH_<REGISTRY>` is `true` (NPM, PYPI, CRATES, NUGET, GO, CPP,
+#     RUBYGEMS, PACKAGIST, PUBDEV, MAVEN, COCOAPODS). The
 #     owner sets a variable after configuring that registry, so merging this file
 #     and pushing a tag publishes nothing until then, and a registry that is not
 #     ready is skipped rather than failed.
 #   * Credentials are OIDC trusted publishing wherever the registry has it (npm,
-#     PyPI, crates.io, NuGet). npm and crates.io can only trust a package that
+#     PyPI, crates.io, NuGet, RubyGems, pub.dev). Maven Central takes a Portal
+#     user token, CocoaPods a trunk session token, and Packagist only a git push
+#     to the PHP split repository (a deploy key). npm and crates.io can only trust a package that
 #     already exists, so their first upload may use a bootstrap secret
 #     (`NPM_TOKEN`, `CARGO_REGISTRY_TOKEN`) that is deleted afterwards. The
-#     owner's checklist (names, trusted-publisher fields, variables) is in the
-#     pull request that added this file.
+#     owner's checklist (names, trusted-publisher fields, secrets, variables) is
+#     docs/release/publishing.md.
 #   * Publishing is idempotent: a version that is already on a registry is
 #     skipped, so a run that failed half way is safe to re-dispatch.
 #
@@ -60,6 +68,17 @@ on:
       - 'sdks/cpp/packaging/**'
       - 'sdks/swift/Package.swift'
       - 'sdks/go/go.mod'
+      - 'sdks/ruby/loams.gemspec'
+      - 'sdks/ruby/lib/loams/version.rb'
+      - 'sdks/php/composer.json'
+      - 'sdks/dart/pubspec.yaml'
+      - 'sdks/java/pom.xml'
+      - 'sdks/java/build.sh'
+      - 'sdks/kotlin/pom.xml'
+      - 'sdks/kotlin/build.sh'
+      - 'Loams.podspec'
+      - 'scripts/sdk/maven-bundle.sh'
+      - 'scripts/sdk/php-split.sh'
       - 'crates/loams-proto/**'
       - 'crates/loams-live-proto/**'
   workflow_dispatch:
@@ -102,6 +121,8 @@ jobs:
       pep440: ${{ steps.spell.outputs.pep440 }}
       npm_tag: ${{ steps.spell.outputs.npm_tag }}
       go_tag: ${{ steps.spell.outputs.go_tag }}
+      gem: ${{ steps.spell.outputs.gem }}
+      composer_tag: ${{ steps.spell.outputs.composer_tag }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -190,15 +211,24 @@ jobs:
           NUGET: ${{ vars.SDK_PUBLISH_NUGET }}
           GO: ${{ vars.SDK_PUBLISH_GO }}
           CPP: ${{ vars.SDK_PUBLISH_CPP }}
+          RUBYGEMS: ${{ vars.SDK_PUBLISH_RUBYGEMS }}
+          PACKAGIST: ${{ vars.SDK_PUBLISH_PACKAGIST }}
+          PUBDEV: ${{ vars.SDK_PUBLISH_PUBDEV }}
+          MAVEN: ${{ vars.SDK_PUBLISH_MAVEN }}
+          COCOAPODS: ${{ vars.SDK_PUBLISH_COCOAPODS }}
+          EVENT: ${{ github.event_name }}
         run: |
           {
             echo "### SDK release plan"
             echo
             echo "| Registry | Variable | Publishes in this run |"
             echo "|---|---|---|"
-            for pair in "npm:NPM" "PyPI:PYPI" "crates.io:CRATES" "NuGet:NUGET" "Go module tag:GO" "C++ release assets:CPP"; do
+            for pair in "npm:NPM" "PyPI:PYPI" "crates.io:CRATES" "NuGet:NUGET" "Go module tag:GO" "C++ release assets:CPP" \
+                        "RubyGems:RUBYGEMS" "Packagist (split repo):PACKAGIST" "pub.dev:PUBDEV" "Maven Central:MAVEN" "CocoaPods:COCOAPODS"; do
               name=${pair%%:*}; var=${pair#*:}; value=${!var:-}
               if [ "$PUBLISH" = true ] && [ "$value" = true ]; then state=yes; else state=no; fi
+              # pub.dev takes an OIDC token only from a tag push.
+              if [ "$var" = PUBDEV ] && [ "$state" = yes ] && [ "$EVENT" != push ]; then state="no (tag push only)"; fi
               echo "| $name | \`SDK_PUBLISH_$var\` = \`${value:-unset}\` | $state |"
             done
             echo "| SwiftPM | none: the release tag is the version | n/a |"
@@ -737,3 +767,368 @@ jobs:
           done
           echo "::error::no GitHub release for $TAG after two hours. Re-dispatch this workflow with tag $TAG and dry_run false once release-github.yml has created it."
           exit 1
+
+  # ---------------------------------------------------------------- Ruby
+  ruby:
+    name: "Ruby: build the gem"
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: ruby/setup-ruby@651ff0d62c5c79bed6d53ec518387aae20e72c1a # v1.329.0
+        with:
+          ruby-version: '3.4'
+          bundler-cache: true
+          working-directory: sdks/ruby
+      - name: the conformance suite
+        working-directory: sdks/ruby
+        run: bundle exec rake test
+      - name: gem build, and the gem loads in a clean GEM_HOME
+        working-directory: sdks/ruby
+        env:
+          GEM_VERSION: ${{ needs.plan.outputs.gem }}
+        run: |
+          set -euo pipefail
+          gem build loams.gemspec
+          test -f "loams-$GEM_VERSION.gem" || { echo "the gem is not loams-$GEM_VERSION"; exit 1; }
+          home="$RUNNER_TEMP/gems"
+          GEM_HOME="$home" GEM_PATH="$home" gem install --no-document "./loams-$GEM_VERSION.gem"
+          (cd "$RUNNER_TEMP" && GEM_HOME="$home" GEM_PATH="$home" ruby -e 'require "loams"; puts "loams #{Loams::VERSION}"; Loams.client("http://127.0.0.1:4400")')
+          mkdir -p "$RUNNER_TEMP/gem" && mv "loams-$GEM_VERSION.gem" "$RUNNER_TEMP/gem/"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdk-gem
+          path: ${{ runner.temp }}/gem/*.gem
+          if-no-files-found: error
+
+  publish-rubygems:
+    name: "Ruby: publish to RubyGems"
+    needs: [plan, ruby]
+    if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_RUBYGEMS == 'true'
+    # RubyGems' trusted publisher names this environment.
+    environment: rubygems
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # RubyGems trusted publishing exchanges this for a short-lived API key.
+      id-token: write
+    steps:
+      - uses: ruby/setup-ruby@651ff0d62c5c79bed6d53ec518387aae20e72c1a # v1.329.0
+        with:
+          ruby-version: '3.4'
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdk-gem
+          path: gem
+      - name: a short-lived RubyGems API key (trusted publishing, OIDC)
+        uses: rubygems/configure-rubygems-credentials@dc5a8d8553e6ee01fc26761a49e99e733d17954a # v2.1.0
+      - name: gem push
+        env:
+          GEM_VERSION: ${{ needs.plan.outputs.gem }}
+        run: |
+          set -euo pipefail
+          if curl -fsS -o /dev/null "https://rubygems.org/api/v2/rubygems/loams/versions/$GEM_VERSION.json"; then
+            echo "loams $GEM_VERSION is already on RubyGems; skipped"; exit 0
+          fi
+          gem push "gem/loams-$GEM_VERSION.gem"
+
+  # ---------------------------------------------------------------- PHP
+  php:
+    name: "PHP: test and split"
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+      - name: composer validate, install and the suite
+        working-directory: sdks/php
+        run: |
+          composer validate --strict
+          composer install --no-interaction --no-progress
+          vendor/bin/phpunit
+      # Packagist reads the split repository; this builds the commit it would
+      # get and checks the archive Composer downloads, without pushing.
+      - name: the split repository's commit, built locally
+        env:
+          SHA: ${{ needs.plan.outputs.sha }}
+          COMPOSER_TAG: ${{ needs.plan.outputs.composer_tag }}
+        run: bash scripts/sdk/php-split.sh "$SHA" "$COMPOSER_TAG" "https://github.com/${{ vars.PACKAGIST_SPLIT_REPO || 'ostrium-labs/loams-php' }}.git"
+
+  publish-packagist:
+    name: "PHP: push the split repository (Packagist)"
+    needs: [plan, php]
+    if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_PACKAGIST == 'true'
+    environment: packagist
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962 # 2.40.0
+        with:
+          php-version: '8.3'
+          tools: composer:v2
+      # A deploy key with write access to the split repository only. Packagist's
+      # GitHub hook on that repository picks the tag up; nothing here talks to
+      # Packagist.
+      - name: push main and the Composer tag
+        env:
+          DEPLOY_KEY: ${{ secrets.PACKAGIST_SPLIT_DEPLOY_KEY }}
+          SPLIT_REPO: ${{ vars.PACKAGIST_SPLIT_REPO || 'ostrium-labs/loams-php' }}
+          SHA: ${{ needs.plan.outputs.sha }}
+          COMPOSER_TAG: ${{ needs.plan.outputs.composer_tag }}
+        run: |
+          set -euo pipefail
+          [ -n "$DEPLOY_KEY" ] || { echo "::error::the packagist environment has no PACKAGIST_SPLIT_DEPLOY_KEY secret"; exit 1; }
+          key="$RUNNER_TEMP/split-key"
+          printf '%s\n' "$DEPLOY_KEY" > "$key" && chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=yes"
+          mkdir -p ~/.ssh && ssh-keyscan -t ed25519 github.com >> ~/.ssh/known_hosts 2>/dev/null
+          bash scripts/sdk/php-split.sh "$SHA" "$COMPOSER_TAG" "git@github.com:$SPLIT_REPO.git" --push
+          rm -f "$key"
+
+  # ---------------------------------------------------------------- Dart
+  dart:
+    name: "Dart: test and pub publish --dry-run"
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+        with:
+          sdk: stable
+      - name: analyze, test, and the package pub.dev would get
+        working-directory: sdks/dart
+        env:
+          VERSION: ${{ needs.plan.outputs.semver }}
+        run: |
+          set -euo pipefail
+          grep -qx "version: $VERSION" pubspec.yaml || { echo "pubspec.yaml is not at $VERSION"; exit 1; }
+          dart pub get
+          dart analyze
+          dart test
+          dart pub publish --dry-run
+
+  publish-pubdev:
+    name: "Dart: publish to pub.dev"
+    needs: [plan, dart]
+    # pub.dev accepts a GitHub OIDC token only from a run started by pushing the
+    # tag, so a manual re-run of a release skips this job; push the tag again
+    # (or publish by hand) instead.
+    if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_PUBDEV == 'true' && github.event_name == 'push'
+    environment: pub.dev
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      # setup-dart exchanges this for a pub.dev token.
+      id-token: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: dart-lang/setup-dart@6afc89df92d6eb3834022f73cd65adc8cdfcb92d # v1.8.1
+        with:
+          sdk: stable
+      - name: dart pub publish
+        working-directory: sdks/dart
+        env:
+          VERSION: ${{ needs.plan.outputs.semver }}
+        run: |
+          set -euo pipefail
+          if curl -fsS -o /dev/null "https://pub.dev/api/packages/loams/versions/$VERSION"; then
+            echo "loams $VERSION is already on pub.dev; skipped"; exit 0
+          fi
+          dart pub get
+          dart pub publish --force
+
+  # ---------------------------------------------------------------- Java and Kotlin
+  jvm:
+    name: "Java and Kotlin: build the Maven Central bundles"
+    needs: plan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      # The compiler, and the kotlin-stdlib version sdks/kotlin/pom.xml declares.
+      KOTLIN_VERSION: '2.2.20'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: actions/setup-java@b843ebf9b913146b38da2eaa7aeddf76074ae1ad # v6.1.0
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: kotlinc
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/kotlinc.zip" \
+            "https://github.com/JetBrains/kotlin/releases/download/v${KOTLIN_VERSION}/kotlin-compiler-${KOTLIN_VERSION}.zip"
+          unzip -q "$RUNNER_TEMP/kotlinc.zip" -d "$RUNNER_TEMP"
+          echo "$RUNNER_TEMP/kotlinc/bin" >> "$GITHUB_PATH"
+      - name: the suites, then the jars, sources, javadoc and POMs
+        env:
+          VERSION: ${{ needs.plan.outputs.semver }}
+        run: |
+          set -euo pipefail
+          grep -q "<artifactId>kotlin-stdlib</artifactId>" sdks/kotlin/pom.xml
+          grep -A1 "<artifactId>kotlin-stdlib</artifactId>" sdks/kotlin/pom.xml | grep -q "<version>$KOTLIN_VERSION</version>" \
+            || { echo "sdks/kotlin/pom.xml's kotlin-stdlib is not $KOTLIN_VERSION, the compiler used here"; exit 1; }
+          (cd sdks/java && ./build.sh test && ./build.sh package "$RUNNER_TEMP/maven/java")
+          (cd sdks/kotlin && ./build.sh test && ./build.sh package "$RUNNER_TEMP/maven/kotlin")
+          test -f "$RUNNER_TEMP/maven/java/loams-$VERSION.jar"
+          test -f "$RUNNER_TEMP/maven/kotlin/loams-kotlin-$VERSION.jar"
+      # The same bundle the publish job uploads, signed with a throwaway key so
+      # the signing path is exercised; Central would reject this signature.
+      - name: the bundles, signed with a throwaway key
+        run: |
+          set -euo pipefail
+          export GNUPGHOME="$RUNNER_TEMP/gnupg-dry-run"
+          mkdir -m 700 "$GNUPGHOME"
+          gpg --batch --passphrase '' --quick-gen-key 'dry run <dry-run@loams.invalid>' ed25519 sign 1d
+          bash scripts/sdk/maven-bundle.sh "$RUNNER_TEMP/maven/java" "$RUNNER_TEMP/java-bundle.zip"
+          bash scripts/sdk/maven-bundle.sh "$RUNNER_TEMP/maven/kotlin" "$RUNNER_TEMP/kotlin-bundle.zip"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: sdk-maven
+          path: ${{ runner.temp }}/maven/
+          if-no-files-found: error
+
+  publish-maven:
+    name: "Java and Kotlin: publish to Maven Central"
+    needs: [plan, jvm]
+    if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_MAVEN == 'true'
+    environment: maven-central
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sdk-maven
+          path: maven
+      # Central requires every file signed, with a public key it can find on a
+      # keyserver (docs/release/signing.md has the key).
+      - name: sign, bundle and upload (Central Portal API)
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.LOAMS_GPG_PRIVATE_KEY }}
+          GPG_KEY_ID: ${{ vars.LOAMS_GPG_KEY_ID }}
+          CENTRAL_USERNAME: ${{ secrets.MAVEN_CENTRAL_USERNAME }}
+          CENTRAL_PASSWORD: ${{ secrets.MAVEN_CENTRAL_PASSWORD }}
+          VERSION: ${{ needs.plan.outputs.semver }}
+        run: |
+          set -euo pipefail
+          missing=()
+          [ -n "$GPG_PRIVATE_KEY" ] || missing+=("secret LOAMS_GPG_PRIVATE_KEY")
+          [ -n "$GPG_KEY_ID" ] || missing+=("variable LOAMS_GPG_KEY_ID")
+          [ -n "$CENTRAL_USERNAME" ] || missing+=("secret MAVEN_CENTRAL_USERNAME")
+          [ -n "$CENTRAL_PASSWORD" ] || missing+=("secret MAVEN_CENTRAL_PASSWORD")
+          [ ${#missing[@]} -eq 0 ] || { echo "::error::missing: ${missing[*]}"; exit 1; }
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          printf '%s\n' "$GPG_PRIVATE_KEY" | gpg --batch --import
+          # Best effort: Central looks the key up on keyserver.ubuntu.com among others.
+          gpg --batch --keyserver hkps://keyserver.ubuntu.com --send-keys "$GPG_KEY_ID" \
+            || echo "::warning::could not send $GPG_KEY_ID to keyserver.ubuntu.com"
+          auth=$(printf '%s:%s' "$CENTRAL_USERNAME" "$CENTRAL_PASSWORD" | base64 -w0)
+          echo "::add-mask::$auth"
+          for pair in java:loams kotlin:loams-kotlin; do
+            dir=${pair%%:*}; artifact=${pair#*:}
+            if curl -fsS -o /dev/null "https://repo1.maven.org/maven2/dev/loams/$artifact/$VERSION/$artifact-$VERSION.pom"; then
+              echo "dev.loams:$artifact:$VERSION is already on Maven Central; skipped"; continue
+            fi
+            bash scripts/sdk/maven-bundle.sh "maven/$dir" "$RUNNER_TEMP/$artifact.zip" "$GPG_KEY_ID"
+            id=$(curl -fsS -X POST -H "Authorization: Bearer $auth" \
+              -F "bundle=@$RUNNER_TEMP/$artifact.zip;type=application/octet-stream" \
+              "https://central.sonatype.com/api/v1/publisher/upload?publishingType=AUTOMATIC&name=dev.loams:$artifact:$VERSION")
+            echo "dev.loams:$artifact:$VERSION: deployment $id"
+            for attempt in $(seq 1 60); do
+              state=$(curl -fsS -X POST -H "Authorization: Bearer $auth" \
+                "https://central.sonatype.com/api/v1/publisher/status?id=$id" | python3 -c 'import json,sys; d=json.load(sys.stdin); print(d["deploymentState"]); [print(e, file=sys.stderr) for e in (d.get("errors") or {}).items()]')
+              echo "  $state"
+              case "$state" in
+                PUBLISHING|PUBLISHED) break ;;
+                FAILED) echo "::error::Central rejected dev.loams:$artifact:$VERSION (deployment $id)"; exit 1 ;;
+              esac
+              sleep 20
+            done
+            case "$state" in PUBLISHING|PUBLISHED) ;; *) echo "::error::deployment $id is still $state"; exit 1 ;; esac
+          done
+
+  # ---------------------------------------------------------------- Objective-C
+  objc:
+    name: "Objective-C: pod lib lint"
+    needs: plan
+    runs-on: macos-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      # ci.yml's sdk-objc job runs the SwiftPM suite these sources come from;
+      # here only what CocoaPods builds is checked.
+      - name: pod lib lint
+        timeout-minutes: 25
+        env:
+          VERSION: ${{ needs.plan.outputs.semver }}
+        run: |
+          set -euo pipefail
+          command -v pod >/dev/null || sudo gem install cocoapods --no-document
+          pod --version
+          grep -q "s.version      = '$VERSION'" Loams.podspec || { echo "Loams.podspec is not at $VERSION"; exit 1; }
+          pod lib lint Loams.podspec
+
+  publish-cocoapods:
+    name: "Objective-C: pod trunk push"
+    needs: [plan, objc]
+    if: needs.plan.outputs.publish == 'true' && vars.SDK_PUBLISH_COCOAPODS == 'true'
+    environment: cocoapods
+    runs-on: macos-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ needs.plan.outputs.ref }}
+          persist-credentials: false
+      # trunk clones the release tag named in the podspec and lints it again.
+      - name: pod trunk push
+        env:
+          COCOAPODS_TRUNK_TOKEN: ${{ secrets.COCOAPODS_TRUNK_TOKEN }}
+          VERSION: ${{ needs.plan.outputs.semver }}
+        run: |
+          set -euo pipefail
+          [ -n "$COCOAPODS_TRUNK_TOKEN" ] || { echo "::error::the cocoapods environment has no COCOAPODS_TRUNK_TOKEN secret"; exit 1; }
+          if curl -fsS -o /dev/null "https://trunk.cocoapods.org/api/v1/pods/Loams/versions/$VERSION"; then
+            echo "Loams $VERSION is already on CocoaPods trunk; skipped"; exit 0
+          fi
+          command -v pod >/dev/null || sudo gem install cocoapods --no-document
+          pod trunk push Loams.podspec
