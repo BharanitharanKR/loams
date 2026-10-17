@@ -110,7 +110,13 @@ export function PanelRegion({
         if (!mounted.has(id)) return null;
         const Entry = t.component;
         return (
-          <div key={t.id} className="lc-panel-tab" hidden={id !== activeId}>
+          <div
+            key={t.id}
+            className="lc-panel-tab"
+            role="tabpanel"
+            aria-label={t.meta?.label ?? 'Tab'}
+            hidden={id !== activeId}
+          >
             <SlotBoundary plugin={t.plugin}>
               <Entry params={params} props={id === state.tab ? state.props : NO_PROPS} />
             </SlotBoundary>

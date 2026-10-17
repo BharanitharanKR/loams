@@ -115,6 +115,7 @@ describe('the inspector (D1078)', () => {
     expect(region.textContent).toContain('details of orders');
     fireEvent.click(screen.getByRole('tab', { name: 'SQL' }));
     expect(screen.getByText('sql tab')).toBeTruthy();
+    expect(screen.getByRole('tabpanel', { name: 'SQL' }).textContent).toBe('sql tab');
   });
 
   it('hides tabs whose routes do not match, and its toggle when none apply', () => {
