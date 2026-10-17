@@ -22,7 +22,8 @@
         "platform",
         "transport",
         "desktop",
-        "agentd.endpoint"
+        "agentd.endpoint",
+        "theme"
       ],
       "slots": [],
       "permissions": [],

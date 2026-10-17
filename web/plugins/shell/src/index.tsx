@@ -5,18 +5,24 @@
 import { type PluginModule, service } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
 import type { SlotRegistry } from '@loams/slots';
+import { AppearanceSection } from './appearance.js';
 import { Layout } from './layout.js';
 import { syncModeWithRoute } from './mode-switcher.js';
 import { HashRouter } from './router.js';
 
+export {
+  AppearanceMenu,
+  AppearanceSection,
+  readMotion,
+  setMotion,
+  useThemeState,
+} from './appearance.js';
 export {
   inMode,
   Layout,
   type ModeFilter,
   navSections,
   SECTIONS,
-  THEME_KEY,
-  useTheme,
 } from './layout.js';
 export {
   MODE_LABEL,
@@ -39,12 +45,13 @@ export { compile, HashRouter, type HashSource, windowHash } from './router.js';
 
 const plugin: PluginModule = {
   name: 'shell',
-  inject: ['slots', 'session', 'flags', 'mode'],
+  inject: ['slots', 'session', 'flags', 'mode', 'theme'],
   apply(ctx: Context) {
     const slots = service(ctx, 'slots') as SlotRegistry;
     const session = service(ctx, 'session');
     const flags = service(ctx, 'flags');
     const mode = service(ctx, 'mode');
+    const theme = service(ctx, 'theme');
     const router = new HashRouter(slots);
     ctx.effect(() => () => router.dispose(), 'router');
     ctx.provide('router', router);
@@ -52,8 +59,20 @@ const plugin: PluginModule = {
     ctx.effect(() => syncModeWithRoute(router, mode), 'mode-route');
     ctx.effect(() =>
       slots.register({ name: 'root', plugin: 'shell' }, () => (
-        <Layout router={router} session={session} flags={flags} mode={mode} />
+        <Layout router={router} session={session} flags={flags} mode={mode} theme={theme} />
       )),
+    );
+    // Settings › Appearance: the theme choice and panel motion (D1074, D1076).
+    ctx.effect(() =>
+      slots.register(
+        {
+          name: 'console.settings.section',
+          plugin: 'shell',
+          order: 5,
+          meta: { id: 'appearance', label: 'Appearance' },
+        },
+        () => <AppearanceSection theme={theme} />,
+      ),
     );
   },
 };

@@ -3879,9 +3879,9 @@ export function ShellSidebar({
 }
 ```
 
-`Nav` is the existing `Nav` from `layout.tsx`, moved here. Its `session` prop renders `EnvironmentSwitcher` or `shell.nav.context` above the sections, as the old `Layout` did (layout.tsx:733-737).
+`Nav` is the existing `Nav` from `layout.tsx`, moved here. Its `session` prop renders `EnvironmentSwitcher` or `shell.nav.context` above the sections, as the old `Layout` did (layout.tsx:713-717).
 
-`@loams/ui`'s `Sidebar` renders `<nav aria-label={label}>` inside a `div` with `style={{ width }}`; the frame test relies on that. In `Layout`, replace the old `lc-shell` tree (layout.tsx:726-839):
+`@loams/ui`'s `Sidebar` renders `<nav aria-label={label}>` inside a `div` with `style={{ width }}`; the frame test relies on that. In `Layout`, replace the old `lc-shell` tree (layout.tsx:706-806):
 
 ```tsx
   const [side, setSide] = useSidebarState();
@@ -3890,7 +3890,7 @@ export function ShellSidebar({
   const [paletteOpen, setPaletteOpen] = useState(false);
   const sidebarOpen = narrow ? sheetOpen : side.open;
   const toggleSidebar = () => (narrow ? setSheetOpen((v) => !v) : setSide({ open: !side.open }));
-  // The gate, the engine check and the bare-page branch (layout.tsx:713-724) stay as they are.
+  // The gate, the engine check and the bare-page branch (layout.tsx:693-704) stay as they are.
   return (
     <ToastProvider>
       <TooltipProvider>
@@ -8626,3 +8626,8 @@ The owner accepted every recommendation ("yes accept all, run it that way"):
 | T1-4 | Only `color:` declarations moved to `--op-accent-fg`. `text-decoration-color: var(--op-accent)` (`admin-ui/src/admin.css`) and `--xy-minimap-mask-stroke-color` (`plugins/canvas/src/canvas.css`) are UI marks, not text, and keep the accent (3:1 is met). `web/packages/ui/README.md`'s "Dark mode" paragraph (humus and chalk) was rewritten for directions A and B along with "Fonts". | `web/` | 1 | As built. |
 | T1-5 | Biome reflowed three lines that the `text-accent-fg` rename made too long (`ui/src/overlay.tsx`, `plugins/git/src/CodeBrowser.tsx`, `StatusIndicators.tsx`). `overlay.tsx` gained 2 lines inside `SelectMenu`, and `console.css` lost 2 lines at the top. | Tasks 5, 7 | 5, 7 | Task 5's `SelectMenu`/`Combobox` anchor is now `overlay.tsx:304-422` (Tabs stays `423-473`); Task 7's `/* Frame */` anchor is now `console.css:38-598`. |
 | T1-6 | Review of #710: two `text-accent` sites in `studio-ui/src/git/WorktreeSetupCard.tsx` (a warning stage, and "worktree ready, setup action failed") used the old ochre to mean "warning". Indigo means no state. CodeRabbit also asked for a 3:1 control-border token for `Question.tsx`'s answer fields, which use `border-rule` (about 1.2:1). | `studio-ui`, Task 4 | 1, 4 | Both WorktreeSetupCard sites use `text-warn` (W3), not `text-accent-fg`. No new token for control borders in Task 1: W4's `--op-input` is the input outline, and Task 4 restyles the fields on it. Task 4 decides whether `--op-input` needs a 3:1 value for non-text contrast (WCAG 1.4.11). |
+| T2-1 | `web/plugins/shell/test/palette.test.tsx` "palette_scopes_by_mode" pinned the old single `Use dark theme` row under `# General`, twice. It was not in Task 2's file list. | `plugins/shell/test` | 2 | Both expected lists now carry `# Appearance` with `Theme: System`, `Theme: Dark` and `Theme: Light`. |
+| T2-2 | A platform that calls `ctx.provide('theme', …)` must list it in its manifest's `provides`. | `packages/platform-web`, `packages/platform-electron` | 2 | Both `package.json` manifests gain `"theme"` in `provides`. |
+| T2-3 | Small changes to the plan's code. `useThemeState` subscribes through one stable callback (a `.bind` per render made `useSyncExternalStore` resubscribe on every render). `AppearanceMenu` keeps the motion flag in state, so its item label changes after a toggle. `desktopThemeStore` swallows a rejected `theme:set`, so the choice still holds for the window. The shell also exports `useThemeState`. | `plugins/shell/src/appearance.tsx`, `packages/platform-electron` | 2 | As built. |
+| T2-4 | `layout.tsx` lost 20 lines (`useTheme`, `THEME_KEY` and the sun/moon button). | Task 7 | 7 | Task 7's anchors are now `layout.tsx:713-717` (the context or environment switcher), `706-806` (the `lc-shell` tree) and `693-704` (the engine check, the gate and the bare-page branch). |
+| T2-5 | Settings › Appearance renders wherever `console.settings.section` is shown, which today is only the desktop's Settings page (`plugins/desktop-settings`). On the web, the header's Appearance menu and the palette's three `Theme:` commands carry the choice. Chromium reports `prefers-color-scheme: light` when the OS states no preference (Playwright's `no-preference` included), so the dark fallback is reachable only where `matchMedia` gives no answer (jsdom, or no `matchMedia`). | Task 10 | 10 | Task 10's Settings place should render the `console.settings.section` entries (Appearance among them) on the web too. Screens and tests that need dark set it with `colorScheme: 'dark'` or a saved choice, never by relying on "no preference". |

@@ -2,13 +2,14 @@ import {
   type FlagsService,
   MIN_ENGINE,
   type SessionService,
+  THEME_KEY,
   UPGRADE_COMMAND,
 } from '@loams/console-host';
 import { SlotProvider, SlotRegistry } from '@loams/slots';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DOCK_DEFAULT, DOCK_KEY, DOCK_MAX, DOCK_MIN, Layout, THEME_KEY } from '../src/layout.js';
+import { DOCK_DEFAULT, DOCK_KEY, DOCK_MAX, DOCK_MIN, Layout } from '../src/layout.js';
 import { HashRouter, type HashSource } from '../src/router.js';
 
 function memory(start = '/'): HashSource {
@@ -97,15 +98,12 @@ describe('shell chrome', () => {
     );
   });
 
-  it('toggles the theme and remembers it', () => {
-    document.documentElement.classList.remove('dark');
-    setup();
-    fireEvent.click(screen.getByRole('button', { name: 'Use dark theme' }));
-    expect(document.documentElement.classList.contains('dark')).toBe(true);
-    expect(localStorage.getItem(THEME_KEY)).toBe('dark');
-    fireEvent.click(screen.getByRole('button', { name: 'Use light theme' }));
-    expect(document.documentElement.classList.contains('dark')).toBe(false);
+  it('offers System, Dark and Light and saves the choice', async () => {
+    setup('/', flags);
+    fireEvent.click(screen.getByRole('button', { name: /^Theme: /i }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /Light/ }));
     expect(localStorage.getItem(THEME_KEY)).toBe('light');
+    expect(document.documentElement.classList.contains('dark')).toBe(false);
   });
 
   it('opens the nav drawer from the menu button and closes it again', () => {

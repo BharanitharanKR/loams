@@ -8,6 +8,7 @@
 // for it here, so the preview keeps working. Namespaces without data yet
 // return empty or "unconfigured" results.
 
+import { parseThemeChoice } from '@loams/console-host/theme';
 import type {
   ChatApproval,
   ChatEvent,
@@ -366,6 +367,11 @@ export function createFakeDesktop(): LoamsDesktopApi {
   return {
     version: '0.1.0-preview.1',
     platform: 'linux',
+    // The preload passes the saved choice; the dev preview keeps it in local storage.
+    theme: {
+      initial: parseThemeChoice(localStorage.getItem('loams-theme')),
+      set: async () => {},
+    },
     servers: {
       list: async () => ({ servers: [...data.servers], activeId: data.activeId }),
       add: async (e) => {
