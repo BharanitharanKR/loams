@@ -8598,12 +8598,18 @@ The plan was searched for "TBD", "TODO", "implement later", "similar to Task", "
 | 4. Pages assuming the old frame | `viewport.test.ts` "no page sizes itself against the viewport" | 7 |
 | 5. Forced colours | `contrast.test.ts` "forced colours (Review Focus 5)" | 1 |
 
-## Open questions for the owner
+## Owner answers (2026-10-17)
 
-1. **Console and Studio modes (W10).** Design 59 makes the home agent-first, but D900–D902's two modes remain. This plan keeps them and the switcher, and loads Studio in both. Should Part 2 retire the split, with one shell, Studio's home at `/`, and Overview as a page?
-2. **Light muted text (W1).** The mockup's `#8a857c` fails AA, so this plan uses `#6b665e`. Is the slightly darker muted tone acceptable, or should muted text be larger or bolder where it is used?
-3. **The accent as text in dark (W2).** The spec's dark indigo is 4.26:1 as text, so a lighter `--op-accent-fg` carries links and accent text. Accept the second accent tone?
-4. **Thread text in the palette (W13).** Matching uses the title and the last message preview. Full transcript search needs an agentd method. Should it be scheduled with Part 2?
+The owner accepted every recommendation ("yes accept all, run it that way"):
+
+1. **W10, console and Studio modes:** yes. Part 2 retires the split: one shell, Studio's home at `/`, and Overview becomes a page. CF1 keeps both modes and the switcher.
+2. **W1, light muted text:** accepted. `#6b665e` (muted) and `#716c64` (faint).
+3. **W2, a second accent tone:** accepted. `--op-accent-fg` carries accent text; `--op-accent` is for fills and focus.
+4. **W13, thread text in the palette:** for now, the title and the last message preview. Full transcript search comes with Part 2, through a new agentd method.
+5. **Task 4, the T3 Code archive download:** approved. `scripts/studio/vendor.mjs fetch` downloads the GitHub archive zip by HTTP to record its hash; nothing is cloned.
+6. **Task 0, `@axe-core/playwright` (axe-core is MPL-2.0):** allowed as a test-only dev dependency. It is never shipped, so record it in the licence gate as an exception for dev and test only.
+
+**Execution method:** one implementer agent per task, in the order above. Each task opens its own PR into `dev`. CodeRabbit reviews it (self-review when CodeRabbit is rate-limited, said in the PR), and the PR merges only on a green `CI required` with `Connectors required` and `Web and mobile required` not failing. No reviewer subagents.
 
 ## Rulings made during execution
 
