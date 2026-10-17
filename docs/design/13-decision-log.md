@@ -1001,6 +1001,13 @@ Living document. Newest decisions at the bottom of each table.
 | D1084 | 2026-10-17 | **Native menus (App/File/Edit/View/Window/Help) with the D1081 accelerators, a splash window with light/dark loaders (dsh-desktop's generator), admin and desktop pages as full pages** ([§59](59-console-foundation.md) §6) | dsh-desktop pattern | Approved (owner, 2026-10-17) |
 | D1085 | 2026-10-17 | **OS notifications** for approvals and finished runs when unfocused (click opens the thread); the update card as a toast with dsh-desktop's consent-before-download flow, respecting #688's opt-out ([§59](59-console-foundation.md) §6) | dsh-desktop pattern | Approved (owner, 2026-10-17) |
 | D1086 | 2026-10-17 | **Rollout without a flag in four PR steps** (tokens → primitives → shell regions → desktop chrome); pages broken by a step are fixed in that step ([§59](59-console-foundation.md) §8) | Keep the console working at every step | Approved (owner, 2026-10-17) |
+| D1087 | 2026-10-17 | **Places are a first-class object:** a record with a data scope (namespace, project, environment, branch), an allow-list of tools, roles, an approval policy and budgets. Entering a place computes the effective capability (the agent's grants intersected with the place's grants), checked before the run and shown in the composer and the inspector. Part 2's scope chips select a Place ([§60](60-places-and-harness-composition.md) §3) | Owner asked what fits Loams from Endo and "The Harness Is an Object" (2026-10-17) | Proposed |
+| D1088 | 2026-10-17 | **Composition rules:** tools and authority intersect, context accumulates for the visit, identity stays with the agent (a place assigns a role, recorded as agent, role and place), and refusal wins in a conflict ([§60](60-places-and-harness-composition.md) §3) | The essay's algebra, applied the same way to models in a harness and agents in a place | Proposed |
+| D1089 | 2026-10-17 | **What an agent left behind is recorded and shown:** attributed artifacts (commits, rows, branches, files, events, approvals) per (agent, role, place, thread, run), promotable or discardable as a unit through branches ([§60](60-places-and-harness-composition.md) §3) | Loams is built on logs | Proposed |
+| D1090 | 2026-10-17 | **Durable agent workflows:** `agent()`, `parallel()` and `phase()` workflows run on Loams Durable with agentd's harnesses, inside a Place; scheduled prompts are Durable timers. Needs its own design ([§60](60-places-and-harness-composition.md) §3) | Endo's workflows made durable and auditable | Proposed |
+| D1091 | 2026-10-17 | **Cascades in the LLM gateway:** typed triage with a confidence, threshold escalation, an optional verifier, and deterministic routes, each step logged with model, price and confidence ([§60](60-places-and-harness-composition.md) §3; with §57's LLM module) | The essay's "engineered intelligence" | Proposed |
+| D1092 | 2026-10-17 | **No new harness language now:** Places, roles and composition are data (proto and YAML) checked by OpenFGA plus a policy check; watch DSPy, BAML and any standard ([§60](60-places-and-harness-composition.md) §3) | New languages that try to replace the incumbent fail (§58) | Proposed |
+| D1093 | 2026-10-17 | **Part 2 Studio UX from Endo:** switch harness or model in the middle of a thread, "Dig In" (fork from a selection), and scheduled prompts ([§60](60-places-and-harness-composition.md) §3) | Small wins for the agent home | Proposed |
 
 ## Open questions
 
@@ -1621,6 +1628,12 @@ Living document. Newest decisions at the bottom of each table.
 | Q933 | Sidebar vibrancy on macOS in light mode too? Default: yes, behind the sidebar only ([§59](59-console-foundation.md) §6) | Owner | Part 1 |
 | Q934 | Does the hosted web console show the sidebar thread list? Default: yes when the server offers agentd, otherwise Pages only ([§59](59-console-foundation.md) §5) | Owner | Part 1 |
 | Q935 | Mobile (§37)? Default: out of scope for Part 1; the tokens apply when the mobile app is restyled ([§59](59-console-foundation.md) §2) | Owner | Part 4 |
+| Q936 | Where does the Place record live? Default: a place section on projects and environments first; a separate `loams.places.v1` only if nesting needs it ([§60](60-places-and-harness-composition.md) §5) | Owner | Part 2 |
+| Q937 | How is the effective capability shown before a run? Default: a compact can / can't list in the scope chip and the inspector's Place tab ([§60](60-places-and-harness-composition.md) §5) | Owner | Part 2 |
+| Q938 | Where do Durable agent workflows live? Default: files in the project's Loams Git repository, registered with Durable when committed ([§60](60-places-and-harness-composition.md) §5) | Eng | Later design |
+| Q939 | Do places learn from visitors? Default: not automatically; a suggested change to a place is left behind and needs approval ([§60](60-places-and-harness-composition.md) §5) | Owner | Part 2 |
+| Q940 | Can an agent rewrite its own harness or Place? Default: only inside the enclosing place's limits, as a proposal a person approves ([§60](60-places-and-harness-composition.md) §5) | Owner | Part 2 |
+| Q941 | Borrow code from Endo? Default: no; it is built on Effect, which the console stack excludes; ideas only ([§60](60-places-and-harness-composition.md) §5) | Eng | Part 2 |
 
 ## Owner actions pending (2026-10-02)
 
