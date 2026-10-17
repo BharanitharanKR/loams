@@ -6,6 +6,7 @@
 #   ./build.sh test         # compile and run
 #   ./build.sh test -t name # run the test methods whose name contains `name`
 #   ./build.sh stubs        # regenerate sdks/java/gen from proto/ (needs `buf`)
+#   ./build.sh package DIR  # the Maven Central files for dev.loams:loams in DIR
 #   ./build.sh clean
 #
 # ## Why not Maven or Gradle
@@ -158,6 +159,38 @@ remote plugin is pinned so a generation difference is a version bump in a diff."
   say "build.sh: commit them if they changed; 'generated code is never hand-edited'"
 }
 
+# The files Maven Central wants for dev.loams:loams, unsigned: the POM, the jar,
+# the sources jar and the javadoc jar, named <artifact>-<version>[-classifier].
+# sdk-release.yml signs them and uploads the bundle; the version is pom.xml's.
+package_artifacts() {
+  local out="${1:?usage: build.sh package DIR}"
+  need jar
+  need javadoc
+  compile
+  local version
+  version="$(sed -n 's|^  <version>\(.*\)</version>$|\1|p' "$root/pom.xml")"
+  [ -n "$version" ] || die "no project <version> in pom.xml"
+  local base="loams-$version"
+  mkdir -p "$out"
+  out="$(cd "$out" && pwd)"
+  local meta="$build/meta/META-INF"
+  rm -rf "$build/meta" && mkdir -p "$meta"
+  cp "$root/LICENSE" "$root/NOTICE" "$meta/"
+  printf 'Automatic-Module-Name: dev.loams\nImplementation-Title: Loams Java SDK\nImplementation-Version: %s\n' \
+    "$version" >"$build/manifest.txt"
+  jar --create --file "$out/$base.jar" --manifest "$build/manifest.txt" \
+    -C "$classes" . -C "$build/meta" META-INF/LICENSE -C "$build/meta" META-INF/NOTICE
+  jar --create --file "$out/$base-sources.jar" -C "$root/gen" . -C "$root/src" . -C "$build/meta" META-INF
+  rm -rf "$build/javadoc"
+  javadoc -quiet -Xdoclint:none -encoding UTF-8 --release "$release" \
+    -cp "$(classpath)" -d "$build/javadoc" "@$build/src-sources.txt" >"$build/javadoc.log" 2>&1 \
+    || { cat "$build/javadoc.log" >&2; die "javadoc failed"; }
+  jar --create --file "$out/$base-javadoc.jar" -C "$build/javadoc" .
+  cp "$root/pom.xml" "$out/$base.pom"
+  say "build.sh: dev.loams:loams:$version in $out"
+  ls -l "$out" >&2
+}
+
 case "${1:-test}" in
   clean)
     rm -rf "$build"
@@ -168,6 +201,9 @@ case "${1:-test}" in
     ;;
   compile)
     compile
+    ;;
+  package)
+    package_artifacts "${2:-}"
     ;;
   test)
     compile
@@ -181,6 +217,6 @@ case "${1:-test}" in
     ( cd "$root" && exec java -cp "$(classpath)" dev.loams.RunTests "$@" )
     ;;
   *)
-    die "unknown command '$1'. Use clean, stubs, compile or test."
+    die "unknown command '$1'. Use clean, stubs, compile, package or test."
     ;;
 esac

@@ -1,0 +1,5 @@
+# What Composer leaves out of the dist archive (the split repository's zipball).
+/tests export-ignore
+/phpunit.xml export-ignore
+/composer.lock export-ignore
+/.gitattributes export-ignore
