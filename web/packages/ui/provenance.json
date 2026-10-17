@@ -16,6 +16,15 @@
   ],
   "files": [
     {
+      "path": "src/alert-dialog.tsx",
+      "upstreamPath": "apps/web/src/components/ui/alert-dialog.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "c7f9c00a6ac3249b3f7290f8c71ee1485514cd2c1ed215f6199225c048bd1d94",
+      "localSha256": "c1d1d3ec2fb235c20e162de13a7aecd94087bf0ecf01d394dde8ddc7e5e7fb8e",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
       "path": "src/alert.tsx",
       "upstreamPath": "apps/web/src/components/ui/alert.tsx",
       "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
@@ -111,6 +120,24 @@
       "note": "merges apps/web/src/components/ui/dialog-styles.ts; autocomplete's popup parts are src/autocomplete.tsx since CF1; @legendapp/list replaced by TanStack Virtual"
     },
     {
+      "path": "src/dialog-styles.ts",
+      "upstreamPath": "apps/web/src/components/ui/dialog-styles.ts",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "e0e987bd3bcf354286d0323db8a448d1953fce676c2503ee3d6c02dfd0a82fbb",
+      "localSha256": "cac0797c076aa660fccb0d17f0a4d5271657c0d77dd8f944530bb1f71eebea4b",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/dialog.tsx",
+      "upstreamPath": "apps/web/src/components/ui/dialog.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "df4c8fd3b1faf98162df58f548fa6e81c0ff6474719b6f76e99e331982f60230",
+      "localSha256": "1e08dc648ae55c992c435b96fb2229437de6590187df36fcd90049fbf742a8a1",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
       "path": "src/empty.tsx",
       "upstreamPath": "apps/web/src/components/ui/empty.tsx",
       "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
@@ -157,6 +184,15 @@
       "group": "k"
     },
     {
+      "path": "src/menu.tsx",
+      "upstreamPath": "apps/web/src/components/ui/menu.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "993548edbbb3f2cb1055b6adab0be81115cd0da9d10b77cf99d56684e322401d",
+      "localSha256": "6aeeeaf7b98ab4934fc522e092913ebf232163016e7f296086eb7aa25ba4f0a0",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
       "path": "src/middle-truncate.tsx",
       "upstreamPath": "apps/web/src/components/ui/middle-truncate.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
@@ -171,6 +207,24 @@
       "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
       "upstreamSha256": "361690355ca0b145e835cabe937271c9381b3c6bfc14786d79a95074b9bacaed",
       "localSha256": "ecfd2aaf1c35bd0e89df1bd09cafc3503fb8c2a010ac82e1bd891d9b2a08932e",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/popover.tsx",
+      "upstreamPath": "apps/web/src/components/ui/popover.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "740ff44488fda81290fea6219d82c8fc937a194abe013a75a05314ab110fce9c",
+      "localSha256": "4cbab5640ff223c907df11e209fc615dd70c2a27bab1540a6aae76ccdf5ce1bf",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/preview-card.tsx",
+      "upstreamPath": "apps/web/src/components/ui/preview-card.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "82e22c657e46be7d48c63d247960be5473a5058d40b6486db7c6f35ab0e45b75",
+      "localSha256": "804312bd5d15371bc4662bab97a0511e7d405f9e7c27a48bc477942f2a3de51b",
       "verdict": "adapt",
       "group": "k"
     },
@@ -207,6 +261,15 @@
       "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
       "upstreamSha256": "b99515751890f0d4c61b06e3badd14ccec6ee7104238135602ca0a2f119f476e",
       "localSha256": "9e389c9f78792ac3379021d989377a7c6112fbb4be4647aba237800718c522d1",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/sheet.tsx",
+      "upstreamPath": "apps/web/src/components/ui/sheet.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "e85b3af5c8a53e3eb9405b9056184d3d02066abc5a8f2cf48c1afcd079a1a94d",
+      "localSha256": "9acf4b8ca2fb460ba11273a0b43524ca0882feec2a319db8036fb24aa9e354d8",
       "verdict": "adapt",
       "group": "k"
     },
@@ -275,6 +338,15 @@
       "verdict": "adapt",
       "group": "k",
       "note": "merges apps/web/src/components/ui/toggle.tsx; its segmented variant stays Segmented (segmented.tsx)"
+    },
+    {
+      "path": "src/tooltip.tsx",
+      "upstreamPath": "apps/web/src/components/ui/tooltip.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "2d4bfcbc0ee53a44a68e8a6cacd11d7db22bd11c8e1ffa258676300ccee6c494",
+      "localSha256": "d7662fcf1f66a28500fee4830593fe929030c0c2eb832cea0e8f4c04ae65df21",
+      "verdict": "adapt",
+      "group": "k"
     }
   ]
 }

@@ -288,3 +288,42 @@ export function ComboboxStatus({ className, ...props }: WithClass<ComboboxPrimit
 }
 
 export const useComboboxFilter = ComboboxPrimitive.useFilter;
+
+/* The Loams wrapper ------------------------------------------------------------------- */
+
+/** A text input that filters a list of string options; Enter or a click picks one. */
+export function Combobox({
+  value,
+  onValueChange,
+  options,
+  label,
+  placeholder,
+  empty = 'No matches.',
+}: {
+  value: string | null;
+  onValueChange: (value: string | null) => void;
+  options: string[];
+  label: string;
+  placeholder?: string;
+  empty?: React.ReactNode;
+}) {
+  const id = React.useId();
+  return (
+    <ComboboxRoot items={options} value={value} onValueChange={(v) => onValueChange(v)}>
+      <label htmlFor={id} className="sr-only">
+        {label}
+      </label>
+      <ComboboxInput id={id} placeholder={placeholder} showTrigger={false} />
+      <ComboboxPopup>
+        <ComboboxEmpty>{empty}</ComboboxEmpty>
+        <ComboboxList>
+          {(item: string) => (
+            <ComboboxItem key={item} value={item}>
+              {item}
+            </ComboboxItem>
+          )}
+        </ComboboxList>
+      </ComboboxPopup>
+    </ComboboxRoot>
+  );
+}
