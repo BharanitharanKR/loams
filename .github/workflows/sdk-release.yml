@@ -290,7 +290,8 @@ jobs:
             if npm view "$pkg@$VERSION" version >/dev/null 2>&1; then
               echo "$pkg@$VERSION is already on npm; skipped"; continue
             fi
-            npm publish "npm/loams-$name-$VERSION.tgz" --access public --tag "$NPM_TAG" --provenance
+            # A bare "npm/x.tgz" is read as a GitHub shorthand (npm/x.tgz.git); "./" makes it a file.
+            npm publish "./npm/loams-$name-$VERSION.tgz" --access public --tag "$NPM_TAG" --provenance
           done
 
   # ---------------------------------------------------------------- Python
