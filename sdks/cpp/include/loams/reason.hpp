@@ -108,6 +108,8 @@ enum class Reason {
   kLiveAppMismatch,
   kLiveOriginNotAllowed,
   kSessionRotate,
+  kSessionGone,
+  kNodeDraining,
   kRoleRequired,
   kSetupRequired,
   kTokenMissing,
