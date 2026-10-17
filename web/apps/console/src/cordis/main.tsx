@@ -58,11 +58,7 @@ if (root) {
         demo
           ? {
               transport: createMockTransport({
-                // The dev server's demo also shows Studio (behind `studio` until SD1 Task 32).
-                features: {
-                  [THIRD_PARTY_FLAG]: true,
-                  ...(import.meta.env.DEV ? { studio: true } : {}),
-                },
+                features: { [THIRD_PARTY_FLAG]: true },
               }),
             }
           : {

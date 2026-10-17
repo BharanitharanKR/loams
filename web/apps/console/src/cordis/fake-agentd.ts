@@ -6,21 +6,24 @@
 // Connect router with sample projects and threads. Nothing else is intercepted, and no
 // daemon, file or network is touched.
 
-import { createConnectRouter } from '@connectrpc/connect';
+import { type ConnectRouter, createConnectRouter } from '@connectrpc/connect';
 import { createFetchHandler } from '@connectrpc/connect/protocol';
 import {
   ApprovalRisk,
   ApprovalService,
   CheckState,
   DiffService,
+  DiffSide,
   FileService,
   GitService,
   HarnessId,
   HarnessService,
+  NotificationService,
   PreviewService,
   ProjectService,
   QueueService,
   ReasoningLevel,
+  ReviewService,
   RunGroupService,
   RunGroupState,
   RunMemberStatus,
@@ -29,6 +32,7 @@ import {
   ThreadService,
   WorkspaceEntryKind,
 } from '@loams/proto/agentd';
+import { pendingDemoApprovals, transcriptFrames } from './fake-agentd-transcripts.js';
 
 const BASE = 'loams-app://console/';
 const now = Date.now();
@@ -245,9 +249,113 @@ async function* once<T>(value: T, signal: AbortSignal): AsyncGenerator<T> {
   );
 }
 
-function fakeRouter() {
+/** Waits `ms` (forever when absent), or less if the watch is cancelled; true if it was. */
+function pause(ms: number | undefined, signal: AbortSignal): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (signal.aborted) return resolve(true);
+    const timer = ms === undefined ? undefined : setTimeout(() => resolve(false), ms);
+    signal.addEventListener(
+      'abort',
+      () => {
+        clearTimeout(timer);
+        resolve(true);
+      },
+      { once: true },
+    );
+  });
+}
+
+/** A watch that sends its frames `gapMs` apart and then stays open. */
+async function* frames<T>(values: T[], gapMs: number, signal: AbortSignal): AsyncGenerator<T> {
+  for (const [i, value] of values.entries()) {
+    if (i > 0 && (await pause(gapMs, signal))) return;
+    yield value;
+  }
+  await pause(undefined, signal);
+}
+
+/** The demo working-tree change of a checkout: one spec file. */
+const SPEC_OLD = `test.describe('studio', () => {
+  test('sends a prompt', async ({ page }) => {
+    await page.goto('/#/studio');
+    await page.waitForTimeout(2000);
+    await page.getByRole('textbox').fill('hello');
+    await page.keyboard.press('Enter');
+  });
+});
+`;
+const SPEC_NEW = SPEC_OLD.replace(
+  "    await page.waitForTimeout(2000);\n    await page.getByRole('textbox').fill('hello');\n",
+  "    const composer = page.getByRole('textbox', { name: 'Message' });\n    await expect(composer).toBeEditable();\n    await composer.fill('hello');\n",
+);
+const SPEC_PATH = 'web/apps/console/test/e2e/studio.spec.ts';
+const SPEC_PATCH = `diff --git a/${SPEC_PATH} b/${SPEC_PATH}
+index 1111111..2222222 100644
+--- a/${SPEC_PATH}
++++ b/${SPEC_PATH}
+@@ -1,8 +1,9 @@
+ test.describe('studio', () => {
+   test('sends a prompt', async ({ page }) => {
+     await page.goto('/#/studio');
+-    await page.waitForTimeout(2000);
+-    await page.getByRole('textbox').fill('hello');
++    const composer = page.getByRole('textbox', { name: 'Message' });
++    await expect(composer).toBeEditable();
++    await composer.fill('hello');
+     await page.keyboard.press('Enter');
+   });
+ });
+`;
+
+function checkoutDiff(cwd: string) {
+  return {
+    cwd,
+    checkoutId: `demo:${cwd}`,
+    checksum: `demo-sum:${cwd}`,
+    patch: SPEC_PATCH,
+    files: [{ path: SPEC_PATH, status: 'modified', additions: 3, deletions: 2 }],
+    additions: 3,
+    deletions: 2,
+    updatedAtMs: ago(1),
+  };
+}
+
+/** Every demo checkout's diff, for `WatchCheckoutDiffs`. */
+const CHECKOUT_DIFFS = [...new Set(chats.map((c) => c.cwd))].map(checkoutDiff);
+
+/** One review comment on the spec, in each checkout (the Diff panel's comments). */
+function reviewComments(checkoutId: string) {
+  return [
+    {
+      id: `${checkoutId}#c1`,
+      checkoutId,
+      path: SPEC_PATH,
+      side: DiffSide.NEW,
+      line: 5,
+      body: 'Name the textbox in the page too, so this locator does not match the search field.',
+      diffChecksum: checkoutId.replace(/^demo:/, 'demo-sum:'),
+      createdAtMs: ago(6),
+    },
+  ];
+}
+
+const bash = (command: string) => ({
+  kind: {
+    case: 'structValue' as const,
+    value: { fields: { command: { kind: { case: 'stringValue' as const, value: command } } } },
+  },
+});
+
+export interface FakeAgentdOptions {
+  /** The gap between a transcript's frames (ms). */
+  transcriptGapMs?: number;
+}
+
+/** The fake daemon's services, on any Connect router (the preview's, or a test transport). */
+export function fakeAgentdRoutes(router: ConnectRouter, o: FakeAgentdOptions = {}): ConnectRouter {
+  const gap = o.transcriptGapMs ?? 1500;
   return (
-    createConnectRouter()
+    router
       .service(ProjectService, { listRepos: () => ({ repos: REPOS }) })
       .service(ThreadService, {
         watchThreads: (_req, ctx) => once({ chats }, ctx.signal),
@@ -265,10 +373,42 @@ function fakeRouter() {
             ctx.signal,
           ),
         markThreadSeen: () => ({ ok: true }),
+        // The thread page (SD1 Task 18): the transcript, its restore points and its usage.
+        watchTranscript: (req, ctx) => frames(transcriptFrames(req.chatId), gap, ctx.signal),
+        listCheckpoints: (req) => ({
+          checkpoints: [
+            {
+              turnId: `${req.chatId}-u1`,
+              ref: `refs/loams/checkpoints/${req.chatId}/turn/1/pre`,
+              createdAtMs: ago(12),
+              filesChanged: 1,
+            },
+          ],
+        }),
+        getThreadUsage: () => ({
+          turns: [],
+          totals: { inputTokens: 14_200n, outputTokens: 4_200n, durationMs: 59_000n },
+        }),
       })
       .service(GitService, {
         listWorktrees: (req) => ({ worktrees: worktrees[req.repoPath] ?? [] }),
         listBranches: () => ({ branches: ['dev', 'main', 'perf/build'] }),
+        listGitHistory: () => ({
+          page: {
+            commits: [
+              { sha: '5e1f00aa7c', subject: 'console: the thread list in Console mode' },
+              { sha: '41d07be2c9', subject: 'studio: the pair diff for run groups' },
+              { sha: '9f3c2a71e0', subject: 'agentd: supervised threads by default' },
+            ].map((c, i) => ({
+              ...c,
+              authorName: 'Priya Raman',
+              authorEmail: 'priya@example.com',
+              authoredAt: new Date(now - (i + 1) * 3_600_000).toISOString(),
+            })),
+          },
+        }),
+        watchChangeRequest: (req, ctx) =>
+          once({ status: { cwd: req.cwd, branch: req.branch ?? '' } }, ctx.signal),
       })
       // The composer's catalogs (SD1 Task 19).
       .service(StudioService, {
@@ -399,52 +539,44 @@ function fakeRouter() {
         watchApprovals: (_req, ctx) =>
           once(
             {
-              pending: ['demo-r2', 'demo-r3'].map((chatId, i) => ({
+              pending: pendingDemoApprovals().map((a, i) => ({
                 id: `demo-ap-${i}`,
-                chatId,
-                turnId: 't1',
-                tool: 'Bash',
-                args: {
-                  kind: {
-                    case: 'structValue' as const,
-                    value: {
-                      fields: {
-                        command: {
-                          kind: {
-                            case: 'stringValue' as const,
-                            value:
-                              'pnpm --filter @loams/console exec playwright test studio.spec.ts',
-                          },
-                        },
-                      },
-                    },
-                  },
-                },
+                chatId: a.chatId,
+                turnId: a.turnId,
+                tool: a.tool,
+                args: bash(a.command),
                 risk: ApprovalRisk.WRITE,
                 createdAtMs: ago(1),
               })),
             },
             ctx.signal,
           ),
+        resolveApproval: () => ({}),
       })
       .service(DiffService, {
-        getCheckoutDiff: (req) => ({
-          diff: {
-            cwd: req.cwd,
-            checkoutId: `demo:${req.cwd}`,
-            checksum: `demo-sum:${req.cwd}`,
-            files: [
-              {
-                path: 'web/apps/console/test/e2e/studio.spec.ts',
-                status: 'modified',
-                additions: 3,
-                deletions: 1,
-              },
-            ],
-            additions: 3,
-            deletions: 1,
+        getCheckoutDiff: (req) => ({ diff: checkoutDiff(req.cwd) }),
+        watchCheckoutDiffs: (_req, ctx) => once({ diffs: CHECKOUT_DIFFS }, ctx.signal),
+        getCheckoutFileDiffText: (req) => ({
+          text: {
+            diffChecksum: req.diffChecksum,
+            ...(req.path === SPEC_PATH ? { oldText: SPEC_OLD, newText: SPEC_NEW } : {}),
           },
         }),
+      })
+      // No notifications: the bell's watch stays open and quiet.
+      .service(NotificationService, {
+        watchNotifications: (_req, ctx) => frames([], gap, ctx.signal),
+      })
+      // The Diff panel's review comments (SD1 Task 20): one per checkout, kept read-only.
+      .service(ReviewService, {
+        watchReviewComments: (req, ctx) =>
+          once(
+            { frame: { case: 'reset', value: { comments: reviewComments(req.checkoutId) } } },
+            ctx.signal,
+          ),
+        upsertReviewComment: (req) => ({ id: req.comment?.id ?? 'demo-comment' }),
+        deleteReviewComment: (req) => ({ id: req.id }),
+        resolveReviewComment: (req) => ({ id: req.id }),
       })
   );
 }
@@ -452,7 +584,9 @@ function fakeRouter() {
 /** Answers the desktop agentd route from the fake router; everything else is the page's fetch. */
 export function installFakeAgentd(): void {
   const handlers = new Map(
-    fakeRouter().handlers.map((h) => [h.requestPath, createFetchHandler(h)] as const),
+    fakeAgentdRoutes(createConnectRouter()).handlers.map(
+      (h) => [h.requestPath, createFetchHandler(h)] as const,
+    ),
   );
   const pageFetch = globalThis.fetch.bind(globalThis);
   globalThis.fetch = (input, init) => {
@@ -460,7 +594,11 @@ export function installFakeAgentd(): void {
     if (!url.startsWith(BASE)) return pageFetch(input, init);
     const path = `/${url.slice(BASE.length)}`;
     const handler = handlers.get(path);
-    if (!handler) return Promise.resolve(new Response(null, { status: 404 }));
+    if (!handler) {
+      // A method the preview has no fake for yet: say which, so the next one is easy to add.
+      console.warn(`fake agentd: no fake for ${path}`);
+      return Promise.resolve(new Response(null, { status: 404 }));
+    }
     return handler(new Request(`http://fake-agentd${path}`, init));
   };
 }

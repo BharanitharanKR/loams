@@ -79,11 +79,11 @@ test.describe('studio on the web edition', () => {
 
   test('web_remote_requires_token', async () => {
     // No host yet: Studio asks for one.
-    await expect(page.getByText('Connect an agentd host')).toBeVisible();
+    await expect(page.getByText('Studio needs a Loams server with agentd')).toBeVisible();
     // A host without a token is still not connected: the transport never calls without one.
     await addHost(page, agentd, { token: false });
     await go(page, '/studio');
-    await expect(page.getByText('Connect an agentd host')).toBeVisible();
+    await expect(page.getByText('Studio needs a Loams server with agentd')).toBeVisible();
     // The daemon refuses a call without a token (and with someone else's).
     expect((await agentd.raw('/loams.agentd.v1.StudioService/GetHost', {}, null)).status).toBe(401);
     expect(
@@ -122,7 +122,9 @@ test.describe('studio on the web edition', () => {
     await agentd.call('/loams.agentd.v1.ProjectService/AddRepo', { path: agentd.repo });
     await page.reload();
     // The reload drops the pasted token (memory only, T7-11): paste it again.
-    await expect(page.getByText('Connect an agentd host')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Studio needs a Loams server with agentd')).toBeVisible({
+      timeout: 30_000,
+    });
     await go(page, '/studio/settings');
     const row = page.getByRole('list', { name: 'Registered hosts' }).getByRole('listitem', {
       name: 'E2E host',

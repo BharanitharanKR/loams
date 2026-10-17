@@ -68,7 +68,7 @@ describe('empty states', () => {
 
   it('empty_state_without_host_web', async () => {
     show(webFake().agentd);
-    expect(await screen.findByText('Connect an agentd host')).toBeTruthy();
+    expect(await screen.findByText('Studio needs a Loams server with agentd')).toBeTruthy();
     const link = screen.getByRole('link', { name: 'Agentd hosts' });
     expect(link.getAttribute('href')).toBe('#/studio/settings');
   });
