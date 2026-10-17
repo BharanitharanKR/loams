@@ -51,7 +51,11 @@ function Tables({ wesql, schema }: { wesql: Wesql; schema: string }) {
       rowKey={(t) => t.name}
       empty={<Empty title="No tables">This schema has no tables.</Empty>}
       columns={[
-        { key: 'name', header: 'Table', cell: (t) => <span className="font-mono">{t.name}</span> },
+        {
+          key: 'name',
+          header: 'Table',
+          cell: (t) => <span className={/* mono-ok: id */ 'font-mono'}>{t.name}</span>,
+        },
         { key: 'engine', header: 'Engine', cell: (t) => t.engine },
         { key: 'rows', header: 'Rows', numeric: true, cell: (t) => t.rows.toLocaleString('en-US') },
       ]}
@@ -83,7 +87,7 @@ export function Schemas({ wesql }: { wesql: Wesql }) {
             key={s.name}
             variant={s.name === current ? 'primary' : 'quiet'}
             aria-pressed={s.name === current}
-            className="justify-start font-mono"
+            className={/* mono-ok: id */ 'justify-start font-mono'}
             onClick={() => setPicked(s.name)}
           >
             {s.name}

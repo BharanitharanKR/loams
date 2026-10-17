@@ -278,7 +278,7 @@ function ProduceCard({
             <Textarea
               {...p}
               rows={6}
-              className="font-mono"
+              className={/* mono-ok: code */ 'font-mono'}
               value={body}
               onChange={(e) => setBody(e.target.value)}
             />

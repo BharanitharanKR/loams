@@ -46,7 +46,7 @@ export function ResultsGrid({ columns, rows }: { columns: ColumnHeader[]; rows: 
           only real rows and the sticky header stays inside the drawn slice. */}
       <div aria-hidden="true" style={{ height: before }} />
       <table
-        className="w-full border-collapse font-mono text-[13px]"
+        className={/* mono-ok: sql */ 'w-full border-collapse font-mono text-[13px]'}
         aria-rowcount={rows.length + 1}
         aria-colcount={columns.length}
       >

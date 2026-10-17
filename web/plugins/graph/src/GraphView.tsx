@@ -334,7 +334,7 @@ function NodeDetails({ node, stub }: { node: graph.Node; stub: boolean }) {
   return (
     <div className="flex flex-col gap-2">
       <h3 className="m-0 text-base">
-        Node <span className="font-mono">#{node.id.toString()}</span>
+        Node <span className={/* mono-ok: id */ 'font-mono'}>#{node.id.toString()}</span>
       </h3>
       {stub ? (
         <p className="m-0 text-muted">The result names this node only as an endpoint.</p>
@@ -347,7 +347,9 @@ function NodeDetails({ node, stub }: { node: graph.Node; stub: boolean }) {
             {keys.map((k) => (
               <div key={k} className="contents">
                 <dt className="text-muted">{k}</dt>
-                <dd className="m-0 break-words font-mono">{valueText(node.properties[k])}</dd>
+                <dd className={/* mono-ok: code */ 'm-0 break-words font-mono'}>
+                  {valueText(node.properties[k])}
+                </dd>
               </div>
             ))}
           </dl>

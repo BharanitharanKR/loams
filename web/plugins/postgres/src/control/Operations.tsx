@@ -49,7 +49,7 @@ export function Operations({
             return (
               <tr key={op.id} data-operation={op.id} data-state={op.state}>
                 <td>
-                  <span className="font-mono text-xs">{op.kind}</span>
+                  <span className={/* mono-ok: id */ 'font-mono text-xs'}>{op.kind}</span>
                   <span className="block text-xs text-faint">{op.id}</span>
                 </td>
                 <td className="text-sm">{targetText(op, names)}</td>

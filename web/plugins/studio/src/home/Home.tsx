@@ -52,10 +52,7 @@ export function Home({ agentd }: { agentd: StudioAgentd }) {
         <p className="m-0 mt-1 text-muted">Pick a project to start a thread in it.</p>
       </header>
       <section aria-labelledby="studio-projects" className="flex flex-col gap-3">
-        <h2
-          id="studio-projects"
-          className="m-0 font-mono text-[0.7rem] text-faint uppercase tracking-[0.14em]"
-        >
+        <h2 id="studio-projects" className="m-0 text-micro font-medium text-faint">
           Projects
         </h2>
         <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3 p-0">
@@ -74,7 +71,11 @@ export function Home({ agentd }: { agentd: StudioAgentd }) {
                   />
                   {p.name}
                 </span>
-                <span className="truncate font-mono text-[0.72rem] text-faint">{p.path}</span>
+                <span
+                  className={/* mono-ok: path */ 'truncate font-mono text-[0.72rem] text-faint'}
+                >
+                  {p.path}
+                </span>
                 {p.branch && (
                   <span className="flex items-center gap-1.5 text-[0.8rem] text-muted">
                     <GitBranch size={13} aria-hidden="true" />
@@ -139,9 +140,7 @@ export function ProjectPage({
         </p>
       </header>
       <section aria-label="New thread" className="flex flex-col gap-2">
-        <h2 className="m-0 font-mono text-[0.7rem] text-faint uppercase tracking-[0.14em]">
-          New thread
-        </h2>
+        <h2 className="m-0 text-micro font-medium text-faint">New thread</h2>
         <ThreadComposer
           project={{ path: project.path, name: project.name, branch: project.branch }}
           {...(navigate

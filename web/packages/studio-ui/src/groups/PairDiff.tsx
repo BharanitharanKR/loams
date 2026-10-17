@@ -43,7 +43,7 @@ export function PairDiff({
 
   return (
     <div className="flex min-w-0 flex-col gap-2" data-pair-diff>
-      <div className="grid grid-cols-2 gap-2 font-mono text-[0.7rem] text-faint uppercase tracking-[0.12em]">
+      <div className="grid grid-cols-2 gap-2 text-micro font-medium text-faint">
         <span className="truncate">{from}</span>
         <span className="truncate">{to}</span>
       </div>
@@ -68,7 +68,11 @@ export function PairDiff({
               aria-label={path}
               className="min-w-0 border border-rule-soft"
             >
-              <h4 className="m-0 border-b border-rule-soft bg-surface px-3 py-1.5 font-mono text-[0.76rem] font-normal text-ink">
+              <h4
+                className={
+                  /* mono-ok: path */ "m-0 border-b border-rule-soft bg-surface px-3 py-1.5 font-mono text-[0.76rem] font-normal text-ink"
+                }
+              >
                 {path}
               </h4>
               <StyledDiffCodeView

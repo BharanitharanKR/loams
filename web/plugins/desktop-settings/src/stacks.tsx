@@ -120,7 +120,7 @@ export function StacksSection({ desktop }: { desktop: LoamsDesktopApi }) {
                   <>
                     <StatusTag status={STACK_TONE[st.phase]}>{STACK_LABEL[st.phase]}</StatusTag>
                     {st.phase === 'running' && st.services.length > 0 && (
-                      <div className="text-xs text-muted font-mono">
+                      <div className={/* mono-ok: id */ 'text-xs text-muted font-mono'}>
                         {st.services
                           .map((x) => `${x.name} ${x.ports.join(',')}`.trim())
                           .join(' · ')}

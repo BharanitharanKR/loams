@@ -34,9 +34,13 @@ export function SharedApprovals({
       <ul className="m-0 flex list-none flex-col gap-2 p-0">
         {shared.map((item) => (
           <li key={item.key} className="flex flex-wrap items-center gap-x-3 gap-y-1">
-            <span className="font-mono text-[0.8rem] font-semibold text-ink">{item.tool}</span>
+            <span className={/* mono-ok: id */ "font-mono text-[0.8rem] font-semibold text-ink"}>
+              {item.tool}
+            </span>
             <code
-              className="max-w-full truncate font-mono text-[0.76rem] text-muted"
+              className={
+                /* mono-ok: code */ "max-w-full truncate font-mono text-[0.76rem] text-muted"
+              }
               title={item.argsText}
             >
               {item.argsText}

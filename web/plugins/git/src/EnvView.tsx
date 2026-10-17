@@ -120,7 +120,7 @@ export function EnvView(p: { client: GitClient; namespace: string; repoId: strin
           {envs.map((e) => (
             <li key={e.name} className="rounded-md border border-solid border-rule p-3">
               <p className="m-0 flex items-center gap-2">
-                <span className="font-mono text-ink">{e.name}</span>
+                <span className={/* mono-ok: id */ 'font-mono text-ink'}>{e.name}</span>
                 <Badge>rev {e.revision}</Badge>
                 {e.lastPromotion && (
                   <StatusTag status={PROMOTION[e.lastPromotion.status]}>
@@ -183,10 +183,10 @@ export function EnvView(p: { client: GitClient; namespace: string; repoId: strin
               {keys.map((k) => (
                 <tr key={k.key} className="border-0 border-t border-solid border-rule align-top">
                   <th scope="row" className="py-1.5 pr-3 text-left font-normal">
-                    <span className="font-mono text-ink">{k.key}</span>
+                    <span className={/* mono-ok: id */ 'font-mono text-ink'}>{k.key}</span>
                     <span className="block text-xs text-muted">{k.file}</span>
                   </th>
-                  <td className="py-1.5 pr-3 font-mono text-xs text-muted">
+                  <td className={/* mono-ok: hash */ 'py-1.5 pr-3 font-mono text-xs text-muted'}>
                     {k.plain ? (
                       <Badge title="Non-secret configuration kept in git (# loams:plain)">
                         plain
@@ -345,12 +345,14 @@ function AuditLog(p: {
                 <td className="py-1 pr-3">
                   <Badge>{e.kind}</Badge>
                 </td>
-                <td className="py-1 pr-3 font-mono">{e.environment}</td>
-                <td className="py-1 pr-3 font-mono text-xs">
+                <td className={/* mono-ok: id */ 'py-1 pr-3 font-mono'}>{e.environment}</td>
+                <td className={/* mono-ok: id */ 'py-1 pr-3 font-mono text-xs'}>
                   {e.keys.map((k, i) => `${k}@v${e.versions[i] ?? '?'}`).join(', ')}
                 </td>
-                <td className="py-1 pr-3 font-mono text-xs">{e.principal}</td>
-                <td className="py-1 font-mono text-xs text-muted">{e.subject || '-'}</td>
+                <td className={/* mono-ok: id */ 'py-1 pr-3 font-mono text-xs'}>{e.principal}</td>
+                <td className={/* mono-ok: id */ 'py-1 font-mono text-xs text-muted'}>
+                  {e.subject || '-'}
+                </td>
               </tr>
             ))}
           </tbody>

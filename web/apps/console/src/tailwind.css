@@ -55,7 +55,7 @@
   --color-current: currentColor;
 
   --font-sans: var(--loams-font-sans);
-  --font-mono: var(--loams-font-mono);
+  --font-mono: var(--loams-font-mono); /* mono-ok: code */
   --ease-op: var(--op-ease);
   --ease-panel: var(--op-ease-panel);
 

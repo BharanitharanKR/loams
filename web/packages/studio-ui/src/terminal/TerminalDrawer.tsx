@@ -207,7 +207,7 @@ export function terminalThemeFromTokens(element?: Element | null): ITheme {
 function monoFont(): string {
   try {
     const value = getComputedStyle(document.documentElement)
-      .getPropertyValue("--loams-font-mono")
+      .getPropertyValue("--loams-font-mono") // mono-ok: code
       .trim();
     return value || "ui-monospace, monospace";
   } catch {

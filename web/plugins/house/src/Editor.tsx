@@ -109,7 +109,9 @@ export function Editor(p: EditorProps) {
         aria-activedescendant={shown ? `${listId}-${active}` : undefined}
         aria-describedby={p.describedBy}
         aria-invalid={p.invalid || undefined}
-        className="loams-input box-border w-full resize-y font-mono text-[13px]"
+        className={
+          /* mono-ok: sql */ 'loams-input box-border w-full resize-y font-mono text-[13px]'
+        }
         rows={8}
         spellCheck={false}
         value={p.value}
@@ -128,7 +130,9 @@ export function Editor(p: EditorProps) {
         role="listbox"
         aria-label="Completions"
         hidden={!shown}
-        className="absolute left-2 z-10 m-0 max-h-60 overflow-auto rounded-md border border-solid border-rule bg-surface p-1 font-mono text-[13px] shadow"
+        className={
+          /* mono-ok: sql */ 'absolute left-2 z-10 m-0 max-h-60 overflow-auto rounded-md border border-solid border-rule bg-surface p-1 font-mono text-[13px] shadow'
+        }
       >
         {options.map((w, i) => (
           <div

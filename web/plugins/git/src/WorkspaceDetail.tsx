@@ -65,34 +65,34 @@ export function WorkspaceDetail(p: {
     <article className="flex min-w-0 flex-col gap-3" aria-labelledby="git-ws-title">
       <header className="flex flex-col gap-1">
         <h2 id="git-ws-title" className="m-0 flex flex-wrap items-center gap-2 text-base">
-          <span className="font-mono">{ws.name || ws.wsId}</span>
+          <span className={/* mono-ok: id */ 'font-mono'}>{ws.name || ws.wsId}</span>
           {ws.agent && <Badge>agent</Badge>}
           {ws.conflicts.length > 0 && <StatusTag status="failed">conflicts</StatusTag>}
         </h2>
         <dl className="m-0 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-0.5 text-sm">
           <dt className="text-muted">Workspace</dt>
-          <dd className="m-0 font-mono">{ws.wsId}</dd>
+          <dd className={/* mono-ok: id */ 'm-0 font-mono'}>{ws.wsId}</dd>
           <dt className="text-muted">Owner</dt>
-          <dd className="m-0 font-mono">{ws.owner}</dd>
+          <dd className={/* mono-ok: id */ 'm-0 font-mono'}>{ws.owner}</dd>
           <dt className="text-muted">Tracks</dt>
-          <dd className="m-0 font-mono">{ws.track}</dd>
+          <dd className={/* mono-ok: id */ 'm-0 font-mono'}>{ws.track}</dd>
           <dt className="text-muted">Base commit</dt>
-          <dd className="m-0 font-mono" title={ws.base}>
+          <dd className={/* mono-ok: hash */ 'm-0 font-mono'} title={ws.base}>
             {shortOid(ws.base)}{' '}
             <span className="text-muted">at seq {ws.baseSeq.toLocaleString('en-US')}</span>
           </dd>
           <dt className="text-muted">HEAD</dt>
-          <dd className="m-0 font-mono" title={ws.head}>
+          <dd className={/* mono-ok: hash */ 'm-0 font-mono'} title={ws.head}>
             {shortOid(ws.head)} {ws.headRef ? `(${ws.headRef})` : '(detached)'}
           </dd>
           <dt className="text-muted">Latest snapshot</dt>
-          <dd className="m-0 font-mono">
+          <dd className={/* mono-ok: id */ 'm-0 font-mono'}>
             @{ws.n} · writer {ws.writer} · {formatRelative(ws.updatedAt)}
           </dd>
           {ws.fork && (
             <>
               <dt className="text-muted">Forked from</dt>
-              <dd className="m-0 font-mono">
+              <dd className={/* mono-ok: id */ 'm-0 font-mono'}>
                 {ws.fork.wsId}@{ws.fork.n}
               </dd>
             </>
@@ -179,7 +179,7 @@ function ChangedPaths({ ws }: { ws: Workspace }) {
       <tbody>
         {sorted.map((c: ChangedPath) => (
           <tr key={c.path} className="border-0 border-t border-solid border-rule">
-            <td className="py-1 font-mono">{c.path}</td>
+            <td className={/* mono-ok: path */ 'py-1 font-mono'}>{c.path}</td>
             <td className="py-1">
               <Badge>{CHANGE_TEXT[c.kind]}</Badge>
             </td>
@@ -257,7 +257,7 @@ function SnapshotTimeline(p: {
               }`}
             />
             <span className="flex flex-wrap items-center gap-2 text-sm">
-              <span className="font-mono text-ink">@{s.n}</span>
+              <span className={/* mono-ok: id */ 'font-mono text-ink'}>@{s.n}</span>
               {s.label && <Badge>{s.label}</Badge>}
               {s.takeover && (
                 <Badge

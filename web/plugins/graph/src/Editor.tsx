@@ -60,7 +60,9 @@ function ErrorSpan({
   const after = cps.slice(position.column - 1 + position.length).join('');
   return (
     <pre
-      className="m-0 overflow-auto rounded-md bg-surface p-2 font-mono text-[13px]"
+      className={
+        /* mono-ok: code */ 'm-0 overflow-auto rounded-md bg-surface p-2 font-mono text-[13px]'
+      }
       data-testid="error-span"
     >
       <span className="select-none text-faint">{position.line} │ </span>
@@ -164,7 +166,9 @@ export function Editor(p: EditorProps) {
         aria-label="Statement"
         aria-describedby={p.failure ? errorId : undefined}
         aria-invalid={p.failure?.failure.position ? true : undefined}
-        className="loams-input box-border w-full resize-y font-mono text-[13px]"
+        className={
+          /* mono-ok: code */ 'loams-input box-border w-full resize-y font-mono text-[13px]'
+        }
         rows={7}
         spellCheck={false}
         value={p.statement}
@@ -175,7 +179,7 @@ export function Editor(p: EditorProps) {
         <summary className="cursor-pointer text-sm text-muted">Parameters</summary>
         <Textarea
           aria-label="Parameters (JSON object)"
-          className="mt-2 box-border w-full resize-y font-mono text-[13px]"
+          className={/* mono-ok: code */ 'mt-2 box-border w-full resize-y font-mono text-[13px]'}
           rows={3}
           spellCheck={false}
           placeholder='{"name": "Keanu Reeves"}'

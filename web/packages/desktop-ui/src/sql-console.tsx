@@ -94,7 +94,7 @@ export function SqlConsole({
         </label>
         <Textarea
           id={`${labelId}-editor`}
-          className="box-border min-h-32 w-full font-mono text-sm"
+          className={/* mono-ok: sql */ 'box-border min-h-32 w-full font-mono text-sm'}
           spellCheck={false}
           rows={6}
           placeholder={placeholder}
@@ -143,9 +143,9 @@ export function SqlConsole({
                 rowKey={(row) => String(row.i)}
                 columns={result.columns.map((name, c) => ({
                   key: `${c}`,
-                  header: <span className="font-mono">{name}</span>,
+                  header: <span className={/* mono-ok: sql */ 'font-mono'}>{name}</span>,
                   cell: (row: { r: unknown[] }) => (
-                    <span className="font-mono text-xs">{cell(row.r[c])}</span>
+                    <span className={/* mono-ok: sql */ 'font-mono text-xs'}>{cell(row.r[c])}</span>
                   ),
                 }))}
                 empty={<p className="m-0 text-sm text-muted">No rows.</p>}

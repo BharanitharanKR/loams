@@ -915,7 +915,9 @@ function menuRow(item: ComposerMenuItem) {
       };
     case 'slash-command':
       return {
-        icon: <span className="w-3.5 text-center font-mono text-faint">/</span>,
+        icon: (
+          <span className={/* mono-ok: code */ 'w-3.5 text-center font-mono text-faint'}>/</span>
+        ),
         title: `/${item.command.name}`,
         detail: item.command.description,
       };
@@ -948,9 +950,7 @@ function SuggestionMenu({
   const heading = kind === 'path' ? 'Files' : kind === 'skill' ? 'Skills' : 'Commands and skills';
   return (
     <div className="absolute right-0 bottom-full left-0 z-20 mb-1 max-h-72 overflow-auto border border-rule bg-bg shadow-pop">
-      <div className="px-3 pt-2 pb-1 font-mono text-[0.68rem] text-faint uppercase tracking-[0.14em]">
-        {heading}
-      </div>
+      <div className="px-3 pt-2 pb-1 text-micro font-medium text-faint">{heading}</div>
       {items.length === 0 ? (
         <p className="m-0 px-3 pb-2 text-[0.84rem] text-muted">{emptyText}</p>
       ) : (
@@ -1000,7 +1000,7 @@ function QueuedMessages({
 }) {
   return (
     <section aria-label="Queued messages" className="border border-rule-soft bg-surface">
-      <h3 className="m-0 px-3 pt-2 font-mono text-[0.68rem] text-faint uppercase tracking-[0.14em]">
+      <h3 className="m-0 px-3 pt-2 text-micro font-medium text-faint">
         Queued for when the turn ends
       </h3>
       <ul className="m-0 list-none p-0 py-1">

@@ -62,7 +62,7 @@ const Loading = ({ what }: { what: string }) => (
 );
 
 const Mono = ({ children }: { children: ReactNode }) => (
-  <span className="font-mono text-xs">{children}</span>
+  <span className={/* mono-ok: id */ 'font-mono text-xs'}>{children}</span>
 );
 
 const when = (ms: number | undefined) => (ms ? new Date(ms).toLocaleString() : '—');
@@ -223,7 +223,7 @@ export function PromiseDetail({
     <Dialog
       open
       onClose={onClose}
-      title={<span className="font-mono text-sm break-all">{current.id}</span>}
+      title={<span className={/* mono-ok: id */ 'font-mono text-sm break-all'}>{current.id}</span>}
       footer={
         confirming ? (
           <>
@@ -366,7 +366,7 @@ function NewPromise({
             <Textarea
               {...p}
               rows={4}
-              className="font-mono"
+              className={/* mono-ok: code */ 'font-mono'}
               value={param}
               onChange={(e) => setParam(e.target.value)}
             />
@@ -610,7 +610,7 @@ function NewSchedule({
           {(p) => (
             <Input
               {...p}
-              className="font-mono"
+              className={/* mono-ok: code */ 'font-mono'}
               value={cron}
               onChange={(e) => setCron(e.target.value)}
             />
@@ -623,7 +623,7 @@ function NewSchedule({
           {(p) => (
             <Input
               {...p}
-              className="font-mono"
+              className={/* mono-ok: id */ 'font-mono'}
               value={promiseId}
               onChange={(e) => setPromiseId(e.target.value)}
             />
@@ -636,7 +636,7 @@ function NewSchedule({
           {(p) => (
             <Input
               {...p}
-              className="font-mono"
+              className={/* mono-ok: id */ 'font-mono'}
               value={target}
               onChange={(e) => setTarget(e.target.value)}
             />
@@ -829,7 +829,9 @@ export function TasksTab({ api }: { api: DurableApi }) {
         <Dialog
           open
           onClose={() => setSelected(undefined)}
-          title={<span className="font-mono text-sm break-all">{selected.id}</span>}
+          title={
+            <span className={/* mono-ok: id */ 'font-mono text-sm break-all'}>{selected.id}</span>
+          }
           footer={
             <Button variant="quiet" onClick={() => setSelected(undefined)}>
               Close
@@ -857,7 +859,7 @@ export function TasksTab({ api }: { api: DurableApi }) {
             </div>
             <div className="col-span-2">
               <dt className="text-muted text-xs">Resumes</dt>
-              <dd className="m-0 font-mono text-xs break-all">
+              <dd className={/* mono-ok: code */ 'm-0 font-mono text-xs break-all'}>
                 {JSON.stringify(selected.resumes)}
               </dd>
             </div>

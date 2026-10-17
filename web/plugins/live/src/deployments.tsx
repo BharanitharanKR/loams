@@ -35,7 +35,7 @@ export const PREVIEW_NOTICE =
 export const LOG_CAP = 500;
 
 const Mono = ({ children }: { children: ReactNode }) => (
-  <span className="font-mono text-xs">{children}</span>
+  <span className={/* mono-ok: id */ 'font-mono text-xs'}>{children}</span>
 );
 const shortId = (id: string) => id.slice(-8);
 const when = (ms: number) => new Date(ms).toLocaleString();
@@ -389,7 +389,9 @@ export function LogsCard({
           aria-label="Function log lines"
           // biome-ignore lint/a11y/noNoninteractiveTabindex: the scrolled log must be reachable by keyboard
           tabIndex={0}
-          className="font-mono text-xs border border-rule rounded p-2 overflow-auto max-h-80"
+          className={
+            /* mono-ok: code */ 'font-mono text-xs border border-rule rounded p-2 overflow-auto max-h-80'
+          }
         >
           {lines.length === 0 ? (
             <p className="m-0 text-muted">

@@ -46,7 +46,7 @@ function Capabilities({ summary, manifest }: { summary: ConnectorSummary; manife
         </Row>
         <Row k="Delivery">
           {delivery.source || delivery.sink ? (
-            <span className="font-mono text-xs">
+            <span className="text-xs">
               source {String(delivery.source ?? 'n/a')}, sink {String(delivery.sink ?? 'n/a')}
             </span>
           ) : (
@@ -71,7 +71,7 @@ function Facts({ summary, manifest }: { summary: ConnectorSummary; manifest: Rec
         <Row k="Auth">{badges(summary.auth)}</Row>
         <Row k="Secrets">{badges(manifest.secrets)}</Row>
         <Row k="Licence">
-          <span className="font-mono text-xs">{summary.licence || 'n/a'}</span>
+          <span className={/* mono-ok: id */ 'font-mono text-xs'}>{summary.licence || 'n/a'}</span>
           {Object.keys(deps).length > 0 && (
             <span className="ml-2 text-xs text-muted">
               {Object.entries(deps)
@@ -81,7 +81,7 @@ function Facts({ summary, manifest }: { summary: ConnectorSummary; manifest: Rec
           )}
         </Row>
         <Row k="Runtime">
-          <span className="font-mono text-xs">
+          <span className={/* mono-ok: id */ 'font-mono text-xs'}>
             {summary.runtime.kind} {summary.runtime.ref}
           </span>
           {typeof runtime.version === 'string' && (
@@ -166,7 +166,7 @@ export function DetailPage({
         title={summary.name}
         subtitle={
           <>
-            <span className="font-mono">{summary.id}</span> · {summary.category}{' '}
+            <span className={/* mono-ok: id */ 'font-mono'}>{summary.id}</span> · {summary.category}{' '}
             <StatusTag status={statusTone(summary.status)}>{summary.status}</StatusTag>
           </>
         }

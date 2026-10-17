@@ -65,7 +65,7 @@ function ServiceNodeView({ data, selected }: NodeProps<ServiceFlowNode>) {
       <div className="flex items-center gap-2">
         <span
           aria-hidden="true"
-          className="inline-flex h-6 min-w-8 items-center justify-center bg-raised px-1 font-mono text-[10px] text-muted"
+          className="inline-flex h-6 min-w-8 items-center justify-center bg-raised px-1 text-[10px] text-muted"
         >
           {info.glyph}
         </span>
@@ -73,7 +73,7 @@ function ServiceNodeView({ data, selected }: NodeProps<ServiceFlowNode>) {
           <div className="truncate text-[11px] uppercase tracking-wide text-faint">
             {info.label}
           </div>
-          <div className="truncate font-mono text-sm">{s.name}</div>
+          <div className={/* mono-ok: id */ 'truncate font-mono text-sm'}>{s.name}</div>
         </div>
         <StatusTag status={STATUS_TONE[s.status]}>{STATUS_LABEL[s.status]}</StatusTag>
       </div>
@@ -87,9 +87,7 @@ function ServiceNodeView({ data, selected }: NodeProps<ServiceFlowNode>) {
         </div>
         <div className="shrink-0 text-right">
           <div className="text-[10px] text-faint">{info.metric.name}</div>
-          <div className="font-mono text-xs tabular-nums">
-            {latestValue(points, info.metric.unit)}
-          </div>
+          <div className="text-xs tabular-nums">{latestValue(points, info.metric.unit)}</div>
         </div>
       </div>
       <Handle type="source" position={Position.Right} isConnectable={false} />

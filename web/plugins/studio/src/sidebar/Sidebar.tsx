@@ -130,7 +130,7 @@ function WorkingDuration({ since }: { since: number }) {
     return () => clearInterval(timer);
   }, []);
   return (
-    <span className="shrink-0 font-mono text-[0.68rem] text-faint">
+    <span className="shrink-0 tabular-nums text-micro text-faint">
       {formatWorkingDurationLabel(now - since)}
     </span>
   );
@@ -141,7 +141,9 @@ function JumpHint({ label }: { label: string }) {
   return (
     <span
       aria-hidden="true"
-      className="pointer-events-none absolute top-1/2 right-8 z-10 inline-flex h-5 -translate-y-1/2 items-center rounded-pill border border-rule bg-bg px-1.5 font-mono text-[0.66rem] text-ink shadow-pop"
+      className={
+        /* mono-ok: code */ 'pointer-events-none absolute top-1/2 right-8 z-10 inline-flex h-5 -translate-y-1/2 items-center rounded-pill border border-rule bg-bg px-1.5 font-mono text-[0.66rem] text-ink shadow-pop'
+      }
     >
       {label}
     </span>
@@ -299,7 +301,7 @@ function GroupRow({
       >
         <Layers aria-hidden="true" className="size-3.5 shrink-0 text-info" />
         <span className="min-w-0 flex-1 truncate">{group.title}</span>
-        <span className="shrink-0 font-mono text-[0.68rem] text-faint">
+        <span className="shrink-0 tabular-nums text-micro text-faint">
           {group.memberIds.length} runs
         </span>
       </a>
@@ -389,7 +391,11 @@ function ProjectSection({
             <span className="min-w-0 flex-1 truncate">{project.name}</span>
             {status && <ThreadStatusLabel status={status} compact />}
             {project.branch && (
-              <span className="shrink-0 font-mono text-[0.68rem] font-normal text-faint">
+              <span
+                className={
+                  /* mono-ok: id */ 'shrink-0 font-mono text-[0.68rem] font-normal text-faint'
+                }
+              >
                 {project.branch}
               </span>
             )}
@@ -425,9 +431,7 @@ function ProjectSection({
             >
               <Marker id={sidebarMarkerId('pinned-header')}>
                 {pinned.length > 0 && (
-                  <span className="block px-2 pt-1 font-mono text-[0.62rem] text-faint uppercase tracking-[0.12em]">
-                    Pinned
-                  </span>
+                  <span className="block px-2 pt-1 text-micro font-medium text-faint">Pinned</span>
                 )}
               </Marker>
               {pinned.map((t) => (
@@ -600,7 +604,10 @@ function CleanupDialog({
             {candidates.map((c) => (
               <span key={c.worktreePath} className="flex items-center gap-2 text-[0.84rem]">
                 <FolderGit2 aria-hidden="true" className="size-3.5 shrink-0" />
-                <span className="min-w-0 flex-1 truncate font-mono" title={c.worktreePath}>
+                <span
+                  className={/* mono-ok: path */ 'min-w-0 flex-1 truncate font-mono'}
+                  title={c.worktreePath}
+                >
                   {c.project} / {formatWorktreePathForDisplay(c.worktreePath)}
                   {c.branch ? ` (${c.branch})` : ''}
                 </span>
@@ -888,9 +895,7 @@ export function StudioSidebar({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-rule-soft pr-2 pl-4">
-        <h2 className="m-0 font-mono text-[0.68rem] text-faint uppercase tracking-[0.14em]">
-          Projects
-        </h2>
+        <h2 className="m-0 text-micro font-medium text-faint">Projects</h2>
         <Button
           variant="quiet"
           size="sm"

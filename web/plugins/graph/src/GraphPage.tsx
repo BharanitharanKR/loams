@@ -344,7 +344,7 @@ function Workspace({
           {selected ? (
             <>
               <h2 className="m-0 text-base">
-                <span className="font-mono">{selected.name}</span>
+                <span className={/* mono-ok: id */ 'font-mono'}>{selected.name}</span>
                 <span className="ml-2 text-sm font-normal text-muted">in {ns}</span>
               </h2>
               <Editor

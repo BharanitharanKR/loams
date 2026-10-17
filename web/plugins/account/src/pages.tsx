@@ -211,7 +211,7 @@ export function SetupPage({ router, session }: { router: RouterService; session:
               {...p}
               value={form.setupToken}
               onChange={set('setupToken')}
-              className="loams-mono"
+              className={/* mono-ok: id */ 'loams-mono'}
               required
             />
           )}

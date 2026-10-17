@@ -75,7 +75,7 @@ export function Query({ client, namespace, databaseId, branchId, running }: Quer
       </label>
       <textarea
         id="sql-statement"
-        className="loams-input font-mono text-sm min-h-32"
+        className={/* mono-ok: sql */ 'loams-input font-mono text-sm min-h-32'}
         spellCheck={false}
         value={statement}
         aria-describedby="sql-statement-hint"
@@ -152,7 +152,7 @@ export function ResultGrid({ result }: { result: QueryResult }) {
                 <tr key={r}>
                   {row.map((cell, i) => (
                     // biome-ignore lint/suspicious/noArrayIndexKey: positional cells
-                    <td key={i} className="font-mono">
+                    <td key={i} className={/* mono-ok: sql */ 'font-mono'}>
                       {cell === null ? <span className="text-faint">NULL</span> : cell}
                     </td>
                   ))}

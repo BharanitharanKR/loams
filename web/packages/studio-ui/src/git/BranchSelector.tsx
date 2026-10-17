@@ -123,7 +123,7 @@ export function BranchSelector({
               >
                 <MiddleTruncate
                   value={ref.name}
-                  className="min-w-0 flex-1 font-mono text-[0.8rem]"
+                  className={/* mono-ok: id */ "min-w-0 flex-1 font-mono text-[0.8rem]"}
                 />
                 {ref.isDefault && <Badge>default</Badge>}
                 {ref.worktreePath && <Badge title={ref.worktreePath}>worktree</Badge>}

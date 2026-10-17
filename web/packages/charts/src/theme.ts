@@ -61,7 +61,7 @@ export function readChartTheme(root?: HTMLElement): ChartTheme {
     faint: v('--op-faint'),
     accent: v('--op-accent'),
     fontSans: style?.getPropertyValue('--loams-font-sans').trim() || FONT_SANS_FALLBACK,
-    fontMono: style?.getPropertyValue('--loams-font-mono').trim() || FONT_MONO_FALLBACK,
+    fontMono: style?.getPropertyValue('--loams-font-mono').trim() || FONT_MONO_FALLBACK, // mono-ok: code
     palette,
     sequential: [first ? rgba(first, 0.12) : bg, first],
   };

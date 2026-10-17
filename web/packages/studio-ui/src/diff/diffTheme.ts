@@ -22,9 +22,9 @@ export const DIFF_TOKEN_VARIABLES: Readonly<Record<string, string>> = {
   "--diffs-fg-number-override": "var(--op-faint)",
   "--diffs-bg-selection-override": "var(--op-accent-soft)",
   "--diffs-bg-selection-number-override": "var(--op-accent-soft)",
-  "--diffs-font-family": "var(--loams-font-mono)",
+  /* mono-ok: code */ "--diffs-font-family": "var(--loams-font-mono)",
   "--diffs-header-font-family": "var(--loams-font-sans)",
-  "--font-mono": "var(--loams-font-mono)",
+  /* mono-ok: code */ "--font-mono": "var(--loams-font-mono)",
   "--font-sans": "var(--loams-font-sans)",
 };
 

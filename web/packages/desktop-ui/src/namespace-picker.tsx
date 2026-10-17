@@ -49,7 +49,7 @@ export function NamespacePicker({
       <Input
         id={`${idPrefix}-ns-input`}
         list={`${idPrefix}-ns-options`}
-        className="w-48 font-mono"
+        className={/* mono-ok: id */ 'w-48 font-mono'}
         value={draft}
         onChange={(e) => setDraft(e.target.value)}
         spellCheck={false}

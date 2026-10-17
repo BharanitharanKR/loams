@@ -158,7 +158,7 @@ export function EngineCard({
           ).map(([k, v]) => (
             <div key={k} className="contents">
               <dt className="text-muted">{k}</dt>
-              <dd className="m-0 font-mono truncate" title={v}>
+              <dd className={/* mono-ok: path */ 'm-0 font-mono truncate'} title={v}>
                 {v}
               </dd>
             </div>

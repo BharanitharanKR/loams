@@ -83,7 +83,7 @@ function ActionForm({
         {(p) => (
           <Input
             {...p}
-            className="font-mono"
+            className={/* mono-ok: code */ 'font-mono'}
             value={value.command}
             onChange={(e) => setValue({ ...value, command: e.target.value })}
           />

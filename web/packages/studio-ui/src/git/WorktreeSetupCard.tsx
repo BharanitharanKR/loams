@@ -195,7 +195,7 @@ function OutputTail({ lines, failed }: { lines: readonly string[]; failed: boole
   return (
     <pre
       className={cx(
-        "m-0 mb-1 ml-6 overflow-hidden border px-2.5 py-1.5 font-mono text-[0.72rem] leading-relaxed",
+        /* mono-ok: code */ "m-0 mb-1 ml-6 overflow-hidden border px-2.5 py-1.5 font-mono text-[0.72rem] leading-relaxed",
         failed
           ? "border-danger bg-danger-soft text-danger"
           : "border-rule-soft bg-raised text-muted",
@@ -221,7 +221,7 @@ function SetupDetails({ snapshot }: { snapshot: WorktreeSetupSnapshot }) {
       {rows.map(([term, value]) => (
         <div key={term} className="contents">
           <dt className="text-ink">{term}</dt>
-          <dd className="m-0 min-w-0 font-mono">
+          <dd className={/* mono-ok: path */ "m-0 min-w-0 font-mono"}>
             <MiddleTruncate value={value} className="flex" />
           </dd>
         </div>

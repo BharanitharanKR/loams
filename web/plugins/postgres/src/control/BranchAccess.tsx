@@ -136,7 +136,7 @@ export function BranchAccess({
                 {load.roles.map((r) => (
                   <tr key={r.name} data-role={r.name}>
                     <td>
-                      <span className="font-mono text-sm">{r.name}</span>{' '}
+                      <span className={/* mono-ok: id */ 'font-mono text-sm'}>{r.name}</span>{' '}
                       {r.system && <Badge>System</Badge>}
                     </td>
                     <td>
@@ -212,8 +212,8 @@ export function BranchAccess({
               <tbody>
                 {load.databases.map((d) => (
                   <tr key={d.name} data-database={d.name}>
-                    <td className="font-mono text-sm">{d.name}</td>
-                    <td className="font-mono text-xs">{d.ownerRole}</td>
+                    <td className={/* mono-ok: id */ 'font-mono text-sm'}>{d.name}</td>
+                    <td className={/* mono-ok: id */ 'font-mono text-xs'}>{d.ownerRole}</td>
                     <td>
                       <Button
                         size="sm"
