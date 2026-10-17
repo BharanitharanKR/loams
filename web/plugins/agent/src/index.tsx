@@ -1,5 +1,5 @@
-// @loams/plugin-agent: the agent chat panel in the right dock (D675) and the
-// "Agent providers" section of Settings. The loop, the tools and the keys
+// @loams/plugin-agent: the agent chat panel, the inspector's Agent tab (D675, design 59
+// W10), and the "Agent providers" section of Settings. The loop, the tools and the keys
 // live in the main process; this plugin is the panel.
 
 import { type PluginModule, service } from '@loams/console-host';
@@ -54,9 +54,16 @@ const plugin: PluginModule = {
     });
     ctx.effect(() => () => store.dispose(), 'agent-store');
     ctx.effect(() =>
-      slots.register({ name: 'shell.dock.right', plugin: 'agent' }, () => (
-        <AgentPanel store={store} desktop={desktop} />
-      )),
+      // The inspector's "Agent" tab (design 59 W10; it was the right dock).
+      slots.register(
+        {
+          name: 'shell.inspector.tab',
+          plugin: 'agent',
+          order: 100,
+          meta: { id: 'agent', label: 'Agent' },
+        },
+        () => <AgentPanel store={store} desktop={desktop} />,
+      ),
     );
     ctx.effect(() =>
       slots.register(

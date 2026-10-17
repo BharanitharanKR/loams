@@ -30,7 +30,10 @@ export interface SlotMap {
   'shell.overlay': { kind: 'list'; props: Record<string, never> };
   /** A product nav entry; the shell reads its `meta` and renders the link itself. */
   'shell.nav.section': { kind: 'list'; props: Record<string, never> };
-  /** The right dock (the agent panel); one plugin owns it. Empty hides the dock and its toggle. */
+  /**
+   * The old right dock. Its entry shows as an inspector tab (W10); new code registers a
+   * `shell.inspector.tab` instead (the agent plugin does since CF1 Task 8).
+   */
   'shell.dock.right': { kind: 'single'; props: Record<string, never> };
   /** The header's context controls (Studio's project, branch and host until Task 9). */
   'shell.header.server': { kind: 'list'; props: Record<string, never> };
@@ -51,6 +54,10 @@ export interface SlotMap {
   'shell.topbar.right': { kind: 'list'; props: Record<string, never> };
   /** The agent home (Part 2 fills it; W11). Rendered on the mode's home route with its params. */
   'shell.home': { kind: 'single'; props: { params: Record<string, string> } };
+  /** A tab of the right inspector; `meta.id` is its tab id, `meta.label` its name, `meta.routes` where it shows. */
+  'shell.inspector.tab': { kind: 'list'; props: PanelTabProps };
+  /** A tab of the bottom drawer, as `shell.inspector.tab`. */
+  'shell.drawer.tab': { kind: 'list'; props: PanelTabProps };
   /**
    * Commands for the shell's palette (§53 §4.5, §5.10; SD1 Task 24). An entry renders
    * nothing: while the palette is open it is mounted with the query and calls `publish`
@@ -61,6 +68,14 @@ export interface SlotMap {
     kind: 'list';
     props: { query: string; publish: (commands: readonly PaletteCommand[]) => void };
   };
+}
+
+/** What an inspector or drawer tab receives (design 59, D1078). */
+export interface PanelTabProps {
+  /** The current route's params. */
+  params: Record<string, string>;
+  /** What `inspector.open({ tab, props })` passed for this tab; empty otherwise. */
+  props: Readonly<Record<string, unknown>>;
 }
 
 /** One row of the shell's command palette, as a `palette.command` entry publishes it. */
@@ -112,6 +127,8 @@ export interface SlotMeta {
    * modes. Without it the entry shows in each of its plugin's modes.
    */
   mode?: 'console' | 'studio';
+  /** Route patterns ("/studio/t/:threadId") where an inspector or drawer tab shows; none means everywhere. */
+  routes?: readonly string[];
 }
 
 export interface SlotSpec<N extends SlotName> {

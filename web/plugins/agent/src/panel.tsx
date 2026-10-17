@@ -1,6 +1,6 @@
 // The agent panel: chat list, messages, tool and approval cards, composer
 // with the provider picker. State lives in AgentStore; the shell keeps the
-// dock mounted, so a hidden panel keeps its draft and its running turn.
+// inspector tab mounted, so a hidden panel keeps its draft and its running turn.
 
 import type { ChatApproval, ChatStopReason, LoamsDesktopApi } from '@loams/desktop/contracts';
 import { Button, Input, Select } from '@loams/ui';

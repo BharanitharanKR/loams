@@ -26,7 +26,9 @@
         "theme"
       ],
       "provides": [
-        "router"
+        "router",
+        "inspector",
+        "drawer"
       ],
       "slots": [
         "root",
@@ -43,6 +45,8 @@
         "shell.topbar.center",
         "shell.topbar.right",
         "shell.home",
+        "shell.inspector.tab",
+        "shell.drawer.tab",
         "palette.command",
         "console.settings.section"
       ],

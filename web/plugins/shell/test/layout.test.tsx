@@ -7,9 +7,8 @@ import {
 } from '@loams/console-host';
 import { SlotProvider, SlotRegistry } from '@loams/slots';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
-import { useEffect } from 'react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { DOCK_DEFAULT, DOCK_KEY, DOCK_MAX, DOCK_MIN, Layout } from '../src/layout.js';
+import { Layout } from '../src/layout.js';
 import { HashRouter, type HashSource } from '../src/router.js';
 
 function memory(start = '/'): HashSource {
@@ -193,108 +192,7 @@ describe('shell layout', () => {
     );
     expect(slots.entries('console.nav')).toHaveLength(4);
   });
-
-  it('hides the dock and its toggle while the slot is empty', () => {
-    setup();
-    expect(screen.queryByRole('button', { name: /agent/i })).toBeNull();
-    expect(screen.queryByRole('complementary')).toBeNull();
-    fireEvent.keyDown(window, { key: 'j', ctrlKey: true });
-    expect(screen.queryByRole('complementary')).toBeNull();
-  });
-
-  it('dock_toggle_and_shortcut', () => {
-    const { slots } = setup();
-    act(() => {
-      slots.register({ name: 'shell.dock.right', plugin: 'agent' }, () => <p>chat here</p>);
-    });
-    const toggle = screen.getByRole('button', { name: /agent/i });
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    expect(screen.queryByText('chat here')).toBeNull();
-    fireEvent.click(toggle);
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    expect(screen.getByText('chat here')).toBeTruthy();
-    expect(screen.getByRole('complementary', { name: /agent/i })).toBeTruthy();
-    fireEvent.keyDown(window, { key: 'j', ctrlKey: true });
-    expect(toggle.getAttribute('aria-expanded')).toBe('false');
-    fireEvent.keyDown(window, { key: 'J', metaKey: true });
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-    fireEvent.keyDown(window, { key: 'j' });
-    expect(toggle.getAttribute('aria-expanded')).toBe('true');
-  });
-
-  it('dock_stays_mounted_when_closed_and_manages_focus', () => {
-    const { slots } = setup();
-    let mounts = 0;
-    function Chat() {
-      useEffect(() => {
-        mounts++;
-      }, []);
-      return <textarea data-dock-autofocus aria-label="Message" />;
-    }
-    act(() => {
-      slots.register({ name: 'shell.dock.right', plugin: 'agent' }, () => <Chat />);
-    });
-    const toggle = screen.getByRole('button', { name: /agent/i });
-    expect(mounts).toBe(0);
-    fireEvent.click(toggle);
-    expect(document.activeElement).toBe(screen.getByLabelText('Message'));
-    fireEvent.change(screen.getByLabelText('Message'), { target: { value: 'draft' } });
-    fireEvent.keyDown(window, { key: 'j', ctrlKey: true });
-    expect(screen.queryByRole('complementary')).toBeNull();
-    expect(document.getElementById('lc-dock')?.hidden).toBe(true);
-    expect(document.activeElement).toBe(toggle);
-    fireEvent.keyDown(window, { key: 'j', ctrlKey: true });
-    expect((screen.getByLabelText('Message') as HTMLTextAreaElement).value).toBe('draft');
-    expect(mounts).toBe(1);
-    expect(document.activeElement).toBe(screen.getByLabelText('Message'));
-  });
-
-  it('dock_width_clamped_and_persisted', () => {
-    const { slots } = setup();
-    act(() => {
-      slots.register({ name: 'shell.dock.right', plugin: 'agent' }, () => <p>chat</p>);
-    });
-    fireEvent.click(screen.getByRole('button', { name: /agent/i }));
-    const handle = screen.getByRole('separator', { name: 'Resize agent panel' });
-    expect(Number(handle.getAttribute('aria-valuenow'))).toBe(DOCK_DEFAULT);
-    expect(handle.getAttribute('aria-valuemin')).toBe(String(DOCK_MIN));
-    expect(handle.getAttribute('aria-valuemax')).toBe(String(DOCK_MAX));
-    for (let i = 0; i < 100; i++) fireEvent.keyDown(handle, { key: 'ArrowLeft' });
-    expect(handle.getAttribute('aria-valuenow')).toBe(String(DOCK_MAX));
-    for (let i = 0; i < 100; i++) fireEvent.keyDown(handle, { key: 'ArrowRight' });
-    expect(handle.getAttribute('aria-valuenow')).toBe(String(DOCK_MIN));
-    fireEvent.keyDown(handle, { key: 'ArrowLeft' });
-    const saved = JSON.parse(localStorage.getItem(DOCK_KEY) ?? '{}');
-    expect(saved.open).toBe(true);
-    expect(saved.width).toBeGreaterThan(DOCK_MIN);
-    expect(saved.width).toBeLessThanOrEqual(DOCK_MAX);
-
-    // A fresh mount restores it, and a corrupt value falls back and clamps.
-    cleanup();
-    setupWithDock();
-    expect(
-      screen.getByRole('separator', { name: 'Resize agent panel' }).getAttribute('aria-valuenow'),
-    ).toBe(String(saved.width));
-    cleanup();
-    localStorage.setItem(DOCK_KEY, JSON.stringify({ open: true, width: 99999 }));
-    setupWithDock();
-    expect(
-      screen.getByRole('separator', { name: 'Resize agent panel' }).getAttribute('aria-valuenow'),
-    ).toBe(String(DOCK_MAX));
-    cleanup();
-    localStorage.setItem(DOCK_KEY, '{nope');
-    setupWithDock();
-    expect(screen.queryByRole('separator', { name: 'Resize agent panel' })).toBeNull();
-  });
 });
-
-function setupWithDock() {
-  const r = setup();
-  act(() => {
-    r.slots.register({ name: 'shell.dock.right', plugin: 'agent' }, () => <p>chat</p>);
-  });
-  return r;
-}
 
 describe('engine support (design §54 §13.1)', () => {
   it('engine_older_than_n_minus_one_shows_upgrade_page', () => {
