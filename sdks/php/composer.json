@@ -1,8 +1,19 @@
 {
     "name": "loams/loams",
-    "description": "Official PHP client for Loams",
+    "description": "Official PHP client for Loams (preview: the API may change between releases)",
+    "keywords": [
+        "loams",
+        "database",
+        "sdk",
+        "client"
+    ],
+    "homepage": "https://loams.dev",
     "type": "library",
     "license": "Apache-2.0",
+    "support": {
+        "issues": "https://github.com/ostrium-labs/loams/issues",
+        "source": "https://github.com/ostrium-labs/loams/tree/main/sdks/php"
+    },
     "require": {
         "php": ">=8.2"
     },

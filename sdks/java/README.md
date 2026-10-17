@@ -1,6 +1,27 @@
 ![Loams — Your data. Your bucket.](../../docs/assets/loams-banner.svg)
 
-# The Loams Java SDK
+# The Loams Java SDK (preview)
+
+> **Pre-release (preview).** This SDK is published as a preview of Loams. Its API
+> can change between previews without notice: pin the exact version, and expect
+> breaking changes until 1.0. Report problems at
+> <https://github.com/ostrium-labs/loams/issues>.
+
+## Install
+
+Maven:
+
+```xml
+<dependency>
+  <groupId>dev.loams</groupId>
+  <artifactId>loams</artifactId>
+  <version>0.1.0-preview.2</version>
+</dependency>
+```
+
+Gradle: `implementation("dev.loams:loams:0.1.0-preview.2")`. Java 17 or newer; the only
+runtime dependency is `com.google.protobuf:protobuf-java`. `./build.sh package OUT_DIR`
+builds the jars and POM that sdk-release.yml publishes.
 
 Design [§44](../../docs/design/44-unified-api-and-sdks.md) §7 (D604, D605, D606, D610,
 D612), §9 row 2, §10.1 and §10.3; runtime contract R1–R10 in
