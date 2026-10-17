@@ -237,6 +237,11 @@ impl BucketWorkspaceStore {
         snap: pb::WorkspaceSnapshot,
     ) -> Result<Arc<pb::WorkspaceSnapshot>, WsError> {
         let bytes = encode_snapshot(&snap).map_err(WsError::from_format)?;
+        // An id that already names a workspace is answered before any name
+        // is claimed, so a conflicting spec never leaves a name record.
+        if let Some(existing) = self.read_snapshot(paths, &spec.ws_id, SnapN::ZERO).await? {
+            return replay_or_conflict(existing, &snap, spec);
+        }
         if let Some(name) = &spec.name {
             self.claim_name(paths, &spec.owner, name, &spec.ws_id)
                 .await?;
@@ -249,13 +254,7 @@ impl BucketWorkspaceStore {
             .read_snapshot(paths, &spec.ws_id, SnapN::ZERO)
             .await?
             .ok_or_else(|| WsError::corrupt(&path, "refused as existing but not returned"))?;
-        if is_replay(&existing, &snap) {
-            Ok(existing)
-        } else {
-            Err(WsError::IdConflict {
-                ws_id: spec.ws_id.clone(),
-            })
-        }
+        replay_or_conflict(existing, &snap, spec)
     }
 
     /// A page of `owner`'s named workspaces.
@@ -337,6 +336,21 @@ impl BucketWorkspaceStore {
             };
         }
         Ok(out)
+    }
+}
+
+/// The stored snapshot 0 when `offered` replays it; `IdConflict` otherwise.
+fn replay_or_conflict(
+    existing: Arc<pb::WorkspaceSnapshot>,
+    offered: &pb::WorkspaceSnapshot,
+    spec: &CreateWs,
+) -> Result<Arc<pb::WorkspaceSnapshot>, WsError> {
+    if is_replay(&existing, offered) {
+        Ok(existing)
+    } else {
+        Err(WsError::IdConflict {
+            ws_id: spec.ws_id.clone(),
+        })
     }
 }
 
@@ -588,6 +602,13 @@ impl MemWorkspaceStore {
         let repo = spec.repo.to_string();
         let ws = spec.ws_id.to_string();
         let mut state = self.state();
+        if let Some(existing) = state
+            .snaps
+            .get(&(repo.clone(), ws.clone()))
+            .and_then(|chain| chain.get(&0))
+        {
+            return replay_or_conflict(existing.clone(), &snap, spec);
+        }
         if let Some(name) = &spec.name {
             let key = (repo.clone(), spec.owner.to_string(), format!("{name}.json"));
             let (holder, _) = state
@@ -601,18 +622,13 @@ impl MemWorkspaceStore {
                 });
             }
         }
-        let chain = state.snaps.entry((repo, ws)).or_default();
-        match chain.get(&0) {
-            Some(existing) if is_replay(existing, &snap) => Ok(existing.clone()),
-            Some(_) => Err(WsError::IdConflict {
-                ws_id: spec.ws_id.clone(),
-            }),
-            None => {
-                let snap = Arc::new(snap);
-                chain.insert(0, snap.clone());
-                Ok(snap)
-            }
-        }
+        let snap = Arc::new(snap);
+        state
+            .snaps
+            .entry((repo, ws))
+            .or_default()
+            .insert(0, snap.clone());
+        Ok(snap)
     }
 }
 

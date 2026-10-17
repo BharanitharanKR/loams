@@ -173,11 +173,36 @@ async fn create_replay_returns_same_ws() {
         ws.create(other).await,
         Err(WsError::IdConflict { .. })
     ));
+    // A conflicting spec with a name claims no name.
+    let mut named = spec.clone();
+    named.name = Some(WsName::parse("never-claimed").unwrap());
+    assert!(matches!(
+        ws.create(named.clone()).await,
+        Err(WsError::IdConflict { .. })
+    ));
+    assert!(
+        ws.list(&repo(), Some(&principal("alice")), None, 10)
+            .await
+            .expect("list")
+            .iter()
+            .all(|s| s.name.as_ref().map(WsName::as_str) != Some("never-claimed"))
+    );
 
     // The in-memory store answers the same way.
     let mem = MemWorkspaceStore::new();
     let first = mem.create(spec.clone()).await.expect("create");
-    assert_eq!(mem.create(spec).await.expect("replay"), first);
+    assert_eq!(mem.create(spec.clone()).await.expect("replay"), first);
+    assert!(matches!(
+        mem.create(named).await,
+        Err(WsError::IdConflict { .. })
+    ));
+    assert!(
+        mem.list(&repo(), Some(&principal("alice")), None, 10)
+            .await
+            .expect("list")
+            .iter()
+            .all(|s| s.name.as_ref().map(WsName::as_str) != Some("never-claimed"))
+    );
 }
 
 #[tokio::test]
