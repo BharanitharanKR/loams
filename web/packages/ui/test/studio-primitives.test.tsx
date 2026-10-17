@@ -5,13 +5,18 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { type ReactElement, useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  Alert,
   AlertDialog,
+  AlertTitle,
+  Badge,
   Button,
+  CheckboxControl,
   Collapsible,
   CollapsiblePanel,
   CollapsibleTrigger,
   type CommandItem,
   CommandPalette,
+  InputControl,
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
@@ -22,6 +27,7 @@ import {
   MiddleTruncate,
   ResizeHandle,
   ScrollArea,
+  Separator,
   Sheet,
   Sidebar,
   SidebarContent,
@@ -174,6 +180,19 @@ const SPECIMENS: [string, () => ReactElement][] = [
       </Sheet>
     ),
   ],
+  ['Button', () => <Button variant="primary">x</Button>],
+  ['Badge', () => <Badge variant="info">x</Badge>],
+  ['InputControl', () => <InputControl aria-label="x" />],
+  ['CheckboxControl', () => <CheckboxControl aria-label="x" />],
+  [
+    'Alert',
+    () => (
+      <Alert variant="danger">
+        <AlertTitle>x</AlertTitle>
+      </Alert>
+    ),
+  ],
+  ['Separator', () => <Separator />],
 ];
 
 describe('renders_with_tokens_only', () => {

@@ -317,8 +317,9 @@ describe('DeploymentsPage', () => {
     const client = createMockDeployClient({ intervalMs: 60_000 });
     const { container } = render(<DeploymentsPage client={client} />);
     await screen.findByRole('heading', { name: 'api v1.42.0' });
+    // The stage graph's nodes mount a tick after the heading: wait for them, not the heading.
+    await waitFor(() => expect(container.querySelectorAll('.ld-node').length).toBeGreaterThan(0));
     const nodes = container.querySelectorAll('.ld-node');
-    expect(nodes.length).toBeGreaterThan(0);
     for (const n of nodes) expect(n.getAttribute('data-motion')).toBe('reduce');
   });
 

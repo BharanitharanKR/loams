@@ -7,9 +7,70 @@
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "url": "https://github.com/pingdotgg/t3code/archive/6524a8d43795dc543f7cfb572388cdea3662ad48.zip",
       "sha256": "4d13a8e39bee303cc33797742187abe15c70c70c3879d2d4e4bc8a51b3bb14a3"
+    },
+    {
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "url": "https://github.com/pingdotgg/t3code/archive/33aa4614783e856977a5f0b856dc65ebc1ce6794.zip",
+      "sha256": "cd024c093e038c56bb10f5250625df513accc0d1d9d3d9e3f87e63604ae77518"
     }
   ],
   "files": [
+    {
+      "path": "src/alert.tsx",
+      "upstreamPath": "apps/web/src/components/ui/alert.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "235ee3a3f9961123d109450431a3e42f3e9471062c93e4958688d6c90f2c0fd5",
+      "localSha256": "8b9a9d301329057a3b984055196dcf733521610972483c476aac245ec6ec0c77",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/autocomplete.tsx",
+      "upstreamPath": "apps/web/src/components/ui/autocomplete.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "d0a446b3bd58aace62752438dbfa11d8e3727fa839da3107518e0f78e29dab45",
+      "localSha256": "373342095c26aff86f28b1370156b5f6270b10716c212c9b827fdc5bbe4c1537",
+      "verdict": "adapt",
+      "group": "k",
+      "note": "the virtualised lists are dropped; long lists use VirtualList"
+    },
+    {
+      "path": "src/badge.tsx",
+      "upstreamPath": "apps/web/src/components/ui/badge.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "fa4900e3ad6e170801633a31d7866dc2dd660fd5e992a825fb5404a87d0f226f",
+      "localSha256": "7d403d849fc3f2db74176b5e05d1fee92c3a7811787289093d9c92555bdf4257",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/button.tsx",
+      "upstreamPath": "apps/web/src/components/ui/button.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "90e714b31089a9a7136a372000eabf2d3056cced072dc5aa3583edef8a078aa6",
+      "localSha256": "4a0da083d984ae72be37fc5ad57da6a163fd0ae27efd3a5b6b8bf6d7f553f01c",
+      "verdict": "adapt",
+      "group": "k",
+      "note": "the cva table became the Loams .loams-btn classes in styles.css; Loams variant and size names kept; InlineButton dropped"
+    },
+    {
+      "path": "src/checkbox.tsx",
+      "upstreamPath": "apps/web/src/components/ui/checkbox.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "9926ce8ff27c10e279f9b156ad02fbd505654b0b96681612f0fecc4978054e75",
+      "localSha256": "6dede20ed456a47100d137061dc7615bda5c2f7b0df78d8213fde9f94dace03c",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/collapsible-section-header.tsx",
+      "upstreamPath": "apps/web/src/components/ui/collapsible-section-header.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "122e65a061bac4b49f3c3e64d3266e401f039b6549641d43eab6eb7f75693825",
+      "localSha256": "b0499189016714832218b213520efc9b91e2dd4e4776938291a2ba38a2683a8f",
+      "verdict": "adapt",
+      "group": "k"
+    },
     {
       "path": "src/collapsible.tsx",
       "upstreamPath": "apps/web/src/components/ui/collapsible.tsx",
@@ -18,6 +79,16 @@
       "localSha256": "8ffda4289c742c04043db885b48bd33afe7ff46dd57a810a5f621ea2f2a4dc3f",
       "verdict": "adapt",
       "group": "k"
+    },
+    {
+      "path": "src/combobox.tsx",
+      "upstreamPath": "apps/web/src/components/ui/combobox.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "ee3e5a18c64b4941823985b30660e60e814d4f8c9fb52df9f31a4c5b2c4db725",
+      "localSha256": "93f02142c337da6ad5a6a16c767cb9f2f08203c2f5ec1650c7c0b79be8873ec4",
+      "verdict": "adapt",
+      "group": "k",
+      "note": "the virtualised lists are dropped; long lists use VirtualList"
     },
     {
       "path": "src/command-rank.ts",
@@ -34,10 +105,29 @@
       "upstreamPath": "apps/web/src/components/ui/command.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "b295fcfed11b65ad8cb156bd6458cafa59d626b7f55949098045a9f831ad700f",
-      "localSha256": "50cf3deb048d3438deb7b62554238d72f01380dbd4d5d6c3730af2e974eaa9fe",
+      "localSha256": "d625a642f197d14c4c54cddfcdb15767264a6a3bf1e613452a440ce901a298a2",
       "verdict": "adapt",
       "group": "k",
-      "note": "merges apps/web/src/components/ui/autocomplete.tsx and dialog-styles.ts; @legendapp/list replaced by TanStack Virtual"
+      "note": "merges apps/web/src/components/ui/dialog-styles.ts; autocomplete's popup parts are src/autocomplete.tsx since CF1; @legendapp/list replaced by TanStack Virtual"
+    },
+    {
+      "path": "src/empty.tsx",
+      "upstreamPath": "apps/web/src/components/ui/empty.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "75749c54ab2c607076591c27247e72ca5e0a9458b04469377a28b0370033fa4a",
+      "localSha256": "08b7b9a715a7614a05d811186fe0850d719126ef9873d084ff9d6a16316673ea",
+      "verdict": "adapt",
+      "group": "k",
+      "note": "the parts build the Loams Empty, which keeps its props and paints no grain (Q929)"
+    },
+    {
+      "path": "src/group.tsx",
+      "upstreamPath": "apps/web/src/components/ui/group.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "c014163b0ff8271040ebf1cb7fc0a00a579bab60a87ea3de2ae43f98d73b96cc",
+      "localSha256": "7c62e4cee4f7989fce0c9d46168d5cc38134a4988541ddffd8431546e6825a10",
+      "verdict": "adapt",
+      "group": "k"
     },
     {
       "path": "src/input-group.tsx",
@@ -45,6 +135,15 @@
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "6e7d282125b31e26fb9893553b79851886c8d38f1647ba98b2b7b0fc3b63f3a7",
       "localSha256": "2b9837bef13f04095569f513a290e66f02b516447b97c9b9425224e41d283b98",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/input.tsx",
+      "upstreamPath": "apps/web/src/components/ui/input.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "3da4013e812d00d8a3f9795825625ab098bf4e14c360b20fcd653ca1f8b77f57",
+      "localSha256": "33a1580a0b47677cff546f5381e2da10b5cf1371a3fd9f27083b66499eb73c00",
       "verdict": "adapt",
       "group": "k"
     },
@@ -67,11 +166,47 @@
       "group": "k"
     },
     {
+      "path": "src/number-field.tsx",
+      "upstreamPath": "apps/web/src/components/ui/number-field.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "361690355ca0b145e835cabe937271c9381b3c6bfc14786d79a95074b9bacaed",
+      "localSha256": "ecfd2aaf1c35bd0e89df1bd09cafc3503fb8c2a010ac82e1bd891d9b2a08932e",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/radio-group.tsx",
+      "upstreamPath": "apps/web/src/components/ui/radio-group.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "917c7b5f85b8ce7869b7dc76e154bfabbd715d663e7faef539c4e68c71b1f1df",
+      "localSha256": "8679c05db24220ff92d68bf3e1f6ca0ab6d300f07fe73655fb7e3535d28a4a9f",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
       "path": "src/scroll-area.tsx",
       "upstreamPath": "apps/web/src/components/ui/scroll-area.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "601ca408d3a58588baab3724f8df96ecfeb433aac487a2710a6f664cf6ada348",
       "localSha256": "0f46d23b40f341f27fed47b1df768e826cc5046d0bbc7729b882f5d66e6984df",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/select.tsx",
+      "upstreamPath": "apps/web/src/components/ui/select.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "510d1e050931661dda3c27776a48a942bcce6775b1bfcfbeb5c3e740a1efbff0",
+      "localSha256": "642b5ffca3c2ec3b3a06078ff9ddf71a2e7b6dd70d8c7ab6c3735932db206d4b",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/separator.tsx",
+      "upstreamPath": "apps/web/src/components/ui/separator.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "b99515751890f0d4c61b06e3badd14ccec6ee7104238135602ca0a2f119f476e",
+      "localSha256": "9e389c9f78792ac3379021d989377a7c6112fbb4be4647aba237800718c522d1",
       "verdict": "adapt",
       "group": "k"
     },
@@ -109,6 +244,25 @@
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "b6a76d03b50e878a3659e67fac13d5d2e1e27d5857400e33499a5e46604b0274",
       "localSha256": "10909c688b314247e0c8469548ac104c7d25ceea5195d37fade9f0edc9dc9e96",
+      "verdict": "adapt",
+      "group": "k"
+    },
+    {
+      "path": "src/table.tsx",
+      "upstreamPath": "apps/web/src/components/ui/table.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "4749ee685d0f7c4865a10cfa4837c85558e3c94baaaa8d9a4416266161d87654",
+      "localSha256": "2e86a2c109b79ac814a996693d05aa933fea7c298547fe59cb1cb256336ccc9e",
+      "verdict": "adapt",
+      "group": "k",
+      "note": "the parts are exported as TableRoot and friends; the Loams column Table follows unchanged"
+    },
+    {
+      "path": "src/textarea.tsx",
+      "upstreamPath": "apps/web/src/components/ui/textarea.tsx",
+      "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
+      "upstreamSha256": "4ad2ca0bb70943eec4825bedaeb76ea9816d48de1a79ce969c1d1cdce8affc01",
+      "localSha256": "ebe3f0759195b60182502868b35f60ec668dd25d6f84ab04ffda910932631786",
       "verdict": "adapt",
       "group": "k"
     },

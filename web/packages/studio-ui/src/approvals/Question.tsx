@@ -195,7 +195,7 @@ export const QuestionCard = memo(function QuestionCard({
                   [activeQuestion.id]: { customAnswer: event.target.value },
                 })
               }
-              className="min-w-0 flex-1 rounded-md border border-rule bg-bg px-2 py-1 text-sm text-ink"
+              className="min-w-0 flex-1 rounded-md border border-input bg-bg px-2 py-1 text-sm text-ink"
             />
           ) : (
             <input
@@ -218,7 +218,7 @@ export const QuestionCard = memo(function QuestionCard({
                   advance(answers);
                 }
               }}
-              className="min-w-0 flex-1 rounded-md border border-rule bg-bg px-2 py-1 text-sm text-ink"
+              className="min-w-0 flex-1 rounded-md border border-input bg-bg px-2 py-1 text-sm text-ink"
             />
           )}
           <Button

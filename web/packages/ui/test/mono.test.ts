@@ -71,16 +71,14 @@ describe('monospace (D1075)', () => {
 
   it("@loams/ui's label primitives use the UI face", () => {
     const css = readFileSync(join(UI_SRC, 'styles.css'), 'utf8');
-    for (const selector of [
-      '.loams-status {',
-      '.loams-badge {',
-      '.loams-table th {',
-      '.loams-stat > span {',
-    ]) {
+    for (const selector of ['.loams-status {', '.loams-table th {', '.loams-stat > span {']) {
       const at = css.indexOf(selector);
       expect(at, selector).toBeGreaterThan(-1);
       expect(css.slice(at, css.indexOf('}', at)), selector).not.toContain('--loams-font-mono');
     }
+    // Badge paints itself with utilities since CF1 Task 4 (its .loams-badge rule is gone).
+    expect(css).not.toContain('.loams-badge {');
+    expect(readFileSync(join(UI_SRC, 'badge.tsx'), 'utf8')).not.toMatch(MONO);
     const snippet = css.slice(css.indexOf('.loams-snippet {'));
     expect(snippet.slice(0, snippet.indexOf('}'))).toContain('--loams-font-mono');
   });
