@@ -233,6 +233,14 @@ Design reference: [58 Data Access and HTAP](../design/58-data-access-and-htap.md
 |---|---|---|---|
 | [DA1: Data access and HTAP](2026-10-16-da1-data-access.md) | A task list only: **DA1a** Loams protocol extensions in `loams-gateway`; **DA1b** `loams.plan.v1`; **DA1c** the Loams Data API, its spec, and MCP tools; **DA1d** HTAP phases 1–3; **DA1e** ADBC and Power BI; **DA1f** the shared bucket-segment library `loams-seglog` (Task F1, with PG2 Task 40) | GW1, API2 Task 1, PG2, HS1, NF1f | **Stub** |
 
+## Track CF: the console and desktop redesign
+
+Design reference: [59 Console and Desktop Redesign, Part 1: the Foundation](../design/59-console-foundation.md) (D1073–D1086, Q928–Q935). The owner approved the direction, the mockups and the spec on 2026-10-17: a T3 Code-, Codex- and DSH Desktop-like, agent-first console, in four parts. CF1 is Part 1.
+
+| Plan | Scope | Depends on | Status |
+|---|---|---|---|
+| [CF1: Console foundation](2026-10-17-cf1-console-foundation.md) | Task 0: reconcile. **CF1a** (Tasks 1–3): token values (dark B, light A), the radius scale, system fonts, the contrast and forced-colour tests; System/Dark/Light per device; monospace only for code. **CF1b** (4–6): the rest of T3 Code's `components/ui` in `@loams/ui` with provenance; toasts, destructive and typed confirmation. **CF1c** (7–12): the six shell regions on `@loams/slots` (sidebar, top bar drag region, main and the home slot, inspector and drawer with `inspector.open()`, palette sources); Studio's threads, panels and terminal in them; pinned Pages, Settings and the palette; one keymap. **CF1d** (13–16): per-OS window chrome synced to the theme, native menus and context menu, the splash and dsh-desktop provenance, notifications and the update toast. **CF1e** (17): screenshots in both themes, axe, the desktop chrome e2e. 18 tasks | SD1 (built) | **Planned** |
+
 ## Track RN: runners and the usage hooks
 
 Design reference: [24 CPU-time runtime](../design/24-cpu-time-runtime.md) §16 (the `Runner` trait, D375) and [27 Usage hooks](../design/27-usage-hooks.md) §3.7 (`InvocationObserver`, D549); [34](../design/34-protocol-gateway-and-standards.md) keeps the decision rows. Generic observability only: no metering in this repository (D403, D444, D541), and since 2026-10-02 the usage reporter and the meter protocol are in `loams-platform` too (D548). The usage-event task and the Cloudflare runner moved to `loams-platform` (private) with the protocol gateway (D440).
