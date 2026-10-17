@@ -1,15 +1,19 @@
 name: Release SDKs
 
 # Publishes the seven supported SDKs from one release tag, each to its own
-# registry, as a preview. The other SDKs under sdks/ (Java, Kotlin, Ruby, PHP,
+# registry. The other SDKs under sdks/ (Java, Kotlin, Ruby, PHP,
 # Dart, Objective-C) are "coming soon" and are not built here.
 #
-#   SDK         Registry               Name                     Version for v0.1.0-preview.2
-#   TypeScript  npm                    @loams/live, @loams/client  0.1.0-preview.2, dist-tag `preview`
-#   Python      PyPI                   loams                    0.1.0a2 (PEP 440)
-#   Rust        crates.io              loams-proto, loams-live-proto, loams   0.1.0-preview.2
-#   C#          NuGet                  Loams                    0.1.0-preview.2
-#   Go          proxy.golang.org       loams.dev/go             tag sdks/go/v0.1.0-preview.2
+#   SDK         Registry               Name                     Version for v0.1.0
+#   TypeScript  npm                    @loams/live, @loams/client  0.1.0, dist-tag `latest`
+#   Python      PyPI                   loams                    0.1.0 (PEP 440)
+#   Rust        crates.io              loams-proto, loams-live-proto, loams   0.1.0
+#   C#          NuGet                  Loams                    0.1.0
+#   Go          proxy.golang.org       loams.dev/go             tag sdks/go/v0.1.0
+#
+# A pre-release tag (v0.1.0-preview.N, -rc.N) keeps its suffix in every
+# ecosystem's spelling and publishes to npm dist-tag `preview` or `next`, so it
+# never becomes `latest`; scripts/sdk/sdk-version.py has the mapping.
 #   Swift       SwiftPM (git)          github.com/ostrium-labs/loams   the release tag itself
 #   C++         GitHub release assets  loams-cpp-<v>.tar.gz     CMake config package inside
 #
