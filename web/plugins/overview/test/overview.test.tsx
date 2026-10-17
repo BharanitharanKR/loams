@@ -139,7 +139,9 @@ describe('overview cards', () => {
   });
 
   it('every_card_links_to_its_page', () => {
-    render(<StackCard id="postgres" title="Postgres" href="/postgres" state={{ phase: 'stopped' }} />);
+    render(
+      <StackCard id="postgres" title="Postgres" href="/postgres" state={{ phase: 'stopped' }} />,
+    );
     expect(screen.getByRole('link', { name: 'Open Postgres' }).getAttribute('href')).toBe(
       '#/postgres',
     );

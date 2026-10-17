@@ -88,8 +88,8 @@ export function StacksSection({ desktop }: { desktop: LoamsDesktopApi }) {
       )}
       {noRuntime ? (
         <Notice tone="warn" title="No container runtime found">
-          Postgres, MySQL (dev) and TiKV run in containers. Install Docker or Podman, then reopen this
-          page.
+          Postgres, MySQL (dev) and TiKV run in containers. Install Docker or Podman, then reopen
+          this page.
         </Notice>
       ) : (
         allRead && <p className="text-sm text-muted m-0">Container runtime: found.</p>
