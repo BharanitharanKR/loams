@@ -2,7 +2,7 @@
 // docs/design/studio-vendor-inventory.md group (k); docs/design/console-ui-stack.md 1–2).
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { type ReactElement, useState } from 'react';
+import { type ReactElement, useEffect, useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   Alert,
@@ -16,6 +16,7 @@ import {
   CollapsibleTrigger,
   type CommandItem,
   CommandPalette,
+  ConfirmDialog,
   Dialog,
   InputControl,
   InputGroup,
@@ -59,12 +60,16 @@ import {
   Spinner,
   Switch,
   splitForMiddleTruncate,
+  Toaster,
+  ToastProvider,
   Toggle,
   ToggleGroup,
   TooltipPopup,
   TooltipProvider,
   TooltipRoot,
   TooltipTrigger,
+  TypedConfirmDialog,
+  useToast,
 } from '../src';
 
 afterEach(cleanup);
@@ -107,6 +112,31 @@ const ITEMS: CommandItem[] = [
   { id: 'open', text: 'Open project', group: 'Projects' },
   { id: 'settings', text: 'Settings', group: 'Go to' },
 ];
+
+/** Every toast type, an action, a secondary action and details, in one stack. */
+function RaiseToasts() {
+  const toast = useToast();
+  useEffect(() => {
+    for (const type of ['success', 'error', 'warning', 'info', 'loading'] as const) {
+      toast.add({ title: `A ${type} toast`, description: 'Details', type });
+    }
+    toast.add({
+      title: 'Table dropped',
+      actionProps: { children: 'Undo' },
+      data: { secondaryActionProps: { children: 'View' }, expandableContent: 'orders' },
+    });
+  }, [toast]);
+  return null;
+}
+
+function ToastSpecimen() {
+  return (
+    <ToastProvider>
+      <RaiseToasts />
+      <Toaster />
+    </ToastProvider>
+  );
+}
 
 const SPECIMENS: [string, () => ReactElement][] = [
   [
@@ -276,6 +306,34 @@ const SPECIMENS: [string, () => ReactElement][] = [
         <PreviewCardTrigger href="#/data">orders</PreviewCardTrigger>
         <PreviewCardPopup>12 columns</PreviewCardPopup>
       </PreviewCard>
+    ),
+  ],
+  ['Toaster', () => <ToastSpecimen />],
+  [
+    'ConfirmDialog',
+    () => (
+      <ConfirmDialog
+        open
+        onClose={() => {}}
+        onConfirm={() => {}}
+        object="the branch fix-cache"
+        impact="Its 3 commits are deleted."
+        confirm="Delete branch"
+      />
+    ),
+  ],
+  [
+    'TypedConfirmDialog',
+    () => (
+      <TypedConfirmDialog
+        open
+        onClose={() => {}}
+        onConfirm={() => {}}
+        object="the table orders on production"
+        impact="Production data is deleted."
+        phrase="production"
+        confirm="Drop table"
+      />
     ),
   ],
 ];

@@ -74,6 +74,12 @@ export {
   rankCommandMatch,
   rankCommands,
 } from './command-rank';
+export {
+  ConfirmDialog,
+  type ConfirmDialogProps,
+  TypedConfirmDialog,
+  type TypedConfirmDialogProps,
+} from './confirm';
 export { cx } from './cx';
 export { DataTable, type SortableColumn, VirtualList } from './data-table';
 export {
@@ -205,6 +211,7 @@ export {
   SidebarMenuItem,
   SidebarMenuSub,
 } from './sidebar';
+export { type ResponsiveSidebarState, resolveSidebarState } from './sidebar-state';
 export { Skeleton } from './skeleton';
 export { Spinner } from './spinner';
 export { type Status, StatusTag } from './status';
@@ -222,7 +229,19 @@ export {
 } from './table';
 export { type Tab, Tabs } from './tabs';
 export { TextareaControl, type TextareaControlProps } from './textarea';
-export { Toaster, ToastProvider, useToast } from './toast';
+export {
+  hiddenToastActionProps,
+  type StackedToastOptions,
+  stackedToast,
+  type ToastApi,
+  type ToastData,
+  Toaster,
+  type ToastOptions,
+  ToastProvider,
+  type ToastType,
+  toastManager,
+  useToast,
+} from './toast';
 export { Toggle, ToggleGroup } from './toggle-group';
 export {
   Tooltip,

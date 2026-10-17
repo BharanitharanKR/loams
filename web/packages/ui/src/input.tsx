@@ -33,8 +33,11 @@ export function InputControl({
   ...props
 }: InputControlProps) {
   const inputClassName = cx(
-    'h-9 w-full min-w-0 rounded-[inherit] bg-transparent px-3 leading-9 outline-none placeholder:text-faint',
-    (size === 'compact' || size === 'sm') && 'h-7 px-2.5 text-small leading-7',
+    // The console has no preflight: the input takes the box's face, size and colour itself.
+    'h-9 w-full min-w-0 rounded-[inherit] border-0 bg-transparent px-3 font-[inherit] text-inherit leading-9 outline-none placeholder:text-faint',
+    size === 'compact' || size === 'sm'
+      ? 'h-7 px-2.5 text-small leading-7'
+      : 'text-[length:inherit]',
     size === 'lg' && 'h-10 leading-10',
     props.type === 'search' &&
       '[&::-webkit-search-cancel-button]:appearance-none [&::-webkit-search-decoration]:appearance-none [&::-webkit-search-results-button]:appearance-none [&::-webkit-search-results-decoration]:appearance-none',

@@ -123,6 +123,51 @@ describe('primitives adapted from T3 Code', () => {
     expect(headed.filter((p) => !rows.has(p))).toEqual([]);
   });
 
+  it('has a row for every design 59 primitive (D1077)', () => {
+    const rows = new Set(prov.files.map((r) => r.upstreamPath));
+    const ts = new Set(['dialog-styles', 'sidebarState', 'toastHelpers']);
+    const expected = [
+      'alert',
+      'alert-dialog',
+      'autocomplete',
+      'badge',
+      'button',
+      'checkbox',
+      'collapsible-section-header',
+      'combobox',
+      'command',
+      'dialog',
+      'dialog-styles',
+      'empty',
+      'group',
+      'input',
+      'input-group',
+      'kbd',
+      'menu',
+      'middle-truncate',
+      'number-field',
+      'popover',
+      'preview-card',
+      'radio-group',
+      'scroll-area',
+      'select',
+      'separator',
+      'sheet',
+      'sidebar',
+      'sidebarState',
+      'skeleton',
+      'spinner',
+      'switch',
+      'table',
+      'textarea',
+      'toast',
+      'toastHelpers',
+      'toggle-group',
+      'tooltip',
+    ].map((n) => `apps/web/src/components/ui/${n}.${ts.has(n) ? 'ts' : 'tsx'}`);
+    expect(expected.filter((p) => !rows.has(p))).toEqual([]);
+  });
+
   it('ships the MIT text and a NOTICE, and says so in its licence field', () => {
     const licence = readFileSync(join(UI, 'LICENSE.t3code'), 'utf8');
     const studio = readFileSync(join(WEB, 'packages/studio-ui/LICENSE.t3code'), 'utf8');
