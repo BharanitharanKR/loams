@@ -3,7 +3,7 @@
 // positions persist per project through the client; a node opens a details panel.
 
 import { PageHead } from '@loams/desktop-ui';
-import { Badge, Button, Notice } from '@loams/ui';
+import { Badge, Button, Notice, SampleDataNotice } from '@loams/ui';
 import {
   applyNodeChanges,
   Background,
@@ -113,10 +113,13 @@ export function CanvasPage({
   client,
   projectId,
   navigate,
+  sample,
 }: {
   client: CanvasClient;
   projectId: string;
   navigate: (to: string) => void;
+  /** The client is a fixture: the page says so. */
+  sample?: boolean;
 }) {
   const [project, setProject] = useState<Project>();
   const [failure, setFailure] = useState<string>();
@@ -197,6 +200,11 @@ export function CanvasPage({
   return (
     <div className="lc-page">
       {head}
+      {sample && (
+        <SampleDataNotice>
+          Services you add or move here are not saved to a project.
+        </SampleDataNotice>
+      )}
       <CanvasContext.Provider value={{ client, projectId }}>
         <ReactFlowProvider>
           <ProjectCanvas

@@ -30,7 +30,7 @@ const plugin: PluginModule = {
     ctx.effect(() =>
       router.page(
         { id: 'deployments', path: '/deployments', title: 'Deployments', plugin: 'deployments' },
-        () => <DeploymentsPage client={client} />,
+        () => <DeploymentsPage client={client} sample />,
       ),
     );
     ctx.effect(() =>

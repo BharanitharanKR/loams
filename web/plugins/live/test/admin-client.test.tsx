@@ -249,7 +249,7 @@ describe('DeploymentsPage over the engine', () => {
     render(<DeploymentsPage api={api} />);
     const history = await screen.findByRole('table', { name: 'Deploy history' });
     expect(within(history).getByText(/live_schema_violation/)).toBeTruthy();
-    expect(screen.queryByText(PREVIEW_NOTICE)).toBeNull();
+    expect(screen.queryByText(new RegExp(PREVIEW_NOTICE))).toBeNull();
     expect(screen.queryByText('Worker health')).toBeNull();
     const log = await screen.findByRole('log', { name: 'Function log lines' });
     expect(await within(log).findByText(/line 3/)).toBeTruthy();

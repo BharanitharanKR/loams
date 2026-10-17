@@ -220,8 +220,12 @@ The preview's images, the contract the compose stack in
   workflow's own `GITHUB_TOKEN` (`packages: write`); there is no stored registry
   credential.
 - **Tags.** Every image gets `:<version>` (for example `0.1.0-preview.1`, no `v` prefix) and
-  the rolling `:preview`, which moves with each preview release. There is no `:latest`.
-  Deployments that must not move pin `:<version>`.
+  the rolling `:preview`, which moves with each prerelease (`-preview.N`, `-rc.N`). A
+  stable version (no `-`, for example `0.1.0`) gets `:<version>`, `:<major>.<minor>` and
+  `:latest` instead, and is a normal GitHub release (the repository's "Latest"); a
+  prerelease is a GitHub pre-release and never `:latest`. The rule is
+  [`scripts/release/channel.sh`](../../scripts/release/channel.sh). Deployments that must
+  not move pin `:<version>`.
 - **Images built elsewhere.** `ghcr.io/ostrium-labs/tidb:v8.5.8-loams.1` is built by
   [`scripts/sqldb/tidb-image/build.sh`](../../scripts/sqldb/tidb-image/build.sh) from an
   annotated patch-queue tag, is public, amd64 only, and is pinned in

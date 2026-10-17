@@ -11,6 +11,7 @@ import {
   Empty,
   Field,
   Notice,
+  SampleDataNotice,
   Select,
   type Status,
   StatusTag,
@@ -29,8 +30,7 @@ import {
 } from './admin.js';
 import { errorText } from './pages.js';
 
-export const PREVIEW_NOTICE =
-  'This page shows sample data, not your engine, and actions here change nothing.';
+export const PREVIEW_NOTICE = 'Actions here change nothing.';
 /** The most log lines kept on screen; older lines drop off the top. */
 export const LOG_CAP = 500;
 
@@ -518,11 +518,7 @@ export function DeploymentsPage({
           <Button onClick={reload}>Refresh</Button>
         </div>
       </header>
-      {api.mocked && (
-        <Notice tone="info" title="Preview">
-          {PREVIEW_NOTICE}
-        </Notice>
-      )}
+      {api.mocked && <SampleDataNotice>{PREVIEW_NOTICE}</SampleDataNotice>}
       {done && (
         <div role="status">
           <Notice tone="success" title="Done">

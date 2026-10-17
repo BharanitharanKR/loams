@@ -276,7 +276,7 @@ describe('overview page', () => {
     expect(within(card('postgres')).getByText('Running')).toBeTruthy();
     // The live dashboard sits above the cards, on sample data until a server API exists.
     expect(screen.getByRole('heading', { name: 'Activity' })).toBeTruthy();
-    expect(screen.getByText('Sample data')).toBeTruthy();
+    expect(screen.getAllByText('Sample data')).not.toHaveLength(0);
   });
 
   it('refresh_re_reads_everything_and_keeps_data_on_screen', async () => {
