@@ -242,7 +242,7 @@ mod served {
     const WATCH_POLL: Duration = HINT_EVERY;
     /// Messages a `ReadFiles` or `Diff` stream buffers before its producer waits.
     const STREAM_BUFFER: usize = 16;
-    /// The most file or patch bytes in one `ReadFiles` or `Diff` message (ruling T26.3).
+    /// The most file or patch bytes in one `ReadFiles` or `Diff` message (ruling T26.4).
     const CHUNK_BYTES: usize = 1024 * 1024;
 
     /// `WorkspaceService`, served.
