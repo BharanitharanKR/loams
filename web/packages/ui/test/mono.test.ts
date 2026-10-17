@@ -17,7 +17,8 @@ const SKIP = new Set(['node_modules', 'dist', 'gen', 'test', 'tests', '__tests__
 const SOURCE = /\.(css|tsx?|jsx?)$/;
 const MONO = /\bfont-mono\b|--loams-font-mono|\bloams-mono\b/;
 const MARKED = /mono-ok:\s*(code|id|sql|path|hash|number)\b/;
-const ELEMENT = /<(code|pre|kbd|samp)\b/;
+// The mono face must be on the code element's own opening tag, not elsewhere on the line.
+const ELEMENT = /<(code|pre|kbd|samp)\b[^>]*(\bfont-mono\b|--loams-font-mono|\bloams-mono\b)/;
 
 // Files copied unchanged from upstream: `provenance.test.ts` pins their hash (T3-1).
 const AS_IS = new Set(
@@ -61,6 +62,7 @@ describe('monospace (D1075)', () => {
     expect(MARKED.test("className={/* mono-ok: id */ 'font-mono'}")).toBe(true);
     expect(MARKED.test("className={/* mono-ok: because */ 'font-mono'}")).toBe(false);
     expect(ELEMENT.test('<code className="font-mono">x</code>')).toBe(true);
+    expect(ELEMENT.test('<span className="font-mono">Label</span><code>x</code>')).toBe(false);
   });
 
   it('labels outside @loams/ui do not use monospace', () => {
