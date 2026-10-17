@@ -5,7 +5,7 @@
 const KEY = 'loams.console.demo-data';
 
 /** The pages demo.yml adds or turns on, as their nav labels, for the toggle's explanation. */
-export const DEMO_PAGES = ['Deployments', 'SQL', 'Metrics', 'Pipelines', 'Git'];
+export const DEMO_PAGES = ['Deployments', 'Loams SQL', 'Metrics', 'Pipelines', 'Git'];
 
 export function demoEnabled(): boolean {
   try {

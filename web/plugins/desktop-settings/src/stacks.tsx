@@ -5,7 +5,7 @@ import { LiveStoreCard } from './live-store.js';
 
 export const STACKS: { id: StackId; label: string; note: string }[] = [
   { id: 'postgres', label: 'Postgres', note: 'Branchable Postgres' },
-  { id: 'wesql', label: 'WeSQL', note: 'MySQL-compatible, S3-backed' },
+  { id: 'wesql', label: 'MySQL (dev)', note: 'Local MySQL-compatible dev stack' },
   { id: 'tikv', label: 'TiKV', note: 'Distributed key-value store' },
 ];
 
@@ -88,7 +88,7 @@ export function StacksSection({ desktop }: { desktop: LoamsDesktopApi }) {
       )}
       {noRuntime ? (
         <Notice tone="warn" title="No container runtime found">
-          Postgres, WeSQL and TiKV run in containers. Install Docker or Podman, then reopen this
+          Postgres, MySQL (dev) and TiKV run in containers. Install Docker or Podman, then reopen this
           page.
         </Notice>
       ) : (

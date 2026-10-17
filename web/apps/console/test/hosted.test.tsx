@@ -242,7 +242,7 @@ describe('the browser edition', () => {
     await waitFor(() => expect(navLabels(root)).toContain('Live'));
     const labels = navLabels(root);
     expect(labels).toEqual(expect.arrayContaining(['Live', 'Graph', 'Analytics', 'Status']));
-    for (const sample of ['Deployments', 'SQL', 'Metrics', 'Pipelines', 'Git']) {
+    for (const sample of ['Deployments', 'Loams SQL', 'Metrics', 'Pipelines', 'Git']) {
       expect(labels).not.toContain(sample);
     }
     const status = Object.fromEntries(handle.plugins().map((p) => [p.id, p.status]));
@@ -263,9 +263,9 @@ describe('the browser edition', () => {
 
   it('adds the sample-data pages under Demo data', async () => {
     const { root } = await boot(true);
-    await waitFor(() => expect(navLabels(root)).toContain('SQL'));
+    await waitFor(() => expect(navLabels(root)).toContain('Loams SQL'));
     expect(navLabels(root)).toEqual(
-      expect.arrayContaining(['Live', 'Deployments', 'SQL', 'Metrics', 'Pipelines', 'Git']),
+      expect.arrayContaining(['Live', 'Deployments', 'Loams SQL', 'Metrics', 'Pipelines', 'Git']),
     );
     expect(root.textContent).toContain('Sample pages on');
   }, 20_000); // boots the browser edition's whole catalog; a cold macOS runner needs over 5 s
