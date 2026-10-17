@@ -65,7 +65,7 @@ export function Schema({
           </Group>
           <Group title="Property keys" empty="No property keys.">
             {schema.propertyKeys.map((k) => (
-              <li key={k} className="font-mono">
+              <li key={k} className={/* mono-ok: id */ 'font-mono'}>
                 {k}
               </li>
             ))}
@@ -73,7 +73,7 @@ export function Schema({
           <Group title="Indexes" empty="No indexes.">
             {schema.indexes.map((i) => (
               <li key={i.name} className="flex flex-col">
-                <span className="font-mono">{i.name}</span>
+                <span className={/* mono-ok: id */ 'font-mono'}>{i.name}</span>
                 <span className="text-xs text-muted">
                   {[i.kind, i.target, i.properties.join(', ')].filter(Boolean).join(' · ')}
                 </span>
@@ -112,7 +112,7 @@ function Group({
 function Row({ name, count }: { name: string; count: bigint }) {
   return (
     <li className="flex items-center justify-between gap-2">
-      <span className="font-mono">{name}</span>
+      <span className={/* mono-ok: id */ 'font-mono'}>{name}</span>
       <span className="text-muted tabular-nums">{fmt.format(count)}</span>
     </li>
   );

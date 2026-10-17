@@ -118,7 +118,7 @@ export const PendingApprovalCard = memo(function PendingApprovalCard({
       <div className="flex items-center gap-2 px-3 pt-2 text-xs text-muted">
         <ShieldAlert className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
         <span className="shrink-0 font-medium text-accent-fg">{label}</span>
-        <span className="min-w-0 truncate font-mono">{approval.tool}</span>
+        <span className={/* mono-ok: id */ "min-w-0 truncate font-mono"}>{approval.tool}</span>
         {approval.risk === "destructive" || approval.risk === "write" ? (
           <span
             className={cx(

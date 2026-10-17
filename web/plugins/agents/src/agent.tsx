@@ -472,7 +472,7 @@ function AddTrust({
               {...p}
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              className="loams-mono"
+              className={/* mono-ok: id */ 'loams-mono'}
             />
           )}
         </Field>

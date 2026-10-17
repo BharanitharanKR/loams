@@ -78,9 +78,7 @@ export function FactoryGroup({ factory }: { factory: StudioFactory }) {
   return (
     <nav aria-label="Factory" className="shrink-0 border-t border-rule-soft py-2">
       <div className="flex h-8 items-center justify-between gap-2 pr-2 pl-4">
-        <h2 className="m-0 font-mono text-[0.68rem] text-faint uppercase tracking-[0.14em]">
-          Factory
-        </h2>
+        <h2 className="m-0 text-micro font-medium text-faint">Factory</h2>
         {factory.kind === 'desktop' && (
           <a
             href={`#${FACTORY_HOME}`}

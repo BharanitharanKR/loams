@@ -128,13 +128,12 @@ function MemberColumn({
         >
           <StatusIcon status={member.status} />
           <span>{MEMBER_STATUS_LABEL[member.status]}</span>
-          {winner && (
-            <span className="ml-auto font-mono text-[0.68rem] text-accent-fg uppercase tracking-[0.12em]">
-              winner
-            </span>
-          )}
+          {winner && <span className="ml-auto text-accent-fg text-micro font-medium">Winner</span>}
         </p>
-        <p className="m-0 truncate font-mono text-[0.7rem] text-faint" title={member.cwd}>
+        <p
+          className={/* mono-ok: path */ "m-0 truncate font-mono text-[0.7rem] text-faint"}
+          title={member.cwd}
+        >
           {member.branch}
         </p>
       </header>
@@ -148,7 +147,7 @@ function MemberColumn({
           {member.filesChanged} {member.filesChanged === 1 ? "file" : "files"}
         </dd>
         <dt className="sr-only">Lines</dt>
-        <dd className="m-0 flex gap-1.5 font-mono tabular-nums">
+        <dd className="m-0 flex gap-1.5 tabular-nums">
           <span className="text-grow">+{member.additions}</span>
           <span className="text-danger">−{member.deletions}</span>
         </dd>

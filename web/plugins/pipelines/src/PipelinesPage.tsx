@@ -322,7 +322,7 @@ export function PipelinesPage({ client, initial }: PipelinesPageProps) {
           <label htmlFor="pipeline-name">Pipeline name</label>
           <Input
             id="pipeline-name"
-            className="font-mono"
+            className={/* mono-ok: id */ 'font-mono'}
             value={graph.name}
             disabled={readOnly}
             spellCheck={false}

@@ -371,7 +371,7 @@ export function DiffPanel({ threadId, source, onOpenFile, className }: DiffPanel
       <div className="flex shrink-0 flex-wrap items-center gap-0.5">
         {diff && files.length > 0 ? (
           <span
-            className="mr-1 font-mono text-[0.72rem] tabular-nums"
+            className="mr-1 text-[0.72rem] tabular-nums"
             title={`${diff.additions} additions, ${diff.deletions} deletions`}
           >
             <span className="text-grow">+{diff.additions}</span>{" "}
@@ -563,7 +563,7 @@ export function DiffPanel({ threadId, source, onOpenFile, className }: DiffPanel
         <p className="m-0 mb-2 text-[0.75rem] text-muted">{renderable.reason}</p>
         <pre
           className={cx(
-            "m-0 border border-rule-soft bg-surface p-3 font-mono text-[0.75rem] leading-relaxed text-ink",
+            /* mono-ok: code */ "m-0 border border-rule-soft bg-surface p-3 font-mono text-[0.75rem] leading-relaxed text-ink",
             view.wrap ? "whitespace-pre-wrap break-words" : "overflow-auto",
           )}
         >

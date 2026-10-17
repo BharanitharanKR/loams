@@ -223,7 +223,9 @@ export function AnnotatableCodeView({
               </Button>
               <button
                 type="button"
-                className="min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-mono text-[0.78rem] text-ink hover:text-accent-fg"
+                className={
+                  /* mono-ok: path */ "min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-mono text-[0.78rem] text-ink hover:text-accent-fg"
+                }
                 title={onOpenFile ? `Open ${file.filePath}` : file.filePath}
                 onClick={() => onOpenFile?.(file.filePath)}
                 disabled={!onOpenFile}
@@ -233,7 +235,7 @@ export function AnnotatableCodeView({
                   : file.filePath}
               </button>
               {renderFileMeta?.(file)}
-              <span className="shrink-0 font-mono text-[0.72rem] tabular-nums">
+              <span className="shrink-0 text-[0.72rem] tabular-nums">
                 <span className="text-grow">+{file.stat?.additions ?? 0}</span>{" "}
                 <span className="text-danger">−{file.stat?.deletions ?? 0}</span>
               </span>

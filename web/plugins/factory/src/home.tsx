@@ -29,7 +29,10 @@ function Tile({
       <Card title={app.label} actions={<HealthPill health={app.health} />} className="h-full">
         <div className="flex flex-col gap-3">
           <p className="text-sm text-muted">{ROLES[app.id]}</p>
-          <p className="truncate font-mono text-xs text-faint" title={app.url}>
+          <p
+            className={/* mono-ok: path */ 'truncate font-mono text-xs text-faint'}
+            title={app.url}
+          >
             {app.url ?? 'No URL yet'}
           </p>
           <div className="flex flex-wrap gap-2">

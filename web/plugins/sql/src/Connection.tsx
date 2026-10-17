@@ -114,7 +114,7 @@ export function Connection({ client, namespace, databaseId, branchId, copy }: Co
         {rows.map(([k, v]) => (
           <div key={k} className="contents">
             <dt className="text-muted">{k}</dt>
-            <dd className="font-mono">{v}</dd>
+            <dd className={/* mono-ok: id */ 'font-mono'}>{v}</dd>
           </div>
         ))}
       </dl>

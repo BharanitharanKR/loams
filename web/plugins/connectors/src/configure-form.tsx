@@ -39,7 +39,7 @@ function FieldInput({
   );
   const label = (
     <>
-      <span className="font-mono">{f.key}</span>
+      <span className={/* mono-ok: id */ 'font-mono'}>{f.key}</span>
       {f.required && <span aria-hidden="true"> *</span>}
     </>
   );
@@ -120,7 +120,7 @@ export function Fields({
       {fields.map((f) =>
         f.children ? (
           <fieldset key={f.id} className="m-0 border border-rule p-4">
-            <legend className="px-2 font-mono text-sm">
+            <legend className={/* mono-ok: id */ 'px-2 font-mono text-sm'}>
               {f.key}
               {f.required && <span aria-hidden="true"> *</span>}
             </legend>

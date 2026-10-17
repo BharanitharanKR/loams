@@ -33,7 +33,9 @@ function Context({ agentd, router }: { agentd: StudioAgentd; router: RouterServi
         {project?.branch && (
           <span className={CHIP} title="Branch">
             <GitBranch size={13} aria-hidden="true" />
-            <span className="truncate font-mono text-[0.72rem]">{project.branch}</span>
+            <span className={/* mono-ok: id */ 'truncate font-mono text-[0.72rem]'}>
+              {project.branch}
+            </span>
           </span>
         )}
         {agentd.kind === 'web' && (

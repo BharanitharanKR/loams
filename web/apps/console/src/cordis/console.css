@@ -24,7 +24,7 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 code {
-  font-family: var(--loams-font-mono);
+  font-family: var(--loams-font-mono); /* mono-ok: code */
   font-size: 0.82em;
 }
 :focus-visible {
@@ -118,11 +118,8 @@ code {
   border-radius: var(--op-radius-pill);
   background: var(--op-accent-soft);
   color: var(--op-accent-fg);
-  font-family: var(--loams-font-mono);
-  font-size: 0.6rem;
+  font-size: var(--op-text-micro);
   font-weight: 500;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
   white-space: nowrap;
 }
 .lc-side-close,
@@ -204,7 +201,6 @@ code {
 .lc-nav-heading {
   margin: 0 0 6px;
   padding: 0 10px;
-  font-family: var(--loams-font-mono);
   font-size: 0.64rem;
   font-weight: 400;
   color: var(--op-faint);
@@ -269,7 +265,6 @@ code {
 }
 .lc-side-version {
   padding: 6px 10px 0;
-  font-family: var(--loams-font-mono);
   font-size: 0.64rem;
   color: var(--op-faint);
 }
@@ -804,7 +799,7 @@ code {
 }
 .ds-ns input {
   width: 200px;
-  font-family: var(--loams-font-mono);
+  font-family: var(--loams-font-mono); /* mono-ok: id */
 }
 .ds-tabs {
   display: flex;
@@ -861,7 +856,7 @@ code {
 .ds-mono,
 .ds-editor,
 .ds-json {
-  font-family: var(--loams-font-mono);
+  font-family: var(--loams-font-mono); /* mono-ok: code */
   font-size: 13px;
 }
 .ds-editor {
@@ -967,7 +962,7 @@ code {
   background: var(--op-surface);
   color: inherit;
   font: inherit;
-  font-family: var(--loams-font-mono);
+  font-family: var(--loams-font-mono); /* mono-ok: id */
   font-size: 12px;
 }
 button.lc-hosted-engine {

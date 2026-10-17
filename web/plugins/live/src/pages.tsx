@@ -45,7 +45,7 @@ const isNotRunning = (e: unknown) =>
 const isUnserved = (e: unknown) => e instanceof ConnectError && e.code === Code.Unimplemented;
 
 const Mono = ({ children }: { children: ReactNode }) => (
-  <span className="font-mono text-xs">{children}</span>
+  <span className={/* mono-ok: id */ 'font-mono text-xs'}>{children}</span>
 );
 
 function Loading({ what }: { what: string }) {
@@ -218,7 +218,7 @@ function Controls({
         {(p) => (
           <Input
             {...p}
-            className="font-mono"
+            className={/* mono-ok: code */ 'font-mono'}
             placeholder='["alice"]'
             value={sel.eq}
             onChange={(e) => onChange({ ...sel, eq: e.target.value })}
@@ -485,7 +485,7 @@ export function MutateTab({ api, tables, sel, onGone }: TabProps) {
               <Textarea
                 {...p}
                 rows={5}
-                className="font-mono"
+                className={/* mono-ok: code */ 'font-mono'}
                 value={insertFields}
                 onChange={(e) => setInsertFields(e.target.value)}
               />
@@ -513,7 +513,7 @@ export function MutateTab({ api, tables, sel, onGone }: TabProps) {
             {(p) => (
               <Input
                 {...p}
-                className="font-mono"
+                className={/* mono-ok: id */ 'font-mono'}
                 value={patchId}
                 onChange={(e) => setPatchId(e.target.value)}
               />
@@ -524,7 +524,7 @@ export function MutateTab({ api, tables, sel, onGone }: TabProps) {
               <Textarea
                 {...p}
                 rows={3}
-                className="font-mono"
+                className={/* mono-ok: code */ 'font-mono'}
                 value={patchFields}
                 onChange={(e) => setPatchFields(e.target.value)}
               />
@@ -551,7 +551,7 @@ export function MutateTab({ api, tables, sel, onGone }: TabProps) {
             {(p) => (
               <Input
                 {...p}
-                className="font-mono"
+                className={/* mono-ok: id */ 'font-mono'}
                 value={deleteId}
                 onChange={(e) => setDeleteId(e.target.value)}
               />

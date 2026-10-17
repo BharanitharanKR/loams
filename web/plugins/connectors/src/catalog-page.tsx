@@ -204,7 +204,9 @@ export function CatalogPage({
                       actions={<StatusTag status={statusTone(c.status)}>{c.status}</StatusTag>}
                     >
                       <div className="flex flex-col gap-3">
-                        <p className="truncate font-mono text-xs text-faint">{c.id}</p>
+                        <p className={/* mono-ok: id */ 'truncate font-mono text-xs text-faint'}>
+                          {c.id}
+                        </p>
                         <div className="flex flex-wrap gap-1">
                           <Badge>{c.category}</Badge>
                           <Badge title={`runtime ${c.runtime.kind}`}>{runtimeClass(c)}</Badge>

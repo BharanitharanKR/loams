@@ -318,9 +318,7 @@ export function ResolveDialog({
             )}
           </Field>
           <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-            <legend className="mb-1 font-mono text-[0.7rem] text-faint uppercase tracking-[0.14em]">
-              What to do with it
-            </legend>
+            <legend className="mb-1 text-micro font-medium text-faint">What to do with it</legend>
             {radio("merge", "Merge into the base", `Merge the winner’s branch into ${base}.`)}
             {radio(
               "pr",
@@ -408,9 +406,7 @@ export function ResolveDialog({
             aria-label="This will"
             className="flex flex-col gap-1 border border-rule-soft bg-bg p-3"
           >
-            <h3 className="m-0 font-mono text-[0.7rem] text-faint uppercase tracking-[0.14em]">
-              This will
-            </h3>
+            <h3 className="m-0 text-micro font-medium text-faint">This will</h3>
             {needsWinnerState && winner.loading ? (
               <p className="m-0 text-[0.82rem] text-muted">Reading the winner’s changes…</p>
             ) : needsWinnerState && winner.error ? (
@@ -439,7 +435,7 @@ export function ResolveDialog({
               <strong className="text-[0.86rem] text-danger">{errorTitle(error.reason)}</strong>
               <span className="text-[0.82rem] text-ink">{errorText(error)}</span>
               {error.paths && error.paths.length > 0 && (
-                <ul className="m-0 pl-5 font-mono text-[0.76rem] text-ink">
+                <ul className={/* mono-ok: path */ "m-0 pl-5 font-mono text-[0.76rem] text-ink"}>
                   {error.paths.map((p) => (
                     <li key={p}>{p}</li>
                   ))}

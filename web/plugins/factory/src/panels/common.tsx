@@ -5,7 +5,7 @@ import { ago } from '../model.js';
 export const rel = (iso?: string) => ago(iso, formatRelative);
 export const num = (n?: number) => (n === undefined ? '' : formatNumber(n));
 export const mono = (s?: string | number) => (
-  <span className="font-mono text-xs">{s === undefined ? '' : String(s)}</span>
+  <span className={/* mono-ok: id */ 'font-mono text-xs'}>{s === undefined ? '' : String(s)}</span>
 );
 export const dash = (s?: ReactNode) => s ?? '';
 

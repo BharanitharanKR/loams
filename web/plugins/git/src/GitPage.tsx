@@ -69,7 +69,7 @@ export function GitPage(p: GitPageProps) {
         {repo ? (
           <section className="flex min-w-0 flex-col gap-3" aria-label={`Repository ${repo.name}`}>
             <h2 className="m-0 text-base">
-              <span className="font-mono">{repo.name}</span>
+              <span className={/* mono-ok: id */ 'font-mono'}>{repo.name}</span>
               <span className="ml-2 text-sm font-normal text-muted">in {ns}</span>
             </h2>
             <Tabs<RepoTab>

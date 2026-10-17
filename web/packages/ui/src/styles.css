@@ -122,8 +122,8 @@
   gap: 7px;
   padding: 2px 9px 2px 7px;
   border-radius: 999px;
-  font-family: var(--loams-font-mono);
-  font-size: 0.68rem;
+  font-family: inherit;
+  font-size: var(--op-text-micro);
   line-height: 1.5;
   white-space: nowrap;
 }
@@ -177,8 +177,8 @@
   padding: 1px 7px;
   border: 1px solid var(--op-rule-soft);
   border-radius: 4px;
-  font-family: var(--loams-font-mono);
-  font-size: 0.7rem;
+  font-family: inherit;
+  font-size: var(--op-text-micro);
   line-height: 1.6;
   color: var(--op-muted);
   background: var(--op-surface);
@@ -399,9 +399,9 @@ textarea.loams-input {
 
 .loams-table th {
   padding: 9px 16px;
-  font-family: var(--loams-font-mono);
-  font-size: 0.66rem;
-  font-weight: 400;
+  font-family: inherit;
+  font-size: var(--op-text-micro);
+  font-weight: 500;
   text-align: left;
   color: var(--op-faint);
   border-bottom: 1px solid var(--op-rule-soft);
@@ -466,8 +466,8 @@ textarea.loams-input {
 }
 
 .loams-stat > span {
-  font-family: var(--loams-font-mono);
-  font-size: 0.66rem;
+  font-family: inherit;
+  font-size: var(--op-text-micro);
   color: var(--op-faint);
 }
 

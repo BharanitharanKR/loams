@@ -46,7 +46,11 @@ export function StepPanel({ step, onClose }: { step: Step; onClose: () => void }
     <Card
       headingLevel={3}
       title={
-        <span ref={heading} tabIndex={-1} className="font-mono text-sm break-all">
+        <span
+          ref={heading}
+          tabIndex={-1}
+          className={/* mono-ok: id */ 'font-mono text-sm break-all'}
+        >
           {step.name}
         </span>
       }
@@ -84,12 +88,12 @@ export function StepPanel({ step, onClose }: { step: Step; onClose: () => void }
           )}
           <div className="col-span-2">
             <dt className="text-muted text-xs">Id</dt>
-            <dd className="m-0 font-mono text-xs break-all">{step.id}</dd>
+            <dd className={/* mono-ok: id */ 'm-0 font-mono text-xs break-all'}>{step.id}</dd>
           </div>
         </dl>
         {step.error && (
           <Notice tone={step.status === 'failed' ? 'danger' : 'warn'} title="Error">
-            <span className="font-mono text-xs break-all">{step.error}</span>
+            <span className={/* mono-ok: code */ 'font-mono text-xs break-all'}>{step.error}</span>
           </Notice>
         )}
         {step.attempts.length > 0 && (
@@ -116,7 +120,9 @@ export function StepPanel({ step, onClose }: { step: Step; onClose: () => void }
               {
                 key: 'error',
                 header: 'Error',
-                cell: (a) => <span className="font-mono text-xs">{a.error ?? ''}</span>,
+                cell: (a) => (
+                  <span className={/* mono-ok: code */ 'font-mono text-xs'}>{a.error ?? ''}</span>
+                ),
               },
             ]}
           />

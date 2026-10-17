@@ -150,7 +150,7 @@ function ProviderCard({
           {(p) => (
             <Input
               {...p}
-              className="font-mono"
+              className={/* mono-ok: path */ 'font-mono'}
               value={baseUrl}
               onChange={(e) => setBaseUrl(e.target.value)}
               spellCheck={false}
@@ -161,7 +161,7 @@ function ProviderCard({
           {(p) => (
             <Input
               {...p}
-              className="font-mono"
+              className={/* mono-ok: id */ 'font-mono'}
               value={model}
               onChange={(e) => setModel(e.target.value)}
               spellCheck={false}

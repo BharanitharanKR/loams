@@ -236,7 +236,7 @@ function ErrorNotice({ error }: { error: GitActionError }) {
         <p className="m-0">Nothing was merged and the tree is clean. These paths conflict:</p>
         <ul
           aria-label="Conflicting paths"
-          className="m-0 mt-1 list-none p-0 font-mono text-[0.78rem]"
+          className={/* mono-ok: path */ "m-0 mt-1 list-none p-0 font-mono text-[0.78rem]"}
         >
           {(error.paths ?? []).map((path) => (
             <li key={path}>{path}</li>
@@ -427,11 +427,13 @@ function WriteDialog({
           )}
           <dl className="m-0 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-[0.84rem]">
             <dt className="text-muted">Branch</dt>
-            <dd className="m-0 font-mono text-ink">{branch}</dd>
+            <dd className={/* mono-ok: id */ "m-0 font-mono text-ink"}>{branch}</dd>
             {pushes && (
               <>
                 <dt className="text-muted">Push to</dt>
-                <dd className="m-0 font-mono text-ink">origin/{status.refName ?? ""}</dd>
+                <dd className={/* mono-ok: id */ "m-0 font-mono text-ink"}>
+                  origin/{status.refName ?? ""}
+                </dd>
               </>
             )}
           </dl>
@@ -466,14 +468,14 @@ function WriteDialog({
                         />
                         <span
                           className={cx(
-                            "min-w-0 flex-1 truncate font-mono text-[0.78rem]",
+                            /* mono-ok: path */ "min-w-0 flex-1 truncate font-mono text-[0.78rem]",
                             isExcluded ? "text-faint" : "text-ink",
                           )}
                           title={file.path}
                         >
                           {file.path}
                         </span>
-                        <span className="shrink-0 font-mono text-[0.74rem] tabular-nums">
+                        <span className="shrink-0 text-[0.74rem] tabular-nums">
                           <span className="text-grow">+{file.insertions}</span>
                           <span className="text-faint"> / </span>
                           <span className="text-danger">-{file.deletions}</span>

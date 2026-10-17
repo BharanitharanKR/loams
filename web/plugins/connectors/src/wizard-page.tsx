@@ -248,7 +248,7 @@ export function WizardPage({
     <div className="lc-page">
       <PageHead
         title={`New ${summary.name} instance`}
-        subtitle={<span className="font-mono">{summary.id}</span>}
+        subtitle={<span className={/* mono-ok: id */ 'font-mono'}>{summary.id}</span>}
         actions={back}
       />
       <FixtureNotice flow={flow} />
@@ -391,13 +391,13 @@ export function WizardPage({
             <>
               <dl className="m-0 grid grid-cols-[10rem_1fr] gap-2 text-sm">
                 <dt className="text-muted">Name</dt>
-                <dd className="m-0 font-mono">{name}</dd>
+                <dd className={/* mono-ok: id */ 'm-0 font-mono'}>{name}</dd>
                 <dt className="text-muted">Direction</dt>
                 <dd className="m-0">{dir}</dd>
                 <dt className="text-muted">Runtime</dt>
                 <dd className="m-0">{rt}</dd>
                 <dt className="text-muted">Fabric</dt>
-                <dd className="m-0 font-mono">
+                <dd className={/* mono-ok: id */ 'm-0 font-mono'}>
                   {kind} {target}
                   {partitions && kind !== 'collection' ? ` (${partitions} partitions)` : ''}
                 </dd>

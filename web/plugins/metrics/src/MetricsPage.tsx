@@ -322,8 +322,8 @@ export function MetricsPage({ client }: { client: MetricsClient }) {
               onKeyDown={(e) => onTabKey(e, i)}
               className={
                 isSel
-                  ? 'rounded-pill bg-accent-soft px-3 py-1 text-sm text-accent-ink'
-                  : 'rounded-pill px-3 py-1 text-sm text-muted hover:text-ink'
+                  ? 'cursor-pointer rounded-pill border-0 bg-accent-soft px-3 py-1 text-sm text-accent-fg'
+                  : 'cursor-pointer rounded-pill border-0 bg-transparent px-3 py-1 text-sm text-muted hover:bg-raised hover:text-ink'
               }
             >
               {d.title}

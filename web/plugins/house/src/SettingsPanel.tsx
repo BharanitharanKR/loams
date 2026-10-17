@@ -45,7 +45,7 @@ export function SettingsPanel({
                 <Input
                   aria-label={`Setting ${i + 1} name`}
                   list={listId}
-                  className="min-w-0 flex-1 font-mono text-[13px]"
+                  className={/* mono-ok: id */ 'min-w-0 flex-1 font-mono text-[13px]'}
                   value={r.name}
                   spellCheck={false}
                   autoComplete="off"
@@ -55,7 +55,7 @@ export function SettingsPanel({
                 />
                 <Input
                   aria-label={`Setting ${i + 1} value`}
-                  className="w-28 font-mono text-[13px]"
+                  className={/* mono-ok: code */ 'w-28 font-mono text-[13px]'}
                   value={r.value}
                   spellCheck={false}
                   autoComplete="off"

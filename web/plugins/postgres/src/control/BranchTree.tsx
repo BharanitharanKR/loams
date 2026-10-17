@@ -115,7 +115,9 @@ export function BranchTree({
                   <td>
                     {b.parentId ? (
                       <>
-                        <span className="font-mono text-xs">{b.parentLsn || '—'}</span>
+                        <span className={/* mono-ok: id */ 'font-mono text-xs'}>
+                          {b.parentLsn || '—'}
+                        </span>
                         {b.parentTime && (
                           <time dateTime={b.parentTime} className="block text-xs text-muted">
                             {new Date(b.parentTime).toLocaleString()}
@@ -126,7 +128,9 @@ export function BranchTree({
                       <span className="text-xs text-muted">Root</span>
                     )}
                   </td>
-                  <td className="font-mono text-xs">{b.wal?.commitLsn || '—'}</td>
+                  <td className={/* mono-ok: id */ 'font-mono text-xs'}>
+                    {b.wal?.commitLsn || '—'}
+                  </td>
                   <td className="text-xs">{formatBytes(b.logicalSizeBytes)}</td>
                   <td>
                     <Checkbox
@@ -289,7 +293,7 @@ function CreateBranchDialog({
             {(p) => (
               <Input
                 {...p}
-                className="font-mono"
+                className={/* mono-ok: id */ 'font-mono'}
                 placeholder="0/16B3748"
                 value={lsn}
                 onChange={(e) => setLsn(e.target.value)}

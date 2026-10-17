@@ -489,7 +489,7 @@ function Workspace({
       >
         <p className="m-0 text-sm">
           The House says this statement writes. It runs once more, with writes allowed, on{' '}
-          <span className="font-mono">{database}</span>.
+          <span className={/* mono-ok: id */ 'font-mono'}>{database}</span>.
         </p>
         <pre className="m-0 mt-2 max-h-48 overflow-auto rounded-md bg-surface p-2 font-mono text-xs">
           {confirm?.sql}

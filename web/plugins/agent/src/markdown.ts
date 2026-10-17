@@ -53,7 +53,7 @@ const marked = new Marked({
       return (
         '<div class="lc-code my-2 border border-rule bg-raised">' +
         '<div class="flex items-center justify-between px-2 py-1 border-b border-rule-soft text-xs text-muted">' +
-        `<span class="font-mono">${escapeHtml(label)}</span>` +
+        `<span class="font-mono">${escapeHtml(label)}</span>` + // mono-ok: code
         '<button type="button" data-copy="" class="text-xs text-ink bg-surface border border-rule px-2 py-0.5 cursor-pointer">Copy</button>' +
         '</div>' +
         `<pre class="m-0 p-2 overflow-x-auto text-xs font-mono"><code>${escapeHtml(text)}</code></pre>` +

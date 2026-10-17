@@ -116,7 +116,7 @@ function WhenField({ row, onChange }: { row: KeybindingRow; onChange: (when: str
         aria-label={`When ${commandLabel(row.command)} applies`}
         aria-invalid={!parsed.ok}
         aria-describedby={!parsed.ok || unknown.length ? id : undefined}
-        className="h-8 font-mono text-[0.78rem]"
+        className={/* mono-ok: code */ 'h-8 font-mono text-[0.78rem]'}
         value={draft}
         placeholder="Always"
         maxLength={256}

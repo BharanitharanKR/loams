@@ -609,7 +609,7 @@ function JobBody({ job }: { job: JobDetail }) {
           <p className="text-muted text-sm">No log lines.</p>
         ) : (
           <ScrollRegion label="Job logs" className="max-h-64">
-            <ol className="loams-pre font-mono text-sm">
+            <ol className={/* mono-ok: code */ 'loams-pre font-mono text-sm'}>
               {job.logs.map((l, i) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: log lines are append-only and may repeat
                 <li key={i}>

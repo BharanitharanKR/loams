@@ -118,7 +118,10 @@ export function Panel({
           <h3 id={titleId} className="truncate">
             {panel.title}
           </h3>
-          <span className="block truncate font-mono text-xs text-muted" title={def?.description}>
+          <span
+            className={/* mono-ok: id */ 'block truncate font-mono text-xs text-muted'}
+            title={def?.description}
+          >
             {panel.metric}
           </span>
         </div>
@@ -248,7 +251,7 @@ function StatBody({
         return (
           <li key={name} className="flex min-w-0 flex-col gap-1">
             <span className="truncate text-xs text-muted">{name}</span>
-            <strong className="font-mono text-2xl text-ink" aria-live="off">
+            <strong className="tabular-nums text-2xl text-ink" aria-live="off">
               {formatValue(v, unit)}
             </strong>
             <Sparkline

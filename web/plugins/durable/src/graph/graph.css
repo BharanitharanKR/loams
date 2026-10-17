@@ -111,7 +111,7 @@
   min-width: 0;
 }
 .dg-node-name {
-  font-family: var(--loams-font-mono);
+  font-family: var(--loams-font-mono); /* mono-ok: id */
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -127,7 +127,6 @@
   font-variant-numeric: tabular-nums;
 }
 .dg-attempts {
-  font-family: var(--loams-font-mono);
   color: var(--op-ink);
 }
 .dg-dot {
@@ -162,7 +161,7 @@
   border: 1px solid var(--op-rule);
   background: var(--op-surface);
   color: var(--op-ink);
-  font-family: var(--loams-font-mono);
+  font-family: var(--loams-font-mono); /* mono-ok: id */
   font-size: 0.75rem;
   cursor: pointer;
 }

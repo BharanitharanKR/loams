@@ -291,7 +291,7 @@ function NewLink({
             <Textarea
               {...p}
               rows={3}
-              className="font-mono"
+              className={/* mono-ok: code */ 'font-mono'}
               value={options}
               onChange={(e) => setOptions(e.target.value)}
             />
