@@ -1,41 +1,56 @@
 /*
- * Loams tokens. Light mode stands on white; dark mode is humus with chalk
- * text. Ochre is the only brand accent and means "fresh": the write path,
- * the newest thing, focus. Sprout means built or healthy, gley planned or
- * informational, oxide failed. Put the class `dark` on <html> for dark mode.
+ * Loams tokens (design 59, D1073–D1076). Dark is direction B: T3 Code's neutral-black canvas,
+ * focused and dense. Light is direction A: a warm window with the work area as a white card.
+ * Indigo is the one accent: the primary action, selection and focus (as text it is
+ * --op-accent-fg). Emerald (grow), amber (warn), red (danger) and blue (info) mean state only.
+ * Put the class `dark` on <html> for dark mode.
  *
- * Every colour, shadow and radius in web/plugins and web/packages comes from
- * here (docs/design/console-ui-stack.md); packages/ui/test/colours.test.ts
- * fails on a raw colour literal anywhere else.
- *
- * Fonts: set --loams-font-sans and --loams-font-mono to your loaded faces
- * (Archivo and Martian Mono); the fallbacks keep text readable without them.
+ * Values derive from T3 Code apps/web/src/index.css at 33aa4614 (MIT; see LICENSE.t3code).
+ * Every colour, shadow and radius in web/plugins and web/packages comes from here
+ * (docs/design/console-ui-stack.md): test/colours.test.ts fails on a raw colour literal
+ * anywhere else, and test/contrast.test.ts checks every text pair for WCAG AA.
  */
 :root {
+  --op-window: #f4f2ee;
   --op-bg: #ffffff;
-  --op-surface: #f9f9f7;
-  --op-raised: #f0f0ec;
-  --op-rule: #deded8;
-  --op-rule-soft: #ebebe6;
-  --op-ink: #1a1511;
-  --op-muted: #5b5044;
-  --op-faint: #74695b;
-  --op-accent: #8a520a;
-  --op-accent-soft: #f6e4c4;
-  --op-accent-ink: #fff8ec;
-  --op-grow: #3f7426;
-  --op-grow-soft: #eaf1e1;
-  --op-grow-deep: #36602a;
+  /* Cards, popovers and dialogs: white on the window in direction A. */
+  --op-surface: #ffffff;
+  --op-raised: #f1efea;
+  --op-rule: #ece8e2;
+  --op-rule-soft: #efece7;
+  --op-input: #dcd7cf;
+  --op-ink: #1d1b18;
+  --op-muted: #6b665e;
+  --op-faint: #716c64;
+  --op-accent: oklch(0.488 0.217 264);
+  --op-accent-fg: oklch(0.488 0.217 264);
+  --op-accent-soft: oklch(0.488 0.217 264 / 0.1);
+  --op-accent-ink: #ffffff;
+  --op-grow: #047857;
+  --op-grow-soft: rgb(4 120 87 / 0.1);
+  --op-grow-deep: #047857;
   --op-grow-on: #ffffff;
-  --op-info: #3c5a68;
-  --op-info-soft: #dde8eb;
-  --op-danger: #a63a20;
-  --op-danger-soft: #f8dcd2;
+  --op-warn: #92400e;
+  --op-warn-soft: rgb(146 64 14 / 0.1);
+  --op-info: #1d4ed8;
+  --op-info-soft: rgb(29 78 216 / 0.1);
+  --op-danger: #b91c1c;
+  --op-danger-soft: rgb(185 28 28 / 0.1);
 
-  /* Overlays: the pop-up shadow and the scrim behind a modal. */
-  --op-shadow-pop: 0 24px 48px -24px rgb(26 21 17 / 0.35);
-  --op-shadow-modal: 0 32px 64px -24px rgb(26 21 17 / 0.45);
-  --op-scrim: rgb(10 8 6 / 0.45);
+  /* Sidebar rows: the selected row is a white chip with a 1px shadow (direction A). */
+  --op-row-hover: rgb(29 27 24 / 0.04);
+  --op-row-selected: #ffffff;
+  --op-shadow-chip: 0 1px 1px rgb(29 27 24 / 0.08), 0 0 0 1px rgb(29 27 24 / 0.04);
+
+  /* Elevation: lightness steps and hairlines; shadows only for floating things. */
+  --op-shadow-pop: 0 12px 32px -12px rgb(29 27 24 / 0.18);
+  --op-shadow-modal: 0 24px 56px -20px rgb(29 27 24 / 0.28);
+  --op-shadow-composer: 0 12px 28px -18px rgb(0 0 0 / 0.4);
+  --op-scrim: rgb(29 27 24 / 0.24);
+  /* Dialog glass: 80% opacity over a 14px blur; dark adds a 4% white inset highlight. */
+  --op-glass: 80%;
+  --op-blur: 14px;
+  --op-dialog-highlight: inset 0 0 0 0 transparent;
 
   /* Chart series, the validated categorical order (fixed, never cycled). */
   --op-chart-1: #2a78d6;
@@ -47,13 +62,11 @@
   --op-chart-7: #6250d6;
   --op-chart-8: #e34948;
 
-  /* Terminals (Studio, SD1 Task 22): the surface, cursor and selection, and the 16
-     ANSI colours from the brand hues. Each keeps 4.5:1 on --op-term-bg, except dark
-     mode's black, which stays a shade just off the background as terminals expect. */
+  /* Terminals (Studio, SD1 Task 22): unchanged except the selection, which follows the accent. */
   --op-term-bg: var(--op-surface);
   --op-term-fg: var(--op-ink);
   --op-term-cursor: var(--op-accent);
-  --op-term-selection: #8a520a40;
+  --op-term-selection: rgb(29 78 216 / 0.25);
   --op-term-black: #1a1511;
   --op-term-red: #a63a20;
   --op-term-green: #3f7426;
@@ -71,42 +84,76 @@
   --op-term-bright-cyan: #33737e;
   --op-term-bright-white: #74695b;
 
-  /* Spacing steps of 4px; panels keep hard corners, anything you press is a pill. */
+  /* Spacing steps of 4px; the radius scale (D1073). */
   --op-space: 4px;
-  --op-radius: 0;
-  --op-radius-sm: 4px;
+  --op-radius: 10px;
+  --op-radius-xs: 4px;
+  --op-radius-sm: 6px;
+  --op-radius-md: 8px;
+  --op-radius-lg: 14px;
+  --op-radius-xl: 22px;
   --op-radius-pill: 999px;
 
-  --op-ease: cubic-bezier(0.22, 1, 0.36, 1);
-  --loams-font-sans: "Archivo", "Archivo Variable", ui-sans-serif, system-ui, sans-serif;
+  /* Density (D1076). */
+  --op-control-compact: 28px;
+  --op-control: 32px;
+  --op-control-input: 36px;
+  --op-topbar: 44px;
+  --op-row: 28px;
+
+  /* Type (D1075): system faces; monospace for code, ids and SQL only. */
+  --loams-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif;
   --loams-font-mono:
-    "Martian Mono", "Martian Mono Variable", ui-monospace, "SFMono-Regular", monospace;
+    ui-monospace, "SF Mono", "SFMono-Regular", Menlo, Consolas, "Liberation Mono", monospace;
+  --op-text-micro: 11px;
+  --op-text-small: 12px;
+  --op-text-body: 13px;
+  --op-text-emphasis: 14px;
+  --op-text-section: 16px;
+  --op-text-title: 20px;
+  --op-text-hero: 24px;
+
+  /* Motion (D1076): off by default, panels snap; colour and opacity changes are quick. */
+  --op-ease: cubic-bezier(0.22, 1, 0.36, 1);
+  --op-ease-panel: cubic-bezier(0.32, 0.72, 0, 1);
+  --op-duration: 120ms;
+  --op-panel-duration: 0ms;
   color-scheme: light;
 }
 
 .dark {
-  --op-bg: #15110d;
-  --op-surface: #1c1713;
-  --op-raised: #25201a;
-  --op-rule: #372e26;
-  --op-rule-soft: #28211b;
-  --op-ink: #f4f5ee;
-  --op-muted: #a69985;
-  --op-faint: #938775;
-  --op-accent: #e4a24a;
-  --op-accent-soft: #33250f;
-  --op-accent-ink: #1a1206;
-  --op-grow: #9cc25e;
-  --op-grow-soft: #1d2a17;
-  --op-grow-deep: #36602a;
-  --op-grow-on: #f4f5ee;
-  --op-info: #8ea8b4;
-  --op-info-soft: #1b252a;
-  --op-danger: #e0664a;
-  --op-danger-soft: #361a12;
-  --op-shadow-pop: 0 24px 48px -24px rgb(0 0 0 / 0.6);
-  --op-shadow-modal: 0 32px 64px -24px rgb(0 0 0 / 0.7);
-  --op-scrim: rgb(10 8 6 / 0.6);
+  --op-window: #111111;
+  --op-bg: #0a0a0a;
+  --op-surface: #111111;
+  --op-raised: rgb(255 255 255 / 0.04);
+  --op-rule: rgb(255 255 255 / 0.06);
+  --op-rule-soft: rgb(255 255 255 / 0.04);
+  --op-input: rgb(255 255 255 / 0.08);
+  --op-ink: #f5f5f5;
+  --op-muted: #a3a3a3;
+  --op-faint: #8a8a8a;
+  --op-accent: oklch(0.571 0.21 264);
+  --op-accent-fg: oklch(0.72 0.14 264);
+  --op-accent-soft: oklch(0.571 0.21 264 / 0.18);
+  --op-accent-ink: #ffffff;
+  --op-grow: #34d399;
+  --op-grow-soft: rgb(52 211 153 / 0.14);
+  --op-grow-deep: #047857;
+  --op-grow-on: #ffffff;
+  --op-warn: #fbbf24;
+  --op-warn-soft: rgb(251 191 36 / 0.14);
+  --op-info: #60a5fa;
+  --op-info-soft: rgb(96 165 250 / 0.14);
+  --op-danger: #f87171;
+  --op-danger-soft: rgb(248 113 113 / 0.14);
+  --op-row-hover: rgb(255 255 255 / 0.04);
+  --op-row-selected: rgb(255 255 255 / 0.07);
+  --op-shadow-chip: 0 0 0 0 transparent;
+  --op-shadow-pop: 0 12px 32px -12px rgb(0 0 0 / 0.6);
+  --op-shadow-modal: 0 24px 56px -20px rgb(0 0 0 / 0.7);
+  --op-shadow-composer: 0 12px 28px -18px rgb(0 0 0 / 0.75);
+  --op-scrim: rgb(0 0 0 / 0.5);
+  --op-dialog-highlight: inset 0 1px 0 rgb(255 255 255 / 0.04);
   /* The same hues, stepped for the dark surface. */
   --op-chart-1: #3987e5;
   --op-chart-2: #d95926;
@@ -116,7 +163,7 @@
   --op-chart-6: #008300;
   --op-chart-7: #9085e9;
   --op-chart-8: #e66767;
-  --op-term-selection: #e4a24a40;
+  --op-term-selection: rgb(119 162 252 / 0.25);
   --op-term-black: #4a4038;
   --op-term-red: #e0664a;
   --op-term-green: #9cc25e;
@@ -132,6 +179,33 @@
   --op-term-bright-blue: #a2c3ef;
   --op-term-bright-magenta: #dfb0e1;
   --op-term-bright-cyan: #98d8de;
-  --op-term-bright-white: #f4f5ee;
+  --op-term-bright-white: #f5f5f5;
   color-scheme: dark;
+}
+
+/* The optional panel easing (D1076): Settings › Appearance › Motion sets data-motion="on". */
+html[data-motion="on"] {
+  --op-panel-duration: 300ms;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root,
+  html[data-motion="on"] {
+    --op-panel-duration: 0ms;
+    --op-duration: 0ms;
+  }
+}
+
+/* Windows High Contrast and other forced palettes (Review Focus 5): alpha hairlines and
+   soft fills would vanish, so they become system colours. */
+@media (forced-colors: active) {
+  :root,
+  .dark {
+    --op-rule: CanvasText;
+    --op-rule-soft: CanvasText;
+    --op-input: CanvasText;
+    --op-accent: Highlight;
+    --op-accent-fg: LinkText;
+    --op-row-selected: Highlight;
+  }
 }

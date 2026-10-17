@@ -56,9 +56,9 @@ const LITERAL =
   /(?<![\w&/-])#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})(?![\w-])|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(\s*[-\d.]/i;
 /** Tailwind's default palette, cleared in the console's tailwind.css, and T3 Code's own names. */
 const PALETTE =
-  /^(?:[a-z-]+:)*(?:bg|text|border|ring|fill|stroke|outline|shadow|from|to|via|divide|accent|caret|decoration)-(?:(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d|white$|black$|foreground|background|primary|secondary|popover|sidebar|destructive|input$|muted-foreground)/;
-/** Corners are hard or a pill (`rounded-none`, `rounded-sm`, `rounded-pill`); nothing else. */
-const RADIUS = /^(?:[a-z-]+:)*rounded(?:-[a-z]+)?-(?:xs|md|lg|xl|2xl|3xl|full)$|^rounded$/;
+  /^(?:[a-z-]+:)*(?:bg|text|border|ring|fill|stroke|outline|shadow|from|to|via|divide|accent|caret|decoration)-(?:(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d|white$|black$|foreground|background|primary|secondary|popover|sidebar|destructive|muted-foreground|placeholder|success|warning|card)/;
+/** Corners come from the scale (D1073): none, xs, sm, md, lg, xl, pill, panel. */
+const RADIUS = /^(?:[a-z-]+:)*rounded(?:-[a-z]+)?-(?:2xl|3xl|full)$|^rounded$/;
 
 /** Every class in the document and every inline style that breaks the token rule. */
 function offTokenClasses(root: ParentNode = document.body): string[] {
@@ -188,11 +188,11 @@ describe('renders_with_tokens_only', () => {
   it('the scan catches what it is meant to', () => {
     const div = document.createElement('div');
     div.innerHTML =
-      '<span class="bg-red-500 rounded-lg text-foreground hover:bg-[#fff] rounded-full"></span>' +
-      '<span class="bg-surface rounded-pill rounded-none text-muted"></span>';
+      '<span class="bg-red-500 rounded-2xl text-foreground hover:bg-[#fff] rounded-full"></span>' +
+      '<span class="bg-surface rounded-pill rounded-md border-input rounded-panel text-muted"></span>';
     expect(offTokenClasses(div)).toEqual([
       'bg-red-500',
-      'rounded-lg',
+      'rounded-2xl',
       'text-foreground',
       'hover:bg-[#fff]',
       'rounded-full',

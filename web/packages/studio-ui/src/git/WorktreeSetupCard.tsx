@@ -112,7 +112,7 @@ function stageRowClassName(status: WorktreeSetupStageStatus): string {
     case "failed":
       return "text-danger";
     case "warning":
-      return "text-accent";
+      return "text-warn";
     case "pending":
       return "text-faint";
     case "running":
@@ -261,7 +261,7 @@ export function WorktreeSetupCard({
       <div
         className={cx(
           "flex min-w-0 items-baseline gap-2 border-b border-rule-soft pb-2 text-[0.88rem] tabular-nums",
-          failed ? "text-danger" : finishedWithFailedStage ? "text-accent" : "text-ink",
+          failed ? "text-danger" : finishedWithFailedStage ? "text-warn" : "text-ink",
         )}
         role="status"
         aria-live="polite"

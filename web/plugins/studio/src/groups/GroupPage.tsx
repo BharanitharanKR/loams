@@ -439,7 +439,7 @@ export function GroupPage({
     <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 px-6 py-6">
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2 text-[0.78rem] text-muted">
-          <Layers size={14} aria-hidden="true" className="text-accent" />
+          <Layers size={14} aria-hidden="true" className="text-accent-fg" />
           <span>Run group</span>
           <span aria-hidden="true">·</span>
           <span>

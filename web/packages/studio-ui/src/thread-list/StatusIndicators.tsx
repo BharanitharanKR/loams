@@ -75,7 +75,10 @@ export function ThreadStatusLabel({
         title={status.label}
         className={`inline-flex size-3.5 shrink-0 items-center justify-center ${status.colorClass}`}
       >
-        <span className={`size-[7px] rounded-pill ${status.dotClass} ${pulse}`} />
+        <span
+          data-status-dot=""
+          className={`size-[7px] rounded-pill ${status.dotClass} ${pulse}`}
+        />
       </span>
     );
   }
@@ -87,7 +90,7 @@ export function ThreadStatusLabel({
       title={status.label}
       className={`inline-flex shrink-0 items-center gap-1 text-[0.7rem] ${status.colorClass}`}
     >
-      <span className={`size-1.5 rounded-pill ${status.dotClass} ${pulse}`} />
+      <span data-status-dot="" className={`size-1.5 rounded-pill ${status.dotClass} ${pulse}`} />
       <span aria-hidden="true">{status.label}</span>
     </span>
   );

@@ -35,8 +35,8 @@ export interface ChartTheme {
 /** How many categorical series colours the tokens define (`--op-chart-1` .. `--op-chart-8`). */
 export const PALETTE_SIZE = 8;
 
-const FONT_SANS = 'Archivo, ui-sans-serif, system-ui, sans-serif';
-const FONT_MONO = '"Martian Mono", ui-monospace, monospace';
+const FONT_SANS_FALLBACK = '-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, sans-serif';
+const FONT_MONO_FALLBACK = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
 
 /** Read the current chart theme off `root` (default: <html>). */
 export function readChartTheme(root?: HTMLElement): ChartTheme {
@@ -60,8 +60,8 @@ export function readChartTheme(root?: HTMLElement): ChartTheme {
     muted: v('--op-muted'),
     faint: v('--op-faint'),
     accent: v('--op-accent'),
-    fontSans: style?.getPropertyValue('--loams-font-sans').trim() || FONT_SANS,
-    fontMono: style?.getPropertyValue('--loams-font-mono').trim() || FONT_MONO,
+    fontSans: style?.getPropertyValue('--loams-font-sans').trim() || FONT_SANS_FALLBACK,
+    fontMono: style?.getPropertyValue('--loams-font-mono').trim() || FONT_MONO_FALLBACK,
     palette,
     sequential: [first ? rgba(first, 0.12) : bg, first],
   };

@@ -238,7 +238,10 @@ export function CodeBrowser(p: { client: GitClient; ws: WsRef; n?: number }) {
                   </span>
                   {entry.env && <Badge title="Env file: values are redacted">env</Badge>}
                   {entry.change && (
-                    <span className="ml-auto text-xs text-accent" title={CHANGE_TEXT[entry.change]}>
+                    <span
+                      className="ml-auto text-xs text-accent-fg"
+                      title={CHANGE_TEXT[entry.change]}
+                    >
                       <span aria-hidden="true">{CHANGE_LABEL[entry.change]}</span>
                       <span className="sr-only">, {CHANGE_TEXT[entry.change]}</span>
                     </span>

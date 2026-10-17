@@ -223,7 +223,7 @@ export function AnnotatableCodeView({
               </Button>
               <button
                 type="button"
-                className="min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-mono text-[0.78rem] text-ink hover:text-accent"
+                className="min-w-0 flex-1 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-mono text-[0.78rem] text-ink hover:text-accent-fg"
                 title={onOpenFile ? `Open ${file.filePath}` : file.filePath}
                 onClick={() => onOpenFile?.(file.filePath)}
                 disabled={!onOpenFile}

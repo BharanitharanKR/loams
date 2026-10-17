@@ -604,7 +604,7 @@ function CleanupDialog({
                   {c.project} / {formatWorktreePathForDisplay(c.worktreePath)}
                   {c.branch ? ` (${c.branch})` : ''}
                 </span>
-                {c.dirty && <span className="shrink-0 text-accent">has changes</span>}
+                {c.dirty && <span className="shrink-0 text-accent-fg">has changes</span>}
               </span>
             ))}
           </span>

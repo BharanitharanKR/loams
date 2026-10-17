@@ -27,18 +27,17 @@ Put the class `dark` on `<html>`:
 <html class="dark">
 ```
 
-Light mode stands on white; dark mode is humus with chalk informational and
-oxide failed. The class also flips `color-scheme`, so form controls and
+Light mode is a warm window with the work area as a white card; dark mode is
+a neutral-black canvas (design 59, D1073). Indigo is the one accent; emerald,
+amber, red and blue mean state only. The class also flips `color-scheme`, so form controls and
 scrollbars follow. `onThemeChange(fn)` calls `fn` whenever the class or the
 inline style of `<html>` changes, and returns a function that disconnects the
 observer.
 
 ## Fonts
 
-Set `--loams-font-sans` and `--loams-font-mono` to your loaded faces; the
-defaults are Archivo and Martian Mono with system fallbacks. The console
-bundles both from Fontsource under the SIL Open Font License 1.1 (see
-[`NOTICE`](../../../NOTICE)).
+The tokens use the system UI and monospace stacks (design 59, D1075); no font
+is bundled. Monospace is for code, ids and SQL only.
 
 ## Exports
 

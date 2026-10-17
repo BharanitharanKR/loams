@@ -232,7 +232,7 @@ function ComposerMentionNodeView({ node }: NodeViewProps) {
           spellCheck={false}
           data-composer-mention-chip="true"
         >
-          <FileText size={12} aria-hidden="true" className="shrink-0 text-accent" />
+          <FileText size={12} aria-hidden="true" className="shrink-0 text-accent-fg" />
           <span className="truncate">{basenameOfPath(path)}</span>
         </button>
       </Tooltip>

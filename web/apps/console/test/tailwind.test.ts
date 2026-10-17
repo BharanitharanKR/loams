@@ -21,9 +21,9 @@ const code = tailwind.replace(/\/\*[\s\S]*?\*\//g, '');
  * paint UI with ANSI colours.
  */
 const lightBlock = tokens.slice(tokens.indexOf(':root'), tokens.indexOf('.dark'));
-const colorTokens = [...lightBlock.matchAll(/^\s*(--op-[a-z-]+):\s*#/gm)]
+const colorTokens = [...lightBlock.matchAll(/^\s*(--op-[a-z-]+):\s*(?:#|rgb\(|oklch\()/gm)]
   .map((m) => m[1])
-  .filter((name) => !name?.startsWith('--op-term-'));
+  .filter((name) => !name?.startsWith('--op-term-') && !name?.startsWith('--op-chart-'));
 
 describe('console tailwind theme (utilities over @loams/ui tokens)', () => {
   it('finds the colour tokens', () => {
@@ -34,10 +34,19 @@ describe('console tailwind theme (utilities over @loams/ui tokens)', () => {
     expect(tailwind).toMatch(new RegExp(`--color-[a-z-]+:\\s*var\\(${token}\\);`));
   });
 
-  it('maps fonts and easing to the tokens', () => {
+  it('maps fonts, easing, radii and the type scale to the tokens', () => {
     expect(tailwind).toContain('--font-sans: var(--loams-font-sans);');
     expect(tailwind).toContain('--font-mono: var(--loams-font-mono);');
     expect(tailwind).toContain('--ease-op: var(--op-ease);');
+    expect(tailwind).toContain('--ease-panel: var(--op-ease-panel);');
+    expect(tailwind).toContain('--radius-none: 0px;');
+    for (const step of ['xs', 'sm', 'md', 'lg', 'xl', 'pill']) {
+      expect(tailwind).toContain(`--radius-${step}: var(--op-radius-${step});`);
+    }
+    expect(tailwind).toContain('--radius-panel: var(--op-radius);');
+    for (const size of ['micro', 'small', 'body', 'emphasis', 'section', 'title', 'hero']) {
+      expect(tailwind).toContain(`--text-${size}: var(--op-text-${size});`);
+    }
   });
 
   it('uses inline theme so dark mode follows the token switch', () => {

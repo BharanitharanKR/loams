@@ -361,7 +361,9 @@ export function SelectMenu<V extends string>({
                   disabled={o.disabled}
                   className={ITEM}
                 >
-                  <BaseSelect.ItemIndicator className="w-3 text-accent">✓</BaseSelect.ItemIndicator>
+                  <BaseSelect.ItemIndicator className="w-3 text-accent-fg">
+                    ✓
+                  </BaseSelect.ItemIndicator>
                   <BaseSelect.ItemText>{o.label}</BaseSelect.ItemText>
                 </BaseSelect.Item>
               ))}

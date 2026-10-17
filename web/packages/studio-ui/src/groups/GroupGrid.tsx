@@ -33,7 +33,7 @@ export const MEMBER_STATUS_LABEL: Record<MemberStatus, string> = {
 
 const STATUS_CLASS: Record<MemberStatus, string> = {
   queued: "text-muted",
-  running: "text-accent",
+  running: "text-accent-fg",
   "awaiting-input": "text-info",
   done: "text-grow",
   errored: "text-danger",
@@ -74,7 +74,7 @@ export function checkLabel(state: CheckStatus, exitCode?: number): string | null
 const CHECK_CLASS: Record<CheckStatus, string> = {
   none: "text-faint",
   pending: "text-muted",
-  running: "text-accent",
+  running: "text-accent-fg",
   passed: "text-grow",
   failed: "text-danger",
 };
@@ -129,7 +129,7 @@ function MemberColumn({
           <StatusIcon status={member.status} />
           <span>{MEMBER_STATUS_LABEL[member.status]}</span>
           {winner && (
-            <span className="ml-auto font-mono text-[0.68rem] text-accent uppercase tracking-[0.12em]">
+            <span className="ml-auto font-mono text-[0.68rem] text-accent-fg uppercase tracking-[0.12em]">
               winner
             </span>
           )}

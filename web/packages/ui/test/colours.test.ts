@@ -61,4 +61,20 @@ describe('colour tokens', () => {
     expect(sample.match(LITERAL)).toHaveLength(4);
     expect('href="#/streams" #add-on issue #269 rgba(var(--op-ink))'.match(LITERAL)).toBeNull();
   });
+
+  it('uses the accent as text only through text-accent-fg (W2)', () => {
+    const hits: string[] = [];
+    const TEXT_ACCENT = /\btext-accent(?![-\w])/g;
+    const CSS_ACCENT = /(?<![-\w])color:\s*var\(--op-accent\)/g;
+    for (const root of ROOTS) {
+      for (const path of files(root)) {
+        const lines = readFileSync(path, 'utf8').split('\n');
+        lines.forEach((line, i) => {
+          const re = path.endsWith('.css') ? CSS_ACCENT : TEXT_ACCENT;
+          for (const m of line.matchAll(re)) hits.push(`${relative(WEB, path)}:${i + 1}: ${m[0]}`);
+        });
+      }
+    }
+    expect(hits).toEqual([]);
+  });
 });

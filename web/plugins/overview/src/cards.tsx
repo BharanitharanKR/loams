@@ -34,7 +34,7 @@ export function OverviewCard({
         <div className="flex flex-col gap-3">
           {children}
           <a
-            className="text-sm text-accent no-underline"
+            className="text-sm text-accent-fg no-underline"
             href={`#${href}`}
             aria-label={`Open ${title}`}
           >

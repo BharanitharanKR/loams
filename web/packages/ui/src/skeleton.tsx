@@ -8,7 +8,7 @@ import { cx } from './cx';
 
 // A skeleton's width and height are its content, so callers size it through className.
 // Its shape is not: a block (hard corners) or a pill.
-const SHAPES = { block: 'rounded-none', pill: 'rounded-pill' } as const;
+const SHAPES = { block: 'rounded-md', pill: 'rounded-pill' } as const;
 
 /** A placeholder while content loads. Hidden from assistive technology; pair it with a status. */
 export function Skeleton({

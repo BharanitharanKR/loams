@@ -70,7 +70,7 @@ export function Home({ agentd }: { agentd: StudioAgentd }) {
                     size={16}
                     strokeWidth={1.75}
                     aria-hidden="true"
-                    className="text-accent"
+                    className="text-accent-fg"
                   />
                   {p.name}
                 </span>
