@@ -162,6 +162,58 @@ extension LiveAdminTests {
     }
 }
 
+extension LiveAdminTests {
+    /// `client.live.authenticate` (LV1 Task 17) sends `LiveService/Authenticate`
+    /// with the client's bearer, is never retried, and returns the identity
+    /// version, so a caller tells an extended session (the version it holds) from
+    /// a changed identity (a bumped one).
+    func testAuthenticateSurfacesExtendedAndChangedIdentity() async throws {
+        let call = try loamsRequireBinding(module: "live", call: "authenticate")
+        XCTAssertEqual(call.rpc, "loams.live.v1.LiveService/Authenticate")
+        XCTAssertEqual(call.retry, .manual)
+        XCTAssertEqual(call.streaming, .unary)
+        XCTAssertFalse(call.takesIdempotencyKey)
+
+        let transport = StubTransport(replies: [
+            .success(["identity": .string("4")]),
+            .success(["identity": .string("5")]),
+        ])
+        let live = LiveModule(
+            invoker: CallInvoker(transport: transport, auth: StaticTokenSource("tok-bob"), maxRetries: 0)
+        )
+        let request = DynamicMessage(
+            protoTypeName: authenticateRequestTypeName, fields: ["session_id": .string("s1")]
+        )
+        let extended = try await live.authenticate(request)
+        let changed = try await live.authenticate(request)
+
+        XCTAssertEqual(extended.loamsFields()["identity"], .string("4"), "same caller: the version is unchanged")
+        XCTAssertEqual(changed.loamsFields()["identity"], .string("5"), "another caller bumps it")
+        XCTAssertEqual(transport.calls.map(\.rpc), Array(repeating: "loams.live.v1.LiveService/Authenticate", count: 2))
+        XCTAssertEqual(transport.calls.map(\.bearer), ["tok-bob", "tok-bob"])
+        XCTAssertEqual(transport.calls[0].body, ["session_id": .string("s1")])
+    }
+
+    /// A refused Authenticate is not retried, and the reasons a Live session
+    /// closes with are in the registry.
+    func testAuthenticateIsNotRetriedAndSessionReasonsAreKnown() async throws {
+        let transport = StubTransport(replies: [.failure(code: .unavailable, message: "restarting", info: nil)])
+        let live = LiveModule(
+            invoker: CallInvoker(transport: transport, auth: nil, maxRetries: loamsDefaultMaxRetries)
+        )
+        do {
+            _ = try await live.authenticate(DynamicMessage(protoTypeName: authenticateRequestTypeName, fields: [:]))
+            XCTFail("the stub refuses every call")
+        } catch {
+            XCTAssertEqual(LoamsError.code(of: error), .unavailable)
+        }
+        XCTAssertEqual(transport.calls.count, 1)
+        XCTAssertEqual(loamsReason(from: "session_rotate"), .sessionRotate)
+        XCTAssertEqual(loamsReason(from: "token_expired"), .tokenExpired)
+        XCTAssertEqual(loamsReason(from: "token_revoked"), .tokenRevoked)
+    }
+}
+
 /// Calls the deprecated method from one place, so the deprecation warning the
 /// test exists to cover is not repeated.
 @available(*, deprecated)

@@ -113,4 +113,60 @@ public sealed class LiveAdminTests
         Assert.Contains(Reason.LiveAppExists, ReasonRegistry.All);
         Assert.Contains(Reason.LiveAppMismatch, ReasonRegistry.All);
     }
+
+    [Fact]
+    public async Task Authenticate_sends_the_session_and_the_bearer_and_surfaces_both_outcomes()
+    {
+        var binding = Facade.Binding("live", "Authenticate");
+        Assert.Equal("loams.live.v1.LiveService/Authenticate", binding.Rpc);
+        Assert.Equal(RetryClass.Manual, binding.Retry);
+        Assert.Equal(Streaming.Unary, binding.Streaming);
+        Assert.False(binding.TakesIdempotencyKey);
+
+        // 4 is the version the session holds: the same caller answers 4 again (the
+        // expiry moved), another caller answers 5 (the identity changed).
+        var handler = new StubHandler(
+            StubHandler.ConnectJson(HttpStatusCode.OK, "{\"identity\":\"4\"}"),
+            StubHandler.ConnectJson(HttpStatusCode.OK, "{\"identity\":\"5\"}"));
+        using var client = new LoamsClient(new LoamsClientOptions
+        {
+            Endpoint = "https://fixture.invalid",
+            Codec = Codec.Json,
+            Handler = handler,
+            MaxRetries = 3,
+            Auth = new StaticTokenSource("tok-bob"),
+        });
+
+        var extended = await client.Live.AuthenticateAsync(new AuthenticateRequest { SessionId = "s1" });
+        var changed = await client.Live.AuthenticateAsync(new AuthenticateRequest { SessionId = "s1" });
+
+        Assert.Equal(4UL, extended.Identity);
+        Assert.Equal(5UL, changed.Identity);
+        Assert.All(handler.Requests, (request) =>
+        {
+            Assert.Equal("/loams.live.v1.LiveService/Authenticate", request.Path);
+            Assert.Equal("tok-bob", request.Bearer);
+            Assert.Contains("s1", System.Text.Encoding.UTF8.GetString(request.Body));
+        });
+    }
+
+    [Fact]
+    public async Task Authenticate_is_not_retried()
+    {
+        var handler = new StubHandler(StubHandler.ConnectRefusal(HttpStatusCode.ServiceUnavailable,
+            "unavailable", "the node is restarting", "unavailable"));
+        using var client = ClientOver(handler);
+
+        await Assert.ThrowsAnyAsync<LoamsError>(() =>
+            client.Live.AuthenticateAsync(new AuthenticateRequest { SessionId = "s1" }));
+        Assert.Equal(1, handler.CallCount);
+    }
+
+    [Fact]
+    public void The_session_reasons_are_in_the_registry()
+    {
+        Assert.Contains(Reason.SessionRotate, ReasonRegistry.All);
+        Assert.Contains(Reason.TokenExpired, ReasonRegistry.All);
+        Assert.Contains(Reason.TokenRevoked, ReasonRegistry.All);
+    }
 }

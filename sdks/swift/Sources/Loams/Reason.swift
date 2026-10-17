@@ -61,6 +61,7 @@ public enum Reason: String, Sendable, Hashable, CaseIterable {
     case alreadyExists = "already_exists"
     case permissionDenied = "permission_denied"
     case tokenExpired = "token_expired"
+    case tokenRevoked = "token_revoked"
     case unauthenticated = "unauthenticated"
     case failedPrecondition = "failed_precondition"
     case resourceExhausted = "resource_exhausted"
@@ -124,6 +125,7 @@ public let loamsReasonCodes: [Reason: Code] = [
     .alreadyExists: .alreadyExists,
     .permissionDenied: .permissionDenied,
     .tokenExpired: .unauthenticated,
+    .tokenRevoked: .unauthenticated,
     .unauthenticated: .unauthenticated,
     .failedPrecondition: .failedPrecondition,
     .resourceExhausted: .resourceExhausted,

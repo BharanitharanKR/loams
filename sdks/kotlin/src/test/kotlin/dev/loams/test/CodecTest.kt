@@ -51,7 +51,7 @@ object CodecTest {
                 "the instance module's calls",
             )
             assertEquals(
-                listOf("modifyQuerySet", "watch"),
+                listOf("authenticate", "modifyQuerySet", "watch"),
                 dev.loams.Facade.module("live").calls.map { it.facadeName }.sorted(),
                 "the live module's calls",
             )

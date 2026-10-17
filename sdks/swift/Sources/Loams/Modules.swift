@@ -77,6 +77,26 @@ public struct LiveModule: Sendable {
         self.invoker = invoker
     }
 
+    /// Replaces an open watch session's identity with this call's credential
+    /// (`AuthenticateRequest`: `session_id`; LV1 Task 17).
+    ///
+    /// The credential is the client's own `TokenSource`, so to re-authenticate as
+    /// another caller, call this on a client built with that caller's source. The
+    /// response's `identity` is the session's identity version after the call: the
+    /// same caller only extends the session and leaves it unchanged, and a different
+    /// caller (a sign-in or a sign-out) bumps it, after which the next transition
+    /// reruns every query as the new caller. Compare it with the version you hold.
+    /// An unknown session answers `not_found`.
+    ///
+    /// A mutation with no `idempotency_key` field, so it is never retried (R3).
+    public func authenticate(
+        _ request: DynamicMessage,
+        options: CallOptions = .init()
+    ) async throws -> DynamicMessage {
+        let binding = try loamsRequireBinding(module: "live", call: "Authenticate")
+        return try await invoker.unary(binding: binding, request: request, overrides: options)
+    }
+
     /// Changes the query set a watch is over.
     ///
     /// A mutation: retryable only once it carries an idempotency key, and its

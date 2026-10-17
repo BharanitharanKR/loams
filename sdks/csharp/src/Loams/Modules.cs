@@ -105,6 +105,26 @@ public sealed class LiveModule
         _invoker.ServerStreamAsync<Transition>(Facade.Binding("live", "Watch"), request, options,
             cancellationToken);
 
+    /// <summary>
+    /// Replaces an open watch session's identity with this call's credential
+    /// (<c>AuthenticateRequest.SessionId</c>; LV1 Task 17).
+    /// </summary>
+    /// <remarks>
+    /// The credential is the client's own <see cref="ITokenSource"/>, so to
+    /// re-authenticate as another caller, call this on a client built with that
+    /// caller's source. The response's <c>Identity</c> is the session's identity
+    /// version after the call: the same caller only extends the session and leaves it
+    /// unchanged, and a different caller (a sign-in or a sign-out) bumps it, after which
+    /// the next transition reruns every query as the new caller. Compare it with the
+    /// version you hold. An unknown session is <c>not_found</c>. A mutation with no
+    /// idempotency key, so it is never retried.
+    /// </remarks>
+    public Task<AuthenticateResponse> AuthenticateAsync(
+        AuthenticateRequest request,
+        CallOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        _invoker.UnaryAsync<AuthenticateResponse>(Facade.Binding("live", "Authenticate"), request, options, cancellationToken);
+
     /// <summary>Changes what a query set watches.</summary>
     public Task<ModifyQuerySetResponse> ModifyQuerySetAsync(
         ModifyQuerySetRequest request,
