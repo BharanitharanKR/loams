@@ -119,5 +119,7 @@ allowBuilds:
   '@bufbuild/buf': false
   vite-plus: true
   msw: false
+  # Electron 44 has no install script any more (the binary downloads on first use; the
+  # desktop's dev and preview scripts run install-electron). Kept for older Electrons.
   electron: true
   electron-winstaller: false

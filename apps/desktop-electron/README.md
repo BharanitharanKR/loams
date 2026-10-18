@@ -69,7 +69,7 @@ Main-process pieces:
 ```sh
 pnpm install
 cargo build --release -p loams --features live,durable,live-tikv,graph   # the engine; the default build lacks durable, live-tikv and graph
-pnpm --filter @loams/desktop dev                         # builds the connector catalog, then electron-vite dev
+pnpm --filter @loams/desktop dev                         # fetches Electron, builds the connector catalog, then electron-vite dev
 ```
 
 Cargo output goes to the shared target directory from `~/Documents/.cargo/config.toml`; do not set `CARGO_TARGET_DIR`.
@@ -79,6 +79,10 @@ Running against:
 
 - **The apps mock** backs the cloud console REST API and the app protos with seed data. `cargo run -p loams-apps-mock`
   serves `http://127.0.0.1:8084` (change it with `--listen`; building it needs `protoc`, see
+Electron 44 has no install script: its binary is downloaded on first use (into `~/.cache/electron`), and
+`electron-vite` does not trigger that download itself. `dev` and `preview` run `install-electron` first (a no-op once the
+binary is there); run `pnpm --filter @loams/desktop exec install-electron` before any other `electron-vite` command.
+
   [web/README.md](../../web/README.md#develop)). Add that URL as a server in the app. In a browser,
   `LOAMS_API=<url> pnpm --filter @loams/console dev` serves the console on `:5173` under `/ui/` (add `?desktop` for the
   desktop edition with the fake bridge).
