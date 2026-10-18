@@ -493,23 +493,18 @@ impl WorkspaceHost {
                 Some(space) => Some(space),
                 None => return Err(EngineError::Other(format!("no such space: {space_id}"))),
             },
-            // No project named: a thread this daemon hosts in `cwd` belongs to
-            // the project at that path, as a first `Send` claims it
-            // ([`claim_chat`](Self::claim_chat)). Studio's "New thread in
-            // <project>" sends only the project's path.
-            None => {
-                let own = self.inner.config.device_id.as_str();
-                match cwd.as_deref().map(str::trim) {
-                    Some(path)
-                        if device_id.is_none_or(|d| d == own)
-                            && !matches!(path, "" | "~" | "~/") =>
-                    {
-                        let space_id = self.space_for_path(path)?;
-                        self.read(|doc| doc.space(&space_id))?
-                    }
-                    _ => None,
+            // Neither a project nor a device named: a thread in `cwd` belongs
+            // to the project at that path on this device, as a first `Send`
+            // claims it ([`claim_chat`](Self::claim_chat)). Studio's "New
+            // thread in <project>" sends only the project's path. A named
+            // device keeps the chat project-less (the projectless tests).
+            None => match cwd.as_deref().map(str::trim) {
+                Some(path) if device_id.is_none() && !matches!(path, "" | "~" | "~/") => {
+                    let space_id = self.space_for_path(path)?;
+                    self.read(|doc| doc.space(&space_id))?
                 }
-            }
+                _ => None,
+            },
         };
         // With neither a project nor a device the thread runs here: since the
         // edge sync left (D781) this daemon is the only host a client reaches.
@@ -1037,7 +1032,7 @@ mod tests {
         assert_eq!(chat.space_id, None);
         assert_eq!(chat.cwd.as_deref(), Some("~"));
 
-        // Another device's chat never claims one of our projects.
+        // A named device keeps the chat project-less, here or elsewhere.
         host.create_chat(
             "elsewhere",
             None,
