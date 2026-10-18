@@ -246,8 +246,17 @@ public sealed class Transport : IDisposable
         // Default headers first, then this attempt's, then `Authorization`: the
         // runtime sets the bearer last so a caller-supplied one cannot defeat the
         // refresh, which is the whole of R1.
+        //
+        // A default the attempt also names is skipped rather than added beside the
+        // attempt's: `TryAddWithoutValidation` appends, so a client whose default
+        // `loams-live-app` is `blog` and a call that says `WithLiveApp("shop")`
+        // sent both values, and the server saw `blog, shop` (B17).
         foreach (var (name, value) in _options.DefaultHeaders)
         {
+            if (Names(request.Headers, name))
+            {
+                continue;
+            }
             message.Headers.TryAddWithoutValidation(name, value);
         }
         foreach (var (name, value) in request.Headers)
@@ -264,6 +273,18 @@ public sealed class Transport : IDisposable
         }
 
         return message;
+    }
+
+    private static bool Names(IReadOnlyDictionary<string, string> headers, string name)
+    {
+        foreach (var key in headers.Keys)
+        {
+            if (string.Equals(key, name, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// <summary>
