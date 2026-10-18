@@ -83,6 +83,18 @@ impl ResonateServer for TikvServer {
         let mut config =
             loams_tikv::TikvConfig::new(self.config.pd.clone(), self.config.keyspace.clone());
         config.root = self.config.root.clone();
+        // PD pre-allocates keyspaces only when a cluster is first
+        // bootstrapped, so a cluster that predates the durable keyspace (a
+        // stack moving its Resonate off SQLite) has none: create it, as Live
+        // does for its own. Idempotent.
+        loams_tikv::ensure_keyspace(&config.pd_http_url(), &config.keyspace)
+            .await
+            .map_err(|e| {
+                Unavailable::new(format!(
+                    "cannot open the TiKV durable keyspace {}: {e}",
+                    config.keyspace
+                ))
+            })?;
         let tikv = Tikv::connect(config)
             .await
             .map_err(|e| Unavailable::new(format!("cannot open the TiKV durable store: {e}")))?;
