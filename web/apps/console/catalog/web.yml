@@ -25,7 +25,7 @@
     # engine's main port. Neither uses the desktop bridge, so the rows leave it out.
     - id: data-studio
       name: '@loams/plugin-data-studio'
-      inject: [router, slots, transport, platform, flags]
+      inject: [router, slots, transport, platform, flags, session]
     - id: streams
       name: '@loams/plugin-streams'
       inject: [router, slots, platform]

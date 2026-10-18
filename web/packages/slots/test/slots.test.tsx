@@ -52,6 +52,7 @@ describe('SlotRegistry', () => {
       'shell.topbar.right',
       'shell.inspector.tab',
       'shell.drawer.tab',
+      'shell.palette.source',
     ] as const) {
       expect(() => r.register({ name, plugin: 't' }, () => null)).not.toThrow();
     }

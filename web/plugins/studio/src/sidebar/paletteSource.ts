@@ -2,7 +2,8 @@
 // `StudioPaletteSource`, filled from agentd. Each call reads the first frame of
 // `WatchThreads` (and `WatchRunGroups`) and closes the stream, and places the threads in
 // projects as the sidebar does (`foldThreads`: `ListRepos`, then each repository's
-// `ListWorktrees`). A daemon without run groups (before Task 12) answers none. The other
+// `ListWorktrees`), with each thread's last message for the palette's thread text (CF1
+// Task 11, W13). A daemon without run groups (before Task 12) answers none. The other
 // rows (files, git actions, harnesses) stay with the source they come from.
 
 import { createClient, type Transport } from '@connectrpc/connect';
@@ -51,7 +52,7 @@ async function placedThreads(transport: Transport, groups: readonly RunGroup[] =
       ),
     ),
   );
-  return foldThreads({
+  const placed = foldThreads({
     chats: (chats?.chats ?? []) as Chat[],
     sessions: [],
     approvals: [],
@@ -59,6 +60,11 @@ async function placedThreads(transport: Transport, groups: readonly RunGroup[] =
     projects: repos,
     worktrees,
   });
+  // The palette's thread text (W13): each thread's last message, capped.
+  const previews = new Map(
+    (chats?.chats ?? []).map((c) => [c.id, (c.lastMessagePreview ?? '').slice(0, 500)]),
+  );
+  return { ...placed, previews };
 }
 
 export function agentdPaletteSource(
@@ -70,7 +76,7 @@ export function agentdPaletteSource(
     async threads(): Promise<PaletteThread[]> {
       const transport = agentd.transport();
       if (!transport) return [];
-      const { threads } = await placedThreads(transport);
+      const { threads, previews } = await placedThreads(transport);
       return threads.map((t) => ({
         id: t.id,
         title: t.title,
@@ -78,6 +84,7 @@ export function agentdPaletteSource(
         branch: t.branch,
         updatedAt: t.updatedAt,
         archived: t.archived,
+        preview: previews.get(t.id) || undefined,
       }));
     },
     async runGroups(): Promise<PaletteRunGroup[]> {
