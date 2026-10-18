@@ -229,6 +229,14 @@ describe('compile', () => {
     expect([e.from, e.to]).toEqual([from, to]);
   });
 
+  it('_id is the document id: numbers are uint ids, the rest strings', () => {
+    expect(ok('_id:42').filter).toEqual({ ids: [42] });
+    expect(ok('_id:(1 OR abc OR "7")').filter).toEqual({ ids: [1, 'abc', '7'] });
+    expect(ok('NOT _id:3').filter).toEqual({ bool: { mustNot: [{ ids: [3] }] } });
+    expect(err('_id > 3').message).toContain('exact ids');
+    expect(err('_id:4*').message).toContain('not wildcards');
+  });
+
   it('free text with no text fields is an error', () => {
     const fields = FIELDS.filter((f) => f.type !== 'text');
     const parsed = parse('hello');

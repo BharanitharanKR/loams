@@ -548,6 +548,9 @@ export function compileQuery(
 
 const DATE_ONLY = /^\d{4}-\d{2}-\d{2}$/;
 
+/** The document id, a clause on every collection: `_id:42`. */
+export const ID_FIELD = '_id';
+
 class Compiler {
   readonly terms: string[] = [];
   readonly highlight = new Set<string>();
@@ -623,6 +626,7 @@ class Compiler {
   }
 
   private field(n: Extract<Node, { kind: 'field' }>, scored: boolean): JsonObject {
+    if (n.field === ID_FIELD && !this.byName.has(ID_FIELD)) return this.ids(n);
     const { info, path } = this.resolve(n);
     const at = (v: KqlValue) => [v.from, v.to] as const;
     if (info.type === 'vector') {
@@ -715,6 +719,23 @@ class Compiler {
       return { terms: { field: path, values: n.values.map((v) => this.scalar(info, n.field, v)) } };
     }
     return { bool: { should: n.values.map(one) } };
+  }
+
+  /** `_id:42` or `_id:(1 OR 2)`: the documents with these ids. */
+  private ids(n: Extract<Node, { kind: 'field' }>): JsonObject {
+    if (n.op !== ':') {
+      throw new KqlError('_id takes exact ids: _id:42 or _id:(1 OR 2).', n.fieldFrom, n.to);
+    }
+    const ids = n.values.map((v): JsonValue => {
+      if (!v.quoted && /[*?]/.test(v.text)) {
+        throw new KqlError('_id takes exact ids, not wildcards.', v.from, v.to);
+      }
+      // A whole number is a uint id; anything else (or a quoted number) a string or UUID id.
+      return !v.quoted && /^\d+$/.test(v.text) && Number.isSafeInteger(Number(v.text))
+        ? Number(v.text)
+        : v.text;
+    });
+    return { ids };
   }
 
   private scalar(info: FieldInfo, name: string, v: KqlValue): JsonValue {

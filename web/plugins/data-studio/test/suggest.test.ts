@@ -46,6 +46,7 @@ describe('suggest', () => {
       'body_chars',
       'public',
       'created_at',
+      '_id',
     ]);
     expect(r.items[1]?.detail).toBe('text');
   });
@@ -151,6 +152,11 @@ describe('suggest', () => {
     expect(
       applySuggestion('ty rest', { kind: 'field', label: 'type', insert: 'type ', from: 0, to: 2 }),
     ).toEqual({ text: 'type rest', cursor: 5 });
+  });
+
+  it('_id is offered and hinted', () => {
+    expect(labels(at('_i|'))).toEqual(['_id']);
+    expect(at('_id:|').items[0]?.label).toContain('document id');
   });
 
   it('limits the list', () => {

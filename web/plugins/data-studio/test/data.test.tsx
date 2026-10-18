@@ -158,8 +158,9 @@ describe('data studio', () => {
     const box = screen.getByRole('combobox', { name: 'Search query' });
     fireEvent.change(box, { target: { value: 'refund tenant:a' } });
     fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(got).toHaveLength(2));
     expect((await screen.findByTestId('score')).textContent).toBe('0.8125');
-    const req = got[got.length - 1] as query.SearchRequest;
+    const req = got[1] as query.SearchRequest;
     expect(req.namespace).toBe('default');
     expect(req.collection).toBe('articles');
     const text = req.retrievers[0]?.retriever;

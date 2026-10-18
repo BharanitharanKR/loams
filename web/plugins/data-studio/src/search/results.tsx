@@ -50,17 +50,9 @@ function Runs({ runs }: { runs: { text: string; hit: boolean }[] }) {
   );
 }
 
-/** The words the engine marked in its fragments. */
-function markedWords(frags: string[]): string[] {
-  const out = new Set<string>();
-  for (const f of frags) for (const r of highlightRuns(f)) if (r.hit) out.add(r.text);
-  return [...out];
-}
-
 /**
- * A field's text with the query marked. A short value is shown whole with the words the
- * engine marked (its fragments can cut the value short); a long one as the engine's fragments.
- * Without engine highlights, the query's own words are marked.
+ * A field's text with the query marked: the engine's fragments when it sent some, else
+ * the value with the query's own words marked in the browser.
  */
 function Highlighted({
   hit,
@@ -74,8 +66,7 @@ function Highlighted({
   max: number;
 }) {
   const frags = hit.highlight[field];
-  const text = show(hit.source[field]);
-  if (frags && frags.length > 0 && text.length > max) {
+  if (frags && frags.length > 0) {
     return (
       <>
         {frags.map((f, i) => (
@@ -88,9 +79,9 @@ function Highlighted({
       </>
     );
   }
-  const words = frags && frags.length > 0 ? markedWords(frags) : terms;
+  const text = show(hit.source[field]);
   const cut = text.length > max ? `${text.slice(0, max - 1)}…` : text;
-  return <Runs runs={markTerms(cut, words)} />;
+  return <Runs runs={markTerms(cut, terms)} />;
 }
 
 export function Results(p: ResultsProps) {

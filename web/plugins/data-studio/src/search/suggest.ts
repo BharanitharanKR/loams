@@ -2,7 +2,7 @@
 // the operators a field's type allows, values (from the caller's cache of top values),
 // AND / OR / NOT, and recent queries. Pure: the caller fetches values and passes them in.
 
-import { type FieldInfo, type FieldType, lex, quoteValue, type Token } from './kql.js';
+import { type FieldInfo, type FieldType, ID_FIELD, lex, quoteValue, type Token } from './kql.js';
 
 export type SuggestionKind = 'field' | 'operator' | 'value' | 'conjunction' | 'recent' | 'hint';
 
@@ -116,6 +116,10 @@ export function suggest(input: SuggestInput): SuggestResult {
   const cursor = Math.max(0, Math.min(input.cursor, text.length));
   const limit = input.limit ?? 12;
   const searchable = fields.filter((f) => f.type !== 'vector' && f.indexed);
+  // `_id` is a clause on every collection (last, unless the schema has its own).
+  if (!searchable.some((f) => f.name === ID_FIELD)) {
+    searchable.push({ name: ID_FIELD, type: 'keyword', fast: false, indexed: true });
+  }
   const sig = lex(text).filter((t) => t.kind !== 'ws');
   // The word or conjunction the cursor is in or at the end of.
   const at = sig.find(
@@ -163,7 +167,10 @@ export function suggest(input: SuggestInput): SuggestResult {
         });
       }
       if (items.length === 0) {
-        const hint = valueHint(info?.type, field, info?.fast ?? false);
+        const hint =
+          field === ID_FIELD && !info
+            ? 'A document id, like _id:42 or _id:(1 OR 2)'
+            : valueHint(info?.type, field, info?.fast ?? false);
         if (hint) items.push({ kind: 'hint', label: hint, from, to });
       }
     }
