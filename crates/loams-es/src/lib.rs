@@ -82,6 +82,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use axum::Router;
+use axum::extract::DefaultBodyLimit;
 use axum::http::{Method, Uri};
 use axum::middleware;
 use axum::response::Response;
@@ -326,6 +327,11 @@ impl EsGateway {
                 http::prepare,
             ))
             .layer(middleware::from_fn(http::method_not_allowed))
+            // `http::prepare` has already read the body under
+            // `max_body_bytes`; without this the handlers' `Bytes`
+            // extractor would hold it to axum's own 2 MB default and
+            // answer a plain 413 (0.1.0 release e2e, B16).
+            .layer(DefaultBodyLimit::max(self.config().max_body_bytes))
             .service(routes);
         Router::new().fallback_service(service)
     }
