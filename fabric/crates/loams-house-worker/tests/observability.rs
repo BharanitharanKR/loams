@@ -487,7 +487,7 @@ async fn query_log_row_per_query() {
     let dropped = post(addr, "alice", "DROP TABLE _house.query_log", &[]).await;
     assert_eq!(code(&dropped), Some("497"), "{}", dropped.text());
     let made = post(addr, "alice", "CREATE DATABASE _house", &[]).await;
-    assert_eq!(code(&made), Some("36"), "{}", made.text());
+    assert_eq!(code(&made), Some("497"), "{}", made.text());
     let shown = ok(addr, "alice", "SHOW DATABASES").await;
     assert!(!shown.text().contains("_house"), "{}", shown.text());
     // `system.processes` is the front's: the statement asking sees itself.
