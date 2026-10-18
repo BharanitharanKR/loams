@@ -17,7 +17,14 @@ import {
 } from '@loams/console-host';
 import { useSlot } from '@loams/slots';
 import { Toaster, ToastProvider, TooltipProvider } from '@loams/ui';
-import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import { AppearanceMenu } from './appearance.js';
 import { EngineTooOld } from './engine.js';
 import { MainRegion, Outlet, TopBar, UserMenu, useNarrow, useSidebarState } from './frame.js';
@@ -216,6 +223,13 @@ export function Layout({
     [narrow, side.open, setSide],
   );
   const location = useLocation(router);
+  // A route profile (T9-6: a Studio thread opens the inspector on Diff at 420px) applies
+  // before the paint, so the thread never flashes without its panel.
+  useLayoutEffect(() => {
+    for (const panel of [inspector, drawer]) {
+      if (panel instanceof PanelController) panel.route(location.path);
+    }
+  }, [inspector, drawer, location.path]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: close the sheet per route
   useEffect(() => setSheetOpen(false), [location.path]);
 

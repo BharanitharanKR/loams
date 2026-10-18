@@ -75,7 +75,7 @@ export const timeline = (page: Page) => page.getByRole('log', { name: 'Thread ti
 /** The shell's inspector (design 59): the thread's panels are its tabs. */
 export const inspector = (page: Page) => page.getByRole('complementary', { name: 'Inspector' });
 
-/** Opens one of the thread's panels in the inspector (it starts closed). */
+/** Opens one of the thread's panels in the inspector (a thread opens it on Diff, T9-6; the person may have closed it). */
 export async function openInspectorTab(page: Page, tab: string): Promise<void> {
   const show = page.getByRole('button', { name: 'Show inspector' });
   if (await show.isVisible()) await show.click();

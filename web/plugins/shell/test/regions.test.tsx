@@ -132,8 +132,48 @@ describe('the inspector (D1078)', () => {
     });
     expect(screen.queryByRole('button', { name: /Inspector/ })).toBeNull();
     act(() => router.navigate('/studio/t/c_1'));
-    fireEvent.click(screen.getByRole('button', { name: 'Show inspector' }));
+    // A thread opens the inspector on Diff by itself (T9-6).
+    expect(screen.getByRole('button', { name: 'Hide inspector' })).toBeTruthy();
     expect(screen.getByRole('tab', { name: 'Diff' })).toBeTruthy();
+  });
+
+  it('a Studio thread opens the inspector on Diff at 420px, and keeps the person`s choice there (T9-6)', () => {
+    const diffTab = (slots: SlotRegistry) =>
+      act(() => {
+        slots.register(
+          {
+            name: 'shell.inspector.tab',
+            plugin: 'studio',
+            meta: { id: 'studio.diff', label: 'Diff', routes: ['/studio/t/:threadId'] },
+          },
+          () => <p>diff</p>,
+        );
+        slots.register(
+          { name: 'shell.inspector.tab', plugin: 'agent', meta: { id: 'agent', label: 'Agent' } },
+          () => <p>agent</p>,
+        );
+      });
+    const first = setup('/studio/t/c_1');
+    diffTab(first.slots);
+    expect(first.inspector.state()).toMatchObject({ open: true, tab: 'studio.diff', size: 420 });
+    expect(screen.getByRole('tab', { name: 'Diff' }).getAttribute('aria-selected')).toBe('true');
+    // Other routes keep the closed 280px default.
+    act(() => first.router.navigate('/data'));
+    expect(first.inspector.state()).toMatchObject({ open: false, size: 280 });
+    act(() => first.inspector.open({ tab: 'agent' }));
+    // Back on a thread: the thread profile again, not the page's choice.
+    act(() => first.router.navigate('/studio/t/c_2'));
+    expect(first.inspector.state()).toMatchObject({ open: true, tab: 'studio.diff', size: 420 });
+    // The person resizes, then closes it on a thread.
+    act(() => first.inspector.resize(500));
+    act(() => first.inspector.close());
+    cleanup();
+    // Next time (a reload, this device): the thread keeps that choice, and the page keeps its own.
+    const again = setup('/studio/t/c_1');
+    diffTab(again.slots);
+    expect(again.inspector.state()).toMatchObject({ open: false, size: 500 });
+    act(() => again.router.navigate('/data'));
+    expect(again.inspector.state()).toMatchObject({ open: true, tab: 'agent', size: 280 });
   });
 
   it("keeps the agent tab mounted, so the agent's chat state survives closing it", () => {
