@@ -295,7 +295,7 @@ fn clear_failure(rec: &mut EndpointRec) {
 
 impl<N: NeonRead> PgService<N> {
     /// The endpoint `endpoint_id` of `project_id`.
-    async fn endpoint(
+    pub(crate) async fn endpoint(
         &self,
         project_id: &str,
         endpoint_id: &str,

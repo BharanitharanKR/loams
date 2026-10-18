@@ -47,9 +47,12 @@ use loams_pg_control::runtime::images;
 use loams_pg_control::runtime::remote::RemoteRuntime;
 use loams_pg_control::runtime::runner::{RunnerPolicy, RunnerServer};
 use loams_pg_control::runtime::{ComputeRuntime, RuntimeStatus};
+use loams_pg_control::scram::RoleVerifiers;
 use loams_pg_control::secrets::Secret;
 use loams_pg_control::service::Clock;
+use loams_pg_control::service::connect::GetConnectionInfo;
 use loams_pg_control::service::endpoints::{CreateEndpoint, DeleteEndpoint, EndpointAction};
+use loams_pg_control::service::roles::{CreateRole, ResetRolePassword};
 use loams_pg_control::store::conformance::{Factory, local_factory};
 use loams_pg_control::upcall::{
     ComputeCtlConfigurer, ComputeKeys, SpecSources, UpcallConfig, UpcallServer,
@@ -199,6 +202,7 @@ fn port_range(ns: &str) -> std::ops::Range<u16> {
         "it-idle" => 55_750..56_000,
         "it-ro" => 56_000..56_250,
         "it-cold" => 56_250..56_500,
+        "it-roles" => 56_500..56_750,
         other => panic!("no port range for the case {other}"),
     }
 }
@@ -248,6 +252,9 @@ async fn stack(ns: &'static str) -> Stack {
     let h = common::harness_on(store.clone());
     let keys = Arc::new(ComputeKeys::generate().unwrap());
     let pageserver_id: u64 = env("IT_PAGESERVER_ID", "1234").parse().unwrap();
+    // Roles' password verifiers (Task 24), for the upcall's specs and the
+    // reconciler's pushes alike.
+    let verifiers = Arc::new(RoleVerifiers::new(h.secrets.clone()));
     let sources = SpecSources {
         pageservers: BTreeMap::from([(
             pageserver_id,
@@ -265,6 +272,7 @@ async fn stack(ns: &'static str) -> Stack {
                 .collect(),
         )]),
         endpoint_storage: None,
+        verifiers: Some(verifiers.clone()),
     };
     let upcall = UpcallServer::bind(
         store.clone(),
@@ -274,6 +282,7 @@ async fn stack(ns: &'static str) -> Stack {
             pageservers: sources.pageservers.clone(),
             default_pageserver: sources.default_pageserver,
             wal_pools: sources.wal_pools.clone(),
+            verifiers: Some(verifiers.clone()),
             ..UpcallConfig::defaults("0.0.0.0:0".parse().unwrap())
         },
     )
@@ -978,6 +987,234 @@ async fn it_ro_endpoint_rejects_writes_then_promotes() {
         .unwrap()
         .get(0);
     assert_eq!(n, 3);
+}
+
+/// A login as `user` with `password` at `host:port`, database `db`.
+async fn login(
+    host: &str,
+    port: u16,
+    db: &str,
+    user: &str,
+    password: &str,
+) -> Result<tokio_postgres::Client, tokio_postgres::Error> {
+    let mut config = tokio_postgres::Config::new();
+    config
+        .host(host)
+        .port(port)
+        .dbname(db)
+        .user(user)
+        .password(password)
+        .connect_timeout(Duration::from_secs(10));
+    let (client, conn) = config.connect(tokio_postgres::NoTls).await?;
+    tokio::spawn(conn);
+    Ok(client)
+}
+
+/// Whether `e` is Postgres refusing the password (SQLSTATE 28P01).
+fn bad_password(e: &tokio_postgres::Error) -> bool {
+    e.code() == Some(&tokio_postgres::error::SqlState::INVALID_PASSWORD)
+}
+
+/// PG2 Task 24 (0.1.0 blocker): a role's password reaches the compute as a
+/// SCRAM verifier. `CreateRole`'s password logs in through
+/// `GetConnectionInfo`'s address; the compute's `pg_authid` holds a
+/// verifier, never the password; `ResetRolePassword` reaches the running
+/// compute (the reconciler's `/configure`): the new password logs in and
+/// the old one is refused; after a suspend, the next compute has the new
+/// password from its spec.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs deploy/loams-postgres-dev running, and docker or podman"]
+async fn it_role_password_reaches_compute_and_rotates() {
+    let st = stack("it-roles").await;
+    let (ns, bin, project, store, h, r, compose_dir) = (
+        st.ns,
+        &st.bin,
+        st.project.to_string(),
+        &st.store,
+        &st.h,
+        &st.r,
+        &st.compose_dir,
+    );
+    let ep = h
+        .service
+        .create_endpoint(
+            &user(),
+            CreateEndpoint {
+                namespace: ns.into(),
+                project_id: project.clone(),
+                kind: EndpointType::ReadWrite,
+                idempotency_key: "ep".into(),
+                ..CreateEndpoint::default()
+            },
+        )
+        .await
+        .unwrap();
+    let id = ep.endpoint.record.id.clone();
+    let action = |key: &str| EndpointAction {
+        namespace: ns.into(),
+        project_id: project.clone(),
+        endpoint_id: id.clone(),
+        idempotency_key: key.into(),
+    };
+    // A role made before the compute starts reaches it through the spec.
+    let created = h
+        .service
+        .create_role(
+            &user(),
+            CreateRole {
+                namespace: ns.into(),
+                project_id: project.clone(),
+                name: "app".into(),
+                idempotency_key: "role".into(),
+                ..CreateRole::default()
+            },
+        )
+        .await
+        .unwrap();
+    let first = created.password.expose().clone();
+    h.service
+        .start_endpoint(&user(), action("start1"))
+        .await
+        .unwrap();
+    settle(r, store, ns, &project, &id, Some(EndpointState::Running)).await;
+
+    // GetConnectionInfo: the endpoint's address, the role, no password.
+    let info = h
+        .service
+        .connection_info(GetConnectionInfo {
+            namespace: ns.into(),
+            project_id: project.clone(),
+            ..GetConnectionInfo::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(info.user, "app");
+    assert_eq!(info.database, "postgres");
+    assert!(!info.uri.contains(&first), "{}", info.uri);
+    let running = endpoint(store, &project, &id).await.unwrap();
+    assert_eq!(
+        format!("{}:{}", info.host, info.port),
+        running.backend_addr.clone().unwrap()
+    );
+    let client = login(&info.host, info.port, &info.database, &info.user, &first)
+        .await
+        .expect("CreateRole's password logs in");
+    let who: String = client
+        .query_one("SELECT current_user::text", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(who, "app");
+    drop(client);
+
+    // The compute holds a SCRAM verifier, not the password.
+    let compute = running.compute_id.clone().unwrap().to_lowercase();
+    let stored = compose(
+        bin,
+        compose_dir,
+        ns,
+        &[
+            "exec",
+            "-T",
+            &compute,
+            "/usr/local/bin/psql",
+            "-h",
+            "127.0.0.1",
+            "-p",
+            "55433",
+            "-U",
+            "cloud_admin",
+            "-d",
+            "postgres",
+            "-At",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-c",
+            "SELECT rolpassword FROM pg_authid WHERE rolname = 'app'",
+        ],
+    );
+    assert!(stored.trim().starts_with("SCRAM-SHA-256$4096:"), "{stored}");
+    assert!(!stored.contains(&first));
+
+    // ResetRolePassword on the running compute: the reconciler pushes the
+    // new spec; the new password logs in and the old one is refused.
+    let reset = h
+        .service
+        .reset_role_password(
+            &user(),
+            ResetRolePassword {
+                namespace: ns.into(),
+                project_id: project.clone(),
+                name: "app".into(),
+                idempotency_key: "reset".into(),
+                ..ResetRolePassword::default()
+            },
+        )
+        .await
+        .unwrap();
+    let second = reset.password.expose().clone();
+    assert_ne!(first, second);
+    let start = Instant::now();
+    loop {
+        if let Err(e) = r.reconcile_project(ns, &project).await {
+            eprintln!("pass: {e}");
+        }
+        match login(&info.host, info.port, &info.database, "app", &second).await {
+            Ok(_) => break,
+            Err(e) => {
+                assert!(
+                    start.elapsed() < Duration::from_secs(90),
+                    "the new password never logged in: {e}"
+                );
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    let old = login(&info.host, info.port, &info.database, "app", &first)
+        .await
+        .expect_err("the old password is refused after the reset");
+    assert!(bad_password(&old), "{old}");
+    // The compute did not restart for it.
+    assert_eq!(
+        endpoint(store, &project, &id).await.unwrap().compute_id,
+        running.compute_id
+    );
+
+    // The next compute (after a suspend) has the new password from its spec.
+    h.service
+        .suspend_endpoint(&user(), action("suspend1"))
+        .await
+        .unwrap();
+    settle(r, store, ns, &project, &id, Some(EndpointState::Suspended)).await;
+    h.service
+        .start_endpoint(&user(), action("start2"))
+        .await
+        .unwrap();
+    settle(r, store, ns, &project, &id, Some(EndpointState::Running)).await;
+    let client = login(&info.host, info.port, &info.database, "app", &second)
+        .await
+        .expect("the new password logs in to the next compute");
+    let one: i32 = client.query_one("SELECT 1", &[]).await.unwrap().get(0);
+    assert_eq!(one, 1);
+    let old = login(&info.host, info.port, &info.database, "app", &first)
+        .await
+        .expect_err("the old password is refused by the next compute");
+    assert!(bad_password(&old), "{old}");
+
+    h.service
+        .delete_endpoint(
+            &user(),
+            DeleteEndpoint {
+                namespace: ns.into(),
+                project_id: project.clone(),
+                endpoint_id: id.clone(),
+                idempotency_key: "delete".into(),
+                ..DeleteEndpoint::default()
+            },
+        )
+        .await
+        .unwrap();
+    settle(r, store, ns, &project, &id, None).await;
 }
 
 /// PG2 Task 17's cold start on compose, for `scripts/pg2/cold-start.sh`: a

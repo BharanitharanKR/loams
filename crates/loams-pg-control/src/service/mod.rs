@@ -30,6 +30,7 @@
 //! [`Caller::admin`].
 
 pub mod branches;
+pub mod connect;
 pub mod databases;
 pub mod endpoints;
 mod idempotency;
@@ -130,6 +131,8 @@ pub struct ServiceConfig {
     /// what it needs and before its batch commits, so a test can commit a
     /// competing write at exactly that point. `None` in production.
     pub before_commit: Option<BeforeCommit>,
+    /// How `GetConnectionInfo` tells clients to connect (Task 20/25).
+    pub connect: connect::ConnectConfig,
 }
 
 /// See [`ServiceConfig::before_commit`].
@@ -145,6 +148,7 @@ impl fmt::Debug for ServiceConfig {
             .field("default_history_retention", &self.default_history_retention)
             .field("max_history_retention", &self.max_history_retention)
             .field("before_commit", &self.before_commit.is_some())
+            .field("connect", &self.connect)
             .finish_non_exhaustive()
     }
 }
@@ -160,6 +164,7 @@ impl Default for ServiceConfig {
             max_history_retention: Duration::from_secs(30 * 24 * 3600),
             clock: Clock::system(),
             before_commit: None,
+            connect: connect::ConnectConfig::default(),
         }
     }
 }
@@ -423,6 +428,9 @@ pub struct PgService<N> {
     neon: N,
     secrets: Arc<dyn SecretStore>,
     config: ServiceConfig,
+    /// Kicks the reconciler after a role or database change, so running
+    /// computes take the new spec now (Task 24); `None`: the resync does.
+    kicker: Option<crate::reconcile::Kicker>,
 }
 
 impl<N: fmt::Debug> fmt::Debug for PgService<N> {
@@ -449,6 +457,21 @@ impl<N: NeonRead> PgService<N> {
             neon,
             secrets,
             config,
+            kicker: None,
+        }
+    }
+
+    /// Kicks `kicker`'s reconciler after each role or database change.
+    #[must_use]
+    pub fn with_kicker(mut self, kicker: crate::reconcile::Kicker) -> Self {
+        self.kicker = Some(kicker);
+        self
+    }
+
+    /// Marks `project_id` for a reconciler pass, when there is a kicker.
+    pub(crate) fn kick(&self, project_id: &str) {
+        if let Some(k) = &self.kicker {
+            k.kick(crate::reconcile::Kick::Project(project_id.to_owned()));
         }
     }
 

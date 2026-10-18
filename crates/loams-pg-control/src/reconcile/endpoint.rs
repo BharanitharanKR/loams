@@ -1174,14 +1174,15 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         let mut endpoint = self.ep().clone();
         endpoint.compute_id = Some(id.to_owned());
         endpoint.backend_addr = Some(addr.to_string());
-        let spec_version = match spec::read_inputs(&self.act.ctx.store, &binding, None).await {
-            Ok(mut inputs) => {
-                inputs.endpoint = endpoint.clone();
-                spec::build(&self.c.sources, id, cu, &inputs).map_or(0, |(_, version)| version)
-            }
-            Err(SpecError::Store(e)) => return Err(e.into()),
-            Err(_) => 0,
-        };
+        let spec_version =
+            match spec::read_inputs(&self.act.ctx.store, &self.c.sources, &binding, None).await {
+                Ok(mut inputs) => {
+                    inputs.endpoint = endpoint.clone();
+                    spec::build(&self.c.sources, id, cu, &inputs).map_or(0, |(_, version)| version)
+                }
+                Err(SpecError::Store(e)) => return Err(e.into()),
+                Err(_) => 0,
+            };
         Ok((endpoint, binding, spec_version))
     }
 
@@ -1261,7 +1262,13 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         let Some(binding) = &compute.binding else {
             return Ok(());
         };
-        let inputs = match spec::read_inputs(&self.act.ctx.store, binding, Some(&compute.id)).await
+        let inputs = match spec::read_inputs(
+            &self.act.ctx.store,
+            &self.c.sources,
+            binding,
+            Some(&compute.id),
+        )
+        .await
         {
             Ok(i) => i,
             Err(SpecError::Store(e)) => return Err(e.into()),
@@ -1582,6 +1589,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         };
         let mut inputs = match spec::read_inputs(
             &self.act.ctx.store,
+            &self.c.sources,
             &binding,
             Some(&compute.record.id),
         )
@@ -1766,6 +1774,7 @@ impl<S: PgControlStore, N: NeonWrite> One<'_, '_, S, N> {
         };
         let inputs = match spec::read_inputs(
             &self.act.ctx.store,
+            &self.c.sources,
             &binding,
             Some(&compute.record.id),
         )

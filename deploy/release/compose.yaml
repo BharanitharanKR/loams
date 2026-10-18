@@ -452,7 +452,7 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - >
-        until [ -s /run/endpoint-storage/key.pem ]; do echo waiting for pg-control's key; sleep 1; done;
+        until [ -s /run/endpoint-storage/key.pem ]; do echo "waiting for the pg-control key"; sleep 1; done;
         exec endpoint_storage --config='{"listen": "0.0.0.0:51243",
         "pemfile": "/run/endpoint-storage/key.pem", "type": "AwsS3",
         "bucket_name": "neon", "bucket_region": "us-east-1",

@@ -6,8 +6,10 @@
 //! What it reads: the project (tenant, `loams-wal` pool), the endpoint
 //! (branch, kind, settings, suspend timeout, current compute), the branch
 //! (timeline, the pageserver of `notify-attach`), and the branch's roles
-//! and databases in key order. Roles carry no password verifier yet: wiring
-//! the role secrets into the spec as SCRAM verifiers is Task 24's.
+//! and databases in key order. Each role carries its password's
+//! SCRAM-SHA-256 verifier ([`crate::scram`], Task 24), never the password:
+//! `compute_ctl` sets the role's `rolpassword` to it at start and on every
+//! `/configure`, so a reset reaches a running compute with the next push.
 //!
 //! Task 11: endpoint settings outside the allow-list
 //! ([`ALLOWED_PG_SETTINGS`](crate::service::endpoints::ALLOWED_PG_SETTINGS))
@@ -30,6 +32,8 @@ use crate::model::{
     EndpointKey, EndpointRec, EndpointType, ProjectKey, ProjectRec, ProjectState, Record, RoleRec,
     WalService,
 };
+use crate::scram::RoleVerifiers;
+use crate::secrets::SecretError;
 use crate::service::endpoints::setting_allowed;
 use crate::store::{MAX_PAGE_SIZE, Page, PgControlStore, StoreError, Versioned};
 
@@ -48,6 +52,9 @@ pub struct Sources {
     /// Endpoint storage, where computes keep their file cache's state so a
     /// promoted replica can prewarm (R2.13, Task 16); `None`: not run.
     pub endpoint_storage: Option<EndpointStorage>,
+    /// Where roles' password verifiers come from (Task 24); `None`: roles
+    /// get no password (tests that never log in).
+    pub verifiers: Option<std::sync::Arc<RoleVerifiers>>,
 }
 
 /// Endpoint storage (the fork's `endpoint_storage`, Task 16): its address
@@ -122,6 +129,9 @@ pub(crate) struct Inputs {
     pub(crate) endpoint: EndpointRec,
     pub(crate) branch: Versioned<BranchRec>,
     pub(crate) roles: Vec<Versioned<RoleRec>>,
+    /// Role name → its password's SCRAM verifier; a role missing here gets
+    /// no password.
+    pub(crate) verifiers: BTreeMap<String, std::sync::Arc<str>>,
     pub(crate) databases: Vec<Versioned<DatabaseRec>>,
 }
 
@@ -130,6 +140,7 @@ pub(crate) struct Inputs {
 /// (`NotCurrent` otherwise): a replaced compute must not run.
 pub(crate) async fn read_inputs<S: PgControlStore>(
     store: &S,
+    sources: &Sources,
     binding: &ComputeBinding,
     current: Option<&str>,
 ) -> Result<Inputs, SpecError> {
@@ -172,14 +183,56 @@ pub(crate) async fn read_inputs<S: PgControlStore>(
         branch_id: branch.record.id.clone(),
     };
     let roles = list_all::<S, RoleRec>(store, &scope).await?;
+    let verifiers = match &sources.verifiers {
+        Some(v) => read_verifiers(store, v, &roles).await?,
+        None => BTreeMap::new(),
+    };
     let databases = list_all::<S, DatabaseRec>(store, &scope).await?;
     Ok(Inputs {
         project,
         endpoint,
         branch,
         roles,
+        verifiers,
         databases,
     })
+}
+
+/// The verifiers of `roles`' passwords. A password that is gone because a
+/// reset or delete moved its role on meanwhile makes the inputs not ready
+/// (the caller reads again); one gone while its record still names it is
+/// lost (the role's password must be reset), and the role gets none.
+async fn read_verifiers<S: PgControlStore>(
+    store: &S,
+    verifiers: &RoleVerifiers,
+    roles: &[Versioned<RoleRec>],
+) -> Result<BTreeMap<String, std::sync::Arc<str>>, SpecError> {
+    let mut out = BTreeMap::new();
+    for r in roles {
+        match verifiers.get(&r.record.secret_ref).await {
+            Ok(v) => {
+                out.insert(r.record.name.clone(), v);
+            }
+            Err(SecretError::NotFound(_)) => {
+                let now = store.get::<RoleRec>(&r.record.key()).await?;
+                if now.is_some_and(|n| n.record.secret_ref == r.record.secret_ref) {
+                    tracing::error!(branch = %r.record.branch_id, role = %r.record.name, secret_ref = %r.record.secret_ref, "a role's password is missing from the credential store: the role gets none until its password is reset");
+                } else {
+                    return Err(SpecError::NotReady(format!(
+                        "role {} changed while its spec was read",
+                        r.record.name
+                    )));
+                }
+            }
+            Err(e) => {
+                return Err(SpecError::NotReady(format!(
+                    "the password of role {}: {e}",
+                    r.record.name
+                )));
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// The spec of `compute`, bound by `binding`.
@@ -189,7 +242,7 @@ pub(crate) async fn attached<S: PgControlStore>(
     compute: &ComputeRec,
     binding: &ComputeBinding,
 ) -> Result<ComputeSpec, SpecError> {
-    let inputs = read_inputs(store, binding, Some(&compute.id)).await?;
+    let inputs = read_inputs(store, sources, binding, Some(&compute.id)).await?;
     Ok(build(sources, &compute.id, compute.cu, &inputs)?.0)
 }
 
@@ -384,7 +437,7 @@ pub(crate) fn build(
     for r in &inputs.roles {
         builder = builder.role(SpecRole {
             name: r.record.name.clone(),
-            encrypted_password: None,
+            encrypted_password: inputs.verifiers.get(&r.record.name).map(|v| v.to_string()),
         });
     }
     for d in &inputs.databases {
