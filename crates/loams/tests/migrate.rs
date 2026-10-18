@@ -30,7 +30,8 @@ fn migrate_run_on_current_stack_exits_quickly() {
     // An empty store is a new stack: stamped at this release.
     let (code, out, err) = migrate(&["run", "--output", "json"], dir.path());
     assert_eq!(code, Some(0), "{out}{err}");
-    let first: Value = serde_json::from_str(out.trim()).expect("json");
+    let first: Value =
+        serde_json::from_str(out.trim()).unwrap_or_else(|e| panic!("json: {e}: {out:?}"));
     assert_eq!(first["to"], env!("CARGO_PKG_VERSION"));
     assert_eq!(first["stack_written"], true);
     // Again, on the current stack: nothing to do, well under 2 s.
@@ -43,7 +44,8 @@ fn migrate_run_on_current_stack_exits_quickly() {
     // The status shows the stamp and an empty ledger.
     let (code, out, _) = migrate(&["status"], dir.path());
     assert_eq!(code, Some(0));
-    let status: Value = serde_json::from_str(out.trim()).expect("json");
+    let status: Value =
+        serde_json::from_str(out.trim()).unwrap_or_else(|e| panic!("json: {e}: {out:?}"));
     assert_eq!(status["stack"]["release"], env!("CARGO_PKG_VERSION"));
     assert_eq!(status["ledger"], serde_json::json!([]));
 }
@@ -53,7 +55,8 @@ fn migrate_plan_json_matches_schema() {
     let dir = TempDir::new().expect("dir");
     let (code, out, err) = migrate(&["plan"], dir.path());
     assert_eq!(code, Some(0), "{out}{err}");
-    let plan: Value = serde_json::from_str(out.trim()).expect("json");
+    let plan: Value =
+        serde_json::from_str(out.trim()).unwrap_or_else(|e| panic!("json: {e}: {out:?}"));
     let keys: Vec<&str> = plan
         .as_object()
         .expect("an object")
@@ -97,7 +100,8 @@ fn migrate_snapshot_restore_round_trip_on_a_local_stack() {
     let to = snapshots_dir.to_str().expect("utf-8");
     let (code, out, err) = migrate(&["snapshot", "--to", to], dir.path());
     assert_eq!(code, Some(0), "{out}{err}");
-    let taken: Value = serde_json::from_str(out.trim()).expect("json");
+    let taken: Value =
+        serde_json::from_str(out.trim()).unwrap_or_else(|e| panic!("json: {e}: {out:?}"));
     let id = taken["id"].as_str().expect("id").to_string();
     let stores: Vec<&str> = taken["components"]
         .as_array()
@@ -119,12 +123,14 @@ fn migrate_snapshot_restore_round_trip_on_a_local_stack() {
         dir.path(),
     );
     assert_eq!(code, Some(0), "{out}{err}");
-    let restored: Value = serde_json::from_str(out.trim()).expect("json");
+    let restored: Value =
+        serde_json::from_str(out.trim()).unwrap_or_else(|e| panic!("json: {e}: {out:?}"));
     assert_eq!(restored["restored"][0], "raft");
     // The stack still opens, at its release.
     let (code, out, _) = migrate(&["status"], dir.path());
     assert_eq!(code, Some(0));
-    let status: Value = serde_json::from_str(out.trim()).expect("json");
+    let status: Value =
+        serde_json::from_str(out.trim()).unwrap_or_else(|e| panic!("json: {e}: {out:?}"));
     assert_eq!(status["stack"]["release"], env!("CARGO_PKG_VERSION"));
     let (code, _, err) = migrate(
         &["snapshots", "prune", "--dir", to, "--id", &id],
