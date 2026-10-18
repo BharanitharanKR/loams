@@ -2,10 +2,10 @@
 small order workflow's promises in every state, invocations that create tasks,
 and schedules.
 
-- `order-<n>` root promises with `resonate:invoke` tags (each creates a task
+- `order-<n>` root promises with `resonate:target` tags (each creates a task
   for the `poll://any@order-workers` group), some resolved, rejected,
   canceled or left pending;
-- `order-<n>.charge` / `.ship` child promises;
+- `order-<n>:charge` / `:ship` child promises;
 - schedules `nightly-report` (cron 0 2 * * *) and `hourly-sync` (0 * * * *).
 
 Idempotent: a promise or schedule that exists is answered as it is (409s are
@@ -49,14 +49,14 @@ def main():
         root = f"order-{1000 + n}"
         s, d = call("promise.create", {
             "id": root, "timeoutAt": far, "param": payload({"order": 1000 + n, "items": n, "total": 19.5 * n}),
-            "tags": {"resonate:invoke": "poll://any@order-workers", "resonate:scope": "global",
+            "tags": {"resonate:target": "poll://any@order-workers",
                      "workflow": "checkout"}})
         report.add(f"promise.create {root}", s in (200, 201, 409), f"{s} {str(d)[:160]}")
         for step in ("charge", "ship"):
-            cid = f"{root}.{step}"
+            cid = f"{root}:{step}"  # a root's child joins with ":" (resonate-core)
             s, d = call("promise.create", {"id": cid, "timeoutAt": far, "param": payload({"step": step}),
                                            "tags": {"resonate:root": root, "resonate:parent": root, "workflow": "checkout"}})
-            report.add(f"promise.create {cid}", s in (200, 201, 409), f"{s}")
+            report.add(f"promise.create {cid}", s in (200, 201, 409), f"{s} {str(d)[:160]}")
             if state != "pending":
                 s, d = call("promise.settle", {"id": cid, "state": "resolved", "value": payload({"ok": True})})
                 report.add(f"promise.settle {cid}", s in (200, 201, 409), f"{s}")
@@ -70,7 +70,7 @@ def main():
     for sid, cron in (("nightly-report", "0 2 * * *"), ("hourly-sync", "0 * * * *")):
         s, d = call("schedule.create", {"id": sid, "cron": cron, "promiseId": f"{sid}.{{{{.timestamp}}}}",
                                         "promiseTimeout": 3600000, "promiseParam": payload({"schedule": sid}),
-                                        "promiseTags": {"resonate:invoke": "poll://any@report-workers"}})
+                                        "promiseTags": {"resonate:target": "poll://any@report-workers"}})
         report.add(f"schedule.create {sid}", s in (200, 201, 409), f"{s} {str(d)[:200]}")
     report.attempt("promise.search order-*", lambda: len((call("promise.search", {"id": "order-*", "limit": 100})[1]
                                                          or {}).get("promises", [])))

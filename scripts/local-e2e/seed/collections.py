@@ -168,7 +168,9 @@ def elasticsearch(report, limit, q):
             "embedding": {"type": "dense_vector", "dims": 512, "index": True, "similarity": "cosine"}}})
     actions = ({"_index": index, "_id": str(pk), "_source": {"title": t, "text": x, "dbpedia_id": d, "embedding": v}}
                for pk, t, x, d, v in rows(limit))
-    n, errors = helpers.bulk(es, actions, chunk_size=500, raise_on_error=False)
+    # The gateway refuses bodies over 2 MB (axum's default; bug: its configured
+    # http.max_content_length is 100 MiB), so chunks stay under 1.5 MB.
+    n, errors = helpers.bulk(es, actions, chunk_size=500, max_chunk_bytes=1_500_000, raise_on_error=False)
     report.add("es: _bulk", not errors, f"{n} indexed, {len(errors) if errors else 0} errors {str(errors)[:200]}")
     es.indices.refresh(index=index)
     report.attempt("es: _count", lambda: es.count(index=index).body["count"])
@@ -206,7 +208,15 @@ def wire(report):
                              connect_timeout=10) as conn, conn.cursor() as cur:
             cur.execute("SELECT _id, title FROM dbpedia ORDER BY _id LIMIT 3")
             return cur.fetchall()
-    report.attempt("mysql wire: select", my)
+    report.attempt("mysql wire: select (PyMySQL)", my)
+
+    def my_cli():
+        import subprocess
+        host, port = MYSQLWIRE.split(":")
+        return subprocess.run(["mysql", f"-h{host}", f"-P{port}", "-uloams", NS, "-N", "-e",
+                               "SELECT letter, count(*) FROM dbpedia GROUP BY letter ORDER BY 2 DESC LIMIT 3"],
+                              check=True, capture_output=True, text=True, timeout=60).stdout.strip()
+    report.attempt("mysql wire: select (mysql CLI)", my_cli)
 
 
 def main():

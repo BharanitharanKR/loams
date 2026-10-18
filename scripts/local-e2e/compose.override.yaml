@@ -104,7 +104,7 @@ services:
   tailscale:
     profiles: [disabled]
   house-tailscale:
-    profiles: [disabled]
+    profiles: !override [disabled]
 
   house:
     ports:

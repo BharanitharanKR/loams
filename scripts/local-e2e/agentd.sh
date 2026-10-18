@@ -52,12 +52,15 @@ case "$mode" in
     dir="$E2E_HOME/desktop-userdata/agentd"
     mkdir -p "$dir"; chmod 0700 "$dir"
     [[ -f "$dir/config.toml" ]] || : > "$dir/config.toml"
-    systemctl --user stop loams-e2e-agentd-desktop 2>/dev/null || true
+    systemctl --user stop loams-e2e-agentd-desktop 2>/dev/null || true; systemctl --user reset-failed loams-e2e-agentd-desktop 2>/dev/null || true
     systemd-run --user --unit=loams-e2e-agentd-desktop --description='Loams local-e2e agentd (desktop, child mode)' \
       -p WorkingDirectory="$home" "${envs[@]}" \
       "$E2E_HOME/bin/loams-agentd" run --child --config "$dir/config.toml"
     for _ in $(seq 60); do [[ -s "$dir/agentd.json" ]] && break; sleep 0.5; done
     cat "$dir/agentd.json"; echo
+    port="$(python3 -I -c 'import json,sys; print(json.load(open(sys.argv[1]))["connectPort"])' "$dir/agentd.json")"
+    curl -s -X POST "http://127.0.0.1:$port/loams.agentd.v1.ProjectService/AddRepo" -H "authorization: Bearer $(cat "$dir/agentd.token")" \
+      -H 'content-type: application/json' -H 'connect-protocol-version: 1' -d "{\"path\": \"$project\"}"; echo
     ;;
   web)
     target="$(cd "$root" && cargo metadata --format-version 1 --no-deps | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')"
@@ -71,15 +74,20 @@ case "$mode" in
         -out "$web/tls/cert.pem" -days 30 -subj /CN=127.0.0.1 -addext 'subjectAltName=IP:127.0.0.1,DNS:localhost' 2>/dev/null
     fi
     node "$here/agentd-token.mjs" "$web"   # writes jwks.json and token (sub local-e2e, 7 days)
-    systemctl --user stop loams-e2e-agentd-web 2>/dev/null || true
+    systemctl --user stop loams-e2e-agentd-web 2>/dev/null || true; systemctl --user reset-failed loams-e2e-agentd-web 2>/dev/null || true
     systemd-run --user --unit=loams-e2e-agentd-web --description='Loams local-e2e agentd (web, remote mode)' \
       -p WorkingDirectory="$home" "${envs[@]}" -E LOAMS_AGENTD_TEST_ISSUER="$web/jwks.json" \
       "$base/loams-agentd-debug" serve --remote --listen 127.0.0.1:17443 \
       --tls-cert "$web/tls/cert.pem" --tls-key "$web/tls/key.pem" \
       --issuer http://127.0.0.1:9/application/o/loams-e2e/ --audience loams-agentd --subject local-e2e \
       --allow-origin http://127.0.0.1:5190 --allow-origin http://localhost:5190 \
+      --allow-origin http://127.0.0.1:5192 --allow-origin http://localhost:5192 \
       --config "$web/dir/config.toml"
-    sleep 2; systemctl --user --no-pager status loams-e2e-agentd-web | head -5
+    for _ in $(seq 30); do curl -sk -o /dev/null https://127.0.0.1:17443/ && break; sleep 1; done
+    # Register the project, as the desktop's folder picker would (the web edition adds only git URLs).
+    curl -sk -X POST https://127.0.0.1:17443/loams.agentd.v1.ProjectService/AddRepo -H "authorization: Bearer $(cat "$web/token")" \
+      -H 'content-type: application/json' -H 'connect-protocol-version: 1' -d "{\"path\": \"$project\"}"; echo
+    systemctl --user --no-pager status loams-e2e-agentd-web | head -5
     echo "token: $web/token (paste into the console's Settings > Agentd hosts with https://127.0.0.1:17443)"
     ;;
   *) echo "usage: agentd.sh desktop|web|stop" >&2; exit 2 ;;

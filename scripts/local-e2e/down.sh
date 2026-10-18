@@ -9,7 +9,7 @@
 set -uo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/env.sh"
-systemctl --user stop loams-e2e-desktop loams-e2e-console loams-e2e-agentd-desktop loams-e2e-agentd-web 2>/dev/null
+systemctl --user stop loams-e2e-desktop loams-e2e-console loams-e2e-console-hosted loams-e2e-agentd-desktop loams-e2e-agentd-web 2>/dev/null
 if systemctl --user is-active -q loams-e2e-podman; then
   # pg-runner's computes are compose projects of their own (loams-pg-<ns>).
   for p in $(epodman ps -a --format '{{index .Labels "com.docker.compose.project"}}' | sort -u | grep '^loams-pg-'); do

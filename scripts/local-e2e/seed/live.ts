@@ -4,7 +4,7 @@
 //   `events` (index `by_repo`, `by_type`), queries `events:recent`,
 //   `events:byRepo`, `repos:top` and mutations `events:add`, `repos:bump`;
 //   seeded with the first 400 events of the GH Archive hour (data/gharchive);
-// - app `chinook-live` (CreateApp, addressed with the `loams-live-app`
+// - app `chinook_live` (CreateApp, addressed with the `loams-live-app`
 //   header): a `playlists` table with a live query over it.
 //
 // Then a live query: `events:recent` is watched, an event is added, and the
@@ -16,8 +16,9 @@
 //   node <tsx>/dist/cli.mjs scripts/local-e2e/seed/live.ts
 // (scripts/local-e2e/seed-all.sh finds tsx in the workspace.)
 
-import { readFileSync } from 'node:fs';
-import { gunzipSync } from 'node:zlib';
+import { createReadStream } from 'node:fs';
+import { createInterface } from 'node:readline';
+import { createGunzip } from 'node:zlib';
 import { Loams } from '../../../sdks/typescript/packages/client/src/index.ts';
 
 const ENGINE = process.env.E2E_ENGINE ?? 'http://127.0.0.1:18080';
@@ -104,13 +105,31 @@ export const playlists = {
 
 const enc = new TextEncoder();
 
+// The facade documents this module as `loams.live.admin`, but the Loams object only
+// exposes `instance`, `live`, `tables` and `system`; the rest are in `loams.modules`.
+// biome-ignore lint/suspicious/noExplicitAny: the generated LiveAdminModule
+const admin = (l: Loams): any => (l as any).live?.admin ?? l.modules['live.admin'];
+
+// A deploy names the deployment it builds on (`expected_active`): a rerun reads the
+// active one from the conflict and deploys again on top of it.
+// biome-ignore lint/suspicious/noExplicitAny: DeployRequest init
+async function deploy(l: Loams, req: any): Promise<any> {
+  try {
+    return await admin(l).deploy(req);
+  } catch (e) {
+    const active = /but (\S+) is/.exec((e as Error).message)?.[1];
+    if (!active || req.expectedActive) throw e;
+    return admin(l).deploy({ ...req, expectedActive: active });
+  }
+}
+
 async function main() {
   const loams = new Loams({ endpoint: ENGINE, transportOptions: { useBinaryFormat: false } });
   const info = await loams.instance.getInstance({});
   console.log('engine', info.serverVersion, 'live:', info.apiVersions.includes('loams.live.v1'));
 
   // 1. The default app.
-  const dep = await loams.live.admin.deploy({
+  const dep = await deploy(loams, {
     bundle: enc.encode(FEED),
     message: 'local-e2e: githubFeed',
     schema: {
@@ -124,10 +143,13 @@ async function main() {
 
   const count = Number(js((await loams.tables.query({ function: 'events:count', args: v({}) })).result));
   if (count === 0) {
-    const lines = gunzipSync(readFileSync(`${DATA}/gharchive/2024-01-15-15.json.gz`))
-      .toString('utf8')
-      .split('\n', 400)
-      .filter(Boolean);
+    const lines: string[] = [];
+    const rl = createInterface({ input: createReadStream(`${DATA}/gharchive/2024-01-15-15.json.gz`).pipe(createGunzip()) });
+    for await (const line of rl) {
+      if (line) lines.push(line);
+      if (lines.length >= 400) break;
+    }
+    rl.close();
     let n = 0;
     for (const line of lines) {
       const e = JSON.parse(line);
@@ -177,16 +199,26 @@ async function main() {
 
   // 3. A second app, addressed by header.
   try {
-    await loams.live.admin.createApp({ name: 'chinook-live', namespace: 'e2e' });
-    console.log('created app chinook-live');
+    await admin(loams).createApp({ name: 'chinook_live', namespace: 'e2e' });
+    console.log('created app chinook_live');
   } catch (e) {
-    console.log('createApp chinook-live:', (e as Error).message);
+    console.log('createApp chinook_live:', (e as Error).message);
   }
   const app = new Loams({
     endpoint: ENGINE,
-    transportOptions: { useBinaryFormat: false, headers: { 'loams-live-app': 'chinook-live' } },
+    // `transportOptions.headers` is not sent (bug in the local-e2e report): an interceptor is.
+    transportOptions: {
+      useBinaryFormat: false,
+      headers: { 'loams-live-app': 'chinook_live' },
+      interceptors: [
+        (next) => async (req) => {
+          req.header.set('loams-live-app', 'chinook_live');
+          return next(req);
+        },
+      ],
+    },
   });
-  await app.live.admin.deploy({
+  await deploy(app, {
     bundle: enc.encode(PLAYLISTS),
     message: 'local-e2e: playlists',
     schema: { tables: [{ name: 'playlists', indexes: [] }] },
@@ -196,8 +228,8 @@ async function main() {
     for (const [name, tracks] of [['Music', 3290], ['Movies', 0], ['TV Shows', 213], ['90s Music', 1477], ['Grunge', 15]] as const)
       await app.tables.mutate({ function: 'playlists:add', args: v({ name, tracks }) });
   }
-  console.log('chinook-live playlists', JSON.stringify(js((await app.tables.query({ function: 'playlists:list', args: v({}) })).result)).slice(0, 200));
-  const apps = await loams.live.admin.listApps({});
+  console.log('chinook_live playlists', JSON.stringify(js((await app.tables.query({ function: 'playlists:list', args: v({}) })).result)).slice(0, 200));
+  const apps = await admin(loams).listApps({});
   console.log('apps', apps.apps.map((a) => a.name).join(', '));
 }
 

@@ -47,6 +47,13 @@ page.on('requestfailed', (r) => log.push({ kind: 'requestfailed', url: r.url().s
 
 await page.goto(BASE, { waitUntil: 'networkidle', timeout: 60_000 }).catch(() => {});
 await page.waitForTimeout(3000);
+// The hosted edition asks which engine to use first: its config.json names it, so Connect.
+if (await page.getByText('Connect your engine').isVisible().catch(() => false)) {
+  await page.getByRole('button', { name: 'Connect', exact: true }).click();
+  await page.waitForLoadState('networkidle').catch(() => {});
+  await page.waitForTimeout(3000);
+  console.log('connected the hosted console to its engine');
+}
 
 // The routes: every in-app link in the navigation (hash routes), then EXTRA.
 let routes = await page.$$eval('a[href]', (as) =>

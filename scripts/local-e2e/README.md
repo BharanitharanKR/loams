@@ -38,7 +38,9 @@ use `source scripts/local-e2e/env.sh` and then `epodman ps`, `ecompose ps`,
 | 7680 | pg-control (`loams.postgres.v1`), API key in `$E2E_HOME/pg-api-key` |
 | 55500-55999 | Postgres computes |
 | 19000 | RustFS S3 (`rustfsadmin` / `rustfsadmin`), buckets `loams-engine`, `neon` |
-| 5190 | console dev server |
+| 5190 | console dev server (the engine-served edition: base.yml pages) |
+| 5192 | the hosted web edition (deploy/stage.mjs output, as console.loams.dev serves it) |
+| 3000 | the compose `console` service (broken in 0.1.0, see the report) |
 | 17443 | agentd for the web console (HTTPS, self-signed) |
 
 ## How it runs without Tailscale
@@ -53,8 +55,11 @@ ports to the engine's loopback listeners. The House gets the same
 the House. Containers on the compose network can reach the forwarder too, so
 never run this on a shared machine.
 
-The bucket is S3 (RustFS, from the included Postgres stack): `LOAMS_BUCKET=s3://loams-engine/stack`
-with `AWS_*` in `secrets/engine.env`.
+The bucket was meant to be S3 (RustFS, from the included Postgres stack), but the
+engine ignores `AWS_*` (it opens the bucket with `object_store::parse_url_opts` and
+no options, which does not read the environment), so it is
+`file:///var/lib/loams/bucket` until that is fixed. `secrets/engine.env` still holds
+the RustFS settings; set `LOAMS_BUCKET=s3://loams-engine/stack` in `.env` to retry.
 
 ## Steps
 
@@ -68,10 +73,24 @@ scripts/local-e2e/up.sh                        # the stack, with --profile house
 scripts/local-e2e/seed-all.sh                  # every product (or name some: seed-all.sh graph house)
 scripts/local-e2e/agentd.sh desktop            # agentd for the desktop's Studio
 scripts/local-e2e/agentd.sh web                # agentd for the web console's Studio (debug build)
-scripts/local-e2e/console.sh                   # http://127.0.0.1:5190/
+scripts/local-e2e/console.sh                   # dev server, http://127.0.0.1:5190/
+scripts/local-e2e/console.sh hosted            # hosted web edition, http://127.0.0.1:5192/
+node scripts/local-e2e/console-setup.mjs       # first-run setup (org + owner) through the console
 pnpm --filter @loams/console build && scripts/local-e2e/desktop.sh
-node scripts/local-e2e/console-crawl.mjs --out <dir>   # a screenshot and a report per page
+node scripts/local-e2e/console-crawl.mjs --base http://127.0.0.1:5192/ --out <dir>  # screenshot + report per page
+node scripts/local-e2e/console-interact.mjs --out <dir>   # Analytics, Graph, Live, Studio (hosted edition)
+node scripts/local-e2e/desktop-crawl.mjs --out <dir>      # every desktop page (its own userData)
 ```
+
+The console's first-run owner is `owner@e2e.local`; the password is in
+`$E2E_HOME/console-owner.env` (mode 0600). For Studio in the hosted edition, add
+the host `https://127.0.0.1:17443` in Studio > Settings with the token in
+`$E2E_HOME/agentd/web/token` (accept the self-signed certificate at that URL
+first in your own browser). The pasted token lives in the tab's memory only.
+
+Restarting the engine: `ecompose rm -sf loams-forward && ecompose up -d loams loams-forward`
+(Podman refuses to recreate a container that another one shares the network
+namespace of).
 
 Stop: `scripts/local-e2e/down.sh` (data kept). Remove everything:
 `scripts/local-e2e/down.sh --purge`.

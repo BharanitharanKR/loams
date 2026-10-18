@@ -6,8 +6,7 @@ as E2E_HOUSE_PASSWORD), then read back through the engine's loams.house.v1
 
 - database `nyc`, table `yellow_trips` (MergeTree), loaded with
   `INSERT ... FORMAT Parquet` (the file as the request body);
-- table `nyc.payment_types` (a small dimension), and a view
-  `nyc.daily_revenue`.
+- table `nyc.payment_types` (a small dimension).
 
 Idempotent: the table is truncated before the load.
 
@@ -34,9 +33,6 @@ DDL = [
         Airport_fee Nullable(Float64)
     ) ENGINE = MergeTree ORDER BY (tpep_pickup_datetime, PULocationID)""",
     "CREATE TABLE IF NOT EXISTS nyc.payment_types (id Int64, name String) ENGINE = MergeTree ORDER BY id",
-    """CREATE VIEW IF NOT EXISTS nyc.daily_revenue AS SELECT toDate(tpep_pickup_datetime) AS day,
-        count() AS trips, round(sum(total_amount), 2) AS revenue, round(avg(trip_distance), 2) AS avg_miles
-        FROM nyc.yellow_trips GROUP BY day ORDER BY day""",
 ]
 
 
@@ -69,7 +65,11 @@ def main():
     report.attempt("count", lambda: ch("SELECT count() FROM nyc.yellow_trips"))
     report.attempt("top pickup zones", lambda: ch(
         "SELECT PULocationID, count() c FROM nyc.yellow_trips GROUP BY PULocationID ORDER BY c DESC LIMIT 5 FORMAT TSV"))
-    report.attempt("daily revenue (view)", lambda: ch("SELECT * FROM nyc.daily_revenue LIMIT 3 FORMAT TSV"))
+    report.attempt("daily revenue", lambda: ch(
+        "SELECT toDate(tpep_pickup_datetime) AS day, count() AS trips, round(sum(total_amount), 2) AS revenue "
+        "FROM nyc.yellow_trips GROUP BY day ORDER BY day LIMIT 3 FORMAT TSV"))
+    # CREATE VIEW is not on the House's surface (501 NOT_IMPLEMENTED); a SELECT of a
+    # view that is not there answers UNKNOWN_DATABASE for a database that exists.
     # The console's path: the engine's loams.house.v1, as dev-loopback.
     def via_engine():
         msgs, end = connect_stream("loams.house.v1.HouseService/ExecuteQuery", {

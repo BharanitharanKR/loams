@@ -3,7 +3,7 @@
 # copied to $E2E_HOME/stack (as byoc/install.sh copies it to a VM), with
 # compose.override.yaml from this directory, on the local-e2e Podman store.
 #
-#   scripts/local-e2e/up.sh            # house + postgres-control profiles
+#   scripts/local-e2e/up.sh            # house, postgres-control and console profiles
 #   scripts/local-e2e/up.sh --no-pg    # without the Postgres control plane
 #   scripts/local-e2e/up.sh infra      # only the stack directory and the services
 #                                      # that need no Loams image (pd, tikv, tidb,
@@ -14,9 +14,9 @@ set -euo pipefail
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 . "$here/env.sh"
 root="$(cd "$here/../.." && pwd)"
-profiles=(--profile house --profile postgres-control)
+profiles=(--profile house --profile postgres-control --profile console)
 mode="${1:-all}"
-[[ "$mode" == "--no-pg" ]] && profiles=(--profile house)
+[[ "$mode" == "--no-pg" ]] && profiles=(--profile house --profile console)
 
 # 1. The Podman API on the e2e store (a transient user unit).
 if ! systemctl --user is-active -q loams-e2e-podman; then
@@ -55,12 +55,16 @@ if [[ ! -f .env ]]; then
 LOAMS_REGISTRY=$E2E_REGISTRY
 LOAMS_VERSION=$E2E_VERSION
 LOAMS_AUTH_MODE=off
-LOAMS_CORS_ORIGINS=http://127.0.0.1:5190,http://localhost:5190
-LOAMS_BUCKET=s3://loams-engine/stack
+LOAMS_CORS_ORIGINS=http://127.0.0.1:5190,http://localhost:5190,http://127.0.0.1:5192,http://localhost:5192,http://127.0.0.1:3000,http://localhost:3000
+# s3://loams-engine/stack does not work: the engine ignores AWS_* (bug B1 in the local-e2e report).
+LOAMS_BUCKET=file:///var/lib/loams/bucket
 LOAMS_HOUSE_ENDPOINT=https://house:8443
 HOUSE_PRINCIPALS=dev-loopback=read+write+ddl+admin
 CONTAINER_SOCKET=$E2E_PODMAN_SOCK
 CONTAINER_SOCKET_GID=0
+# The compose console (--profile console) on http://127.0.0.1:3000, from the console build.
+LOAMS_ENGINE_URL=http://127.0.0.1:18080
+LOAMS_CONSOLE_DIR=$root/web/apps/console/dist
 ENV
 fi
 if [[ ! -f secrets/engine.env ]]; then
