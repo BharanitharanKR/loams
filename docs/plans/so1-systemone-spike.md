@@ -15,7 +15,7 @@ Plan: [SO1](2026-10-02-so1-systemone.md), Task 0. Design: [§40](../design/40-lo
 | In-process backend | **ort-with-approval**, through upstream `laya-onnx`, not our own port. Task 12 waits for the owner's answer and for the parity and latency gates to be measured on the runner. Without approval: **none** |
 | `FluidUse` as a SwiftPM dependency alone | **No.** The `FluidUse` product pulls `FluidAudio` and about twenty model families. `LayaManager` is five self-contained files, so vendoring them (Q525) looks feasible. Feeds SO2 Task 0 (R0.11) |
 | `axum` and `async-trait` | **Match** the workspace: `axum = "0.8"` (0.8.9 locked), `async-trait = "0.1"` (0.1.92) (R0.13) |
-| Decision numbers | D520–D539 and Q520–Q539 are in the log, all Proposed, with no collision. Next free numbers: **D1107** and **Q949** |
+| Decision numbers | D520–D539 and Q520–Q539 are in the log, all Proposed, with no collision. The highest numbers in use are D1106 and Q948, so new decisions from the owner questions take the next ones |
 
 ## 1. Licences and pins (re-verified 2026-10-18)
 
