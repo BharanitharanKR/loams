@@ -11,9 +11,11 @@
 //! ```
 //!
 //! `NEON_PAGESERVER` (default `http://127.0.0.1:9898`) and `NEON_WAL`
-//! (default `http://127.0.0.1:7677`) override the addresses. `NEON_WAL` must
-//! be `loams-wal`: the stack's stock `safekeeper1` refuses its timeline
-//! create (it requires `mconf`; R2.11).
+//! (default `http://127.0.0.1:7677`) override the addresses. `NEON_WAL` is
+//! `loams-wal`, or the stack's stock `safekeeper1` (`http://127.0.0.1:7676`),
+//! which the release stack's `pg-control` uses: `pg2-e2e.yml` runs both
+//! (0.1.0 blocker B2, CreateProject stuck in CREATING on `missing field
+//! mconf`).
 #![allow(clippy::unwrap_used)]
 
 use std::sync::Arc;
