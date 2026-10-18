@@ -442,6 +442,10 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
   compose up`: 0.1.0 recreates the safekeeper, which must be drained first. preview.1 →
   preview.2 kept no data: from preview.1, start a fresh stack (`docker compose down -v`, then
   `up -d` with `LOAMS_VERSION=0.1.0`).
+- **Podman: recreating the engine after an `.env` change** fails with "has dependent containers"
+  while the `tailscale` sidecar shares its network namespace. Run `docker compose rm -sf tailscale
+  && docker compose up -d loams tailscale` (see [upgrades](upgrades.md#recreating-a-service-by-hand));
+  `loams upgrade` does this itself.
 
 ## Reporting issues
 

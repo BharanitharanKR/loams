@@ -23,7 +23,7 @@ fn steps_run_in_documented_order() {
         &k,
         &[
             "migrate plan",
-            "stop tailscale house-tailscale",
+            "rm tailscale house-tailscale",
             "stop compute1 house loams tidb",
             "prepare",
             "stop pd tikv",
@@ -139,7 +139,7 @@ fn door_closed_during_upgrade() {
     let k = kinds(&fake);
     let closed = k
         .iter()
-        .position(|k| k == "stop tailscale house-tailscale")
+        .position(|k| k == "rm tailscale house-tailscale")
         .expect("closed");
     let opened = k
         .iter()
@@ -180,7 +180,7 @@ fn assert_rolled_back(world: &World, fake: &Fake, err: &loams_upgrade::errors::U
         &[
             "migrate snapshot",
             "migrate snapshots list",
-            "stop tailscale house-tailscale",
+            "rm tailscale house-tailscale",
             "cold restore",
             "up pd tikv",
             "migrate restore",
@@ -205,6 +205,32 @@ fn assert_rolled_back(world: &World, fake: &Fake, err: &loams_upgrade::errors::U
         .contains("preview.2")
     );
     assert_eq!(last_event(world), Event::RolledBack);
+}
+
+#[test]
+fn snapshot_failure_restarts_old_release_with_sidecars_removed_first() {
+    // Podman will not recreate `loams` while `tailscale` is in its network
+    // namespace (B18): the restart removes the sidecars before `up`.
+    let world = World::new(ENV);
+    let mut script = Script::new();
+    script.insert(
+        "migrate snapshot".to_string(),
+        failed(1, "loams migrate: snapshot_incomplete"),
+    );
+    let fake = scripted(script, false);
+    let err = upgrade(&world, &fake, &opts()).unwrap_err();
+    assert_eq!(err.code, "snapshot_incomplete", "{err}");
+    let k = kinds(&fake);
+    in_order(
+        &k,
+        &[
+            "rm tailscale house-tailscale",
+            "migrate snapshot",
+            "rm tailscale house-tailscale",
+            "up ",
+        ],
+    );
+    assert_eq!(last_event(&world), Event::RolledBack);
 }
 
 #[test]

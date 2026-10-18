@@ -64,6 +64,42 @@ pub fn stop(runtime: &dyn Runtime, dir: &Path, services: &[String]) -> Result<()
     checked(runtime.compose(dir, &args)?, "stop").map(drop)
 }
 
+/// `compose rm --stop --force <services>` (nothing to do for none): the
+/// containers go, their volumes stay.
+pub fn remove(runtime: &dyn Runtime, dir: &Path, services: &[String]) -> Result<()> {
+    if services.is_empty() {
+        return Ok(());
+    }
+    let mut args = strings(&["rm", "--stop", "--force"]);
+    args.extend(services.iter().cloned());
+    checked(runtime.compose(dir, &args)?, "rm").map(drop)
+}
+
+/// The services that share another service's network namespace
+/// (`network_mode: service:<other>`), in the order `config` lists them.
+///
+/// Podman refuses to remove a container while another container, even a
+/// stopped one, is in its network namespace ("has dependent containers which
+/// must be removed before it"), so compose cannot recreate `<other>` (a new
+/// image or `.env`) until these are removed. Docker allows it but leaves the
+/// dependant in a namespace that is gone. Either way they are removed before
+/// `<other>` is recreated and created again after it.
+pub fn network_dependents(config: &serde_json::Value) -> Vec<String> {
+    config["services"]
+        .as_object()
+        .map(|s| {
+            s.iter()
+                .filter(|(_, v)| {
+                    v["network_mode"]
+                        .as_str()
+                        .is_some_and(|m| m.starts_with("service:"))
+                })
+                .map(|(k, _)| k.clone())
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 /// `compose up -d --wait <services>`: started, and healthy where a
 /// healthcheck exists.
 pub fn up(runtime: &dyn Runtime, dir: &Path, services: &[String]) -> Result<()> {
@@ -157,4 +193,27 @@ pub fn long_running(config: &serde_json::Value) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod tests {
+    use serde_json::json;
+
+    use super::*;
+
+    #[test]
+    fn network_dependents_are_the_service_network_modes() {
+        let config = json!({"services": {
+            "loams": {},
+            "tailscale": {"network_mode": "service:loams"},
+            "bridge": {"network_mode": "bridge"},
+            "other": {"network_mode": "container:abc"},
+            "house-tailscale": {"network_mode": "service:house"},
+        }});
+        assert_eq!(
+            network_dependents(&config),
+            ["tailscale", "house-tailscale"]
+        );
+        assert!(network_dependents(&json!({})).is_empty());
+    }
 }

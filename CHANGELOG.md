@@ -165,6 +165,14 @@ See [docs/release/upgrades.md](docs/release/upgrades.md).
   `SIGTERM` a node drains: `/ready` answers `503`, its streams close and new calls are refused
   with `unavailable` (`node_draining`, new), and running mutations finish first (LV1 Task 24).
 
+### Fixed
+- **`loams upgrade` on Podman.** Closing the door now removes the Tailscale sidecars (and any other service with
+  `network_mode: service:…`) instead of stopping them, and restarting the old release after a failure removes them
+  first, so compose can recreate the engine and the House: Podman refuses to remove a container while another one,
+  even stopped, is in its network namespace ("has dependent containers"). Opening the door creates them again.
+  To recreate the engine by hand after an `.env` change: `docker compose rm -sf tailscale && docker compose up -d
+  loams tailscale` ([upgrades](docs/release/upgrades.md#recreating-a-service-by-hand)).
+
 ## [0.1.0-preview.2] - 2026-10-15
 
 The second preview. Everything marked **Preview** in the [feature status table](docs/release/preview.md#feature-status)

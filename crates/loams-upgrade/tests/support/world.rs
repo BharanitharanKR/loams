@@ -110,6 +110,15 @@ pub fn kind(args: &[String]) -> String {
                         .join(" ")
                 ),
                 "stop" => format!("stop {}", a[2..].join(" ")),
+                "rm" => format!(
+                    "rm {}",
+                    a[2..]
+                        .iter()
+                        .filter(|x| !x.starts_with('-'))
+                        .copied()
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                ),
                 "exec" => "engine ready".to_string(),
                 _ if a.contains(&"pull") => "pull images".to_string(),
                 other => other.to_string(),
@@ -180,6 +189,14 @@ pub fn config(tikv_mount: bool) -> String {
         let mut svc = serde_json::Map::new();
         if !restart.is_empty() {
             svc.insert("restart".into(), json!(restart));
+        }
+        // As in deploy/release/compose.yaml: each sidecar is in the network
+        // namespace of the service it fronts.
+        if name == "tailscale" {
+            svc.insert("network_mode".into(), json!("service:loams"));
+        }
+        if name == "house-tailscale" {
+            svc.insert("network_mode".into(), json!("service:house"));
         }
         if name == "tikv" && tikv_mount {
             svc.insert(
