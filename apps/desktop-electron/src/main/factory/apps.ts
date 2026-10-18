@@ -136,7 +136,6 @@ export const FACTORY_APPS: Record<FactoryAppId, FactoryAppDef> = {
 		// Its unauthenticated health route sits at the origin, whatever path the UI is on.
 		probe: async (url) => {
 			const r = await fetch(new URL("/healthz", url).href, {
-				redirect: "manual",
 				signal: AbortSignal.timeout(10_000),
 			});
 			if (!r.ok)

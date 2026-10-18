@@ -346,13 +346,14 @@ describe('panels', () => {
     const { api } = fakeDesktop({
       apps: ok('plane'),
       queries: {
-        'plane.stats': { open: 2, inProgress: 1, closedLast7d: 3 },
+        'plane.stats': { open: 2, inProgress: 1, closedLast7d: 3, p95_latency: 4 },
         'plane.issues': [],
       },
     });
     render(<PanelsPage desktop={api} app="plane" navigate={nav().navigate} />);
     expect(await screen.findByText('in progress')).toBeTruthy();
-    expect(screen.getByText('closed last 7d')).toBeTruthy();
+    expect(screen.getByText('closed last7d')).toBeTruthy();
+    expect(screen.getByText('p95 latency')).toBeTruthy();
     expect(screen.queryByText('inProgress')).toBeNull();
   });
 

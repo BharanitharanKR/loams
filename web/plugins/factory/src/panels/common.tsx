@@ -45,10 +45,10 @@ export function metricKeys(rows: Record<string, unknown>[]): string[] {
   return [...keys];
 }
 
-/** A metric key as words: `nb_visits` -> "visits", `closedLast7d` -> "closed last 7d". */
+/** A metric key as words: `nb_visits` -> "visits", `inProgress` -> "in progress" (`p95` stays). */
 export const label = (k: string) =>
   k
     .replace(/^nb_/, '')
     .replace(/_/g, ' ')
-    .replace(/([a-z])([A-Z0-9])/g, '$1 $2')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
     .toLowerCase();
