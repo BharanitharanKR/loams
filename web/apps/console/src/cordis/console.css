@@ -26,9 +26,14 @@ code {
   font-family: var(--loams-font-mono); /* mono-ok: code */
   font-size: 0.82em;
 }
-:focus-visible {
-  outline: 2px solid var(--op-accent);
-  outline-offset: 2px;
+/* The default ring, in the `base` layer (tailwind.css orders it below the utilities): a
+   control that draws its own ring (a field's box, a menu row's highlight) opts out with
+   `outline-none` (UI1). */
+@layer base {
+  :focus-visible {
+    outline: var(--op-focus-width) solid var(--op-focus);
+    outline-offset: var(--op-focus-offset);
+  }
 }
 ::selection {
   background: var(--op-accent);
