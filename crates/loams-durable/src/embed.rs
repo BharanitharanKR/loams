@@ -20,6 +20,7 @@ use serde_json::{Map, Value};
 
 use crate::config::{self, DurableConfig, DurableStore, Mode};
 use crate::error::DurableError;
+use crate::gateway::DurableGateway;
 use crate::inproc::{self, InProcWorker};
 use crate::listen;
 use crate::registry;
@@ -156,6 +157,12 @@ impl DurableServer {
     /// The server, for an in-process caller such as Loams's SDK network.
     pub fn server(&self) -> Arc<dyn ResonateServer> {
         Arc::clone(self.running.server())
+    }
+
+    /// The listener's protocol endpoint (`POST /`), for a host to serve on
+    /// its own port behind its own authentication (B12).
+    pub fn gateway(&self) -> DurableGateway {
+        DurableGateway::new(self.server())
     }
 
     /// The `worker_inproc` worker Loams's runtime subscribes to (D1 Task 6).

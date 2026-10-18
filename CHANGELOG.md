@@ -24,6 +24,10 @@ Expected downtime: about 5 minutes, excluding image pulls.
 See [docs/release/upgrades.md](docs/release/upgrades.md).
 
 ### Added
+- **Durable on the main port** (B12): `POST /durable/` on `--listen` is the embedded Resonate server's
+  protocol endpoint, behind the engine's authentication (org members and the operator; a credential bound
+  to one environment is refused), on a loopback main port or behind TLS and authentication. The loopback
+  durable listener keeps working. The browser console now has the Durable page.
 - **Upgrades that keep data** (design §54, plan UP1). `loams upgrade check|--to|rollback|status|snapshots`
   upgrades a self-hosted compose stack one release at a time:
   - it takes a snapshot of every store first (TiKV by BR or a cold copy, the bucket's pointers and a GC

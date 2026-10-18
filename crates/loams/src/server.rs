@@ -1010,6 +1010,20 @@ impl Durable {
         }
     }
 
+    /// The server's protocol endpoint, for `POST /durable/` on the main
+    /// port (B12).
+    #[cfg(feature = "durable")]
+    fn endpoint(&self) -> Option<api::durable::DurableHandle> {
+        self.server
+            .as_ref()
+            .map(|server| Arc::new(server.gateway()) as api::durable::DurableHandle)
+    }
+
+    #[cfg(not(feature = "durable"))]
+    fn endpoint(&self) -> Option<api::durable::DurableHandle> {
+        None
+    }
+
     #[cfg(feature = "durable")]
     fn addr(&self) -> Option<SocketAddr> {
         self.server.as_ref().map(|server| server.listen())
@@ -1274,6 +1288,25 @@ fn main_port_serves_live(config: &ServerConfig) -> bool {
         || (config.tls.secures() && config.auth.enforced())
 }
 
+/// Whether the main port may serve the durable API under `/durable/` (B12):
+/// as for Loams Live ([`main_port_serves_live`]), on loopback, or behind TLS
+/// and authentication. The durable listener itself is loopback only (D111).
+fn main_port_serves_durable(config: &ServerConfig) -> bool {
+    let serves = config.cluster.is_none()
+        && (config.listen.ip().to_canonical().is_loopback()
+            || (config.tls.secures() && config.auth.enforced()));
+    #[cfg(feature = "durable")]
+    if !serves && config.durable.is_some() {
+        tracing::warn!(
+            listen = %config.listen,
+            "the durable API is not served under /durable/ on --listen {}: beyond loopback it \
+             needs TLS and authentication",
+            config.listen
+        );
+    }
+    serves
+}
+
 /// The main port's state without Loams Live when it may not serve it
 /// ([`main_port_serves_live`]; `None`: serve `state` as it is). The
 /// `tailscale serve` target (loopback, with the tailnet's TLS) serves it
@@ -1337,6 +1370,10 @@ struct NodeSetup {
     /// What the start built before the node (Loams Live, and the
     /// authentication its listener shares with the node's surfaces).
     pre: Prebuilt,
+    /// The embedded durable server's endpoint for `POST /durable/` on the
+    /// main port (B12); `None` on a cluster node, whose main port is not
+    /// guarded.
+    durable: Option<api::durable::DurableHandle>,
 }
 
 /// What `start_with_live` builds before the node: the authentication (LV1
@@ -2144,6 +2181,7 @@ impl Server {
             extra_sources: Vec::new(),
             node_info: None,
             pre,
+            durable: durable.endpoint(),
         };
         let parts = match Self::assemble(&mut config, store, setup).await {
             Ok(parts) => parts,
@@ -2476,6 +2514,7 @@ impl Server {
                 join_changed,
             })),
             pre: Prebuilt::default(),
+            durable: None,
         };
         // After the leader, before the collection service (row T0-6).
         let durable = match Durable::start(config, node_id).await {
@@ -2517,6 +2556,7 @@ impl Server {
             extra_sources,
             node_info,
             pre,
+            durable,
         } = setup;
         // Built before anything is bound: a bad key file or OIDC setting
         // stops the start with nothing to undo. A cluster node is not
@@ -3079,6 +3119,7 @@ impl Server {
             principals: principals.clone(),
             #[cfg(feature = "live")]
             live,
+            durable: durable.filter(|_| main_port_serves_durable(config)),
         };
         let (app, tailscale) = match (roles.gateway, config.cluster.is_some()) {
             (true, false) => {
