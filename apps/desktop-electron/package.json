@@ -6,7 +6,8 @@
 	"license": "Apache-2.0",
 	"main": "out/main/index.js",
 	"scripts": {
-		"dev": "node scripts/connectors-catalog.mjs && electron-vite dev",
+		"dev": "install-electron && node scripts/connectors-catalog.mjs && electron-vite dev",
+		"preview": "install-electron && electron-vite preview",
 		"catalog": "node scripts/connectors-catalog.mjs",
 		"build": "node scripts/connectors-catalog.mjs && electron-vite build",
 		"test": "vitest run",
