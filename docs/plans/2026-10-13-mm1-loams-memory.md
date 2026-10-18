@@ -1044,7 +1044,7 @@ Task 0 was done on 2026-10-18 against `dev` at `222ccafe`. Paths are relative to
 - `refuse_reserved` (`crates/loams-meta/src/state/mod.rs`) refuses every collection name that starts with `_` ("reserved for implicit objects").
 - Graph names must match `[a-z][a-z0-9_-]{0,62}` (`validate_names`, `crates/loams-graph/src/engine.rs`). That refuses the leading `_`, the dots and upper-case ULIDs.
 - So neither `_mem.<store>.<shard>.*` collections nor the `_mem.<store>.<shard>` graph can be created today.
-- Task 4 must add an internal creation path that sets `managed_by` and is the only path allowed to use the `_mem.` and `_code.` prefixes. The managed graph's name grammar is an open question for the owner, raised on this task's PR. Until the owner answers, Task 4 uses §52's names and lower-cases the ids inside graph names.
+- Task 4 must add an internal creation path that sets `managed_by` and is the only path allowed to use the `_mem.` and `_code.` prefixes. The owner ruled on the managed graph's name grammar on 2026-10-18 (Owner rulings). Until the owner answers, Task 4 uses §52's names and lower-cases the ids inside graph names.
 - `_system` and `_graph.<gr_id>` show that the leading `_` is already the system convention, so a managed prefix fits it.
 
 **R0.4 GR1's state.**
@@ -1056,7 +1056,7 @@ Task 0 was done on 2026-10-18 against `dev` at `222ccafe`. Paths are relative to
   - `Search.expand` is `loams_query::expand::Expand`, run by `CollectionService::search_expanded`. `loams_graph::retrieval::LoamsGraphExpander` implements it, and `crates/loams/src/server.rs` wires it in.
 - **No per-row endpoint labels.** An `EdgeMap`'s endpoint labels are fixed. Only the key (`Endpoint.field`) and the edge type (`TYPE FROM`) come from the row. Several `EdgeMap`s over one collection would each map every row.
   - So §52 §6.3's fallback applies: `edges` splits into one collection per structural edge type. The names are `_mem.<store>.<shard>.mentions`, `.alias_of`, `.in_community` and `.derived_from`. Each gets one `EdgeMap` with fixed labels. Tasks 4 and 14 follow this. A later per-row label field in `loams.graph.v1` would be an API change and is not assumed.
-- **No property projection (R17.1).** A vertex's or edge's properties are all of its document's `source` fields. Vectors are excluded (`properties()`, `crates/loams-graph/src/link/collection.rs`). §52 §6.3's `PROPERTIES (...)` lists therefore cannot be expressed, and fact and episode text reaches the graph, its `_graph.<gr_id>` stream and its snapshots. Task 23's purge must cover them. This is an open question for the owner, raised on this task's PR.
+- **No property projection (R17.1).** A vertex's or edge's properties are all of its document's `source` fields. Vectors are excluded (`properties()`, `crates/loams-graph/src/link/collection.rs`). §52 §6.3's `PROPERTIES (...)` lists therefore cannot be expressed, and fact and episode text reaches the graph, its `_graph.<gr_id>` stream and its snapshots. Task 23's purge must cover them. The owner ruled on 2026-10-18 that GR1 adds an optional `properties` projection in Task 14 (Owner rulings).
 
 **R0.5 `loams-durable` is used only by its own tests.**
 - **Embed:** `DurableServer::start(DurableConfig, node_id)` (`crates/loams-durable/src/embed.rs`).
@@ -1089,7 +1089,7 @@ Task 0 was done on 2026-10-18 against `dev` at `222ccafe`. Paths are relative to
   - `crate::auth::Principal { subject, kind, display_name, email, grant: Grant{org, environment, scopes, expires_at_ms} }` and `trait Authenticator` are in `crates/loams/src/auth/mod.rs`. `trait Authorizer` is in `auth/authorizer.rs`.
   - A handler reads the principal with `ctx.extensions().get::<Principal>()` (as `connect_admin.rs`'s `Admin::actor`).
   - `loams-memory` must not depend on `loams`, so Task 11's handler maps `Principal` into `loams-memory`'s own `RequestCtx`, which carries the subject, kind, org and scopes.
-- **Idempotency:** `connect_idempotency::Ledger` is per process (300 s window, 1 024 entries) and typed to `WriteDocumentsResponse`. It cannot serve `Add`, whose test `add_replay_returns_same_episode` uses two nodes. Until API2's `IdempotencyStore` lands, Task 5 keeps a durable record per key in the space. That needs a new field in §52 §6.1's tables; the question is raised with the owner on this task's PR. Errors use `connect::refuse(code, reason, message, metadata)` and the helpers in `connect_errors.rs`.
+- **Idempotency:** `connect_idempotency::Ledger` is per process (300 s window, 1 024 entries) and typed to `WriteDocumentsResponse`. It cannot serve `Add`, whose test `add_replay_returns_same_episode` uses two nodes. Until API2's `IdempotencyStore` lands, Task 5 keeps a durable record per key in the space. That needs a new field in §52 §6.1's tables; the owner accepted `idempotency_fp` on 2026-10-18 (Owner rulings). Errors use `connect::refuse(code, reason, message, metadata)` and the helpers in `connect_errors.rs`.
 
 **R0.9 Nothing serves MCP over HTTP.** API2 R0.6 still holds. `crates/loams-agentd-mcp` is a hand-written stdio JSON-RPC proxy to agentd (`serve_stdio`) and does not use `rmcp`. The workspace pins `rmcp` 3.4.1 with `server` and `transport-streamable-http-server`, but no crate depends on it (it is not in `Cargo.lock`). `crates/loams` has no `/mcp` route and nothing listens on 8083. Task 12 creates `crates/loams-mcp` on the workspace `rmcp` pin.
 
@@ -1122,5 +1122,15 @@ The owner accepted the controller's recommendations:
 | Q783 | Run LoCoMo internally. Publishing LoCoMo scores waits for a legal check of CC BY-NC 4.0. LongMemEval results may be published. |
 | Q785 / Q786 | No two-way Git mirror at GA: export and import in the Agent Memory Repo format only. The mirror follows once Loams Git can purge history. |
 | Q789 / Q790 | On the desktop, learning from sessions is opt-in. Memory writes to the user's own space need no approval. |
+
+### 2026-10-18 (Task 0's questions, PR #768)
+
+The owner accepted Task 0's three recommendations:
+
+| Question | Ruling |
+|---|---|
+| Managed object names (R0.3) | Only the `managed_by` creation path may create the `_mem.` and `_code.` names. The graph-name rule is widened for managed graphs only. |
+| Graph property projection (R0.4) | GR1 adds an optional `properties` field to `GraphMapping`. The field is additive in `loams.graph.v1`. It lands in MM1 Task 14, with the GR1 owner. |
+| Durable idempotency for `Add` (R0.8) | Episodes get a keyword field, `idempotency_fp`, with §52 §6.1's episode table updated. It holds the key's fingerprint and the request digest and is looked up through `SpaceScope`. It is used until API2's `IdempotencyStore` lands. |
 
 Implementation has not started; the owner will say when.
