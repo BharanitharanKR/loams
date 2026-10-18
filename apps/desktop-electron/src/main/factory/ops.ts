@@ -524,7 +524,42 @@ export const OPS: Record<FactoryAppId, Record<string, Op>> = {
 							.map((d) => ({ date: str(d["date"]), ...numbers(d) })),
 					};
 				} catch (e) {
-					// Undocumented endpoint: 404 means "unavailable on this version".
+					// Undocumented endpoint, gone in Langfuse 4: read /v2/metrics instead.
+					if (rec(e)["status"] !== 404) throw e;
+				}
+				const to = new Date(Math.floor(Date.now() / 1000) * 1000);
+				const from = new Date(to.getTime() - 30 * 86_400_000);
+				try {
+					const r = rec(
+						await call(a, "metrics", {
+							view: "observations",
+							metrics: [
+								{ field: "count", aggregation: "count" },
+								{ field: "totalCost", aggregation: "sum" },
+							],
+							timeDimension: { granularity: "day" },
+							fromTimestamp: from.toISOString().replace(".000Z", "Z"),
+							toTimestamp: to.toISOString().replace(".000Z", "Z"),
+						}),
+					);
+					return {
+						available: true,
+						days: arr(r["data"])
+							.slice(0, 120)
+							.map((d) => {
+								const n = numbers(d);
+								return {
+									date: str(d["time_dimension"]),
+									...(n["count_count"] === undefined
+										? {}
+										: { observations: n["count_count"] }),
+									...(n["sum_totalCost"] === undefined
+										? {}
+										: { totalCost: n["sum_totalCost"] }),
+								};
+							}),
+					};
+				} catch (e) {
 					if (rec(e)["status"] === 404) return { available: false, days: [] };
 					throw e;
 				}

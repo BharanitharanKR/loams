@@ -483,7 +483,16 @@ export function buildLangfuseMetricsParams(query: LangfuseMetricsQuery): { query
   assertRange("row_limit", query.config?.row_limit, 1, 1000);
   assertLangfuseMetricsWindow(query);
 
-  return { query: JSON.stringify(query) };
+  // On the wire each metric is `{ measure, aggregation }`: `field` is this adapter's
+  // name for it, and Langfuse rejects a metric without `measure` (a 400).
+  const wire = {
+    ...query,
+    metrics: metrics.map((m) => {
+      const { field, aggregation } = normalizeLangfuseMetric(m);
+      return { measure: field, aggregation };
+    }),
+  };
+  return { query: JSON.stringify(wire) };
 }
 
 function assertRange(field: string, value: number | undefined, min: number, max: number): void {

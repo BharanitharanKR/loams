@@ -301,10 +301,24 @@ describe("langfuse metrics request shape", () => {
     expect([...url.searchParams.keys()]).toEqual(["query"]);
     expect(JSON.parse(url.searchParams.get("query")!)).toMatchObject({
       view: "observations",
-      metrics: [{ field: "latency", aggregation: "p95" }],
+      // The wire name is `measure` (Langfuse rejects `field` with a 400).
+      metrics: [{ measure: "latency", aggregation: "p95" }],
       dimensions: ["name"],
       timeDimension: { granularity: "day" },
     });
+  });
+
+  it("sends a bare measure name as { measure, aggregation: count }", () => {
+    const params = buildLangfuseMetricsParams({
+      view: "observations",
+      metrics: ["latency", { field: "totalCost", aggregation: "sum" }],
+      fromTimestamp: "2026-01-01T00:00:00Z",
+      toTimestamp: "2026-01-08T00:00:00Z",
+    });
+    expect(JSON.parse(params.query).metrics).toEqual([
+      { measure: "latency", aggregation: "count" },
+      { measure: "totalCost", aggregation: "sum" },
+    ]);
   });
 
   it("round-trips reserved characters through the query blob", () => {

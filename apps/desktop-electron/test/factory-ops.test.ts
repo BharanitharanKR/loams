@@ -37,6 +37,8 @@ describe("ops", () => {
 			"topPages",
 			"live",
 			"metricsDaily",
+			// Langfuse 4's daily usage (/v2/metrics): a read.
+			"metrics",
 			// GlitchTip's latest event of an issue (SD1 Task 27): a read.
 			"latestIssueEvent",
 		]);
@@ -251,6 +253,52 @@ describe("ops for Studio", () => {
 		);
 		await expect(run).rejects.toBeInstanceOf(UnsupportedError);
 		await expect(run).rejects.not.toThrow(/http:/);
+	});
+
+	it("langfuse_daily_falls_back_to_v2_metrics_on_404", async () => {
+		// Langfuse 4 serves no /metrics/daily: the daily table comes from /v2/metrics.
+		const op = OPS.langfuse.daily;
+		if (!op) throw new Error("no daily op");
+		const asked: Record<string, unknown>[] = [];
+		const out = await op.run(
+			adapter({
+				metricsDaily: () =>
+					Promise.reject(Object.assign(new Error("404"), { status: 404 })),
+				metrics: (q: Record<string, unknown>) => {
+					asked.push(q);
+					return {
+						data: [
+							{
+								time_dimension: "2026-10-18",
+								count_count: 3,
+								sum_totalCost: 0.5,
+							},
+							{
+								time_dimension: "2026-10-19",
+								count_count: 0,
+								sum_totalCost: null,
+							},
+						],
+					};
+				},
+			}),
+			op.params.parse({}) as never,
+			ctx,
+		);
+		expect(asked[0]).toMatchObject({
+			view: "observations",
+			timeDimension: { granularity: "day" },
+		});
+		const from = Date.parse(String(asked[0]?.["fromTimestamp"]));
+		const to = Date.parse(String(asked[0]?.["toTimestamp"]));
+		expect(to - from).toBe(30 * 86_400_000);
+		expect(out).toEqual({
+			available: true,
+			days: [
+				{ date: "2026-10-18", observations: 3, totalCost: 0.5 },
+				{ date: "2026-10-19", observations: 0 },
+			],
+		});
 	});
 
 	it("openpanel_insights_default_to_a_window_that_includes_today", async () => {
