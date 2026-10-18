@@ -1118,7 +1118,7 @@ MM1a's `Forget` stays logical (Task 9).
 - A module with calls needs every SDK's package map and stubs (`@loams/proto/memory`, the Go and Python stub paths). Task 44 owns those, so it adds the calls together with them.
 - Retry classes follow D610 from what the proto already says: `NO_SIDE_EFFECTS` reads are `safe`, keyed mutations are `keyed`, and the R1.2 exemptions are `never` unless Task 44 marks one `retry_safe`.
 - The package list and the 22 new reasons still change the generated facades. The TypeScript, Python, Rust and Go facade outputs and the facade-gen goldens are regenerated.
-- The hand-kept registries get the same rows in the page's order, as in the `loams.repos.v1` catch-up commit `e04ec5df`: C++, C#, Go `reason.go`, Rust's `Reason`, the Python count, the conformance recorder and `error.json`. None of these reasons is recorded, because nothing serves the package yet.
+- The hand-kept registries get the same rows in the page's order, as in the `loams.repos.v1` catch-up commit `e04ec5df`: C++, C#, Go `reason.go`, Rust's `Reason`, Java, Kotlin, Dart, PHP, Ruby, the Python count, the conformance recorder and `error.json`. None of these reasons is recorded, because nothing serves the package yet.
 
 **R1.2 Which mutations take `idempotency_key = 15`.**
 - **Keyed (11):** `CreateStore`, `DeleteStore`, `ExportSpace`, `ImportSpace`, `Add`, `AddBatch`, `UpdateFact`, `RetryExtraction`, `Forget`, `Consolidate` and `RevertDreamRun`.
