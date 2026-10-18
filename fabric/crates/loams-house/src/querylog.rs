@@ -809,7 +809,7 @@ impl QueryLog {
                 .into_iter()
                 .filter(|e| filter.keeps(e) && !seen.contains(&e.query_id)),
         );
-        out.sort_by(|a, b| b.started_us.cmp(&a.started_us));
+        out.sort_by_key(|e| std::cmp::Reverse(e.started_us));
         out.truncate(MAX_READ_ROWS);
         Ok(out)
     }
