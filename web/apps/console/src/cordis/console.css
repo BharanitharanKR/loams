@@ -1152,6 +1152,13 @@ button.lc-hosted-engine {
   border-radius: 50%;
   background: var(--op-grow);
 }
+/* UX-1: the dot follows /health: amber while checking, red while unreachable. */
+.lc-hosted-dot-checking {
+  background: var(--op-warn);
+}
+.lc-hosted-dot-down {
+  background: var(--op-danger);
+}
 .lc-hosted-demo {
   display: inline-flex;
   align-items: center;
@@ -1373,4 +1380,100 @@ button.lc-hosted-engine {
 .lc-side-head .lc-hosted {
   gap: 6px 8px;
   padding: 0 4px;
+}
+
+/* UX-2: the Pages list's "All pages" row, and the page it opens. */
+.lc-pages-all {
+  margin-top: 4px;
+  color: var(--op-faint);
+}
+.lc-all-pages {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+  gap: 24px;
+  max-width: 960px;
+}
+.lc-all-pages h2 {
+  margin: 0 0 6px;
+  padding: 0 8px;
+  color: var(--op-faint);
+  font-size: var(--op-text-micro);
+  font-weight: 500;
+}
+.lc-all-pages ul {
+  display: grid;
+  gap: 1px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lc-all-pages li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  border-radius: var(--op-radius-md);
+}
+.lc-all-pages li:hover {
+  background: var(--op-row-hover);
+}
+.lc-all-pages-link {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  height: var(--op-row);
+  padding: 0 8px;
+  color: var(--op-ink);
+  font-size: var(--op-text-small);
+  text-decoration: none;
+}
+.lc-all-pages-pin {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  margin-right: 4px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--op-radius-sm);
+  background: none;
+  color: var(--op-faint);
+  cursor: pointer;
+}
+.lc-all-pages-pin[aria-pressed="true"] {
+  color: var(--op-accent-fg);
+}
+.lc-all-pages-pin:hover {
+  color: var(--op-ink);
+}
+.lc-all-pages li:not(:hover) .lc-all-pages-pin[aria-pressed="false"]:not(:focus-visible) {
+  opacity: 0.45;
+}
+
+/* UX-3: Settings' sections (App, Organisation, Studio) under its one heading. */
+.lc-settings-nav > .lc-pages-head {
+  color: var(--op-muted);
+  font-size: var(--op-text-small);
+  font-weight: 600;
+}
+.lc-settings-group {
+  display: grid;
+  gap: 1px;
+}
+.lc-settings-group + .lc-settings-nav > .lc-pages-head {
+  color: var(--op-muted);
+  font-size: var(--op-text-small);
+  font-weight: 600;
+}
+.lc-settings-group {
+  margin-top: 8px;
+}
+.lc-settings-sub {
+  margin: 0;
+  padding: 4px 8px 2px;
+  color: var(--op-faint);
+  font-size: var(--op-text-micro);
+  font-weight: 400;
+  letter-spacing: 0.02em;
 }

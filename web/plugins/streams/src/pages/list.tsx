@@ -8,6 +8,7 @@ import {
   Field,
   Input,
   Select,
+  SkeletonList,
   StatusTag,
   Table,
   Textarea,
@@ -378,7 +379,13 @@ export function ListPage({
         />
       </div>
       <Card title={tab === 'streams' ? `Streams in ${ns}` : `Links in ${ns}`} flush>
-        {active.state === 'loading' && <p className="lc-muted p-4">Loading…</p>}
+        {active.state === 'loading' && (
+          <SkeletonList
+            className="p-4"
+            label={tab === 'streams' ? 'Loading streams' : 'Loading links'}
+            rows={5}
+          />
+        )}
         {active.state === 'error' && active.message === NOT_SERVED && (
           <Empty title="Streams are not on this server">
             Streams and links live on a Loams engine. Switch to a server that runs one, such as This

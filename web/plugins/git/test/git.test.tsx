@@ -106,7 +106,8 @@ describe('GitPage', () => {
     const nav = await screen.findByRole('navigation', { name: 'Repositories' });
     const mono = await within(nav).findByRole('button', { name: /monorepo/ });
     await waitFor(() => expect(mono.getAttribute('aria-current')).toBe('true'));
-    expect(screen.getAllByText('Sample data').length).toBeGreaterThanOrEqual(2);
+    // UX-5: the shared notice only, no second badge in the page head.
+    expect(screen.getAllByText('Sample data').length).toBe(1);
     const lb = await listbox();
     await waitFor(() => expect(within(lb).getAllByRole('option').length).toBeGreaterThan(0));
     // Only a window of the million rows is in the DOM.

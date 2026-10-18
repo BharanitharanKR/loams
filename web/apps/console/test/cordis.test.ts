@@ -46,7 +46,7 @@ const navLabels = (handle: { slots: ConsoleHandle['slots'] }) =>
   ).map((p) => p.label);
 /** The sidebar's pinned Pages. */
 const pinnedLabels = (root: HTMLElement) =>
-  [...root.querySelectorAll('.lc-pages a')].map((a) => a.textContent);
+  [...root.querySelectorAll('.lc-pages ul a')].map((a) => a.textContent);
 
 describe('the cordis console', () => {
   it('boots the oss catalog and renders the first-party pages', async () => {
