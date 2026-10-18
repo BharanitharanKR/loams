@@ -2607,7 +2607,7 @@ mod served {
             .await
             .map_err(|err| push_error(record.name.as_str(), err))?;
             // Pushing HEAD to `track` makes the workspace's commits upstream: its base moves
-            // there, so a later `Rebase` sees no local commits (ruling T27.6).
+            // there, so a later `Rebase` sees no local commits (ruling T27.7).
             let track = RefName::parse(&snap.track).ok();
             let pushed_head = head_of(&snap)?.filter(|head| {
                 specs

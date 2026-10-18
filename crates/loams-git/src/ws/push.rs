@@ -403,7 +403,7 @@ fn denies_force(snapshot: &RefSnapshot, name: &RefName) -> bool {
 }
 
 /// The idempotency key of a push carrying the caller's `key`: bound to the
-/// principal, so two callers' keys never meet (ruling T27.5).
+/// principal, so two callers' keys never meet (ruling T27.6).
 pub fn push_key(principal: &Principal, key: &IdemKey) -> IdemKey {
     let mut hash = Sha256::new();
     hash.update(b"ws-push keyed\0");
