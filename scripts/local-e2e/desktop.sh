@@ -8,7 +8,10 @@
 # - Studio's daemon is the release loams-agentd (LOAMS_AGENTD_BIN), which the
 #   app starts or attaches to itself, with the Mock harness (no API keys);
 # - a server "Local compose stack (e2e)" at http://127.0.0.1:18080, made the
-#   active one on first start (servers.json).
+#   active one on first start (servers.json);
+# - the Postgres page reaches pg-control (127.0.0.1:7680) with the API key
+#   up.sh minted into $E2E_HOME/pg-api-key (LOAMS_PG_CONTROL_API_KEY_FILE;
+#   main reads it, the renderer never sees it).
 # Both scripts fetch Electron's binary first (install-electron).
 #
 #   desktop.sh [start [dev|preview]|stop|logs]
@@ -34,6 +37,7 @@ JSON
       -E LOAMS_DESKTOP_USER_DATA="$ud" -E LOAMS_BIN="$E2E_HOME/bin/loams-engine" \
       -E LOAMS_AGENTD_BIN="$E2E_HOME/bin/loams-agentd" -E LOAMS_DESKTOP_HARNESS=mock \
       -E LOAMS_DESKTOP_NO_UPDATE_CHECK=1 \
+      -E LOAMS_PG_CONTROL_API_KEY_FILE="$E2E_HOME/pg-api-key" \
       pnpm run "$run"
     echo "desktop: started, pnpm $run (journalctl --user -u loams-e2e-desktop -f)" ;;
   stop) systemctl --user stop loams-e2e-desktop ;;
