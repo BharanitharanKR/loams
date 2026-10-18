@@ -206,16 +206,10 @@ async function main() {
   }
   const app = new Loams({
     endpoint: ENGINE,
-    // `transportOptions.headers` is not sent (bug in the local-e2e report): an interceptor is.
+    // `transportOptions.headers` alone (B17, fixed by PR #759: no interceptor needed).
     transportOptions: {
       useBinaryFormat: false,
       headers: { 'loams-live-app': 'chinook_live' },
-      interceptors: [
-        (next) => async (req) => {
-          req.header.set('loams-live-app', 'chinook_live');
-          return next(req);
-        },
-      ],
     },
   });
   await deploy(app, {
@@ -229,6 +223,14 @@ async function main() {
       await app.tables.mutate({ function: 'playlists:add', args: v({ name, tracks }) });
   }
   console.log('chinook_live playlists', JSON.stringify(js((await app.tables.query({ function: 'playlists:list', args: v({}) })).result)).slice(0, 200));
+  // The header must have routed the deploy: the default app has no `playlists`.
+  try {
+    await loams.tables.query({ function: 'playlists:list', args: v({}) });
+    console.error('B17: playlists:list answered on the default app: the loams-live-app header was not sent');
+    process.exitCode = 1;
+  } catch (e) {
+    console.log('default app has no playlists:list (the header routed the deploy):', (e as Error).message.slice(0, 120));
+  }
   const apps = await admin(loams).listApps({});
   console.log('apps', apps.apps.map((a) => a.name).join(', '));
 }

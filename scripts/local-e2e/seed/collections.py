@@ -168,9 +168,9 @@ def elasticsearch(report, limit, q):
             "embedding": {"type": "dense_vector", "dims": 512, "index": True, "similarity": "cosine"}}})
     actions = ({"_index": index, "_id": str(pk), "_source": {"title": t, "text": x, "dbpedia_id": d, "embedding": v}}
                for pk, t, x, d, v in rows(limit))
-    # The gateway refuses bodies over 2 MB (axum's default; bug: its configured
-    # http.max_content_length is 100 MiB), so chunks stay under 1.5 MB.
-    n, errors = helpers.bulk(es, actions, chunk_size=500, max_chunk_bytes=1_500_000, raise_on_error=False)
+    # Bodies of ~4 MB, over axum's 2 MB default that the gateway used to refuse
+    # them at (B16, fixed by PR #760: http.max_content_length, 100 MiB).
+    n, errors = helpers.bulk(es, actions, chunk_size=1000, max_chunk_bytes=4_000_000, raise_on_error=False)
     report.add("es: _bulk", not errors, f"{n} indexed, {len(errors) if errors else 0} errors {str(errors)[:200]}")
     es.indices.refresh(index=index)
     report.attempt("es: _count", lambda: es.count(index=index).body["count"])
