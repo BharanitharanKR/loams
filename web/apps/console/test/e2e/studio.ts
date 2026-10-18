@@ -50,7 +50,8 @@ export async function chooseApprovalMode(
 export async function sendPrompt(page: Page, box: Locator, text: string): Promise<void> {
   await box.click();
   await page.keyboard.type(text);
-  const send = page.getByRole('button', { name: 'Send', exact: true });
+  // The page's own Send: the desktop's inspector can show the Agent tab, whose chat has one too.
+  const send = page.getByRole('main').getByRole('button', { name: 'Send', exact: true });
   await expect(send).toBeEnabled();
   await send.click();
 }

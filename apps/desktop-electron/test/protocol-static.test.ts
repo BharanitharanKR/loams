@@ -96,7 +96,9 @@ describe("ensureCspMeta", () => {
 			`<head><meta charset="utf-8" /><script>${body}</script><script src="/a.js"></script></head>`,
 		);
 		const hash = createHash("sha256").update(body).digest("base64");
-		expect(out).toContain(`script-src 'self' 'sha256-${hash}'; style-src`);
+		expect(out).toContain(
+			`script-src 'self' 'wasm-unsafe-eval' 'sha256-${hash}'; style-src`,
+		);
 		expect(out.match(/sha256-/g)?.length).toBe(1);
 	});
 	it("injects_at_head_start_without_charset", () => {
@@ -115,8 +117,9 @@ describe("ensureCspMeta", () => {
 		expect(parts).toBe(CONSOLE_CSP);
 	});
 	it("csp_matches_the_console_build_policy", () => {
-		expect(CONSOLE_CSP).toContain("script-src 'self'");
-		expect(CONSOLE_CSP).not.toContain("unsafe-eval");
+		expect(CONSOLE_CSP).toContain("script-src 'self' 'wasm-unsafe-eval';");
+		// WebAssembly may compile (the code viewers' Shiki engine); JavaScript eval may not.
+		expect(CONSOLE_CSP).not.toContain("'unsafe-eval'");
 		expect(CONSOLE_CSP).toContain("object-src 'none'");
 	});
 });

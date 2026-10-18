@@ -106,8 +106,8 @@ describe('vercel.json', () => {
 
   test('sends a CSP without inline or eval scripts that admits the tailnet and the issuer', () => {
     const csp = header('Content-Security-Policy');
-    assert.match(csp, /script-src 'self';/);
-    assert.doesNotMatch(csp, /unsafe-eval|script-src[^;]*unsafe-inline/);
+    assert.match(csp, /script-src 'self' 'wasm-unsafe-eval';/);
+    assert.doesNotMatch(csp, /'unsafe-eval'|script-src[^;]*unsafe-inline/);
     assert.match(csp, /connect-src 'self' https:\/\/\*\.ts\.net https:\/\/auth\.loams\.dev;/);
     assert.match(csp, /object-src 'none'/);
     for (const key of [
@@ -220,12 +220,12 @@ describe('stage', () => {
         authIssuer: 'https://auth.loams.dev/oidc',
       }),
     });
-    assert.match(csp, /script-src 'self' 'sha256-x'(;|$)/);
+    assert.match(csp, /script-src 'self' 'wasm-unsafe-eval' 'sha256-x'(;|$)/);
     assert.match(
       csp,
       /connect-src 'self' https:\/\/\*\.ts\.net https:\/\/loams\.example\.com https:\/\/auth\.loams\.dev(;|$)/,
     );
-    assert.doesNotMatch(csp, /unsafe-eval/);
+    assert.doesNotMatch(csp, /'unsafe-eval'/);
     assert.match(contentSecurityPolicy(), /connect-src 'self'(;|$)/);
     assert.deepEqual(connectSources(), ["'self'", TAILNET]);
   });
@@ -306,7 +306,11 @@ describe('stage', () => {
       root,
       /connect-src 'self' https:\/\/\*\.ts\.net https:\/\/loams\.tail1\.ts\.net https:\/\/auth\.loams\.dev/,
     );
-    assert.match(root, /script-src 'self';/, 'the cordis console has no inline script');
+    assert.match(
+      root,
+      /script-src 'self' 'wasm-unsafe-eval';/,
+      'the cordis console has no inline script',
+    );
     const want = {
       hosted: true,
       engineUrl: 'https://loams.tail1.ts.net',

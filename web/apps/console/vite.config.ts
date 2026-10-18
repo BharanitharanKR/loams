@@ -97,9 +97,12 @@ function connectorCatalog(): Plugin {
 /**
  * The console's CSP, in production builds only (Vite's dev server injects
  * inline scripts): no `unsafe-eval` and no remote source (§37 §6.3).
+ * `wasm-unsafe-eval` lets WebAssembly compile (and nothing else): the code
+ * viewers highlight with Shiki's WASM engine (@pierre/diffs `shiki-wasm`), and
+ * without it every diff and file view rendered empty in a production build.
  */
 const CSP =
-  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
   "img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'self'; " +
   "object-src 'none'; base-uri 'none'; form-action 'self'";
 

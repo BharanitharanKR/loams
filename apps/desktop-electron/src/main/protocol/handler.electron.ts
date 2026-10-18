@@ -83,9 +83,14 @@ export function installAppProtocol(ses: Session, deps: AppProtocolDeps): void {
 		if (url.hostname !== "console") return text(404, "not found");
 
 		// Before the server routes: `/loams.` is otherwise the active server's.
+		// Node's fetch, not `ses.fetch`: the daemon's loopback listener is plain
+		// HTTP/1.1, where Chromium's network stack allows six connections per host,
+		// and Studio keeps six Watch* server streams open. Through the session the
+		// seventh request (AddRepo, a thread's turn, ...) queued behind them for
+		// ever. The daemon needs no cookie or session state (they are dropped).
 		if (isAgentdPath(url.pathname))
 			return handleAgentdRequest(req, deps.agentd, (r) =>
-				ses.fetch(r as Request),
+				globalThis.fetch(r as Request),
 			);
 
 		if (isProxied(url.pathname)) {
