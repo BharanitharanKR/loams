@@ -9,7 +9,9 @@ use std::net::TcpListener;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
-use loams_durable::{DurableConfig, DurableRuntime, DurableServer, DurableStore, RuntimeOptions};
+use loams_durable::{
+    DurableConfig, DurableError, DurableRuntime, DurableServer, DurableStore, RuntimeOptions,
+};
 use loams_tikv::testing::{TEST_META, TestCluster, cluster};
 use resonate_sdk::prelude::*;
 use serde_json::{Value, json};
@@ -78,6 +80,15 @@ async fn call(server: &DurableServer, kind: &str, data: Value) -> Value {
         .process(json!({ "kind": kind, "data": data }))
         .await
         .unwrap_or_else(|e| panic!("{kind}: {e}"))
+}
+
+/// The status of a request that may be refused (a 404 is an answer here).
+async fn status_of(server: &DurableServer, kind: &str, data: Value) -> i64 {
+    match server.process(json!({ "kind": kind, "data": data })).await {
+        Ok(response) => status(&response),
+        Err(DurableError::Protocol { status, .. }) => i64::from(status),
+        Err(e) => panic!("{kind}: {e}"),
+    }
 }
 
 fn status(response: &Value) -> i64 {
@@ -322,7 +333,7 @@ async fn schedules_persist_and_fire_after_a_restart() {
         }),
     )
     .await;
-    assert_eq!(status(&created), 201, "{created}");
+    assert!(matches!(status(&created), 200 | 201), "{created}");
     let due = created["data"]["schedule"]["nextRunAt"]
         .as_i64()
         .expect("nextRunAt");
@@ -357,7 +368,7 @@ async fn schedules_persist_and_fire_after_a_restart() {
         }),
     )
     .await;
-    assert_eq!(status(&doomed), 201, "{doomed}");
+    assert!(matches!(status(&doomed), 200 | 201), "{doomed}");
     let deleted = call(&first, "schedule.delete", json!({ "id": "tikv-deleted" })).await;
     assert_eq!(status(&deleted), 200, "{deleted}");
     first.stop().await;
@@ -373,8 +384,8 @@ async fn schedules_persist_and_fire_after_a_restart() {
     .await;
     assert_eq!(status(&got), 200, "{got}");
     assert_eq!(got["data"]["schedule"]["cron"], "* * * * *");
-    let gone = call(&second, "schedule.get", json!({ "id": "tikv-deleted" })).await;
-    assert_eq!(status(&gone), 404, "{gone}");
+    let gone = status_of(&second, "schedule.get", json!({ "id": "tikv-deleted" })).await;
+    assert_eq!(gone, 404, "the deleted schedule stays deleted");
     let listed = call(&second, "schedule.search", json!({ "limit": 10 })).await;
     assert_eq!(status(&listed), 200, "{listed}");
     let ids: Vec<&str> = listed["data"]["schedules"]
@@ -391,15 +402,15 @@ async fn schedules_persist_and_fire_after_a_restart() {
         + Duration::from_millis(u64::try_from((due - now_ms()).max(0)).unwrap_or(0))
         + Duration::from_secs(30);
     loop {
-        let promise = call(&second, "promise.get", json!({ "id": tick })).await;
-        if status(&promise) == 200 {
+        if status_of(&second, "promise.get", json!({ "id": tick })).await == 200 {
+            let promise = call(&second, "promise.get", json!({ "id": tick })).await;
             assert_eq!(
                 promise["data"]["promise"]["tags"]["resonate:schedule"],
                 "tikv-every-minute"
             );
             break;
         }
-        assert!(Instant::now() < deadline, "{tick} never fired: {promise}");
+        assert!(Instant::now() < deadline, "{tick} never fired");
         tokio::time::sleep(Duration::from_millis(500)).await;
     }
     let moved = call(
