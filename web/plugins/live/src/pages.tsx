@@ -51,7 +51,7 @@ const isNotRunning = (e: unknown) =>
 const isUnserved = (e: unknown) => e instanceof ConnectError && e.code === Code.Unimplemented;
 
 const Mono = ({ children }: { children: ReactNode }) => (
-  <span className={/* mono-ok: id */ 'font-mono text-xs'}>{children}</span>
+  <span className={/* mono-ok: id */ 'font-mono text-small'}>{children}</span>
 );
 
 function Loading({ what }: { what: string }) {
@@ -592,7 +592,7 @@ export function MutateTab({ api, tables, sel, onGone }: TabProps) {
             <p className="m-0">
               Run <Mono>{pending.fn}</Mono> with these arguments. It commits at once.
             </p>
-            <pre className="font-mono text-xs m-0 overflow-auto">
+            <pre className="font-mono text-small m-0 overflow-auto">
               {JSON.stringify(pending.args, null, 2)}
             </pre>
             <p className="m-0 text-muted">

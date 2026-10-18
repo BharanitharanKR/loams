@@ -395,6 +395,12 @@
   border-radius: var(--op-radius-lg);
 }
 
+/* Inside a card the card is the frame: no second, dashed box. */
+.loams-card .loams-empty {
+  border: 0;
+  border-radius: 0;
+}
+
 .loams-empty-body {
   max-width: 42ch;
 }
@@ -440,6 +446,15 @@
   color: var(--op-ink);
   background: var(--op-bg);
   transition: border-color var(--op-duration-fast) ease;
+}
+
+/* A toolbar field: 28px at 12px, beside compact buttons (a namespace, a database). */
+.loams-input.loams-input-compact {
+  width: auto;
+  height: var(--op-control-compact);
+  padding-left: 8px;
+  border-radius: var(--op-radius-sm);
+  font-size: var(--op-text-small);
 }
 
 .loams-input::placeholder {

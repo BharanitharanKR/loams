@@ -255,7 +255,9 @@ export function CatalogPage({
                         actions={<StatusTag status={statusTone(c.status)}>{c.status}</StatusTag>}
                       >
                         <div className="flex flex-col gap-3">
-                          <p className={/* mono-ok: id */ 'truncate font-mono text-xs text-faint'}>
+                          <p
+                            className={/* mono-ok: id */ 'truncate font-mono text-small text-faint'}
+                          >
                             {c.id}
                           </p>
                           <div className="flex flex-wrap gap-1">

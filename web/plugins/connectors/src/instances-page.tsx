@@ -196,7 +196,7 @@ export function InstancesPage({
                       {i.name}
                     </a>
                   </th>
-                  <td className={/* mono-ok: id */ 'font-mono text-xs'}>{i.connector}</td>
+                  <td className={/* mono-ok: id */ 'font-mono text-small'}>{i.connector}</td>
                   <td>{i.direction}</td>
                   <td>
                     <Badge>{i.runtime}</Badge>
@@ -222,7 +222,7 @@ export function InstancesPage({
 /** A small accessible bar sparkline of events per second; the numbers are in the table below it. */
 function Throughput({ d }: { d: InstanceDetail }) {
   const pts = d.throughput;
-  if (pts.length === 0) return <p className="m-0 text-sm text-muted">No samples yet.</p>;
+  if (pts.length === 0) return <p className="m-0 text-body text-muted">No samples yet.</p>;
   const max = Math.max(1, ...pts.map((p) => p.eventsPerSec));
   const latest = pts[pts.length - 1];
   return (
@@ -249,7 +249,7 @@ function Throughput({ d }: { d: InstanceDetail }) {
           );
         })}
       </svg>
-      <p className="m-0 text-xs text-muted">
+      <p className="m-0 text-small text-muted">
         Latest {latest?.eventsPerSec.toLocaleString('en')} events/s, peak {max.toLocaleString('en')}{' '}
         events/s.
       </p>
@@ -345,7 +345,7 @@ export function InstanceDetailPage({
             <Throughput d={d} />
           </Card>
           <Card title="Delivery">
-            <dl className="m-0 text-sm">
+            <dl className="m-0 text-body">
               <dt className="text-muted">Mode</dt>
               <dd className="m-0">{d.delivery}</dd>
               <dt className="mt-2 text-muted">Dead-lettered</dt>
@@ -355,7 +355,7 @@ export function InstanceDetailPage({
         </div>
         <Card title="Checkpoints">
           {d.checkpoints.length === 0 ? (
-            <p className="m-0 text-sm text-muted">No checkpoint committed yet.</p>
+            <p className="m-0 text-body text-muted">No checkpoint committed yet.</p>
           ) : (
             <div className="loams-table-wrap">
               <table className="loams-table">
@@ -379,7 +379,7 @@ export function InstanceDetailPage({
                       <th scope="row" className={/* mono-ok: id */ 'font-mono'}>
                         {c.split}
                       </th>
-                      <td className={/* mono-ok: id */ 'font-mono text-xs'}>{c.position}</td>
+                      <td className={/* mono-ok: id */ 'font-mono text-small'}>{c.position}</td>
                       <td className="loams-num">{c.epoch}</td>
                       <td>
                         <time dateTime={c.committedAt}>
@@ -396,30 +396,30 @@ export function InstanceDetailPage({
         </Card>
         <Card title="Errors">
           {d.errors.length === 0 ? (
-            <p className="m-0 text-sm text-muted">No errors.</p>
+            <p className="m-0 text-body text-muted">No errors.</p>
           ) : (
-            <ul className="m-0 flex list-none flex-col gap-2 p-0 text-sm">
+            <ul className="m-0 flex list-none flex-col gap-2 p-0 text-body">
               {d.errors.map((e) => (
                 <li
                   key={`${e.at}-${e.class}`}
                   className="border-b border-rule-soft pb-2 last:border-b-0"
                 >
                   <Badge>{e.class}</Badge>{' '}
-                  <time dateTime={e.at} className="text-xs text-muted">
+                  <time dateTime={e.at} className="text-small text-muted">
                     {e.at.replace('T', ' ').slice(0, 19)}
                   </time>
                   {e.split && (
-                    <span className={/* mono-ok: id */ 'ml-2 font-mono text-xs'}>{e.split}</span>
+                    <span className={/* mono-ok: id */ 'ml-2 font-mono text-small'}>{e.split}</span>
                   )}
                   <p className="m-0 mt-1">{e.message}</p>
-                  {e.hint && <p className="m-0 text-xs text-muted">{e.hint}</p>}
+                  {e.hint && <p className="m-0 text-small text-muted">{e.hint}</p>}
                 </li>
               ))}
             </ul>
           )}
         </Card>
         <Card title="Config and Fabric binding">
-          <dl className="m-0 mb-3 grid grid-cols-[10rem_1fr] gap-2 text-sm">
+          <dl className="m-0 mb-3 grid grid-cols-[10rem_1fr] gap-2 text-body">
             <dt className="text-muted">Fabric</dt>
             <dd className={/* mono-ok: id */ 'm-0 font-mono'}>
               {d.fabric.kind}{' '}
@@ -437,7 +437,7 @@ export function InstanceDetailPage({
             <dd className="m-0 tabular-nums">{d.version}</dd>
           </dl>
           <section aria-label="Instance config">
-            <pre className="m-0 max-h-80 overflow-auto border border-rule bg-surface p-3 font-mono text-xs">
+            <pre className="m-0 max-h-80 overflow-auto border border-rule bg-surface p-3 font-mono text-small">
               {JSON.stringify(d.config, null, 2)}
             </pre>
           </section>

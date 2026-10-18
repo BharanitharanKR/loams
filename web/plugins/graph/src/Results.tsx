@@ -116,7 +116,7 @@ function RowsView({
         <span>
           {name}
           {type && type !== 'ANY' && (
-            <span className="ml-1 font-normal text-faint text-xs">{type}</span>
+            <span className="ml-1 font-normal text-faint text-small">{type}</span>
           )}
         </span>
       ),
@@ -138,7 +138,7 @@ function RowsView({
       />
       {pages > 1 && (
         <nav className="flex items-center justify-end gap-2 pt-2" aria-label="Result pages">
-          <span className="mr-auto text-sm text-muted">
+          <span className="mr-auto text-body text-muted">
             Rows {fmt.format(current * TABLE_PAGE + 1)}–
             {fmt.format(Math.min((current + 1) * TABLE_PAGE, result.rows.length))}
           </span>
@@ -155,7 +155,7 @@ function RowsView({
 
   return (
     <section className="flex flex-col gap-3" aria-label="Results">
-      <p className="m-0 text-sm text-muted" role="status">
+      <p className="m-0 text-body text-muted" role="status">
         {fmt.format(result.rows.length)} {result.rows.length === 1 ? 'row' : 'rows'}
         {result.elapsedNanos > 0n && ` in ${elapsed(result.elapsedNanos)}`}
         {counters && `. ${counters}`}
@@ -179,7 +179,7 @@ function RowsView({
         </div>
       )}
       {result.notifications.length > 0 && (
-        <ul className="m-0 flex list-none flex-col gap-1 p-0 text-sm" aria-label="Notifications">
+        <ul className="m-0 flex list-none flex-col gap-1 p-0 text-body" aria-label="Notifications">
           {result.notifications.map((n, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: notifications have no id
             <li key={i}>
@@ -228,7 +228,7 @@ function Operator({ op, profile }: { op: graph.PlanOperator; profile: boolean })
     <li>
       <span className={/* mono-ok: code */ 'font-mono'}>{detail}</span>
       {profile && (
-        <span className="ml-2 text-muted text-xs">
+        <span className="ml-2 text-muted text-small">
           {fmt.format(Number(op.rows))} rows · {elapsed(op.elapsedNanos)}
         </span>
       )}
@@ -248,9 +248,9 @@ function PlanView({ result }: { result: PlanResult }) {
   const root = result.plan.root;
   return (
     <section className="flex flex-col gap-3" aria-label={result.profile ? 'Profile' : 'Plan'}>
-      <h3 className="m-0 text-base">{result.profile ? 'Profile' : 'Plan'}</h3>
+      <h3 className="m-0 text-emphasis">{result.profile ? 'Profile' : 'Plan'}</h3>
       {root ? (
-        <ul className="m-0 list-none p-0 text-sm" aria-label="Plan operators">
+        <ul className="m-0 list-none p-0 text-body" aria-label="Plan operators">
           <Operator op={root} profile={result.profile} />
         </ul>
       ) : (
@@ -258,8 +258,8 @@ function PlanView({ result }: { result: PlanResult }) {
       )}
       {result.plan.text && (
         <details>
-          <summary className="cursor-pointer text-sm text-muted">Engine text</summary>
-          <pre className="m-0 overflow-auto p-3 font-mono text-xs">{result.plan.text}</pre>
+          <summary className="cursor-pointer text-body text-muted">Engine text</summary>
+          <pre className="m-0 overflow-auto p-3 font-mono text-small">{result.plan.text}</pre>
         </details>
       )}
     </section>
