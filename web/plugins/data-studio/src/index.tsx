@@ -38,7 +38,7 @@ export function DataRoute({
   transport: Transport;
   platform: Pick<PlatformService, 'fetch' | 'baseUrl'>;
   flags: Pick<FlagsService, 'has'>;
-  navigate: (to: string) => void;
+  navigate: (to: string, opts?: { replace?: boolean }) => void;
   params: PageProps['params'];
   view: View;
 }) {
@@ -66,6 +66,7 @@ export function DataRoute({
       coll={params.coll ?? ''}
       tab={view}
       navigate={navigate}
+      params={params}
     />
   );
 }
@@ -79,7 +80,7 @@ const plugin: PluginModule = {
     const transport = service(ctx, 'transport');
     const platform = service(ctx, 'platform');
     const flags = service(ctx, 'flags');
-    const navigate = (to: string) => router.navigate(to);
+    const navigate = (to: string, opts?: { replace?: boolean }) => router.navigate(to, opts);
     // The static `/sql` route is registered before `/:coll`, because the router
     // takes the first match: a collection named "sql" is not reachable by URL.
     const routes: { id: string; path: string; title: string; view: View }[] = [
