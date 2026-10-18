@@ -59,6 +59,8 @@ function browserStorage(): Store | undefined {
 export class PanelController implements PanelService {
   #state: PanelState;
   #profile: PanelProfile | undefined;
+  /** Below 960px the panel is a sheet over the page, so a profile does not open it by default. */
+  #narrow = false;
   readonly #listeners = new Set<() => void>();
 
   constructor(
@@ -95,12 +97,14 @@ export class PanelController implements PanelService {
    * Follows the route: entering or leaving a profile's routes swaps to that profile's saved
    * state (or its default). Within the same profile nothing changes.
    */
-  route(path: string): void {
+  route(path: string, o: { narrow?: boolean } = {}): void {
     const next = this.config.profiles?.find((p) =>
       p.routes.some((r) => compile(r).pattern.test(path)),
     );
-    if (next === this.#profile) return;
+    const narrow = o.narrow === true;
+    if (next === this.#profile && narrow === this.#narrow) return;
     this.#profile = next;
+    this.#narrow = narrow;
     this.#state = this.#read();
     for (const listener of [...this.#listeners]) listener();
   }
@@ -121,7 +125,12 @@ export class PanelController implements PanelService {
   #read(): PanelState {
     const p = this.#profile;
     const size = p?.size ?? this.config.size;
-    const fallback: PanelState = { open: p?.open ?? false, tab: p?.tab, props: {}, size };
+    const fallback: PanelState = {
+      open: (p?.open ?? false) && !this.#narrow,
+      tab: p?.tab,
+      props: {},
+      size,
+    };
     try {
       const raw = JSON.parse(
         this.storage?.getItem(this.#key) ?? 'null',

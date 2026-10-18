@@ -224,12 +224,13 @@ export function Layout({
   );
   const location = useLocation(router);
   // A route profile (T9-6: a Studio thread opens the inspector on Diff at 420px) applies
-  // before the paint, so the thread never flashes without its panel.
+  // before the paint, so the thread never flashes without its panel. Below 960px the
+  // inspector is a sheet over the thread, so the profile leaves it closed there.
   useLayoutEffect(() => {
     for (const panel of [inspector, drawer]) {
-      if (panel instanceof PanelController) panel.route(location.path);
+      if (panel instanceof PanelController) panel.route(location.path, { narrow });
     }
-  }, [inspector, drawer, location.path]);
+  }, [inspector, drawer, location.path, narrow]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: close the sheet per route
   useEffect(() => setSheetOpen(false), [location.path]);
 

@@ -137,6 +137,14 @@ describe('the inspector (D1078)', () => {
     expect(screen.getByRole('tab', { name: 'Diff' })).toBeTruthy();
   });
 
+  it('a narrow window does not open the thread inspector by itself (it would cover the thread)', () => {
+    const p = new PanelController(INSPECTOR);
+    p.route('/studio/t/c_1', { narrow: true });
+    expect(p.state()).toMatchObject({ open: false, tab: 'studio.diff', size: 420 });
+    p.route('/studio/t/c_1');
+    expect(p.state().open).toBe(true);
+  });
+
   it('a Studio thread opens the inspector on Diff at 420px, and keeps the person`s choice there (T9-6)', () => {
     const diffTab = (slots: SlotRegistry) =>
       act(() => {
