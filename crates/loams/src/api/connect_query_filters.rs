@@ -154,8 +154,12 @@ fn multi_match_json(view: &MultiMatchQueryView<'_>) -> Result<Value, ConnectErro
         .fields
         .iter()
         .map(|f: &MultiMatchFieldView<'_>| {
-            let (name, boost) = (f.field, f.boost);
-            json!([name, boost])
+            // proto3 cannot tell an absent `boost` from `0`, and a field
+            // listed without one (`{"field": "title"}`) is a plain field, not
+            // one that scores nothing: 0 is the default boost of 1, as a bare
+            // field name is in Elasticsearch.
+            let boost = if f.boost == 0.0 { 1.0 } else { f.boost };
+            json!([f.field, boost])
         })
         .collect::<Vec<_>>();
     if !fields.is_empty() {
@@ -269,9 +273,19 @@ fn fuzzy_json(view: &FuzzyQueryView<'_>) -> Result<Value, ConnectError> {
 /// materialised first rather than pattern-matched on the view, so what is read
 /// here is exactly what `pk::from_json` is about to read.
 ///
-/// The three arms are total and spelled as `DocumentId` spells them; anything
-/// else is refused here, with the same message `pk::from_json` would produce for
-/// the same JSON, so a bad id is one error on both surfaces rather than two.
+/// Accepted, per id type:
+///
+/// - an unsigned integer id: `{"uint": "26084"}` (proto3 JSON's string form,
+///   exact up to `u64::MAX`), `{"uint": 26084}` or a bare `26084` — a JSON
+///   number is a double inside a `google.protobuf.Value`, so it is taken when
+///   it is a whole number no larger than 2^53, where a double is still exact;
+/// - a string id: `{"string": "k"}` or a bare `"k"`, as the REST route spells
+///   it;
+/// - a UUID id: `{"uuid": "…"}`.
+///
+/// Anything else is refused here, with the same message `pk::from_json` would
+/// produce for the same JSON, so a bad id is one error on both surfaces rather
+/// than two.
 fn id_json(value: Value) -> Result<Value, ConnectError> {
     let refused = || {
         invalid(
@@ -281,9 +295,23 @@ fn id_json(value: Value) -> Result<Value, ConnectError> {
             ),
         )
     };
+    let not_uint = || {
+        invalid(
+            "filter.ids",
+            format!(
+                "invalid id {value}: uint is not an unsigned 64-bit integer \
+                 (send one above 2^53 as a decimal string)"
+            ),
+        )
+    };
+    match &value {
+        Value::Number(number) => return whole_number(number).map(|n| json!(n)).ok_or_else(not_uint),
+        Value::String(text) => return Ok(json!(text)),
+        _ => {}
+    }
     // One arm, exactly as `pk::from_json` requires of the REST spelling's object
-    // form. Anything else — a bare number here, a two-key object, no object at
-    // all — is that function's refusal, said here.
+    // form. Anything else — a two-key object, a list — is that function's
+    // refusal, said here.
     let Some(arms) = value.as_object().filter(|arms| arms.len() == 1) else {
         return Err(refused());
     };
@@ -293,20 +321,30 @@ fn id_json(value: Value) -> Result<Value, ConnectError> {
         // 64-bit integer, which is what keeps `u64::MAX` exact. The REST bare
         // form is the number, so it is parsed here rather than handed on for
         // `pk::from_json` to refuse as an object.
-        ("uint", Value::String(text)) => {
-            text.parse::<u64>()
-                .map(|number| json!(number))
-                .map_err(|_| {
-                    invalid(
-                        "filter.ids",
-                        format!("invalid id {value}: uint is not an unsigned 64-bit integer"),
-                    )
-                })
+        ("uint", Value::String(text)) => text
+            .parse::<u64>()
+            .map(|number| json!(number))
+            .map_err(|_| not_uint()),
+        // proto3 JSON readers also accept the number form of a 64-bit integer.
+        ("uint", Value::Number(number)) => {
+            whole_number(number).map(|n| json!(n)).ok_or_else(not_uint)
         }
         ("string", Value::String(text)) => Ok(json!(text)),
         ("uuid", Value::String(text)) => Ok(json!({ "uuid": text })),
         _ => Err(refused()),
     }
+}
+
+/// A JSON number as an unsigned id: a `u64` as is, or a double that is a
+/// whole number in `0..=2^53` (above that a double has already lost digits,
+/// so the id it names is not the one the caller meant).
+fn whole_number(number: &serde_json::Number) -> Option<u64> {
+    const EXACT: f64 = 9_007_199_254_740_992.0; // 2^53
+    if let Some(n) = number.as_u64() {
+        return Some(n);
+    }
+    let x = number.as_f64()?;
+    (x.fract() == 0.0 && (0.0..=EXACT).contains(&x)).then_some(x as u64)
 }
 
 fn query_string_json(view: &QueryStringQueryView<'_>) -> Value {

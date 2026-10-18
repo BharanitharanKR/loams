@@ -1952,6 +1952,122 @@ async fn filter_ir_is_accepted_in_every_form_the_rest_route_takes() {
     running.shutdown().await;
 }
 
+/// What a console (or any proto3 JSON caller) sends without thinking about
+/// it: a whole-number id as a JSON number, a `multiMatch` field without a
+/// boost, a `queryString` without default fields. Each is answered as the REST
+/// route and Elasticsearch answer it.
+#[tokio::test]
+async fn ids_multi_match_and_query_string_defaults_rpc() {
+    let running = Running::start().await;
+    kb(&running, "w").await;
+
+    // Ids: `{"uint": 1}`, a bare `3`, a bare string and `{"string": …}` are
+    // all ids; a fraction, a negative and a double past 2^53 are not.
+    let body = running
+        .connect(
+            SEARCH,
+            &kb_request(&[
+                (
+                    "filter",
+                    json!({"ids": [{"uint": 1}, 3, "k-str", {"string": "k-str"}, {"uint": "2"}]}),
+                ),
+                ("limit", json!(10)),
+            ]),
+        )
+        .await
+        .expect_ok();
+    assert_eq!(
+        sorted(pks(&body)),
+        sorted(vec![json!(1u64), json!(2u64), json!(3u64), json!("k-str")]),
+        "{body}"
+    );
+    for bad in [
+        json!({"uint": 1.5}),
+        json!(-1),
+        json!(18_014_398_509_481_984.0_f64),
+        json!({"uint": true}),
+    ] {
+        let reply = running
+            .connect(
+                SEARCH,
+                &kb_request(&[("filter", json!({"ids": [bad.clone()]}))]),
+            )
+            .await;
+        let error = reply.expect_error(StatusCode::BAD_REQUEST);
+        assert_eq!(error["code"], "invalid_argument", "{bad}: {error}");
+    }
+
+    let text = |query: Value| {
+        kb_request(&[
+            ("retrievers", json!([{"text": {"query": query, "k": 10}}])),
+            ("limit", json!(10)),
+        ])
+    };
+    let ranked = |body: &Value, what: &str| {
+        let scores = scores(body);
+        assert_eq!(sorted(pks(body)), vec![json!(1u64), json!(3u64)], "{what}: {body}");
+        assert!(scores.iter().all(|s| *s > 0.0), "{what}: every hit scores: {body}");
+        assert!(
+            scores.windows(2).all(|w| w[0] >= w[1]),
+            "{what}: best first: {body}"
+        );
+        scores
+    };
+
+    // multiMatch: a field without a boost is boost 1, so the hits score as
+    // `match` does (BM25, best_fields), not 0.
+    let single = running
+        .connect(SEARCH, &text(json!({"match": {"field": "body", "text": "refund"}})))
+        .await
+        .expect_ok();
+    let want = ranked(&single, "match");
+    for (what, query) in [
+        (
+            "multiMatch without boosts",
+            json!({"multiMatch": {"fields": [{"field": "body"}], "text": "refund"}}),
+        ),
+        (
+            "multiMatch with boost 1",
+            json!({"multiMatch": {"fields": [{"field": "body", "boost": 1.0}], "text": "refund"}}),
+        ),
+        (
+            "multiMatch without fields",
+            json!({"multiMatch": {"text": "refund"}}),
+        ),
+        (
+            "multiMatch best_fields",
+            json!({"multiMatch": {"fields": [{"field": "body"}, {"field": "tenant"}],
+                   "text": "refund", "kind": "MULTI_MATCH_KIND_BEST_FIELDS"}}),
+        ),
+    ] {
+        let body = running.connect(SEARCH, &text(query)).await.expect_ok();
+        let got = ranked(&body, what);
+        assert_eq!(pks(&body), pks(&single), "{what}: the ranking of match");
+        for (g, w) in got.iter().zip(&want) {
+            assert!((g - w).abs() < 1e-4, "{what}: {got:?} vs {want:?}");
+        }
+    }
+
+    // queryString without default fields searches every text field, on both
+    // surfaces.
+    let body = running
+        .connect(SEARCH, &text(json!({"queryString": {"query": "refund"}})))
+        .await
+        .expect_ok();
+    ranked(&body, "queryString without defaultFields");
+    let rest = running
+        .rest_query(
+            "w",
+            &json!({"collection": "kb", "limit": 10, "retrievers": [
+                {"text": {"query": {"query_string": {"query": "refund"}}, "k": 10}}]}),
+        )
+        .await
+        .expect_ok();
+    ranked(&rest, "REST query_string without default_fields");
+
+    running.shutdown().await;
+}
+
 /// An empty result is an empty answer, never an error: a filter that matches
 /// nothing, a total of zero, a scroll of a collection nobody wrote to, and a
 /// page past the end all answer `200` with the empties **absent** (proto3

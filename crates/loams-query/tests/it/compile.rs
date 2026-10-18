@@ -1022,6 +1022,116 @@ async fn query_string_honours_the_default_operator() {
     assert_eq!(fx.hits(&query("and")).unwrap(), set(&[0]));
 }
 
+/// Two text fields (`title`, `body`) and a keyword (`tag`): what a query that
+/// names no fields searches.
+async fn two_text_fields() -> (CollectionSchema, Searcher) {
+    let schema = CollectionSchema::new(
+        vec![
+            text("title", true),
+            text("body", true),
+            field("tag", FieldKind::Keyword),
+        ],
+        vec![],
+        DynamicMapping::Ignore,
+    );
+    schema.validate().expect("valid schema");
+    let searcher = split(
+        &schema,
+        vec![
+            json!({"f": {"title": "Cold River", "body": "a river in the mountains", "tag": "river"}}),
+            json!({"f": {"title": "Saline Creek", "body": "a long river and its basin", "tag": "creek"}}),
+            json!({"f": {"title": "Green Hill", "body": "a hill by a lake", "tag": "river"}}),
+            json!({"f": {"title": "River", "body": "river river river", "tag": "x"}}),
+        ],
+    )
+    .await;
+    (schema, searcher)
+}
+
+/// The (pk, score) of each hit, best first.
+fn ranked(schema: &CollectionSchema, searcher: &Searcher, query: Value) -> Vec<(u64, f32)> {
+    let tokenizers = query_tokenizers();
+    let split = searcher.schema().clone();
+    let compiler = QueryCompiler::new(schema, &split, &tokenizers);
+    let compiled = compiler
+        .compile(&q(query), CompileMode::Scoring)
+        .expect("compiles");
+    searcher
+        .search(&*compiled.query, &TopDocs::with_limit(100).order_by_score())
+        .expect("search")
+        .into_iter()
+        .map(|(score, address)| (u64::from(address.doc_id), score))
+        .collect()
+}
+
+#[tokio::test]
+async fn query_string_without_default_fields_searches_every_text_field() {
+    let (schema, searcher) = two_text_fields().await;
+    for query in [
+        json!({"query_string": {"query": "river"}}),
+        json!({"query_string": {"query": "river", "default_fields": []}}),
+    ] {
+        let hits = ranked(&schema, &searcher, query.clone());
+        // Doc 1 has "river" only in its body, doc 0 and 3 in both; doc 2's
+        // keyword tag is not a text field and is not searched.
+        let pks: BTreeSet<u64> = hits.iter().map(|(pk, _)| *pk).collect();
+        assert_eq!(pks, set(&[0, 1, 3]), "{query}");
+        assert!(hits.iter().all(|(_, score)| *score > 0.0), "{hits:?}");
+    }
+    // A field the query names itself still works, and named defaults win.
+    let titled = ranked(&schema, &searcher, json!({"query_string": {"query": "title:river"}}));
+    let pks: BTreeSet<u64> = titled.iter().map(|(pk, _)| *pk).collect();
+    assert_eq!(pks, set(&[0, 3]));
+    let named = ranked(
+        &schema,
+        &searcher,
+        json!({"query_string": {"query": "river", "default_fields": ["title"]}}),
+    );
+    let pks: BTreeSet<u64> = named.iter().map(|(pk, _)| *pk).collect();
+    assert_eq!(pks, set(&[0, 3]));
+}
+
+#[tokio::test]
+async fn multi_match_scores_and_ranks_with_bm25() {
+    let (schema, searcher) = two_text_fields().await;
+    let best = ranked(
+        &schema,
+        &searcher,
+        json!({"multi_match": {"fields": [["title", 1.0], ["body", 1.0]], "text": "river"}}),
+    );
+    let pks: BTreeSet<u64> = best.iter().map(|(pk, _)| *pk).collect();
+    assert_eq!(pks, set(&[0, 1, 3]));
+    assert!(best.iter().all(|(_, score)| *score > 0.0), "{best:?}");
+    // Doc 3 ("River" / "river river river") is the best match.
+    assert_eq!(best[0].0, 3, "{best:?}");
+    // best_fields is the best single field's score: each hit's score is the
+    // max of its per-field match scores.
+    let title = ranked(&schema, &searcher, json!({"match": {"field": "title", "text": "river"}}));
+    let body = ranked(&schema, &searcher, json!({"match": {"field": "body", "text": "river"}}));
+    let of = |hits: &[(u64, f32)], pk: u64| {
+        hits.iter()
+            .find(|(p, _)| *p == pk)
+            .map_or(0.0, |(_, s)| *s)
+    };
+    for (pk, score) in &best {
+        let expected = of(&title, *pk).max(of(&body, *pk));
+        assert!((score - expected).abs() < 1e-5, "doc {pk}: {score} vs {expected}");
+    }
+    // most_fields sums them.
+    let most = ranked(
+        &schema,
+        &searcher,
+        json!({"multi_match": {"fields": [["title", 1.0], ["body", 1.0]], "text": "river", "kind": "most_fields"}}),
+    );
+    for (pk, score) in &most {
+        let expected = of(&title, *pk) + of(&body, *pk);
+        assert!((score - expected).abs() < 1e-5, "doc {pk}: {score} vs {expected}");
+    }
+    // No fields is every text field at boost 1, the same as naming them.
+    let all = ranked(&schema, &searcher, json!({"multi_match": {"text": "river"}}));
+    assert_eq!(all, best);
+}
+
 #[test]
 fn highlight_terms_skip_must_not() {
     let schema = schema();

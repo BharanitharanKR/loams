@@ -1091,6 +1091,76 @@ async fn a_query_string_syntax_error_is_a_parse_failure() {
     es.server.shutdown().await.expect("shutdown");
 }
 
+/// `multi_match` scores with BM25 (best_fields: the best field's score) and
+/// ranks; with no `fields`, and `query_string` with no `default_field`, search
+/// every text field (`index.query.default_field` is `*`).
+#[tokio::test]
+async fn multi_match_and_query_string_score_over_every_text_field() {
+    let es = Es::start().await;
+    let docs: Vec<(&str, Value)> = vec![
+        ("1", json!({"title": "Cold River", "body": "a river in the mountains"})),
+        ("2", json!({"title": "Saline Creek", "body": "a long river and its basin"})),
+        ("3", json!({"title": "Green Hill", "body": "a hill by a lake"})),
+    ];
+    bulk_index(&es, "mm", &docs).await;
+    let scored = |a: &Answer, what: &str| {
+        let mut got = ids(a);
+        got.sort();
+        assert_eq!(got, ["1", "2"], "{what}: {}", a.text);
+        let s: Vec<f64> = hits(a).iter().map(|h| h["_score"].as_f64().unwrap()).collect();
+        assert!(s.iter().all(|s| *s > 0.0), "{what}: {}", a.text);
+        assert!(s.windows(2).all(|w| w[0] >= w[1]), "{what}: {}", a.text);
+        assert_eq!(a.body["hits"]["max_score"].as_f64(), Some(s[0]), "{what}");
+        scores(a)
+    };
+    let title = scores(
+        &search(&es, "/mm/_search", json!({"query": {"match": {"title": "river"}}})).await,
+    );
+    let body = scores(
+        &search(&es, "/mm/_search", json!({"query": {"match": {"body": "river"}}})).await,
+    );
+    let of = |m: &BTreeMap<String, f64>, id: &str| m.get(id).copied().unwrap_or(0.0);
+
+    let best = search(
+        &es,
+        "/mm/_search",
+        json!({"query": {"multi_match": {"query": "river", "fields": ["title", "body"]}}}),
+    )
+    .await;
+    let best = scored(&best, "multi_match");
+    for (id, score) in &best {
+        let want = of(&title, id).max(of(&body, id));
+        assert!(close(*score, want, 1e-4), "best_fields {id}: {score} vs {want}");
+    }
+    // Doc 1 has "river" in both fields and outranks doc 2.
+    assert!(best["1"] > best["2"], "{best:?}");
+
+    let most = search(
+        &es,
+        "/mm/_search",
+        json!({"query": {"multi_match": {"query": "river", "fields": ["title", "body"],
+                                        "type": "most_fields"}}}),
+    )
+    .await;
+    for (id, score) in scored(&most, "most_fields") {
+        let want = of(&title, &id) + of(&body, &id);
+        assert!(close(score, want, 1e-4), "most_fields {id}: {score} vs {want}");
+    }
+
+    for (what, query) in [
+        ("multi_match without fields", json!({"multi_match": {"query": "river"}})),
+        ("query_string without default_field", json!({"query_string": {"query": "river"}})),
+        (
+            "query_string default_field *",
+            json!({"query_string": {"query": "river", "default_field": "*"}}),
+        ),
+    ] {
+        let a = search(&es, "/mm/_search", json!({ "query": query })).await;
+        scored(&a, what);
+    }
+    es.server.shutdown().await.expect("shutdown");
+}
+
 #[tokio::test]
 async fn min_score_and_boost_shape_the_scores() {
     let es = Es::start().await;
