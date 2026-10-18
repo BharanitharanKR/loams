@@ -170,7 +170,7 @@
       "upstreamPath": "apps/web/src/components/ui/input.tsx",
       "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
       "upstreamSha256": "3da4013e812d00d8a3f9795825625ab098bf4e14c360b20fcd653ca1f8b77f57",
-      "localSha256": "144c047ace2464f3ff76b9afe58a7f649f6d15a2f5cf6eae07b8369b48ee0309",
+      "localSha256": "61855b491f674289949473b732f4a26649b55695cdeb4ae541b75a97684002b2",
       "verdict": "adapt",
       "group": "k"
     },
