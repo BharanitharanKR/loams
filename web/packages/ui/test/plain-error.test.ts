@@ -23,6 +23,12 @@ describe('plainError', () => {
     );
   });
 
+  it('reads a long run of spaces in linear time', () => {
+    const started = performance.now();
+    expect(plainError(`502${' '.repeat(50_000)}!`)).toMatch(/^502 /);
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
   it("keeps the server's own sentence", () => {
     expect(plainError('namespace "e2e" not found')).toBe('namespace "e2e" not found');
     expect(plainError('HTTP 404')).toBe('HTTP 404');

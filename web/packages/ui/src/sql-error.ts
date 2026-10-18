@@ -43,7 +43,9 @@ export function sqlErrorPosition(message: string, statement: string): SqlPositio
   };
   const firstUse = (qualified: string): SqlPosition | undefined => {
     const name = qualified.replace(/\.+$/, '').split('.').pop() ?? '';
-    const idx = name ? statement.search(new RegExp(`\\b${name.replace(/\$/g, '\\$')}\\b`)) : -1;
+    const idx = name
+      ? statement.search(new RegExp(`\\b${name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`))
+      : -1;
     return idx >= 0 ? { ...positionOfOffset(statement, idx), length: name.length } : undefined;
   };
   const near = (quoted: string, line: number): SqlPosition => {
