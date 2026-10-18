@@ -14,8 +14,9 @@
 #
 # pg-control-deploy-neon (Task 9, the PG2a exit): e2e_create_project_and_branch,
 # the service and the reconciler against deploy/loams-postgres-dev's
-# pageserver and a loams-wal (the stack's stock safekeeper refuses
-# loams-wal's timeline create, R2.11).
+# pageserver and a loams-wal; then again against the stack's stock
+# safekeeper1, which the release stack's pg-control uses (0.1.0 blocker B2:
+# the WAL client sends the stock safekeeper's `mconf` and reads its head).
 #
 # pg-control-compose-runtime (Task 10): it_compose_compute_answers_select_1,
 # a compute the compose runtime starts on deploy/loams-postgres-dev's network
@@ -240,24 +241,32 @@ jobs:
         working-directory: deploy/loams-postgres-dev
         run: |
           for i in 1 2 3; do
-            docker compose pull rustfs create-bucket storage_broker pageserver && exit 0
+            docker compose pull rustfs create-bucket storage_broker pageserver safekeeper1 && exit 0
             sleep $((i * 15))
           done
           exit 1
-      - name: deploy/loams-postgres-dev storage, and loams-wal
+      - name: deploy/loams-postgres-dev storage (with its stock safekeeper1), and loams-wal
         working-directory: deploy/loams-postgres-dev
         run: |
-          docker compose up -d --pull never rustfs create-bucket storage_broker pageserver
+          docker compose up -d --pull never rustfs create-bucket storage_broker pageserver safekeeper1
           nohup "$GITHUB_WORKSPACE/target/debug/loams-wal" --store mem \
             --listen-pg 127.0.0.1:5455 --listen-http 127.0.0.1:7677 > "${{ runner.temp }}/loams-wal.log" 2>&1 &
           for _ in $(seq 1 120); do
-            curl -sf localhost:9898/v1/status && curl -sf localhost:7677/v1/status && break
+            curl -sf localhost:9898/v1/status && curl -sf localhost:7677/v1/status \
+              && curl -sf localhost:7676/v1/status && break
             sleep 1
           done
-          curl -sf localhost:9898/v1/status && curl -sf localhost:7677/v1/status
+          curl -sf localhost:9898/v1/status && curl -sf localhost:7677/v1/status && curl -sf localhost:7676/v1/status
       - name: e2e_create_project_and_branch
         env:
           NEON_WAL: http://127.0.0.1:7677
+        run: cargo test -p loams-pg-control --locked --test e2e_deploy_neon -- --ignored
+      # 0.1.0 blocker B2: the release stack points pg-control's --wal at the
+      # stock safekeeper1 of the pinned storage image, not at loams-wal. The
+      # same CreateProject, branch and delete, against it.
+      - name: e2e_create_project_and_branch on the stack's stock safekeeper (B2)
+        env:
+          NEON_WAL: http://127.0.0.1:7676
         run: cargo test -p loams-pg-control --locked --test e2e_deploy_neon -- --ignored
       - name: logs
         if: failure()
