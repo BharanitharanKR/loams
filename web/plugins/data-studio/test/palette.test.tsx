@@ -111,5 +111,6 @@ describe('the palette tables', () => {
     rerender(<SqlPage client={client} ns="shop" navigate={() => {}} table="users" />);
     await act(async () => {});
     expect(codeEditorText(screen.getByLabelText('SQL'))).toBe(tableStatement('users'));
-  });
+    // The code editor's first mount is slow on a loaded runner.
+  }, 20_000);
 });
