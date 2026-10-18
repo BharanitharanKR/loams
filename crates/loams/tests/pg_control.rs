@@ -702,6 +702,18 @@ mod postgres {
         assert_eq!(status, 400, "{replay}");
         assert_eq!(reason(&replay), "secret_already_issued");
 
+        // GetConnectionInfo is served (0.1.0): with no endpoint yet it names
+        // what is missing rather than answering not_implemented.
+        let (status, e) = pg
+            .call(
+                "GetConnectionInfo",
+                json!({"namespace": "acme", "projectId": id}),
+                None,
+            )
+            .await;
+        assert_eq!(status, 400, "{e}");
+        assert_eq!(reason(&e), "failed_precondition", "{e}");
+
         let (status, e) = pg
             .call(
                 "GetProject",
