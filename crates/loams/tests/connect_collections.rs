@@ -65,6 +65,7 @@ const TOKEN: &str = "loams-consistency-token";
 
 // The RPC paths of design §44 §5.1, row for row of `docs/api/route-map.md`.
 const CREATE_NAMESPACE: &str = "/loams.collection.v1.NamespaceService/CreateNamespace";
+const LIST_NAMESPACES: &str = "/loams.collection.v1.NamespaceService/ListNamespaces";
 const CREATE_COLLECTION: &str = "/loams.collection.v1.CollectionService/CreateCollection";
 const LIST_COLLECTIONS: &str = "/loams.collection.v1.CollectionService/ListCollections";
 const GET_COLLECTION: &str = "/loams.collection.v1.CollectionService/GetCollection";
@@ -1266,7 +1267,7 @@ fn hot_status(body: &Value) -> &Value {
 /// upgrade ledger), so no caller creates or addresses it: `CreateNamespace`,
 /// the collection RPCs and every `/v1/namespaces/_system/…` route answer
 /// `invalid_argument` (`field` = `namespace`, message `namespace_reserved: …`).
-/// There is no namespace listing to omit it from.
+/// `ListNamespaces` omits it (`list_namespaces_pages_by_name_with_counts`).
 #[tokio::test]
 async fn system_namespace_is_reserved() {
     let running = Running::start().await;
@@ -1335,5 +1336,125 @@ async fn system_namespace_is_reserved() {
         .await;
     assert_eq!(other.status, StatusCode::CREATED, "{}", other.body);
 
+    running.shutdown().await;
+}
+
+/// B7: `ListNamespaces` answers every namespace the caller reaches (sign-in
+/// off: every one) by name, AIP-158 paged, with its collection and stream
+/// counts, and never `_system`.
+#[tokio::test]
+async fn list_namespaces_pages_by_name_with_counts() {
+    let running = Running::start().await;
+    for ns in ["zeta", "alpha", "mid"] {
+        running
+            .connect(CREATE_NAMESPACE, &json!({"namespace": ns}))
+            .await
+            .expect_ok();
+    }
+    running
+        .connect(
+            CREATE_COLLECTION,
+            &json!({"namespace": "alpha", "name": "kb", "schema": kb_schema()}),
+        )
+        .await
+        .expect_ok();
+    let stream = running
+        .rest(
+            Method::POST,
+            "/v1/namespaces/alpha/streams",
+            Some(json!({"name": "events", "partitions": 1})),
+        )
+        .await;
+    assert!(stream.status.is_success(), "{}", stream.body);
+
+    let all = running
+        .connect(LIST_NAMESPACES, &json!({}))
+        .await
+        .expect_ok();
+    let names: Vec<&str> = all["namespaces"]
+        .as_array()
+        .expect("namespaces")
+        .iter()
+        .map(|ns| ns["namespace"].as_str().expect("a name"))
+        .collect();
+    assert_eq!(names, ["alpha", "mid", "zeta"], "{all}");
+    assert!(all.get(PAGE_KEY).is_none(), "{all}");
+    let alpha = &all["namespaces"][0];
+    assert_eq!(alpha["collectionCount"], 1, "{alpha}");
+    // The collection's implicit stream is not counted, the named one is.
+    assert_eq!(alpha["streamCount"], 1, "{alpha}");
+    assert!(
+        int64(&alpha["namespaceId"]).is_some_and(|id| id > 0),
+        "{alpha}"
+    );
+    // A field at its default is absent in proto3 JSON.
+    assert!(
+        all["namespaces"][1].get("collectionCount").is_none(),
+        "{all}"
+    );
+
+    let first = running
+        .connect(LIST_NAMESPACES, &json!({"pageSize": 2}))
+        .await
+        .expect_ok();
+    assert_eq!(
+        first["namespaces"].as_array().map(Vec::len),
+        Some(2),
+        "{first}"
+    );
+    let token = first[PAGE_KEY].as_str().expect("a next page").to_owned();
+    let second = running
+        .connect(LIST_NAMESPACES, &json!({"pageSize": 2, "pageToken": token}))
+        .await
+        .expect_ok();
+    assert_eq!(second["namespaces"][0]["namespace"], "zeta", "{second}");
+    assert!(second.get(PAGE_KEY).is_none(), "{second}");
+
+    let bad = running
+        .connect(LIST_NAMESPACES, &json!({"pageToken": "nope"}))
+        .await
+        .expect_error(StatusCode::BAD_REQUEST);
+    assert_eq!(error_info(&bad).reason, "invalid_argument", "{bad}");
+    running.shutdown().await;
+}
+
+/// B7: with sign-in on, `ListNamespaces` is not public (no credential is
+/// `401`), and the operator's key from the keys file lists every namespace.
+/// The per-role matrix is `api::namespace_reach`'s unit test.
+#[tokio::test]
+async fn list_namespaces_needs_a_credential_when_sign_in_is_on() {
+    let keys = TempDir::new().expect("temp dir");
+    let (key, line) = loams::auth::api_key::new_key("test");
+    let path = keys.path().join("api-keys");
+    std::fs::write(&path, format!("{line}\n")).expect("keys file");
+    let running = Running::start_with(|config| {
+        config.auth = loams::auth::AuthConfig::api_keys(&path);
+    })
+    .await;
+    let anonymous = running.connect(LIST_NAMESPACES, &json!({})).await;
+    assert_eq!(
+        anonymous.status(),
+        StatusCode::UNAUTHORIZED,
+        "{}",
+        anonymous.body
+    );
+
+    let call = |rpc: &'static str, body: Value| {
+        running
+            .http
+            .post(format!("{}{rpc}", running.base))
+            .header("content-type", "application/json")
+            .header("authorization", format!("Bearer {key}"))
+            .body(body.to_string())
+            .send()
+    };
+    let created = call(CREATE_NAMESPACE, json!({"namespace": "acme"}))
+        .await
+        .expect("create");
+    assert_eq!(created.status(), StatusCode::OK);
+    let listed = call(LIST_NAMESPACES, json!({})).await.expect("list");
+    assert_eq!(listed.status(), StatusCode::OK);
+    let body: Value = listed.json().await.expect("json");
+    assert_eq!(body["namespaces"][0]["namespace"], "acme", "{body}");
     running.shutdown().await;
 }
