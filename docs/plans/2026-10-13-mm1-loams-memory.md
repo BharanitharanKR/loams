@@ -1111,6 +1111,57 @@ MM1a's `Forget` stays logical (Task 9).
 
 **R0.14 Features.** `crates/loams/Cargo.toml` has `durable = ["dep:loams-durable"]` and `graph = ["dep:loams-graph"]`, and neither is a default feature. In Task 11, `memory` enables `durable` (MM1a needs the extraction functions). It adds `graph` only from Task 14 on. Before then, MM1a runs without graphs, as §52 §14 says.
 
+### Task 1 rulings (2026-10-18)
+
+**R1.1 SDK exposure waits for Task 44.**
+- Both services carry `ModuleOptions { name: "memory", unstable: true }`. No method carries `FacadeOptions` yet, so the generated facades have no `memory` module. This follows PG2 ruling R1.3 and API2's rule, which requires facade calls only on stable packages.
+- A module with calls needs every SDK's package map and stubs (`@loams/proto/memory`, the Go and Python stub paths). Task 44 owns those, so it adds the calls together with them.
+- Retry classes follow D610 from what the proto already says: `NO_SIDE_EFFECTS` reads are `safe`, keyed mutations are `keyed`, and the R1.2 exemptions are `never` unless Task 44 marks one `retry_safe`.
+- The package list and the 22 new reasons still change the generated facades. The TypeScript, Python, Rust and Go facade outputs and the facade-gen goldens are regenerated.
+- The hand-kept registries get the same rows in the page's order, as in the `loams.repos.v1` catch-up commit `e04ec5df`: C++, C#, Go `reason.go`, Rust's `Reason`, the Python count, the conformance recorder and `error.json`. None of these reasons is recorded, because nothing serves the package yet.
+
+**R1.2 Which mutations take `idempotency_key = 15`.**
+- **Keyed (11):** `CreateStore`, `DeleteStore`, `ExportSpace`, `ImportSpace`, `Add`, `AddBatch`, `UpdateFact`, `RetryExtraction`, `Forget`, `Consolidate` and `RevertDreamRun`.
+  - `CreateStore` is a create by name, but §52 §9.1 marks it `idempotency_key`, so it keeps the key.
+  - `DeleteStore` and the other RPCs that answer an `Operation` are keyed, so a replay answers the same operation.
+  - `UpdateFact` (a correction) and `Forget` (a new erasure) write new records.
+- **Idempotent by construction (7, no key; API1 ruling 2.4):** `CreateSpace` (keyed by kind and `external_id`), `UpdateStore`, `UpdateSpace`, `ConfigureMirror`, `InvalidateFact`, `PinFact`, and `UpdateBlock` (compare-and-swap on `if_version`).
+- `every_mutation_has_idempotency_key` pins both lists.
+
+**R1.3 RPCs answer the resource, as §52 §9.1 writes them.** `Store`, `Space`, `Fact`, `Entity`, `Episode`, `Block`, `Profile`, `Erasure` and `Operation` are answered directly, and `WatchSpace` streams `SpaceEvent`. `buf.yaml` lists `memory.proto` under `RPC_RESPONSE_STANDARD_NAME` and `RPC_REQUEST_RESPONSE_UNIQUE`, as `loams.graph.v1` does. `buf lint` (STANDARD) and `buf breaking` against `dev` pass with buf 1.73.0.
+
+**R1.4 Reason codes.**
+
+| Code | Reasons |
+|---|---|
+| not_found | `memory_store_not_found`, `memory_space_not_found` |
+| resource_exhausted | `memory_space_limit`, `memory_core_budget_exceeded`, `memory_token_budget_exhausted` |
+| failed_precondition | `memory_managed_object` (§52 §5.1), `memory_secret_detected`, `memory_pii_refused`, `memory_model_not_configured`, `memory_model_not_local`, `memory_extraction_failed`, `code_repo_not_indexed`, `code_language_unsupported` |
+| aborted | `memory_block_version_mismatch` (§52 §6.5) |
+| invalid_argument | `memory_block_too_large`, `memory_content_too_large`, `memory_too_many_spaces`, `memory_cross_space_write`, `code_change_too_large`, `code_scip_invalid` |
+| unavailable | `code_index_building` (transient) |
+| unimplemented | `memory_not_yet_available` |
+
+`reasons_have_their_connect_codes` pins all 22.
+
+**R1.5 The route map lists Connect paths, not REST.** §52 names no REST surface, and API2 (D602) removes application REST. The planned `loams.memory.v1` section in `docs/api/route-map.md` therefore has one row per RPC with its Connect path, put first, and the task that serves it. `every_rpc_has_a_planned_route` checks the section both ways.
+
+**R1.6 Defaults the design leaves open.**
+- **Store addressing.** `store` takes the store's name or its `ms_` id. Names match `^[a-z][a-z0-9-]{0,62}$`, so a name never starts with `ms_`.
+- **`AddBatch`** takes at most 100 items. Each item succeeds or fails on its own (`AddBatchResult.error_reason`).
+- **`PinFact`** takes `bool pinned`; `false` is §52 §7.3's `UnpinFact`.
+- **`GetProfile` is `NO_SIDE_EFFECTS` and has no `refresh` field.** §6.6's `refresh: instant` regenerates a managed block with a model call, which is a write. Until the owner decides, an instant refresh is `Consolidate` with `steps: [DREAM_STEP_BLOCKS]` (owner question).
+- **`Fact`** keeps §9.1's fields 1–16 and adds §6.3's `expires_hint`, `trust`, `last_used_time` and `uses` as fields 17–20.
+- **Timestamps** use AIP-142 `_time` names (`record_time`, `create_time`).
+- **`ModelRef.key_ref`** holds an `env/` reference, never a key.
+- **`UpdateBlock`'s `if_version = 0`** creates a block that does not exist yet.
+- **`Erasure.id`** is whatever §18 §9's erasure log assigns (Task 23).
+- **`UpdateSpace`** answers `Space`. A move is named in `Space.operation` (kind `memory.space.move`).
+
+**R1.7 Two RPCs have no owning task.** `DeleteStore` (it needs Task 23's purge) and an `UpdateSpace` that changes `isolation` (a shard move) are in §9.1, but no MM1 task implements them. Until a task is named they answer `memory_not_yet_available` (owner question).
+
+**R1.8 The `CATALOGUE` row lands with Task 11, not here.** R0.8 had Task 1 add the row with `available: cfg!(feature = "memory")`, but that feature does not exist until Task 11. A row with `available: false` also promises that every RPC answers `feature_not_in_variant`, and that needs the stub registration Task 11 writes. Task 11 adds the row, the feature and the stub together. The package is authorized for `route_map.rs` by a §44 §7.2 module-catalogue row rather than §8's "New protos:" sentence, as PG2 Task 1 did.
+
 ## Owner rulings (2026-10-13)
 
 The owner accepted the controller's recommendations:
