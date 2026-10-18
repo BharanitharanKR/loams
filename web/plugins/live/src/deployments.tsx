@@ -505,8 +505,8 @@ export function DeploymentsPage({
   const functionPaths = shown?.functions.map((f) => f.path) ?? [];
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-6xl">
-      <header className="flex items-start justify-between gap-4">
+    <div className="lc-page">
+      <header className="lc-page-head flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="m-0">Live deployments</h1>
           <p className="text-muted m-0">

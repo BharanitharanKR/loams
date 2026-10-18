@@ -283,14 +283,36 @@ code {
   min-width: 0;
 }
 .lc-topbar-start {
-  flex: 1;
+  /* Shrinks first, and its pills and crumbs truncate: nothing in it may overlap the
+     search box (at 1440 Studio's context pills used to run under it). */
+  /* After the search box it gives way before the tools on the right do. */
+  flex: 1 100 auto;
+  overflow: hidden;
+  /* Room for the focus ring of its first and last controls inside the clip. */
+  margin-inline: -3px;
+  padding: 3px;
 }
 .lc-topbar-end {
-  flex: none;
+  /* Gives way after the search box: Studio's git tools truncate their labels. */
+  flex: 0 1 auto;
+  min-width: 0;
+}
+/* Only Studio's checkout and branch pickers give way (their labels truncate, down to
+   their icon); the commit action, the overlays, the mode switch and the panel toggles
+   keep their size. */
+.lc-topbar-end > :not(.lc-studio-tools),
+.lc-studio-tools > div > :last-child {
+  flex-shrink: 0;
+}
+.lc-studio-tools > div > :not(:last-child):not(:empty) {
+  min-width: 36px;
 }
 .lc-topbar-center {
   display: flex;
-  flex: none;
+  /* Gives way before the context pills and crumbs do, down to the hint's min-width. */
+  flex: 0 1000 auto;
+  /* The search box's own floor: below it the tools on the right give way instead. */
+  min-width: 200px;
   align-items: center;
   justify-content: center;
   gap: 6px;
@@ -327,6 +349,8 @@ code {
   align-items: center;
   gap: 8px;
   width: min(320px, 28vw);
+  /* Never narrower than its hint text and keys (it gives way to the tools, not to zero). */
+  min-width: 200px;
   height: var(--op-control-compact);
   padding: 0 4px 0 10px;
   border: 1px solid var(--op-rule);
@@ -611,8 +635,10 @@ code {
   .lc-main {
     padding: 20px 12px 48px;
   }
+  .lc-topbar-center,
   .lc-palette-hint {
     width: auto;
+    min-width: 0;
   }
   .lc-palette-hint-text {
     display: none;
@@ -1283,6 +1309,19 @@ button.lc-hosted-engine {
 
 .lc-mode {
   flex-shrink: 0;
+}
+/* With Studio's git tools in the top bar, the mode switch is icons only below 1536px
+   (each option keeps its name for assistive technology and its tooltip), so the bar fits
+   at 1280 and 1440 with the sidebar open. */
+@media (max-width: 1535px) {
+  .lc-topbar:has(.lc-studio-tools) .lc-mode span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 @media (max-width: 640px) {
   .lc-mode span {

@@ -75,7 +75,7 @@ export function AppearanceSection({ theme }: { theme: ThemeService }) {
   const { choice } = useThemeState(theme);
   const [motion, setMotionState] = useState(readMotion);
   return (
-    <section className="grid gap-3" aria-labelledby="lc-appearance">
+    <section className="grid justify-items-start gap-3" aria-labelledby="lc-appearance">
       <h2 id="lc-appearance" className="m-0 text-section font-semibold">
         Appearance
       </h2>

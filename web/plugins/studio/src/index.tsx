@@ -142,6 +142,8 @@ const plugin: PluginModule = {
     // until SF1 (D922).
     const factory = desktop?.factory ? desktopFactory(desktop) : undefined;
     const navigate = (to: string) => router.navigate(to);
+    const setTrail = (trail: { label: string; href?: string }[] | undefined) =>
+      router.setTrail?.(trail);
     // One keyboard layer and palette source for every Studio page (SD1 Task 24). The
     // palette's threads and run groups come from agentd (SD1 Task 17).
     const keys = createStudioKeys({ edition: platform.kind });
@@ -165,6 +167,7 @@ const plugin: PluginModule = {
               openExternal={(url) => platform.openExternal(url)}
               inspector={inspector}
               drawer={drawer}
+              setTrail={setTrail}
             />
           ),
         ),
