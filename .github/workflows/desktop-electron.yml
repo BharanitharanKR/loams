@@ -79,8 +79,9 @@ jobs:
     name: "${{ matrix.area }}: package (${{ matrix.arch }})"
     needs: platforms
     runs-on: ${{ matrix.runner }}
-    # A cold Windows or macOS engine build takes about an hour on a GitHub-hosted runner.
-    timeout-minutes: 150
+    # A cold Windows or macOS engine build takes about an hour on a GitHub-hosted runner; a cold
+    # Intel one took 2h04m plus 23 minutes for the agent daemon (run 39099462854 hit 150).
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.platforms.outputs.matrix) }}

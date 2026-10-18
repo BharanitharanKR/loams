@@ -266,8 +266,8 @@ jobs:
     name: "Windows: package the unpacked app"
     needs: plan
     runs-on: windows-2025
-    # A cold Windows engine build takes about an hour.
-    timeout-minutes: 150
+    # A cold Windows engine build takes about an hour, the agent daemon about 16 more minutes.
+    timeout-minutes: 180
     env:
       LOAMS_DESKTOP_VERSION: ${{ needs.plan.outputs.desktop_version }}
     steps:
@@ -495,8 +495,9 @@ jobs:
     # The Apple signing secrets, when they exist, live with the others in this environment.
     environment: desktop-release
     runs-on: ${{ matrix.runner }}
-    # The Intel engine build alone takes 90+ minutes.
-    timeout-minutes: 150
+    # A cold Intel engine build took 2h04m and the agent daemon 23 more minutes (Desktop run
+    # 39099462854 hit the old 150-minute limit while packaging).
+    timeout-minutes: 240
     strategy:
       fail-fast: true
       matrix:
