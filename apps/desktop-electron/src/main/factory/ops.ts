@@ -468,6 +468,13 @@ export const OPS: Record<FactoryAppId, Record<string, Op>> = {
 							isRootObservation: true,
 							limit: clamp(p.limit),
 							fromStartTime: p.fromStartTime,
+						}).catch((e: unknown) => {
+							// A self-hosted Langfuse not on its v4 data model has no v2 observations.
+							if (rec(e)["status"] === 404)
+								throw new UnsupportedError(
+									"Recent traces need Langfuse v4's observations API, which this Langfuse does not serve. Open the app to see its traces.",
+								);
+							throw e;
 						}),
 					)["data"],
 				).map((o) => ({

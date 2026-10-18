@@ -1,7 +1,11 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { FACTORY_APPS } from "../src/main/factory/apps";
-import { OP_NAME_ALLOWLIST, OPS } from "../src/main/factory/ops";
+import {
+	OP_NAME_ALLOWLIST,
+	OPS,
+	UnsupportedError,
+} from "../src/main/factory/ops";
 
 const src = readFileSync(
 	new URL("../src/main/factory/ops.ts", import.meta.url),
@@ -191,5 +195,28 @@ describe("ops for Studio", () => {
 		)) as { release?: string; stack?: string };
 		expect(out.release).toBe("api@2");
 		expect(out.stack).toBeUndefined();
+	});
+	it("langfuse_traces_without_v4_api_is_unsupported_not_a_raw_404", async () => {
+		// A default self-hosted Langfuse (no LANGFUSE_MIGRATION_V4_WRITE_MODE) answers
+		// /api/public/v2/observations with a 404: say so, without the request URL.
+		const op = OPS.langfuse.traces;
+		if (!op) throw new Error("no traces op");
+		const run = op.run(
+			adapter({
+				listObservations: () => {
+					throw Object.assign(
+						new Error(
+							"GET http://lf/api/public/v2/observations?limit=20 failed with 404: v4 write mode",
+						),
+						{ status: 404 },
+					);
+				},
+			}),
+			op.params.parse({}) as never,
+			ctx,
+		);
+		await expect(run).rejects.toBeInstanceOf(UnsupportedError);
+		await expect(run).rejects.toThrow(/Langfuse v4/);
+		await expect(run).rejects.not.toThrow(/http:/);
 	});
 });
