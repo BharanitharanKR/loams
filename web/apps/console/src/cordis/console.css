@@ -285,7 +285,8 @@ code {
 .lc-topbar-start {
   /* Shrinks first, and its pills and crumbs truncate: nothing in it may overlap the
      search box (at 1440 Studio's context pills used to run under it). */
-  flex: 1 1 auto;
+  /* After the search box it gives way before the tools on the right do. */
+  flex: 1 100 auto;
   overflow: hidden;
   /* Room for the focus ring of its first and last controls inside the clip. */
   margin-inline: -3px;
@@ -296,11 +297,15 @@ code {
   flex: 0 1 auto;
   min-width: 0;
 }
-/* Only Studio's checkout and branch pickers give way (their labels truncate); the commit
-   action, the overlays, the mode switch and the panel toggles keep their size. */
+/* Only Studio's checkout and branch pickers give way (their labels truncate, down to
+   their icon); the commit action, the overlays, the mode switch and the panel toggles
+   keep their size. */
 .lc-topbar-end > :not(.lc-studio-tools),
 .lc-studio-tools > div > :last-child {
   flex-shrink: 0;
+}
+.lc-studio-tools > div > :not(:last-child):not(:empty) {
+  min-width: 36px;
 }
 .lc-topbar-center {
   display: flex;
@@ -1304,6 +1309,19 @@ button.lc-hosted-engine {
 
 .lc-mode {
   flex-shrink: 0;
+}
+/* With Studio's git tools in the top bar, the mode switch is icons only below 1536px
+   (each option keeps its name for assistive technology and its tooltip), so the bar fits
+   at 1280 and 1440 with the sidebar open. */
+@media (max-width: 1535px) {
+  .lc-topbar:has(.lc-studio-tools) .lc-mode span {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
 }
 @media (max-width: 640px) {
   .lc-mode span {

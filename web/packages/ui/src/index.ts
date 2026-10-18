@@ -162,6 +162,7 @@ export {
   NumberFieldIncrement,
   NumberFieldInput,
 } from './number-field';
+export { plainError } from './plain-error';
 export {
   Popover,
   PopoverClose,
@@ -248,7 +249,6 @@ export {
   type SqlPosition,
   sqlErrorPosition,
 } from './sql-error';
-export { plainError } from './plain-error';
 export { formatSql } from './sql-format';
 export {
   callAt,
