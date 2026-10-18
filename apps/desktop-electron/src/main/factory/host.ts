@@ -316,20 +316,21 @@ export class FactoryHost {
 			this.#health.delete(app);
 			return this.#info(app);
 		}
-		if (!def.adapter) {
-			// No adapter (OpenObserve): configured means nothing to probe.
-			this.#health.set(app, "ok");
-			return this.#info(app);
-		}
 		const gen = this.#gen.get(app) ?? 0;
 		let health: FactoryHealth = "ok";
 		try {
-			const live = await this.#adapter(app);
-			await this.#timed(
-				OPS[app]["health"]?.run(live.adapter, undefined as never, {
-					fields: this.#plainFields(app),
-				}),
-			);
+			if (!def.adapter) {
+				// No adapter (OpenObserve): its probe, if it has one, says whether it answers.
+				const url = this.vault.get(app)?.url ?? "";
+				if (def.probe) await this.#timed(def.probe(url));
+			} else {
+				const live = await this.#adapter(app);
+				await this.#timed(
+					OPS[app]["health"]?.run(live.adapter, undefined as never, {
+						fields: this.#plainFields(app),
+					}),
+				);
+			}
 		} catch (e) {
 			health =
 				classifyError(e) === "auth_failed" ? "auth_failed" : "unreachable";

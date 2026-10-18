@@ -12,6 +12,11 @@ export interface FactoryAppDef {
 	hasPanels: boolean;
 	/** Absent for OpenObserve: full UI only. */
 	adapter?: () => Promise<AdapterCtor>;
+	/**
+	 * Health for an app without an adapter: resolves when the app answers, throws
+	 * (with `status` for an HTTP error) when it does not.
+	 */
+	probe?: (url: string) => Promise<void>;
 	configFrom(
 		url: string,
 		fields: Record<string, string>,
@@ -128,6 +133,17 @@ export const FACTORY_APPS: Record<FactoryAppId, FactoryAppDef> = {
 		label: "OpenObserve",
 		credentialFields: [sso],
 		hasPanels: false,
+		// Its unauthenticated health route sits at the origin, whatever path the UI is on.
+		probe: async (url) => {
+			const r = await fetch(new URL("/healthz", url).href, {
+				redirect: "manual",
+				signal: AbortSignal.timeout(10_000),
+			});
+			if (!r.ok)
+				throw Object.assign(new Error(`health check answered ${r.status}`), {
+					status: r.status,
+				});
+		},
 		configFrom: (url) => ({ baseUrl: base(url) }),
 	},
 };

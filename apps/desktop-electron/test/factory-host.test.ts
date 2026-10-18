@@ -323,6 +323,42 @@ describe("factory host", () => {
 		expect(r).toMatchObject({ ok: true, value: { health: "unreachable" } });
 	});
 
+	it("adapterless_app_health_is_probed_not_assumed", async () => {
+		// OpenObserve has no adapter: its health comes from its unauthenticated
+		// /healthz at the configured origin, never from "configured means ok".
+		const real = new FactoryHost(mkVault(), new Context());
+		const seen: string[] = [];
+		const cases: [() => Response | Promise<Response>, string][] = [
+			[() => Response.json({ status: "ok" }), "ok"],
+			[() => new Response("bad gateway", { status: 502 }), "unreachable"],
+			[
+				() => {
+					throw new TypeError("fetch failed");
+				},
+				"unreachable",
+			],
+		];
+		for (const [respond, health] of cases) {
+			vi.stubGlobal(
+				"fetch",
+				vi.fn(async (u: string | URL) => {
+					seen.push(String(u));
+					return respond();
+				}),
+			);
+			await real.remove("openobserve");
+			const r = await real.configure(
+				"openobserve",
+				"http://o2.example:5080/web/",
+				{},
+			);
+			expect(r).toMatchObject({ ok: true, value: { health } });
+		}
+		expect(seen.every((u) => u === "http://o2.example:5080/healthz")).toBe(
+			true,
+		);
+	});
+
 	it("error_codes_map", async () => {
 		const h = mk();
 		await h.configure("forgejo", "https://f.example", { token: "t" });
