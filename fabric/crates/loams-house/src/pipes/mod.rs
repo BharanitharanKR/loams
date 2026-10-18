@@ -1346,6 +1346,8 @@ impl ViewWriter {
                 user: &user.user,
                 grants: None,
                 batch: Some(batch),
+                front: None,
+                admin: false,
             },
             lease,
             &analysis,
