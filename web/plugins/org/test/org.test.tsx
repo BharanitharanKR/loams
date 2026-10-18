@@ -43,6 +43,21 @@ describe('@loams/plugin-org', () => {
     expect(router.trail()).toEqual([{ label: 'Acme Robotics' }]);
   });
 
+  it('home_with_no_projects_fills_its_tiles_and_says_where_the_data_is', async () => {
+    const router = stubRouter('/');
+    const transport = createAdminTransport({
+      projects: { listProjects: () => ({ projects: [] }) },
+    });
+    render(
+      withConsole(<Home router={router} session={stubSession()} auditPath="/audit" />, transport),
+    );
+    expect(await screen.findByText('No projects yet')).toBeTruthy();
+    expect(screen.getByText(/0 projects, 0 environments/)).toBeTruthy();
+    // B7: every tile resolves; none stays at the "…" placeholder.
+    await waitFor(() => expect(screen.queryByText('…')).toBeNull());
+    expect(screen.getByRole('link', { name: 'Data explorer' }).getAttribute('href')).toBe('#/data');
+  });
+
   it('teams_page_lists_teams_and_creates_one', async () => {
     const created: string[] = [];
     const transport = createAdminTransport({

@@ -172,14 +172,17 @@ export async function startHosted(
 
   let user: string | undefined;
   let identityProblem: string | undefined;
+  let authOff = false;
   if (mode === 'oidc' && auth) {
     user = auth.user()?.email ?? auth.user()?.name;
   } else if (mode === 'tailscale') {
     // Not a gate: the engine refuses what it cannot attribute, and the header says why
     // it shows no one.
     const identity = await fetchIdentity(engine);
-    if (identity.ok) user = identity.user;
-    else identityProblem = identity.message;
+    if (identity.ok) {
+      user = identity.user;
+      authOff = identity.authOff === true;
+    } else identityProblem = identity.message;
   }
 
   const demo = demoEnabled();
@@ -188,6 +191,7 @@ export async function startHosted(
     authMode: mode,
     user,
     identityProblem,
+    authOff,
     demo,
     setDemo(on) {
       setDemoEnabled(on);

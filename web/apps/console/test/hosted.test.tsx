@@ -241,12 +241,22 @@ describe('the browser edition', () => {
     const { root, handle, session } = await boot(false);
     await waitFor(() => expect(navLabels(root)).toContain('Live'));
     const labels = navLabels(root);
-    expect(labels).toEqual(expect.arrayContaining(['Live', 'Graph', 'Analytics', 'Status']));
+    expect(labels).toEqual(
+      expect.arrayContaining(['Live', 'Graph', 'Analytics', 'Streams & Links', 'Status']),
+    );
+    // Durable stays desktop-only: the engine's main port has no `/durable/` route.
+    expect(labels).not.toContain('Durable');
     for (const sample of ['Deployments', 'Loams SQL', 'Metrics', 'Pipelines', 'Git']) {
       expect(labels).not.toContain(sample);
     }
     const status = Object.fromEntries(handle.plugins().map((p) => [p.id, p.status]));
-    expect(status).toMatchObject({ live: 'active', graph: 'active', house: 'active' });
+    expect(status).toMatchObject({
+      live: 'active',
+      graph: 'active',
+      house: 'active',
+      'data-studio': 'active',
+      streams: 'active',
+    });
 
     expect(root.querySelector('.lc-side .lc-preview')).toBeNull();
     await waitFor(() => expect(root.textContent).toContain('loams.tail1.ts.net'));
@@ -302,6 +312,11 @@ describe('sign-in modes', () => {
         json(200, { session: { user: { name: 'Ada' } } }),
       ),
     ).toEqual({ ok: true, user: 'Ada' });
+    expect(
+      await fetchIdentity('https://e', async () =>
+        json(200, { session: { user: { id: 'dev-loopback', name: 'Local developer' } } }),
+      ),
+    ).toEqual({ ok: true, user: 'Local developer', authOff: true });
     const refused = await fetchIdentity('https://e', async () => json(401, {}));
     expect(refused).toEqual({ ok: false, message: expect.stringMatching(/tailnet/) });
     const empty = await fetchIdentity('https://e', async () => json(200, { user: {} }));
@@ -322,6 +337,11 @@ describe('sign-in modes', () => {
       'ada@example.com via tailnet',
     );
     expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
+    // B20: an engine with sign-in off is not a tailnet login.
+    rerender(<HostedHeader session={{ ...base, user: 'Local developer', authOff: true }} />);
+    expect(container.querySelector('.lc-hosted-user')?.textContent).toBe(
+      'Local developer · sign-in off',
+    );
     rerender(<HostedHeader session={{ ...base, identityProblem: 'nope' }} />);
     const unknown = container.querySelector('.lc-hosted-user-unknown');
     expect(unknown?.textContent).toBe('Tailnet user unknown');

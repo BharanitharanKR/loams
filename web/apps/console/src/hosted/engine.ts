@@ -146,7 +146,10 @@ export async function checkHealth(
   }
 }
 
-export type Identity = { ok: true; user: string } | { ok: false; message: string };
+export type Identity = { ok: true; user: string; authOff?: true } | { ok: false; message: string };
+
+/** The principal an engine with sign-in off (LOAMS_AUTH_MODE=off) names every caller. */
+export const DEV_LOOPBACK = 'dev-loopback';
 
 /** `AuthService/GetSession` as a Connect GET (API2 Task 10): a simple request, no preflight. */
 export const GET_SESSION =
@@ -183,13 +186,14 @@ export async function fetchIdentity(
       };
     }
     const body = (await res.json()) as {
-      session?: { user?: { email?: unknown; name?: unknown } };
+      session?: { user?: { id?: unknown; email?: unknown; name?: unknown } };
     } | null;
     const pick = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : undefined);
     const user = pick(body?.session?.user?.email) ?? pick(body?.session?.user?.name);
-    return user
-      ? { ok: true, user }
-      : { ok: false, message: 'The engine answered GetSession without a user.' };
+    if (!user) return { ok: false, message: 'The engine answered GetSession without a user.' };
+    return body?.session?.user?.id === DEV_LOOPBACK
+      ? { ok: true, user, authOff: true }
+      : { ok: true, user };
   } catch (e) {
     return {
       ok: false,

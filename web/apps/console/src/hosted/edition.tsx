@@ -10,6 +10,7 @@ import {
   service,
 } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
+import dataStudioPkg from '@loams/plugin-data-studio/package.json';
 import gitPkg from '@loams/plugin-git/package.json';
 import graphPkg from '@loams/plugin-graph/package.json';
 import housePkg from '@loams/plugin-house/package.json';
@@ -17,6 +18,7 @@ import livePkg from '@loams/plugin-live/package.json';
 import metricsPkg from '@loams/plugin-metrics/package.json';
 import pipelinesPkg from '@loams/plugin-pipelines/package.json';
 import sqlPkg from '@loams/plugin-sql/package.json';
+import streamsPkg from '@loams/plugin-streams/package.json';
 import { Button } from '@loams/ui';
 import demoYml from '../../catalog/demo.yml?raw';
 import webYml from '../../catalog/web.yml?raw';
@@ -31,6 +33,8 @@ export const webModules: ModuleTable = {
   '@loams/plugin-metrics': () => import('@loams/plugin-metrics'),
   '@loams/plugin-pipelines': () => import('@loams/plugin-pipelines'),
   '@loams/plugin-git': () => import('@loams/plugin-git'),
+  '@loams/plugin-data-studio': () => import('@loams/plugin-data-studio'),
+  '@loams/plugin-streams': () => import('@loams/plugin-streams'),
 };
 
 export const webManifests: unknown[] = [
@@ -41,11 +45,22 @@ export const webManifests: unknown[] = [
   metricsPkg,
   pipelinesPkg,
   gitPkg,
+  dataStudioPkg,
+  streamsPkg,
 ];
 
 /** The patches over base.yml, in order. */
 export function webPatches(demo: boolean): CatalogPatch[] {
   return demo ? [parsePatch(webYml), parsePatch(demoYml)] : [parsePatch(webYml)];
+}
+
+/**
+ * The engine-served edition's patch (the console at the engine's `/ui/`, and the dev
+ * server): web.yml's pages the engine serves (Data explorer, Streams & Links, Live,
+ * Graph, Analytics), without web.yml's changes to base.yml's own rows.
+ */
+export function servedPagesPatch(): CatalogPatch {
+  return parsePatch(webYml).filter((row) => 'insert' in row);
 }
 
 /** What the header shows and does; the hosted gate provides it. */
@@ -57,6 +72,11 @@ export interface HostedSession {
   user?: string;
   /** Tailscale mode: why the engine did not say who this is. */
   identityProblem?: string;
+  /**
+   * The engine runs with sign-in off (LOAMS_AUTH_MODE=off, loopback only): every caller
+   * is the local developer, whatever the console's mode says.
+   */
+  authOff?: boolean;
   demo: boolean;
   setDemo(on: boolean): void;
   /** Back to the connect screen; unset when the deploy fixes the engine. */
@@ -145,6 +165,16 @@ function HostedIdentity({ session }: { session: HostedSession }) {
         title={session.identityProblem ?? 'The engine did not say who you are.'}
       >
         Tailnet user unknown
+      </span>
+    );
+  if (session.authOff)
+    return (
+      <span
+        className="lc-hosted-user"
+        title="The engine runs with sign-in off (LOAMS_AUTH_MODE=off): it listens on loopback only and every caller is the local developer."
+      >
+        {session.user ?? 'Local developer'}
+        <span className="lc-hosted-via"> · sign-in off</span>
       </span>
     );
   if (!session.user) return null;
