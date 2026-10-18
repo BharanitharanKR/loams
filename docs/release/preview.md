@@ -466,8 +466,11 @@ credential.
 - **Authorization is coarse.** A valid token or key can do anything the engine can do; there
   are no per-namespace roles or tenant quotas yet (planned).
 - **Keep the other listeners inside the stack.** The tailnet sidecar serves the engine's main
-  port. The Qdrant, Elasticsearch, Flight SQL, Postgres-wire and MySQL-wire listeners, Resonate
-  stay inside the compose network unless you publish them. The House's ClickHouse HTTP
+  port. The Qdrant (`127.0.0.1:6333`, gRPC `6334`), Elasticsearch (`9200`), Flight SQL
+  (`8082`), Postgres-wire (`5432`) and MySQL-wire (`3306`) listeners are on loopback in the
+  engine's network namespace, and Resonate stays inside the compose network, unless you
+  publish them. The Postgres and MySQL wire listeners authenticate nobody (any user name and
+  password is accepted) and serve the `default` namespace. The House's ClickHouse HTTP
   interface is served only through its own sidecar, with the House's own user and password. Do not publish them in 0.1.0: the auth modes above are specified for the main
   port, and the other listeners are not all reviewed against them.
 - **Traffic inside the compose network is plain text**, between `loams`, TiDB, TiKV, PD and
@@ -504,6 +507,10 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
   runs its own Linux kernel): on an older kernel the workers refuse to boot.
 - **Console:** some pages (Jobs, Connectors, SQL, Git) still show demonstration data, not your
   stack.
+- **Postgres and MySQL wire** are read-only and serve one namespace. A collection's `_id` is
+  text in SQL, whatever the keys are (one collection may hold integer, string and UUID keys),
+  so `ORDER BY _id` sorts integer keys as text (`1`, `10`, `100`); use
+  `ORDER BY CAST(_id AS BIGINT)` for integer keys.
 - **Durable on TiKV** is in progress: Loams Durable keeps its state in SQLite on the `loams`
   service's data.
 - **Not in this release:** the Loams Git repository service in the release images

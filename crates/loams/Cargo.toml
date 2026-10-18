@@ -242,6 +242,8 @@ rcgen = { version = "0.14", default-features = false, features = ["crypto", "pem
 hyper-util = { version = "0.1", features = ["server-auto", "tokio", "service"] }
 # The client of the PostgreSQL wire listener's tests (`pg::tests`).
 tokio-postgres = "0.7"
+# The client of the MySQL wire listener's tests (`mysql_wire::tests`).
+mysql_async = { version = "0.37", default-features = false, features = ["minimal-rust"] }
 tonic = { workspace = true, features = ["gzip"] }
 
 [lints]
