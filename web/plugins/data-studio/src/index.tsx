@@ -52,7 +52,8 @@ export function DataRoute({
     return (
       <div className="lc-page ds-page">
         <Empty title="This server has no data plane.">
-          Switch to a server that serves collections, such as This computer.
+          It does not serve collections (loams.collection.v1). Switch to a server that does, such
+          as This computer on Loams Desktop.
         </Empty>
       </div>
     );
