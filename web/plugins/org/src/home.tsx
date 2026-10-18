@@ -86,6 +86,14 @@ export function Home({
   const all = envs.flatMap((q) => q.data?.environments ?? []);
   const sum = (f: (e: admin.Environment) => bigint | undefined) =>
     all.reduce((n, e) => n + num(f(e)), 0);
+  // The engine does not measure environments yet (their stats are all zero), and data
+  // written straight to a namespace is in no environment: a 0 would read as "empty", so
+  // the tiles show a dash until some environment reports a number.
+  const reported = all.some(
+    (e) =>
+      num(e.stats?.documents) > 0 || num(e.stats?.storageBytes) > 0 || num(e.stats?.queries24h) > 0,
+  );
+  const stat = (text: string) => (envsReady ? reported ? text : <NotReported /> : '…');
   const allAgents = agents.flatMap((q) => q.data?.agents ?? []);
   const liveTokens = allAgents.reduce((n, a) => n + a.activeTokens, 0);
 
@@ -118,18 +126,15 @@ export function Home({
         />
         <Stat
           label="Documents"
-          value={envsReady ? formatNumber(sum((e) => e.stats?.documents)) : '…'}
+          value={stat(formatNumber(sum((e) => e.stats?.documents)))}
           detail={list.length > 0 ? 'Across every environment' : 'No project environments yet'}
         />
         <Stat
           label="Storage"
-          value={envsReady ? formatBytes(sum((e) => e.stats?.storageBytes)) : '…'}
+          value={stat(formatBytes(sum((e) => e.stats?.storageBytes)))}
           detail="In object storage"
         />
-        <Stat
-          label="Queries, 24 h"
-          value={envsReady ? formatNumber(sum((e) => e.stats?.queries24h)) : '…'}
-        />
+        <Stat label="Queries, 24 h" value={stat(formatNumber(sum((e) => e.stats?.queries24h)))} />
         <Stat
           label="Agent tokens live"
           value={agentsReady ? liveTokens : '…'}
@@ -218,5 +223,18 @@ export function Home({
         </p>
       )}
     </Page>
+  );
+}
+
+const NOT_REPORTED =
+  'Not reported: this server does not measure environments yet. Each namespace shows its own size under Namespaces.';
+
+/** A tile's value the server does not report: a dash, with why on hover. */
+function NotReported() {
+  return (
+    <span title={NOT_REPORTED}>
+      <span aria-hidden="true">—</span>
+      <span className="sr-only">Not reported</span>
+    </span>
   );
 }

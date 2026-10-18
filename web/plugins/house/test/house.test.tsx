@@ -308,3 +308,64 @@ describe('analytics page', () => {
     expect(client.cancelled.length).toBe(1);
   });
 });
+
+describe('databases and history on a partial House', () => {
+  const unimplemented = (what: string) =>
+    new HouseError({
+      code: 'unimplemented',
+      message: `${what} is served from a later task`,
+      reason: 'not_implemented',
+      metadata: {},
+    });
+
+  afterEach(() => localStorage.clear());
+
+  it('an_unimplemented_history_is_a_notice_not_an_error', async () => {
+    const client = createMockHouseClient({ delayMs: 0 });
+    client.listQueryHistory = async () => {
+      throw unimplemented('The query log');
+    };
+    render(<HousePage client={client} />);
+    await screen.findByLabelText('SQL');
+    expect(await screen.findByText('Query history is not available on this server.')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText(/later task/)).toBeNull();
+  });
+
+  it('databases_come_from_system_databases_without_list_databases', async () => {
+    const client = createMockHouseClient({ delayMs: 0 });
+    client.listDatabases = async () => {
+      throw unimplemented('ListDatabases');
+    };
+    render(<HousePage client={client} />);
+    const picker = (await screen.findByLabelText('Database')) as HTMLSelectElement;
+    const names = [...picker.options].map((o) => o.value);
+    expect(names).toEqual(['analytics', 'default']);
+    expect(picker.value).toBe('default');
+    expect(screen.queryByText('Analytics — coming soon in a later preview')).toBeNull();
+  });
+
+  it('the_chosen_database_is_remembered_per_server', async () => {
+    const first = render(
+      <HousePage client={createMockHouseClient({ delayMs: 0 })} serverKey="https://a" />,
+    );
+    const picker = (await screen.findByLabelText('Database')) as HTMLSelectElement;
+    fireEvent.change(picker, { target: { value: 'analytics' } });
+    expect(await screen.findByText('Tables in analytics')).toBeTruthy();
+    first.unmount();
+
+    const again = render(
+      <HousePage client={createMockHouseClient({ delayMs: 0 })} serverKey="https://a" />,
+    );
+    await waitFor(() =>
+      expect((screen.getByLabelText('Database') as HTMLSelectElement).value).toBe('analytics'),
+    );
+    expect(screen.getByText('Tables in analytics')).toBeTruthy();
+    again.unmount();
+
+    render(<HousePage client={createMockHouseClient({ delayMs: 0 })} serverKey="https://b" />);
+    await waitFor(() =>
+      expect((screen.getByLabelText('Database') as HTMLSelectElement).value).toBe('default'),
+    );
+  });
+});
