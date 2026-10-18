@@ -29,14 +29,16 @@ const noCollections = () => {
 };
 
 describe('@loams/plugin-projects', () => {
-  it('the palette lists every project', async () => {
+  it('the palette lists every project, once something is typed (T11-3)', async () => {
     const published: PaletteCommand[][] = [];
     const router = stubRouter('/');
-    render(
-      withConsole(
-        <ProjectsSource query="" publish={(c) => published.push([...c])} router={router} />,
-      ),
+    const publish = (c: readonly PaletteCommand[]) => published.push([...c]);
+    const { rerender } = render(
+      withConsole(<ProjectsSource query="" publish={publish} router={router} />),
     );
+    await waitFor(() => expect(published.length).toBeGreaterThan(0));
+    expect(published.at(-1)).toEqual([]);
+    rerender(withConsole(<ProjectsSource query="docs" publish={publish} router={router} />));
     await waitFor(() =>
       expect(published.at(-1)?.map((c) => c.title)).toContain('Go to project Docs search'),
     );

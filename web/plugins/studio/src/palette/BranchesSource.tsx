@@ -1,6 +1,7 @@
 // The palette's branches (design 59, D1078; CF1 Task 11): each Studio project's local
 // branches, from agentd's `ListBranches`. Branches are navigation only: a row opens the
-// branch's project, and the palette never switches a checkout.
+// branch's project, and the palette never switches a checkout. Like the pin rows (T10-2)
+// they show once something is typed, and only then are the branches read (ruling T11-3).
 
 import { AgentdScope, useAgentdQuery } from '@loams/console-host/query';
 import { GitService } from '@loams/proto/agentd';
@@ -73,6 +74,12 @@ export function BranchesSource(props: {
   agentd: StudioAgentd;
   navigate: (to: string) => void;
 }) {
+  const typed = props.query.trim() !== '';
+  const { publish } = props;
+  useEffect(() => {
+    if (!typed) publish([]);
+  }, [typed, publish]);
+  if (!typed) return null;
   return (
     <AgentdScope agentd={props.agentd}>
       <Branches agentd={props.agentd} publish={props.publish} navigate={props.navigate} />

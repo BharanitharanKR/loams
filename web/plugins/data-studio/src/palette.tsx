@@ -1,7 +1,8 @@
 // The palette's tables (design 59, D1078; CF1 Task 11): the open environment's
 // collections, which the namespace's SQL serves as tables, from the Data explorer's own
-// `ListCollections`. A row opens the collection; once something is typed, each table
-// also offers Search and the SQL editor (ruling T11-2).
+// `ListCollections`. Like the pin rows (T10-2), they show once something is typed, so an
+// empty palette keeps its pages and commands on top (ruling T11-3). Each table opens the
+// collection, and also offers Search and the SQL editor (ruling T11-2).
 
 import type { PaletteCommand } from '@loams/slots';
 import { useEffect, useState } from 'react';
@@ -12,7 +13,10 @@ export function tableStatement(table: string): string {
   return `SELECT * FROM "${table.replaceAll('"', '""')}" LIMIT 100`;
 }
 
-/** The open environment's tables, by name, for the palette (D1078). Loaded once per opening. */
+/**
+ * The open environment's tables, by name, for the palette (D1078). Loaded once per opening,
+ * listed once the query is not empty.
+ */
 export function TablesSource({
   query,
   publish,
@@ -40,7 +44,10 @@ export function TablesSource({
   }, [client, namespace]);
   const typed = query.trim() !== '';
   useEffect(() => {
-    if (!namespace) return publish([]);
+    if (!namespace || !typed) {
+      publish([]);
+      return;
+    }
     const ns = encodeURIComponent(namespace);
     publish(
       names.flatMap((name) => {
@@ -54,7 +61,6 @@ export function TablesSource({
           keywords,
           run: () => navigate(at),
         };
-        if (!typed) return [open];
         return [
           open,
           {

@@ -26,26 +26,37 @@ const tables = () =>
   }) as unknown as DataClient;
 
 describe('the palette tables', () => {
-  it("the palette lists the namespace's tables (D1078)", async () => {
+  it("the palette lists the namespace's tables, once something is typed (D1078, T11-3)", async () => {
     const published: PaletteCommand[][] = [];
     const navigate = vi.fn();
     const client = tables();
-    render(
+    const source = (query: string) => (
       <TablesSource
-        query=""
+        query={query}
         publish={(c) => published.push([...c])}
         client={client}
         namespace="shop"
         navigate={navigate}
-      />,
+      />
     );
-    await waitFor(() => expect(published.at(-1)?.map((c) => c.title)).toEqual(['orders', 'users']));
-    expect(client.listCollections).toHaveBeenCalledWith('shop');
+    const { rerender } = render(source(''));
+    await waitFor(() => expect(client.listCollections).toHaveBeenCalledWith('shop'));
+    expect(published.at(-1)).toEqual([]);
+    rerender(source('ord'));
+    await waitFor(() =>
+      expect(
+        published
+          .at(-1)
+          ?.filter((c) => !c.secondary)
+          .map((c) => c.title),
+      ).toEqual(['orders', 'users']),
+    );
+    expect(client.listCollections).toHaveBeenCalledTimes(1);
     published.at(-1)?.[0]?.run();
     expect(navigate).toHaveBeenCalledWith('/data/shop/orders');
   });
 
-  it('a typed query also offers Search and the SQL editor, after the table', async () => {
+  it('each table also offers Search and the SQL editor, after the table (T11-2)', async () => {
     const published: PaletteCommand[][] = [];
     const navigate = vi.fn();
     render(

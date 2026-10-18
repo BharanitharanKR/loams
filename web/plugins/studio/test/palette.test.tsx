@@ -314,7 +314,7 @@ describe("the palette's branches and thread text (CF1 Task 11)", () => {
     expect(ranked[0]?.id).toBe('thread:t1');
   });
 
-  it("lists each project's branches, and a branch opens its project (never a checkout)", async () => {
+  it("lists each project's branches once typed, and a branch opens its project (never a checkout)", async () => {
     const calls: string[] = [];
     const transport = createRouterTransport(({ service }) => {
       service(ProjectService, {
@@ -348,16 +348,20 @@ describe("the palette's branches and thread text (CF1 Task 11)", () => {
     const agentd = studioAgentd(service);
     const published: PaletteCommand[][] = [];
     const navigate = vi.fn();
-    render(
+    const source = (query: string) =>
       wrapServerState(
         <BranchesSource
-          query=""
+          query={query}
           publish={(c) => published.push([...c])}
           agentd={agentd}
           navigate={navigate}
         />,
-      ),
-    );
+      );
+    const { rerender } = render(source(''));
+    // An empty query lists no branches and reads none (T11-3).
+    await waitFor(() => expect(published.at(-1)).toEqual([]));
+    expect(calls).toEqual([]);
+    rerender(source('d'));
     await waitFor(() =>
       expect(
         published
