@@ -102,6 +102,8 @@ export interface FakeDiff {
   discardPaths: ReturnType<typeof vi.fn>;
   setComments(comments: ReviewComment[]): void;
   setChangeRequest(changeRequest: ChangeRequestInfo | null): void;
+  /** Sends the working tree's watch a snapshot. */
+  emitWorking(diff: CheckoutDiffView): void;
 }
 
 export function fakeDiff(
@@ -117,6 +119,7 @@ export function fakeDiff(
   let changeRequest = opts.changeRequest ?? null;
   const commentListeners = new Set<(c: readonly ReviewComment[]) => void>();
   const crListeners = new Set<(c: ChangeRequestInfo | null) => void>();
+  const workingListeners = new Set<(d: CheckoutDiffView) => void>();
   const upsert: ReviewCommentDraft[] = [];
   const getDiff = vi.fn(async (selection: DiffSelection) => {
     switch (selection.kind) {
@@ -140,8 +143,9 @@ export function fakeDiff(
   const source: DiffSource = {
     key: 'fake:thread-1',
     watchWorkingDiff(listener) {
+      workingListeners.add(listener);
       listener(checkoutDiff(WORKING_PATCH, checksum));
-      return () => {};
+      return () => workingListeners.delete(listener);
     },
     getDiff,
     async fileText() {
@@ -192,6 +196,9 @@ export function fakeDiff(
     setChangeRequest(next) {
       changeRequest = next;
       for (const listener of crListeners) listener(next);
+    },
+    emitWorking(next) {
+      for (const listener of workingListeners) listener(next);
     },
   };
 }
