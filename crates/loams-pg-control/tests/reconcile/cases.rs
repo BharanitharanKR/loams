@@ -498,7 +498,10 @@ async fn stale_lease_write_is_fenced() {
     let a = reconciler(
         &h,
         ReconcilerConfig {
-            lease_ttl: Duration::from_millis(300),
+            // Short enough for the next holder to take over soon, long
+            // enough that a loaded runner's gap between the pass's lease
+            // renewals does not lapse it before the hook (Fenced).
+            lease_ttl: Duration::from_secs(2),
             before_write: Some(pause_at("project.ready", reached.clone(), release.clone())),
             ..config(&h, "pg-control-a")
         },
@@ -543,7 +546,10 @@ async fn crash_between_neon_call_and_record_write_converges() {
     let a = reconciler(
         &h,
         ReconcilerConfig {
-            lease_ttl: Duration::from_millis(300),
+            // Short enough for the next holder to take over soon, long
+            // enough that a loaded runner's gap between the pass's lease
+            // renewals does not lapse it before the hook (Fenced).
+            lease_ttl: Duration::from_secs(2),
             before_write: Some(pause_at("project.ready", reached.clone(), never)),
             ..config(&h, "pg-control-a")
         },
