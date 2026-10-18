@@ -147,6 +147,8 @@ export function failureText(e: unknown): string {
 export interface PgControlClient {
   /** Fixture-backed data, not a server: the page says so. */
   readonly mock?: boolean;
+  /** Where pg-control answers (host:port), for the page header. */
+  readonly endpoint?: string;
 
   listProjects(namespace: string): Promise<PgProject[]>;
   createProject(

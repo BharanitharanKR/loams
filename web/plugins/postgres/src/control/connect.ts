@@ -236,6 +236,14 @@ export function errorFromJson(body: unknown, status: number): PgControlError {
 const randomKey = () =>
   globalThis.crypto?.randomUUID?.() ?? `k-${Date.now().toString(36)}-${Math.random()}`;
 
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return url;
+  }
+}
+
 export function createConnectPgControl(options: ConnectPgControlOptions): PgControlClient {
   const base = options.baseUrl.endsWith('/') ? options.baseUrl : `${options.baseUrl}/`;
   const doFetch = options.fetch ?? ((input, init) => globalThis.fetch(input, init));
@@ -287,6 +295,7 @@ export function createConnectPgControl(options: ConnectPgControlOptions): PgCont
   });
 
   return {
+    endpoint: hostOf(options.baseUrl),
     async listProjects(namespace) {
       return (await all(POSTGRES, 'ListProjects', { namespace }, 'projects')).map(projectFromJson);
     },
