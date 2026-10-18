@@ -70,11 +70,9 @@ export function Home({
   // the tiles show a dash until some environment reports a number.
   const reported = all.some(
     (e) =>
-      num(e.stats?.documents) > 0 ||
-      num(e.stats?.storageBytes) > 0 ||
-      num(e.stats?.queries24h) > 0,
+      num(e.stats?.documents) > 0 || num(e.stats?.storageBytes) > 0 || num(e.stats?.queries24h) > 0,
   );
-  const stat = (text: string) => (envsReady ? (reported ? text : <NotReported />) : '…');
+  const stat = (text: string) => (envsReady ? reported ? text : <NotReported /> : '…');
   const allAgents = agents.flatMap((q) => q.data?.agents ?? []);
   const liveTokens = allAgents.reduce((n, a) => n + a.activeTokens, 0);
 
@@ -96,10 +94,7 @@ export function Home({
           value={stat(formatBytes(sum((e) => e.stats?.storageBytes)))}
           detail="In object storage"
         />
-        <Stat
-          label="Queries, 24 h"
-          value={stat(formatNumber(sum((e) => e.stats?.queries24h)))}
-        />
+        <Stat label="Queries, 24 h" value={stat(formatNumber(sum((e) => e.stats?.queries24h)))} />
         <Stat
           label="Agent tokens live"
           value={agentsReady ? liveTokens : '…'}
@@ -197,8 +192,9 @@ const NOT_REPORTED =
 /** A tile's value the server does not report: a dash, with why on hover. */
 function NotReported() {
   return (
-    <span title={NOT_REPORTED} aria-label={`Not reported. ${NOT_REPORTED}`}>
-      —
+    <span title={NOT_REPORTED}>
+      <span aria-hidden="true">—</span>
+      <span className="sr-only">Not reported</span>
     </span>
   );
 }

@@ -59,7 +59,9 @@ describe('@loams/plugin-org', () => {
     // Nothing reports a size: a dash with the reason, not "0" and "0 B".
     const dashes = screen.getAllByText('—');
     expect(dashes).toHaveLength(3);
-    expect(dashes[0]?.getAttribute('title')).toMatch(/does not measure environments/);
+    expect(dashes[0]?.parentElement?.getAttribute('title')).toMatch(
+      /does not measure environments/,
+    );
     expect(screen.queryByText('0 B')).toBeNull();
   });
 
