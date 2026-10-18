@@ -16,7 +16,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(cd "$here/../.." && pwd)"
 jobs="${E2E_JOBS:-5}"
 builder="$E2E_REGISTRY/builder:rust-1.97.1-trixie"
-mkdir -p "$E2E_HOME/bin" "$E2E_HOME/cargo-target" "$E2E_HOME/cargo-target-fabric" "$E2E_HOME/cargo-registry" \
+mkdir -p "$E2E_HOME/bin" "$E2E_HOME/cargo-target" "$E2E_HOME/cargo-target-fabric" "$E2E_HOME/cargo-registry" "$E2E_HOME/cargo-git" \
   "$root/target" "$root/fabric/target"
 epodman image exists "$builder" || epodman build -t "$builder" -f "$here/images/Containerfile.builder" "$here/images"
 what=("$@"); ((${#what[@]})) || what=(engine pg-control agentd fabric)
@@ -25,7 +25,7 @@ run() {
   epodman run --rm --name "loams-e2e-build-$1" --network host \
     -v "$root:/src:ro" -v "$E2E_HOME/cargo-target:/src/target" \
     -v "$E2E_HOME/cargo-target-fabric:/src/fabric/target" \
-    -v "$E2E_HOME/cargo-registry:/usr/local/cargo/registry" \
+    -v "$E2E_HOME/cargo-registry:/usr/local/cargo/registry" -v "$E2E_HOME/cargo-git:/usr/local/cargo/git" \
     -v "$E2E_HOME/bin:/out" -e CARGO_BUILD_JOBS="$jobs" "$builder" bash -ec "$2"
 }
 
