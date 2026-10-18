@@ -99,7 +99,7 @@ The rules, in the order they bite:
 | `memory_extraction_failed` | failed_precondition | `Add` with `wait_ms` whose extraction failed within the wait (the episode is written and searchable); also an episode's `extraction.reason` after invalid model output or a provider error (§52 §7.1.2) | `episode`, `cause` |
 | `memory_too_many_spaces` | invalid_argument | `Search`, `GetProfile`: more than 8 spaces (§52 §4.2) | `limit` |
 | `memory_cross_space_write` | invalid_argument | a write that would touch two spaces, or link entities of two spaces (I-ISO, §52 §5.3) | |
-| `memory_not_yet_available` | unimplemented | a `loams.memory.v1` RPC whose MM1 task has not landed, on a server built with the feature `memory` (MM1 plan "Shared contracts"; removed at MM1 Task 56) | `rpc` |
+| `memory_not_yet_available` | unimplemented | a `loams.memory.v1` RPC whose MM1 task has not landed, on a server built with the feature `memory` (MM1 plan "Shared contracts"; no longer raised from MM1 Task 56, but never removed) | `rpc` |
 | `code_repo_not_indexed` | failed_precondition | a `CodeMemoryService` query of a repository with no code index (§52 §8; MM1 Task 27) | `repo` |
 | `code_index_building` | unavailable | a `CodeMemoryService` query while the repository's first index is being built; retry later | `repo`, `retry_after_ms` |
 | `code_change_too_large` | invalid_argument | `ReviewContext`, `ImpactRadius`, `RiskScore`: a change over the file limit (default 500, at most 2 000; §52 §13.1) | `limit` |
@@ -154,7 +154,7 @@ The rules, in the order they bite:
 
 The `loams.postgres.v1` rows (`project_not_found` to `secret_already_issued`) are design §46 §4.1's, registered by PG2 Task 1 before `pg-control` raises them (PG2 Task 9); `reasons_registered` (`crates/loams-proto/tests/postgres.rs`) fails if one §46 §4.1 names is missing. A replayed create under a taken name with another key answers the generic `already_exists`, and a `RestartEndpoint` with `promote` while the branch's read-write endpoint runs the generic `failed_precondition` (PG2 Task 1 ruling R1.8).
 
-The `loams.memory.v1` rows (`memory_store_not_found` to `code_scip_invalid`) are Loams Memory's (design §52 §9.1, D884), registered by MM1 Task 1 before any RPC raises them, with the codes of MM1 ruling R1.4; `reasons_registered` and `reasons_have_their_connect_codes` (`crates/loams-proto/tests/memory.rs`) fail if one §52 §9.1 names is missing or its code changes. The `code_*` rows are `CodeMemoryService`'s (MM1 Task 27); `memory_not_yet_available` is removed at MM1 Task 56.
+The `loams.memory.v1` rows (`memory_store_not_found` to `code_scip_invalid`) are Loams Memory's (design §52 §9.1, D884), registered by MM1 Task 1 before any RPC raises them, with the codes of MM1 ruling R1.4; `reasons_registered` and `reasons_have_their_connect_codes` (`crates/loams-proto/tests/memory.rs`) fail if one §52 §9.1 names is missing or its code changes. The `code_*` rows are `CodeMemoryService`'s (MM1 Task 27); `memory_not_yet_available` stays registered after MM1 Task 56, which stops raising it.
 
 The `loams.repos.v1` rows (`repo_not_found` to `env_foreign_reference`) are Loams Git's (design §36 §19.10, plan GT1's "Public API" contract), registered by GT1 Task 12 before any RPC raises them; `reasons_registered` (`crates/loams-proto/tests/repos.rs`) fails if one the proto or §19.10 names is missing. `quota_exceeded` is shared with `loams.postgres.v1`.
 

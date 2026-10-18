@@ -249,11 +249,11 @@ Loams Memory (design §52 §9.1, D884). With the `loams` feature `memory` (MM1 T
 | `/loams.memory.v1.MemoryAdminService/GetStore` | POST | `loams.memory.v1.MemoryAdminService/GetStore` | MVP: Task 3 |
 | `/loams.memory.v1.MemoryAdminService/ListStores` | POST | `loams.memory.v1.MemoryAdminService/ListStores` | MVP: Task 3 |
 | `/loams.memory.v1.MemoryAdminService/UpdateStore` | POST | `loams.memory.v1.MemoryAdminService/UpdateStore` | MVP: Task 3 |
-| `/loams.memory.v1.MemoryAdminService/DeleteStore` | POST | `loams.memory.v1.MemoryAdminService/DeleteStore` | returns an `Operation`; no MM1 task names it yet (needs Task 23's purge; ruling R1.7) |
+| `/loams.memory.v1.MemoryAdminService/DeleteStore` | POST | `loams.memory.v1.MemoryAdminService/DeleteStore` | returns an `Operation`; Task 23 (owner ruling, R1.7) |
 | `/loams.memory.v1.MemoryAdminService/CreateSpace` | POST | `loams.memory.v1.MemoryAdminService/CreateSpace` | MVP: Task 3 |
 | `/loams.memory.v1.MemoryAdminService/GetSpace` | POST | `loams.memory.v1.MemoryAdminService/GetSpace` | MVP: Task 3 |
 | `/loams.memory.v1.MemoryAdminService/ListSpaces` | POST | `loams.memory.v1.MemoryAdminService/ListSpaces` | MVP: Task 3 |
-| `/loams.memory.v1.MemoryAdminService/UpdateSpace` | POST | `loams.memory.v1.MemoryAdminService/UpdateSpace` | `name` and `ttl` with Task 3; an `isolation` move returns `memory.space.move`, which no MM1 task names yet (ruling R1.7) |
+| `/loams.memory.v1.MemoryAdminService/UpdateSpace` | POST | `loams.memory.v1.MemoryAdminService/UpdateSpace` | `name` and `ttl` with Task 3; an `isolation` move returns `memory.space.move`, Task 52 (owner ruling, R1.7) |
 | `/loams.memory.v1.MemoryAdminService/ExportSpace` | POST | `loams.memory.v1.MemoryAdminService/ExportSpace` | returns an `Operation`; Task 25 |
 | `/loams.memory.v1.MemoryAdminService/ImportSpace` | POST | `loams.memory.v1.MemoryAdminService/ImportSpace` | returns an `Operation`; Task 25 |
 | `/loams.memory.v1.MemoryAdminService/ConfigureMirror` | POST | `loams.memory.v1.MemoryAdminService/ConfigureMirror` | Task 26 (deferred past GA, Q785/Q786) |
