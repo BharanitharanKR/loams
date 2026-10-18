@@ -463,30 +463,54 @@ export const OPS: Record<FactoryAppId, Record<string, Op>> = {
 			params: z
 				.object({ limit, fromStartTime: z.string().max(40).optional() })
 				.strict(),
-			run: async (a, p: { limit?: number; fromStartTime?: string }) =>
-				arr(
-					rec(
-						await call(a, "listObservations", {
-							isRootObservation: true,
-							limit: clamp(p.limit),
-							fromStartTime: p.fromStartTime,
-						}).catch((e: unknown) => {
-							// A self-hosted Langfuse not on its v4 data model has no v2 observations.
-							if (rec(e)["status"] === 404)
-								throw new UnsupportedError(
-									"Recent traces need Langfuse v4's observations API, which this Langfuse does not serve. Open the app to see its traces.",
-								);
-							throw e;
-						}),
-					)["data"],
-				).map((o) => ({
-					id: str(o["id"]),
-					traceId: str(o["traceId"]),
-					name: str(o["name"]),
-					startTime: str(o["startTime"]),
-					level: str(o["level"]),
-					totalCost: num(o["totalCost"]) ?? num(o["calculatedTotalCost"]),
-				})),
+			run: async (a, p: { limit?: number; fromStartTime?: string }) => {
+				const limit = clamp(p.limit);
+				try {
+					return arr(
+						rec(
+							await call(a, "listObservations", {
+								isRootObservation: true,
+								limit,
+								fromStartTime: p.fromStartTime,
+							}),
+						)["data"],
+					).map((o) => ({
+						id: str(o["id"]),
+						traceId: str(o["traceId"]),
+						name: str(o["name"]),
+						startTime: str(o["startTime"]),
+						level: str(o["level"]),
+						totalCost: num(o["totalCost"]) ?? num(o["calculatedTotalCost"]),
+					}));
+				} catch (e) {
+					if (rec(e)["status"] !== 404) throw e;
+				}
+				// A self-hosted Langfuse 3.x off the v4 data model has no v2 observations:
+				// its legacy trace list is the read that is left (owner ruling, 2026-10-18).
+				try {
+					return arr(
+						rec(
+							await call(a, "listLegacyTraces", {
+								limit,
+								fromTimestamp: p.fromStartTime,
+							}),
+						)["data"],
+					).map((t) => ({
+						id: str(t["id"]),
+						traceId: str(t["id"]),
+						name: str(t["name"]),
+						startTime: str(t["timestamp"]),
+						level: undefined,
+						totalCost: num(t["totalCost"]),
+					}));
+				} catch (e) {
+					if (rec(e)["status"] === 404)
+						throw new UnsupportedError(
+							"This Langfuse serves neither its observations API nor its trace list. Open the app to see its traces.",
+						);
+					throw e;
+				}
+			},
 		},
 		daily: {
 			params: none,

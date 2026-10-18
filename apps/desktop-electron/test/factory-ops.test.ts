@@ -196,29 +196,63 @@ describe("ops for Studio", () => {
 		expect(out.release).toBe("api@2");
 		expect(out.stack).toBeUndefined();
 	});
-	it("langfuse_traces_without_v4_api_is_unsupported_not_a_raw_404", async () => {
-		// A default self-hosted Langfuse (no LANGFUSE_MIGRATION_V4_WRITE_MODE) answers
-		// /api/public/v2/observations with a 404: say so, without the request URL.
+	it("langfuse_traces_fall_back_to_the_legacy_list_on_404", async () => {
+		// A default self-hosted Langfuse 3.x has no /v2/observations: read its trace list.
 		const op = OPS.langfuse.traces;
 		if (!op) throw new Error("no traces op");
-		const run = op.run(
+		const notFound = () =>
+			Promise.reject(Object.assign(new Error("404"), { status: 404 }));
+		const out = await op.run(
 			adapter({
-				listObservations: () => {
-					throw Object.assign(
-						new Error(
-							"GET http://lf/api/public/v2/observations?limit=20 failed with 404: v4 write mode",
-						),
-						{ status: 404 },
-					);
+				listObservations: notFound,
+				listLegacyTraces: (q: unknown) => {
+					expect(q).toMatchObject({ limit: 20 });
+					return {
+						data: [
+							{
+								id: "t1",
+								name: "checkout-agent",
+								timestamp: "2026-10-18T08:00:00Z",
+								totalCost: 0.5,
+							},
+						],
+					};
 				},
 			}),
 			op.params.parse({}) as never,
 			ctx,
 		);
+		expect(out).toEqual([
+			{
+				id: "t1",
+				traceId: "t1",
+				name: "checkout-agent",
+				startTime: "2026-10-18T08:00:00Z",
+				level: undefined,
+				totalCost: 0.5,
+			},
+		]);
+	});
+
+	it("langfuse_traces_without_either_api_is_unsupported_not_a_raw_404", async () => {
+		const op = OPS.langfuse.traces;
+		if (!op) throw new Error("no traces op");
+		const notFound = () =>
+			Promise.reject(
+				Object.assign(
+					new Error("GET http://lf/api/public/v2/observations failed with 404"),
+					{ status: 404 },
+				),
+			);
+		const run = op.run(
+			adapter({ listObservations: notFound, listLegacyTraces: notFound }),
+			op.params.parse({}) as never,
+			ctx,
+		);
 		await expect(run).rejects.toBeInstanceOf(UnsupportedError);
-		await expect(run).rejects.toThrow(/Langfuse v4/);
 		await expect(run).rejects.not.toThrow(/http:/);
 	});
+
 	it("openpanel_insights_default_to_a_window_that_includes_today", async () => {
 		// OpenPanel's own default window ends yesterday: a deploy's first hours read as zero.
 		const op = OPS.openpanel.insights;

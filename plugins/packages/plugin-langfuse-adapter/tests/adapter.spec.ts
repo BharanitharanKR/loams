@@ -443,6 +443,23 @@ describe("langfuse deprecated surface", () => {
   });
 });
 
+describe("langfuse legacy trace list (fallback for self-hosted 3.x)", () => {
+  it("reads /api/public/traces only through its own method, with the key and a bounded limit", async () => {
+    const page = await harness!.service.listLegacyTraces({ limit: 20 });
+    expect(page.data).toEqual([]);
+    const call = harness!.captured.at(-1)!;
+    expect(new URL(call.url).pathname).toBe("/api/public/traces");
+    expect(new URL(call.url).searchParams.get("limit")).toBe("20");
+    expect(call.headers.authorization?.startsWith("Basic ")).toBe(true);
+    // The general guard still refuses the path everywhere else.
+    expect(() => assertSupportedLangfusePath("/api/public/traces")).toThrow(/2026-11-16/);
+  });
+
+  it("rejects a limit outside 1..100", async () => {
+    await expect(harness!.service.listLegacyTraces({ limit: 101 })).rejects.toThrow(/1\.\.100/);
+  });
+});
+
 describe("langfuse deprecation marker", () => {
   it("does not break parsing when _deprecation is present", async () => {
     const page = await harness!.service.listObservations();
