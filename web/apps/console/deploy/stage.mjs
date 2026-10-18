@@ -70,7 +70,8 @@ export function contentSecurityPolicy({
 } = {}) {
   return [
     "default-src 'self'",
-    `script-src ${["'self'", ...scriptHashes].join(' ')}`,
+    // WebAssembly compiles (the code viewers' Shiki engine); JavaScript eval does not.
+    `script-src ${["'self'", "'wasm-unsafe-eval'", ...scriptHashes].join(' ')}`,
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob:",
     "font-src 'self'",
