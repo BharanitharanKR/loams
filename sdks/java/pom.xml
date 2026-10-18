@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  The POM Maven Central gets for loams. There is no Maven build: build.sh compiles
+  with javac/kotlinc, and `./build.sh package OUT_DIR` writes this file next to
+  the jars it describes. scripts/sdk/sdk-version.py keeps <version> at the release.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+  <groupId>dev.loams</groupId>
+  <artifactId>loams</artifactId>
+  <version>0.1.0</version>
+  <packaging>jar</packaging>
+  <name>Loams Java SDK</name>
+  <description>The official Java client for Loams. Pre-release (preview): the API may change between previews.</description>
+  <url>https://loams.dev</url>
+  <licenses>
+    <license>
+      <name>Apache-2.0</name>
+      <url>https://www.apache.org/licenses/LICENSE-2.0</url>
+      <distribution>repo</distribution>
+    </license>
+  </licenses>
+  <developers>
+    <developer>
+      <id>ostrium-labs</id>
+      <name>Ostrium Labs</name>
+      <email>security@ostriumlabs.com</email>
+      <organization>Ostrium Labs</organization>
+      <organizationUrl>https://github.com/ostrium-labs</organizationUrl>
+    </developer>
+  </developers>
+  <scm>
+    <connection>scm:git:https://github.com/ostrium-labs/loams.git</connection>
+    <developerConnection>scm:git:ssh://git@github.com/ostrium-labs/loams.git</developerConnection>
+    <url>https://github.com/ostrium-labs/loams/tree/main/sdks/java</url>
+  </scm>
+  <issueManagement>
+    <system>GitHub</system>
+    <url>https://github.com/ostrium-labs/loams/issues</url>
+  </issueManagement>
+  <dependencies>
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+      <version>4.29.3</version>
+    </dependency>
+  </dependencies>
+</project>

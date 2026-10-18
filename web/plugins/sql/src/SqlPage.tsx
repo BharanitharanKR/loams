@@ -3,7 +3,7 @@
 // the right.
 
 import { PageHead } from '@loams/desktop-ui';
-import { Badge, Button, Empty, formatBytes, Notice } from '@loams/ui';
+import { Badge, Button, Empty, formatBytes, Notice, SampleDataNotice } from '@loams/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { Connection } from './Connection.js';
 import {
@@ -70,7 +70,7 @@ export function SqlPage({ client, copy, namespace = 'default', mocked }: SqlPage
   const head = (
     <PageHead
       title="Loams SQL"
-      badge={<Badge>{mocked ? 'loams.sqldb.v1 · sample data' : 'loams.sqldb.v1'}</Badge>}
+      badge={<Badge>loams.sqldb.v1</Badge>}
       subtitle="MySQL-compatible databases on TiDB. Each branch is a copy with its own compute, which suspends when idle."
     />
   );
@@ -111,9 +111,9 @@ export function SqlPage({ client, copy, namespace = 'default', mocked }: SqlPage
     <div className="lc-page flex flex-col gap-4">
       {head}
       {mocked && (
-        <Notice title="Sample data">
-          The loams.sqldb.v1 API has not landed yet; this page runs against built-in fixtures.
-        </Notice>
+        <SampleDataNotice>
+          The loams.sqldb.v1 API has not landed yet; nothing here reaches a database.
+        </SampleDataNotice>
       )}
       <div className="grid gap-4 md:grid-cols-[16rem_1fr]">
         <DatabaseList databases={dbs.value} selected={selected} onSelect={setSelected} />

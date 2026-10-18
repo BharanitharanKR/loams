@@ -111,7 +111,12 @@ func New(options Options) (*Client, error) {
 	if options.Protocol != "" {
 		config.Protocol = options.Protocol
 	}
-	config.HTTPClient = options.HTTPClient
+	// `Options.HTTPClient` wins over `Transport.HTTPClient`, but only when it is
+	// set: assigning it unconditionally threw away a client the caller had put on
+	// the transport.
+	if options.HTTPClient != nil {
+		config.HTTPClient = options.HTTPClient
+	}
 	if config.HTTPClient == nil {
 		built, err := NewHTTPClient(config)
 		if err != nil {
@@ -143,6 +148,11 @@ func New(options Options) (*Client, error) {
 	}
 	clients := facade.NewServiceClients(config.HTTPClient, endpoint, clientOptions...)
 	client.invoker = NewCallInvoker(clients, options.Auth, maxRetries, client.session)
+	// ExtraHeaders were accepted and never sent (B17), so a client configured to
+	// address one Live app silently addressed the server's default app instead.
+	// They go through the invoker, which is the one place every unary call and
+	// every stream builds its request headers.
+	client.invoker.headers = config.ExtraHeaders.Clone()
 
 	client.instance = &instanceModule{moduleInfo{invoker: client.invoker, registry: client.modules, name: "instance"}}
 	client.live = &liveModule{moduleInfo{invoker: client.invoker, registry: client.modules, name: "live"}}

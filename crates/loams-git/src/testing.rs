@@ -145,6 +145,13 @@ impl MemLeaseTable {
         })
     }
 
+    /// Whether `key`'s holder released it (rather than letting it expire).
+    pub fn released(&self, key: &str) -> bool {
+        self.lock()
+            .get(key)
+            .is_some_and(|lease| lease.owner.is_none())
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, std::collections::HashMap<String, MemLease>> {
         self.leases
             .lock()

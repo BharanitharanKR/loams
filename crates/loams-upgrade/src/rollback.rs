@@ -70,7 +70,7 @@ pub fn restore(runtime: &dyn Runtime, stack: &mut StackDir, restore: &Restore) -
     let pd_tikv = vec!["pd".to_string(), "tikv".to_string()];
     // Everything stops (the door was closed by the upgrade, or is now).
     let config = compose::config(runtime, &stack.dir)?;
-    door::close(runtime, &stack.dir, &compose::services(&config))?;
+    door::close(runtime, &stack.dir, &config)?;
     compose::stop(runtime, &stack.dir, &compose::services(&config))?;
     install::restore_host(&stack.dir, id)?;
     stack.env = read_env(&stack.dir.join(".env"));
@@ -126,15 +126,14 @@ pub fn restore(runtime: &dyn Runtime, stack: &mut StackDir, restore: &Restore) -
     )?;
     // The previous release, then its health, then the door.
     let config = compose::config(runtime, &stack.dir)?;
-    let enabled = compose::services(&config);
     let services: Vec<String> = compose::long_running(&config)
         .into_iter()
-        .filter(|s| !door::SIDECARS.contains(&s.as_str()))
+        .filter(|s| !door::is_gate(&config, s))
         .collect();
     compose::up(runtime, &stack.dir, &services)?;
     let bad: Vec<String> = compose::unhealthy(&compose::ps(runtime, &stack.dir)?)
         .into_iter()
-        .filter(|s| !door::SIDECARS.contains(&s.as_str()))
+        .filter(|s| !door::is_gate(&config, s))
         .collect();
     if !bad.is_empty() {
         return Err(UpgradeError::new(
@@ -143,7 +142,7 @@ pub fn restore(runtime: &dyn Runtime, stack: &mut StackDir, restore: &Restore) -
         ));
     }
     crate::run::engine_ready(runtime, &stack.dir)?;
-    door::open(runtime, &stack.dir, &enabled)
+    door::open(runtime, &stack.dir, &config)
 }
 
 /// `rollback_failed` (exit 11): the failure, the rollback's failure, where
@@ -400,20 +399,19 @@ pub fn rollback(
 /// start on the data as it is.
 fn swap_images_back(runtime: &dyn Runtime, stack: &mut StackDir, id: &str) -> Result<()> {
     let config = compose::config(runtime, &stack.dir)?;
-    door::close(runtime, &stack.dir, &compose::services(&config))?;
+    door::close(runtime, &stack.dir, &config)?;
     compose::stop(runtime, &stack.dir, &compose::services(&config))?;
     install::restore_host(&stack.dir, id)?;
     stack.env = read_env(&stack.dir.join(".env"));
     let config = compose::config(runtime, &stack.dir)?;
-    let enabled = compose::services(&config);
     let services: Vec<String> = compose::long_running(&config)
         .into_iter()
-        .filter(|s| !door::SIDECARS.contains(&s.as_str()))
+        .filter(|s| !door::is_gate(&config, s))
         .collect();
     compose::up(runtime, &stack.dir, &services)?;
     let bad: Vec<String> = compose::unhealthy(&compose::ps(runtime, &stack.dir)?)
         .into_iter()
-        .filter(|s| !door::SIDECARS.contains(&s.as_str()))
+        .filter(|s| !door::is_gate(&config, s))
         .collect();
     if !bad.is_empty() {
         return Err(UpgradeError::new(
@@ -422,5 +420,5 @@ fn swap_images_back(runtime: &dyn Runtime, stack: &mut StackDir, id: &str) -> Re
         ));
     }
     crate::run::engine_ready(runtime, &stack.dir)?;
-    door::open(runtime, &stack.dir, &enabled)
+    door::open(runtime, &stack.dir, &config)
 }

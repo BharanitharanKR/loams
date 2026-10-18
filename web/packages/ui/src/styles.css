@@ -557,6 +557,39 @@ textarea.loams-input {
   border-left-color: var(--op-grow);
 }
 
+/* Sample data: the notice and badge on every page that renders fixtures ----------- */
+
+.loams-sample-data {
+  padding: 9px 14px;
+  border: 1px solid var(--op-warn-soft);
+  border-left: 3px solid var(--op-warn);
+  border-radius: var(--op-radius-md);
+  background: var(--op-warn-soft);
+  color: var(--op-ink);
+  font-family: inherit;
+  font-size: 0.86rem;
+  line-height: 1.5;
+}
+
+.loams-sample-data strong {
+  font-weight: 600;
+  color: var(--op-warn);
+}
+
+.loams-sample-data-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border: 1px solid var(--op-warn);
+  background: var(--op-warn-soft);
+  color: var(--op-warn);
+  font-family: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
 /* Snippets ------------------------------------------------------------------------ */
 
 .loams-snippet {
@@ -762,4 +795,531 @@ textarea.loams-input {
   .loams-btn {
     border-color: ButtonText;
   }
+}
+
+/* ---------- The query editor (sql-editor.tsx, sql-workbench.tsx, query-results.tsx) ---------- */
+
+.loams-sql-frame {
+  container-type: inline-size;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--op-rule);
+  border-radius: var(--op-radius-md);
+  background: var(--op-surface);
+  overflow: hidden;
+}
+
+.loams-sql-frame:focus-within {
+  border-color: var(--op-input);
+}
+
+.loams-sql-editor {
+  min-width: 0;
+}
+
+.loams-sql-frame > .loams-sql-editor {
+  border-top: 1px solid var(--op-rule);
+}
+
+/* Standalone (no frame): the editor draws its own border. */
+.loams-sql-editor:not(.loams-sql-frame > *) {
+  border: 1px solid var(--op-rule);
+  border-radius: var(--op-radius-md);
+  overflow: hidden;
+}
+
+.loams-sql-editor .cm-editor.cm-focused {
+  outline: 2px solid var(--op-accent);
+  outline-offset: -2px;
+}
+
+.loams-sql-editor-invalid .cm-editor {
+  box-shadow: inset 2px 0 0 var(--op-danger);
+}
+
+.loams-sql-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  background: var(--op-raised);
+}
+
+.loams-sql-toolbar-spacer {
+  flex: 1 1 auto;
+}
+
+.loams-sql-hint {
+  font-size: var(--op-text-micro);
+  color: var(--op-muted);
+  white-space: nowrap;
+}
+
+/* The hint gives way first when the toolbar is narrow. */
+@container (max-width: 720px) {
+  .loams-sql-hint {
+    display: none;
+  }
+}
+
+.loams-sql-disabled,
+.loams-sql-running {
+  margin: 8px 0 0;
+  font-size: var(--op-text-small);
+  color: var(--op-muted);
+}
+
+.loams-sql-workbench {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+/* Syntax colours: tokens.css --op-code-*. */
+.loams-tok-keyword {
+  color: var(--op-code-keyword);
+  font-weight: 500;
+}
+.loams-tok-string {
+  color: var(--op-code-string);
+}
+.loams-tok-number {
+  color: var(--op-code-number);
+}
+.loams-tok-comment {
+  color: var(--op-code-comment);
+  font-style: italic;
+}
+.loams-tok-function {
+  color: var(--op-code-function);
+}
+.loams-tok-type {
+  color: var(--op-code-type);
+}
+.loams-tok-param {
+  color: var(--op-code-param);
+}
+.loams-tok-operator,
+.loams-tok-punct {
+  color: var(--op-code-operator);
+}
+.loams-tok-property {
+  color: var(--op-ink);
+}
+
+.loams-cm-error {
+  text-decoration: underline wavy var(--op-danger);
+  text-underline-offset: 3px;
+  background: var(--op-danger-soft);
+}
+
+.loams-cm-signature {
+  padding: 4px 8px;
+  font-family: var(--loams-font-mono);
+  font-size: var(--op-text-small);
+  color: var(--op-muted);
+  max-width: 40em;
+}
+
+.loams-cm-signature-active {
+  color: var(--op-ink);
+  font-weight: 600;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.loams-cm-signature-doc {
+  margin-top: 2px;
+  font-family: var(--loams-font-sans);
+  color: var(--op-faint);
+}
+
+/* The error the engine named. */
+.loams-query-error {
+  display: grid;
+  gap: 6px;
+  padding: 10px 12px;
+  border: 1px solid var(--op-danger);
+  border-radius: var(--op-radius-md);
+  background: var(--op-danger-soft);
+}
+
+.loams-query-error p {
+  margin: 0;
+}
+
+.loams-query-error-title {
+  font-size: var(--op-text-body);
+  color: var(--op-danger);
+}
+
+.loams-query-error-where {
+  color: var(--op-ink);
+}
+
+.loams-query-error-message {
+  font-size: var(--op-text-body);
+  color: var(--op-ink);
+  overflow-wrap: anywhere;
+}
+
+.loams-query-error-span {
+  margin: 0;
+  padding: 6px 8px;
+  overflow: auto;
+  font-family: var(--loams-font-mono);
+  font-size: var(--op-text-small);
+  background: var(--op-surface);
+  border-radius: var(--op-radius-sm);
+}
+
+.loams-query-error-span mark {
+  color: var(--op-ink);
+  background: var(--op-danger-soft);
+  text-decoration: underline wavy var(--op-danger);
+}
+
+.loams-query-error-gutter {
+  color: var(--op-faint);
+  user-select: none;
+}
+
+/* Example queries before the first run. */
+.loams-sql-examples-title {
+  margin: 0 0 6px;
+  font-size: var(--op-text-small);
+  color: var(--op-muted);
+}
+
+.loams-sql-examples ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.loams-sql-example {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+  color: var(--op-ink);
+  background: var(--op-surface);
+  border: 1px solid var(--op-rule);
+  border-radius: var(--op-radius-md);
+  cursor: pointer;
+  font: inherit;
+}
+
+.loams-sql-example:hover {
+  border-color: var(--op-input);
+  background: var(--op-row-hover);
+}
+
+.loams-sql-example:focus-visible {
+  outline: 2px solid var(--op-accent);
+  outline-offset: 2px;
+}
+
+.loams-sql-example-label {
+  font-size: var(--op-text-body);
+  font-weight: 500;
+}
+
+.loams-sql-example code {
+  overflow: hidden;
+  font-family: var(--loams-font-mono);
+  font-size: var(--op-text-small);
+  color: var(--op-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.loams-history-item {
+  display: grid;
+  gap: 2px;
+  max-width: 34em;
+}
+
+.loams-history-item code {
+  overflow: hidden;
+  font-family: var(--loams-font-mono);
+  font-size: var(--op-text-small);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.loams-history-meta {
+  font-size: var(--op-text-micro);
+  color: var(--op-faint);
+}
+
+/* Results. */
+.loams-results {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.loams-results-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.loams-results-status {
+  margin: 0;
+  font-size: var(--op-text-small);
+  color: var(--op-muted);
+}
+
+.loams-results-status strong {
+  color: var(--op-ink);
+  font-weight: 500;
+}
+
+.loams-results-truncated {
+  color: var(--op-warn);
+}
+
+.loams-results-copied {
+  font-size: var(--op-text-small);
+  color: var(--op-muted);
+}
+
+.loams-results-actions {
+  display: flex;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.loams-results-empty {
+  margin: 0;
+  padding: 12px;
+  font-family: var(--loams-font-sans);
+  font-size: var(--op-text-body);
+  color: var(--op-muted);
+}
+
+.loams-results-scroll {
+  overflow: auto;
+  border: 1px solid var(--op-rule);
+  border-radius: var(--op-radius-md);
+  background: var(--op-surface);
+}
+
+.loams-results-scroll:focus-visible {
+  outline: 2px solid var(--op-accent);
+  outline-offset: 2px;
+}
+
+.loams-results-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--loams-font-mono);
+  font-size: var(--op-text-small);
+}
+
+.loams-results-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 4px 10px;
+  text-align: left;
+  vertical-align: bottom;
+  white-space: nowrap;
+  font-family: var(--loams-font-sans);
+  font-weight: 500;
+  color: var(--op-ink);
+  background: var(--op-surface);
+  box-shadow: inset 0 -1px 0 var(--op-rule);
+}
+
+.loams-results-col {
+  display: block;
+}
+
+.loams-results-type {
+  display: block;
+  max-width: 24em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-family: var(--loams-font-mono);
+  font-size: var(--op-text-micro);
+  font-weight: 400;
+  color: var(--op-faint);
+}
+
+/* biome-ignore lint/style/noDescendingSpecificity: a different table from .loams-table */
+.loams-results-table td {
+  max-width: 420px;
+  padding: 0 10px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  border-bottom: 1px solid var(--op-rule-soft);
+}
+
+.loams-results-table tbody tr:hover {
+  background: var(--op-row-hover);
+}
+
+.loams-results-table .loams-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.loams-results-null {
+  color: var(--op-faint);
+  font-style: italic;
+}
+
+.loams-results-rownum {
+  width: 1%;
+  color: var(--op-faint);
+  text-align: right;
+  user-select: none;
+}
+
+.loams-sql-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+
+@media (min-width: 1200px) {
+  .loams-sql-layout {
+    grid-template-columns: minmax(0, 1fr) 260px;
+  }
+}
+
+.loams-schema-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+  max-height: 70vh;
+  overflow: auto;
+  padding: 8px;
+  border: 1px solid var(--op-rule);
+  border-radius: var(--op-radius-md);
+  background: var(--op-surface);
+}
+
+.loams-schema-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.loams-schema-head h3 {
+  margin: 0;
+  font-size: var(--op-text-small);
+  font-weight: 600;
+  color: var(--op-muted);
+}
+
+.loams-schema-filter {
+  flex: 1;
+  min-width: 0;
+  height: var(--op-control-compact);
+}
+
+.loams-schema-note {
+  margin: 0;
+  font-size: var(--op-text-small);
+  color: var(--op-muted);
+}
+
+.loams-schema-tables,
+.loams-schema-columns {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.loams-schema-tables summary {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 3px 4px;
+  border-radius: var(--op-radius-sm);
+  cursor: pointer;
+}
+
+.loams-schema-tables summary:hover {
+  background: var(--op-row-hover);
+}
+
+.loams-schema-tables summary:focus-visible,
+.loams-schema-column:focus-visible {
+  outline: 2px solid var(--op-accent);
+  outline-offset: 1px;
+}
+
+.loams-schema-table {
+  font-family: var(--loams-font-mono);
+  font-size: var(--op-text-small);
+  font-weight: 500;
+  color: var(--op-ink);
+}
+
+.loams-schema-kind {
+  margin-left: auto;
+  font-size: var(--op-text-micro);
+  color: var(--op-faint);
+}
+
+.loams-schema-columns {
+  padding-left: 14px;
+}
+
+.loams-schema-column {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 4px;
+  font: inherit;
+  text-align: left;
+  color: var(--op-ink);
+  background: transparent;
+  border: 0;
+  border-radius: var(--op-radius-sm);
+  cursor: pointer;
+}
+
+.loams-schema-column:hover:not(:disabled) {
+  background: var(--op-row-hover);
+}
+
+.loams-schema-column:disabled {
+  cursor: default;
+}
+
+.loams-schema-col {
+  overflow: hidden;
+  font-family: var(--loams-font-mono);
+  font-size: var(--op-text-small);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.loams-schema-type {
+  flex-shrink: 0;
+  max-width: 50%;
+  overflow: hidden;
+  font-family: var(--loams-font-mono);
+  font-size: var(--op-text-micro);
+  color: var(--op-code-type);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

@@ -16,6 +16,7 @@ use loams_collection::{
 };
 use loams_common::meta::{Consistency, MetaStore};
 use loams_query::flight::{StatementTicket, decode_ticket, encode_ticket, ticket_consistency};
+use loams_query::graph::GraphCaller;
 use loams_query::sql::{rows_to_json, run_read_only};
 use loams_query::{
     CollectionInfo, CollectionService, ColumnRole, ReadConsistency, ScanAt, ScanPlan, ScanRequest,
@@ -75,7 +76,7 @@ async fn high_watermarks(f: &Fixture, info: &CollectionInfo) -> ConsistencyToken
 }
 
 async fn sql_count(service: &CollectionService, consistency: ReadConsistency) -> Value {
-    let ctx = service.sql_context_with(NS, consistency);
+    let ctx = service.sql_context_with(NS, consistency, GraphCaller::Internal);
     let result = run_read_only(&ctx, "SELECT count(*) AS n FROM kb", &service.config().sql)
         .await
         .expect("count");

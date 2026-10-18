@@ -5,6 +5,12 @@
 //! [`GraphTables`], which the server hands the service when it runs graphs
 //! ([`crate::CollectionService::set_graph_tables`]); `graph_expand` runs on the
 //! [`GraphExpander`](crate::expand::GraphExpander) the `expand` stage uses.
+//!
+//! Every call names who it is for, a [`GraphCaller`] (GR1 R24.12): a principal's request (a
+//! search's `expand`, a SQL graph or algorithm function) is checked for the principal's `reader`
+//! relation on the graph before the graph is read; only Loams' own calls are not.
+
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use loams_collection::PrimaryKey;
@@ -21,6 +27,87 @@ pub const DEFAULT_PATH_HOPS: u8 = 6;
 
 /// `graph_neighbors`' default `limit_per_key`.
 pub const DEFAULT_LIMIT_PER_KEY: usize = 100;
+
+/// Who a graph read is for (GR1 R24.12, amending R24.4). Every [`GraphTables`] and
+/// [`GraphExpander`](crate::expand::GraphExpander) call carries one, and an implementation
+/// answers [`GraphCaller::authorize_read`] before it reads the graph, so a caller who may search
+/// a namespace's collections cannot read a graph's neighbourhood without a relation on it.
+#[derive(Clone, Debug)]
+pub enum GraphCaller {
+    /// Loams itself, on no principal's behalf: a link (collection → graph, stream → graph), an
+    /// algorithm's write-back task, a call forwarded from the node that took (and checked) the
+    /// request, maintenance. Never checked. A request a principal made is never `Internal`.
+    Internal,
+    /// A principal's request: each graph it touches needs the principal's `reader` relation,
+    /// decided as `loams.graph.v1`'s RPCs are (the environment fence, the relation, the
+    /// `graph:*` scopes; GR1 Task 24).
+    Principal(Arc<dyn GraphReadGate>),
+}
+
+impl GraphCaller {
+    /// A principal that may read no graph: a request with no admitted principal, or a surface
+    /// the server has not told who calls it.
+    #[must_use]
+    pub fn nobody() -> Self {
+        Self::Principal(Arc::new(Nobody))
+    }
+
+    /// Checks that the caller may read graph `graph` of `namespace` for `what` (the table
+    /// function, or `Search.expand`). `Internal` always may.
+    ///
+    /// # Errors
+    ///
+    /// [`ServiceError::PermissionDenied`] (need `reader`), or `Unavailable` when the relations
+    /// cannot be read.
+    pub async fn authorize_read(
+        &self,
+        what: &str,
+        namespace: &str,
+        graph: &str,
+    ) -> Result<(), ServiceError> {
+        match self {
+            Self::Internal => Ok(()),
+            Self::Principal(gate) => gate.authorize_read(what, namespace, graph).await,
+        }
+    }
+}
+
+/// Decides a principal's graph reads ([`GraphCaller::Principal`]): Loams Graph's authorizer
+/// bound to the request's caller, in the server.
+#[async_trait]
+pub trait GraphReadGate: Send + Sync + std::fmt::Debug {
+    /// Whether the bound caller may read graph `graph` of `namespace` (as
+    /// [`GraphCaller::authorize_read`]); a refusal is audited by the implementation.
+    async fn authorize_read(
+        &self,
+        what: &str,
+        namespace: &str,
+        graph: &str,
+    ) -> Result<(), ServiceError>;
+}
+
+/// [`GraphCaller::nobody`]'s gate.
+#[derive(Debug)]
+struct Nobody;
+
+#[async_trait]
+impl GraphReadGate for Nobody {
+    async fn authorize_read(
+        &self,
+        what: &str,
+        namespace: &str,
+        graph: &str,
+    ) -> Result<(), ServiceError> {
+        let object = format!("graph:{namespace}/{graph}");
+        Err(ServiceError::PermissionDenied {
+            message: format!(
+                "{what} on {object} needs reader: the caller holds no relation on {object}"
+            ),
+            need: "reader".to_string(),
+            object,
+        })
+    }
+}
 
 /// One incident edge of a vertex (`graph_neighbors`' row).
 #[derive(Clone, Debug, PartialEq)]
@@ -50,6 +137,8 @@ pub struct PathStep {
 /// `graph_neighbors`' call.
 #[derive(Clone, Debug)]
 pub struct NeighborsCall<'a> {
+    /// Who the read is for.
+    pub caller: &'a GraphCaller,
     pub namespace: &'a str,
     pub graph: &'a str,
     pub keys: Vec<PrimaryKey>,
@@ -63,6 +152,8 @@ pub struct NeighborsCall<'a> {
 /// `graph_degree`'s call.
 #[derive(Clone, Debug)]
 pub struct DegreeCall<'a> {
+    /// Who the read is for.
+    pub caller: &'a GraphCaller,
     pub namespace: &'a str,
     pub graph: &'a str,
     pub keys: Vec<PrimaryKey>,
@@ -74,6 +165,8 @@ pub struct DegreeCall<'a> {
 /// `graph_shortest_path`'s call.
 #[derive(Clone, Debug)]
 pub struct PathCall<'a> {
+    /// Who the read is for.
+    pub caller: &'a GraphCaller,
     pub namespace: &'a str,
     pub graph: &'a str,
     pub from: PrimaryKey,
@@ -111,6 +204,8 @@ pub enum AlgorithmSpec {
 /// A graph algorithm's call.
 #[derive(Clone, Debug)]
 pub struct AlgorithmCall<'a> {
+    /// Who the read is for.
+    pub caller: &'a GraphCaller,
     pub namespace: &'a str,
     pub graph: &'a str,
     /// Only edges of these types; empty is every type.
@@ -142,7 +237,7 @@ pub struct AlgorithmRow {
 }
 
 /// Reads a graph for the graph table functions: Loams Graph's (`loams-graph`), when the server
-/// runs it.
+/// runs it. Every method answers its call's [`GraphCaller::authorize_read`] first.
 #[async_trait]
 pub trait GraphTables: Send + Sync + std::fmt::Debug {
     /// Each key's incident edges, keys in call order, each key's edges ordered by direction

@@ -10,6 +10,7 @@ mod determinism;
 mod filter_write;
 mod flight;
 mod flight_ingest;
+mod graph_callers;
 mod graph_ddl;
 mod hot_hooks;
 mod ir_json;

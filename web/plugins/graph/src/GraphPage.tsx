@@ -7,7 +7,7 @@
 import { Code, type Transport } from '@connectrpc/connect';
 import { NamespacePicker, PageHead } from '@loams/desktop-ui';
 import { graph } from '@loams/proto';
-import { Badge, Button, ComingSoon, Empty, isNotServed, Notice } from '@loams/ui';
+import { Badge, Button, ComingSoon, Empty, isNotServed, Notice, type SqlSchema } from '@loams/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createGraphClient,
@@ -171,6 +171,19 @@ function Workspace({
   const [status, setStatus] = useState<string>();
   const [recent, setRecent] = useState<string[]>(() => history.list());
   const [schemaTick, setSchemaTick] = useState(0);
+  const [graphSchema, setGraphSchema] = useState<graph.GraphSchema>();
+  // Labels and edge types complete as names; property keys as their columns.
+  const editorSchema = useMemo<SqlSchema>(() => {
+    if (!graphSchema) return { tables: [] };
+    const props = graphSchema.propertyKeys.map((name) => ({ name }));
+    return {
+      tables: [
+        ...graphSchema.labels.map((l) => ({ name: l.label, kind: 'label', columns: props })),
+        ...graphSchema.edgeTypes.map((e) => ({ name: e.type, kind: 'edge type', columns: [] })),
+        ...props.map((p) => ({ name: p.name, kind: 'property', columns: [] })),
+      ],
+    };
+  }, [graphSchema]);
   const abort = useRef<AbortController | undefined>(undefined);
 
   useEffect(() => setRecent(history.list()), [history]);
@@ -364,6 +377,7 @@ function Workspace({
                 onCancel={() => abort.current?.abort()}
                 failure={failure}
                 history={recent}
+                schema={editorSchema}
               />
               {status && <Notice title={status} />}
               {busy && !streaming && (
@@ -386,7 +400,13 @@ function Workspace({
           )}
         </div>
         {selected && (
-          <Schema client={client} namespace={ns} name={selected.name} refresh={schemaTick} />
+          <Schema
+            client={client}
+            namespace={ns}
+            name={selected.name}
+            refresh={schemaTick}
+            onSchema={setGraphSchema}
+          />
         )}
       </div>
     </div>

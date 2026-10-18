@@ -20,7 +20,9 @@ import {
   expectMockEdit,
   go,
   hashOf,
+  inspector,
   modes,
+  openInspectorTab,
   projectHref,
   startThread,
   timeline,
@@ -79,11 +81,11 @@ test.describe('studio on the web edition', () => {
 
   test('web_remote_requires_token', async () => {
     // No host yet: Studio asks for one.
-    await expect(page.getByText('Connect an agentd host')).toBeVisible();
+    await expect(page.getByText('Studio needs a Loams server with agentd')).toBeVisible();
     // A host without a token is still not connected: the transport never calls without one.
     await addHost(page, agentd, { token: false });
     await go(page, '/studio');
-    await expect(page.getByText('Connect an agentd host')).toBeVisible();
+    await expect(page.getByText('Studio needs a Loams server with agentd')).toBeVisible();
     // The daemon refuses a call without a token (and with someone else's).
     expect((await agentd.raw('/loams.agentd.v1.StudioService/GetHost', {}, null)).status).toBe(401);
     expect(
@@ -122,7 +124,9 @@ test.describe('studio on the web edition', () => {
     await agentd.call('/loams.agentd.v1.ProjectService/AddRepo', { path: agentd.repo });
     await page.reload();
     // The reload drops the pasted token (memory only, T7-11): paste it again.
-    await expect(page.getByText('Connect an agentd host')).toBeVisible({ timeout: 30_000 });
+    await expect(page.getByText('Studio needs a Loams server with agentd')).toBeVisible({
+      timeout: 30_000,
+    });
     await go(page, '/studio/settings');
     const row = page.getByRole('list', { name: 'Registered hosts' }).getByRole('listitem', {
       name: 'E2E host',
@@ -167,6 +171,8 @@ test.describe('studio on the web edition', () => {
     threadId = await startThread(page, agentd.repo, 'Please edit the notes');
     expect(threadId).not.toBe('');
     await expect(timeline(page)).toContainText('Please edit the notes');
+    // The diff is the shell inspector's Diff tab (design 59).
+    await openInspectorTab(page, 'Diff');
     await expectMockEdit(page, 1);
     // The header names the Mock and the thread's approval mode, as Settings › Studio chose.
     await expect(page.getByRole('main')).toContainText(/Mock\s*full-access/);
@@ -216,15 +222,16 @@ test.describe('studio on the web edition', () => {
   });
 
   test('files_tab_reads_the_checkout', async () => {
-    const panel = page.getByRole('complementary', { name: 'Panel' });
-    await panel.getByRole('tab', { name: 'Files' }).click();
-    await expect.poll(() => hashOf(page)).toContain('panel=files');
+    // The inspector's tab strip is the shell's: it switches tabs without a `?panel=` link.
+    await openInspectorTab(page, 'Files');
+    const panel = inspector(page);
     await panel.getByText('README.md', { exact: true }).click();
     await expect(panel).toContainText('A project for Studio end-to-end tests.');
   });
 
   test('terminal_round_trip', async () => {
-    await page.getByRole('button', { name: 'Show terminal' }).click();
+    // The terminal is the shell drawer's tab (design 59).
+    await page.getByRole('button', { name: 'Show drawer' }).click();
     const terminal = page.locator('.xterm').first();
     await expect(terminal).toBeVisible({ timeout: 30_000 });
     await terminal.click();
@@ -348,6 +355,7 @@ test.describe('supervised approvals on the web edition', () => {
     expect(notes()).toEqual(['first line\n']);
     // Allowed once, it runs: the edit lands.
     await card.click();
+    await openInspectorTab(page, 'Diff');
     await expectMockEdit(page, 1);
     await expect(page.getByRole('button', { name: 'Allow once' })).toHaveCount(0);
     expect(notes()).toEqual(['first line\nmock edit 1\n']);

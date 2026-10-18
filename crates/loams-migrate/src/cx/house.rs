@@ -60,14 +60,7 @@ impl HouseCx {
     /// [`HouseCx::discard_sibling`] (or a rollback) to remove.
     pub fn swap_dir(&self) -> Result<(), MigrationError> {
         let sibling = self.sibling();
-        rustix::fs::renameat_with(
-            rustix::fs::CWD,
-            &sibling,
-            rustix::fs::CWD,
-            &self.dir,
-            rustix::fs::RenameFlags::EXCHANGE,
-        )
-        .map_err(|e| {
+        exchange(&sibling, &self.dir).map_err(|e| {
             io_error(
                 &format!(
                     "exchanging {} and {}",
@@ -89,4 +82,28 @@ impl HouseCx {
             Err(e) => Err(io_error("discarding the sibling directory", e)),
         }
     }
+}
+
+/// Exchanges two directories atomically: renameat2(RENAME_EXCHANGE) on
+/// Linux, renamex_np(RENAME_SWAP) on macOS.
+#[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
+fn exchange(a: &Path, b: &Path) -> std::io::Result<()> {
+    rustix::fs::renameat_with(
+        rustix::fs::CWD,
+        a,
+        rustix::fs::CWD,
+        b,
+        rustix::fs::RenameFlags::EXCHANGE,
+    )
+    .map_err(std::io::Error::from)
+}
+
+/// Elsewhere there is no atomic exchange, so House directory migrations are
+/// refused (the server runs on Linux; this keeps the binary building).
+#[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
+fn exchange(_a: &Path, _b: &Path) -> std::io::Result<()> {
+    Err(std::io::Error::new(
+        std::io::ErrorKind::Unsupported,
+        "an atomic directory exchange needs Linux or macOS",
+    ))
 }

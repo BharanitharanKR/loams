@@ -4,9 +4,11 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-18
+
 ### Upgrading
 
-From **0.1.0-preview.2** (one step at a time): `loams upgrade --to 0.1.0-preview.3`.
+From **0.1.0-preview.2** (one step at a time): `loams upgrade --to 0.1.0`.
 
 It takes a snapshot first, and `loams upgrade rollback` restores it.
 
@@ -34,10 +36,13 @@ See [docs/release/upgrades.md](docs/release/upgrades.md).
   upgrade page. CI gains `Upgrade: previous release → candidate`, which upgrades the previous release's
   stack with fixtures in every product and rolls it back.
 - **Git push and fetch to the bucket from the release packages.** `git-remote-loams`, git's
-  remote helper for `loams::<store-url>/ns/<ns>/repos/<repo>` URLs (`crates/loams-git-remote`),
+  remote helper for `loams::<store-url>/ns/<namespace-id>/repos/<repo>` URLs (`crates/loams-git-remote`),
   now ships next to `loams` in the .deb, .rpm and .pkg.tar.zst (`/usr/bin`), the macOS
   tarballs and the Windows zip, so `git clone`, `fetch` and `push` reach a Loams Git
-  repository on a bucket with no server in between. It is not published to crates.io.
+  repository on a bucket with no server in between. The namespace is its numeric id (the bucket
+  has no namespace names), and a push with `LOAMS_GIT_CREATE_ON_PUSH=1` creates the repository:
+  the repository service (`loams.repos.v1`, cargo feature `git`) is not in the release images.
+  It is not published to crates.io.
   `git-remote-loams --version` prints its version. See `docs/release/packaging.md`.
 - **Loams Studio, an agentic development environment in the console** (design §53, plan SD1).
   The console has two modes, Console and Studio. Studio runs coding agents in threads, each
@@ -163,7 +168,15 @@ See [docs/release/upgrades.md](docs/release/upgrades.md).
   `SIGTERM` a node drains: `/ready` answers `503`, its streams close and new calls are refused
   with `unavailable` (`node_draining`, new), and running mutations finish first (LV1 Task 24).
 
-## [0.1.0-preview.2] - unreleased
+### Fixed
+- **`loams upgrade` on Podman.** Closing the door now removes the Tailscale sidecars (and any other service with
+  `network_mode: service:…`) instead of stopping them, and restarting the old release after a failure removes them
+  first, so compose can recreate the engine and the House: Podman refuses to remove a container while another one,
+  even stopped, is in its network namespace ("has dependent containers"). Opening the door creates them again.
+  To recreate the engine by hand after an `.env` change: `docker compose rm -sf tailscale && docker compose up -d
+  loams tailscale` ([upgrades](docs/release/upgrades.md#recreating-a-service-by-hand)).
+
+## [0.1.0-preview.2] - 2026-10-15
 
 The second preview. Everything marked **Preview** in the [feature status table](docs/release/preview.md#feature-status)
 ships in it, built from `dev` with the work held back from preview.1 merged. Same shape as

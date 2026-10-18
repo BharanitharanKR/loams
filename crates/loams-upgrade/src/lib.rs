@@ -16,6 +16,7 @@ pub mod errors;
 pub mod helpers;
 pub mod history;
 pub mod install;
+mod mode;
 pub mod path;
 pub mod rollback;
 pub mod run;

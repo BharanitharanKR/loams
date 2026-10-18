@@ -1,6 +1,6 @@
-# Loams preview: run it yourself
+# Loams: run it yourself
 
-Everything in the preview runs on your machine or on VMs you own. Ostrium hosts
+Everything in Loams 0.1.0 runs on your machine or on VMs you own. Ostrium hosts
 two things only: the console (a React app) and the auth service. You can serve
 the console yourself instead, from your own Vercel or Cloudflare project, or
 from this stack (`--profile console`).
@@ -25,7 +25,8 @@ No service binds a host port on `0.0.0.0` by default.
 ## Images
 
 Built by [`build.sh`](build.sh) from `Containerfile.<name>` and published to
-`ghcr.io/ostrium-labs` as `:<version>` and `:preview`, for linux/amd64 and
+`ghcr.io/ostrium-labs` as `:<version>`, `:<major>.<minor>` and `:latest` (a
+prerelease gets `:preview` instead), for linux/amd64 and
 linux/arm64. Each runs as uid 10001 on debian-slim, with tini as PID 1 and a
 healthcheck.
 
@@ -34,12 +35,12 @@ healthcheck.
 | `loams` | the engine, features `live,live-tikv,durable,graph,tikv,pgwire,mysql-wire,stream-grpc` |
 | `loams-fabric` | `loams-fabric house` and `loams-house-worker`, with the digest-pinned libchdb; workers sealed with `--sandbox pods` by default |
 | `loams-agentd` | the agent daemon (optional) |
-| `loams-pg-control` | `loams` with features `postgres,tikv` and the standalone `docker-compose` CLI: `pg-control` and `pg-runner` (`--profile postgres-control`; from the release after 0.1.0-preview.2) |
+| `loams-pg-control` | `loams` with features `postgres,tikv` and the standalone `docker-compose` CLI: `pg-control` and `pg-runner` (`--profile postgres-control`; from 0.1.0) |
 
 ```sh
 deploy/release/build.sh loams                        # both platforms, local manifest list
 deploy/release/build.sh --platforms linux/amd64 loams
-deploy/release/build.sh --version 0.1.0-preview.2 --push   # CI on a tag
+deploy/release/build.sh --version 0.1.0 --push   # CI on a tag
 ```
 
 ## On this machine
@@ -53,7 +54,7 @@ docker compose logs tailscale            # the node name, or a login URL
 ```
 
 Set the console's `LOAMS_ENGINE_URL` to `https://loams.<tailnet>.ts.net`.
-Profiles add `headscale` (coming soon, unsupported in 0.1.0-preview.2), `console` (the console from `LOAMS_CONSOLE_DIR`, with
+Profiles add `headscale` (coming soon, unsupported in 0.1.0), `console` (the console from `LOAMS_CONSOLE_DIR`, with
 `/config.json` built from `LOAMS_ENGINE_URL`, `LOAMS_AUTH_ISSUER` and
 `LOAMS_AUTH_CLIENT_ID`), `agentd` and `house` (below). Stop with `docker compose --profile '*'
 down`; add `--volumes` to delete the data.
@@ -79,8 +80,7 @@ names that caller's Loams principal. The House gives each principal the scopes
 (`read`, `write`, `ddl`, `admin`) `HOUSE_PRINCIPALS` lists; a principal not
 listed has no House access, and every statement is recorded with its principal
 in `/var/lib/loams-house/audit.log`. With `LOAMS_HOUSE_ENDPOINT` set,
-`loams.house.v1` and the console's House page reach the House. The link needs `loams` and `loams-fabric` images built after
-0.1.0-preview.2. The House is also on the `house` network, which nothing else
+`loams.house.v1` and the console's House page reach the House. The link needs `loams` and `loams-fabric` 0.1.0 images or later. The House is also on the `house` network, which nothing else
 joins. Workers run sealed: `HOUSE_SANDBOX=pods` (default;
 Landlock with TCP rules on Linux 6.7 or later, and seccomp) or `netns` (adds a
 user and network namespace per worker; needs unprivileged user namespaces in the
@@ -149,9 +149,9 @@ audience `LOAMS_OIDC_AUDIENCE`; `apikey` checks hashed keys in
 `LOAMS_API_KEYS_FILE`, which compose points at `secrets/api-keys`. See
 `.env.example`.
 
-### Headscale (coming soon, unsupported in 0.1.0-preview.2)
+### Headscale (coming soon, unsupported in 0.1.0)
 
-0.1.0-preview.2 supports one setup: your own Tailscale tailnet and the hosted
+0.1.0 supports one setup: your own Tailscale tailnet and the hosted
 console. Headscale issues no `ts.net` HTTPS certificates, so the hosted console
 (served over HTTPS) cannot reach an engine on a Headscale tailnet. The profile
 stays in the bundle for a later release; the steps below are unsupported.
@@ -178,9 +178,9 @@ From 0.1.0-preview.2, `loams upgrade` upgrades this stack in place, one release 
 time, with a snapshot first:
 
 ```sh
-loams upgrade check --to 0.1.0-preview.3   # what it will do and what would stop it
-loams upgrade --to 0.1.0-preview.3         # snapshot, migrate, restart, verify
-loams upgrade rollback                     # back to the snapshot
+loams upgrade check --to 0.1.0  # what it will do and what would stop it
+loams upgrade --to 0.1.0        # snapshot, migrate, restart, verify
+loams upgrade rollback          # back to the snapshot
 ```
 
 Snapshots go to the `upgrade-snapshots` volume, or to `LOAMS_UPGRADE_SNAPSHOT_DIR`
@@ -201,24 +201,23 @@ directory and `deploy/loams-postgres-dev` to `~/loams`, writes `.env` with mode
 needs SSH and outbound internet only.
 
 ```sh
-deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.0-preview.3 --check   # loams upgrade check
-deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.0-preview.3           # loams upgrade, on the VM
-deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.0-preview.3 --rollback
+deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.0 --check  # loams upgrade check
+deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.0          # loams upgrade, on the VM
+deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.0 --rollback
 ```
 
 `upgrade.sh` fetches the target release's `loams` CLI on the VM (its Linux
 package, checked against the release's `SHA256SUMS`) and runs `loams upgrade` in
 `~/loams/release`, streaming its output; its exit code is the CLI's.
 
-## Known gaps in the preview
+## Known gaps in 0.1.0
 
-- With 0.1.0-preview.2 images the engine does not reach the House: its TLS link
-  (HS1 Task 20) needs later images, so `loams.house.v1` answers
-  `house_not_configured`; use the House's own tailnet URL (`--profile house`).
+- Without `LOAMS_HOUSE_ENDPOINT` the engine does not reach the House, so
+  `loams.house.v1` answers `house_not_configured`; use the House's own tailnet
+  URL (`--profile house`).
 - `HOUSE_SANDBOX=netns` fails under Docker's default seccomp profile (no
   unprivileged user namespaces) and the House does not start; keep `pods` there.
-- With 0.1.0-preview.2 images the House takes no `INSERT` into its tables (HS1 Task 12 is
-  in later images). On a kernel without Landlock TCP rules (before 6.7) the workers refuse
+- On a kernel without Landlock TCP rules (before 6.7) the House's workers refuse
   to boot.
 - Live's own listener (7710), durable (8001), and the MySQL and Postgres wire
   listeners of the engine are loopback only and are not forwarded over the
@@ -232,6 +231,5 @@ package, checked against the release's `SHA256SUMS`) and runs `loams upgrade` in
 - `pg-control` (`--profile postgres-control`) keeps its records in a local file
   (one node) and reaches the Postgres stack, its computes and `pg-runner` in
   plain text on the compose networks; no PgDog fronts the computes yet (PG2c),
-  so clients connect to an endpoint's published port. Its image ships from
-  the release after 0.1.0-preview.2; until then build it with
-  `build.sh loams-pg-control`.
+  so clients connect to an endpoint's published port. Its image,
+  `loams-pg-control`, ships from 0.1.0.

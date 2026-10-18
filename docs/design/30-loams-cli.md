@@ -596,7 +596,7 @@ curl -fsSL https://loams.dev/install.sh | sh -s -- --variant full --version 0.4.
 
 ### 17.3 `loams self-update` (D294, CLI2)
 
-1. **Refuse foreign installs.** Without `receipt.json`, or when `current_exe()` is not `$LOAMS_HOME/bin/loams`, it exits 6 (`managed_install`) with the right upgrade command: `cargo install loams` (`cargo install loams` names an unrelated crate, verified 2026-10-01), or the package manager.
+1. **Refuse foreign installs.** Without `receipt.json`, or when `current_exe()` is not `$LOAMS_HOME/bin/loams`, it exits 6 (`managed_install`) with the right upgrade command: `cargo install loams-server` (D1106; the crate `loams` is the Rust SDK), or the package manager.
 2. **Fetch and verify** the manifest for `--version` or the latest, with the embedded public keys (`minisign-verify` 0.3, MIT). A failure exits 9.
 3. **Check versions.** If the target is not newer, it prints "up to date" and exits 0. `--version` with an older version needs `--yes`.
 4. **Download** the archive for the receipt's variant (`--variant` switches it), then check its SHA-256 (exit 9 on mismatch).

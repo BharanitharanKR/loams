@@ -2359,6 +2359,10 @@ jobs:
       - if: ${{ !cancelled() && github.event_name == 'pull_request' && github.base_ref == 'main' }}
         name: the release's CHANGELOG entry has its Upgrading section
         run: python3 scripts/release/upgrade_path.py check-changelog
+      # Stable (no `-`) vs prerelease channel flags and image tags of a release.
+      - if: ${{ !cancelled() }}
+        name: release channel (stable vs prerelease) self-test
+        run: scripts/release/channel.sh --self-test
       # API2 Task 19's every_sdk_dir_has_a_job and only_wave1_is_required. Here
       # because this job is unconditional and light, so a new sdks/<lang>
       # without a job fails every pull request that adds it.

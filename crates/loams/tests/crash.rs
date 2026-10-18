@@ -906,6 +906,16 @@ fn field(name: &str, kind: FieldKind) -> FieldSpec {
 async fn create_docs(dir: &Path, keys: u64) -> Docs {
     let store = bucket_store(dir);
     let (node, meta) = open_meta(dir, &store).await;
+    // The startup gate (design §54 §4.3) refuses a store that has data but no
+    // stack record, so stamp the stack first, as a server's first start does.
+    loams_migrate::startup::stamp_new_stack(
+        meta.clone(),
+        env!("CARGO_PKG_VERSION"),
+        "crash-gate",
+        None,
+    )
+    .await
+    .expect("stamp the stack");
     let ns = meta.create_namespace("acme").await.expect("namespace");
     let vector = VectorSpec {
         name: "v".to_string(),

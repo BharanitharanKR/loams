@@ -209,7 +209,21 @@ jobs:
           key: desktop-release-linux-${{ matrix.arch }}
       - name: engine (live and durable)
         run: cargo build --release -p loams --features live,durable,live-tikv,graph
+      # The agent daemon behind Studio (0.1.0 release fix B9); fetch-engine.mjs bundles it with
+      # SHA256SUMS and VERSION, and fails the package without it (LOAMS_REQUIRE_AGENTD).
+      - name: agent daemon
+        env:
+          DESKTOP_VERSION: ${{ needs.plan.outputs.desktop_version }}
+          LOAMS_BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # The daemon reports the app's version; empty (a dry run) keeps the crate's.
+          [ -n "$DESKTOP_VERSION" ] && export LOAMS_AGENTD_VERSION="$DESKTOP_VERSION"
+          cargo build --release -p loams-agentd
+          target/release/loams-agentd version
       - name: package
+        env:
+          LOAMS_REQUIRE_AGENTD: "1"
         run: pnpm nx run loams-desktop-electron:package-linux --outputStyle=static
       - name: split the rpm (SignPath) from the rest
         run: |
@@ -735,7 +749,7 @@ jobs:
           ls -l
 
       # The product release is created by release-github.yml; this only adds the desktop files and a
-      # section of notes, once. A published product release is updated in place (it is a preview).
+      # section of notes, once. A published product release is updated in place.
       - name: attach to the product release
         if: env.MODE == 'product'
         env:

@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1.7
 # The Loams engine image (ghcr.io/ostrium-labs/loams), built by build.sh from
 # the repository root. Multi-stage: the build stage compiles `loams` with the
-# preview feature set, the runtime stage is debian-slim with the binary, curl
+# release feature set (FEATURES below), the runtime stage is debian-slim with the binary, curl
 # for the healthcheck and tini as PID 1, run as an unprivileged user.
 ARG RUST_IMAGE=docker.io/library/rust:1.97.1-slim-trixie
 ARG RUNTIME_IMAGE=docker.io/library/debian:trixie-slim
@@ -42,7 +42,7 @@ RUN apt-get update \
  && install -d -o loams -g loams -m 0700 /var/lib/loams-pg-control /var/lib/loams-upgrade-snapshots
 COPY --from=build /out/loams /usr/local/bin/loams
 LABEL org.opencontainers.image.title="loams" \
-      org.opencontainers.image.description="Loams engine (preview)" \
+      org.opencontainers.image.description="Loams engine" \
       org.opencontainers.image.source="https://github.com/ostrium-labs/loams" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}" \

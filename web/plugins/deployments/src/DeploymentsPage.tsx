@@ -15,6 +15,7 @@ import {
   Empty,
   formatRelative,
   Notice,
+  SampleDataNotice,
   Stat,
   Stats,
   StatusTag,
@@ -91,7 +92,7 @@ const TABS = [
 ] as const;
 type TabId = (typeof TABS)[number]['id'];
 
-export function DeploymentsPage({ client }: { client: DeployClient }) {
+export function DeploymentsPage({ client, sample }: { client: DeployClient; sample?: boolean }) {
   const [tab, setTab] = useState<TabId>('live');
   const base = useId();
   const refs = useRef<Record<string, HTMLButtonElement | null>>({});
@@ -119,6 +120,9 @@ export function DeploymentsPage({ client }: { client: DeployClient }) {
         <h1>Deployments</h1>
         <p>Pipelines, environment promotion and how often deploys land or fail.</p>
       </header>
+      {sample && (
+        <SampleDataNotice>The pipelines and deploys shown are simulated.</SampleDataNotice>
+      )}
       <Summary client={client} />
       <div role="tablist" aria-label="Deployment views" className="ld-tabs" onKeyDown={onKey}>
         {TABS.map((t) => (

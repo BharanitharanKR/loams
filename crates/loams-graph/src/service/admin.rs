@@ -156,8 +156,10 @@ pub struct GraphAdmin {
     /// (an embedder or a test without authorization); the server always sets one.
     authorizer: Option<Arc<dyn crate::authz::GraphAuthorizer>>,
     /// The caller this handle serves ([`GraphAdmin::for_caller`]). `None` is a call Loams makes
-    /// itself (a search's expansion, a table function, a link, a write-back, a forwarded call),
-    /// which is not checked here; every RPC handler sets one.
+    /// itself (a link, a write-back, a forwarded call, maintenance), which is not checked here;
+    /// every RPC handler sets one. A search's expansion and the SQL table functions read through
+    /// this unchecked handle too, but only after their `loams_query::graph::GraphCaller` passed
+    /// (GR1 R24.12, [`crate::authz::PrincipalReads`]).
     caller: Option<Arc<crate::authz::Caller>>,
     /// When open graphs are evicted (GR1 Task 14).
     evict_policy: EvictPolicy,

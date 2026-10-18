@@ -2,10 +2,22 @@
 // parameters as a JSON object, the read-only toggle (on by default), Run, Explain,
 // Profile and Cancel, and the history. A refused statement shows its GQLSTATUS and
 // reason, and the span the server names (`line`/`column`/`length`, 1-based, counted in
-// characters, R7.4) is underlined under the editor and selected in it.
+// characters, R7.4) is underlined in the editor and shown under it. The editor is the
+// console's shared query editor in its GQL mode: highlighting, and completion of keywords,
+// the graph's labels, edge types and property keys.
 
-import { Button, Checkbox, Select, Textarea } from '@loams/ui';
-import { type KeyboardEvent, useEffect, useId, useRef } from 'react';
+import {
+  Button,
+  Checkbox,
+  positionOfOffset,
+  RunHint,
+  Select,
+  SqlEditor,
+  type SqlPosition,
+  type SqlSchema,
+  Textarea,
+} from '@loams/ui';
+import { useId, useMemo } from 'react';
 import type { GraphFailure, Language } from './client.js';
 
 export interface EditorProps {
@@ -27,6 +39,8 @@ export interface EditorProps {
   /** The last refusal, with the statement it refused. */
   failure?: { failure: GraphFailure; statement: string };
   history: string[];
+  /** Labels, edge types and property keys of the selected graph, for completion. */
+  schema?: SqlSchema;
 }
 
 /** The UTF-16 range of a 1-based line/column/length counted in code points, or undefined. */
@@ -101,26 +115,22 @@ export function FailureView({ failure, statement }: { failure: GraphFailure; sta
   );
 }
 
+/** The editor position (UTF-16) of the span the server named (code points). */
+function errorPosition(
+  statement: string,
+  failure?: { failure: GraphFailure; statement: string },
+): SqlPosition | undefined {
+  const pos = failure?.failure.position;
+  if (!pos || failure.statement !== statement) return undefined;
+  const range = spanRange(statement, pos);
+  if (!range) return undefined;
+  return { ...positionOfOffset(statement, range[0]), length: Math.max(1, range[1] - range[0]) };
+}
+
 export function Editor(p: EditorProps) {
-  const ref = useRef<HTMLTextAreaElement>(null);
   const ids = useId();
   const errorId = `${ids}-error`;
-
-  // Select the span the server named, so the caret lands on it.
-  useEffect(() => {
-    const pos = p.failure?.failure.position;
-    const el = ref.current;
-    if (!pos || !el || el.value !== p.failure?.statement) return;
-    const range = spanRange(el.value, pos);
-    if (range) el.setSelectionRange(range[0], range[1]);
-  }, [p.failure]);
-
-  const onKey = (e: KeyboardEvent) => {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      if (!p.busy && p.statement.trim()) p.onRun();
-    }
-  };
+  const errorAt = useMemo(() => errorPosition(p.statement, p.failure), [p.statement, p.failure]);
 
   return (
     <section className="flex flex-col gap-3" aria-label="Editor">
@@ -161,20 +171,46 @@ export function Editor(p: EditorProps) {
           </label>
         )}
       </div>
-      <textarea
-        ref={ref}
-        aria-label="Statement"
-        aria-describedby={p.failure ? errorId : undefined}
-        aria-invalid={p.failure?.failure.position ? true : undefined}
-        className={
-          /* mono-ok: code */ 'loams-input box-border w-full resize-y font-mono text-[13px]'
-        }
-        rows={7}
-        spellCheck={false}
-        value={p.statement}
-        onChange={(e) => p.onStatement(e.target.value)}
-        onKeyDown={onKey}
-      />
+      <div className="loams-sql-frame">
+        <div className="loams-sql-toolbar" role="toolbar" aria-label="Statement actions">
+          <Button
+            variant="primary"
+            size="sm"
+            onClick={p.onRun}
+            disabled={p.busy || !p.statement.trim()}
+          >
+            Run
+          </Button>
+          <Button size="sm" onClick={p.onExplain} disabled={p.busy || !p.statement.trim()}>
+            Explain
+          </Button>
+          <Button size="sm" onClick={p.onProfile} disabled={p.busy || !p.statement.trim()}>
+            Profile
+          </Button>
+          {p.busy && (
+            <Button size="sm" variant="quiet" onClick={p.onCancel}>
+              Cancel
+            </Button>
+          )}
+          <span className="loams-sql-toolbar-spacer" />
+          <RunHint selection={false} />
+        </div>
+        <SqlEditor
+          label="Statement"
+          dialect="gql"
+          schema={p.schema}
+          value={p.statement}
+          onChange={p.onStatement}
+          onRun={() => {
+            if (!p.busy && p.statement.trim()) p.onRun();
+          }}
+          describedBy={p.failure ? errorId : undefined}
+          invalid={!!p.failure?.failure.position}
+          errorAt={errorAt}
+          minLines={6}
+          placeholder="MATCH (n) RETURN n LIMIT 10"
+        />
+      </div>
       <details>
         <summary className="cursor-pointer text-sm text-muted">Parameters</summary>
         <Textarea
@@ -190,23 +226,6 @@ export function Editor(p: EditorProps) {
           Parameters are sent with the statement and never kept in the history.
         </p>
       </details>
-      <div className="flex flex-wrap items-center gap-2">
-        <Button variant="primary" onClick={p.onRun} disabled={p.busy || !p.statement.trim()}>
-          Run
-        </Button>
-        <Button onClick={p.onExplain} disabled={p.busy || !p.statement.trim()}>
-          Explain
-        </Button>
-        <Button onClick={p.onProfile} disabled={p.busy || !p.statement.trim()}>
-          Profile
-        </Button>
-        {p.busy && (
-          <Button variant="quiet" onClick={p.onCancel}>
-            Cancel
-          </Button>
-        )}
-        <span className="text-xs text-muted">Ctrl or Cmd + Enter runs.</span>
-      </div>
       {p.failure && (
         <div id={errorId}>
           <FailureView failure={p.failure.failure} statement={p.failure.statement} />

@@ -1,7 +1,16 @@
 // `/connectors/instances` and `/connectors/instances/:name`: running connector instances (CN2),
 // with pause and resume, per-split checkpoints, lag, throughput and errors.
 
-import { Badge, Button, Card, Empty, Notice, type Status, StatusTag } from '@loams/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  Notice,
+  SampleDataNotice,
+  type Status,
+  StatusTag,
+} from '@loams/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   type FlowClient,
@@ -29,10 +38,10 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export function FixtureNotice({ flow }: { flow: FlowClient }) {
   if (!flow.fixture) return null;
   return (
-    <Notice title="Demo data">
+    <SampleDataNotice>
       No FlowService is served yet: these instances are fixtures, and anything created, paused or
       resumed here lasts only until the app reloads.
-    </Notice>
+    </SampleDataNotice>
   );
 }
 

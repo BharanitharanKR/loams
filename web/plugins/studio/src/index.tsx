@@ -1,7 +1,8 @@
 // @loams/plugin-studio: Loams Studio, the agentic development environment in the
-// console (design §53; SD1 Task 15). `modes: ["studio"]`, so the host applies it
-// the first time Studio mode is entered. It registers Studio's routes, its nav
-// entries and its header context. It reaches loams-agentd through the console's
+// console (design §53; SD1 Task 15). `modes: ["studio"]`; the host applies it at boot in
+// every edition where Studio mode is available (design 59, W10). It registers Studio's
+// routes, its nav entries, and its parts of the shell's regions (regions.tsx): the
+// sidebar's threads, the home, the inspector and drawer tabs, and the top bar context. It reaches loams-agentd through the console's
 // `agentd` service on the desktop (SD1 Task 6), and on the web through the selected
 // remote agentd host (SD1 Task 7, hosts/agentd.ts; `?host=<id>` selects one), in
 // both cases with connect-query over the host's transport (agentd.ts).
@@ -13,11 +14,11 @@ import type {} from '@loams/platform-electron';
 import { type StudioAgentd, studioAgentd } from './agentd.js';
 import { desktopFactory } from './factory.js';
 import { GitActionBus, withGitActions } from './git/bus.js';
-import { StudioContext } from './header.js';
 import { hostedAgentd } from './hosts/agentd.js';
 import { createStudioKeys, listenShellCommands } from './palette/commands.js';
 import { StudioPalette } from './palette/StudioPalette.js';
 import { desktopPreview } from './preview/access.js';
+import { registerStudioRegions } from './regions.js';
 import { routeOf, STUDIO_PAGES } from './routes.js';
 import { agentdPaletteSource } from './sidebar/paletteSource.js';
 import { StudioView } from './view.js';
@@ -45,7 +46,7 @@ export {
   hostedAgentd,
   type StudioHosts,
 } from './hosts/agentd.js';
-export { LAYOUT_DEFAULTS, LAYOUT_KEY, StudioLayout } from './layout/StudioLayout.js';
+export { StudioLayout } from './layout/StudioLayout.js';
 export {
   type CommandName,
   createStudioKeys,
@@ -73,6 +74,16 @@ export {
 } from './preview/access.js';
 export { ForwardHint, PreviewTab } from './preview/PreviewTab.js';
 export {
+  registerStudioRegions,
+  STUDIO_TABS,
+  StudioHome,
+  type StudioRegionDeps,
+  StudioThreads,
+  StudioTools,
+  studioRouteAt,
+  THREAD_ROUTES,
+} from './regions.js';
+export {
   routeOf,
   STUDIO_PAGES,
   type StudioRoute,
@@ -82,7 +93,7 @@ export {
 export { KeybindingsCard } from './settings/Keybindings.js';
 export { FactoryGroup } from './sidebar/Factory.js';
 export { agentdPaletteSource } from './sidebar/paletteSource.js';
-export { StudioSidebar } from './sidebar/Sidebar.js';
+export { StudioSidebar, THREADS_SHOWN } from './sidebar/Sidebar.js';
 export {
   type ComposerProject,
   ThreadComposer,
@@ -109,11 +120,13 @@ export { StudioView } from './view.js';
 const plugin: PluginModule = {
   name: 'studio',
   // `desktop` only on the desktop edition: the catalog rows narrow this list.
-  inject: ['router', 'slots', 'mode', 'platform', 'flags', 'agentd'],
+  inject: ['router', 'slots', 'mode', 'platform', 'flags', 'agentd', 'inspector', 'drawer'],
   apply(ctx: Context) {
     const router = service(ctx, 'router');
     const slots = service(ctx, 'slots');
     const platform = service(ctx, 'platform');
+    const inspector = service(ctx, 'inspector');
+    const drawer = service(ctx, 'drawer');
     const desktop = platform.kind === 'desktop' ? service(ctx, 'desktop') : undefined;
     const agentd: StudioAgentd = desktop
       ? studioAgentd(
@@ -143,13 +156,13 @@ const plugin: PluginModule = {
           ({ params }) => (
             <StudioView
               agentd={agentd}
-              factory={factory}
               route={routeOf(page.kind, params)}
               navigate={navigate}
               hostParam={params.host}
               keys={keys}
               openExternal={(url) => platform.openExternal(url)}
-              gitBus={gitBus}
+              inspector={inspector}
+              drawer={drawer}
             />
           ),
         ),
@@ -181,7 +194,8 @@ const plugin: PluginModule = {
           order: 90,
           meta: {
             id: 'studio-settings',
-            label: 'Settings',
+            // Settings lists every settings page (D1080), so this one says whose it is.
+            label: 'Studio settings',
             href: '/studio/settings',
             icon: 'settings',
             group: 'Studio',
@@ -207,12 +221,23 @@ const plugin: PluginModule = {
         ),
       ),
     );
-    ctx.effect(() =>
-      slots.register(
-        { name: 'shell.header.server', plugin: 'studio', meta: { mode: 'studio' } },
-        () => <StudioContext agentd={agentd} router={router} />,
-      ),
-    );
+    // Design 59: the sidebar's threads, the home, the inspector and drawer tabs, the top bar.
+    ctx.effect(() => {
+      const disposers = registerStudioRegions(slots, {
+        agentd,
+        factory,
+        router,
+        keys,
+        inspector,
+        drawer,
+        gitBus,
+        openExternal: (url) => platform.openExternal(url),
+        mode: service(ctx, 'mode'),
+      });
+      return () => {
+        for (const dispose of disposers) dispose();
+      };
+    }, 'studio-regions');
   },
 };
 

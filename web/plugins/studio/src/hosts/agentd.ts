@@ -7,7 +7,7 @@
 // (`getToken`). Until then, in development, a token pasted in Settings, held in this
 // page's memory only (never stored) and flagged with a warning.
 
-import type { Transport } from '@connectrpc/connect';
+import { Code, ConnectError, type Transport } from '@connectrpc/connect';
 import { createAgentdTransport } from '@loams/agentd-client/connect';
 import {
   type AgentdHost,
@@ -36,6 +36,50 @@ export interface StudioHosts {
   subscribe(listener: () => void): () => void;
   /** Changes whenever `subscribe`'s listeners are called (a store snapshot). */
   version(): number;
+}
+
+/** What a browser says when `fetch` could not even reach the server. */
+const NETWORK_FAILURE = /failed to fetch|networkerror|load failed|network request failed/i;
+
+/**
+ * Why a browser cannot reach an agentd host, when `fetch` said only "Failed to fetch" (B21):
+ * the browser does not say whether the host is down, its certificate is not accepted, or
+ * the console's Content-Security-Policy blocked the origin.
+ */
+export function unreachableHostMessage(url: string): string {
+  let origin = url;
+  try {
+    origin = new URL(url).origin;
+  } catch {
+    // Keep the URL as given.
+  }
+  return (
+    `This browser could not reach the agentd host at ${origin}. Check that loams-agentd is ` +
+    `running there; for a self-signed certificate, open ${origin} once in this browser and ` +
+    'accept it; and on a deployed console, that its LOAMS_AGENTD_ORIGINS lists ' +
+    `${origin} (without it the console's Content-Security-Policy blocks the host).`
+  );
+}
+
+/** `transport`, with a network failure turned into `unavailable` and what to check. */
+export function explainNetworkFailures(transport: Transport, url: string): Transport {
+  const explain = (error: unknown): never => {
+    const e = ConnectError.from(error);
+    if (e.code !== Code.Canceled && NETWORK_FAILURE.test(e.rawMessage)) {
+      throw new ConnectError(
+        unreachableHostMessage(url),
+        Code.Unavailable,
+        undefined,
+        undefined,
+        error,
+      );
+    }
+    throw error;
+  };
+  return {
+    unary: (...args) => transport.unary(...args).catch(explain),
+    stream: (...args) => transport.stream(...args).catch(explain),
+  };
 }
 
 export interface HostedAgentdOptions {
@@ -84,9 +128,12 @@ export function hostedAgentd(o: HostedAgentdOptions = {}): StudioAgentd & { host
       const getToken = tokenOf(host);
       client = {
         id: host.id,
-        transport: o.transportFor
-          ? o.transportFor(host, getToken)
-          : createAgentdTransport({ kind: 'remote', baseUrl: host.url, getToken }),
+        transport: explainNetworkFailures(
+          o.transportFor
+            ? o.transportFor(host, getToken)
+            : createAgentdTransport({ kind: 'remote', baseUrl: host.url, getToken }),
+          host.url,
+        ),
       };
     }
     return client.transport;

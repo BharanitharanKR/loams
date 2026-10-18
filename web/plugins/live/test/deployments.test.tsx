@@ -121,7 +121,8 @@ describe('createMockAdminApi', () => {
 describe('DeploymentsPage', () => {
   it('shows the preview notice, the active deployment and the history', async () => {
     render(<DeploymentsPage api={createMockAdminApi()} />);
-    expect(await screen.findByText(PREVIEW_NOTICE)).toBeTruthy();
+    expect(await screen.findByText(/Sample data/)).toBeTruthy();
+    expect(screen.getByText(new RegExp(PREVIEW_NOTICE))).toBeTruthy();
     const history = await screen.findByRole('table', { name: 'Deploy history' });
     for (const id of [D1, D2, D3, D4]) expect(within(history).getByText(short(id))).toBeTruthy();
     const active = screen.getByRole('region', { name: 'Active deployment' });
@@ -229,7 +230,7 @@ describe('DeploymentsPage', () => {
     };
     render(<DeploymentsPage api={flaky} />);
     expect(await screen.findByText('boom')).toBeTruthy();
-    expect(screen.queryByText(PREVIEW_NOTICE)).toBeNull();
+    expect(screen.queryByText(new RegExp(PREVIEW_NOTICE))).toBeNull();
     fail = false;
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(await screen.findByRole('table', { name: 'Deploy history' })).toBeTruthy();

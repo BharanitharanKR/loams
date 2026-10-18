@@ -32,12 +32,21 @@
 //! ([`denials`]). The authorization is checked before the graph is looked up, so a caller who may
 //! not read a graph cannot tell whether it exists.
 //!
+//! **Loams' own reads for a principal** (GR1 R24.12, amending R24.4): a search's `expand` and the
+//! SQL graph and algorithm table functions are a principal's requests too. `loams-query` passes
+//! each one's [`GraphCaller`](loams_query::graph::GraphCaller), and a principal's
+//! ([`PrincipalReads`]) needs `reader` on every graph it touches, decided and audited here as an
+//! RPC's is; a refusal fails the request (`PERMISSION_DENIED`, `need` = `reader`). Only Loams'
+//! own calls on no principal's behalf (links, a write-back, a forwarded call, maintenance) are
+//! `GraphCaller::Internal` and unchecked.
+//!
 //! The engine session that runs a statement has the Grafeo role of the statement's own access,
 //! which is never above the caller's relation (a statement needing more is refused here first),
 //! so the engine still refuses a write that both classifiers called a read (§48 §11.2 item 1).
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use async_trait::async_trait;
@@ -427,6 +436,70 @@ pub(crate) fn note_disagreement(statement: &str, guard: Access, engine: Access) 
     );
 }
 
+/// A principal's graph reads through `loams-query` (a search's `expand`, the SQL graph and
+/// algorithm table functions; GR1 R24.12): its [`Caller`] and the authorizer that decides it,
+/// as `loams_query::graph::GraphCaller::Principal`.
+#[derive(Debug, Clone)]
+pub struct PrincipalReads {
+    authorizer: Arc<dyn GraphAuthorizer>,
+    caller: Caller,
+}
+
+impl PrincipalReads {
+    /// `caller`'s reads, decided by `authorizer`.
+    #[must_use]
+    pub fn new(authorizer: Arc<dyn GraphAuthorizer>, caller: Caller) -> Self {
+        Self { authorizer, caller }
+    }
+
+    /// As the graph caller `loams-query` passes down.
+    #[must_use]
+    pub fn into_graph_caller(self) -> loams_query::graph::GraphCaller {
+        loams_query::graph::GraphCaller::Principal(Arc::new(self))
+    }
+}
+
+#[async_trait]
+impl loams_query::graph::GraphReadGate for PrincipalReads {
+    /// `reader` on the graph: the fence, the relation, the scopes ([`decide`]); a refusal is
+    /// audited and counted as an RPC's, with `what` as its rpc.
+    async fn authorize_read(
+        &self,
+        what: &str,
+        namespace: &str,
+        graph: &str,
+    ) -> Result<(), loams_query::ServiceError> {
+        let need = Need::At(Relation::Reader);
+        let standing = self
+            .authorizer
+            .standing(&self.caller, namespace, Some(graph))
+            .await
+            .map_err(|err| {
+                loams_query::ServiceError::Unavailable(
+                    err.message.unwrap_or_else(|| err.code.as_str().to_string()),
+                )
+            })?;
+        decide(&self.caller, &standing, need)
+            .map(|_| ())
+            .map_err(|refusal| {
+                let denial =
+                    record_denial(&self.caller, what, namespace, Some(graph), need, refusal);
+                loams_query::ServiceError::PermissionDenied {
+                    message: denial.message,
+                    need: denial.need.to_string(),
+                    object: denial.object,
+                }
+            })
+    }
+}
+
+/// A refusal, as audited: its message, what it needed, and the object.
+struct Denial {
+    message: String,
+    need: &'static str,
+    object: String,
+}
+
 /// The refusal for `refusal`, audited.
 fn denied(
     caller: &Caller,
@@ -436,6 +509,24 @@ fn denied(
     need: Need,
     refusal: Refusal,
 ) -> ConnectError {
+    let denial = record_denial(caller, rpc, namespace, graph, need, refusal);
+    refuse_with(
+        ErrorCode::PermissionDenied,
+        DENIED,
+        denial.message,
+        &[("need", denial.need)],
+    )
+}
+
+/// Audits and counts a refusal, and words it.
+fn record_denial(
+    caller: &Caller,
+    rpc: &str,
+    namespace: &str,
+    graph: Option<&str>,
+    need: Need,
+    refusal: Refusal,
+) -> Denial {
     DENIALS.fetch_add(1, Ordering::Relaxed);
     let object = match graph {
         Some(graph) => format!("graph:{namespace}/{graph}"),
@@ -484,12 +575,11 @@ fn denied(
         refusal = ?refusal,
         "Loams Graph authorization refused"
     );
-    refuse_with(
-        ErrorCode::PermissionDenied,
-        DENIED,
-        format!("{rpc} on {object} needs {need_name}: {why}"),
-        &[("need", need_name)],
-    )
+    Denial {
+        message: format!("{rpc} on {object} needs {need_name}: {why}"),
+        need: need_name,
+        object,
+    }
 }
 
 /// Audits an allowed call that changes a graph's lifecycle (create, update, delete), as Live

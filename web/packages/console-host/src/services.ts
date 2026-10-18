@@ -95,6 +95,12 @@ export interface FlagsService {
   /** True until first-run setup has created the org and its owner. */
   setupRequired?: boolean;
   /**
+   * The instance offers no sign-in (GetInstance lists only SIGN_IN_KIND_NONE): an
+   * engine with LOAMS_AUTH_MODE=off, loopback only, where first-run setup needs no
+   * token and every caller is the local developer.
+   */
+  signInOff?: boolean;
+  /**
    * Why GetInstance gave no answer: the engine does not have it
    * (`unimplemented`, an engine too old for this console), or it could not
    * be reached (`unreachable`).

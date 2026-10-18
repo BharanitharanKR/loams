@@ -2,9 +2,11 @@
 // screen, and the browser edition's catalog (real pages by default, sample pages
 // only under "Demo data") booted over the in-memory mock.
 
+import type { ConsoleHandle } from '@loams/console-host';
 import { composeCatalog, parseCatalog } from '@loams/console-host';
 import { createMockTransport } from '@loams/console-host/testing';
 import { createWebPlatform } from '@loams/platform-web';
+import { pageEntries } from '@loams/plugin-shell';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import baseCatalog from '../catalog/base.yml?raw';
@@ -126,7 +128,7 @@ describe('Connect your engine', () => {
     render(
       <ConnectScreen modes={AUTH_MODES} initialMode="apikey" check={check} onConnect={onConnect} />,
     );
-    expect(screen.getByText('Preview')).toBeTruthy();
+    expect(screen.queryByText('Preview')).toBeNull();
     expect(screen.getByText(/needs Tailscale running/)).toBeTruthy();
     const connect = screen.getByRole('button', { name: 'Connect' }) as HTMLButtonElement;
     expect(connect.disabled).toBe(true);
@@ -197,8 +199,13 @@ describe('Connect your engine', () => {
   });
 });
 
-const navLabels = (root: HTMLElement) =>
-  [...root.querySelectorAll('.lc-nav a')].map((a) => a.textContent);
+/** Every page the plugins register (design 59 D1080: the sidebar pins only a few). */
+const navLabels = (handle: { slots: ConsoleHandle['slots'] }) =>
+  pageEntries(
+    handle.slots.entries('shell.nav.section'),
+    handle.slots.entries('console.nav'),
+    undefined,
+  ).map((p) => p.label);
 
 async function boot(demo: boolean) {
   const root = document.createElement('div');
@@ -239,16 +246,26 @@ describe('the browser edition', () => {
 
   it('loads only pages the engine serves, with the engine, Demo data and sign-out in the header', async () => {
     const { root, handle, session } = await boot(false);
-    await waitFor(() => expect(navLabels(root)).toContain('Live'));
-    const labels = navLabels(root);
-    expect(labels).toEqual(expect.arrayContaining(['Live', 'Graph', 'Analytics', 'Status']));
+    await waitFor(() => expect(navLabels(handle)).toContain('Live'));
+    const labels = navLabels(handle);
+    expect(labels).toEqual(
+      expect.arrayContaining(['Live', 'Graph', 'Analytics', 'Streams & Links', 'Status']),
+    );
+    // Durable stays desktop-only: the engine's main port has no `/durable/` route.
+    expect(labels).not.toContain('Durable');
     for (const sample of ['Deployments', 'Loams SQL', 'Metrics', 'Pipelines', 'Git']) {
       expect(labels).not.toContain(sample);
     }
     const status = Object.fromEntries(handle.plugins().map((p) => [p.id, p.status]));
-    expect(status).toMatchObject({ live: 'active', graph: 'active', house: 'active' });
+    expect(status).toMatchObject({
+      live: 'active',
+      graph: 'active',
+      house: 'active',
+      'data-studio': 'active',
+      streams: 'active',
+    });
 
-    expect(root.querySelector('.lc-side .lc-preview')?.textContent).toBe('Preview');
+    expect(root.querySelector('.lc-side .lc-preview')).toBeNull();
     await waitFor(() => expect(root.textContent).toContain('loams.tail1.ts.net'));
     const toggle = root.querySelector('.lc-hosted-demo input') as HTMLInputElement;
     expect(toggle.checked).toBe(false);
@@ -262,9 +279,9 @@ describe('the browser edition', () => {
   });
 
   it('adds the sample-data pages under Demo data', async () => {
-    const { root } = await boot(true);
-    await waitFor(() => expect(navLabels(root)).toContain('Loams SQL'));
-    expect(navLabels(root)).toEqual(
+    const { root, handle } = await boot(true);
+    await waitFor(() => expect(navLabels(handle)).toContain('Loams SQL'));
+    expect(navLabels(handle)).toEqual(
       expect.arrayContaining(['Live', 'Deployments', 'Loams SQL', 'Metrics', 'Pipelines', 'Git']),
     );
     expect(root.textContent).toContain('Sample pages on');
@@ -302,6 +319,11 @@ describe('sign-in modes', () => {
         json(200, { session: { user: { name: 'Ada' } } }),
       ),
     ).toEqual({ ok: true, user: 'Ada' });
+    expect(
+      await fetchIdentity('https://e', async () =>
+        json(200, { session: { user: { id: 'dev-loopback', name: 'Local developer' } } }),
+      ),
+    ).toEqual({ ok: true, user: 'Local developer', authOff: true });
     const refused = await fetchIdentity('https://e', async () => json(401, {}));
     expect(refused).toEqual({ ok: false, message: expect.stringMatching(/tailnet/) });
     const empty = await fetchIdentity('https://e', async () => json(200, { user: {} }));
@@ -322,6 +344,11 @@ describe('sign-in modes', () => {
       'ada@example.com via tailnet',
     );
     expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
+    // B20: an engine with sign-in off is not a tailnet login.
+    rerender(<HostedHeader session={{ ...base, user: 'Local developer', authOff: true }} />);
+    expect(container.querySelector('.lc-hosted-user')?.textContent).toBe(
+      'Local developer · sign-in off',
+    );
     rerender(<HostedHeader session={{ ...base, identityProblem: 'nope' }} />);
     const unknown = container.querySelector('.lc-hosted-user-unknown');
     expect(unknown?.textContent).toBe('Tailnet user unknown');

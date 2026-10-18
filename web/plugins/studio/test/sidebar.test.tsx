@@ -1,14 +1,16 @@
 // Studio's thread list and sidebar (SD1 Task 17; §53 §5.3): threads grouped under their
 // projects, status badges that follow the daemon's sessions, the pinned order, delete
-// with the worktree prompt, search, the keyboard, and the palette's threads (T24-6).
+// with the worktree prompt, search, the keyboard, and the palette's threads (T24-6). Since
+// design 59 the list is the shell sidebar's (`StudioThreads`), shown beside the view, and
+// archived threads are in Studio's settings.
 
 import { SessionStatus } from '@loams/proto/agentd';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { StudioRoute } from '../src/routes.js';
 import { agentdPaletteSource } from '../src/sidebar/paletteSource.js';
-import { StudioView } from '../src/view.js';
 import { wrap } from './fakes.js';
+import { StudioInShell } from './shell.js';
 import { at, sidebarDaemon } from './sidebar-fakes.js';
 
 function viewport(wide: boolean) {
@@ -20,11 +22,19 @@ function viewport(wide: boolean) {
   })) as unknown as typeof window.matchMedia;
 }
 
-function show(daemon: ReturnType<typeof sidebarDaemon>, route: StudioRoute = { kind: 'home' }) {
+/**
+ * The view with the shell sidebar's thread list beside it (design 59, Task 9). The list shows
+ * once the daemon is reachable (Q934), so this waits for it.
+ */
+async function show(
+  daemon: ReturnType<typeof sidebarDaemon>,
+  route: StudioRoute = { kind: 'home' },
+) {
   const navigate = vi.fn();
   const view = render(
-    wrap(<StudioView agentd={daemon.agentd} route={route} navigate={navigate} />),
+    wrap(<StudioInShell agentd={daemon.agentd} route={route} navigate={navigate} />),
   );
+  await screen.findByRole('navigation', { name: 'Projects' });
   return { navigate, view };
 }
 
@@ -49,7 +59,7 @@ afterEach(cleanup);
 
 describe('the sidebar', () => {
   it('sidebar_groups_by_project', async () => {
-    show(sidebarDaemon());
+    await show(sidebarDaemon());
     await within(nav()).findByRole('link', { name: /^Fix the login redirect/ });
     // loams: newest first; acme-site's thread under it (cwd inside the checkout); the
     // thread no project holds under "Other threads".
@@ -81,7 +91,7 @@ describe('the sidebar', () => {
         },
       ],
     });
-    show(daemon);
+    await show(daemon);
     const login = await within(nav()).findByRole('link', { name: /^Fix the login redirect/ });
     expect(login.getAttribute('aria-label')).toBe('Fix the login redirect');
 
@@ -137,7 +147,7 @@ describe('the sidebar', () => {
   });
 
   it('shows no run groups or approvals when the daemon has none yet', async () => {
-    show(sidebarDaemon({ groups: 'unimplemented', approvals: 'unimplemented' }));
+    await show(sidebarDaemon({ groups: 'unimplemented', approvals: 'unimplemented' }));
     expect(await within(nav()).findByRole('link', { name: /^Draft the README/ })).toBeTruthy();
     expect(screen.queryByRole('img', { name: /Run group/ })).toBeNull();
     expect(screen.queryByRole('alert')).toBeNull();
@@ -145,7 +155,7 @@ describe('the sidebar', () => {
 
   it('reorder_persists_pin_order', async () => {
     const daemon = sidebarDaemon({ pins: ['t-b', 't-site', 't-a'] });
-    show(daemon);
+    await show(daemon);
     await within(nav()).findByRole('link', { name: /^Draft the README/ });
     await waitFor(() =>
       expect(rowTitles(threadsOf('loams')).slice(0, 2)).toEqual([
@@ -195,7 +205,7 @@ describe('the sidebar', () => {
 
   it('delete_offers_worktree_cleanup_only_when_unshared', async () => {
     const daemon = sidebarDaemon();
-    const { navigate } = show(daemon, { kind: 'thread', threadId: 't-fix' });
+    const { navigate } = await show(daemon, { kind: 'thread', threadId: 't-fix' });
     await within(nav()).findByRole('link', { name: /^Speed up the build/ });
 
     // Shares its worktree with "Review the README": no worktree offer.
@@ -240,7 +250,7 @@ describe('the sidebar', () => {
 
   it('cleans up worktrees no thread uses, keeping ones with changes', async () => {
     const daemon = sidebarDaemon();
-    show(daemon);
+    await show(daemon);
     await within(nav()).findByRole('link', { name: /^Speed up the build/ });
     fireEvent.click(screen.getByRole('button', { name: 'Clean up worktrees' }));
     const dialog = await screen.findByRole('alertdialog');
@@ -253,7 +263,7 @@ describe('the sidebar', () => {
   });
 
   it('search_filters_threads', async () => {
-    show(sidebarDaemon());
+    await show(sidebarDaemon());
     await within(nav()).findByRole('link', { name: /^Fix the login redirect/ });
     const search = screen.getByRole('searchbox', { name: 'Search threads' });
     fireEvent.change(search, { target: { value: 'readme' } });
@@ -272,7 +282,7 @@ describe('the sidebar', () => {
 
   it('keyboard_navigation', async () => {
     const daemon = sidebarDaemon();
-    const { navigate } = show(daemon, { kind: 'project', projectId: '~/src/loams' });
+    const { navigate } = await show(daemon, { kind: 'project', projectId: '~/src/loams' });
     const loams = await within(nav()).findByRole('link', { name: /^loams/ });
     await within(nav()).findByRole('link', { name: /^Fix the login redirect/ });
     // ↓ moves from the project row to its first thread; Enter opens it.
@@ -315,7 +325,7 @@ describe('the sidebar', () => {
 
   it('opening a thread marks it seen; rename, fork and archive go to the daemon', async () => {
     const daemon = sidebarDaemon();
-    const { navigate } = show(daemon, { kind: 'thread', threadId: 't-site' });
+    const { navigate } = await show(daemon, { kind: 'thread', threadId: 't-site' });
     await within(nav()).findByRole('link', { name: /^New landing page/ });
     await waitFor(() => expect(daemon.calls).toContain('MarkThreadSeen:t-site'));
 
@@ -338,15 +348,32 @@ describe('the sidebar', () => {
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Archive thread' }));
     await waitFor(() => expect(daemon.calls).toContain('SetThreadArchived:t-lost:true'));
     await waitFor(() => expect(screen.queryByRole('link', { name: /^Notes,|^Notes$/ })).toBeNull());
-    fireEvent.click(screen.getByRole('button', { name: 'Show archived (1)' }));
-    expect(screen.getByRole('link', { name: /^Notes$/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Show archived/ })).toBeNull();
+
+    // Archived threads are in Studio's settings (design 59, D1079), where Unarchive puts one back.
+    cleanup();
+    render(
+      wrap(
+        <StudioInShell agentd={daemon.agentd} route={{ kind: 'settings' }} navigate={vi.fn()} />,
+      ),
+    );
+    const archived = await screen.findByRole('list', { name: 'Archived threads' });
+    expect(within(archived).getByRole('link', { name: 'Notes' }).getAttribute('href')).toBe(
+      '#/studio/t/t-lost',
+    );
+    fireEvent.click(within(archived).getByRole('button', { name: 'Unarchive Notes' }));
+    await waitFor(() => expect(daemon.calls).toContain('SetThreadArchived:t-lost:false'));
+    expect(await within(nav()).findByRole('link', { name: /^Notes(,|$)/ })).toBeTruthy();
+    await waitFor(() =>
+      expect(screen.queryByRole('list', { name: 'Archived threads' })).toBeNull(),
+    );
   });
 
   it('a running thread cannot be archived', async () => {
     const daemon = sidebarDaemon({
       sessions: [{ chatId: 't-login', status: SessionStatus.WORKING, updatedAtMs: at(31) }],
     });
-    show(daemon);
+    await show(daemon);
     await waitFor(() =>
       expect(screen.getByRole('link', { name: 'Fix the login redirect, Working' })).toBeTruthy(),
     );

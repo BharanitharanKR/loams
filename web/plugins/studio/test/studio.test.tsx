@@ -1,14 +1,17 @@
 // @loams/plugin-studio's skeleton (SD1 Task 15, §53 §5.1–§5.2): the manifest, the
-// empty states without agentd, adding a project on each edition, and the layout.
+// empty states without agentd, adding a project on each edition, and the layout (design 59:
+// the page column, its commands sent to the shell's inspector and drawer).
 
 import { validateManifest } from '@loams/console-host';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import pkg from '../package.json';
 import type { StudioAgentd } from '../src/agentd.js';
-import { LAYOUT_DEFAULTS, LAYOUT_KEY, StudioLayout } from '../src/layout/StudioLayout.js';
-import { StudioView } from '../src/view.js';
+import { StudioLayout } from '../src/layout/StudioLayout.js';
+import { StudioCommands } from '../src/palette/commands.js';
+import type { StudioRoute } from '../src/routes.js';
 import { desktopFake, webFake, wrap } from './fakes.js';
+import { StudioInShell, TestPanel } from './shell.js';
 
 /** jsdom has no matchMedia: answer every query with `wide`. */
 function viewport(wide: boolean) {
@@ -20,12 +23,9 @@ function viewport(wide: boolean) {
   })) as unknown as typeof window.matchMedia;
 }
 
-function show(
-  agentd: StudioAgentd,
-  route: Parameters<typeof StudioView>[0]['route'] = { kind: 'home' },
-) {
+function show(agentd: StudioAgentd, route: StudioRoute = { kind: 'home' }) {
   const navigate = vi.fn();
-  render(wrap(<StudioView agentd={agentd} route={route} navigate={navigate} />));
+  render(wrap(<StudioInShell agentd={agentd} route={route} navigate={navigate} />));
   return { navigate };
 }
 
@@ -68,7 +68,7 @@ describe('empty states', () => {
 
   it('empty_state_without_host_web', async () => {
     show(webFake().agentd);
-    expect(await screen.findByText('Connect an agentd host')).toBeTruthy();
+    expect(await screen.findByText('Studio needs a Loams server with agentd')).toBeTruthy();
     const link = screen.getByRole('link', { name: 'Agentd hosts' });
     expect(link.getAttribute('href')).toBe('#/studio/settings');
   });
@@ -137,82 +137,30 @@ describe('adding a project', () => {
   });
 });
 
-describe('the layout', () => {
-  const regions = (panel = true) => (
-    <StudioLayout
-      sidebar={<p>projects</p>}
-      panel={panel ? <p>panel body</p> : undefined}
-      drawer={<p>terminal</p>}
-      title="Thread"
-    >
-      <p>main body</p>
-    </StudioLayout>
-  );
+describe('the layout (design 59: the shell owns the sidebar, inspector and drawer)', () => {
+  it('is the page column only, and sends its panel and terminal commands to the shell', () => {
+    const commands = new StudioCommands();
+    const inspector = new TestPanel();
+    const drawer = new TestPanel();
+    render(
+      <StudioLayout commands={commands} inspector={inspector} drawer={drawer}>
+        <p>main body</p>
+      </StudioLayout>,
+    );
+    expect(screen.getByText('main body')).toBeTruthy();
+    expect(screen.queryByRole('separator')).toBeNull();
+    expect(screen.queryByRole('complementary')).toBeNull();
 
-  it('layout_sizes_persist_and_tolerate_storage_failure', () => {
-    render(regions());
-    const handle = screen.getByRole('separator', { name: 'Resize sidebar' });
-    expect(handle.getAttribute('aria-valuenow')).toBe(String(LAYOUT_DEFAULTS.sidebar));
-    fireEvent.keyDown(handle, { key: 'ArrowRight' });
-    const stored = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}');
-    expect(stored.sidebar).toBeGreaterThan(LAYOUT_DEFAULTS.sidebar);
-    cleanup();
-    // A fresh mount reads the stored size.
-    render(regions());
-    expect(
-      screen.getByRole('separator', { name: 'Resize sidebar' }).getAttribute('aria-valuenow'),
-    ).toBe(String(stored.sidebar));
-    cleanup();
+    act(() => void commands.run('rightPanel.toggle'));
+    expect(inspector.state().open).toBe(true);
+    act(() => void commands.run('rightPanel.toggle'));
+    expect(inspector.state().open).toBe(false);
+    act(() => void commands.run('rightPanel.show'));
+    expect(inspector.state().open).toBe(true);
 
-    // Storage that throws: defaults, and resizing still works for the page.
-    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => {
-      throw new Error('SecurityError');
-    });
-    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => {
-      throw new Error('SecurityError');
-    });
-    render(regions());
-    const h = screen.getByRole('separator', { name: 'Resize panel' });
-    expect(h.getAttribute('aria-valuenow')).toBe(String(LAYOUT_DEFAULTS.panel));
-    fireEvent.keyDown(h, { key: 'ArrowLeft' });
-    expect(Number(h.getAttribute('aria-valuenow'))).toBeGreaterThan(LAYOUT_DEFAULTS.panel);
-    get.mockRestore();
-    set.mockRestore();
-  });
-
-  it('opens and closes the panel and the drawer', () => {
-    render(regions());
-    expect(screen.getByText('panel body')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Hide panel' }));
-    expect(screen.queryByText('panel body')).toBeNull();
-    expect(screen.queryByText('terminal')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Show terminal' }));
-    expect(screen.getByText('terminal')).toBeTruthy();
-    expect(JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? '{}')).toMatchObject({
-      panelOpen: false,
-      drawerOpen: true,
-    });
-  });
-
-  it('layout_narrow_uses_overlays', () => {
-    viewport(false);
-    render(regions());
-    // The sidebar is a drawer behind a button, and the panel an overlay.
-    expect(screen.queryByText('projects')).toBeNull();
-    expect(screen.queryByRole('separator', { name: 'Resize sidebar' })).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Show projects' }));
-    const drawer = screen.getByRole('dialog', { name: 'Projects' });
-    expect(within(drawer).getByText('projects')).toBeTruthy();
-    // The scrim and the close button both close it.
-    fireEvent.click(screen.getAllByRole('button', { name: 'Close projects' })[1] as HTMLElement);
-    expect(screen.queryByRole('dialog', { name: 'Projects' })).toBeNull();
-    // The panel starts closed on a narrow window and opens over the thread.
-    expect(screen.queryByText('panel body')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Show panel' }));
-    expect(screen.getByRole('dialog', { name: 'Panel' })).toBeTruthy();
-    act(() => {
-      fireEvent.keyDown(screen.getByRole('dialog', { name: 'Panel' }), { key: 'Escape' });
-    });
-    expect(screen.queryByRole('dialog', { name: 'Panel' })).toBeNull();
+    act(() => void commands.run('terminal.toggle'));
+    expect(drawer.state()).toMatchObject({ open: true, tab: 'studio.terminal' });
+    act(() => void commands.run('terminal.toggle'));
+    expect(drawer.state().open).toBe(false);
   });
 });

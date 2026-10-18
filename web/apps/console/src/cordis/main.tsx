@@ -21,6 +21,7 @@ import { parsePatch, THIRD_PARTY_FLAG } from '@loams/console-host';
 import { createMockTransport } from '@loams/console-host/testing';
 import { createWebPlatform } from '@loams/platform-web';
 import samplesYml from '../../catalog/samples.yml?raw';
+import { servedPagesPatch, webManifests, webModules } from '../hosted/edition.js';
 import { startHosted } from '../hosted/start.js';
 import { loadRuntimeConfig } from '../runtime-config.js';
 import { startDesktop } from './desktop.js';
@@ -58,11 +59,7 @@ if (root) {
         demo
           ? {
               transport: createMockTransport({
-                // The dev server's demo also shows Studio (behind `studio` until SD1 Task 32).
-                features: {
-                  [THIRD_PARTY_FLAG]: true,
-                  ...(import.meta.env.DEV ? { studio: true } : {}),
-                },
+                features: { [THIRD_PARTY_FLAG]: true },
               }),
             }
           : {
@@ -83,8 +80,11 @@ if (root) {
       return startConsole({
         platform,
         root,
-        // Demo only: the sample third-party plugin (catalog/samples.yml).
-        patches: demo ? [parsePatch(samplesYml)] : undefined,
+        // Demo: the sample third-party plugin (catalog/samples.yml). Otherwise the pages
+        // the engine serves (Data explorer, Streams & Links, Live, Graph, Analytics), as
+        // in the hosted edition.
+        patches: demo ? [parsePatch(samplesYml)] : [servedPagesPatch()],
+        ...(demo ? {} : { extraModules: webModules, extraManifests: webManifests }),
         // Demo only: grant a sandboxed plugin what it declares (start.ts).
         grant: demo ? (manifest) => manifest.permissions : undefined,
       });

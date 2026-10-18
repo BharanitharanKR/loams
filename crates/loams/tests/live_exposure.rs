@@ -425,6 +425,62 @@ async fn cors_actual_request_checked_per_app() {
     server.shutdown().await.expect("stops");
 }
 
+/// The engine's own origin is the console's too (0.1.0 release e2e, B11):
+/// the desktop and the engine-served console call Live from the origin the
+/// engine itself answers on, which no app lists and `LOAMS_CORS_ORIGINS`
+/// need not. A platform principal from it is admitted; an app end user from
+/// it is not, and a look-alike origin on another port is not the engine's.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn the_engines_own_origin_is_admitted_for_platform_principals() {
+    let dir = TempDir::new().expect("a temp dir");
+    let (server, base, key) = two_apps(&dir).await;
+    let client = reqwest::Client::new();
+    let bearer = format!("Bearer {key}");
+    let url = format!("{base}/loams.live.v1.LiveService/Query");
+    let ping = json!({"function": "notes:ping"});
+    let (status, headers, body) = call(
+        &client,
+        &url,
+        &ping,
+        &[
+            ("authorization", &bearer),
+            ("loams-live-app", "shop"),
+            ("origin", &base),
+        ],
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    assert_eq!(body["result"]["stringValue"], "pong");
+    assert_eq!(header(&headers, "access-control-allow-credentials"), None);
+    // Without a platform credential the engine's origin earns nothing.
+    let (status, _, body) = call(
+        &client,
+        &url,
+        &ping,
+        &[("loams-live-app", "shop"), ("origin", &base)],
+    )
+    .await;
+    assert_ne!(status, 200, "{body}");
+    // Another port on the same host is another origin.
+    let port = server.local_addr().port();
+    let other = format!("http://127.0.0.1:{}", port.wrapping_add(1));
+    let (status, headers, body) = call(
+        &client,
+        &url,
+        &ping,
+        &[
+            ("authorization", &bearer),
+            ("loams-live-app", "shop"),
+            ("origin", &other),
+        ],
+    )
+    .await;
+    assert_eq!(status, 403, "{body}");
+    assert_eq!(reason(&body), "live_origin_not_allowed");
+    assert_eq!(header(&headers, "access-control-allow-origin"), None);
+    server.shutdown().await.expect("stops");
+}
+
 /// No answer, preflight or actual, allowed or refused, carries
 /// `Access-Control-Allow-Credentials`: credentials are bearer headers.
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]

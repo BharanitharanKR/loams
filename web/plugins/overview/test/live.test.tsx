@@ -123,7 +123,7 @@ describe('live dashboard', () => {
   it('renders every panel, says the data is a sample, and lists deployments and alerts', async () => {
     const client = mockOverviewMetrics({ now: () => NOW });
     render(<LiveDashboard client={client} now={() => NOW} />);
-    expect(screen.getByText('Sample data')).toBeTruthy();
+    expect(screen.getAllByText('Sample data').length).toBe(2);
     await screen.findByRole('list', { name: 'Key metrics' });
     expect(screen.getAllByRole('listitem').length).toBeGreaterThanOrEqual(4);
 

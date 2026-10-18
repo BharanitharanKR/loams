@@ -172,6 +172,11 @@ impl Session {
         let target = match self.address.resolve(&store).await? {
             Some(repo) => Target::Exists(repo),
             None if for_push && create_on_push() => Target::Create(self.address.new_repo_id()?),
+            None if for_push => {
+                return Err(HelperError::NotFoundForPush {
+                    address: self.address.raw.clone(),
+                });
+            }
             None => return Err(self.not_found()),
         };
         self.target = Some(target.clone());

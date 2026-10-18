@@ -287,6 +287,10 @@ pub(super) fn clauses(label: bool, types: bool) -> String {
 impl GraphExpander for LoamsGraphExpander {
     async fn expand(&self, call: ExpandCall<'_>) -> Result<Expanded, ServiceError> {
         let e = call.expand;
+        // Before anything is read (GR1 R24.12): a principal needs `reader` on the graph.
+        call.caller
+            .authorize_read("expand", call.namespace, &e.graph)
+            .await?;
         if let Some(q) = &e.edge_filter {
             filter::check(q, "edge_filter")?;
         }

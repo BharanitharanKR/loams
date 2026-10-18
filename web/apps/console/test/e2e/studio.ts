@@ -50,7 +50,8 @@ export async function chooseApprovalMode(
 export async function sendPrompt(page: Page, box: Locator, text: string): Promise<void> {
   await box.click();
   await page.keyboard.type(text);
-  const send = page.getByRole('button', { name: 'Send', exact: true });
+  // The page's own Send: the desktop's inspector can show the Agent tab, whose chat has one too.
+  const send = page.getByRole('main').getByRole('button', { name: 'Send', exact: true });
   await expect(send).toBeEnabled();
   await send.click();
 }
@@ -71,9 +72,19 @@ export async function startThread(page: Page, repo: string, prompt: string): Pro
 /** The thread timeline. */
 export const timeline = (page: Page) => page.getByRole('log', { name: 'Thread timeline' });
 
-/** The thread panel's diff of one file. */
+/** The shell's inspector (design 59): the thread's panels are its tabs. */
+export const inspector = (page: Page) => page.getByRole('complementary', { name: 'Inspector' });
+
+/** Opens one of the thread's panels in the inspector (it starts closed). */
+export async function openInspectorTab(page: Page, tab: string): Promise<void> {
+  const show = page.getByRole('button', { name: 'Show inspector' });
+  if (await show.isVisible()) await show.click();
+  await inspector(page).getByRole('tab', { name: tab }).click();
+}
+
+/** The inspector Diff tab's diff of one file. */
 export const diffOf = (page: Page, path: string) =>
-  page.getByRole('complementary', { name: 'Panel' }).getByRole('region', { name: path });
+  inspector(page).getByRole('region', { name: path });
 
 /** Waits until the turn's Mock edit is in the timeline and the diff. */
 export async function expectMockEdit(page: Page, n: number): Promise<void> {

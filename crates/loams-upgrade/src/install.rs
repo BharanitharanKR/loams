@@ -8,11 +8,11 @@
 //! host (0700, files 0600): the snapshot volume is the containers', and the
 //! host files are the CLI's (UP1 Task 13 ruling).
 
-use std::os::unix::fs::PermissionsExt as _;
 use std::path::{Path, PathBuf};
 
 use crate::errors::{Result, UpgradeError};
 use crate::history;
+use crate::mode::{mode_of, set_mode};
 use crate::path::Release;
 
 /// The included Postgres stack's directory, beside the stack directory.
@@ -30,8 +30,7 @@ fn kept(name: &str) -> bool {
 fn copy_tree(from: &Path, to: &Path, private: bool, skip: &dyn Fn(&str) -> bool) -> Result<()> {
     std::fs::create_dir_all(to).map_err(|e| io(to, e))?;
     if private {
-        std::fs::set_permissions(to, std::fs::Permissions::from_mode(0o700))
-            .map_err(|e| io(to, e))?;
+        set_mode(to, 0o700).map_err(|e| io(to, e))?;
     }
     for entry in std::fs::read_dir(from).map_err(|e| io(from, e))? {
         let entry = entry.map_err(|e| io(from, e))?;
@@ -47,8 +46,7 @@ fn copy_tree(from: &Path, to: &Path, private: bool, skip: &dyn Fn(&str) -> bool)
         } else if kind.is_file() {
             std::fs::copy(&source, &target).map_err(|e| io(&target, e))?;
             if private {
-                std::fs::set_permissions(&target, std::fs::Permissions::from_mode(0o600))
-                    .map_err(|e| io(&target, e))?;
+                set_mode(&target, 0o600).map_err(|e| io(&target, e))?;
             }
         }
     }
@@ -111,7 +109,7 @@ fn modes(dir: &Path) -> Result<std::collections::BTreeMap<String, u32>> {
             } else if !meta.is_file() {
                 continue;
             }
-            out.insert(rel, meta.permissions().mode() & 0o7777);
+            out.insert(rel, mode_of(&meta));
         }
     }
     Ok(out)
@@ -122,8 +120,7 @@ fn apply_modes(dir: &Path, saved: &std::collections::BTreeMap<String, u32>) -> R
     for (rel, mode) in saved {
         let path = dir.join(rel);
         if path.exists() {
-            std::fs::set_permissions(&path, std::fs::Permissions::from_mode(*mode))
-                .map_err(|e| io(&path, e))?;
+            set_mode(&path, *mode).map_err(|e| io(&path, e))?;
         }
     }
     Ok(())
@@ -266,5 +263,5 @@ pub fn apply_env(stack_dir: &Path, from: &str, to: &str, release: &Release) -> R
 /// Writes `text` to `path`, 0600.
 pub fn write_private(path: &Path, text: &str) -> Result<()> {
     std::fs::write(path, text).map_err(|e| io(path, e))?;
-    std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o600)).map_err(|e| io(path, e))
+    set_mode(path, 0o600).map_err(|e| io(path, e))
 }

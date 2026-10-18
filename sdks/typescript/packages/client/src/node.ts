@@ -22,7 +22,7 @@
 
 import { createGrpcTransport } from '@connectrpc/connect-node';
 import type { Transport } from '@connectrpc/connect';
-import type { TransportOptions } from './runtime/transports.js';
+import { transportInterceptors, type TransportOptions } from './runtime/transports.js';
 
 export * from './index.js';
 
@@ -35,13 +35,13 @@ export * from './index.js';
  * retries.
  */
 export function createNodeTransport(options: TransportOptions = {}): Transport {
+  const interceptors = transportInterceptors(options);
   return createGrpcTransport({
     baseUrl: options.baseUrl ?? '',
     useBinaryFormat: options.useBinaryFormat ?? true,
-    ...(options.headers === undefined ? {} : { headers: options.headers }),
     ...(options.defaultTimeoutMs === undefined
       ? {}
       : { defaultTimeoutMs: options.defaultTimeoutMs }),
-    ...(options.interceptors === undefined ? {} : { interceptors: options.interceptors }),
+    ...(interceptors.length === 0 ? {} : { interceptors }),
   });
 }

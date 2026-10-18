@@ -20,6 +20,8 @@ import type { ChatService } from "./agent/service";
 import { registerTools } from "./agent/tools";
 import { agentdDir, readAgentdTarget } from "./agentd/discover";
 import { registerAgentdIpc } from "./agentd/ipc.electron";
+import { type AgentdLauncher, createAgentdLauncher } from "./agentd/launch";
+import type { AgentdService } from "./agentd/service";
 import { createAgentdService } from "./agentd/setup";
 import { type StudioWatch, watchStudio } from "./agentd/studio-watch";
 import { appPaths } from "./app-paths";
@@ -107,6 +109,9 @@ let studioPreview: StudioPreviewView | undefined;
 let chat: ChatService | undefined;
 let tray: TrayHandle | undefined;
 let studioWatch: StudioWatch | undefined;
+let agentdLauncher: AgentdLauncher | undefined;
+let agentdService: AgentdService | undefined;
+let agentdPoll: NodeJS.Timeout | undefined;
 let studio: StudioSnapshot = EMPTY_STUDIO;
 let isQuitting = false;
 const settingsFile = (): string =>
@@ -299,15 +304,37 @@ const singleInstance = initSingleInstance({
 			});
 			registerStacksIpc(stacks, paths.logs);
 			registerSqlIpc(sql);
-			// DD1: the agent daemon's status panel (mock daemon in development builds).
+			// DD1: the agent daemon behind Studio and the status panel. It attaches to a
+			// running loams-agentd, else starts the bundled one (a child of the app until
+			// the user turns background agents on). The fixture mock is opt-in in development.
+			agentdLauncher = createAgentdLauncher({
+				dir: agentdDir(app.getPath("userData")),
+				logsDir: paths.logs,
+				candidates: paths.agentdBin,
+			});
 			const agentd = createAgentdService({
 				userData: app.getPath("userData"),
 				settingsFile: settingsFile(),
 				version: app.getVersion(),
-				mock: !app.isPackaged,
+				mock: !app.isPackaged && process.env.LOAMS_DESKTOP_AGENTD_MOCK === "1",
+				launcher: agentdLauncher,
 			});
+			agentdService = agentd;
 			registerAgentdIpc(agentd);
-			void agentd.attach();
+			void agentd.attach().then(async () => {
+				if (
+					agentd.status().state === "stopped" &&
+					process.env.LOAMS_DESKTOP_AGENTD_AUTOSTART !== "0" &&
+					agentdLauncher?.binary()
+				) {
+					const r = await agentd.start();
+					if (!r.ok) console.error("[agentd] start failed:", r.message);
+				}
+			});
+			// A daemon started outside the app (or restarted) is picked up within seconds.
+			agentdPoll = setInterval(() => {
+				if (agentd.status().state !== "running") void agentd.attach();
+			}, 5_000);
 			// SD1 Task 28: Studio's editor hand-off and notification choices.
 			registerStudioIpc({ settingsFile: settingsFile() });
 			// With the TiKV stack chosen, a stack left running from last time starts the engine
@@ -431,6 +458,10 @@ const singleInstance = initSingleInstance({
 			if (quitting) return;
 			quitting = true;
 			studioWatch?.stop();
+			clearInterval(agentdPoll);
+			void agentdService?.dispose();
+			// A child daemon stops with the app; the background service keeps running.
+			agentdLauncher?.killChild();
 			tray?.destroy();
 			factoryEmbed?.closeAll();
 			factoryViews?.closeAll();

@@ -935,13 +935,33 @@ impl CollectionService {
 
     /// Rule 1: resolve, forward to a remote owner (falling back to the local
     /// path when it is unavailable), or plan locally.
+    ///
+    /// A search that names no caller: one with an `expand` stage is refused, since an expansion
+    /// reads a graph and needs to know who for ([`CollectionService::search_as`]).
     pub async fn search(
         &self,
         ns: &str,
         request: SearchRequest,
     ) -> Result<SearchResponse, ServiceError> {
+        if request.expand.is_some() {
+            return Err(ServiceError::Internal(
+                "a search with expand names its graph caller (search_as)".to_string(),
+            ));
+        }
+        self.search_as(ns, request, &crate::graph::GraphCaller::Internal)
+            .await
+    }
+
+    /// [`CollectionService::search`] for `caller`: an `expand` stage reads its graph only when
+    /// `caller` may (GR1 R24.12); a refusal fails the whole search.
+    pub async fn search_as(
+        &self,
+        ns: &str,
+        request: SearchRequest,
+        caller: &crate::graph::GraphCaller,
+    ) -> Result<SearchResponse, ServiceError> {
         if request.expand.is_some() || request.rerank.is_some() {
-            return self.search_expanded(ns, request).await;
+            return self.search_expanded(ns, request, caller).await;
         }
         let hot = self.request_hot();
         validate_request(&request, &self.config.search.limits)?;
@@ -964,6 +984,7 @@ impl CollectionService {
         &self,
         ns: &str,
         request: SearchRequest,
+        caller: &crate::graph::GraphCaller,
     ) -> Result<SearchResponse, ServiceError> {
         use crate::expand::{Assembly, ExpandCall, ExpandStats, Fetched, Rerank, seed_key};
         validate_request(&request, &self.config.search.limits)?;
@@ -1027,6 +1048,7 @@ impl CollectionService {
                 let no_key = seeds.iter().filter(|s| s.is_none()).count();
                 let expanded = expander
                     .expand(ExpandCall {
+                        caller,
                         namespace: ns,
                         expand,
                         seeds,
@@ -1532,22 +1554,28 @@ impl CollectionService {
         self.plan_scan(ns, name_or_alias, at).await
     }
 
-    /// A read-only SQL context over namespace `ns` at `Strong` consistency.
-    pub fn sql_context(&self, ns: &str) -> datafusion::prelude::SessionContext {
-        self.sql_context_with(ns, ReadConsistency::Strong)
+    /// A read-only SQL context over namespace `ns` at `Strong` consistency, for `caller`.
+    pub fn sql_context(
+        &self,
+        ns: &str,
+        caller: crate::graph::GraphCaller,
+    ) -> datafusion::prelude::SessionContext {
+        self.sql_context_with(ns, ReadConsistency::Strong, caller)
     }
 
     /// A read-only SQL context over namespace `ns` at `consistency` (Task 10
     /// rule 1): the namespace's catalog, the search table functions and the
     /// retriever descriptors. Every scan resolves its view when it executes,
-    /// with `consistency` and the hot scope current now.
+    /// with `consistency` and the hot scope current now. Its graph and algorithm table
+    /// functions read a graph only when `caller` may (GR1 R24.12).
     pub fn sql_context_with(
         &self,
         ns: &str,
         consistency: ReadConsistency,
+        caller: crate::graph::GraphCaller,
     ) -> datafusion::prelude::SessionContext {
         match self.this.upgrade() {
-            Some(service) => crate::sql::context(service, ns, consistency),
+            Some(service) => crate::sql::context(service, ns, consistency, caller),
             // Only while the service is being dropped.
             None => datafusion::prelude::SessionContext::new(),
         }

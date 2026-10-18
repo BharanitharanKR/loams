@@ -1,7 +1,15 @@
 import type { IpcResult, SqlResult } from '@loams/desktop/contracts';
 import type { SqlDialect } from '@loams/desktop/sql-lex';
-import { Button, Notice, Table, Textarea } from '@loams/ui';
-import { type KeyboardEvent, useId, useRef, useState } from 'react';
+import {
+  Button,
+  formatSql,
+  Notice,
+  RunHint,
+  SqlEditor,
+  type SqlEditorHandle,
+  Table,
+} from '@loams/ui';
+import { useId, useRef, useState } from 'react';
 
 export const MAX_ROWS = 1000;
 /** Longest cell text rendered; longer values are clipped with an ellipsis. */
@@ -24,6 +32,7 @@ function cell(v: unknown) {
  * plain read is confirmed by the main process (a native dialog), not here: one prompt.
  */
 export function SqlConsole({
+  dialect,
   run,
   initial = '',
   placeholder = 'SELECT 1',
@@ -38,6 +47,7 @@ export function SqlConsole({
   const [out, setOut] = useState<Outcome>({ state: 'idle' });
   const seq = useRef(0);
   const labelId = useId();
+  const editor = useRef<SqlEditorHandle>(null);
 
   async function exec(text: string) {
     const mine = ++seq.current;
@@ -66,17 +76,10 @@ export function SqlConsole({
     }
   }
 
-  function submit() {
-    const text = sql.trim();
+  function submit(statement = sql) {
+    const text = statement.trim();
     if (!text || out.state === 'running') return;
     void exec(text);
-  }
-
-  function onKeyDown(e: KeyboardEvent) {
-    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-      e.preventDefault();
-      submit();
-    }
   }
 
   // The renderer enforces the cap itself, whatever the backend sent.
@@ -89,28 +92,45 @@ export function SqlConsole({
   return (
     <div className="flex flex-col gap-3">
       <div className="flex flex-col gap-2">
-        <label id={labelId} htmlFor={`${labelId}-editor`} className="text-sm font-medium">
+        <span id={labelId} className="text-sm font-medium">
           SQL editor
-        </label>
-        <Textarea
-          id={`${labelId}-editor`}
-          className={/* mono-ok: sql */ 'box-border min-h-32 w-full font-mono text-sm'}
-          spellCheck={false}
-          rows={6}
-          placeholder={placeholder}
-          value={sql}
-          onChange={(e) => setSql(e.target.value)}
-          onKeyDown={onKeyDown}
-        />
-        <div className="flex items-center gap-3">
-          <Button
-            variant="primary"
-            disabled={!sql.trim() || out.state === 'running'}
-            onClick={submit}
-          >
-            {out.state === 'running' ? 'Running…' : 'Run'}
-          </Button>
-          <span className="text-xs text-faint">Ctrl/Cmd+Enter</span>
+        </span>
+        <div className="loams-sql-frame">
+          <div className="loams-sql-toolbar">
+            <Button
+              variant="primary"
+              size="sm"
+              disabled={!sql.trim() || out.state === 'running'}
+              onClick={() => submit()}
+            >
+              {out.state === 'running' ? 'Running…' : 'Run'}
+            </Button>
+            <Button
+              size="sm"
+              disabled={!sql.trim() || out.state === 'running'}
+              onClick={() => submit(editor.current?.selectionOrStatement() || sql)}
+            >
+              Run selection
+            </Button>
+            <span className="loams-sql-toolbar-spacer" />
+            <RunHint />
+            <Button
+              size="sm"
+              variant="quiet"
+              onClick={() => editor.current?.replace(formatSql(sql))}
+            >
+              Format
+            </Button>
+          </div>
+          <SqlEditor
+            handle={editor}
+            label="SQL editor"
+            dialect={dialect === 'mysql' ? 'mysql' : 'postgres'}
+            placeholder={placeholder}
+            value={sql}
+            onChange={setSql}
+            onRun={(text) => submit(text)}
+          />
         </div>
       </div>
 

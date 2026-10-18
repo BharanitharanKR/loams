@@ -18,7 +18,7 @@
 // right failure.
 
 import { createConnectTransport } from '@connectrpc/connect-web';
-import type { Transport } from '@connectrpc/connect';
+import type { Interceptor, Transport } from '@connectrpc/connect';
 
 /** What a caller may configure on the transport. */
 export interface TransportOptions {
@@ -27,7 +27,13 @@ export interface TransportOptions {
    * `endpoint`, so a caller building a transport by hand rarely needs it.
    */
   baseUrl?: string;
-  /** Extra headers on every request, for a gateway or a proxy. */
+  /**
+   * Extra headers on every request, unary and streaming: for a gateway, a
+   * proxy, or a routing header such as the Live app a call is for. They are
+   * attached by an interceptor (`headersInterceptor`), because neither
+   * connect-web's nor connect-node's transport has a `headers` option; a
+   * header the call already sets (a credential, a per-call header) wins.
+   */
   headers?: Record<string, string>;
   /**
    * `useBinaryFormat` picks the encoding: `true` is protobuf, `false` is the
@@ -58,13 +64,44 @@ export interface TransportOptions {
  * case, not a fallback: it is the default in every runtime.
  */
 export function createLoamsTransport(options: TransportOptions = {}): Transport {
+  const interceptors = transportInterceptors(options);
   return createConnectTransport({
     baseUrl: options.baseUrl ?? '',
     useBinaryFormat: options.useBinaryFormat ?? true,
-    ...(options.headers === undefined ? {} : { headers: options.headers }),
     ...(options.defaultTimeoutMs === undefined
       ? {}
       : { defaultTimeoutMs: options.defaultTimeoutMs }),
-    ...(options.interceptors === undefined ? {} : { interceptors: options.interceptors }),
+    ...(interceptors.length === 0 ? {} : { interceptors }),
   });
+}
+
+/**
+ * An interceptor that sets `headers` on every request, unary and streaming.
+ *
+ * A header already on the request is left alone, so a per-call header or the
+ * credential the invoker attaches is never overwritten by a static default.
+ */
+export function headersInterceptor(headers: Record<string, string>): Interceptor {
+  const entries = Object.entries(headers);
+  return (next) => (request) => {
+    for (const [name, value] of entries) {
+      if (!request.header.has(name)) {
+        request.header.set(name, value);
+      }
+    }
+    return next(request);
+  };
+}
+
+/**
+ * The interceptors a transport built from `options` runs: the static headers
+ * first (outermost), then the caller's own, so a caller's interceptor sees the
+ * headers and may still change them.
+ */
+export function transportInterceptors(options: TransportOptions): Interceptor[] {
+  const headers =
+    options.headers === undefined || Object.keys(options.headers).length === 0
+      ? []
+      : [headersInterceptor(options.headers)];
+  return [...headers, ...(options.interceptors ?? [])];
 }

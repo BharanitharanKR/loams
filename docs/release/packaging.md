@@ -13,7 +13,7 @@ is [`publishing.md`](publishing.md), which this does not change.
 ## What ships
 
 Two binaries are packaged: **`loams`**, `crates/loams/src/main.rs`, and, from
-0.1.0-preview.3, **`git-remote-loams`**, `crates/loams-git-remote` (git's
+0.1.0, **`git-remote-loams`**, `crates/loams-git-remote` (git's
 remote helper for `loams::` URLs; see [Git push and fetch to the
 bucket](#git-push-and-fetch-to-the-bucket)). The `loams` subcommands are
 `dev`, `standalone`, `cluster`, `warm`, `durable` and `migrate`.
@@ -250,9 +250,33 @@ no Loams server in between:
 
 ```sh
 git-remote-loams --version
-git clone loams::<store-url>/ns/<ns>/repos/<repo> work
+# The first push creates the repository (only with this variable set, so a typo
+# in a URL never creates one).
+LOAMS_GIT_CREATE_ON_PUSH=1 git -C myrepo push loams::<store-url>/ns/<namespace-id>/repos/<repo> main
+git clone loams::<store-url>/ns/<namespace-id>/repos/<repo> work
 git -C work push origin main
 ```
+
+The URL's parts:
+
+- `<store-url>` is the bucket the engine uses (`LOAMS_BUCKET`, for example
+  `s3://bucket/prefix` or `file:///var/lib/loams/bucket`). The helper opens it
+  itself, with the backend's credentials from the environment (`AWS_*`,
+  `GOOGLE_*`, `AZURE_*`).
+- `<namespace-id>` is the namespace's **numeric id**, not its name. The bucket
+  keys everything by namespace id; the names live in the engine's metadata
+  store, which the helper never reaches, so a name there is refused with a
+  message that says so. The engine answers the id as `namespace_id` from
+  `loams.collection.v1.NamespaceService/CreateNamespace` (for a namespace that
+  already exists, the `already_exists` error carries it as `id`), and as `id`
+  from `POST /v1/namespaces`.
+- `<repo>` is the repository's id (`[a-z0-9][a-z0-9._-]{0,99}`); a push with
+  `LOAMS_GIT_CREATE_ON_PUSH=1` creates the repository under that id. The
+  helper also accepts a repository name from `loams.repos.v1`'s catalog, but
+  that service (cargo feature `git`) is not in the release images, so there
+  `CreateRepo` and the other `RepoService` calls answer
+  `feature_not_in_variant`: repositories are created by `git-remote-loams`
+  push, and the console does not list them.
 
 The helper reads refs from the repository's WAL in the bucket, fetches stored
 packs, and pushes by uploading one pack and committing one ref transaction

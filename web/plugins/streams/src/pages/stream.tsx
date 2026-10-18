@@ -319,7 +319,7 @@ export function StreamPage({
   const back = `/streams/${encodeURIComponent(ns)}`;
   const count = detail.state === 'ready' ? detail.data.partitions.length : 0;
   return (
-    <div className="lc-page max-w-[1180px]">
+    <div className="lc-page">
       <PageHead
         crumbs={
           <>

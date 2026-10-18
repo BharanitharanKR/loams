@@ -9,6 +9,8 @@ export interface PathsEnv {
 	appRoot: string;
 	/** Value of LOAMS_BIN, when set. Tried first. */
 	loamsBin?: string;
+	/** Value of LOAMS_AGENTD_BIN, when set. Tried first for the agent daemon. */
+	agentdBin?: string;
 	/** Cargo target directory, injected by the caller. Defaults to `<repo>/target` in dev. */
 	cargoTargetDir?: string;
 	/** Defaults to process.platform. */
@@ -21,6 +23,8 @@ export interface ResolvedPaths {
 	consoleDist: string;
 	/** Candidates in order of preference. */
 	engineBin: string[];
+	/** loams-agentd candidates, in order of preference. */
+	agentdBin: string[];
 	factoryDir: string;
 	serversFile: string;
 	/** The shipped stacks: loams-postgres-dev/, wesql/ and tikv/ (each with a compose.yaml). Read-only. */
@@ -30,8 +34,9 @@ export interface ResolvedPaths {
 }
 
 export function resolvePaths(env: PathsEnv): ResolvedPaths {
-	const exe =
-		(env.platform ?? process.platform) === "win32" ? "loams.exe" : "loams";
+	const win = (env.platform ?? process.platform) === "win32";
+	const exe = win ? "loams.exe" : "loams";
+	const agentdExe = win ? "loams-agentd.exe" : "loams-agentd";
 	const repoRoot = resolve(env.appRoot, "..", "..");
 	const consoleDist = env.isPackaged
 		? join(env.resourcesPath, "console")
@@ -50,11 +55,22 @@ export function resolvePaths(env: PathsEnv): ResolvedPaths {
 		);
 	}
 
+	const agentdBin: string[] = [];
+	if (env.agentdBin) agentdBin.push(env.agentdBin);
+	agentdBin.push(join(env.resourcesPath, "bin", agentdExe));
+	if (cargoTarget) {
+		agentdBin.push(
+			join(cargoTarget, "release", agentdExe),
+			join(cargoTarget, "debug", agentdExe),
+		);
+	}
+
 	return {
 		engineData: join(env.userData, "engine"),
 		logs: env.logs,
 		consoleDist,
 		engineBin,
+		agentdBin,
 		factoryDir: join(env.userData, "factory"),
 		serversFile: join(env.userData, "servers.json"),
 		stacksDir: env.isPackaged

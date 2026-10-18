@@ -1,4 +1,4 @@
-# The Loams preview stack: everything a user runs themselves, on one machine
+# The Loams stack: everything a user runs themselves, on one machine
 # or a VM of their own (BYOC, see byoc/install.sh). Configure it in .env (copy
 # .env.example). Start the engine and its storage with
 #
@@ -120,7 +120,7 @@ services:
   # snapshot first. No listener, no published port, no tailnet door, no
   # container socket.
   migrate:
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.0-preview.2}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.0}
     command:
       - migrate
       - run
@@ -163,7 +163,7 @@ services:
 
   loams:
     <<: *restart
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.0-preview.2}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.0}
     command:
       - standalone
       - --bucket=${LOAMS_BUCKET:-file:///var/lib/loams/bucket}
@@ -172,6 +172,13 @@ services:
       # standalone defaults Flight SQL to 0.0.0.0, which would put it on the
       # compose network; keep it on loopback like every other engine listener.
       - --flight-sql-listen=127.0.0.1:8082
+      # The Postgres and MySQL wire listeners over collections (namespace
+      # `default`). Loopback in the engine's network namespace, like Qdrant
+      # (6333/6334), Elasticsearch (9200) and Flight SQL: they authenticate
+      # nobody yet, so they are not on the tailnet (docs/release/preview.md,
+      # "Keep the other listeners inside the stack").
+      - --pg-listen=127.0.0.1:5432
+      - --mysql-listen=127.0.0.1:3306
       - --graph-data-dir=/var/lib/loams/graph
       - --meta=tikv://pd:2379/loams_meta
       - --live-store=tikv://pd:2379/loams_live_dev
@@ -188,7 +195,7 @@ services:
       LOAMS_HOUSE_ENDPOINT: ${LOAMS_HOUSE_ENDPOINT:-}
       LOAMS_HOUSE_CA: /var/lib/loams-house-link/house.crt
       LOAMS_HOUSE_KEY_FILE: /var/lib/loams-house-link/link.key
-      # Engine auth (preview): tailscale | oidc | apikey | off (loopback only).
+      # Engine auth: tailscale | oidc | apikey | off (loopback only).
       # tailscale trusts the Tailscale-User-Login headers that the sidecar's
       # `tailscale serve` proxy adds, on LOAMS_TAILSCALE_LISTEN only: a loopback
       # port of its own that is the serve target and nothing else.
@@ -263,7 +270,7 @@ services:
   house:
     <<: *restart
     profiles: [house]
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-fabric:${LOAMS_VERSION:-0.1.0-preview.2}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-fabric:${LOAMS_VERSION:-0.1.0}
     command:
       - house
       - --single-node
@@ -324,7 +331,7 @@ services:
       TS_USERSPACE: "true"
       TS_AUTH_ONCE: "true"
       # https (Tailscale: MagicDNS + HTTPS certificates), or http for Headscale
-      # (coming soon, unsupported in 0.1.0-preview.2); see tailscale/serve-*.json.
+      # (coming soon, unsupported in 0.1.0); see tailscale/serve-*.json.
       TS_SERVE_CONFIG: /config/serve-${TS_SERVE_MODE:-https}.json
       TS_EXTRA_ARGS: --login-server=${TS_LOGIN_SERVER:-https://controlplane.tailscale.com} ${TS_EXTRA_ARGS:-}
     volumes:
@@ -334,7 +341,7 @@ services:
       loams:
         condition: service_started
 
-  # COMING SOON, unsupported in 0.1.0-preview.2: Headscale issues no ts.net
+  # COMING SOON, unsupported in 0.1.0: Headscale issues no ts.net
   # HTTPS certificates, so the hosted console cannot reach an engine on it.
   # A self-hosted tailnet control server (`--profile headscale`). Clients,
   # including the browser's device, must reach HEADSCALE_SERVER_URL, so on a VM
@@ -381,7 +388,7 @@ services:
   pg-control:
     <<: *restart
     profiles: [postgres-control]
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-pg-control:${LOAMS_VERSION:-0.1.0-preview.2}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-pg-control:${LOAMS_VERSION:-0.1.0}
     command:
       - pg-control
       - --store=local
@@ -469,7 +476,7 @@ services:
   pg-runner:
     <<: *restart
     profiles: [postgres-control]
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-pg-control:${LOAMS_VERSION:-0.1.0-preview.2}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-pg-control:${LOAMS_VERSION:-0.1.0}
     command:
       - pg-runner
       - --listen=0.0.0.0:7691
@@ -507,7 +514,7 @@ services:
   agentd:
     <<: *restart
     profiles: [agentd]
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-agentd:${LOAMS_VERSION:-0.1.0-preview.2}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-agentd:${LOAMS_VERSION:-0.1.0}
     # The daemon writes its token, lock and store beside its config.toml, in
     # a directory it makes owner-only (0700): that is /home/loams/agentd, in
     # the data volume. Only config.toml comes from ./agentd, read-only, and

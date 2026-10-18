@@ -365,7 +365,7 @@ export function createFakeDesktop(): LoamsDesktopApi {
   const later = (ms: number, fn: () => void) => globalThis.setTimeout(fn, ms);
 
   return {
-    version: '0.1.0-preview.1',
+    version: '0.1.0',
     platform: 'linux',
     // The preload passes the saved choice; the dev preview keeps it in local storage.
     theme: {

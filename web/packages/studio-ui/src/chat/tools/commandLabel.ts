@@ -1,7 +1,7 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // packages/client-runtime/src/work-log/commandLabel.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// header only. Loams' changes are Apache-2.0.
+// this header, and the shell `-c` flag test made linear-time (CodeQL js/polynomial-redos). Loams' changes are Apache-2.0.
 type CommandWrapper = "env" | "sudo";
 type CommandProgramContext = "exec" | "shell";
 
@@ -211,7 +211,9 @@ function shellCommandArgumentIndex(tokens: ReadonlyArray<string>, start: number)
       index += 1;
       continue;
     }
-    if (option === "--command" || /^-[a-zA-Z]*c[a-zA-Z]*$/.test(option)) return index + 1;
+    if (option === "--command" || (/^-[a-zA-Z]+$/.test(option) && option.includes("c"))) {
+      return index + 1;
+    }
   }
   return null;
 }

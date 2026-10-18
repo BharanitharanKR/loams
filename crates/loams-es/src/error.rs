@@ -219,6 +219,11 @@ impl EsError {
                 error.retry_after_secs = Some(retry_after_ms.div_ceil(1000).max(1));
                 error
             }
+            // A graph read the caller may not make (GR1 R24.12); the ES surface reads no
+            // graph today, so this is only ever a passed-through refusal.
+            ServiceError::PermissionDenied { message, .. } => {
+                Self::new(403, "security_exception", message)
+            }
         }
     }
 

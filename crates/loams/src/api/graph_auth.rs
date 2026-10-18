@@ -25,7 +25,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use connectrpc::{ConnectError, ErrorCode};
-use loams_graph::authz::{Caller, CallerKind, GraphAuthorizer, Relation, Standing};
+use loams_graph::authz::{Caller, CallerKind, GraphAuthorizer, PrincipalReads, Relation, Standing};
 use loams_proto::loams::admin::v1 as admin_pb;
 
 use crate::auth::authorizer::{Actor, Denied};
@@ -286,6 +286,15 @@ pub(crate) fn authorizer(principals: &Principals) -> Arc<dyn GraphAuthorizer> {
     Arc::new(DirectoryGraphAuthz::new(principals.clone()))
 }
 
+/// The graph caller of a request's reads through `loams-query` (GR1 R24.12): `principal`'s,
+/// checked for `reader` by this authorizer ([`super::graph_caller`]).
+pub(crate) fn graph_caller(
+    principals: &Principals,
+    principal: Option<&Principal>,
+) -> loams_query::graph::GraphCaller {
+    PrincipalReads::new(authorizer(principals), caller_of(principal)).into_graph_caller()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -517,6 +526,60 @@ mod tests {
                 .expect("standing")
                 .in_environment
         );
+    }
+
+    /// GR1 R24.12: a search's `expand` and the SQL graph functions read as the request's
+    /// principal, through the same RBAC: no relation (or another environment, or no principal)
+    /// is `permission_denied` with need `reader`; a `viewer` and the operator read.
+    #[tokio::test]
+    async fn graph_reads_through_loams_query_need_reader() {
+        use loams_query::ServiceError;
+        let principals = principals().await;
+        let person = |subject: &str, environment: Option<&str>| Principal {
+            subject: subject.into(),
+            kind: PrincipalKind::Session,
+            display_name: subject.into(),
+            email: None,
+            grant: Grant {
+                environment: environment.map(str::to_string),
+                ..Grant::default()
+            },
+        };
+        let read = |principal: Option<Principal>, ns: &'static str| {
+            let principals = principals.clone();
+            async move {
+                graph_caller(&principals, principal.as_ref())
+                    .authorize_read("graph_neighbors", ns, "kg")
+                    .await
+            }
+        };
+        for (who, principal, ns) in [
+            (
+                "a member with no grant",
+                Some(person("stranger", None)),
+                "shop-dev",
+            ),
+            (
+                "a viewer bound to another environment",
+                Some(person("viewer", Some("shop/prod"))),
+                "shop-dev",
+            ),
+            ("no principal", None, "elsewhere"),
+        ] {
+            match read(principal, ns).await {
+                Err(ServiceError::PermissionDenied { need, object, .. }) => {
+                    assert_eq!(need, "reader", "{who}");
+                    assert_eq!(object, format!("graph:{ns}/kg"), "{who}");
+                }
+                other => panic!("{who}: expected permission_denied, got {other:?}"),
+            }
+        }
+        read(Some(person("viewer", None)), "shop-dev")
+            .await
+            .expect("a viewer reads");
+        read(Some(crate::auth::Auth::dev_loopback()), "shop-prod")
+            .await
+            .expect("the operator reads");
     }
 
     #[test]
