@@ -314,7 +314,7 @@ Design: [§40](../design/40-loams-systemone.md), D520–D539. Decisions are advi
 | Plan | Scope | Status |
 |---|---|---|
 | [SO1: SystemOne engine, API and backends](2026-10-02-so1-systemone.md) | Spike (kevala, `ort`, `laya-serve`); `loams.systemone.v1`; the `loams-systemone` crate; `laya-serve` sidecar; Jev adapter; calibration; self-test; model manager; route, CLI, MCP; decision log | Planned |
-| [SO2: SystemOne on the desktop](2026-10-02-so2-systemone-desktop.md) | Swift Core ML sidecar; `loams-systemone-link`; Model Manager and Settings; Loams Bot decisions; zeron MCP tool; optional browser plugin, CPU and MLX paths | Planned |
+| [SO2: SystemOne on the desktop](2026-10-02-so2-systemone-desktop.md) | Re-targeted 2026-10-18 to the in-repo desktop: the Swift Core ML sidecar supervised by `loams-agentd`; `loams-agentd-systemone`; SystemOne on ndjson and `loams.agentd.v1`; Model Manager and Settings › Decisions in the cordis shell; Loams Bot decisions in the ACP shim and Studio's card; `systemone_decide` in agentd's MCP shim and tool registry; optional browser plugin, CPU and MLX paths | Planned (re-target awaiting the owner's approval) |
 
 ## Track API and SDK: unified Connect services and generated clients
 
