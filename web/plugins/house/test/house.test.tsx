@@ -230,7 +230,8 @@ describe('analytics page', () => {
     run();
     const alert = await screen.findByTestId('house-failure');
     expect(within(alert).getByText(/^Code 344 · SUPPORT_IS_DISABLED · /)).toBeTruthy();
-    expect(sqlBox().getAttribute('aria-invalid')).toBe('true');
+    // SqlEditor sets aria-invalid in an effect (a CodeMirror reconfigure), after the alert renders.
+    await waitFor(() => expect(sqlBox().getAttribute('aria-invalid')).toBe('true'));
   });
 
   it('write_requires_confirmation', async () => {
