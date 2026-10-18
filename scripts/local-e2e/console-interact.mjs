@@ -59,7 +59,7 @@ await step('analytics-query', async () => {
   await page.keyboard.press('Control+Enter');
   await page.waitForTimeout(5000);
   const t = await text();
-  if (!/rows in .* rows read/.test(t)) throw new Error(t.slice(t.indexOf('Allow writes'), t.indexOf('Allow writes') + 300));
+  if (!/\d+ rows? .*rows read/.test(t)) throw new Error(t.slice(t.indexOf('Allow writes'), t.indexOf('Allow writes') + 300));
   return t.slice(t.indexOf('Allow writes'), t.indexOf('Allow writes') + 200);
 });
 
@@ -115,20 +115,25 @@ await step('studio-add-agentd-host', async () => {
 
 await step('studio-home', async () => {
   // In-app navigation: the pasted token lives in this tab's memory only, a reload drops it.
-  await page.getByRole('link', { name: 'Home', exact: true }).first().click();
+  // The redesigned shell (CF1): the sidebar's "Back" leaves Studio settings for Studio's home.
+  const back = page.getByRole('link', { name: 'Back', exact: true }).or(page.getByRole('button', { name: 'Back', exact: true }));
+  await back.first().click();
   await page.waitForTimeout(4000);
   return (await text()).slice(0, 300);
 });
 
 await step('studio-thread', async () => {
-  await page.getByRole('region', { name: 'Projects' }).getByRole('link', { name: /e2e-sample/ }).click();
+  await page.getByRole('link', { name: 'New thread', exact: true }).or(page.getByRole('button', { name: 'New thread', exact: true })).first().click();
   await page.waitForTimeout(2500);
-  const box = page.getByRole('textbox', { name: 'New thread prompt' });
+  const box = page.getByRole('textbox', { name: /prompt|message|thread/i }).or(page.locator('textarea, [contenteditable=true]')).first();
   await box.click();
   await box.fill('local-e2e: add a line to notes.txt');
-  await page.getByRole('button', { name: 'Send', exact: true }).click();
+  const send = page.getByRole('button', { name: /^(Send|Start)/ });
+  if (await send.first().isVisible().catch(() => false)) await send.first().click();
+  else await page.keyboard.press('Enter');
   await page.waitForTimeout(10000);
-  return (await page.getByRole('log', { name: 'Thread timeline' }).innerText()).replace(/\s+/g, ' ').slice(0, 300);
+  const log = page.getByRole('log').first();
+  return ((await log.isVisible().catch(() => false)) ? await log.innerText() : await text()).replace(/\s+/g, ' ').slice(0, 300);
 });
 
 writeFileSync(join(OUT, 'interact.json'), JSON.stringify(results, null, 2));

@@ -25,8 +25,9 @@ const form = page.getByText('Set up this install');
 if (!(await form.isVisible().catch(() => false))) {
   console.log('no setup screen: already set up');
 } else {
-  // The field is required in the form; an open gate (auth off) ignores its value.
-  await page.getByLabel('Setup token').fill(process.env.LOAMS_SETUP_TOKEN ?? 'auth-off');
+  // Auth off: the form has no token field (PR #753); otherwise it is required.
+  const token = page.getByLabel('Setup token');
+  if (await token.isVisible().catch(() => false)) await token.fill(process.env.LOAMS_SETUP_TOKEN ?? 'auth-off');
   await page.getByLabel('Organization name').fill('Ostrium e2e');
   await page.getByLabel('Your name').fill('E2E Owner');
   await page.getByLabel('Email').fill(env.E2E_CONSOLE_EMAIL);

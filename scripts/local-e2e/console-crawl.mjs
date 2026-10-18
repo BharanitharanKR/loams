@@ -55,6 +55,22 @@ if (await page.getByText('Connect your engine').isVisible().catch(() => false)) 
   console.log('connected the hosted console to its engine');
 }
 
+// The sidebar lists pinned pages only (D1080): pin every page first, through
+// the "Edit pages" menu, so their links are on the page.
+for (let i = 0; i < 60; i++) {
+  const edit = page.getByRole('button', { name: 'Edit pages' });
+  if (!(await edit.isVisible().catch(() => false))) break;
+  await edit.click();
+  const item = page.locator('[role="menuitemcheckbox"][aria-checked="false"]').first();
+  if (!(await item.isVisible({ timeout: 1500 }).catch(() => false))) {
+    await page.keyboard.press('Escape');
+    break;
+  }
+  await item.click();
+  await page.keyboard.press('Escape').catch(() => {});
+  await page.waitForTimeout(150);
+}
+
 // The routes: every in-app link in the navigation (hash routes), then EXTRA.
 let routes = await page.$$eval('a[href]', (as) =>
   [...new Set(as.map((a) => a.getAttribute('href')).filter((h) => h && (h.startsWith('#/') || h.startsWith('/')) && !h.startsWith('//')))],
