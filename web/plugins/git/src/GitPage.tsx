@@ -6,7 +6,7 @@
 // served, that client is the fixture-backed mock, and the page says so.
 
 import { NamespacePicker, PageHead } from '@loams/desktop-ui';
-import { SampleDataBadge, SampleDataNotice } from '@loams/ui';
+import { SampleDataNotice } from '@loams/ui';
 import { useCallback, useState } from 'react';
 import type { GitClient, Repo, WorkspaceSummary } from './client.js';
 import { EnvView } from './EnvView.js';
@@ -54,7 +54,6 @@ export function GitPage(p: GitPageProps) {
       <PageHead
         title="Git"
         subtitle="Repositories, virtual workspaces and env secrets on the bucket."
-        badge={p.preview ? <SampleDataBadge /> : undefined}
       />
       {p.preview && (
         <SampleDataNotice>
