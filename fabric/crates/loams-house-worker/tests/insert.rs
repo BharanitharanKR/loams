@@ -791,6 +791,27 @@ async fn block_hash_dedup_window() {
     assert_eq!(ok(addr, "SELECT count() FROM t").await, "7\n");
 }
 
+/// `TRUNCATE` then the same load writes the rows again (the local e2e seed's
+/// reload, 2026-10-18, which left `nyc.yellow_trips` empty): the block's key
+/// from before the `TRUNCATE` is not held.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn same_insert_after_truncate_is_written() {
+    let house = lakehouse("retruncate").await;
+    let addr = house.addr();
+    ok(addr, KV).await;
+    let load = |addr| async move {
+        written_rows(&inserted(addr, "INSERT INTO t FORMAT CSV", b"1,a\n2,b\n", &[]).await)
+    };
+    assert_eq!(load(addr).await, 2);
+    // Without a TRUNCATE between them, the same block is a duplicate.
+    assert_eq!(load(addr).await, 0);
+    ok(addr, "TRUNCATE TABLE t").await;
+    assert_eq!(ok(addr, "SELECT count() FROM t").await, "0\n");
+    assert_eq!(load(addr).await, 2);
+    assert_eq!(ok(addr, "SELECT count(), sum(k) FROM t").await, "2\t3\n");
+    assert_eq!(load(addr).await, 0);
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
 async fn insert_deduplicate_0_writes_twice() {
     let house = lakehouse("nodedup").await;

@@ -20,8 +20,9 @@ export function SettingsPage({ section }: { section?: string }) {
   return (
     <div className="lc-page">
       <header className="lc-page-head">
-        <h1>Settings</h1>
-        <p>Servers, local stacks, updates and what this app is.</p>
+        {/* UX-3: the sidebar's "Settings" is the one Settings heading; this is its App part. */}
+        <h1>App settings</h1>
+        <p>Appearance, servers, local stacks, updates and what this app is.</p>
       </header>
       <div className="flex gap-6 items-start">
         <nav aria-label="Settings sections" className="w-48 shrink-0">

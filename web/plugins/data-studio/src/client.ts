@@ -31,8 +31,26 @@ export interface SqlResult {
 
 export interface SearchHit {
   id: string;
+  /** The typed id, for follow-up reads (Find similar). */
+  pk?: documents.DocumentId;
   score: number;
   source: JsonObject;
+  /** The engine's highlight fragments per field. */
+  highlight: Record<string, string[]>;
+}
+
+export interface SearchResult {
+  hits: SearchHit[];
+  /** The matching count, when the engine counted. */
+  total?: number;
+  /** The total is a lower bound. */
+  totalAtLeast: boolean;
+}
+
+/** One bucket of a terms aggregation. */
+export interface Bucket {
+  key: string;
+  count: number;
 }
 
 export interface CollectionSpec {
@@ -156,18 +174,80 @@ export function createDataClient(
     },
 
     /** `ir` is the SearchRequest in proto JSON, without namespace and collection. */
-    async search(ns: string, coll: string, ir: JsonObject): Promise<SearchHit[]> {
+    async search(
+      ns: string,
+      coll: string,
+      ir: JsonObject,
+      signal?: AbortSignal,
+    ): Promise<SearchResult> {
       const request = fromJson(query.SearchRequestSchema, {
         ...ir,
         namespace: ns,
         collection: coll,
       });
-      const res = await search.search(request);
-      return res.hits.map((h) => ({
-        id: idText(h.pk),
-        score: h.score,
-        source: h.source ?? {},
-      }));
+      const res = await search.search(request, { signal });
+      const hits = res.hits.map((h) => {
+        const highlight: Record<string, string[]> = {};
+        for (const [k, v] of Object.entries(h.highlight)) {
+          const list = toJson(ValueSchema, v);
+          if (Array.isArray(list)) highlight[k] = list.map(String);
+          else if (typeof list === 'string') highlight[k] = [list];
+        }
+        return {
+          id: idText(h.pk),
+          pk: h.pk,
+          score: h.score,
+          source: h.source ?? {},
+          highlight,
+        };
+      });
+      const total = res.total?.value;
+      return {
+        hits,
+        total: total === undefined ? undefined : Number(total),
+        totalAtLeast: res.total?.relation === query.TotalRelation.GTE,
+      };
+    },
+
+    /** Runs aggregations (proto JSON) over the documents that match `filter`. */
+    async aggregate(
+      ns: string,
+      coll: string,
+      aggregations: JsonObject,
+      filter?: JsonObject,
+      signal?: AbortSignal,
+    ): Promise<JsonObject> {
+      const request = fromJson(query.SearchRequestSchema, {
+        namespace: ns,
+        collection: coll,
+        limit: 0,
+        aggregations,
+        ...(filter ? { filter } : {}),
+      });
+      const res = await search.search(request, { signal });
+      const out = res.aggregations ? toJson(ValueSchema, res.aggregations) : {};
+      return out && typeof out === 'object' && !Array.isArray(out) ? out : {};
+    },
+
+    /** One document's vector, for Find similar. */
+    async vectorOf(
+      ns: string,
+      coll: string,
+      id: documents.DocumentId,
+      field: string,
+    ): Promise<number[]> {
+      const res = await docs.getDocuments({
+        namespace: ns,
+        collection: coll,
+        ids: [id],
+        select: { source: 'none', vectors: [field] },
+      });
+      const v = res.documents[0]?.vectors[field];
+      const list = v ? toJson(ValueSchema, v) : undefined;
+      if (!Array.isArray(list) || list.some((n) => typeof n !== 'number')) {
+        throw new Error(`Document ${idText(id)} has no ${field} vector.`);
+      }
+      return list as number[];
     },
 
     /** Upserts a batch of `{id, source, vectors}`; returns the write token. */
@@ -220,6 +300,19 @@ export function createDataClient(
 }
 
 export type DataClient = ReturnType<typeof createDataClient>;
+
+/** The buckets of a terms aggregation's answer. */
+export function bucketsOf(agg: JsonValue | undefined): Bucket[] {
+  if (!agg || typeof agg !== 'object' || Array.isArray(agg)) return [];
+  const list = agg.buckets;
+  if (!Array.isArray(list)) return [];
+  return list.flatMap((b) => {
+    if (!b || typeof b !== 'object' || Array.isArray(b)) return [];
+    const key = b.key_as_string ?? b.key;
+    if (key === undefined || key === null) return [];
+    return [{ key: String(key), count: Number(b.doc_count ?? 0) }];
+  });
+}
 
 /** A collection's schema as the REST schema JSON. */
 export function schemaOf(info: CollectionInfo): JsonObject {

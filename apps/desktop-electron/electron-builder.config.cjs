@@ -78,6 +78,9 @@ module.exports = {
 		target: ["dmg", "zip"].map((target) => (macArch ? { target, arch: [macArch] } : { target })),
 		category: "public.app-category.developer-tools",
 		icon: "build/icon.icns",
+		// Signs as electron-builder would, then rewrites resources/bin/SHA256SUMS from the signed
+		// loams-agentd and loams and reseals the bundle (scripts/mac-sign.cjs, release fix B9).
+		sign: require("./scripts/mac-sign.cjs"),
 		...(hasAppleCertificate
 			? {
 					hardenedRuntime: true,

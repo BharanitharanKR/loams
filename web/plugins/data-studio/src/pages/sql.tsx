@@ -9,6 +9,7 @@ import {
 } from '@loams/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { DataClient } from '../client.js';
+import { tableStatement } from '../palette.js';
 import { PageHead, Tabs } from '../shared.js';
 
 /** The namespace's tables and functions, read with SQL from information_schema. */
@@ -58,21 +59,33 @@ export async function loadEngineSchema(client: DataClient, ns: string): Promise<
   return { tables: [...tables.values()], functions, defaultSchema: 'collections' };
 }
 
-/** `/data/:ns/sql`: a read-only SQL editor over the namespace. */
+/**
+ * `/data/:ns/sql`: a read-only SQL editor over the namespace. `?table=` (the palette's
+ * "Query <table> in SQL") opens it on a `SELECT` of that table.
+ */
 export function SqlPage({
   client,
   ns,
   navigate,
+  table,
 }: {
   client: DataClient;
   ns: string;
   navigate: (to: string) => void;
+  table?: string;
 }) {
   const [schema, setSchema] = useState<SqlSchema>({ tables: [] });
   const [schemaState, setSchemaState] = useState<{ loading: boolean; error?: string }>({
     loading: true,
   });
   const editor = useRef<SqlEditorHandle>(null);
+  // A new `?table=` while the page is open replaces the text; the first one is `initial`.
+  const shownTable = useRef(table);
+  useEffect(() => {
+    if (!table || shownTable.current === table) return;
+    shownTable.current = table;
+    editor.current?.replace(tableStatement(table));
+  }, [table]);
 
   useEffect(() => {
     let live = true;
@@ -120,6 +133,7 @@ export function SqlPage({
         schema={schema}
         run={run}
         historyScope={`engine:${ns}`}
+        initial={table ? tableStatement(table) : undefined}
         label="SQL"
         resetKey={ns}
         handle={editor}

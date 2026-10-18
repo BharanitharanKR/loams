@@ -18,9 +18,10 @@ import {
   useStudioKeybindings,
 } from './palette/commands.js';
 import { PreviewTab } from './preview/PreviewTab.js';
-import { useReach } from './projects/queries.js';
+import { useProjects, useReach } from './projects/queries.js';
 import { type Panel, type StudioRoute, studioHref } from './routes.js';
 import { SettingsPage } from './settings/Settings.js';
+import { usePublishedSidebar } from './sidebar/data.js';
 import { useNewThread } from './sidebar/useThreadActions.js';
 import { DraftCard } from './thread/FactoryLinks.js';
 import { DiffTab } from './thread/LazyDiffTab.js';
@@ -207,6 +208,7 @@ function StudioPage({
   openExternal,
   inspector,
   drawer,
+  setTrail,
 }: {
   agentd: StudioAgentd;
   route: StudioRoute;
@@ -221,10 +223,13 @@ function StudioPage({
   inspector?: PanelService;
   /** The shell's drawer: the thread's terminal is its tab (design 59). */
   drawer?: PanelService;
+  /** The shell's breadcrumbs (and tab title): the project and thread by name. */
+  setTrail?: (trail: { label: string; href?: string }[] | undefined) => void;
 }) {
   useEffect(() => {
     if (hostParam) agentd.hosts?.select(hostParam);
   }, [agentd, hostParam]);
+  useStudioTrail(agentd, route, setTrail);
   const reach = useReach(agentd);
   const connected = reach.state === 'ready' || route.kind === 'settings';
   const thread = route.kind === 'thread' ? route : undefined;
@@ -257,6 +262,40 @@ function StudioPage({
       )}
     </StudioLayout>
   );
+}
+
+/**
+ * "Studio / loams / Fix the login redirect loop" instead of "Studio / Thread": the names
+ * come from the projects query and the sidebar's published rows, once they are known.
+ */
+function useStudioTrail(
+  agentd: StudioAgentd,
+  route: StudioRoute,
+  setTrail: ((trail: { label: string; href?: string }[] | undefined) => void) | undefined,
+): void {
+  const projects = useProjects(agentd);
+  const sidebar = usePublishedSidebar(agentd);
+  const thread =
+    route.kind === 'thread' ? sidebar?.threads.find((t) => t.id === route.threadId) : undefined;
+  const projectId = route.kind === 'project' ? route.projectId : (thread?.projectId ?? undefined);
+  const project = projectId ? projects.data?.find((p) => p.id === projectId) : undefined;
+  const threadTitle = thread ? thread.title || 'Untitled thread' : undefined;
+  const projectName = project?.name;
+  const projectHref = project ? studioHref({ kind: 'project', projectId: project.id }) : undefined;
+  const kind = route.kind;
+  useEffect(() => {
+    if (!setTrail) return;
+    const root = { label: 'Studio', href: '/studio' };
+    if (kind === 'project' && projectName) setTrail([root, { label: projectName }]);
+    else if (kind === 'thread' && threadTitle) {
+      setTrail([
+        root,
+        ...(projectName && projectHref ? [{ label: projectName, href: projectHref }] : []),
+        { label: threadTitle },
+      ]);
+    } else return;
+    return () => setTrail(undefined);
+  }, [setTrail, kind, projectName, projectHref, threadTitle]);
 }
 
 /** A Studio page, with connect-query reading the daemon over `agentd`'s transport. */

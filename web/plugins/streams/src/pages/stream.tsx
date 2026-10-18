@@ -1,4 +1,15 @@
-import { Badge, Button, Card, Empty, Field, Input, Select, Table, Textarea } from '@loams/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  Field,
+  Input,
+  Select,
+  SkeletonList,
+  Table,
+  Textarea,
+} from '@loams/ui';
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ApiError,
@@ -334,7 +345,7 @@ export function StreamPage({
           </>
         }
       />
-      {detail.state === 'loading' && <p className="lc-muted">Loading stream…</p>}
+      {detail.state === 'loading' && <SkeletonList label="Loading the stream" rows={4} />}
       {detail.state === 'error' && (
         <ErrorNotice title="Could not load the stream" message={detail.message} />
       )}

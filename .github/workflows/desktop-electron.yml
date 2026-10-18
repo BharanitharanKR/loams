@@ -79,8 +79,9 @@ jobs:
     name: "${{ matrix.area }}: package (${{ matrix.arch }})"
     needs: platforms
     runs-on: ${{ matrix.runner }}
-    # A cold Windows or macOS engine build takes about an hour on a GitHub-hosted runner.
-    timeout-minutes: 150
+    # A cold Windows or macOS engine build takes about an hour on a GitHub-hosted runner; a cold
+    # Intel one took 2h04m plus 23 minutes for the agent daemon (run 39099462854 hit 150).
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.platforms.outputs.matrix) }}
@@ -166,8 +167,50 @@ jobs:
             "$bin" --version
           fi
 
+      # The agent daemon behind Studio (release fix B9), for the engine's target. A cross build sets
+      # LOAMS_AGENTD_BIN for fetch-engine.mjs, which then requires it (LOAMS_REQUIRE_AGENTD below).
+      - name: agent daemon
+        shell: bash
+        run: |
+          set -euo pipefail
+          exe=loams-agentd; [ "$RUNNER_OS" = Windows ] && exe=loams-agentd.exe
+          if [ -n "${RUST_TARGET:-}" ]; then
+            cargo build --release -p loams-agentd --target "$RUST_TARGET"
+            bin="$PWD/target/$RUST_TARGET/release/$exe"
+            echo "LOAMS_AGENTD_BIN=$bin" >> "$GITHUB_ENV"
+          else
+            cargo build --release -p loams-agentd
+            bin="target/release/$exe"
+          fi
+          if [ "${RUST_TARGET:-}" = x86_64-apple-darwin ]; then
+            arch -x86_64 "$bin" version
+          elif [ "${RUST_TARGET:-}" = aarch64-apple-darwin ]; then
+            [ "$(lipo -archs "$bin")" = arm64 ]
+          else
+            "$bin" version
+          fi
+
       - name: package
+        env:
+          LOAMS_REQUIRE_AGENTD: "1"
         run: pnpm nx run loams-desktop-electron:${{ matrix.target }} --outputStyle=static
+
+      - name: the daemon is bundled
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$RUNNER_OS" in
+            Linux) dirs=(apps/desktop-electron/dist/linux*-unpacked); bin="${dirs[0]}/resources/bin"; exe=loams-agentd ;;
+            Windows) bin=apps/desktop-electron/dist/win-unpacked/resources/bin; exe=loams-agentd.exe ;;
+            macOS) apps=(apps/desktop-electron/dist/mac*/*.app); bin="${apps[0]}/Contents/Resources/bin"; exe=loams-agentd ;;
+          esac
+          ls -l "$bin"
+          for f in "$exe" SHA256SUMS VERSION; do
+            [ -s "$bin/$f" ] || { echo "::error::$bin/$f is missing"; exit 1; }
+          done
+          # SHA256SUMS lists the files as shipped (on macOS, after signing: scripts/mac-sign.cjs).
+          if command -v sha256sum >/dev/null; then (cd "$bin" && sha256sum -c SHA256SUMS)
+          else (cd "$bin" && shasum -a 256 -c SHA256SUMS); fi
 
       - name: macOS signature
         if: runner.os == 'macOS'
@@ -178,6 +221,8 @@ jobs:
           codesign -dv "$app" 2>&1 | grep -E 'Signature|Identifier|Format'
           lipo -archs "$app/Contents/MacOS/Loams Desktop"
           lipo -archs "$app/Contents/Resources/bin/loams"
+          lipo -archs "$app/Contents/Resources/bin/loams-agentd"
+          codesign --verify --strict --verbose=2 "$app/Contents/Resources/bin/loams-agentd"
 
       - name: smoke test (Playwright, Task 16)
         if: runner.os == 'Linux' && hashFiles('apps/desktop-electron/playwright.config.ts') != ''

@@ -110,6 +110,7 @@ export function PipelineCanvas({
           panOnDrag
           zoomOnScroll={false}
           preventScrolling={false}
+          proOptions={{ hideAttribution: true }}
         >
           <Background variant={BackgroundVariant.Dots} gap={16} color="var(--op-rule)" />
         </ReactFlow>

@@ -2,7 +2,7 @@
 // types with their counts, its property keys and its indexes.
 
 import type { graph } from '@loams/proto';
-import { Button } from '@loams/ui';
+import { Button, SkeletonList } from '@loams/ui';
 import { type ReactNode, useEffect, useState } from 'react';
 import { type GraphClient, type GraphFailure, toFailure } from './client.js';
 
@@ -57,7 +57,7 @@ export function Schema({
         </Button>
       </div>
       {error && <p className="m-0 text-danger">{error.message}</p>}
-      {!schema && !error && <p className="m-0 text-muted">Loading…</p>}
+      {!schema && !error && <SkeletonList label="Loading the schema" rows={4} />}
       {schema && (
         <>
           <Group title="Labels" empty="No labels.">

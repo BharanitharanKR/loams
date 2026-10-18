@@ -82,7 +82,7 @@ const entry = (slots: SlotRegistry, plugin: string, label: string, group: string
     () => null,
   );
 
-const navLabels = () => [...document.querySelectorAll('.lc-pages a')].map((a) => a.textContent);
+const navLabels = () => [...document.querySelectorAll('.lc-pages ul a')].map((a) => a.textContent);
 
 beforeEach(() => {
   localStorage.clear();

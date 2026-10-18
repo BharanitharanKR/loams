@@ -427,6 +427,10 @@ The House's security layers in 0.1.0:
 - **Tailnet only.** The engine has no public address. Only the `tailscale` sidecar (and the
   House's `house-tailscale`, with `--profile house`) is reachable from outside the compose
   network, and only for tailnet members your tailnet policy allows. Nothing binds `0.0.0.0` on the host by default.
+- **HTTPS certificates are public.** Enabling Tailscale HTTPS certificates publishes
+  `loams.<tailnet>.ts.net` in public Certificate Transparency logs, so the hostname becomes
+  discoverable. It stays unreachable outside your tailnet
+  ([Tailscale: enabling HTTPS](https://tailscale.com/kb/1153/enabling-https)).
 - **Authentication on every request**, chosen by `LOAMS_AUTH_MODE`.
 - **The auth service never reaches your stack.** In `oidc` mode the engine fetches the
   issuer's JWKS outbound; the auth service sees sign-ins, not data.
@@ -442,6 +446,11 @@ The House's security layers in 0.1.0:
 | `off` | Loopback clients only; every other client is refused | none |
 
 The compose default is `tailscale`.
+
+Tailscale identity headers (`Tailscale-User-Login` and the rest) are empty for requests from
+tagged devices ([Tailscale Serve](https://tailscale.com/kb/1312/serve)). CI machines and
+servers that call the engine therefore cannot use `tailscale` mode: set `LOAMS_AUTH_MODE=apikey`
+and give them an API key.
 
 ### TLS on the main port
 
@@ -494,10 +503,11 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
 - **Loams Postgres:** `--profile postgres-control` runs `pg-control` beside the stack, with the
   container runtime's socket given only to a separate compute runner that starts nothing but
   the pinned compute images (see [`deploy/release/README.md`](../../deploy/release/README.md#postgres-control-plane)).
-  Its images are the fork's own release `lp-2026.10.1` (Postgres 16.9 and 17.5), pinned in
-  `deploy/pins/loams-postgres-images.toml` (NF1 Task 14); the next release, `lp-2026.11.0`
-  (Postgres minors 16.15 and 17.11, NF1 Task 17), is not pinned yet. The pg-control to runner link is
-  plaintext on its internal network until PG2 Task 23.
+  Its images are the fork's own release `lp-2026.11.0` (Postgres 16.15 and 17.11), pinned in
+  `deploy/pins/loams-postgres-images.toml` (NF1 Tasks 14 and 17). Logical decoding accepts the
+  output plugins `pgoutput`, `test_decoding` and `wal2json` only (`output_plugin_libraries`, the
+  fix for CVE-2026-6471). The pg-control to runner link is plaintext on its internal network until
+  PG2 Task 23.
 - **Loams Graph:** writes reach the Loams log before they are acknowledged and graphs recover
   from snapshots and the log after a crash (GR1 Tasks 11 to 14). Keep a copy of graph data you
   cannot recreate.

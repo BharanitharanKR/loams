@@ -25,6 +25,7 @@ export const SLOT_KINDS: Record<string, SlotKind> = {
   'shell.inspector.tab': 'list',
   'shell.drawer.tab': 'list',
   'palette.command': 'list',
+  'shell.palette.source': 'list',
 };
 
 /**
