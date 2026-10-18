@@ -166,7 +166,8 @@ export function ControlPlane({
     <div className="flex flex-col gap-4">
       {client.mock && (
         <SampleDataNotice>
-          The server does not offer loams.postgres.v1 yet. Nothing here changes a database.
+          No Postgres control plane (pg-control, loams.postgres.v1) answered. Nothing here changes a
+          database.
         </SampleDataNotice>
       )}
       <div className="flex flex-wrap items-end gap-3">

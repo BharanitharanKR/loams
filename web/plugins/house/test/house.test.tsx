@@ -230,7 +230,9 @@ describe('analytics page', () => {
     run();
     const alert = await screen.findByTestId('house-failure');
     expect(within(alert).getByText(/^Code 344 · SUPPORT_IS_DISABLED · /)).toBeTruthy();
-    expect(sqlBox().getAttribute('aria-invalid')).toBe('true');
+    // The shared editor marks itself invalid after the render that shows the
+    // error; wait for it (it raced on a busy CI runner).
+    await waitFor(() => expect(sqlBox().getAttribute('aria-invalid')).toBe('true'));
   });
 
   it('write_requires_confirmation', async () => {

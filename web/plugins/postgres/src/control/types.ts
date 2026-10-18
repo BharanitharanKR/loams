@@ -1,9 +1,9 @@
 // The Postgres control plane as the page sees it: loams.postgres.v1 (PostgresService) and the
 // loams.operations.v1 records its long-running calls return. @loams/proto does not generate
 // loams.postgres.v1 yet, so these are hand-written plain shapes that follow the proto field
-// for field (camelCase, timestamps as RFC 3339 strings, durations in seconds). When the
-// generated types land, a Connect client implements `PgControlClient` over the console's
-// transport and the page is unchanged; until then the page runs on `createMockPgControl`.
+// for field (camelCase, timestamps as RFC 3339 strings, durations in seconds).
+// `createConnectPgControl` implements `PgControlClient` over Connect JSON against pg-control's
+// own listener; the page falls back to `createMockPgControl` when no control plane answers.
 
 export type ProjectState = 'creating' | 'ready' | 'upgrading' | 'deleting' | 'failed';
 export type BranchState = 'creating' | 'ready' | 'restoring' | 'deleting' | 'failed';

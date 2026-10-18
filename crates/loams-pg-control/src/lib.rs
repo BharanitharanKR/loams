@@ -37,6 +37,7 @@ pub mod pgdog;
 pub mod pool;
 pub mod reconcile;
 pub mod runtime;
+pub mod scram;
 pub mod secrets;
 pub mod service;
 pub mod store;
