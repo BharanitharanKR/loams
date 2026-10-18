@@ -20,6 +20,7 @@
 #include "loams/client.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <atomic>
 #include <chrono>
 #include <thread>
@@ -42,6 +43,44 @@ std::string TrimmedEndpoint(std::string endpoint) {
     endpoint.pop_back();
   }
   return endpoint;
+}
+
+using HeaderList = std::vector<std::pair<std::string, std::string>>;
+
+bool SameHeaderName(const std::string& left, const std::string& right) {
+  return left.size() == right.size() &&
+         std::equal(left.begin(), left.end(), right.begin(), [](char a, char b) {
+           return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+         });
+}
+
+bool HasHeader(const HeaderList& headers, const std::string& name) {
+  return std::any_of(headers.begin(), headers.end(),
+                     [&](const auto& header) { return SameHeaderName(header.first, name); });
+}
+
+/// Appends the caller's headers to the SDK's own (B17).
+///
+/// The client's `Options::headers` first, then the call's, and a call's header
+/// **replaces** a client header of the same name rather than going out beside it:
+/// both used to be appended, so a client whose `loams-live-app` was `blog` and a
+/// call that named `shop` sent two `loams-live-app` lines, and a server reading
+/// the first addressed `blog`. A header the SDK already set — the content type,
+/// the bearer, the consistency token — is the SDK's and is not duplicated.
+void AppendCallerHeaders(HeaderList& out, const HeaderList& client, const HeaderList& call) {
+  HeaderList merged;
+  for (const auto& header : client) {
+    if (!HasHeader(call, header.first)) {
+      merged.push_back(header);
+    }
+  }
+  merged.insert(merged.end(), call.begin(), call.end());
+  const HeaderList sdk = out;
+  for (auto& header : merged) {
+    if (!HasHeader(sdk, header.first)) {
+      out.push_back(std::move(header));
+    }
+  }
 }
 
 /// A sleeping retry that cannot be woken. `std::this_thread::sleep_for` on a
@@ -174,12 +213,7 @@ void Client::Invoke(const CallPlan& plan, HttpTransport& transport,
         request.headers.emplace_back("loams-consistency-token", token.Value());
       }
     }
-    for (const auto& header : impl_->options.headers) {
-      request.headers.push_back(header);
-    }
-    for (const auto& header : plan.headers) {
-      request.headers.push_back(header);
-    }
+    AppendCallerHeaders(request.headers, impl_->options.headers, plan.headers);
 
     HttpResponse response;
     std::exception_ptr failure;
@@ -490,12 +524,7 @@ MessageStream Client::OpenStream(const MethodBinding& binding, const google::pro
         http.headers.emplace_back("authorization", "Bearer " + token);
       }
     }
-    for (const auto& header : impl_->options.headers) {
-      http.headers.push_back(header);
-    }
-    for (const auto& header : headers) {
-      http.headers.push_back(header);
-    }
+    AppendCallerHeaders(http.headers, impl_->options.headers, headers);
     auto reader = impl_->transport->Open(http);
     return std::unique_ptr<FrameStream>(new TransportFrameStream(std::move(reader), content_type, binding.rpc));
   };
