@@ -24,6 +24,9 @@ Expected downtime: about 5 minutes, excluding image pulls.
 See [docs/release/upgrades.md](docs/release/upgrades.md).
 
 ### Added
+- **`NamespaceService/ListNamespaces`** (B7): the namespaces the caller can reach, by name and paged, with
+  their collection and stream counts. The console's Namespaces page and the org home's Namespaces tile
+  read it, and fall back to the browser's list on an older engine.
 - **Upgrades that keep data** (design §54, plan UP1). `loams upgrade check|--to|rollback|status|snapshots`
   upgrades a self-hosted compose stack one release at a time:
   - it takes a snapshot of every store first (TiKV by BR or a cold copy, the bucket's pointers and a GC

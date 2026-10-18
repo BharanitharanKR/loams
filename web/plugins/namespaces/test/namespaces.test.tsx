@@ -1,9 +1,10 @@
 import { create } from '@bufbuild/protobuf';
+import { Code, ConnectError, createRouterTransport } from '@connectrpc/connect';
 import type { SessionService } from '@loams/console-host';
-import { instance } from '@loams/proto';
+import { collection, instance } from '@loams/proto';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
-import { NamespacesPage } from '../src/index.js';
+import { listNamespaces, NamespacesPage } from '../src/index.js';
 
 afterEach(cleanup);
 
@@ -59,5 +60,84 @@ describe('NamespacesPage', () => {
     fireEvent.click(screen.getAllByRole('button', { name: 'Streams & Links' })[0] as HTMLElement);
     expect(went).toEqual(['/data/e2e', '/streams/default']);
     localStorage.clear();
+  });
+
+  const authOff: SessionService = {
+    principal: () =>
+      create(instance.PrincipalSchema, { id: 'dev-loopback', displayName: 'Local developer' }),
+    environments: () => [],
+    environment: () => undefined,
+    select: () => {},
+    authenticatedAt: () => undefined,
+    subscribe: () => () => {},
+  };
+
+  it('lists the engine namespaces with their counts, across pages (B7)', async () => {
+    const asked: string[] = [];
+    const transport = createRouterTransport(({ service }) => {
+      service(collection.NamespaceService, {
+        createNamespace: () => ({}),
+        listNamespaces: (req) => {
+          asked.push(req.pageToken);
+          return req.pageToken === ''
+            ? {
+                namespaces: [{ namespace: 'alpha', collectionCount: 2, streamCount: 1 }],
+                nextPageToken: '1',
+              }
+            : { namespaces: [{ namespace: 'e2e', collectionCount: 5 }] };
+        },
+      });
+    });
+    localStorage.setItem('loams.data.namespaces', JSON.stringify(['only-in-browser']));
+    render(
+      <NamespacesPage
+        session={authOff}
+        navigate={() => {}}
+        load={() => listNamespaces(transport)}
+      />,
+    );
+    expect(await screen.findByText('e2e')).toBeTruthy();
+    expect(asked).toEqual(['', '1']);
+    expect(screen.getByText('alpha')).toBeTruthy();
+    expect(screen.getByRole('columnheader', { name: 'Collections' })).toBeTruthy();
+    expect(screen.getByText('5')).toBeTruthy();
+    // The engine's list replaces the browser's guesses.
+    expect(screen.queryByText('only-in-browser')).toBeNull();
+    expect(screen.queryByText(/does not list namespaces/)).toBeNull();
+    localStorage.clear();
+  });
+
+  it('falls back to the browser list on an engine without ListNamespaces', async () => {
+    const transport = createRouterTransport(({ service }) => {
+      service(collection.NamespaceService, {
+        createNamespace: () => ({}),
+        listNamespaces: () => {
+          throw new ConnectError('no such method', Code.Unimplemented);
+        },
+      });
+    });
+    expect(await listNamespaces(transport)).toBeUndefined();
+    render(
+      <NamespacesPage
+        session={authOff}
+        navigate={() => {}}
+        load={() => listNamespaces(transport)}
+      />,
+    );
+    expect(await screen.findByText(/does not list namespaces/)).toBeTruthy();
+    expect(screen.getAllByRole('row')).toHaveLength(2); // the header and default
+    expect(screen.queryByRole('columnheader', { name: 'Collections' })).toBeNull();
+  });
+
+  it('a failing list is reported, not swallowed', async () => {
+    const transport = createRouterTransport(({ service }) => {
+      service(collection.NamespaceService, {
+        createNamespace: () => ({}),
+        listNamespaces: () => {
+          throw new ConnectError('store down', Code.Unavailable);
+        },
+      });
+    });
+    await expect(listNamespaces(transport)).rejects.toThrow(/store down/);
   });
 });

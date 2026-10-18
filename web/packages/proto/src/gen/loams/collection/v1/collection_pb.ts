@@ -95,7 +95,7 @@ import type { JsonObject, Message } from "@bufbuild/protobuf";
  * Describes the file loams/collection/v1/collection.proto.
  */
 export const file_loams_collection_v1_collection: GenFile = /*@__PURE__*/
-  fileDesc("CiRsb2Ftcy9jb2xsZWN0aW9uL3YxL2NvbGxlY3Rpb24ucHJvdG8SE2xvYW1zLmNvbGxlY3Rpb24udjEiKwoWQ3JlYXRlTmFtZXNwYWNlUmVxdWVzdBIRCgluYW1lc3BhY2UYASABKAkiQgoXQ3JlYXRlTmFtZXNwYWNlUmVzcG9uc2USEQoJbmFtZXNwYWNlGAEgASgJEhQKDG5hbWVzcGFjZV9pZBgCIAEoBCKLAQoXQ3JlYXRlQ29sbGVjdGlvblJlcXVlc3QSEQoJbmFtZXNwYWNlGAEgASgJEgwKBG5hbWUYAiABKAkSJwoGc2NoZW1hGAMgASgLMhcuZ29vZ2xlLnByb3RvYnVmLlN0cnVjdBIXCgpwYXJ0aXRpb25zGAQgASgNSACIAQFCDQoLX3BhcnRpdGlvbnMiUgoWTGlzdENvbGxlY3Rpb25zUmVxdWVzdBIRCgluYW1lc3BhY2UYASABKAkSEQoJcGFnZV9zaXplGAIgASgFEhIKCnBhZ2VfdG9rZW4YAyABKAkibAoXTGlzdENvbGxlY3Rpb25zUmVzcG9uc2USOAoLY29sbGVjdGlvbnMYASADKAsyIy5sb2Ftcy5jb2xsZWN0aW9uLnYxLkNvbGxlY3Rpb25JbmZvEhcKD25leHRfcGFnZV90b2tlbhgCIAEoCSI9ChRHZXRDb2xsZWN0aW9uUmVxdWVzdBIRCgluYW1lc3BhY2UYASABKAkSEgoKY29sbGVjdGlvbhgCIAEoCSI+ChVEcm9wQ29sbGVjdGlvblJlcXVlc3QSEQoJbmFtZXNwYWNlGAEgASgJEhIKCmNvbGxlY3Rpb24YAiABKAkiKQoWRHJvcENvbGxlY3Rpb25SZXNwb25zZRIPCgdkcm9wcGVkGAEgASgIIo0CChBBZGRGaWVsZHNSZXF1ZXN0EhEKCW5hbWVzcGFjZRgBIAEoCRISCgpjb2xsZWN0aW9uGAIgASgJEicKBmZpZWxkcxgDIAMoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSKAoHdmVjdG9ycxgEIAMoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSSwoLYW5ub3RhdGlvbnMYBSADKAsyNi5sb2Ftcy5jb2xsZWN0aW9uLnYxLkFkZEZpZWxkc1JlcXVlc3QuQW5ub3RhdGlvbnNFbnRyeRoyChBBbm5vdGF0aW9uc0VudHJ5EgsKA2tleRgBIAEoCRINCgV2YWx1ZRgCIAEoCToCOAEiPAoRQWRkRmllbGRzUmVzcG9uc2USJwoGc2NoZW1hGAEgASgLMhcuZ29vZ2xlLnByb3RvYnVmLlN0cnVjdCJjChNMaXN0VmVyc2lvbnNSZXF1ZXN0EhEKCW5hbWVzcGFjZRgBIAEoCRISCgpjb2xsZWN0aW9uGAIgASgJEhEKCXBhZ2Vfc2l6ZRgDIAEoBRISCgpwYWdlX3Rva2VuGAQgASgJImcKFExpc3RWZXJzaW9uc1Jlc3BvbnNlEjYKCHZlcnNpb25zGAEgAygLMiQubG9hbXMuY29sbGVjdGlvbi52MS5NYW5pZmVzdFZlcnNpb24SFwoPbmV4dF9wYWdlX3Rva2VuGAIgASgJInwKD01hbmlmZXN0VmVyc2lvbhIPCgd2ZXJzaW9uGAEgASgEEhUKDWNyZWF0ZWRfYXRfbXMYAiABKAQSEgoKc2l6ZV9ieXRlcxgDIAEoBBIWCg5saXZlX2RvY19jb3VudBgEIAEoBBIVCg1sYW5jZV92ZXJzaW9uGAUgASgEImAKC1NjYW5SZXF1ZXN0EhEKCW5hbWVzcGFjZRgBIAEoCRISCgpjb2xsZWN0aW9uGAIgASgJEioKAmF0GAMgASgLMh4ubG9hbXMuY29sbGVjdGlvbi52MS5TY2FuUG9pbnQiQQoJU2NhblBvaW50EhoKEG1hbmlmZXN0X3ZlcnNpb24YASABKARIABIPCgV0b2tlbhgCIAEoCUgAQgcKBXBvaW50IlwKFFVwZGF0ZUFsaWFzZXNSZXF1ZXN0EhEKCW5hbWVzcGFjZRgBIAEoCRIxCgdhY3Rpb25zGAIgAygLMiAubG9hbXMuY29sbGVjdGlvbi52MS5BbGlhc0FjdGlvbiJ/CgtBbGlhc0FjdGlvbhIyCgZjcmVhdGUYASABKAsyIC5sb2Ftcy5jb2xsZWN0aW9uLnYxLkNyZWF0ZUFsaWFzSAASMgoGZGVsZXRlGAIgASgLMiAubG9hbXMuY29sbGVjdGlvbi52MS5EZWxldGVBbGlhc0gAQggKBmFjdGlvbiIwCgtDcmVhdGVBbGlhcxINCgVhbGlhcxgBIAEoCRISCgpjb2xsZWN0aW9uGAIgASgJIhwKC0RlbGV0ZUFsaWFzEg0KBWFsaWFzGAEgASgJIhcKFVVwZGF0ZUFsaWFzZXNSZXNwb25zZSJjCg1TZXRIb3RSZXF1ZXN0EhEKCW5hbWVzcGFjZRgBIAEoCRISCgpjb2xsZWN0aW9uGAIgASgJEisKA2hvdBgDIAEoCzIeLmxvYW1zLmNvbGxlY3Rpb24udjEuSG90Q29uZmlnIj0KDlNldEhvdFJlc3BvbnNlEisKA2hvdBgBIAEoCzIeLmxvYW1zLmNvbGxlY3Rpb24udjEuSG90U3RhdHVzIj4KFVdhcm1Db2xsZWN0aW9uUmVxdWVzdBIRCgluYW1lc3BhY2UYASABKAkSEgoKY29sbGVjdGlvbhgCIAEoCSIYChZXYXJtQ29sbGVjdGlvblJlc3BvbnNlIj0KCUhvdENvbmZpZxIPCgd2ZWN0b3JzGAEgASgIEgwKBHRleHQYAiABKAgSEQoJZnJhZ21lbnRzGAMgASgIIpcDCg5Db2xsZWN0aW9uSW5mbxIKCgJpZBgBIAEoBBIMCgRuYW1lGAIgASgJEhEKCW5hbWVzcGFjZRgDIAEoCRInCgZzY2hlbWEYBCABKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0EhIKCnBhcnRpdGlvbnMYBSABKA0SDwoHYWxpYXNlcxgGIAMoCRIOCgZzdHJlYW0YByABKAQSGAoQbWFuaWZlc3RfdmVyc2lvbhgIIAEoBBIWCg5saXZlX2RvY19jb3VudBgJIAEoBBISCgpzaXplX2J5dGVzGAogASgEEhUKDWNyZWF0ZWRfYXRfbXMYCyABKAQSGAoQbGlua19sYWdfcmVjb3JkcxgMIAEoBBIrCgNob3QYDSABKAsyHi5sb2Ftcy5jb2xsZWN0aW9uLnYxLkhvdFN0YXR1cxIXCg91bmFwcGxpZWRfYnl0ZXMYDiABKAQSPQoMYmFja3ByZXNzdXJlGA8gASgLMicubG9hbXMuY29sbGVjdGlvbi52MS5CYWNrcHJlc3N1cmVTdGF0dXMiuwEKEkJhY2twcmVzc3VyZVN0YXR1cxI1CgVzdGF0ZRgBIAEoDjImLmxvYW1zLmNvbGxlY3Rpb24udjEuQmFja3ByZXNzdXJlU3RhdGUSGQoRdW5hcHBsaWVkX3JlY29yZHMYAiABKAQSFwoPdW5hcHBsaWVkX2J5dGVzGAMgASgEEh0KFW1heF91bmFwcGxpZWRfcmVjb3JkcxgEIAEoBBIbChNtYXhfdW5hcHBsaWVkX2J5dGVzGAUgASgEIsoCCglIb3RTdGF0dXMSDwoHZW5hYmxlZBgBIAEoCBIuCgZjb25maWcYAiABKAsyHi5sb2Ftcy5jb2xsZWN0aW9uLnYxLkhvdENvbmZpZxIPCgdwaW5fYWxsGAMgASgIEhAKCHByb21vdGVkGAQgASgIEiwKBW93bmVyGAUgASgLMh0ubG9hbXMuY29sbGVjdGlvbi52MS5Ib3RPd25lchI4Cgd2ZWN0b3JzGAYgASgLMicubG9hbXMuY29sbGVjdGlvbi52MS5Ib3RTdHJ1Y3R1cmVTdGF0dXMSNQoEdGV4dBgHIAEoCzInLmxvYW1zLmNvbGxlY3Rpb24udjEuSG90U3RydWN0dXJlU3RhdHVzEjoKCWZyYWdtZW50cxgIIAEoCzInLmxvYW1zLmNvbGxlY3Rpb24udjEuSG90U3RydWN0dXJlU3RhdHVzIioKCEhvdE93bmVyEg8KB25vZGVfaWQYASABKAQSDQoFbG9jYWwYAiABKAgi+AIKEkhvdFN0cnVjdHVyZVN0YXR1cxIwCgVzdGF0ZRgBIAEoDjIhLmxvYW1zLmNvbGxlY3Rpb24udjEuSG90U3RhdGVLaW5kEhsKDnNvdXJjZV92ZXJzaW9uGAIgASgESACIAQESEwoLb3Zlcl9idWRnZXQYAyABKAgSRQoHY29sdW1ucxgEIAMoCzI0LmxvYW1zLmNvbGxlY3Rpb24udjEuSG90U3RydWN0dXJlU3RhdHVzLkNvbHVtbnNFbnRyeRIVCg1waW5uZWRfc3BsaXRzGAUgASgEEg4KBnNwbGl0cxgGIAEoBBIYChBwcmVmZXRjaGVkX2J5dGVzGAcgASgEEg0KBWJ5dGVzGAggASgEGlQKDENvbHVtbnNFbnRyeRILCgNrZXkYASABKAkSMwoFdmFsdWUYAiABKAsyJC5sb2Ftcy5jb2xsZWN0aW9uLnYxLkhvdENvbHVtblN0YXR1czoCOAFCEQoPX3NvdXJjZV92ZXJzaW9uItgBCg9Ib3RDb2x1bW5TdGF0dXMSMAoFc3RhdGUYASABKA4yIS5sb2Ftcy5jb2xsZWN0aW9uLnYxLkhvdFN0YXRlS2luZBIbCg5zb3VyY2VfdmVyc2lvbhgCIAEoBEgAiAEBEiQKF2FydGlmYWN0X3NvdXJjZV92ZXJzaW9uGAMgASgESAGIAQESEgoKZGVsdGFfcm93cxgEIAEoBBINCgVlcnJvchgFIAEoCUIRCg9fc291cmNlX3ZlcnNpb25CGgoYX2FydGlmYWN0X3NvdXJjZV92ZXJzaW9uIp0ECghTY2FuUGxhbhIRCgluYW1lc3BhY2UYASABKAkSEgoKY29sbGVjdGlvbhgCIAEoCRIVCg1jb2xsZWN0aW9uX2lkGAMgASgEEhgKEG1hbmlmZXN0X3ZlcnNpb24YBCABKAQSFgoOc2NoZW1hX3ZlcnNpb24YBSABKAQSMwoFbGFuY2UYBiABKAsyJC5sb2Ftcy5jb2xsZWN0aW9uLnYxLkxhbmNlVmVyc2lvblJlZhI0CglmcmFnbWVudHMYByADKAsyIS5sb2Ftcy5jb2xsZWN0aW9uLnYxLlNjYW5GcmFnbWVudBIRCglsaXZlX3Jvd3MYCCABKAQSMAoHY29sdW1ucxgJIAMoCzIfLmxvYW1zLmNvbGxlY3Rpb24udjEuU2NhbkNvbHVtbhITCgtwa19lbmNvZGluZxgKIAEoCRIMCgR0YWlsGAsgASgIEhQKDHRhaWxfcmVjb3JkcxgMIAEoBBIxCgdvZmZzZXRzGA0gAygLMiAubG9hbXMuY29sbGVjdGlvbi52MS5TY2FuT2Zmc2V0cxIVCg1kdXJhYmxlX3Rva2VuGA4gASgJEikKA3BpbhgPIAEoCzIcLmxvYW1zLmNvbGxlY3Rpb24udjEuU2NhblBpbhIVCg1wbGFubmVkX2F0X21zGBAgASgEEhoKDWV4cGlyZXNfYXRfbXMYESABKARIAIgBAUIQCg5fZXhwaXJlc19hdF9tcyKDAQoPTGFuY2VWZXJzaW9uUmVmEhAKA3VyaRgBIAEoCUgAiAEBEg8KB3ZlcnNpb24YAiABKAQSFQoNbWFuaWZlc3RfcGF0aBgDIAEoCRIWCg5zdG9yYWdlX2Zvcm1hdBgEIAEoCRIWCg5zdGFibGVfcm93X2lkcxgFIAEoCEIGCgRfdXJpIu4BCgxTY2FuRnJhZ21lbnQSCgoCaWQYASABKAQSFQoNcGh5c2ljYWxfcm93cxgCIAEoBBIUCgxkZWxldGVkX3Jvd3MYAyABKAQSEQoJbGl2ZV9yb3dzGAQgASgEEiwKBWZpbGVzGAUgAygLMh0ubG9hbXMuY29sbGVjdGlvbi52MS5TY2FuRmlsZRI8Cg1kZWxldGlvbl9maWxlGAYgASgLMiUubG9hbXMuY29sbGVjdGlvbi52MS5TY2FuRGVsZXRpb25GaWxlEiYKBWxhbmNlGAcgASgLMhcuZ29vZ2xlLnByb3RvYnVmLlN0cnVjdCJACghTY2FuRmlsZRIMCgRwYXRoGAEgASgJEhcKCnNpemVfYnl0ZXMYAiABKARIAIgBAUINCgtfc2l6ZV9ieXRlcyJnChBTY2FuRGVsZXRpb25GaWxlEgwKBHBhdGgYASABKAkSLwoEa2luZBgCIAEoDjIhLmxvYW1zLmNvbGxlY3Rpb24udjEuRGVsZXRpb25LaW5kEhQKDGRlbGV0ZWRfcm93cxgDIAEoBCK9AQoKU2NhbkNvbHVtbhIMCgRuYW1lGAEgASgJEhEKCWRhdGFfdHlwZRgCIAEoCRIMCgRyb2xlGAMgASgJEhMKBnZlY3RvchgEIAEoCUgAiAEBEhAKA2RpbRgFIAEoDUgBiAEBEhUKCGRpc3RhbmNlGAYgASgJSAKIAQESFQoIbW9kaWZpZXIYByABKAlIA4gBAUIJCgdfdmVjdG9yQgYKBF9kaW1CCwoJX2Rpc3RhbmNlQgsKCV9tb2RpZmllciJBCgtTY2FuT2Zmc2V0cxIRCglwYXJ0aXRpb24YASABKA0SDwoHYXBwbGllZBgCIAEoBBIOCgZ0YXJnZXQYAyABKAQiMgoHU2NhblBpbhIYChBtYW5pZmVzdF92ZXJzaW9uGAEgASgEEg0KBXRva2VuGAIgASgJKpgBChFCYWNrcHJlc3N1cmVTdGF0ZRIiCh5CQUNLUFJFU1NVUkVfU1RBVEVfVU5TUEVDSUZJRUQQABIbChdCQUNLUFJFU1NVUkVfU1RBVEVfT1BFThABEiEKHUJBQ0tQUkVTU1VSRV9TVEFURV9USFJPVFRMSU5HEAISHwobQkFDS1BSRVNTVVJFX1NUQVRFX0RJU0FCTEVEEAMqfQoMSG90U3RhdGVLaW5kEh4KGkhPVF9TVEFURV9LSU5EX1VOU1BFQ0lGSUVEEAASFgoSSE9UX1NUQVRFX0tJTkRfT0ZGEAESGwoXSE9UX1NUQVRFX0tJTkRfQlVJTERJTkcQAhIYChRIT1RfU1RBVEVfS0lORF9SRUFEWRADKmAKDERlbGV0aW9uS2luZBIdChlERUxFVElPTl9LSU5EX1VOU1BFQ0lGSUVEEAASFwoTREVMRVRJT05fS0lORF9BUlJBWRABEhgKFERFTEVUSU9OX0tJTkRfQklUTUFQEAIy1gEKEE5hbWVzcGFjZVNlcnZpY2USbgoPQ3JlYXRlTmFtZXNwYWNlEisubG9hbXMuY29sbGVjdGlvbi52MS5DcmVhdGVOYW1lc3BhY2VSZXF1ZXN0GiwubG9hbXMuY29sbGVjdGlvbi52MS5DcmVhdGVOYW1lc3BhY2VSZXNwb25zZSIAGlKKtRhOCgtjb2xsZWN0aW9ucxI/TmFtZXNwYWNlczogdGhlIGNvbnRhaW5lciBldmVyeSBjb2xsZWN0aW9uIGFuZCBzdHJlYW0gbGl2ZXMgaW4uMtoIChFDb2xsZWN0aW9uU2VydmljZRJnChBDcmVhdGVDb2xsZWN0aW9uEiwubG9hbXMuY29sbGVjdGlvbi52MS5DcmVhdGVDb2xsZWN0aW9uUmVxdWVzdBojLmxvYW1zLmNvbGxlY3Rpb24udjEuQ29sbGVjdGlvbkluZm8iABJxCg9MaXN0Q29sbGVjdGlvbnMSKy5sb2Ftcy5jb2xsZWN0aW9uLnYxLkxpc3RDb2xsZWN0aW9uc1JlcXVlc3QaLC5sb2Ftcy5jb2xsZWN0aW9uLnYxLkxpc3RDb2xsZWN0aW9uc1Jlc3BvbnNlIgOQAgESZAoNR2V0Q29sbGVjdGlvbhIpLmxvYW1zLmNvbGxlY3Rpb24udjEuR2V0Q29sbGVjdGlvblJlcXVlc3QaIy5sb2Ftcy5jb2xsZWN0aW9uLnYxLkNvbGxlY3Rpb25JbmZvIgOQAgESawoORHJvcENvbGxlY3Rpb24SKi5sb2Ftcy5jb2xsZWN0aW9uLnYxLkRyb3BDb2xsZWN0aW9uUmVxdWVzdBorLmxvYW1zLmNvbGxlY3Rpb24udjEuRHJvcENvbGxlY3Rpb25SZXNwb25zZSIAElwKCUFkZEZpZWxkcxIlLmxvYW1zLmNvbGxlY3Rpb24udjEuQWRkRmllbGRzUmVxdWVzdBomLmxvYW1zLmNvbGxlY3Rpb24udjEuQWRkRmllbGRzUmVzcG9uc2UiABJoCgxMaXN0VmVyc2lvbnMSKC5sb2Ftcy5jb2xsZWN0aW9uLnYxLkxpc3RWZXJzaW9uc1JlcXVlc3QaKS5sb2Ftcy5jb2xsZWN0aW9uLnYxLkxpc3RWZXJzaW9uc1Jlc3BvbnNlIgOQAgESSQoEU2NhbhIgLmxvYW1zLmNvbGxlY3Rpb24udjEuU2NhblJlcXVlc3QaHS5sb2Ftcy5jb2xsZWN0aW9uLnYxLlNjYW5QbGFuIgASaAoNVXBkYXRlQWxpYXNlcxIpLmxvYW1zLmNvbGxlY3Rpb24udjEuVXBkYXRlQWxpYXNlc1JlcXVlc3QaKi5sb2Ftcy5jb2xsZWN0aW9uLnYxLlVwZGF0ZUFsaWFzZXNSZXNwb25zZSIAElMKBlNldEhvdBIiLmxvYW1zLmNvbGxlY3Rpb24udjEuU2V0SG90UmVxdWVzdBojLmxvYW1zLmNvbGxlY3Rpb24udjEuU2V0SG90UmVzcG9uc2UiABJrCg5XYXJtQ29sbGVjdGlvbhIqLmxvYW1zLmNvbGxlY3Rpb24udjEuV2FybUNvbGxlY3Rpb25SZXF1ZXN0GisubG9hbXMuY29sbGVjdGlvbi52MS5XYXJtQ29sbGVjdGlvblJlc3BvbnNlIgAaV4q1GFMKC2NvbGxlY3Rpb25zEkRDb2xsZWN0aW9uczogc2NoZW1hLCBhbGlhc2VzLCB2ZXJzaW9ucywgc2NhbiBwbGFucyBhbmQgdGhlIGhvdCB0aWVyLmIGcHJvdG8z", [file_google_protobuf_struct, file_loams_options_v1_options]);
+  fileDesc("CiRsb2Ftcy9jb2xsZWN0aW9uL3YxL2NvbGxlY3Rpb24ucHJvdG8SE2xvYW1zLmNvbGxlY3Rpb24udjEiKwoWQ3JlYXRlTmFtZXNwYWNlUmVxdWVzdBIRCgluYW1lc3BhY2UYASABKAkiQgoXQ3JlYXRlTmFtZXNwYWNlUmVzcG9uc2USEQoJbmFtZXNwYWNlGAEgASgJEhQKDG5hbWVzcGFjZV9pZBgCIAEoBCI+ChVMaXN0TmFtZXNwYWNlc1JlcXVlc3QSEQoJcGFnZV9zaXplGAEgASgFEhIKCnBhZ2VfdG9rZW4YAiABKAkiaQoWTGlzdE5hbWVzcGFjZXNSZXNwb25zZRI2CgpuYW1lc3BhY2VzGAEgAygLMiIubG9hbXMuY29sbGVjdGlvbi52MS5OYW1lc3BhY2VJbmZvEhcKD25leHRfcGFnZV90b2tlbhgCIAEoCSJoCg1OYW1lc3BhY2VJbmZvEhEKCW5hbWVzcGFjZRgBIAEoCRIUCgxuYW1lc3BhY2VfaWQYAiABKAQSGAoQY29sbGVjdGlvbl9jb3VudBgDIAEoDRIUCgxzdHJlYW1fY291bnQYBCABKA0iiwEKF0NyZWF0ZUNvbGxlY3Rpb25SZXF1ZXN0EhEKCW5hbWVzcGFjZRgBIAEoCRIMCgRuYW1lGAIgASgJEicKBnNjaGVtYRgDIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QSFwoKcGFydGl0aW9ucxgEIAEoDUgAiAEBQg0KC19wYXJ0aXRpb25zIlIKFkxpc3RDb2xsZWN0aW9uc1JlcXVlc3QSEQoJbmFtZXNwYWNlGAEgASgJEhEKCXBhZ2Vfc2l6ZRgCIAEoBRISCgpwYWdlX3Rva2VuGAMgASgJImwKF0xpc3RDb2xsZWN0aW9uc1Jlc3BvbnNlEjgKC2NvbGxlY3Rpb25zGAEgAygLMiMubG9hbXMuY29sbGVjdGlvbi52MS5Db2xsZWN0aW9uSW5mbxIXCg9uZXh0X3BhZ2VfdG9rZW4YAiABKAkiPQoUR2V0Q29sbGVjdGlvblJlcXVlc3QSEQoJbmFtZXNwYWNlGAEgASgJEhIKCmNvbGxlY3Rpb24YAiABKAkiPgoVRHJvcENvbGxlY3Rpb25SZXF1ZXN0EhEKCW5hbWVzcGFjZRgBIAEoCRISCgpjb2xsZWN0aW9uGAIgASgJIikKFkRyb3BDb2xsZWN0aW9uUmVzcG9uc2USDwoHZHJvcHBlZBgBIAEoCCKNAgoQQWRkRmllbGRzUmVxdWVzdBIRCgluYW1lc3BhY2UYASABKAkSEgoKY29sbGVjdGlvbhgCIAEoCRInCgZmaWVsZHMYAyADKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0EigKB3ZlY3RvcnMYBCADKAsyFy5nb29nbGUucHJvdG9idWYuU3RydWN0EksKC2Fubm90YXRpb25zGAUgAygLMjYubG9hbXMuY29sbGVjdGlvbi52MS5BZGRGaWVsZHNSZXF1ZXN0LkFubm90YXRpb25zRW50cnkaMgoQQW5ub3RhdGlvbnNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBIjwKEUFkZEZpZWxkc1Jlc3BvbnNlEicKBnNjaGVtYRgBIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QiYwoTTGlzdFZlcnNpb25zUmVxdWVzdBIRCgluYW1lc3BhY2UYASABKAkSEgoKY29sbGVjdGlvbhgCIAEoCRIRCglwYWdlX3NpemUYAyABKAUSEgoKcGFnZV90b2tlbhgEIAEoCSJnChRMaXN0VmVyc2lvbnNSZXNwb25zZRI2Cgh2ZXJzaW9ucxgBIAMoCzIkLmxvYW1zLmNvbGxlY3Rpb24udjEuTWFuaWZlc3RWZXJzaW9uEhcKD25leHRfcGFnZV90b2tlbhgCIAEoCSJ8Cg9NYW5pZmVzdFZlcnNpb24SDwoHdmVyc2lvbhgBIAEoBBIVCg1jcmVhdGVkX2F0X21zGAIgASgEEhIKCnNpemVfYnl0ZXMYAyABKAQSFgoObGl2ZV9kb2NfY291bnQYBCABKAQSFQoNbGFuY2VfdmVyc2lvbhgFIAEoBCJgCgtTY2FuUmVxdWVzdBIRCgluYW1lc3BhY2UYASABKAkSEgoKY29sbGVjdGlvbhgCIAEoCRIqCgJhdBgDIAEoCzIeLmxvYW1zLmNvbGxlY3Rpb24udjEuU2NhblBvaW50IkEKCVNjYW5Qb2ludBIaChBtYW5pZmVzdF92ZXJzaW9uGAEgASgESAASDwoFdG9rZW4YAiABKAlIAEIHCgVwb2ludCJcChRVcGRhdGVBbGlhc2VzUmVxdWVzdBIRCgluYW1lc3BhY2UYASABKAkSMQoHYWN0aW9ucxgCIAMoCzIgLmxvYW1zLmNvbGxlY3Rpb24udjEuQWxpYXNBY3Rpb24ifwoLQWxpYXNBY3Rpb24SMgoGY3JlYXRlGAEgASgLMiAubG9hbXMuY29sbGVjdGlvbi52MS5DcmVhdGVBbGlhc0gAEjIKBmRlbGV0ZRgCIAEoCzIgLmxvYW1zLmNvbGxlY3Rpb24udjEuRGVsZXRlQWxpYXNIAEIICgZhY3Rpb24iMAoLQ3JlYXRlQWxpYXMSDQoFYWxpYXMYASABKAkSEgoKY29sbGVjdGlvbhgCIAEoCSIcCgtEZWxldGVBbGlhcxINCgVhbGlhcxgBIAEoCSIXChVVcGRhdGVBbGlhc2VzUmVzcG9uc2UiYwoNU2V0SG90UmVxdWVzdBIRCgluYW1lc3BhY2UYASABKAkSEgoKY29sbGVjdGlvbhgCIAEoCRIrCgNob3QYAyABKAsyHi5sb2Ftcy5jb2xsZWN0aW9uLnYxLkhvdENvbmZpZyI9Cg5TZXRIb3RSZXNwb25zZRIrCgNob3QYASABKAsyHi5sb2Ftcy5jb2xsZWN0aW9uLnYxLkhvdFN0YXR1cyI+ChVXYXJtQ29sbGVjdGlvblJlcXVlc3QSEQoJbmFtZXNwYWNlGAEgASgJEhIKCmNvbGxlY3Rpb24YAiABKAkiGAoWV2FybUNvbGxlY3Rpb25SZXNwb25zZSI9CglIb3RDb25maWcSDwoHdmVjdG9ycxgBIAEoCBIMCgR0ZXh0GAIgASgIEhEKCWZyYWdtZW50cxgDIAEoCCKXAwoOQ29sbGVjdGlvbkluZm8SCgoCaWQYASABKAQSDAoEbmFtZRgCIAEoCRIRCgluYW1lc3BhY2UYAyABKAkSJwoGc2NoZW1hGAQgASgLMhcuZ29vZ2xlLnByb3RvYnVmLlN0cnVjdBISCgpwYXJ0aXRpb25zGAUgASgNEg8KB2FsaWFzZXMYBiADKAkSDgoGc3RyZWFtGAcgASgEEhgKEG1hbmlmZXN0X3ZlcnNpb24YCCABKAQSFgoObGl2ZV9kb2NfY291bnQYCSABKAQSEgoKc2l6ZV9ieXRlcxgKIAEoBBIVCg1jcmVhdGVkX2F0X21zGAsgASgEEhgKEGxpbmtfbGFnX3JlY29yZHMYDCABKAQSKwoDaG90GA0gASgLMh4ubG9hbXMuY29sbGVjdGlvbi52MS5Ib3RTdGF0dXMSFwoPdW5hcHBsaWVkX2J5dGVzGA4gASgEEj0KDGJhY2twcmVzc3VyZRgPIAEoCzInLmxvYW1zLmNvbGxlY3Rpb24udjEuQmFja3ByZXNzdXJlU3RhdHVzIrsBChJCYWNrcHJlc3N1cmVTdGF0dXMSNQoFc3RhdGUYASABKA4yJi5sb2Ftcy5jb2xsZWN0aW9uLnYxLkJhY2twcmVzc3VyZVN0YXRlEhkKEXVuYXBwbGllZF9yZWNvcmRzGAIgASgEEhcKD3VuYXBwbGllZF9ieXRlcxgDIAEoBBIdChVtYXhfdW5hcHBsaWVkX3JlY29yZHMYBCABKAQSGwoTbWF4X3VuYXBwbGllZF9ieXRlcxgFIAEoBCLKAgoJSG90U3RhdHVzEg8KB2VuYWJsZWQYASABKAgSLgoGY29uZmlnGAIgASgLMh4ubG9hbXMuY29sbGVjdGlvbi52MS5Ib3RDb25maWcSDwoHcGluX2FsbBgDIAEoCBIQCghwcm9tb3RlZBgEIAEoCBIsCgVvd25lchgFIAEoCzIdLmxvYW1zLmNvbGxlY3Rpb24udjEuSG90T3duZXISOAoHdmVjdG9ycxgGIAEoCzInLmxvYW1zLmNvbGxlY3Rpb24udjEuSG90U3RydWN0dXJlU3RhdHVzEjUKBHRleHQYByABKAsyJy5sb2Ftcy5jb2xsZWN0aW9uLnYxLkhvdFN0cnVjdHVyZVN0YXR1cxI6CglmcmFnbWVudHMYCCABKAsyJy5sb2Ftcy5jb2xsZWN0aW9uLnYxLkhvdFN0cnVjdHVyZVN0YXR1cyIqCghIb3RPd25lchIPCgdub2RlX2lkGAEgASgEEg0KBWxvY2FsGAIgASgIIvgCChJIb3RTdHJ1Y3R1cmVTdGF0dXMSMAoFc3RhdGUYASABKA4yIS5sb2Ftcy5jb2xsZWN0aW9uLnYxLkhvdFN0YXRlS2luZBIbCg5zb3VyY2VfdmVyc2lvbhgCIAEoBEgAiAEBEhMKC292ZXJfYnVkZ2V0GAMgASgIEkUKB2NvbHVtbnMYBCADKAsyNC5sb2Ftcy5jb2xsZWN0aW9uLnYxLkhvdFN0cnVjdHVyZVN0YXR1cy5Db2x1bW5zRW50cnkSFQoNcGlubmVkX3NwbGl0cxgFIAEoBBIOCgZzcGxpdHMYBiABKAQSGAoQcHJlZmV0Y2hlZF9ieXRlcxgHIAEoBBINCgVieXRlcxgIIAEoBBpUCgxDb2x1bW5zRW50cnkSCwoDa2V5GAEgASgJEjMKBXZhbHVlGAIgASgLMiQubG9hbXMuY29sbGVjdGlvbi52MS5Ib3RDb2x1bW5TdGF0dXM6AjgBQhEKD19zb3VyY2VfdmVyc2lvbiLYAQoPSG90Q29sdW1uU3RhdHVzEjAKBXN0YXRlGAEgASgOMiEubG9hbXMuY29sbGVjdGlvbi52MS5Ib3RTdGF0ZUtpbmQSGwoOc291cmNlX3ZlcnNpb24YAiABKARIAIgBARIkChdhcnRpZmFjdF9zb3VyY2VfdmVyc2lvbhgDIAEoBEgBiAEBEhIKCmRlbHRhX3Jvd3MYBCABKAQSDQoFZXJyb3IYBSABKAlCEQoPX3NvdXJjZV92ZXJzaW9uQhoKGF9hcnRpZmFjdF9zb3VyY2VfdmVyc2lvbiKdBAoIU2NhblBsYW4SEQoJbmFtZXNwYWNlGAEgASgJEhIKCmNvbGxlY3Rpb24YAiABKAkSFQoNY29sbGVjdGlvbl9pZBgDIAEoBBIYChBtYW5pZmVzdF92ZXJzaW9uGAQgASgEEhYKDnNjaGVtYV92ZXJzaW9uGAUgASgEEjMKBWxhbmNlGAYgASgLMiQubG9hbXMuY29sbGVjdGlvbi52MS5MYW5jZVZlcnNpb25SZWYSNAoJZnJhZ21lbnRzGAcgAygLMiEubG9hbXMuY29sbGVjdGlvbi52MS5TY2FuRnJhZ21lbnQSEQoJbGl2ZV9yb3dzGAggASgEEjAKB2NvbHVtbnMYCSADKAsyHy5sb2Ftcy5jb2xsZWN0aW9uLnYxLlNjYW5Db2x1bW4SEwoLcGtfZW5jb2RpbmcYCiABKAkSDAoEdGFpbBgLIAEoCBIUCgx0YWlsX3JlY29yZHMYDCABKAQSMQoHb2Zmc2V0cxgNIAMoCzIgLmxvYW1zLmNvbGxlY3Rpb24udjEuU2Nhbk9mZnNldHMSFQoNZHVyYWJsZV90b2tlbhgOIAEoCRIpCgNwaW4YDyABKAsyHC5sb2Ftcy5jb2xsZWN0aW9uLnYxLlNjYW5QaW4SFQoNcGxhbm5lZF9hdF9tcxgQIAEoBBIaCg1leHBpcmVzX2F0X21zGBEgASgESACIAQFCEAoOX2V4cGlyZXNfYXRfbXMigwEKD0xhbmNlVmVyc2lvblJlZhIQCgN1cmkYASABKAlIAIgBARIPCgd2ZXJzaW9uGAIgASgEEhUKDW1hbmlmZXN0X3BhdGgYAyABKAkSFgoOc3RvcmFnZV9mb3JtYXQYBCABKAkSFgoOc3RhYmxlX3Jvd19pZHMYBSABKAhCBgoEX3VyaSLuAQoMU2NhbkZyYWdtZW50EgoKAmlkGAEgASgEEhUKDXBoeXNpY2FsX3Jvd3MYAiABKAQSFAoMZGVsZXRlZF9yb3dzGAMgASgEEhEKCWxpdmVfcm93cxgEIAEoBBIsCgVmaWxlcxgFIAMoCzIdLmxvYW1zLmNvbGxlY3Rpb24udjEuU2NhbkZpbGUSPAoNZGVsZXRpb25fZmlsZRgGIAEoCzIlLmxvYW1zLmNvbGxlY3Rpb24udjEuU2NhbkRlbGV0aW9uRmlsZRImCgVsYW5jZRgHIAEoCzIXLmdvb2dsZS5wcm90b2J1Zi5TdHJ1Y3QiQAoIU2NhbkZpbGUSDAoEcGF0aBgBIAEoCRIXCgpzaXplX2J5dGVzGAIgASgESACIAQFCDQoLX3NpemVfYnl0ZXMiZwoQU2NhbkRlbGV0aW9uRmlsZRIMCgRwYXRoGAEgASgJEi8KBGtpbmQYAiABKA4yIS5sb2Ftcy5jb2xsZWN0aW9uLnYxLkRlbGV0aW9uS2luZBIUCgxkZWxldGVkX3Jvd3MYAyABKAQivQEKClNjYW5Db2x1bW4SDAoEbmFtZRgBIAEoCRIRCglkYXRhX3R5cGUYAiABKAkSDAoEcm9sZRgDIAEoCRITCgZ2ZWN0b3IYBCABKAlIAIgBARIQCgNkaW0YBSABKA1IAYgBARIVCghkaXN0YW5jZRgGIAEoCUgCiAEBEhUKCG1vZGlmaWVyGAcgASgJSAOIAQFCCQoHX3ZlY3RvckIGCgRfZGltQgsKCV9kaXN0YW5jZUILCglfbW9kaWZpZXIiQQoLU2Nhbk9mZnNldHMSEQoJcGFydGl0aW9uGAEgASgNEg8KB2FwcGxpZWQYAiABKAQSDgoGdGFyZ2V0GAMgASgEIjIKB1NjYW5QaW4SGAoQbWFuaWZlc3RfdmVyc2lvbhgBIAEoBBINCgV0b2tlbhgCIAEoCSqYAQoRQmFja3ByZXNzdXJlU3RhdGUSIgoeQkFDS1BSRVNTVVJFX1NUQVRFX1VOU1BFQ0lGSUVEEAASGwoXQkFDS1BSRVNTVVJFX1NUQVRFX09QRU4QARIhCh1CQUNLUFJFU1NVUkVfU1RBVEVfVEhST1RUTElORxACEh8KG0JBQ0tQUkVTU1VSRV9TVEFURV9ESVNBQkxFRBADKn0KDEhvdFN0YXRlS2luZBIeChpIT1RfU1RBVEVfS0lORF9VTlNQRUNJRklFRBAAEhYKEkhPVF9TVEFURV9LSU5EX09GRhABEhsKF0hPVF9TVEFURV9LSU5EX0JVSUxESU5HEAISGAoUSE9UX1NUQVRFX0tJTkRfUkVBRFkQAypgCgxEZWxldGlvbktpbmQSHQoZREVMRVRJT05fS0lORF9VTlNQRUNJRklFRBAAEhcKE0RFTEVUSU9OX0tJTkRfQVJSQVkQARIYChRERUxFVElPTl9LSU5EX0JJVE1BUBACMsYCChBOYW1lc3BhY2VTZXJ2aWNlEm4KD0NyZWF0ZU5hbWVzcGFjZRIrLmxvYW1zLmNvbGxlY3Rpb24udjEuQ3JlYXRlTmFtZXNwYWNlUmVxdWVzdBosLmxvYW1zLmNvbGxlY3Rpb24udjEuQ3JlYXRlTmFtZXNwYWNlUmVzcG9uc2UiABJuCg5MaXN0TmFtZXNwYWNlcxIqLmxvYW1zLmNvbGxlY3Rpb24udjEuTGlzdE5hbWVzcGFjZXNSZXF1ZXN0GisubG9hbXMuY29sbGVjdGlvbi52MS5MaXN0TmFtZXNwYWNlc1Jlc3BvbnNlIgOQAgEaUoq1GE4KC2NvbGxlY3Rpb25zEj9OYW1lc3BhY2VzOiB0aGUgY29udGFpbmVyIGV2ZXJ5IGNvbGxlY3Rpb24gYW5kIHN0cmVhbSBsaXZlcyBpbi4y2ggKEUNvbGxlY3Rpb25TZXJ2aWNlEmcKEENyZWF0ZUNvbGxlY3Rpb24SLC5sb2Ftcy5jb2xsZWN0aW9uLnYxLkNyZWF0ZUNvbGxlY3Rpb25SZXF1ZXN0GiMubG9hbXMuY29sbGVjdGlvbi52MS5Db2xsZWN0aW9uSW5mbyIAEnEKD0xpc3RDb2xsZWN0aW9ucxIrLmxvYW1zLmNvbGxlY3Rpb24udjEuTGlzdENvbGxlY3Rpb25zUmVxdWVzdBosLmxvYW1zLmNvbGxlY3Rpb24udjEuTGlzdENvbGxlY3Rpb25zUmVzcG9uc2UiA5ACARJkCg1HZXRDb2xsZWN0aW9uEikubG9hbXMuY29sbGVjdGlvbi52MS5HZXRDb2xsZWN0aW9uUmVxdWVzdBojLmxvYW1zLmNvbGxlY3Rpb24udjEuQ29sbGVjdGlvbkluZm8iA5ACARJrCg5Ecm9wQ29sbGVjdGlvbhIqLmxvYW1zLmNvbGxlY3Rpb24udjEuRHJvcENvbGxlY3Rpb25SZXF1ZXN0GisubG9hbXMuY29sbGVjdGlvbi52MS5Ecm9wQ29sbGVjdGlvblJlc3BvbnNlIgASXAoJQWRkRmllbGRzEiUubG9hbXMuY29sbGVjdGlvbi52MS5BZGRGaWVsZHNSZXF1ZXN0GiYubG9hbXMuY29sbGVjdGlvbi52MS5BZGRGaWVsZHNSZXNwb25zZSIAEmgKDExpc3RWZXJzaW9ucxIoLmxvYW1zLmNvbGxlY3Rpb24udjEuTGlzdFZlcnNpb25zUmVxdWVzdBopLmxvYW1zLmNvbGxlY3Rpb24udjEuTGlzdFZlcnNpb25zUmVzcG9uc2UiA5ACARJJCgRTY2FuEiAubG9hbXMuY29sbGVjdGlvbi52MS5TY2FuUmVxdWVzdBodLmxvYW1zLmNvbGxlY3Rpb24udjEuU2NhblBsYW4iABJoCg1VcGRhdGVBbGlhc2VzEikubG9hbXMuY29sbGVjdGlvbi52MS5VcGRhdGVBbGlhc2VzUmVxdWVzdBoqLmxvYW1zLmNvbGxlY3Rpb24udjEuVXBkYXRlQWxpYXNlc1Jlc3BvbnNlIgASUwoGU2V0SG90EiIubG9hbXMuY29sbGVjdGlvbi52MS5TZXRIb3RSZXF1ZXN0GiMubG9hbXMuY29sbGVjdGlvbi52MS5TZXRIb3RSZXNwb25zZSIAEmsKDldhcm1Db2xsZWN0aW9uEioubG9hbXMuY29sbGVjdGlvbi52MS5XYXJtQ29sbGVjdGlvblJlcXVlc3QaKy5sb2Ftcy5jb2xsZWN0aW9uLnYxLldhcm1Db2xsZWN0aW9uUmVzcG9uc2UiABpXirUYUwoLY29sbGVjdGlvbnMSRENvbGxlY3Rpb25zOiBzY2hlbWEsIGFsaWFzZXMsIHZlcnNpb25zLCBzY2FuIHBsYW5zIGFuZCB0aGUgaG90IHRpZXIuYgZwcm90bzM", [file_google_protobuf_struct, file_loams_options_v1_options]);
 
 /**
  * @generated from message loams.collection.v1.CreateNamespaceRequest
@@ -144,6 +144,101 @@ export const CreateNamespaceResponseSchema: GenMessage<CreateNamespaceResponse> 
   messageDesc(file_loams_collection_v1_collection, 1);
 
 /**
+ * @generated from message loams.collection.v1.ListNamespacesRequest
+ */
+export type ListNamespacesRequest = Message<"loams.collection.v1.ListNamespacesRequest"> & {
+  /**
+   * AIP-158 page size; 0 or absent is every namespace that fits.
+   *
+   * @generated from field: int32 page_size = 1;
+   */
+  pageSize: number;
+
+  /**
+   * The `next_page_token` of the previous page; absent starts at the first.
+   *
+   * @generated from field: string page_token = 2;
+   */
+  pageToken: string;
+};
+
+/**
+ * Describes the message loams.collection.v1.ListNamespacesRequest.
+ * Use `create(ListNamespacesRequestSchema)` to create a new message.
+ */
+export const ListNamespacesRequestSchema: GenMessage<ListNamespacesRequest> = /*@__PURE__*/
+  messageDesc(file_loams_collection_v1_collection, 2);
+
+/**
+ * @generated from message loams.collection.v1.ListNamespacesResponse
+ */
+export type ListNamespacesResponse = Message<"loams.collection.v1.ListNamespacesResponse"> & {
+  /**
+   * By name.
+   *
+   * @generated from field: repeated loams.collection.v1.NamespaceInfo namespaces = 1;
+   */
+  namespaces: NamespaceInfo[];
+
+  /**
+   * Absent on the last page.
+   *
+   * @generated from field: string next_page_token = 2;
+   */
+  nextPageToken: string;
+};
+
+/**
+ * Describes the message loams.collection.v1.ListNamespacesResponse.
+ * Use `create(ListNamespacesResponseSchema)` to create a new message.
+ */
+export const ListNamespacesResponseSchema: GenMessage<ListNamespacesResponse> = /*@__PURE__*/
+  messageDesc(file_loams_collection_v1_collection, 3);
+
+/**
+ * One namespace, as `ListNamespaces` answers it.
+ *
+ * @generated from message loams.collection.v1.NamespaceInfo
+ */
+export type NamespaceInfo = Message<"loams.collection.v1.NamespaceInfo"> & {
+  /**
+   * The namespace's name.
+   *
+   * @generated from field: string namespace = 1;
+   */
+  namespace: string;
+
+  /**
+   * Its id, stable for the life of the namespace. A decimal string in JSON.
+   *
+   * @generated from field: uint64 namespace_id = 2;
+   */
+  namespaceId: bigint;
+
+  /**
+   * How many collections it holds (absent: none).
+   *
+   * @generated from field: uint32 collection_count = 3;
+   */
+  collectionCount: number;
+
+  /**
+   * How many streams it holds, a collection's own implicit stream and the
+   * engine's internal streams (names starting with `_`) not counted.
+   *
+   * @generated from field: uint32 stream_count = 4;
+   */
+  streamCount: number;
+};
+
+/**
+ * Describes the message loams.collection.v1.NamespaceInfo.
+ * Use `create(NamespaceInfoSchema)` to create a new message.
+ */
+export const NamespaceInfoSchema: GenMessage<NamespaceInfo> = /*@__PURE__*/
+  messageDesc(file_loams_collection_v1_collection, 4);
+
+/**
  * @generated from message loams.collection.v1.CreateCollectionRequest
  */
 export type CreateCollectionRequest = Message<"loams.collection.v1.CreateCollectionRequest"> & {
@@ -180,7 +275,7 @@ export type CreateCollectionRequest = Message<"loams.collection.v1.CreateCollect
  * Use `create(CreateCollectionRequestSchema)` to create a new message.
  */
 export const CreateCollectionRequestSchema: GenMessage<CreateCollectionRequest> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 2);
+  messageDesc(file_loams_collection_v1_collection, 5);
 
 /**
  * @generated from message loams.collection.v1.ListCollectionsRequest
@@ -211,7 +306,7 @@ export type ListCollectionsRequest = Message<"loams.collection.v1.ListCollection
  * Use `create(ListCollectionsRequestSchema)` to create a new message.
  */
 export const ListCollectionsRequestSchema: GenMessage<ListCollectionsRequest> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 3);
+  messageDesc(file_loams_collection_v1_collection, 6);
 
 /**
  * @generated from message loams.collection.v1.ListCollectionsResponse
@@ -237,7 +332,7 @@ export type ListCollectionsResponse = Message<"loams.collection.v1.ListCollectio
  * Use `create(ListCollectionsResponseSchema)` to create a new message.
  */
 export const ListCollectionsResponseSchema: GenMessage<ListCollectionsResponse> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 4);
+  messageDesc(file_loams_collection_v1_collection, 7);
 
 /**
  * @generated from message loams.collection.v1.GetCollectionRequest
@@ -261,7 +356,7 @@ export type GetCollectionRequest = Message<"loams.collection.v1.GetCollectionReq
  * Use `create(GetCollectionRequestSchema)` to create a new message.
  */
 export const GetCollectionRequestSchema: GenMessage<GetCollectionRequest> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 5);
+  messageDesc(file_loams_collection_v1_collection, 8);
 
 /**
  * @generated from message loams.collection.v1.DropCollectionRequest
@@ -285,7 +380,7 @@ export type DropCollectionRequest = Message<"loams.collection.v1.DropCollectionR
  * Use `create(DropCollectionRequestSchema)` to create a new message.
  */
 export const DropCollectionRequestSchema: GenMessage<DropCollectionRequest> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 6);
+  messageDesc(file_loams_collection_v1_collection, 9);
 
 /**
  * @generated from message loams.collection.v1.DropCollectionResponse
@@ -305,7 +400,7 @@ export type DropCollectionResponse = Message<"loams.collection.v1.DropCollection
  * Use `create(DropCollectionResponseSchema)` to create a new message.
  */
 export const DropCollectionResponseSchema: GenMessage<DropCollectionResponse> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 7);
+  messageDesc(file_loams_collection_v1_collection, 10);
 
 /**
  * @generated from message loams.collection.v1.AddFieldsRequest
@@ -352,7 +447,7 @@ export type AddFieldsRequest = Message<"loams.collection.v1.AddFieldsRequest"> &
  * Use `create(AddFieldsRequestSchema)` to create a new message.
  */
 export const AddFieldsRequestSchema: GenMessage<AddFieldsRequest> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 8);
+  messageDesc(file_loams_collection_v1_collection, 11);
 
 /**
  * @generated from message loams.collection.v1.AddFieldsResponse
@@ -371,7 +466,7 @@ export type AddFieldsResponse = Message<"loams.collection.v1.AddFieldsResponse">
  * Use `create(AddFieldsResponseSchema)` to create a new message.
  */
 export const AddFieldsResponseSchema: GenMessage<AddFieldsResponse> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 9);
+  messageDesc(file_loams_collection_v1_collection, 12);
 
 /**
  * @generated from message loams.collection.v1.ListVersionsRequest
@@ -405,7 +500,7 @@ export type ListVersionsRequest = Message<"loams.collection.v1.ListVersionsReque
  * Use `create(ListVersionsRequestSchema)` to create a new message.
  */
 export const ListVersionsRequestSchema: GenMessage<ListVersionsRequest> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 10);
+  messageDesc(file_loams_collection_v1_collection, 13);
 
 /**
  * @generated from message loams.collection.v1.ListVersionsResponse
@@ -431,7 +526,7 @@ export type ListVersionsResponse = Message<"loams.collection.v1.ListVersionsResp
  * Use `create(ListVersionsResponseSchema)` to create a new message.
  */
 export const ListVersionsResponseSchema: GenMessage<ListVersionsResponse> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 11);
+  messageDesc(file_loams_collection_v1_collection, 14);
 
 /**
  * One retained manifest of a collection.
@@ -480,7 +575,7 @@ export type ManifestVersion = Message<"loams.collection.v1.ManifestVersion"> & {
  * Use `create(ManifestVersionSchema)` to create a new message.
  */
 export const ManifestVersionSchema: GenMessage<ManifestVersion> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 12);
+  messageDesc(file_loams_collection_v1_collection, 15);
 
 /**
  * @generated from message loams.collection.v1.ScanRequest
@@ -515,7 +610,7 @@ export type ScanRequest = Message<"loams.collection.v1.ScanRequest"> & {
  * Use `create(ScanRequestSchema)` to create a new message.
  */
 export const ScanRequestSchema: GenMessage<ScanRequest> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 13);
+  messageDesc(file_loams_collection_v1_collection, 16);
 
 /**
  * The state a scan plans: absent is the live manifest.
@@ -552,7 +647,7 @@ export type ScanPoint = Message<"loams.collection.v1.ScanPoint"> & {
  * Use `create(ScanPointSchema)` to create a new message.
  */
 export const ScanPointSchema: GenMessage<ScanPoint> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 14);
+  messageDesc(file_loams_collection_v1_collection, 17);
 
 /**
  * @generated from message loams.collection.v1.UpdateAliasesRequest
@@ -576,7 +671,7 @@ export type UpdateAliasesRequest = Message<"loams.collection.v1.UpdateAliasesReq
  * Use `create(UpdateAliasesRequestSchema)` to create a new message.
  */
 export const UpdateAliasesRequestSchema: GenMessage<UpdateAliasesRequest> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 15);
+  messageDesc(file_loams_collection_v1_collection, 18);
 
 /**
  * One alias change. A proto oneof, so the JSON is the REST route's
@@ -612,7 +707,7 @@ export type AliasAction = Message<"loams.collection.v1.AliasAction"> & {
  * Use `create(AliasActionSchema)` to create a new message.
  */
 export const AliasActionSchema: GenMessage<AliasAction> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 16);
+  messageDesc(file_loams_collection_v1_collection, 19);
 
 /**
  * @generated from message loams.collection.v1.CreateAlias
@@ -636,7 +731,7 @@ export type CreateAlias = Message<"loams.collection.v1.CreateAlias"> & {
  * Use `create(CreateAliasSchema)` to create a new message.
  */
 export const CreateAliasSchema: GenMessage<CreateAlias> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 17);
+  messageDesc(file_loams_collection_v1_collection, 20);
 
 /**
  * @generated from message loams.collection.v1.DeleteAlias
@@ -653,7 +748,7 @@ export type DeleteAlias = Message<"loams.collection.v1.DeleteAlias"> & {
  * Use `create(DeleteAliasSchema)` to create a new message.
  */
 export const DeleteAliasSchema: GenMessage<DeleteAlias> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 18);
+  messageDesc(file_loams_collection_v1_collection, 21);
 
 /**
  * @generated from message loams.collection.v1.UpdateAliasesResponse
@@ -666,7 +761,7 @@ export type UpdateAliasesResponse = Message<"loams.collection.v1.UpdateAliasesRe
  * Use `create(UpdateAliasesResponseSchema)` to create a new message.
  */
 export const UpdateAliasesResponseSchema: GenMessage<UpdateAliasesResponse> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 19);
+  messageDesc(file_loams_collection_v1_collection, 22);
 
 /**
  * @generated from message loams.collection.v1.SetHotRequest
@@ -698,7 +793,7 @@ export type SetHotRequest = Message<"loams.collection.v1.SetHotRequest"> & {
  * Use `create(SetHotRequestSchema)` to create a new message.
  */
 export const SetHotRequestSchema: GenMessage<SetHotRequest> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 20);
+  messageDesc(file_loams_collection_v1_collection, 23);
 
 /**
  * @generated from message loams.collection.v1.SetHotResponse
@@ -717,7 +812,7 @@ export type SetHotResponse = Message<"loams.collection.v1.SetHotResponse"> & {
  * Use `create(SetHotResponseSchema)` to create a new message.
  */
 export const SetHotResponseSchema: GenMessage<SetHotResponse> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 21);
+  messageDesc(file_loams_collection_v1_collection, 24);
 
 /**
  * @generated from message loams.collection.v1.WarmCollectionRequest
@@ -741,7 +836,7 @@ export type WarmCollectionRequest = Message<"loams.collection.v1.WarmCollectionR
  * Use `create(WarmCollectionRequestSchema)` to create a new message.
  */
 export const WarmCollectionRequestSchema: GenMessage<WarmCollectionRequest> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 22);
+  messageDesc(file_loams_collection_v1_collection, 25);
 
 /**
  * @generated from message loams.collection.v1.WarmCollectionResponse
@@ -754,7 +849,7 @@ export type WarmCollectionResponse = Message<"loams.collection.v1.WarmCollection
  * Use `create(WarmCollectionResponseSchema)` to create a new message.
  */
 export const WarmCollectionResponseSchema: GenMessage<WarmCollectionResponse> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 23);
+  messageDesc(file_loams_collection_v1_collection, 26);
 
 /**
  * What to keep hot for a collection (M1.3 Task 8 rule 1).
@@ -783,7 +878,7 @@ export type HotConfig = Message<"loams.collection.v1.HotConfig"> & {
  * Use `create(HotConfigSchema)` to create a new message.
  */
 export const HotConfigSchema: GenMessage<HotConfig> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 24);
+  messageDesc(file_loams_collection_v1_collection, 27);
 
 /**
  * One collection, as `GetCollection` and the collection-carrying list RPCs
@@ -909,7 +1004,7 @@ export type CollectionInfo = Message<"loams.collection.v1.CollectionInfo"> & {
  * Use `create(CollectionInfoSchema)` to create a new message.
  */
 export const CollectionInfoSchema: GenMessage<CollectionInfo> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 25);
+  messageDesc(file_loams_collection_v1_collection, 28);
 
 /**
  * The unapplied-data budget and admission's answer under it (D86).
@@ -948,7 +1043,7 @@ export type BackpressureStatus = Message<"loams.collection.v1.BackpressureStatus
  * Use `create(BackpressureStatusSchema)` to create a new message.
  */
 export const BackpressureStatusSchema: GenMessage<BackpressureStatus> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 26);
+  messageDesc(file_loams_collection_v1_collection, 29);
 
 /**
  * The hot tier's status for one collection, as the node that owns it
@@ -1016,7 +1111,7 @@ export type HotStatus = Message<"loams.collection.v1.HotStatus"> & {
  * Use `create(HotStatusSchema)` to create a new message.
  */
 export const HotStatusSchema: GenMessage<HotStatus> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 27);
+  messageDesc(file_loams_collection_v1_collection, 30);
 
 /**
  * @generated from message loams.collection.v1.HotOwner
@@ -1043,7 +1138,7 @@ export type HotOwner = Message<"loams.collection.v1.HotOwner"> & {
  * Use `create(HotOwnerSchema)` to create a new message.
  */
 export const HotOwnerSchema: GenMessage<HotOwner> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 28);
+  messageDesc(file_loams_collection_v1_collection, 31);
 
 /**
  * One hot structure's state. A single message serves `vectors`, `text` and
@@ -1114,7 +1209,7 @@ export type HotStructureStatus = Message<"loams.collection.v1.HotStructureStatus
  * Use `create(HotStructureStatusSchema)` to create a new message.
  */
 export const HotStructureStatusSchema: GenMessage<HotStructureStatus> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 29);
+  messageDesc(file_loams_collection_v1_collection, 32);
 
 /**
  * One vector column's hot state, the minimum of which is the structure's.
@@ -1160,7 +1255,7 @@ export type HotColumnStatus = Message<"loams.collection.v1.HotColumnStatus"> & {
  * Use `create(HotColumnStatusSchema)` to create a new message.
  */
 export const HotColumnStatusSchema: GenMessage<HotColumnStatus> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 30);
+  messageDesc(file_loams_collection_v1_collection, 33);
 
 /**
  * One state of a collection, resolved into what an external reader needs to
@@ -1293,7 +1388,7 @@ export type ScanPlan = Message<"loams.collection.v1.ScanPlan"> & {
  * Use `create(ScanPlanSchema)` to create a new message.
  */
 export const ScanPlanSchema: GenMessage<ScanPlan> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 31);
+  messageDesc(file_loams_collection_v1_collection, 34);
 
 /**
  * The Lance version a manifest names.
@@ -1344,7 +1439,7 @@ export type LanceVersionRef = Message<"loams.collection.v1.LanceVersionRef"> & {
  * Use `create(LanceVersionRefSchema)` to create a new message.
  */
 export const LanceVersionRefSchema: GenMessage<LanceVersionRef> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 32);
+  messageDesc(file_loams_collection_v1_collection, 35);
 
 /**
  * One Lance fragment of the planned version.
@@ -1401,7 +1496,7 @@ export type ScanFragment = Message<"loams.collection.v1.ScanFragment"> & {
  * Use `create(ScanFragmentSchema)` to create a new message.
  */
 export const ScanFragmentSchema: GenMessage<ScanFragment> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 33);
+  messageDesc(file_loams_collection_v1_collection, 36);
 
 /**
  * @generated from message loams.collection.v1.ScanFile
@@ -1425,7 +1520,7 @@ export type ScanFile = Message<"loams.collection.v1.ScanFile"> & {
  * Use `create(ScanFileSchema)` to create a new message.
  */
 export const ScanFileSchema: GenMessage<ScanFile> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 34);
+  messageDesc(file_loams_collection_v1_collection, 37);
 
 /**
  * @generated from message loams.collection.v1.ScanDeletionFile
@@ -1454,7 +1549,7 @@ export type ScanDeletionFile = Message<"loams.collection.v1.ScanDeletionFile"> &
  * Use `create(ScanDeletionFileSchema)` to create a new message.
  */
 export const ScanDeletionFileSchema: GenMessage<ScanDeletionFile> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 35);
+  messageDesc(file_loams_collection_v1_collection, 38);
 
 /**
  * One readable column of the planned Lance version.
@@ -1516,7 +1611,7 @@ export type ScanColumn = Message<"loams.collection.v1.ScanColumn"> & {
  * Use `create(ScanColumnSchema)` to create a new message.
  */
 export const ScanColumnSchema: GenMessage<ScanColumn> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 36);
+  messageDesc(file_loams_collection_v1_collection, 39);
 
 /**
  * One partition's applied offset against the requested one.
@@ -1545,7 +1640,7 @@ export type ScanOffsets = Message<"loams.collection.v1.ScanOffsets"> & {
  * Use `create(ScanOffsetsSchema)` to create a new message.
  */
 export const ScanOffsetsSchema: GenMessage<ScanOffsets> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 37);
+  messageDesc(file_loams_collection_v1_collection, 40);
 
 /**
  * What reads exactly the planned state.
@@ -1572,7 +1667,7 @@ export type ScanPin = Message<"loams.collection.v1.ScanPin"> & {
  * Use `create(ScanPinSchema)` to create a new message.
  */
 export const ScanPinSchema: GenMessage<ScanPin> = /*@__PURE__*/
-  messageDesc(file_loams_collection_v1_collection, 38);
+  messageDesc(file_loams_collection_v1_collection, 41);
 
 /**
  * @generated from enum loams.collection.v1.BackpressureState
@@ -1695,6 +1790,27 @@ export const NamespaceService: GenService<{
     methodKind: "unary";
     input: typeof CreateNamespaceRequestSchema;
     output: typeof CreateNamespaceResponseSchema;
+  },
+  /**
+   * The namespaces the caller can reach, by name (AIP-158 paged). The
+   * engine's own reserved namespace is never listed. A caller reaches a
+   * namespace by the same rules a namespace's data is reached by: the
+   * operator (sign-in off, a key from the keys file) and an org owner or
+   * admin reach every one; a member reaches the namespaces that are no
+   * project's environment and the environments their project grants give
+   * them; a credential bound to one environment reaches only that
+   * environment's namespace; anyone outside the org reaches none.
+   *
+   * The counts come from the metastore's catalog in the same read, so they
+   * cost nothing per namespace; document counts and bytes are not here,
+   * since the engine does not keep them per namespace.
+   *
+   * @generated from rpc loams.collection.v1.NamespaceService.ListNamespaces
+   */
+  listNamespaces: {
+    methodKind: "unary";
+    input: typeof ListNamespacesRequestSchema;
+    output: typeof ListNamespacesResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_loams_collection_v1_collection, 0);
