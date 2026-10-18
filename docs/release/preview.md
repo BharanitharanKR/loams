@@ -265,6 +265,82 @@ optional local `console` service. `off` is accepted only for loopback clients: t
 refuses every request that does not come from loopback, so this mode cannot be reached over
 the tailnet. Do not use it on a shared machine.
 
+### The bucket: a local directory or S3
+
+`LOAMS_BUCKET` in `.env` is where the engine keeps its data. The default,
+`file:///var/lib/loams/bucket`, is the `loams-data` volume. For an object store, set
+`LOAMS_BUCKET` to `s3://<bucket>/<prefix>` (or `gs://...`, `az://...`) and put the store's
+settings in `secrets/engine.env`, one `KEY=value` per line. The engine and the one-shot
+`migrate` service both read that file. The engine reads them the way the backends' own
+`from_env()` do: `AWS_*` for S3, `GOOGLE_*` for GCS and `AZURE_*` for Azure. At startup it logs
+the bucket, endpoint, region and where its credentials come from, never their values.
+
+The store needs conditional writes (`If-None-Match` and `If-Match` on `PUT`). AWS S3,
+Cloudflare R2, GCS, Azure, MinIO and RustFS all support them. The bucket must already exist.
+
+**AWS S3.** Without an endpoint the engine talks to AWS. On EC2 or EKS, leave out the keys
+to use the instance role (or `AWS_WEB_IDENTITY_TOKEN_FILE` and `AWS_ROLE_ARN`). Named
+profiles (`AWS_PROFILE`, `~/.aws/config`) are not read.
+
+```sh
+# .env
+LOAMS_BUCKET=s3://my-bucket/loams
+# secrets/engine.env
+AWS_ACCESS_KEY_ID=AKIA...
+AWS_SECRET_ACCESS_KEY=...
+AWS_REGION=eu-west-1
+# AWS_SESSION_TOKEN=...   for temporary credentials
+```
+
+**Cloudflare R2.** Use an R2 API token's S3 credentials and the account's endpoint. The
+region is `auto`.
+
+```sh
+LOAMS_BUCKET=s3://my-bucket/loams
+AWS_ACCESS_KEY_ID=...
+AWS_SECRET_ACCESS_KEY=...
+AWS_ENDPOINT_URL=https://<ACCOUNT_ID>.r2.cloudflarestorage.com
+AWS_REGION=auto
+```
+
+**MinIO or RustFS** (or another S3-compatible store). Requests are path style
+(`<endpoint>/<bucket>/<key>`) by default, which these stores expect. An `http://` endpoint
+allows plain HTTP by itself, so `AWS_ALLOW_HTTP=true` is optional. Set
+`AWS_ALLOW_HTTP=false` to refuse plain HTTP even then. Use plain HTTP only on a network
+you trust, such as the compose network.
+
+```sh
+LOAMS_BUCKET=s3://loams/data
+AWS_ACCESS_KEY_ID=rustfsadmin
+AWS_SECRET_ACCESS_KEY=...
+AWS_ENDPOINT_URL=http://rustfs:9000      # AWS_ENDPOINT is accepted too
+AWS_REGION=us-east-1                     # any value; these stores ignore it
+# AWS_ALLOW_HTTP=true                    # implied by an http:// endpoint
+# AWS_VIRTUAL_HOSTED_STYLE_REQUEST=true  # <bucket>.<endpoint> addressing, if your store needs it
+```
+
+**Google Cloud Storage.** Put the service account's JSON key, on one line, in
+`GOOGLE_SERVICE_ACCOUNT_KEY`. Leave it out on GCE or GKE to use the VM's or the workload's
+identity.
+
+```sh
+LOAMS_BUCKET=gs://my-bucket/loams
+GOOGLE_SERVICE_ACCOUNT_KEY={"type":"service_account",...}
+```
+
+**Azure Blob Storage.**
+
+```sh
+LOAMS_BUCKET=az://my-container/loams
+AZURE_STORAGE_ACCOUNT_NAME=myaccount
+AZURE_STORAGE_ACCOUNT_KEY=...
+```
+
+If writes fail with `Error performing PUT http://169.254.169.254`, the engine found no
+credentials and asked the cloud metadata service, which answers only on a cloud VM. Check
+that `secrets/engine.env` exists and sets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
+The engine also logs a warning at startup when an S3 bucket has an endpoint but no access key.
+
 ## BYOC: your own VM over SSH
 
 The stack is the same on a VM: one VM for a trial, or the services split across VMs that share a
