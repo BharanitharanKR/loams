@@ -55,15 +55,32 @@ describe("agentd service", () => {
 		expect((await svc.sessions()).ok).toBe(false);
 	});
 
-	it("start_refused_until_consent", async () => {
+	it("start_before_consent_runs_a_child", async () => {
 		const { svc, log } = setup({ bg: "ask" });
-		const r = await svc.start();
-		expect(r).toMatchObject({ ok: false, code: "consent_required" });
-		expect(log).toEqual([]);
+		expect((await svc.start()).ok).toBe(true);
+		expect(log).toEqual(["launch:child"]);
+		expect(svc.status().state).toBe("running");
+	});
+
+	it("start_with_background_on_runs_the_service", async () => {
+		const { svc, log } = setup({ bg: "ask" });
 		expect(svc.setBackground("on")).toEqual({ ok: true, value: undefined });
 		expect((await svc.start()).ok).toBe(true);
 		expect(log).toEqual(["bg:on", "launch:service"]);
 		expect(svc.status().state).toBe("running");
+	});
+
+	it("start_reports_why_launch_failed", async () => {
+		const { svc } = setup({ bg: "off" });
+		const failing = svc as unknown as { deps: { launch: () => Promise<void> } };
+		failing.deps.launch = async () => {
+			throw new AgentdError("unavailable", "loams-agentd is not bundled with this build");
+		};
+		expect(await svc.start()).toMatchObject({
+			ok: false,
+			code: "launch_failed",
+			message: "loams-agentd is not bundled with this build",
+		});
 	});
 
 	it("status_has_no_token_fields", async () => {

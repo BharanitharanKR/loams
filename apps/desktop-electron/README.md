@@ -39,6 +39,13 @@ Main-process pieces:
   and the page's `Authorization`, adds the daemon's token, and streams the answer back unbuffered. It re-reads
   `agentd.json` and `agentd.token` per request, and answers 503 `agentd_unavailable` when no daemon runs. The page
   never sees the token.
+- **The daemon** (`src/main/agentd`). On start main attaches to a running `loams-agentd` (`agentd.json`, `agentd.token`
+  in `<userData>/agentd`) through its Connect listener (`StudioService.GetHost`), and otherwise starts the bundled one
+  (`LOAMS_AGENTD_BIN`, else `resources/bin`, else the Cargo target in development): as the app's child
+  (`run --child`, stopped on quit, output in `agentd.log`) until the user turns background agents on, then as the
+  per-user service (`install-runtime`, `service install`). It re-checks every 5 seconds, so a daemon started outside the
+  app is picked up. `LOAMS_DESKTOP_AGENTD_AUTOSTART=0` turns the start off; `LOAMS_DESKTOP_AGENTD_MOCK=1` (development
+  only) uses the fixture daemon instead.
 - **Studio** (`src/main/agentd/studio-watch.ts`, `src/main/studio`, `src/main/preview`). Main watches the daemon's `WatchSessions`, `WatchThreads`,
   `WatchApprovals` and `WatchNotifications` itself, with the token only it holds, for the tray's Studio block (up to
   five threads, then "Open Studio") and OS notifications (only while the window is unfocused, once each; the choices
@@ -72,6 +79,10 @@ cargo build --release -p loams --features live,durable,live-tikv,graph   # the e
 pnpm --filter @loams/desktop dev                         # fetches Electron, builds the connector catalog, then electron-vite dev
 ```
 
+Electron 44 has no install script: its binary is downloaded on first use (into `~/.cache/electron`), and
+`electron-vite` does not trigger that download itself. `dev` and `preview` run `install-electron` first (a no-op once the
+binary is there); run `pnpm --filter @loams/desktop exec install-electron` before any other `electron-vite` command.
+
 Cargo output goes to the shared target directory from `~/Documents/.cargo/config.toml`; do not set `CARGO_TARGET_DIR`.
 Point the app at your build with `LOAMS_BIN=<target>/release/loams`.
 
@@ -79,10 +90,6 @@ Running against:
 
 - **The apps mock** backs the cloud console REST API and the app protos with seed data. `cargo run -p loams-apps-mock`
   serves `http://127.0.0.1:8084` (change it with `--listen`; building it needs `protoc`, see
-Electron 44 has no install script: its binary is downloaded on first use (into `~/.cache/electron`), and
-`electron-vite` does not trigger that download itself. `dev` and `preview` run `install-electron` first (a no-op once the
-binary is there); run `pnpm --filter @loams/desktop exec install-electron` before any other `electron-vite` command.
-
   [web/README.md](../../web/README.md#develop)). Add that URL as a server in the app. In a browser,
   `LOAMS_API=<url> pnpm --filter @loams/console dev` serves the console on `:5173` under `/ui/` (add `?desktop` for the
   desktop edition with the fake bridge).
@@ -159,6 +166,10 @@ pnpm nx run loams-desktop-electron:package-linux     # or package-macos / packag
 - `scripts/fetch-engine.mjs` copies the engine (`LOAMS_BIN`, else `<cargo target_directory>/release/loams`)
   into `resources/bin/` and strips the copy. Build it with
   `cargo build --release -p loams --features live,durable,live-tikv,graph`; the default build lacks `durable`, `live-tikv` (Live on TiKV) and `graph` (the Graph page, loams.graph.v1).
+  It also copies `loams-agentd` (`LOAMS_AGENTD_BIN`, else `<target>/release/loams-agentd`; build it with
+  `cargo build --release -p loams-agentd`) and writes `SHA256SUMS` and `VERSION` beside the two binaries, which
+  `loams-agentd install-runtime` checks when background agents are turned on. Without the daemon the package still
+  builds and Studio says it is not bundled; `LOAMS_REQUIRE_AGENTD=1` (the release) makes that an error.
 - Config: `electron-builder.config.cjs`. Output goes to `dist/` (git-ignored). Targets: Linux AppImage, deb,
   rpm, pacman (x64 and arm64, built natively on each runner); Windows NSIS x64; macOS dmg and zip (arm64 and x64),
   unsigned. Linux rpm needs `rpmbuild`; pacman needs `bsdtar`; deb and rpm need a glibc with `libcrypt.so.1`
@@ -171,7 +182,7 @@ pnpm nx run loams-desktop-electron:package-linux     # or package-macos / packag
   `_TSA`) to sign through Jsign (`scripts/windows-sign.cjs`). SignPath submission is a release-workflow step.
 - The package ships `NOTICE` and T3 Code's `LICENSE.t3code` in its resources folder, beside the console's own copies in
   `resources/console` (the console bundles code vendored from T3 Code, D913).
-- The package ships the console build (`web/apps/console/dist`), the stripped engine (built with `live,durable,live-tikv,graph`) in `resources/bin/`, `stacks/` (the compose files), `connectors.json`, and the tray icons (inside the asar).
+- The package ships the console build (`web/apps/console/dist`), the stripped engine (built with `live,durable,live-tikv,graph`) and agent daemon in `resources/bin/`, `stacks/` (the compose files), `connectors.json`, and the tray icons (inside the asar).
 - AppImage on a host without FUSE: `./Loams*.AppImage --appimage-extract-and-run`.
 - CI: `.github/workflows/desktop-electron.yml` (unsigned artifacts; macOS and Windows are `continue-on-error`).
 

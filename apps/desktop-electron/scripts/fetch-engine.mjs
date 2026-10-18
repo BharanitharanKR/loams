@@ -5,8 +5,23 @@
 // desktop needs for durable execution and Live on the TiKV stack, ruling T23-7, and graph, which
 // serves loams.graph.v1 to the Graph page, GR1 Task 8).
 // Never sets CARGO_TARGET_DIR: the shared target dir comes from the cargo config.
+//
+// It also bundles loams-agentd, the daemon behind Studio (0.1.0 release fix B9): LOAMS_AGENTD_BIN, else
+// <target>/release/loams-agentd[.exe]. With it come SHA256SUMS and VERSION, which `loams-agentd
+// install-runtime` checks when the user turns background agents on. Without the daemon the app still
+// packages (Studio then says it is not bundled), unless LOAMS_REQUIRE_AGENTD=1, as the release sets.
 import { execFileSync, spawnSync } from "node:child_process";
-import { chmodSync, copyFileSync, existsSync, mkdirSync, rmSync, statSync } from "node:fs";
+import { createHash } from "node:crypto";
+import {
+	chmodSync,
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync,
+} from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -32,16 +47,20 @@ if (process.env.LOAMS_BUILD_ENGINE === "1") {
 	);
 }
 
-let src = process.env.LOAMS_BIN;
-if (!src) {
-	const meta = JSON.parse(
-		execFileSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], {
-			cwd: repo,
-			maxBuffer: 256 * 1024 * 1024,
-		}).toString(),
-	);
-	src = join(meta.target_directory, "release", exe);
-}
+let targetDir;
+const releaseDir = () => {
+	if (!targetDir) {
+		const meta = JSON.parse(
+			execFileSync("cargo", ["metadata", "--format-version", "1", "--no-deps"], {
+				cwd: repo,
+				maxBuffer: 256 * 1024 * 1024,
+			}).toString(),
+		);
+		targetDir = meta.target_directory;
+	}
+	return join(targetDir, "release");
+};
+const src = process.env.LOAMS_BIN || join(releaseDir(), exe);
 if (!existsSync(src)) {
 	console.error(
 		`engine binary not found at ${src}\n` +
@@ -58,17 +77,52 @@ copyFileSync(src, dest);
 chmodSync(dest, 0o755);
 
 // The unstripped release binary is ~470 MB. Strip the copy, never the cargo output.
-if (process.platform !== "win32") {
+function strip(file, what) {
+	if (process.platform === "win32") return;
 	const flags = process.platform === "darwin" ? ["-x"] : [];
-	let stripped = false;
 	for (const tool of ["strip", "llvm-strip"]) {
-		const r = spawnSync(tool, [...flags, dest], { stdio: "ignore" });
-		if (r.status === 0) {
-			stripped = true;
-			break;
-		}
+		const r = spawnSync(tool, [...flags, file], { stdio: "ignore" });
+		if (r.status === 0) return;
 	}
-	if (!stripped) console.warn("warning: no strip/llvm-strip found; shipping an unstripped engine");
+	console.warn(`warning: no strip/llvm-strip found; shipping an unstripped ${what}`);
 }
+strip(dest, "engine");
 const mb = (statSync(dest).size / 1048576).toFixed(1);
 console.log(`engine: ${src} -> ${dest} (${mb} MB)`);
+
+const agentdExe = process.platform === "win32" ? "loams-agentd.exe" : "loams-agentd";
+let agentdSrc = process.env.LOAMS_AGENTD_BIN;
+if (!agentdSrc) {
+	try {
+		agentdSrc = join(releaseDir(), agentdExe);
+	} catch {
+		agentdSrc = undefined;
+	}
+}
+if (!agentdSrc || !existsSync(agentdSrc)) {
+	const msg =
+		`loams-agentd not found at ${agentdSrc ?? "<cargo target>/release"}\n` +
+		"Build it: cargo build --release -p loams-agentd (or set LOAMS_AGENTD_BIN).";
+	if (process.env.LOAMS_REQUIRE_AGENTD === "1") {
+		console.error(msg);
+		process.exit(1);
+	}
+	console.warn(`warning: ${msg}\nPackaging without the agent daemon: Studio will say it is not bundled.`);
+} else {
+	const agentdDest = join(outDir, agentdExe);
+	copyFileSync(agentdSrc, agentdDest);
+	chmodSync(agentdDest, 0o755);
+	strip(agentdDest, "loams-agentd");
+	// What `loams-agentd install-runtime --from resources/bin` checks (crates/loams-agentd/src/runtime_install.rs).
+	const sha = (f) => createHash("sha256").update(readFileSync(f)).digest("hex");
+	writeFileSync(
+		join(outDir, "SHA256SUMS"),
+		`${sha(dest)}  ${exe}\n${sha(agentdDest)}  ${agentdExe}\n`,
+	);
+	const version =
+		process.env.LOAMS_DESKTOP_VERSION ||
+		JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;
+	writeFileSync(join(outDir, "VERSION"), `${version}\n`);
+	const amb = (statSync(agentdDest).size / 1048576).toFixed(1);
+	console.log(`agentd: ${agentdSrc} -> ${agentdDest} (${amb} MB), SHA256SUMS and VERSION ${version}`);
+}
