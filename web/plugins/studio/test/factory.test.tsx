@@ -71,6 +71,26 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('the Factory group', () => {
+  it('re-reads the apps after a navigation, so a configure elsewhere shows', async () => {
+    // The group stays mounted while the factory's own pages configure an app.
+    let health = 'unconfigured';
+    const factory = desktopFactory({
+      factory: {
+        list: async () => [
+          { id: 'forgejo', label: 'Forgejo', health, hasPanels: true, credentialFields: [] },
+        ],
+      },
+    } as never);
+    render(wrap(<FactoryGroup factory={factory} />));
+    const group = await screen.findByRole('navigation', { name: 'Factory' });
+    expect(await within(group).findByText('0 of 1 connected')).toBeTruthy();
+    health = 'ok';
+    await act(async () => {
+      window.dispatchEvent(new HashChangeEvent('hashchange'));
+    });
+    expect(await within(group).findByText('1 of 1 connected')).toBeTruthy();
+  });
+
   it('lists the eight apps with their configured state', async () => {
     render(wrap(<FactoryGroup factory={desktopFake().factory} />));
     const group = await screen.findByRole('navigation', { name: 'Factory' });
