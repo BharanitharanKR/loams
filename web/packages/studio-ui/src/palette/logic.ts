@@ -37,6 +37,8 @@ export interface PaletteThread {
   /** Milliseconds since the epoch of the thread's last activity. */
   updatedAt: number;
   archived?: boolean;
+  /** The thread's last message, so the palette finds a thread by its text (W13). */
+  preview?: string;
 }
 
 export interface PaletteProject {
@@ -88,6 +90,8 @@ export function buildThreadActionItems(input: {
         thread.branch ?? "",
         // Last so pasted IDs never outrank title matches for shared substrings.
         thread.id,
+        // After the id: a thread's own words rank under its title, project and branch (W13).
+        thread.preview ?? "",
       ],
       recency: thread.updatedAt,
       run: () => input.open(thread),

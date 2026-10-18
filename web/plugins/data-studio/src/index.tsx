@@ -19,9 +19,11 @@ import { createDataClient } from './client.js';
 import { CollectionPage } from './pages/collection.js';
 import { CollectionsPage } from './pages/collections.js';
 import { SqlPage } from './pages/sql.js';
+import { TablesSource } from './palette.js';
 import type { Tab } from './shared.js';
 
 export { createDataClient } from './client.js';
+export { TablesSource, tableStatement } from './palette.js';
 
 export const DATA_PLANE_API = 'loams.collection.v1';
 
@@ -58,7 +60,8 @@ export function DataRoute({
   const ns = params.ns || 'default';
   if (view === 'collections')
     return <CollectionsPage client={client} ns={ns} navigate={navigate} />;
-  if (view === 'sql') return <SqlPage client={client} ns={ns} navigate={navigate} />;
+  if (view === 'sql')
+    return <SqlPage client={client} ns={ns} navigate={navigate} table={params.table} />;
   return (
     <CollectionPage
       client={client}
@@ -72,7 +75,7 @@ export function DataRoute({
 
 const plugin: PluginModule = {
   name: 'data-studio',
-  inject: ['desktop', 'router', 'slots', 'transport', 'platform', 'flags'],
+  inject: ['desktop', 'router', 'slots', 'transport', 'platform', 'flags', 'session'],
   apply(ctx: Context) {
     const router = service(ctx, 'router');
     const slots = service(ctx, 'slots');
@@ -110,6 +113,22 @@ const plugin: PluginModule = {
         ),
       );
     }
+    // The palette's tables (CF1 Task 11): the open environment's namespace, or the
+    // Data explorer's own default when no environment is selected.
+    const session = service(ctx, 'session');
+    const tablesClient = createDataClient(transport, platform.fetch, platform.baseUrl);
+    ctx.effect(() =>
+      slots.register({ name: 'shell.palette.source', plugin: 'data-studio' }, (p) => (
+        <TablesSource
+          {...p}
+          client={tablesClient}
+          namespace={
+            flags.has(DATA_PLANE_API) ? (session.environment()?.namespace ?? 'default') : undefined
+          }
+          navigate={navigate}
+        />
+      )),
+    );
     ctx.effect(() =>
       slots.register(
         {

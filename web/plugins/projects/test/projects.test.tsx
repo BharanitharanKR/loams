@@ -9,12 +9,13 @@ import {
   withConsole,
 } from '@loams/admin-ui/testing';
 import type { admin } from '@loams/proto';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import type { PaletteCommand } from '@loams/slots';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AccessPage } from '../src/access.js';
 import { ProjectPill } from '../src/context.js';
 import { connectSnippet, EnvironmentPage } from '../src/environment.js';
-import { projectOf } from '../src/index.js';
+import { ProjectsSource, projectOf } from '../src/index.js';
 import { ProjectPage } from '../src/project.js';
 
 afterEach(() => {
@@ -28,6 +29,24 @@ const noCollections = () => {
 };
 
 describe('@loams/plugin-projects', () => {
+  it('the palette lists every project', async () => {
+    const published: PaletteCommand[][] = [];
+    const router = stubRouter('/');
+    render(
+      withConsole(
+        <ProjectsSource query="" publish={(c) => published.push([...c])} router={router} />,
+      ),
+    );
+    await waitFor(() =>
+      expect(published.at(-1)?.map((c) => c.title)).toContain('Go to project Docs search'),
+    );
+    published
+      .at(-1)
+      ?.find((c) => c.title === 'Go to project Docs search')
+      ?.run();
+    expect(router.navigated).toEqual(['/projects/docs-search']);
+  });
+
   it('project_page_lists_environments_and_agents', async () => {
     const router = stubRouter('/projects/docs-search');
     render(

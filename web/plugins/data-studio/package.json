@@ -24,12 +24,14 @@
         "slots",
         "transport",
         "platform",
-        "flags"
+        "flags",
+        "session"
       ],
       "provides": [],
       "slots": [
         "console.page",
-        "shell.nav.section"
+        "shell.nav.section",
+        "shell.palette.source"
       ],
       "permissions": [
         "collections:read",

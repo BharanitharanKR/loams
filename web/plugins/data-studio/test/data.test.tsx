@@ -231,7 +231,7 @@ describe('data studio', () => {
   it('data_studio_renamed_label_only', () => {
     // Q812: "Data explorer" is the visible name; the route, page ids and plugin id stay.
     const pages: { id: string; path: string; title: string }[] = [];
-    const nav: { plugin: string; meta?: Record<string, unknown> }[] = [];
+    const nav: { name: string; plugin: string; meta?: Record<string, unknown> }[] = [];
     const ctx = {
       router: {
         page: (spec: (typeof pages)[number]) => {
@@ -252,7 +252,7 @@ describe('data studio', () => {
       effect: (fn: () => unknown) => fn(),
     };
     plugin.apply(ctx as never, {});
-    expect(nav).toEqual([
+    expect(nav.filter((n) => n.name === 'shell.nav.section')).toEqual([
       expect.objectContaining({
         plugin: 'data-studio',
         meta: expect.objectContaining({ id: 'data', label: 'Data explorer', href: '/data' }),
