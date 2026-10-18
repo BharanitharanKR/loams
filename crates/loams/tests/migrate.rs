@@ -50,6 +50,29 @@ fn migrate_run_on_current_stack_exits_quickly() {
     assert_eq!(status["ledger"], serde_json::json!([]));
 }
 
+/// Logs go to stderr, so `--output json` stays parseable however verbose
+/// the log filter is (a warning on stdout once broke the JSON).
+#[test]
+fn migrate_logs_never_reach_stdout() {
+    let dir = TempDir::new().expect("dir");
+    let output = Command::new(env!("CARGO_BIN_EXE_loams"))
+        .args(["migrate", "run", "--output", "json", "--data-dir"])
+        .arg(dir.path())
+        .env("RUST_LOG", "debug")
+        .output()
+        .expect("run loams migrate");
+    let out = String::from_utf8_lossy(&output.stdout);
+    let err = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(0), "{out}{err}");
+    let result: Value =
+        serde_json::from_str(out.trim()).unwrap_or_else(|e| panic!("json: {e}: {out:?}"));
+    assert_eq!(result["stack_written"], true);
+    assert!(
+        err.contains("new stack") || err.contains("DEBUG"),
+        "the logs are on stderr: {err:?}"
+    );
+}
+
 #[test]
 fn migrate_plan_json_matches_schema() {
     let dir = TempDir::new().expect("dir");
