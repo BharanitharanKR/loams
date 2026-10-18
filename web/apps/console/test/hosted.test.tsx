@@ -251,8 +251,6 @@ describe('the browser edition', () => {
     expect(labels).toEqual(
       expect.arrayContaining(['Live', 'Graph', 'Analytics', 'Streams & Links', 'Status']),
     );
-    // Durable stays desktop-only: the engine's main port has no `/durable/` route.
-    expect(labels).not.toContain('Durable');
     for (const sample of ['Deployments', 'Loams SQL', 'Metrics', 'Pipelines', 'Git']) {
       expect(labels).not.toContain(sample);
     }
@@ -263,6 +261,8 @@ describe('the browser edition', () => {
       house: 'active',
       'data-studio': 'active',
       streams: 'active',
+      // B12: over the engine's `/durable/` on its main port.
+      durable: 'active',
     });
 
     expect(root.querySelector('.lc-side .lc-preview')).toBeNull();

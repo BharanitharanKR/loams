@@ -29,6 +29,7 @@ Served by `api::router` on `--listen` (gateway role). Tests are in `crates/loams
 |---|---|---|---|---|---|
 | GET | `/health` | protocol | kept; also `grpc.health.v1.Health/Check` | none (200) | `it/http.rs` (startup helpers poll it) |
 | GET | `/ready` | protocol | kept; also `grpc.health.v1.Health/Check` | `MetaStore::is_ready` | `it/http.rs`, `cluster.rs` |
+| POST | `/durable/` | protocol | kept (B12): the Resonate protocol envelope, the loopback durable listener's `POST /` behind the port's authentication | `loams_durable::DurableGateway::handle` | `api::durable` unit tests, `durable.rs::durable_api_is_served_on_the_main_port_too` |
 | POST | `/v1/namespaces` | app | `loams.collection.v1.NamespaceService/CreateNamespace` | `MetaStore::create_namespace` | `http.rs::namespaces_and_streams_are_created_once` |
 | POST | `/v1/namespaces/{ns}/streams` | app | `loams.stream.v1.StreamService/CreateStream` | `MetaStore::create_stream` | `http.rs::namespaces_and_streams_are_created_once` |
 | GET | `/v1/namespaces/{ns}/streams` | app | `loams.stream.v1.StreamService/ListStreams` (not yet in the proto; native REST until the streams Connect service exists, AP1e Task 19, D672) | `MetaStore::streams` | `http.rs::list_streams_sorted`, `unknown_namespace_404` |
