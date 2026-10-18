@@ -309,7 +309,7 @@ message Extractor {
   string provider = 4;
 }
 
-// Model calls made for a request or a run: counts, never prices.
+// Model calls made for a request or a run: counts of calls and tokens only.
 message ModelCallStats {
   uint64 calls = 1;
   uint64 input_tokens = 2;
