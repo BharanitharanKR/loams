@@ -363,7 +363,7 @@ describe('the browser edition', () => {
     expect(signOut).toBeTruthy();
     if (signOut) fireEvent.click(signOut);
     expect(session.signOut).toHaveBeenCalled();
-  });
+  }, 20_000); // boots the browser edition's whole catalog, as the test below (Windows: over 5 s)
 
   it('adds the sample-data pages under Demo data', async () => {
     const { root, handle } = await boot(true);
