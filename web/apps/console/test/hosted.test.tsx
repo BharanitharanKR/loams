@@ -461,6 +461,27 @@ describe('sign-in modes', () => {
     expect(start).not.toHaveBeenCalled();
   });
 
+  it('a remembered engine that is down opens the connect screen, not the console', async () => {
+    saveMode('tailscale');
+    // The engine is down behind its gateway: /health answers 502.
+    const fetcher = vi.fn(async () => json(502, {}));
+    vi.stubGlobal('fetch', fetcher);
+    const root = document.createElement('div');
+    document.body.append(root);
+    const start = vi.fn();
+    const config = parseRuntimeConfig({
+      authMode: 'tailscale',
+      engineUrl: 'https://loams.tail1.ts.net',
+    });
+    void startHosted(config, root, start);
+    await waitFor(() => expect(root.textContent).toContain('Connect your engine'));
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://loams.tail1.ts.net/health',
+      expect.objectContaining({ credentials: 'omit' }),
+    );
+    expect(start).not.toHaveBeenCalled();
+  });
+
   it('tailscale: no sign-in or connect screen, the engine names the user', async () => {
     saveMode('tailscale');
     const fetcher = vi.fn(async () =>
