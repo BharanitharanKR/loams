@@ -466,7 +466,7 @@ impl Run<'_> {
         }
         let rest: Vec<String> = long
             .iter()
-            .filter(|s| !started.contains(s) && !door::SIDECARS.contains(&s.as_str()))
+            .filter(|s| !started.contains(s) && !door::is_gate(&config, s))
             .cloned()
             .collect();
         compose::up(self.runtime, &self.stack.dir, &rest)
@@ -477,8 +477,8 @@ impl Run<'_> {
     }
 
     fn open_door(&mut self) -> Result<()> {
-        let (_, enabled) = self.enabled()?;
-        door::open(self.runtime, &self.stack.dir, &enabled)
+        let (config, _) = self.enabled()?;
+        door::open(self.runtime, &self.stack.dir, &config)
     }
 
     /// Removes the earlier snapshots once this one verified (Q822), unless
@@ -634,8 +634,8 @@ pub fn upgrade_step(
     // Steps 4–7: a failure restarts the old release on its unchanged data.
     let before = (|| {
         run.step("close_door", |r| {
-            let (_, enabled) = r.enabled()?;
-            door::close(r.runtime, &r.stack.dir, &enabled)
+            let (config, _) = r.enabled()?;
+            door::close(r.runtime, &r.stack.dir, &config)
         })?;
         run.step("quiesce", Run::quiesce)?;
         run.step("snapshot", Run::snapshot)?;
@@ -684,6 +684,10 @@ fn restart_old(run: &mut Run<'_>, err: UpgradeError) -> UpgradeError {
             install::restore_host(&run.stack.dir, id)?;
             run.stack.env = read_env(&run.stack.dir.join(".env"));
         }
+        // The services in another's network namespace go first, so the one
+        // they depend on can be recreated (Podman); `up` creates them again.
+        let config = compose::config(run.runtime, &run.stack.dir)?;
+        door::close(run.runtime, &run.stack.dir, &config)?;
         compose::up_all(run.runtime, &run.stack.dir)
     })();
     let event = if restarted.is_ok() {

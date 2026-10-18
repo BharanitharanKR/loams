@@ -78,7 +78,7 @@ fn rollback_restores_every_component() {
         &k,
         &[
             "migrate snapshots list",
-            "stop tailscale house-tailscale",
+            "rm tailscale house-tailscale",
             "cold restore",
             "up pd tikv",
             "migrate restore",
@@ -217,7 +217,7 @@ fn keep_writes_refused_with_point_of_no_return() {
     in_order(
         &k,
         &[
-            "stop tailscale house-tailscale",
+            "rm tailscale house-tailscale",
             "engine ready",
             "up tailscale house-tailscale",
         ],
