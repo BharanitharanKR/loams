@@ -89,9 +89,14 @@ impl Address {
     /// Opens the bucket, with the backend's settings and credentials from
     /// the environment (`AWS_*`, `GOOGLE_*`, `AZURE_*`).
     pub fn open_store(&self) -> Result<Store, HelperError> {
-        Store::from_url(&self.store_url, std::env::vars()).map_err(|err| HelperError::Store {
-            what: format!("open {}", self.store_url),
-            reason: err.to_string(),
+        // `from_url` reads the backend's variables itself. Passing the whole
+        // environment as options would also apply unrelated variables whose
+        // lowercased names happen to be config keys (`TOKEN`, `REGION`, ...).
+        Store::from_url(&self.store_url, std::iter::empty::<(&str, &str)>()).map_err(|err| {
+            HelperError::Store {
+                what: format!("open {}", self.store_url),
+                reason: err.to_string(),
+            }
         })
     }
 

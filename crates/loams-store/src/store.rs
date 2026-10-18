@@ -104,14 +104,34 @@ impl Store {
     /// Opens a store from a URL such as `s3://bucket/prefix`, `gs://bucket`,
     /// `az://container`, `file:///abs/dir` or `memory:///`.
     ///
-    /// `options` are backend-specific keys (for example `aws_region`); credentials
-    /// not given here are read from the environment by the backend.
+    /// Settings come from the process environment first, as the backends'
+    /// own `from_env()` read them: `AWS_*` for S3 (`AWS_ACCESS_KEY_ID`,
+    /// `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_REGION`,
+    /// `AWS_ENDPOINT_URL` or `AWS_ENDPOINT`, `AWS_ALLOW_HTTP`,
+    /// `AWS_VIRTUAL_HOSTED_STYLE_REQUEST`, ...), `GOOGLE_*` and
+    /// `SERVICE_ACCOUNT` for GCS, `AZURE_*` and `IDENTITY_ENDPOINT` for Azure.
+    /// Then the URL, then `options`: backend-specific keys (for example
+    /// `aws_region`, case-insensitive) that override the environment. An S3
+    /// endpoint given as `http://` allows plain HTTP unless `AWS_ALLOW_HTTP`
+    /// or `aws_allow_http` says otherwise.
     ///
     /// Every backend is durable once a write returns: `file://` stores fsync the
     /// written file and its directory before `put` returns, as S3, GCS and Azure
     /// do implicitly. Callers such as the metastore rely on this.
     pub fn from_url<I, K, V>(url: &str, options: I) -> Result<Self, StoreError>
     where
+        I: IntoIterator<Item = (K, V)>,
+        K: AsRef<str>,
+        V: Into<String>,
+    {
+        Self::from_url_with_env(url, crate::backend::process_env(), options)
+    }
+
+    /// [`Store::from_url`], reading the backend's settings from `env` instead
+    /// of the process environment.
+    pub fn from_url_with_env<E, I, K, V>(url: &str, env: E, options: I) -> Result<Self, StoreError>
+    where
+        E: IntoIterator<Item = (String, String)>,
         I: IntoIterator<Item = (K, V)>,
         K: AsRef<str>,
         V: Into<String>,
@@ -142,8 +162,16 @@ impl Store {
                 .with_fsync(true);
             return Ok(Self::new(Arc::new(fs)));
         }
-        let (store, prefix) =
-            object_store::parse_url_opts(&parsed, options).map_err(|e| map_err(url, e))?;
+        let (scheme, prefix) =
+            ObjectStoreScheme::parse(&parsed).map_err(|e| map_err(url, e.into()))?;
+        let (store, prefix) = if crate::backend::is_cloud(&scheme) {
+            let prefix = Path::parse(prefix).map_err(|e| map_err(url, e.into()))?;
+            let store =
+                crate::backend::build(&scheme, url, env, options).map_err(|e| map_err(url, e))?;
+            (store, prefix)
+        } else {
+            object_store::parse_url_opts(&parsed, options).map_err(|e| map_err(url, e))?
+        };
         let store: Arc<dyn ObjectStore> = if prefix.as_ref().is_empty() {
             Arc::from(store)
         } else {
