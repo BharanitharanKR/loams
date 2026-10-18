@@ -310,8 +310,10 @@ mod tests {
         b64.encode(digest::digest(&digest::SHA256, client_key.as_ref()).as_ref()) == stored
     }
 
+    /// A store; `rival` is a secret another instance stores under the
+    /// same reference just before this one's next `create` (a lost race).
     #[derive(Default)]
-    struct Mem(Mutex<HashMap<String, Vec<u8>>>);
+    struct Mem(Mutex<HashMap<String, Vec<u8>>>, Mutex<Option<Vec<u8>>>);
 
     #[async_trait::async_trait]
     impl SecretStore for Mem {
@@ -324,6 +326,9 @@ mod tests {
         }
         async fn create(&self, r: &SecretRef, s: Secret<Vec<u8>>) -> Result<bool, SecretError> {
             let mut m = self.0.lock().unwrap();
+            if let Some(rival) = self.1.lock().unwrap().take() {
+                m.insert(r.as_str().into(), rival);
+            }
             if m.contains_key(r.as_str()) {
                 return Ok(false);
             }
@@ -390,17 +395,27 @@ mod tests {
         assert_eq!(distinct.len(), 4, "same password, different verifiers");
     }
 
-    /// Instances that start together end on one key.
+    /// Instances that start together end on one key: one that finds no
+    /// key but loses the `create` to another uses the other's.
     #[tokio::test]
     async fn racing_instances_share_one_key() {
-        let store: Arc<Mem> = Arc::default();
         let r = SecretRef::parse("pg-role-a-1").unwrap();
-        store.put(&r, Secret::new(b"pw".to_vec())).await.unwrap();
-        let (x, y) = (
-            RoleVerifiers::new(store.clone()),
-            RoleVerifiers::new(store.clone()),
-        );
-        let (vx, vy) = tokio::join!(x.get(&r), y.get(&r));
-        assert_eq!(vx.unwrap(), vy.unwrap());
+        let rival = SaltKey::generate().unwrap().expose().clone();
+        let winner: Arc<Mem> = Arc::default();
+        winner.put(&r, Secret::new(b"pw".to_vec())).await.unwrap();
+        winner
+            .put(
+                &SecretRef::parse(SALT_KEY_REF).unwrap(),
+                Secret::new(rival.clone()),
+            )
+            .await
+            .unwrap();
+        let loser: Arc<Mem> = Arc::default();
+        loser.put(&r, Secret::new(b"pw".to_vec())).await.unwrap();
+        *loser.1.lock().unwrap() = Some(rival);
+        let theirs = RoleVerifiers::new(winner).get(&r).await.unwrap();
+        let ours = RoleVerifiers::new(loser.clone()).get(&r).await.unwrap();
+        assert_eq!(ours, theirs, "the loser uses the stored key, not its own");
+        assert!(loser.1.lock().unwrap().is_none(), "the race happened");
     }
 }
