@@ -7940,6 +7940,7 @@ dependencies = [
  "loams-tikv",
  "loams-upgrade",
  "loams-worker",
+ "mysql_async",
  "object_store 0.14.2",
  "opensrv-mysql",
  "proptest",
