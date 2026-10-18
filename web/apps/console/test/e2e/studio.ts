@@ -107,9 +107,11 @@ export async function commentOnDiff(page: Page, path: string, text: string): Pro
   const line = file.locator('[data-line]').filter({ hasText: 'mock edit' }).first();
   const plus = file.locator('[data-utility-button], [data-gutter-utility-slot] button').first();
   const draft = file.getByRole('textbox', { name: /^Comment on line/ });
-  // The viewer re-renders while the diff settles (the daemon's diff sync), which drops
-  // the hover that shows the "+": hover and click again until the draft opens. A draft
-  // only opens while comments are possible (the diff has a checkout and a checksum).
+  // The "+" shows only while the line is hovered, and the viewer is still drawing the
+  // file when the diff first arrives: hover and click again until the draft opens. A draft
+  // only opens while comments are possible (the diff has a checkout and a checksum). Once
+  // open it stays: the panel keeps it through the thread's updates (the daemon renames the
+  // thread's branch after the first turn, and re-sends unchanged diffs).
   await expect(async () => {
     if (await draft.isVisible()) return;
     await line.hover();

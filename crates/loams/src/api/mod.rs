@@ -25,6 +25,7 @@ pub(crate) mod connect_postgres;
 mod connect_query;
 mod connect_query_filters;
 mod connect_query_ir;
+pub mod durable;
 mod errors;
 pub mod events;
 // Loams Git's forwarded commits and cluster seams (GT1 Task 14).
@@ -171,6 +172,10 @@ pub struct AppState {
     /// LV1 Task 18), and then the package answers `feature_not_in_variant`.
     #[cfg(feature = "live")]
     pub live: Option<loams_live::LiveRoutes>,
+    /// The embedded durable server's protocol endpoint, served as
+    /// `POST /durable/` (B12, [`durable`]); `None` when this port does not
+    /// serve it, and then the route answers `404 durable_not_served`.
+    pub durable: Option<durable::DurableHandle>,
 }
 
 /// What a query node needs to run forwarded reads (plan M1.3 Task 11).
@@ -232,6 +237,7 @@ pub fn router(state: AppState) -> Router {
     let routes = Router::new()
         .route("/health", get(health))
         .route("/ready", get(ready))
+        .route("/durable/", post(durable::envelope))
         .route("/v1/namespaces", post(create_namespace))
         .route(
             "/v1/namespaces/{ns}/streams",

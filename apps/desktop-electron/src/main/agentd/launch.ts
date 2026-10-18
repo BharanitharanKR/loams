@@ -3,7 +3,7 @@
 //
 //   child    `loams-agentd run --child --config <userData>/agentd/config.toml`, a child
 //            of this process: its output goes to `<logs>/agentd.log`, and it is stopped
-//            (SIGTERM) when the app quits.
+//            (SIGTERM; TerminateProcess on Windows) when the app quits.
 //   service  `install-runtime --from <bundle> --to <userData>/agentd/runtime`, then
 //            `service install --config …`, which installs the per-user service and
 //            starts it (design §50 §5.2). The bundle is `resources/bin`, which holds
@@ -34,6 +34,8 @@ export interface LauncherDeps {
 	run?: (file: string, args: string[]) => Promise<void>;
 	/** How long to wait for the discovery file (ms). */
 	readyTimeoutMs?: number;
+	/** Defaults to process.platform. */
+	platform?: NodeJS.Platform;
 }
 
 export interface AgentdLauncher {
@@ -59,6 +61,7 @@ export function createAgentdLauncher(deps: LauncherDeps): AgentdLauncher {
 	const doSpawn = deps.spawnChild ?? spawn;
 	const run = deps.run ?? execOnce;
 	const readyTimeout = deps.readyTimeoutMs ?? 20_000;
+	const win = (deps.platform ?? process.platform) === "win32";
 	const config = join(deps.dir, "config.toml");
 	let child: ChildProcess | null = null;
 
@@ -68,7 +71,9 @@ export function createAgentdLauncher(deps: LauncherDeps): AgentdLauncher {
 		const bin = binary();
 		if (!bin) throw new AgentdError("unavailable", "loams-agentd is not bundled with this build");
 		mkdirSync(deps.dir, { recursive: true });
-		if (process.platform !== "win32") chmodSync(deps.dir, 0o700);
+		// Windows has no mode bits: the daemon gives its own files an owner-only DACL
+		// (crates/loams-agentd/src/owner_only.rs).
+		if (!win) chmodSync(deps.dir, 0o700);
 		// Every key is optional (crates/loams-agentd/src/config.rs); the file must exist.
 		if (!exists(config)) writeFileSync(config, "", { mode: 0o600 });
 		return bin;
@@ -128,7 +133,10 @@ export function createAgentdLauncher(deps: LauncherDeps): AgentdLauncher {
 		killChild() {
 			const c = child;
 			child = null;
-			if (c && c.exitCode === null) c.kill("SIGTERM");
+			// On Windows Node has no signals: kill() is TerminateProcess. The daemon's harness
+			// processes are in a kill-on-close job object, so they stop with it, and its SQLite
+			// state recovers as after any crash.
+			if (c && c.exitCode === null) c.kill(win ? undefined : "SIGTERM");
 		},
 	};
 }

@@ -89,8 +89,14 @@ reference; if SignPath rejects the paste, that is the first thing to check. The 
 embedded in the installer is not separately signed.
 
 The workflow does not trust SignPath's output: after the unpacked app comes back it checks
-`Loams Desktop.exe` and `resources/bin/loams.exe` (when bundled), and after the installer comes back it
-checks the installer, all with `Get-AuthenticodeSignature` (status must be `Valid`). If a check fails,
+`Loams Desktop.exe`, `resources/bin/loams-agentd.exe` and `resources/bin/loams.exe` (when bundled), and
+after the installer comes back it checks the installer, all with `Get-AuthenticodeSignature` (status must
+be `Valid`). Signing rewrites the two binaries, so the workflow writes `resources/bin/SHA256SUMS` again
+(`scripts/bin-sums.cjs`) before it builds the installer; on macOS `scripts/mac-sign.cjs` does the same
+between signing the binaries and sealing the app. `loams-agentd install-runtime` checks those sums when a
+user turns background agents on. After this change the SignPath-side Windows artifact configuration must
+be pasted again from `signpath/artifact-configuration.desktop-windows.xml` (it now lists
+`loams-agentd.exe`). If a check fails,
 the run fails when `DESKTOP_REQUIRE_SIGNING` is `true`; otherwise the installer is released named
 `-unsigned` and the notes say so.
 
