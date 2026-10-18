@@ -305,7 +305,9 @@ fn id_json(value: Value) -> Result<Value, ConnectError> {
         )
     };
     match &value {
-        Value::Number(number) => return whole_number(number).map(|n| json!(n)).ok_or_else(not_uint),
+        Value::Number(number) => {
+            return whole_number(number).map(|n| json!(n)).ok_or_else(not_uint);
+        }
         Value::String(text) => return Ok(json!(text)),
         _ => {}
     }

@@ -1079,7 +1079,11 @@ async fn query_string_without_default_fields_searches_every_text_field() {
         assert!(hits.iter().all(|(_, score)| *score > 0.0), "{hits:?}");
     }
     // A field the query names itself still works, and named defaults win.
-    let titled = ranked(&schema, &searcher, json!({"query_string": {"query": "title:river"}}));
+    let titled = ranked(
+        &schema,
+        &searcher,
+        json!({"query_string": {"query": "title:river"}}),
+    );
     let pks: BTreeSet<u64> = titled.iter().map(|(pk, _)| *pk).collect();
     assert_eq!(pks, set(&[0, 3]));
     let named = ranked(
@@ -1106,16 +1110,24 @@ async fn multi_match_scores_and_ranks_with_bm25() {
     assert_eq!(best[0].0, 3, "{best:?}");
     // best_fields is the best single field's score: each hit's score is the
     // max of its per-field match scores.
-    let title = ranked(&schema, &searcher, json!({"match": {"field": "title", "text": "river"}}));
-    let body = ranked(&schema, &searcher, json!({"match": {"field": "body", "text": "river"}}));
-    let of = |hits: &[(u64, f32)], pk: u64| {
-        hits.iter()
-            .find(|(p, _)| *p == pk)
-            .map_or(0.0, |(_, s)| *s)
-    };
+    let title = ranked(
+        &schema,
+        &searcher,
+        json!({"match": {"field": "title", "text": "river"}}),
+    );
+    let body = ranked(
+        &schema,
+        &searcher,
+        json!({"match": {"field": "body", "text": "river"}}),
+    );
+    let of =
+        |hits: &[(u64, f32)], pk: u64| hits.iter().find(|(p, _)| *p == pk).map_or(0.0, |(_, s)| *s);
     for (pk, score) in &best {
         let expected = of(&title, *pk).max(of(&body, *pk));
-        assert!((score - expected).abs() < 1e-5, "doc {pk}: {score} vs {expected}");
+        assert!(
+            (score - expected).abs() < 1e-5,
+            "doc {pk}: {score} vs {expected}"
+        );
     }
     // most_fields sums them.
     let most = ranked(
@@ -1125,10 +1137,17 @@ async fn multi_match_scores_and_ranks_with_bm25() {
     );
     for (pk, score) in &most {
         let expected = of(&title, *pk) + of(&body, *pk);
-        assert!((score - expected).abs() < 1e-5, "doc {pk}: {score} vs {expected}");
+        assert!(
+            (score - expected).abs() < 1e-5,
+            "doc {pk}: {score} vs {expected}"
+        );
     }
     // No fields is every text field at boost 1, the same as naming them.
-    let all = ranked(&schema, &searcher, json!({"multi_match": {"text": "river"}}));
+    let all = ranked(
+        &schema,
+        &searcher,
+        json!({"multi_match": {"text": "river"}}),
+    );
     assert_eq!(all, best);
 }
 

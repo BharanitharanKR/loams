@@ -2005,8 +2005,15 @@ async fn ids_multi_match_and_query_string_defaults_rpc() {
     };
     let ranked = |body: &Value, what: &str| {
         let scores = scores(body);
-        assert_eq!(sorted(pks(body)), vec![json!(1u64), json!(3u64)], "{what}: {body}");
-        assert!(scores.iter().all(|s| *s > 0.0), "{what}: every hit scores: {body}");
+        assert_eq!(
+            sorted(pks(body)),
+            vec![json!(1u64), json!(3u64)],
+            "{what}: {body}"
+        );
+        assert!(
+            scores.iter().all(|s| *s > 0.0),
+            "{what}: every hit scores: {body}"
+        );
         assert!(
             scores.windows(2).all(|w| w[0] >= w[1]),
             "{what}: best first: {body}"
@@ -2017,7 +2024,10 @@ async fn ids_multi_match_and_query_string_defaults_rpc() {
     // multiMatch: a field without a boost is boost 1, so the hits score as
     // `match` does (BM25, best_fields), not 0.
     let single = running
-        .connect(SEARCH, &text(json!({"match": {"field": "body", "text": "refund"}})))
+        .connect(
+            SEARCH,
+            &text(json!({"match": {"field": "body", "text": "refund"}})),
+        )
         .await
         .expect_ok();
     let want = ranked(&single, "match");

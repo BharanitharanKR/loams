@@ -28,9 +28,9 @@ use loams_quickwit::query::tokenizers::TokenizerManager;
 use loams_text::STANDARD;
 use tantivy::columnar::NumericalValue;
 use tantivy::query::{
-    AllQuery, BooleanQuery, BoostQuery, ConstScoreQuery, DisjunctionMaxQuery, EmptyQuery,
-    ExistsQuery, FuzzyTermQuery, Occur, PhrasePrefixQuery, PhraseQuery, Query as TantivyQuery,
-    QueryParser, RangeQuery, RegexQuery, TermQuery, TermSetQuery,
+    AllQuery, BooleanQuery, BoostQuery, ConstScoreQuery, EmptyQuery, ExistsQuery, FuzzyTermQuery,
+    Occur, PhrasePrefixQuery, PhraseQuery, Query as TantivyQuery, QueryParser, RangeQuery,
+    RegexQuery, TermQuery, TermSetQuery,
 };
 use tantivy::query_grammar::{UserInputAst, UserInputLeaf};
 use tantivy::schema::{Field, FieldType, IndexRecordOption, Schema};
@@ -39,6 +39,7 @@ use tantivy::{DateTime, Term};
 use crate::error::ServiceError;
 use crate::ir::{BoolOperator, FieldValue, Fuzziness, MultiMatchKind, Query};
 use crate::text::coerce::{Coerced, RangeOp, coerce_bound, coerce_term};
+use crate::text::dismax::ExactDisMax;
 use crate::text::fields::{ResolvedField, resolve_field};
 
 type Boxed = Box<dyn TantivyQuery>;
@@ -1042,10 +1043,7 @@ impl<'c, 'a> Build<'c, 'a> {
             MultiMatchKind::MostFields => Box::new(BooleanQuery::new(
                 per_field.into_iter().map(|q| (Occur::Should, q)).collect(),
             )),
-            _ => Box::new(DisjunctionMaxQuery::with_tie_breaker(
-                per_field,
-                tie_breaker,
-            )),
+            _ => Box::new(ExactDisMax::with_tie_breaker(per_field, tie_breaker)),
         })
     }
 
@@ -1107,10 +1105,7 @@ impl<'c, 'a> Build<'c, 'a> {
                     Box::new(BoostQuery::new(leaf, boost)) as Boxed
                 })
                 .collect();
-            let per_token: Boxed = Box::new(DisjunctionMaxQuery::with_tie_breaker(
-                disjuncts,
-                tie_breaker,
-            ));
+            let per_token: Boxed = Box::new(ExactDisMax::with_tie_breaker(disjuncts, tie_breaker));
             clauses.push((occur, per_token));
         }
         Ok(Box::new(BooleanQuery::new(clauses)))
