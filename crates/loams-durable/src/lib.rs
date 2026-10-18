@@ -12,12 +12,17 @@
 //! SDK over [`InProcNetwork`], which reaches the server through its
 //! `worker_inproc` plugin with no socket (D141).
 //!
+//! [`DurableGateway`] is the listener's protocol endpoint as a function, for a
+//! host that serves the durable API on a port of its own behind its own
+//! authentication (B12: `loams` under `/durable/` on its main port).
+//!
 //! The embed leaves its host alone: no tracing subscriber, no signal handler,
 //! no panic hook, and a handler panic answers 500.
 
 mod config;
 mod embed;
 mod error;
+mod gateway;
 pub mod inproc;
 mod listen;
 #[cfg(feature = "mysql")]
@@ -33,6 +38,7 @@ pub use config::{
 };
 pub use embed::{DurableServer, LOCK_FILE, PROTOCOL_VERSION};
 pub use error::DurableError;
+pub use gateway::DurableGateway;
 pub use inproc::{InProcNetwork, InProcWorker};
 pub use listen::{is_loopback, parse_listen};
 pub use registry::registry;

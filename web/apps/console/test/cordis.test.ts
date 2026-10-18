@@ -90,13 +90,17 @@ describe('the cordis console', () => {
 
   it('disabling a plugin removes its page and nav entry without a reload', async () => {
     const { root, handle } = await start();
-    await waitFor(() => expect(navLabels(handle)).toContain('Approvals'));
+    // waitFor's 1 s default is too short on a cold macOS runner (as above).
+    const slow = { timeout: 10_000 };
+    await waitFor(() => expect(navLabels(handle)).toContain('Approvals'), slow);
     await handle.disable('approvals');
-    await waitFor(() =>
-      expect(navLabels(handle)).toEqual(['Status', 'Namespaces', 'Deployments', 'Preferences']),
+    await waitFor(
+      () =>
+        expect(navLabels(handle)).toEqual(['Status', 'Namespaces', 'Deployments', 'Preferences']),
+      slow,
     );
     expect(root.querySelector('.lc-chip')).toBeNull();
-  });
+  }, 20_000);
 
   it('runs the third-party sample in a sandboxed frame when the instance allows it', async () => {
     const { root, handle } = await start({ [THIRD_PARTY_FLAG]: true }, true, true);

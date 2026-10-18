@@ -211,3 +211,64 @@ async fn durable_start_failure_is_fatal() {
         .expect("the metastore was released");
     server.shutdown().await.expect("shutdown");
 }
+
+/// B12: the durable API is also `POST /durable/` on the main port, behind
+/// its authentication (sign-in off here: the developer on loopback), and it
+/// is the same server the loopback listener serves, which keeps working.
+#[tokio::test(flavor = "multi_thread")]
+async fn durable_api_is_served_on_the_main_port_too() {
+    let dir = TempDir::new().unwrap();
+    let durable = free_addr();
+    let server = Server::start(config(&dir, durable)).await.expect("start");
+    let main = format!("http://{}", server.local_addr());
+    let http = reqwest::Client::new();
+    let envelope = |kind: &str, data: serde_json::Value| {
+        serde_json::json!({
+            "kind": kind,
+            "head": { "corrId": "b12", "version": loams_durable::PROTOCOL_VERSION },
+            "data": data,
+        })
+    };
+    let created = http
+        .post(format!("{main}/durable/"))
+        .json(&envelope(
+            "promise.create",
+            serde_json::json!({ "id": "b12-1", "timeoutAt": i64::MAX / 2, "param": {}, "tags": {} }),
+        ))
+        .send()
+        .await
+        .expect("create on the main port");
+    assert!(created.status().is_success(), "{}", created.status());
+    let created: serde_json::Value = created.json().await.expect("an envelope");
+    assert_eq!(created["data"]["promise"]["id"], "b12-1", "{created}");
+
+    // The loopback listener answers for the same promise.
+    let got: serde_json::Value = http
+        .post(format!("http://{durable}/"))
+        .json(&envelope(
+            "promise.get",
+            serde_json::json!({ "id": "b12-1" }),
+        ))
+        .send()
+        .await
+        .expect("get on the durable listener")
+        .json()
+        .await
+        .expect("an envelope");
+    assert_eq!(got["data"]["promise"]["id"], "b12-1", "{got}");
+
+    // A protocol error keeps its status and its envelope.
+    let missing = http
+        .post(format!("{main}/durable/"))
+        .json(&envelope(
+            "promise.get",
+            serde_json::json!({ "id": "nope" }),
+        ))
+        .send()
+        .await
+        .expect("get a missing promise");
+    assert_eq!(missing.status().as_u16(), 404);
+    let missing: serde_json::Value = missing.json().await.expect("an envelope");
+    assert_eq!(missing["head"]["status"], 404, "{missing}");
+    server.shutdown().await.expect("shutdown");
+}
