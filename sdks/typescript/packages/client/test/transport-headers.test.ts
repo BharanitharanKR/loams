@@ -11,7 +11,11 @@
 // but undefined: the module was only reachable as `loams.modules['live.admin']`.
 
 import { createServer, type IncomingHttpHeaders, type Server } from 'node:http';
-import { createServer as createHttp2Server, type Http2Server } from 'node:http2';
+import {
+  createServer as createHttp2Server,
+  type Http2Server,
+  type Http2Session,
+} from 'node:http2';
 import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Loams } from '../src/loams.js';
@@ -49,7 +53,12 @@ async function recordHttp1(): Promise<Recorder> {
   open = {
     endpoint: `http://127.0.0.1:${port}`,
     seen,
-    close: () => new Promise((resolve) => server.close(() => resolve())),
+    // Keep-alive connections would hold `close` open past the hook's timeout.
+    close: () =>
+      new Promise((resolve) => {
+        server.close(() => resolve());
+        server.closeAllConnections();
+      }),
   };
   return open;
 }
@@ -57,6 +66,12 @@ async function recordHttp1(): Promise<Recorder> {
 async function recordHttp2(): Promise<Recorder> {
   const seen: Recorder['seen'] = [];
   const server: Http2Server = createHttp2Server();
+  // The client keeps its HTTP/2 session open; `close` waits for every session.
+  const sessions = new Set<Http2Session>();
+  server.on('session', (session) => {
+    sessions.add(session);
+    session.on('close', () => sessions.delete(session));
+  });
   server.on('stream', (stream, headers) => {
     seen.push({ path: String(headers[':path']), headers: headers as IncomingHttpHeaders });
     stream.resume();
@@ -70,7 +85,13 @@ async function recordHttp2(): Promise<Recorder> {
   open = {
     endpoint: `http://127.0.0.1:${port}`,
     seen,
-    close: () => new Promise((resolve) => server.close(() => resolve())),
+    close: () =>
+      new Promise((resolve) => {
+        server.close(() => resolve());
+        for (const session of sessions) {
+          session.destroy();
+        }
+      }),
   };
   return open;
 }
