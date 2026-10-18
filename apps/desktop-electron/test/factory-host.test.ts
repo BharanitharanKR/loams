@@ -359,6 +359,41 @@ describe("factory host", () => {
 		);
 	});
 
+	it("plane_app_url_is_the_embedded_ui_and_the_api_base_stays", async () => {
+		// ItsAPlan serves its API and its web UI on different origins.
+		const seen: string[] = [];
+		vi.stubGlobal(
+			"fetch",
+			vi.fn(async (u: string | URL | Request) => {
+				seen.push(String(u instanceof Request ? u.url : u));
+				return Response.json({ authenticated: true, name: "x", status: "ok" });
+			}),
+		);
+		const h = new FactoryHost(mkVault(), new Context());
+		const r = await h.configure("plane", "http://api.plan.test", {
+			apiKey: "itp_k",
+			appUrl: "http://plan.test/",
+		});
+		expect(r).toMatchObject({
+			ok: true,
+			value: { url: "http://api.plan.test" },
+		});
+		expect(h.appUrls("plane")).toEqual({ url: "http://plan.test/" });
+		expect(seen.every((u) => u.startsWith("http://api.plan.test/"))).toBe(true);
+		// Not an http(s) URL: refused, nothing stored.
+		const bad = await h.configure("plane", "http://api.plan.test", {
+			apiKey: "itp_k",
+			appUrl: "javascript:alert(1)",
+		});
+		expect(bad).toMatchObject({ ok: false, code: "invalid_url" });
+		// Without one, the embedded UI is the configured URL, as before.
+		await h.configure("plane", "http://api.plan.test", { apiKey: "itp_k" });
+		expect(h.appUrls("plane")?.url).toBe("http://plan.test/");
+		await h.remove("plane");
+		await h.configure("plane", "http://api.plan.test", { apiKey: "itp_k" });
+		expect(h.appUrls("plane")?.url).toBe("http://api.plan.test");
+	});
+
 	it("error_codes_map", async () => {
 		const h = mk();
 		await h.configure("forgejo", "https://f.example", { token: "t" });

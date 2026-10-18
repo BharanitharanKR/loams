@@ -136,7 +136,9 @@ export class FactoryHost {
 		const e = this.vault.get(app);
 		if (!e) return undefined;
 		const sso = e.fields["ssoOrigin"]?.reveal();
-		return { url: e.url, ...(sso ? { ssoOrigin: sso } : {}) };
+		// The app's own UI, when it is not served at the API's URL (ItsAPlan).
+		const ui = e.fields["appUrl"]?.reveal();
+		return { url: ui || e.url, ...(sso ? { ssoOrigin: sso } : {}) };
 	}
 
 	#secrets(app: FactoryAppId): string[] {
@@ -277,6 +279,25 @@ export class FactoryHost {
 				code: "invalid_url",
 				message: "Enter an http(s) URL",
 			};
+		}
+		const appUrl = fields["appUrl"];
+		if (typeof appUrl === "string" && appUrl.length > 0) {
+			let ok = false;
+			try {
+				const u = new URL(appUrl);
+				ok =
+					(u.protocol === "http:" || u.protocol === "https:") &&
+					!u.username &&
+					!u.password;
+			} catch {
+				// not a URL
+			}
+			if (!ok)
+				return {
+					ok: false,
+					code: "invalid_url",
+					message: "Enter an http(s) App URL",
+				};
 		}
 		const allowed = new Set(def.credentialFields.map((f) => f.key));
 		const clean: Record<string, string> = {};

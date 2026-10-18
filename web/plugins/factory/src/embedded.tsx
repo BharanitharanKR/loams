@@ -28,6 +28,8 @@ export function EmbeddedApp({
   const [info, setInfo] = useState<FactoryAppInfo>();
   const [error, setError] = useState<string>();
   const label = info?.label ?? APP_LABELS[app];
+  // The app's own UI: its App URL when it has one (ItsAPlan), else its URL.
+  const uiUrl = info?.fields?.appUrl || info?.url;
 
   useEffect(() => {
     let live = true;
@@ -142,8 +144,8 @@ export function EmbeddedApp({
         <Button
           size="sm"
           variant="quiet"
-          disabled={!info?.url}
-          onClick={() => info?.url && void desktop.shell.openExternal(info.url)}
+          disabled={!uiUrl}
+          onClick={() => uiUrl && void desktop.shell.openExternal(uiUrl)}
         >
           <ExternalLink aria-hidden="true" size={14} /> Open in browser
         </Button>

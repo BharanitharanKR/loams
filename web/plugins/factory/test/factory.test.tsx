@@ -133,6 +133,18 @@ describe('embedded', () => {
     spy.mockRestore();
   });
 
+  it('open_in_browser_uses_the_app_url_when_there_is_one', async () => {
+    // ItsAPlan's UI is not at its API's URL: the configured App URL wins.
+    const { api, calls } = fakeDesktop({
+      apps: IDS.map((id) =>
+        id === 'plane' ? info(id, 'ok', true, { appUrl: 'https://plan.example.test/' }) : info(id),
+      ),
+    });
+    render(<EmbeddedApp desktop={api} app="plane" navigate={nav().navigate} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Open in browser/ }));
+    await waitFor(() => expect(calls).toContain('external:https://plan.example.test/'));
+  });
+
   it('unconfigured_app_does_not_show_a_view', async () => {
     const { api, shown } = fakeDesktop();
     render(<EmbeddedApp desktop={api} app="zulip" navigate={nav().navigate} />);

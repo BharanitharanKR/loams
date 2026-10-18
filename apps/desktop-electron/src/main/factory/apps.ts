@@ -64,6 +64,8 @@ export const FACTORY_APPS: Record<FactoryAppId, FactoryAppDef> = {
 		credentialFields: [
 			f("apiKey", "API key"),
 			f("projectKey", "Project key", false),
+			// ItsAPlan's web UI and its API are separate origins: the embedded UI uses this.
+			f("appUrl", "App URL (optional)", false),
 			sso,
 		],
 		hasPanels: true,
