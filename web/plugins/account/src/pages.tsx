@@ -167,7 +167,16 @@ type SetupForm = {
   password: string;
 };
 
-export function SetupPage({ router, session }: { router: RouterService; session: SessionService }) {
+export function SetupPage({
+  router,
+  session,
+  tokenNeeded = true,
+}: {
+  router: RouterService;
+  session: SessionService;
+  /** False on an engine with sign-in off (LOAMS_AUTH_MODE=off): setup is open on loopback. */
+  tokenNeeded?: boolean;
+}) {
   useTrail(router, [{ label: 'Set up Loams' }]);
   const complete = useMutation(auth.AuthService.method.completeSetup);
   const [form, setForm] = useState<SetupForm>({
@@ -185,7 +194,7 @@ export function SetupPage({ router, session }: { router: RouterService; session:
     if (form.password.length < 12) return setError('Use a password of at least 12 characters.');
     setError(undefined);
     try {
-      await complete.mutateAsync(form);
+      await complete.mutateAsync(tokenNeeded ? form : { ...form, setupToken: '' });
       await session.refresh?.();
       router.navigate('/');
     } catch (e) {
@@ -194,28 +203,36 @@ export function SetupPage({ router, session }: { router: RouterService; session:
   };
   return (
     <AuthFrame title="Set up this install">
-      <p className="muted">
-        When it started, the server wrote a one-time setup token to the file it named in its log,
-        readable only by the server's user. The token lasts an hour, creates the organization and
-        its owner, then stops working.
-      </p>
+      {tokenNeeded ? (
+        <p className="muted">
+          Enter this engine's setup token: the value of <code>LOAMS_SETUP_TOKEN</code> in its
+          environment. It creates the organization and its owner once; after that, setup is closed.
+        </p>
+      ) : (
+        <p className="muted">
+          This engine runs with sign-in off (<code>LOAMS_AUTH_MODE=off</code>, loopback only), so
+          setup needs no token. Create the organization and its owner.
+        </p>
+      )}
       <form className="form" onSubmit={submit}>
         {error && (
           <Notice tone="danger" title="Setup failed">
             {error}
           </Notice>
         )}
-        <Field label="Setup token">
-          {(p) => (
-            <Input
-              {...p}
-              value={form.setupToken}
-              onChange={set('setupToken')}
-              className={/* mono-ok: id */ 'loams-mono'}
-              required
-            />
-          )}
-        </Field>
+        {tokenNeeded && (
+          <Field label="Setup token">
+            {(p) => (
+              <Input
+                {...p}
+                value={form.setupToken}
+                onChange={set('setupToken')}
+                className={/* mono-ok: id */ 'loams-mono'}
+                required
+              />
+            )}
+          </Field>
+        )}
         <Field label="Organization name">
           {(p) => (
             <Input

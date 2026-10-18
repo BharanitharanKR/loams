@@ -174,6 +174,9 @@ export const flagsPlugin: PluginModule = {
           features: { ...info.features },
           apiVersions: [...info.apiVersions],
           setupRequired: info.setupRequired,
+          signInOff:
+            info.signInMethods.length > 0 &&
+            info.signInMethods.every((m) => m.kind === instance.SignInKind.NONE),
           has: (api) => info.apiVersions.includes(api),
         };
       } catch (error) {
