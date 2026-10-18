@@ -632,6 +632,39 @@ async fn number_of_fragments_zero_highlights_whole_values() {
 }
 
 #[tokio::test]
+async fn a_short_value_is_highlighted_to_its_last_character() {
+    let setup = Setup::new(
+        vec![vec![upsert(
+            1,
+            json!({"title": ["Cold River (Bearcamp River)", "a fox.", "(fox)"]}),
+            None,
+        )]],
+        vec![],
+    )
+    .await;
+    let view = setup.view().await;
+    // Tantivy ends a fragment at its last token, which dropped the `)` and
+    // the `.`; a value shorter than the fragment size is returned whole.
+    let response = search(
+        &view,
+        highlighted(
+            matching("title", "river fox"),
+            vec![highlight_field("title", "[", "]", 180, 5)],
+        ),
+    )
+    .await;
+    assert_eq!(
+        response.hits[0].highlight["title"],
+        vec![
+            "Cold [River] (Bearcamp [River])".to_string(),
+            "a [fox].".to_string(),
+            "([fox])".to_string(),
+        ]
+    );
+    setup.shutdown().await;
+}
+
+#[tokio::test]
 async fn highlights_are_identical_across_placements() {
     let (a, b, _) = fixtures().await;
     let (a_view, b_view) = (a.view().await, b.view().await);
