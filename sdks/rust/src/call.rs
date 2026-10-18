@@ -183,7 +183,7 @@ impl RetryPlan {
     }
 
     /// The connect-rust options one attempt carries.
-    async fn call_options(&self) -> Result<CallOptions, LoamsError> {
+    pub(crate) async fn call_options(&self) -> Result<CallOptions, LoamsError> {
         let mut options = CallOptions::default();
         for (name, value) in self.headers().await? {
             options = options.with_header(name, value);

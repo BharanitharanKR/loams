@@ -81,8 +81,8 @@ pub const APP_END_USER_PATHS: &[&str] = &["/loams.live.v1.LiveService/"];
 pub struct LeftToApp;
 
 /// The extension of a request whose `Origin` the engine's own CORS allows
-/// (`LOAMS_CORS_ORIGINS`, the console's), as opposed to one only a Live
-/// app lists.
+/// (`LOAMS_CORS_ORIGINS`, the console's) or is the engine's own (the
+/// request's `Host`), as opposed to one only a Live app lists.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct EngineOrigin;
 
@@ -241,7 +241,14 @@ async fn guard(State(state): State<AuthLayerState>, mut request: Request, next: 
         .get(header::ORIGIN)
         .and_then(|v| v.to_str().ok())
         .map(str::to_owned);
-    let engine_origin = origin.as_deref().filter(|o| cors.allows(o));
+    // The engine's own origin (a page it serves itself, or the desktop
+    // loading the console from it) is the engine's as much as a configured
+    // console origin is: same-origin, so a browser applies no CORS to it
+    // anyway. Marking it lets Live admit a platform principal from it
+    // (0.1.0 release e2e, B11) without widening CORS for any other origin.
+    let engine_origin = origin
+        .as_deref()
+        .filter(|o| cors.allows(o) || same_host(o, request.headers()));
     if engine_origin.is_some() {
         request.extensions_mut().insert(EngineOrigin);
     }
