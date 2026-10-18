@@ -179,7 +179,7 @@ flowchart LR
 | Loams Git | Git on the bucket: a WAL, ref log, checkpoints, O(1) forks and GC, and `loams.repos.v1`'s repository catalog (cargo feature `git`) | Experimental. `git-remote-loams` ships with the `loams` CLI packages and pushes and fetches straight to a bucket; the repository service is not in the release images |
 | First-party connectors | Native source and sink connectors (Kafka family, Postgres CDC, object storage, key-value, search, brokers, cloud queues, HTTP APIs) on `loams-connector-sdk` | In progress. Not in the release images |
 | Self-hosting with Docker Compose | The whole stack in `deploy/release/compose.yaml`, reachable only over your Tailscale tailnet, locally or on your VMs with `byoc/install.sh` over SSH | Available. Headscale is coming soon |
-| Graph expansion | GraphRAG expansion of 1 to 2 hops, planned together with the retrieval query | Planned |
+| Graph expansion | GraphRAG expansion of 1 to 2 hops from a retrieval query's hits: the `expand` stage of a search (REST and Connect), and the SQL table functions `graph_expand`, `graph_neighbors`, `graph_degree` and `graph_shortest_path` | Experimental. Runs on a Loams Graph (cargo feature `graph`, in the release `loams` image); the caller needs `reader` on each graph it touches (GR1 R24.12). The SDKs and the MCP `search` tool do not expose it yet (GR1 Task 36), and a UUID-keyed collection's neighbors come back without their documents |
 | Iceberg analytics | Iceberg tables through a REST catalog, readable by DuckDB, Spark, Trino and ClickHouse | Planned |
 | Kafka wire and OTLP | Kafka clients and OpenTelemetry logs ingest into streams | Planned |
 | Authorization and tenancy | Roles, per-namespace authorization, tenant quotas and a namespace router | Planned |
@@ -415,8 +415,10 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
 - **Loams Postgres:** `--profile postgres-control` runs `pg-control` beside the stack, with the
   container runtime's socket given only to a separate compute runner that starts nothing but
   the pinned compute images (see [`deploy/release/README.md`](../../deploy/release/README.md#postgres-control-plane)).
-  Its images are pinned to Neon's last public build until the fork's own builds (NF1 Task 14),
-  and the pg-control to runner link is plaintext on its internal network until PG2 Task 23.
+  Its images are the fork's own release `lp-2026.10.1` (Postgres 16.9 and 17.5), pinned in
+  `deploy/pins/loams-postgres-images.toml` (NF1 Task 14); the next release, `lp-2026.11.0`
+  (Postgres minors 16.15 and 17.11, NF1 Task 17), is not pinned yet. The pg-control to runner link is
+  plaintext on its internal network until PG2 Task 23.
 - **Loams Graph:** writes reach the Loams log before they are acknowledged and graphs recover
   from snapshots and the log after a crash (GR1 Tasks 11 to 14). Keep a copy of graph data you
   cannot recreate.
