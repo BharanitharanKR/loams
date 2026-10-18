@@ -6,7 +6,10 @@
 //! URL of the bucket (`file:///…`, `s3://bucket/prefix`, `gs://…`,
 //! `az://…`), opened with the backend's credentials from the environment.
 //! `<repo>` is a repository id, or a name the catalog maps to one (ruling
-//! T51.2).
+//! T51.2). `<ns>` is the namespace's numeric id: the bucket keys everything
+//! by namespace id and keeps no namespace names (those are in the engine's
+//! metadata store, which a serverless helper cannot read), so a name there
+//! is refused with a message that says so.
 
 use loams_git::paths::RepoPaths;
 use loams_git::{
@@ -48,12 +51,6 @@ impl Address {
         if repos != "repos" || ns_word != "ns" || RepoId::parse(repo).is_err() {
             return Err(bad());
         }
-        let ns = ns
-            .parse::<u64>()
-            .ok()
-            .filter(|_| !ns.is_empty() && ns.bytes().all(|b| b.is_ascii_digit()))
-            .map(NamespaceId)
-            .ok_or_else(bad)?;
         // `scheme://` alone (no bucket, no directory) names nothing.
         let has_location = store_url
             .split_once("://")
@@ -61,6 +58,19 @@ impl Address {
         if !has_location {
             return Err(bad());
         }
+        let numeric = !ns.is_empty() && ns.bytes().all(|b| b.is_ascii_digit());
+        let ns = match ns.parse::<u64>().ok().filter(|_| numeric) {
+            Some(id) => NamespaceId(id),
+            // A namespace name (what the console and the APIs show): say
+            // why it cannot work rather than "expected …".
+            None if RepoName::parse(ns).is_ok() => {
+                return Err(HelperError::NamespaceName {
+                    address: raw.to_string(),
+                    ns: ns.to_string(),
+                });
+            }
+            None => return Err(bad()),
+        };
         Ok(Self {
             raw: raw.to_string(),
             store_url: store_url.to_string(),
@@ -167,8 +177,8 @@ mod tests {
         for raw in [
             "",
             "file:///data",
-            "file:///data/ns/x/repos/web",
             "file:///data/ns/-1/repos/web",
+            "file:///data/ns/Bad/repos/web",
             "file:///data/ns/1/repo/web",
             "file:///data/nss/1/repos/web",
             "file:///data/ns/1/repos/Web",
@@ -180,8 +190,25 @@ mod tests {
             let err = Address::parse(raw).expect_err(raw);
             assert_eq!(
                 err.to_string(),
-                format!("loams: expected <store-url>/ns/<ns>/repos/<repo_id>, got {raw}")
+                format!("loams: expected <store-url>/ns/<namespace-id>/repos/<repo>, got {raw}")
             );
+        }
+    }
+
+    #[test]
+    fn a_namespace_name_says_the_url_wants_its_id() {
+        for raw in [
+            "s3://loams-engine/stack/ns/e2e/repos/e2e-sample",
+            "file:///data/ns/x/repos/web",
+        ] {
+            let err = Address::parse(raw).expect_err(raw);
+            assert!(
+                matches!(&err, HelperError::NamespaceName { address, .. } if address == raw),
+                "{err}"
+            );
+            let text = err.to_string();
+            assert!(text.contains("numeric id"), "{text}");
+            assert!(text.contains("namespace_id"), "{text}");
         }
     }
 }

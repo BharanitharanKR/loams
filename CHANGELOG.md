@@ -36,10 +36,13 @@ See [docs/release/upgrades.md](docs/release/upgrades.md).
   upgrade page. CI gains `Upgrade: previous release → candidate`, which upgrades the previous release's
   stack with fixtures in every product and rolls it back.
 - **Git push and fetch to the bucket from the release packages.** `git-remote-loams`, git's
-  remote helper for `loams::<store-url>/ns/<ns>/repos/<repo>` URLs (`crates/loams-git-remote`),
+  remote helper for `loams::<store-url>/ns/<namespace-id>/repos/<repo>` URLs (`crates/loams-git-remote`),
   now ships next to `loams` in the .deb, .rpm and .pkg.tar.zst (`/usr/bin`), the macOS
   tarballs and the Windows zip, so `git clone`, `fetch` and `push` reach a Loams Git
-  repository on a bucket with no server in between. It is not published to crates.io.
+  repository on a bucket with no server in between. The namespace is its numeric id (the bucket
+  has no namespace names), and a push with `LOAMS_GIT_CREATE_ON_PUSH=1` creates the repository:
+  the repository service (`loams.repos.v1`, cargo feature `git`) is not in the release images.
+  It is not published to crates.io.
   `git-remote-loams --version` prints its version. See `docs/release/packaging.md`.
 - **Loams Studio, an agentic development environment in the console** (design §53, plan SD1).
   The console has two modes, Console and Studio. Studio runs coding agents in threads, each
