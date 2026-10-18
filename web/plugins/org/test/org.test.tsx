@@ -58,6 +58,31 @@ describe('@loams/plugin-org', () => {
     expect(screen.getByRole('link', { name: 'Data explorer' }).getAttribute('href')).toBe('#/data');
   });
 
+  it('home_namespaces_tile_counts_what_the_engine_lists_or_falls_back_to_environments', async () => {
+    const router = stubRouter('/');
+    const listed = createAdminTransport({
+      projects: { listProjects: () => ({ projects: [] }) },
+      namespaces: {
+        listNamespaces: () => ({
+          namespaces: [
+            { namespace: 'default', collectionCount: 2 },
+            { namespace: 'e2e', collectionCount: 3, streamCount: 1 },
+          ],
+        }),
+      },
+    });
+    render(
+      withConsole(<Home router={router} session={stubSession()} auditPath="/audit" />, listed),
+    );
+    expect(await screen.findByText('5 collections')).toBeTruthy();
+    cleanup();
+    // An engine without ListNamespaces: the tile counts project environments (none here).
+    const older = createAdminTransport({ projects: { listProjects: () => ({ projects: [] }) } });
+    render(withConsole(<Home router={router} session={stubSession()} auditPath="/audit" />, older));
+    expect(await screen.findByText('Project environments')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText('…')).toBeNull());
+  });
+
   it('teams_page_lists_teams_and_creates_one', async () => {
     const created: string[] = [];
     const transport = createAdminTransport({

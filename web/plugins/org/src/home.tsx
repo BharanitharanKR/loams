@@ -1,4 +1,4 @@
-import { createClient } from '@connectrpc/connect';
+import { Code, ConnectError, createClient } from '@connectrpc/connect';
 import { useQuery, useTransport } from '@connectrpc/connect-query';
 import {
   AuditTable,
@@ -13,9 +13,9 @@ import {
   useTrail,
 } from '@loams/admin-ui';
 import type { RouterService, SessionService } from '@loams/console-host';
-import { admin } from '@loams/proto';
+import { admin, collection } from '@loams/proto';
 import { Badge, Card, Empty, formatBytes, formatNumber, Stat, Stats } from '@loams/ui';
-import { useQueries } from '@tanstack/react-query';
+import { useQueries, useQuery as useTanstackQuery } from '@tanstack/react-query';
 import { Bot, Lock } from 'lucide-react';
 import { type CSSProperties, useMemo } from 'react';
 
@@ -37,6 +37,7 @@ export function Home({
     () => ({
       projects: createClient(admin.ProjectService, transport),
       agents: createClient(admin.AgentService, transport),
+      namespaces: createClient(collection.NamespaceService, transport),
     }),
     [transport],
   );
@@ -56,6 +57,26 @@ export function Home({
     })),
   });
   const audit = useQuery(admin.AuditService.method.listAuditEvents, { pageSize: 8 });
+  // B7: every namespace the caller reaches, project environment or not. `null` on an
+  // engine without ListNamespaces, and the tile then counts environments.
+  const namespaces = useTanstackQuery({
+    queryKey: ['org-home', 'namespaces'],
+    queryFn: async () => {
+      try {
+        const res = await clients.namespaces.listNamespaces({ pageSize: 1000 });
+        return {
+          count: res.namespaces.length,
+          more: res.nextPageToken !== '',
+          collections: res.namespaces.reduce((n, ns) => n + ns.collectionCount, 0),
+        };
+      } catch (err) {
+        const code = ConnectError.from(err).code;
+        if (code === Code.Unimplemented || code === Code.NotFound) return null;
+        throw err;
+      }
+    },
+    retry: false,
+  });
 
   // Ready once the project list is in and every project's query answered: an org with
   // no projects is ready at once (B7: the tiles stayed at "…" forever).
@@ -76,6 +97,25 @@ export function Home({
       </PageHead>
 
       <Stats>
+        <Stat
+          label="Namespaces"
+          value={
+            namespaces.data
+              ? `${formatNumber(namespaces.data.count)}${namespaces.data.more ? '+' : ''}`
+              : namespaces.data === null || namespaces.error
+                ? envsReady
+                  ? formatNumber(all.length)
+                  : '…'
+                : '…'
+          }
+          detail={
+            namespaces.data
+              ? `${formatNumber(namespaces.data.collections)} collections`
+              : namespaces.data === null || namespaces.error
+                ? 'Project environments'
+                : undefined
+          }
+        />
         <Stat
           label="Documents"
           value={envsReady ? formatNumber(sum((e) => e.stats?.documents)) : '…'}

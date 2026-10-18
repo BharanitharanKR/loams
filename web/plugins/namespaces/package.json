@@ -20,7 +20,8 @@
       "tier": "first-party",
       "inject": [
         "session",
-        "router"
+        "router",
+        "transport"
       ],
       "provides": [],
       "slots": [

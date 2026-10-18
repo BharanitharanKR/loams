@@ -24,6 +24,9 @@ Expected downtime: about 5 minutes, excluding image pulls.
 See [docs/release/upgrades.md](docs/release/upgrades.md).
 
 ### Added
+- **`NamespaceService/ListNamespaces`** (B7): the namespaces the caller can reach, by name and paged, with
+  their collection and stream counts. The console's Namespaces page and the org home's Namespaces tile
+  read it, and fall back to the browser's list on an older engine.
 - **Durable on the main port** (B12): `POST /durable/` on `--listen` is the embedded Resonate server's
   protocol endpoint, behind the engine's authentication (org members and the operator; a credential bound
   to one environment is refused), on a loopback main port or behind TLS and authentication. The loopback
