@@ -2078,6 +2078,119 @@ async fn ids_multi_match_and_query_string_defaults_rpc() {
     running.shutdown().await;
 }
 
+/// `select` restricts each hit's `source`, whatever retrieves the hits: a
+/// text, a vector or a fused retriever, a filter alone, with or without
+/// highlighting, over the RPC and the REST route alike.
+#[tokio::test]
+async fn select_restricts_the_returned_source_rpc() {
+    let running = Running::start().await;
+    kb(&running, "w").await;
+    let text =
+        json!([{"text": {"query": {"match": {"field": "body", "text": "refund"}}, "k": 10}}]);
+    let vector = json!([{"vector": {"field": "embedding", "query": [1.0, 0.0, 0.0], "k": 10}}]);
+    let fused = json!([{"fused": {"inputs": [text[0].clone(), vector[0].clone()],
+                                  "fusion": {"rrf": {"k": 60}}, "k": 10}}]);
+    let shapes: Vec<(&str, Vec<(&str, Value)>)> = vec![
+        ("text", vec![("retrievers", text.clone())]),
+        ("vector", vec![("retrievers", vector.clone())]),
+        ("fused", vec![("retrievers", fused.clone())]),
+        ("filter", vec![("filter", tenant("a"))]),
+        (
+            "text + highlight",
+            vec![
+                ("retrievers", text.clone()),
+                (
+                    "highlight",
+                    json!({"fields": [{"field": "body", "preTag": "[", "postTag": "]",
+                                                  "fragmentSize": 100, "numberOfFragments": 1}]}),
+                ),
+            ],
+        ),
+    ];
+    // (select, the source keys every hit may have).
+    let selects: Vec<(Value, Vec<&str>)> = vec![
+        (json!({"source": {"include": ["body"]}}), vec!["body"]),
+        (
+            json!({"source": {"include": ["tenant", "n"]}}),
+            vec!["n", "tenant"],
+        ),
+        (
+            json!({"source": {"exclude": ["body"]}}),
+            vec!["n", "tenant"],
+        ),
+        (json!({"source": "none"}), vec![]),
+        // Elasticsearch's `_source` spellings.
+        (json!({"source": ["body"]}), vec!["body"]),
+        (json!({"source": {"includes": ["body"]}}), vec!["body"]),
+        (
+            json!({"source": {"excludes": ["body"]}}),
+            vec!["n", "tenant"],
+        ),
+        (json!({"source": false}), vec![]),
+    ];
+    for (shape, extra) in &shapes {
+        for (select, keys) in &selects {
+            let mut fields: Vec<(&str, Value)> = extra.clone();
+            fields.push(("select", select.clone()));
+            fields.push(("limit", json!(10)));
+            let body = running
+                .connect(SEARCH, &kb_request(&fields))
+                .await
+                .expect_ok();
+            let hits = hits(&body);
+            assert!(!hits.is_empty(), "{shape} {select}: {body}");
+            for hit in &hits {
+                let got: Vec<&str> = hit
+                    .get("source")
+                    .and_then(Value::as_object)
+                    .map(|source| source.keys().map(String::as_str).collect())
+                    .unwrap_or_default();
+                assert!(
+                    got.iter().all(|key| keys.contains(key)),
+                    "{shape} {select}: source keys {got:?}, expected within {keys:?}: {hit}"
+                );
+            }
+        }
+    }
+    // A `select` the engine cannot read is refused, never the whole source.
+    for select in [
+        json!({"include": ["body"]}),
+        json!({"source": {"only": ["body"]}}),
+    ] {
+        let reply = running
+            .connect(
+                SEARCH,
+                &kb_request(&[("retrievers", text.clone()), ("select", select.clone())]),
+            )
+            .await;
+        let error = reply.expect_error(StatusCode::BAD_REQUEST);
+        assert_eq!(error["code"], "invalid_argument", "{select}: {error}");
+    }
+    // The REST route's §05 projection and its IR projection.
+    for select in [
+        json!({"source": {"include": ["body"]}}),
+        json!(["id", "body"]),
+    ] {
+        let rest = if select.is_array() {
+            json!({"from": "collections.kb", "limit": 10, "select": select,
+                   "retrieve": [{"text": {"field": "body", "query": "refund", "k": 10}}]})
+        } else {
+            json!({"collection": "kb", "limit": 10, "select": select, "retrievers": text})
+        };
+        let body = running.rest_query("w", &rest).await.expect_ok();
+        let hits = hits(&body);
+        assert!(!hits.is_empty(), "REST {select}: {body}");
+        for hit in &hits {
+            let keys: Vec<&str> = hit["source"]
+                .as_object()
+                .map(|source| source.keys().map(String::as_str).collect())
+                .unwrap_or_default();
+            assert_eq!(keys, ["body"], "REST {select}: {hit}");
+        }
+    }
+    running.shutdown().await;
+}
+
 /// An empty result is an empty answer, never an error: a filter that matches
 /// nothing, a total of zero, a scroll of a collection nobody wrote to, and a
 /// page past the end all answer `200` with the empties **absent** (proto3

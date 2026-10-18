@@ -247,6 +247,28 @@ impl<'de> Deserialize<'de> for SourceFilter {
             fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
                 f.write_str("\"all\", \"none\" or {\"include\": [..], \"exclude\": [..]}")
             }
+            // Elasticsearch's `_source: true | false`.
+            fn visit_bool<E: de::Error>(self, v: bool) -> Result<SourceFilter, E> {
+                Ok(if v {
+                    SourceFilter::All
+                } else {
+                    SourceFilter::None
+                })
+            }
+            // Elasticsearch's `_source: ["title", "meta.*"]`: include patterns.
+            fn visit_seq<A: de::SeqAccess<'de>>(
+                self,
+                mut seq: A,
+            ) -> Result<SourceFilter, A::Error> {
+                let mut include = Vec::new();
+                while let Some(pattern) = seq.next_element::<String>()? {
+                    include.push(pattern);
+                }
+                Ok(SourceFilter::Paths {
+                    include,
+                    exclude: Vec::new(),
+                })
+            }
             fn visit_str<E: de::Error>(self, v: &str) -> Result<SourceFilter, E> {
                 match v {
                     "all" => Ok(SourceFilter::All),
@@ -258,8 +280,9 @@ impl<'de> Deserialize<'de> for SourceFilter {
                 let (mut include, mut exclude) = (None, None);
                 while let Some(key) = map.next_key::<String>()? {
                     let slot = match key.as_str() {
-                        "include" => &mut include,
-                        "exclude" => &mut exclude,
+                        // `includes`/`excludes` are Elasticsearch's spelling.
+                        "include" | "includes" => &mut include,
+                        "exclude" | "excludes" => &mut exclude,
                         other => {
                             return Err(de::Error::custom(format!(
                                 "unknown key {other} in the source filter"

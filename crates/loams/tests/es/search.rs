@@ -1195,6 +1195,78 @@ async fn multi_match_and_query_string_score_over_every_text_field() {
     es.server.shutdown().await.expect("shutdown");
 }
 
+/// `_source` filtering on `_search`, in each spelling Elasticsearch takes.
+#[tokio::test]
+async fn search_source_filtering_restricts_each_hit() {
+    let es = Es::start().await;
+    let docs: Vec<(&str, Value)> = vec![
+        (
+            "1",
+            json!({"title": "Cold River", "body": "a river", "meta": {"a": 1, "b": 2}}),
+        ),
+        (
+            "2",
+            json!({"title": "Saline River", "body": "a creek", "meta": {"a": 3, "b": 4}}),
+        ),
+    ];
+    bulk_index(&es, "src", &docs).await;
+    let query = json!({"match": {"title": "river"}});
+    let keys = |a: &Answer| -> Vec<Vec<String>> {
+        hits(a)
+            .iter()
+            .map(|h| match h.get("_source").and_then(Value::as_object) {
+                Some(source) => {
+                    let mut keys: Vec<String> = source.keys().cloned().collect();
+                    keys.sort();
+                    keys
+                }
+                None => vec!["<none>".to_string()],
+            })
+            .collect()
+    };
+    for (source, want) in [
+        (json!(["title"]), vec!["title"]),
+        (json!("title"), vec!["title"]),
+        (
+            json!({"includes": ["title", "meta.a"]}),
+            vec!["meta", "title"],
+        ),
+        (json!({"excludes": ["body", "meta"]}), vec!["title"]),
+        (
+            json!({"includes": ["meta"], "excludes": ["meta.b"]}),
+            vec!["meta"],
+        ),
+        (json!(false), vec!["<none>"]),
+    ] {
+        let a = search(
+            &es,
+            "/src/_search",
+            json!({"query": query, "_source": source}),
+        )
+        .await;
+        let got = keys(&a);
+        assert_eq!(got.len(), 2, "{source}: {}", a.text);
+        for hit in got {
+            assert_eq!(hit, want, "{source}: {}", a.text);
+        }
+        if source == json!({"includes": ["meta"], "excludes": ["meta.b"]}) {
+            assert_eq!(hits(&a)[0]["_source"]["meta"].as_object().unwrap().len(), 1);
+        }
+    }
+    // The URL parameters.
+    for path in [
+        "/src/_search?_source_includes=title",
+        "/src/_search?_source=title",
+        "/src/_search?_source_excludes=body,meta",
+    ] {
+        let a = search(&es, path, json!({"query": query})).await;
+        for hit in keys(&a) {
+            assert_eq!(hit, ["title"], "{path}: {}", a.text);
+        }
+    }
+    es.server.shutdown().await.expect("shutdown");
+}
+
 #[tokio::test]
 async fn min_score_and_boost_shape_the_scores() {
     let es = Es::start().await;
