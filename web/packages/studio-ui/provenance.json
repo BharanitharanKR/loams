@@ -136,7 +136,7 @@
       "upstreamPath": "apps/web/src/components/chat/MessagesTimeline.logic.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "123de3e17ecf954fc243e975c9a9d07765c9cc16d8091b5da2a72e3149600853",
-      "localSha256": "91577cafa644bd2600142f7bab8d5faf119a5df7c3056a070f2ab2f820cb4072",
+      "localSha256": "d437db8e8eb353aa6c0241a70d84ab42bcaf0fe96062e7c86b6bd0e0e85d7098",
       "verdict": "adapt",
       "group": "b",
       "note": "rows from agentd transcript entries; stable-row reuse kept"
@@ -146,16 +146,17 @@
       "upstreamPath": "packages/client-runtime/src/work-log/commandLabel.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "e439d44bb9e3007c1aeb99c8b6c77a3688e9374fe3a83560af63ce6d00337bec",
-      "localSha256": "741d98c456ea65e5f24a5218dcec90acf2d9b3fa3744a30832486674c222af78",
-      "verdict": "as-is",
-      "group": "b"
+      "localSha256": "68321ec156dc5abacb65ee0c01f58ed76d4a716a0ce02ad18fffc0ab3d904763",
+      "verdict": "adapt",
+      "group": "b",
+      "note": "shell -c flag test made linear-time (CodeQL js/polynomial-redos)"
     },
     {
       "path": "src/chat/tools/presentation.ts",
       "upstreamPath": "packages/client-runtime/src/work-log/presentation.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "fc8ce4fef03e48a837f283063195a822d48978a7ed4fadee993250cf7cd28d17",
-      "localSha256": "e3df95c2b1bf89fd15fbfdaa14f402293d3bd898e5193ba18429afde2f4e95be",
+      "localSha256": "4d09e76298bbf5117e12bc90d01c6379ebcbe3a9cce15f60967a1ac0931b4a1e",
       "verdict": "adapt",
       "group": "b",
       "note": "presentation rules over agentd's ToolCall kinds"
@@ -639,9 +640,10 @@
       "upstreamPath": "apps/web/src/worktreeCleanup.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "e5d1bb9e7190177be0143ad34cf49ac3cc44e09df5937d2764bdd77187070604",
-      "localSha256": "810fb13961d99ee088901c0a84fdc2dfd611387358558add87585362904e00dd",
-      "verdict": "as-is",
-      "group": "thread-list"
+      "localSha256": "8b701ec34d980c037c30a85cee8044a5baa3cd1916dc07ee45f3e50285744f06",
+      "verdict": "adapt",
+      "group": "thread-list",
+      "note": "trailing-slash trim made linear-time (CodeQL js/polynomial-redos)"
     },
     {
       "path": "src/git/actions.logic.ts",
