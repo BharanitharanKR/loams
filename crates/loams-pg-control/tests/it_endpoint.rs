@@ -1172,8 +1172,7 @@ async fn it_role_password_reaches_compute_and_rotates() {
     }
     let old = login(&info.host, info.port, &info.database, "app", &first)
         .await
-        .err()
-        .expect("the old password is refused after the reset");
+        .expect_err("the old password is refused after the reset");
     assert!(bad_password(&old), "{old}");
     // The compute did not restart for it.
     assert_eq!(
@@ -1199,8 +1198,7 @@ async fn it_role_password_reaches_compute_and_rotates() {
     assert_eq!(one, 1);
     let old = login(&info.host, info.port, &info.database, "app", &first)
         .await
-        .err()
-        .expect("the old password is refused by the next compute");
+        .expect_err("the old password is refused by the next compute");
     assert!(bad_password(&old), "{old}");
 
     h.service
