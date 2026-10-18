@@ -154,6 +154,30 @@ describe('the Factory group', () => {
     expect(await screen.findByRole('navigation', { name: 'Factory' })).toBeTruthy();
   });
 
+  it('shows its header while the daemon is down (owner ruling, 2026-10-18)', async () => {
+    const { agentd } = desktopAgentd({ running: false });
+    const router = {
+      current: () => ({ path: '/studio', params: {} }),
+      subscribe: () => () => {},
+      navigate: vi.fn(),
+      page: () => () => {},
+    };
+    render(
+      wrap(
+        <StudioThreads
+          agentd={agentd}
+          factory={desktopFake().factory}
+          router={router}
+          keys={createStudioKeys()}
+        />,
+      ),
+    );
+    const group = await screen.findByRole('navigation', { name: 'Factory' });
+    expect(await within(group).findByText('3 of 8 connected')).toBeTruthy();
+    // The threads still need the daemon.
+    expect(screen.queryByRole('navigation', { name: 'Projects' })).toBeNull();
+  });
+
   it('shows in Studio mode only; the threads show in both (design 59, W10)', async () => {
     const { agentd } = desktopAgentd({ folder: null });
     const listeners = new Set<() => void>();
