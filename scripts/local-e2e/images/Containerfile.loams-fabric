@@ -17,7 +17,7 @@ COPY loams-fabric loams-house-worker /usr/local/bin/
 COPY libchdb.so /usr/local/lib/
 RUN ldconfig
 LABEL org.opencontainers.image.title="loams-fabric" \
-      org.opencontainers.image.description="Loams Fabric: the House front and its chDB workers (preview)" \
+      org.opencontainers.image.description="Loams Fabric: the House front and its chDB workers" \
       org.opencontainers.image.source="https://github.com/ostrium-labs/loams" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}" \

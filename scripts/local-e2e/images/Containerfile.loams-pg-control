@@ -35,7 +35,7 @@ RUN apt-get update \
 COPY loams-pg-control /usr/local/bin/loams
 COPY --from=compose /docker-compose /usr/local/bin/docker-compose
 LABEL org.opencontainers.image.title="loams-pg-control" \
-      org.opencontainers.image.description="Loams Postgres control plane and compute runner (preview)" \
+      org.opencontainers.image.description="Loams Postgres control plane and compute runner" \
       org.opencontainers.image.source="https://github.com/ostrium-labs/loams" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}" \

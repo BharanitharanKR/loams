@@ -24,7 +24,7 @@ case "${1:-start}" in
     for _ in $(seq 60); do curl -fsS -o /dev/null http://127.0.0.1:5190/ && break; sleep 1; done
     echo "console: http://127.0.0.1:5190/" ;;
   hosted)
-    (cd "$root/web/apps/console" && { [[ -f dist/index.html ]] || pnpm build; } \
+    (cd "$root/web/apps/console" && { [[ -n "${E2E_SKIP_BUILD:-}" && -f dist/index.html ]] || pnpm build; } \
       && LOAMS_ENGINE_URL="${E2E_ENGINE:-http://127.0.0.1:18080}" LOAMS_AGENTD_ORIGINS=https://127.0.0.1:17443 node deploy/stage.mjs)
     systemctl --user stop loams-e2e-console-hosted 2>/dev/null || true; systemctl --user reset-failed loams-e2e-console-hosted 2>/dev/null || true
     systemd-run --user --unit=loams-e2e-console-hosted --description='Loams local-e2e hosted console (:5192)' \

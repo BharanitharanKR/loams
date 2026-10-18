@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# Loams Git: a small repository made here (no clone), registered with the
-# engine's RepoService and pushed with git-remote-loams straight to the
-# stack's bucket (RustFS on 127.0.0.1:19000), then fetched back into a fresh
-# clone. git-remote-loams is built on the host (the shared cargo target) if
+# Loams Git: a small repository made here (no clone), pushed with
+# git-remote-loams straight to the engine's bucket (RustFS on 127.0.0.1:19000;
+# the first push creates it, LOAMS_GIT_CREATE_ON_PUSH=1), then fetched back
+# into a fresh clone. git-remote-loams is built on the host (the shared cargo target) if
 # it is not on PATH.
 #
 #   scripts/local-e2e/seed/git.sh
@@ -45,17 +45,39 @@ MD
   git -C "$src" checkout -q main
 fi
 
-# The catalog entry (RepoService needs the engine's `git` feature).
-reply="$(curl -s -X POST "$engine/loams.repos.v1.RepoService/CreateRepo" -H 'content-type: application/json' \
-  -H 'connect-protocol-version: 1' -d '{"namespace": "e2e", "name": "e2e-sample", "idempotencyKey": "e2e-sample"}')"
-say "CreateRepo: ${reply:0:300}"
-reply="$(curl -s -X POST "$engine/loams.repos.v1.RepoService/ListRepos" -H 'content-type: application/json' \
+# The bucket keys repositories by the namespace's numeric id (not its name):
+# ask the engine for it (CreateNamespace answers the id, or already_exists
+# with it), else E2E_GIT_NS_ID (1001, the id of the first namespace).
+reply="$(curl -s -X POST "$engine/loams.collection.v1.NamespaceService/CreateNamespace" -H 'content-type: application/json' \
   -H 'connect-protocol-version: 1' -d '{"namespace": "e2e"}')"
-say "ListRepos: ${reply:0:300}"
+nsid="$(python3 -I -c '
+import json, re, sys
+try:
+    d = json.loads(sys.argv[1])
+except ValueError:
+    sys.exit(0)
+if d.get("namespaceId"):
+    print(d["namespaceId"])
+else:
+    m = re.search(r"\bid[\"=: ]+(\d+)", json.dumps(d))
+    print(m.group(1) if m else "")
+' "$reply")"
+nsid="${nsid:-${E2E_GIT_NS_ID:-1001}}"
+say "namespace e2e: id $nsid (CreateNamespace: ${reply:0:200})"
 
+# The engine's bucket (LOAMS_BUCKET in the stack's .env), here through RustFS's
+# host port. Its first push creates the repository (RepoService answers
+# feature_not_in_variant in the release image).
+bucket="$(sed -n 's/^LOAMS_BUCKET=//p' "$E2E_HOME/stack/release/.env" | tail -1)"
+bucket="${bucket:-s3://loams-engine/stack}"
+case "$bucket" in
+  s3://*) ;;
+  *) say "FAIL the engine's bucket is $bucket: the host's helper cannot reach a file:// bucket inside the container; use s3://"; exit 1 ;;
+esac
 export AWS_ACCESS_KEY_ID=rustfsadmin AWS_SECRET_ACCESS_KEY=rustfsadmin AWS_REGION=us-east-1 \
-  AWS_ENDPOINT=http://127.0.0.1:19000 AWS_ALLOW_HTTP=true
-remote="loams::s3://loams-engine/stack/ns/e2e/repos/e2e-sample"
+  AWS_ENDPOINT_URL=http://127.0.0.1:19000 AWS_ALLOW_HTTP=true LOAMS_GIT_CREATE_ON_PUSH=1
+remote="loams::${bucket%/}/ns/$nsid/repos/e2e-sample"
+say "remote $remote"
 git -C "$src" remote remove loams 2>/dev/null
 git -C "$src" remote add loams "$remote"
 status=0

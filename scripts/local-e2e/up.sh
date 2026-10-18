@@ -56,8 +56,8 @@ LOAMS_REGISTRY=$E2E_REGISTRY
 LOAMS_VERSION=$E2E_VERSION
 LOAMS_AUTH_MODE=off
 LOAMS_CORS_ORIGINS=http://127.0.0.1:5190,http://localhost:5190,http://127.0.0.1:5192,http://localhost:5192,http://127.0.0.1:3000,http://localhost:3000
-# s3://loams-engine/stack does not work: the engine ignores AWS_* (bug B1 in the local-e2e report).
-LOAMS_BUCKET=file:///var/lib/loams/bucket
+# RustFS (from the Postgres stack), with AWS_* in secrets/engine.env (B1, fixed by PR #755).
+LOAMS_BUCKET=s3://loams-engine/stack
 LOAMS_HOUSE_ENDPOINT=https://house:8443
 HOUSE_PRINCIPALS=dev-loopback=read+write+ddl+admin
 CONTAINER_SOCKET=$E2E_PODMAN_SOCK
@@ -67,13 +67,27 @@ LOAMS_ENGINE_URL=http://127.0.0.1:18080
 LOAMS_CONSOLE_DIR=$root/web/apps/console/dist
 ENV
 fi
+# A stack made before B1 was fixed kept its bucket on the loams-data volume.
+if grep -q '^# s3://loams-engine/stack does not work' .env; then
+  sed -i 's|^# s3://loams-engine/stack does not work.*|# RustFS (from the Postgres stack), with AWS_* in secrets/engine.env (B1, fixed by PR #755).|' .env
+  python3 -I - .env <<'PY'
+import sys
+p = sys.argv[1]
+lines = open(p).read().splitlines(keepends=True)
+i = max(n for n, l in enumerate(lines) if l.startswith("LOAMS_BUCKET="))
+lines[i] = "LOAMS_BUCKET=s3://loams-engine/stack\n"
+open(p, "w").write("".join(lines))
+PY
+  echo "up.sh: the engine's bucket is now s3://loams-engine/stack (re-seed: data on the old bucket is not moved)"
+fi
+sed -i 's/^AWS_ENDPOINT=/AWS_ENDPOINT_URL=/' secrets/engine.env 2>/dev/null || true
 if [[ ! -f secrets/engine.env ]]; then
   cat > secrets/engine.env <<ENV
 # The engine's S3 settings for LOAMS_BUCKET (RustFS from the Postgres stack).
 AWS_ACCESS_KEY_ID=rustfsadmin
 AWS_SECRET_ACCESS_KEY=rustfsadmin
 AWS_REGION=us-east-1
-AWS_ENDPOINT=http://rustfs:9000
+AWS_ENDPOINT_URL=http://rustfs:9000
 AWS_ALLOW_HTTP=true
 ENV
   chmod 0644 secrets/engine.env

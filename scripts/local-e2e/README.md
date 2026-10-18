@@ -55,11 +55,14 @@ ports to the engine's loopback listeners. The House gets the same
 the House. Containers on the compose network can reach the forwarder too, so
 never run this on a shared machine.
 
-The bucket was meant to be S3 (RustFS, from the included Postgres stack), but the
-engine ignores `AWS_*` (it opens the bucket with `object_store::parse_url_opts` and
-no options, which does not read the environment), so it is
-`file:///var/lib/loams/bucket` until that is fixed. `secrets/engine.env` still holds
-the RustFS settings; set `LOAMS_BUCKET=s3://loams-engine/stack` in `.env` to retry.
+The engine's bucket is S3: `s3://loams-engine/stack` on RustFS (from the
+included Postgres stack; `e2e-bucket` creates the bucket), with the `AWS_*`
+settings in `secrets/engine.env` (`AWS_ENDPOINT_URL=http://rustfs:9000`). A
+stack made before PR #755 (B1) used `file:///var/lib/loams/bucket`; `up.sh`
+switches its `.env` over, and the old data is not moved, so re-seed (`down.sh
+--purge` or remove the volumes first). Git repositories live in the same bucket
+under `ns/<namespace-id>/repos/<repo>`; `seed/git.sh` pushes there from the host
+through RustFS's port 19000.
 
 ## Steps
 
@@ -71,12 +74,11 @@ scripts/local-e2e/build-binaries.sh            # release binaries in rust:1.97.1
 scripts/local-e2e/build-images.sh              # the four images, from those binaries
 scripts/local-e2e/up.sh                        # the stack, with --profile house and postgres-control
 scripts/local-e2e/seed-all.sh                  # every product (or name some: seed-all.sh graph house)
-scripts/local-e2e/agentd.sh desktop            # agentd for the desktop's Studio
 scripts/local-e2e/agentd.sh web                # agentd for the web console's Studio (debug build)
 scripts/local-e2e/console.sh                   # dev server, http://127.0.0.1:5190/
 scripts/local-e2e/console.sh hosted            # hosted web edition, http://127.0.0.1:5192/
 node scripts/local-e2e/console-setup.mjs       # first-run setup (org + owner) through the console
-pnpm --filter @loams/console build && scripts/local-e2e/desktop.sh
+pnpm --filter @loams/console build && scripts/local-e2e/desktop.sh   # start [dev|preview]; the app starts agentd itself
 node scripts/local-e2e/console-crawl.mjs --base http://127.0.0.1:5192/ --out <dir>  # screenshot + report per page
 node scripts/local-e2e/console-interact.mjs --out <dir>   # Analytics, Graph, Live, Studio (hosted edition)
 node scripts/local-e2e/desktop-crawl.mjs --out <dir>      # every desktop page (its own userData)

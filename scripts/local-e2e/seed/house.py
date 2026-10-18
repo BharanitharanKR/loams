@@ -8,7 +8,9 @@ as E2E_HOUSE_PASSWORD), then read back through the engine's loams.house.v1
   `INSERT ... FORMAT Parquet` (the file as the request body);
 - table `nyc.payment_types` (a small dimension).
 
-Idempotent: the table is truncated before the load.
+Idempotent: the tables are truncated before the load. The load runs twice (the
+second TRUNCATE + reload must keep its rows), and each row count must match
+the Parquet file's (else the check fails).
 
     E2E_HOUSE_PASSWORD=... venv/bin/python -I scripts/local-e2e/seed/house.py
 """
@@ -16,6 +18,7 @@ Idempotent: the table is truncated before the load.
 from __future__ import annotations
 
 import base64
+import json
 import os
 import sys
 
@@ -54,15 +57,29 @@ def main():
     report.attempt("ping", lambda: ch("SELECT version()"))
     for sql in DDL:
         report.attempt(f"ddl {sql.split('(')[0][:60]}", lambda sql=sql: ch(sql) or "ok")
-    report.attempt("payment types", lambda: ch("TRUNCATE TABLE nyc.payment_types") or ch(
-        "INSERT INTO nyc.payment_types VALUES (0,'Flex Fare'),(1,'Credit card'),(2,'Cash'),(3,'No charge'),"
-        "(4,'Dispute'),(5,'Unknown'),(6,'Voided trip')") or "ok")
+    payments = ("INSERT INTO nyc.payment_types VALUES (0,'Flex Fare'),(1,'Credit card'),(2,'Cash'),"
+                "(3,'No charge'),(4,'Dispute'),(5,'Unknown'),(6,'Voided trip')")
     path = data_path("nyc-taxi", "yellow_tripdata_2024-01.parquet")
-    log(f"loading {path} ({os.path.getsize(path) >> 20} MiB)")
-    report.attempt("load yellow_trips (FORMAT Parquet)", lambda: ch("TRUNCATE TABLE nyc.yellow_trips") or ch(
-        "INSERT INTO nyc.yellow_trips FORMAT Parquet", open(path, "rb").read(),
-        {"input_format_parquet_allow_missing_columns": "1"}) or "ok")
-    report.attempt("count", lambda: ch("SELECT count() FROM nyc.yellow_trips"))
+    import pyarrow.parquet as pq
+    expected = pq.ParquetFile(path).metadata.num_rows
+    log(f"loading {path} ({os.path.getsize(path) >> 20} MiB, {expected} rows)")
+    body = open(path, "rb").read()
+
+    def count(table, want):
+        got = int(ch(f"SELECT count() FROM {table}"))
+        if got != want:
+            raise AssertionError(f"{table}: {got} rows, expected {want}")
+        return f"{got} rows"
+
+    # Twice: the second TRUNCATE + reload is the same INSERT inside the House's
+    # insert deduplication window, which must not drop it (fixed by PR #767).
+    for n in (1, 2):
+        report.attempt(f"payment types (load {n})", lambda: ch("TRUNCATE TABLE nyc.payment_types") or ch(payments) or "ok")
+        report.attempt(f"payment types count (load {n})", lambda: count("nyc.payment_types", 7))
+        report.attempt(f"load yellow_trips (FORMAT Parquet, load {n})", lambda: ch("TRUNCATE TABLE nyc.yellow_trips") or ch(
+            "INSERT INTO nyc.yellow_trips FORMAT Parquet", body,
+            {"input_format_parquet_allow_missing_columns": "1"}) or "ok")
+        report.attempt(f"yellow_trips count (load {n})", lambda: count("nyc.yellow_trips", expected))
     report.attempt("top pickup zones", lambda: ch(
         "SELECT PULocationID, count() c FROM nyc.yellow_trips GROUP BY PULocationID ORDER BY c DESC LIMIT 5 FORMAT TSV"))
     report.attempt("daily revenue", lambda: ch(
@@ -77,6 +94,8 @@ def main():
                    "JOIN nyc.payment_types p ON p.id = t.payment_type GROUP BY p.name ORDER BY trips DESC"})
         if end:
             raise AssertionError(end)
+        if "Credit card" not in json.dumps(msgs):
+            raise AssertionError(f"no 'Credit card' row in the reply: {str(msgs)[:300]}")
         return str(msgs)[:300]
     report.attempt("engine loams.house.v1 ExecuteQuery", via_engine)
     report.attempt("engine loams.house.v1 ListDatabases/Tables", lambda: str(connect(

@@ -15,7 +15,7 @@ RUN apt-get update \
  && install -d -m 0700 -o loams -g loams /home/loams/agentd
 COPY loams-agentd /usr/local/bin/loams-agentd
 LABEL org.opencontainers.image.title="loams-agentd" \
-      org.opencontainers.image.description="Loams agent daemon (preview, optional)" \
+      org.opencontainers.image.description="Loams agent daemon (optional)" \
       org.opencontainers.image.source="https://github.com/ostrium-labs/loams" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}" \
