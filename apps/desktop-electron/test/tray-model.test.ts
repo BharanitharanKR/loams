@@ -44,7 +44,6 @@ describe("tray-model", () => {
 			expect(m.items.map((i) => i.id)).toEqual([
 				"open",
 				"engine",
-				"approvals",
 				"servers",
 				"quit",
 			]);
@@ -63,7 +62,10 @@ describe("tray-model", () => {
 		});
 		expect(m.items[3]?.label).toContain("Local engine");
 		expect(m.tooltip).toContain("3 pending approvals");
-		expect(trayModel(ready, 0, server).items[2]?.enabled).toBe(false);
+		// No server approvals (the plugin is absent on a real engine): no dead-end item.
+		expect(trayModel(ready, 0, server).items.map((i) => i.id)).not.toContain(
+			"approvals",
+		);
 	});
 	it("badge_label", () => {
 		expect(badgeLabel(0)).toBe("");
