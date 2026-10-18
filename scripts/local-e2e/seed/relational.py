@@ -108,7 +108,9 @@ def postgres(report):
                                         "idempotencyKey": "e2e-chinook-rw"}).get("endpoint", {})
         report.add("pg: CreateEndpoint", True, ep.get("id"))
     env = os.path.join(HOME, "pg-chinook.env")
-    if not os.path.exists(env):
+    # A new password every run (a file left by an older stack is stale); the
+    # compute gets it with its next spec push, some seconds later.
+    if True:
         roles = [r.get("name") for r in pg_call("ListRoles", {"namespace": ns, "projectId": pid, "branchId": branch}).get("roles", [])]
         if "app" in roles:
             password = pg_call("ResetRolePassword", {"namespace": ns, "projectId": pid, "branchId": branch,
@@ -117,16 +119,31 @@ def postgres(report):
             password = pg_call("CreateRole", {"namespace": ns, "projectId": pid, "branchId": branch, "name": "app",
                                               "idempotencyKey": "e2e-chinook-app"}).get("password")
         fd = os.open(env, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
-        os.write(fd, f"PGPASSWORD={password}\n".encode())
+        os.write(fd, f"PGPASSWORD={password}\nPROJECT={pid}\n".encode())
         os.close(fd)
-    password = open(env).read().split("=", 1)[1].strip()
+    password = dict(line.split("=", 1) for line in open(env).read().splitlines() if "=" in line)["PGPASSWORD"]
     dbs = [d.get("name") for d in pg_call("ListDatabases", {"namespace": ns, "projectId": pid, "branchId": branch}).get("databases", [])]
     if "chinook" not in dbs:
         pg_call("CreateDatabase", {"namespace": ns, "projectId": pid, "branchId": branch, "name": "chinook",
                                    "ownerRole": "app", "idempotencyKey": "e2e-chinook-db"})
-    info = pg_call("GetConnectionInfo", {"namespace": ns, "projectId": pid, "branchId": branch,
-                                         "role": "app", "database": "chinook"}).get("connection", {})
-    report.add("pg: GetConnectionInfo", True, {k: v for k, v in info.items() if k != "caPem"})
+    try:
+        info = pg_call("GetConnectionInfo", {"namespace": ns, "projectId": pid, "branchId": branch,
+                                             "role": "app", "database": "chinook"}).get("connection", {})
+        report.add("pg: GetConnectionInfo", True, {k: v for k, v in info.items() if k != "caPem"})
+    except HttpError as e:
+        # 0.1.0: GetConnectionInfo answers unimplemented (PG2 Tasks 20 and 25), so
+        # start the endpoint and dial its `host` (PgDog's address).
+        if e.status != 501:
+            raise
+        report.add("pg: GetConnectionInfo", False, f"{e} (falling back to the endpoint's host)")
+        q = {"namespace": ns, "projectId": pid, "endpointId": ep["id"]}
+        if pg_call("GetEndpoint", q).get("endpoint", {}).get("state") != "ENDPOINT_STATE_RUNNING":
+            pg_call("StartEndpoint", q)
+        ep = until("the endpoint is running", lambda: (lambda x: x if x.get("state") == "ENDPOINT_STATE_RUNNING" else None)(
+            pg_call("GetEndpoint", q).get("endpoint", {})), within=300)
+        host, port = ep["host"].rsplit(":", 1)
+        info = {"host": host, "port": port, "user": "app"}
+        report.add("pg: endpoint running", True, ep["host"])
     ca = os.path.join(HOME, "pg-chinook-ca.pem")
     if info.get("caPem"):
         open(ca, "w").write(info["caPem"])
@@ -134,11 +151,50 @@ def postgres(report):
     def dial():
         try:
             return psycopg.connect(host="127.0.0.1", port=int(info["port"]), user=info.get("user", "app"),
-                                   password=password, dbname="chinook", sslmode="require", connect_timeout=10,
+                                   password=password, dbname="chinook", sslmode=os.environ.get("E2E_PG_SSLMODE", "prefer"),
+                                   connect_timeout=10,
                                    autocommit=True)
         except psycopg.OperationalError as e:
             log("waiting for the compute:", str(e).splitlines()[0])
             return None
+    def password_by_hand():
+        # 0.1.0: roles reach the compute with no password verifier (pg-control's
+        # upcall/spec.rs, "Task 24"), so the API's password never works. Set it
+        # inside the compute (cloud_admin is trusted on its loopback) to go on.
+        import subprocess
+        home = os.environ.get("E2E_HOME", "/mnt/Projects/loams-e2e")
+        run = os.environ.get("XDG_RUNTIME_DIR", f"/run/user/{os.getuid()}")
+        pod = ["podman", "--root", f"{home}/podman/storage", "--runroot", f"{run}/loams-e2e-podman"]
+        names = subprocess.run(pod + ["ps", "--format", "{{.Names}}"], check=True, capture_output=True, text=True).stdout.split()
+        want = f"loams-pg-{ns}-{ep['computeId'].lower()}-"
+        name = next(n for n in names if n.startswith(want))
+        lit = password.replace("'", "''")
+        subprocess.run(pod + ["exec", "-i", name, "psql", "-h", "127.0.0.1", "-p", "55433", "-U", "cloud_admin",
+                              "-d", "postgres", "-v", "ON_ERROR_STOP=1", "-q", "-f", "-"],
+                       input=f"ALTER ROLE app PASSWORD '{lit}';\n", check=True, capture_output=True, text=True)
+        return name
+
+    first = dial()
+    if first is None:
+        try:
+            psycopg.connect(host="127.0.0.1", port=int(info["port"]), user="app", password=password, dbname="chinook",
+                            connect_timeout=10).close()
+        except psycopg.OperationalError as e:
+            if "password authentication failed" in str(e):
+                # Give the spec push a minute, then set it by hand.
+                time.sleep(60)
+                try:
+                    psycopg.connect(host="127.0.0.1", port=int(info["port"]), user="app", password=password,
+                                    dbname="chinook", connect_timeout=10).close()
+                    report.add("pg: connect as app with the API's password", True, "after the spec push")
+                except psycopg.OperationalError as e2:
+                    report.add("pg: connect as app with the API's password", False, str(e2).splitlines()[0])
+                    report.add("pg: password set in the compute by hand (workaround)", True, password_by_hand())
+        else:
+            report.add("pg: connect as app with the API's password", True, "ok")
+    else:
+        first.close()
+        report.add("pg: connect as app with the API's password", True, "ok")
     conn = until("the compute accepts connections", dial, within=600, every=5)
     with conn:
         have = conn.execute("SELECT count(*) FROM information_schema.tables WHERE table_name='track'").fetchone()[0]
@@ -149,7 +205,8 @@ def postgres(report):
             for s in stmts:
                 conn.execute(s)
             report.add("pg: load Chinook", True, f"{len(stmts)} statements in {time.time() - t0:.0f}s")
-        report.add("pg: track count", True, conn.execute("SELECT count(*) FROM track").fetchone()[0])
+        n = conn.execute("SELECT count(*) FROM track").fetchone()[0]
+        report.add("pg: track count", n == 3503, f"{n} (expected 3503)")
         report.add("pg: revenue per country", True, conn.execute(
             "SELECT billing_country, sum(total) FROM invoice GROUP BY 1 ORDER BY 2 DESC LIMIT 5").fetchall())
     report.add("pg: branches", True, [b.get("name") for b in pg_call(

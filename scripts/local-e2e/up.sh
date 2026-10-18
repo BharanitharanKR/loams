@@ -26,6 +26,10 @@ if ! systemctl --user is-active -q loams-e2e-podman; then
     "unix://$E2E_PODMAN_SOCK"
   for _ in $(seq 50); do [[ -S "$E2E_PODMAN_SOCK" ]] && break; sleep 0.2; done
 fi
+# `podman system service` makes the socket 0600; pg-runner (uid 10001, group 0
+# = your user inside rootless Podman, CONTAINER_SOCKET_GID=0) needs group
+# access, as podman.socket's SocketMode=0660 gives it.
+chmod 0660 "$E2E_PODMAN_SOCK"
 export DOCKER_HOST="unix://$E2E_PODMAN_SOCK"
 
 # 2. The images (build-binaries.sh, then build-images.sh, when missing).

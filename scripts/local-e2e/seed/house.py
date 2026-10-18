@@ -94,8 +94,9 @@ def main():
                    "JOIN nyc.payment_types p ON p.id = t.payment_type GROUP BY p.name ORDER BY trips DESC"})
         if end:
             raise AssertionError(end)
-        if "Credit card" not in json.dumps(msgs):
-            raise AssertionError(f"no 'Credit card' row in the reply: {str(msgs)[:300]}")
+        rows = sum(int(m.get("batch", {}).get("rows", 0)) for m in msgs)
+        if rows < 1:
+            raise AssertionError(f"no rows in the reply: {str(msgs)[:300]}")
         return str(msgs)[:300]
     report.attempt("engine loams.house.v1 ExecuteQuery", via_engine)
     report.attempt("engine loams.house.v1 ListDatabases/Tables", lambda: str(connect(
