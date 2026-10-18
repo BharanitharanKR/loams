@@ -15,6 +15,8 @@ import {
   Notice,
   plainError,
   Select,
+  SelectionGroup,
+  SelectionIndicator,
   SkeletonList,
   StatusTag,
   Table,
@@ -813,23 +815,24 @@ export function LivePage({
               ]}
             />
           </Card>
-          <div role="tablist" aria-label="Live views" className="flex gap-4 border-b border-rule">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={t.id === tab}
-                className={
-                  t.id === tab
-                    ? 'bg-transparent border-0 border-b-2 border-accent text-ink px-1 py-2 cursor-pointer font-medium'
-                    : 'bg-transparent border-0 border-b-2 border-transparent text-muted px-1 py-2 cursor-pointer'
-                }
-                onClick={() => setTab(t.id)}
-              >
-                {t.label}
-              </button>
-            ))}
+          <div role="tablist" aria-label="Live views" className="ds-tabs">
+            <SelectionGroup>
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={t.id === tab}
+                  className="ds-tab"
+                  onClick={() => setTab(t.id)}
+                >
+                  {t.label}
+                  {t.id === tab && (
+                    <SelectionIndicator layoutId="live-tab" className="ds-tab-indicator" />
+                  )}
+                </button>
+              ))}
+            </SelectionGroup>
           </div>
           {tab === 'documents' && (
             <DocumentsTab api={api} tables={loaded.tables} sel={sel} onSel={setSel} onGone={gone} />

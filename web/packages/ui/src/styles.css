@@ -539,7 +539,17 @@ textarea.loams-input {
   vertical-align: middle;
 }
 
-.loams-table tbody tr:last-child td {
+/* A row header (`<th scope="row">`) reads as the row's first cell, not as a column head. */
+.loams-table tbody th {
+  height: auto;
+  padding: 8px 10px;
+  font-size: var(--op-text-body);
+  font-weight: var(--op-weight-regular);
+  color: var(--op-ink);
+  white-space: normal;
+}
+
+.loams-table tbody tr:last-child > * {
   border-bottom: 0;
 }
 
@@ -1351,6 +1361,7 @@ button.loams-row,
   font-size: var(--op-text-small);
 }
 
+/* biome-ignore lint/style/noDescendingSpecificity: a different table from .loams-table */
 .loams-results-table th {
   position: sticky;
   top: 0;
@@ -1381,7 +1392,6 @@ button.loams-row,
   color: var(--op-faint);
 }
 
-/* biome-ignore lint/style/noDescendingSpecificity: a different table from .loams-table */
 .loams-results-table td {
   max-width: 420px;
   padding: 0 10px;

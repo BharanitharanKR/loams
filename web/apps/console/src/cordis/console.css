@@ -653,21 +653,24 @@ code {
   display: grid;
   gap: 16px;
 }
+/* The page header (PageHead): a 20px title, a one-line muted subtitle, actions on the right
+   at the title's height. Desktop-dense: the page's 16px gap is the only space under it. */
 .lc-page-head {
-  margin-bottom: 8px;
+  min-height: var(--op-control);
 }
 .lc-page-head h1 {
   margin: 0;
-  font-size: var(--op-text-hero);
-  line-height: 1.2;
+  min-height: var(--op-control);
+  font-size: var(--op-text-title);
+  line-height: var(--op-control);
   letter-spacing: -0.01em;
-  font-weight: 600;
+  font-weight: var(--op-weight-semibold);
 }
 .lc-page-head p {
   max-width: 68ch;
-  margin: 8px 0 0;
-  font-size: var(--op-text-emphasis);
-  line-height: 1.6;
+  margin: 2px 0 0;
+  font-size: var(--op-text-body);
+  line-height: 20px;
   color: var(--op-muted);
 }
 .lc-page > h2,
@@ -947,7 +950,7 @@ code {
   gap: 8px;
 }
 .ds-crumbs {
-  font-size: 13px;
+  font-size: var(--op-text-body);
   color: var(--op-muted);
   margin-bottom: 4px;
 }
@@ -970,20 +973,6 @@ code {
   flex-wrap: wrap;
   border-bottom: 1px solid var(--op-rule);
 }
-.ds-ns {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-bottom: 8px;
-}
-.ds-ns label {
-  font-size: 13px;
-  color: var(--op-muted);
-}
-.ds-ns input {
-  width: 200px;
-  font-family: var(--loams-font-mono); /* mono-ok: id */
-}
 .ds-tabs {
   display: flex;
   gap: 4px;
@@ -992,22 +981,42 @@ code {
 .ds-toolbar .ds-tabs {
   border-bottom: 0;
 }
+/* Tab strips on data pages (DataTabs and the hand-rolled strips): the @loams/ui Tabs look,
+   a 36px tab with a 2px accent underline that slides (SelectionIndicator). */
 .ds-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  height: 36px;
+  margin-bottom: -1px;
+  padding: 0 12px;
   appearance: none;
   background: none;
   border: 0;
-  border-bottom: 2px solid transparent;
-  padding: 8px 12px;
+  border-radius: var(--op-radius-sm) var(--op-radius-sm) 0 0;
   color: var(--op-muted);
   font: inherit;
+  font-size: var(--op-text-body);
+  font-weight: var(--op-weight-medium);
+  text-decoration: none;
   cursor: pointer;
+  transition: color var(--op-duration-fast) var(--op-ease-out);
 }
-.ds-tab:hover {
-  color: var(--op-ink);
-}
+.ds-tab:hover,
 .ds-tab[aria-selected="true"] {
   color: var(--op-ink);
-  border-bottom-color: var(--op-accent);
+}
+.ds-tab:focus-visible {
+  outline: var(--op-focus-width) solid var(--op-focus);
+  outline-offset: calc(var(--op-focus-width) * -1);
+}
+.ds-tab-indicator {
+  right: 8px;
+  bottom: 0;
+  left: 8px;
+  height: 2px;
+  border-radius: var(--op-radius-pill);
+  background: var(--op-accent);
 }
 .ds-pad {
   padding: 16px;

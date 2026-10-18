@@ -8,6 +8,7 @@ import {
   Empty,
   Notice,
   SampleDataNotice,
+  SkeletonList,
   type Status,
   StatusTag,
 } from '@loams/ui';
@@ -145,65 +146,74 @@ export function InstancesPage({
           {error}
         </Notice>
       )}
-      {!list && !loadError && <p className="text-sm text-muted">Loading…</p>}
+      {!list && !loadError && <SkeletonList label="Loading connector instances" rows={4} />}
       {list && list.length === 0 && (
-        <Empty title="No instances yet">Pick a connector in the catalog and create one.</Empty>
+        <Empty
+          title="No instances yet"
+          actions={
+            <Button size="sm" onClick={() => navigate('/connectors')}>
+              Browse the catalog
+            </Button>
+          }
+        >
+          Pick a connector in the catalog and create one.
+        </Empty>
       )}
       {list && list.length > 0 && (
-        <table className="w-full border-collapse text-sm">
-          <caption className="sr-only">Connector instances</caption>
-          <thead>
-            <tr className="text-left text-muted">
-              <th scope="col" className="py-2">
-                Name
-              </th>
-              <th scope="col">Connector</th>
-              <th scope="col">Direction</th>
-              <th scope="col">Runtime</th>
-              <th scope="col">State</th>
-              <th scope="col" className="text-right">
-                Events/s
-              </th>
-              <th scope="col" className="text-right">
-                Lag
-              </th>
-              <th scope="col">
-                <span className="sr-only">Actions</span>
-              </th>
-            </tr>
-          </thead>
-          <tbody>
-            {list.map((i) => (
-              <tr key={i.name} className="border-t border-rule-soft">
-                <th scope="row" className="py-2 text-left font-normal">
-                  <a
-                    href={`#/connectors/instances/${encodeURIComponent(i.name)}`}
-                    className={/* mono-ok: id */ 'font-mono'}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      navigate(`/connectors/instances/${encodeURIComponent(i.name)}`);
-                    }}
-                  >
-                    {i.name}
-                  </a>
+        <div className="loams-table-wrap">
+          <table className="loams-table">
+            <caption className="sr-only">Connector instances</caption>
+            <thead>
+              <tr>
+                <th scope="col">Name</th>
+                <th scope="col">Connector</th>
+                <th scope="col">Direction</th>
+                <th scope="col">Runtime</th>
+                <th scope="col">State</th>
+                <th scope="col" className="loams-num">
+                  Events/s
                 </th>
-                <td className={/* mono-ok: id */ 'font-mono text-xs'}>{i.connector}</td>
-                <td>{i.direction}</td>
-                <td>
-                  <Badge>{i.runtime}</Badge>
-                </td>
-                <td>
-                  <StatusTag status={STATE_TONE[i.state]}>{i.state}</StatusTag>
-                </td>
-                <td className="text-right tabular-nums">{i.eventsPerSec.toLocaleString('en')}</td>
-                <td className="text-right tabular-nums">{formatLag(i.lagSeconds)}</td>
-                <td className="text-right">
-                  <PauseResume i={i} busy={busy} act={act} />
-                </td>
+                <th scope="col" className="loams-num">
+                  Lag
+                </th>
+                <th scope="col">
+                  <span className="sr-only">Actions</span>
+                </th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {list.map((i) => (
+                <tr key={i.name}>
+                  <th scope="row">
+                    <a
+                      href={`#/connectors/instances/${encodeURIComponent(i.name)}`}
+                      className={/* mono-ok: id */ 'font-mono'}
+                      onClick={(e) => {
+                        e.preventDefault();
+                        navigate(`/connectors/instances/${encodeURIComponent(i.name)}`);
+                      }}
+                    >
+                      {i.name}
+                    </a>
+                  </th>
+                  <td className={/* mono-ok: id */ 'font-mono text-xs'}>{i.connector}</td>
+                  <td>{i.direction}</td>
+                  <td>
+                    <Badge>{i.runtime}</Badge>
+                  </td>
+                  <td>
+                    <StatusTag status={STATE_TONE[i.state]}>{i.state}</StatusTag>
+                  </td>
+                  <td className="loams-num">{i.eventsPerSec.toLocaleString('en')}</td>
+                  <td className="loams-num">{formatLag(i.lagSeconds)}</td>
+                  <td className="text-right">
+                    <PauseResume i={i} busy={busy} act={act} />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
@@ -293,7 +303,7 @@ export function InstanceDetailPage({
     return (
       <div className="lc-page">
         <PageHead title="Instance" actions={back} />
-        <p className="text-sm text-muted">Loading…</p>
+        <SkeletonList label="Loading the instance" layout="cards" rows={3} />
       </div>
     );
   }
@@ -329,7 +339,7 @@ export function InstanceDetailPage({
         )}
         <div className="grid gap-4 lg:grid-cols-3">
           <Card title="Lag">
-            <p className="m-0 text-2xl tabular-nums">{formatLag(d.lagSeconds)}</p>
+            <p className="m-0 text-title font-semibold tabular-nums">{formatLag(d.lagSeconds)}</p>
           </Card>
           <Card title="Throughput">
             <Throughput d={d} />
@@ -347,44 +357,41 @@ export function InstanceDetailPage({
           {d.checkpoints.length === 0 ? (
             <p className="m-0 text-sm text-muted">No checkpoint committed yet.</p>
           ) : (
-            <table className="w-full border-collapse text-sm">
-              <caption className="sr-only">Committed position per split</caption>
-              <thead>
-                <tr className="text-left text-muted">
-                  <th scope="col" className="py-1">
-                    Split
-                  </th>
-                  <th scope="col">Position</th>
-                  <th scope="col" className="text-right">
-                    Epoch
-                  </th>
-                  <th scope="col">Committed</th>
-                  <th scope="col" className="text-right">
-                    Lag
-                  </th>
-                </tr>
-              </thead>
-              <tbody>
-                {d.checkpoints.map((c) => (
-                  <tr key={c.split} className="border-t border-rule-soft">
-                    <th
-                      scope="row"
-                      className={/* mono-ok: id */ 'py-1 text-left font-mono font-normal'}
-                    >
-                      {c.split}
+            <div className="loams-table-wrap">
+              <table className="loams-table">
+                <caption className="sr-only">Committed position per split</caption>
+                <thead>
+                  <tr>
+                    <th scope="col">Split</th>
+                    <th scope="col">Position</th>
+                    <th scope="col" className="loams-num">
+                      Epoch
                     </th>
-                    <td className={/* mono-ok: id */ 'font-mono text-xs'}>{c.position}</td>
-                    <td className="text-right tabular-nums">{c.epoch}</td>
-                    <td>
-                      <time dateTime={c.committedAt}>
-                        {c.committedAt.replace('T', ' ').slice(0, 19)}
-                      </time>
-                    </td>
-                    <td className="text-right tabular-nums">{formatLag(c.lagSeconds)}</td>
+                    <th scope="col">Committed</th>
+                    <th scope="col" className="loams-num">
+                      Lag
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {d.checkpoints.map((c) => (
+                    <tr key={c.split}>
+                      <th scope="row" className={/* mono-ok: id */ 'font-mono'}>
+                        {c.split}
+                      </th>
+                      <td className={/* mono-ok: id */ 'font-mono text-xs'}>{c.position}</td>
+                      <td className="loams-num">{c.epoch}</td>
+                      <td>
+                        <time dateTime={c.committedAt}>
+                          {c.committedAt.replace('T', ' ').slice(0, 19)}
+                        </time>
+                      </td>
+                      <td className="loams-num">{formatLag(c.lagSeconds)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
         <Card title="Errors">

@@ -3,7 +3,7 @@
 // counters and notifications; and the plan tree of an Explain or a Profile.
 
 import type { graph } from '@loams/proto';
-import { Button, type Column, Table } from '@loams/ui';
+import { Button, type Column, SelectionGroup, SelectionIndicator, Table } from '@loams/ui';
 import { useId, useMemo, useState } from 'react';
 import { STREAM_MAX_ROWS } from './client.js';
 import { GraphView } from './GraphView.js';
@@ -189,23 +189,26 @@ function RowsView({
         </ul>
       )}
       {hasGraph && (
-        <div className="flex gap-1 border-0 border-b border-solid border-rule" role="tablist">
-          {(['table', 'graph'] as const).map((t) => (
-            <button
-              key={t}
-              type="button"
-              role="tab"
-              id={`${base}-${t}`}
-              aria-selected={view === t}
-              aria-controls={`${base}-panel`}
-              className={`cursor-pointer border-0 border-b-2 border-solid bg-transparent px-4 py-2 font-sans text-sm ${
-                view === t ? 'border-accent text-ink' : 'border-transparent text-muted'
-              }`}
-              onClick={() => setTab(t)}
-            >
-              {t === 'table' ? 'Table' : 'Graph'}
-            </button>
-          ))}
+        <div className="ds-tabs" role="tablist">
+          <SelectionGroup>
+            {(['table', 'graph'] as const).map((t) => (
+              <button
+                key={t}
+                type="button"
+                role="tab"
+                id={`${base}-${t}`}
+                aria-selected={view === t}
+                aria-controls={`${base}-panel`}
+                className="ds-tab"
+                onClick={() => setTab(t)}
+              >
+                {t === 'table' ? 'Table' : 'Graph'}
+                {view === t && (
+                  <SelectionIndicator layoutId="graph-view" className="ds-tab-indicator" />
+                )}
+              </button>
+            ))}
+          </SelectionGroup>
         </div>
       )}
       {hasGraph ? (
