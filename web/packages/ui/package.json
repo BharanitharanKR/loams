@@ -70,6 +70,8 @@
     "@codemirror/view": "catalog:",
     "@lezer/highlight": "catalog:",
     "@tanstack/react-table": "catalog:",
-    "@tanstack/react-virtual": "catalog:"
+    "@tanstack/react-virtual": "catalog:",
+    "lucide-react": "catalog:",
+    "motion": "catalog:"
   }
 }
