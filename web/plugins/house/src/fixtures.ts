@@ -97,30 +97,3 @@ export const HISTORY: HistoryEntry[] = [
     resultRows: 1,
   },
 ];
-
-/** ClickHouse keywords the editor completes, beside `system.functions`. */
-export const KEYWORDS = [
-  'SELECT',
-  'FROM',
-  'WHERE',
-  'PREWHERE',
-  'GROUP BY',
-  'ORDER BY',
-  'LIMIT',
-  'OFFSET',
-  'HAVING',
-  'WITH',
-  'JOIN',
-  'LEFT JOIN',
-  'ARRAY JOIN',
-  'UNION ALL',
-  'FINAL',
-  'SAMPLE',
-  'SETTINGS',
-  'FORMAT',
-  'INSERT INTO',
-  'CREATE TABLE',
-  'DESCRIBE TABLE',
-  'SHOW TABLES',
-  'EXPLAIN',
-];

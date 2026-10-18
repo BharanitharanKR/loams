@@ -51,6 +51,14 @@
   --color-row-hover: var(--op-row-hover);
   --color-row-selected: var(--op-row-selected);
   --color-scrim: var(--op-scrim);
+  --color-code-keyword: var(--op-code-keyword);
+  --color-code-string: var(--op-code-string);
+  --color-code-number: var(--op-code-number);
+  --color-code-comment: var(--op-code-comment);
+  --color-code-function: var(--op-code-function);
+  --color-code-type: var(--op-code-type);
+  --color-code-param: var(--op-code-param);
+  --color-code-operator: var(--op-code-operator);
   --color-transparent: transparent;
   --color-current: currentColor;
 

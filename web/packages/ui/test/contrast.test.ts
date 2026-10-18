@@ -85,6 +85,15 @@ const TEXT = [
   '--op-warn',
   '--op-info',
   '--op-danger',
+  // The query editor's syntax colours.
+  '--op-code-keyword',
+  '--op-code-string',
+  '--op-code-number',
+  '--op-code-comment',
+  '--op-code-function',
+  '--op-code-type',
+  '--op-code-param',
+  '--op-code-operator',
 ];
 const SURFACES = ['--op-bg', '--op-surface', '--op-window', '--op-raised', '--op-row-selected'];
 /** A state colour on its own soft fill. */
