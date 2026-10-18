@@ -978,7 +978,11 @@ async fn spec_carries_scram_verifier_never_password() {
     assert!(got.starts_with("SCRAM-SHA-256$4096:"), "{got}");
     assert_eq!(
         got,
-        scram::role_verifier(password.as_bytes(), &role.record.secret_ref)
+        scram::role_verifier(
+            password.as_bytes(),
+            verifiers.salt_key().await.unwrap(),
+            &role.record.secret_ref
+        )
     );
     // Stable: the same records give the same bytes.
     assert_eq!(r.spec(id, Some(&token)).await.1, first);
@@ -1006,7 +1010,11 @@ async fn spec_carries_scram_verifier_never_password() {
     let v: Value = serde_json::from_str(&second).unwrap();
     assert_eq!(
         v["spec"]["cluster"]["roles"][0]["encrypted_password"],
-        scram::role_verifier(new_password.as_bytes(), &rec.secret_ref)
+        scram::role_verifier(
+            new_password.as_bytes(),
+            verifiers.salt_key().await.unwrap(),
+            &rec.secret_ref
+        )
     );
     assert_ne!(second, first);
 
