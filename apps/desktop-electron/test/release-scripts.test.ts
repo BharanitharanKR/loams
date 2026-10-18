@@ -168,7 +168,7 @@ describe("bin-sums.cjs", () => {
 
 // The macOS signer: SHA256SUMS must describe the binaries as signed, and the bundle is resealed after.
 describe("mac-sign.cjs", () => {
-	const { macSign, resealOptions, binDir } = createRequire(import.meta.url)(
+	const { macSign, signWith, resealOptions, binDir } = createRequire(import.meta.url)(
 		"../scripts/mac-sign.cjs",
 	);
 	const app = () => {
@@ -191,7 +191,7 @@ describe("mac-sign.cjs", () => {
 			}
 		};
 		const opts = { app: a, identity: "-", ignore: () => false, binaries: ["x"] };
-		await macSign(opts, { sign });
+		await signWith(opts, sign);
 		expect(calls).toHaveLength(2);
 		expect(calls[0]).toBe(opts);
 		expect(readFileSync(join(bin, "SHA256SUMS"), "utf8")).toBe(
@@ -207,9 +207,14 @@ describe("mac-sign.cjs", () => {
 	it("signs once when no daemon is bundled", async () => {
 		const a = app();
 		let n = 0;
-		await macSign({ app: a, identity: "-" }, { sign: async () => void n++ });
+		await signWith({ app: a, identity: "-" }, async () => void n++);
 		expect(n).toBe(1);
 		expect(existsSync(join(binDir(a), "SHA256SUMS"))).toBe(false);
+	});
+	it("the hook takes only the options: electron-builder passes its packager second", () => {
+		// Desktop run 39092978401: a second `deps` parameter received the MacPackager, whose
+		// unbound `sign` method then failed.
+		expect(macSign.length).toBe(1);
 	});
 	it("reseal options keep the identity and keychain", () => {
 		const o = resealOptions({ app: "/A.app", identity: "ABC", keychain: "/k", binaries: ["/b"] });

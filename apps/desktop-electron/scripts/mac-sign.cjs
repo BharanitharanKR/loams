@@ -34,11 +34,12 @@ function binDir(app) {
 }
 
 /**
+ * The three passes with `sign` as the signer (exported for tests). electron-builder calls the
+ * exported function as `(opts, packager)`, so the signer cannot be its second parameter.
  * @param {import('@electron/osx-sign').SignOptions} opts what electron-builder would sign with
- * @param {{ sign?: (o: object) => Promise<void> }} [deps] injectable for tests
+ * @param {(o: object) => Promise<void>} sign
  */
-async function macSign(opts, deps = {}) {
-	const sign = deps.sign ?? builderSign();
+async function signWith(opts, sign) {
 	await sign(opts);
 	const dir = binDir(opts.app);
 	if (!existsSync(dir)) return;
@@ -48,8 +49,14 @@ async function macSign(opts, deps = {}) {
 	await sign(resealOptions(opts));
 }
 
+/** electron-builder's `mac.sign` hook: `(opts, packager)`; the packager is not used. */
+async function macSign(opts) {
+	await signWith(opts, builderSign());
+}
+
 module.exports = macSign;
 module.exports.default = macSign;
 module.exports.macSign = macSign;
+module.exports.signWith = signWith;
 module.exports.resealOptions = resealOptions;
 module.exports.binDir = binDir;
