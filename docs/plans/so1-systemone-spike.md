@@ -12,7 +12,7 @@ Plan: [SO1](2026-10-02-so1-systemone.md), Task 0. Design: [§40](../design/40-lo
 | kevala | **Fails** on published evidence: no multilingual Laya support, and its own int8 parity figure (0.024) is above the 0.02 gate (R0.9) |
 | `ort` | `2.0.0-rc.14` (2026-10-12), still a release candidate. `load-dynamic` was not tried (no third-party builds, R0.3, R0.10) |
 | New: official `laya-rust` (`laya-onnx`) | **The candidate.** Upstream now ships a Rust port on `ort` and `tokenizers` that covers all three checkpoints, so the port D527 priced is already written. Choosing it changes D527: **owner question** (R0.8) |
-| In-process backend | **ort-with-approval**, through upstream `laya-onnx`, not our own port. Task 12 waits for the owner's answer and for the parity and latency gates to be measured on the runner. Without approval: **none** |
+| In-process backend | **ort-with-approval**, through upstream `laya-onnx`, not our own port. The owner approved it on 2026-10-18 (D527 amended); Task 12 waits for the parity and latency gates to be measured on the runner |
 | `FluidUse` as a SwiftPM dependency alone | **No.** The `FluidUse` product pulls `FluidAudio` and about twenty model families. `LayaManager` is five self-contained files, so vendoring them (Q525) looks feasible. Feeds SO2 Task 0 (R0.11) |
 | `axum` and `async-trait` | **Match** the workspace: `axum = "0.8"` (0.8.9 locked), `async-trait = "0.1"` (0.1.92) (R0.13) |
 | Decision numbers | D520–D539 and Q520–Q539 are in the log, all Proposed, with no collision. The highest numbers in use are D1106 and Q948, so new decisions from the owner questions take the next ones |

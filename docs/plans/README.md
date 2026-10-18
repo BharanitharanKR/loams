@@ -313,7 +313,7 @@ Design: [§40](../design/40-loams-systemone.md), D520–D539. Decisions are advi
 
 | Plan | Scope | Status |
 |---|---|---|
-| [SO1: SystemOne engine, API and backends](2026-10-02-so1-systemone.md) | Spike (kevala, `ort`, `laya-serve`); `loams.systemone.v1`; the `loams-systemone` crate; `laya-serve` sidecar; Jev adapter; calibration; self-test; model manager; route, CLI, MCP; decision log | Planned; Task 0 done 2026-10-18 ([spike](so1-systemone-spike.md), rulings R0.1–R0.24, five owner questions) |
+| [SO1: SystemOne engine, API and backends](2026-10-02-so1-systemone.md) | Spike (kevala, `ort`, `laya-serve`); `loams.systemone.v1`; the `loams-systemone` crate; `laya-serve` sidecar; Jev adapter; calibration; self-test; model manager; route, CLI, MCP; decision log | Planned; Task 0 done 2026-10-18 ([spike](so1-systemone-spike.md), rulings R0.1–R0.24, owner rulings 2026-10-18) |
 | [SO2: SystemOne on the desktop](2026-10-02-so2-systemone-desktop.md) | Swift Core ML sidecar; `loams-systemone-link`; Model Manager and Settings; Loams Bot decisions; zeron MCP tool; optional browser plugin, CPU and MLX paths | Planned |
 
 ## Track API and SDK: unified Connect services and generated clients

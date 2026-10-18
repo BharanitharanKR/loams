@@ -276,6 +276,18 @@ pub fn ece(rows: &[(f64 /* confidence */, bool /* correct */)], bins: usize) -> 
 
 **Commit:** `docs: document SystemOne and close SO1`.
 
+## Owner rulings 2026-10-18 (on Task 0's questions)
+
+The owner accepted all five recommendations of Task 0. They are binding for Tasks 1 to 13; the decision log and design §40 carry them.
+
+| # | Question | Decision | Where recorded |
+|---|---|---|---|
+| R0.8 | The in-process backend | Upstream's **`laya-onnx`** (official Rust port on `ort`), behind an off-by-default `native` feature, enabled only once the parity, latency and `cargo deny` gates are measured. kevala is not used | D527 amended, Q523 answered; §40 §1, §7.2. Task 12 runs on this basis |
+| R0.14 | `POST /v1/systemone` against D602 | A **D603 compatibility surface**, served in v1 **only on the loopback listener** (desktop and `loams dev`); servers expose `loams.systemone.v1` over Connect only | §40 §4.2 "Listener". Task 10 mounts the HTTP route on the loopback listener only |
+| R0.5a | 101 to 255 options on `laya-serve` | **Tournament mode** (`LAYA_TOURNAMENT_GROUP`) as a capability with a `choice_by_tournament` warning, **after Task 8 measures it** | D525 amended; §40 §4.2, §6.3. Task 4 adds the capability; Task 8 measures before it is on |
+| R0.6 | `noul` criteria wire shape | An optional **object with optional `true` and `false`** descriptions, forwarded to Jev and Laya; any other key is a `422`; `noul_criteria_ignored` is dropped | §40 §4.2. Task 2's two `noul` criteria tests change accordingly |
+| R0.20 | D538 (desktop integration) | Rewritten so **`loams-agentd` hosts SystemOne** on the desktop | D538's wording lands with the SO2 re-plan, [#770](https://github.com/ostrium-labs/loams/pull/770); §40 §8 is marked superseded |
+
 ## Rulings made during execution
 
 | # | Ruling | Why | Cost if wrong |
