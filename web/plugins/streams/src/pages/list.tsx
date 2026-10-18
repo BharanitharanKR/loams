@@ -390,6 +390,7 @@ export function ListPage({
             <ErrorNotice
               title={tab === 'streams' ? 'Could not list streams' : 'Could not list links'}
               message={active.message}
+              retry={tab === 'streams' ? reloadStreams : reloadLinks}
             />
           </div>
         )}

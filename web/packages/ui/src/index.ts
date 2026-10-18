@@ -162,6 +162,7 @@ export {
   NumberFieldIncrement,
   NumberFieldInput,
 } from './number-field';
+export { plainError } from './plain-error';
 export {
   Popover,
   PopoverClose,
