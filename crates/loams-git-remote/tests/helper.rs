@@ -28,7 +28,7 @@ async fn clone_of_missing_repo_fails() {
     let err = env.fails(env.path(), &["clone", "-q", &bad, "y"]);
     assert!(
         err.contains(&format!(
-            "fatal: loams: expected <store-url>/ns/<ns>/repos/<repo_id>, got {}/nope",
+            "fatal: loams: expected <store-url>/ns/<namespace-id>/repos/<repo>, got {}/nope",
             env.store_url()
         )),
         "{err}"
@@ -45,6 +45,7 @@ async fn push_to_missing_repo_fails_without_create_flag() {
     env.commit(&dir, "a.txt", "a\n");
     let err = env.fails(&dir, &["push", &env.url(&repo), "main"]);
     assert!(err.contains("not found"), "{err}");
+    assert!(err.contains("LOAMS_GIT_CREATE_ON_PUSH=1"), "{err}");
     let checkpoint = env
         .wal(&repo)
         .latest_checkpoint(loams_git::Seq(u64::MAX))
