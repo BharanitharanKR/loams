@@ -35,11 +35,13 @@ export function DataTable<T>({
   );
 }
 
-/** Column keys for a numeric-metric row, in a stable order, without the date. */
+/** Column keys for a numeric-metric row, in a stable order, without the date or internal columns. */
 export function metricKeys(rows: Record<string, unknown>[]): string[] {
   const keys = new Set<string>();
+  // A leading underscore marks an upstream's internal column (OpenPanel's `_avg_…`).
   for (const r of rows)
-    for (const [k, v] of Object.entries(r)) if (typeof v === 'number') keys.add(k);
+    for (const [k, v] of Object.entries(r))
+      if (typeof v === 'number' && !k.startsWith('_')) keys.add(k);
   return [...keys];
 }
 

@@ -356,6 +356,29 @@ describe('panels', () => {
     expect(screen.queryByText('inProgress')).toBeNull();
   });
 
+  it('openpanel_series_shows_days_and_no_internal_columns', async () => {
+    const { api } = fakeDesktop({
+      apps: ok('openpanel'),
+      queries: {
+        'openpanel.insights': {
+          summary: { total_sessions: 1 },
+          series: [
+            {
+              date: '2026-10-18T00:00:00.000Z',
+              avg_session_duration: 2,
+              _avg_session_duration: 2,
+            },
+          ],
+          topPages: [],
+        },
+      },
+    });
+    render(<PanelsPage desktop={api} app="openpanel" navigate={nav().navigate} />);
+    expect(await screen.findByText('2026-10-18')).toBeTruthy();
+    expect(screen.queryByText('2026-10-18T00:00:00.000Z')).toBeNull();
+    expect(screen.getAllByText('avg session duration')).toHaveLength(1);
+  });
+
   it('openobserve_is_full_ui_only', async () => {
     const { api, queries } = fakeDesktop({
       apps: IDS.map((i) => info(i, i === 'openobserve' ? 'ok' : 'unconfigured')),
