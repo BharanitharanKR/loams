@@ -43,4 +43,10 @@ export function metricKeys(rows: Record<string, unknown>[]): string[] {
   return [...keys];
 }
 
-export const label = (k: string) => k.replace(/^nb_/, '').replace(/_/g, ' ');
+/** A metric key as words: `nb_visits` -> "visits", `closedLast7d` -> "closed last 7d". */
+export const label = (k: string) =>
+  k
+    .replace(/^nb_/, '')
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z0-9])/g, '$1 $2')
+    .toLowerCase();

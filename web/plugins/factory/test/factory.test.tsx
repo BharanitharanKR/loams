@@ -341,6 +341,21 @@ describe('panels', () => {
     }
   });
 
+  it('plane_stat_labels_are_words_not_keys', async () => {
+    // ItsAPlan's stats are camelCase keys (`inProgress`, `closedLast7d`).
+    const { api } = fakeDesktop({
+      apps: ok('plane'),
+      queries: {
+        'plane.stats': { open: 2, inProgress: 1, closedLast7d: 3 },
+        'plane.issues': [],
+      },
+    });
+    render(<PanelsPage desktop={api} app="plane" navigate={nav().navigate} />);
+    expect(await screen.findByText('in progress')).toBeTruthy();
+    expect(screen.getByText('closed last 7d')).toBeTruthy();
+    expect(screen.queryByText('inProgress')).toBeNull();
+  });
+
   it('openobserve_is_full_ui_only', async () => {
     const { api, queries } = fakeDesktop({
       apps: IDS.map((i) => info(i, i === 'openobserve' ? 'ok' : 'unconfigured')),
