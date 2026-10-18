@@ -172,6 +172,13 @@ services:
       # standalone defaults Flight SQL to 0.0.0.0, which would put it on the
       # compose network; keep it on loopback like every other engine listener.
       - --flight-sql-listen=127.0.0.1:8082
+      # The Postgres and MySQL wire listeners over collections (namespace
+      # `default`). Loopback in the engine's network namespace, like Qdrant
+      # (6333/6334), Elasticsearch (9200) and Flight SQL: they authenticate
+      # nobody yet, so they are not on the tailnet (docs/release/preview.md,
+      # "Keep the other listeners inside the stack").
+      - --pg-listen=127.0.0.1:5432
+      - --mysql-listen=127.0.0.1:3306
       - --graph-data-dir=/var/lib/loams/graph
       - --meta=tikv://pd:2379/loams_meta
       - --live-store=tikv://pd:2379/loams_live_dev
