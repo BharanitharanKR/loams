@@ -357,10 +357,12 @@ export const OPS: Record<FactoryAppId, Record<string, Op>> = {
 				c,
 			) => {
 				const id = need(p.projectId ?? c.fields["projectId"], "projectId");
+				// OpenPanel's own default window ends yesterday; the last 30 days include today.
+				const range = p.range ?? "30d";
 				const [ov, pages] = await Promise.all([
-					call(a, "overview", id, { range: p.range, interval: p.interval }),
+					call(a, "overview", id, { range, interval: p.interval }),
 					call(a, "topPages", id, {
-						range: p.range,
+						range,
 						limit: clamp(p.limit, 10),
 					}),
 				]);

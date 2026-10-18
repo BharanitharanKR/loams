@@ -219,4 +219,28 @@ describe("ops for Studio", () => {
 		await expect(run).rejects.toThrow(/Langfuse v4/);
 		await expect(run).rejects.not.toThrow(/http:/);
 	});
+	it("openpanel_insights_default_to_a_window_that_includes_today", async () => {
+		// OpenPanel's own default window ends yesterday: a deploy's first hours read as zero.
+		const op = OPS.openpanel.insights;
+		if (!op) throw new Error("no insights op");
+		const seen: unknown[] = [];
+		await op.run(
+			adapter({
+				overview: (_id: unknown, q: unknown) => {
+					seen.push(q);
+					return { summary: {}, series: [] };
+				},
+				topPages: (_id: unknown, q: unknown) => {
+					seen.push(q);
+					return [];
+				},
+			}),
+			op.params.parse({ projectId: "shop" }) as never,
+			ctx,
+		);
+		expect(seen).toEqual([
+			expect.objectContaining({ range: "30d" }),
+			expect.objectContaining({ range: "30d" }),
+		]);
+	});
 });
