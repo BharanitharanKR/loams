@@ -113,7 +113,9 @@ export function HousePage({ client, sample }: HousePageProps) {
         <Notice tone="danger" title="Could not reach the server">
           {detected.error}
         </Notice>
-        <Button onClick={() => setTick((t) => t + 1)}>Try again</Button>
+        <div>
+          <Button onClick={() => setTick((t) => t + 1)}>Try again</Button>
+        </div>
       </div>
     );
   }

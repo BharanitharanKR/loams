@@ -13,6 +13,7 @@ import {
   Field,
   Input,
   Notice,
+  plainError,
   Select,
   StatusTag,
   Table,
@@ -26,7 +27,9 @@ const PAGE = 50;
 export const DEPLOY_TIP = 'Not yet available (R1 Task 13)';
 
 export function errorText(e: unknown): string {
-  return e instanceof ConnectError ? e.rawMessage : e instanceof Error ? e.message : String(e);
+  return plainError(
+    e instanceof ConnectError ? e.rawMessage : e instanceof Error ? e.message : String(e),
+  );
 }
 
 /**
@@ -718,8 +721,8 @@ export function LivePage({
   }, [loaded.state, retryMs]);
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-6xl">
-      <header className="flex items-start justify-between gap-4">
+    <div className="lc-page">
+      <header className="lc-page-head flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="m-0">Live</h1>
           <p className="text-muted m-0">

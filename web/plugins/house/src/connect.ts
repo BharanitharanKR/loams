@@ -7,6 +7,7 @@ import { create } from '@bufbuild/protobuf';
 import { timestampDate } from '@bufbuild/protobuf/wkt';
 import { Code, ConnectError, createClient, type Transport } from '@connectrpc/connect';
 import { errors, house, instance } from '@loams/proto';
+import { plainError } from '@loams/ui';
 import {
   type Cell,
   type Database,
@@ -36,7 +37,7 @@ export function fromConnect(e: unknown): HouseError {
   const ch = Number(metadata.clickhouse_code);
   return new HouseError({
     code: wireCode(err.code),
-    message: err.rawMessage,
+    message: plainError(err.rawMessage),
     reason: info?.reason || undefined,
     clickhouseCode: Number.isFinite(ch) && ch > 0 ? ch : undefined,
     clickhouseName: metadata.clickhouse_name || undefined,

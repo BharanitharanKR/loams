@@ -1,3 +1,4 @@
+import { plainError } from '@loams/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 export type Loaded<T> =
@@ -10,7 +11,8 @@ export const errorMessage = (e: unknown): string => (e instanceof Error ? e.mess
 /**
  * Runs `load` on mount and whenever `deps` change; `reload` runs it again. A dependency
  * change always shows Loading; a reload does too unless `keepOnReload` keeps the old data
- * in view. `errorText` turns a thrown error into the message shown (default: its message).
+ * in view. `errorText` turns a thrown error into the message shown (default: its message); a bare
+ * gateway status or network failure is then put in plain words (`plainError`).
  */
 export function useLoad<T>(
   load: () => Promise<T>,
@@ -33,7 +35,7 @@ export function useLoad<T>(
     loadRef
       .current()
       .then((data) => live && setValue({ state: 'ready', data }))
-      .catch((e) => live && setValue({ state: 'error', message: textRef.current(e) }));
+      .catch((e) => live && setValue({ state: 'error', message: plainError(textRef.current(e)) }));
     return () => {
       live = false;
     };

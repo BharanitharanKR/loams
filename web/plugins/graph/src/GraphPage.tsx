@@ -106,7 +106,9 @@ export function GraphPage({ transport, openExternal, storage, namespace }: Graph
         <Notice tone="danger" title="Could not reach the server">
           {detected.message}
         </Notice>
-        <Button onClick={() => setTick((t) => t + 1)}>Try again</Button>
+        <div>
+          <Button onClick={() => setTick((t) => t + 1)}>Try again</Button>
+        </div>
       </div>
     );
   }

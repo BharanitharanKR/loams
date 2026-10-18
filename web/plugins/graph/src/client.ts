@@ -7,6 +7,7 @@
 import { create } from '@bufbuild/protobuf';
 import { Code, ConnectError, createClient, type Transport } from '@connectrpc/connect';
 import { errors, graph, instance } from '@loams/proto';
+import { plainError } from '@loams/ui';
 
 /** What the page asks for on every Execute (§48 §18.2). */
 export const PAGE_MAX_ROWS = 1000;
@@ -60,7 +61,7 @@ export function toFailure(e: unknown): GraphFailure {
   return {
     code: err.code,
     codeName: wireCode(err.code),
-    message: err.rawMessage,
+    message: plainError(err.rawMessage),
     reason: info?.reason || undefined,
     metadata,
     gqlstatus: metadata.gqlstatus || undefined,
