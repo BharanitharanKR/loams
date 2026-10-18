@@ -239,6 +239,8 @@ export function QueryInput({
             setOpen(true);
           }}
           onBlur={() => setOpen(false)}
+          // The bar draws the focus ring around the input and its button together.
+          style={{ outline: 'none' }}
           className={cx(
             /* mono-ok: code */ 'min-w-0 flex-1 border-0 bg-transparent font-mono text-ink outline-none placeholder:text-faint',
             small ? 'h-8 px-2.5 text-small' : 'h-10 px-3 text-body',

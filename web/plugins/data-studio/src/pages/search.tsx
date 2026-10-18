@@ -242,7 +242,7 @@ export function SearchTab({
   return (
     <div className="flex flex-col gap-3">
       {/* The query bar */}
-      <div className="flex flex-wrap items-start gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <QueryInput
           className="min-w-72 flex-1"
           inputRef={inputRef}
@@ -649,7 +649,7 @@ function RetrievalBar({
         <Control label="Vector">
           {vectorFields.length > 1 && (
             <select
-              className="loams-input h-7 w-auto py-0"
+              className={SMALL_CONTROL}
               aria-label="Vector field"
               value={state.vectorField}
               onChange={(e) => onVectorField(e.target.value)}
@@ -685,7 +685,7 @@ function RetrievalBar({
       )}
       <Control label="Top-k">
         <select
-          className="loams-input h-7 w-auto py-0"
+          className={SMALL_CONTROL}
           aria-label="Top-k"
           value={state.k}
           onChange={(e) => onK(Number(e.target.value))}
@@ -702,7 +702,7 @@ function RetrievalBar({
       {hasVectors && state.mode === 'hybrid' && (
         <Control label="Fusion">
           <select
-            className="loams-input h-7 w-auto py-0"
+            className={SMALL_CONTROL}
             aria-label="Fusion method"
             value={state.fusion}
             onChange={(e) => onFusion(e.target.value as FusionMethod)}
@@ -718,7 +718,7 @@ function RetrievalBar({
                 type="number"
                 min={1}
                 max={1000}
-                className="loams-input h-7 w-16 py-0"
+                className={cx(SMALL_CONTROL, 'w-16')}
                 aria-label="RRF k"
                 value={state.rrfK}
                 disabled={!fused}
@@ -753,6 +753,10 @@ function RetrievalBar({
     </div>
   );
 }
+
+/** A compact select or number box for the retrieval bar. */
+const SMALL_CONTROL =
+  'h-7 rounded-sm border border-rule bg-bg px-2 text-small text-ink focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50';
 
 function Control({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -834,7 +838,7 @@ function StatusLine({
       {outcome.state === 'done' && (
         <>
           <span className="text-body text-ink">
-            <strong className="tabular-nums">
+            <strong className="tabular-nums" data-testid="hit-count">
               {outcome.total === undefined
                 ? outcome.hits.length.toLocaleString('en-US')
                 : `${outcome.totalAtLeast ? '≥ ' : ''}${outcome.total.toLocaleString('en-US')}`}

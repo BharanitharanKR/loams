@@ -50,7 +50,18 @@ function Runs({ runs }: { runs: { text: string; hit: boolean }[] }) {
   );
 }
 
-/** A field's text with the query marked: the engine's fragments when it sent some. */
+/** The words the engine marked in its fragments. */
+function markedWords(frags: string[]): string[] {
+  const out = new Set<string>();
+  for (const f of frags) for (const r of highlightRuns(f)) if (r.hit) out.add(r.text);
+  return [...out];
+}
+
+/**
+ * A field's text with the query marked. A short value is shown whole with the words the
+ * engine marked (its fragments can cut the value short); a long one as the engine's fragments.
+ * Without engine highlights, the query's own words are marked.
+ */
 function Highlighted({
   hit,
   field,
@@ -63,7 +74,8 @@ function Highlighted({
   max: number;
 }) {
   const frags = hit.highlight[field];
-  if (frags && frags.length > 0) {
+  const text = show(hit.source[field]);
+  if (frags && frags.length > 0 && text.length > max) {
     return (
       <>
         {frags.map((f, i) => (
@@ -76,9 +88,9 @@ function Highlighted({
       </>
     );
   }
-  const text = show(hit.source[field]);
+  const words = frags && frags.length > 0 ? markedWords(frags) : terms;
   const cut = text.length > max ? `${text.slice(0, max - 1)}…` : text;
-  return <Runs runs={markTerms(cut, terms)} />;
+  return <Runs runs={markTerms(cut, words)} />;
 }
 
 export function Results(p: ResultsProps) {
@@ -90,9 +102,16 @@ function Cards({ hits, fields, terms, ranks, canSimilar, onSimilar, onFilter }: 
   return (
     <ol className="m-0 flex list-none flex-col gap-2 p-0" aria-label="Search results">
       {hits.map((h, i) => {
-        const titleField = textFields.find((f) => typeof h.source[f] === 'string');
+        const titleField = textFields.find((f) => {
+          const v = h.source[f];
+          return typeof v === 'string' && v.trim() !== '';
+        });
         const bodyFields = textFields.filter((f) => f !== titleField && h.source[f] !== undefined);
-        const other = Object.keys(h.source).filter((k) => !textFields.includes(k));
+        const order = fields.map((f) => f.name);
+        const rank = (k: string) => (order.includes(k) ? order.indexOf(k) : order.length);
+        const other = Object.keys(h.source)
+          .filter((k) => !textFields.includes(k))
+          .sort((a, b) => rank(a) - rank(b) || a.localeCompare(b));
         return (
           <li key={h.id}>
             <article
