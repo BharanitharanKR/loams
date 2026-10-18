@@ -16,7 +16,7 @@ const target: AgentdTarget = {
 };
 
 function hostFetch(seen: { url: string; auth: string | null }[], up: () => boolean): typeof fetch {
-	return (async (input: RequestInfo | URL, init?: RequestInit) => {
+	return (async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
 		const headers = new Headers(init?.headers);
 		seen.push({ url: String(input), auth: headers.get("authorization") });
 		if (!up()) throw new TypeError("fetch failed");
