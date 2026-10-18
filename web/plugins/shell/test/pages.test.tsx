@@ -7,7 +7,6 @@ import { act, cleanup, fireEvent, render, screen, within } from '@testing-librar
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { AllPagesPage } from '../src/all-pages.js';
 import { Layout } from '../src/layout.js';
-import { PreferencesPage } from '../src/preferences.js';
 import {
   DEFAULT_PINNED,
   isSettingsPage,
@@ -17,6 +16,7 @@ import {
   settingsHome,
   writePinned,
 } from '../src/pages.js';
+import { PreferencesPage } from '../src/preferences.js';
 import { HashRouter, type HashSource } from '../src/router.js';
 
 function memory(start = '/'): HashSource {
@@ -221,14 +221,16 @@ describe('pages (D1080)', () => {
     expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('#/settings');
     act(() => router.navigate('/settings'));
     const nav = screen.getByRole('navigation', { name: 'Settings' });
-    expect(within(nav).getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
-      'Settings',
-    ]);
-    expect(within(nav).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
-      'App',
-      'Organisation',
-      'Studio',
-    ]);
+    expect(
+      within(nav)
+        .getAllByRole('heading', { level: 2 })
+        .map((h) => h.textContent),
+    ).toEqual(['Settings']);
+    expect(
+      within(nav)
+        .getAllByRole('heading', { level: 3 })
+        .map((h) => h.textContent),
+    ).toEqual(['App', 'Organisation', 'Studio']);
     const list = (name: string) =>
       within(within(nav).getByRole('list', { name }))
         .getAllByRole('link')
@@ -276,7 +278,12 @@ describe('pages (D1080)', () => {
     const went: [string, unknown][] = [];
     const navigate = (to: string, opts?: { replace?: boolean }) => went.push([to, opts]);
     slots.register(
-      { name: 'console.settings.section', plugin: 'shell', order: 5, meta: { id: 'a', label: 'A' } },
+      {
+        name: 'console.settings.section',
+        plugin: 'shell',
+        order: 5,
+        meta: { id: 'a', label: 'A' },
+      },
       () => <p>Appearance section</p>,
     );
     const { unmount } = render(

@@ -318,9 +318,7 @@ function ProjectCanvas({
     save(pos);
     setAnnouncement('Services laid out again.');
     // After React Flow has the new positions.
-    requestAnimationFrame(
-      () => void fitView({ ...FIT_VIEW, duration: reducedMotion ? 0 : 300 }),
-    );
+    requestAnimationFrame(() => void fitView({ ...FIT_VIEW, duration: reducedMotion ? 0 : 300 }));
   };
 
   const create = async (req: AddServiceRequest) => {

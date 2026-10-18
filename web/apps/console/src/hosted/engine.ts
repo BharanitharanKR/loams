@@ -226,8 +226,9 @@ export function watchHealth(
   origin: string,
   onStatus: (s: EngineStatus) => void,
   check: (origin: string) => Promise<Health> = (o) => checkHealth(o),
-  target: Pick<EventTarget, 'addEventListener' | 'removeEventListener'> | undefined = globalThis
-    .window,
+  target:
+    | Pick<EventTarget, 'addEventListener' | 'removeEventListener'>
+    | undefined = globalThis.window,
 ): () => void {
   let stopped = false;
   let timer: ReturnType<typeof setTimeout> | undefined;

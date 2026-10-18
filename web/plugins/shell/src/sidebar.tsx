@@ -30,8 +30,8 @@ import {
   pageAt,
   pageEntries,
   pinnedPages,
-  settingsSections,
   settingsHome,
+  settingsSections,
   togglePinned,
 } from './pages.js';
 import type { HashRouter } from './router.js';

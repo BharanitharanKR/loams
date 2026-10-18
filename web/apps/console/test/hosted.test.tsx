@@ -190,7 +190,8 @@ describe('the engine dot (UX-1)', () => {
         }}
       />,
     );
-    const dot = () => container.querySelector('[data-engine-status]')?.getAttribute('data-engine-status');
+    const dot = () =>
+      container.querySelector('[data-engine-status]')?.getAttribute('data-engine-status');
     const title = () => container.querySelector('.lc-hosted-engine')?.getAttribute('title');
     expect(dot()).toBe('checking');
     expect(title()).toMatch(/^Checking the engine/);
@@ -199,7 +200,9 @@ describe('the engine dot (UX-1)', () => {
     expect(title()).toBe('Connected to https://loams.tail1.ts.net. Change engine');
     act(() => report({ state: 'down', message: 'Failed to fetch', retryInMs: 8_000 }));
     expect(dot()).toBe('down');
-    expect(title()).toMatch(/^Cannot reach the engine at https:\/\/loams.tail1.ts.net\. No answer\./);
+    expect(title()).toMatch(
+      /^Cannot reach the engine at https:\/\/loams.tail1.ts.net\. No answer\./,
+    );
     expect(title()).toContain('Trying again in 8 s.');
     expect(screen.getByRole('button', { name: /Cannot reach the engine/ })).toBeTruthy();
   });
@@ -429,7 +432,9 @@ describe('sign-in modes', () => {
     );
     expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
     // B20: an engine with sign-in off is not a tailnet login.
-    rerender(<HostedHeader watch={idle} session={{ ...base, user: 'Local developer', authOff: true }} />);
+    rerender(
+      <HostedHeader watch={idle} session={{ ...base, user: 'Local developer', authOff: true }} />,
+    );
     expect(container.querySelector('.lc-hosted-user')?.textContent).toBe(
       'Local developer · sign-in off',
     );

@@ -1442,7 +1442,7 @@ button.lc-hosted-engine {
   cursor: pointer;
 }
 .lc-all-pages-pin[aria-pressed="true"] {
-  color: var(--op-accent);
+  color: var(--op-accent-fg);
 }
 .lc-all-pages-pin:hover {
   color: var(--op-ink);

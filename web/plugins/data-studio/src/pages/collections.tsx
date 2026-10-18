@@ -12,6 +12,7 @@ import {
   Field,
   Input,
   Select,
+  SkeletonList,
   StatusTag,
   Table,
 } from '@loams/ui';
@@ -296,15 +297,15 @@ export function CollectionsPage({
           key={ns}
           ns={ns}
           navigate={navigate}
-          href={
-            search ? (next) => `${SEARCH_PATH}?ns=${encodeURIComponent(next)}` : undefined
-          }
+          href={search ? (next) => `${SEARCH_PATH}?ns=${encodeURIComponent(next)}` : undefined}
         />
         {!search && <Tabs ns={ns} active="documents" navigate={navigate} />}
       </div>
       {nsError && <ErrorNotice title="Could not create the namespace" message={nsError} />}
       <Card title={`Collections in ${ns}`} flush>
-        {list.state === 'loading' && <p className="lc-muted ds-pad">Loading collections…</p>}
+        {list.state === 'loading' && (
+          <SkeletonList className="ds-pad" label="Loading collections" rows={4} />
+        )}
         {list.state === 'error' && (
           <div className="ds-pad">
             <ErrorNotice title="Could not list collections" message={list.message} />

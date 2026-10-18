@@ -2,7 +2,7 @@
 // groups"). The recent threads are the sidebar's rows (it publishes them to the query
 // cache), so the home opens no stream of its own.
 
-import { Badge, Card, Empty, formatRelative } from '@loams/ui';
+import { Badge, Card, Empty, formatRelative, SkeletonList } from '@loams/ui';
 import { FolderGit2, GitBranch } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { Project, StudioAgentd } from '../agentd.js';
@@ -20,7 +20,7 @@ export function Home({ agentd }: { agentd: StudioAgentd }) {
   if (projects.isPending)
     return (
       <Padded>
-        <Empty title="Loading projects…" />
+        <SkeletonList label="Loading projects" layout="cards" rows={3} />
       </Padded>
     );
   if (projects.isError) {

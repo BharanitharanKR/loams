@@ -14,6 +14,7 @@ import { DRAWER, INSPECTOR, PanelController } from './panel.js';
 import { PreferencesPage } from './preferences.js';
 import { HashRouter } from './router.js';
 
+export { AllPagesPage, pagesByArea, usePinned } from './all-pages.js';
 export {
   AppearanceMenu,
   AppearanceSection,
@@ -41,9 +42,7 @@ export {
   useMode,
   useModeShortcut,
 } from './mode-switcher.js';
-
 export { inMode, type ModeFilter, navSections, SECTIONS, STUDIO_SECTIONS } from './nav.js';
-export { AllPagesPage, pagesByArea, usePinned } from './all-pages.js';
 export {
   ALL_PAGES_PATH,
   currentProject,

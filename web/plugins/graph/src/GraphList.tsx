@@ -5,7 +5,7 @@
 
 import { Code } from '@connectrpc/connect';
 import { graph } from '@loams/proto';
-import { Badge, Button, Checkbox, Dialog, Field, Input, Notice } from '@loams/ui';
+import { Badge, Button, Checkbox, Dialog, Field, Input, Notice, SkeletonList } from '@loams/ui';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { type GraphClient, type GraphFailure, type Language, toFailure } from './client.js';
 
@@ -128,7 +128,7 @@ export function GraphList(p: GraphListProps) {
           );
         })}
       </ul>
-      {loading && <p className="m-0 text-sm text-muted">Loading…</p>}
+      {loading && <SkeletonList label="Loading graphs" rows={3} />}
       {next && !loading && (
         <Button size="sm" variant="quiet" onClick={() => void load(next)}>
           Load more

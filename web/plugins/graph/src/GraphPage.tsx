@@ -7,7 +7,16 @@
 import { Code, type Transport } from '@connectrpc/connect';
 import { NamespacePicker, PageHead } from '@loams/desktop-ui';
 import { graph } from '@loams/proto';
-import { Badge, Button, ComingSoon, Empty, isNotServed, Notice, type SqlSchema } from '@loams/ui';
+import {
+  Badge,
+  Button,
+  ComingSoon,
+  Empty,
+  isNotServed,
+  Notice,
+  SkeletonList,
+  type SqlSchema,
+} from '@loams/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createGraphClient,
@@ -85,9 +94,7 @@ export function GraphPage({ transport, openExternal, storage, namespace }: Graph
     return (
       <div className="lc-page">
         {head}
-        <p className="text-muted" role="status">
-          Asking the server about Loams Graph…
-        </p>
+        <SkeletonList label="Asking the server about Loams Graph" layout="cards" rows={3} />
       </div>
     );
   }
