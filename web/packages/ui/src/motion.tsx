@@ -20,6 +20,7 @@ import {
   motion,
   type Transition,
   useReducedMotion,
+  type Variants,
 } from 'motion/react';
 import { type ReactElement, type ReactNode, useId } from 'react';
 import { cx } from './cx';
@@ -224,7 +225,7 @@ const STAGGER_STEP = 0.025;
 const STAGGER_CAP = 8;
 
 /** The list-stagger variants: the container's children rise in order, capped at 8 steps. */
-export const LIST_STAGGER = {
+export const LIST_STAGGER: { container: Variants; item: Variants } = {
   container: {
     hidden: {},
     visible: {},
@@ -241,7 +242,7 @@ export const LIST_STAGGER = {
     }),
     exit: { opacity: 0, transition: leave(MOTION_DURATION.exit) },
   },
-} as const;
+};
 
 /**
  * A list whose items rise in order when it first appears (results arriving, a filtered list).
