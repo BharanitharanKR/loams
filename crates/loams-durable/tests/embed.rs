@@ -352,3 +352,59 @@ async fn mysql_store_needs_the_feature() {
         "{err}"
     );
 }
+
+/// B12: the gateway answers what the listener's `POST /` answers, for the
+/// same bytes: a created promise, the same promise from the listener, a
+/// `400` envelope for bytes that are no envelope, and `404` for `ui.*`.
+#[tokio::test(flavor = "multi_thread")]
+async fn gateway_answers_like_the_listener() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let server = DurableServer::start(config(dir.path()), "node-a")
+        .await
+        .expect("start");
+    let gateway = server.gateway();
+    let envelope = |kind: &str, data: Value| {
+        serde_json::to_vec(&json!({
+            "kind": kind,
+            "head": { "corrId": "c-1", "version": loams_durable::PROTOCOL_VERSION },
+            "data": data,
+        }))
+        .expect("json")
+    };
+    let (status, body) = gateway
+        .handle(&envelope(
+            "promise.create",
+            json!({ "id": "gw-1", "timeoutAt": far(), "param": {}, "tags": {} }),
+        ))
+        .await;
+    let body: Value = serde_json::from_slice(&body).expect("an envelope");
+    assert!((200..300).contains(&status), "{status}: {body}");
+    assert_eq!(body["kind"], "promise.create", "{body}");
+    assert_eq!(body["head"]["corrId"], "c-1", "{body}");
+    assert_eq!(body["head"]["status"], status, "{body}");
+
+    // The listener sees the promise the gateway created: one server.
+    let got = server.process(get("gw-1")).await.expect("get");
+    assert_eq!(got["data"]["promise"]["id"], "gw-1", "{got}");
+
+    let (status, body) = gateway.handle(br#"{"kind": "promise.get"}"#).await;
+    let body: Value = serde_json::from_slice(&body).expect("an envelope");
+    assert_eq!(status, 400, "{body}");
+    assert_eq!(body["kind"], "promise.get", "{body}");
+
+    let (status, _) = gateway.handle(b"not json").await;
+    assert_eq!(status, 400);
+
+    let (status, body) = gateway
+        .handle(&envelope("ui.executions.search", json!({})))
+        .await;
+    assert_eq!(status, 404, "{}", String::from_utf8_lossy(&body));
+
+    let (status, body) = gateway
+        .handle(&envelope("promise.get", json!({ "id": "missing" })))
+        .await;
+    let body: Value = serde_json::from_slice(&body).expect("an envelope");
+    assert_eq!(status, 404, "{body}");
+    assert_eq!(body["head"]["status"], 404, "{body}");
+    server.stop().await;
+}

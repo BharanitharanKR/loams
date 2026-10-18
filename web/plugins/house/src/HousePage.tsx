@@ -23,6 +23,7 @@ import {
   SampleDataNotice,
   SchemaPanel,
   Select,
+  SkeletonList,
   SqlEditor,
   type SqlEditorHandle,
   SqlExamples,
@@ -100,9 +101,7 @@ export function HousePage({ client, sample }: HousePageProps) {
     return (
       <div className="lc-page">
         {head}
-        <p className="text-muted" role="status">
-          Asking the server about Loams House…
-        </p>
+        <SkeletonList label="Asking the server about Loams House" layout="cards" rows={3} />
       </div>
     );
   }
@@ -113,7 +112,9 @@ export function HousePage({ client, sample }: HousePageProps) {
         <Notice tone="danger" title="Could not reach the server">
           {detected.error}
         </Notice>
-        <Button onClick={() => setTick((t) => t + 1)}>Try again</Button>
+        <div>
+          <Button onClick={() => setTick((t) => t + 1)}>Try again</Button>
+        </div>
       </div>
     );
   }

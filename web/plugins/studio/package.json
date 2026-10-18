@@ -37,6 +37,7 @@
         "console.page",
         "shell.nav.section",
         "palette.command",
+        "shell.palette.source",
         "shell.sidebar.threads",
         "shell.home",
         "shell.inspector.tab",

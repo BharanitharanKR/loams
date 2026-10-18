@@ -435,7 +435,7 @@
       "upstreamPath": "apps/web/src/components/CommandPalette.logic.ts",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "2741456cbbae272e4538611ad32e8b3bca1c6d9a2a50f67ff1634fb5b9e8bb69",
-      "localSha256": "b2957ee157d28799b3be0a12928895abde1d49a0079d3a6f7e39bf50632ce0fb",
+      "localSha256": "2b48d089937959041ffaf52e4464abab29b498b451dae78303344aaa00989d2c",
       "verdict": "adapt",
       "group": "h",
       "note": "the ranking half lives in @loams/ui src/command-rank.ts, which the shell's palette also uses"

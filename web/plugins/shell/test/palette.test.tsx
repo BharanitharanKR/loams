@@ -1,6 +1,6 @@
 // The shell's command palette (SD1 Task 24; §53 §4.5, §5.10; T3-6): Mod+K in both
 // modes, built on @loams/ui's CommandPalette. Plugins contribute through the
-// `palette.command` slot; the current mode's commands come first and the other
+// `shell.palette.source` slot and its alias `palette.command` (CF1 Task 11, W9); the current mode's commands come first and the other
 // mode's follow under their mode's heading.
 
 import { type Mode, ModeController, type SessionService } from '@loams/console-host';
@@ -208,6 +208,26 @@ describe('the shell palette', () => {
     await waitFor(() => expect(listed()).toEqual(['# Pages', 'Go to Jobs']));
     fireEvent.keyDown(again, { key: 'Enter' });
     await waitFor(() => expect(router.current().path).toBe('/jobs'));
+  });
+
+  it('reads shell.palette.source as well as palette.command (W9)', async () => {
+    const { slots } = setup('console');
+    act(() => {
+      slots.register({ name: 'shell.palette.source', plugin: 'pages' }, ({ publish }) => {
+        useEffect(
+          () =>
+            publish([{ id: 'p', title: 'Go to project acme', group: 'Projects', run: () => {} }]),
+          [publish],
+        );
+        return null;
+      });
+    });
+    contribute(slots, { plugin: 'pages' }, [
+      { id: 'old', title: 'An alias row', group: 'Projects', run: () => {} },
+    ]);
+    await openPalette();
+    expect(await screen.findByRole('option', { name: /Go to project acme/ })).toBeTruthy();
+    expect(screen.getByRole('option', { name: /An alias row/ })).toBeTruthy();
   });
 
   it('Mod+K toggles the palette', async () => {

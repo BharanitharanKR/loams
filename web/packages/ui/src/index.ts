@@ -162,6 +162,7 @@ export {
   NumberFieldIncrement,
   NumberFieldInput,
 } from './number-field';
+export { plainError } from './plain-error';
 export {
   Popover,
   PopoverClose,
@@ -232,6 +233,7 @@ export {
 } from './sidebar';
 export { type ResponsiveSidebarState, resolveSidebarState } from './sidebar-state';
 export { Skeleton } from './skeleton';
+export { SkeletonList } from './skeleton-list';
 export { Spinner } from './spinner';
 export {
   codeEditorText,

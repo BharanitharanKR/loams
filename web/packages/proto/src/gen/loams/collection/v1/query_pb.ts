@@ -928,7 +928,9 @@ export type Query = Message<"loams.collection.v1.Query"> & {
    * values are strings, so a `u64::MAX` id stays exact and `{"uuid": "…"}` keeps
    * the REST spelling verbatim. The handler reads each back through the same
    * `loams_query::json::pk::from_json` `GetDocumentsRequest.ids` goes through, so
-   * the three arms and their refusals are the document RPCs'.
+   * the three arms and their refusals are the document RPCs'. A whole number
+   * (`{"uint": 1}` or a bare `1`, exact up to 2^53) is a `uint` id too, and a
+   * bare string is a `string` id, as the REST route spells them.
    *
    * @generated from field: repeated google.protobuf.Value ids = 16;
    */
@@ -1034,7 +1036,8 @@ export const MatchPhraseQuerySchema: GenMessage<MatchPhraseQuery> = /*@__PURE__*
  */
 export type MultiMatchQuery = Message<"loams.collection.v1.MultiMatchQuery"> & {
   /**
-   * The fields to search, each with its boost.
+   * The fields to search, each with its boost. None is every indexed text
+   * field at boost 1, as Elasticsearch's `index.query.default_field` of `*`.
    *
    * @generated from field: repeated loams.collection.v1.MultiMatchField fields = 1;
    */
@@ -1083,6 +1086,8 @@ export type MultiMatchField = Message<"loams.collection.v1.MultiMatchField"> & {
   field: string;
 
   /**
+   * Absent (0) is 1, as a bare field name is in Elasticsearch.
+   *
    * @generated from field: float boost = 2;
    */
   boost: number;
@@ -1327,7 +1332,8 @@ export type QueryStringQuery = Message<"loams.collection.v1.QueryStringQuery"> &
   query: string;
 
   /**
-   * The fields to search when the query names none.
+   * The fields to search when the query names none. None is every indexed
+   * text field, as Elasticsearch's `index.query.default_field` of `*`.
    *
    * @generated from field: repeated string default_fields = 2;
    */

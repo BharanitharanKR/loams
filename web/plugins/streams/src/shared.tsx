@@ -8,7 +8,7 @@ import {
   NamespacePicker as SharedPicker,
   useLoad as useSharedLoad,
 } from '@loams/desktop-ui';
-import { isNotServed, Notice } from '@loams/ui';
+import { Button, isNotServed, Notice } from '@loams/ui';
 import { ApiError } from './client.js';
 
 /**
@@ -35,11 +35,31 @@ export function useLoad<T>(load: () => Promise<T>, deps: unknown[]): [Loaded<T>,
   return useSharedLoad(load, deps, { keepOnReload: true, errorText });
 }
 
-export function ErrorNotice({ title, message }: { title: string; message: string }) {
-  return (
+export function ErrorNotice({
+  title,
+  message,
+  retry,
+}: {
+  title: string;
+  message: string;
+  /** Offers "Try again" under the notice. */
+  retry?: () => void;
+}) {
+  const notice = (
     <Notice tone="danger" title={title}>
       {message}
     </Notice>
+  );
+  if (!retry) return notice;
+  return (
+    <div className="flex flex-col gap-2">
+      {notice}
+      <div>
+        <Button size="sm" onClick={retry}>
+          Try again
+        </Button>
+      </div>
+    </div>
   );
 }
 

@@ -11,6 +11,7 @@ import {
 } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
 import dataStudioPkg from '@loams/plugin-data-studio/package.json';
+import durablePkg from '@loams/plugin-durable/package.json';
 import gitPkg from '@loams/plugin-git/package.json';
 import graphPkg from '@loams/plugin-graph/package.json';
 import housePkg from '@loams/plugin-house/package.json';
@@ -20,10 +21,12 @@ import pipelinesPkg from '@loams/plugin-pipelines/package.json';
 import sqlPkg from '@loams/plugin-sql/package.json';
 import streamsPkg from '@loams/plugin-streams/package.json';
 import { Button } from '@loams/ui';
+import { useEffect, useState } from 'react';
 import demoYml from '../../catalog/demo.yml?raw';
 import webYml from '../../catalog/web.yml?raw';
 import type { AuthMode } from '../runtime-config.js';
 import { DEMO_PAGES } from './demo.js';
+import { type EngineStatus, watchHealth } from './engine.js';
 
 export const webModules: ModuleTable = {
   '@loams/plugin-live': () => import('@loams/plugin-live'),
@@ -35,6 +38,7 @@ export const webModules: ModuleTable = {
   '@loams/plugin-git': () => import('@loams/plugin-git'),
   '@loams/plugin-data-studio': () => import('@loams/plugin-data-studio'),
   '@loams/plugin-streams': () => import('@loams/plugin-streams'),
+  '@loams/plugin-durable': () => import('@loams/plugin-durable'),
 };
 
 export const webManifests: unknown[] = [
@@ -47,6 +51,7 @@ export const webManifests: unknown[] = [
   gitPkg,
   dataStudioPkg,
   streamsPkg,
+  durablePkg,
 ];
 
 /** The patches over base.yml, in order. */
@@ -104,24 +109,44 @@ export const hostedManifest = {
   },
 };
 
-export function HostedHeader({ session }: { session: HostedSession }) {
+export function HostedHeader({
+  session,
+  watch = watchHealth,
+}: {
+  session: HostedSession;
+  /** The /health poller; tests pass their own. */
+  watch?: (origin: string, onStatus: (s: EngineStatus) => void) => () => void;
+}) {
   const host = new URL(session.engine).host;
+  const [status, setStatus] = useState<EngineStatus>({ state: 'checking' });
+  useEffect(() => watch(session.engine, setStatus), [watch, session.engine]);
+  const said = engineStatusText(status, session.engine);
+  const title = session.changeEngine ? `${said} Change engine` : said;
+  const dot = (
+    <>
+      <span
+        className={`lc-hosted-dot lc-hosted-dot-${status.state}`}
+        data-engine-status={status.state}
+        aria-hidden="true"
+      />
+      <span>{host}</span>
+      <span className="sr-only">{said}</span>
+    </>
+  );
   return (
     <div className="lc-hosted">
       {session.changeEngine ? (
         <button
           type="button"
           className="lc-hosted-engine"
-          title={`Connected to ${session.engine}. Change engine`}
+          title={title}
           onClick={session.changeEngine}
         >
-          <span className="lc-hosted-dot" aria-hidden="true" />
-          <span>{host}</span>
+          {dot}
         </button>
       ) : (
-        <span className="lc-hosted-engine" title={`Connected to ${session.engine}`}>
-          <span className="lc-hosted-dot" aria-hidden="true" />
-          <span>{host}</span>
+        <span className="lc-hosted-engine" title={title}>
+          {dot}
         </span>
       )}
       <label
@@ -148,6 +173,17 @@ export function HostedHeader({ session }: { session: HostedSession }) {
       )}
     </div>
   );
+}
+
+/** The engine dot's tooltip and screen-reader text. */
+export function engineStatusText(status: EngineStatus, engine: string): string {
+  if (status.state === 'checking') return `Checking the engine at ${engine}...`;
+  if (status.state === 'ok') return `Connected to ${engine}.`;
+  const secs = Math.max(1, Math.round(status.retryInMs / 1000));
+  const why = /fetch|network|load failed/i.test(status.message)
+    ? 'No answer. Check that it is running and that this device is on its tailnet.'
+    : status.message;
+  return `Cannot reach the engine at ${engine}. ${why} Trying again in ${secs} s.`;
 }
 
 /** Who the console is acting as, and how the engine knows. */
