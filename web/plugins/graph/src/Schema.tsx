@@ -13,12 +13,15 @@ export function Schema({
   namespace,
   name,
   refresh,
+  onSchema,
 }: {
   client: GraphClient;
   namespace: string;
   name: string;
   /** Changes after each statement that wrote, so counts follow. */
   refresh: number;
+  /** Gets the schema each time it is read (the editor completes its names). */
+  onSchema?: (schema: graph.GraphSchema | undefined) => void;
 }) {
   const [schema, setSchema] = useState<graph.GraphSchema>();
   const [error, setError] = useState<GraphFailure>();
@@ -30,7 +33,11 @@ export function Schema({
     setError(undefined);
     client
       .getSchema(namespace, name)
-      .then((s) => live && setSchema(s))
+      .then((s) => {
+        if (!live) return;
+        setSchema(s);
+        onSchema?.(s);
+      })
       .catch((e) => {
         if (!live) return;
         setSchema(undefined);

@@ -1,9 +1,14 @@
 import type { IpcResult, SqlResult, StackState } from '@loams/desktop/contracts';
+import { setCodeEditorText } from '@loams/ui';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConnectPanel, isWrite, MAX_CELL_CHARS, SqlConsole, StackCard } from '../src/index.js';
 
 afterEach(cleanup);
+
+// jsdom has no layout: the code editor measures text ranges for its selection and tooltips.
+Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect ??= () => new DOMRect();
 
 // jsdom has no <dialog> modal support.
 HTMLDialogElement.prototype.showModal ??= function (this: HTMLDialogElement) {
@@ -147,7 +152,7 @@ describe('sql console', () => {
   it('writes_are_confirmed_by_main_not_by_a_second_dialog', async () => {
     const run = vi.fn(async () => result());
     render(<SqlConsole dialect="postgres" run={run} />);
-    fireEvent.change(screen.getByLabelText('SQL editor'), { target: { value: 'DELETE FROM t' } });
+    act(() => setCodeEditorText(screen.getByLabelText('SQL editor'), 'DELETE FROM t'));
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() => expect(run).toHaveBeenCalledWith('DELETE FROM t'));
     expect(screen.queryByRole('button', { name: 'Run anyway' })).toBeNull();
@@ -160,7 +165,7 @@ describe('sql console', () => {
       message: 'cancelled',
     }));
     render(<SqlConsole dialect="postgres" run={run} />);
-    fireEvent.change(screen.getByLabelText('SQL editor'), { target: { value: 'DELETE FROM t' } });
+    act(() => setCodeEditorText(screen.getByLabelText('SQL editor'), 'DELETE FROM t'));
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() => expect(run).toHaveBeenCalled());
     await waitFor(() =>
@@ -175,7 +180,7 @@ describe('sql console', () => {
     const run = vi.fn(async () => result());
     render(<SqlConsole dialect="postgres" run={run} />);
     const editor = screen.getByLabelText('SQL editor');
-    fireEvent.change(editor, { target: { value: 'select 1' } });
+    act(() => setCodeEditorText(editor, 'select 1'));
     fireEvent.keyDown(editor, { key: 'Enter', metaKey: true });
     await waitFor(() => expect(run).toHaveBeenCalledTimes(1));
     expect(await screen.findByText('2 rows in 5 ms')).toBeTruthy();
@@ -184,9 +189,7 @@ describe('sql console', () => {
   it('truncated_notice', async () => {
     const run = async () => result({ truncated: true });
     render(<SqlConsole dialect="postgres" run={run} />);
-    fireEvent.change(screen.getByLabelText('SQL editor'), {
-      target: { value: 'select * from big' },
-    });
+    act(() => setCodeEditorText(screen.getByLabelText('SQL editor'), 'select * from big'));
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     expect(await screen.findByText(/truncated at 1,000 rows/i)).toBeTruthy();
   });
@@ -198,7 +201,7 @@ describe('sql console', () => {
       message: 'relation "x" does not exist',
     });
     render(<SqlConsole dialect="postgres" run={run} />);
-    fireEvent.change(screen.getByLabelText('SQL editor'), { target: { value: 'select * from x' } });
+    act(() => setCodeEditorText(screen.getByLabelText('SQL editor'), 'select * from x'));
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     expect(await screen.findByText('relation "x" does not exist')).toBeTruthy();
     expect(screen.getByText(/42P01/)).toBeTruthy();
@@ -263,7 +266,7 @@ describe('renderer row cap', () => {
       value: { columns: ['n', 's'], rows, rowCount: 1500, truncated: false, elapsedMs: 1 },
     });
     render(<SqlConsole dialect="postgres" run={run} />);
-    fireEvent.change(screen.getByLabelText('SQL editor'), { target: { value: 'select 1' } });
+    act(() => setCodeEditorText(screen.getByLabelText('SQL editor'), 'select 1'));
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     expect(await screen.findByText(/truncated at 1,000 rows/i)).toBeTruthy();
     expect(screen.getAllByRole('row')).toHaveLength(1001);

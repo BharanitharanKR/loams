@@ -2,7 +2,8 @@ import { create } from '@bufbuild/protobuf';
 import { Code, ConnectError, createRouterTransport } from '@connectrpc/connect';
 import { validateManifest } from '@loams/console-host';
 import { collection, documents, query } from '@loams/proto';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { setCodeEditorText } from '@loams/ui';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import pkg from '../package.json';
 import { createDataClient, toDocumentId } from '../src/client.js';
@@ -15,6 +16,10 @@ import { SearchTab } from '../src/pages/search.js';
 import { SqlPage } from '../src/pages/sql.js';
 
 afterEach(cleanup);
+
+// jsdom has no layout: the code editor measures text ranges for its selection and tooltips.
+Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect ??= () => new DOMRect();
 
 // The empty state's grain canvas observes its size; jsdom has no ResizeObserver.
 globalThis.ResizeObserver ??= class {
@@ -145,15 +150,16 @@ describe('data studio', () => {
     const { client } = clientWith({}, fetch);
     render(<SqlPage client={client} ns="default" navigate={() => {}} />);
     const box = screen.getByLabelText('SQL');
-    fireEvent.change(box, { target: { value: 'SELEKT' } });
+    act(() => setCodeEditorText(box, 'SELEKT'));
     fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true });
     expect((await screen.findByRole('alert')).textContent).toContain('parse error near FROM');
     const calls = (fetch as unknown as ReturnType<typeof vi.fn>).mock.calls as unknown as [
       string,
       RequestInit,
     ][];
-    expect(calls[0]?.[0]).toBe('loams-app://console/v1/namespaces/default/sql');
-    expect(JSON.parse(String(calls[0]?.[1].body))).toEqual({ query: 'SELEKT' });
+    // The page reads the schema first (information_schema), then runs the statement.
+    const ran = calls.find((c) => JSON.parse(String(c[1].body)).query === 'SELEKT');
+    expect(ran?.[0]).toBe('loams-app://console/v1/namespaces/default/sql');
   });
 
   it('sql_result_grid', async () => {
@@ -169,6 +175,7 @@ describe('data studio', () => {
     ) as unknown as typeof globalThis.fetch;
     const { client } = clientWith({}, fetch);
     render(<SqlPage client={client} ns="default" navigate={() => {}} />);
+    act(() => setCodeEditorText(screen.getByLabelText('SQL'), 'SELECT n FROM t'));
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await screen.findByText('2 rows');
     expect(screen.getByText('Int64')).toBeTruthy();
