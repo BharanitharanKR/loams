@@ -121,7 +121,13 @@ describe('data studio', () => {
         client={client}
         ns="default"
         coll="articles"
-        schema={{ vectors: [{ name: 'embedding', dim: 3 }] }}
+        schema={{
+          fields: [
+            { name: 'title', kind: { text: { analyzer: 'standard' } }, indexed: true },
+            { name: 'tenant', kind: 'keyword', indexed: true },
+          ],
+          vectors: [{ name: 'embedding', dim: 3 }],
+        }}
       />,
     );
     fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'refund' } });
@@ -132,7 +138,11 @@ describe('data studio', () => {
     expect((await screen.findByTestId('score')).textContent).toBe('0.8125');
     expect(got?.namespace).toBe('default');
     expect(got?.collection).toBe('articles');
-    expect(got?.retrievers[0]?.retriever.case).toBe('text');
+    const text = got?.retrievers[0]?.retriever;
+    expect(text?.case).toBe('text');
+    // Free text names the schema's text fields; without them the engine matches nothing.
+    const qs = text?.case === 'text' ? text.value.query?.query : undefined;
+    expect(qs?.case === 'queryString' && qs.value.defaultFields).toEqual(['title']);
     expect(got?.filter?.query.case).toBe('term');
     expect(got?.limit).toBe(10);
   });
