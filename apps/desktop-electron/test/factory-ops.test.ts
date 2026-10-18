@@ -264,8 +264,8 @@ describe("ops for Studio", () => {
 			adapter({
 				metricsDaily: () =>
 					Promise.reject(Object.assign(new Error("404"), { status: 404 })),
-				metrics: (q: Record<string, unknown>) => {
-					asked.push(q);
+				metrics: (q: unknown) => {
+					asked.push(q as Record<string, unknown>);
 					return {
 						data: [
 							{
