@@ -174,3 +174,11 @@ describe('resolvePgControl', () => {
     expect(c.mock).toBe(true);
   });
 });
+
+describe('endpoint', () => {
+  it('reports the host:port pg-control is reached at', () => {
+    expect(createConnectPgControl({ baseUrl: 'http://127.0.0.1:7680' }).endpoint).toBe(
+      '127.0.0.1:7680',
+    );
+  });
+});

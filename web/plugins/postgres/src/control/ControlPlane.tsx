@@ -166,8 +166,8 @@ export function ControlPlane({
     <div className="flex flex-col gap-4">
       {client.mock && (
         <SampleDataNotice>
-          No Postgres control plane (pg-control, loams.postgres.v1) answered. Nothing here changes a
-          database.
+          pg-control isn't reachable, so this is fixture data and nothing here changes a database.
+          Set LOAMS_PG_CONTROL_API_KEY_FILE (and start pg-control) to connect.
         </SampleDataNotice>
       )}
       <div className="flex flex-wrap items-end gap-3">
