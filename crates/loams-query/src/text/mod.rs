@@ -18,6 +18,7 @@
 pub mod checksums;
 pub mod coerce;
 pub mod compile;
+pub mod dismax;
 pub mod fields;
 pub mod highlight;
 pub mod norms;

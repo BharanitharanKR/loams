@@ -1,4 +1,4 @@
-import { Badge, Button, Card, Empty, Table } from '@loams/ui';
+import { Badge, Button, Card, Empty, SkeletonList, Table } from '@loams/ui';
 import type { LinkDetail, StreamsClient } from '../client.js';
 import { ErrorNotice, PageHead, useLoad } from '../shared.js';
 import { StatusBadge } from './list.js';
@@ -90,7 +90,7 @@ export function LinkPage({
           </>
         }
       />
-      {link.state === 'loading' && <p className="lc-muted">Loading link…</p>}
+      {link.state === 'loading' && <SkeletonList label="Loading the link" rows={4} />}
       {link.state === 'error' && (
         <ErrorNotice title="Could not load the link" message={link.message} />
       )}

@@ -34,7 +34,8 @@
       "slots": [
         "console.page",
         "shell.topbar.left",
-        "shell.nav.section"
+        "shell.nav.section",
+        "shell.palette.source"
       ],
       "permissions": [],
       "requires": {

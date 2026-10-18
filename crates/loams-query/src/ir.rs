@@ -296,7 +296,9 @@ pub enum Query {
         slop: u32,
     },
     MultiMatch {
-        /// `[[name, boost], …]`.
+        /// `[[name, boost], …]`. Empty (or absent) is every indexed text
+        /// field at boost 1, Elasticsearch's `index.query.default_field`.
+        #[serde(default)]
         fields: Vec<(String, f32)>,
         text: String,
         #[serde(default)]
@@ -361,6 +363,9 @@ pub enum Query {
     Ids(#[serde(with = "crate::json::pk::vec")] Vec<PrimaryKey>),
     QueryString {
         query: String,
+        /// The fields a term without `field:` searches. Empty (or absent) is
+        /// every indexed text field, Elasticsearch's
+        /// `index.query.default_field` of `*`.
         #[serde(default)]
         default_fields: Vec<String>,
         #[serde(default)]

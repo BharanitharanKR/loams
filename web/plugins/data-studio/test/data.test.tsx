@@ -1,4 +1,4 @@
-import { create } from '@bufbuild/protobuf';
+import { create, type JsonObject } from '@bufbuild/protobuf';
 import { Code, ConnectError, createRouterTransport } from '@connectrpc/connect';
 import { validateManifest } from '@loams/console-host';
 import { collection, documents, query } from '@loams/proto';
@@ -106,13 +106,41 @@ describe('data studio', () => {
     await screen.findByText('first');
   });
 
+  const SEARCH_SCHEMA: JsonObject = {
+    fields: [
+      { name: 'title', kind: { text: { analyzer: 'standard' } }, indexed: true },
+      { name: 'tenant', kind: 'keyword', indexed: true, fast: true },
+    ],
+    vectors: [{ name: 'embedding', dim: 3 }],
+  };
+
   it('search_sends_ir_and_renders_scores', async () => {
-    let got: query.SearchRequest | undefined;
+    const got: query.SearchRequest[] = [];
+    const onParams = vi.fn();
     const { client } = clientWith({
       search: (req) => {
-        got = req;
+        got.push(req);
         return create(query.SearchResponseSchema, {
-          hits: [{ pk: uid(9), score: 0.8125, source: { title: 'refund' } }],
+          hits: [
+            {
+              pk: uid(9),
+              score: 0.8125,
+              source: { title: 'refund policy', tenant: 'a' },
+              highlight: {
+                title: {
+                  kind: {
+                    case: 'listValue',
+                    value: {
+                      values: [
+                        { kind: { case: 'stringValue', value: '\uE000refund\uE001 policy' } },
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          ],
+          total: { value: 1n, relation: query.TotalRelation.EQ },
         });
       },
     });
@@ -121,30 +149,93 @@ describe('data studio', () => {
         client={client}
         ns="default"
         coll="articles"
-        schema={{
-          fields: [
-            { name: 'title', kind: { text: { analyzer: 'standard' } }, indexed: true },
-            { name: 'tenant', kind: 'keyword', indexed: true },
-          ],
-          vectors: [{ name: 'embedding', dim: 3 }],
-        }}
+        schema={SEARCH_SCHEMA}
+        onParams={onParams}
       />,
     );
-    fireEvent.change(screen.getByLabelText('Text'), { target: { value: 'refund' } });
-    fireEvent.change(screen.getByLabelText('Filter'), {
-      target: { value: '{"term":{"field":"tenant","value":"a"}}' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Search' }));
+    // The first search runs on its own: everything, filter only.
+    await waitFor(() => expect(got).toHaveLength(1));
+    const box = screen.getByRole('combobox', { name: 'Search query' });
+    fireEvent.change(box, { target: { value: 'refund tenant:a' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    await waitFor(() => expect(got).toHaveLength(2));
     expect((await screen.findByTestId('score')).textContent).toBe('0.8125');
-    expect(got?.namespace).toBe('default');
-    expect(got?.collection).toBe('articles');
-    const text = got?.retrievers[0]?.retriever;
+    const req = got[1] as query.SearchRequest;
+    expect(req.namespace).toBe('default');
+    expect(req.collection).toBe('articles');
+    const text = req.retrievers[0]?.retriever;
     expect(text?.case).toBe('text');
-    // Free text names the schema's text fields; without them the engine matches nothing.
-    const qs = text?.case === 'text' ? text.value.query?.query : undefined;
-    expect(qs?.case === 'queryString' && qs.value.defaultFields).toEqual(['title']);
-    expect(got?.filter?.query.case).toBe('term');
-    expect(got?.limit).toBe(10);
+    const q = text?.case === 'text' ? text.value.query?.query : undefined;
+    expect(q?.case === 'match' && q.value.field).toBe('title');
+    expect(req.filter?.query.case).toBe('term');
+    expect(req.limit).toBe(20);
+    expect(req.highlight?.fields.map((f) => f.field)).toEqual(['title']);
+    // The engine's highlight is marked, and the URL carries the query.
+    expect(screen.getByText('refund', { selector: 'mark' })).toBeTruthy();
+    expect(screen.getByText('1', { selector: 'strong' }).parentElement?.textContent).toContain(
+      '1 hit',
+    );
+    expect(onParams).toHaveBeenLastCalledWith('q=refund+tenant%3Aa');
+  });
+
+  it('search_shows_query_errors_without_sending', async () => {
+    const search = vi.fn(() => create(query.SearchResponseSchema, {}));
+    const { client } = clientWith({ search });
+    render(<SearchTab client={client} ns="default" coll="articles" schema={SEARCH_SCHEMA} />);
+    await waitFor(() => expect(search).toHaveBeenCalledTimes(1));
+    const box = screen.getByRole('combobox', { name: 'Search query' });
+    fireEvent.change(box, { target: { value: 'tenat:a' } });
+    fireEvent.keyDown(box, { key: 'Enter' });
+    const alert = await screen.findByRole('alert');
+    expect(alert.textContent).toContain('Did you mean tenant?');
+    expect(alert.querySelector('mark')?.textContent).toBe('tenat');
+    expect(box.getAttribute('aria-invalid')).toBe('true');
+    expect(search).toHaveBeenCalledTimes(1);
+  });
+
+  it('search_suggests_fields_and_takes_the_keyboard', async () => {
+    const { client } = clientWith();
+    render(<SearchTab client={client} ns="default" coll="articles" schema={SEARCH_SCHEMA} />);
+    const box = screen.getByRole('combobox', { name: 'Search query' }) as HTMLInputElement;
+    fireEvent.focus(box);
+    fireEvent.change(box, { target: { value: 'ten', selectionStart: 3 } });
+    const list = await screen.findByRole('listbox');
+    expect(
+      within(list)
+        .getAllByRole('option')
+        .map((o) => o.textContent),
+    ).toEqual([expect.stringContaining('tenant')]);
+    fireEvent.keyDown(box, { key: 'ArrowDown' });
+    expect(box.getAttribute('aria-activedescendant')).toBeTruthy();
+    fireEvent.keyDown(box, { key: 'Enter' });
+    expect(box.value).toBe('tenant ');
+    fireEvent.keyDown(box, { key: 'Escape' });
+    expect(screen.queryByRole('listbox')).toBeNull();
+  });
+
+  it('search_state_comes_from_the_url', async () => {
+    const got: query.SearchRequest[] = [];
+    const { client } = clientWith({
+      search: (req) => {
+        got.push(req);
+        return create(query.SearchResponseSchema, {});
+      },
+    });
+    render(
+      <SearchTab
+        client={client}
+        ns="default"
+        coll="articles"
+        schema={SEARCH_SCHEMA}
+        params={{ q: 'refund', f: '[["tenant:b","n"]]', k: '50', mode: 'text' }}
+      />,
+    );
+    await waitFor(() => expect(got).toHaveLength(1));
+    const req = got[0] as query.SearchRequest;
+    expect(req.limit).toBe(50);
+    expect(req.filter?.query.case).toBe('bool');
+    expect(screen.getByText('tenant:b')).toBeTruthy();
+    expect(screen.getByText('NOT')).toBeTruthy();
   });
 
   it('sql_error_shown', async () => {
@@ -231,7 +322,7 @@ describe('data studio', () => {
   it('data_studio_renamed_label_only', () => {
     // Q812: "Data explorer" is the visible name; the route, page ids and plugin id stay.
     const pages: { id: string; path: string; title: string }[] = [];
-    const nav: { plugin: string; meta?: Record<string, unknown> }[] = [];
+    const nav: { name: string; plugin: string; meta?: Record<string, unknown> }[] = [];
     const ctx = {
       router: {
         page: (spec: (typeof pages)[number]) => {
@@ -252,12 +343,20 @@ describe('data studio', () => {
       effect: (fn: () => unknown) => fn(),
     };
     plugin.apply(ctx as never, {});
-    expect(nav).toEqual([
+    // UX-2: its SQL editor and the Search entry are Pages too, so each can be pinned.
+    expect(nav.filter((n) => n.name === 'shell.nav.section')).toEqual([
       expect.objectContaining({
         plugin: 'data-studio',
         meta: expect.objectContaining({ id: 'data', label: 'Data explorer', href: '/data' }),
       }),
+      expect.objectContaining({
+        meta: expect.objectContaining({ id: 'data-sql', label: 'SQL', href: '/data/default/sql' }),
+      }),
+      expect.objectContaining({
+        meta: expect.objectContaining({ id: 'search', label: 'Search', href: '/search' }),
+      }),
     ]);
+    expect(pages.find((p) => p.id === 'search')).toMatchObject({ path: '/search' });
     expect(pages.find((p) => p.id === 'data')).toMatchObject({
       path: '/data',
       title: 'Data explorer',
@@ -267,6 +366,9 @@ describe('data studio', () => {
 
   it('manifest_is_valid', () => {
     expect(validateManifest(pkg).editions).toEqual(['desktop']);
+    // UX-7: not gated on loams.collection.v1, so /data explains a server without a data
+    // plane instead of "No plugin serves /data".
+    expect(validateManifest(pkg).requires.api).toEqual([]);
   });
 
   it('leading_zero_string_id_stays_string', () => {

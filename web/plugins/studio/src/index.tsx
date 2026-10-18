@@ -15,6 +15,7 @@ import { type StudioAgentd, studioAgentd } from './agentd.js';
 import { desktopFactory } from './factory.js';
 import { GitActionBus, withGitActions } from './git/bus.js';
 import { hostedAgentd } from './hosts/agentd.js';
+import { BranchesSource } from './palette/BranchesSource.js';
 import { createStudioKeys, listenShellCommands } from './palette/commands.js';
 import { StudioPalette } from './palette/StudioPalette.js';
 import { desktopPreview } from './preview/access.js';
@@ -47,6 +48,7 @@ export {
   type StudioHosts,
 } from './hosts/agentd.js';
 export { StudioLayout } from './layout/StudioLayout.js';
+export { BranchesSource } from './palette/BranchesSource.js';
 export {
   type CommandName,
   createStudioKeys,
@@ -140,6 +142,8 @@ const plugin: PluginModule = {
     // until SF1 (D922).
     const factory = desktop?.factory ? desktopFactory(desktop) : undefined;
     const navigate = (to: string) => router.navigate(to);
+    const setTrail = (trail: { label: string; href?: string }[] | undefined) =>
+      router.setTrail?.(trail);
     // One keyboard layer and palette source for every Studio page (SD1 Task 24). The
     // palette's threads and run groups come from agentd (SD1 Task 17).
     const keys = createStudioKeys({ edition: platform.kind });
@@ -163,6 +167,7 @@ const plugin: PluginModule = {
               openExternal={(url) => platform.openExternal(url)}
               inspector={inspector}
               drawer={drawer}
+              setTrail={setTrail}
             />
           ),
         ),
@@ -219,6 +224,13 @@ const plugin: PluginModule = {
             copy={(text) => platform.clipboardWrite(text)}
           />
         ),
+      ),
+    );
+    // The palette's branches (CF1 Task 11): navigation to the branch's project only.
+    ctx.effect(() =>
+      slots.register(
+        { name: 'shell.palette.source', plugin: 'studio', meta: { mode: 'studio' } },
+        (p) => <BranchesSource {...p} agentd={agentd} navigate={navigate} />,
       ),
     );
     // Design 59: the sidebar's threads, the home, the inspector and drawer tabs, the top bar.

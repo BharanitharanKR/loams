@@ -1885,6 +1885,8 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sdk-objc == 'true'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: macos-latest
+    # A hung suite once held the runner for the 6 h job limit.
+    timeout-minutes: 30
     # issues: write is for the nightly-failure issue step only (schedule only).
     permissions:
       contents: read

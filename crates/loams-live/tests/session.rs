@@ -150,7 +150,8 @@ fn merged_transitions_stay_consistent() {
 /// queue filled is closed with RESOURCE_EXHAUSTED.
 #[tokio::test]
 async fn blocked_session_is_closed() {
-    let outbox = Outbox::new(2, Duration::from_millis(50));
+    // Long enough that filling the queue on a loaded runner stays inside it.
+    let outbox = Outbox::new(2, Duration::from_millis(500));
     let mut version = Version::default();
     for i in 1..=3 {
         let end = v(1, i);
@@ -159,7 +160,7 @@ async fn blocked_session_is_closed() {
     }
     assert_eq!(outbox.len(), 1, "the full queue merged");
     assert!(!outbox.check_blocked(), "not blocked yet");
-    tokio::time::sleep(Duration::from_millis(80)).await;
+    tokio::time::sleep(Duration::from_millis(600)).await;
     assert!(!outbox.push(transition(version, v(1, 9), vec![])), "closed");
     let err = outbox
         .pop()
