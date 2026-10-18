@@ -1,7 +1,7 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/chat/MessagesTimeline.logic.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// the row derivation retargeted from T3's turn items to agentd transcript entries and message parts, with upstream's stable-row reuse (`computeStableMessagesTimelineRows`, `isRowUnchanged`), the duration starts, user-message collapsing and the follow band kept; no minimap, worktree setup, MCP apps, HTML renders, attempts or citations. Loams' changes are Apache-2.0.
+// the row derivation retargeted from T3's turn items to agentd transcript entries and message parts, with upstream's stable-row reuse (`computeStableMessagesTimelineRows`, `isRowUnchanged`), the duration starts, user-message collapsing and the follow band kept; no minimap, worktree setup, MCP apps, HTML renders, attempts or citations; the markdown-link pattern made linear-time (CodeQL js/polynomial-redos). Loams' changes are Apache-2.0.
 
 // Transcript entries → timeline rows (SD1 Task 18). One row per thing a person reads:
 // a user message, an assistant text or reasoning part, a run of tool calls, a plan, a
@@ -249,7 +249,9 @@ function isRowUnchanged(a: TimelineRow, b: TimelineRow): boolean {
 
 const MAX_COLLAPSED_USER_MESSAGE_LINES = 8;
 const MAX_COLLAPSED_USER_MESSAGE_LENGTH = 600;
-const MARKDOWN_LINK = /!?\[([^\]\n]*)\]\((?:<[^>\n]*>|[^\s)]*)\)/g;
+// Neither the label nor the target may hold the bracket that opens the next
+// match, so a failed match never rescans the text after it (linear time).
+const MARKDOWN_LINK = /!?\[([^[\]\n]*)\]\((?:<[^<>\n]*>|[^\s)[\]]*)\)/g;
 
 export function shouldCollapseUserMessage(text: string): boolean {
   const visible = text.replace(MARKDOWN_LINK, "$1");

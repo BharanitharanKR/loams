@@ -4,7 +4,6 @@
 //! an attempt a killed CLI left (`upgrade_in_progress`).
 
 use std::io::Write as _;
-use std::os::unix::fs::{OpenOptionsExt as _, PermissionsExt as _};
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -72,7 +71,7 @@ pub fn now() -> u64 {
 pub fn private_dir(stack_dir: &Path) -> Result<PathBuf> {
     let dir = stack_dir.join(DIR);
     std::fs::create_dir_all(&dir)
-        .and_then(|()| std::fs::set_permissions(&dir, std::fs::Permissions::from_mode(0o700)))
+        .and_then(|()| crate::mode::set_mode(&dir, 0o700))
         .map_err(|e| UpgradeError::new("internal", format!("{}: {e}", dir.display())))?;
     Ok(dir)
 }
@@ -102,10 +101,7 @@ impl History {
         }
         let line = serde_json::to_string(entry)
             .map_err(|e| UpgradeError::new("internal", e.to_string()))?;
-        std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .mode(0o600)
+        crate::mode::create_mode(std::fs::OpenOptions::new().create(true).append(true), 0o600)
             .open(&self.path)
             .and_then(|mut f| writeln!(f, "{line}"))
             .map_err(|e| UpgradeError::new("internal", format!("{}: {e}", self.path.display())))

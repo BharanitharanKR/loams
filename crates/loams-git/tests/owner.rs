@@ -316,8 +316,15 @@ async fn idle_sequencer_is_evicted_and_reloads() {
             .expect("a1");
     assert_eq!(n.a.len().await, 1);
     eventually("the idle sequencer to close", async || n.a.is_empty().await).await;
+    // The sweep takes the sequencer out of the table first, then counts the
+    // eviction and releases the lease: wait for the release too.
+    // Released, not merely expired.
+    eventually("the eviction to release the lease", async || {
+        n.table.released(&key)
+    })
+    .await;
+    assert_eq!(n.table.holder(&key), None);
     assert_eq!(n.a.stats().evictions, 1);
-    assert_eq!(n.table.holder(&key), None, "eviction releases the lease");
     // The next commit loads the repository again and continues its log.
     let second =
         n.a.commit(TEST_NS, TENANT, &repo, create("a2", "a2", 2))

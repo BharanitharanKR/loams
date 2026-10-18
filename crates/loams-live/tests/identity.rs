@@ -752,6 +752,12 @@ async fn revoked_key_closes_sessions(store: TestStore) {
         .resolve(Some(APP))
         .await
         .expect("shop runs");
+    // The revoked session's task sends the error, then leaves the table: the
+    // client can see the error first, so wait for the table to catch up.
+    let deadline = std::time::Instant::now() + Duration::from_secs(5);
+    while shop.sessions().len() > 1 && std::time::Instant::now() < deadline {
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
     assert_eq!(shop.sessions().len(), 1, "the other session stays");
     handle.stop().await;
 }

@@ -1,7 +1,7 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/worktreeCleanup.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// this header only. Loams' changes are Apache-2.0.
+// this header, and trailing slashes trimmed in a loop rather than a backtracking regex (CodeQL js/polynomial-redos). Loams' changes are Apache-2.0.
 import type { ThreadShell } from "./types";
 
 function normalizeWorktreePath(path: string | null): string | null {
@@ -42,7 +42,10 @@ export function formatWorktreePathForDisplay(worktreePath: string): string {
     return worktreePath;
   }
 
-  const normalized = trimmed.replace(/\\/g, "/").replace(/\/+$/, "");
+  let normalized = trimmed.replace(/\\/g, "/");
+  let end = normalized.length;
+  while (end > 0 && normalized[end - 1] === "/") end -= 1;
+  normalized = normalized.slice(0, end);
   const parts = normalized.split("/");
   const lastPart = parts[parts.length - 1]?.trim() ?? "";
   return lastPart.length > 0 ? lastPart : trimmed;
