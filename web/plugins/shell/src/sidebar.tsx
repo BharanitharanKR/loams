@@ -15,21 +15,22 @@ import {
   SidebarFooter,
   SidebarHeader,
 } from '@loams/ui';
-import { ArrowLeft, BookOpen, Pin, Settings, SquarePen } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { ArrowLeft, BookOpen, LayoutList, Pin, Settings, SquarePen } from 'lucide-react';
+import { useRef } from 'react';
+import { usePinned } from './all-pages.js';
 import { Brand, runShellCommand, SIDEBAR } from './frame.js';
 import { iconFor } from './icons.js';
 import { useMode } from './mode-switcher.js';
 import { useLocation } from './nav.js';
 import {
+  ALL_PAGES_PATH,
   currentProject,
   isSettingsPage,
-  PAGES_CHANGED_EVENT,
   type PageEntry,
   pageAt,
   pageEntries,
   pinnedPages,
-  readPinned,
+  settingsSections,
   settingsHome,
   togglePinned,
 } from './pages.js';
@@ -142,7 +143,12 @@ function Navigation({ router }: { router: HashRouter }) {
   return settings ? (
     <SettingsNav pages={all.filter(isSettingsPage)} current={here.id} back={back.current} />
   ) : (
-    <PagesSection all={all} project={project} current={here?.id} />
+    <PagesSection
+      all={all}
+      project={project}
+      current={here?.id}
+      allCurrent={location.path === ALL_PAGES_PATH}
+    />
   );
 }
 
@@ -163,26 +169,16 @@ function PageLink({ page, current }: { page: PageEntry; current: boolean }) {
   );
 }
 
-/** The pins of the open project, live across the sidebar and the palette. */
-function usePinned(project: string | undefined): string[] {
-  const [pinned, setPinned] = useState(() => readPinned(project));
-  useEffect(() => {
-    setPinned(readPinned(project));
-    const onChange = () => setPinned(readPinned(project));
-    window.addEventListener(PAGES_CHANGED_EVENT, onChange);
-    return () => window.removeEventListener(PAGES_CHANGED_EVENT, onChange);
-  }, [project]);
-  return pinned;
-}
-
 function PagesSection({
   all,
   project,
   current,
+  allCurrent,
 }: {
   all: PageEntry[];
   project: string | undefined;
   current?: string;
+  allCurrent: boolean;
 }) {
   const pinned = usePinned(project);
   const shown = pinnedPages(all, pinned);
@@ -224,6 +220,15 @@ function PagesSection({
       ) : (
         <p className="lc-pages-empty">No pinned pages. Pin one here or from the palette.</p>
       )}
+      {/* UX-2: every page, pinned or not, one click away. */}
+      <a
+        className="lc-page-link lc-pages-all"
+        href={`#${ALL_PAGES_PATH}`}
+        aria-current={allCurrent ? 'page' : undefined}
+      >
+        <LayoutList aria-hidden="true" size={15} strokeWidth={1.75} />
+        <span className="lc-page-label">All pages</span>
+      </a>
     </section>
   );
 }
@@ -244,11 +249,18 @@ function SettingsNav({
         <span className="lc-page-label">Back</span>
       </a>
       <h2 className="lc-pages-head">Settings</h2>
-      <ul>
-        {pages.map((p) => (
-          <PageLink key={p.id} page={p} current={p.id === current} />
-        ))}
-      </ul>
+      {settingsSections(pages).map((s) => (
+        <div key={s.section} className="lc-settings-group">
+          <h3 id={`lc-settings-${s.section}`} className="lc-settings-sub">
+            {s.section}
+          </h3>
+          <ul aria-labelledby={`lc-settings-${s.section}`}>
+            {s.pages.map((p) => (
+              <PageLink key={p.id} page={p} current={p.id === current} />
+            ))}
+          </ul>
+        </div>
+      ))}
     </nav>
   );
 }

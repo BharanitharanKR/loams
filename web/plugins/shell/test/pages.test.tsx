@@ -5,7 +5,9 @@ import { type SessionService, ThemeController } from '@loams/console-host';
 import { SlotProvider, SlotRegistry } from '@loams/slots';
 import { act, cleanup, fireEvent, render, screen, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { AllPagesPage } from '../src/all-pages.js';
 import { Layout } from '../src/layout.js';
+import { PreferencesPage } from '../src/preferences.js';
 import {
   DEFAULT_PINNED,
   isSettingsPage,
@@ -199,6 +201,127 @@ describe('pages (D1080)', () => {
         .getByRole('link', { name: /Back/ })
         .getAttribute('href'),
     ).toBe('#/data');
+  });
+
+  it('Settings has one heading and its sections: App, Organisation, Studio (UX-3)', () => {
+    const { slots, router } = setup('/data');
+    act(() => {
+      for (const [id, label, href, group, order] of [
+        ['settings', 'App settings', '/settings', 'Organisation', 120],
+        ['studio-settings', 'Studio settings', '/studio/settings', 'Studio', 130],
+      ] as const) {
+        slots.register(
+          { name: 'shell.nav.section', plugin: id, order, meta: { id, label, href, group } },
+          () => null,
+        );
+        router.page({ id, path: href, title: label, plugin: id }, () => <p>{label} page</p>);
+      }
+    });
+    // The foot's one Settings entry opens the app's own settings on the desktop.
+    expect(screen.getByRole('link', { name: 'Settings' }).getAttribute('href')).toBe('#/settings');
+    act(() => router.navigate('/settings'));
+    const nav = screen.getByRole('navigation', { name: 'Settings' });
+    expect(within(nav).getAllByRole('heading', { level: 2 }).map((h) => h.textContent)).toEqual([
+      'Settings',
+    ]);
+    expect(within(nav).getAllByRole('heading', { level: 3 }).map((h) => h.textContent)).toEqual([
+      'App',
+      'Organisation',
+      'Studio',
+    ]);
+    const list = (name: string) =>
+      within(within(nav).getByRole('list', { name }))
+        .getAllByRole('link')
+        .map((a) => a.textContent);
+    expect(list('App')).toEqual(['App settings']);
+    expect(list('Organisation')).toEqual(['Teams', 'Audit log', 'Metrics']);
+    expect(list('Studio')).toEqual(['Studio settings']);
+  });
+
+  it('All pages lists every page by area, pins from there, and is the last Pages row (UX-2)', () => {
+    const { router } = setup('/');
+    const side = screen.getByRole('navigation', { name: 'Sidebar' });
+    const all = within(side).getByRole('link', { name: 'All pages' });
+    expect(all.getAttribute('href')).toBe('#/pages');
+    // The shell plugin registers this page (index.tsx); the harness renders the Layout alone.
+    act(() => {
+      router.page({ id: 'all-pages', path: '/pages', title: 'All pages' }, () => (
+        <AllPagesPage router={router} />
+      ));
+      router.navigate('/pages');
+    });
+    expect(within(side).getByRole('link', { name: 'All pages' }).getAttribute('aria-current')).toBe(
+      'page',
+    );
+    expect(screen.getByRole('heading', { level: 1, name: 'All pages' })).toBeTruthy();
+    const main = screen.getByRole('main');
+    expect(
+      within(main)
+        .getAllByRole('heading', { level: 2 })
+        .map((h) => h.textContent),
+    ).toEqual(['Data', 'Compute', 'Integrate']);
+    // Settings pages are not here: Settings lists them.
+    expect(within(main).queryByRole('link', { name: 'Teams' })).toBeNull();
+    const pin = within(main).getByRole('button', { name: 'Pin Jobs' });
+    expect(pin.getAttribute('aria-pressed')).toBe('false');
+    fireEvent.click(pin);
+    expect(readPinned(undefined)).toContain('jobs');
+    expect(within(pagesList()).getByRole('link', { name: 'Jobs' })).toBeTruthy();
+    fireEvent.click(within(main).getByRole('button', { name: 'Unpin Git' }));
+    expect(within(pagesList()).queryByRole('link', { name: 'Git' })).toBeNull();
+  });
+
+  it('Preferences opens Settings › App where the desktop has it, and stays on the web (UX-3)', () => {
+    const slots = new SlotRegistry();
+    const went: [string, unknown][] = [];
+    const navigate = (to: string, opts?: { replace?: boolean }) => went.push([to, opts]);
+    slots.register(
+      { name: 'console.settings.section', plugin: 'shell', order: 5, meta: { id: 'a', label: 'A' } },
+      () => <p>Appearance section</p>,
+    );
+    const { unmount } = render(
+      <SlotProvider registry={slots}>
+        <PreferencesPage navigate={navigate} />
+      </SlotProvider>,
+    );
+    expect(screen.getByText('Appearance section')).toBeTruthy();
+    expect(went).toEqual([]);
+    unmount();
+    slots.register(
+      {
+        name: 'shell.nav.section',
+        plugin: 'desktop-settings',
+        order: 120,
+        meta: { id: 'settings', label: 'App settings', href: '/settings', group: 'Organisation' },
+      },
+      () => null,
+    );
+    render(
+      <SlotProvider registry={slots}>
+        <PreferencesPage navigate={navigate} />
+      </SlotProvider>,
+    );
+    expect(went).toEqual([['/settings', { replace: true }]]);
+    expect(screen.queryByText('Appearance section')).toBeNull();
+  });
+
+  it('keeps a person`s stored pins over the new defaults (UX-2)', () => {
+    writePinned(undefined, ['jobs']);
+    setup('/');
+    expect(
+      within(pagesList())
+        .getAllByRole('link')
+        .map((a) => a.textContent),
+    ).toEqual(['Jobs']);
+    expect(DEFAULT_PINNED.slice(0, 7)).toEqual([
+      'data',
+      'data-sql',
+      'search',
+      'streams',
+      'graph',
+      'live',
+      'analytics',
+    ]);
   });
 
   it('the home route stays in Pages where it is the org home', () => {

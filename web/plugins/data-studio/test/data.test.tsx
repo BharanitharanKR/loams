@@ -343,12 +343,20 @@ describe('data studio', () => {
       effect: (fn: () => unknown) => fn(),
     };
     plugin.apply(ctx as never, {});
+    // UX-2: its SQL editor and the Search entry are Pages too, so each can be pinned.
     expect(nav.filter((n) => n.name === 'shell.nav.section')).toEqual([
       expect.objectContaining({
         plugin: 'data-studio',
         meta: expect.objectContaining({ id: 'data', label: 'Data explorer', href: '/data' }),
       }),
+      expect.objectContaining({
+        meta: expect.objectContaining({ id: 'data-sql', label: 'SQL', href: '/data/default/sql' }),
+      }),
+      expect.objectContaining({
+        meta: expect.objectContaining({ id: 'search', label: 'Search', href: '/search' }),
+      }),
     ]);
+    expect(pages.find((p) => p.id === 'search')).toMatchObject({ path: '/search' });
     expect(pages.find((p) => p.id === 'data')).toMatchObject({
       path: '/data',
       title: 'Data explorer',
@@ -358,6 +366,9 @@ describe('data studio', () => {
 
   it('manifest_is_valid', () => {
     expect(validateManifest(pkg).editions).toEqual(['desktop']);
+    // UX-7: not gated on loams.collection.v1, so /data explains a server without a data
+    // plane instead of "No plugin serves /data".
+    expect(validateManifest(pkg).requires.api).toEqual([]);
   });
 
   it('leading_zero_string_id_stays_string', () => {

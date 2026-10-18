@@ -5,10 +5,11 @@
 import { type PluginModule, service } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
 import type { SlotRegistry } from '@loams/slots';
+import { AllPagesPage } from './all-pages.js';
 import { AppearanceSection } from './appearance.js';
 import { Layout } from './layout.js';
 import { syncModeWithRoute } from './mode-switcher.js';
-import { PREFERENCES_ID } from './pages.js';
+import { ALL_PAGES_PATH, PREFERENCES_ID } from './pages.js';
 import { DRAWER, INSPECTOR, PanelController } from './panel.js';
 import { PreferencesPage } from './preferences.js';
 import { HashRouter } from './router.js';
@@ -42,7 +43,9 @@ export {
 } from './mode-switcher.js';
 
 export { inMode, type ModeFilter, navSections, SECTIONS, STUDIO_SECTIONS } from './nav.js';
+export { AllPagesPage, pagesByArea, usePinned } from './all-pages.js';
 export {
+  ALL_PAGES_PATH,
   currentProject,
   DEFAULT_PINNED,
   isSettingsPage,
@@ -104,11 +107,18 @@ const plugin: PluginModule = {
         />
       )),
     );
+    // All pages (UX-2): the Pages list's way to every page. No nav entry of its own.
+    ctx.effect(() =>
+      router.page(
+        { id: 'all-pages', path: ALL_PAGES_PATH, title: 'All pages', plugin: 'shell' },
+        () => <AllPagesPage router={router} />,
+      ),
+    );
     // Preferences (T2-5): the settings sections where the desktop's Settings page is absent.
     ctx.effect(() =>
       router.page(
         { id: PREFERENCES_ID, path: '/preferences', title: 'Preferences', plugin: 'shell' },
-        () => <PreferencesPage />,
+        () => <PreferencesPage navigate={(to, opts) => router.navigate(to, opts)} />,
       ),
     );
     ctx.effect(() =>
