@@ -1020,6 +1020,7 @@ Living document. Newest decisions at the bottom of each table.
 | D1103 | 2026-10-17 | **One `Jailer::rollback(run)`** across Git, Postgres and collection branches plus checkpoints and snapshots, recorded as left behind ([§61](61-loams-jailer.md) §4.4) | Rollback exists in pieces today | Proposed |
 | D1104 | 2026-10-17 | **Verdict CloudEvents (`io.loams.dev.jailer.verdict.v1`) and a hash-chained log** ([§61](61-loams-jailer.md) §4.8) | Audit | Proposed |
 | D1105 | 2026-10-17 | **Plan JL1** after SB1d, alongside Part 2: JL1a deterministic jailer in agentd, JL1b overseer in shadow mode, JL1c gateway enforcement points, JL1d gVisor and microVM sensors, JL1e eBPF ([§61](61-loams-jailer.md) §5) | Order of value | Proposed |
+| D1106 | 2026-10-18 | **Package names on crates.io:** the Rust SDK (`sdks/rust`) is published as **`loams`** (`cargo add loams`), with `loams-proto` and `loams-live-proto`. When the server binary is published, it goes out as **`loams-server`**, and the install hint is `cargo install loams-server` (**amends D294 and D400**). The binary installed on disk is still called `loams` | The SDK is what most people add from crates.io; `cargo add loams` should give them the client. A crates.io name is permanent, so the choice had to be made before the first SDK upload | Approved (owner, 2026-10-18) |
 
 ## Open questions
 
