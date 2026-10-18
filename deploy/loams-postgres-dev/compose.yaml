@@ -9,8 +9,8 @@ name: loams-neon
 # Multi-arch index digests, generated from deploy/pins/loams-postgres-images.toml by
 # scripts/nf1/pins.py (NF1 Task 2; `pins.py check` fails on a hand edit): images.storage and
 # images.compute-v<majors.default>. NEON_IMAGE and COMPUTE_IMAGE override them (PG2 R2.1).
-x-neon-image: &neon-image ${NEON_IMAGE:-ghcr.io/ostrium-labs/loams-postgres-storage@sha256:fc99d2ea577263590fc9fa0b4c6ed122637b4a357a6f75a3d1478c537ba6347a}
-x-compute-image: &compute-image ${COMPUTE_IMAGE:-ghcr.io/ostrium-labs/loams-postgres-compute-v17@sha256:ee9f854e6ba495cef3c87f49469a6bcc4462e53f71f097471b3bd7ed7f991ea8}
+x-neon-image: &neon-image ${NEON_IMAGE:-ghcr.io/ostrium-labs/loams-postgres-storage@sha256:4dcec4cbef637b92b1088ea2c0bc857f3b5ef4318f02e8d2d4a0f9263ed4140e}
+x-compute-image: &compute-image ${COMPUTE_IMAGE:-ghcr.io/ostrium-labs/loams-postgres-compute-v17@sha256:210b71416c827b6cf7842853706e1dbdcc870fd4a7af8e235d6e7296b95edb0e}
 x-s3-env: &s3-env
   AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
   AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}

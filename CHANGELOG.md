@@ -75,6 +75,12 @@ See [docs/release/upgrades.md](docs/release/upgrades.md).
   statement writes at most 1 GiB.
 
 ### Changed
+- **Loams Postgres `lp-2026.11.0`: Postgres 16.15 and 17.11.** The Postgres stack's images move
+  from the fork's `lp-2026.10.1` (16.9 and 17.5) to `lp-2026.11.0`
+  (`deploy/pins/loams-postgres-images.toml`). 17.11 keeps the fork's heap WAL format (upstream's
+  visibility-map block references are not taken), so existing timelines read as before. Logical
+  decoding now accepts only the output plugins `pgoutput`, `test_decoding` and `wal2json`
+  (`output_plugin_libraries`, the fix for CVE-2026-6471).
 - **`loams-agentd` supervises new threads by default, on your own machine too.** Unset,
   `[approvals] default_mode` is now `supervised` on a local daemon as on the remote
   listener, so a thread that has no approval mode of its own (including older threads that
