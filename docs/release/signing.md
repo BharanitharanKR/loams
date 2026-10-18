@@ -42,7 +42,8 @@ the `.sig` files.
 
 ### The key
 
-- **User ID:** `Loams Release Signing Key <security@ostriumlabs.com>`, Ed25519, signing only, no passphrase.
+- **User ID:** `Loams Release Signing Key <security@ostriumlabs.org>`, Ed25519, signing only, no passphrase.
+- **User ID corrected** on 2026-10-18: the key was created with the user ID `<security@ostriumlabs.com>`, which is not our domain. That user ID is now revoked and `<security@ostriumlabs.org>` is the primary one. The fingerprint is unchanged, so signatures made before the fix still verify; re-import the public key to pick up the change.
 - **Fingerprint:** `333AC94599D5A1EB2A416D1E83DC134D8CAF895D` (`333A C945 99D5 A1EB 2A41 6D1E 83DC 134D 8CAF 895D`). This is the value of `LOAMS_GPG_KEY_ID`.
 - **Created** 2026-10-16, **expires** 2028-10-15. Extend the expiry before then, and re-publish the public key.
 - **Public key:** [`loams-release-key.asc`](loams-release-key.asc), in this directory. Also publish it at `https://loams.dev/gpg.asc` and on keys.openpgp.org.

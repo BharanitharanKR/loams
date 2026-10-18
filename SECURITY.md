@@ -13,7 +13,7 @@ Report them privately through GitHub's private vulnerability reporting:
 1. Open the repository's **Security** tab and choose **Report a vulnerability** ([direct link](../../security/advisories/new)).
 2. Fill in the advisory form. Only you and the maintainers can see it.
 
-If you cannot use GitHub, email **security@ostriumlabs.com**. Please don't put vulnerability details in a public channel while you wait for a reply.
+If you cannot use GitHub, email **security@ostriumlabs.org**. Please don't put vulnerability details in a public channel while you wait for a reply.
 
 Please include:
 

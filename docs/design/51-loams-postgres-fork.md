@@ -188,7 +188,7 @@ Not forked, but fetched by upstream's build: `neondatabase/pgrag` (Apache-2.0, `
 
 ### 3.7 Security (D805)
 
-- **Reporting.** Private vulnerability reporting is enabled on every unarchived fork. `SECURITY.md` points at Loams' policy (`security@ostriumlabs.com`, acknowledgement within 3 business days). *As built (NF1 Task 5 ruling 4):* enabled on the six unarchived forks; `SECURITY.md` on `loams-postgres`, `postgres` (`loams/meta`), `tokio-epoll-uring` and `pg_session_jwt`.
+- **Reporting.** Private vulnerability reporting is enabled on every unarchived fork. `SECURITY.md` points at Loams' policy (`security@ostriumlabs.org`, acknowledgement within 3 business days). *As built (NF1 Task 5 ruling 4):* enabled on the six unarchived forks; `SECURITY.md` on `loams-postgres`, `postgres` (`loams/meta`), `tokio-epoll-uring` and `pg_session_jwt`.
 - **Monitoring** (`loams-advisories.yml`, daily):
   - `cargo deny check advisories` on the fork's `Cargo.lock`;
   - Trivy (or Grype) scans of every pinned digest, covering Debian packages and extension binaries;
