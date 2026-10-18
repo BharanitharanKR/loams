@@ -40,9 +40,7 @@
       ],
       "requires": {
         "console": "^0.1.0",
-        "api": [
-          "loams.collection.v1"
-        ]
+        "api": []
       },
       "editions": [
         "desktop"

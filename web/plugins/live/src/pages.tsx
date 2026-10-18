@@ -15,6 +15,7 @@ import {
   Notice,
   plainError,
   Select,
+  SkeletonList,
   StatusTag,
   Table,
   Textarea,
@@ -52,11 +53,7 @@ const Mono = ({ children }: { children: ReactNode }) => (
 );
 
 function Loading({ what }: { what: string }) {
-  return (
-    <p className="text-muted" role="status">
-      Loading {what}...
-    </p>
-  );
+  return <SkeletonList label={`Loading ${what}`} rows={5} />;
 }
 
 function Err({ title, message }: { title: string; message: string }) {

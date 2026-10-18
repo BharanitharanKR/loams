@@ -17,7 +17,7 @@ import { Empty } from '@loams/ui';
 import { useMemo } from 'react';
 import { createDataClient } from './client.js';
 import { CollectionPage } from './pages/collection.js';
-import { CollectionsPage } from './pages/collections.js';
+import { CollectionsPage, SEARCH_PATH } from './pages/collections.js';
 import { SqlPage } from './pages/sql.js';
 import { TablesSource } from './palette.js';
 import type { Tab } from './shared.js';
@@ -27,7 +27,7 @@ export { TablesSource, tableStatement } from './palette.js';
 
 export const DATA_PLANE_API = 'loams.collection.v1';
 
-type View = 'collections' | 'sql' | Exclude<Tab, 'sql'>;
+type View = 'collections' | 'search-entry' | 'sql' | Exclude<Tab, 'sql'>;
 
 export function DataRoute({
   transport,
@@ -52,7 +52,8 @@ export function DataRoute({
     return (
       <div className="lc-page ds-page">
         <Empty title="This server has no data plane.">
-          Switch to a server that serves collections, such as This computer.
+          It does not serve collections (loams.collection.v1). Switch to a server that does, such as
+          This computer on Loams Desktop.
         </Empty>
       </div>
     );
@@ -60,6 +61,8 @@ export function DataRoute({
   const ns = params.ns || 'default';
   if (view === 'collections')
     return <CollectionsPage client={client} ns={ns} navigate={navigate} />;
+  if (view === 'search-entry')
+    return <CollectionsPage client={client} ns={ns} navigate={navigate} target="search" />;
   if (view === 'sql')
     return <SqlPage client={client} ns={ns} navigate={navigate} table={params.table} />;
   return (
@@ -90,6 +93,8 @@ const plugin: PluginModule = {
       // The visible name is "Data explorer" (Q812), so it is not confused with Loams Studio;
       // the routes and the plugin id stay, to keep links working.
       { id: 'data', path: '/data', title: 'Data explorer', view: 'collections' },
+      // The Search entry (UX-2): a collection picker that opens Search; `?ns=` picks the namespace.
+      { id: 'search', path: SEARCH_PATH, title: 'Search', view: 'search-entry' },
       { id: 'data-ns', path: '/data/:ns', title: 'Data explorer', view: 'collections' },
       { id: 'data-sql', path: '/data/:ns/sql', title: 'SQL', view: 'sql' },
       { id: 'data-coll', path: '/data/:ns/:coll', title: 'Collection', view: 'documents' },
@@ -130,17 +135,26 @@ const plugin: PluginModule = {
         />
       )),
     );
-    ctx.effect(() =>
-      slots.register(
-        {
-          name: 'shell.nav.section',
-          plugin: 'data-studio',
-          order: 20,
-          meta: { id: 'data', label: 'Data explorer', href: '/data', icon: 'data', group: 'Data' },
-        },
-        () => null,
-      ),
-    );
+    // The Pages (D1080, UX-2): the Data explorer, its SQL editor (over the default
+    // namespace, as `/data` is) and the Search entry, so each can be pinned.
+    const pages = [
+      { id: 'data', label: 'Data explorer', href: '/data', icon: 'data', order: 20 },
+      { id: 'data-sql', label: 'SQL', href: '/data/default/sql', icon: 'query', order: 21 },
+      { id: 'search', label: 'Search', href: SEARCH_PATH, icon: 'search', order: 22 },
+    ];
+    for (const p of pages) {
+      ctx.effect(() =>
+        slots.register(
+          {
+            name: 'shell.nav.section',
+            plugin: 'data-studio',
+            order: p.order,
+            meta: { id: p.id, label: p.label, href: p.href, icon: p.icon, group: 'Data' },
+          },
+          () => null,
+        ),
+      );
+    }
   },
 };
 

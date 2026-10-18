@@ -13,6 +13,7 @@ import {
   Notice,
   SampleDataNotice,
   Select,
+  SkeletonList,
   type Status,
   StatusTag,
   Table,
@@ -526,11 +527,7 @@ export function DeploymentsPage({
           </Notice>
         </div>
       )}
-      {loaded.state === 'loading' && (
-        <p className="text-muted" role="status">
-          Loading deployments...
-        </p>
-      )}
+      {loaded.state === 'loading' && <SkeletonList label="Loading deployments" rows={4} />}
       {loaded.state === 'error' && (
         <div className="flex flex-col gap-3">
           <Notice tone="danger" title="Could not load deployments">

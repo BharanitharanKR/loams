@@ -1,6 +1,6 @@
 import type { JsonObject, JsonValue } from '@bufbuild/protobuf';
 import type { documents } from '@loams/proto';
-import { Badge, Button, Card, Empty, Stat, Stats, Table } from '@loams/ui';
+import { Badge, Button, Card, Empty, SkeletonList, Stat, Stats, Table } from '@loams/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { type DataClient, type DocRow, schemaOf } from '../client.js';
 import { ErrorNotice, errorText, PageHead, type Tab, Tabs, tabPath, useLoad } from '../shared.js';
@@ -37,7 +37,8 @@ export function DocumentsTab({
     setCursors(next);
   };
 
-  if (page.state === 'loading') return <p className="lc-muted ds-pad">Loading documents…</p>;
+  if (page.state === 'loading')
+    return <SkeletonList className="ds-pad" label="Loading documents" rows={6} />;
   if (page.state === 'error')
     return <ErrorNotice title="Could not read documents" message={page.message} />;
   const { rows, next } = page.data;
