@@ -168,7 +168,12 @@ fn field_snippets(
         else {
             continue;
         };
-        let whole = field.number_of_fragments == 0;
+        // A value that fits in one fragment is its own fragment, whole.
+        // Tantivy ends a fragment at its last token's end, so rendering its
+        // fragment would drop whatever follows the last token: the `)` of
+        // `Cold River (Bearcamp River)`, a final `.` (Elasticsearch returns
+        // the whole short value).
+        let whole = field.number_of_fragments == 0 || text.len() <= field.fragment_size.max(1);
         let max_num_chars = if whole {
             text.len().max(1)
         } else {
@@ -201,7 +206,7 @@ fn field_snippets(
             )
         };
         out.push(rendered);
-        if !whole && out.len() >= field.number_of_fragments {
+        if field.number_of_fragments != 0 && out.len() >= field.number_of_fragments {
             break;
         }
     }

@@ -28,9 +28,9 @@ use loams_quickwit::query::tokenizers::TokenizerManager;
 use loams_text::STANDARD;
 use tantivy::columnar::NumericalValue;
 use tantivy::query::{
-    AllQuery, BooleanQuery, BoostQuery, ConstScoreQuery, DisjunctionMaxQuery, EmptyQuery,
-    ExistsQuery, FuzzyTermQuery, Occur, PhrasePrefixQuery, PhraseQuery, Query as TantivyQuery,
-    QueryParser, RangeQuery, RegexQuery, TermQuery, TermSetQuery,
+    AllQuery, BooleanQuery, BoostQuery, ConstScoreQuery, EmptyQuery, ExistsQuery, FuzzyTermQuery,
+    Occur, PhrasePrefixQuery, PhraseQuery, Query as TantivyQuery, QueryParser, RangeQuery,
+    RegexQuery, TermQuery, TermSetQuery,
 };
 use tantivy::query_grammar::{UserInputAst, UserInputLeaf};
 use tantivy::schema::{Field, FieldType, IndexRecordOption, Schema};
@@ -39,6 +39,7 @@ use tantivy::{DateTime, Term};
 use crate::error::ServiceError;
 use crate::ir::{BoolOperator, FieldValue, Fuzziness, MultiMatchKind, Query};
 use crate::text::coerce::{Coerced, RangeOp, coerce_bound, coerce_term};
+use crate::text::dismax::ExactDisMax;
 use crate::text::fields::{ResolvedField, resolve_field};
 
 type Boxed = Box<dyn TantivyQuery>;
@@ -173,6 +174,13 @@ impl<'a> QueryCompiler<'a> {
         }
     }
 
+    /// The fields a query that names none searches: every indexed `Text`
+    /// field, in schema order, as Elasticsearch's `index.query.default_field`
+    /// of `*` does for `query_string` and `multi_match`.
+    fn default_text_fields(&self) -> Vec<String> {
+        default_text_fields(self.schema)
+    }
+
     /// The tokens of `text` under `analyzer`, with their positions.
     fn analyze(&self, analyzer: &str, text: &str) -> Result<Vec<(usize, String)>, ServiceError> {
         analyze(self.tokenizers, analyzer, text)
@@ -192,6 +200,15 @@ fn analyze(
         .token_stream(text)
         .process(&mut |token| tokens.push((token.position, token.text.clone())));
     Ok(tokens)
+}
+
+fn default_text_fields(schema: &CollectionSchema) -> Vec<String> {
+    schema
+        .fields
+        .iter()
+        .filter(|spec| spec.indexed && matches!(spec.kind, FieldKind::Text { .. }))
+        .map(|spec| spec.name.clone())
+        .collect()
 }
 
 fn invalid(message: impl Into<String>) -> ServiceError {
@@ -484,6 +501,11 @@ fn highlight_walk(
         } => analyzed(field, text, analyzer.as_deref()),
         Query::MatchPhrase { field, text, .. } => analyzed(field, text, None),
         Query::MultiMatch { fields, text, .. } => {
+            if fields.is_empty() {
+                for field in default_text_fields(schema) {
+                    analyzed(&field, text, None);
+                }
+            }
             for (field, _) in fields {
                 analyzed(field, text, None);
             }
@@ -989,6 +1011,19 @@ impl<'c, 'a> Build<'c, 'a> {
         operator: BoolOperator,
         tie_breaker: f32,
     ) -> Result<Boxed, ServiceError> {
+        if fields.is_empty() {
+            // No fields named: every text field, at boost 1 (ES's `*`).
+            let all: Vec<(String, f32)> = self
+                .c
+                .default_text_fields()
+                .into_iter()
+                .map(|name| (name, 1.0))
+                .collect();
+            if all.is_empty() {
+                return Ok(empty());
+            }
+            return self.multi_match(&all, text, kind, operator, tie_breaker);
+        }
         if kind == MultiMatchKind::CrossFields {
             return self.cross_fields(fields, text, operator, tie_breaker);
         }
@@ -1008,10 +1043,7 @@ impl<'c, 'a> Build<'c, 'a> {
             MultiMatchKind::MostFields => Box::new(BooleanQuery::new(
                 per_field.into_iter().map(|q| (Occur::Should, q)).collect(),
             )),
-            _ => Box::new(DisjunctionMaxQuery::with_tie_breaker(
-                per_field,
-                tie_breaker,
-            )),
+            _ => Box::new(ExactDisMax::with_tie_breaker(per_field, tie_breaker)),
         })
     }
 
@@ -1073,10 +1105,7 @@ impl<'c, 'a> Build<'c, 'a> {
                     Box::new(BoostQuery::new(leaf, boost)) as Boxed
                 })
                 .collect();
-            let per_token: Boxed = Box::new(DisjunctionMaxQuery::with_tie_breaker(
-                disjuncts,
-                tie_breaker,
-            ));
+            let per_token: Boxed = Box::new(ExactDisMax::with_tie_breaker(disjuncts, tie_breaker));
             clauses.push((occur, per_token));
         }
         Ok(Box::new(BooleanQuery::new(clauses)))
@@ -1728,6 +1757,16 @@ impl<'c, 'a> Build<'c, 'a> {
         default_fields: &[String],
         operator: BoolOperator,
     ) -> Result<Boxed, ServiceError> {
+        // No default fields named: every text field, as Elasticsearch's
+        // `index.query.default_field` of `*` does. Fields the query names
+        // itself (`title:river`) resolve through the split either way.
+        let all;
+        let default_fields = if default_fields.is_empty() {
+            all = self.c.default_text_fields();
+            &all[..]
+        } else {
+            default_fields
+        };
         let fields: Vec<Field> = default_fields
             .iter()
             .filter_map(|name| match self.c.resolve(name) {

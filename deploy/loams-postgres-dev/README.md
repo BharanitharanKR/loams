@@ -27,20 +27,21 @@ difference. `NEON_IMAGE` and `COMPUTE_IMAGE` still override the pins.
 Since NF1 Task 14 the pins are our own builds: a Loams Postgres release (`lp-YYYY.MM.N`) of
 `ostrium-labs/loams-postgres`, each image signed and attested by the fork's release workflow
 (`scripts/nf1/verify-pins.sh` checks them in `nf1-pins.yml`). The first, `lp-2026.10.1`, has the
-same Postgres revisions as Neon's last public build (16.9 and 17.5). Until then, the pins were
+same Postgres revisions as Neon's last public build (16.9 and 17.5); `lp-2026.11.0` moves to the
+minors 16.15 and 17.11 (NF1 Task 17). Until then, the pins were
 that build, 2025-08-26, git `77e22e4b`, at Neon's own repositories, with `mirror:` sources; its
 amd64 manifests were `sha256:ead56a7b33925ca4df9f1ee0d29f55fa25e165a3fee6a4f19055050c68e8cad0`
 (`neon`) and `sha256:9b86e3ecb2267fbdeb0fd2478db0e662959ccdfa4526efa4a558410a93c6c46f`
 (`compute-node-v17`). The mirrored packages (see Mirror) stay private and are never deployed.
 
 <!-- pins.py: begin images (generated from deploy/pins/loams-postgres-images.toml) -->
-Pinned in [`deploy/pins/loams-postgres-images.toml`](../pins/loams-postgres-images.toml): `fork_release` `lp-2026.10.1`, `fork_commit` `78b247596077e1659d0adeaf5f74b258321792a5`.
+Pinned in [`deploy/pins/loams-postgres-images.toml`](../pins/loams-postgres-images.toml): `fork_release` `lp-2026.11.0`, `fork_commit` `a213ec44ac29c31812712ffdd6de7c1f4d4a599c`.
 
 | Pin | Image (multi-arch index) | Source | Postgres |
 |---|---|---|---|
-| `storage` | `ghcr.io/ostrium-labs/loams-postgres-storage@sha256:fc99d2ea577263590fc9fa0b4c6ed122637b4a357a6f75a3d1478c537ba6347a` | `ostrium-labs/loams-postgres@78b247596077e1659d0adeaf5f74b258321792a5` | 16.9, 17.5 |
-| `compute-v16` | `ghcr.io/ostrium-labs/loams-postgres-compute-v16@sha256:68fc3cadcc756c4d2b67b5a401a5504b86f0ec0d8ab19f39b0c28a7b31303ec9` | `ostrium-labs/loams-postgres@78b247596077e1659d0adeaf5f74b258321792a5` | 16.9 |
-| `compute-v17` | `ghcr.io/ostrium-labs/loams-postgres-compute-v17@sha256:ee9f854e6ba495cef3c87f49469a6bcc4462e53f71f097471b3bd7ed7f991ea8` | `ostrium-labs/loams-postgres@78b247596077e1659d0adeaf5f74b258321792a5` | 17.5 |
+| `storage` | `ghcr.io/ostrium-labs/loams-postgres-storage@sha256:4dcec4cbef637b92b1088ea2c0bc857f3b5ef4318f02e8d2d4a0f9263ed4140e` | `ostrium-labs/loams-postgres@a213ec44ac29c31812712ffdd6de7c1f4d4a599c` | 16.15, 17.11 |
+| `compute-v16` | `ghcr.io/ostrium-labs/loams-postgres-compute-v16@sha256:29842a21499b282b97420b141d11fd3923b9102ce0f37c14491581c5f6591434` | `ostrium-labs/loams-postgres@a213ec44ac29c31812712ffdd6de7c1f4d4a599c` | 16.15 |
+| `compute-v17` | `ghcr.io/ostrium-labs/loams-postgres-compute-v17@sha256:210b71416c827b6cf7842853706e1dbdcc870fd4a7af8e235d6e7296b95edb0e` | `ostrium-labs/loams-postgres@a213ec44ac29c31812712ffdd6de7c1f4d4a599c` | 17.11 |
 
 Postgres majors: supported 17; beta none; maintenance 16; default 17.
 <!-- pins.py: end images -->

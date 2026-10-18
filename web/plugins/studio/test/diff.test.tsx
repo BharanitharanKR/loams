@@ -19,7 +19,7 @@ import {
 } from '@loams/proto/agentd';
 import { ErrorInfoSchema } from '@loams/proto/errors';
 import { useDiffPanelStore } from '@loams/studio-ui/diff';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { DiffTab } from '../src/thread/DiffTab.js';
 import { diffRequest, isStaleDiff } from '../src/thread/diff-source.js';
@@ -51,7 +51,14 @@ index 1111111..2222222 100644
 const hold = (signal: AbortSignal) =>
   new Promise<void>((resolve) => signal.addEventListener('abort', () => resolve()));
 
-function fakeAgentd(opts: { changeRequest?: boolean; stale?: boolean } = {}) {
+function fakeAgentd(
+  opts: {
+    changeRequest?: boolean;
+    stale?: boolean;
+    /** When it settles, the thread's branch is renamed and the diff sent again, unchanged. */
+    later?: Promise<void>;
+  } = {},
+) {
   const calls: string[] = [];
   const sent: SendReviewToThreadRequest[] = [];
   const posted: PostReviewToChangeRequestRequest[] = [];
@@ -77,6 +84,22 @@ function fakeAgentd(opts: { changeRequest?: boolean; stale?: boolean } = {}) {
             { id: 'thread-1', deviceId: 'd', cwd: '/repo/wt', checkoutId: 'co-7', branch: 'feat' },
           ],
         };
+        if (opts.later) {
+          await opts.later;
+          // The daemon names the thread after its first turn and renames its branch.
+          yield {
+            chats: [
+              {
+                id: 'thread-1',
+                deviceId: 'd',
+                cwd: '/repo/wt',
+                checkoutId: 'co-7',
+                branch: 'feat-renamed',
+                title: 'Feature',
+              },
+            ],
+          };
+        }
         await hold(ctx.signal);
       },
     });
@@ -87,6 +110,10 @@ function fakeAgentd(opts: { changeRequest?: boolean; stale?: boolean } = {}) {
       },
       async *watchCheckoutDiffs(_req, ctx) {
         yield { diffs: [diff] };
+        if (opts.later) {
+          await opts.later;
+          yield { diffs: [{ ...diff, updatedAtMs: 2n }] };
+        }
         await hold(ctx.signal);
       },
       discard: (req) => {
@@ -275,5 +302,34 @@ describe('diff_sources_switch', () => {
       commitSha: 'abc',
     });
     expect(diffRequest(thread, { kind: 'turn' })).toEqual({ cwd: '/w', mode: 'turn', chatId: 't' });
+  });
+});
+
+describe('review_draft_survives_thread_updates', () => {
+  it('keeps a half-written comment when the thread’s branch is renamed', async () => {
+    let release = () => {};
+    const later = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const daemon = fakeAgentd({ later });
+    mount(daemon);
+    const card = (await screen.findByText('Why 2?')).closest(
+      '[data-diff-comment-annotation]',
+    ) as HTMLElement;
+    fireEvent.click(within(card).getByRole('button', { name: 'Edit comment' }));
+    const box = (await screen.findByRole('textbox', {
+      name: /^Comment on line/,
+    })) as HTMLTextAreaElement;
+    fireEvent.change(box, { target: { value: 'Half-written' } });
+
+    // The thread's row changes under the open draft, and the diff is sent again unchanged.
+    await act(async () => release());
+    // The open pull request follows the new branch...
+    await waitFor(() => expect(daemon.calls).toContain('WatchChangeRequest:/repo/wt:feat-renamed'));
+    // ...while the diff, its comments and the draft stay as they were.
+    expect(screen.queryByText('Loading changes')).toBeNull();
+    expect(box.isConnected).toBe(true);
+    expect(box.value).toBe('Half-written');
+    expect(daemon.calls.filter((c) => c === 'WatchReviewComments:co-7')).toHaveLength(1);
   });
 });
