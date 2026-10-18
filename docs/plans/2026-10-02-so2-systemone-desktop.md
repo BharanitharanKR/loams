@@ -145,6 +145,7 @@ apps/desktop-electron/scripts/build-coreml.mjs          # macOS arm64: swift bui
 apps/desktop-electron/{electron-builder.config.cjs,build/entitlements.mac.plist}
 crates/loams-agentd-systemone/{Cargo.toml,src/{lib,local,coreml,remote,state,residency,config,questions}.rs,tests/*}
 crates/loams-agentd/src/{server.rs,config.rs}           # owns LocalSystemOne; [systemone] config
+crates/loams-agentd/src/runtime_install.rs              # optional loams-coreml (Task 1)
 crates/loams-agentd-proto/src/systemone.rs  fixtures/systemone_*.json
 crates/loams-agentd-connect/src/systemone.rs
 proto/loams/agentd/v1/systemone.proto
@@ -177,7 +178,7 @@ THIRD_PARTY_NOTICES.md  apps/desktop-electron/NOTICE
 
 ### Task 1: The Core ML sidecar
 
-**Files:** `apps/desktop-electron/sidecars/coreml/*`, `apps/desktop-electron/scripts/build-coreml.mjs`, `electron-builder.config.cjs` (the binary on macOS arm64 only), `.github/workflows/desktop-electron.yml` (a `coreml` job on the macOS arm64 runner), `THIRD_PARTY_NOTICES.md` and `apps/desktop-electron/NOTICE` (FluidUse, FluidAudio, Laya).
+**Files:** `apps/desktop-electron/sidecars/coreml/*`, `apps/desktop-electron/scripts/build-coreml.mjs`, `electron-builder.config.cjs` (the binary on macOS arm64 only), `crates/loams-agentd/src/runtime_install.rs` (`install-runtime` copies and hash-checks `loams-coreml` as an optional binary), `.github/workflows/desktop-electron.yml` (a `coreml` job on the macOS arm64 runner), `THIRD_PARTY_NOTICES.md` and `apps/desktop-electron/NOTICE` (FluidUse, FluidAudio, Laya).
 
 **Produces:** the `loams-coreml` executable with `--socket <path> --key-fd <fd> --models <dir>`; `POST /v1/systemone` and `GET /health` per design §7.3; `resources/bin/loams-coreml` and its line in `SHA256SUMS` on macOS arm64 builds.
 
@@ -189,9 +190,9 @@ THIRD_PARTY_NOTICES.md  apps/desktop-electron/NOTICE
 - Answers carry `confidence` and `answer_confidence` computed as `laya-serve` does; `action.act_probability` is **not** emitted.
 - `/health` answers `{"status":"ok"}` to everyone and the full payload (loaded buckets, compute units, revisions) only with the key.
 - Exits on a closed key fd (the daemon died).
-- Linux, Windows and macOS x64 builds do not contain the binary, and `install-runtime` does not expect it there.
+- `install-runtime` today copies the fixed `BINARIES` list (`loams-agentd`, `loams`). It gains an optional list with `loams-coreml`: copied and checked against `SHA256SUMS` when present in `--from`, an error when present but unlisted or mismatched, and skipped when absent. Linux, Windows and macOS x64 builds do not contain the binary.
 
-**Tests:** XCTest and a script: `choice_matches_golden_fixture` (SO1 Task 2's fixtures where applicable, probabilities within 0.02 of the PyTorch reference rows recorded in Task 0); `score_and_noul_shapes`; `over_32_options_is_422`; `truncation_reported`; `bucket_selection_smallest_fit`; `wrong_key_is_401`; `socket_mode_0600`; `no_tcp_listener` (`lsof`-style check); `exits_when_parent_dies`; `act_probability_absent`; `health_without_key_is_status_only`. Packaging: `coreml_only_in_macos_arm64_bundle` (a Vitest over the builder config), `sha256sums_lists_coreml`. CI on a macOS 14+ Apple silicon runner; skipped (not failed) with a notice where the runner is unavailable.
+**Tests:** XCTest and a script: `choice_matches_golden_fixture` (SO1 Task 2's fixtures where applicable, probabilities within 0.02 of the PyTorch reference rows recorded in Task 0); `score_and_noul_shapes`; `over_32_options_is_422`; `truncation_reported`; `bucket_selection_smallest_fit`; `wrong_key_is_401`; `socket_mode_0600`; `no_tcp_listener` (`lsof`-style check); `exits_when_parent_dies`; `act_probability_absent`; `health_without_key_is_status_only`. Packaging: `coreml_only_in_macos_arm64_bundle` (a Vitest over the builder config), `sha256sums_lists_coreml`. Runtime install (Rust, `cargo test -p loams-agentd`): `install_runtime_copies_and_verifies_coreml`, `install_runtime_rejects_coreml_digest_mismatch`, `install_runtime_without_coreml_still_succeeds`; and on the macOS arm64 runner, `packaged_runtime_contains_coreml` (install the packaged app's `resources/bin` into a temporary runtime and run `loams-coreml --help` from `runtime/current/`). CI on a macOS 14+ Apple silicon runner; skipped (not failed) with a notice where the runner is unavailable.
 
 **Commit:** `coreml: Core ML sidecar for Laya on Apple silicon`.
 
