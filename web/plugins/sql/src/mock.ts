@@ -212,6 +212,18 @@ export function createMockSqlClient(opts: MockOptions = {}): SqlClient {
           truncated: false,
           elapsedMs: 1,
         };
+      if (/\binformation_schema\.columns\b/i.test(s))
+        return {
+          columns: [
+            { name: 'TABLE_NAME', type: 'VARCHAR' },
+            { name: 'COLUMN_NAME', type: 'VARCHAR' },
+            { name: 'DATA_TYPE', type: 'VARCHAR' },
+          ],
+          rows: SAMPLE.columns.map((c) => ['products', c.name, c.type.toLowerCase()]),
+          rowsAffected: 0,
+          truncated: false,
+          elapsedMs: 2,
+        };
       if (/^(select|show|describe|desc|explain|with)\b/i.test(s)) {
         const rows = SAMPLE.rows.slice(0, input.maxRows);
         return { ...SAMPLE, rows, truncated: rows.length < SAMPLE.rows.length };

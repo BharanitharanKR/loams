@@ -20,14 +20,13 @@ Requires **Go 1.24 or newer** — the SDK uses range-over-func iterators
 ## Installing
 
 ```console
-go get loams.dev/go@v0.1.0-preview.2
+go get loams.dev/go@v0.1.0
 ```
 
 Go 1.25 or newer: the module lives in `sdks/go` of the main repository, and the
 `go-import` tag that says so carries a subdirectory, which only Go 1.25 reads
-(see [Publishing](#publishing)). **Preview:** `v0.1.0-preview.*` versions track
-the Loams preview server; `go get loams.dev/go` without a version does not pick
-a prerelease while no release exists, so name the version.
+(see [Publishing](#publishing)). `v0.1.0` tracks Loams 0.1.0; in 0.x the API
+may change between minor versions.
 
 From a checkout of this repository, with a `replace`:
 
@@ -170,8 +169,8 @@ hand-written API with no proto behind it, which is what §7.3 says not to do.
 - **Repository:** this one. The module is the `sdks/go` subdirectory of
   `github.com/ostrium-labs/loams`; there is no mirror repository.
 - **Tags:** a module in a subdirectory is versioned by tags prefixed with that
-  subdirectory, so release `v0.1.0-preview.2` of Loams is tag
-  `sdks/go/v0.1.0-preview.2` on the same commit.
+  subdirectory, so release `v0.1.0` of Loams is tag
+  `sdks/go/v0.1.0` on the same commit.
   `.github/workflows/sdk-release.yml` pushes it on a release tag when the
   repository variable `SDK_PUBLISH_GO` is `true`, then asks `proxy.golang.org` for
   the version so the module is cached and in the checksum database.
@@ -192,8 +191,8 @@ The fourth field, `sdks/go`, is the subdirectory (Go 1.25+). As of 2026-10-13
 Verify after the first tag, from an empty module:
 
 ```console
-GOPROXY=direct go list -m loams.dev/go@v0.1.0-preview.2
-GOPROXY=https://proxy.golang.org go list -m loams.dev/go@v0.1.0-preview.2
+GOPROXY=direct go list -m loams.dev/go@v0.1.0
+GOPROXY=https://proxy.golang.org go list -m loams.dev/go@v0.1.0
 ```
 
 ## Tests

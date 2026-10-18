@@ -1,15 +1,14 @@
 # The Loams SDK for .NET (`Loams`)
 
-> **Preview.** `0.1.0-preview.*` packages track the Loams preview server and may
-> change between previews. NuGet hides prereleases unless asked: pin the exact
-> version, or pass `--prerelease`.
+> **0.1.0.** `Loams` 0.1.0 tracks Loams 0.1.0. In 0.x the API may change between
+> minor versions.
 
 One `LoamsClient` with namespaced modules over the unified Connect API,
 generated from the Loams protos. `net8.0`; the only dependency is
 `Google.Protobuf`.
 
 ```console
-dotnet add package Loams --version 0.1.0-preview.2
+dotnet add package Loams --version 0.1.0
 ```
 
 ```csharp

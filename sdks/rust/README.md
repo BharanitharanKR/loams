@@ -1,14 +1,14 @@
 # The Loams SDK for Rust (`loams`)
 
-**Preview.** `0.1.0-preview.*` releases track the Loams preview server and may
-change between previews. Pin an exact version.
+**0.1.0.** `loams` 0.1.0 tracks Loams 0.1.0. In 0.x the API may change between
+minor versions; `loams = "0.1"` stays on the 0.1 line.
 
 One `Loams` client with namespaced modules over the unified Connect API,
 generated from the protos in [`proto/`](https://github.com/ostrium-labs/loams/tree/dev/proto).
 
 ```toml
 [dependencies]
-loams = "=0.1.0-preview.2"
+loams = "0.1"
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 ```
 

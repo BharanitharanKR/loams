@@ -22,8 +22,15 @@ import {
   PROTO_PACKAGES,
   PROTO_REV,
   SERVICE_DESCRIPTORS,
+  type AdminAgentsModule,
+  type AdminAuditModule,
+  type AdminKeysModule,
+  type AdminOrgModule,
+  type AdminProjectsModule,
+  type AuthModule,
   type CallBinding,
   type InstanceModule,
+  type LiveAdminModule,
   type LiveModule,
   type ModuleBinding,
   type TablesModule,
@@ -86,17 +93,39 @@ export interface LoamsModules {
   readonly [module: string]: unknown;
 }
 
+/** `loams.live`: the session calls, with `loams.live.admin` under it. */
+export type LiveNamespace = LiveModule & {
+  /** `loams.live.admin` — apps, deploy, roll back, index status and logs. */
+  readonly admin: LiveAdminModule;
+};
+
+/** `loams.admin`: the console's administration modules (design §44 §7.2). */
+export interface AdminNamespace {
+  readonly agents: AdminAgentsModule;
+  readonly audit: AdminAuditModule;
+  readonly keys: AdminKeysModule;
+  readonly org: AdminOrgModule;
+  readonly projects: AdminProjectsModule;
+}
+
 /** One SDK, over one instance. */
 export class Loams {
   /** `loams.instance` — what this instance is, and who the caller is. */
   readonly instance: InstanceModule;
-  /** `loams.live` — the live sync session half. Its package is `unstable`. */
-  readonly live: LiveModule;
+  /** `loams.live` — the live sync session half, and `loams.live.admin`.
+   * Its package is `unstable`. */
+  readonly live: LiveNamespace;
   /** `loams.tables` — the table half of the same service (design §44 §7.2). */
   readonly tables: TablesModule;
+  /** `loams.admin` — org, projects, agents, keys and audit. */
+  readonly admin: AdminNamespace;
+  /** `loams.auth` — sessions and sign-in. */
+  readonly auth: AuthModule;
   /** The module catalogue, feature detection and the version check. */
   readonly system: SystemApi;
-  /** Every generated module, by name: the catalogue a caller iterates. */
+  /** Every generated module, by its dotted name (`'live.admin'`): the
+   * catalogue a caller iterates. The same objects are reachable as
+   * properties, `loams.live.admin` for `'live.admin'`. */
   readonly modules: Readonly<Record<string, unknown>>;
 
   readonly #invoker: CallInvoker;
@@ -125,9 +154,12 @@ export class Loams {
     );
 
     this.modules = buildModules(this.#invoker);
-    this.instance = this.modules.instance as InstanceModule;
-    this.live = this.modules.live as LiveModule;
-    this.tables = this.modules.tables as TablesModule;
+    const tree = nestModules(this.modules);
+    this.instance = tree.instance as InstanceModule;
+    this.live = tree.live as LiveNamespace;
+    this.tables = tree.tables as TablesModule;
+    this.admin = tree.admin as AdminNamespace;
+    this.auth = tree.auth as AuthModule;
     this.system = new SystemApi(
       (request, callOptions) => this.instance.getInstance(request, callOptions),
       {
@@ -259,4 +291,41 @@ function buildModules(invoker: CallInvoker): Record<string, unknown> {
     modules[module.name] = calls;
   }
   return modules;
+}
+
+/**
+ * The module tree a dotted name implies: `'live.admin'` becomes `live.admin`
+ * and `'admin.org'` becomes `admin.org`.
+ *
+ * A child is attached to its parent module object when the parent exists
+ * (`live` is a module with calls of its own), and to a plain namespace object
+ * when it does not (`admin` has only children). The flat catalogue is left as
+ * it is; the tree reuses its objects, so `loams.live.admin` and
+ * `loams.modules['live.admin']` are the same object.
+ */
+function nestModules(flat: Record<string, unknown>): Record<string, unknown> {
+  const tree: Record<string, unknown> = {};
+  // Parents before children, so a module with calls of its own is the node
+  // its children hang from rather than being replaced by a namespace.
+  const names = Object.keys(flat).sort((a, b) => a.split('.').length - b.split('.').length);
+  for (const name of names) {
+    const path = name.split('.');
+    const leaf = path.pop() as string;
+    let node = tree;
+    for (const part of path) {
+      let next = node[part] as Record<string, unknown> | undefined;
+      if (next === undefined) {
+        next = {};
+        node[part] = next;
+      }
+      node = next;
+    }
+    if (leaf in node) {
+      throw new LoamsError(`the module ${name} collides with a call of the same name`, {
+        code: Code.Internal,
+      });
+    }
+    node[leaf] = flat[name];
+  }
+  return tree;
 }

@@ -122,6 +122,34 @@ describe('@loams/plugin-account', () => {
     expect(session.refreshed).toBe(1);
   });
 
+  it('setup_needs_no_token_when_sign_in_is_off', async () => {
+    const setups: auth.CompleteSetupRequest[] = [];
+    const transport = createAdminTransport({
+      auth: {
+        completeSetup: (req) => {
+          setups.push(req);
+          return {};
+        },
+      },
+    });
+    const router = stubRouter('/setup');
+    const session = stubSession({ gate: 'setup', account: null });
+    render(
+      withConsole(<SetupPage router={router} session={session} tokenNeeded={false} />, transport),
+    );
+    expect(screen.queryByLabelText('Setup token')).toBeNull();
+    expect(screen.getByText(/needs no token/)).toBeTruthy();
+    const fill = (label: string, value: string) =>
+      fireEvent.change(screen.getByLabelText(label), { target: { value } });
+    fill('Organization name', 'Acme');
+    fill('Your name', 'Priya');
+    fill('Email', 'priya@acme.dev');
+    fill('Password', 'a long enough password');
+    fireEvent.click(screen.getByRole('button', { name: 'Create organization' }));
+    await waitFor(() => expect(router.navigated).toEqual(['/']));
+    expect(setups[0]).toMatchObject({ setupToken: '', orgName: 'Acme' });
+  });
+
   it('consent_decides_and_follows_the_redirect', async () => {
     const decisions: auth.DecideConsentRequest[] = [];
     const transport = createAdminTransport({

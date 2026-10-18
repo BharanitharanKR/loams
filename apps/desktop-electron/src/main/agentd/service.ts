@@ -154,20 +154,24 @@ export class AgentdService {
 		return ok;
 	}
 
+	/**
+	 * Starts the daemon in the mode `daemon.background` names. Before the user has
+	 * answered (`ask`), it starts as the app's child, which stops with the app: only
+	 * the background service needs the consent (D785), and Studio cannot work without
+	 * a daemon (0.1.0 release fix B9).
+	 */
 	async start(): Promise<IpcResult<void>> {
 		const bg = this.deps.readBackground();
-		if (needsConsent(bg))
-			return fail(
-				"consent_required",
-				"Choose whether agents keep running in the background first",
-			);
 		if (this.#client) return ok;
-		const mode = modeFor(bg);
+		const mode = needsConsent(bg) ? "child" : modeFor(bg);
 		if (!mode) return fail("consent_required", "No background choice yet");
 		try {
 			await this.deps.launch(mode);
-		} catch {
-			return fail("launch_failed", "Could not start the daemon");
+		} catch (e) {
+			return fail(
+				"launch_failed",
+				e instanceof AgentdError ? e.message : "Could not start the daemon",
+			);
 		}
 		await this.attach();
 		return this.#client

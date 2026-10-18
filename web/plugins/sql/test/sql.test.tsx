@@ -1,7 +1,8 @@
 // The Loams SQL page against the fixture-backed client (src/mock.ts).
 
 import { validateManifest } from '@loams/console-host';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { setCodeEditorText } from '@loams/ui';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { StrictMode } from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import pkg from '../package.json';
@@ -18,6 +19,10 @@ import { createMockSqlClient, defaultFixtures } from '../src/mock.js';
 import { SqlPage } from '../src/SqlPage.js';
 
 afterEach(cleanup);
+
+// jsdom has no layout: the code editor measures text ranges for its selection and tooltips.
+Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect ??= () => new DOMRect();
 
 globalThis.ResizeObserver ??= class {
   observe() {}
@@ -192,11 +197,12 @@ describe('SqlPage', () => {
     const client = createMockSqlClient({ transitionMs: 0 });
     const query = vi.spyOn(client, 'query');
     mount(client);
-    const box = (await screen.findByLabelText('Statement')) as HTMLTextAreaElement;
-    fireEvent.change(box, { target: { value: 'SELECT * FROM products' } });
+    const box = await screen.findByLabelText('Statement');
+    act(() => setCodeEditorText(box, 'SELECT * FROM products'));
     fireEvent.keyDown(box, { key: 'Enter', ctrlKey: true });
-    const grid = await screen.findByRole('table', { name: 'Query results' });
-    expect(query.mock.calls[0]?.[1]).toMatchObject({
+    const grid = await screen.findByRole('table', { name: 'Result rows' });
+    const ran = query.mock.calls.find((c) => c[1].statement === 'SELECT * FROM products');
+    expect(ran?.[1]).toMatchObject({
       databaseId: 'db_shop000000000001',
       branchId: 'br_shopmain00000000',
       statement: 'SELECT * FROM products',
@@ -206,14 +212,14 @@ describe('SqlPage', () => {
       within(grid)
         .getAllByRole('columnheader')
         .map((h) => h.textContent),
-    ).toEqual(['id', 'name', 'price', 'discontinued_at']);
+    ).toEqual(['#', 'idBIGINT', 'nameVARCHAR', 'priceDECIMAL', 'discontinued_atDATETIME']);
     expect(within(grid).getAllByText('NULL').length).toBe(2);
   });
 
   it('shows a failed statement', async () => {
     mount();
     const box = await screen.findByLabelText('Statement');
-    fireEvent.change(box, { target: { value: 'SELEC oops' } });
+    act(() => setCodeEditorText(box, 'SELEC oops'));
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     expect(await screen.findByText(/syntax_error/)).toBeTruthy();
   });

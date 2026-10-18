@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Stops the Loams preview stack that byoc/install.sh put on a host.
+# Stops the Loams stack that byoc/install.sh put on a host.
 #
 #   deploy/release/byoc/uninstall.sh [-p port] [-i key] [--dir DIR] [--purge] user@host
 #

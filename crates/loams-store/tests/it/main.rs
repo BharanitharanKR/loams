@@ -7,4 +7,5 @@ mod from_url;
 mod list_page;
 mod multipart;
 mod reads;
+mod s3_env;
 mod store;

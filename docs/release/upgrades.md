@@ -34,7 +34,10 @@ container of the **target** release's `loams` image. The CLI itself reads no sto
    `--bundle DIR` takes a local bundle instead (a checkout at the target's tag); the report says it is
    unverified.
 3. **Pull** the target's images. The stack still serves, and a pull failure changes nothing.
-4. **Close the door.** The Tailscale sidecars stop: no client reaches the stack until step 12.
+4. **Close the door.** The Tailscale sidecars are removed (their state volumes stay), and so is any other
+   long-running service in another service's network namespace (`network_mode: service:…`): no client reaches
+   the stack until step 12. Removed, not stopped, because Podman cannot recreate the engine or the House while
+   a container, even a stopped one, shares its network namespace (see "Recreating a service by hand" below).
 5. **Quiesce.** The writers stop: agentd, the console, the Postgres computes, `pg-control`, `pg-runner`, the House,
    the engine, TiDB.
 6. **Snapshot** (see below).
@@ -46,7 +49,7 @@ container of the **target** release's `loams` image. The CLI itself reads no sto
 10. **Ordered start:** TiDB, the engine, the House, the Postgres stack, then the rest.
 11. **Verify:** `loams migrate verify` reads every product's data, every service is healthy, and the engine
     answers `/ready`.
-12. **Open the door.**
+12. **Open the door:** the sidecars are created and started again.
 
 A failure in steps 1–3 changes nothing. A failure in steps 4–7 restarts the old release on its unchanged data. A
 failure in steps 8–11 rolls back from the snapshot automatically, with the door still closed, and exits 10
@@ -108,7 +111,7 @@ pins and its expected downtime (`scripts/release/upgrade-notes.sh`).
 
 ## Rules worth knowing
 
-- **One step at a time.** Each preview upgrades from the one before it only. From v0.1.0 on, a patch release
+- **One step at a time.** Each release upgrades from the one before it only. From v0.1.0 on, a patch release
   upgrades from any earlier patch of its minor line. `migrate` refuses any other source
   (`upgrade_step_not_adjacent`).
 - **Never by hand across preview.2 → 0.1.0.** `docker compose up` with the new bundle would recreate the
@@ -117,6 +120,9 @@ pins and its expected downtime (`scripts/release/upgrade-notes.sh`).
   is refused (`component_downgrade`). No Postgres major changes through `loams upgrade`.
 - **The engine refuses data it cannot read.** It exits 78 (`format_unreadable`, `migration_incomplete`,
   `stack_unrecognised`) rather than start. `loams migrate status` shows why.
+- **Recreating a service by hand.** A sidecar with `network_mode: service:X` (the `tailscale` sidecar is in
+  `loams`'s namespace, `house-tailscale` in `house`'s) must go before `X` is recreated, so remove it first and
+  let compose create it again (see below).
 - **The hosted console** supports the newest engine and the one before it. An older engine gets an "Upgrade
   your engine" page.
 
@@ -140,6 +146,28 @@ Every error has a code. `--output json` prints `{"error": code, "message": …}`
 | 9 | `checksum_mismatch`, `signature_invalid`, `manifest_invalid` | The download does not match the release: do not use it. |
 | 10 | `upgrade_failed_rolled_back` | The upgrade failed and the stack is back on the previous release, as it was. The message says why; `status` shows the attempt. |
 | 11 | `rollback_failed` | The rollback failed too. The message names the snapshot, its host files and the manual steps: stop the stack, copy the host files back, restore TiKV, run `loams migrate restore --from <snapshot>` in the target's `loams` image, start the stack. |
+
+### Recreating a service by hand
+
+After you change `.env` (or the image) yourself, `docker compose up -d` recreates the services it affects. On
+Podman, recreating `loams` (or `house`) fails while its sidecar exists, even stopped:
+
+```text
+Error response from daemon: container … has dependent containers which must be removed before it: …
+```
+
+Remove the sidecars in its network namespace first; `up` creates them again:
+
+```sh
+docker compose rm -sf tailscale && docker compose up -d loams tailscale              # the engine
+docker compose rm -sf house-tailscale && docker compose up -d house house-tailscale  # the House
+```
+
+`podman compose` runs the same commands when it uses Docker Compose. `podman-compose` (the Python tool) has no
+`rm`, and its `up -d` exits 0 while it keeps the old container running: remove the sidecar with
+`podman rm -f <project>_tailscale_1` (`podman ps -a` shows the name), then `podman-compose up -d`. A failed
+recreate can leave a container named `<id>_<project>-loams-1` beside the old one; the commands above still bring
+the service up on its new settings. `loams upgrade` and `loams upgrade rollback` remove the sidecars themselves.
 
 For a BYOC VM that `byoc/install.sh` set up, `deploy/release/byoc/upgrade.sh user@host --to V` runs the same
 upgrade on the VM over SSH (`--check`, `--rollback`); see [`deploy/release/README.md`](../../deploy/release/README.md).

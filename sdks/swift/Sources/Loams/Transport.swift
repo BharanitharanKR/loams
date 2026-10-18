@@ -328,16 +328,20 @@ public final class ConnectTransport: HTTPTransport, @unchecked Sendable {
             forHTTPHeaderField: "Content-Type"
         )
         urlRequest.setValue(String(payload.count), forHTTPHeaderField: "Content-Length")
-        // The bearer travels in a header and **never** in the URL: a query string
-        // ends up in proxy logs, in browser history and in `Referer` (R1).
-        if let bearer, !bearer.isEmpty {
-            urlRequest.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
-        }
+        // The client's headers, then this call's (which replace one of the same
+        // name), then the bearer **last**: it was set first, so an
+        // `Authorization` in `extraHeaders` replaced the token source's bearer and
+        // R1's refresh could never take effect.
         for (name, value) in config.extraHeaders {
             urlRequest.setValue(value, forHTTPHeaderField: name)
         }
         for (name, value) in request.headers where name.lowercased() != "authorization" {
             urlRequest.setValue(value, forHTTPHeaderField: name)
+        }
+        // The bearer travels in a header and **never** in the URL: a query string
+        // ends up in proxy logs, in browser history and in `Referer` (R1).
+        if let bearer, !bearer.isEmpty {
+            urlRequest.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
         }
 
         let (data, response) = try await session.data(for: urlRequest)

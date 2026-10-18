@@ -17,6 +17,7 @@
 #include "support.hpp"
 
 #include <algorithm>
+#include <cctype>
 #include <memory>
 #include <string>
 #include <vector>
@@ -34,6 +35,20 @@ std::string HeaderOf(const HttpRequest& request, const std::string& name) {
     }
   }
   return "<none>";
+}
+
+/// How many lines of a header a request carries, matched case-insensitively.
+std::size_t HeaderCount(const HttpRequest& request, const std::string& name) {
+  std::size_t count = 0;
+  for (const auto& header : request.headers) {
+    std::string lowered = header.first;
+    std::transform(lowered.begin(), lowered.end(), lowered.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    if (lowered == name) {
+      ++count;
+    }
+  }
+  return count;
 }
 
 ScriptedTransport::Answer Ok(const std::string& json) {
@@ -224,6 +239,51 @@ int main() {
     LOAMS_CHECK(ReasonFromString("session_rotate") == Reason::kSessionRotate, "session_rotate");
     LOAMS_CHECK(ReasonFromString("token_expired") == Reason::kTokenExpired, "token_expired");
     LOAMS_CHECK(ReasonFromString("token_revoked") == Reason::kTokenRevoked, "token_revoked");
+  }
+
+  // --- B17: Options::headers reach the wire on unary and stream; a call's app wins ---
+  {
+    ScriptedTransport transport;
+    transport.AddAnswer(Ok("{}"));
+    transport.AddAnswer(Ok("{}"));
+    ScriptedTransport::Answer stream_answer;
+    stream_answer.status = 200;
+    stream_answer.content_type = "application/connect+json";
+    stream_answer.body = EncodeEnvelopeFrame(kFrameMessage, R"({"sessionId":"1"})") +
+                         EncodeEnvelopeFrame(kFrameEndOfStream, "{}");
+    transport.AddAnswer(stream_answer);
+
+    Options options = JsonOptions(&transport);
+    options.token_source = StaticToken("real-key");
+    options.headers = {{kLiveAppHeader, "blog"}, {"x-tenant", "acme"}, {"Authorization", "Bearer not-the-key"}};
+    std::shared_ptr<Loams> loams = MakeLoams(options);
+
+    live::v1::GetAppRequest get;
+    live::v1::GetAppResponse got;
+    loams->LiveAdmin()->GetApp(&get, &got);
+    loams->LiveAdmin()->GetApp(&get, &got, "shop");
+    live::v1::WatchRequest watch;
+    MessageStream stream = loams->Live()->Watch(&watch);
+    live::v1::Transition transition;
+    std::size_t received = 0;
+    while (stream.Receive(&transition)) {
+      ++received;
+    }
+    LOAMS_CHECK_EQ(received, std::size_t{1}, "the stream's one message");
+
+    const std::vector<HttpRequest> requests = transport.Requests();
+    LOAMS_REQUIRE(requests.size() == 3, "two unary calls and one stream");
+    for (const HttpRequest& sent : requests) {
+      LOAMS_CHECK_EQ(HeaderOf(sent, "x-tenant"), std::string("acme"), "the client's header on " + sent.url);
+      LOAMS_CHECK_EQ(HeaderCount(sent, "authorization"), std::size_t{1}, "one authorization on " + sent.url);
+      LOAMS_CHECK_EQ(HeaderOf(sent, "authorization"), std::string("Bearer real-key"),
+                     "the client's header must not displace the bearer on " + sent.url);
+      LOAMS_CHECK_EQ(HeaderCount(sent, kLiveAppHeader), std::size_t{1}, "one app header on " + sent.url);
+    }
+    LOAMS_CHECK_EQ(HeaderOf(requests[0], kLiveAppHeader), std::string("blog"), "unary: the client's app");
+    LOAMS_CHECK_EQ(HeaderOf(requests[1], kLiveAppHeader), std::string("shop"),
+                   "unary: the call's app replaces the client's");
+    LOAMS_CHECK_EQ(HeaderOf(requests[2], kLiveAppHeader), std::string("blog"), "stream: the client's app");
   }
 
   return Finish("cpp_live_admin");

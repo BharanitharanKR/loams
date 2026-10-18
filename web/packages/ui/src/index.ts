@@ -172,6 +172,22 @@ export {
   PopoverTrigger,
 } from './popover';
 export { PreviewCard, PreviewCardPopup, PreviewCardTrigger } from './preview-card';
+export {
+  clearHistory,
+  type HistoryItem,
+  pushHistory,
+  readHistory,
+  useQueryHistory,
+} from './query-history';
+export {
+  cellText,
+  QueryResults,
+  type QueryResultsProps,
+  type ResultColumn,
+  resultWindow,
+  toCsv,
+  toJsonRows,
+} from './query-results';
 export { Radio, RadioGroup, RadioGroupItem } from './radio-group';
 export { ScrollArea } from './scroll-area';
 export { Segmented, type SegmentedOption } from './segmented';
@@ -217,6 +233,50 @@ export {
 export { type ResponsiveSidebarState, resolveSidebarState } from './sidebar-state';
 export { Skeleton } from './skeleton';
 export { Spinner } from './spinner';
+export {
+  codeEditorText,
+  SqlEditor,
+  type SqlEditorHandle,
+  type SqlEditorProps,
+  setCodeEditorText,
+  statementAt,
+} from './sql-editor';
+export {
+  cleanSqlError,
+  offsetOfPosition,
+  positionOfOffset,
+  type SqlPosition,
+  sqlErrorPosition,
+} from './sql-error';
+export { formatSql } from './sql-format';
+export {
+  callAt,
+  EMPTY_SCHEMA,
+  ENGINE_FUNCTIONS,
+  ENGINE_GRAPH_FUNCTIONS,
+  ENGINE_SEARCH_FUNCTIONS,
+  GQL_KEYWORDS,
+  type SqlColumn,
+  type SqlDialectName,
+  type SqlFunction,
+  type SqlSchema,
+  type SqlTable,
+  signatureText,
+  tablesInScope,
+} from './sql-language';
+export {
+  HistoryMenu,
+  QueryErrorView,
+  type QueryOutcome,
+  RunHint,
+  SchemaPanel,
+  type SqlExample,
+  SqlExamples,
+  SqlToolbar,
+  SqlWorkbench,
+  type SqlWorkbenchProps,
+  sqlExamples,
+} from './sql-workbench';
 export { type Status, StatusTag } from './status';
 export { Switch } from './switch';
 export {

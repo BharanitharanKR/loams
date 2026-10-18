@@ -13,8 +13,24 @@ export interface SearchForm {
   hybrid: boolean;
 }
 
-/** Builds the SearchRequest IR (proto JSON) from the form; throws a readable error. */
-export function buildSearchIr(f: SearchForm): JsonObject {
+/** The names of a schema's text fields: free text is matched against these. */
+export function textFields(schema: JsonObject): string[] {
+  const list = Array.isArray(schema.fields) ? schema.fields : [];
+  return list.flatMap((f) => {
+    if (typeof f !== 'object' || f === null || Array.isArray(f)) return [];
+    const kind = f.kind;
+    const isText =
+      typeof kind === 'object' && kind !== null && !Array.isArray(kind) && 'text' in kind;
+    return isText && f.indexed !== false ? [String(f.name ?? '')] : [];
+  });
+}
+
+/**
+ * Builds the SearchRequest IR (proto JSON) from the form; throws a readable error.
+ * Free text is a query string over the schema's text fields: the engine matches
+ * nothing when a query string names no default fields.
+ */
+export function buildSearchIr(f: SearchForm, defaultFields: string[] = []): JsonObject {
   const retrievers: JsonObject[] = [];
   let vector: number[] | undefined;
   if (f.vector.trim()) {
@@ -35,7 +51,12 @@ export function buildSearchIr(f: SearchForm): JsonObject {
   }
   const text = f.text.trim();
   if (text && (f.hybrid || !vector)) {
-    retrievers.push({ text: { query: { queryString: { query: text } }, k: f.limit } });
+    if (defaultFields.length === 0) {
+      throw new Error('This collection has no text fields to search. Use a filter or a vector.');
+    }
+    retrievers.push({
+      text: { query: { queryString: { query: text, defaultFields } }, k: f.limit },
+    });
   }
   if (vector) {
     retrievers.push({ vector: { field: f.vectorField, query: vector, k: f.limit } });
@@ -83,7 +104,7 @@ export function SearchTab({
     setError(undefined);
     setBusy(true);
     try {
-      setHits(await client.search(ns, coll, buildSearchIr(form)));
+      setHits(await client.search(ns, coll, buildSearchIr(form, textFields(schema))));
     } catch (err) {
       setHits(undefined);
       setError(errorText(err));

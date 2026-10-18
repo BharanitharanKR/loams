@@ -15,7 +15,13 @@
 // generator produced, the typed error hierarchy, the token sources, and the
 // reason registry as a type.
 
-export { Loams, type LoamsModules, type LoamsOptions } from './loams.js';
+export {
+  Loams,
+  type AdminNamespace,
+  type LiveNamespace,
+  type LoamsModules,
+  type LoamsOptions,
+} from './loams.js';
 export {
   SystemApi,
   type Catalogue,
@@ -96,5 +102,9 @@ export {
   staticToken,
   type TokenSource,
 } from './runtime/token-source.js';
-export { createLoamsTransport, type TransportOptions } from './runtime/transports.js';
+export {
+  createLoamsTransport,
+  headersInterceptor,
+  type TransportOptions,
+} from './runtime/transports.js';
 export { uuidv7, uuidv7Time } from './runtime/uuidv7.js';

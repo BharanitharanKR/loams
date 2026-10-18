@@ -2,7 +2,7 @@
 // registry, `?host=` by id only, pasted development tokens, and the projects
 // client over the selected host. No network: the client is a fake.
 
-import { createClient, createRouterTransport } from '@connectrpc/connect';
+import { Code, ConnectError, createClient, createRouterTransport } from '@connectrpc/connect';
 import { createHostRegistry, HOSTS_KEY, localHostStore } from '@loams/agentd-client/hosts';
 import { ProjectService } from '@loams/proto/agentd';
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
@@ -70,6 +70,21 @@ describe('the hosted agentd', () => {
     expect((await listProjects(agentd)).map((p) => p.name)).toEqual(['repo-of-devbox']);
     expect(tokens).toEqual(['pasted-token']);
     expect(agentd.cacheKey()).toBe(`host:${host.id}`);
+  });
+
+  it('says what to check when the browser cannot reach the host (B21)', async () => {
+    // What the web transport rejects with when `fetch` itself fails (or the CSP blocks it).
+    const offline = () => Promise.reject(new ConnectError('Failed to fetch', Code.Unknown));
+    const transportFor = vi.fn(() => ({ unary: offline, stream: offline }));
+    const agentd = hostedAgentd({ transportFor });
+    const host = agentd.hosts.registry.add({ name: 'devbox', url: URL_A });
+    agentd.hosts.setPastedToken(host.id, 't');
+    const failure = await listProjects(agentd).catch((e: unknown) => ConnectError.from(e));
+    expect(failure).toBeInstanceOf(ConnectError);
+    expect((failure as ConnectError).code).toBe(Code.Unavailable);
+    expect((failure as ConnectError).rawMessage).toMatch(
+      /LOAMS_AGENTD_ORIGINS lists https:\/\/devbox/,
+    );
   });
 
   it('pasted tokens are never stored', () => {

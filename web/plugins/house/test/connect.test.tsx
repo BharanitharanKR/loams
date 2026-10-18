@@ -6,7 +6,8 @@ import { create } from '@bufbuild/protobuf';
 import { timestampFromDate } from '@bufbuild/protobuf/wkt';
 import { Code, ConnectError, createRouterTransport } from '@connectrpc/connect';
 import { errors, house, instance } from '@loams/proto';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { setCodeEditorText } from '@loams/ui';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { ExecuteQueryRequest, QueryFrame } from '../src/client.js';
 import { HouseError } from '../src/client.js';
@@ -14,6 +15,10 @@ import { createHouseClient, decodeRows } from '../src/connect.js';
 import { HousePage } from '../src/HousePage.js';
 
 afterEach(cleanup);
+
+// jsdom has no layout: the code editor measures text ranges for its selection and tooltips.
+Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect ??= () => new DOMRect();
 
 globalThis.ResizeObserver ??= class {
   observe() {}
@@ -161,7 +166,7 @@ describe('createHouseClient', () => {
     render(<HousePage client={createHouseClient(server())} />);
     await waitFor(() => screen.getByLabelText('SQL'));
     expect(screen.queryByText('Sample data')).toBeNull();
-    fireEvent.change(screen.getByLabelText('SQL'), { target: { value: REQ.sql } });
+    act(() => setCodeEditorText(screen.getByLabelText('SQL'), REQ.sql));
     fireEvent.click(screen.getByRole('button', { name: 'Run' }));
     await waitFor(() => expect(screen.getAllByText('2').length).toBeGreaterThan(0));
   });

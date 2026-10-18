@@ -65,6 +65,8 @@ jobs:
         env:
           LOAMS_GIT_LIN_SEEDS: "32"
         run: cargo test -p loams-git -p loams-git-remote -p loams-fs --features loams-git-remote/faults --locked
+      - name: loams-store against RustFS (AWS_* from the environment, B1)
+        run: cargo test -p loams-store --locked --test it s3_env
       - name: Q385 (RustFS multipart atomicity)
         run: cargo test -p loams-git --locked --test blob -- --ignored q385 --nocapture
       - name: stop RustFS

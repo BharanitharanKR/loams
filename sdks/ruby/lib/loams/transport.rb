@@ -9,7 +9,12 @@ module Loams
 
   class HttpTransport
     def initialize(endpoint)
-      @endpoint = endpoint.to_s.sub(%r{/+$}, "")
+      @endpoint = endpoint.to_s
+      # Trailing slashes trimmed by index: `sub(%r{/+$}, "")` backtracks
+      # quadratically on a long run of slashes (CodeQL rb/polynomial-redos).
+      cut = @endpoint.length
+      cut -= 1 while cut.positive? && @endpoint[cut - 1] == "/"
+      @endpoint = @endpoint[0, cut]
       @uri = URI.parse(@endpoint)
     end
 

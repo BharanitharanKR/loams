@@ -26,15 +26,42 @@ use std::process::ExitCode;
 /// `fatal: ` prefix.
 #[derive(Debug, thiserror::Error)]
 pub enum HelperError {
-    /// The address is not `<store-url>/ns/<ns>/repos/<repo>`.
-    #[error("loams: expected <store-url>/ns/<ns>/repos/<repo_id>, got {address}")]
+    /// The address is not `<store-url>/ns/<namespace-id>/repos/<repo>`.
+    #[error("loams: expected <store-url>/ns/<namespace-id>/repos/<repo>, got {address}")]
     BadAddress {
         /// The address as git gave it.
         address: String,
     },
+    /// The namespace segment is a name, not the namespace's numeric id. The
+    /// bucket keys repositories by namespace id and keeps no namespace
+    /// names (those live in the engine's metadata store), and the helper
+    /// reaches no server, so it cannot look a name up.
+    #[error(
+        "loams: the namespace in a loams:: URL is its numeric id, not its name \
+         (got '{ns}' in {address}): the bucket keeps namespace ids only and \
+         git-remote-loams talks to no server. The engine answers the id as \
+         `namespace_id` from loams.collection.v1.NamespaceService/CreateNamespace \
+         (`id` on an already_exists answer)"
+    )]
+    NamespaceName {
+        /// The address as git gave it.
+        address: String,
+        /// The namespace segment.
+        ns: String,
+    },
     /// No repository at the address (Ruling 7).
     #[error("repository '{address}' not found")]
     NotFound {
+        /// The address as git gave it.
+        address: String,
+    },
+    /// A push to an address with no repository, without
+    /// `LOAMS_GIT_CREATE_ON_PUSH=1` (Ruling 7: a typo must not create one).
+    #[error(
+        "repository '{address}' not found; to create it with this push, run \
+         the push with LOAMS_GIT_CREATE_ON_PUSH=1"
+    )]
+    NotFoundForPush {
         /// The address as git gave it.
         address: String,
     },
