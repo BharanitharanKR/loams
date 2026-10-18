@@ -75,4 +75,32 @@ describe("resolvePaths", () => {
 		);
 		expect(p.engineBin).toHaveLength(4);
 	});
+
+	it("agentd_bin_candidates_on_each_platform", () => {
+		for (const [platform, exe] of [
+			["linux", "loams-agentd"],
+			["darwin", "loams-agentd"],
+			["win32", "loams-agentd.exe"],
+		] as const) {
+			const p = resolvePaths({ ...base, platform, cargoTargetDir: "/cargo/target" });
+			expect(p.agentdBin).toEqual([
+				n(`/opt/Loams/resources/bin/${exe}`),
+				n(`/cargo/target/release/${exe}`),
+				n(`/cargo/target/debug/${exe}`),
+			]);
+		}
+	});
+
+	it("agentd_bin_override_first_and_packaged_has_only_the_bundle", () => {
+		const p = resolvePaths({
+			...base,
+			platform: "win32",
+			isPackaged: true,
+			agentdBin: "C:\\x\\loams-agentd.exe",
+		});
+		expect(p.agentdBin).toEqual([
+			"C:\\x\\loams-agentd.exe",
+			n("/opt/Loams/resources/bin/loams-agentd.exe"),
+		]);
+	});
 });

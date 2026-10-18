@@ -124,6 +124,99 @@ describe("windows-sign.cjs", () => {
 	});
 });
 
+// The bundled binaries' SHA256SUMS, which `loams-agentd install-runtime` checks (release fix B9).
+describe("bin-sums.cjs", () => {
+	const { binaryNames, binSums, writeBinSums } = createRequire(import.meta.url)(
+		"../scripts/bin-sums.cjs",
+	);
+	it("names the platform's executables", () => {
+		expect(binaryNames("win32")).toEqual(["loams-agentd.exe", "loams.exe"]);
+		expect(binaryNames("darwin")).toEqual(["loams-agentd", "loams"]);
+		expect(binaryNames("linux")).toEqual(["loams-agentd", "loams"]);
+	});
+	it("lists both binaries in sha256sum format, ignoring other files", () => {
+		const d = fresh("sums-both");
+		writeFileSync(join(d, "loams-agentd.exe"), "daemon");
+		writeFileSync(join(d, "loams.exe"), "engine");
+		writeFileSync(join(d, "VERSION"), "0.1.0\n");
+		expect(writeBinSums(d, "win32")).toBe(
+			`${sha("daemon")}  loams-agentd.exe\n${sha("engine")}  loams.exe\n`,
+		);
+		expect(readFileSync(join(d, "SHA256SUMS"), "utf8")).toBe(binSums(d, "win32"));
+	});
+	it("lists the daemon alone when the engine is not bundled (a Windows build without it)", () => {
+		const d = fresh("sums-daemon-only");
+		writeFileSync(join(d, "loams-agentd.exe"), "daemon");
+		expect(binSums(d, "win32")).toBe(`${sha("daemon")}  loams-agentd.exe\n`);
+	});
+	it("writes nothing without the daemon, and the platform picks the names", () => {
+		const d = fresh("sums-none");
+		writeFileSync(join(d, "loams-agentd"), "unix daemon");
+		expect(writeBinSums(d, "win32")).toBeNull();
+		expect(existsSync(join(d, "SHA256SUMS"))).toBe(false);
+		expect(binSums(d, "darwin")).toBe(`${sha("unix daemon")}  loams-agentd\n`);
+	});
+	it("cli fails without the daemon", () => {
+		const d = fresh("sums-cli");
+		const r = spawnSync(process.execPath, [join(scripts, "bin-sums.cjs"), d, "linux"], {
+			encoding: "utf8",
+		});
+		expect(r.status).toBe(1);
+		expect(r.stderr).toMatch(/no loams-agentd/);
+	});
+});
+
+// The macOS signer: SHA256SUMS must describe the binaries as signed, and the bundle is resealed after.
+describe("mac-sign.cjs", () => {
+	const { macSign, resealOptions, binDir } = createRequire(import.meta.url)(
+		"../scripts/mac-sign.cjs",
+	);
+	const app = () => {
+		const a = join(fresh("mac-sign"), "Loams Desktop.app");
+		mkdirSync(binDir(a), { recursive: true });
+		return a;
+	};
+	it("rewrites SHA256SUMS from the signed binaries, then reseals only the bundle", async () => {
+		const a = app();
+		const bin = binDir(a);
+		writeFileSync(join(bin, "loams-agentd"), "daemon");
+		writeFileSync(join(bin, "loams"), "engine");
+		writeFileSync(join(bin, "SHA256SUMS"), "stale\n");
+		const calls: { ignore?: (f: string) => boolean; app: string; identity: string }[] = [];
+		// A signer that changes every binary, as codesign does.
+		const sign = async (o: { ignore?: (f: string) => boolean; app: string; identity: string }) => {
+			calls.push(o);
+			if (calls.length === 1) {
+				for (const f of ["loams-agentd", "loams"]) writeFileSync(join(bin, f), `${f} signed`);
+			}
+		};
+		const opts = { app: a, identity: "-", ignore: () => false, binaries: ["x"] };
+		await macSign(opts, { sign });
+		expect(calls).toHaveLength(2);
+		expect(calls[0]).toBe(opts);
+		expect(readFileSync(join(bin, "SHA256SUMS"), "utf8")).toBe(
+			`${sha("loams signed")}  loams\n${sha("loams-agentd signed")}  loams-agentd\n`,
+		);
+		const reseal = calls[1];
+		if (!reseal) throw new Error("no second signing pass");
+		expect(reseal.identity).toBe("-");
+		expect(reseal.ignore?.(a)).toBe(false);
+		expect(reseal.ignore?.(join(bin, "loams-agentd"))).toBe(true);
+		expect(reseal.ignore?.(join(a, "Contents", "MacOS", "Loams Desktop"))).toBe(true);
+	});
+	it("signs once when no daemon is bundled", async () => {
+		const a = app();
+		let n = 0;
+		await macSign({ app: a, identity: "-" }, { sign: async () => void n++ });
+		expect(n).toBe(1);
+		expect(existsSync(join(binDir(a), "SHA256SUMS"))).toBe(false);
+	});
+	it("reseal options keep the identity and keychain", () => {
+		const o = resealOptions({ app: "/A.app", identity: "ABC", keychain: "/k", binaries: ["/b"] });
+		expect(o).toMatchObject({ app: "/A.app", identity: "ABC", keychain: "/k", binaries: undefined });
+	});
+});
+
 // gpg-sign.sh runs on the Linux release runner (desktop-electron-release.yml); on Windows, bash and
 // gpg (when present at all) are Git for Windows' MSYS builds, which this bash script does not target.
 const hasGpg =
