@@ -1620,12 +1620,22 @@ fn main() -> ExitCode {
 
 #[tokio::main]
 async fn serve(cli: Cli) -> ExitCode {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,openraft=warn")),
-        )
-        .init();
+    // The one-shot commands print their result (JSON with `--output json`)
+    // on stdout, so their logs go to stderr: a warning (the embedded
+    // metastore's election under load) must not come before the JSON.
+    let logs_to_stderr = matches!(
+        cli.command,
+        Command::Migrate { .. } | Command::Warm { .. } | Command::Auth { .. }
+    );
+    let logs = tracing_subscriber::fmt().with_env_filter(
+        tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,openraft=warn")),
+    );
+    if logs_to_stderr {
+        logs.with_writer(std::io::stderr).init();
+    } else {
+        logs.init();
+    }
     if let Command::Warm { target, server } = &cli.command {
         return warm(target, server).await;
     }
