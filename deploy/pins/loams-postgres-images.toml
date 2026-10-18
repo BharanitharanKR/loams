@@ -1,7 +1,7 @@
 # Written by scripts/nf1/pins.py (set); checked by pins.py (check). Do not edit by hand.
 schema = 1
-fork_release = "lp-2026.10.1"
-fork_commit = "78b247596077e1659d0adeaf5f74b258321792a5"
+fork_release = "lp-2026.11.0"
+fork_commit = "a213ec44ac29c31812712ffdd6de7c1f4d4a599c"
 
 [majors]
 supported = [17]
@@ -11,18 +11,18 @@ default = 17
 
 [images.storage]
 repository = "ghcr.io/ostrium-labs/loams-postgres-storage"
-digest = "sha256:fc99d2ea577263590fc9fa0b4c6ed122637b4a357a6f75a3d1478c537ba6347a"
-source = "ostrium-labs/loams-postgres@78b247596077e1659d0adeaf5f74b258321792a5"
-pg_minors = { "16" = "16.9", "17" = "17.5" }
+digest = "sha256:4dcec4cbef637b92b1088ea2c0bc857f3b5ef4318f02e8d2d4a0f9263ed4140e"
+source = "ostrium-labs/loams-postgres@a213ec44ac29c31812712ffdd6de7c1f4d4a599c"
+pg_minors = { "16" = "16.15", "17" = "17.11" }
 
 [images.compute-v16]
 repository = "ghcr.io/ostrium-labs/loams-postgres-compute-v16"
-digest = "sha256:68fc3cadcc756c4d2b67b5a401a5504b86f0ec0d8ab19f39b0c28a7b31303ec9"
-source = "ostrium-labs/loams-postgres@78b247596077e1659d0adeaf5f74b258321792a5"
-pg_minor = "16.9"
+digest = "sha256:29842a21499b282b97420b141d11fd3923b9102ce0f37c14491581c5f6591434"
+source = "ostrium-labs/loams-postgres@a213ec44ac29c31812712ffdd6de7c1f4d4a599c"
+pg_minor = "16.15"
 
 [images.compute-v17]
 repository = "ghcr.io/ostrium-labs/loams-postgres-compute-v17"
-digest = "sha256:ee9f854e6ba495cef3c87f49469a6bcc4462e53f71f097471b3bd7ed7f991ea8"
-source = "ostrium-labs/loams-postgres@78b247596077e1659d0adeaf5f74b258321792a5"
-pg_minor = "17.5"
+digest = "sha256:210b71416c827b6cf7842853706e1dbdcc870fd4a7af8e235d6e7296b95edb0e"
+source = "ostrium-labs/loams-postgres@a213ec44ac29c31812712ffdd6de7c1f4d4a599c"
+pg_minor = "17.11"

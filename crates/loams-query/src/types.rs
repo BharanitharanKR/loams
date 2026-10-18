@@ -20,8 +20,11 @@ fn is_empty_map<K, V>(map: &BTreeMap<K, V>) -> bool {
     map.is_empty()
 }
 
-/// What a read returns of each document.
+/// What a read returns of each document. An unknown key is refused: a
+/// misspelt `select` (`{"include": [..]}` without `source`) used to return
+/// the whole source, silently.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Projection {
     /// Default `All`.
     #[serde(default)]
@@ -35,8 +38,9 @@ pub struct Projection {
 }
 
 /// Which part of `_source` a read returns (Ruling 12). JSON: `"all"`,
-/// `"none"` or `{"include": [..], "exclude": [..]}` (serde in
-/// [`crate::json::values`]).
+/// `"none"` or `{"include": [..], "exclude": [..]}`; Elasticsearch's
+/// spellings are read too: `true`/`false`, a list of include patterns and
+/// `includes`/`excludes` (serde in [`crate::json::values`]).
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub enum SourceFilter {
     #[default]
