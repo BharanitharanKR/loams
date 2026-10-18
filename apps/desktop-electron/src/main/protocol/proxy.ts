@@ -133,18 +133,20 @@ const AGENTD_DROPPED_RESPONSE = [
 export async function proxyAgentdRequest(
 	req: Request,
 	target: string,
-	/** `Bearer <token>`. */
+	/** `Bearer <token>`; empty sends no `Authorization`. */
 	authorization: string,
 	fetchImpl: typeof fetch,
+	/** Replaces the request path (the query string is kept). */
+	pathname?: string,
 ): Promise<Response> {
 	const src = new URL(req.url);
 	const dest = new URL(target);
 	const headers = new Headers(req.headers);
 	for (const k of AGENTD_DROPPED_REQUEST) headers.delete(k);
-	headers.set("authorization", authorization);
+	if (authorization) headers.set("authorization", authorization);
 	const hasBody = req.method !== "GET" && req.method !== "HEAD";
 	const res = await fetchImpl(
-		new Request(`${dest.origin}${src.pathname}${src.search}`, {
+		new Request(`${dest.origin}${pathname ?? src.pathname}${src.search}`, {
 			method: req.method,
 			headers,
 			body: hasBody ? req.body : undefined,
