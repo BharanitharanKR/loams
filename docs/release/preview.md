@@ -427,6 +427,10 @@ The House's security layers in 0.1.0:
 - **Tailnet only.** The engine has no public address. Only the `tailscale` sidecar (and the
   House's `house-tailscale`, with `--profile house`) is reachable from outside the compose
   network, and only for tailnet members your tailnet policy allows. Nothing binds `0.0.0.0` on the host by default.
+- **HTTPS certificates are public.** Enabling Tailscale HTTPS certificates publishes
+  `loams.<tailnet>.ts.net` in public Certificate Transparency logs, so the hostname becomes
+  discoverable. It stays unreachable outside your tailnet
+  ([Tailscale: enabling HTTPS](https://tailscale.com/kb/1153/enabling-https)).
 - **Authentication on every request**, chosen by `LOAMS_AUTH_MODE`.
 - **The auth service never reaches your stack.** In `oidc` mode the engine fetches the
   issuer's JWKS outbound; the auth service sees sign-ins, not data.
@@ -442,6 +446,11 @@ The House's security layers in 0.1.0:
 | `off` | Loopback clients only; every other client is refused | none |
 
 The compose default is `tailscale`.
+
+Tailscale identity headers (`Tailscale-User-Login` and the rest) are empty for requests from
+tagged devices ([Tailscale Serve](https://tailscale.com/kb/1312/serve)). CI machines and
+servers that call the engine therefore cannot use `tailscale` mode: set `LOAMS_AUTH_MODE=apikey`
+and give them an API key.
 
 ### TLS on the main port
 
