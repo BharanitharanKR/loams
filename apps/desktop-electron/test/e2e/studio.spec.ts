@@ -135,7 +135,10 @@ test.describe("studio on the desktop edition", () => {
 	});
 
 	test("factory_group_visible_in_studio_only", async () => {
-		const factoryNav = page.locator('a[href="#/studio/factory"]');
+		// The sidebar's Factory group; Console's overview has its own Software Factory card.
+		const factoryNav = page
+			.getByRole("navigation", { name: "Sidebar" })
+			.locator('a[href="#/studio/factory"]');
 		await expect(factoryNav.first()).toBeVisible();
 		await modes(page).console.click();
 		await expect.poll(() => hashOf(page)).toBe("/");
@@ -235,12 +238,8 @@ test.describe("studio on the desktop edition", () => {
 		await expect(page.getByRole("button", { name: "Allow once" })).toHaveCount(0);
 	});
 
-	test("badge_live_in_console_mode", async () => {
-		// In Console, an approval the daemon starts waiting on shows on the badge.
-		await modes(page).console.click();
-		await expect.poll(() => hashOf(page)).toBe("/");
-		const chip = page.locator('a.lc-chip[href="#/approvals"]');
-		const before = Number((await chip.textContent().catch(() => "0"))?.match(/\d+/)?.[0] ?? 0);
+	/** A supervised thread started through the API, so the daemon waits on its first edit. */
+	async function supervisedThread(prompt: string): Promise<string> {
 		const chatId = `e2e-${Date.now()}`;
 		await agentd.call("/loams.agentd.v1.ApprovalService/SetThreadApprovalMode", {
 			chatId,
@@ -249,14 +248,13 @@ test.describe("studio on the desktop edition", () => {
 		await agentd.call("/loams.agentd.v1.ThreadService/Send", {
 			chatId,
 			messageId: `${chatId}-m1`,
-			request: {
-				prompt: "Edit while Console is open",
-				cwd: agentd.repo,
-				sandbox: "SANDBOX_LEVEL_WORKSPACE_WRITE",
-			},
+			request: { prompt, cwd: agentd.repo, sandbox: "SANDBOX_LEVEL_WORKSPACE_WRITE" },
 		});
-		await expect(chip).toContainText(`${before + 1} approval`, { timeout: 60_000 });
-		// Resolved in Studio, it leaves the badge.
+		return chatId;
+	}
+
+	/** Allows a waiting thread's edit from its Studio page, then goes back to Console. */
+	async function allowFromStudio(chatId: string) {
 		await modes(page).studio.click();
 		await go(page, `/studio/t/${chatId}`);
 		await page.getByRole("button", { name: "Allow once" }).click();
@@ -264,8 +262,38 @@ test.describe("studio on the desktop edition", () => {
 			timeout: 60_000,
 		});
 		await modes(page).console.click();
+		await expect.poll(() => hashOf(page)).toBe("/");
+	}
+
+	test("badge_live_in_console_mode", async () => {
+		// In Console, an approval the daemon starts waiting on shows on the thread's
+		// row in the shell sidebar: Studio's streams stay live outside Studio (§53 §4.2).
+		await modes(page).console.click();
+		await expect.poll(() => hashOf(page)).toBe("/");
+		const chatId = await supervisedThread("Edit while Console is open");
+		const waiting = page
+			.getByRole("navigation", { name: "Projects" })
+			.getByRole("link", { name: /^Edit while Console is open/ })
+			.getByRole("img", { name: "Pending Approval" });
+		await expect(waiting).toBeVisible({ timeout: 60_000 });
+		// Resolved in Studio, it leaves the badge.
+		await allowFromStudio(chatId);
+		await expect(waiting).toHaveCount(0);
+		expect(threadId).not.toBe("");
+	});
+
+	// The header's approvals chip (§53 §4.5: it counts the server's and agentd's
+	// approvals) comes from @loams/plugin-approvals, which `requires.api`
+	// loams.approvals.v1. The Loams engine does not serve that package (only the
+	// apps mock does), so on a real engine, as with the fake one here, the plugin
+	// never loads and agentd's approvals never reach the chip or #/approvals.
+	test.fixme("approvals_chip_counts_agent_approvals", async () => {
+		const chip = page.locator('a.lc-chip[href="#/approvals"]');
+		const before = Number((await chip.textContent().catch(() => "0"))?.match(/\d+/)?.[0] ?? 0);
+		const chatId = await supervisedThread("Edit while the chip counts");
+		await expect(chip).toContainText(`${before + 1} approval`, { timeout: 60_000 });
+		await allowFromStudio(chatId);
 		if (before === 0) await expect(chip).toHaveCount(0);
 		else await expect(chip).toContainText(`${before} approval`);
-		expect(threadId).not.toBe("");
 	});
 });
