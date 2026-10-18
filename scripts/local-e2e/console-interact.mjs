@@ -24,7 +24,12 @@ const ctx = await browser.newContext({ viewport: { width: 1440, height: 900 }, c
 await ctx.addInitScript(() => { try { localStorage.setItem('loams-theme', 'dark'); } catch {} });
 const page = await ctx.newPage();
 const log = [];
-page.on('response', (r) => r.status() >= 400 && log.push(`${r.status()} ${r.url().replace(BASE, '/').slice(0, 160)}`));
+page.on('response', async (r) => {
+  if (r.status() < 400) return;
+  // Keep the error's message (Connect answers JSON errors) so a failed step says why.
+  const body = await r.text().catch(() => '');
+  log.push(`${r.status()} ${r.url().replace(BASE, '/').slice(0, 160)} ${body.slice(0, 200)}`);
+});
 page.on('pageerror', (e) => log.push(`pageerror ${String(e).slice(0, 200)}`));
 const results = [];
 async function step(name, fn) {
@@ -123,9 +128,10 @@ await step('studio-home', async () => {
 });
 
 await step('studio-thread', async () => {
-  await page.getByRole('link', { name: 'New thread', exact: true }).or(page.getByRole('button', { name: 'New thread', exact: true })).first().click();
+  // Studio's home: "Pick a project to start a thread in it".
+  await page.getByRole('button', { name: 'New thread in e2e-sample' }).or(page.getByRole('link', { name: 'New thread in e2e-sample' })).first().click();
   await page.waitForTimeout(2500);
-  const box = page.getByRole('textbox', { name: /prompt|message|thread/i }).or(page.locator('textarea, [contenteditable=true]')).first();
+  const box = page.getByRole('region', { name: 'New thread' }).locator('textarea, [contenteditable=true], [role=textbox]').first();
   await box.click();
   await box.fill('local-e2e: add a line to notes.txt');
   const send = page.getByRole('button', { name: /^(Send|Start)/ });

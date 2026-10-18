@@ -62,7 +62,7 @@ for (let i = 0; i < 60; i++) {
   if (!(await edit.isVisible().catch(() => false))) break;
   await edit.click();
   const item = page.locator('[role="menuitemcheckbox"][aria-checked="false"]').first();
-  if (!(await item.isVisible({ timeout: 1500 }).catch(() => false))) {
+  if (!(await item.waitFor({ state: 'visible', timeout: 1500 }).then(() => true, () => false))) {
     await page.keyboard.press('Escape');
     break;
   }
@@ -75,6 +75,14 @@ for (let i = 0; i < 60; i++) {
 let routes = await page.$$eval('a[href]', (as) =>
   [...new Set(as.map((a) => a.getAttribute('href')).filter((h) => h && (h.startsWith('#/') || h.startsWith('/')) && !h.startsWith('//')))],
 );
+// Settings pages are listed in the sidebar once Settings is open.
+const settings = page.getByRole('link', { name: 'Settings', exact: true }).first();
+if (await settings.isVisible().catch(() => false)) {
+  await settings.click();
+  await page.waitForTimeout(1500);
+  routes.push(...(await page.$$eval('a[href]', (as) =>
+    as.map((a) => a.getAttribute('href')).filter((h) => h && (h.startsWith('#/') || h.startsWith('/')) && !h.startsWith('//')))));
+}
 routes = [...new Set(['#/', ...routes, ...EXTRA])];
 if (args.only) routes = args.only.split(',');
 console.log(`routes (${routes.length}):`, routes.join(' '));
