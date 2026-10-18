@@ -1,6 +1,6 @@
 # 62 — Postgres Major Versions: 16 and 17 Now, 18 Next, 19 After Its First Minor
 
-Status: **Proposed** · 2026-10-18. Source: the owner's request of 2026-10-18, **"I want Postgres 16, 17 latest and plan for 18 and 19 support."** Decisions **D1107–D1118** and questions **Q949–Q959** are in the [decision log](13-decision-log.md), all marked Proposed. Plan stub: [NF2](../plans/2026-10-18-nf2-postgres-18-19.md). **This document writes no code.**
+Status: **Approved** · 2026-10-18 (owner approved all decisions and questions, 2026-10-18). Source: the owner's request of 2026-10-18, **"I want Postgres 16, 17 latest and plan for 18 and 19 support."** Decisions **D1107–D1118** and questions **Q949–Q959** are in the [decision log](13-decision-log.md), all approved by the owner on 2026-10-18. Plan stub: [NF2](../plans/2026-10-18-nf2-postgres-18-19.md). **This document writes no code.**
 
 This is an addendum to [§51](51-loams-postgres-fork.md) §8 (Postgres 18 and 19) and §9 (upgrade paths). It replaces their per-major detail with what was checked on 2026-10-18 against the fork, upstream Postgres and the Loams tree. It also moves NF1's milestones NF1e and NF1f (Tasks 24–35) and NF1 Tasks 36–38 into a new plan, NF2 (D1107). It touches these earlier documents:
 - [§46](46-loams-postgres-production.md) §12 and D716: major upgrades of Loams Postgres projects;
