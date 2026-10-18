@@ -201,6 +201,28 @@ describe('pages (D1080)', () => {
     ).toBe('#/data');
   });
 
+  it('the home route stays in Pages where it is the org home', () => {
+    const slots = new SlotRegistry();
+    const router = new HashRouter(slots, memory('/'));
+    slots.register(
+      {
+        name: 'shell.nav.section',
+        plugin: 'org',
+        order: 1,
+        meta: { id: 'org-home', label: 'All projects', href: '/', group: 'Organisation' },
+      },
+      () => null,
+    );
+    router.page({ id: 'org-home', path: '/', title: 'All projects' }, () => <p>home</p>);
+    render(
+      <SlotProvider registry={slots}>
+        <Layout router={router} session={session} theme={theme} />
+      </SlotProvider>,
+    );
+    expect(screen.queryByRole('navigation', { name: 'Settings' })).toBeNull();
+    expect(screen.getByRole('heading', { name: 'Pages' })).toBeTruthy();
+  });
+
   it('every page keeps its route and is in the palette', async () => {
     const { router } = setup('/');
     for (const [, label, href] of PAGES) {

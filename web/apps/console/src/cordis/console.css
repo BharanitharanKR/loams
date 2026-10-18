@@ -447,10 +447,10 @@ code {
   color: var(--op-muted);
   background: var(--op-raised);
 }
+/* Narrow: the pills stay (the only place to switch project or environment), just tighter. */
 @media (max-width: 720px) {
-  .lc-project-pill,
-  .lc-env-pill {
-    display: none;
+  .lc-pill-trigger {
+    max-width: 120px;
   }
 }
 /* Preferences (T2-5): the settings sections, one under the other. */

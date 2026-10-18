@@ -136,7 +136,13 @@ export function FactoryGroup({ factory }: { factory: StudioFactory }) {
           {apps.isSuccess && apps.data.length > 0 && !open && (
             <span className="ml-auto flex items-center gap-1.5 font-normal">
               {failing && (
-                <span aria-hidden="true" className="inline-block size-1.5 rounded-pill bg-danger" />
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="inline-block size-1.5 rounded-pill bg-danger"
+                  />
+                  <span className="sr-only">Some apps need attention.</span>
+                </>
               )}
               {connected} of {apps.data.length} connected
             </span>

@@ -136,7 +136,8 @@ function Navigation({ router }: { router: HashRouter }) {
   const { all, project, location } = usePages(router);
   const here = pageAt(all, location.path);
   const back = useRef('/');
-  const settings = here !== undefined && isSettingsPage(here);
+  // The home route stays in Pages even where it is the org's home (`org-home` at `/`).
+  const settings = here !== undefined && here.href !== '/' && isSettingsPage(here);
   if (!settings) back.current = location.path;
   return settings ? (
     <SettingsNav pages={all.filter(isSettingsPage)} current={here.id} back={back.current} />

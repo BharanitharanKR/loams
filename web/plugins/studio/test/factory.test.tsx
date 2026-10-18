@@ -78,6 +78,8 @@ describe('the Factory group', () => {
     const toggle = within(group).getByRole('button', { name: /^Factory/ });
     expect(toggle.getAttribute('aria-expanded')).toBe('false');
     expect(await within(group).findByText('3 of 8 connected')).toBeTruthy();
+    // A failing app is announced, not only drawn (the dot is decorative).
+    expect(within(group).getByText('Some apps need attention.')).toBeTruthy();
     expect(within(group).queryByRole('list')).toBeNull();
     fireEvent.click(toggle);
     expect(localStorage.getItem('loams.studio.factory.open')).toBe('1');
