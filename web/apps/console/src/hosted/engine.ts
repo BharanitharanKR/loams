@@ -207,3 +207,61 @@ export async function fetchIdentity(
     clearTimeout(timer);
   }
 }
+
+/** What the header's engine dot shows: checking (amber), reachable (green) or down (red). */
+export type EngineStatus =
+  | { state: 'checking' }
+  | { state: 'ok'; ms: number }
+  | { state: 'down'; message: string; retryInMs: number };
+
+/** How often `watchHealth` asks: steady while the engine answers, backing off while it does not. */
+export const HEALTH_POLL = { okMs: 30_000, firstRetryMs: 2_000, maxRetryMs: 60_000 } as const;
+
+/**
+ * Polls `<engine>/health` until stopped and reports each change (UX-1). While the engine
+ * answers it asks every 30 s; after a failure it retries after 2 s, doubling to at most
+ * 60 s. Coming back online or to the tab asks again at once. Returns the stop function.
+ */
+export function watchHealth(
+  origin: string,
+  onStatus: (s: EngineStatus) => void,
+  check: (origin: string) => Promise<Health> = (o) => checkHealth(o),
+  target: Pick<EventTarget, 'addEventListener' | 'removeEventListener'> | undefined = globalThis
+    .window,
+): () => void {
+  let stopped = false;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let retry: number = HEALTH_POLL.firstRetryMs;
+  let inFlight = false;
+  const run = async () => {
+    if (stopped || inFlight) return;
+    inFlight = true;
+    clearTimeout(timer);
+    const h = await check(origin);
+    inFlight = false;
+    if (stopped) return;
+    if (h.ok) {
+      retry = HEALTH_POLL.firstRetryMs;
+      onStatus({ state: 'ok', ms: h.ms });
+      timer = setTimeout(run, HEALTH_POLL.okMs);
+    } else {
+      onStatus({ state: 'down', message: h.message, retryInMs: retry });
+      timer = setTimeout(run, retry);
+      retry = Math.min(retry * 2, HEALTH_POLL.maxRetryMs);
+    }
+  };
+  const now = () => {
+    if (globalThis.document?.visibilityState === 'hidden') return;
+    void run();
+  };
+  onStatus({ state: 'checking' });
+  void run();
+  target?.addEventListener('online', now);
+  target?.addEventListener('focus', now);
+  return () => {
+    stopped = true;
+    clearTimeout(timer);
+    target?.removeEventListener('online', now);
+    target?.removeEventListener('focus', now);
+  };
+}

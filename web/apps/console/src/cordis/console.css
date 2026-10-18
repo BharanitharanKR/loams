@@ -1152,6 +1152,13 @@ button.lc-hosted-engine {
   border-radius: 50%;
   background: var(--op-grow);
 }
+/* UX-1: the dot follows /health: amber while checking, red while unreachable. */
+.lc-hosted-dot-checking {
+  background: var(--op-warn);
+}
+.lc-hosted-dot-down {
+  background: var(--op-danger);
+}
 .lc-hosted-demo {
   display: inline-flex;
   align-items: center;
