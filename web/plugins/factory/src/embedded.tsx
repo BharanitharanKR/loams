@@ -116,7 +116,7 @@ export function EmbeddedApp({
     );
   }
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div className="box-border flex h-full min-h-0 flex-col gap-3 p-4">
       <div className="flex flex-wrap items-center gap-2">
         <h1 className="m-0 mr-auto flex items-center gap-3 text-lg font-medium">
           {label} {info && <HealthPill health={info.health} />}
