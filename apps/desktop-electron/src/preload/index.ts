@@ -7,6 +7,7 @@ import {
 	type StackState,
 } from "../shared/contracts";
 import { themeFromArgv, versionFromArgv } from "../shared/version";
+import { type ChromeDocument, mountWindowChrome } from "./window-chrome";
 
 const invoke = <T>(ch: string, ...args: unknown[]): Promise<T> =>
 	ipcRenderer.invoke(ch, ...args) as Promise<T>;
@@ -67,6 +68,7 @@ const api: LoamsDesktopApi = {
 		pickFolder: (title) => invoke(CH.shellPickFolder, title),
 		setBadge: (count) => invoke(CH.shellBadge, count),
 		onCommand: (cb) => subscribe(CH.shellCommand, cb),
+		onFullscreen: (cb) => subscribe(CH.shellFullscreen, cb),
 	},
 	// SD1 Task 28: Studio's editor hand-off and notification choices; main builds every
 	// editor URL or argv itself.
@@ -158,4 +160,12 @@ const api: LoamsDesktopApi = {
 	},
 };
 
+// html[data-platform] and data-fullscreen for the console's window chrome rules (D1083).
+// The preload compiles without the DOM library; in the renderer these globals exist.
+const page = globalThis as unknown as {
+	document: ChromeDocument;
+	addEventListener(type: "unload", fn: () => void, o: { once: boolean }): void;
+};
+const unmountChrome = mountWindowChrome(page.document);
+page.addEventListener("unload", unmountChrome, { once: true });
 contextBridge.exposeInMainWorld("loamsDesktop", api);

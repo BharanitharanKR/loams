@@ -187,6 +187,8 @@ export interface LoamsDesktopApi {
 		setBadge(count: number): Promise<void>; // pending approvals in tray
 		/** The application menu's renderer commands (SD1 Task 28): mode switches and a new thread. */
 		onCommand(cb: (command: ShellCommand) => void): () => void;
+		/** The window entered or left fullscreen (D1083); the preload also marks `<html>`. */
+		onFullscreen(cb: (fullscreen: boolean) => void): () => void;
 	};
 	update: {
 		state(): Promise<{
@@ -319,6 +321,7 @@ export const CH = {
 	shellPendingNav: "shell:pending-nav",
 	shellBadge: "shell:badge",
 	shellCommand: "shell:command",
+	shellFullscreen: "shell:fullscreen",
 	updateState: "update:state",
 	updateCheck: "update:check",
 	updateAutoGet: "update:auto-get",

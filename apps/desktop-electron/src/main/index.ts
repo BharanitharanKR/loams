@@ -78,6 +78,8 @@ import {
 import { registerThemeIpc } from "./shell/theme-ipc.electron";
 import { createTray, type TrayHandle } from "./shell/tray.electron";
 import { closeAction, TRAY_ROUTES } from "./shell/tray-model";
+import { ChromeSync, windowChromeOptions } from "./shell/window-chrome";
+import { installWindowChrome } from "./shell/window-chrome.electron";
 import {
 	loadWindowState,
 	MIN_HEIGHT,
@@ -110,6 +112,7 @@ let factoryEmbed: FactoryEmbed | undefined;
 let studioPreview: StudioPreviewView | undefined;
 let chat: ChatService | undefined;
 let tray: TrayHandle | undefined;
+let chrome: ChromeSync | undefined;
 let studioWatch: StudioWatch | undefined;
 let agentdLauncher: AgentdLauncher | undefined;
 let agentdService: AgentdService | undefined;
@@ -156,6 +159,10 @@ function createWindow(): BrowserWindow {
 		minHeight: MIN_HEIGHT,
 		show: false,
 		title: "Loams Desktop",
+		...windowChromeOptions(
+			process.platform,
+			chrome?.dark ?? nativeTheme.shouldUseDarkColors,
+		),
 		webPreferences: {
 			preload: join(__dirname, "../preload/index.cjs"),
 			contextIsolation: true,
@@ -172,6 +179,7 @@ function createWindow(): BrowserWindow {
 	secureWindow(win);
 	// Cut, copy, paste, links and Look Up (D1084); pages with their own menu keep it.
 	installContextMenu(win);
+	if (chrome) installWindowChrome(win, chrome);
 	// The console sets document.title per page; the native title stays the product name.
 	win.on("page-title-updated", (e) => e.preventDefault());
 	setMainWindow(win);
@@ -219,9 +227,18 @@ const singleInstance = initSingleInstance({
 	onPrimary: () => {
 		void app.whenReady().then(async () => {
 			app.setAppUserModelId("dev.loams.desktop");
-			// The theme choice (D1074): OS dialogs and menus follow it; Task 13 syncs the chrome.
+			// The theme choice (D1074): OS dialogs and menus follow it, and so does the window
+			// chrome (D1083): on each theme:set, and on each OS flip while the choice is System.
 			nativeTheme.themeSource = readThemeChoice(settingsFile());
-			registerThemeIpc({ settingsFile, onTheme: () => {} });
+			chrome = new ChromeSync({
+				platform: process.platform,
+				window: getMainWindow,
+				choice: () => readThemeChoice(settingsFile()),
+				osDark: () => nativeTheme.shouldUseDarkColors,
+			});
+			const sync = chrome;
+			nativeTheme.on("updated", () => sync.onOsThemeChanged());
+			registerThemeIpc({ settingsFile, onTheme: (dark) => sync.onTheme(dark) });
 			registry = new ServerRegistry(
 				join(app.getPath("userData"), "servers.json"),
 				{ devDemo: !app.isPackaged },

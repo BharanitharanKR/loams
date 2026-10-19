@@ -487,6 +487,8 @@ export function createFakeDesktop(): LoamsDesktopApi {
       setBadge: async () => undefined,
       // No application menu in a browser preview.
       onCommand: () => () => undefined,
+      // A browser tab has no native window chrome to go fullscreen.
+      onFullscreen: () => () => undefined,
     },
     // Studio's editor hand-off (SD1 Task 28): a browser preview cannot start an editor.
     studio: {
