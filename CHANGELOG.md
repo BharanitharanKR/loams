@@ -65,6 +65,12 @@ All notable changes to this project are documented here. The format follows [Kee
   (as `Stream`s); consistency tokens that parse and merge, a session store that gives reads
   read-your-writes, a default namespace, `LoamsClient.fromEnv`, client deadlines
   (`client_deadline_exceeded`), and the notes example app.
+- **The Objective-C SDK builds apps** (SDKP L13): `namespaces`, `collections`, `documents`, `search`,
+  `vector` and `graph` on `LoamsClient` over Connect JSON, `LoamsClient.call` for any facade call, the
+  `LoamsSchema`, `LoamsFilter` and `LoamsSearch` builders, `collection:namespace:` handles,
+  `writeBatch`, `scrollAll` and `queryAll`; consistency tokens that parse and merge, a session store that
+  gives reads read-your-writes, a default namespace, `LoamsClientConfiguration.fromEnvironment`, client
+  deadlines (`client_deadline_exceeded`), and `LoamsSubscription` with a cancel token.
 - **`loams.sql.v1` on the main port** (SDKP P0b, API2 Task 1): `SqlService/Query` runs one read-only
   statement over a namespace's collections with `$1…$n` parameters (each cast to its placeholder's
   inferred type) and answers typed columns and rows; `QueryArrow` answers the result as one Arrow IPC

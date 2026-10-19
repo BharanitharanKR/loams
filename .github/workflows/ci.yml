@@ -2002,6 +2002,11 @@ jobs:
       - name: the Objective-C SDK's tests
         working-directory: sdks/objc
         run: swift test --disable-swift-testing
+      # SDKP: the app suite. The tests above replayed the recorded app scenario
+      # and wrote sdks/fixtures/results/objc.json; this fails the job unless every
+      # app fixture was replayed and every SDKP test is named.
+      - name: the Objective-C SDK passes the app suite
+        run: node sdks/conformance/check-languages.mjs --check objc --suite app
       # API2 Task 19: a nightly failure opens or updates one issue per language.
       - name: open or update the nightly-failure issue
         if: ${{ failure() && inputs.nightly == true }}
