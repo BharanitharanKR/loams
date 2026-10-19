@@ -1,0 +1,96 @@
+name: Release checksums
+
+# SHA256SUMS over every file attached to a published product release, and its
+# detached GPG signature SHA256SUMS.asc, made with the project key
+# (docs/release/signing.md) and verified against docs/release/loams-release-key.asc
+# before anything is uploaded.
+#
+# release-github.yml writes the first SHA256SUMS over its own assets (the compose
+# bundle, the SBOMs, the upgrade manifest). The CLI packages, the C++ tarball and
+# the desktop files are attached later by other workflows, and nothing signed the
+# list, so v0.1.0 shipped without SHA256SUMS.asc. This workflow rewrites the list
+# over everything attached at the time it runs, after checking that every entry of
+# the existing list still matches, and signs it. The desktop files keep their own
+# DESKTOP-SHA256SUMS(.asc) as well.
+#
+# Runs at the end of release-package.yml, and by hand for a release that is
+# already published:
+#   gh workflow run release-checksums.yml --ref main -f tag=vX.Y.Z
+# Re-running is safe: the result depends only on the attached files.
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Published release tag, vX.Y.Z(-pre).'
+        required: true
+
+permissions: {}
+
+concurrency:
+  group: release-checksums-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  sums:
+    name: SHA256SUMS and SHA256SUMS.asc
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: |
+            scripts/release/sign-checksums.sh
+            docs/release/loams-release-key.asc
+          sparse-checkout-cone-mode: false
+      - name: the tag is a published release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "$TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "::error::$TAG is not a vX.Y.Z(-pre) tag"; exit 1; }
+          draft=$(gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json isDraft -q .isDraft) \
+            || { echo "::error::$TAG has no release"; exit 1; }
+          [ "$draft" = false ] || { echo "::error::$TAG is a draft; publish it first"; exit 1; }
+      - name: download the attached files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/assets"; mkdir -p "$d"
+          gh release download "$TAG" -R "$GITHUB_REPOSITORY" --dir "$d"
+          rm -f "$d/SHA256SUMS.asc"
+          ls -l "$d"
+      - name: write, sign and verify SHA256SUMS
+        env:
+          LOAMS_GPG_PRIVATE_KEY: ${{ secrets.LOAMS_GPG_PRIVATE_KEY }}
+          LOAMS_GPG_KEY_ID: ${{ vars.LOAMS_GPG_KEY_ID }}
+          LOAMS_GPG_PASSPHRASE: ${{ secrets.LOAMS_GPG_PASSPHRASE }}
+        run: bash scripts/release/sign-checksums.sh "$RUNNER_TEMP/assets" docs/release/loams-release-key.asc
+      - name: attach
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/assets"
+          # The list first, then its signature, so the pair is never left mismatched for long.
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber "$d/SHA256SUMS"
+          gh release upload "$TAG" -R "$GITHUB_REPOSITORY" --clobber "$d/SHA256SUMS.asc"
+          {
+            echo "SHA256SUMS ($(wc -l < "$d/SHA256SUMS") files) and SHA256SUMS.asc attached to $TAG."
+            echo
+            echo '```'
+            cat "$d/SHA256SUMS"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
