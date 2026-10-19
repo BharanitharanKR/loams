@@ -290,8 +290,37 @@ public sealed class Search
         return this;
     }
 
-    /// <summary>The request. Each call returns a fresh copy.</summary>
-    public SearchRequest Build() => _request.Clone();
+    /// <summary>The candidate count a retriever gets when the caller names none.</summary>
+    public const uint DefaultK = 10;
+
+    /// <summary>
+    /// The request. Each call returns a fresh copy. A retriever whose <c>k</c> was
+    /// left at 0 gets <c>max(10, offset + limit)</c>: the engine requires
+    /// 1 ≤ k, and a retriever that fetches fewer candidates than the page shows
+    /// would starve it.
+    /// </summary>
+    public SearchRequest Build()
+    {
+        var request = _request.Clone();
+        var window = request.Offset + (request.HasLimit ? request.Limit : DefaultK);
+        var k = Math.Max(DefaultK, window);
+        foreach (var retriever in request.Retrievers)
+        {
+            switch (retriever.RetrieverCase)
+            {
+                case Retriever.RetrieverOneofCase.Text when retriever.Text.K == 0:
+                    retriever.Text.K = k;
+                    break;
+                case Retriever.RetrieverOneofCase.Vector when retriever.Vector.K == 0:
+                    retriever.Vector.K = k;
+                    break;
+                case Retriever.RetrieverOneofCase.Sparse when retriever.Sparse.K == 0:
+                    retriever.Sparse.K = k;
+                    break;
+            }
+        }
+        return request;
+    }
 
     public static implicit operator SearchRequest(Search search) => search.Build();
 }

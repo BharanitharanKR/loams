@@ -417,7 +417,7 @@ public sealed class CallInvoker
         CallOptions settings,
         CancellationToken cancellationToken)
     {
-        var session = SessionFor(settings);
+        var session = SessionFor(binding, settings);
         var (prepared, bodyCarriesToken) = Prepare(binding, request, settings, session);
 
         // R3: keyed **once**, before the first attempt, and the same message goes to
@@ -656,8 +656,19 @@ public sealed class CallInvoker
             : new RetryPlan(retrySafe, maxRetries, _source.CanRefresh, _source.RefreshAsync);
     }
 
-    private ConsistencySession? SessionFor(CallOptions settings) =>
-        settings.UseSessionConsistency == false ? null : _session;
+    // R4's session applies to the packages whose tokens share the collection log's
+    // `v1:` family and whose reads accept a merged token. A graph token names one
+    // graph's own stream (`v1:s<graph>/p0@<offset>`), so a graph read refuses a
+    // merged one: graph tokens are threaded by the caller (SDKP ruling, C# L5).
+    internal static readonly FrozenSet<string> SessionPackages = new[]
+    {
+        "loams.collection.v1", "loams.sql.v1",
+    }.ToFrozenSet(StringComparer.Ordinal);
+
+    private ConsistencySession? SessionFor(CallBinding binding, CallOptions settings) =>
+        settings.UseSessionConsistency == false
+            ? null
+            : settings.UseSessionConsistency == true || SessionPackages.Contains(binding.Package) ? _session : null;
 
     /// <summary>The response fields a consistency token can arrive in (R4).</summary>
     internal static readonly string[] TokenFields = ["consistency_token", "token", "read_token"];

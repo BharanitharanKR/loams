@@ -4,6 +4,14 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+- **The C# SDK builds apps** (SDKP L5): `Namespaces`, `Collections`, `Documents`, `Search`, `Vector` and
+  `Graph` modules over the generated `loams.collection.v1` and `loams.graph.v1` stubs, the `Schema`,
+  `Filter` and `Search` builders, `client.Collection(name)` handles, `WriteBatchAsync`, `ScrollAllAsync`
+  and `QueryAllAsync`; consistency tokens that parse and merge, a session store that gives reads
+  read-your-writes, a default namespace, client deadlines (`client_deadline_exceeded`), and the
+  `examples/Notes` app.
+
 ## [0.1.0] - 2026-10-19
 
 ### Upgrading

@@ -48,7 +48,7 @@ public sealed class AppBuilderTests
                 .Filter(Filter.Eq("tags", "policy")).Highlight("body").Select(include: ["title"])
                 .Sort(Sort.Score(), Sort.Pk()).Limit(2).Build(),
             """
-            {"collection":"notes","retrievers":[{"text":{"query":{"match":{"field":"body","text":"refund"}}}}],
+            {"collection":"notes","retrievers":[{"text":{"query":{"match":{"field":"body","text":"refund"}},"k":10}}],
              "filter":{"term":{"field":"tags","value":"policy"}},
              "sort":[{"score":{"order":"SORT_ORDER_DESC"}},{"pk":{"order":"SORT_ORDER_ASC"}}],
              "limit":2,"select":{"source":{"include":["title"],"exclude":[]}},
@@ -66,13 +66,13 @@ public sealed class AppBuilderTests
         ["search_after_page"] = (Search.On("notes").Text("refund", "body").Sort(Sort.Score(), Sort.Pk())
                 .After([Value.ForNumber(1.5), Value.ForNumber(3)]).Limit(2).Build(),
             """
-            {"collection":"notes","retrievers":[{"text":{"query":{"match":{"field":"body","text":"refund"}}}}],
+            {"collection":"notes","retrievers":[{"text":{"query":{"match":{"field":"body","text":"refund"}},"k":10}}],
              "sort":[{"score":{"order":"SORT_ORDER_DESC"}},{"pk":{"order":"SORT_ORDER_ASC"}}],
              "searchAfter":[1.5,3],"limit":2}
             """),
         ["search_expand"] = (Search.On("notes").Text("refund", "body").Expand("notes_graph", "id", hops: 1).Build(),
             """
-            {"collection":"notes","retrievers":[{"text":{"query":{"match":{"field":"body","text":"refund"}}}}],
+            {"collection":"notes","retrievers":[{"text":{"query":{"match":{"field":"body","text":"refund"}},"k":10}}],
              "expandSpec":{"graph":"notes_graph","fromField":"id","hops":1}}
             """),
     };
@@ -80,8 +80,8 @@ public sealed class AppBuilderTests
     private static Search Hybrid() => Search.On("notes").Text("refund", "body").Vector("embedding", Embedding).Limit(3);
 
     private static string HybridJson(string fusion) =>
-        """{"collection":"notes","retrievers":[{"text":{"query":{"match":{"field":"body","text":"refund"}}}},"""
-        + """{"vector":{"field":"embedding","query":[0.1,0.2,0.3,0.4]}}],"fusion":""" + fusion + ""","limit":3}""";
+        """{"collection":"notes","retrievers":[{"text":{"query":{"match":{"field":"body","text":"refund"}},"k":10}},"""
+        + """{"vector":{"field":"embedding","query":[0.1,0.2,0.3,0.4],"k":10}}],"fusion":""" + fusion + ""","limit":3}""";
 
     private static IMessage Parse(IMessage like, string json) =>
         JsonParser.Default.Parse(json, like.Descriptor);
