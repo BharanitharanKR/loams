@@ -143,6 +143,7 @@ const std::vector<RegistryRow>& Registry() {
       {Reason::kLiveWorkerCrashed, Code::kInternal, ""},
       {Reason::kLiveDeployConflict, Code::kFailedPrecondition, ""},
       {Reason::kLiveSchemaViolation, Code::kInvalidArgument, ""},
+      {Reason::kFilterConflict, Code::kInvalidArgument, ""},
       {Reason::kLiveIndexNotReady, Code::kFailedPrecondition, ""},
       {Reason::kLiveAppDisabled, Code::kFailedPrecondition, ""},
       {Reason::kLiveAppExists, Code::kFailedPrecondition, ""},
