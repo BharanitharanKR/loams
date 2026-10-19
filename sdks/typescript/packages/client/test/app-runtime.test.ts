@@ -60,9 +60,9 @@ describe('typescript_default_namespace', () => {
   it('refuses a namespaced call with neither, before any network call', async () => {
     const { sent, transport } = messageTransport(() => ({}));
     const invoker = documentsInvoker(transport);
-    await expect(invoker.unary(GET, { collection: 'notes', ids: [] })).rejects.toBeInstanceOf(
-      InvalidArgumentError,
-    );
+    const refused = await invoker.unary(GET, { collection: 'notes', ids: [] }).catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(InvalidArgumentError);
+    expect((refused as InvalidArgumentError).reason).toBe('namespace_required');
     expect(sent).toHaveLength(0);
   });
 
@@ -368,7 +368,9 @@ describe('typescript_search_query_all_requires_tiebreak', () => {
     let calls = 0;
     const search = searchCalls({ query: (() => { calls += 1; return Promise.resolve({ hits: [] }); }) as UnaryCall });
     const noSort = Search.on('notes').text('refund').limit(2);
-    await expect(search.queryAll(noSort).next()).rejects.toBeInstanceOf(InvalidArgumentError);
+    const refused = await search.queryAll(noSort).next().catch((e: unknown) => e);
+    expect(refused).toBeInstanceOf(InvalidArgumentError);
+    expect((refused as InvalidArgumentError).reason).toBe('search_after_needs_tiebreak');
     const scoreOnly = noSort.sort(Sort.score());
     await expect(search.queryAll(scoreOnly).next()).rejects.toBeInstanceOf(InvalidArgumentError);
     expect(calls).toBe(0);

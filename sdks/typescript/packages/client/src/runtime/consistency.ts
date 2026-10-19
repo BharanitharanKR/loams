@@ -110,6 +110,7 @@ export class ConsistencyToken {
     const invalid = () =>
       new InvalidArgumentError(`invalid consistency token ${JSON.stringify(text)}`, {
         code: Code.InvalidArgument,
+        reason: 'invalid_consistency_token',
         metadata: { field: 'consistency_token' },
       });
     if (!text.startsWith(TOKEN_PREFIX)) {

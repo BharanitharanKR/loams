@@ -124,12 +124,14 @@ await notes.writeBatch(rows);               // 10 000 rows / 4 MiB a chunk, one 
 - **Subscriptions (R14).** `streams.subscribe({ stream, partition, fromOffset })`
   is an async iterable over `Fetch` that exposes `offset` for resuming.
 
-The module objects (`loams.namespaces`, `loams.collections`, `loams.documents`,
-`loams.search`, `loams.vector`, `loams.graph`, `loams.sql`, `loams.streams`) are
-generated from the protos' facade annotations, and appear as those
-annotations land (SDKP P0a–P0c); the builders, the handle and the runtime above
-work today. Durable workflows use the Resonate SDK pointed at
-`LOAMS_ENDPOINT/durable/` (SDKP-1).
+The modules `loams.namespaces`, `loams.collections`, `loams.documents`,
+`loams.search`, `loams.vector` and `loams.graph` are generated from the protos'
+facade annotations, with the hand-written conveniences above added to them;
+`loams.sql` and `loams.streams` arrive the same way with `loams.sql.v1` and
+`loams.stream.v1` (SDKP P0b, P0c). `examples/notes/main.ts` is the whole app
+scenario as a program, type-checked in CI. The session's token is used only for
+collection and SQL reads: a graph's token names one graph (SDKP-17). Durable
+workflows use the Resonate SDK pointed at `LOAMS_ENDPOINT/durable/` (SDKP-1).
 
 ## What is generated and what is hand-written
 

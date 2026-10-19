@@ -22,6 +22,16 @@ This directory contains Loams language implementations, code generation template
 | **Objective-C** | [`objc/`](objc/) | Implementation and runtime fixtures |
 | **PHP** | [`php/`](php/) | Implementation and runtime fixtures |
 
+## App modules (SDKP)
+
+What each SDK's public client offers for building an app (`docs/plans/2026-10-19-sdk-parity.md`).
+A row is added by that language's SDKP task; the app suite is
+`node sdks/conformance/check-languages.mjs --check <lang> --suite app`.
+
+| Language | namespaces · collections · documents · search · vector · graph | sql · streams | Builders, handle, R11–R14 | App suite |
+| --- | --- | --- | --- | --- |
+| TypeScript | yes | with P0b/P0c | yes | `app_collections`, `app_search`, `app_graph` |
+
 ## Installing
 
 The SDKs are published as `0.1.0` from the Loams release tag by

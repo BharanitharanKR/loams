@@ -279,7 +279,7 @@ export function searchCalls(search: { query: UnaryCall }) {
       if (!builder.hasTiebreak) {
         throw new InvalidArgumentError(
           'search.queryAll needs a sort that ends in the primary key, such as .sort(Sort.score(), Sort.pk())',
-          { code: Code.InvalidArgument, metadata: { field: 'sort' } },
+          { code: Code.InvalidArgument, reason: 'search_after_needs_tiebreak', metadata: { field: 'sort' } },
         );
       }
       const limit = (builder.toJson().limit as number | undefined) ?? 10;

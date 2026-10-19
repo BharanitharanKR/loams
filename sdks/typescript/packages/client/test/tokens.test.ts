@@ -15,6 +15,7 @@ import { CallInvoker } from '../src/runtime/call.js';
 import { ConsistencySession, ConsistencyToken } from '../src/runtime/consistency.js';
 import { InvalidArgumentError } from '../src/runtime/errors.js';
 import { GET, WRITE, messageTransport } from './helpers/app.js';
+import { MODULES } from '../src/gen/facade.js';
 import { FIXTURES } from './helpers/server.js';
 
 interface TokenCorpus {
@@ -43,6 +44,11 @@ describe('typescript_consistency_token_merge', () => {
 
   it.each(corpus.malformed.map((text) => ({ text })))('refuses $text', ({ text }) => {
     expect(() => ConsistencyToken.parse(text)).toThrow(InvalidArgumentError);
+    try {
+      ConsistencyToken.parse(text);
+    } catch (error) {
+      expect((error as InvalidArgumentError).reason).toBe('invalid_consistency_token');
+    }
     expect(ConsistencyToken.isValid(text)).toBe(false);
   });
 
@@ -127,6 +133,20 @@ describe('typescript_session_read_your_writes', () => {
     expect(session.current('loams.collection.v1')).toBe('v1:s4/p0@12');
     expect(session.current('loams.graph.v1')).toBeUndefined();
     expect(session.current()).toBeUndefined();
+  });
+
+  it('never sends the session token on a graph read (SDKP-17)', async () => {
+    // A graph's token names one graph, and a Graph read refuses any other.
+    const { GraphService } = await import('@loams/proto/graph');
+    const execute = MODULES.find((m) => m.name === 'graph')!.calls.find((c) => c.method === 'Execute')!;
+    const session = new ConsistencySession();
+    session.record('v1:s4/p0@12', 'loams.graph.v1');
+    session.record('v1:s4/p0@12', 'loams.collection.v1');
+    const { sent, transport } = messageTransport(() => ({}));
+    const invoker = new CallInvoker(transport as never, undefined, 0, session, { namespace: 'app' });
+    invoker.register(execute.service, GraphService);
+    await invoker.unary(execute, { graph: 'g', statement: 'MATCH (n) RETURN n', readOnly: true });
+    expect((sent[0]?.input as { consistency?: unknown }).consistency).toBeUndefined();
   });
 
   it('opts a call out with session: false', async () => {

@@ -246,6 +246,13 @@ export const APP_PACKAGES: ReadonlySet<string> = new Set([
   'loams.stream.v1',
 ]);
 
+/**
+ * The packages whose reads take the session's token as `at_least` (R4,
+ * SDKP-17): collections and SQL. A graph's token names one graph's stream and
+ * a Graph read refuses any other, so graph reads never take the session's.
+ */
+export const SESSION_PACKAGES: ReadonlySet<string> = new Set(['loams.collection.v1', 'loams.sql.v1']);
+
 /** What the invoker reads off a request schema once, per RPC. */
 interface RequestShape {
   /** The request declares `idempotency_key` (D610). */
@@ -328,7 +335,8 @@ export class CallInvoker {
       // `optional` field still gets a key, and `MutateRequest` (which has one)
       // is never confused with `DeployRequest` (which does not).
       const namespace = method.input.field.namespace;
-      const app = APP_PACKAGES.has(descriptor.file.proto.package ?? '');
+      const pkg = descriptor.file.proto.package ?? '';
+      const app = APP_PACKAGES.has(pkg);
       this.shapes.set(`${service}/${method.name}`, {
         keyed: method.input.field[IDEMPOTENCY_KEY] !== undefined,
         namespaced:
@@ -336,7 +344,7 @@ export class CallInvoker {
           namespace !== undefined &&
           namespace.fieldKind === 'scalar' &&
           namespace.oneof === undefined,
-        atLeast: app ? atLeastOf(method.input) : undefined,
+        atLeast: SESSION_PACKAGES.has(pkg) ? atLeastOf(method.input) : undefined,
       });
     }
     this.clients.set(service, createClient(descriptor, this.transport) as unknown as Record<
@@ -380,7 +388,12 @@ export class CallInvoker {
         if (fallback === undefined || fallback === '') {
           throw new InvalidArgumentError(
             `${binding.rpc} needs a namespace: pass one, or give the client a default namespace`,
-            { code: Code.InvalidArgument, rpc: binding.rpc, metadata: { field: 'namespace' } },
+            {
+              code: Code.InvalidArgument,
+              reason: 'namespace_required',
+              rpc: binding.rpc,
+              metadata: { field: 'namespace' },
+            },
           );
         }
         message = { ...message, namespace: fallback };
