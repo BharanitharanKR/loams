@@ -65,6 +65,52 @@ do {
 A runnable version is in `Examples/Quickstart`. It reads `LOAMS_ENDPOINT` and
 `LOAMS_API_KEY` and prints no secrets.
 
+## Build an app
+
+Namespaces, collections, documents, search, vector and graph, with no REST calls
+(SDKP). [`Examples/Notes`](Examples/Notes/Notes.swift) is the whole notes app;
+`LOAMS_ENDPOINT=http://127.0.0.1:8080 swift run Notes` runs it.
+
+```swift
+var options = try Options.fromEnvironment()   // LOAMS_ENDPOINT, LOAMS_API_KEY or LOAMS_TOKEN, LOAMS_NAMESPACE
+options.namespace = "app"                     // filled into every app request that names none (R11)
+options.sessionConsistency = true             // reads see this process's writes (R4)
+options.timeout = 10                          // seconds per unary call, retries included (R12); 30 by default
+let loams = try Loams(options)
+
+_ = try await loams.namespaces.create("app")
+_ = try await loams.collections.create("notes",
+    schema: Schema().text("title").text("body").keyword("tags").i64("n").vector("embedding", dim: 4))
+
+let notes = loams.collection("notes")
+_ = try await notes.upsert([Doc(1, ["title": .string("Refund policy"), "tags": ["policy"].json, "n": .int(1)],
+                                vectors: ["embedding": [1, 0, 0, 0]])])
+
+let hits = try await loams.search.query(
+    Search.on("notes")
+        .text("refund", fields: ["body"])
+        .vector("embedding", [1, 0, 0, 0])
+        .fuse(.rrf(k: 60))                    // or .dbsf, .weighted([0.7, 0.3])
+        .filter(Filter.eq("tags", "policy") && Filter.range("n", gte: 1))
+        .highlight("body")
+        .limit(5)
+)
+
+let policies = try await notes.count(where: Filter.eq("tags", "policy"))
+for try await doc in notes.scrollAll(limit: 100) { _ = doc }   // every document, in id order
+let batch = try await notes.writeBatch(manyDocs)              // chunks of 10 000 ops, one key per chunk (R13)
+_ = try await loams.graph.query("notes_graph", "INSERT (:Note {id: $id})",
+                                parameters: ["id": GraphValue.int(1)])   // experimental
+```
+
+Modules: `namespaces`, `collections`, `documents`, `search` (`query`, `queryAll` with a
+`.pk()` tiebreaker, `hybrid`), `vector` and `graph` (experimental). Requests and answers
+are proto3 JSON (`DynamicMessage`). A write's token is a `ConsistencyToken` (`parse`,
+`merge`) a read takes as `Consistent.atLeast(token)`. SQL and streams arrive with
+`loams.sql.v1` and `loams.stream.v1`; `Subscription` is the resumable fetch loop the
+streams module will use. Durable has no module: use the
+[Resonate SDK](https://docs.resonatehq.io) with `LOAMS_ENDPOINT/durable/` as its URL.
+
 ## The six conformance tests
 
 The names `sdks/conformance/check-languages.mjs` looks for, declared in

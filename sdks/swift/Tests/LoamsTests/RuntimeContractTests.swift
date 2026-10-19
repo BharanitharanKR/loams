@@ -211,51 +211,41 @@ final class ConsistencyContractTests: XCTestCase {
         XCTAssertFalse(loamsIsConsistencyToken("abc"))
     }
 
-    /// The session keeps the token it was given and reports two different tokens
-    /// meeting as an **error** rather than merging them into a wrong one.
-    ///
-    /// A silently-wrong consistency token reads stale data, which is worse than a
-    /// failure — that is the whole reason this is an error.
-    func testSessionRefusesToMergeTwoDifferentTokens() async throws {
+    /// The session merges the tokens it is given (R4 as amended by SDKP §2.1):
+    /// the max offset per stream and partition.
+    func testSessionMergesTokens() async throws {
         let session = ConsistencySession()
-        try await session.record("v1:aaa")
+        try await session.record("v1:s1/p0@5")
+        try await session.record("v1:s1/p0@3,s1/p1@2")
         let current = await session.current()
-        XCTAssertEqual(current, "v1:aaa")
+        XCTAssertEqual(current, "v1:s1/p0@5,s1/p1@2")
 
         do {
-            try await session.record("v1:bbb")
-            XCTFail("two different tokens must not merge silently")
-        } catch {
-            XCTAssertEqual(LoamsError.code(of: error), .failedPrecondition)
-            XCTAssertTrue(
-                "\(error)".contains("cannot merge"),
-                "the error must say why: \(error)"
-            )
-        }
-        // The first token survives: the session keeps what it had rather than
-        // adopting one of two candidates.
+            try await session.record("opaque")
+            XCTFail("a token that is not v1: must not merge")
+        } catch {}
         let kept = await session.current()
-        XCTAssertEqual(kept, "v1:aaa", "the session keeps the first token")
+        XCTAssertEqual(kept, "v1:s1/p0@5,s1/p1@2", "the session keeps what it had")
         let conflicts = await session.conflicts()
-        XCTAssertEqual(conflicts, 1, "the unmergeable pair is counted, not silent")
+        XCTAssertEqual(conflicts, 1, "the unmergeable token is counted, not silent")
     }
 
     /// The same token twice is not a conflict, and an empty token is not a token.
     func testSessionIdempotenceAndEmptiness() async throws {
         let session = ConsistencySession()
-        try await session.record("v1:aaa")
-        try await session.record("v1:aaa")
+        try await session.record("v1:s1/p0@1")
+        try await session.record("v1:s1/p0@1")
         let conflicts = await session.conflicts()
         XCTAssertEqual(conflicts, 0, "the same token twice is not a conflict")
 
         try await session.record("")
         let afterEmpty = await session.current()
-        XCTAssertEqual(afterEmpty, "v1:aaa", "an empty token is not a token")
+        XCTAssertEqual(afterEmpty, "v1:s1/p0@1", "an empty token is not a token")
     }
 
     func testSessionClears() async {
         let session = ConsistencySession()
-        try? await session.record("v1:aaa")
+        try? await session.record("v1:s1/p0@1")
         await session.clear()
         let current = await session.current()
         XCTAssertNil(current, "clear forgets the token")
@@ -792,7 +782,7 @@ final class FacadeContractTests: XCTestCase {
     func testProtoPackagesIncludeTheWellKnownTypes() {
         XCTAssertTrue(loamsProtoPackages.contains("google.protobuf"))
         let loamsOnes = loamsProtoPackages.filter { $0.hasPrefix("loams.") }
-        XCTAssertEqual(loamsOnes.count, 8, "eight loams.* packages, which is what R9 compares")
+        XCTAssertEqual(loamsOnes.count, 10, "ten loams.* packages (with SDKP's collection and graph), which is what R9 compares")
     }
 }
 
