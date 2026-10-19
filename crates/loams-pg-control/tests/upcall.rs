@@ -937,3 +937,93 @@ async fn notify_attach_shard_map_write_survives_faults() {
     let again = r.store.get::<BranchRec>(&main_key).await.unwrap().unwrap();
     assert_eq!(again.version, written.version, "the retry wrote nothing");
 }
+
+/// Task 24: a role carries its password's SCRAM-SHA-256 verifier, never
+/// the password; the same verifier for the same records; a reset (a new
+/// reference and secret) gives a new one, which a compute takes on its next
+/// spec or `/configure`; a role whose secret is lost gets none.
+#[tokio::test]
+async fn spec_carries_scram_verifier_never_password() {
+    use loams_pg_control::model::RoleKey;
+    use loams_pg_control::scram::{self, RoleVerifiers};
+    use loams_pg_control::secrets::SecretStore;
+
+    let secrets = Arc::new(common::MemorySecrets::default());
+    let verifiers = Arc::new(RoleVerifiers::new(secrets.clone()));
+    let r = rig_with(|c| c.verifiers = Some(verifiers.clone())).await;
+    let key = RoleKey {
+        branch_id: r.ids.main.to_string(),
+        name: "app".into(),
+    };
+    let role = r.store.get::<RoleRec>(&key).await.unwrap().unwrap();
+    let password = "pw-sentinel-0123456789abcdefghijklmnopqrstu";
+    secrets
+        .put(
+            &role.record.secret_ref,
+            Secret::new(password.as_bytes().to_vec()),
+        )
+        .await
+        .unwrap();
+
+    let id = r.ids.compute;
+    let token = r.token(id);
+    let (status, first) = r.spec(id, Some(&token)).await;
+    assert_eq!(status, 200, "{first}");
+    assert!(!first.contains(password), "the password is in the spec");
+    let v: Value = serde_json::from_str(&first).unwrap();
+    let got = v["spec"]["cluster"]["roles"][0]["encrypted_password"]
+        .as_str()
+        .unwrap()
+        .to_owned();
+    assert!(got.starts_with("SCRAM-SHA-256$4096:"), "{got}");
+    assert_eq!(
+        got,
+        scram::role_verifier(
+            password.as_bytes(),
+            verifiers.salt_key().await.unwrap(),
+            &role.record.secret_ref
+        )
+    );
+    // Stable: the same records give the same bytes.
+    assert_eq!(r.spec(id, Some(&token)).await.1, first);
+
+    // A reset: a new reference and password; the old secret is deleted.
+    let new_password = "pw-sentinel-rotated-0123456789abcdefghijklm";
+    let mut rec = role.record.clone();
+    rec.secret_ref = SecretRef::new_role(&r.ids.project);
+    secrets
+        .put(
+            &rec.secret_ref,
+            Secret::new(new_password.as_bytes().to_vec()),
+        )
+        .await
+        .unwrap();
+    r.store
+        .api_writer()
+        .put(&rec, Some(role.version))
+        .await
+        .unwrap();
+    secrets.delete(&role.record.secret_ref).await.unwrap();
+    let (status, second) = r.spec(id, Some(&token)).await;
+    assert_eq!(status, 200, "{second}");
+    assert!(!second.contains(password) && !second.contains(new_password));
+    let v: Value = serde_json::from_str(&second).unwrap();
+    assert_eq!(
+        v["spec"]["cluster"]["roles"][0]["encrypted_password"],
+        scram::role_verifier(
+            new_password.as_bytes(),
+            verifiers.salt_key().await.unwrap(),
+            &rec.secret_ref
+        )
+    );
+    assert_ne!(second, first);
+
+    // A role whose secret is lost (its record still names it) gets no
+    // password, and the spec is still served.
+    let r2 = rig_with(|c| c.verifiers = Some(verifiers.clone())).await;
+    let id = r2.ids.compute;
+    let (status, third) = r2.spec(id, Some(&r2.token(id))).await;
+    assert_eq!(status, 200, "{third}");
+    let v: Value = serde_json::from_str(&third).unwrap();
+    assert!(v["spec"]["cluster"]["roles"][0]["encrypted_password"].is_null());
+}

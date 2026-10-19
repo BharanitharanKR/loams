@@ -14,7 +14,7 @@ Pod::Spec.new do |s|
   s.description  = 'The Loams Objective-C SDK. Pre-release: the API may change between previews; pin the exact version.'
   s.homepage     = 'https://loams.dev'
   s.license      = { :type => 'Apache-2.0', :file => 'sdks/objc/LICENSE' }
-  s.author       = { 'Ostrium Labs' => 'security@ostriumlabs.com' }
+  s.author       = { 'Ostrium Labs' => 'security@ostriumlabs.org' }
   s.source       = { :git => 'https://github.com/ostrium-labs/loams.git', :tag => "v#{s.version}" }
 
   s.ios.deployment_target = '15.0'

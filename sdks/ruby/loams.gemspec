@@ -10,7 +10,7 @@ Gem::Specification.new do |spec|
   spec.name = "loams"
   spec.version = Loams::VERSION
   spec.authors = ["Ostrium Labs"]
-  spec.email = ["security@ostriumlabs.com"]
+  spec.email = ["security@ostriumlabs.org"]
   spec.summary = "Official Ruby client for Loams (preview)"
   spec.description = "The Loams Ruby SDK. Pre-release: the API may change between previews; pin the exact version."
   spec.homepage = "https://loams.dev"

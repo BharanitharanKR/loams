@@ -42,6 +42,7 @@ use loams_pg_control::neon::NeonClients;
 use loams_pg_control::service::branches::{
     BranchPoint, CreateBranch, DeleteBranch, SetDefaultBranch, UpdateBranch,
 };
+use loams_pg_control::service::connect::GetConnectionInfo;
 use loams_pg_control::service::databases::{CreateDatabase, DeleteDatabase};
 use loams_pg_control::service::endpoints::{
     CreateEndpoint, DeleteEndpoint, EndpointAction, UpdateEndpoint,
@@ -1304,12 +1305,30 @@ impl PostgresService for Postgres {
         ctx: RequestContext,
         request: ServiceRequest<'_, pb::GetConnectionInfoRequest>,
     ) -> ServiceResult<pb::GetConnectionInfoResponse> {
-        let call = Call::new("GetConnectionInfo", request.namespace).project(request.project_id);
-        self.gate
+        let call = Call::new("GetConnectionInfo", request.namespace)
+            .project(request.project_id)
+            .target("branch_id", request.branch_id);
+        let info = self
+            .gate
             .read(&ctx, call, || async {
-                Err(Failure::NotBuilt("PG2 Tasks 20 and 25"))
+                Ok(self
+                    .service
+                    .connection_info(GetConnectionInfo {
+                        namespace: request.namespace.to_owned(),
+                        project_id: request.project_id.to_owned(),
+                        branch_id: request.branch_id.to_owned(),
+                        endpoint_id: request.endpoint_id.to_owned(),
+                        role: request.role.to_owned(),
+                        database: request.database.to_owned(),
+                        read_only: request.read_only,
+                    })
+                    .await?)
             })
-            .await
+            .await?;
+        Response::ok(pb::GetConnectionInfoResponse {
+            connection: MessageField::some(msg::connection_info(info)),
+            ..Default::default()
+        })
     }
 
     async fn issue_connect_credential(

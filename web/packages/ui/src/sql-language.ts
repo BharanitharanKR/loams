@@ -502,8 +502,9 @@ function scopeSource(schema: SqlSchema, functions: SqlFunction[]): CompletionSou
 }
 
 function namespaceOf(schema: SqlSchema): SQLNamespace {
-  const top: Record<string, SQLNamespace> = {};
-  const bySchema: Record<string, Record<string, SQLNamespace>> = {};
+  // Prototype-free: schema and table names come from the server (`__proto__` is a valid name).
+  const top: Record<string, SQLNamespace> = Object.create(null);
+  const bySchema: Record<string, Record<string, SQLNamespace>> = Object.create(null);
   for (const tb of schema.tables) {
     const entry: SQLNamespace = {
       self: { label: tb.name, type: 'type', detail: tb.kind ?? 'table', boost: 1 },
@@ -511,7 +512,7 @@ function namespaceOf(schema: SqlSchema): SQLNamespace {
     };
     if (!tb.schema || tb.schema === schema.defaultSchema) top[tb.name] = entry;
     if (tb.schema) {
-      bySchema[tb.schema] ??= {};
+      bySchema[tb.schema] ??= Object.create(null);
       (bySchema[tb.schema] as Record<string, SQLNamespace>)[tb.name] = entry;
     }
   }

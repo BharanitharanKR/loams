@@ -18,7 +18,7 @@ export function plainError(message: string): string {
     return 'The server could not be reached. Check that it is running and that its address is right, then try again.';
   }
   const status =
-    /^(?:HTTP\s+)?(50[234])(?:\s+[A-Za-z ]+)?$/i.exec(m)?.[1] ?? GATEWAY[m.toLowerCase()];
+    /^(?:HTTP\s+)?(50[234])(?:\s[A-Za-z ]*)?$/i.exec(m)?.[1] ?? GATEWAY[m.toLowerCase()];
   if (status) {
     return `The server did not answer (HTTP ${status}). Check that the engine is running, then try again.`;
   }

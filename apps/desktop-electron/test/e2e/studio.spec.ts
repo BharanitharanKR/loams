@@ -298,18 +298,22 @@ test.describe("studio on the desktop edition", () => {
 		expect(threadId).not.toBe("");
 	});
 
-	// The header's approvals chip (§53 §4.5: it counts the server's and agentd's
-	// approvals) comes from @loams/plugin-approvals, which `requires.api`
-	// loams.approvals.v1. The Loams engine does not serve that package (only the
-	// apps mock does), so on a real engine, as with the fake one here, the plugin
-	// never loads and agentd's approvals never reach the chip or #/approvals.
-	test.fixme("approvals_chip_counts_agent_approvals", async () => {
+	// The header's approvals chip comes from @loams/plugin-approvals, which `requires.api`
+	// loams.approvals.v1. The Loams engine does not serve that package, so on a real
+	// engine the plugin does not load: no chip, no #/approvals page, no tray item for it.
+	// The daemon's approvals show where Studio shows them (the thread row badge).
+	test("approvals_chip_absent_without_server_approvals", async () => {
+		await modes(page).console.click();
+		await expect.poll(() => hashOf(page)).toBe("/");
 		const chip = page.locator('a.lc-chip[href="#/approvals"]');
-		const before = Number((await chip.textContent().catch(() => "0"))?.match(/\d+/)?.[0] ?? 0);
-		const chatId = await supervisedThread("Edit while the chip counts");
-		await expect(chip).toContainText(`${before + 1} approval`, { timeout: 60_000 });
+		const chatId = await supervisedThread("Edit while the chip is absent");
+		const waiting = page
+			.getByRole("navigation", { name: "Projects" })
+			.getByRole("link", { name: /^Edit while the chip is absent/ })
+			.getByRole("img", { name: "Pending Approval" });
+		await expect(waiting).toBeVisible({ timeout: 60_000 });
+		await expect(chip).toHaveCount(0);
 		await allowFromStudio(chatId);
-		if (before === 0) await expect(chip).toHaveCount(0);
-		else await expect(chip).toContainText(`${before} approval`);
+		await expect(chip).toHaveCount(0);
 	});
 });

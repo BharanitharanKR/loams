@@ -188,7 +188,7 @@ Not forked, but fetched by upstream's build: `neondatabase/pgrag` (Apache-2.0, `
 
 ### 3.7 Security (D805)
 
-- **Reporting.** Private vulnerability reporting is enabled on every unarchived fork. `SECURITY.md` points at Loams' policy (`security@ostriumlabs.com`, acknowledgement within 3 business days). *As built (NF1 Task 5 ruling 4):* enabled on the six unarchived forks; `SECURITY.md` on `loams-postgres`, `postgres` (`loams/meta`), `tokio-epoll-uring` and `pg_session_jwt`.
+- **Reporting.** Private vulnerability reporting is enabled on every unarchived fork. `SECURITY.md` points at Loams' policy (`security@ostriumlabs.org`, acknowledgement within 3 business days). *As built (NF1 Task 5 ruling 4):* enabled on the six unarchived forks; `SECURITY.md` on `loams-postgres`, `postgres` (`loams/meta`), `tokio-epoll-uring` and `pg_session_jwt`.
 - **Monitoring** (`loams-advisories.yml`, daily):
   - `cargo deny check advisories` on the fork's `Cargo.lock`;
   - Trivy (or Grype) scans of every pinned digest, covering Debian packages and extension binaries;
@@ -391,6 +391,8 @@ The pgrx-based extensions (`pg_jsonschema`, `pg_graphql`, `pg_tiktoken`, `pgx_ul
 - An extension whose upstream has no release for 24 months, or changes to a forbidden licence, moves to `dropped` at the next roll-up, announced one roll-up in advance.
 
 ## 8. Postgres 18 and 19 (D813, D814)
+
+> **Detail superseded by [§62](62-postgres-major-versions.md)** (2026-10-18, Proposed): the per-major changes as checked against 18.6 and 19 RC1, 19's GA date (2026-11-19, not 2026-10-29), the base of the 18 branch, the support window (16 supported again), promotion rules and upgrade paths. This section is kept as written.
 
 ### 8.1 Support policy (answers Q649)
 

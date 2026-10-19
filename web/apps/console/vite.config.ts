@@ -133,6 +133,8 @@ export default defineConfig({
     proxy: {
       '/api': api,
       '/v1': api,
+      // The durable API (promises and schedules) on the engine's main port (B12).
+      '/durable/': api,
       // The app protos over Connect (`/loams.<package>.<Service>/<Method>`), as the
       // desktop shell proxies them: the `?desktop` preview's pages read them here.
       '^/loams\\.[a-z0-9_.]+\\.[A-Za-z0-9]+/': api,

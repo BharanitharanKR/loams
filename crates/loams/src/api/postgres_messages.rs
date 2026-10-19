@@ -13,6 +13,7 @@ use loams_pg_control::model::{
 };
 use loams_pg_control::service::ServiceError;
 use loams_pg_control::service::branches::BranchView;
+use loams_pg_control::service::connect::ConnectionInfo;
 use loams_pg_control::service::endpoints::EndpointView;
 use loams_pg_control::service::watch::{ProjectSnapshot, ResourceKind, WatchEvent, WatchItem};
 use loams_postgres::Lsn;
@@ -163,6 +164,19 @@ pub(super) fn role(r: &RoleRec) -> pb::Role {
         branch_id: r.branch_id.clone(),
         system: r.system,
         create_time: MessageField::some(timestamp(r.created_at_ms)),
+        ..Default::default()
+    }
+}
+
+pub(super) fn connection_info(c: ConnectionInfo) -> pb::ConnectionInfo {
+    pb::ConnectionInfo {
+        host: c.host,
+        port: u32::from(c.port),
+        database: c.database,
+        user: c.user,
+        sslmode: c.sslmode,
+        ca_pem: c.ca_pem,
+        uri: c.uri,
         ..Default::default()
     }
 }

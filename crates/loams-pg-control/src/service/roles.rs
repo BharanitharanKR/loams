@@ -320,6 +320,7 @@ impl<N: NeonRead> PgService<N> {
             .await;
         match out {
             Ok(role) => {
+                self.kick(&role.record.project_id);
                 tracing::info!(branch = %role.record.branch_id, role = %role.record.name, secret_ref = %role.record.secret_ref, "issued a role password");
                 Ok(RoleIssued { role, password })
             }
@@ -417,8 +418,10 @@ impl<N: NeonRead> PgService<N> {
     }
 
     /// `ResetRolePassword`: a new password, once; the old one stops
-    /// working when the compute spec and PgDog take the new record (Tasks
-    /// 11, 24), and its secret is deleted.
+    /// working when the compute spec takes the new record (Tasks 11, 24:
+    /// the reconciler is kicked and pushes `/configure` to the running
+    /// compute; a compute started later reads it in its spec), and its
+    /// secret is deleted.
     ///
     /// # Errors
     ///
@@ -436,6 +439,7 @@ impl<N: NeonRead> PgService<N> {
         let mut issued = None;
         match self.reset_tries(caller, &req, &password, &mut issued).await {
             Ok((role, old)) => {
+                self.kick(&role.record.project_id);
                 self.forget(&old).await;
                 tracing::info!(branch = %role.record.branch_id, role = %role.record.name, secret_ref = %role.record.secret_ref, "rotated a role password");
                 Ok(RoleIssued { role, password })
@@ -549,6 +553,7 @@ impl<N: NeonRead> PgService<N> {
             scope.check(&mut batch)?;
             let mutation = Mutation::new(batch, |_| ());
             if let Applied::Done(()) = self.apply("DeleteRole", claim.as_ref(), mutation).await? {
+                self.kick(&current.record.project_id);
                 self.forget(&current.record.secret_ref).await;
                 return Ok(());
             }

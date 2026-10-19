@@ -74,6 +74,7 @@ Design reference: [51 Loams Postgres: our hard fork of Neon](../design/51-loams-
 | NF1e (Tasks 24–30) | Postgres 18: vendor 18.6; format diff; `postgres_ffi`, `wal_decoder`, pageserver, `pgxn/neon`, walproposer and `compute_ctl` at 18; `loams-postgres-compute-v18`; the decoder, `loams-wal` and `loams-postgres` at 18; the gate and promotion | Tasks 16, 17; Q717, Q727 | Planned |
 | NF1f (Tasks 31–35) | Postgres 19: track from RC1 (2026-10-15); port Neon's patch series; the Rust side at 19; `loams-postgres-compute-v19` beta and Loams behind `allow_beta_major`; the GA gate (Q718) | Task 27 | Planned |
 | NF1g (Tasks 36–41) | PgDog per major; branch major upgrades through `fast_import` and `ImportPgdata` (used by PG2 Task 51); the `pg_upgrade --link` spike; desktop majors and the upgrade prompt; runbooks, maintainers and the MVM switch; docs and status | Task 28; PG2 Task 58 for Task 39 | Planned |
+| [NF2: Postgres 18 and 19](2026-10-18-nf2-postgres-18-19.md) (stub; NF2a Tasks 0–16, NF2b 17–24, NF2c 25–28) | Design [§62](../design/62-postgres-major-versions.md) (D1107–D1118, Q949–Q959). Supersedes NF1 Tasks 24–35 and takes over 36–38: the 18 format diff, `loams/pg18` from `REL_18_6`, synchronous AIO in the smgr, the Rust side, images and extensions at 18, Loams' majors from the pin file and pg-control's major API, PgDog per major, branch upgrades by import; minors within 7 days for every major, 14 and 15 removed; 19 after 18's beta, supported after 19.1 and D1113; the `pg_upgrade`-on-a-timeline spike | NF1 Tasks 16–18; Q949–Q959 | Stub |
 
 ## Track R: Loams Live, TiDB SQL and the TiKV metastore (parallel to M1)
 
@@ -313,7 +314,7 @@ Design: [§40](../design/40-loams-systemone.md), D520–D539. Decisions are advi
 
 | Plan | Scope | Status |
 |---|---|---|
-| [SO1: SystemOne engine, API and backends](2026-10-02-so1-systemone.md) | Spike (kevala, `ort`, `laya-serve`); `loams.systemone.v1`; the `loams-systemone` crate; `laya-serve` sidecar; Jev adapter; calibration; self-test; model manager; route, CLI, MCP; decision log | Planned |
+| [SO1: SystemOne engine, API and backends](2026-10-02-so1-systemone.md) | Spike (kevala, `ort`, `laya-serve`); `loams.systemone.v1`; the `loams-systemone` crate; `laya-serve` sidecar; Jev adapter; calibration; self-test; model manager; route, CLI, MCP; decision log | Planned; Task 0 done 2026-10-18 ([spike](so1-systemone-spike.md), rulings R0.1–R0.24, owner rulings 2026-10-18) |
 | [SO2: SystemOne on the desktop](2026-10-02-so2-systemone-desktop.md) | Swift Core ML sidecar; `loams-systemone-link`; Model Manager and Settings; Loams Bot decisions; zeron MCP tool; optional browser plugin, CPU and MLX paths | Planned |
 
 ## Track API and SDK: unified Connect services and generated clients

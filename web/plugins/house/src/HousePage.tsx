@@ -64,6 +64,80 @@ export interface HousePageProps {
   client: HouseClient;
   /** The client answers from built-in sample data, not a server. */
   sample?: boolean;
+  /** The server this page talks to, so the chosen database is remembered per server. */
+  serverKey?: string;
+}
+
+/** Databases a person does not pick from: ClickHouse's own catalogs. */
+const HIDDEN_DATABASES = new Set(['system', 'INFORMATION_SCHEMA', 'information_schema']);
+
+const DATABASE_KEY = 'loams.house.database';
+
+/** The database last chosen on `serverKey`, if storage allows. */
+export function rememberedDatabase(serverKey: string): string | undefined {
+  try {
+    const raw = JSON.parse(globalThis.localStorage?.getItem(DATABASE_KEY) ?? '{}');
+    const name = raw && typeof raw === 'object' ? raw[serverKey] : undefined;
+    return typeof name === 'string' && name ? name : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function rememberDatabase(serverKey: string, name: string) {
+  try {
+    const raw = JSON.parse(globalThis.localStorage?.getItem(DATABASE_KEY) ?? '{}');
+    const all = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    globalThis.localStorage?.setItem(DATABASE_KEY, JSON.stringify({ ...all, [serverKey]: name }));
+  } catch {
+    // Storage is a convenience: the page still works on `default`.
+  }
+}
+
+/**
+ * The databases to offer: `ListDatabases`, else (a House that does not serve it, or
+ * lists none) the names in `system.databases`, read from `default` like the function list.
+ */
+async function loadDatabases(
+  client: HouseClient,
+  signal: AbortSignal,
+  onNotServed: () => void,
+): Promise<Database[]> {
+  try {
+    const page = await client.listDatabases();
+    if (page.items.length) return page.items;
+  } catch (e) {
+    // No House at all is the page's "coming soon"; a House without ListDatabases
+    // (`unimplemented`, `not_implemented`) still has system.databases.
+    if (toFailure(e).reason?.endsWith('not_configured')) {
+      onNotServed();
+      return [];
+    }
+  }
+  const names: Database[] = [];
+  try {
+    for await (const f of client.executeQuery(
+      {
+        sql: 'SELECT name FROM system.databases ORDER BY name',
+        database: 'default',
+        settings: {},
+        params: {},
+        format: 'ARROW_IPC',
+        maxRows: SERVER_MAX_ROWS,
+        timeoutMs: PAGE_TIMEOUT_MS,
+        readOnly: true,
+      },
+      signal,
+    )) {
+      if (f.kind !== 'batch') continue;
+      for (const [name] of f.rows)
+        if (typeof name === 'string' && !HIDDEN_DATABASES.has(name))
+          names.push({ name, tableCount: 0, comment: '' });
+    }
+  } catch {
+    // No list: the page stays on `default`.
+  }
+  return names;
 }
 
 /**
@@ -74,7 +148,7 @@ const houseNotServed = (f: HouseFailure) => isNotServed({ reason: f.reason });
 
 type Detected = 'loading' | 'available' | 'absent' | 'not-served' | { error: string };
 
-export function HousePage({ client, sample }: HousePageProps) {
+export function HousePage({ client, sample, serverKey = '' }: HousePageProps) {
   const [detected, setDetected] = useState<Detected>('loading');
   const [tick, setTick] = useState(0);
   const notServed = useCallback(() => setDetected('not-served'), []);
@@ -139,7 +213,9 @@ export function HousePage({ client, sample }: HousePageProps) {
       </div>
     );
   }
-  return <Workspace client={client} sample={sample} onNotServed={notServed} />;
+  return (
+    <Workspace client={client} sample={sample} serverKey={serverKey} onNotServed={notServed} />
+  );
 }
 
 interface RunState {
@@ -154,17 +230,23 @@ interface RunState {
 function Workspace({
   client,
   sample,
+  serverKey,
   onNotServed,
 }: {
   client: HouseClient;
   sample?: boolean;
+  serverKey: string;
   /** The House answered house_not_configured: the page shows "coming soon" instead. */
   onNotServed: () => void;
 }) {
   const ids = useId();
   const failureId = `${ids}-failure`;
   const [databases, setDatabases] = useState<Database[]>([]);
-  const [database, setDatabase] = useState('default');
+  const [database, setDatabase] = useState(() => rememberedDatabase(serverKey) ?? 'default');
+  const chooseDatabase = (name: string) => {
+    setDatabase(name);
+    rememberDatabase(serverKey, name);
+  };
   // No query to start with: the examples below the editor are built from the tables this
   // House has, so the first run never names a table that does not exist.
   const [sql, setSql] = useState('');
@@ -193,17 +275,18 @@ function Workspace({
   useEffect(() => {
     let live = true;
     const ac = new AbortController();
-    client.listDatabases().then(
-      (p) => {
-        if (!live) return;
-        setDatabases(p.items);
-        if (p.items.length && !p.items.some((d) => d.name === 'default'))
-          setDatabase(p.items[0]?.name ?? 'default');
-      },
-      (e) => {
-        if (live && houseNotServed(toFailure(e))) onNotServed();
-      },
-    );
+    void loadDatabases(client, ac.signal, () => live && onNotServed()).then((items) => {
+      if (!live || !items.length) return;
+      setDatabases(items);
+      // The remembered database while the server still has it, else `default`, else the first.
+      setDatabase((current) =>
+        items.some((d) => d.name === current)
+          ? current
+          : items.some((d) => d.name === 'default')
+            ? 'default'
+            : (items[0]?.name ?? 'default'),
+      );
+    });
     // The function list, fetched once through ExecuteQuery (§49 §18.3). The House runs a
     // statement only in a database it serves (it refuses `system`), so the qualified
     // system table is read from `default`.
@@ -417,13 +500,17 @@ function Workspace({
         subtitle="ClickHouse SQL over Loams House: lake and realtime tables, read-only by default."
         actions={
           databases.length > 0 && (
-            <label className="flex items-center gap-2 text-sm" htmlFor={`${ids}-db`}>
+            <label className="flex items-center gap-2 text-body" htmlFor={`${ids}-db`}>
               <span className="text-muted">Database</span>
               <Select
                 id={`${ids}-db`}
+                className="loams-input-compact"
                 value={database}
-                onChange={(e) => setDatabase(e.target.value)}
+                onChange={(e) => chooseDatabase(e.target.value)}
               >
+                {databases.some((d) => d.name === database) ? null : (
+                  <option value={database}>{database}</option>
+                )}
                 {databases.map((d) => (
                   <option key={d.name} value={d.name}>
                     {d.name}
@@ -486,7 +573,7 @@ function Workspace({
           {notice && <Notice title={notice} />}
 
           {busy && (
-            <div className="flex items-center gap-3 text-sm text-muted" role="status">
+            <div className="flex items-center gap-3 text-body text-muted" role="status">
               <span>Running… {progress ? `${fmt.format(progress.readRows)} rows read` : ''}</span>
               {pct !== undefined && (
                 <progress
@@ -501,8 +588,8 @@ function Workspace({
 
           {plan !== undefined && (
             <section aria-label="Plan" className="flex flex-col gap-2">
-              <h3 className="m-0 text-base">Plan</h3>
-              <pre className="m-0 overflow-auto rounded-md bg-surface p-3 font-mono text-xs">
+              <h3 className="m-0 text-emphasis">Plan</h3>
+              <pre className="m-0 overflow-auto rounded-md bg-surface p-3 font-mono text-small">
                 {plan}
               </pre>
             </section>
@@ -591,11 +678,11 @@ function Workspace({
           </>
         }
       >
-        <p className="m-0 text-sm">
+        <p className="m-0 text-body">
           The House says this statement writes. It runs once more, with writes allowed, on{' '}
           <span className={/* mono-ok: id */ 'font-mono'}>{database}</span>.
         </p>
-        <pre className="m-0 mt-2 max-h-48 overflow-auto rounded-md bg-surface p-2 font-mono text-xs">
+        <pre className="m-0 mt-2 max-h-48 overflow-auto rounded-md bg-surface p-2 font-mono text-small">
           {confirm?.sql}
         </pre>
       </Dialog>

@@ -707,6 +707,8 @@ Tests:
 - `revoked_grant_removed_after_push`
 - `reset_password_rotates_at_pgdog_and_compute`
 
+*(0.1.0 blocker, 2026-10-18: the compute half, before PgDog.)* `src/scram.rs` derives each role's SCRAM-SHA-256 verifier from its stored password, salted from its `SecretRef` (fresh per password) so the spec stays a pure function of the records; `RoleVerifiers` caches it per reference and is shared by the upcall listener and the reconciler (`Sources.verifiers`). The spec's `encrypted_password` is the verifier, never the password. Role and database writes kick the reconciler, whose `push_spec` sends `/configure` to the running compute; a compute started later reads it in its spec. Tests: `scram::tests` (a reference vector), `upcall::spec_carries_scram_verifier_never_password`, `it_endpoint::it_role_password_reaches_compute_and_rotates` (in `pg2-e2e.yml`). `GetConnectionInfo` answers the endpoint's `backend_addr` directly until Task 20's PgDog fronts it (`service/connect.rs`). The PgDog half (`users.toml`, `scram_login_through_pgdog`, `md5_and_plain_refused`) stays with this task.
+
 Commit `feat(pg): scram through pgdog`.
 
 ### Task 25: Credential exchange for OIDC and agent tokens (`IssueConnectCredential`)

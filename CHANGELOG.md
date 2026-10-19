@@ -4,7 +4,7 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
-## [0.1.0] - 2026-10-18
+## [0.1.0] - 2026-10-19
 
 ### Upgrading
 
@@ -24,6 +24,9 @@ Expected downtime: about 5 minutes, excluding image pulls.
 See [docs/release/upgrades.md](docs/release/upgrades.md).
 
 ### Added
+- **`NamespaceService/ListNamespaces`** (B7): the namespaces the caller can reach, by name and paged, with
+  their collection and stream counts. The console's Namespaces page and the org home's Namespaces tile
+  read it, and fall back to the browser's list on an older engine.
 - **Durable on the main port** (B12): `POST /durable/` on `--listen` is the embedded Resonate server's
   protocol endpoint, behind the engine's authentication (org members and the operator; a credential bound
   to one environment is refused), on a loopback main port or behind TLS and authentication. The loopback
@@ -185,6 +188,14 @@ See [docs/release/upgrades.md](docs/release/upgrades.md).
   even stopped, is in its network namespace ("has dependent containers"). Opening the door creates them again.
   To recreate the engine by hand after an `.env` change: `docker compose rm -sf tailscale && docker compose up -d
   loams tailscale` ([upgrades](docs/release/upgrades.md#recreating-a-service-by-hand)).
+- **Postgres role passwords work.** The password `CreateRole` or `ResetRolePassword` answers now logs in:
+  the compute spec carries each role's SCRAM-SHA-256 verifier (never the password), so `compute_ctl` sets it
+  at start, and a reset reaches a running compute through `/configure` within seconds (the old password is
+  then refused). Roles made earlier get their stored password applied on the next spec push.
+- **`GetConnectionInfo`** answers the endpoint's host and port, the database, the role and `sslmode` (no
+  password) instead of `not_implemented`.
+- **`endpoint-storage` no longer restart-loops** ("Unterminated quoted string" in its wait loop), so
+  computes start with their file cache prewarmed.
 
 ## [0.1.0-preview.2] - 2026-10-15
 

@@ -16,8 +16,6 @@ the runtime below it is hand-written and obeys the contract in
 pip install loams
 ```
 
-<!-- verify after publish -->
-
 From a checkout instead:
 
 ```
