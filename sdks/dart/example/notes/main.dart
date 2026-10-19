@@ -50,8 +50,9 @@ Future<void> main() async {
     ]);
 
     final page = await notes.search(Search.on('notes')
-        .text('refund', fields: ['body'])
-        .vector('embedding', [1, 0, 0, 0])
+        // k is explicit so the example also runs on a 0.1.0 engine, which has no default k.
+        .text('refund', fields: ['body'], k: 10)
+        .vector('embedding', [1, 0, 0, 0], k: 10)
         .fuse(Fusion.rrf(60))
         .filter(Filter.eq('tags', 'policy'))
         .highlight('body')
