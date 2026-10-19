@@ -35,6 +35,7 @@ import (
 	graphv1connect "loams.dev/go/gen/loams/graph/v1/graphv1connect"
 	instancev1connect "loams.dev/go/gen/loams/instance/v1/instancev1connect"
 	livev1connect "loams.dev/go/gen/loams/live/v1/livev1connect"
+	sqlv1connect "loams.dev/go/gen/loams/sql/v1/sqlv1connect"
 )
 
 // ProtoRev is the proto revision this SDK was generated from
@@ -484,6 +485,26 @@ var Modules = []ModuleBinding{
 		},
 	},
 	{
+		Name:    "sql",
+		Summary: "SQL: one read-only statement over a namespace's collections, with parameters.",
+		Service: sqlv1connect.SqlServiceName,
+		Package: "loams.sql.v1",
+		Calls: []CallBinding{
+			{
+				Module: "sql", Name: "Query", ProtoName: "query",
+				Method: "Query", RPC: sqlv1connect.SqlServiceName + "/Query",
+				Service: sqlv1connect.SqlServiceName, Package: "loams.sql.v1",
+				Idempotency: NoSideEffects, Retry: RetrySafe, Streaming: Unary,
+			},
+			{
+				Module: "sql", Name: "QueryArrow", ProtoName: "query_arrow",
+				Method: "QueryArrow", RPC: sqlv1connect.SqlServiceName + "/QueryArrow",
+				Service: sqlv1connect.SqlServiceName, Package: "loams.sql.v1",
+				Idempotency: NoSideEffects, Retry: RetrySafe, Streaming: Unary,
+			},
+		},
+	},
+	{
 		Name:     "tables",
 		Service:  livev1connect.LiveServiceName,
 		Package:  "loams.live.v1",
@@ -571,5 +592,6 @@ func NewServiceClients(httpClient connect.HTTPClient, baseURL string, opts ...co
 		collectionv1connect.QueryServiceName:      collectionv1connect.NewQueryServiceClient(httpClient, baseURL, opts...),
 		graphv1connect.GraphAdminServiceName:      graphv1connect.NewGraphAdminServiceClient(httpClient, baseURL, opts...),
 		graphv1connect.GraphServiceName:           graphv1connect.NewGraphServiceClient(httpClient, baseURL, opts...),
+		sqlv1connect.SqlServiceName:               sqlv1connect.NewSqlServiceClient(httpClient, baseURL, opts...),
 	}
 }

@@ -206,8 +206,11 @@ hits, err := notes.Search(ctx, notes.Query().
 **The app modules** are `client.Namespaces()`, `Collections()`, `Documents()`,
 `Search()`, `Vector()` and `Graph()`, one method per facade call, with the
 conveniences on `client.DocumentCalls()`, `client.SearchCalls()` and
-`client.Collection(name)`. `Sql()` and `Streams()` arrive with
-`loams.sql.v1` and `loams.stream.v1` (SDKP P0b, P0c). `examples/notes` is the
+`client.Collection(name)`. `Sql()` is `loams.sql`: `Query` answers `Columns`
+and `Rows`, `Records(ctx, statement, []any{…})` answers one map per row, and
+`loams.SqlRecords(answer)` reads an answer in hand; `QueryArrow` answers Arrow
+IPC bytes (`ArrowIpc`), which apache/arrow-go's `ipc.NewReader` reads.
+`Streams()` arrives with `loams.stream.v1` (SDKP P0c). `examples/notes` is the
 whole app scenario as a program, built by `go vet ./...`. The session's token
 is used only for collection and SQL reads: a graph's token names one graph
 (SDKP-17). The binding table is checked against

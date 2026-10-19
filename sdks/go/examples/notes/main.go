@@ -91,6 +91,16 @@ func run(ctx context.Context) error {
 	}
 	fmt.Println("policy notes:", policy.GetCount())
 
+	// SQL over the same collection, with a `$1` parameter, as records.
+	perTag, err := client.Sql().Records(ctx,
+		"SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags", []any{1})
+	if err != nil {
+		return err
+	}
+	for _, row := range perTag {
+		fmt.Println(row["tags"], row["c"])
+	}
+
 	// A bulk load: chunked, one idempotency key per chunk, the tokens merged.
 	loaded, err := notes.WriteBatch(ctx, bulk(100), loams.BatchOptions{ChunkRows: 25})
 	if err != nil {

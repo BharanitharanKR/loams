@@ -1,6 +1,6 @@
-// SDKP Part B for Go: the app scenario through the public facade.
+// SDKP Parts B and C for Go: the app scenario through the public facade.
 //
-// go_app_collections, go_app_search and go_app_graph replay
+// go_app_collections, go_app_search, go_app_graph and go_app_sql (Part C) replay
 // sdks/fixtures/recorded/app/ against the shared fixture server
 // (sdks/fixtures/app-scenario.md says how): each step's facade call is made on
 // a Client with the recorded request — built with the builders when the step
@@ -29,6 +29,7 @@ import (
 	collectionv1 "loams.dev/go/gen/loams/collection/v1"
 	graphv1 "loams.dev/go/gen/loams/graph/v1"
 	operationsv1 "loams.dev/go/gen/loams/operations/v1"
+	sqlv1 "loams.dev/go/gen/loams/sql/v1"
 )
 
 // Canonical test names, for check-languages --suite app.
@@ -36,6 +37,7 @@ const (
 	AppCollections = "go_app_collections"
 	AppSearch      = "go_app_search"
 	AppGraph       = "go_app_graph"
+	AppSql         = "go_app_sql"
 )
 
 type appStep struct {
@@ -145,6 +147,12 @@ var appCalls = map[string]appCall{
 	}),
 	"graph.delete": unaryCall[graphv1.DeleteGraphRequest, operationsv1.Operation](func(c *Client) func(context.Context, *graphv1.DeleteGraphRequest, ...CallOption) (*operationsv1.Operation, error) {
 		return c.Graph().Delete
+	}),
+	"sql.query": unaryCall[sqlv1.QueryRequest, sqlv1.QueryResponse](func(c *Client) func(context.Context, *sqlv1.QueryRequest, ...CallOption) (*sqlv1.QueryResponse, error) {
+		return c.Sql().Query
+	}),
+	"sql.query_arrow": unaryCall[sqlv1.QueryArrowRequest, sqlv1.QueryArrowResponse](func(c *Client) func(context.Context, *sqlv1.QueryArrowRequest, ...CallOption) (*sqlv1.QueryArrowResponse, error) {
+		return c.Sql().QueryArrow
 	}),
 }
 
@@ -300,6 +308,39 @@ func TestGoAppSearch(t *testing.T) {
 
 func TestGoAppGraph(t *testing.T) {
 	t.Run(AppGraph, func(t *testing.T) { replayOnOwnServer(t, "app_graph") })
+}
+
+func TestGoAppSql(t *testing.T) {
+	t.Run(AppSql, func(t *testing.T) { replayOnOwnServer(t, "app_sql") })
+}
+
+// Sql().Records sends the `$1` value and reads the rows as records, against
+// the recorded first step of app_sql.
+func TestGoSqlRecords(t *testing.T) {
+	server, err := startNodeFixtureServer(t)
+	if err != nil {
+		t.Skipf("the shared fixture server needs node: %v", err)
+	}
+	t.Cleanup(server.stop)
+	client, err := New(Options{
+		Endpoint:  server.endpoint,
+		Namespace: "app",
+		NoRetries: true,
+		Transport: TransportConfig{ConnectOptions: []connect.ClientOption{connect.WithProtoJSON()}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	records, err := client.Sql().Records(context.Background(),
+		"SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags", []any{1},
+		WithHeader("loams-fixture-name", "app_sql"), WithHeader("loams-fixture-step", "0"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := []map[string]any{{"tags": "policy", "c": 2.0}, {"tags": "shipping", "c": 1.0}}
+	if fmt.Sprint(records) != fmt.Sprint(want) {
+		t.Fatalf("records %v, want %v", records, want)
+	}
 }
 
 // appFixtureNames are the app fixtures the manifest names.
