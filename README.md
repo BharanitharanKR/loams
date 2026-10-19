@@ -39,7 +39,7 @@ Read the [pitch](docs/design/00-pitch.md) and the [architecture](docs/design/01-
 | **Console, desktop, CLI** | Hosted web console; Loams Desktop and the `loams` CLI for Linux, macOS and Windows |
 | **Loams Studio** | Experimental. An agentic development environment in the console's Studio mode: coding agents (Claude Code, Codex, opencode and others) in threads with a git worktree each, diff review, git actions, terminals, previews and parallel runs, all through the `loams-agentd` daemon. On by default in Loams Desktop; in the browser it runs against a remote `loams-agentd` and is behind a feature flag ([guides](docs/guides/studio/index.md)) |
 | **Loams Git** | Experimental. `git-remote-loams`, git's remote helper, ships with the `loams` CLI packages: `git clone`, `fetch` and `push` reach a Loams Git repository on a bucket, with no server in between |
-| **SDKs** | TypeScript, Python, Go, Rust, C#, C++ and Swift (more languages coming). Published to npm, PyPI, crates.io, NuGet and the Go proxy as `0.1.0`; Swift from the release tag, C++ as a release tarball <!-- verify after publish --> |
+| **SDKs** | TypeScript, Python, Go, Rust, C#, C++ and Swift (more languages coming). Published to npm, PyPI, crates.io, NuGet and the Go proxy as `0.1.0`; Swift from the release tag, C++ as a release tarball. Experimental: Java and Kotlin on Maven Central, Ruby on RubyGems |
 
 **Coming next:** Loams Git on the server (repositories in the release images), first-party connectors, Iceberg analytics, Kafka wire, functions and jobs. The full status table is in [Running Loams](docs/release/preview.md); the plan is in the [roadmap](docs/design/12-roadmap-testing-risks.md).
 

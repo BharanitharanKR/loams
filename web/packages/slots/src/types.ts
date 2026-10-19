@@ -68,6 +68,14 @@ export interface SlotMap {
     kind: 'list';
     props: { query: string; publish: (commands: readonly PaletteCommand[]) => void };
   };
+  /**
+   * A palette source (design 59, D1078; the same contract as `palette.command`, which stays
+   * an alias, W9): mounted with the query while the palette is open, it calls `publish`.
+   */
+  'shell.palette.source': {
+    kind: 'list';
+    props: { query: string; publish: (commands: readonly PaletteCommand[]) => void };
+  };
 }
 
 /** What an inspector or drawer tab receives (design 59, D1078). */

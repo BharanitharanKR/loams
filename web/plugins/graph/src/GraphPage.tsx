@@ -7,7 +7,16 @@
 import { Code, type Transport } from '@connectrpc/connect';
 import { NamespacePicker, PageHead } from '@loams/desktop-ui';
 import { graph } from '@loams/proto';
-import { Badge, Button, ComingSoon, Empty, isNotServed, Notice, type SqlSchema } from '@loams/ui';
+import {
+  Badge,
+  Button,
+  ComingSoon,
+  Empty,
+  isNotServed,
+  Notice,
+  SkeletonList,
+  type SqlSchema,
+} from '@loams/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createGraphClient,
@@ -85,9 +94,7 @@ export function GraphPage({ transport, openExternal, storage, namespace }: Graph
     return (
       <div className="lc-page">
         {head}
-        <p className="text-muted" role="status">
-          Asking the server about Loams Graph…
-        </p>
+        <SkeletonList label="Asking the server about Loams Graph" layout="cards" rows={3} />
       </div>
     );
   }
@@ -106,7 +113,9 @@ export function GraphPage({ transport, openExternal, storage, namespace }: Graph
         <Notice tone="danger" title="Could not reach the server">
           {detected.message}
         </Notice>
-        <Button onClick={() => setTick((t) => t + 1)}>Try again</Button>
+        <div>
+          <Button onClick={() => setTick((t) => t + 1)}>Try again</Button>
+        </div>
       </div>
     );
   }
@@ -356,9 +365,9 @@ function Workspace({
         <div className="flex min-w-0 flex-col gap-4">
           {selected ? (
             <>
-              <h2 className="m-0 text-base">
+              <h2 className="m-0 text-emphasis">
                 <span className={/* mono-ok: id */ 'font-mono'}>{selected.name}</span>
-                <span className="ml-2 text-sm font-normal text-muted">in {ns}</span>
+                <span className="ml-2 text-body font-normal text-muted">in {ns}</span>
               </h2>
               <Editor
                 statement={statement}
@@ -381,7 +390,7 @@ function Workspace({
               />
               {status && <Notice title={status} />}
               {busy && !streaming && (
-                <p className="m-0 text-sm text-muted" role="status">
+                <p className="m-0 text-body text-muted" role="status">
                   Running…
                 </p>
               )}

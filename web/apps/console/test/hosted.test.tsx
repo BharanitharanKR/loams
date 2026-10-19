@@ -7,7 +7,7 @@ import { composeCatalog, parseCatalog } from '@loams/console-host';
 import { createMockTransport } from '@loams/console-host/testing';
 import { createWebPlatform } from '@loams/platform-web';
 import { pageEntries } from '@loams/plugin-shell';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import baseCatalog from '../catalog/base.yml?raw';
 import { startConsole } from '../src/cordis/start.js';
@@ -24,16 +24,22 @@ import {
 } from '../src/hosted/edition.js';
 import {
   checkHealth,
+  type EngineStatus,
   fetchIdentity,
+  HEALTH_POLL,
   parseEngineUrl,
   savedEngine,
   savedMode,
   saveEngine,
   saveMode,
+  watchHealth,
 } from '../src/hosted/engine.js';
 import { ConfigErrorScreen, ConnectScreen } from '../src/hosted/screens.js';
 import { redirectUri, startHosted } from '../src/hosted/start.js';
 import { AUTH_MODES, parseRuntimeConfig } from '../src/runtime-config.js';
+
+/** A /health watcher that never reports, for header tests about something else. */
+const idle = () => () => {};
 
 let dispose: (() => Promise<void>) | undefined;
 afterEach(async () => {
@@ -118,6 +124,87 @@ describe('engine URL', () => {
     expect(redirectUri({ origin: 'http://localhost:5173', pathname: '/ui/cordis.html' })).toBe(
       'http://localhost:5173/ui/cordis.html',
     );
+  });
+});
+
+describe('the engine dot (UX-1)', () => {
+  afterEach(() => vi.useRealTimers());
+
+  it('polls /health, backs off while the engine is down, and asks again on focus', async () => {
+    vi.useFakeTimers();
+    const answers = [false, false, true];
+    const check = vi.fn(async () =>
+      answers.shift() === false
+        ? { ok: false as const, kind: 'unreachable' as const, message: 'Failed to fetch' }
+        : { ok: true as const, status: 200, ms: 3 },
+    );
+    const seen: EngineStatus[] = [];
+    const target = new EventTarget();
+    const stop = watchHealth('https://e', (s) => seen.push(s), check, target);
+    expect(seen[0]).toEqual({ state: 'checking' });
+    await vi.advanceTimersByTimeAsync(0);
+    expect(seen.at(-1)).toMatchObject({ state: 'down', retryInMs: HEALTH_POLL.firstRetryMs });
+    await vi.advanceTimersByTimeAsync(HEALTH_POLL.firstRetryMs);
+    expect(seen.at(-1)).toMatchObject({ state: 'down', retryInMs: 2 * HEALTH_POLL.firstRetryMs });
+    await vi.advanceTimersByTimeAsync(2 * HEALTH_POLL.firstRetryMs);
+    expect(seen.at(-1)).toEqual({ state: 'ok', ms: 3 });
+    expect(check).toHaveBeenCalledTimes(3);
+    target.dispatchEvent(new Event('focus'));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(check).toHaveBeenCalledTimes(4);
+    stop();
+    await vi.advanceTimersByTimeAsync(HEALTH_POLL.okMs * 2);
+    expect(check).toHaveBeenCalledTimes(4);
+  });
+
+  it('caps the backoff', async () => {
+    vi.useFakeTimers();
+    const seen: EngineStatus[] = [];
+    const stop = watchHealth(
+      'https://e',
+      (s) => seen.push(s),
+      async () => ({ ok: false, kind: 'timeout', message: 'No answer within 6 s.' }),
+      new EventTarget(),
+    );
+    await vi.advanceTimersByTimeAsync(10 * HEALTH_POLL.maxRetryMs);
+    expect(seen.at(-1)).toMatchObject({ state: 'down', retryInMs: HEALTH_POLL.maxRetryMs });
+    stop();
+  });
+
+  it('is amber while checking, green when the engine answers, red with the reason when not', () => {
+    let report: (s: EngineStatus) => void = () => {};
+    const watch = (_origin: string, on: (s: EngineStatus) => void) => {
+      report = on;
+      return () => {};
+    };
+    const { container } = render(
+      <HostedHeader
+        watch={watch}
+        session={{
+          engine: 'https://loams.tail1.ts.net',
+          authMode: 'tailscale',
+          user: 'ada@example.com',
+          demo: false,
+          setDemo: vi.fn(),
+          changeEngine: vi.fn(),
+        }}
+      />,
+    );
+    const dot = () =>
+      container.querySelector('[data-engine-status]')?.getAttribute('data-engine-status');
+    const title = () => container.querySelector('.lc-hosted-engine')?.getAttribute('title');
+    expect(dot()).toBe('checking');
+    expect(title()).toMatch(/^Checking the engine/);
+    act(() => report({ state: 'ok', ms: 4 }));
+    expect(dot()).toBe('ok');
+    expect(title()).toBe('Connected to https://loams.tail1.ts.net. Change engine');
+    act(() => report({ state: 'down', message: 'Failed to fetch', retryInMs: 8_000 }));
+    expect(dot()).toBe('down');
+    expect(title()).toMatch(
+      /^Cannot reach the engine at https:\/\/loams.tail1.ts.net\. No answer\./,
+    );
+    expect(title()).toContain('Trying again in 8 s.');
+    expect(screen.getByRole('button', { name: /Cannot reach the engine/ })).toBeTruthy();
   });
 });
 
@@ -251,8 +338,6 @@ describe('the browser edition', () => {
     expect(labels).toEqual(
       expect.arrayContaining(['Live', 'Graph', 'Analytics', 'Streams & Links', 'Status']),
     );
-    // Durable stays desktop-only: the engine's main port has no `/durable/` route.
-    expect(labels).not.toContain('Durable');
     for (const sample of ['Deployments', 'Loams SQL', 'Metrics', 'Pipelines', 'Git']) {
       expect(labels).not.toContain(sample);
     }
@@ -263,6 +348,8 @@ describe('the browser edition', () => {
       house: 'active',
       'data-studio': 'active',
       streams: 'active',
+      // B12: over the engine's `/durable/` on its main port.
+      durable: 'active',
     });
 
     expect(root.querySelector('.lc-side .lc-preview')).toBeNull();
@@ -276,7 +363,7 @@ describe('the browser edition', () => {
     expect(signOut).toBeTruthy();
     if (signOut) fireEvent.click(signOut);
     expect(session.signOut).toHaveBeenCalled();
-  });
+  }, 20_000); // boots the browser edition's whole catalog, as the test below (Windows: over 5 s)
 
   it('adds the sample-data pages under Demo data', async () => {
     const { root, handle } = await boot(true);
@@ -338,18 +425,20 @@ describe('sign-in modes', () => {
       setDemo: vi.fn(),
     };
     const { container, rerender } = render(
-      <HostedHeader session={{ ...base, user: 'ada@example.com' }} />,
+      <HostedHeader watch={idle} session={{ ...base, user: 'ada@example.com' }} />,
     );
     expect(container.querySelector('.lc-hosted-user')?.textContent).toBe(
       'ada@example.com via tailnet',
     );
     expect(screen.queryByRole('button', { name: 'Sign out' })).toBeNull();
     // B20: an engine with sign-in off is not a tailnet login.
-    rerender(<HostedHeader session={{ ...base, user: 'Local developer', authOff: true }} />);
+    rerender(
+      <HostedHeader watch={idle} session={{ ...base, user: 'Local developer', authOff: true }} />,
+    );
     expect(container.querySelector('.lc-hosted-user')?.textContent).toBe(
       'Local developer · sign-in off',
     );
-    rerender(<HostedHeader session={{ ...base, identityProblem: 'nope' }} />);
+    rerender(<HostedHeader watch={idle} session={{ ...base, identityProblem: 'nope' }} />);
     const unknown = container.querySelector('.lc-hosted-user-unknown');
     expect(unknown?.textContent).toBe('Tailnet user unknown');
     expect(unknown?.getAttribute('title')).toBe('nope');
@@ -359,6 +448,7 @@ describe('sign-in modes', () => {
     const signOut = vi.fn();
     render(
       <HostedHeader
+        watch={idle}
         session={{
           engine: 'https://loams.tail1.ts.net',
           authMode: 'apikey',
@@ -458,6 +548,27 @@ describe('sign-in modes', () => {
     void startHosted(config, root, start);
     await waitFor(() => expect(root.textContent).toContain('Connect your engine'));
     expect((root.querySelector('input[type=text]') as HTMLInputElement).value).toBe('');
+    expect(start).not.toHaveBeenCalled();
+  });
+
+  it('a remembered engine that is down opens the connect screen, not the console', async () => {
+    saveMode('tailscale');
+    // The engine is down behind its gateway: /health answers 502.
+    const fetcher = vi.fn(async () => json(502, {}));
+    vi.stubGlobal('fetch', fetcher);
+    const root = document.createElement('div');
+    document.body.append(root);
+    const start = vi.fn();
+    const config = parseRuntimeConfig({
+      authMode: 'tailscale',
+      engineUrl: 'https://loams.tail1.ts.net',
+    });
+    void startHosted(config, root, start);
+    await waitFor(() => expect(root.textContent).toContain('Connect your engine'));
+    expect(fetcher).toHaveBeenCalledWith(
+      'https://loams.tail1.ts.net/health',
+      expect.objectContaining({ credentials: 'omit' }),
+    );
     expect(start).not.toHaveBeenCalled();
   });
 

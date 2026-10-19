@@ -11,7 +11,6 @@
 // install-runtime` checks when the user turns background agents on. Without the daemon the app still
 // packages (Studio then says it is not bundled), unless LOAMS_REQUIRE_AGENTD=1, as the release sets.
 import { execFileSync, spawnSync } from "node:child_process";
-import { createHash } from "node:crypto";
 import {
 	chmodSync,
 	copyFileSync,
@@ -22,24 +21,21 @@ import {
 	statSync,
 	writeFileSync,
 } from "node:fs";
+import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+
+const { writeBinSums } = createRequire(import.meta.url)("./bin-sums.cjs");
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const repo = resolve(root, "..", "..");
 
 // Windows builds set this when the engine did not build or pass its smoke test: ship no engine, and
-// the app shows the "not available on Windows yet" state. resources/bin stays an empty directory.
-if (process.env.LOAMS_DESKTOP_NO_LOCAL_ENGINE === "1") {
-	const out = join(root, "resources", "bin");
-	rmSync(out, { recursive: true, force: true });
-	mkdirSync(out, { recursive: true });
-	console.warn("LOAMS_DESKTOP_NO_LOCAL_ENGINE=1: not bundling the local engine");
-	process.exit(0);
-}
+// the app shows the "not available on Windows yet" state. The agent daemon is still bundled below.
+const noEngine = process.env.LOAMS_DESKTOP_NO_LOCAL_ENGINE === "1";
 const exe = process.platform === "win32" ? "loams.exe" : "loams";
 
-if (process.env.LOAMS_BUILD_ENGINE === "1") {
+if (!noEngine && process.env.LOAMS_BUILD_ENGINE === "1") {
 	execFileSync(
 		"cargo",
 		["build", "--release", "-p", "loams", "--features", "live,durable,live-tikv,graph"],
@@ -60,21 +56,6 @@ const releaseDir = () => {
 	}
 	return join(targetDir, "release");
 };
-const src = process.env.LOAMS_BIN || join(releaseDir(), exe);
-if (!existsSync(src)) {
-	console.error(
-		`engine binary not found at ${src}\n` +
-			"Build it: cargo build --release -p loams --features live,durable,live-tikv,graph (or set LOAMS_BIN / LOAMS_BUILD_ENGINE=1).",
-	);
-	process.exit(1);
-}
-
-const outDir = join(root, "resources", "bin");
-rmSync(outDir, { recursive: true, force: true });
-mkdirSync(outDir, { recursive: true });
-const dest = join(outDir, exe);
-copyFileSync(src, dest);
-chmodSync(dest, 0o755);
 
 // The unstripped release binary is ~470 MB. Strip the copy, never the cargo output.
 function strip(file, what) {
@@ -86,9 +67,29 @@ function strip(file, what) {
 	}
 	console.warn(`warning: no strip/llvm-strip found; shipping an unstripped ${what}`);
 }
-strip(dest, "engine");
-const mb = (statSync(dest).size / 1048576).toFixed(1);
-console.log(`engine: ${src} -> ${dest} (${mb} MB)`);
+
+const outDir = join(root, "resources", "bin");
+rmSync(outDir, { recursive: true, force: true });
+mkdirSync(outDir, { recursive: true });
+
+if (noEngine) {
+	console.warn("LOAMS_DESKTOP_NO_LOCAL_ENGINE=1: not bundling the local engine");
+} else {
+	const src = process.env.LOAMS_BIN || join(releaseDir(), exe);
+	if (!existsSync(src)) {
+		console.error(
+			`engine binary not found at ${src}\n` +
+				"Build it: cargo build --release -p loams --features live,durable,live-tikv,graph (or set LOAMS_BIN / LOAMS_BUILD_ENGINE=1).",
+		);
+		process.exit(1);
+	}
+	const dest = join(outDir, exe);
+	copyFileSync(src, dest);
+	chmodSync(dest, 0o755);
+	strip(dest, "engine");
+	const mb = (statSync(dest).size / 1048576).toFixed(1);
+	console.log(`engine: ${src} -> ${dest} (${mb} MB)`);
+}
 
 const agentdExe = process.platform === "win32" ? "loams-agentd.exe" : "loams-agentd";
 let agentdSrc = process.env.LOAMS_AGENTD_BIN;
@@ -113,12 +114,9 @@ if (!agentdSrc || !existsSync(agentdSrc)) {
 	copyFileSync(agentdSrc, agentdDest);
 	chmodSync(agentdDest, 0o755);
 	strip(agentdDest, "loams-agentd");
-	// What `loams-agentd install-runtime --from resources/bin` checks (crates/loams-agentd/src/runtime_install.rs).
-	const sha = (f) => createHash("sha256").update(readFileSync(f)).digest("hex");
-	writeFileSync(
-		join(outDir, "SHA256SUMS"),
-		`${sha(dest)}  ${exe}\n${sha(agentdDest)}  ${agentdExe}\n`,
-	);
+	// What `loams-agentd install-runtime --from resources/bin` checks. Signing rewrites the binaries,
+	// so mac-sign.cjs (macOS) and the release workflow (Windows, after SignPath) write it again.
+	writeBinSums(outDir);
 	const version =
 		process.env.LOAMS_DESKTOP_VERSION ||
 		JSON.parse(readFileSync(join(root, "package.json"), "utf8")).version;

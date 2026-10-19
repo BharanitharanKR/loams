@@ -24,12 +24,14 @@
         "slots",
         "transport",
         "platform",
-        "flags"
+        "flags",
+        "session"
       ],
       "provides": [],
       "slots": [
         "console.page",
-        "shell.nav.section"
+        "shell.nav.section",
+        "shell.palette.source"
       ],
       "permissions": [
         "collections:read",
@@ -38,9 +40,7 @@
       ],
       "requires": {
         "console": "^0.1.0",
-        "api": [
-          "loams.collection.v1"
-        ]
+        "api": []
       },
       "editions": [
         "desktop"

@@ -325,7 +325,11 @@ test("electron smoke", async () => {
 				await expect(
 					page.getByRole("heading", { name: /^movies/ }),
 				).toBeVisible();
-				await page.getByLabel("Statement").fill("MATCH (n) RETURN count(n)");
+				// The CodeMirror editor (a labelled contenteditable textbox, #762); its toolbar
+				// is "Statement actions", so the label alone matches both.
+				const statement = page.getByRole("textbox", { name: "Statement", exact: true });
+				await statement.fill("MATCH (n) RETURN count(n)");
+				await expect(statement).toHaveText("MATCH (n) RETURN count(n)");
 				await page.getByRole("button", { name: "Run", exact: true }).click();
 				const table = page.getByRole("table");
 				await expect(table).toBeVisible();

@@ -37,6 +37,23 @@ jobs:
           docker compose --env-file .env.example config -q
           docker compose --env-file .env.example --profile '*' config -q
           LOAMS_POSTGRES_COMPOSE=./postgres-off.yaml docker compose --env-file .env.example config -q
+      # 0.1.0 blocker: an apostrophe in endpoint-storage's `sh -c` script
+      # ("pg-control's key") opened a quote that never closed, and the
+      # service restart-looped. Every inline shell script must parse.
+      - name: every inline shell script parses (sh -n)
+        working-directory: deploy/release
+        run: |
+          docker compose --env-file .env.example --profile '*' config --format json \
+            | jq -r '.services | to_entries[]
+                     | (.value.entrypoint // []) as $ep | (.value.command // []) as $cmd
+                     | ($ep + $cmd) as $argv
+                     | [range(0; $argv | length - 1) as $i
+                        | select($argv[$i] | test("^-[a-z]*c$")) | $argv[$i + 1]][]
+                     | @base64' \
+            | while read -r script; do
+                printf '%s' "$script" | base64 -d > "$RUNNER_TEMP/script.sh"
+                sh -n "$RUNNER_TEMP/script.sh" || { cat "$RUNNER_TEMP/script.sh"; exit 1; }
+              done
       - name: no host port on 0.0.0.0
         working-directory: deploy/release
         run: |

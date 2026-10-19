@@ -19,7 +19,7 @@ import {
   collectDirectoryPaths,
   diffFileTreeEntries,
 } from '../src/diff/tree/diffFileTree.logic';
-import { checkoutDiff, comment, type FakeDiff, fakeDiff } from './diff-fakes';
+import { checkoutDiff, comment, type FakeDiff, fakeDiff, WORKING_PATCH } from './diff-fakes';
 import { installDomStubs, wrap } from './files-fakes';
 
 beforeAll(installDomStubs);
@@ -469,5 +469,60 @@ describe('upstream commentSubmitShortcut cases', () => {
     expect(
       isCommentSubmitShortcut({ key: 'K', metaKey: true, ctrlKey: false }, 'Looks good', false),
     ).toBe(false);
+  });
+});
+
+describe('review_draft_survives_thread_updates', () => {
+  /** Opens a draft by editing the stored comment, and types into it. */
+  async function openDraft(text: string): Promise<HTMLTextAreaElement> {
+    await screen.findByText('Why a <script> here?');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit comment' }));
+    const box = (await screen.findByRole('textbox', {
+      name: /^Comment on line/,
+    })) as HTMLTextAreaElement;
+    fireEvent.change(box, { target: { value: text } });
+    return box;
+  }
+
+  it('keeps the viewer and the draft when the watch sends the same diff again', async () => {
+    const fake = fakeDiff({ comments: [comment()] });
+    mount(fake);
+    await waitFor(() =>
+      expect(viewerFor('src/app.ts').shadowRoot?.querySelector('[data-line]')).not.toBeNull(),
+    );
+    const box = await openDraft('Half-written');
+    const line = viewerFor('src/app.ts').shadowRoot?.querySelector('[data-line]') as Element;
+    // The daemon's watch re-sends an unchanged snapshot (a new object, a later timestamp).
+    act(() => fake.emitWorking({ ...checkoutDiff(WORKING_PATCH, 'sum-1'), updatedAtMs: 2 }));
+    expect(line.isConnected).toBe(true);
+    expect(box.isConnected).toBe(true);
+    expect(box.value).toBe('Half-written');
+    // A changed diff is shown.
+    act(() =>
+      fake.emitWorking(
+        checkoutDiff(WORKING_PATCH.replace('export const d = 4;', 'export const d = 5;'), 'sum-2'),
+      ),
+    );
+    await waitFor(() => expect(line.isConnected).toBe(false));
+  });
+
+  it('keeps an open draft when the host hands over a new source for the same thread', async () => {
+    const fake = fakeDiff({ comments: [comment()] });
+    const view = mount(fake);
+    const box = await openDraft('Half-written');
+    // A host rebuilds its source as the thread's row changes (its branch renamed); the new
+    // object's watch answers later, as a daemon's does.
+    const renamed: typeof fake.source = {
+      ...fake.source,
+      watchWorkingDiff(listener, onError) {
+        const timer = setTimeout(() => fake.source.watchWorkingDiff(listener, onError), 10);
+        return () => clearTimeout(timer);
+      },
+    };
+    view.rerender(wrap(<DiffPanel threadId="thread-1" source={renamed} />));
+    await act(() => new Promise((resolve) => setTimeout(resolve, 30)));
+    expect(screen.queryByText('Loading changes')).toBeNull();
+    expect(box.isConnected).toBe(true);
+    expect(box.value).toBe('Half-written');
   });
 });

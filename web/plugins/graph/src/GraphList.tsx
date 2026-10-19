@@ -5,7 +5,7 @@
 
 import { Code } from '@connectrpc/connect';
 import { graph } from '@loams/proto';
-import { Badge, Button, Checkbox, Dialog, Field, Input, Notice } from '@loams/ui';
+import { Badge, Button, Checkbox, Dialog, Field, Input, Notice, SkeletonList } from '@loams/ui';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { type GraphClient, type GraphFailure, type Language, toFailure } from './client.js';
 
@@ -71,7 +71,7 @@ export function GraphList(p: GraphListProps) {
   return (
     <nav className="flex flex-col gap-2" aria-label="Graphs">
       <div className="flex items-center justify-between gap-2">
-        <h2 className="m-0 text-base">Graphs</h2>
+        <h2 className="m-0 text-emphasis">Graphs</h2>
         {p.canAdmin && (
           <Button size="sm" onClick={() => setCreating(true)}>
             New graph
@@ -85,7 +85,7 @@ export function GraphList(p: GraphListProps) {
         </Notice>
       )}
       {!loading && !error && graphs.length === 0 && (
-        <p className="m-0 text-sm text-muted">No graphs in {namespace} yet.</p>
+        <p className="m-0 text-body text-muted">No graphs in {namespace} yet.</p>
       )}
       <ul className="m-0 flex list-none flex-col gap-1 p-0">
         {graphs.map((g) => {
@@ -102,14 +102,16 @@ export function GraphList(p: GraphListProps) {
                 onClick={() => onSelect(g)}
               >
                 <span
-                  className={/* mono-ok: id */ 'flex items-center gap-2 font-mono text-sm text-ink'}
+                  className={
+                    /* mono-ok: id */ 'flex items-center gap-2 font-mono text-body text-ink'
+                  }
                 >
                   {g.name}
                   {g.mode === graph.GraphMode.LINKED && <Badge>linked</Badge>}
                   {state && <Badge>{state}</Badge>}
                 </span>
                 {g.stats && (
-                  <span className="text-xs text-muted">
+                  <span className="text-small text-muted">
                     {g.stats.nodes.toString()} nodes · {g.stats.edges.toString()} relationships
                   </span>
                 )}
@@ -128,7 +130,7 @@ export function GraphList(p: GraphListProps) {
           );
         })}
       </ul>
-      {loading && <p className="m-0 text-sm text-muted">Loading…</p>}
+      {loading && <SkeletonList label="Loading graphs" rows={3} />}
       {next && !loading && (
         <Button size="sm" variant="quiet" onClick={() => void load(next)}>
           Load more
@@ -210,7 +212,7 @@ function CreateDialog({
   return (
     <Dialog open onClose={onClose} title="New graph">
       <form className="flex flex-col gap-3" onSubmit={submit}>
-        <p className="m-0 text-sm text-muted">
+        <p className="m-0 text-body text-muted">
           An owned graph in <span className={/* mono-ok: id */ 'font-mono'}>{namespace}</span>,
           written with GQL.
         </p>

@@ -2,7 +2,8 @@
 // Mod+K in both modes, on @loams/ui's CommandPalette, ranked as T3 Code ranks
 // (@loams/ui `rankCommands`).
 //
-// Plugins contribute through the `palette.command` slot: an entry renders nothing and,
+// Plugins contribute through the `shell.palette.source` slot (design 59, W9; its older
+// name `palette.command` stays an alias): an entry renders nothing and,
 // while the palette is open, publishes its commands for the current query (so a plugin
 // can read server state with its own hooks, and only while someone is looking). The
 // shell adds "Go to" rows from the nav and its own general commands.
@@ -172,7 +173,11 @@ export function ShellPalette({
     [given, onOpenChange],
   );
   const [query, setQuery] = useState('');
-  const entries = useSlot('palette.command');
+  // `shell.palette.source` (design 59, W9) and its alias `palette.command` have the same
+  // props, so their entries mount the same way.
+  const legacy = useSlot('palette.command');
+  const sources = useSlot('shell.palette.source');
+  const entries = [...legacy, ...(sources as unknown as SlotEntry<'palette.command'>[])];
   const toast = useToast();
   const published = useRef(new Map<number, { sig: string; commands: readonly PaletteCommand[] }>());
   const [, bump] = useState(0);

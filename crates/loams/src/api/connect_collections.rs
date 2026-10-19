@@ -42,15 +42,16 @@ use std::sync::Arc;
 use buffa::MessageField;
 use buffa::RepeatedView;
 use connectrpc::{ConnectError, RequestContext, Response, ServiceRequest, ServiceResult};
-use loams_common::meta::{HotConfig, is_reserved_namespace};
+use loams_common::meta::{Consistency, HotConfig, is_reserved_namespace};
 use loams_proto::loams::collection::v1 as pb;
 use loams_proto::loams::collection::v1::{
     AddFieldsRequest, AddFieldsResponse, CollectionService, CollectionServiceExt,
     CreateCollectionRequest, CreateNamespaceRequest, CreateNamespaceResponse,
     DropCollectionRequest, DropCollectionResponse, GetCollectionRequest, ListCollectionsRequest,
-    ListCollectionsResponse, ListVersionsRequest, ListVersionsResponse, NamespaceService,
-    NamespaceServiceExt, ScanRequest, SetHotRequest, SetHotResponse, UpdateAliasesRequest,
-    UpdateAliasesResponse, WarmCollectionRequest, WarmCollectionResponse,
+    ListCollectionsResponse, ListNamespacesRequest, ListNamespacesResponse, ListVersionsRequest,
+    ListVersionsResponse, NamespaceService, NamespaceServiceExt, ScanRequest, SetHotRequest,
+    SetHotResponse, UpdateAliasesRequest, UpdateAliasesResponse, WarmCollectionRequest,
+    WarmCollectionResponse,
 };
 use loams_query::json::schema;
 use loams_query::{ScanAt, ServiceError, alias_actions_from_json};
@@ -169,6 +170,68 @@ impl NamespaceService for Collections {
         Response::ok(CreateNamespaceResponse {
             namespace: name.to_owned(),
             namespace_id: id.0,
+            ..Default::default()
+        })
+    }
+
+    /// The namespaces the caller reaches (`super::namespace_reach`), by name,
+    /// with their collection and stream counts from the catalog: three
+    /// metastore reads whatever the number of namespaces, no per-namespace
+    /// scan.
+    async fn list_namespaces(
+        &self,
+        ctx: RequestContext,
+        request: ServiceRequest<'_, ListNamespacesRequest>,
+    ) -> ServiceResult<ListNamespacesResponse> {
+        let page = Page::new(request.page_size, request.page_token)?;
+        let meta = &self.state.meta;
+        let mut namespaces = meta
+            .namespaces(Consistency::Local)
+            .await
+            .map_err(refused_meta)?;
+        namespaces.retain(|ns| !is_reserved_namespace(&ns.name));
+        namespaces.sort_by(|a, b| a.name.cmp(&b.name));
+        let reached = super::namespace_reach::reachable(
+            &self.state.principals,
+            ctx.extensions().get::<crate::auth::Principal>(),
+            namespaces.iter().map(|ns| ns.name.clone()).collect(),
+        )
+        .await?;
+        let reached: std::collections::BTreeSet<String> = reached.into_iter().collect();
+        namespaces.retain(|ns| reached.contains(&ns.name));
+        let (namespaces, next_page_token) = page.finish(namespaces);
+        let mut collections: BTreeMap<u64, u32> = BTreeMap::new();
+        let mut streams: BTreeMap<u64, u32> = BTreeMap::new();
+        if !namespaces.is_empty() {
+            for collection in meta
+                .collections(Consistency::Local, None)
+                .await
+                .map_err(refused_meta)?
+            {
+                *collections.entry(collection.namespace.0).or_default() += 1;
+            }
+            for stream in meta
+                .streams(Consistency::Local, None)
+                .await
+                .map_err(refused_meta)?
+            {
+                if !stream.name.starts_with('_') {
+                    *streams.entry(stream.namespace.0).or_default() += 1;
+                }
+            }
+        }
+        Response::ok(ListNamespacesResponse {
+            namespaces: namespaces
+                .into_iter()
+                .map(|ns| pb::NamespaceInfo {
+                    collection_count: collections.get(&ns.id.0).copied().unwrap_or(0),
+                    stream_count: streams.get(&ns.id.0).copied().unwrap_or(0),
+                    namespace: ns.name,
+                    namespace_id: ns.id.0,
+                    ..Default::default()
+                })
+                .collect(),
+            next_page_token,
             ..Default::default()
         })
     }

@@ -13,6 +13,12 @@ use common::{eventually, pid_gone, pool, small, statement, tmp_root};
 use loams_house::{ExitReason, Launcher, Outcome, PoolConfig, ProcessLauncher};
 use loams_house_ipc::{Bind, EXIT_PROTOCOL, Frame, FrameCodec, InputSpec, PROTOCOL_VERSION};
 
+/// A statement that runs until it is killed. `count()` over a bare `numbers()` is
+/// answered from the range in large steps, so it can reach the 1 TiB read limit
+/// (TOO_MANY_BYTES, code 307) before a kill lands; the per-row hash makes ClickHouse
+/// read every row, which keeps it busy for minutes.
+const LONG_QUERY: &str = "SELECT count() FROM numbers(1e12) WHERE NOT ignore(sipHash64(number))";
+
 fn bind(namespace: &str) -> Frame {
     Frame::Bind(Bind {
         namespace: namespace.to_string(),
@@ -94,7 +100,7 @@ async fn kill_is_the_cancel() {
     let pid = lease.pid();
 
     lease
-        .start(statement("SELECT count() FROM numbers(1e12)", "TSV"))
+        .start(statement(LONG_QUERY, "TSV"))
         .await
         .expect("started");
     // The handle is for this statement: taken after `start` (review I1).
@@ -160,7 +166,7 @@ async fn crash_does_not_reach_the_front() {
     let doomed_pid = doomed.pid();
 
     doomed
-        .start(statement("SELECT count() FROM numbers(1e12)", "TSV"))
+        .start(statement(LONG_QUERY, "TSV"))
         .await
         .expect("started");
     doomed.abort_for_test().await.expect("Abort sent");
@@ -359,7 +365,7 @@ async fn deadline_kill_answers_159() {
     let pool = pool("deadline", small(2)).await;
     let mut lease = pool.acquire("ns-deadline").await.expect("worker");
     lease
-        .start(statement("SELECT count() FROM numbers(1e12)", "TSV"))
+        .start(statement(LONG_QUERY, "TSV"))
         .await
         .expect("started");
     // The handle is for this statement: taken after `start` (review I1).
@@ -700,11 +706,7 @@ fn busy_worker_exits_when_its_socket_closes() {
         FrameCodec::read(&mut socket).expect("frame"),
         Some(Frame::Done)
     );
-    FrameCodec::write(
-        &mut socket,
-        &Frame::Execute(statement("SELECT count() FROM numbers(1e12)", "TSV")),
-    )
-    .expect("Execute");
+    FrameCodec::write(&mut socket, &Frame::Execute(statement(LONG_QUERY, "TSV"))).expect("Execute");
     std::thread::sleep(Duration::from_millis(300));
     assert!(launched.control.exit().borrow().is_none(), "still running");
 

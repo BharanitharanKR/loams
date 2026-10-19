@@ -787,6 +787,8 @@ Commit `loams-ci: monthly extension updates` (LP-0022).
 
 ## NF1e — Postgres 18 (Tasks 24–30)
 
+> **Superseded by [NF2](2026-10-18-nf2-postgres-18-19.md)** (D1107, 2026-10-18): this milestone's tasks moved to NF2, with the corrections of [§62](../design/62-postgres-major-versions.md) (the 18 base is `REL_18_6`, 19's GA is 2026-11-19, no `preview` pin list).
+
 ### Task 24: Postgres 18 in the fork
 
 **Files:**
@@ -917,6 +919,8 @@ Commit `deploy(pg): Postgres 18 supported`.
 
 ## NF1f — Postgres 19 (Tasks 31–35)
 
+> **Superseded by [NF2](2026-10-18-nf2-postgres-18-19.md)** (D1107, 2026-10-18): this milestone's tasks moved to NF2, with the corrections of [§62](../design/62-postgres-major-versions.md) (the 18 base is `REL_18_6`, 19's GA is 2026-11-19, no `preview` pin list).
+
 ### Task 31: Track 19 from RC1
 
 **Files:**
@@ -996,6 +1000,8 @@ Tests: the matrix; `pins.py check`; `verify-pins.sh`.
 Commit `deploy(pg): Postgres 19 supported`.
 
 ## NF1g — Upgrades, Loams integration and ownership (Tasks 36–41)
+
+> Tasks 36–38 and Task 41's removal of 14 and 15 moved to [NF2](2026-10-18-nf2-postgres-18-19.md) Tasks 12, 13, 25 and 16 (D1107, D1115). Tasks 39–41 stay here.
 
 ### Task 36: PgDog per major
 
@@ -1372,7 +1378,7 @@ Fork PRs, all merged with merge commits by the org admin's PR bypass: ostrium-la
 1. **No teams were created; CODEOWNERS uses the organisation's admins.** The plan lists the three teams as an owner action (Q722, Q734), and `codeowners_valid` needs `codeowners/errors` to be `[]`, which an owner that does not exist fails ("Unknown owner"). Every file keeps §51 §3.5's sections: storage, compute and CI; Postgres (`/vendor/`, `/pgxn/`, `/compute/`); security (`/deny.toml`, `/.github/`, `/LOAMS_PATCHES.md`, `/NOTICE`). Each section names the team that will own it in a comment, and each is owned by the three org admins (`@dina-kar`, `@Kesh3805`, `@ostrium-tech`) until then. Swapping in a team is a one-line edit per section. The security section also owns `/CODEOWNERS` and `/SECURITY.md`. In the small forks, `*` names the future `loams-postgres-maintainers` (`postgres-maintainers` in `postgres`), and `/.github/` (and `/deny.toml` in `tokio-epoll-uring`) names `security`. `codeowners/errors` is `[]` on all four branches; Neon's file on `loams-postgres` `main` had 22 errors (its `@neondatabase/*` teams). With CODEOWNERS present, `main`'s ruleset (code-owner review) now needs an approval from one of the admins other than the author, or the admin PR bypass (Task 3 ruling 4).
 2. **`check-dco.sh` exempts the trailer exception table.** `1218fb7a` has no `Signed-off-by` either, and cannot be rewritten, so a check from `neon-fork-point` failed on it. The script reads the 40-hex shas of `LOAMS_PATCHES.md`'s `## Commits without a trailer` section and skips them (one list of pre-rule commits, not two); a sha elsewhere in the file exempts nothing. The table is read from a trusted revision, `EXEMPT_FROM` (default `HEAD`; the workflow passes the pull request's base commit), so a pull request cannot exempt its own unsigned commit by adding a row (CodeRabbit on fork PR #3, fixed in `2ba913b0`). The sign-off is matched by the author's email, as in Loams' original; CodeRabbit's request to also match the name was declined, since the copy should not diverge from Loams' rule alone. `BASE` defaults to `neon-fork-point` and `HEAD` to `HEAD`, and the workflow runs it over `neon-fork-point..HEAD` (on a PR, GitHub's merge commit; merges are skipped). One fix to the copy: the range is computed in an assignment, so a missing ref fails instead of checking an empty range (the Loams original's `for sha in $(git rev-list …)` passes on a bad ref). The test is `scripts/loams/tests/test-dco.sh` (Loams' six cases plus: Neon history exempt, an unsigned commit fails, the table exempts it, the table in the wrong section does not, a bad ref fails). `test_governance.py` runs it as `dco_rejects_unsigned`, beside `notice_retains_upstream` and `codeowners_valid`.
 3. **No required check.** `loams-dco.yml` has the jobs `dco` and `governance`. Actions are disabled on `loams-postgres` (Task 4 ruling 6), so neither is added to the `main` ruleset; whoever enables Actions adds `dco` (and `patches`) in the same step.
-4. **Security contact and private reporting.** `SECURITY.md` names `security@ostriumlabs.com` and 3 business days, as §51 §3.7 does (Loams' `SECURITY.md` uses the same address); no other address was invented. Each `SECURITY.md` links Loams' policy (`ostrium-labs/loams/security/policy`) and its own repository's private reporting. Private vulnerability reporting was off on every fork and is now enabled (`PUT …/private-vulnerability-reporting`) on `loams-postgres`, `postgres`, `tokio-epoll-uring`, `pg_session_jwt`, `rust-postgres` and `azure-sdk-for-rust` (§3.7: "every fork"); `autoscaling` and `framed-websockets` are archived and were left alone. Response targets (Q724) are not stated: they are Task 6's. `postgres`'s file sends vulnerabilities in PostgreSQL itself to the PostgreSQL Security Team and ones in the fork's changes to us.
+4. **Security contact and private reporting.** `SECURITY.md` names `security@ostriumlabs.org` and 3 business days, as §51 §3.7 does (Loams' `SECURITY.md` uses the same address); no other address was invented. Each `SECURITY.md` links Loams' policy (`ostrium-labs/loams/security/policy`) and its own repository's private reporting. Private vulnerability reporting was off on every fork and is now enabled (`PUT …/private-vulnerability-reporting`) on `loams-postgres`, `postgres`, `tokio-epoll-uring`, `pg_session_jwt`, `rust-postgres` and `azure-sdk-for-rust` (§3.7: "every fork"); `autoscaling` and `framed-websockets` are archived and were left alone. Response targets (Q724) are not stated: they are Task 6's. `postgres`'s file sends vulnerabilities in PostgreSQL itself to the PostgreSQL Security Team and ones in the fork's changes to us.
 5. **`postgres`: `loams/meta` was created at `REL_17_STABLE_neon`'s head (`56692dfb`)**, as the plan says, and the files go there by PR. **This amends Task 15:** `loams/REL_17_STABLE` should start from `loams/meta`'s tip (one commit on `56692dfb`) rather than "unchanged", and Task 15 adds the same two files to `loams/REL_16_STABLE` and `loams/REL_18_STABLE`.
 6. **`NOTICE`** keeps Neon's five lines unchanged and appends the plan's text one sentence per line ("Loams Postgres." / "Based on Neon by Databricks/Neon Inc. (…), licensed under the Apache License 2.0." / "Modifications Copyright 2026 Ostrium Labs and the Loams Authors." / "Changes from Neon are listed in LOAMS_PATCHES.md."). Shipping it in images under `/usr/share/doc/loams-postgres/` stays with Tasks 10 and 11.
 7. **`LOAMS_PATCHES.md` and `LOAMS.md`.** LP-0000's title now covers this task ("…; CODEOWNERS, DCO check, SECURITY.md, NOTICE"), and the exception table says the DCO check uses it too. `LOAMS.md` names the DCO script, CODEOWNERS and SECURITY.md in one sentence.

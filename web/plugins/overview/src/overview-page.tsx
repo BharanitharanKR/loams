@@ -1,7 +1,7 @@
 import type { Transport } from '@connectrpc/connect';
 import type { LoamsDesktopApi, ServerEntry, StackId, StackState } from '@loams/desktop/contracts';
 import { Slot } from '@loams/slots';
-import { Button } from '@loams/ui';
+import { Button, StaggerItem, StaggerList } from '@loams/ui';
 import { useEffect, useMemo, useState } from 'react';
 import {
   ConnectorsCard,
@@ -120,24 +120,40 @@ export function OverviewPage({
         </Button>
       </header>
       <LiveDashboard client={liveClient} />
-      <h2 className="mb-3">Status</h2>
-      <div className="lc-cards">
-        <EngineCard engine={engine} active={active} />
-        <DataCard where={where} load={data} />
-        <StackCard
-          id="postgres"
-          title="Postgres"
-          href="/postgres"
-          state={postgres}
-          local={isLocal}
-        />
-        <LiveCard engine={engine} local={isLocal} />
-        <DurableCard where={where} load={durable} local={isLocal} />
-        <StreamsCard where={where} load={streams} />
-        <ConnectorsCard load={connectors} />
-        <FactoryCard load={factory} />
+      <h2>Status</h2>
+      <StaggerList as="div" className="lc-cards">
+        <StaggerItem as="div" index={0}>
+          <EngineCard engine={engine} active={active} />
+        </StaggerItem>
+        <StaggerItem as="div" index={1}>
+          <DataCard where={where} load={data} />
+        </StaggerItem>
+        <StaggerItem as="div" index={2}>
+          <StackCard
+            id="postgres"
+            title="Postgres"
+            href="/postgres"
+            state={postgres}
+            local={isLocal}
+          />
+        </StaggerItem>
+        <StaggerItem as="div" index={3}>
+          <LiveCard engine={engine} local={isLocal} />
+        </StaggerItem>
+        <StaggerItem as="div" index={4}>
+          <DurableCard where={where} load={durable} local={isLocal} />
+        </StaggerItem>
+        <StaggerItem as="div" index={5}>
+          <StreamsCard where={where} load={streams} />
+        </StaggerItem>
+        <StaggerItem as="div" index={6}>
+          <ConnectorsCard load={connectors} />
+        </StaggerItem>
+        <StaggerItem as="div" index={7}>
+          <FactoryCard load={factory} />
+        </StaggerItem>
         <Slot name="environment.overview.card" props={{}} />
-      </div>
+      </StaggerList>
     </div>
   );
 }

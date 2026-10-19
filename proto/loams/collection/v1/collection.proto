@@ -98,6 +98,21 @@ service NamespaceService {
   // a caller that wants the namespace to exist before it writes to it.
   rpc CreateNamespace(CreateNamespaceRequest) returns (CreateNamespaceResponse) {
   }
+  // The namespaces the caller can reach, by name (AIP-158 paged). The
+  // engine's own reserved namespace is never listed. A caller reaches a
+  // namespace by the same rules a namespace's data is reached by: the
+  // operator (sign-in off, a key from the keys file) and an org owner or
+  // admin reach every one; a member reaches the namespaces that are no
+  // project's environment and the environments their project grants give
+  // them; a credential bound to one environment reaches only that
+  // environment's namespace; anyone outside the org reaches none.
+  //
+  // The counts come from the metastore's catalog in the same read, so they
+  // cost nothing per namespace; document counts and bytes are not here,
+  // since the engine does not keep them per namespace.
+  rpc ListNamespaces(ListNamespacesRequest) returns (ListNamespacesResponse) {
+    option idempotency_level = NO_SIDE_EFFECTS;
+  }
 }
 
 service CollectionService {
@@ -180,6 +195,33 @@ message CreateNamespaceResponse {
   string namespace = 1;
   // Its id, stable for the life of the namespace. A decimal string in JSON.
   uint64 namespace_id = 2;
+}
+
+message ListNamespacesRequest {
+  // AIP-158 page size; 0 or absent is every namespace that fits.
+  int32 page_size = 1;
+  // The `next_page_token` of the previous page; absent starts at the first.
+  string page_token = 2;
+}
+
+message ListNamespacesResponse {
+  // By name.
+  repeated NamespaceInfo namespaces = 1;
+  // Absent on the last page.
+  string next_page_token = 2;
+}
+
+// One namespace, as `ListNamespaces` answers it.
+message NamespaceInfo {
+  // The namespace's name.
+  string namespace = 1;
+  // Its id, stable for the life of the namespace. A decimal string in JSON.
+  uint64 namespace_id = 2;
+  // How many collections it holds (absent: none).
+  uint32 collection_count = 3;
+  // How many streams it holds, a collection's own implicit stream and the
+  // engine's internal streams (names starting with `_`) not counted.
+  uint32 stream_count = 4;
 }
 
 message CreateCollectionRequest {

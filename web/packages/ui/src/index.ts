@@ -38,6 +38,8 @@ export {
   type ButtonSize,
   type ButtonVariant,
   buttonClass,
+  IconButton,
+  type IconButtonProps,
 } from './button';
 export {
   fit,
@@ -118,6 +120,7 @@ export { ButtonGroup, ButtonGroupSeparator } from './group';
 export { InputControl, type InputControlProps } from './input';
 export { InputGroup, InputGroupAddon, InputGroupInput } from './input-group';
 export { Kbd, KbdGroup } from './kbd';
+export { ListRow, type ListRowProps } from './list-row';
 export { Logo, Mark, Wordmark } from './logo';
 export {
   Menu,
@@ -156,12 +159,38 @@ export {
   Stats,
 } from './misc';
 export {
+  AnimatePresence,
+  INSTANT,
+  LIST_STAGGER,
+  LoadingSwap,
+  MOTION_DURATION,
+  MOTION_EASE,
+  MOTION_PRESETS,
+  MOTION_SPRING,
+  type MotionPreset,
+  type MotionPresetName,
+  MotionProvider,
+  motion,
+  motionPreset,
+  OverlayPresence,
+  REDUCED_PRESET,
+  SelectionGroup,
+  SelectionIndicator,
+  StaggerItem,
+  StaggerList,
+  useMotionPreset,
+  useMotionRender,
+  useMotionTransition,
+  usePrefersReducedMotion,
+} from './motion';
+export {
   NumberField,
   NumberFieldDecrement,
   NumberFieldGroup,
   NumberFieldIncrement,
   NumberFieldInput,
 } from './number-field';
+export { plainError } from './plain-error';
 export {
   Popover,
   PopoverClose,
@@ -190,6 +219,7 @@ export {
 } from './query-results';
 export { Radio, RadioGroup, RadioGroupItem } from './radio-group';
 export { ScrollArea } from './scroll-area';
+export { SearchInput, type SearchInputProps } from './search-input';
 export { Segmented, type SegmentedOption } from './segmented';
 export {
   type Option,
@@ -232,6 +262,7 @@ export {
 } from './sidebar';
 export { type ResponsiveSidebarState, resolveSidebarState } from './sidebar-state';
 export { Skeleton } from './skeleton';
+export { SkeletonList } from './skeleton-list';
 export { Spinner } from './spinner';
 export {
   codeEditorText,

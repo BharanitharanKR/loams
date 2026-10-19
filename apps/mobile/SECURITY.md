@@ -8,7 +8,7 @@ Loams mobile has no release yet. Security fixes land on `main` only.
 
 **Please do not report security vulnerabilities in public issues, pull requests or discussions.**
 
-Report them privately through GitHub's private vulnerability reporting: open the repository's **Security** tab and choose **Report a vulnerability**. If you cannot use GitHub, email **security@ostriumlabs.com**.
+Report them privately through GitHub's private vulnerability reporting: open the repository's **Security** tab and choose **Report a vulnerability**. If you cannot use GitHub, email **security@ostriumlabs.org**.
 
 Please include the platform (Android or iOS), the app version or commit, steps to reproduce, and your assessment of the impact.
 

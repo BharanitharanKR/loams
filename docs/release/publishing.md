@@ -1,8 +1,12 @@
 # Publishing Loams: registries, secrets and the release path
 
-Status (2026-10-17): **container images publish on every tag. The SDK release
-workflow is ready for thirteen SDKs, and it publishes nothing until the owner
-turns on each registry.** Every SDK goes out under the name `loams`, or that
+Status (2026-10-19): **container images publish on every tag. `v0.1.0` is live
+on npm, PyPI, crates.io, NuGet, the Go proxy, RubyGems and Maven Central, and as
+the C++ tarball on the GitHub release.** The PHP split repository
+`ostrium-labs/loams-php` has `main` and `v0.1.0`, but the package is not on
+Packagist until the owner submits it (step 5 below). pub.dev and CocoaPods are
+not turned on. The SDK release workflow publishes nothing to a registry until
+the owner turns it on. Every SDK goes out under the name `loams`, or that
 registry's spelling of it. The `v0.1.0-preview.N` tags publish pre-release
 versions. `v0.1.0` is a normal release (owner, 2026-10-17), and the SDK READMEs
 still call the APIs a preview until 1.0.
@@ -180,13 +184,13 @@ the tags.
 
 1. Sign in at central.sonatype.com → Namespaces → Add namespace `dev.loams`. The portal shows a verification key. Add a **DNS TXT** record on the apex `loams.dev` (name `@`) whose value is that key, then click Verify. The record can be removed once the namespace is verified.
 2. Go to Account → Generate User Token. Store the two values as the secrets `MAVEN_CENTRAL_USERNAME` and `MAVEN_CENTRAL_PASSWORD` in the `maven-central` environment. They are the token's username and password, not the login.
-3. Central rejects artifacts whose signing key it cannot find. Upload [`loams-release-key.asc`](loams-release-key.asc) (fingerprint `333AC94599D5A1EB2A416D1E83DC134D8CAF895D`, see [signing.md](signing.md)) at https://keyserver.ubuntu.com/ (Submit Key) and at https://keys.openpgp.org/upload. keys.openpgp.org then asks you to confirm `security@ostriumlabs.com`. The publish job also tries `gpg --send-keys` to keyserver.ubuntu.com. The workflow uses the existing repository secret `LOAMS_GPG_PRIVATE_KEY` and variable `LOAMS_GPG_KEY_ID`.
+3. Central rejects artifacts whose signing key it cannot find. Upload [`loams-release-key.asc`](loams-release-key.asc) (fingerprint `333AC94599D5A1EB2A416D1E83DC134D8CAF895D`, see [signing.md](signing.md)) at https://keyserver.ubuntu.com/ (Submit Key) and at https://keys.openpgp.org/upload. keys.openpgp.org then asks you to confirm `security@ostriumlabs.org`. The publish job also tries `gpg --send-keys` to keyserver.ubuntu.com. The workflow uses the existing repository secret `LOAMS_GPG_PRIVATE_KEY` and variable `LOAMS_GPG_KEY_ID`.
 4. Set the variable `SDK_PUBLISH_MAVEN=true`. The job uploads each bundle with `publishingType=AUTOMATIC` and waits until Central reports `PUBLISHING` or `PUBLISHED`.
 
 ### CocoaPods (`Loams`)
 
 1. Read the trunk shutdown note under [Release gotchas](#release-gotchas) first.
-2. On a Mac, run `pod trunk register security@ostriumlabs.com 'Ostrium Labs' --description='loams sdk-release'` and click the link in the email. Copy the token from `~/.netrc` (the `password` for `machine trunk.cocoapods.org`), and store it as the secret `COCOAPODS_TRUNK_TOKEN` in the `cocoapods` environment. Trunk sessions expire, so re-register if a push says the session is invalid.
+2. On a Mac, run `pod trunk register security@ostriumlabs.org 'Ostrium Labs' --description='loams sdk-release'` and click the link in the email. Copy the token from `~/.netrc` (the `password` for `machine trunk.cocoapods.org`), and store it as the secret `COCOAPODS_TRUNK_TOKEN` in the `cocoapods` environment. Trunk sessions expire, so re-register if a push says the session is invalid.
 3. Set the variable `SDK_PUBLISH_COCOAPODS=true`. `pod trunk push` clones the tag named in [`Loams.podspec`](../../Loams.podspec), so the tag must exist on GitHub first, which it does on a tag run. The first push claims `Loams` for the registered email.
 
 ### Go and C++ (no account)

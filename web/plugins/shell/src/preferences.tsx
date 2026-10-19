@@ -5,9 +5,23 @@
 
 import { useSlot } from '@loams/slots';
 import { Empty } from '@loams/ui';
+import { useEffect } from 'react';
 
-export function PreferencesPage() {
+/** The desktop's Settings page, which lists the same sections (UX-3). */
+const APP_SETTINGS = '/settings';
+
+export function PreferencesPage({
+  navigate,
+}: {
+  navigate?: (to: string, opts?: { replace?: boolean }) => void;
+}) {
   const sections = useSlot('console.settings.section').filter((e) => e.meta?.id && e.meta.label);
+  // On the desktop, Settings › App already shows these sections: one place, not two.
+  const desktop = useSlot('shell.nav.section').some((e) => e.meta?.id === 'settings');
+  useEffect(() => {
+    if (desktop) navigate?.(APP_SETTINGS, { replace: true });
+  }, [desktop, navigate]);
+  if (desktop) return null;
   return (
     <div className="lc-page">
       <header className="lc-page-head">

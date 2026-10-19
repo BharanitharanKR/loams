@@ -57,6 +57,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   Skeleton,
+  SkeletonList,
   Spinner,
   Switch,
   splitForMiddleTruncate,
@@ -771,6 +772,14 @@ describe('Spinner, Skeleton, Kbd, ScrollArea', () => {
   it('a skeleton is hidden from assistive technology', () => {
     const { container } = render(<Skeleton className="h-4" />);
     expect(container.firstElementChild?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('a skeleton list is one labelled status over hidden bars (UX-4)', () => {
+    const { container, rerender } = render(<SkeletonList label="Loading collections" rows={3} />);
+    const status = screen.getByRole('status', { name: 'Loading collections' });
+    expect(status.querySelectorAll('[data-slot="skeleton"][aria-hidden="true"]')).toHaveLength(3);
+    rerender(<SkeletonList label="Loading the graph" layout="cards" />);
+    expect(container.querySelectorAll('[data-slot="skeleton"].h-24')).toHaveLength(4);
   });
 
   it('kbd nests keys inside a group', () => {

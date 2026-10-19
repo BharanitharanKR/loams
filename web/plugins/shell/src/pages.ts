@@ -4,13 +4,26 @@
 
 import type { SlotEntry } from '@loams/slots';
 
+/**
+ * A project's pins until the person changes them (Q932, UX-2): the data pages that show the
+ * engine's own data first, then the project's daily pages. A page the edition does not serve
+ * is skipped, and stored pins are never rewritten.
+ */
 export const DEFAULT_PINNED: readonly string[] = [
   'data',
+  'data-sql',
+  'search',
+  'streams',
+  'graph',
+  'live',
+  'analytics',
   'deployments',
   'git',
   'agents',
   'connectors',
 ];
+/** Every page, by group, with a pin for each (UX-2): the Pages list's "All pages". */
+export const ALL_PAGES_PATH = '/pages';
 /** The old sections whose pages are Settings now. */
 export const SETTINGS_GROUPS: readonly string[] = [
   'Organisation',
@@ -118,6 +131,26 @@ export function pinnedPages(all: readonly PageEntry[], pinned: readonly string[]
     const p = byId.get(id);
     return p && !isSettingsPage(p) ? [p] : [];
   });
+}
+
+/** Settings' sections (UX-3): the app's own, the organisation's, then Studio's. */
+export const SETTINGS_SECTIONS = ['App', 'Organisation', 'Studio'] as const;
+export type SettingsSection = (typeof SETTINGS_SECTIONS)[number];
+
+export function settingsSectionOf(entry: Pick<PageEntry, 'group' | 'id'>): SettingsSection {
+  if (entry.id === 'settings' || entry.id === PREFERENCES_ID) return 'App';
+  if (entry.id === 'studio-settings' || entry.group === 'Studio') return 'Studio';
+  return 'Organisation';
+}
+
+/** The Settings pages under their sections, in order; an empty section is left out. */
+export function settingsSections(
+  pages: readonly PageEntry[],
+): { section: SettingsSection; pages: PageEntry[] }[] {
+  return SETTINGS_SECTIONS.map((section) => ({
+    section,
+    pages: pages.filter((p) => settingsSectionOf(p) === section),
+  })).filter((s) => s.pages.length > 0);
 }
 
 /**

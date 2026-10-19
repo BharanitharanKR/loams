@@ -24,15 +24,18 @@ export { isAllowedSetting, settingProblem } from './settings.js';
 
 const plugin: PluginModule = {
   name: 'house',
-  inject: ['router', 'slots', 'transport'],
+  inject: ['router', 'slots', 'transport', 'platform'],
   apply(ctx: Context) {
     const router = service(ctx, 'router');
     const slots = service(ctx, 'slots');
     const client = createHouseClient(service(ctx, 'transport'));
+    // The chosen database is remembered per server: the one the console talks to.
+    const platform = service(ctx, 'platform');
+    const serverKey = platform.serverUrl ?? platform.baseUrl;
     ctx.effect(() =>
       router.page(
         { id: 'analytics', path: '/analytics', title: 'Analytics', plugin: 'house' },
-        () => <HousePage client={client} />,
+        () => <HousePage client={client} serverKey={serverKey} />,
       ),
     );
     ctx.effect(() =>

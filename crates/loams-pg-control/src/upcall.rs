@@ -168,6 +168,9 @@ pub struct UpcallConfig {
     pub wal_pools: BTreeMap<String, Vec<String>>,
     /// Endpoint storage, for the computes' file cache state (Task 16).
     pub endpoint_storage: Option<spec::EndpointStorage>,
+    /// Roles' password verifiers for the specs (Task 24); `None`: roles
+    /// get no password.
+    pub verifiers: Option<Arc<crate::scram::RoleVerifiers>>,
     pub limits: UpcallLimits,
     pub clock: Clock,
 }
@@ -183,6 +186,7 @@ impl UpcallConfig {
             default_pageserver: None,
             wal_pools: BTreeMap::new(),
             endpoint_storage: None,
+            verifiers: None,
             limits: UpcallLimits::default(),
             clock: Clock::system(),
         }
@@ -369,6 +373,7 @@ impl UpcallServer {
                 default_pageserver: config.default_pageserver,
                 wal_pools: config.wal_pools,
                 endpoint_storage: config.endpoint_storage,
+                verifiers: config.verifiers,
             },
             notify_digest: config
                 .notify_token
