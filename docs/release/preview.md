@@ -223,7 +223,8 @@ memory (TiKV, TiDB and the Postgres stack are the large ones), and the Tailscale
 machine whose browser you will use.
 
 Use the files of the release you run, so `compose.yaml` matches the images that
-`LOAMS_VERSION` pins. Either download the compose bundle attached to the release:
+`LOAMS_VERSION` pins. Download the compose bundle attached to the release; this is the
+supported path, and the bundle carries the first-run setup fix below:
 
 ```sh
 curl -fLO https://github.com/ostrium-labs/loams/releases/download/v0.1.0/loams-compose-0.1.0.tar.gz
@@ -232,13 +233,26 @@ cd loams-compose-0.1.0/release
 cp .env.example .env
 ```
 
-or clone the release tag (not the default branch, which moves ahead of the images):
+**From a git checkout instead.** The `v0.1.0` tag predates the first-run setup fix that the
+bundle and `main` have (the setup token's pass-through, see [First-run setup](#first-run-setup)):
+the tag's `compose.yaml` does not pass `LOAMS_SETUP_TOKEN` from `.env` to the engine. If you
+clone the tag, put the token in `secrets/engine.env` instead, and recreate the engine once the
+stack is up:
 
 ```sh
 git clone --branch v0.1.0 https://github.com/ostrium-labs/loams.git
 cd loams/deploy/release
 cp .env.example .env
+echo "LOAMS_SETUP_TOKEN=$(openssl rand -hex 32)" >> secrets/engine.env
+# after `docker compose up -d` below, if the engine was already running:
+docker compose up -d loams
 ```
+
+On the tag, `compute1` also needs a tenant and a timeline created by hand: follow
+[`deploy/loams-postgres-dev/README.md`](../../deploy/loams-postgres-dev/README.md#run), put
+`TENANT_ID` and `TIMELINE_ID` in `.env` and run `docker compose up -d compute1`. Or clone `main`,
+whose `deploy/release` has the setup fix and still pins `LOAMS_VERSION=0.1.0` until the next
+release.
 
 Edit `.env`:
 
@@ -257,9 +271,13 @@ Then start it:
 
 ```sh
 docker compose up -d
-docker compose ps                                   # every service running
+docker compose ps                                   # every service running (see below)
 docker compose exec tailscale tailscale status      # the stack is on your tailnet
 ```
+
+`docker compose ps` lists the long-running services. The one-shot services `migrate` and
+`create-bucket` run first and exit 0 by design (`docker compose ps -a` shows them as
+`Exited (0)`); a non-zero exit is a failure, and `docker compose logs <service>` says why.
 
 The engine's URL is `https://<TS_HOSTNAME>.<tailnet>.ts.net`, by default
 `https://loams.<tailnet>.ts.net`.
