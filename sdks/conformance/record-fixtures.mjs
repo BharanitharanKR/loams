@@ -2076,6 +2076,12 @@ const UNPRODUCIBLE_REASONS = [
     standIn: null,
   },
   {
+    reason: 'batch_partially_applied',
+    code: 'aborted',
+    why: 'Raised by the SDKs, never by a server (runtime contract R13).',
+    standIn: null,
+  },
+  {
     reason: 'workspace_read_only',
     code: 'failed_precondition',
     why:
@@ -2555,6 +2561,48 @@ const UNPRODUCIBLE_REASONS = [
     reason: "live_limit_exceeded",
     code: "resource_exhausted",
     why: "Needs a Live write past an app limit; the recorder writes nothing to Live (LV1 Task 19).",
+    standIn: null,
+  },
+  {
+    reason: "result_too_large",
+    code: "resource_exhausted",
+    why: 'Recorded by `app_sql` when `loams.sql.v1` lands (SDKP P0b).',
+    standIn: null,
+  },
+  {
+    reason: "sql_param_count",
+    code: "invalid_argument",
+    why: "Recorded by `app_sql` when `loams.sql.v1` lands (SDKP P0b).",
+    standIn: null,
+  },
+  {
+    reason: "namespace_required",
+    code: "invalid_argument",
+    why: "Raised by the SDKs before any network call (runtime contract R11); no server returns it.",
+    standIn: null,
+  },
+  {
+    reason: "invalid_consistency_token",
+    code: "invalid_argument",
+    why: "Raised by the SDKs when a token does not parse (runtime contract R4); the server answers a bad token with invalid_argument.",
+    standIn: null,
+  },
+  {
+    reason: "search_after_needs_tiebreak",
+    code: "invalid_argument",
+    why: "Raised by the SDKs before any network call (SDKP section 2.4); no server returns it.",
+    standIn: null,
+  },
+  {
+    reason: "result_too_large",
+    code: "resource_exhausted",
+    why: "Recorded by `app_sql` when `loams.sql.v1` lands (SDKP P0b).",
+    standIn: null,
+  },
+  {
+    reason: "client_deadline_exceeded",
+    code: "deadline_exceeded",
+    why: "Raised by the SDKs, never by a server (runtime contract R12).",
     standIn: null,
   },
 ];
