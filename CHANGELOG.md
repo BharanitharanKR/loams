@@ -42,6 +42,12 @@ All notable changes to this project are documented here. The format follows [Kee
   builders write. Setting both `filter` and `where` is `invalid_argument`,
   reason `filter_conflict`.
 
+- The app conformance corpus (SDKP P0d): the notes-app scenario recorded from
+  `loams dev` (`sdks/fixtures/recorded/app/`, `app-scenario.md`), the builder
+  corpus (`sdks/fixtures/builders/`) and the consistency-token corpus
+  (`sdks/fixtures/tokens.json`, also run by `loams-collection`), and
+  `check-languages.mjs --check <lang> --suite app`.
+
 ### Fixed
 
 - A search retriever without `k` was refused ("k must be between 1 and
