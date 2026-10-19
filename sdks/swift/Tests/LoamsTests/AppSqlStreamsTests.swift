@@ -47,6 +47,26 @@ final class AppSqlStreamsTests: XCTestCase {
         XCTAssertNil(keyed.calls[0].body["partition"], "proto3 JSON omits a zero partition")
     }
 
+    /// Keyed records (SDKP-25) encode as the recorded `app_streams` produce body does.
+    func test_swift_streams_produce_keyed_records() async throws {
+        let stub = StubTransport(replies: [.success(["lastOffset": .string("1")])])
+        let records: [any Sendable] = [
+            ProducerRecord(key: "1", value: JSONValue.object(["note": .int(1), "op": .string("created")])),
+            ProducerRecord(key: "5", value: JSONValue.object(["note": .int(5), "op": .string("deleted")]),
+                           headers: [StreamHeader("source", "notes")]),
+            "plain",
+        ]
+        _ = try await client(stub).streams.produce("note-events", records: records,
+                                                    producerId: "app-producer-1", producerSeq: 1)
+        XCTAssertEqual(stub.calls[0].body["records"], .array([
+            .object(["key": .string("MQ=="), "value": .string("eyJub3RlIjoxLCJvcCI6ImNyZWF0ZWQifQ==")]),
+            .object(["key": .string("NQ=="), "value": .string("eyJub3RlIjo1LCJvcCI6ImRlbGV0ZWQifQ=="),
+                     "headers": .array([.object(["key": .string("source"), "value": .string("bm90ZXM=")])])]),
+            .object(["value": .string("cGxhaW4=")]),
+        ]))
+        XCTAssertEqual(stub.calls[0].body["producerSeq"], .string("1"))
+    }
+
     /// The recorded `app_streams` bodies are proto3 JSON: a zero partition or offset is omitted.
     func test_swift_streams_fetch_omits_zero_partition_and_offset() async throws {
         let stub = StubTransport(replies: [.success([:]), .success([:])])

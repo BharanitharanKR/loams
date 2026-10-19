@@ -73,7 +73,7 @@ public struct StreamsModule: Sendable {
     }
 
     /// Appends records to one partition: each is `Data`, a `String` (UTF-8) or any
-    /// `JSONValue` (as JSON). With `producerId` and `producerSeq` a repeat answers the first
+    /// `JSONValue` (as JSON), or a ``ProducerRecord`` to give it a key and headers. With `producerId` and `producerSeq` a repeat answers the first
     /// append with `duplicate` set, so the SDK retries it; without them a produce is a
     /// plain append and is never retried.
     public func produce(_ stream: String, partition: Int = 0, records: [any Sendable], producerId: String? = nil,
@@ -81,7 +81,7 @@ public struct StreamsModule: Sendable {
                         options: CallOptions = .init()) async throws -> DynamicMessage {
         var fields: [String: JSONValue] = [
             "stream": .string(stream),
-            "records": .array(try records.map { .object(["value": .string(try Self.encode($0).base64EncodedString())]) }),
+            "records": .array(try records.map(Self.recordJSON)),
         ]
         var settings = options
         // proto3 JSON omits a zero partition, as the recorded app_streams bodies do.
@@ -93,6 +93,21 @@ public struct StreamsModule: Sendable {
         }
         if let namespace { fields["namespace"] = .string(namespace) }
         return try await call("Produce", "ProduceRequest", fields, settings)
+    }
+
+    /// One `loams.stream.v1.Record` as proto3 JSON: bytes as base64, an unset key omitted.
+    static func recordJSON(_ record: any Sendable) throws -> JSONValue {
+        guard let record = record as? ProducerRecord else {
+            return .object(["value": .string(try encode(record).base64EncodedString())])
+        }
+        var fields: [String: JSONValue] = ["value": .string(try encode(record.value).base64EncodedString())]
+        if let key = record.key { fields["key"] = .string(try encode(key).base64EncodedString()) }
+        if !record.headers.isEmpty {
+            fields["headers"] = .array(record.headers.map {
+                .object(["key": .string($0.key), "value": .string($0.value.base64EncodedString())])
+            })
+        }
+        return .object(fields)
     }
 
     /// A record's bytes: as given, a string's UTF-8, or a value's JSON.
@@ -143,8 +158,38 @@ public struct StreamsModule: Sendable {
                 default: at = 0
                 }
                 let value = r["value"]?.stringValue.flatMap { Data(base64Encoded: $0) } ?? Data()
-                return StreamRecord(partition: partition, offset: at, value: value)
+                let key = r["key"]?.stringValue.flatMap { Data(base64Encoded: $0) }
+                return StreamRecord(partition: partition, offset: at, value: value, key: key)
             }
         }
+    }
+}
+
+/// A record to produce with a key and headers. The key (partitioning, compaction) and the
+/// value are each `Data`, a `String` (UTF-8) or a `JSONValue` (as JSON).
+public struct ProducerRecord: Sendable {
+    public let key: (any Sendable)?
+    public let value: any Sendable
+    public let headers: [StreamHeader]
+
+    public init(key: (any Sendable)? = nil, value: any Sendable, headers: [StreamHeader] = []) {
+        self.key = key
+        self.value = value
+        self.headers = headers
+    }
+}
+
+/// One record header: a name and its bytes.
+public struct StreamHeader: Sendable, Equatable {
+    public let key: String
+    public let value: Data
+
+    public init(_ key: String, _ value: Data) {
+        self.key = key
+        self.value = value
+    }
+
+    public init(_ key: String, _ text: String) {
+        self.init(key, Data(text.utf8))
     }
 }

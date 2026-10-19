@@ -88,9 +88,9 @@ struct Notes {
         }
         _ = try await loams.streams.create("events")
         let produced = try await loams.streams.produce("events", records: [
-            JSONValue.object(["kind": .string("created"), "note": .int(1)]),
-            JSONValue.object(["kind": .string("patched"), "note": .int(2)]),
-            JSONValue.object(["kind": .string("deleted"), "note": .int(4)]),
+            ProducerRecord(key: "1", value: JSONValue.object(["kind": .string("created"), "note": .int(1)])),
+            ProducerRecord(key: "2", value: JSONValue.object(["kind": .string("patched"), "note": .int(2)])),
+            ProducerRecord(key: "4", value: JSONValue.object(["kind": .string("deleted"), "note": .int(4)])),
         ], producerId: "notes-demo", producerSeq: 1)
         let base = UInt64(produced.fields["baseOffset"]?.stringValue ?? "0") ?? 0
         let last = UInt64(produced.fields["lastOffset"]?.stringValue ?? "0") ?? 0
