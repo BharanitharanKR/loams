@@ -18,6 +18,8 @@ pubkey="${2:-}"
 [[ -n "${LOAMS_GPG_PRIVATE_KEY:-}" ]] || { echo "::error::LOAMS_GPG_PRIVATE_KEY is not set; SHA256SUMS cannot be signed" >&2; exit 1; }
 [[ -n "${LOAMS_GPG_KEY_ID:-}" ]] || { echo "::error::LOAMS_GPG_KEY_ID is not set" >&2; exit 1; }
 
+# Resolve the key before leaving the caller's directory: the workflow passes a relative path.
+pubkey="$(cd "$(dirname "$pubkey")" && pwd)/$(basename "$pubkey")"
 cd "$dir"
 rm -f SHA256SUMS.asc
 if [[ -f SHA256SUMS ]]; then
