@@ -32,6 +32,7 @@ import {
   type CollectionsModule,
   type DocumentsModule,
   type GraphModule,
+  type SqlModule,
   type NamespacesModule,
   type SearchModule,
   type VectorModule,
@@ -41,7 +42,7 @@ import {
   type ModuleBinding,
   type TablesModule,
 } from './gen/facade.js';
-import { attachAppCalls, type documentCalls, type searchCalls, type streamCalls } from './app.js';
+import { attachAppCalls, type documentCalls, type searchCalls, type sqlCalls, type streamCalls } from './app.js';
 import { CollectionHandle, type HandleModules } from './handle.js';
 import {
   CallInvoker,
@@ -148,6 +149,8 @@ export type CollectionsNamespace = CollectionsModule & {
 export type DocumentsNamespace = DocumentsModule & ReturnType<typeof documentCalls>;
 /** `loams.search`, with `text`, `hybrid` and `queryAll` (SDKP §2.4). */
 export type SearchNamespace = SearchModule & ReturnType<typeof searchCalls>;
+/** `loams.sql`, with `records` (SDKP §2.5). */
+export type SqlNamespace = SqlModule & ReturnType<typeof sqlCalls>;
 /** `loams.streams`, once `loams.stream.v1` is annotated (SDKP P0c). */
 export type StreamsNamespace = Record<string, unknown> & ReturnType<typeof streamCalls>;
 
@@ -185,6 +188,8 @@ export class Loams {
   readonly vector: VectorModule;
   /** `loams.graph` — Loams Graph, queried with GQL. Its package is `unstable`. */
   readonly graph: GraphModule;
+  /** `loams.sql` — one read-only SQL statement over a namespace's collections. */
+  readonly sql: SqlNamespace;
   /** The module catalogue, feature detection and the version check. */
   readonly system: SystemApi;
   /** Every generated module, by its dotted name (`'live.admin'`): the
@@ -238,6 +243,7 @@ export class Loams {
     this.search = tree.search as SearchNamespace;
     this.vector = tree.vector as VectorModule;
     this.graph = tree.graph as GraphModule;
+    this.sql = tree.sql as SqlNamespace;
     this.system = new SystemApi(
       (request, callOptions) => this.instance.getInstance(request, callOptions),
       {

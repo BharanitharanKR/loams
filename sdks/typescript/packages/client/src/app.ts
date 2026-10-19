@@ -7,6 +7,7 @@
 // - `documents.scrollAll` over `scroll` (its cursor is a `DocumentId`, not an
 //   AIP-158 string, so the generic `listAll` does not fit it);
 // - `search.text`, `search.hybrid` and `search.queryAll` over `search.query`;
+// - `sql.records` over `sql.query`, and `sqlRecords` for an answer in hand;
 // - `streams.subscribe` over `streams.fetch`;
 // - `<call>All` for every paged call (`namespaces.listAll`,
 //   `collections.listAll`), over the generic paging iterator.
@@ -16,7 +17,8 @@
 // `documents.upsert`. Nothing here names an RPC path or a retry class; those
 // stay the generated bindings'.
 
-import { fromJson, type JsonObject, type JsonValue } from '@bufbuild/protobuf';
+import { fromJson, toJson, type JsonObject, type JsonValue } from '@bufbuild/protobuf';
+import { ListValueSchema, ValueSchema, type ListValue } from '@bufbuild/protobuf/wkt';
 import { Code } from '@connectrpc/connect';
 import { WriteOpSchema } from '@loams/proto/documents';
 import type { ModuleBinding } from './gen/facade.js';
@@ -300,6 +302,64 @@ export function searchCalls(search: { query: UnaryCall }) {
   };
 }
 
+/** The parts of a `sql.query` answer `sqlRecords` reads. */
+export interface SqlAnswer {
+  columns: readonly { name: string }[];
+  rows: readonly ListValue[];
+}
+
+/**
+ * A `sql.query` answer's rows as one object per row, keyed by column name
+ * (SDKP §2.5). A value is its JSON: a 64-bit integer past 2^53 is the decimal
+ * string the server sent, so it stays exact. A column name that repeats keeps
+ * its last value, as a JavaScript object must.
+ */
+export function sqlRecords(answer: SqlAnswer): Record<string, JsonValue>[] {
+  const names = answer.columns.map((column) => column.name);
+  return answer.rows.map((row) => {
+    const values = toJson(ListValueSchema, row) as JsonValue[];
+    const record: Record<string, JsonValue> = {};
+    names.forEach((name, at) => {
+      record[name] = values[at] ?? null;
+    });
+    return record;
+  });
+}
+
+/** The options of `sql.records`. */
+export interface SqlRecordsOptions extends CallOptions {
+  namespace?: string;
+  maxRows?: number;
+}
+
+/** The SQL conveniences over `sql.query`. */
+export function sqlCalls(sql: { query: UnaryCall }) {
+  return {
+    /**
+     * One read-only statement with its `$1…$n` values, answered as records
+     * (`sqlRecords`). The values are JSON scalars; the server casts each to the
+     * type its placeholder was inferred as.
+     */
+    async records(
+      statement: string,
+      params: readonly JsonValue[] = [],
+      options: SqlRecordsOptions = {},
+    ): Promise<Record<string, JsonValue>[]> {
+      const { namespace, maxRows, ...call } = options;
+      const answer = (await sql.query(
+        {
+          sql: statement,
+          params: params.map((value) => fromJson(ValueSchema, value)),
+          ...(namespace !== undefined ? { namespace } : {}),
+          ...(maxRows !== undefined ? { maxRows } : {}),
+        },
+        call,
+      )) as SqlAnswer;
+      return sqlRecords(answer);
+    },
+  };
+}
+
 /** The stream conveniences over `streams.fetch`. */
 export function streamCalls(streams: { fetch: UnaryCall }) {
   return {
@@ -366,6 +426,10 @@ export function attachAppCalls(
   const search = modules.search as { query?: UnaryCall } | undefined;
   if (typeof search?.query === 'function') {
     add('search', searchCalls(search as { query: UnaryCall }));
+  }
+  const sql = modules.sql as { query?: UnaryCall } | undefined;
+  if (typeof sql?.query === 'function') {
+    add('sql', sqlCalls(sql as { query: UnaryCall }));
   }
   const streams = modules.streams as { fetch?: UnaryCall } | undefined;
   if (typeof streams?.fetch === 'function') {

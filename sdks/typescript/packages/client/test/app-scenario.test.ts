@@ -1,7 +1,7 @@
-// SDKP Part B for TypeScript: the app scenario through the public facade.
+// SDKP Parts B and C for TypeScript: the app scenario through the public facade.
 //
-// `typescript_app_collections`, `typescript_app_search` and
-// `typescript_app_graph` replay `sdks/fixtures/recorded/app/` against the
+// `typescript_app_collections`, `typescript_app_search`, `typescript_app_graph`
+// and `typescript_app_sql` (Part C) replay `sdks/fixtures/recorded/app/` against the
 // fixture server (`helpers/app-replay.ts` says how), so each passes only when
 // the facade sends exactly the recorded requests and reads the recorded answers
 // the way they mean. A live `loams dev` cannot replay a recording (its tokens
@@ -10,6 +10,7 @@
 // the fixture server only.
 
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { Loams } from '../src/loams.js';
 import { replayAppFixture } from './helpers/app-replay.js';
 import { startFixtureServer, type FixtureServer } from './helpers/server.js';
 
@@ -38,5 +39,29 @@ describe('typescript_app_search', () => {
 describe('typescript_app_graph', () => {
   it('a build without the graph feature refuses every graph call, typed', async () => {
     await expect(replayAppFixture(server.endpoint, 'app_graph')).resolves.toBeUndefined();
+  });
+});
+
+describe('typescript_app_sql', () => {
+  it('a parameterised read, a capped read, Arrow IPC and the two refusals', async () => {
+    await expect(replayAppFixture(server.endpoint, 'app_sql')).resolves.toBeUndefined();
+  });
+
+  it('sql.records sends the $1 values and reads the rows as records', async () => {
+    const loams = new Loams({
+      endpoint: server.endpoint,
+      namespace: 'app',
+      maxRetries: 0,
+      transportOptions: { useBinaryFormat: false },
+    });
+    const records = await loams.sql.records(
+      'SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags',
+      [1],
+      { headers: { 'loams-fixture-name': 'app_sql', 'loams-fixture-step': '0' } },
+    );
+    expect(records).toEqual([
+      { tags: 'policy', c: 2 },
+      { tags: 'shipping', c: 1 },
+    ]);
   });
 });

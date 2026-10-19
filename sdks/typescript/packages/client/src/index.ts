@@ -23,6 +23,7 @@ export {
   type LiveNamespace,
   type NamespacesNamespace,
   type SearchNamespace,
+  type SqlNamespace,
   type StreamsNamespace,
   type LoamsEnvironment,
   type LoamsModules,
@@ -70,11 +71,15 @@ export {
   documentCalls,
   documentIdJson,
   searchCalls,
+  sqlCalls,
+  sqlRecords,
   streamCalls,
   type DocumentInput,
   type PatchChange,
   type ScrollOptions,
   type SearchShorthandOptions,
+  type SqlAnswer,
+  type SqlRecordsOptions,
   type Target,
 } from './app.js';
 export {

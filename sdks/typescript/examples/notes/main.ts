@@ -71,6 +71,13 @@ export async function main(): Promise<void> {
   const policy = await handle.count({ where: Filter.eq('tags', 'policy') });
   console.log('policy notes:', policy.count);
 
+  // SQL over the same collection, with a `$1` parameter, as records.
+  const perTag = await loams.sql.records(
+    'SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags',
+    [1],
+  );
+  for (const row of perTag) console.log(row.tags, row.c);
+
   // A bulk load: chunked, one idempotency key per chunk, the tokens merged.
   const loaded = await handle.writeBatch(
     Array.from({ length: 100 }, (_, i) => ({ id: 1000 + i, source: { title: `note ${i}`, tags: 'bulk', n: i } })),
