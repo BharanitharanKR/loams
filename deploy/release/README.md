@@ -235,8 +235,13 @@ package, checked against the release's `SHA256SUMS`) and runs `loams upgrade` in
   engine's auth like every other service.
 - TiDB starts with a passwordless root and the Postgres stack with default
   credentials; neither is forwarded over the tailnet by default.
-- `compute1` needs `TENANT_ID` and `TIMELINE_ID` (see
-  [`../loams-postgres-dev/README.md`](../loams-postgres-dev/README.md)).
+- `compute1`'s tenant and timeline are created on the first `up` by the one-shot
+  `pg-bootstrap` service, which keeps their ids in the `pg-bootstrap` volume and
+  exits 0 (so `docker compose ps` does not list it). Set both `TENANT_ID` and
+  `TIMELINE_ID` in `.env` to bring your own; see
+  [`../loams-postgres-dev/README.md`](../loams-postgres-dev/README.md). The
+  `v0.1.0` tag predates `pg-bootstrap`: a checkout of the tag needs those two ids
+  by hand (the 0.1.0 compose bundle and `main` do not).
 - `pg-control` (`--profile postgres-control`) keeps its records in a local file
   (one node) and reaches the Postgres stack, its computes and `pg-runner` in
   plain text on the compose networks; no PgDog fronts the computes yet (PG2c),

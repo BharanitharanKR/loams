@@ -1,6 +1,7 @@
 # deploy/loams-postgres-dev: Loams Postgres (Neon) on RustFS, the development stack from the Neon + WeSQL spike (docs/design/23-neon-and-wesql.md).
 # Derived from neondatabase/neon `docker-compose/` (Apache-2.0), with MinIO replaced by RustFS,
-# one safekeeper instead of three, and computes that attach to an explicit tenant/timeline.
+# one safekeeper instead of three, and computes that attach to an explicit tenant/timeline
+# (compute1's is created by the one-shot pg-bootstrap unless .env names one).
 # Not a production layout: no storage controller, no proxy, no TLS, default credentials, loopback ports.
 # The project keeps its pre-rename name (D823): Docker names users' volumes
 # after it, so renaming it would orphan their data.
@@ -91,8 +92,35 @@ services:
       create-bucket:
         condition: service_completed_successfully
 
-  # A compute is stateless: it attaches to (TENANT_ID, TIMELINE_ID), created beforehand through the
-  # pageserver API (see README.md). Recreating the container loses nothing.
+  # One-shot: makes sure compute1's tenant and timeline exist on the pageserver, then exits 0
+  # (bootstrap/pg-bootstrap.sh). With TENANT_ID and TIMELINE_ID empty it creates them once and
+  # keeps the ids in the pg-bootstrap volume, so every later run (an `up` after a `down` without
+  # -v) reuses them; with both set in .env it only ensures those exist. It runs in the storage
+  # image (curl), on the compose network only, and publishes nothing.
+  pg-bootstrap:
+    image: *neon-image
+    restart: "no"
+    environment:
+      TENANT_ID: ${TENANT_ID:-}
+      TIMELINE_ID: ${TIMELINE_ID:-}
+      # The new timeline's Postgres major: it must match the compute image (COMPUTE_IMAGE).
+      PG_VERSION: ${COMPUTE_PG_MAJOR:-17}
+    # Root (the image's user is `neon`), so that it can write the fresh named volume, which is
+    # root's; with no capabilities, since it only writes its own volume and talks HTTP.
+    user: "0:0"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    entrypoint: ["/bin/sh", "/bootstrap/pg-bootstrap.sh"]
+    volumes:
+      - ./bootstrap/pg-bootstrap.sh:/bootstrap/pg-bootstrap.sh:ro
+      - pg-bootstrap:/var/lib/pg-bootstrap
+    depends_on:
+      pageserver:
+        condition: service_started
+
+  # A compute is stateless: it attaches to (TENANT_ID, TIMELINE_ID) from .env, or else to the ones
+  # pg-bootstrap created (its volume, read-only). Recreating the container loses nothing.
   compute1:
     image: *compute-image
     environment:
@@ -101,10 +129,17 @@ services:
     volumes:
       - ./compute/config.json:/var/db/postgres/configs/config.json:ro
       - ./compute/start.sh:/shell/start.sh:ro
+      - pg-bootstrap:/var/lib/pg-bootstrap:ro
     ports:
       - 127.0.0.1:55433:55433
     entrypoint: ["/bin/bash", "/shell/start.sh"]
-    depends_on: [pageserver, safekeeper1]
+    depends_on:
+      pageserver:
+        condition: service_started
+      safekeeper1:
+        condition: service_started
+      pg-bootstrap:
+        condition: service_completed_successfully
 
   # A second compute for a branch timeline (profile `branch`).
   compute2:
@@ -125,3 +160,5 @@ volumes:
   rustfs-data:
   pageserver-data:
   safekeeper-data:
+  # pg-bootstrap's ids.env: the tenant and timeline it created for compute1.
+  pg-bootstrap:
