@@ -16,6 +16,11 @@ All notable changes to this project are documented here. The format follows [Kee
   modules, the `Schema`, `Filter` and `Search` builders, collection handles, `writeBatch`, `scrollAll` and
   `queryAll`; consistency tokens that parse and merge, a session store that gives reads read-your-writes,
   a default namespace, client deadlines (`client_deadline_exceeded`), and the notes example app.
+- **`loams.sql.v1` on the main port** (SDKP P0b, API2 Task 1): `SqlService/Query` runs one read-only
+  statement over a namespace's collections with `$1…$n` parameters (each cast to its placeholder's
+  inferred type) and answers typed columns and rows; `QueryArrow` answers the result as one Arrow IPC
+  stream, capped at 16 MiB (`result_too_large`, use Flight SQL past it). A parameter count mismatch is
+  `invalid_argument` with reason `sql_param_count`. `@loams/proto` exports the package as `sql`.
 
 ## [0.1.0] - 2026-10-19
 
