@@ -431,7 +431,7 @@ After L1–L13 are all green:
 
 ---
 
-## 6. Rulings made in writing this plan (defaults; the owner may override)
+## 6. Rulings made in writing this plan (owner-approved 2026-10-19, SDKP-10)
 
 | # | Question | Default | Why |
 |---|---|---|---|
@@ -443,10 +443,12 @@ After L1–L13 are all green:
 | SDKP-6 | Links | Second tier: in the facade when API2 Task 3 lands, not in the scenario | Not needed to build an app |
 | SDKP-7 | `search` and `vector` | Two facade entries on one RPC (Q613) | Already ruled |
 
-**Owner questions** (none of them blocks a launch):
-1. Should `durable` be a first-class SDK module after all? If yes, a `loams.durable.v1` design is needed first, which reverses API2-Q3.
-2. Does the Objective-C SDK stay, even as "community", if it fails the app suite? (Q611 says yes.)
+**Owner questions:** both were answered on 2026-10-19 (SDKP-8 and SDKP-9 below), so none is open.
 
 ## Rulings made during execution
 
-(none yet)
+| # | Ruling | Date and source |
+|---|---|---|
+| SDKP-8 | **Durable stays out of the SDKs.** API2-Q3 stands: no `loams.durable.v1` and no `durable` module, and each README points to that language's Resonate SDK (SDKP-1) | Owner, 2026-10-19 |
+| SDKP-9 | **Objective-C is labelled "community" if it cannot pass the app suite.** L13 is not dropped: it ships the generated sources and the SwiftPM target, and records that label as a ruling here (Q611) | Owner, 2026-10-19 |
+| SDKP-10 | **The defaults SDKP-1 to SDKP-7 stand as written.** They are no longer defaults awaiting review | Owner, 2026-10-19 |
