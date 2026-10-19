@@ -1230,7 +1230,7 @@ async fn a_graph_timeout_is_answered_as_the_value_in_force() {
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn idle_namespaces_leave_no_slot_entry() {
     let fixture = Fixture::start().await;
-    let admin = Arc::new(fixture.admin());
+    let admin = Arc::new(fixture.patient_admin());
     for ns in ["a1", "a2", "a3"] {
         create(&admin, ns, "kg", None).await;
         admin
@@ -1242,7 +1242,7 @@ async fn idle_namespaces_leave_no_slot_entry() {
     graph_with_nodes(&admin, 100).await;
     let running = {
         let admin = admin.clone();
-        tokio::spawn(async move { admin.execute(execute("acme", "kg", LONG)).await })
+        tokio::spawn(async move { admin.execute(long_to_its_end("acme", "kg")).await })
     };
     until("running", || admin.statements_in_flight() == 1).await;
     assert_eq!(admin.namespaces_in_use(), 1);

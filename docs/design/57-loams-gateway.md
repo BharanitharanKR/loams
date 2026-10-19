@@ -1,5 +1,7 @@
 # 57 — Loams Gateway: One Rust Gateway, Postgres First
 
+> **Updated 2026-10-19 ([D1119](13-decision-log.md)): Loams has no open core.** Where this document places metering, billing, the hosted control plane, commercial APIs or other components in the private `loams-platform` repository, or calls something private for open-core reasons, read that as superseded: everything is Apache-2.0, and the metering, billing and control-plane code is moving into the open repo now (design §63, Loams Meter). Ostrium Labs offers services (infrastructure efficiency, SLAs, support), not a paid edition. The rest of the design is unchanged.
+
 Status: **Approved direction** (owner, 2026-10-16) · details **Proposed** · 2026-10-16. Source: the owner's decision of 2026-10-16 (§1.1), which is binding. Decisions **D1010–D1024** and open questions **Q895–Q905** are declared in the [decision log](13-decision-log.md). Rows that restate the owner's decision are *Approved*. Rows that add detail to it are *Proposed* until the owner confirms them. Plan: [GW1](../plans/2026-10-16-gw1-loams-gateway.md).
 
 This document builds on these earlier designs, and §13 says where it amends each one:
