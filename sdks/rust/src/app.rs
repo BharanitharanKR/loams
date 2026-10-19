@@ -160,6 +160,7 @@ pub fn prepare_request<R: AppRequest>(
                     ),
                 )
                 .with_rpc(rpc)
+                .with_client_reason(crate::error::NAMESPACE_REQUIRED)
                 .with_metadata("field", "namespace"));
             }
         }
@@ -196,14 +197,46 @@ pub fn response_tokens<M: Serialize>(headers: &http::HeaderMap, message: &M) -> 
     tokens
 }
 
-/// Merges every token a response carried into the session (R4). Strings that
-/// are not `v1:` tokens are ignored by the session itself.
+/// Merges every token a response carried into the session's default scope
+/// (R4). Strings that are not `v1:` tokens are ignored by the session itself.
 pub fn record_response<M: Serialize>(
     session: &ConsistencySession,
     headers: &http::HeaderMap,
     message: &M,
 ) {
+    record_response_in(session, "", headers, message);
+}
+
+/// [`record_response`] into `scope`, the call's proto package (SDKP-17).
+pub fn record_response_in<M: Serialize>(
+    session: &ConsistencySession,
+    scope: &str,
+    headers: &http::HeaderMap,
+    message: &M,
+) {
     for token in response_tokens(headers, message) {
-        session.record(Some(&token));
+        session.record_in(Some(&token), scope);
     }
+}
+
+/// The app packages (R11): their `namespace` is a Loams namespace.
+pub const APP_PACKAGES: [&str; 4] = [
+    "loams.collection.v1",
+    "loams.graph.v1",
+    "loams.sql.v1",
+    "loams.stream.v1",
+];
+
+/// The packages whose reads take the session's token as `at_least` (R4,
+/// SDKP-17): collections and SQL. A graph's token names one graph's stream and
+/// a Graph read refuses any other, so graph reads never take the session's.
+pub const SESSION_PACKAGES: [&str; 2] = ["loams.collection.v1", "loams.sql.v1"];
+
+/// The session token a read in `package` should be held to, if any.
+#[must_use]
+pub fn session_token_for(session: Option<&ConsistencySession>, package: &str) -> Option<String> {
+    if !SESSION_PACKAGES.contains(&package) {
+        return None;
+    }
+    session.and_then(|session| session.current_in(package))
 }

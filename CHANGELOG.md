@@ -145,7 +145,10 @@ All notable changes to this project are documented here. The format follows [Kee
   a default namespace (`with_namespace`, R11); a 30 s unary deadline over the
   whole call with `client_deadline_exceeded` (R12); `write_batch` and
   `BatchError` (R13); `subscribe` as a `futures::Stream` (R14);
-  `CollectionHandle`, `scroll_all`, `query_all`; `Loams::from_env`.
+  `CollectionHandle`, `scroll_all`, `query_all`; `Loams::from_env`. The app
+  modules `namespaces()`, `collections()`, `documents()`, `search()`,
+  `vector()` and `graph()`, `loams.collection(name)`, and the app scenario
+  replayed through them (`rust_app_*`); `examples/notes`.
 
 ### Fixed
 

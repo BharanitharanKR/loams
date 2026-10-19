@@ -169,11 +169,21 @@ struct Detail {
 pub const CLIENT_DEADLINE_EXCEEDED: &str = "client_deadline_exceeded";
 /// The reason a `write_batch` that stopped part-way carries (R13).
 pub const BATCH_PARTIALLY_APPLIED: &str = "batch_partially_applied";
-/// Every reason the SDK raises itself (SDKP §2.1). They are registered in
-/// `docs/api/reasons.md` as client-side; until the [`Reason`] enum has them
-/// they travel as [`LoamsError::unknown_reason`] and read back through
-/// [`LoamsError::client_reason`].
-pub const CLIENT_REASONS: &[&str] = &[CLIENT_DEADLINE_EXCEEDED, BATCH_PARTIALLY_APPLIED];
+/// The reason the SDK raises for an app request with no namespace (R11).
+pub const NAMESPACE_REQUIRED: &str = "namespace_required";
+/// The reason the SDK raises for a malformed consistency token (R4).
+pub const INVALID_CONSISTENCY_TOKEN: &str = "invalid_consistency_token";
+/// The reason `query_all` raises for a sort with no primary-key tiebreaker.
+pub const SEARCH_AFTER_NEEDS_TIEBREAK: &str = "search_after_needs_tiebreak";
+/// Every reason the SDK raises itself (SDKP §2.1), registered in
+/// `docs/api/reasons.md` as client-side and so in the [`Reason`] enum.
+pub const CLIENT_REASONS: &[&str] = &[
+    CLIENT_DEADLINE_EXCEEDED,
+    BATCH_PARTIALLY_APPLIED,
+    NAMESPACE_REQUIRED,
+    INVALID_CONSISTENCY_TOKEN,
+    SEARCH_AFTER_NEEDS_TIEBREAK,
+];
 
 impl LoamsError {
     /// With one `metadata` entry added.

@@ -1480,6 +1480,12 @@ jobs:
       # (issue #374).
       - name: the Rust SDK's generated code is not stale
         run: ./scripts/sdk/drift.sh rust
+      # SDKP: the app suite. `cargo test` above replayed the app scenario
+      # through the facade (tests/app_scenario.rs) and wrote
+      # sdks/fixtures/results/rust.json; this checks it ran every app fixture
+      # and names every app test.
+      - name: the app suite
+        run: node sdks/conformance/check-languages.mjs --check rust --suite app
 
   # SDK2 Task 1: the Python SDK. CI's existing Python jobs are the qdrant
   # smoke and static analysis, neither of which imports this package.

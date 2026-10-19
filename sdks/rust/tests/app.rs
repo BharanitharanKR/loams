@@ -57,6 +57,11 @@ fn rust_consistency_token_merge() {
         let bad = bad.as_str().expect("a string");
         let error = ConsistencyToken::parse(bad).expect_err(bad);
         assert_eq!(error.kind, ErrorKind::InvalidArgument, "{bad}");
+        assert_eq!(
+            error.client_reason(),
+            Some("invalid_consistency_token"),
+            "{bad}"
+        );
     }
 }
 
@@ -113,6 +118,20 @@ fn rust_session_read_your_writes() {
     prepare_request(&mut graph, Some("app"), Some("v1:s1/p0@1"), "rpc").expect("prepared");
     let json = serde_json::to_value(&graph).expect("serialises");
     assert_eq!(json["consistency"]["atLeast"], "v1:s1/p0@1");
+
+    // One token per package, and graph reads never take the session's
+    // (SDKP-17): a graph token names one graph.
+    let scoped = ConsistencySession::new();
+    scoped.record_in(Some("v1:s1/p0@4"), "loams.collection.v1");
+    scoped.record_in(Some("v1:s2/p0@9"), "loams.graph.v1");
+    assert_eq!(
+        loams::app::session_token_for(Some(&scoped), "loams.collection.v1").as_deref(),
+        Some("v1:s1/p0@4")
+    );
+    assert_eq!(
+        loams::app::session_token_for(Some(&scoped), "loams.graph.v1"),
+        None
+    );
 
     // A string that is not a `v1:` token is not the session's business.
     record_response(
@@ -272,7 +291,7 @@ fn doc_id_json(id: u64) -> Value {
     json!({"uint": id.to_string()})
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl CollectionCalls for Stub {
     async fn write_documents(
         &self,

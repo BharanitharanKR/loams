@@ -128,6 +128,7 @@ impl FromStr for ConsistencyToken {
                 Code::InvalidArgument,
                 format!("invalid consistency token {text:?}"),
             )
+            .with_client_reason(crate::error::INVALID_CONSISTENCY_TOKEN)
         };
         let body = text.strip_prefix(PREFIX).ok_or_else(invalid)?;
         if body.is_empty() {

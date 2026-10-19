@@ -75,6 +75,7 @@
 #![warn(missing_debug_implementations)]
 
 pub mod app;
+pub mod app_modules;
 pub mod batch;
 pub mod binding;
 pub mod builders;
@@ -95,7 +96,12 @@ pub mod token;
 pub mod transport;
 pub mod uuidv7;
 
-pub use crate::app::{AppRequest, prepare_request, record_response, response_tokens};
+pub use crate::app::{
+    AppRequest, prepare_request, record_response, record_response_in, response_tokens,
+};
+pub use crate::app_modules::{
+    CollectionsModule, DocumentsModule, GraphModule, NamespacesModule, SearchModule, VectorModule,
+};
 pub use crate::batch::{BatchError, BatchOptions, BatchResult, write_batch};
 pub use crate::binding::{binding_of, module_of};
 pub use crate::builders::{DocId, Filter, Fusion, Schema, Search, Sort, TextRetriever};

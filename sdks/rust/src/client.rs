@@ -82,7 +82,21 @@ impl Runtime {
             .session
             .clone()
             .or_else(|| self.consistency.clone());
-        let consistency = Consistency::resolve(overrides.consistency.as_ref(), session.as_deref());
+        // The header is the path for RPCs whose request has no `consistency`
+        // field; the session's token there is the call's own package's
+        // (SDKP-17). App requests carry it in the field (`prepare_request`).
+        // An app package never takes the session's token as a header: its
+        // requests carry `consistency` (collections, SQL) or must not take
+        // the session's at all (graph).
+        let scoped = ConsistencySession::new();
+        if let Some(token) = session
+            .as_deref()
+            .filter(|_| !crate::app::APP_PACKAGES.contains(&binding.package))
+            .and_then(|session| session.current_in(binding.package))
+        {
+            scoped.record(Some(&token));
+        }
+        let consistency = Consistency::resolve(overrides.consistency.as_ref(), Some(&scoped));
         RetryPlan {
             // D610: a `Safe` call always retries; a `Manual` one retries once it
             // carries an idempotency key, and `keyed` is `true` exactly then.
@@ -380,6 +394,95 @@ where
             client: LiveServiceClient::new(self.inner.transport.clone(), self.inner.config.clone()),
             runtime: &self.inner.runtime,
         }
+    }
+
+    /// `loams.namespaces` (SDKP §2.2).
+    #[must_use]
+    pub fn namespaces(&self) -> crate::app_modules::NamespacesModule<'_, T> {
+        crate::app_modules::NamespacesModule {
+            client: loams_proto::loams::collection::v1::NamespaceServiceClient::new(
+                self.inner.transport.clone(),
+                self.inner.config.clone(),
+            ),
+            runtime: &self.inner.runtime,
+        }
+    }
+
+    /// `loams.collections` (SDKP §2.2).
+    #[must_use]
+    pub fn collections(&self) -> crate::app_modules::CollectionsModule<'_, T> {
+        crate::app_modules::CollectionsModule {
+            client: loams_proto::loams::collection::v1::CollectionServiceClient::new(
+                self.inner.transport.clone(),
+                self.inner.config.clone(),
+            ),
+            runtime: &self.inner.runtime,
+        }
+    }
+
+    /// `loams.documents` (SDKP §2.3).
+    #[must_use]
+    pub fn documents(&self) -> crate::app_modules::DocumentsModule<'_, T> {
+        crate::app_modules::DocumentsModule {
+            client: loams_proto::loams::collection::v1::DocumentServiceClient::new(
+                self.inner.transport.clone(),
+                self.inner.config.clone(),
+            ),
+            runtime: &self.inner.runtime,
+        }
+    }
+
+    /// `loams.search` (SDKP §2.4).
+    #[must_use]
+    pub fn search(&self) -> crate::app_modules::SearchModule<'_, T> {
+        crate::app_modules::SearchModule {
+            client: loams_proto::loams::collection::v1::QueryServiceClient::new(
+                self.inner.transport.clone(),
+                self.inner.config.clone(),
+            ),
+            runtime: &self.inner.runtime,
+        }
+    }
+
+    /// `loams.vector` (SDKP §2.4, Q613).
+    #[must_use]
+    pub fn vector(&self) -> crate::app_modules::VectorModule<'_, T> {
+        crate::app_modules::VectorModule {
+            client: loams_proto::loams::collection::v1::QueryServiceClient::new(
+                self.inner.transport.clone(),
+                self.inner.config.clone(),
+            ),
+            runtime: &self.inner.runtime,
+        }
+    }
+
+    /// `loams.graph` (SDKP §2.5). Its package is `unstable`.
+    #[must_use]
+    pub fn graph(&self) -> crate::app_modules::GraphModule<'_, T> {
+        crate::app_modules::GraphModule {
+            client: crate::app_modules::GraphClients {
+                admin: loams_proto::loams::graph::v1::GraphAdminServiceClient::new(
+                    self.inner.transport.clone(),
+                    self.inner.config.clone(),
+                ),
+                statements: loams_proto::loams::graph::v1::GraphServiceClient::new(
+                    self.inner.transport.clone(),
+                    self.inner.config.clone(),
+                ),
+            },
+            runtime: &self.inner.runtime,
+        }
+    }
+
+    /// A handle on one collection: its document and search calls with
+    /// `collection` (and `namespace`, when given) filled in (SDKP §2.8).
+    #[must_use]
+    pub fn collection<'a>(
+        &'a self,
+        name: &str,
+        namespace: Option<&str>,
+    ) -> crate::handle::CollectionHandle<'a, Self> {
+        crate::handle::CollectionHandle::new(self, name, namespace)
     }
 
     /// `loams.system` — the module catalogue, feature detection and the version
@@ -792,7 +895,7 @@ where
 /// which is what promotes a mutation to `RetryClass::Safe` for the retry loop
 /// (R3, D610). The key is decided **before** the first attempt and lives inside
 /// the request, so every attempt carries the identical one.
-async fn send<Req, V, F, Fut>(
+pub(crate) async fn send<Req, V, F, Fut>(
     binding: &'static CallBinding,
     request: Req,
     keyed: bool,
@@ -820,7 +923,7 @@ where
     let (headers, message, _trailers) = response.into_owned_parts();
     // R4: every token the response carried merges into the session.
     if let Some(session) = &plan.session {
-        crate::app::record_response(session, &headers, &message);
+        crate::app::record_response_in(session, binding.package, &headers, &message);
     }
     Ok(message)
 }
@@ -845,6 +948,70 @@ where
             Err(error) => Some((Err(error), None)),
         }
     }))
+}
+
+#[async_trait::async_trait(?Send)]
+impl<T> crate::handle::CollectionCalls for Loams<T>
+where
+    T: ClientTransport + Send + Sync + 'static,
+    T::ResponseBody: Unpin + Send,
+    <T::ResponseBody as Body>::Error: std::fmt::Display,
+{
+    async fn write_documents(
+        &self,
+        request: loams_proto::loams::collection::v1::WriteDocumentsRequest,
+        options: CallOptionsOverrides,
+    ) -> Result<loams_proto::loams::collection::v1::WriteDocumentsResponse, LoamsError> {
+        self.documents().write(request, options).await
+    }
+
+    async fn get_documents(
+        &self,
+        request: loams_proto::loams::collection::v1::GetDocumentsRequest,
+        options: CallOptionsOverrides,
+    ) -> Result<loams_proto::loams::collection::v1::GetDocumentsResponse, LoamsError> {
+        self.documents().get(request, options).await
+    }
+
+    async fn scroll_documents(
+        &self,
+        request: loams_proto::loams::collection::v1::ScrollDocumentsRequest,
+        options: CallOptionsOverrides,
+    ) -> Result<loams_proto::loams::collection::v1::ScrollDocumentsResponse, LoamsError> {
+        self.documents().scroll(request, options).await
+    }
+
+    async fn count_documents(
+        &self,
+        request: loams_proto::loams::collection::v1::CountDocumentsRequest,
+        options: CallOptionsOverrides,
+    ) -> Result<loams_proto::loams::collection::v1::CountDocumentsResponse, LoamsError> {
+        self.documents().count(request, options).await
+    }
+
+    async fn search(
+        &self,
+        request: loams_proto::loams::collection::v1::SearchRequest,
+        options: CallOptionsOverrides,
+    ) -> Result<loams_proto::loams::collection::v1::SearchResponse, LoamsError> {
+        Loams::search(self).query(request, options).await
+    }
+
+    async fn get_collection(
+        &self,
+        request: loams_proto::loams::collection::v1::GetCollectionRequest,
+        options: CallOptionsOverrides,
+    ) -> Result<loams_proto::loams::collection::v1::CollectionInfo, LoamsError> {
+        self.collections().get(request, options).await
+    }
+
+    async fn drop_collection(
+        &self,
+        request: loams_proto::loams::collection::v1::DropCollectionRequest,
+        options: CallOptionsOverrides,
+    ) -> Result<loams_proto::loams::collection::v1::DropCollectionResponse, LoamsError> {
+        self.collections().drop(request, options).await
+    }
 }
 
 #[cfg(test)]

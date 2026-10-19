@@ -63,11 +63,16 @@ let request = Search::on("notes")
 - **Subscriptions (R14).** `loams::subscribe(from_offset, fetch)` is a
   `futures::Stream` over `Fetch` whose `offset()` says where to resume.
 
-The typed module methods (`loams.collections()`, `loams.documents()`,
-`loams.search()`, `loams.graph()`, `loams.sql()`, `loams.streams()`) arrive
-with the protos' facade annotations (SDKP P0a–P0c), and `loams.collection(name)`
-returns a `CollectionHandle` over them; the builders and runtime above work
-today. Durable workflows use the Resonate SDK pointed at
+The typed modules are `loams.namespaces()`, `loams.collections()`,
+`loams.documents()`, `loams.search()`, `loams.vector()` and `loams.graph()`, one
+method per facade call; `loams.collection("notes", None)` returns a
+`CollectionHandle` with `upsert`, `get`, `delete`, `patch`, `write_batch`,
+`count`, `scroll_all`, `search` and `vector_search`, and
+`loams::handle::query_all` pages a search. `loams.sql()` and `loams.streams()`
+arrive with `loams.sql.v1` and `loams.stream.v1` (SDKP P0b, P0c).
+`examples/notes/main.rs` is the whole app scenario as a program. The session's
+token is used only for collection and SQL reads: a graph's token names one
+graph (SDKP-17). Durable workflows use the Resonate SDK pointed at
 `LOAMS_ENDPOINT/durable/` (SDKP-1).
 
 ## Building

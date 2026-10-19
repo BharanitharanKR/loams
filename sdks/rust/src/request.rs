@@ -119,7 +119,9 @@ pub struct ConsistencySession {
 
 #[derive(Debug, Default)]
 struct SessionState {
-    token: Option<ConsistencyToken>,
+    /// One merged token per scope (a proto package; `""` for a caller using
+    /// the store directly). R4, SDKP-17.
+    tokens: BTreeMap<String, ConsistencyToken>,
     rejected: u64,
     merged: u64,
 }
@@ -139,20 +141,40 @@ impl ConsistencySession {
         Self::default()
     }
 
-    /// The token to attach to the next read, as text, if there is one.
+    /// The token to attach to the next read in the default scope, as text.
     #[must_use]
     pub fn current(&self) -> Option<String> {
-        self.token().map(|token| token.to_string())
+        self.current_in("")
     }
 
-    /// The merged token, parsed.
+    /// The token to attach to the next read in `scope` (a proto package).
+    #[must_use]
+    pub fn current_in(&self, scope: &str) -> Option<String> {
+        self.token_in(scope).map(|token| token.to_string())
+    }
+
+    /// The merged token of the default scope, parsed.
     #[must_use]
     pub fn token(&self) -> Option<ConsistencyToken> {
-        self.state.lock().ok().and_then(|state| state.token.clone())
+        self.token_in("")
     }
 
-    /// Folds a token the server returned into the session's.
+    /// The merged token of `scope`, parsed.
+    #[must_use]
+    pub fn token_in(&self, scope: &str) -> Option<ConsistencyToken> {
+        self.state
+            .lock()
+            .ok()
+            .and_then(|state| state.tokens.get(scope).cloned())
+    }
+
+    /// Folds a token the server returned into the default scope.
     pub fn record(&self, token: Option<&str>) {
+        self.record_in(token, "");
+    }
+
+    /// Folds a token the server returned into `scope`'s.
+    pub fn record_in(&self, token: Option<&str>, scope: &str) {
         let Some(token) = token.filter(|t| t.starts_with("v1:")) else {
             return;
         };
@@ -161,10 +183,11 @@ impl ConsistencySession {
         };
         match token.parse::<ConsistencyToken>() {
             Ok(parsed) => {
-                state.token = Some(match state.token.take() {
+                let merged = match state.tokens.remove(scope) {
                     None => parsed.normalized(),
                     Some(current) => current.merge(&parsed),
-                });
+                };
+                state.tokens.insert(scope.to_owned(), merged);
                 state.merged += 1;
             }
             Err(_) => state.rejected += 1,

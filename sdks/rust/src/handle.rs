@@ -32,7 +32,8 @@ use loams_proto::loams::collection::v1::{
 };
 
 /// The app modules' unary calls a handle and the conveniences need.
-#[async_trait]
+/// The futures are not `Send`: a handle runs on the caller's task.
+#[async_trait(?Send)]
 pub trait CollectionCalls: Send + Sync {
     /// `documents.write`.
     async fn write_documents(
@@ -348,6 +349,7 @@ pub fn query_all<'a, C: CollectionCalls + ?Sized>(
             Code::InvalidArgument,
             "search.query_all needs a sort that ends in the primary key, such as .sort([Sort::score(None), Sort::pk(None)])",
         )
+        .with_client_reason(crate::error::SEARCH_AFTER_NEEDS_TIEBREAK)
         .with_metadata("field", "sort")
     });
     let window = builder.window() as usize;
