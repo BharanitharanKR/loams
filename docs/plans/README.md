@@ -335,6 +335,14 @@ Design: [§44](../design/44-unified-api-and-sdks.md), D600–D619. All 13 gRPC-s
 | [SDK2: language clients](2026-10-02-sdk2-languages.md) | Thirteen language tasks with public facades, transports, conformance, examples and registry packages | SDK1 Tasks 1–4 and the services each fixture uses | Planned — **remaining work superseded by API2 Tasks 19–23 (2026-10-10)** |
 | [API2: the unified Connect API and the SDKs in production](2026-10-10-api2-unified-api-sdks.md) | Every application call a Connect RPC on the main port; REST and the console OpenAPI deleted with no shims; auth on the main port; thirteen shippable SDKs covering the whole API. Finishes API1, SDK1 and SDK2 | See the plan's execution order | Planned (2026-10-10, owner default rulings; D848) |
 
+## Track IS: Loams Infra, the HashiCorp stack's roles in Rust
+
+Design reference: [64 Loams Infra](../design/64-loams-infra-stack.md) (D1150–D1171, Q970–Q983, Proposed). Owner request, 2026-10-19: "I want all of the HashiCorp stack in Loams, in Rust." IS1 is the minimum viable slice; IS2–IS4 get plans when their gates are met.
+
+| Plan | Scope | Depends on | Status |
+|---|---|---|---|
+| [IS1: OpenTofu provider and state, secrets, config](2026-10-19-is1-infra-stack.md) (stub; IS1a Tasks 0–9, IS1b 10–21, IS1c 22–26) | The Rust OpenTofu provider `ostrium-labs/loams` on `loams-tfplugin` with write-only and ephemeral secrets; the Loams state backend (OpenTofu `http`, `loams.infra.v1`); Loams Secrets over `loams-vault` with leases, dynamic Loams Postgres, Loams SQL and external database credentials, trust policies for CI OIDC and a workload issuer; `loams.config.v1` config and catalog on TiKV | v0.1.0; GT1 Tasks 59–60 (or built here); §64 approved | Stub |
+
 ## Later milestones
 
 The roadmap was revised on 2026-09-25 after the [architecture review](../architecture-review-and-recommendations.md) (D42–D50), and on 2026-09-26 for the metastore backends, the namespace router, tenancy and erasure ([§18](../design/18-metastore-backends-and-router.md), D58–D70), then for streams, Kafka, routing and consistency tokens (D71–D76), and for the gaps a comparison with turbopuffer found (D86–D103: backpressure, filter writes and a limits page before launch; the P1 items in M2 and M2.x). **v1.0 is M1 plus M2, production hardening**, including the native stream API core and OTLP logs ingest (D72, D73). **v1.1 is M2.x, cloud and BYOC.** After them come M3 (native graph for GraphRAG; the Resonate durable-execution surface moved to track D, D145), M4 (analytics on Iceberg), M5 (the Kafka wire-protocol gateway with the RisingWave companion, changelog streams, `express` and Flight replay; D74) and M6 (scale). The Neo4j and ClickHouse protocol surfaces are no longer planned, and FoundationDB is dropped (D71). Plans for M2 onward will be written once M1 is done. Their scope and exit gates are in [12-roadmap-testing-risks.md](../design/12-roadmap-testing-risks.md).
