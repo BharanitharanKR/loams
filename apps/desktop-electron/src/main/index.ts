@@ -396,7 +396,7 @@ const singleInstance = initSingleInstance({
 				singleInstance.watchMainWindow(w);
 				return w;
 			};
-			const splash = showSplash({ dark: nativeTheme.shouldUseDarkColors });
+			const splash = showSplash({ dark: sync.dark });
 			const gate = new SplashGate({
 				timeoutMs: SPLASH_TIMEOUT_MS,
 				onShow: () => {

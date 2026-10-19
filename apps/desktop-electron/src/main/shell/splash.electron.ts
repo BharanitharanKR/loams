@@ -1,13 +1,7 @@
 import { join } from "node:path";
 import { app, BrowserWindow } from "electron";
 import { secureWindow } from "../security/install.electron";
-
-/**
- * The splash's background before its page paints: the console canvas in each theme. These
- * equal `CHROME.dark.canvas` and `CHROME.light.canvas` (Task 13, window-chrome.ts); the
- * splash reads CHROME once that module is on dev (T15-2).
- */
-const SPLASH_CANVAS = { dark: "#0a0a0a", light: "#ffffff" } as const;
+import { CHROME } from "./window-chrome";
 
 export function splashPath(): string {
 	return app.isPackaged
@@ -27,7 +21,8 @@ export function showSplash(o: { dark: boolean }): { close(): void } {
 		fullscreenable: false,
 		center: true,
 		show: false,
-		backgroundColor: o.dark ? SPLASH_CANVAS.dark : SPLASH_CANVAS.light,
+		// The console canvas in each theme, before the splash's page paints (T15-2).
+		backgroundColor: o.dark ? CHROME.dark.canvas : CHROME.light.canvas,
 		title: "Loams Desktop",
 		webPreferences: { contextIsolation: true, nodeIntegration: false, sandbox: true },
 	});
