@@ -16,7 +16,7 @@ from collections.abc import Iterator
 
 import pytest
 
-from app_replay import replay_app_fixture, replay_app_fixture_async  # type: ignore[import-not-found]
+from app_replay import replay_app_fixture, replay_app_fixture_async
 from conftest import _endpoint_from_node
 
 

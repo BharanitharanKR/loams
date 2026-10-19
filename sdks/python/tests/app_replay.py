@@ -27,7 +27,7 @@ from loams._gen.facade import MODULES, METHODS
 from loams.runtime.errors import LoamsError
 from loams.runtime.options import CallOptions
 
-from test_builders import build_schema, build_search, evaluate  # type: ignore[import-not-found]
+from test_builders import build_schema, build_search, evaluate
 
 FIXTURES = pathlib.Path(__file__).resolve().parent.parent.parent / "fixtures"
 BUILDERS = FIXTURES / "builders"

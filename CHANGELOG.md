@@ -99,12 +99,20 @@ All notable changes to this project are documented here. The format follows [Kee
   `<call>_all` for paged calls; `Loams.from_env()`. The package now carries the
   `loams.collection.v1` and `loams.graph.v1` messages and Connect stubs.
 
+- Python SDK: the app modules on `Loams` and `AsyncLoams` (`namespaces`,
+  `collections`, `documents`, `search`, `vector`, `graph`), typed with the
+  generated Protocols plus the conveniences; the app scenario replayed through
+  the public facade in `python_app_collections`, `python_app_search` and
+  `python_app_graph`; `examples/notes/main.py`.
+
 ### Changed
 
 - Python SDK: `session_consistency=True` now works: the response header is read
   through `connectrpc.client.ResponseMetadata`, and two different tokens merge
-  instead of being refused. `timeout_ms` is now the SDK's own deadline over all
-  of a call's retries rather than the transport's per-attempt one.
+  instead of being refused. The session keeps one token per proto package, and
+  only collection and SQL reads take it (SDKP-17). `timeout_ms` is now the
+  SDK's own deadline over all of a call's retries rather than the transport's
+  per-attempt one.
 
 ### Fixed
 

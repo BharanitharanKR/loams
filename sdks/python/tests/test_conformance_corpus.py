@@ -373,7 +373,7 @@ def test_python_conformance_all_required_fixtures(endpoint: str) -> None:
     # reads the same report. Only against the fixture server: a live server
     # cannot replay a recording.
     if not os.environ.get("LOAMS_TEST_ENDPOINT"):
-        from app_replay import drive_app_fixtures  # type: ignore[import-not-found]
+        from app_replay import drive_app_fixtures
 
         ran.extend(drive_app_fixtures(endpoint))
 

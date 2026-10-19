@@ -68,11 +68,15 @@ offset per stream and partition), and every later read whose request has a
 
 ## Build an app
 
-The app-building layer (SDKP) adds builders, a collection handle and the runtime
-an app needs. The builders, the handle and the runtime work today; the module
-objects they drive (`loams.namespaces`, `collections`, `documents`, `search`,
-`vector`, `graph`, `sql`, `streams`) are generated from the protos' facade
-annotations and appear as those land (SDKP P0a–P0c).
+The app-building layer (SDKP): the modules `loams.namespaces`, `collections`,
+`documents`, `search`, `vector` and `graph` on both `Loams` and `AsyncLoams`,
+generated from the protos' facade annotations with the hand-written
+conveniences below attached; builders; a collection handle; and the runtime an
+app needs. `loams.sql` and `loams.streams` arrive the same way with
+`loams.sql.v1` and `loams.stream.v1` (SDKP P0b, P0c). `examples/notes/main.py`
+is the whole app scenario as a program, type-checked in CI. The session's
+token is used only for collection and SQL reads: a graph's token names one
+graph (SDKP-17).
 
 ```python
 from loams import Filter, Loams, Schema, Search, Sort, rrf
@@ -132,10 +136,8 @@ Durable workflows use the Resonate SDK pointed at `LOAMS_ENDPOINT/durable/`
 
 ## What is not here yet
 
-- **The app modules themselves** (`namespaces`, `collections`, `documents`,
-  `search`, `vector`, `graph`, `sql`, `streams`): they arrive with the facade
-  annotations of SDKP P0a–P0c. Their messages and Connect stubs
-  (`loams.collection.v1`, `loams.graph.v1`) are already in the package.
+- **`sql` and `streams`**: they arrive with the facade annotations of
+  `loams.sql.v1` and `loams.stream.v1` (SDKP P0b, P0c).
 - **Bulk ingest and bulk results over Arrow Flight SQL.** They go through ADBC,
   which is why the `flight`, `arrow` and `polars` extras already exist.
 
