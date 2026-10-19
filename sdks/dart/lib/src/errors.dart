@@ -534,6 +534,14 @@ class UnavailableException extends LoamsException {
 
 class DeadlineExceededException extends LoamsException {
   DeadlineExceededException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+
+  /// R12: the call's budget ran out on the client; never retried.
+  factory DeadlineExceededException.client() => DeadlineExceededException(
+        'the call ran out of time on the client',
+        code: 'deadline_exceeded',
+        reason: 'client_deadline_exceeded',
+        httpStatus: 504,
+      );
 }
 
 class AbortedException extends LoamsException {
@@ -976,6 +984,12 @@ class ErrorParser {
 
     if (code == 'unauthenticated' || httpStatus == 401) {
       return UnauthenticatedException(message, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails);
+    }
+
+    // No class for the reason: the code's own class, so `on NotFoundException`
+    // catches every `not_found`.
+    if (reasons.containsKey(code)) {
+      return reasons[code]!(message, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails);
     }
 
     return LoamsException(message, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails);
