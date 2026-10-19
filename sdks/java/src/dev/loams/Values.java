@@ -234,12 +234,11 @@ public final class Values {
         };
     }
 
-    // `Query.ids` carries the `DocumentId` shape as a Value: a bare number or string, or {"uuid": "…"}.
+    // `Query.ids` carries the `DocumentId` shape as a Value: {"uint": "1"} (exact past 2^53, and the
+    // builder corpus's spelling), a string, or {"uuid": "…"}.
     static Value documentIdValue(DocumentId id) {
         return switch (id.getIdCase()) {
-            case UINT -> Long.compareUnsigned(id.getUint(), 1L << 53) <= 0
-                    ? Value.newBuilder().setNumberValue(id.getUint()).build()
-                    : of(Map.of("uint", Long.toUnsignedString(id.getUint())));
+            case UINT -> of(Map.of("uint", Long.toUnsignedString(id.getUint())));
             case STRING -> Value.newBuilder().setStringValue(id.getString()).build();
             case UUID -> of(Map.of("uuid", id.getUuid()));
             default -> throw new IllegalArgumentException("loams: a DocumentId must be set");

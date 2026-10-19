@@ -327,6 +327,10 @@ fn every_mapped_package_is_generated_by_the_crate_it_names() {
             // the Rust SDK (and `loams-apps-mock` for its server).
             "loams.admin.v1".to_owned(),
             "loams.auth.v1".to_owned(),
+            // SDKP P0a: the app data planes, which `loams-proto` has compiled
+            // since API1 and the Rust SDK now binds.
+            "loams.collection.v1".to_owned(),
+            "loams.graph.v1".to_owned(),
             "loams.instance.v1".to_owned(),
             "loams.live.v1".to_owned(),
             // GR1 Task 2: `loams-proto` compiles `operations.proto`, which

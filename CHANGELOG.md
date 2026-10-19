@@ -40,6 +40,39 @@ All notable changes to this project are documented here. The format follows [Kee
   instead of answering 404. The Durable page and the Overview's Durable card work on remote servers;
   an engine without the API reads as "Not on this server".
 - Loams is fully open source; there is no open core (D1119). README, CONTRIBUTING, GOVERNANCE, ECOSYSTEM, the design docs and the decision log now say so; the metering, billing and control-plane code is moving into the open repo now (design §63). Ostrium Labs offers services (infrastructure efficiency, SLAs, support).
+- The app modules in every generated SDK facade (SDKP P0a): `namespaces`,
+  `collections`, `documents`, `search`, `vector` and `graph`, from facade
+  annotations on `loams.collection.v1` and `loams.graph.v1`. The facade index
+  `sdks/fixtures/facade-index.json` lists every SDK call for the hand-written
+  SDKs to check themselves against (`scripts/sdk/gen.sh index`), and
+  `gen.sh descriptors` regenerates Ruby's and Kotlin's descriptor sets.
+- `where` on `ScrollDocuments`, `CountDocuments`, `DeleteByFilter` and
+  `PatchByFilter`: a typed `Query`'s proto3 JSON, the shape the SDK `Filter`
+  builders write. Setting both `filter` and `where` is `invalid_argument`,
+  reason `filter_conflict`.
+
+- The app conformance corpus (SDKP P0d): the notes-app scenario recorded from
+  `loams dev` (`sdks/fixtures/recorded/app/`, `app-scenario.md`), the builder
+  corpus (`sdks/fixtures/builders/`) and the consistency-token corpus
+  (`sdks/fixtures/tokens.json`, also run by `loams-collection`), and
+  `check-languages.mjs --check <lang> --suite app`.
+
+- Seven registered reasons (SDKP P0e): `sql_param_count` and
+  `result_too_large` for `loams.sql.v1`, and the client-side
+  `namespace_required`, `invalid_consistency_token`,
+  `search_after_needs_tiebreak`, `client_deadline_exceeded` and
+  `batch_partially_applied`, in every SDK's reason list. The SDK runtime
+  contract gains R11 (default namespace), R12 (timeouts), R13 (`write_batch`)
+  and R14 (`subscribe`), and R4 the token encoding and the session store.
+
+### Fixed
+
+- A search retriever without `k` was refused ("k must be between 1 and
+  100000"); it now takes `max(10, offset + limit)` on REST and Connect.
+- `search_after` refused the primary-key sort value a Connect answer had just
+  returned (a `google.protobuf.Value` number is a double): a whole double is now
+  the key it names, and an id past 2^53 is answered as `{"uint": "…"}` and read
+  back exactly.
 
 ## [0.1.0] - 2026-10-19
 

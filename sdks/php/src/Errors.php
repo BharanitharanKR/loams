@@ -81,6 +81,7 @@ class SequencerUnavailableException extends LoamsException {}
 class IdempotencyKeyReusedException extends LoamsException {}
 class WorkspaceNotFoundException extends LoamsException {}
 class WorkspaceFencedException extends LoamsException {}
+class BatchPartiallyAppliedException extends LoamsException {}
 class WorkspaceReadOnlyException extends LoamsException {}
 class WorkspaceNameTakenException extends LoamsException {}
 class ObjectMissingException extends LoamsException {}
@@ -114,13 +115,20 @@ class LiveBadCursorException extends LoamsException {}
 class LiveWorkerCrashedException extends LoamsException {}
 class LiveDeployConflictException extends LoamsException {}
 class LiveSchemaViolationException extends LoamsException {}
+class FilterConflictException extends LoamsException {}
+class SearchAfterNeedsTiebreakException extends LoamsException {}
+class InvalidConsistencyTokenException extends LoamsException {}
+class NamespaceRequiredException extends LoamsException {}
+class SqlParamCountException extends LoamsException {}
 class LiveIndexNotReadyException extends LoamsException {}
 class LiveAppDisabledException extends LoamsException {}
 class LiveAppExistsException extends LoamsException {}
 class LiveFunctionErrorException extends LoamsException {}
 class LiveFunctionTimeoutException extends LoamsException {}
+class ClientDeadlineExceededException extends LoamsException {}
 class LiveFunctionOutOfMemoryException extends LoamsException {}
 class LiveLimitExceededException extends LoamsException {}
+class ResultTooLargeException extends LoamsException {}
 class LiveAppMismatchException extends LoamsException {}
 class LiveOriginNotAllowedException extends LoamsException {}
 class SessionRotateException extends LoamsException {}
@@ -215,6 +223,7 @@ class ErrorParser
         'idempotency_key_reused' => IdempotencyKeyReusedException::class,
         'workspace_not_found' => WorkspaceNotFoundException::class,
         'workspace_fenced' => WorkspaceFencedException::class,
+        'batch_partially_applied' => BatchPartiallyAppliedException::class,
         'workspace_read_only' => WorkspaceReadOnlyException::class,
         'workspace_name_taken' => WorkspaceNameTakenException::class,
         'object_missing' => ObjectMissingException::class,
@@ -248,13 +257,20 @@ class ErrorParser
         'live_worker_crashed' => LiveWorkerCrashedException::class,
         'live_deploy_conflict' => LiveDeployConflictException::class,
         'live_schema_violation' => LiveSchemaViolationException::class,
+        'filter_conflict' => FilterConflictException::class,
+        'search_after_needs_tiebreak' => SearchAfterNeedsTiebreakException::class,
+        'invalid_consistency_token' => InvalidConsistencyTokenException::class,
+        'namespace_required' => NamespaceRequiredException::class,
+        'sql_param_count' => SqlParamCountException::class,
         'live_index_not_ready' => LiveIndexNotReadyException::class,
         'live_app_disabled' => LiveAppDisabledException::class,
         'live_app_exists' => LiveAppExistsException::class,
         'live_function_error' => LiveFunctionErrorException::class,
         'live_function_timeout' => LiveFunctionTimeoutException::class,
+        'client_deadline_exceeded' => ClientDeadlineExceededException::class,
         'live_function_out_of_memory' => LiveFunctionOutOfMemoryException::class,
         'live_limit_exceeded' => LiveLimitExceededException::class,
+        'result_too_large' => ResultTooLargeException::class,
         'live_app_mismatch' => LiveAppMismatchException::class,
         'live_origin_not_allowed' => LiveOriginNotAllowedException::class,
         'session_rotate' => SessionRotateException::class,
