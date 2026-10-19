@@ -243,7 +243,7 @@ impl SqlService for Sql {
             ));
         };
         Response::ok(QueryArrowResponse {
-            arrow_ipc: bytes.into(),
+            arrow_ipc: bytes,
             truncated: answer.result.truncated,
             consistency_token: answer.token,
             ..Default::default()

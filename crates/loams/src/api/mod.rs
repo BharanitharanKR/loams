@@ -23,9 +23,9 @@ mod connect_messages;
 #[cfg(feature = "postgres")]
 pub(crate) mod connect_postgres;
 mod connect_query;
-mod connect_sql;
 mod connect_query_filters;
 mod connect_query_ir;
+mod connect_sql;
 pub mod durable;
 mod errors;
 pub mod events;
