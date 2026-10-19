@@ -78,6 +78,9 @@ object CompactJson {
 
     private fun writeMessage(out: StringBuilder, message: Message) {
         val descriptor = message.descriptorForType
+        if (writeWellKnown(out, message)) {
+            return
+        }
         if (isWellKnown(descriptor.fullName)) {
             throw UnsupportedOperationException(
                 "${descriptor.fullName} has its own proto3 JSON mapping, which this writer does not " +
@@ -363,4 +366,60 @@ object CompactJson {
         "google.protobuf.FieldMask",
         "google.protobuf.Empty",
     )
+
+    // SDKP: the app-building API sends `Struct`, `Value` and `ListValue` (schemas,
+    // document sources, filter terms, search_after) and `Empty` (unit oneof arms), each
+    // in its proto3 JSON form.
+    private fun writeWellKnown(out: StringBuilder, message: Message): Boolean {
+        when (message.descriptorForType.fullName) {
+            "google.protobuf.Empty" -> out.append("{}")
+            "google.protobuf.Struct" -> writeStruct(out, message)
+            "google.protobuf.ListValue" -> writeList(out, message)
+            "google.protobuf.Value" -> writeValue(out, message)
+            else -> return false
+        }
+        return true
+    }
+
+    private fun writeStruct(out: StringBuilder, struct: Message) {
+        val fields = struct.descriptorForType.findFieldByName("fields")
+        out.append('{')
+        var first = true
+        for (i in 0 until struct.getRepeatedFieldCount(fields)) {
+            val entry = struct.getRepeatedField(fields, i) as Message
+            if (!first) out.append(',')
+            first = false
+            writeString(out, entry.getField(entry.descriptorForType.findFieldByName("key")) as String)
+            out.append(':')
+            writeValue(out, entry.getField(entry.descriptorForType.findFieldByName("value")) as Message)
+        }
+        out.append('}')
+    }
+
+    private fun writeList(out: StringBuilder, list: Message) {
+        val values = list.descriptorForType.findFieldByName("values")
+        out.append('[')
+        for (i in 0 until list.getRepeatedFieldCount(values)) {
+            if (i > 0) out.append(',')
+            writeValue(out, list.getRepeatedField(values, i) as Message)
+        }
+        out.append(']')
+    }
+
+    private fun writeValue(out: StringBuilder, value: Message) {
+        val set = value.allFields.entries.firstOrNull()
+        if (set == null) {
+            out.append("null")
+            return
+        }
+        when (set.key.name) {
+            "null_value" -> out.append("null")
+            "bool_value" -> out.append(if (set.value as Boolean) "true" else "false")
+            "number_value" -> out.append(number(set.value as Double))
+            "string_value" -> writeString(out, set.value as String)
+            "struct_value" -> writeStruct(out, set.value as Message)
+            "list_value" -> writeList(out, set.value as Message)
+            else -> out.append("null")
+        }
+    }
 }
