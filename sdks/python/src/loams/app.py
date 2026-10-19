@@ -179,8 +179,7 @@ def _scroll_request(
     if namespace is not None:
         body["namespace"] = namespace
     if where is not None:
-        # `ScrollDocumentsRequest.where` arrives with SDKP P0a; until then the
-        # decode refuses it loudly rather than dropping the filter.
+        # `where` is the Filter's proto3 JSON, a `Struct` on the wire (SDKP-12).
         body["where"] = where
     if limit is not None:
         body["limit"] = limit
@@ -434,6 +433,7 @@ def _require_tiebreak(search: Search) -> None:
             "search.query_all needs a sort that ends in the primary key, such as "
             ".sort(Sort.score(), Sort.pk())",
             code=Code.INVALID_ARGUMENT,
+            reason="search_after_needs_tiebreak",
             metadata={"field": "sort"},
         )
 

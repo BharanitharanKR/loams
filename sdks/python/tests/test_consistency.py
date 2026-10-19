@@ -66,8 +66,9 @@ def test_python_consistency_token_merge(case: dict[str, Any]) -> None:
 
 @pytest.mark.parametrize("text", CORPUS["malformed"])
 def test_python_consistency_token_merge_refuses_malformed(text: str) -> None:
-    with pytest.raises(InvalidArgumentError):
+    with pytest.raises(InvalidArgumentError) as caught:
         ConsistencyToken.parse(text)
+    assert caught.value.reason == "invalid_consistency_token"
     assert not ConsistencyToken.is_valid(text)
 
 

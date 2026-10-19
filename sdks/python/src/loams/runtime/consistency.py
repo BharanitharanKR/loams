@@ -178,33 +178,45 @@ def _invalid(text: str) -> InvalidArgumentError:
     return InvalidArgumentError(
         f"invalid consistency token {text!r}",
         code=Code.INVALID_ARGUMENT,
+        reason="invalid_consistency_token",
         metadata={"field": "consistency_token"},
     )
 
 
 class ConsistencySession:
-    """A session's consistency token: every token a response carried, merged.
+    """A session's consistency tokens: every token a response carried, merged,
+    kept **per proto package** (R4, SDKP-17).
 
-    `record` folds a token in; `current` is the merge, as text, for the next read.
-    A token that does not parse is counted in `rejected` and raised; the call path
-    swallows it, because the write that answered with it has already happened and
-    a thrown error would invite a caller to retry it.
+    A Graph read refuses a token naming another package's stream, so a
+    collection write's token must never become a graph read's `at_least`: the
+    session holds one merged token per scope, and the call path passes the
+    call's package as the scope. A caller using the store directly may leave the
+    scope out, which is one shared scope.
+
+    A token that does not parse is counted in `rejected` and raised; the call
+    path swallows it, because the write that answered with it has already
+    happened and a thrown error would invite a caller to retry it.
     """
 
     def __init__(self) -> None:
-        self._token: ConsistencyToken | None = None
+        self._tokens: dict[str, ConsistencyToken] = {}
         self._rejected = 0
 
-    def current(self) -> str | None:
-        """The token to attach to the next read, or `None` before any write."""
-        return None if self._token is None else str(self._token)
+    def current(self, scope: str = "") -> str | None:
+        """The token to attach to the next read in `scope`, or `None`."""
+        token = self._tokens.get(scope)
+        return None if token is None else str(token)
 
-    def token(self) -> ConsistencyToken | None:
-        """The merged token, parsed."""
-        return self._token
+    def token(self, scope: str = "") -> ConsistencyToken | None:
+        """The merged token of `scope`, parsed."""
+        return self._tokens.get(scope)
 
-    def record(self, token: str | None) -> None:
-        """Folds a token the server returned in.
+    def scopes(self) -> list[str]:
+        """The scopes the session holds a token for."""
+        return list(self._tokens)
+
+    def record(self, token: str | None, scope: str = "") -> None:
+        """Folds a token the server returned, in `scope`, in.
 
         :raises InvalidArgumentError: when the token does not parse, after
             counting it.
@@ -216,7 +228,8 @@ class ConsistencySession:
         except InvalidArgumentError:
             self._rejected += 1
             raise
-        self._token = parsed.normalized() if self._token is None else self._token.merge(parsed)
+        held = self._tokens.get(scope)
+        self._tokens[scope] = parsed.normalized() if held is None else held.merge(parsed)
 
     @property
     def rejected(self) -> int:
@@ -229,6 +242,6 @@ class ConsistencySession:
         return self._rejected
 
     def clear(self) -> None:
-        """Forgets the token, so the next read is not held to it."""
-        self._token = None
+        """Forgets every token, so the next read is not held to one."""
+        self._tokens.clear()
         self._rejected = 0

@@ -65,7 +65,7 @@ class _Base:
         return self._message("GetDocumentsRequest", **extra)
 
     def _count_request(self, where: FilterJson | None) -> Message:
-        # `CountDocumentsRequest.where` arrives with SDKP P0a.
+        # `where` is the Filter's proto3 JSON, a `Struct` on the wire (SDKP-12).
         return self._message("CountDocumentsRequest", **({} if where is None else {"where": where}))
 
     def query(self) -> Search:

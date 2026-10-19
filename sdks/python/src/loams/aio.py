@@ -38,7 +38,14 @@ from loams._gen.facade import (
     PROTO_REV     ,
     TablesModule  ,
 )
+from loams._gen.facade import GraphModule, VectorModule
 from loams.app import attach_async_app_calls
+from loams.app_types import (
+    AsyncCollectionsNamespace,
+    AsyncDocumentsNamespace,
+    AsyncNamespacesNamespace,
+    AsyncSearchNamespace,
+)
 from loams.handle import AsyncCollectionHandle
 from loams.runtime.call import DEFAULT_TIMEOUT_MS, AsyncCallInvoker
 from loams.runtime.consistency import ConsistencySession
@@ -165,6 +172,13 @@ class AsyncLoams:
         self.instance = cast(InstanceModule, modules["instance"])
         self.live = cast(LiveModule, modules["live"])
         self.tables = cast(TablesModule, modules["tables"])
+        #: The app modules (SDKP), as `Loams` has them; see `loams.loams.Loams`.
+        self.namespaces = cast(AsyncNamespacesNamespace, modules["namespaces"])
+        self.collections = cast(AsyncCollectionsNamespace, modules["collections"])
+        self.documents = cast(AsyncDocumentsNamespace, modules["documents"])
+        self.search = cast(AsyncSearchNamespace, modules["search"])
+        self.vector = cast(VectorModule, modules["vector"])
+        self.graph = cast(GraphModule, modules["graph"])
         self.system = AsyncSystemApi(self.instance.get_instance)
 
     @classmethod

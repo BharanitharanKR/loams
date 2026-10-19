@@ -37,12 +37,20 @@ from loams._gen.facade import (
     PROTO_PACKAGES,
     PROTO_REV,
     CallBinding,
+    GraphModuleSync,
     InstanceModuleSync,
     LiveModuleSync,
     ModuleBinding,
     TablesModuleSync,
+    VectorModuleSync,
 )
 from loams.app import attach_app_calls
+from loams.app_types import (
+    CollectionsNamespace,
+    DocumentsNamespace,
+    NamespacesNamespace,
+    SearchNamespace,
+)
 from loams.handle import CollectionHandle
 from loams.runtime.call import DEFAULT_TIMEOUT_MS, CallInvoker
 from loams.runtime.consistency import ConsistencySession
@@ -248,6 +256,18 @@ class Loams:
         self.instance = cast(InstanceModuleSync, modules["instance"])
         self.live = cast(LiveModuleSync, modules["live"])
         self.tables = cast(TablesModuleSync, modules["tables"])
+        #: `loams.namespaces`: the containers every collection and stream live in.
+        self.namespaces = cast(NamespacesNamespace, modules["namespaces"])
+        #: `loams.collections`: collections, their schemas, aliases and versions.
+        self.collections = cast(CollectionsNamespace, modules["collections"])
+        #: `loams.documents`: write, read, scroll and count, with the conveniences.
+        self.documents = cast(DocumentsNamespace, modules["documents"])
+        #: `loams.search`: text, vector and hybrid search (`Search` builds one).
+        self.search = cast(SearchNamespace, modules["search"])
+        #: `loams.vector`: the kNN half of `search`, by its own name (Q613).
+        self.vector = cast(VectorModuleSync, modules["vector"])
+        #: `loams.graph`: Loams Graph, queried with GQL. Its package is unstable.
+        self.graph = cast(GraphModuleSync, modules["graph"])
         self.system = SystemApi(self.instance.get_instance)
 
     @classmethod

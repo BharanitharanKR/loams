@@ -293,7 +293,7 @@ def test_a_call_opts_out_of_the_session(kind: str, make_server: Callable[[Answer
     if kind == "sync":
         with Loams(server.url, namespace="app", session_consistency=True) as client:
             assert client.consistency is not None
-            client.consistency.record(store_token)
+            client.consistency.record(store_token, "loams.collection.v1")
             client._invoker.unary(
                 GET,
                 GetDocumentsRequest(collection="notes"),
@@ -304,7 +304,7 @@ def test_a_call_opts_out_of_the_session(kind: str, make_server: Callable[[Answer
         async def run() -> None:
             async with AsyncLoams(server.url, namespace="app", session_consistency=True) as client:
                 assert client.consistency is not None
-                client.consistency.record(store_token)
+                client.consistency.record(store_token, "loams.collection.v1")
                 await client._invoker.unary(
                     GET,
                     GetDocumentsRequest(collection="notes"),
@@ -337,6 +337,7 @@ def test_python_default_namespace_refuses_neither_before_any_call(
     with pytest.raises(InvalidArgumentError) as caught:
         call(kind, server.url, GET, GetDocumentsRequest(collection="notes"))
     assert caught.value.metadata["field"] == "namespace"
+    assert caught.value.reason == "namespace_required"
     assert server.requests == [], "the refusal went over the network"
 
 
@@ -743,8 +744,9 @@ def test_python_search_query_all_requires_tiebreak() -> None:
 
     search = SearchCalls(query)
     no_sort = Search("notes").text("refund").limit(2)
-    with pytest.raises(InvalidArgumentError):
+    with pytest.raises(InvalidArgumentError) as caught:
         next(search.query_all(no_sort))
+    assert caught.value.reason == "search_after_needs_tiebreak"
     with pytest.raises(InvalidArgumentError):
         next(search.query_all(no_sort.sort(Sort.score())))
     assert queries == []
@@ -816,3 +818,35 @@ def test_paging_reads_an_item_field_with_an_underscore() -> None:
     ]
     seen = list(paginate(binding, lambda _r, _o: pages.pop(0), ListServiceAccountsRequest()))
     assert [item.id for item in seen] == ["a", "b"]
+
+
+# -- R4 as amended: one token per package, and none for graph reads (SDKP-17) --
+
+
+def test_the_session_keeps_one_token_per_package() -> None:
+    from loams.runtime.consistency import ConsistencySession
+
+    session = ConsistencySession()
+    session.record("v1:s4/p0@12", "loams.collection.v1")
+    session.record("v1:s7/p0@1", "loams.graph.v1")
+    assert session.current("loams.collection.v1") == "v1:s4/p0@12"
+    assert session.current("loams.graph.v1") == "v1:s7/p0@1"
+    assert session.current() is None
+
+
+def test_a_graph_read_never_takes_the_session_token() -> None:
+    """A graph's token names one graph, and a Graph read refuses any other, so
+    the session's token goes to collection and SQL reads only."""
+    from loams._gen.facade import MODULES as ALL
+    from loams.graph.v1.graph_pb2 import ExecuteRequest
+    from loams.runtime.call import prepare_request
+
+    execute = next(
+        c for m in ALL if m.name == "graph" for c in m.calls if c.method == "Execute"
+    )
+    out = prepare_request(
+        execute, ExecuteRequest(graph="g", statement="MATCH (n) RETURN n"), "app", "v1:s4/p0@12"
+    )
+    assert isinstance(out, ExecuteRequest)
+    assert out.namespace == "app", "R11 still fills a graph request's namespace"
+    assert not out.HasField("consistency")

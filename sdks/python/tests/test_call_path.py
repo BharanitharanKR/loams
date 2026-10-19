@@ -247,7 +247,9 @@ def test_the_consistency_header_goes_out_when_the_store_has_a_token() -> None:
             store = client.consistency
             assert store is not None, "session_consistency=True built no store"
             assert store.current() is None, "the store started out holding a token"
-            store.record(f"{TOKEN_PREFIX}s3/p0@7")
+            # The session is kept per proto package (R4, SDKP-17): the token is
+            # recorded in the scope of the call that will send it.
+            store.record(f"{TOKEN_PREFIX}s3/p0@7", "loams.instance.v1")
             client.instance.get_instance(GetInstanceRequest())
     finally:
         started.close()
