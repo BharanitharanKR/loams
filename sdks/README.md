@@ -15,7 +15,7 @@ This directory contains Loams language implementations, code generation template
 | **C# (.NET)** | [`csharp/`](csharp/) | `Loams` (app modules: namespaces, collections, documents, search, vector, graph) |
 | **Java** | [`java/`](java/) | `dev.loams` (app modules: namespaces, collections, documents, search, vector, graph) |
 | **Kotlin** | [`kotlin/`](kotlin/) | `dev.loams.kotlin` (app modules: namespaces, collections, documents, search, vector, graph) |
-| **Swift** | [`swift/`](swift/) | `Loams` |
+| **Swift** | [`swift/`](swift/) | `Loams` (app modules: namespaces, collections, documents, search, vector, graph) |
 | **Ruby** | [`ruby/`](ruby/) | `loams` |
 | **C++** | [`cpp/`](cpp/) | `loams` |
 | **Dart** | [`dart/`](dart/) | Implementation and runtime fixtures |

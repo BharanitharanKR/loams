@@ -13,6 +13,7 @@ All notable changes to this project are documented here. The format follows [Kee
   `examples/Notes` app.
 - **The Java SDK builds apps** (SDKP): namespaces, collections, documents, search, vector and graph
 - **The Kotlin SDK builds apps** (SDKP): namespaces, collections, documents, search, vector and graph
+- **The Swift SDK builds apps** (SDKP): namespaces, collections, documents, search, vector and graph
   modules, the `Schema`, `Filter` and `Search` builders, collection handles, `writeBatch`, `scrollAll` and
   `queryAll`; consistency tokens that parse and merge, a session store that gives reads read-your-writes,
   a default namespace, client deadlines (`client_deadline_exceeded`), and the notes example app.
