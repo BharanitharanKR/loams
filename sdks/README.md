@@ -14,7 +14,7 @@ This directory contains Loams language implementations, code generation template
 | **Go** | [`go/`](go/) | `github.com/ostrium-labs/loams/sdks/go` |
 | **C# (.NET)** | [`csharp/`](csharp/) | `Loams` (app modules: namespaces, collections, documents, search, vector, graph) |
 | **Java** | [`java/`](java/) | `dev.loams` (app modules: namespaces, collections, documents, search, vector, graph) |
-| **Kotlin** | [`kotlin/`](kotlin/) | `dev.loams.kotlin` |
+| **Kotlin** | [`kotlin/`](kotlin/) | `dev.loams.kotlin` (app modules: namespaces, collections, documents, search, vector, graph) |
 | **Swift** | [`swift/`](swift/) | `Loams` |
 | **Ruby** | [`ruby/`](ruby/) | `loams` |
 | **C++** | [`cpp/`](cpp/) | `loams` |
