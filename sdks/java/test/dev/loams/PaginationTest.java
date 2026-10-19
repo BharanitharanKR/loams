@@ -345,6 +345,11 @@ public class PaginationTest {
                 if (call.module().equals("live.admin") && call.name().equals("ListApps")) {
                     continue;
                 }
+                // SDKP: the app modules' list calls, driven against a stub in AppTest until the
+                // app corpus (P0d) records them.
+                if (call.protoPackage().equals("loams.collection.v1") || call.protoPackage().equals("loams.graph.v1")) {
+                    continue;
+                }
                 assertNull(
                         "binding "
                                 + call.module()

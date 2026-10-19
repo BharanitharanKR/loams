@@ -137,6 +137,22 @@ public final class ConnectTransport implements AutoCloseable {
             Map<String, String> headers,
             boolean jsonCodec)
             throws IOException, InterruptedException {
+        return unary(service, method, body, headers, jsonCodec, null);
+    }
+
+    /**
+     * One unary call that gives up after {@code timeout} (R12): the request's own timeout, so a
+     * call that runs out raises {@link java.net.http.HttpTimeoutException} inside a {@link
+     * ConnectFailure}. {@code null} means none.
+     */
+    public UnaryResponse unary(
+            String service,
+            String method,
+            byte[] body,
+            Map<String, String> headers,
+            boolean jsonCodec,
+            Duration timeout)
+            throws IOException, InterruptedException {
         String rpc = service + "/" + method;
         String contentType =
                 jsonCodec ? jsonVariant(UNARY_CONTENT_TYPE.get(protocol)) : UNARY_CONTENT_TYPE.get(protocol);
@@ -151,7 +167,7 @@ public final class ConnectTransport implements AutoCloseable {
         }
 
         HttpResponse<byte[]> response =
-                send(rpc, contentType, payload, headers, HttpResponse.BodyHandlers.ofByteArray(), null);
+                send(rpc, contentType, payload, headers, HttpResponse.BodyHandlers.ofByteArray(), timeout);
 
         byte[] responseBody = response.body();
         if (protocol == Protocol.CONNECT && !jsonCodec) {

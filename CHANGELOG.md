@@ -11,6 +11,10 @@ All notable changes to this project are documented here. The format follows [Kee
   and `QueryAllAsync`; consistency tokens that parse and merge, a session store that gives reads
   read-your-writes, a default namespace, client deadlines (`client_deadline_exceeded`), and the
   `examples/Notes` app.
+- **The Java SDK builds apps** (SDKP): namespaces, collections, documents, search, vector and graph
+  modules, the `Schema`, `Filter` and `Search` builders, collection handles, `writeBatch`, `scrollAll` and
+  `queryAll`; consistency tokens that parse and merge, a session store that gives reads read-your-writes,
+  a default namespace, client deadlines (`client_deadline_exceeded`), and the notes example app.
 
 ## [0.1.0] - 2026-10-19
 
