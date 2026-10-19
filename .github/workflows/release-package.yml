@@ -623,6 +623,19 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
+  # SHA256SUMS over everything attached so far, signed (SHA256SUMS.asc). Also after
+  # a failed build, so what was attached is covered; a re-run rewrites the pair.
+  checksums:
+    name: Checksums
+    needs: [guard, linux, windows, macos]
+    if: ${{ always() && needs.guard.result == 'success' && needs.guard.outputs.dry_run != 'true' }}
+    permissions:
+      contents: write
+    uses: ./.github/workflows/release-checksums.yml
+    with:
+      tag: ${{ needs.guard.outputs.tag }}
+    secrets: inherit
+
   # One job edits the release notes, so the Linux, Windows and macOS notes cannot
   # interleave. The warnings here are the point: a reader who downloads a file
   # from this release must not have to guess whether it is signed.
