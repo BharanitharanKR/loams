@@ -51,7 +51,10 @@ class Subscription(
                 }
             }
             val records = fetch(next)
-            if (records.isEmpty()) {
+            // A page with nothing at or past the offset is an empty one: back off rather than
+            // spin on records already yielded.
+            val from = next
+            if (records.none { it.offset >= from }) {
                 try {
                     sleep(backoff)
                 } catch (interrupted: InterruptedException) {
