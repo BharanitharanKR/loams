@@ -139,19 +139,19 @@ impl ConfigStore {
     /// Read `path` (absent means empty); `None` keeps the configuration in memory.
     pub fn open(path: Option<PathBuf>) -> Self {
         let mut apps = BTreeMap::new();
-        if let Some(p) = &path {
-            if let Ok(text) = std::fs::read_to_string(p) {
-                match serde_json::from_str::<File>(&text) {
-                    Ok(file) => {
-                        for (id, entry) in file.apps {
-                            if let Some(app) = AppId::parse(&id) {
-                                apps.insert(app, entry);
-                            }
+        if let Some(p) = &path
+            && let Ok(text) = std::fs::read_to_string(p)
+        {
+            match serde_json::from_str::<File>(&text) {
+                Ok(file) => {
+                    for (id, entry) in file.apps {
+                        if let Some(app) = AppId::parse(&id) {
+                            apps.insert(app, entry);
                         }
                     }
-                    Err(error) => {
-                        tracing::warn!(%error, "factory.json is not readable; starting empty")
-                    }
+                }
+                Err(error) => {
+                    tracing::warn!(%error, "factory.json is not readable; starting empty")
                 }
             }
         }

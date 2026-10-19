@@ -40,18 +40,16 @@ async fn call(c: &Client, path: &str, query: &Query<'_>) -> Result<Value, OpErro
     let body = match json_of(&target, &response) {
         Ok(body) => body,
         Err(err) => {
-            if response.status != 0 {
-                if let Ok(Value::Object(envelope)) = serde_json::from_slice::<Value>(&response.body)
-                {
-                    if envelope.get("result").and_then(Value::as_str) == Some("error") {
-                        let msg = envelope
-                            .get("msg")
-                            .and_then(Value::as_str)
-                            .filter(|m| !m.is_empty())
-                            .map_or_else(|| err.message.clone(), str::to_owned);
-                        return Err(OpError::other(msg));
-                    }
-                }
+            if response.status != 0
+                && let Ok(Value::Object(envelope)) = serde_json::from_slice::<Value>(&response.body)
+                && envelope.get("result").and_then(Value::as_str) == Some("error")
+            {
+                let msg = envelope
+                    .get("msg")
+                    .and_then(Value::as_str)
+                    .filter(|m| !m.is_empty())
+                    .map_or_else(|| err.message.clone(), str::to_owned);
+                return Err(OpError::other(msg));
             }
             return Err(err);
         }

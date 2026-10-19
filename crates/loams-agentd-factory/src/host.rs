@@ -188,10 +188,10 @@ impl FactoryHost {
             Err(e) if e.code() == "auth_failed" => FactoryHealth::AuthFailed,
             Err(_) => FactoryHealth::Unreachable,
         };
-        if self.generation(app) == generation {
-            if let Ok(mut h) = self.health.lock() {
-                h.insert(app, health);
-            }
+        if self.generation(app) == generation
+            && let Ok(mut h) = self.health.lock()
+        {
+            h.insert(app, health);
         }
         Some(health)
     }
@@ -246,10 +246,10 @@ impl FactoryHost {
                 if *secret && !same_origin {
                     continue;
                 }
-                if !clean.contains_key(*key) {
-                    if let Some(v) = kept.get(*key).filter(|v| !v.is_empty()) {
-                        clean.insert((*key).to_owned(), v.clone());
-                    }
+                if !clean.contains_key(*key)
+                    && let Some(v) = kept.get(*key).filter(|v| !v.is_empty())
+                {
+                    clean.insert((*key).to_owned(), v.clone());
                 }
             }
         }

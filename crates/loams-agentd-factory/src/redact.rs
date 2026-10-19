@@ -67,7 +67,6 @@ mod tests {
         for text in [
             "tok-S3CRET/+x".to_owned(),
             "tok-S3CRET%2F%2Bx".to_owned(),
-            "tok-S3CRET%2F%2Bx".replace("%2F", "%2F"),
             basic.clone(),
             basic.trim_end_matches('=').to_owned(),
         ] {
