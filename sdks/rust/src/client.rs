@@ -909,9 +909,10 @@ mod tests {
         assert_eq!(loams.inner.runtime.max_retries, DEFAULT_MAX_RETRIES);
         assert_eq!(
             loams.bindings().len(),
-            10,
+            16,
             "admin.agents, admin.audit, admin.keys, admin.org, admin.projects, auth, \
-             instance, live, live.admin and tables"
+             collections, documents, graph, instance, live, live.admin, namespaces, search, \
+             tables and vector"
         );
     }
 
@@ -956,7 +957,7 @@ mod tests {
             .expect("generated");
         assert_eq!(binding.rpc, "loams.instance.v1.InstanceService/GetInstance");
         let missing = loams
-            .binding("collections", "list_collections")
+            .binding("collections", "list_collections_of_nothing")
             .unwrap_err();
         assert!(
             missing.to_string().contains("no generated call"),

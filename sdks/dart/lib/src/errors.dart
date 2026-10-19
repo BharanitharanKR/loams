@@ -327,6 +327,9 @@ class LiveDeployConflictException extends LoamsException {
 class LiveSchemaViolationException extends LoamsException {
   LiveSchemaViolationException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
 }
+class FilterConflictException extends LoamsException {
+  FilterConflictException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
+}
 
 class LiveIndexNotReadyException extends LoamsException {
   LiveIndexNotReadyException(super.message, {super.code, super.reason, super.unknownReason, super.httpStatus, super.rawDetails});
@@ -695,6 +698,8 @@ class ErrorParser {
         LiveDeployConflictException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
     'live_schema_violation': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
         LiveSchemaViolationException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
+    'filter_conflict': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
+        FilterConflictException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
     'live_index_not_ready': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>
         LiveIndexNotReadyException(msg, code: code, reason: reason, unknownReason: unknownReason, httpStatus: httpStatus, rawDetails: rawDetails),
     'live_app_disabled': (msg, {code = 'unknown', reason, unknownReason, httpStatus = 500, rawDetails = const []}) =>

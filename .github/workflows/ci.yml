@@ -1350,6 +1350,16 @@ jobs:
           git diff --exit-code -- sdks/typescript/packages/client/src/gen || {
             echo "sdks/typescript/packages/client/src/gen is stale: run 'scripts/sdk/gen.sh typescript' and commit the result"; exit 1;
           }
+      # SDKP P0a: the facade index the hand-written SDKs check themselves
+      # against, and the descriptor sets Ruby and Kotlin read at runtime, are
+      # generated from the same protos and must not drift either.
+      - name: the facade index and the descriptor sets are up to date
+        run: |
+          ./scripts/sdk/gen.sh index
+          ./scripts/sdk/gen.sh descriptors
+          git diff --exit-code -- sdks/fixtures/facade-index.json sdks/ruby/gen sdks/kotlin/gen || {
+            echo "facade-index.json or a descriptor set is stale: run 'scripts/sdk/gen.sh index' and 'scripts/sdk/gen.sh descriptors' and commit the result"; exit 1;
+          }
       # The golden test compares the committed facade against the generator's
       # output over the real proto/ tree, so a proto edit that changed the SDK
       # surface cannot pass with a stale file.

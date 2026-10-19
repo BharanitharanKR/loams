@@ -268,11 +268,21 @@ export class Loams {
 function buildModules(invoker: CallInvoker): Record<string, unknown> {
   const modules: Record<string, unknown> = {};
   for (const module of MODULES) {
-    const descriptor = SERVICE_DESCRIPTORS[module.service];
-    if (descriptor === undefined) {
+    // A module may span two services (`loams.graph` is `GraphAdminService`
+    // and `GraphService`), so every call's own service is registered.
+    const services = new Set([module.service, ...module.calls.map((call) => call.service)]);
+    let missing = false;
+    for (const service of services) {
+      const descriptor = SERVICE_DESCRIPTORS[service];
+      if (descriptor === undefined) {
+        missing = true;
+        continue;
+      }
+      invoker.register(service, descriptor);
+    }
+    if (missing) {
       continue;
     }
-    invoker.register(module.service, descriptor);
     const calls: Record<string, unknown> = {
       module: module.name,
       service: module.service,

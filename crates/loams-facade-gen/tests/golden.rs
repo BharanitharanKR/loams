@@ -28,6 +28,8 @@ const PACKAGE_PARAMETERS: &[&str] = &[
     "loams.live.v1=@loams/live/live",
     "loams.auth.v1=@loams/proto/auth",
     "loams.admin.v1=@loams/proto/admin",
+    "loams.collection.v1=@loams/proto/collection-v1",
+    "loams.graph.v1=@loams/proto/graph",
 ];
 
 const PROTO_REV: &str = "v1";

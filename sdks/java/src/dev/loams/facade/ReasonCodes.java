@@ -106,6 +106,7 @@ public final class ReasonCodes {
         map.put(Reason.LIVE_WORKER_CRASHED, "internal");
         map.put(Reason.LIVE_DEPLOY_CONFLICT, "failed_precondition");
         map.put(Reason.LIVE_SCHEMA_VIOLATION, "invalid_argument");
+        map.put(Reason.FILTER_CONFLICT, "invalid_argument");
         map.put(Reason.LIVE_INDEX_NOT_READY, "failed_precondition");
         map.put(Reason.LIVE_APP_DISABLED, "failed_precondition");
         map.put(Reason.LIVE_APP_EXISTS, "failed_precondition");

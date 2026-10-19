@@ -33,12 +33,21 @@ from loams.admin.v1.key_connect import KeyServiceClient, KeyServiceClientSync
 from loams.admin.v1.project_connect import ProjectServiceClient, ProjectServiceClientSync
 from loams.auth.v1.auth_pb2 import CompleteSetupRequest, CompleteSetupResponse, CreateSessionRequest, CreateSessionResponse, DecideConsentRequest, DecideConsentResponse, DeleteSessionRequest, DeleteSessionResponse, GetSessionRequest, GetSessionResponse, ListProvidersRequest, ListProvidersResponse
 from loams.auth.v1.auth_connect import AuthServiceClient, AuthServiceClientSync
+from loams.collection.v1.collection_pb2 import AddFieldsRequest, AddFieldsResponse, CollectionInfo, CreateCollectionRequest, CreateNamespaceRequest, CreateNamespaceResponse, DropCollectionRequest, DropCollectionResponse, GetCollectionRequest, ListCollectionsRequest, ListCollectionsResponse, ListNamespacesRequest, ListNamespacesResponse, ListVersionsRequest, ListVersionsResponse, ScanPlan, ScanRequest, SetHotRequest, SetHotResponse, UpdateAliasesRequest, UpdateAliasesResponse, WarmCollectionRequest, WarmCollectionResponse
+from loams.collection.v1.document_pb2 import CountDocumentsRequest, CountDocumentsResponse, DeleteByFilterRequest, FilterWriteResponse, GetDocumentsRequest, GetDocumentsResponse, PatchByFilterRequest, ScrollDocumentsRequest, ScrollDocumentsResponse, WriteDocumentsRequest, WriteDocumentsResponse
+from loams.collection.v1.query_pb2 import SearchRequest, SearchResponse
+from loams.collection.v1.collection_connect import CollectionServiceClient, CollectionServiceClientSync, NamespaceServiceClient, NamespaceServiceClientSync
+from loams.collection.v1.document_connect import DocumentServiceClient, DocumentServiceClientSync
+from loams.collection.v1.query_connect import QueryServiceClient, QueryServiceClientSync
+from loams.graph.v1.graph_pb2 import CreateGraphRequest, DeleteGraphRequest, ExecuteBatchRequest, ExecuteBatchResponse, ExecuteRequest, ExecuteResponse, ExecuteStreamRequest, ExplainRequest, GetGraphRequest, GetSchemaRequest, Graph, GraphSchema, ListGraphsRequest, ListGraphsResponse, Plan, ResultChunk, UpdateGraphRequest
+from loams.graph.v1.graph_connect import GraphAdminServiceClient, GraphAdminServiceClientSync, GraphServiceClient, GraphServiceClientSync
 from loams.instance.v1.instance_pb2 import GetInstanceRequest, GetInstanceResponse, WhoAmIRequest, WhoAmIResponse
 from loams.instance.v1.instance_connect import InstanceServiceClient, InstanceServiceClientSync
 from loams.live.v1.live_pb2 import AuthenticateRequest, AuthenticateResponse, ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition, WatchRequest
 from loams.live.v1.admin_pb2 import ActivateDeploymentRequest, ActivateDeploymentResponse, CreateAppRequest, CreateAppResponse, DeleteAppRequest, DeleteAppResponse, DeployRequest, DeployResponse, GetAppRequest, GetAppResponse, GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse, ListAppsRequest, ListAppsResponse, ListDeploymentsRequest, ListDeploymentsResponse, TailLogsRequest, TailLogsResponse, UpdateAppRequest, UpdateAppResponse
 from loams.live.v1.live_connect import LiveServiceClient, LiveServiceClientSync
 from loams.live.v1.admin_connect import LiveAdminServiceClient, LiveAdminServiceClientSync
+from loams.operations.v1.operations_pb2 import Operation
 
 PROTO_REV: Final[str] = "v1"
 """The proto revision this SDK was generated from (`LOAMS_PROTO_REV`,
@@ -128,6 +137,7 @@ Reason = Literal[
     "live_worker_crashed",
     "live_deploy_conflict",
     "live_schema_violation",
+    "filter_conflict",
     "live_index_not_ready",
     "live_app_disabled",
     "live_app_exists",
@@ -260,6 +270,7 @@ REASONS: Final[tuple[Reason, ...]] = (
     "live_worker_crashed",
     "live_deploy_conflict",
     "live_schema_violation",
+    "filter_conflict",
     "live_index_not_ready",
     "live_app_disabled",
     "live_app_exists",
@@ -388,6 +399,7 @@ REASON_CODES: Final[dict[Reason, str]] = {
     "live_worker_crashed": "internal",
     "live_deploy_conflict": "failed_precondition",
     "live_schema_violation": "invalid_argument",
+    "filter_conflict": "invalid_argument",
     "live_index_not_ready": "failed_precondition",
     "live_app_disabled": "failed_precondition",
     "live_app_exists": "failed_precondition",
@@ -1125,6 +1137,374 @@ MODULES: Final[tuple[ModuleBinding, ...]] = (
         ),
     ),
     ModuleBinding(
+        name="collections",
+        summary="Collections: schema, aliases, versions, scan plans and the hot tier.",
+        service="loams.collection.v1.CollectionService",
+        package="loams.collection.v1",
+        unstable=False,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="collections",
+                name="add_fields",
+                proto_name="add_fields",
+                method="AddFields",
+                rpc="loams.collection.v1.CollectionService/AddFields",
+                service="loams.collection.v1.CollectionService",
+                package="loams.collection.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="collections",
+                name="create",
+                proto_name="create",
+                method="CreateCollection",
+                rpc="loams.collection.v1.CollectionService/CreateCollection",
+                service="loams.collection.v1.CollectionService",
+                package="loams.collection.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="collections",
+                name="drop",
+                proto_name="drop",
+                method="DropCollection",
+                rpc="loams.collection.v1.CollectionService/DropCollection",
+                service="loams.collection.v1.CollectionService",
+                package="loams.collection.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="collections",
+                name="get",
+                proto_name="get",
+                method="GetCollection",
+                rpc="loams.collection.v1.CollectionService/GetCollection",
+                service="loams.collection.v1.CollectionService",
+                package="loams.collection.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="collections",
+                name="list",
+                proto_name="list",
+                method="ListCollections",
+                rpc="loams.collection.v1.CollectionService/ListCollections",
+                service="loams.collection.v1.CollectionService",
+                package="loams.collection.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="collections", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="collections",
+                name="list_versions",
+                proto_name="list_versions",
+                method="ListVersions",
+                rpc="loams.collection.v1.CollectionService/ListVersions",
+                service="loams.collection.v1.CollectionService",
+                package="loams.collection.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="versions", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="collections",
+                name="scan",
+                proto_name="scan",
+                method="Scan",
+                rpc="loams.collection.v1.CollectionService/Scan",
+                service="loams.collection.v1.CollectionService",
+                package="loams.collection.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="collections",
+                name="set_hot",
+                proto_name="set_hot",
+                method="SetHot",
+                rpc="loams.collection.v1.CollectionService/SetHot",
+                service="loams.collection.v1.CollectionService",
+                package="loams.collection.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="collections",
+                name="update_aliases",
+                proto_name="update_aliases",
+                method="UpdateAliases",
+                rpc="loams.collection.v1.CollectionService/UpdateAliases",
+                service="loams.collection.v1.CollectionService",
+                package="loams.collection.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="collections",
+                name="warm",
+                proto_name="warm",
+                method="WarmCollection",
+                rpc="loams.collection.v1.CollectionService/WarmCollection",
+                service="loams.collection.v1.CollectionService",
+                package="loams.collection.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+        ),
+    ),
+    ModuleBinding(
+        name="documents",
+        summary="Documents: write, get, scroll, count, delete by filter and patch by filter.",
+        service="loams.collection.v1.DocumentService",
+        package="loams.collection.v1",
+        unstable=False,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="documents",
+                name="count",
+                proto_name="count",
+                method="CountDocuments",
+                rpc="loams.collection.v1.DocumentService/CountDocuments",
+                service="loams.collection.v1.DocumentService",
+                package="loams.collection.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="documents",
+                name="delete_by_filter",
+                proto_name="delete_by_filter",
+                method="DeleteByFilter",
+                rpc="loams.collection.v1.DocumentService/DeleteByFilter",
+                service="loams.collection.v1.DocumentService",
+                package="loams.collection.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="documents",
+                name="get",
+                proto_name="get",
+                method="GetDocuments",
+                rpc="loams.collection.v1.DocumentService/GetDocuments",
+                service="loams.collection.v1.DocumentService",
+                package="loams.collection.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="documents",
+                name="patch_by_filter",
+                proto_name="patch_by_filter",
+                method="PatchByFilter",
+                rpc="loams.collection.v1.DocumentService/PatchByFilter",
+                service="loams.collection.v1.DocumentService",
+                package="loams.collection.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="documents",
+                name="scroll",
+                proto_name="scroll",
+                method="ScrollDocuments",
+                rpc="loams.collection.v1.DocumentService/ScrollDocuments",
+                service="loams.collection.v1.DocumentService",
+                package="loams.collection.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="documents",
+                name="write",
+                proto_name="write",
+                method="WriteDocuments",
+                rpc="loams.collection.v1.DocumentService/WriteDocuments",
+                service="loams.collection.v1.DocumentService",
+                package="loams.collection.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+        ),
+    ),
+    ModuleBinding(
+        name="graph",
+        summary="Loams Graph: stored property graphs, queried with GQL.",
+        service="loams.graph.v1.GraphAdminService",
+        package="loams.graph.v1",
+        unstable=True,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="graph",
+                name="create",
+                proto_name="create",
+                method="CreateGraph",
+                rpc="loams.graph.v1.GraphAdminService/CreateGraph",
+                service="loams.graph.v1.GraphAdminService",
+                package="loams.graph.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="graph",
+                name="delete",
+                proto_name="delete",
+                method="DeleteGraph",
+                rpc="loams.graph.v1.GraphAdminService/DeleteGraph",
+                service="loams.graph.v1.GraphAdminService",
+                package="loams.graph.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="graph",
+                name="explain",
+                proto_name="explain",
+                method="Explain",
+                rpc="loams.graph.v1.GraphService/Explain",
+                service="loams.graph.v1.GraphService",
+                package="loams.graph.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="graph",
+                name="get",
+                proto_name="get",
+                method="GetGraph",
+                rpc="loams.graph.v1.GraphAdminService/GetGraph",
+                service="loams.graph.v1.GraphAdminService",
+                package="loams.graph.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="graph",
+                name="list",
+                proto_name="list",
+                method="ListGraphs",
+                rpc="loams.graph.v1.GraphAdminService/ListGraphs",
+                service="loams.graph.v1.GraphAdminService",
+                package="loams.graph.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="graphs", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="graph",
+                name="query",
+                proto_name="query",
+                method="Execute",
+                rpc="loams.graph.v1.GraphService/Execute",
+                service="loams.graph.v1.GraphService",
+                package="loams.graph.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="graph",
+                name="query_batch",
+                proto_name="query_batch",
+                method="ExecuteBatch",
+                rpc="loams.graph.v1.GraphService/ExecuteBatch",
+                service="loams.graph.v1.GraphService",
+                package="loams.graph.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="graph",
+                name="query_stream",
+                proto_name="query_stream",
+                method="ExecuteStream",
+                rpc="loams.graph.v1.GraphService/ExecuteStream",
+                service="loams.graph.v1.GraphService",
+                package="loams.graph.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="server",
+                pagination=None,
+            ),
+            CallBinding(
+                module="graph",
+                name="schema",
+                proto_name="schema",
+                method="GetSchema",
+                rpc="loams.graph.v1.GraphAdminService/GetSchema",
+                service="loams.graph.v1.GraphAdminService",
+                package="loams.graph.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="graph",
+                name="update",
+                proto_name="update",
+                method="UpdateGraph",
+                rpc="loams.graph.v1.GraphAdminService/UpdateGraph",
+                service="loams.graph.v1.GraphAdminService",
+                package="loams.graph.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+        ),
+    ),
+    ModuleBinding(
         name="instance",
         summary="What this instance is, and who the caller is on it.",
         service="loams.instance.v1.InstanceService",
@@ -1363,6 +1743,65 @@ MODULES: Final[tuple[ModuleBinding, ...]] = (
         ),
     ),
     ModuleBinding(
+        name="namespaces",
+        summary="Namespaces: the container every collection and stream lives in.",
+        service="loams.collection.v1.NamespaceService",
+        package="loams.collection.v1",
+        unstable=False,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="namespaces",
+                name="create",
+                proto_name="create",
+                method="CreateNamespace",
+                rpc="loams.collection.v1.NamespaceService/CreateNamespace",
+                service="loams.collection.v1.NamespaceService",
+                package="loams.collection.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="namespaces",
+                name="list",
+                proto_name="list",
+                method="ListNamespaces",
+                rpc="loams.collection.v1.NamespaceService/ListNamespaces",
+                service="loams.collection.v1.NamespaceService",
+                package="loams.collection.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="namespaces", next_page_token="next_page_token"),
+            ),
+        ),
+    ),
+    ModuleBinding(
+        name="search",
+        summary="Queries: one search over one collection, dense, sparse, text or hybrid.",
+        service="loams.collection.v1.QueryService",
+        package="loams.collection.v1",
+        unstable=False,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="search",
+                name="query",
+                proto_name="query",
+                method="Search",
+                rpc="loams.collection.v1.QueryService/Search",
+                service="loams.collection.v1.QueryService",
+                package="loams.collection.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+        ),
+    ),
+    ModuleBinding(
         name="tables",
         summary="",
         service="loams.live.v1.LiveService",
@@ -1393,6 +1832,29 @@ MODULES: Final[tuple[ModuleBinding, ...]] = (
                 package="loams.live.v1",
                 idempotency="none",
                 retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+        ),
+    ),
+    ModuleBinding(
+        name="vector",
+        summary="",
+        service="loams.collection.v1.QueryService",
+        package="loams.collection.v1",
+        unstable=False,
+        derived=True,
+        calls=(
+            CallBinding(
+                module="vector",
+                name="search",
+                proto_name="search",
+                method="Search",
+                rpc="loams.collection.v1.QueryService/Search",
+                service="loams.collection.v1.QueryService",
+                package="loams.collection.v1",
+                idempotency="no_side_effects",
+                retry="safe",
                 streaming="unary",
                 pagination=None,
             ),
@@ -1704,6 +2166,188 @@ METHODS: Final[dict[str, MethodInfo[Message, Message]]] = {
         output=ListProvidersResponse,
         idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
     ),
+    "loams.collection.v1.CollectionService/AddFields": MethodInfo(
+        name="AddFields",
+        service_name="loams.collection.v1.CollectionService",
+        input=AddFieldsRequest,
+        output=AddFieldsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.collection.v1.CollectionService/CreateCollection": MethodInfo(
+        name="CreateCollection",
+        service_name="loams.collection.v1.CollectionService",
+        input=CreateCollectionRequest,
+        output=CollectionInfo,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.collection.v1.CollectionService/DropCollection": MethodInfo(
+        name="DropCollection",
+        service_name="loams.collection.v1.CollectionService",
+        input=DropCollectionRequest,
+        output=DropCollectionResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.collection.v1.CollectionService/GetCollection": MethodInfo(
+        name="GetCollection",
+        service_name="loams.collection.v1.CollectionService",
+        input=GetCollectionRequest,
+        output=CollectionInfo,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.collection.v1.CollectionService/ListCollections": MethodInfo(
+        name="ListCollections",
+        service_name="loams.collection.v1.CollectionService",
+        input=ListCollectionsRequest,
+        output=ListCollectionsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.collection.v1.CollectionService/ListVersions": MethodInfo(
+        name="ListVersions",
+        service_name="loams.collection.v1.CollectionService",
+        input=ListVersionsRequest,
+        output=ListVersionsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.collection.v1.CollectionService/Scan": MethodInfo(
+        name="Scan",
+        service_name="loams.collection.v1.CollectionService",
+        input=ScanRequest,
+        output=ScanPlan,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.collection.v1.CollectionService/SetHot": MethodInfo(
+        name="SetHot",
+        service_name="loams.collection.v1.CollectionService",
+        input=SetHotRequest,
+        output=SetHotResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.collection.v1.CollectionService/UpdateAliases": MethodInfo(
+        name="UpdateAliases",
+        service_name="loams.collection.v1.CollectionService",
+        input=UpdateAliasesRequest,
+        output=UpdateAliasesResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.collection.v1.CollectionService/WarmCollection": MethodInfo(
+        name="WarmCollection",
+        service_name="loams.collection.v1.CollectionService",
+        input=WarmCollectionRequest,
+        output=WarmCollectionResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.collection.v1.DocumentService/CountDocuments": MethodInfo(
+        name="CountDocuments",
+        service_name="loams.collection.v1.DocumentService",
+        input=CountDocumentsRequest,
+        output=CountDocumentsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.collection.v1.DocumentService/DeleteByFilter": MethodInfo(
+        name="DeleteByFilter",
+        service_name="loams.collection.v1.DocumentService",
+        input=DeleteByFilterRequest,
+        output=FilterWriteResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.collection.v1.DocumentService/GetDocuments": MethodInfo(
+        name="GetDocuments",
+        service_name="loams.collection.v1.DocumentService",
+        input=GetDocumentsRequest,
+        output=GetDocumentsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.collection.v1.DocumentService/PatchByFilter": MethodInfo(
+        name="PatchByFilter",
+        service_name="loams.collection.v1.DocumentService",
+        input=PatchByFilterRequest,
+        output=FilterWriteResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.collection.v1.DocumentService/ScrollDocuments": MethodInfo(
+        name="ScrollDocuments",
+        service_name="loams.collection.v1.DocumentService",
+        input=ScrollDocumentsRequest,
+        output=ScrollDocumentsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.collection.v1.DocumentService/WriteDocuments": MethodInfo(
+        name="WriteDocuments",
+        service_name="loams.collection.v1.DocumentService",
+        input=WriteDocumentsRequest,
+        output=WriteDocumentsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.graph.v1.GraphAdminService/CreateGraph": MethodInfo(
+        name="CreateGraph",
+        service_name="loams.graph.v1.GraphAdminService",
+        input=CreateGraphRequest,
+        output=Graph,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.graph.v1.GraphAdminService/DeleteGraph": MethodInfo(
+        name="DeleteGraph",
+        service_name="loams.graph.v1.GraphAdminService",
+        input=DeleteGraphRequest,
+        output=Operation,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.graph.v1.GraphService/Explain": MethodInfo(
+        name="Explain",
+        service_name="loams.graph.v1.GraphService",
+        input=ExplainRequest,
+        output=Plan,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.graph.v1.GraphAdminService/GetGraph": MethodInfo(
+        name="GetGraph",
+        service_name="loams.graph.v1.GraphAdminService",
+        input=GetGraphRequest,
+        output=Graph,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.graph.v1.GraphAdminService/ListGraphs": MethodInfo(
+        name="ListGraphs",
+        service_name="loams.graph.v1.GraphAdminService",
+        input=ListGraphsRequest,
+        output=ListGraphsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.graph.v1.GraphService/Execute": MethodInfo(
+        name="Execute",
+        service_name="loams.graph.v1.GraphService",
+        input=ExecuteRequest,
+        output=ExecuteResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.graph.v1.GraphService/ExecuteBatch": MethodInfo(
+        name="ExecuteBatch",
+        service_name="loams.graph.v1.GraphService",
+        input=ExecuteBatchRequest,
+        output=ExecuteBatchResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.graph.v1.GraphService/ExecuteStream": MethodInfo(
+        name="ExecuteStream",
+        service_name="loams.graph.v1.GraphService",
+        input=ExecuteStreamRequest,
+        output=ResultChunk,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.graph.v1.GraphAdminService/GetSchema": MethodInfo(
+        name="GetSchema",
+        service_name="loams.graph.v1.GraphAdminService",
+        input=GetSchemaRequest,
+        output=GraphSchema,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.graph.v1.GraphAdminService/UpdateGraph": MethodInfo(
+        name="UpdateGraph",
+        service_name="loams.graph.v1.GraphAdminService",
+        input=UpdateGraphRequest,
+        output=Graph,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
     "loams.instance.v1.InstanceService/GetInstance": MethodInfo(
         name="GetInstance",
         service_name="loams.instance.v1.InstanceService",
@@ -1816,6 +2460,27 @@ METHODS: Final[dict[str, MethodInfo[Message, Message]]] = {
         output=UpdateAppResponse,
         idempotency_level=IDEMPOTENCY_LEVELS["none"],
     ),
+    "loams.collection.v1.NamespaceService/CreateNamespace": MethodInfo(
+        name="CreateNamespace",
+        service_name="loams.collection.v1.NamespaceService",
+        input=CreateNamespaceRequest,
+        output=CreateNamespaceResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.collection.v1.NamespaceService/ListNamespaces": MethodInfo(
+        name="ListNamespaces",
+        service_name="loams.collection.v1.NamespaceService",
+        input=ListNamespacesRequest,
+        output=ListNamespacesResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.collection.v1.QueryService/Search": MethodInfo(
+        name="Search",
+        service_name="loams.collection.v1.QueryService",
+        input=SearchRequest,
+        output=SearchResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
     "loams.live.v1.LiveService/Mutate": MethodInfo(
         name="Mutate",
         service_name="loams.live.v1.LiveService",
@@ -1829,6 +2494,13 @@ METHODS: Final[dict[str, MethodInfo[Message, Message]]] = {
         input=QueryRequest,
         output=QueryResponse,
         idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.collection.v1.QueryService/Search": MethodInfo(
+        name="Search",
+        service_name="loams.collection.v1.QueryService",
+        input=SearchRequest,
+        output=SearchResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
     ),
 }
 class AdminAgentsModule(Protocol):
@@ -2803,6 +3475,592 @@ class AuthModuleSync(Protocol):
 
 
 
+class CollectionsModule(Protocol):
+    """`loams.collections` — Collections: schema, aliases, versions, scan plans and the hot tier.
+
+    Wraps `loams.collection.v1.CollectionService`.
+    """
+
+    module: ClassVar[Literal["collections"]]
+    service: ClassVar[Literal["loams.collection.v1.CollectionService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.collection.v1.CollectionService/AddFields`, retried: safe.
+    """
+    async def add_fields(
+        self,
+        request: loams.collection.v1.collection_pb2.AddFieldsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.AddFieldsResponse:
+        ...
+
+    """`loams.collection.v1.CollectionService/CreateCollection`, retried: safe.
+    """
+    async def create(
+        self,
+        request: loams.collection.v1.collection_pb2.CreateCollectionRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.CollectionInfo:
+        ...
+
+    """`loams.collection.v1.CollectionService/DropCollection`, retried: safe.
+    """
+    async def drop(
+        self,
+        request: loams.collection.v1.collection_pb2.DropCollectionRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.DropCollectionResponse:
+        ...
+
+    """`loams.collection.v1.CollectionService/GetCollection`, retried: safe.
+    """
+    async def get(
+        self,
+        request: loams.collection.v1.collection_pb2.GetCollectionRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.CollectionInfo:
+        ...
+
+    """`loams.collection.v1.CollectionService/ListCollections`, retried: safe. AIP-158: page with `collections` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list(
+        self,
+        request: loams.collection.v1.collection_pb2.ListCollectionsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.ListCollectionsResponse:
+        ...
+
+    """`loams.collection.v1.CollectionService/ListVersions`, retried: safe. AIP-158: page with `versions` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list_versions(
+        self,
+        request: loams.collection.v1.collection_pb2.ListVersionsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.ListVersionsResponse:
+        ...
+
+    """`loams.collection.v1.CollectionService/Scan`, retried: manual.
+    """
+    async def scan(
+        self,
+        request: loams.collection.v1.collection_pb2.ScanRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.ScanPlan:
+        ...
+
+    """`loams.collection.v1.CollectionService/SetHot`, retried: safe.
+    """
+    async def set_hot(
+        self,
+        request: loams.collection.v1.collection_pb2.SetHotRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.SetHotResponse:
+        ...
+
+    """`loams.collection.v1.CollectionService/UpdateAliases`, retried: safe.
+    """
+    async def update_aliases(
+        self,
+        request: loams.collection.v1.collection_pb2.UpdateAliasesRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.UpdateAliasesResponse:
+        ...
+
+    """`loams.collection.v1.CollectionService/WarmCollection`, retried: safe.
+    """
+    async def warm(
+        self,
+        request: loams.collection.v1.collection_pb2.WarmCollectionRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.WarmCollectionResponse:
+        ...
+
+
+
+class CollectionsModuleSync(Protocol):
+    """`loams.collections` — Collections: schema, aliases, versions, scan plans and the hot tier.
+
+    Wraps `loams.collection.v1.CollectionService`.
+    """
+
+    module: ClassVar[Literal["collections"]]
+    service: ClassVar[Literal["loams.collection.v1.CollectionService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.collection.v1.CollectionService/AddFields`, retried: safe.
+    """
+    def add_fields(
+        self,
+        request: loams.collection.v1.collection_pb2.AddFieldsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.AddFieldsResponse:
+        ...
+
+    """`loams.collection.v1.CollectionService/CreateCollection`, retried: safe.
+    """
+    def create(
+        self,
+        request: loams.collection.v1.collection_pb2.CreateCollectionRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.CollectionInfo:
+        ...
+
+    """`loams.collection.v1.CollectionService/DropCollection`, retried: safe.
+    """
+    def drop(
+        self,
+        request: loams.collection.v1.collection_pb2.DropCollectionRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.DropCollectionResponse:
+        ...
+
+    """`loams.collection.v1.CollectionService/GetCollection`, retried: safe.
+    """
+    def get(
+        self,
+        request: loams.collection.v1.collection_pb2.GetCollectionRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.CollectionInfo:
+        ...
+
+    """`loams.collection.v1.CollectionService/ListCollections`, retried: safe. AIP-158: page with `collections` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list(
+        self,
+        request: loams.collection.v1.collection_pb2.ListCollectionsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.ListCollectionsResponse:
+        ...
+
+    """`loams.collection.v1.CollectionService/ListVersions`, retried: safe. AIP-158: page with `versions` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list_versions(
+        self,
+        request: loams.collection.v1.collection_pb2.ListVersionsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.ListVersionsResponse:
+        ...
+
+    """`loams.collection.v1.CollectionService/Scan`, retried: manual.
+    """
+    def scan(
+        self,
+        request: loams.collection.v1.collection_pb2.ScanRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.ScanPlan:
+        ...
+
+    """`loams.collection.v1.CollectionService/SetHot`, retried: safe.
+    """
+    def set_hot(
+        self,
+        request: loams.collection.v1.collection_pb2.SetHotRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.SetHotResponse:
+        ...
+
+    """`loams.collection.v1.CollectionService/UpdateAliases`, retried: safe.
+    """
+    def update_aliases(
+        self,
+        request: loams.collection.v1.collection_pb2.UpdateAliasesRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.UpdateAliasesResponse:
+        ...
+
+    """`loams.collection.v1.CollectionService/WarmCollection`, retried: safe.
+    """
+    def warm(
+        self,
+        request: loams.collection.v1.collection_pb2.WarmCollectionRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.WarmCollectionResponse:
+        ...
+
+
+
+class DocumentsModule(Protocol):
+    """`loams.documents` — Documents: write, get, scroll, count, delete by filter and patch by filter.
+
+    Wraps `loams.collection.v1.DocumentService`.
+    """
+
+    module: ClassVar[Literal["documents"]]
+    service: ClassVar[Literal["loams.collection.v1.DocumentService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.collection.v1.DocumentService/CountDocuments`, retried: safe.
+    """
+    async def count(
+        self,
+        request: loams.collection.v1.document_pb2.CountDocumentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.document_pb2.CountDocumentsResponse:
+        ...
+
+    """`loams.collection.v1.DocumentService/DeleteByFilter`, retried: manual.
+    """
+    async def delete_by_filter(
+        self,
+        request: loams.collection.v1.document_pb2.DeleteByFilterRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.document_pb2.FilterWriteResponse:
+        ...
+
+    """`loams.collection.v1.DocumentService/GetDocuments`, retried: safe.
+    """
+    async def get(
+        self,
+        request: loams.collection.v1.document_pb2.GetDocumentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.document_pb2.GetDocumentsResponse:
+        ...
+
+    """`loams.collection.v1.DocumentService/PatchByFilter`, retried: manual.
+    """
+    async def patch_by_filter(
+        self,
+        request: loams.collection.v1.document_pb2.PatchByFilterRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.document_pb2.FilterWriteResponse:
+        ...
+
+    """`loams.collection.v1.DocumentService/ScrollDocuments`, retried: safe.
+    """
+    async def scroll(
+        self,
+        request: loams.collection.v1.document_pb2.ScrollDocumentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.document_pb2.ScrollDocumentsResponse:
+        ...
+
+    """`loams.collection.v1.DocumentService/WriteDocuments`, retried: manual.
+    """
+    async def write(
+        self,
+        request: loams.collection.v1.document_pb2.WriteDocumentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.document_pb2.WriteDocumentsResponse:
+        ...
+
+
+
+class DocumentsModuleSync(Protocol):
+    """`loams.documents` — Documents: write, get, scroll, count, delete by filter and patch by filter.
+
+    Wraps `loams.collection.v1.DocumentService`.
+    """
+
+    module: ClassVar[Literal["documents"]]
+    service: ClassVar[Literal["loams.collection.v1.DocumentService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.collection.v1.DocumentService/CountDocuments`, retried: safe.
+    """
+    def count(
+        self,
+        request: loams.collection.v1.document_pb2.CountDocumentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.document_pb2.CountDocumentsResponse:
+        ...
+
+    """`loams.collection.v1.DocumentService/DeleteByFilter`, retried: manual.
+    """
+    def delete_by_filter(
+        self,
+        request: loams.collection.v1.document_pb2.DeleteByFilterRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.document_pb2.FilterWriteResponse:
+        ...
+
+    """`loams.collection.v1.DocumentService/GetDocuments`, retried: safe.
+    """
+    def get(
+        self,
+        request: loams.collection.v1.document_pb2.GetDocumentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.document_pb2.GetDocumentsResponse:
+        ...
+
+    """`loams.collection.v1.DocumentService/PatchByFilter`, retried: manual.
+    """
+    def patch_by_filter(
+        self,
+        request: loams.collection.v1.document_pb2.PatchByFilterRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.document_pb2.FilterWriteResponse:
+        ...
+
+    """`loams.collection.v1.DocumentService/ScrollDocuments`, retried: safe.
+    """
+    def scroll(
+        self,
+        request: loams.collection.v1.document_pb2.ScrollDocumentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.document_pb2.ScrollDocumentsResponse:
+        ...
+
+    """`loams.collection.v1.DocumentService/WriteDocuments`, retried: manual.
+    """
+    def write(
+        self,
+        request: loams.collection.v1.document_pb2.WriteDocumentsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.document_pb2.WriteDocumentsResponse:
+        ...
+
+
+
+class GraphModule(Protocol):
+    """`loams.graph` — Loams Graph: stored property graphs, queried with GQL.
+
+    Wraps `loams.graph.v1.GraphAdminService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
+    """
+
+    module: ClassVar[Literal["graph"]]
+    service: ClassVar[Literal["loams.graph.v1.GraphAdminService"]]
+    unstable: ClassVar[Literal[True]]
+    """`loams.graph.v1.GraphAdminService/CreateGraph`, retried: manual.
+    """
+    async def create(
+        self,
+        request: loams.graph.v1.graph_pb2.CreateGraphRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.Graph:
+        ...
+
+    """`loams.graph.v1.GraphAdminService/DeleteGraph`, retried: manual.
+    """
+    async def delete(
+        self,
+        request: loams.graph.v1.graph_pb2.DeleteGraphRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.operations.v1.operations_pb2.Operation:
+        ...
+
+    """`loams.graph.v1.GraphService/Explain`, retried: safe.
+    """
+    async def explain(
+        self,
+        request: loams.graph.v1.graph_pb2.ExplainRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.Plan:
+        ...
+
+    """`loams.graph.v1.GraphAdminService/GetGraph`, retried: safe.
+    """
+    async def get(
+        self,
+        request: loams.graph.v1.graph_pb2.GetGraphRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.Graph:
+        ...
+
+    """`loams.graph.v1.GraphAdminService/ListGraphs`, retried: safe. AIP-158: page with `graphs` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list(
+        self,
+        request: loams.graph.v1.graph_pb2.ListGraphsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.ListGraphsResponse:
+        ...
+
+    """`loams.graph.v1.GraphService/Execute`, retried: manual.
+    """
+    async def query(
+        self,
+        request: loams.graph.v1.graph_pb2.ExecuteRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.ExecuteResponse:
+        ...
+
+    """`loams.graph.v1.GraphService/ExecuteBatch`, retried: manual.
+    """
+    async def query_batch(
+        self,
+        request: loams.graph.v1.graph_pb2.ExecuteBatchRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.ExecuteBatchResponse:
+        ...
+
+    """`loams.graph.v1.GraphService/ExecuteStream`, retried: manual.
+    """
+    def query_stream(
+        self,
+        request: loams.graph.v1.graph_pb2.ExecuteStreamRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> AsyncIterator[loams.graph.v1.graph_pb2.ResultChunk]:
+        ...
+
+    """`loams.graph.v1.GraphAdminService/GetSchema`, retried: safe.
+    """
+    async def schema(
+        self,
+        request: loams.graph.v1.graph_pb2.GetSchemaRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.GraphSchema:
+        ...
+
+    """`loams.graph.v1.GraphAdminService/UpdateGraph`, retried: manual.
+    """
+    async def update(
+        self,
+        request: loams.graph.v1.graph_pb2.UpdateGraphRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.Graph:
+        ...
+
+
+
+class GraphModuleSync(Protocol):
+    """`loams.graph` — Loams Graph: stored property graphs, queried with GQL.
+
+    Wraps `loams.graph.v1.GraphAdminService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
+    """
+
+    module: ClassVar[Literal["graph"]]
+    service: ClassVar[Literal["loams.graph.v1.GraphAdminService"]]
+    unstable: ClassVar[Literal[True]]
+    """`loams.graph.v1.GraphAdminService/CreateGraph`, retried: manual.
+    """
+    def create(
+        self,
+        request: loams.graph.v1.graph_pb2.CreateGraphRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.Graph:
+        ...
+
+    """`loams.graph.v1.GraphAdminService/DeleteGraph`, retried: manual.
+    """
+    def delete(
+        self,
+        request: loams.graph.v1.graph_pb2.DeleteGraphRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.operations.v1.operations_pb2.Operation:
+        ...
+
+    """`loams.graph.v1.GraphService/Explain`, retried: safe.
+    """
+    def explain(
+        self,
+        request: loams.graph.v1.graph_pb2.ExplainRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.Plan:
+        ...
+
+    """`loams.graph.v1.GraphAdminService/GetGraph`, retried: safe.
+    """
+    def get(
+        self,
+        request: loams.graph.v1.graph_pb2.GetGraphRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.Graph:
+        ...
+
+    """`loams.graph.v1.GraphAdminService/ListGraphs`, retried: safe. AIP-158: page with `graphs` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list(
+        self,
+        request: loams.graph.v1.graph_pb2.ListGraphsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.ListGraphsResponse:
+        ...
+
+    """`loams.graph.v1.GraphService/Execute`, retried: manual.
+    """
+    def query(
+        self,
+        request: loams.graph.v1.graph_pb2.ExecuteRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.ExecuteResponse:
+        ...
+
+    """`loams.graph.v1.GraphService/ExecuteBatch`, retried: manual.
+    """
+    def query_batch(
+        self,
+        request: loams.graph.v1.graph_pb2.ExecuteBatchRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.ExecuteBatchResponse:
+        ...
+
+    """`loams.graph.v1.GraphService/ExecuteStream`, retried: manual.
+    """
+    def query_stream(
+        self,
+        request: loams.graph.v1.graph_pb2.ExecuteStreamRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> Iterator[loams.graph.v1.graph_pb2.ResultChunk]:
+        ...
+
+    """`loams.graph.v1.GraphAdminService/GetSchema`, retried: safe.
+    """
+    def schema(
+        self,
+        request: loams.graph.v1.graph_pb2.GetSchemaRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.GraphSchema:
+        ...
+
+    """`loams.graph.v1.GraphAdminService/UpdateGraph`, retried: manual.
+    """
+    def update(
+        self,
+        request: loams.graph.v1.graph_pb2.UpdateGraphRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.graph.v1.graph_pb2.Graph:
+        ...
+
+
+
 class InstanceModule(Protocol):
     """`loams.instance` — What this instance is, and who the caller is on it.
 
@@ -3189,6 +4447,110 @@ class LiveAdminModuleSync(Protocol):
 
 
 
+class NamespacesModule(Protocol):
+    """`loams.namespaces` — Namespaces: the container every collection and stream lives in.
+
+    Wraps `loams.collection.v1.NamespaceService`.
+    """
+
+    module: ClassVar[Literal["namespaces"]]
+    service: ClassVar[Literal["loams.collection.v1.NamespaceService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.collection.v1.NamespaceService/CreateNamespace`, retried: safe.
+    """
+    async def create(
+        self,
+        request: loams.collection.v1.collection_pb2.CreateNamespaceRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.CreateNamespaceResponse:
+        ...
+
+    """`loams.collection.v1.NamespaceService/ListNamespaces`, retried: safe. AIP-158: page with `namespaces` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list(
+        self,
+        request: loams.collection.v1.collection_pb2.ListNamespacesRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.ListNamespacesResponse:
+        ...
+
+
+
+class NamespacesModuleSync(Protocol):
+    """`loams.namespaces` — Namespaces: the container every collection and stream lives in.
+
+    Wraps `loams.collection.v1.NamespaceService`.
+    """
+
+    module: ClassVar[Literal["namespaces"]]
+    service: ClassVar[Literal["loams.collection.v1.NamespaceService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.collection.v1.NamespaceService/CreateNamespace`, retried: safe.
+    """
+    def create(
+        self,
+        request: loams.collection.v1.collection_pb2.CreateNamespaceRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.CreateNamespaceResponse:
+        ...
+
+    """`loams.collection.v1.NamespaceService/ListNamespaces`, retried: safe. AIP-158: page with `namespaces` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list(
+        self,
+        request: loams.collection.v1.collection_pb2.ListNamespacesRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.collection_pb2.ListNamespacesResponse:
+        ...
+
+
+
+class SearchModule(Protocol):
+    """`loams.search` — Queries: one search over one collection, dense, sparse, text or hybrid.
+
+    Wraps `loams.collection.v1.QueryService`.
+    """
+
+    module: ClassVar[Literal["search"]]
+    service: ClassVar[Literal["loams.collection.v1.QueryService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.collection.v1.QueryService/Search`, retried: safe.
+    """
+    async def query(
+        self,
+        request: loams.collection.v1.query_pb2.SearchRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.query_pb2.SearchResponse:
+        ...
+
+
+
+class SearchModuleSync(Protocol):
+    """`loams.search` — Queries: one search over one collection, dense, sparse, text or hybrid.
+
+    Wraps `loams.collection.v1.QueryService`.
+    """
+
+    module: ClassVar[Literal["search"]]
+    service: ClassVar[Literal["loams.collection.v1.QueryService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.collection.v1.QueryService/Search`, retried: safe.
+    """
+    def query(
+        self,
+        request: loams.collection.v1.query_pb2.SearchRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.query_pb2.SearchResponse:
+        ...
+
+
+
 class TablesModule(Protocol):
     """A second facade name for the same RPCs, exposed as `loams.tables`.
 
@@ -3247,6 +4609,48 @@ class TablesModuleSync(Protocol):
         *,
         options: CallOptions | None = None,
     ) -> loams.live.v1.live_pb2.QueryResponse:
+        ...
+
+
+
+class VectorModule(Protocol):
+    """A second facade name for the same RPCs, exposed as `loams.vector`.
+
+    Wraps `loams.collection.v1.QueryService`.
+    """
+
+    module: ClassVar[Literal["vector"]]
+    service: ClassVar[Literal["loams.collection.v1.QueryService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.collection.v1.QueryService/Search`, retried: safe.
+    """
+    async def search(
+        self,
+        request: loams.collection.v1.query_pb2.SearchRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.query_pb2.SearchResponse:
+        ...
+
+
+
+class VectorModuleSync(Protocol):
+    """A second facade name for the same RPCs, exposed as `loams.vector`.
+
+    Wraps `loams.collection.v1.QueryService`.
+    """
+
+    module: ClassVar[Literal["vector"]]
+    service: ClassVar[Literal["loams.collection.v1.QueryService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.collection.v1.QueryService/Search`, retried: safe.
+    """
+    def search(
+        self,
+        request: loams.collection.v1.query_pb2.SearchRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.collection.v1.query_pb2.SearchResponse:
         ...
 
 

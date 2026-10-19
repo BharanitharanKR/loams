@@ -826,6 +826,12 @@
       "standIn": null
     },
     {
+      "reason": "filter_conflict",
+      "code": "invalid_argument",
+      "why": "Recorded by the app scenario (SDKP P0d); the error corpus's recorder sends no typed filter.",
+      "standIn": null
+    },
+    {
       "reason": "live_index_not_ready",
       "code": "failed_precondition",
       "why": "Needs a deploy still backfilling an index that a function reads; the recorder deploys nothing (LV1 Task 9).",

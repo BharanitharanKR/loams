@@ -98,6 +98,7 @@ const (
 	ReasonLiveWorkerCrashed          Reason = "live_worker_crashed"
 	ReasonLiveDeployConflict         Reason = "live_deploy_conflict"
 	ReasonLiveSchemaViolation        Reason = "live_schema_violation"
+	ReasonFilterConflict             Reason = "filter_conflict"
 	ReasonLiveIndexNotReady          Reason = "live_index_not_ready"
 	ReasonLiveAppDisabled            Reason = "live_app_disabled"
 	ReasonLiveAppExists              Reason = "live_app_exists"
@@ -233,6 +234,7 @@ var Reasons = []Reason{
 	ReasonLiveWorkerCrashed,
 	ReasonLiveDeployConflict,
 	ReasonLiveSchemaViolation,
+	ReasonFilterConflict,
 	ReasonLiveIndexNotReady,
 	ReasonLiveAppDisabled,
 	ReasonLiveAppExists,
@@ -363,6 +365,7 @@ var ReasonCodes = map[Reason]string{
 	ReasonLiveWorkerCrashed:          "internal",
 	ReasonLiveDeployConflict:         "failed_precondition",
 	ReasonLiveSchemaViolation:        "invalid_argument",
+	ReasonFilterConflict:             "invalid_argument",
 	ReasonLiveIndexNotReady:          "failed_precondition",
 	ReasonLiveAppDisabled:            "failed_precondition",
 	ReasonLiveAppExists:              "failed_precondition",

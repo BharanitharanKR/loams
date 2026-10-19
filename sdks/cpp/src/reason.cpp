@@ -111,6 +111,7 @@ constexpr Row kRows[] = {
     {Reason::kLiveWorkerCrashed, "live_worker_crashed"},
     {Reason::kLiveDeployConflict, "live_deploy_conflict"},
     {Reason::kLiveSchemaViolation, "live_schema_violation"},
+    {Reason::kFilterConflict, "filter_conflict"},
     {Reason::kLiveIndexNotReady, "live_index_not_ready"},
     {Reason::kLiveAppDisabled, "live_app_disabled"},
     {Reason::kLiveAppExists, "live_app_exists"},

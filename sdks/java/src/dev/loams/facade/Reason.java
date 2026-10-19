@@ -101,6 +101,7 @@ public enum Reason {
     LIVE_WORKER_CRASHED("live_worker_crashed"),
     LIVE_DEPLOY_CONFLICT("live_deploy_conflict"),
     LIVE_SCHEMA_VIOLATION("live_schema_violation"),
+    FILTER_CONFLICT("filter_conflict"),
     LIVE_INDEX_NOT_READY("live_index_not_ready"),
     LIVE_APP_DISABLED("live_app_disabled"),
     LIVE_APP_EXISTS("live_app_exists"),

@@ -2292,6 +2292,12 @@ const UNPRODUCIBLE_REASONS = [
     standIn: null,
   },
   {
+    reason: 'filter_conflict',
+    code: 'invalid_argument',
+    why: 'Recorded by the app scenario (SDKP P0d); the error corpus\'s recorder sends no typed filter.',
+    standIn: null,
+  },
+  {
     reason: 'live_index_not_ready',
     code: 'failed_precondition',
     why:

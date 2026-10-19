@@ -42,6 +42,7 @@ public enum Reason: String, Sendable, Hashable, CaseIterable {
     case liveWorkerCrashed = "live_worker_crashed"
     case liveDeployConflict = "live_deploy_conflict"
     case liveSchemaViolation = "live_schema_violation"
+    case filterConflict = "filter_conflict"
     case liveIndexNotReady = "live_index_not_ready"
     case liveAppDisabled = "live_app_disabled"
     case liveAppExists = "live_app_exists"
@@ -108,6 +109,7 @@ public let loamsReasonCodes: [Reason: Code] = [
     .liveWorkerCrashed: .internal,
     .liveDeployConflict: .failedPrecondition,
     .liveSchemaViolation: .invalidArgument,
+    .filterConflict: .invalidArgument,
     .liveIndexNotReady: .failedPrecondition,
     .liveAppDisabled: .failedPrecondition,
     .liveAppExists: .failedPrecondition,

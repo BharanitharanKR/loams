@@ -120,6 +120,7 @@ enum class Reason {
   kLiveWorkerCrashed,
   kLiveDeployConflict,
   kLiveSchemaViolation,
+  kFilterConflict,
   kLiveIndexNotReady,
   kLiveAppDisabled,
   kLiveAppExists,

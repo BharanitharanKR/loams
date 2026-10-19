@@ -189,6 +189,8 @@ pub enum Reason {
     LiveDeployConflict,
     /// A write did not match its Live table's validator; the message names the table and field paths.
     LiveSchemaViolation,
+    /// A document RPC set both `filter` and `where`; set one.
+    FilterConflict,
     /// A Live function read an index a deploy is still backfilling.
     LiveIndexNotReady,
     /// A call to a Live app that is disabled or deleted.
@@ -360,6 +362,7 @@ impl Reason {
         Reason::LiveWorkerCrashed,
         Reason::LiveDeployConflict,
         Reason::LiveSchemaViolation,
+        Reason::FilterConflict,
         Reason::LiveIndexNotReady,
         Reason::LiveAppDisabled,
         Reason::LiveAppExists,
@@ -490,6 +493,7 @@ impl Reason {
             Reason::LiveWorkerCrashed => "live_worker_crashed",
             Reason::LiveDeployConflict => "live_deploy_conflict",
             Reason::LiveSchemaViolation => "live_schema_violation",
+            Reason::FilterConflict => "filter_conflict",
             Reason::LiveIndexNotReady => "live_index_not_ready",
             Reason::LiveAppDisabled => "live_app_disabled",
             Reason::LiveAppExists => "live_app_exists",
@@ -617,6 +621,7 @@ impl Reason {
             | Reason::HouseSyntaxError
             | Reason::LiveBadCursor
             | Reason::LiveSchemaViolation
+            | Reason::FilterConflict
             | Reason::EnvUnsealed
             | Reason::MemoryBlockTooLarge
             | Reason::MemoryContentTooLarge

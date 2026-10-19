@@ -433,11 +433,12 @@ final class ReasonRegistryTests: XCTestCase {
     /// compiling, which is why this asserts the **count** as well as the set.
     func testReasonRegistryHasAllThirtyEight() {
         XCTAssertEqual(
-            loamsAllReasons.count, 43,
+            loamsAllReasons.count, 44,
             "the 26 original reasons plus the 13 `live_*` ones (including `live_app_disabled`, "
                 + "`live_app_exists`, `live_app_mismatch` and `live_origin_not_allowed`), "
-                + "Live's `session_rotate`, `session_gone` and `node_draining`, and the "
-                + "`token_revoked` its sessions close with; the registry must match exactly"
+                + "Live's `session_rotate`, `session_gone` and `node_draining`, the "
+                + "`token_revoked` its sessions close with, and SDKP's `filter_conflict`; "
+                + "the registry must match exactly"
         )
     }
 

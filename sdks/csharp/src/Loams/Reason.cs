@@ -182,6 +182,8 @@ public enum Reason
 
     /// <summary>A write did not match its Live table's validator; the message names the table and field paths.</summary>
     LiveSchemaViolation = 53,
+    /// <summary>A document RPC set both `filter` and `where`; set one.</summary>
+    FilterConflict = 125,
 
     /// <summary>A Live function read an index a deploy is still backfilling.</summary>
     LiveIndexNotReady = 54,
@@ -544,6 +546,7 @@ public static class ReasonRegistry
         Reason.LiveWorkerCrashed,
         Reason.LiveDeployConflict,
         Reason.LiveSchemaViolation,
+        Reason.FilterConflict,
         Reason.LiveIndexNotReady,
         Reason.LiveAppDisabled,
         Reason.LiveAppExists,
@@ -673,6 +676,7 @@ public static class ReasonRegistry
             [Reason.LiveWorkerCrashed] = "live_worker_crashed",
             [Reason.LiveDeployConflict] = "live_deploy_conflict",
             [Reason.LiveSchemaViolation] = "live_schema_violation",
+            [Reason.FilterConflict] = "filter_conflict",
             [Reason.LiveIndexNotReady] = "live_index_not_ready",
             [Reason.LiveAppDisabled] = "live_app_disabled",
             [Reason.LiveAppExists] = "live_app_exists",
@@ -827,6 +831,7 @@ public static class ReasonRegistry
             [Reason.LiveWorkerCrashed] = Code.Internal,
             [Reason.LiveDeployConflict] = Code.FailedPrecondition,
             [Reason.LiveSchemaViolation] = Code.InvalidArgument,
+            [Reason.FilterConflict] = Code.InvalidArgument,
             [Reason.LiveIndexNotReady] = Code.FailedPrecondition,
             [Reason.LiveAppDisabled] = Code.FailedPrecondition,
             [Reason.LiveAppExists] = Code.FailedPrecondition,

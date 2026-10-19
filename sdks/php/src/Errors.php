@@ -114,6 +114,7 @@ class LiveBadCursorException extends LoamsException {}
 class LiveWorkerCrashedException extends LoamsException {}
 class LiveDeployConflictException extends LoamsException {}
 class LiveSchemaViolationException extends LoamsException {}
+class FilterConflictException extends LoamsException {}
 class LiveIndexNotReadyException extends LoamsException {}
 class LiveAppDisabledException extends LoamsException {}
 class LiveAppExistsException extends LoamsException {}
@@ -248,6 +249,7 @@ class ErrorParser
         'live_worker_crashed' => LiveWorkerCrashedException::class,
         'live_deploy_conflict' => LiveDeployConflictException::class,
         'live_schema_violation' => LiveSchemaViolationException::class,
+        'filter_conflict' => FilterConflictException::class,
         'live_index_not_ready' => LiveIndexNotReadyException::class,
         'live_app_disabled' => LiveAppDisabledException::class,
         'live_app_exists' => LiveAppExistsException::class,

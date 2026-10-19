@@ -295,6 +295,8 @@ enum class Reason {
 
     /** `live_schema_violation` (docs/api/reasons.md). */
     LIVE_SCHEMA_VIOLATION,
+    /** `filter_conflict` (docs/api/reasons.md). */
+    FILTER_CONFLICT,
 
     /** `live_index_not_ready` (docs/api/reasons.md). */
     LIVE_INDEX_NOT_READY,
@@ -528,6 +530,7 @@ object ReasonRegistry {
         Reason.LIVE_WORKER_CRASHED,
         Reason.LIVE_DEPLOY_CONFLICT,
         Reason.LIVE_SCHEMA_VIOLATION,
+        Reason.FILTER_CONFLICT,
         Reason.LIVE_INDEX_NOT_READY,
         Reason.LIVE_APP_DISABLED,
         Reason.LIVE_APP_EXISTS,
@@ -655,6 +658,7 @@ object ReasonRegistry {
         Reason.LIVE_WORKER_CRASHED to "live_worker_crashed",
         Reason.LIVE_DEPLOY_CONFLICT to "live_deploy_conflict",
         Reason.LIVE_SCHEMA_VIOLATION to "live_schema_violation",
+        Reason.FILTER_CONFLICT to "filter_conflict",
         Reason.LIVE_INDEX_NOT_READY to "live_index_not_ready",
         Reason.LIVE_APP_DISABLED to "live_app_disabled",
         Reason.LIVE_APP_EXISTS to "live_app_exists",
@@ -789,6 +793,7 @@ object ReasonRegistry {
         Reason.LIVE_WORKER_CRASHED to Code.INTERNAL,
         Reason.LIVE_DEPLOY_CONFLICT to Code.FAILED_PRECONDITION,
         Reason.LIVE_SCHEMA_VIOLATION to Code.INVALID_ARGUMENT,
+        Reason.FILTER_CONFLICT to Code.INVALID_ARGUMENT,
         Reason.LIVE_INDEX_NOT_READY to Code.FAILED_PRECONDITION,
         Reason.LIVE_APP_DISABLED to Code.FAILED_PRECONDITION,
         Reason.LIVE_APP_EXISTS to Code.FAILED_PRECONDITION,
