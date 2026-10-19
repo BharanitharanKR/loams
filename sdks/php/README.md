@@ -30,6 +30,10 @@ require 'vendor/autoload.php';
 $client = new Loams\Client('https://acme.loams.dev');
 ```
 
+## Examples
+
+Runnable examples (quickstart, approvals, status) are in [`examples/`](examples/).
+
 ## Develop
 
 ```sh
