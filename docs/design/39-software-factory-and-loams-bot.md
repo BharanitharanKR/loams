@@ -1,5 +1,7 @@
 # 39 — Loams Software Factory and Loams Bot: Embedded Collaboration Apps, A2A Agents and the Closed Loop
 
+> **Updated 2026-10-19 ([D1119](13-decision-log.md)): Loams has no open core.** Where this document places metering, billing, the hosted control plane, commercial APIs or other components in the private `loams-platform` repository, or calls something private for open-core reasons, read that as superseded: everything is Apache-2.0, and the metering, billing and control-plane code is moving into the open repo now (design §63, Loams Meter). Ostrium Labs offers services (infrastructure efficiency, SLAs, support), not a paid edition. The rest of the design is unchanged.
+
 Status: **Proposed** · 2026-10-02. The direction is the owner's, from 2026-10-02:
 
 > "write a plan for integrating the UI of Plane, Forgejo, Zulip, GlitchTip, Langfuse 4 for agent tracing and OpenObserve for distributed tracing; for now pick the Slack, Jira, GitHub part [Zulip, Plane, Forgejo first] if you finish it fast; and in our deepseek fork harness in desktop and mobile apps, there should be a single chat interface called Loams bot, where we drive agents of each platform — Plane, Zulip, Forgejo, GlitchTip + product analytics — using A2A. It's a loop, called Loams Software Factory. Make it available as first in our Cloud marketplace page."

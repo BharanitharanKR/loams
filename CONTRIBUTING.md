@@ -20,14 +20,20 @@ The crates are `loams-*` and the binary is `loams`. Packages will publish as `lo
 4. **Attribute derived code.** Code taken from other projects (for example Quickwit, Tantivy or Qdrant) keeps its original copyright header, gets a line in [NOTICE](NOTICE), and is called out in the PR description.
 5. **Keep PRs small.** One focused change per PR, with a description of what changed and why.
 
-## Open-core boundary
+## Everything is open source
 
-The Multitenant BYOC Control Plane with GitOps, generic observability and quota
-enforcement are open source. Billing-grade metering, billing and commercial APIs
-belong in the private `loams-platform` repository. **Integrity** is the rule:
-"could a charge depend on this value, and could a tenant or an agent profit from
-forging it?" If so, its producer and validator belong in the private platform.
-The open engine never depends on a private platform package.
+Loams has no open core (D1119, 2026-10-19). The engine, the Multitenant BYOC
+Control Plane with GitOps, observability, quota enforcement, and the metering,
+billing and hosted control-plane code (moving into the open repo now) are all
+Apache-2.0. Ostrium Labs' business is services (infrastructure efficiency, SLAs,
+support; support@ostriumlabs.org), not withheld code, so a contribution is never turned away because it belongs to a paid edition.
+
+**Integrity** still applies to anything a charge depends on: "could a tenant or an
+agent profit from forging this value?" If so, it must be produced and validated by
+a component the tenant does not control. Being open source does not change that;
+the protection comes from where the code runs, not from hiding it. While that code
+moves in (design §63), nothing in this repository depends on the separate
+`loams-platform` repository.
 
 ## Development setup
 

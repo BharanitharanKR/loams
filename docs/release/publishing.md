@@ -364,5 +364,5 @@ workflow's secrets are in the table at the top of this page.
   marketplace, not publishing Loams itself.
 - D292 (cargo-dist for binaries and GitHub Releases), D294 (`cargo install
   loams`), D298 (the CLI track) and D400 (the `loams` package namespace).
-- D220 and D552 (the open-core boundary). A publish path may not add a
-  billing-grade name or a private package to anything it uploads.
+- D1119 (no open core; supersedes D220 and D552). A publish path still may
+  not add a private, unpublished package to anything it uploads.

@@ -241,6 +241,14 @@ Design reference: [59 Console and Desktop Redesign, Part 1: the Foundation](../d
 |---|---|---|---|
 | [CF1: Console foundation](2026-10-17-cf1-console-foundation.md) | Task 0: reconcile. **CF1a** (Tasks 1–3): token values (dark B, light A), the radius scale, system fonts, the contrast and forced-colour tests; System/Dark/Light per device; monospace only for code. **CF1b** (4–6): the rest of T3 Code's `components/ui` in `@loams/ui` with provenance; toasts, destructive and typed confirmation. **CF1c** (7–12): the six shell regions on `@loams/slots` (sidebar, top bar drag region, main and the home slot, inspector and drawer with `inspector.open()`, palette sources); Studio's threads, panels and terminal in them; pinned Pages, Settings and the palette; one keymap. **CF1d** (13–16): per-OS window chrome synced to the theme, native menus and context menu, the splash and dsh-desktop provenance, notifications and the update toast. **CF1e** (17): screenshots in both themes, axe, the desktop chrome e2e. 18 tasks | SD1 (built) | **Planned** |
 
+## Track ME: Loams Meter, usage metering and enforcement
+
+Design reference: [63 Loams Meter](../design/63-loams-meter.md) (D1120–D1138, Q960–Q969), approved by the owner with all defaults on 2026-10-19. After the 2026-10-19 open-source decision (D1119), metering, entitlements, billing exporters and their control-plane parts are built here. (The code ME is used because MT2 is the Knative plan.)
+
+| Plan | Scope | Depends on | Status |
+|---|---|---|---|
+| [ME1: Loams Meter](2026-10-19-me1-loams-meter.md) (stub) | **ME1a** the imported node agent moved to `loams-meter-agent`, events, `MeterSink` and the observer adapters, the `_system/_meter` stream; **ME1b** House tables, the close job, windows and the query API; **ME1c** the balance engine, customers, entitlements and plans, counter owners, reconciliation, threshold events and the OpenMeter conformance test; **ME1d** `LeaseService`, the gate and its calls in each product, the policy and error mapping; **ME1e** the Stripe, OpenMeter, Lago and webhook exporters, `web/plugins/billing`, operator pages and the `loams-platform` migration; **ME1f** user meters and the OpenTofu provider | HS1b, HS1c (ME1b); MT1 (credentials); GW1 and the gateway's later modules (ME1d); CF1 (ME1e); the `import-platform` and no-open-core (D1119) merges | Stub (design approved 2026-10-19) |
+
 ## Track RN: runners and the usage hooks
 
 Design reference: [24 CPU-time runtime](../design/24-cpu-time-runtime.md) §16 (the `Runner` trait, D375) and [27 Usage hooks](../design/27-usage-hooks.md) §3.7 (`InvocationObserver`, D549); [34](../design/34-protocol-gateway-and-standards.md) keeps the decision rows. Generic observability only: no metering in this repository (D403, D444, D541), and since 2026-10-02 the usage reporter and the meter protocol are in `loams-platform` too (D548). The usage-event task and the Cloudflare runner moved to `loams-platform` (private) with the protocol gateway (D440).
@@ -326,6 +334,22 @@ Design: [§44](../design/44-unified-api-and-sdks.md), D600–D619. All 13 gRPC-s
 | [SDK1: generation pipeline](2026-10-02-sdk1-generation-pipeline.md) | buf pins, facade generation, runtime fixtures, conformance, releases and API docs | API1 Tasks 1–2; may start with AP0 | Planned — **remaining tasks superseded by API2 (2026-10-10)** |
 | [SDK2: language clients](2026-10-02-sdk2-languages.md) | Thirteen language tasks with public facades, transports, conformance, examples and registry packages | SDK1 Tasks 1–4 and the services each fixture uses | Planned — **remaining work superseded by API2 Tasks 19–23 (2026-10-10)** |
 | [API2: the unified Connect API and the SDKs in production](2026-10-10-api2-unified-api-sdks.md) | Every application call a Connect RPC on the main port; REST and the console OpenAPI deleted with no shims; auth on the main port; thirteen shippable SDKs covering the whole API. Finishes API1, SDK1 and SDK2 | See the plan's execution order | Planned (2026-10-10, owner default rulings; D848) |
+
+## Track IS: Loams Infra, the HashiCorp stack's roles in Rust
+
+Design reference: [64 Loams Infra](../design/64-loams-infra-stack.md) (D1150–D1171, Q970–Q983, approved by the owner 2026-10-19). Owner request, 2026-10-19: "I want all of the HashiCorp stack in Loams, in Rust." IS1 is the minimum viable slice; IS2–IS4 get plans when their gates are met.
+
+| Plan | Scope | Depends on | Status |
+|---|---|---|---|
+| [IS1: OpenTofu provider and state, secrets, config](2026-10-19-is1-infra-stack.md) (stub; IS1a Tasks 0–9, IS1b 10–21, IS1c 22–26) | The Rust OpenTofu provider `ostrium-labs/loams` on `loams-tfplugin` with write-only and ephemeral secrets; the Loams state backend (OpenTofu `http`, `loams.infra.v1`); Loams Secrets over `loams-vault` with leases, dynamic Loams Postgres, Loams SQL and external database credentials, trust policies for CI OIDC and a workload issuer; `loams.config.v1` config and catalog on TiKV | v0.1.0; GT1 Tasks 59–60 (or built here); §64 approved | Stub |
+
+## Track OP: the Loams operator and Loams Operator Conformance
+
+Design reference: [65 Loams Operator](../design/65-loams-operator.md) (D1172–D1201, Q984–Q999, approved by the owner 2026-10-19). Owner request, 2026-10-19: "a single operator for the entire Loams platform, with HA … a conformance suite that inspires all other operators". No Rust TiDB operator existed to fork, so `loams-operator` is new Rust on kube-rs. OP1 covers OP0 (spike) and OP1 (the minimum viable slice); OP2–OP4 get plans when their gates are met. Built slowly, after v0.1.0 (Q996).
+
+| Plan | Scope | Depends on | Status |
+|---|---|---|---|
+| [OP1: Loams operator, the minimum viable slice](2026-10-19-op1-loams-operator.md) (stub; OP0 Tasks 0–5, OP1 Tasks 6–21) | `loams-operator-api`, `loams-kube` (Lease, fences, journal, conditions, drift) and `loams-operator`; `LoamsCluster` with the engine, `ObjectStore` (S3 probe, RustFS), PD/TiKV `external` and `bridge` (tidb-operator v2), the gateway and `LoamsNamespace` (CP1 Task 15); RBAC, VAPs, exposure rules, metrics, events, the Helm chart, `loams operator` CLI; LOC spec 0.1, the kind/k3d harness, LOC Core and the operator-HA requirements in CI | v0.1.0 shipped (Q996); CP1 Task 15 (or built here) | Stub (design approved 2026-10-19) |
 
 ## Later milestones
 
