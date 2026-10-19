@@ -31,6 +31,25 @@ All notable changes to this project are documented here. The format follows [Kee
 ### Changed
 
 - Loams is fully open source; there is no open core (D1119). README, CONTRIBUTING, GOVERNANCE, ECOSYSTEM, the design docs and the decision log now say so; the metering, billing and control-plane code is moving into the open repo now (design §63). Ostrium Labs offers services (infrastructure efficiency, SLAs, support).
+- The app modules in every generated SDK facade (SDKP P0a): `namespaces`,
+  `collections`, `documents`, `search`, `vector` and `graph`, from facade
+  annotations on `loams.collection.v1` and `loams.graph.v1`. The facade index
+  `sdks/fixtures/facade-index.json` lists every SDK call for the hand-written
+  SDKs to check themselves against (`scripts/sdk/gen.sh index`), and
+  `gen.sh descriptors` regenerates Ruby's and Kotlin's descriptor sets.
+- `where` on `ScrollDocuments`, `CountDocuments`, `DeleteByFilter` and
+  `PatchByFilter`: a typed `Query`'s proto3 JSON, the shape the SDK `Filter`
+  builders write. Setting both `filter` and `where` is `invalid_argument`,
+  reason `filter_conflict`.
+
+### Fixed
+
+- A search retriever without `k` was refused ("k must be between 1 and
+  100000"); it now takes `max(10, offset + limit)` on REST and Connect.
+- `search_after` refused the primary-key sort value a Connect answer had just
+  returned (a `google.protobuf.Value` number is a double): a whole double is now
+  the key it names, and an id past 2^53 is answered as `{"uint": "…"}` and read
+  back exactly.
 
 ## [0.1.0] - 2026-10-19
 
