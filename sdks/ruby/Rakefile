@@ -8,8 +8,9 @@ end
 
 def run_minitest(filter = nil)
   ruby_bin = RbConfig.ruby
-  test_file = File.expand_path("test/conformance_test.rb", __dir__)
-  args = ["-Ilib", "-Itest", "-Itest/support", test_file]
+  # Every `test/*_test.rb`, in one process.
+  loader = Dir[File.expand_path("test/*_test.rb", __dir__)].sort.map { |f| "require #{f.dump};" }.join
+  args = ["-Ilib", "-Itest", "-Itest/support", "-e", loader]
   if filter && !filter.empty?
     args += ["--", "--name", "/#{filter}/"]
   end
@@ -25,6 +26,36 @@ namespace :test do
     target ||= ENV["TESTOPTS"].to_s.sub(/^--name\s*/, "") unless ENV["TESTOPTS"].to_s.empty?
     run_minitest(target)
   end
+end
+
+# The proto files the committed descriptor set holds (D652). The facade is
+# derived from these at run time, so a package that is not listed here has no
+# module. `buf build` adds every import on its own.
+DESCRIPTOR_PROTOS = %w[
+  instance/v1/instance
+  approvals/v1/approvals
+  devices/v1/devices
+  errors/v1/errors
+  live/v1/catalog
+  live/v1/value
+  live/v1/idempotency
+  live/v1/journal
+  live/v1/live
+  notifications/v1/notifications
+  operations/v1/operations
+  collection/v1/collection
+  collection/v1/document
+  collection/v1/query
+  graph/v1/graph
+].freeze
+
+desc "Regenerate gen/loams-descriptor.binpb from proto/ (needs buf)"
+task :descriptors do
+  repo = File.expand_path("../..", __dir__)
+  out = File.expand_path("gen/loams-descriptor.binpb", __dir__)
+  paths = DESCRIPTOR_PROTOS.flat_map { |p| ["--path", "proto/loams/#{p}.proto"] }
+  Dir.chdir(repo) { system("buf", "build", *paths, "-o", out) || abort("buf build failed") }
+  puts "#{File.size(out)} bytes in gen/loams-descriptor.binpb; commit it if it changed"
 end
 
 desc "Run all tests"
