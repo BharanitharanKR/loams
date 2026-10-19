@@ -35,8 +35,9 @@ notes.upsert([
 
 # With session_consistency, this read sees the write above.
 search = Loams::Search.on("notes")
-  .text("refund", fields: ["body"])
-  .vector("embedding", [1, 0, 0, 0])
+  # k is explicit so the example also runs on a 0.1.0 engine, which has no default k.
+  .text("refund", fields: ["body"], k: 10)
+  .vector("embedding", [1, 0, 0, 0], k: 10)
   .fuse(Loams::Fusion.rrf(60))
   .filter(Loams::Filter.eq("tags", "policy"))
   .highlight("body")
