@@ -19,6 +19,6 @@ Forks, embedded uses, hosted services and products built on Loams are welcome. S
 
 ## Principles and longer-term governance
 
-Everything is Apache-2.0: the engine, the control plane, the APIs and, as they move into the open repository, metering and billing. There is no open core and no paid edition; Ostrium Labs offers services (infrastructure efficiency, SLAs, support) around the open project. Data at rest stays readable without Loams. No single company should control the roadmap long term.
+Everything is Apache-2.0: the engine, the control plane, the APIs, and metering and billing, whose code is moving into the open repo now. There is no open core and no paid edition; Ostrium Labs offers services (infrastructure efficiency, SLAs, support; support@ostriumlabs.org) around the open project. Data at rest stays readable without Loams. No single company should control the roadmap long term.
 
 Once at least three organizations contribute regularly, the maintainers intend to propose Loams to a neutral foundation and adopt that foundation's governance.

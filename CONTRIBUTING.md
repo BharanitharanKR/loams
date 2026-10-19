@@ -23,16 +23,16 @@ The crates are `loams-*` and the binary is `loams`. Packages will publish as `lo
 ## Everything is open source
 
 Loams has no open core (D1119, 2026-10-19). The engine, the Multitenant BYOC
-Control Plane with GitOps, observability, quota enforcement and, as they move in,
-metering, billing and the hosted control plane are all Apache-2.0. Ostrium Labs'
-business is services (infrastructure efficiency, SLAs, support), not withheld code,
-so a contribution is never turned away because it belongs to a paid edition.
+Control Plane with GitOps, observability, quota enforcement, and the metering,
+billing and hosted control-plane code (moving into the open repo now) are all
+Apache-2.0. Ostrium Labs' business is services (infrastructure efficiency, SLAs,
+support; support@ostriumlabs.org), not withheld code, so a contribution is never turned away because it belongs to a paid edition.
 
 **Integrity** still applies to anything a charge depends on: "could a tenant or an
 agent profit from forging this value?" If so, it must be produced and validated by
 a component the tenant does not control. Being open source does not change that;
-the protection comes from where the code runs, not from hiding it. Until the
-metering design (§63) lands, nothing in this repository depends on the separate
+the protection comes from where the code runs, not from hiding it. While that code
+moves in (design §63), nothing in this repository depends on the separate
 `loams-platform` repository.
 
 ## Development setup
