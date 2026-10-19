@@ -21,6 +21,11 @@ All notable changes to this project are documented here. The format follows [Kee
   inferred type) and answers typed columns and rows; `QueryArrow` answers the result as one Arrow IPC
   stream, capped at 16 MiB (`result_too_large`, use Flight SQL past it). A parameter count mismatch is
   `invalid_argument` with reason `sql_param_count`. `@loams/proto` exports the package as `sql`.
+- **`loams.stream.v1` on the main port** (SDKP P0c, API2 Task 2): create, describe and list streams;
+  produce and fetch records and CloudEvents over Connect, gRPC and gRPC-Web. A produce with
+  `producer_id` and `producer_seq` is idempotent (a repeat answers the first append with `duplicate`);
+  `Fetch` takes `max_records` and a long poll (`max_wait_ms`, at most 30 s). The tonic listener of
+  `--stream-grpc-listen` is unchanged and wire-compatible.
 
 ### Changed
 
