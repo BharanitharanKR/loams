@@ -223,6 +223,32 @@ jobs:
           if [ -f "$stage/release/.env.example" ]; then
             sed -i "s/^LOAMS_VERSION=.*/LOAMS_VERSION=$VERSION/" "$stage/release/.env.example"
           fi
+          # First-run checks on the staged bundle (#870), so a bundle that
+          # cannot finish first-run setup does not ship. `compose config` only
+          # resolves the files (it runs nothing); the checks name no version.
+          # - the engine reads config/setup-token.env, the file is in the bundle,
+          #   and a LOAMS_SETUP_TOKEN set for compose reaches the engine;
+          # - every file the stack mounts or reads as an env_file from inside
+          #   the bundle is in it (secrets/ is the user's, so it is skipped).
+          cfg=$(cd "$stage/release" && docker compose --env-file .env.example --profile '*' \
+            config --no-env-resolution --format json)
+          test -f "$stage/release/config/setup-token.env" \
+            || { echo "release/config/setup-token.env is missing from the bundle"; exit 1; }
+          grep -q '^LOAMS_SETUP_TOKEN=' "$stage/release/config/setup-token.env" \
+            || { echo "release/config/setup-token.env does not set LOAMS_SETUP_TOKEN"; exit 1; }
+          jq -e --arg f "$stage/release/config/setup-token.env" \
+            '[.services.loams.env_file // [] | .[] | (.path? // .)] | index($f) != null' <<<"$cfg" >/dev/null \
+            || { echo "compose.yaml does not list config/setup-token.env in the loams service's env_file"; exit 1; }
+          (cd "$stage/release" && LOAMS_SETUP_TOKEN=bundle-check docker compose --env-file .env.example \
+            config --format json loams) \
+            | jq -e '.services.loams.environment.LOAMS_SETUP_TOKEN == "bundle-check"' >/dev/null \
+            || { echo "LOAMS_SETUP_TOKEN does not reach the loams service"; exit 1; }
+          missing=$(jq -r --arg stage "$stage/" --arg secrets "$stage/release/secrets/" \
+            '[.services[] | ((.env_file // [])[] | (.path? // .)),
+                            ((.volumes // [])[] | select(.type == "bind") | .source)]
+             | unique[] | select(startswith($stage) and (startswith($secrets) | not))' <<<"$cfg" \
+            | while read -r f; do [ -e "$f" ] || echo "$f"; done)
+          [ -z "$missing" ] || { echo "the bundle lacks files its compose file uses:"; echo "$missing"; exit 1; }
           tar -C "$RUNNER_TEMP" --sort=name --owner=0 --group=0 --numeric-owner \
             --mtime="$mtime" -czf "$OUT/$name.tar.gz" "$name"
           (cd "$OUT" && sha256sum -- * > SHA256SUMS)
