@@ -231,6 +231,20 @@ const TOKEN_FIELDS = ['consistencyToken', 'token', 'readToken'] as const;
 /** The response header a consistency token is read from (R4). */
 export const CONSISTENCY_TOKEN_HEADER = 'loams-consistency-token';
 
+/**
+ * The packages whose `namespace` field is a Loams namespace (R11) and whose
+ * `consistency` field reads at a consistency token (R4). Other packages have
+ * fields of the same name that mean something else: `loams.live.v1`'s
+ * `CreateAppRequest.namespace` is free text naming an app's environment, and
+ * must never be filled from, or refused for lack of, the client's default.
+ */
+export const APP_PACKAGES: ReadonlySet<string> = new Set([
+  'loams.collection.v1',
+  'loams.graph.v1',
+  'loams.sql.v1',
+  'loams.stream.v1',
+]);
+
 /** What the invoker reads off a request schema once, per RPC. */
 interface RequestShape {
   /** The request declares `idempotency_key` (D610). */
@@ -313,13 +327,15 @@ export class CallInvoker {
       // `optional` field still gets a key, and `MutateRequest` (which has one)
       // is never confused with `DeployRequest` (which does not).
       const namespace = method.input.field.namespace;
+      const app = APP_PACKAGES.has(descriptor.file.proto.package ?? '');
       this.shapes.set(`${service}/${method.name}`, {
         keyed: method.input.field[IDEMPOTENCY_KEY] !== undefined,
         namespaced:
+          app &&
           namespace !== undefined &&
           namespace.fieldKind === 'scalar' &&
           namespace.oneof === undefined,
-        atLeast: atLeastOf(method.input),
+        atLeast: app ? atLeastOf(method.input) : undefined,
       });
     }
     this.clients.set(service, createClient(descriptor, this.transport) as unknown as Record<

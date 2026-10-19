@@ -17,7 +17,7 @@ import { describe, expect, it } from 'vitest';
 import { documentCalls, searchCalls, type UnaryCall } from '../src/app.js';
 import { Filter } from '../src/builders/filter.js';
 import { Search, Sort } from '../src/builders/search.js';
-import { MODULES } from '../src/gen/facade.js';
+import { MODULES, SERVICE_DESCRIPTORS } from '../src/gen/facade.js';
 import { CollectionHandle } from '../src/handle.js';
 import { Loams } from '../src/loams.js';
 import { CallInvoker } from '../src/runtime/call.js';
@@ -71,6 +71,22 @@ describe('typescript_default_namespace', () => {
     const invoker = documentsInvoker(transport);
     await invoker.unary(GET_INSTANCE, {});
     expect(sent[0]?.input).toEqual({});
+  });
+
+  it('leaves a namespace field outside the app packages alone', async () => {
+    // `loams.live.v1` `CreateAppRequest.namespace` is free text naming an
+    // app's environment, not a Loams namespace: never filled, never refused.
+    const createApp = MODULES.find((module) => module.name === 'live.admin')!.calls.find(
+      (call) => call.method === 'CreateApp',
+    )!;
+    const { sent, transport } = messageTransport(() => ({}));
+    const invoker = new CallInvoker(transport as never, undefined, 0, undefined, { namespace: 'app' });
+    invoker.register(createApp.service, SERVICE_DESCRIPTORS[createApp.service]!);
+    await invoker.unary(createApp, { name: 'blog' });
+    expect(sent[0]?.input).toEqual({ name: 'blog' });
+    const bare = new CallInvoker(transport as never, undefined, 0, undefined);
+    bare.register(createApp.service, SERVICE_DESCRIPTORS[createApp.service]!);
+    await expect(bare.unary(createApp, { name: 'blog' })).resolves.toBeDefined();
   });
 
   it('is the client option and LOAMS_NAMESPACE', () => {
