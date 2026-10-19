@@ -147,6 +147,10 @@ git commit -s -m "log: add a WAL object encoder"
 
 This adds a `Signed-off-by: Your Name <you@example.com>` trailer, certifying that you wrote the change or otherwise have the right to submit it under the project's license. To sign off commits you already made, run `git rebase --signoff dev`. If they are already on a shared branch, add a signed-off commit instead, with one line per commit in its body: `I, Your Name <you@example.com>, hereby add my Signed-off-by to this commit: <full sha>` (your author email must match the commit's).
 
+## Questions and discussion
+
+For questions and open-ended discussion, join the [Loams Discord](https://discord.gg/eK6NanHQq). Keep GitHub issues for bugs and feature requests.
+
 ## Code of Conduct
 
-Everyone who takes part in the project agrees to the [Code of Conduct](CODE_OF_CONDUCT.md). Report security issues privately, as described in [SECURITY.md](SECURITY.md).
+Everyone who takes part in the project agrees to the [Code of Conduct](CODE_OF_CONDUCT.md). Report security issues privately, as described in [SECURITY.md](SECURITY.md); never report them on Discord.
