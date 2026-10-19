@@ -14,7 +14,8 @@
 		"test:e2e": "playwright test",
 		"typecheck": "tsc --noEmit -p tsconfig.node.json",
 		"fetch-engine": "node scripts/fetch-engine.mjs",
-		"package": "electron-builder --config electron-builder.config.cjs"
+		"package": "electron-builder --config electron-builder.config.cjs",
+		"loader:generate": "node scripts/generate-loader-gifs.mjs"
 	},
 	"dependencies": {
 		"@noble/ed25519": "3.2.0",
@@ -45,6 +46,7 @@
 		"electron": "44.4.5",
 		"electron-builder": "26.16.1",
 		"electron-vite": "5.0.0",
+		"gifenc": "1.0.3",
 		"typescript": "5.9.3",
 		"vite": "7.3.7",
 		"vitest": "5.0.3",

@@ -485,6 +485,8 @@ export function createFakeDesktop(): LoamsDesktopApi {
       // No OS dialog in a browser preview: a prompt stands in for the folder picker.
       pickFolder: async (title) => globalThis.prompt(title ?? 'Folder path', '~/src/new-project'),
       setBadge: async () => undefined,
+      // No splash in a browser preview.
+      ready: async () => {},
       // No application menu in a browser preview.
       onCommand: () => () => undefined,
       // A browser tab has no native window chrome to go fullscreen.

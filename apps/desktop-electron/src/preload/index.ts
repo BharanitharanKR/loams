@@ -69,6 +69,7 @@ const api: LoamsDesktopApi = {
 		setBadge: (count) => invoke(CH.shellBadge, count),
 		onCommand: (cb) => subscribe(CH.shellCommand, cb),
 		onFullscreen: (cb) => subscribe(CH.shellFullscreen, cb),
+		ready: () => invoke(CH.shellReady),
 	},
 	// SD1 Task 28: Studio's editor hand-off and notification choices; main builds every
 	// editor URL or argv itself.
