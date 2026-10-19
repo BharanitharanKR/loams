@@ -24,6 +24,8 @@ from loams._gen.facade import (
     NamespacesModuleSync,
     SearchModule,
     SearchModuleSync,
+    SqlModule,
+    SqlModuleSync,
 )
 
 if TYPE_CHECKING:
@@ -37,10 +39,12 @@ __all__ = [
     "AsyncDocumentsNamespace",
     "AsyncNamespacesNamespace",
     "AsyncSearchNamespace",
+    "AsyncSqlNamespace",
     "CollectionsNamespace",
     "DocumentsNamespace",
     "NamespacesNamespace",
     "SearchNamespace",
+    "SqlNamespace",
 ]
 
 
@@ -264,3 +268,31 @@ class AsyncSearchNamespace(SearchModule, Protocol):
     ) -> Any: ...
 
     def query_all(self, search: Search, options: CallOptions | None = None) -> AsyncIterator[Any]: ...
+
+
+class SqlNamespace(SqlModuleSync, Protocol):
+    """`loams.sql`, with `records` (SDKP §2.5)."""
+
+    def records(
+        self,
+        statement: str,
+        params: Sequence[Any] = (),
+        *,
+        namespace: str | None = None,
+        max_rows: int | None = None,
+        options: CallOptions | None = None,
+    ) -> list[dict[str, Any]]: ...
+
+
+class AsyncSqlNamespace(SqlModule, Protocol):
+    """`AsyncLoams.sql`, with `records`."""
+
+    async def records(
+        self,
+        statement: str,
+        params: Sequence[Any] = (),
+        *,
+        namespace: str | None = None,
+        max_rows: int | None = None,
+        options: CallOptions | None = None,
+    ) -> list[dict[str, Any]]: ...

@@ -50,6 +50,7 @@ from loams.app_types import (
     DocumentsNamespace,
     NamespacesNamespace,
     SearchNamespace,
+    SqlNamespace,
 )
 from loams.handle import CollectionHandle
 from loams.runtime.call import DEFAULT_TIMEOUT_MS, CallInvoker
@@ -268,6 +269,8 @@ class Loams:
         self.vector = cast(VectorModuleSync, modules["vector"])
         #: `loams.graph`: Loams Graph, queried with GQL. Its package is unstable.
         self.graph = cast(GraphModuleSync, modules["graph"])
+        #: `loams.sql`: one read-only SQL statement over a namespace's collections.
+        self.sql = cast(SqlNamespace, modules["sql"])
         self.system = SystemApi(self.instance.get_instance)
 
     @classmethod

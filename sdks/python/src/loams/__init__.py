@@ -12,7 +12,7 @@ sync ``api_key`` under the name ``async_api_key_source``.
 """
 
 from loams.aio import AsyncLoams
-from loams.app import Document
+from loams.app import Document, sql_records
 from loams.builders import Filter, Fusion, Schema, Search, Sort, dbsf, rrf, weighted
 from loams.handle import AsyncCollectionHandle, CollectionHandle
 from loams.loams import Loams
@@ -110,4 +110,5 @@ __all__ = [
     "oidc_exchange",
     "refreshing",
     "static_token",
+    "sql_records",
 ]

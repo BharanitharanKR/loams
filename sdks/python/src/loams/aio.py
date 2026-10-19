@@ -45,6 +45,7 @@ from loams.app_types import (
     AsyncDocumentsNamespace,
     AsyncNamespacesNamespace,
     AsyncSearchNamespace,
+    AsyncSqlNamespace,
 )
 from loams.handle import AsyncCollectionHandle
 from loams.runtime.call import DEFAULT_TIMEOUT_MS, AsyncCallInvoker
@@ -179,6 +180,8 @@ class AsyncLoams:
         self.search = cast(AsyncSearchNamespace, modules["search"])
         self.vector = cast(VectorModule, modules["vector"])
         self.graph = cast(GraphModule, modules["graph"])
+        #: `AsyncLoams.sql`: one read-only SQL statement over a namespace's collections.
+        self.sql = cast(AsyncSqlNamespace, modules["sql"])
         self.system = AsyncSystemApi(self.instance.get_instance)
 
     @classmethod

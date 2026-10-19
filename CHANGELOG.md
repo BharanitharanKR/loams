@@ -104,6 +104,9 @@ All notable changes to this project are documented here. The format follows [Kee
   generated Protocols plus the conveniences; the app scenario replayed through
   the public facade in `python_app_collections`, `python_app_search` and
   `python_app_graph`; `examples/notes/main.py`.
+- Python SDK: `loams.sql` on both clients (SDKP L2 part C): `sql.query`,
+  `sql.query_arrow`, `sql.records(statement, [$1, …])` and
+  `loams.sql_records(answer)`, replayed by `python_app_sql`.
 
 ### Changed
 

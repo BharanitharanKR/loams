@@ -7,6 +7,7 @@ an app wants a few more, each a thin loop or shorthand over those:
 - `documents.scroll_all` over `scroll` (its cursor is a `DocumentId`, not an
   AIP-158 string, so the generic `<call>_all` does not fit it);
 - `search.text`, `search.hybrid` and `search.query_all` over `search.query`;
+- `sql.records` over `sql.query`, and `sql_records` for an answer in hand;
 - `streams.subscribe` over `streams.fetch`;
 - `<call>_all` for every paged call (`namespaces.list_all`,
   `collections.list_all`), over the generic paging iterator.
@@ -29,7 +30,7 @@ from collections.abc import (
     Sequence,
 )
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, cast
 
 from connectrpc.code import Code
 from google.protobuf import json_format
@@ -60,16 +61,19 @@ from loams.runtime.subscribe import AsyncSubscription, SubscribeRequest, Subscri
 __all__ = [
     "AsyncDocumentCalls",
     "AsyncSearchCalls",
+    "AsyncSqlCalls",
     "AsyncStreamCalls",
     "Document",
     "DocumentCalls",
     "DocumentInput",
     "SearchCalls",
+    "SqlCalls",
     "StreamCalls",
     "WriteOps",
     "attach_app_calls",
     "attach_async_app_calls",
     "document_id_json",
+    "sql_records",
 ]
 
 Unary = Callable[[Message, CallOptions | None], Any]
@@ -578,6 +582,80 @@ def _fetch_request(binding: CallBinding, fields: dict[str, Any]) -> Message:
     return request
 
 
+# -- sql ---------------------------------------------------------------------
+
+_SQL_QUERY = "loams.sql.v1.SqlService/Query"
+
+
+def sql_records(answer: object) -> list[dict[str, Any]]:
+    """A `sql.query` answer's rows as one dict per row, keyed by column name
+    (SDKP §2.5). A value is its JSON: a 64-bit integer past 2^53 is the decimal
+    string the server sent, so it stays exact. A column name that repeats keeps
+    its last value."""
+    names = [column.name for column in getattr(answer, "columns", [])]
+    records: list[dict[str, Any]] = []
+    for row in getattr(answer, "rows", []):
+        # A `ListValue`'s JSON is a list, though the stubs type every message's
+        # JSON as a dict.
+        values = cast("list[Any]", json_format.MessageToDict(row))
+        records.append({name: values[at] if at < len(values) else None for at, name in enumerate(names)})
+    return records
+
+
+def _sql_request(
+    statement: str, params: Sequence[Any], namespace: str | None, max_rows: int | None
+) -> Message:
+    message_type: Any = METHODS[_SQL_QUERY].input
+    fields: dict[str, Any] = {"sql": statement, "params": list(params)}
+    if namespace is not None:
+        fields["namespace"] = namespace
+    if max_rows is not None:
+        fields["maxRows"] = max_rows
+    request: Message = json_format.ParseDict(fields, message_type())
+    return request
+
+
+class SqlCalls:
+    """The sync SQL conveniences over `sql.query`."""
+
+    def __init__(self, query: Unary) -> None:
+        self._query = query
+
+    def records(
+        self,
+        statement: str,
+        params: Sequence[Any] = (),
+        *,
+        namespace: str | None = None,
+        max_rows: int | None = None,
+        options: CallOptions | None = None,
+    ) -> list[dict[str, Any]]:
+        """One read-only statement with its `$1…$n` values (JSON scalars, which
+        the server casts to each placeholder's inferred type), answered as
+        records (`sql_records`)."""
+        return sql_records(self._query(_sql_request(statement, params, namespace, max_rows), options))
+
+
+class AsyncSqlCalls:
+    """`SqlCalls` for `AsyncLoams`."""
+
+    def __init__(self, query: Unary) -> None:
+        self._query = query
+
+    async def records(
+        self,
+        statement: str,
+        params: Sequence[Any] = (),
+        *,
+        namespace: str | None = None,
+        max_rows: int | None = None,
+        options: CallOptions | None = None,
+    ) -> list[dict[str, Any]]:
+        """`SqlCalls.records`, awaited."""
+        answer = await self._query(_sql_request(statement, params, namespace, max_rows), options)
+        return sql_records(answer)
+
+
 class StreamCalls:
     """The sync stream conveniences over `streams.fetch`."""
 
@@ -705,6 +783,10 @@ def _attach(modules: Mapping[str, Any], bindings: Sequence[ModuleBinding], *, is
     query = getattr(search, "query", None)
     if search is not None and query is not None:
         _attach_conveniences(search, (AsyncSearchCalls if is_async else SearchCalls)(query))
+    sql = modules.get("sql")
+    sql_query = getattr(sql, "query", None)
+    if sql is not None and sql_query is not None:
+        _attach_conveniences(sql, (AsyncSqlCalls if is_async else SqlCalls)(sql_query))
     streams = modules.get("streams")
     fetch = getattr(streams, "fetch", None)
     fetch_binding = _binding(bindings, "streams", "fetch")

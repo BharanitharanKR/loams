@@ -72,8 +72,12 @@ The app-building layer (SDKP): the modules `loams.namespaces`, `collections`,
 `documents`, `search`, `vector` and `graph` on both `Loams` and `AsyncLoams`,
 generated from the protos' facade annotations with the hand-written
 conveniences below attached; builders; a collection handle; and the runtime an
-app needs. `loams.sql` and `loams.streams` arrive the same way with
-`loams.sql.v1` and `loams.stream.v1` (SDKP P0b, P0c). `examples/notes/main.py`
+app needs. `loams.sql` is generated from `loams.sql.v1` the same way:
+`sql.query` answers `columns` and `rows`, `sql.records(statement, [$1, …])`
+answers one dict per row, and `loams.sql_records(answer)` reads an answer in
+hand; `sql.query_arrow` answers Arrow IPC bytes (`arrow_ipc`), which
+`pyarrow.ipc.open_stream` reads (the `arrow` extra). `loams.streams` arrives
+with `loams.stream.v1` (SDKP P0c). `examples/notes/main.py`
 is the whole app scenario as a program, type-checked in CI. The session's
 token is used only for collection and SQL reads: a graph's token names one
 graph (SDKP-17).
@@ -136,8 +140,8 @@ Durable workflows use the Resonate SDK pointed at `LOAMS_ENDPOINT/durable/`
 
 ## What is not here yet
 
-- **`sql` and `streams`**: they arrive with the facade annotations of
-  `loams.sql.v1` and `loams.stream.v1` (SDKP P0b, P0c).
+- **`streams`**: it arrives with the facade annotations of `loams.stream.v1`
+  (SDKP P0c).
 - **Bulk ingest and bulk results over Arrow Flight SQL.** They go through ADBC,
   which is why the `flight`, `arrow` and `polars` extras already exist.
 

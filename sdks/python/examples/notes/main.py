@@ -72,6 +72,13 @@ def main() -> None:
 
         print("policy notes:", notes.count(where=Filter.eq("tags", "policy")).count)
 
+        # SQL over the same collection, with a `$1` parameter, as records.
+        per_tag = loams.sql.records(
+            "SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags", [1]
+        )
+        for row in per_tag:
+            print(row["tags"], row["c"])
+
         # A bulk load: chunked, one idempotency key per chunk, the tokens merged.
         loaded = notes.write_batch(
             (Document(1000 + i, {"title": f"note {i}", "tags": "bulk", "n": i}) for i in range(100)),
