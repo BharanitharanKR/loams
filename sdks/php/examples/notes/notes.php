@@ -7,7 +7,7 @@
 
 declare(strict_types=1);
 
-require __DIR__ . '/../../vendor/autoload.php';
+require __DIR__ . '/../bootstrap.php';
 
 use Loams\AlreadyExistsException;
 use Loams\Builders\Filter;
@@ -44,8 +44,9 @@ $notes->upsert([
 
 // With sessionConsistency, this read sees the write above.
 $search = Search::on('notes')
-    ->text('refund', ['body'])
-    ->vector('embedding', [1, 0, 0, 0])
+    // k is explicit so the example also runs on a 0.1.0 engine, which has no default k.
+    ->text('refund', ['body'], k: 10)
+    ->vector('embedding', [1, 0, 0, 0], k: 10)
     ->fuse(Fusion::rrf(60))
     ->filter(Filter::eq('tags', 'policy'))
     ->highlight('body')
