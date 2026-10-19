@@ -1,5 +1,7 @@
 # 37 — Loams Desktop and Mobile Apps: a cordis Console, a Tauri Shell, Native Phones
 
+> **Updated 2026-10-19 ([D1119](13-decision-log.md)): Loams has no open core.** Where this document places metering, billing, the hosted control plane, commercial APIs or other components in the private `loams-platform` repository, or calls something private for open-core reasons, read that as superseded: everything is to be Apache-2.0 in the open repository, and metering, billing and the control plane move in under a separate design (§63, Loams Meter). Ostrium Labs offers services (infrastructure efficiency, SLAs, support), not a paid edition. The rest of the design is unchanged.
+
 Status: **Approved** (owner defaults, 2026-10-02: "do suggested for all") · 2026-10-01, revised 2026-10-02 (the Authentik and D220 rulings). The direction is the owner's, given on 2026-10-01 in two messages:
 
 **Names after the hard fork (D823; NF1 Task 1b).** This document predates the rename and keeps the old names: read `ostrium-labs/neon` as `ostrium-labs/loams-postgres`, `crates/loams-neon` (package `loams-neon`) as `crates/loams-postgres` (package `loams-postgres`), and `deploy/neon` as `deploy/loams-postgres-dev` (the compose project `loams-neon` and the desktop's copied `stacks/neon` keep their names).

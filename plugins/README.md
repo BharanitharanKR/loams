@@ -5,7 +5,7 @@
 The Cordis-based **plugin host, console, agent bus, A2A endpoint and auth layer
 for [Loams](https://github.com/ostrium-labs/loams)**.
 
-Loams is a Rust AI-native data platform, Apache-2.0 and open-core. This
+Loams is a Rust AI-native data platform, fully open source under Apache-2.0. This
 `plugins/` workspace is its imported TypeScript layer (the original
 `loams-plugins` checkout is preserved):
 the thing that loads plugins as Cordis fibers, lists and toggles them in a web
@@ -14,9 +14,8 @@ plugin's HTTP surface, publishes every loaded plugin's agent skills over A2A,
 and decides who is allowed to do any of it.
 
 **Nothing in this repository is Rust.** There is no Rust engine, no data
-warehouse, and no vendored Rust source. Loams' metering, billing and other
-commercial APIs are proprietary to that project and are neither used nor
-reachable from here; the only Loams surface this repository touches is the
+warehouse, and no vendored Rust source. Loams' metering and billing are
+neither used nor reachable from here; the only Loams surface this repository touches is the
 adapter that calls a Loams deployment's public HTTP API, exactly as it calls
 Zulip or Matomo.
 

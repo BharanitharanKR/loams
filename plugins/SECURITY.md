@@ -24,8 +24,8 @@ endpoint, auth layer, and the read-only upstream adapters.
 
 **Out of scope.** The Loams platform itself
 (<https://github.com/ostrium-labs/loams>) — report those through that project's
-own process. Its metering, billing and commercial APIs are proprietary to it and
-none of that code is present here.
+own process. None of its code, including metering and billing, is present
+here.
 
 Also out of scope:
 

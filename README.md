@@ -87,4 +87,4 @@ Questions and chat are welcome on [Discord](https://discord.gg/eK6NanHQq); bugs 
 
 ## License
 
-[Apache License 2.0](LICENSE). Loams builds on DataFusion, Lance, Tantivy, Quickwit, qdrant-edge, SlateDB, openraft, TiKV, TiDB, Neon, Grafeo, chDB and Resonate; attributions are in [NOTICE](NOTICE). Everything needed to self-host Loams is open source here; only metering, billing and the commercial APIs are proprietary (open core).
+[Apache License 2.0](LICENSE). Loams builds on DataFusion, Lance, Tantivy, Quickwit, qdrant-edge, SlateDB, openraft, TiKV, TiDB, Neon, Grafeo, chDB and Resonate; attributions are in [NOTICE](NOTICE). Loams is fully open source: there is no open core and no paid edition. Metering, billing and the control plane are moving into the open repository too (D1119). Ostrium Labs, which leads the project, earns its living from services: infrastructure efficiency reviews, SLAs, support and migration help.
