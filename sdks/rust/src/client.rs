@@ -456,6 +456,19 @@ where
         }
     }
 
+    /// `loams.sql` (SDKP §2.5): one read-only SQL statement over a
+    /// namespace's collections.
+    #[must_use]
+    pub fn sql(&self) -> crate::app_modules::SqlModule<'_, T> {
+        crate::app_modules::SqlModule {
+            client: loams_proto::loams::sql::v1::SqlServiceClient::new(
+                self.inner.transport.clone(),
+                self.inner.config.clone(),
+            ),
+            runtime: &self.inner.runtime,
+        }
+    }
+
     /// `loams.graph` (SDKP §2.5). Its package is `unstable`.
     #[must_use]
     pub fn graph(&self) -> crate::app_modules::GraphModule<'_, T> {

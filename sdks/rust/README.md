@@ -68,8 +68,12 @@ The typed modules are `loams.namespaces()`, `loams.collections()`,
 method per facade call; `loams.collection("notes", None)` returns a
 `CollectionHandle` with `upsert`, `get`, `delete`, `patch`, `write_batch`,
 `count`, `scroll_all`, `search` and `vector_search`, and
-`loams::handle::query_all` pages a search. `loams.sql()` and `loams.streams()`
-arrive with `loams.sql.v1` and `loams.stream.v1` (SDKP P0b, P0c).
+`loams::handle::query_all` pages a search. `loams.sql()` is `loams.sql`:
+`query` answers `columns` and `rows`, `records(statement, vec![$1, …])`
+answers one JSON object per row, and `loams::sql_records(&answer)` reads an
+answer in hand; `query_arrow` answers Arrow IPC bytes (`arrow_ipc`), which the
+`arrow-ipc` crate's `StreamReader` reads. `loams.streams()` arrives with
+`loams.stream.v1` (SDKP P0c).
 `examples/notes/main.rs` is the whole app scenario as a program. The session's
 token is used only for collection and SQL reads: a graph's token names one
 graph (SDKP-17). Durable workflows use the Resonate SDK pointed at

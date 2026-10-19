@@ -149,6 +149,9 @@ All notable changes to this project are documented here. The format follows [Kee
   modules `namespaces()`, `collections()`, `documents()`, `search()`,
   `vector()` and `graph()`, `loams.collection(name)`, and the app scenario
   replayed through them (`rust_app_*`); `examples/notes`.
+- Rust SDK: `loams.sql()` (SDKP L4 part C): `query`, `query_arrow`,
+  `records(statement, params)` and `sql_records(&answer)`, replayed by
+  `rust_app_sql`.
 
 ### Fixed
 

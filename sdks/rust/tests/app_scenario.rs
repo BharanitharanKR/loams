@@ -1,6 +1,7 @@
-//! SDKP Part B for Rust: the app scenario through the public facade.
+//! SDKP Parts B and C for Rust: the app scenario through the public facade.
 //!
-//! `rust_app_collections`, `rust_app_search` and `rust_app_graph` replay
+//! `rust_app_collections`, `rust_app_search`, `rust_app_graph` and
+//! `rust_app_sql` (Part C) replay
 //! `sdks/fixtures/recorded/app/` against the conformance fixture server
 //! (`sdks/fixtures/app-scenario.md` says how): each step's facade call is made
 //! on a `Loams` client with the recorded request — built with the builders when
@@ -17,6 +18,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
 
 use http::{HeaderName, HeaderValue};
+use loams::sql_v1 as sql;
 use loams::{
     CallOptionsOverrides, Loams, LoamsError, TransportOptions, collection_v1 as c, graph_v1 as g,
     instance_v1 as i,
@@ -258,6 +260,22 @@ async fn replay(url: &str, name: &str) -> Result<(), String> {
                 loams_proto::loams::operations::v1::Operation,
                 graph().delete
             ),
+            "sql.query" => call!(
+                loams,
+                json,
+                options,
+                sql::QueryRequest,
+                sql::QueryResponse,
+                sql().query
+            ),
+            "sql.query_arrow" => call!(
+                loams,
+                json,
+                options,
+                sql::QueryArrowRequest,
+                sql::QueryArrowResponse,
+                sql().query_arrow
+            ),
             other => return Err(format!("{place}: no replay for {other}")),
         };
         let status = step["expect"]["status"].as_u64().expect("a status");
@@ -330,6 +348,48 @@ async fn rust_app_search() {
 #[tokio::test]
 async fn rust_app_graph() {
     replay_on_own_server("app_graph").await;
+}
+
+#[tokio::test]
+async fn rust_app_sql() {
+    replay_on_own_server("app_sql").await;
+}
+
+/// `sql().records` sends the `$1` value and reads the rows as records, against
+/// the recorded first step of `app_sql`.
+#[tokio::test]
+async fn rust_sql_records_reads_rows_as_objects() {
+    let server = FixtureServer::start();
+    let loams = Loams::connect(TransportOptions::new(&server.url).json(true))
+        .expect("a client")
+        .with_namespace("app")
+        .max_retries(0);
+    let options = CallOptionsOverrides::new()
+        .header(
+            HeaderName::from_static("loams-fixture-name"),
+            HeaderValue::from_static("app_sql"),
+        )
+        .header(
+            HeaderName::from_static("loams-fixture-step"),
+            HeaderValue::from_static("0"),
+        );
+    let records = loams
+        .sql()
+        .records(
+            "SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags",
+            vec![json!(1)],
+            options,
+        )
+        .await
+        .expect("the recorded answer");
+    let records: Vec<Value> = records.into_iter().map(Value::Object).collect();
+    assert_eq!(
+        records,
+        vec![
+            json!({"tags": "policy", "c": 2.0}),
+            json!({"tags": "shipping", "c": 1.0})
+        ]
+    );
 }
 
 /// Every app fixture, and the report `check-languages --suite app` reads. The

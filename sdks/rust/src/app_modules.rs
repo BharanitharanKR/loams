@@ -1,5 +1,5 @@
 //! The app modules (SDKP §2.2–§2.5): `namespaces`, `collections`,
-//! `documents`, `search`, `vector` and `graph`.
+//! `documents`, `search`, `vector`, `graph` and `sql`.
 //!
 //! One method per facade call of [`crate::facade::MODULES`] (the protos'
 //! `loams.options.v1.facade` annotations), typed with the generated messages,
@@ -26,6 +26,7 @@ use crate::facade::CallBinding;
 use loams_proto::loams::collection::v1 as c;
 use loams_proto::loams::graph::v1 as g;
 use loams_proto::loams::operations::v1::Operation;
+use loams_proto::loams::sql::v1 as s;
 
 /// A request whose message declares `idempotency_key` (R3).
 pub trait KeyedRequest {
@@ -190,6 +191,13 @@ module!(
     /// `unstable`, so the module is experimental.
     GraphModule,
     GraphClients<T>
+);
+
+module!(
+    /// `loams.sql`: one read-only SQL statement over a namespace's
+    /// collections, with `$1…$n` parameters (SDKP §2.5).
+    SqlModule,
+    s::SqlServiceClient<T>
 );
 
 /// The two services behind `loams.graph`.
@@ -503,4 +511,88 @@ where
             }
         },
     )
+}
+
+impl<T> SqlModule<'_, T>
+where
+    T: ClientTransport + Send + Sync + 'static,
+    T::ResponseBody: Unpin,
+    <T::ResponseBody as Body>::Error: std::fmt::Display,
+{
+    unary!(
+        /// `SqlService/Query`: one read-only statement, its rows as JSON-shaped
+        /// values in `columns` order.
+        query, "sql", "query", s::QueryRequest, s::QueryResponse, query_with_options
+    );
+    unary!(
+        /// `SqlService/QueryArrow`: the same result as one Arrow IPC stream
+        /// (`arrow_ipc`), which `arrow-ipc`'s `StreamReader` reads; the SDK
+        /// does not depend on Arrow.
+        query_arrow, "sql", "query_arrow", s::QueryArrowRequest, s::QueryArrowResponse, query_arrow_with_options
+    );
+
+    /// One statement with its `$1…$n` values (JSON scalars, which the server
+    /// casts to each placeholder's inferred type), answered as records
+    /// ([`sql_records`]).
+    ///
+    /// # Errors
+    ///
+    /// `invalid_argument` before any call for a value that is not a
+    /// `google.protobuf.Value`; otherwise the call's failure.
+    pub async fn records(
+        &self,
+        statement: &str,
+        params: Vec<serde_json::Value>,
+        options: CallOptionsOverrides,
+    ) -> Result<Vec<serde_json::Map<String, serde_json::Value>>, LoamsError> {
+        let params = params
+            .into_iter()
+            .enumerate()
+            .map(|(at, value)| {
+                serde_json::from_value(value).map_err(|error| {
+                    LoamsError::new(
+                        crate::error::ErrorKind::InvalidArgument,
+                        connectrpc::ErrorCode::InvalidArgument,
+                        format!("sql parameter ${}: {error}", at + 1),
+                    )
+                    .with_metadata("field", "params")
+                })
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        let request = s::QueryRequest {
+            sql: statement.to_owned(),
+            params,
+            ..Default::default()
+        };
+        Ok(sql_records(&self.query(request, options).await?))
+    }
+}
+
+/// A `sql.query` answer's rows as one JSON object per row, keyed by column
+/// name (SDKP §2.5). A 64-bit integer past 2^53 is the decimal string the
+/// server sent, so it stays exact; a column name that repeats keeps its last
+/// value.
+#[must_use]
+pub fn sql_records(answer: &s::QueryResponse) -> Vec<serde_json::Map<String, serde_json::Value>> {
+    answer
+        .rows
+        .iter()
+        .map(|row| {
+            let values = match serde_json::to_value(row) {
+                Ok(serde_json::Value::Array(values)) => values,
+                _ => Vec::new(),
+            };
+            answer
+                .columns
+                .iter()
+                .enumerate()
+                .map(|(at, column)| {
+                    (
+                        column.name.clone(),
+                        values.get(at).cloned().unwrap_or(serde_json::Value::Null),
+                    )
+                })
+                .collect()
+        })
+        .collect()
 }

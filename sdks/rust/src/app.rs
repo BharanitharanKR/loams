@@ -99,6 +99,7 @@ mod impls {
     use super::AppRequest;
     use loams_proto::loams::collection::v1 as c;
     use loams_proto::loams::graph::v1 as g;
+    use loams_proto::loams::sql::v1 as s;
 
     namespaced!(
         c::CreateNamespaceRequest,
@@ -123,6 +124,9 @@ mod impls {
         g::ImportGraphRequest,
         g::ExecuteBatchRequest,
     );
+    // SQL reads take the session's token too (SDKP-17): their consistency is
+    // the collection one.
+    collection_reads!(s::QueryRequest, s::QueryArrowRequest);
     collection_reads!(
         c::GetDocumentsRequest,
         c::ScrollDocumentsRequest,

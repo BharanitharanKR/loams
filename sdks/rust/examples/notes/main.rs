@@ -103,6 +103,19 @@ async fn main() -> Result<(), LoamsError> {
         .await?;
     println!("policy notes: {:?}", policy.count);
 
+    // SQL over the same collection, with a `$1` parameter, as records.
+    let per_tag = loams
+        .sql()
+        .records(
+            "SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags",
+            vec![json!(1)],
+            none(),
+        )
+        .await?;
+    for row in &per_tag {
+        println!("{} {}", row["tags"], row["c"]);
+    }
+
     // A bulk load: chunked, one idempotency key per chunk, the tokens merged.
     let loaded = notes
         .write_batch(
