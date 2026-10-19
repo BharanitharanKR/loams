@@ -150,8 +150,8 @@ audience `LOAMS_OIDC_AUDIENCE`; `apikey` checks hashed keys in
 `.env.example`.
 
 With any mode but `off`, first-run setup (the console's setup page, which
-creates the org and its owner) needs `LOAMS_SETUP_TOKEN` in `.env`
-(`openssl rand -hex 32`); without it setup is refused. Setup runs once. See
+creates the org and its owner) needs `LOAMS_SETUP_TOKEN` in `.env` or in
+`secrets/engine.env` (`openssl rand -hex 32`); without it setup is refused. Setup runs once. See
 "First-run setup" in [docs/release/preview.md](../../docs/release/preview.md#first-run-setup).
 
 `console/dist` holds a placeholder page, in a clone and in the compose bundle.

@@ -253,8 +253,7 @@ Edit `.env`:
 - `LOAMS_SETUP_TOKEN`: a random secret for [first-run setup](#first-run-setup), for example
   the output of `openssl rand -hex 32`. Every mode except `off` turns authentication on, and
   with authentication on the engine refuses first-run setup without this token. Set it in
-  `.env`, not in `secrets/engine.env`: `compose.yaml` passes `.env`'s value to the engine,
-  and that value overrides the file.
+  `.env` or in `secrets/engine.env`; when both set it, `secrets/engine.env` wins.
 
 Then start it:
 
@@ -285,11 +284,12 @@ with you as its owner, and runs once. With authentication on (`tailscale`, the d
 `oidc` or `apikey`) it needs `LOAMS_SETUP_TOKEN`; without it the engine answers
 `first-run setup on an engine with authentication on needs LOAMS_SETUP_TOKEN; set it and
 restart`, and the console does not offer setup at all. If you started the stack before setting
-the token, add it to `.env` and recreate the engine with `docker compose up -d loams`.
+the token, add it to `.env` (or `secrets/engine.env`) and recreate the engine with
+`docker compose up -d loams`.
 
 **In the console.** Open the console with your engine URL. While the engine has no
 organization and a setup token is set, the console opens on **Set up this install**
-(`#/setup`). Enter the setup token (the value of `LOAMS_SETUP_TOKEN` in `.env`), the
+(`#/setup`). Enter the setup token (the value of `LOAMS_SETUP_TOKEN`), the
 organization name, your name, your email and a password of 12 characters or more. The console
 signs you in as the owner.
 
@@ -311,7 +311,8 @@ docker compose exec -e ORG='Acme' -e NAME='Your Name' -e EMAIL='you@example.com'
 
 A wrong token is refused with `permission_denied`. After setup has run, every further
 `CompleteSetup` is refused with `setup has already run`, whatever the token, so you can empty
-`LOAMS_SETUP_TOKEN` in `.env` and run `docker compose up -d loams` to drop it from the engine.
+`LOAMS_SETUP_TOKEN` where you set it and run `docker compose up -d loams` to drop it from the
+engine.
 With `LOAMS_AUTH_MODE=off` setup needs no token, and only loopback clients can reach it.
 
 ### Without a tailnet
