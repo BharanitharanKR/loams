@@ -25,7 +25,7 @@
 
 **Tech Stack:**
 - **Rust:** 1.97.1, edition 2024, workspace lints, the root workspace; `loams-systemone` (SO1); the daemon's crates as built; `connectrpc` and buffa as `loams-agentd-connect` uses them; `keyring` through DD1's `SecretStore`.
-- **Swift:** Swift 6 with SwiftPM and Xcode, on the macOS arm64 runner only; `FluidUse` (Apache-2.0) and `FluidAudio` pulled transitively.
+- **Swift:** Swift 6 with SwiftPM and Xcode, on the macOS arm64 runner only; the five Laya files of `FluidUse` (Apache-2.0) vendored at `cfba4d3f`; `FluidAudio` is not used (R0.8).
 - **TypeScript:** the workspace toolchain (TypeScript 5.9.3, Node ≥ 22, pnpm, Biome, Vitest, Playwright), React 19, Electron as pinned by `apps/desktop-electron/package.json`. The owner's UI rulings hold: **Tailwind 4 with `@loams/ui` tokens only; Base UI primitives only as wrapped in `@loams/ui`; no Effect; `@connectrpc/connect-query` with TanStack Query for server state.** Lists use `@loams/ui`'s DataTable and VirtualList (TanStack Table and Virtual).
 - **Packaging:** electron-builder with the hardened runtime and notarisation as `electron-builder.config.cjs` and `desktop-sign.yml` set up.
 - **Browser plugin (optional):** cordis, `laya-ts` (Apache-2.0) and `onnxruntime-web` (MIT).
@@ -186,7 +186,7 @@ web/packages/studio-ui/src/chat/tools/{decision-chip.tsx,presentation.ts}
 web/plugins/systemone-local/{package.json,src/*,worker/*}   # optional, Task 8
 .github/workflows/desktop-electron.yml                  # the coreml job (macOS arm64)
 docs/plans/so2-systemone-spike.md  docs/design/40-loams-systemone.md (Task 11, as built)  docs/guides/desktop/decisions.md
-THIRD_PARTY_NOTICES.md  apps/desktop-electron/NOTICE
+NOTICE  apps/desktop-electron/NOTICE  LICENSES.md                 # R0.20
 ```
 
 ### Task 0: Reconcile with the code as built and check the Swift side
@@ -208,7 +208,7 @@ THIRD_PARTY_NOTICES.md  apps/desktop-electron/NOTICE
 
 ### Task 1: The Core ML sidecar
 
-**Files:** `apps/desktop-electron/sidecars/coreml/*`, `apps/desktop-electron/scripts/build-coreml.mjs`, `electron-builder.config.cjs` (the binary on macOS arm64 only), `crates/loams-agentd/src/runtime_install.rs` (`install-runtime` copies and hash-checks `loams-coreml` as an optional binary), `.github/workflows/desktop-electron.yml` (a `coreml` job on the macOS arm64 runner), `THIRD_PARTY_NOTICES.md` and `apps/desktop-electron/NOTICE` (FluidUse, FluidAudio, Laya).
+**Files:** `apps/desktop-electron/sidecars/coreml/*`, `apps/desktop-electron/scripts/build-coreml.mjs`, `electron-builder.config.cjs` (the binary on macOS arm64 only), `crates/loams-agentd/src/runtime_install.rs` (`install-runtime` copies and hash-checks `loams-coreml` as an optional binary), `.github/workflows/desktop-electron.yml` (a `coreml` job on the macOS arm64 runner), the root `NOTICE` and `apps/desktop-electron/NOTICE` (the vendored FluidUse Laya files, R0.8, R0.20).
 
 **Produces:** the `loams-coreml` executable with `--socket <path> --key-fd <fd> --models <dir>`; `POST /v1/systemone` and `GET /health` per design §7.3; `resources/bin/loams-coreml` and its line in `SHA256SUMS` on macOS arm64 builds.
 
@@ -296,7 +296,7 @@ THIRD_PARTY_NOTICES.md  apps/desktop-electron/NOTICE
 - `needs_person` (`noul`: does this need a person's attention before any action);
 - `needs_llm` (`noul`: does this message need a language model at all; false for acknowledgements and thanks).
 
-**Semantics:** before each A2A `SendMessage`, the shim calls the daemon's `SystemOneDecide` over ndjson with its scoped run token, `min_confidence = 0.6` (Ruling 6) and `locality = LOCAL_ONLY`. A confident route sets the A2A `to` hint, and the ACP tool call for the task carries `_meta.systemone` so the card shows "routed to forgejo, 0.91, local" in Studio's thread and the Console agent dock; a `low_confidence` or absent decision sends the message unrouted for Loams Bot to decide, as today. `needs_person` raises the priority of the daemon's OS notification and Studio's toast only (never auto-answers). `needs_llm = false` with confidence above 0.9 may short-circuit to a canned acknowledgement only if the user enabled "quick replies" (`[systemone] quick_replies`, off by default) **and** an independent rule-based check agrees (the message is under 40 characters, is not a question and has no `?`, and matches a per-language allowlist of thanks and acknowledgements); otherwise the message goes on to the LLM. The decision, backend, calibrated confidence and latency go into A2A metadata (`systemone.*`, no content). **No decision can create, approve or answer an approval, a question or a destructive skill.** If the daemon is unreachable or SystemOne is unavailable, the shim behaves exactly as before.
+**Semantics:** before each A2A `SendMessage`, the shim calls the daemon's `SystemOneDecide` over ndjson with its scoped run token, `min_confidence = 0.6` (Ruling 6) and `locality = LOCAL_ONLY`. A confident route is recorded as `systemone.route` in the A2A message's `metadata` (A2A has no `to` field, R0.4); the hint is informational and does not change routing until Loams Bot's server side (SF3) reads it. The the ACP tool call for the task carries `_meta.systemone` so the card shows "routed to forgejo, 0.91, local" in Studio's thread and the Console agent dock; a `low_confidence` or absent decision sends the message unrouted for Loams Bot to decide, as today. `needs_person` raises the priority of the daemon's OS notification and Studio's toast only (never auto-answers). `needs_llm = false` with confidence above 0.9 may short-circuit to a canned acknowledgement only if the user enabled "quick replies" (`[systemone] quick_replies`, off by default) **and** an independent rule-based check agrees (the message is under 40 characters, is not a question and has no `?`, and matches a per-language allowlist of thanks and acknowledgements); otherwise the message goes on to the LLM. The decision, backend, calibrated confidence and latency go into A2A metadata (`systemone.*`, no content). **No decision can create, approve or answer an approval, a question or a destructive skill.** If the daemon is unreachable or SystemOne is unavailable, the shim behaves exactly as before.
 
 **Tests:** `confident_route_sets_hint_and_card` (Rust, plus a Vitest of the chip from `_meta`); `low_confidence_sends_unrouted`; `unavailable_behaves_as_today`; `decision_cannot_approve` (the approval path is unreachable from `bot/decisions.rs`, checked by a compile-time module-visibility test, plus the runtime test that the shim's scoped token is refused by `ResolveApproval`); `needs_person_only_raises_priority`; `quick_replies_off_by_default`; `canned_reply_needs_independent_check` (a model-confident `needs_llm = false` on a question still goes to the LLM); `metadata_has_no_content`; `questions_are_versioned` (a snapshot of the four definitions); `run_token_is_session_bound` (if R7 needed a change).
 
@@ -342,7 +342,7 @@ THIRD_PARTY_NOTICES.md  apps/desktop-electron/NOTICE
 
 **Exit gate:** Tasks 1 to 7 tests; on the macOS arm64 runner, from a clean profile with the packaged app: the app starts, the daemon starts with no models, the first decision prompts for the download in the shell, the models install and verify, a Loams Bot message (against a fake A2A server) is routed locally in under 100 ms end to end (p50, excluding the first load), the chip shows on the card in Studio, the self-test passes, Cloud stays off, `LOAMS_OFFLINE=1` makes no network calls, closing the window leaves decisions working through the daemon, and stopping the daemon leaves no `loams-coreml` process or socket. A Linux CPU run covers the same through `laya-serve`.
 
-**Files:** `docs/design/40-loams-systemone.md` (as built, with the owner's answers to SO2-Q1 to Q5), `docs/design/13-decision-log.md` (D528 and D538 as amended by the owner), `docs/design/50-loams-desktop-daemon.md` (a pointer in §4.1 for the new crate), `docs/guides/desktop/decisions.md`, `THIRD_PARTY_NOTICES.md` (FluidUse, FluidAudio, `laya-coreml`, Laya), `docs/plans/README.md`.
+**Files:** `docs/design/40-loams-systemone.md` (as built, with the owner's answers to SO2-Q1 to Q5), `docs/design/13-decision-log.md` (D528 and D538 as amended by the owner), `docs/design/50-loams-desktop-daemon.md` (a pointer in §4.1 for the new crate), `docs/guides/desktop/decisions.md`, the root `NOTICE` and `apps/desktop-electron/NOTICE` (the vendored FluidUse Laya files), `LICENSES.md` (`laya-coreml` weights, downloaded at run time; R0.20), `docs/plans/README.md`.
 
 **Commit:** `docs: SystemOne on the desktop, SO2 closed`.
 

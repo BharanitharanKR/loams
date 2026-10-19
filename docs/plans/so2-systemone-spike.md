@@ -141,7 +141,8 @@ Run on a **physical** Apple-silicon Mac on macOS 14 or later for §6.2 (the labe
 xcodebuild -version; swift --version            # tools-version 6.0 needs Swift 6.0+ (Xcode 16+)
 # in a scratch SwiftPM package with the five vendored files (LayaModelStore stripped, R0.8):
 swift build -c release --arch arm64
-otool -L .build/release/loams-coreml            # expect Foundation, CoreML, libSystem only
+otool -L .build/release/loams-coreml            # system frameworks and /usr/lib/swift/libswift*.dylib only;
+                                                # fail on FluidAudio, @rpath bundles or anything outside /System and /usr/lib
 nm -u .build/release/loams-coreml | grep -i urlsession   # expect nothing (no download path)
 ```
 
@@ -154,7 +155,7 @@ Download the buckets once, by hand, at revision `7b8d7a2b…` into a scratch dir
 - peak and idle RSS (`footprint <pid>` or `/usr/bin/time -l`), with `[128, 512]` loaded and after idle;
 - compute units: default (`.cpuAndNeuralEngine` at 128, `.all` above) against `.all` and `.cpuOnly`;
 - a `choice` with 33 options: expect `invalidOptionCount(33)`;
-- parity: the 16-case self-test and 200 decisions against `laya-serve` 0.4.11 (`multilingual`, revision `7b928d82…`) on the same inputs (SO1 spike §6 commands); record max abs probability difference and argmax agreement. Gate: 0.02.
+- parity: the 16-case self-test, and 200 decisions against `laya-serve` 0.4.11 (`multilingual`, revision `7b928d82…`) on the same inputs (SO1 spike §6 commands). The 200 are 20 cases from each of the ten suites of upstream's `reports/benchmark-coreml.json` (`app.email_spam`, `app.guardrails_jailbreak`, `app.model_routing_domain`, `app.moderation_toxicity`, `app.phishing`, `app.rag_relevance`, `app.support_triage`, `jev.ag_news`, `jev.emotion`, `massive_intent.en`), picked from those suites' public datasets with the selection fixed and recorded before measuring, so the gate covers `app.guardrails_jailbreak`, where `e8` failed. Record the case list with the results, and the max abs probability difference and argmax agreement per suite and precision. Gate: 0.02.
 
 ### 6.3 Signing, notarisation and the runtime copy
 
