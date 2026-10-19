@@ -3014,6 +3014,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ScrollDocumentsRequest final : publ
     kSelectFieldNumber = 6,
     kConsistencyFieldNumber = 7,
     kPageTokenFieldNumber = 8,
+    kWhereFieldNumber = 9,
     kLimitFieldNumber = 5,
   };
   // string namespace = 1 [json_name = "namespace"];
@@ -3121,6 +3122,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ScrollDocumentsRequest final : publ
   ::loams::collection::v1::DocumentId* PROTOBUF_NONNULL _internal_mutable_page_token();
 
   public:
+  // .google.protobuf.Struct where = 9 [json_name = "where"];
+  [[nodiscard]] bool has_where() const;
+  void clear_where() ;
+  [[nodiscard]] const ::google::protobuf::Struct& where() const;
+  [[nodiscard]] ::google::protobuf::Struct* PROTOBUF_NULLABLE release_where();
+  ::google::protobuf::Struct* PROTOBUF_NONNULL mutable_where();
+  void set_allocated_where(::google::protobuf::Struct* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_where(::google::protobuf::Struct* PROTOBUF_NULLABLE value);
+  ::google::protobuf::Struct* PROTOBUF_NULLABLE unsafe_arena_release_where();
+
+  private:
+  const ::google::protobuf::Struct& _internal_where() const;
+  ::google::protobuf::Struct* PROTOBUF_NONNULL _internal_mutable_where();
+
+  public:
   // optional uint32 limit = 5 [json_name = "limit"];
   [[nodiscard]] bool has_limit() const;
   void clear_limit() ;
@@ -3136,8 +3152,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ScrollDocumentsRequest final : publ
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
-                          5, 78,
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          6, 78,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -3172,6 +3188,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED ScrollDocumentsRequest final : publ
     ::google::protobuf::Struct* PROTOBUF_NULLABLE select_;
     ::loams::collection::v1::Consistency* PROTOBUF_NULLABLE consistency_;
     ::loams::collection::v1::DocumentId* PROTOBUF_NULLABLE page_token_;
+    ::google::protobuf::Struct* PROTOBUF_NULLABLE where_;
     ::uint32_t limit_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
@@ -4228,6 +4245,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteByFilterRequest final : publi
     kFilterFieldNumber = 3,
     kCursorFieldNumber = 6,
     kConsistencyFieldNumber = 7,
+    kWhereFieldNumber = 8,
     kMaxRowsFieldNumber = 4,
     kAllowPartialFieldNumber = 5,
   };
@@ -4306,6 +4324,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteByFilterRequest final : publi
   ::loams::collection::v1::Consistency* PROTOBUF_NONNULL _internal_mutable_consistency();
 
   public:
+  // .google.protobuf.Struct where = 8 [json_name = "where"];
+  [[nodiscard]] bool has_where() const;
+  void clear_where() ;
+  [[nodiscard]] const ::google::protobuf::Struct& where() const;
+  [[nodiscard]] ::google::protobuf::Struct* PROTOBUF_NULLABLE release_where();
+  ::google::protobuf::Struct* PROTOBUF_NONNULL mutable_where();
+  void set_allocated_where(::google::protobuf::Struct* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_where(::google::protobuf::Struct* PROTOBUF_NULLABLE value);
+  ::google::protobuf::Struct* PROTOBUF_NULLABLE unsafe_arena_release_where();
+
+  private:
+  const ::google::protobuf::Struct& _internal_where() const;
+  ::google::protobuf::Struct* PROTOBUF_NONNULL _internal_mutable_where();
+
+  public:
   // optional uint64 max_rows = 4 [json_name = "maxRows"];
   [[nodiscard]] bool has_max_rows() const;
   void clear_max_rows() ;
@@ -4331,8 +4364,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteByFilterRequest final : publi
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 7,
-                          3, 69,
+      ::google::protobuf::internal::TcParseTable<3, 8,
+                          4, 77,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -4365,6 +4398,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED DeleteByFilterRequest final : publi
     ::google::protobuf::Value* PROTOBUF_NULLABLE filter_;
     ::loams::collection::v1::FilterWriteCursor* PROTOBUF_NULLABLE cursor_;
     ::loams::collection::v1::Consistency* PROTOBUF_NULLABLE consistency_;
+    ::google::protobuf::Struct* PROTOBUF_NULLABLE where_;
     ::uint64_t max_rows_;
     bool allow_partial_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -4526,6 +4560,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CountDocumentsRequest final : publi
     kCollectionFieldNumber = 2,
     kFilterFieldNumber = 3,
     kConsistencyFieldNumber = 4,
+    kWhereFieldNumber = 5,
   };
   // string namespace = 1 [json_name = "namespace"];
   void clear_namespace_() ;
@@ -4587,12 +4622,27 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CountDocumentsRequest final : publi
   ::loams::collection::v1::Consistency* PROTOBUF_NONNULL _internal_mutable_consistency();
 
   public:
+  // .google.protobuf.Struct where = 5 [json_name = "where"];
+  [[nodiscard]] bool has_where() const;
+  void clear_where() ;
+  [[nodiscard]] const ::google::protobuf::Struct& where() const;
+  [[nodiscard]] ::google::protobuf::Struct* PROTOBUF_NULLABLE release_where();
+  ::google::protobuf::Struct* PROTOBUF_NONNULL mutable_where();
+  void set_allocated_where(::google::protobuf::Struct* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_where(::google::protobuf::Struct* PROTOBUF_NULLABLE value);
+  ::google::protobuf::Struct* PROTOBUF_NULLABLE unsafe_arena_release_where();
+
+  private:
+  const ::google::protobuf::Struct& _internal_where() const;
+  ::google::protobuf::Struct* PROTOBUF_NONNULL _internal_mutable_where();
+
+  public:
   // @@protoc_insertion_point(class_scope:loams.collection.v1.CountDocumentsRequest)
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<2, 4,
-                          2, 69,
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          3, 69,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -4624,6 +4674,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED CountDocumentsRequest final : publi
     ::google::protobuf::internal::ArenaStringPtr collection_;
     ::google::protobuf::Value* PROTOBUF_NULLABLE filter_;
     ::loams::collection::v1::Consistency* PROTOBUF_NULLABLE consistency_;
+    ::google::protobuf::Struct* PROTOBUF_NULLABLE where_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -5846,6 +5897,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PatchByFilterRequest final : public
     kPatchFieldNumber = 4,
     kCursorFieldNumber = 7,
     kConsistencyFieldNumber = 8,
+    kWhereFieldNumber = 9,
     kMaxRowsFieldNumber = 5,
     kAllowPartialFieldNumber = 6,
   };
@@ -5939,6 +5991,21 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PatchByFilterRequest final : public
   ::loams::collection::v1::Consistency* PROTOBUF_NONNULL _internal_mutable_consistency();
 
   public:
+  // .google.protobuf.Struct where = 9 [json_name = "where"];
+  [[nodiscard]] bool has_where() const;
+  void clear_where() ;
+  [[nodiscard]] const ::google::protobuf::Struct& where() const;
+  [[nodiscard]] ::google::protobuf::Struct* PROTOBUF_NULLABLE release_where();
+  ::google::protobuf::Struct* PROTOBUF_NONNULL mutable_where();
+  void set_allocated_where(::google::protobuf::Struct* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_where(::google::protobuf::Struct* PROTOBUF_NULLABLE value);
+  ::google::protobuf::Struct* PROTOBUF_NULLABLE unsafe_arena_release_where();
+
+  private:
+  const ::google::protobuf::Struct& _internal_where() const;
+  ::google::protobuf::Struct* PROTOBUF_NONNULL _internal_mutable_where();
+
+  public:
   // optional uint64 max_rows = 5 [json_name = "maxRows"];
   [[nodiscard]] bool has_max_rows() const;
   void clear_max_rows() ;
@@ -5964,8 +6031,8 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PatchByFilterRequest final : public
  private:
   class _Internal;
   using ParseTableT_ =
-      ::google::protobuf::internal::TcParseTable<3, 8,
-                          4, 76,
+      ::google::protobuf::internal::TcParseTable<4, 9,
+                          5, 76,
                           2>;
   static constexpr ParseTableT_ InternalGenerateParseTable_(
       const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
@@ -5999,6 +6066,7 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED PatchByFilterRequest final : public
     ::loams::collection::v1::Patch* PROTOBUF_NULLABLE patch_;
     ::loams::collection::v1::FilterWriteCursor* PROTOBUF_NULLABLE cursor_;
     ::loams::collection::v1::Consistency* PROTOBUF_NULLABLE consistency_;
+    ::google::protobuf::Struct* PROTOBUF_NULLABLE where_;
     ::uint64_t max_rows_;
     bool allow_partial_;
     PROTOBUF_TSAN_DECLARE_MEMBER
@@ -8978,13 +9046,13 @@ inline void ScrollDocumentsRequest::set_allocated_after(::loams::collection::v1:
 
 // optional uint32 limit = 5 [json_name = "limit"];
 inline bool ScrollDocumentsRequest::has_limit() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000080U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000100U);
   return value;
 }
 inline void ScrollDocumentsRequest::clear_limit() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.limit_ = 0u;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline ::uint32_t ScrollDocumentsRequest::limit() const {
   // @@protoc_insertion_point(field_get:loams.collection.v1.ScrollDocumentsRequest.limit)
@@ -8992,7 +9060,7 @@ inline ::uint32_t ScrollDocumentsRequest::limit() const {
 }
 inline void ScrollDocumentsRequest::set_limit(::uint32_t value) {
   _internal_set_limit(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:loams.collection.v1.ScrollDocumentsRequest.limit)
 }
 inline ::uint32_t ScrollDocumentsRequest::_internal_limit() const {
@@ -9291,6 +9359,99 @@ inline void ScrollDocumentsRequest::set_allocated_page_token(::loams::collection
 
   _impl_.page_token_ = reinterpret_cast<::loams::collection::v1::DocumentId*>(value);
   // @@protoc_insertion_point(field_set_allocated:loams.collection.v1.ScrollDocumentsRequest.page_token)
+}
+
+// .google.protobuf.Struct where = 9 [json_name = "where"];
+inline bool ScrollDocumentsRequest::has_where() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000080U);
+  PROTOBUF_ASSUME(!value || _impl_.where_ != nullptr);
+  return value;
+}
+inline const ::google::protobuf::Struct& ScrollDocumentsRequest::_internal_where() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::google::protobuf::Struct* p = _impl_.where_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::google::protobuf::Struct>(&::google::protobuf::Struct_globals_);
+}
+inline const ::google::protobuf::Struct& ScrollDocumentsRequest::where() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.collection.v1.ScrollDocumentsRequest.where)
+  return _internal_where();
+}
+inline void ScrollDocumentsRequest::unsafe_arena_set_allocated_where(
+    ::google::protobuf::Struct* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.where_);
+  }
+  _impl_.where_ = reinterpret_cast<::google::protobuf::Struct*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.collection.v1.ScrollDocumentsRequest.where)
+}
+inline ::google::protobuf::Struct* PROTOBUF_NULLABLE ScrollDocumentsRequest::release_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::google::protobuf::Struct* released = _impl_.where_;
+  _impl_.where_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::google::protobuf::Struct* PROTOBUF_NULLABLE ScrollDocumentsRequest::unsafe_arena_release_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.collection.v1.ScrollDocumentsRequest.where)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::google::protobuf::Struct* temp = _impl_.where_;
+  _impl_.where_ = nullptr;
+  return temp;
+}
+inline ::google::protobuf::Struct* PROTOBUF_NONNULL ScrollDocumentsRequest::_internal_mutable_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.where_ == nullptr) {
+    auto* p = Super_::DefaultConstruct<::google::protobuf::Struct>(GetArena());
+    _impl_.where_ = reinterpret_cast<::google::protobuf::Struct*>(p);
+  }
+  return _impl_.where_;
+}
+inline ::google::protobuf::Struct* PROTOBUF_NONNULL ScrollDocumentsRequest::mutable_where()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ::google::protobuf::Struct* _msg = _internal_mutable_where();
+  // @@protoc_insertion_point(field_mutable:loams.collection.v1.ScrollDocumentsRequest.where)
+  return _msg;
+}
+inline void ScrollDocumentsRequest::set_allocated_where(::google::protobuf::Struct* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.where_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  }
+
+  _impl_.where_ = reinterpret_cast<::google::protobuf::Struct*>(value);
+  // @@protoc_insertion_point(field_set_allocated:loams.collection.v1.ScrollDocumentsRequest.where)
 }
 
 // -------------------------------------------------------------------
@@ -9837,6 +9998,99 @@ inline void CountDocumentsRequest::set_allocated_consistency(::loams::collection
   // @@protoc_insertion_point(field_set_allocated:loams.collection.v1.CountDocumentsRequest.consistency)
 }
 
+// .google.protobuf.Struct where = 5 [json_name = "where"];
+inline bool CountDocumentsRequest::has_where() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000010U);
+  PROTOBUF_ASSUME(!value || _impl_.where_ != nullptr);
+  return value;
+}
+inline const ::google::protobuf::Struct& CountDocumentsRequest::_internal_where() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::google::protobuf::Struct* p = _impl_.where_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::google::protobuf::Struct>(&::google::protobuf::Struct_globals_);
+}
+inline const ::google::protobuf::Struct& CountDocumentsRequest::where() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.collection.v1.CountDocumentsRequest.where)
+  return _internal_where();
+}
+inline void CountDocumentsRequest::unsafe_arena_set_allocated_where(
+    ::google::protobuf::Struct* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.where_);
+  }
+  _impl_.where_ = reinterpret_cast<::google::protobuf::Struct*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.collection.v1.CountDocumentsRequest.where)
+}
+inline ::google::protobuf::Struct* PROTOBUF_NULLABLE CountDocumentsRequest::release_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::google::protobuf::Struct* released = _impl_.where_;
+  _impl_.where_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::google::protobuf::Struct* PROTOBUF_NULLABLE CountDocumentsRequest::unsafe_arena_release_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.collection.v1.CountDocumentsRequest.where)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::google::protobuf::Struct* temp = _impl_.where_;
+  _impl_.where_ = nullptr;
+  return temp;
+}
+inline ::google::protobuf::Struct* PROTOBUF_NONNULL CountDocumentsRequest::_internal_mutable_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.where_ == nullptr) {
+    auto* p = Super_::DefaultConstruct<::google::protobuf::Struct>(GetArena());
+    _impl_.where_ = reinterpret_cast<::google::protobuf::Struct*>(p);
+  }
+  return _impl_.where_;
+}
+inline ::google::protobuf::Struct* PROTOBUF_NONNULL CountDocumentsRequest::mutable_where()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  ::google::protobuf::Struct* _msg = _internal_mutable_where();
+  // @@protoc_insertion_point(field_mutable:loams.collection.v1.CountDocumentsRequest.where)
+  return _msg;
+}
+inline void CountDocumentsRequest::set_allocated_where(::google::protobuf::Struct* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.where_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+  }
+
+  _impl_.where_ = reinterpret_cast<::google::protobuf::Struct*>(value);
+  // @@protoc_insertion_point(field_set_allocated:loams.collection.v1.CountDocumentsRequest.where)
+}
+
 // -------------------------------------------------------------------
 
 // CountDocumentsResponse
@@ -10160,13 +10414,13 @@ inline void DeleteByFilterRequest::set_allocated_filter(::google::protobuf::Valu
 
 // optional uint64 max_rows = 4 [json_name = "maxRows"];
 inline bool DeleteByFilterRequest::has_max_rows() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000040U);
   return value;
 }
 inline void DeleteByFilterRequest::clear_max_rows() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_rows_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 inline ::uint64_t DeleteByFilterRequest::max_rows() const {
   // @@protoc_insertion_point(field_get:loams.collection.v1.DeleteByFilterRequest.max_rows)
@@ -10174,7 +10428,7 @@ inline ::uint64_t DeleteByFilterRequest::max_rows() const {
 }
 inline void DeleteByFilterRequest::set_max_rows(::uint64_t value) {
   _internal_set_max_rows(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
   // @@protoc_insertion_point(field_set:loams.collection.v1.DeleteByFilterRequest.max_rows)
 }
 inline ::uint64_t DeleteByFilterRequest::_internal_max_rows() const {
@@ -10190,7 +10444,7 @@ inline void DeleteByFilterRequest::_internal_set_max_rows(::uint64_t value) {
 inline void DeleteByFilterRequest::clear_allow_partial() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.allow_partial_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline bool DeleteByFilterRequest::allow_partial() const {
   // @@protoc_insertion_point(field_get:loams.collection.v1.DeleteByFilterRequest.allow_partial)
@@ -10198,7 +10452,7 @@ inline bool DeleteByFilterRequest::allow_partial() const {
 }
 inline void DeleteByFilterRequest::set_allow_partial(bool value) {
   _internal_set_allow_partial(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:loams.collection.v1.DeleteByFilterRequest.allow_partial)
 }
 inline bool DeleteByFilterRequest::_internal_allow_partial() const {
@@ -10404,6 +10658,99 @@ inline void DeleteByFilterRequest::set_allocated_consistency(::loams::collection
 
   _impl_.consistency_ = reinterpret_cast<::loams::collection::v1::Consistency*>(value);
   // @@protoc_insertion_point(field_set_allocated:loams.collection.v1.DeleteByFilterRequest.consistency)
+}
+
+// .google.protobuf.Struct where = 8 [json_name = "where"];
+inline bool DeleteByFilterRequest::has_where() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000020U);
+  PROTOBUF_ASSUME(!value || _impl_.where_ != nullptr);
+  return value;
+}
+inline const ::google::protobuf::Struct& DeleteByFilterRequest::_internal_where() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::google::protobuf::Struct* p = _impl_.where_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::google::protobuf::Struct>(&::google::protobuf::Struct_globals_);
+}
+inline const ::google::protobuf::Struct& DeleteByFilterRequest::where() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.collection.v1.DeleteByFilterRequest.where)
+  return _internal_where();
+}
+inline void DeleteByFilterRequest::unsafe_arena_set_allocated_where(
+    ::google::protobuf::Struct* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.where_);
+  }
+  _impl_.where_ = reinterpret_cast<::google::protobuf::Struct*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.collection.v1.DeleteByFilterRequest.where)
+}
+inline ::google::protobuf::Struct* PROTOBUF_NULLABLE DeleteByFilterRequest::release_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::google::protobuf::Struct* released = _impl_.where_;
+  _impl_.where_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::google::protobuf::Struct* PROTOBUF_NULLABLE DeleteByFilterRequest::unsafe_arena_release_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.collection.v1.DeleteByFilterRequest.where)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::google::protobuf::Struct* temp = _impl_.where_;
+  _impl_.where_ = nullptr;
+  return temp;
+}
+inline ::google::protobuf::Struct* PROTOBUF_NONNULL DeleteByFilterRequest::_internal_mutable_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.where_ == nullptr) {
+    auto* p = Super_::DefaultConstruct<::google::protobuf::Struct>(GetArena());
+    _impl_.where_ = reinterpret_cast<::google::protobuf::Struct*>(p);
+  }
+  return _impl_.where_;
+}
+inline ::google::protobuf::Struct* PROTOBUF_NONNULL DeleteByFilterRequest::mutable_where()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  ::google::protobuf::Struct* _msg = _internal_mutable_where();
+  // @@protoc_insertion_point(field_mutable:loams.collection.v1.DeleteByFilterRequest.where)
+  return _msg;
+}
+inline void DeleteByFilterRequest::set_allocated_where(::google::protobuf::Struct* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.where_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000020U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+  }
+
+  _impl_.where_ = reinterpret_cast<::google::protobuf::Struct*>(value);
+  // @@protoc_insertion_point(field_set_allocated:loams.collection.v1.DeleteByFilterRequest.where)
 }
 
 // -------------------------------------------------------------------
@@ -10731,13 +11078,13 @@ inline void PatchByFilterRequest::set_allocated_patch(::loams::collection::v1::P
 
 // optional uint64 max_rows = 5 [json_name = "maxRows"];
 inline bool PatchByFilterRequest::has_max_rows() const {
-  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000040U);
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000080U);
   return value;
 }
 inline void PatchByFilterRequest::clear_max_rows() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.max_rows_ = ::uint64_t{0u};
-  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
 }
 inline ::uint64_t PatchByFilterRequest::max_rows() const {
   // @@protoc_insertion_point(field_get:loams.collection.v1.PatchByFilterRequest.max_rows)
@@ -10745,7 +11092,7 @@ inline ::uint64_t PatchByFilterRequest::max_rows() const {
 }
 inline void PatchByFilterRequest::set_max_rows(::uint64_t value) {
   _internal_set_max_rows(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
   // @@protoc_insertion_point(field_set:loams.collection.v1.PatchByFilterRequest.max_rows)
 }
 inline ::uint64_t PatchByFilterRequest::_internal_max_rows() const {
@@ -10761,7 +11108,7 @@ inline void PatchByFilterRequest::_internal_set_max_rows(::uint64_t value) {
 inline void PatchByFilterRequest::clear_allow_partial() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   _impl_.allow_partial_ = false;
-  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+  ClearHasBit(_impl_._has_bits_[0], 0x00000100U);
 }
 inline bool PatchByFilterRequest::allow_partial() const {
   // @@protoc_insertion_point(field_get:loams.collection.v1.PatchByFilterRequest.allow_partial)
@@ -10769,7 +11116,7 @@ inline bool PatchByFilterRequest::allow_partial() const {
 }
 inline void PatchByFilterRequest::set_allow_partial(bool value) {
   _internal_set_allow_partial(value);
-  SetHasBit(_impl_._has_bits_[0], 0x00000080U);
+  SetHasBit(_impl_._has_bits_[0], 0x00000100U);
   // @@protoc_insertion_point(field_set:loams.collection.v1.PatchByFilterRequest.allow_partial)
 }
 inline bool PatchByFilterRequest::_internal_allow_partial() const {
@@ -10975,6 +11322,99 @@ inline void PatchByFilterRequest::set_allocated_consistency(::loams::collection:
 
   _impl_.consistency_ = reinterpret_cast<::loams::collection::v1::Consistency*>(value);
   // @@protoc_insertion_point(field_set_allocated:loams.collection.v1.PatchByFilterRequest.consistency)
+}
+
+// .google.protobuf.Struct where = 9 [json_name = "where"];
+inline bool PatchByFilterRequest::has_where() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000040U);
+  PROTOBUF_ASSUME(!value || _impl_.where_ != nullptr);
+  return value;
+}
+inline const ::google::protobuf::Struct& PatchByFilterRequest::_internal_where() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::google::protobuf::Struct* p = _impl_.where_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::google::protobuf::Struct>(&::google::protobuf::Struct_globals_);
+}
+inline const ::google::protobuf::Struct& PatchByFilterRequest::where() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.collection.v1.PatchByFilterRequest.where)
+  return _internal_where();
+}
+inline void PatchByFilterRequest::unsafe_arena_set_allocated_where(
+    ::google::protobuf::Struct* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.where_);
+  }
+  _impl_.where_ = reinterpret_cast<::google::protobuf::Struct*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.collection.v1.PatchByFilterRequest.where)
+}
+inline ::google::protobuf::Struct* PROTOBUF_NULLABLE PatchByFilterRequest::release_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::google::protobuf::Struct* released = _impl_.where_;
+  _impl_.where_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::google::protobuf::Struct* PROTOBUF_NULLABLE PatchByFilterRequest::unsafe_arena_release_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.collection.v1.PatchByFilterRequest.where)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::google::protobuf::Struct* temp = _impl_.where_;
+  _impl_.where_ = nullptr;
+  return temp;
+}
+inline ::google::protobuf::Struct* PROTOBUF_NONNULL PatchByFilterRequest::_internal_mutable_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.where_ == nullptr) {
+    auto* p = Super_::DefaultConstruct<::google::protobuf::Struct>(GetArena());
+    _impl_.where_ = reinterpret_cast<::google::protobuf::Struct*>(p);
+  }
+  return _impl_.where_;
+}
+inline ::google::protobuf::Struct* PROTOBUF_NONNULL PatchByFilterRequest::mutable_where()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  ::google::protobuf::Struct* _msg = _internal_mutable_where();
+  // @@protoc_insertion_point(field_mutable:loams.collection.v1.PatchByFilterRequest.where)
+  return _msg;
+}
+inline void PatchByFilterRequest::set_allocated_where(::google::protobuf::Struct* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.where_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000040U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
+  }
+
+  _impl_.where_ = reinterpret_cast<::google::protobuf::Struct*>(value);
+  // @@protoc_insertion_point(field_set_allocated:loams.collection.v1.PatchByFilterRequest.where)
 }
 
 // -------------------------------------------------------------------

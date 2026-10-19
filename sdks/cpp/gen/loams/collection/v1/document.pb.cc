@@ -2550,12 +2550,12 @@ constexpr ScrollDocumentsRequest::ParseTableT_ ScrollDocumentsRequest::InternalG
     {
       PROTOBUF_FIELD_OFFSET(ScrollDocumentsRequest, _impl_._has_bits_),
       0, // no _extensions_
-      8, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967040,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      8,  // num_field_entries
-      5,  // num_aux_entries
+      9,  // num_field_entries
+      6,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -2564,10 +2564,7 @@ constexpr ScrollDocumentsRequest::ParseTableT_ ScrollDocumentsRequest::InternalG
       ::_pbi::TcParser::GetTable<::loams::collection::v1::ScrollDocumentsRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .loams.collection.v1.DocumentId page_token = 8 [json_name = "pageToken"];
-      {::_pbi::TcParser::FastMtS1,
-       {66, 6, 4,
-        PROTOBUF_FIELD_OFFSET(ScrollDocumentsRequest, _impl_.page_token_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // string namespace = 1 [json_name = "namespace"];
       {::_pbi::TcParser::FastUS1,
        {10, 0, 0,
@@ -2585,8 +2582,8 @@ constexpr ScrollDocumentsRequest::ParseTableT_ ScrollDocumentsRequest::InternalG
        {34, 3, 1,
         PROTOBUF_FIELD_OFFSET(ScrollDocumentsRequest, _impl_.after_)}},
       // optional uint32 limit = 5 [json_name = "limit"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ScrollDocumentsRequest, _impl_.limit_), 7>(),
-       {40, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint32_t, offsetof(ScrollDocumentsRequest, _impl_.limit_), 8>(),
+       {40, 8, 0,
         PROTOBUF_FIELD_OFFSET(ScrollDocumentsRequest, _impl_.limit_)}},
       // .google.protobuf.Struct select = 6 [json_name = "select"];
       {::_pbi::TcParser::FastMtS1,
@@ -2596,6 +2593,20 @@ constexpr ScrollDocumentsRequest::ParseTableT_ ScrollDocumentsRequest::InternalG
       {::_pbi::TcParser::FastMtS1,
        {58, 5, 3,
         PROTOBUF_FIELD_OFFSET(ScrollDocumentsRequest, _impl_.consistency_)}},
+      // .loams.collection.v1.DocumentId page_token = 8 [json_name = "pageToken"];
+      {::_pbi::TcParser::FastMtS1,
+       {66, 6, 4,
+        PROTOBUF_FIELD_OFFSET(ScrollDocumentsRequest, _impl_.page_token_)}},
+      // .google.protobuf.Struct where = 9 [json_name = "where"];
+      {::_pbi::TcParser::FastMtS1,
+       {74, 7, 5,
+        PROTOBUF_FIELD_OFFSET(ScrollDocumentsRequest, _impl_.where_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -2608,13 +2619,15 @@ constexpr ScrollDocumentsRequest::ParseTableT_ ScrollDocumentsRequest::InternalG
       // .loams.collection.v1.DocumentId after = 4 [json_name = "after"];
       {PROTOBUF_FIELD_OFFSET(ScrollDocumentsRequest, _impl_.after_), _Internal::kHasBitsOffset + 3, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // optional uint32 limit = 5 [json_name = "limit"];
-      {PROTOBUF_FIELD_OFFSET(ScrollDocumentsRequest, _impl_.limit_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
+      {PROTOBUF_FIELD_OFFSET(ScrollDocumentsRequest, _impl_.limit_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt32)},
       // .google.protobuf.Struct select = 6 [json_name = "select"];
       {PROTOBUF_FIELD_OFFSET(ScrollDocumentsRequest, _impl_.select_), _Internal::kHasBitsOffset + 4, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .loams.collection.v1.Consistency consistency = 7 [json_name = "consistency"];
       {PROTOBUF_FIELD_OFFSET(ScrollDocumentsRequest, _impl_.consistency_), _Internal::kHasBitsOffset + 5, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .loams.collection.v1.DocumentId page_token = 8 [json_name = "pageToken"];
       {PROTOBUF_FIELD_OFFSET(ScrollDocumentsRequest, _impl_.page_token_), _Internal::kHasBitsOffset + 6, 4, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .google.protobuf.Struct where = 9 [json_name = "where"];
+      {PROTOBUF_FIELD_OFFSET(ScrollDocumentsRequest, _impl_.where_), _Internal::kHasBitsOffset + 7, 5, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -2642,6 +2655,11 @@ constexpr ScrollDocumentsRequest::ParseTableT_ ScrollDocumentsRequest::InternalG
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::loams::collection::v1::DocumentId_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::google::protobuf::Struct>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::google::protobuf::Struct_globals_},
+        #endif
     }},
     {{
       "\52\11\12\0\0\0\0\0\0\0\0\0\0\0\0\0"
@@ -2667,6 +2685,7 @@ inline constexpr ScrollDocumentsRequest::Impl_::Impl_(
         select_{nullptr},
         consistency_{nullptr},
         page_token_{nullptr},
+        where_{nullptr},
         limit_{0u} {}
 
 template <typename>
@@ -3429,12 +3448,12 @@ constexpr DeleteByFilterRequest::ParseTableT_ DeleteByFilterRequest::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(DeleteByFilterRequest, _impl_._has_bits_),
       0, // no _extensions_
-      7, 56,  // max_field_number, fast_idx_mask
+      8, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967168,  // skipmap
+      4294967040,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      7,  // num_field_entries
-      3,  // num_aux_entries
+      8,  // num_field_entries
+      4,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -3443,7 +3462,10 @@ constexpr DeleteByFilterRequest::ParseTableT_ DeleteByFilterRequest::InternalGen
       ::_pbi::TcParser::GetTable<::loams::collection::v1::DeleteByFilterRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      {::_pbi::TcParser::MiniParse, {}},
+      // .google.protobuf.Struct where = 8 [json_name = "where"];
+      {::_pbi::TcParser::FastMtS1,
+       {66, 5, 3,
+        PROTOBUF_FIELD_OFFSET(DeleteByFilterRequest, _impl_.where_)}},
       // string namespace = 1 [json_name = "namespace"];
       {::_pbi::TcParser::FastUS1,
        {10, 0, 0,
@@ -3457,12 +3479,12 @@ constexpr DeleteByFilterRequest::ParseTableT_ DeleteByFilterRequest::InternalGen
        {26, 2, 0,
         PROTOBUF_FIELD_OFFSET(DeleteByFilterRequest, _impl_.filter_)}},
       // optional uint64 max_rows = 4 [json_name = "maxRows"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DeleteByFilterRequest, _impl_.max_rows_), 5>(),
-       {32, 5, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(DeleteByFilterRequest, _impl_.max_rows_), 6>(),
+       {32, 6, 0,
         PROTOBUF_FIELD_OFFSET(DeleteByFilterRequest, _impl_.max_rows_)}},
       // bool allow_partial = 5 [json_name = "allowPartial"];
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(DeleteByFilterRequest, _impl_.allow_partial_), 6>(),
-       {40, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(DeleteByFilterRequest, _impl_.allow_partial_), 7>(),
+       {40, 7, 0,
         PROTOBUF_FIELD_OFFSET(DeleteByFilterRequest, _impl_.allow_partial_)}},
       // .loams.collection.v1.FilterWriteCursor cursor = 6 [json_name = "cursor"];
       {::_pbi::TcParser::FastMtS1,
@@ -3482,13 +3504,15 @@ constexpr DeleteByFilterRequest::ParseTableT_ DeleteByFilterRequest::InternalGen
       // .google.protobuf.Value filter = 3 [json_name = "filter"];
       {PROTOBUF_FIELD_OFFSET(DeleteByFilterRequest, _impl_.filter_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // optional uint64 max_rows = 4 [json_name = "maxRows"];
-      {PROTOBUF_FIELD_OFFSET(DeleteByFilterRequest, _impl_.max_rows_), _Internal::kHasBitsOffset + 5, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(DeleteByFilterRequest, _impl_.max_rows_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bool allow_partial = 5 [json_name = "allowPartial"];
-      {PROTOBUF_FIELD_OFFSET(DeleteByFilterRequest, _impl_.allow_partial_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(DeleteByFilterRequest, _impl_.allow_partial_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // .loams.collection.v1.FilterWriteCursor cursor = 6 [json_name = "cursor"];
       {PROTOBUF_FIELD_OFFSET(DeleteByFilterRequest, _impl_.cursor_), _Internal::kHasBitsOffset + 3, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .loams.collection.v1.Consistency consistency = 7 [json_name = "consistency"];
       {PROTOBUF_FIELD_OFFSET(DeleteByFilterRequest, _impl_.consistency_), _Internal::kHasBitsOffset + 4, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .google.protobuf.Struct where = 8 [json_name = "where"];
+      {PROTOBUF_FIELD_OFFSET(DeleteByFilterRequest, _impl_.where_), _Internal::kHasBitsOffset + 5, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -3506,9 +3530,14 @@ constexpr DeleteByFilterRequest::ParseTableT_ DeleteByFilterRequest::InternalGen
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::loams::collection::v1::Consistency_globals_},
         #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::google::protobuf::Struct>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::google::protobuf::Struct_globals_},
+        #endif
     }},
     {{
-      "\51\11\12\0\0\0\0\0"
+      "\51\11\12\0\0\0\0\0\0\0\0\0\0\0\0\0"
       "loams.collection.v1.DeleteByFilterRequest"
       "namespace"
       "collection"
@@ -3529,6 +3558,7 @@ inline constexpr DeleteByFilterRequest::Impl_::Impl_(
         filter_{nullptr},
         cursor_{nullptr},
         consistency_{nullptr},
+        where_{nullptr},
         max_rows_{::uint64_t{0u}},
         allow_partial_{false} {}
 
@@ -3636,12 +3666,12 @@ constexpr CountDocumentsRequest::ParseTableT_ CountDocumentsRequest::InternalGen
     {
       PROTOBUF_FIELD_OFFSET(CountDocumentsRequest, _impl_._has_bits_),
       0, // no _extensions_
-      4, 24,  // max_field_number, fast_idx_mask
+      5, 56,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967280,  // skipmap
+      4294967264,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      4,  // num_field_entries
-      2,  // num_aux_entries
+      5,  // num_field_entries
+      3,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -3650,10 +3680,7 @@ constexpr CountDocumentsRequest::ParseTableT_ CountDocumentsRequest::InternalGen
       ::_pbi::TcParser::GetTable<::loams::collection::v1::CountDocumentsRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .loams.collection.v1.Consistency consistency = 4 [json_name = "consistency"];
-      {::_pbi::TcParser::FastMtS1,
-       {34, 3, 1,
-        PROTOBUF_FIELD_OFFSET(CountDocumentsRequest, _impl_.consistency_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // string namespace = 1 [json_name = "namespace"];
       {::_pbi::TcParser::FastUS1,
        {10, 0, 0,
@@ -3666,6 +3693,16 @@ constexpr CountDocumentsRequest::ParseTableT_ CountDocumentsRequest::InternalGen
       {::_pbi::TcParser::FastMtS1,
        {26, 2, 0,
         PROTOBUF_FIELD_OFFSET(CountDocumentsRequest, _impl_.filter_)}},
+      // .loams.collection.v1.Consistency consistency = 4 [json_name = "consistency"];
+      {::_pbi::TcParser::FastMtS1,
+       {34, 3, 1,
+        PROTOBUF_FIELD_OFFSET(CountDocumentsRequest, _impl_.consistency_)}},
+      // .google.protobuf.Struct where = 5 [json_name = "where"];
+      {::_pbi::TcParser::FastMtS1,
+       {42, 4, 2,
+        PROTOBUF_FIELD_OFFSET(CountDocumentsRequest, _impl_.where_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -3677,6 +3714,8 @@ constexpr CountDocumentsRequest::ParseTableT_ CountDocumentsRequest::InternalGen
       {PROTOBUF_FIELD_OFFSET(CountDocumentsRequest, _impl_.filter_), _Internal::kHasBitsOffset + 2, 0, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .loams.collection.v1.Consistency consistency = 4 [json_name = "consistency"];
       {PROTOBUF_FIELD_OFFSET(CountDocumentsRequest, _impl_.consistency_), _Internal::kHasBitsOffset + 3, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .google.protobuf.Struct where = 5 [json_name = "where"];
+      {PROTOBUF_FIELD_OFFSET(CountDocumentsRequest, _impl_.where_), _Internal::kHasBitsOffset + 4, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -3688,6 +3727,11 @@ constexpr CountDocumentsRequest::ParseTableT_ CountDocumentsRequest::InternalGen
         {::_pbi::TcParser::GetTable<::loams::collection::v1::Consistency>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::loams::collection::v1::Consistency_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::google::protobuf::Struct>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::google::protobuf::Struct_globals_},
         #endif
     }},
     {{
@@ -3710,7 +3754,8 @@ inline constexpr CountDocumentsRequest::Impl_::Impl_(
             &::google::protobuf::internal::fixed_address_empty_string,
             ::_pbi::ConstantInitialized()),
         filter_{nullptr},
-        consistency_{nullptr} {}
+        consistency_{nullptr},
+        where_{nullptr} {}
 
 template <typename>
 constexpr CountDocumentsRequest::CountDocumentsRequest(::_pbi::ConstantInitialized,
@@ -4553,12 +4598,12 @@ constexpr PatchByFilterRequest::ParseTableT_ PatchByFilterRequest::InternalGener
     {
       PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_._has_bits_),
       0, // no _extensions_
-      8, 56,  // max_field_number, fast_idx_mask
+      9, 120,  // max_field_number, fast_idx_mask
       offsetof(ParseTableT_, field_lookup_table),
-      4294967040,  // skipmap
+      4294966784,  // skipmap
       offsetof(ParseTableT_, field_entries),
-      8,  // num_field_entries
-      4,  // num_aux_entries
+      9,  // num_field_entries
+      5,  // num_aux_entries
       offsetof(ParseTableT_, aux_entries),
       class_data,
       nullptr,  // post_loop_handler
@@ -4567,10 +4612,7 @@ constexpr PatchByFilterRequest::ParseTableT_ PatchByFilterRequest::InternalGener
       ::_pbi::TcParser::GetTable<::loams::collection::v1::PatchByFilterRequest>(),  // to_prefetch
       #endif  // PROTOBUF_PREFETCH_PARSE_TABLE
     }, {{
-      // .loams.collection.v1.Consistency consistency = 8 [json_name = "consistency"];
-      {::_pbi::TcParser::FastMtS1,
-       {66, 5, 3,
-        PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_.consistency_)}},
+      {::_pbi::TcParser::MiniParse, {}},
       // string namespace = 1 [json_name = "namespace"];
       {::_pbi::TcParser::FastUS1,
        {10, 0, 0,
@@ -4588,17 +4630,31 @@ constexpr PatchByFilterRequest::ParseTableT_ PatchByFilterRequest::InternalGener
        {34, 3, 1,
         PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_.patch_)}},
       // optional uint64 max_rows = 5 [json_name = "maxRows"];
-      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PatchByFilterRequest, _impl_.max_rows_), 6>(),
-       {40, 6, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<::uint64_t, offsetof(PatchByFilterRequest, _impl_.max_rows_), 7>(),
+       {40, 7, 0,
         PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_.max_rows_)}},
       // bool allow_partial = 6 [json_name = "allowPartial"];
-      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PatchByFilterRequest, _impl_.allow_partial_), 7>(),
-       {48, 7, 0,
+      {::_pbi::TcParser::SingularVarintNoZag1<bool, offsetof(PatchByFilterRequest, _impl_.allow_partial_), 8>(),
+       {48, 8, 0,
         PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_.allow_partial_)}},
       // .loams.collection.v1.FilterWriteCursor cursor = 7 [json_name = "cursor"];
       {::_pbi::TcParser::FastMtS1,
        {58, 4, 2,
         PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_.cursor_)}},
+      // .loams.collection.v1.Consistency consistency = 8 [json_name = "consistency"];
+      {::_pbi::TcParser::FastMtS1,
+       {66, 5, 3,
+        PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_.consistency_)}},
+      // .google.protobuf.Struct where = 9 [json_name = "where"];
+      {::_pbi::TcParser::FastMtS1,
+       {74, 6, 4,
+        PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_.where_)}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
+      {::_pbi::TcParser::MiniParse, {}},
     }}, {{
       65535, 65535
     }}, {{
@@ -4611,13 +4667,15 @@ constexpr PatchByFilterRequest::ParseTableT_ PatchByFilterRequest::InternalGener
       // .loams.collection.v1.Patch patch = 4 [json_name = "patch"];
       {PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_.patch_), _Internal::kHasBitsOffset + 3, 1, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // optional uint64 max_rows = 5 [json_name = "maxRows"];
-      {PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_.max_rows_), _Internal::kHasBitsOffset + 6, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
+      {PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_.max_rows_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kUInt64)},
       // bool allow_partial = 6 [json_name = "allowPartial"];
-      {PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_.allow_partial_), _Internal::kHasBitsOffset + 7, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
+      {PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_.allow_partial_), _Internal::kHasBitsOffset + 8, 0, (0 | ::_fl::kFcOptional | ::_fl::kBool)},
       // .loams.collection.v1.FilterWriteCursor cursor = 7 [json_name = "cursor"];
       {PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_.cursor_), _Internal::kHasBitsOffset + 4, 2, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
       // .loams.collection.v1.Consistency consistency = 8 [json_name = "consistency"];
       {PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_.consistency_), _Internal::kHasBitsOffset + 5, 3, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
+      // .google.protobuf.Struct where = 9 [json_name = "where"];
+      {PROTOBUF_FIELD_OFFSET(PatchByFilterRequest, _impl_.where_), _Internal::kHasBitsOffset + 6, 4, (0 | ::_fl::kFcOptional | ::_fl::kMessage | ::_fl::kTvTable)},
     }},
     {{
         #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -4639,6 +4697,11 @@ constexpr PatchByFilterRequest::ParseTableT_ PatchByFilterRequest::InternalGener
         {::_pbi::TcParser::GetTable<::loams::collection::v1::Consistency>()},
         #else
         {::_pbi::FieldAuxMessageGlobals(), &::loams::collection::v1::Consistency_globals_},
+        #endif
+        #ifndef PROTOBUF_MESSAGE_GLOBALS
+        {::_pbi::TcParser::GetTable<::google::protobuf::Struct>()},
+        #else
+        {::_pbi::FieldAuxMessageGlobals(), &::google::protobuf::Struct_globals_},
         #endif
     }},
     {{
@@ -4664,6 +4727,7 @@ inline constexpr PatchByFilterRequest::Impl_::Impl_(
         patch_{nullptr},
         cursor_{nullptr},
         consistency_{nullptr},
+        where_{nullptr},
         max_rows_{::uint64_t{0u}},
         allow_partial_{false} {}
 
@@ -5089,7 +5153,7 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::ScrollDocumentsRequest, _impl_._has_bits_),
-        11, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::ScrollDocumentsRequest, _impl_.namespace__),
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::ScrollDocumentsRequest, _impl_.collection_),
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::ScrollDocumentsRequest, _impl_.filter_),
@@ -5098,14 +5162,16 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::ScrollDocumentsRequest, _impl_.select_),
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::ScrollDocumentsRequest, _impl_.consistency_),
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::ScrollDocumentsRequest, _impl_.page_token_),
+        PROTOBUF_FIELD_OFFSET(::loams::collection::v1::ScrollDocumentsRequest, _impl_.where_),
         0,
         1,
         2,
         3,
-        7,
+        8,
         4,
         5,
         6,
+        7,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::ScrollDocumentsResponse, _impl_._has_bits_),
         6, // hasbit index offset
@@ -5117,15 +5183,17 @@ const ::uint32_t
         1,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::CountDocumentsRequest, _impl_._has_bits_),
-        7, // hasbit index offset
+        8, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::CountDocumentsRequest, _impl_.namespace__),
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::CountDocumentsRequest, _impl_.collection_),
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::CountDocumentsRequest, _impl_.filter_),
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::CountDocumentsRequest, _impl_.consistency_),
+        PROTOBUF_FIELD_OFFSET(::loams::collection::v1::CountDocumentsRequest, _impl_.where_),
         0,
         1,
         2,
         3,
+        4,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::CountDocumentsResponse, _impl_._has_bits_),
         5, // hasbit index offset
@@ -5135,7 +5203,7 @@ const ::uint32_t
         0,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::DeleteByFilterRequest, _impl_._has_bits_),
-        10, // hasbit index offset
+        11, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::DeleteByFilterRequest, _impl_.namespace__),
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::DeleteByFilterRequest, _impl_.collection_),
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::DeleteByFilterRequest, _impl_.filter_),
@@ -5143,16 +5211,18 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::DeleteByFilterRequest, _impl_.allow_partial_),
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::DeleteByFilterRequest, _impl_.cursor_),
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::DeleteByFilterRequest, _impl_.consistency_),
+        PROTOBUF_FIELD_OFFSET(::loams::collection::v1::DeleteByFilterRequest, _impl_.where_),
         0,
         1,
         2,
-        5,
         6,
+        7,
         3,
         4,
+        5,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::PatchByFilterRequest, _impl_._has_bits_),
-        11, // hasbit index offset
+        12, // hasbit index offset
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::PatchByFilterRequest, _impl_.namespace__),
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::PatchByFilterRequest, _impl_.collection_),
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::PatchByFilterRequest, _impl_.filter_),
@@ -5161,14 +5231,16 @@ const ::uint32_t
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::PatchByFilterRequest, _impl_.allow_partial_),
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::PatchByFilterRequest, _impl_.cursor_),
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::PatchByFilterRequest, _impl_.consistency_),
+        PROTOBUF_FIELD_OFFSET(::loams::collection::v1::PatchByFilterRequest, _impl_.where_),
         0,
         1,
         2,
         3,
-        6,
         7,
+        8,
         4,
         5,
+        6,
         0x081, // bitmap
         PROTOBUF_FIELD_OFFSET(::loams::collection::v1::FilterWriteResponse, _impl_._has_bits_),
         12, // hasbit index offset
@@ -5272,19 +5344,19 @@ static const ::_pbi::MigrationSchema
         {106, sizeof(::loams::collection::v1::GetDocumentsRequest)},
         {119, sizeof(::loams::collection::v1::GetDocumentsResponse)},
         {126, sizeof(::loams::collection::v1::ScrollDocumentsRequest)},
-        {145, sizeof(::loams::collection::v1::ScrollDocumentsResponse)},
-        {154, sizeof(::loams::collection::v1::CountDocumentsRequest)},
-        {165, sizeof(::loams::collection::v1::CountDocumentsResponse)},
-        {172, sizeof(::loams::collection::v1::DeleteByFilterRequest)},
-        {189, sizeof(::loams::collection::v1::PatchByFilterRequest)},
-        {208, sizeof(::loams::collection::v1::FilterWriteResponse)},
-        {229, sizeof(::loams::collection::v1::FilterWriteCursor)},
-        {238, sizeof(::loams::collection::v1::Document_VectorsEntry_DoNotUse)},
-        {245, sizeof(::loams::collection::v1::Document_SparseVectorsEntry_DoNotUse)},
-        {252, sizeof(::loams::collection::v1::Document_FieldsEntry_DoNotUse)},
-        {259, sizeof(::loams::collection::v1::Document)},
-        {276, sizeof(::loams::collection::v1::Consistency)},
-        {285, sizeof(::loams::collection::v1::Pin)},
+        {147, sizeof(::loams::collection::v1::ScrollDocumentsResponse)},
+        {156, sizeof(::loams::collection::v1::CountDocumentsRequest)},
+        {169, sizeof(::loams::collection::v1::CountDocumentsResponse)},
+        {176, sizeof(::loams::collection::v1::DeleteByFilterRequest)},
+        {195, sizeof(::loams::collection::v1::PatchByFilterRequest)},
+        {216, sizeof(::loams::collection::v1::FilterWriteResponse)},
+        {237, sizeof(::loams::collection::v1::FilterWriteCursor)},
+        {246, sizeof(::loams::collection::v1::Document_VectorsEntry_DoNotUse)},
+        {253, sizeof(::loams::collection::v1::Document_SparseVectorsEntry_DoNotUse)},
+        {260, sizeof(::loams::collection::v1::Document_FieldsEntry_DoNotUse)},
+        {267, sizeof(::loams::collection::v1::Document)},
+        {284, sizeof(::loams::collection::v1::Consistency)},
+        {293, sizeof(::loams::collection::v1::Pin)},
 };
 static const ::_pbi::MessageGlobalsBase* PROTOBUF_NONNULL const
     file_message_globals[] = {
@@ -5380,7 +5452,7 @@ const char descriptor_table_protodef_loams_2fcollection_2fv1_2fdocument_2eproto[
     "ConsistencyR\013consistency\"r\n\024GetDocuments"
     "Response\022;\n\tdocuments\030\001 \003(\0132\035.loams.coll"
     "ection.v1.DocumentR\tdocuments\022\035\n\nread_to"
-    "ken\030\002 \001(\tR\treadToken\"\227\003\n\026ScrollDocuments"
+    "ken\030\002 \001(\tR\treadToken\"\306\003\n\026ScrollDocuments"
     "Request\022\034\n\tnamespace\030\001 \001(\tR\tnamespace\022\036\n"
     "\ncollection\030\002 \001(\tR\ncollection\022.\n\006filter\030"
     "\003 \001(\0132\026.google.protobuf.ValueR\006filter\0225\n"
@@ -5390,100 +5462,107 @@ const char descriptor_table_protodef_loams_2fcollection_2fv1_2fdocument_2eproto[
     "R\006select\022B\n\013consistency\030\007 \001(\0132 .loams.co"
     "llection.v1.ConsistencyR\013consistency\022>\n\n"
     "page_token\030\010 \001(\0132\037.loams.collection.v1.D"
-    "ocumentIdR\tpageTokenB\010\n\006_limit\"\252\001\n\027Scrol"
-    "lDocumentsResponse\022;\n\tdocuments\030\001 \003(\0132\035."
-    "loams.collection.v1.DocumentR\tdocuments\022"
-    "3\n\004next\030\002 \001(\0132\037.loams.collection.v1.Docu"
-    "mentIdR\004next\022\035\n\nread_token\030\003 \001(\tR\treadTo"
-    "ken\"\311\001\n\025CountDocumentsRequest\022\034\n\tnamespa"
-    "ce\030\001 \001(\tR\tnamespace\022\036\n\ncollection\030\002 \001(\tR"
-    "\ncollection\022.\n\006filter\030\003 \001(\0132\026.google.pro"
-    "tobuf.ValueR\006filter\022B\n\013consistency\030\004 \001(\013"
-    "2 .loams.collection.v1.ConsistencyR\013cons"
-    "istency\"\\\n\026CountDocumentsResponse\022\031\n\005cou"
-    "nt\030\001 \001(\004H\000R\005count\210\001\001\022\035\n\nread_token\030\002 \001(\t"
-    "R\treadTokenB\010\n\006_count\"\333\002\n\025DeleteByFilter"
-    "Request\022\034\n\tnamespace\030\001 \001(\tR\tnamespace\022\036\n"
-    "\ncollection\030\002 \001(\tR\ncollection\022.\n\006filter\030"
-    "\003 \001(\0132\026.google.protobuf.ValueR\006filter\022\036\n"
-    "\010max_rows\030\004 \001(\004H\000R\007maxRows\210\001\001\022#\n\rallow_p"
-    "artial\030\005 \001(\010R\014allowPartial\022>\n\006cursor\030\006 \001"
-    "(\0132&.loams.collection.v1.FilterWriteCurs"
-    "orR\006cursor\022B\n\013consistency\030\007 \001(\0132 .loams."
-    "collection.v1.ConsistencyR\013consistencyB\013"
-    "\n\t_max_rows\"\214\003\n\024PatchByFilterRequest\022\034\n\t"
+    "ocumentIdR\tpageToken\022-\n\005where\030\t \001(\0132\027.go"
+    "ogle.protobuf.StructR\005whereB\010\n\006_limit\"\252\001"
+    "\n\027ScrollDocumentsResponse\022;\n\tdocuments\030\001"
+    " \003(\0132\035.loams.collection.v1.DocumentR\tdoc"
+    "uments\0223\n\004next\030\002 \001(\0132\037.loams.collection."
+    "v1.DocumentIdR\004next\022\035\n\nread_token\030\003 \001(\tR"
+    "\treadToken\"\370\001\n\025CountDocumentsRequest\022\034\n\t"
     "namespace\030\001 \001(\tR\tnamespace\022\036\n\ncollection"
     "\030\002 \001(\tR\ncollection\022.\n\006filter\030\003 \001(\0132\026.goo"
-    "gle.protobuf.ValueR\006filter\0220\n\005patch\030\004 \001("
-    "\0132\032.loams.collection.v1.PatchR\005patch\022\036\n\010"
-    "max_rows\030\005 \001(\004H\000R\007maxRows\210\001\001\022#\n\rallow_pa"
-    "rtial\030\006 \001(\010R\014allowPartial\022>\n\006cursor\030\007 \001("
-    "\0132&.loams.collection.v1.FilterWriteCurso"
-    "rR\006cursor\022B\n\013consistency\030\010 \001(\0132 .loams.c"
-    "ollection.v1.ConsistencyR\013consistencyB\013\n"
-    "\t_max_rows\"\253\003\n\023FilterWriteResponse\022\035\n\007ma"
-    "tched\030\001 \001(\004H\000R\007matched\210\001\001\022\037\n\010affected\030\002 "
-    "\001(\004H\001R\010affected\210\001\001\022\035\n\007written\030\003 \001(\004H\002R\007w"
-    "ritten\210\001\001\022\035\n\007batches\030\004 \001(\004H\003R\007batches\210\001\001"
-    "\022%\n\016rows_remaining\030\005 \001(\010R\rrowsRemaining\022"
-    ">\n\006cursor\030\006 \001(\0132&.loams.collection.v1.Fi"
-    "lterWriteCursorR\006cursor\022\024\n\005token\030\007 \001(\tR\005"
-    "token\022*\n\003pin\030\010 \001(\0132\030.loams.collection.v1"
-    ".PinR\003pin\022)\n\016retry_after_ms\030\t \001(\004H\004R\014ret"
-    "ryAfterMs\210\001\001B\n\n\010_matchedB\013\n\t_affectedB\n\n"
-    "\010_writtenB\n\n\010_batchesB\021\n\017_retry_after_ms"
-    "\"\213\001\n\021FilterWriteCursor\0225\n\005after\030\001 \001(\0132\037."
-    "loams.collection.v1.DocumentIdR\005after\022)\n"
-    "\020manifest_version\030\002 \001(\004R\017manifestVersion"
-    "\022\024\n\005token\030\003 \001(\tR\005token\"\225\005\n\010Document\022/\n\002i"
-    "d\030\001 \001(\0132\037.loams.collection.v1.DocumentId"
-    "R\002id\022/\n\006source\030\002 \001(\0132\027.google.protobuf.S"
-    "tructR\006source\022D\n\007vectors\030\003 \003(\0132*.loams.c"
-    "ollection.v1.Document.VectorsEntryR\007vect"
-    "ors\022W\n\016sparse_vectors\030\004 \003(\01320.loams.coll"
-    "ection.v1.Document.SparseVectorsEntryR\rs"
-    "parseVectors\022A\n\006fields\030\005 \003(\0132).loams.col"
-    "lection.v1.Document.FieldsEntryR\006fields\022"
-    "\032\n\006seq_no\030\006 \001(\004H\000R\005seqNo\210\001\001\022\034\n\tpartition"
-    "\030\007 \001(\rR\tpartition\032R\n\014VectorsEntry\022\020\n\003key"
-    "\030\001 \001(\tR\003key\022,\n\005value\030\002 \001(\0132\026.google.prot"
-    "obuf.ValueR\005value:\0028\001\032Y\n\022SparseVectorsEn"
-    "try\022\020\n\003key\030\001 \001(\tR\003key\022-\n\005value\030\002 \001(\0132\027.g"
-    "oogle.protobuf.StructR\005value:\0028\001\032Q\n\013Fiel"
-    "dsEntry\022\020\n\003key\030\001 \001(\tR\003key\022,\n\005value\030\002 \001(\013"
-    "2\026.google.protobuf.ValueR\005value:\0028\001B\t\n\007_"
-    "seq_no\"\222\001\n\013Consistency\022<\n\tfreshness\030\001 \001("
-    "\0162\036.loams.collection.v1.FreshnessR\tfresh"
-    "ness\022\031\n\010at_least\030\002 \001(\tR\007atLeast\022*\n\003pin\030\003"
-    " \001(\0132\030.loams.collection.v1.PinR\003pin\"F\n\003P"
-    "in\022)\n\020manifest_version\030\001 \001(\004R\017manifestVe"
-    "rsion\022\024\n\005token\030\002 \001(\tR\005token*\257\001\n\010OpResult"
-    "\022\031\n\025OP_RESULT_UNSPECIFIED\020\000\022\025\n\021OP_RESULT"
-    "_CREATED\020\001\022\025\n\021OP_RESULT_UPDATED\020\002\022\025\n\021OP_"
-    "RESULT_DELETED\020\003\022\027\n\023OP_RESULT_NOT_FOUND\020"
-    "\004\022\022\n\016OP_RESULT_NOOP\020\005\022\026\n\022OP_RESULT_ACCEP"
-    "TED\020\006*T\n\tFreshness\022\031\n\025FRESHNESS_UNSPECIF"
-    "IED\020\000\022\024\n\020FRESHNESS_STRONG\020\001\022\026\n\022FRESHNESS"
-    "_EVENTUAL\020\0022\373\005\n\017DocumentService\022k\n\016Write"
-    "Documents\022*.loams.collection.v1.WriteDoc"
-    "umentsRequest\032+.loams.collection.v1.Writ"
-    "eDocumentsResponse\"\000\022h\n\014GetDocuments\022(.l"
-    "oams.collection.v1.GetDocumentsRequest\032)"
-    ".loams.collection.v1.GetDocumentsRespons"
-    "e\"\003\220\002\001\022q\n\017ScrollDocuments\022+.loams.collec"
-    "tion.v1.ScrollDocumentsRequest\032,.loams.c"
-    "ollection.v1.ScrollDocumentsResponse\"\003\220\002"
-    "\001\022n\n\016CountDocuments\022*.loams.collection.v"
-    "1.CountDocumentsRequest\032+.loams.collecti"
-    "on.v1.CountDocumentsResponse\"\003\220\002\001\022h\n\016Del"
-    "eteByFilter\022*.loams.collection.v1.Delete"
-    "ByFilterRequest\032(.loams.collection.v1.Fi"
-    "lterWriteResponse\"\000\022f\n\rPatchByFilter\022).l"
-    "oams.collection.v1.PatchByFilterRequest\032"
-    "(.loams.collection.v1.FilterWriteRespons"
-    "e\"\000\032\\\212\265\030X\n\tdocuments\022KDocuments: write, "
-    "get, scroll, count, delete by filter and"
-    " patch by filter.b\006proto3"
+    "gle.protobuf.ValueR\006filter\022B\n\013consistenc"
+    "y\030\004 \001(\0132 .loams.collection.v1.Consistenc"
+    "yR\013consistency\022-\n\005where\030\005 \001(\0132\027.google.p"
+    "rotobuf.StructR\005where\"\\\n\026CountDocumentsR"
+    "esponse\022\031\n\005count\030\001 \001(\004H\000R\005count\210\001\001\022\035\n\nre"
+    "ad_token\030\002 \001(\tR\treadTokenB\010\n\006_count\"\212\003\n\025"
+    "DeleteByFilterRequest\022\034\n\tnamespace\030\001 \001(\t"
+    "R\tnamespace\022\036\n\ncollection\030\002 \001(\tR\ncollect"
+    "ion\022.\n\006filter\030\003 \001(\0132\026.google.protobuf.Va"
+    "lueR\006filter\022\036\n\010max_rows\030\004 \001(\004H\000R\007maxRows"
+    "\210\001\001\022#\n\rallow_partial\030\005 \001(\010R\014allowPartial"
+    "\022>\n\006cursor\030\006 \001(\0132&.loams.collection.v1.F"
+    "ilterWriteCursorR\006cursor\022B\n\013consistency\030"
+    "\007 \001(\0132 .loams.collection.v1.ConsistencyR"
+    "\013consistency\022-\n\005where\030\010 \001(\0132\027.google.pro"
+    "tobuf.StructR\005whereB\013\n\t_max_rows\"\273\003\n\024Pat"
+    "chByFilterRequest\022\034\n\tnamespace\030\001 \001(\tR\tna"
+    "mespace\022\036\n\ncollection\030\002 \001(\tR\ncollection\022"
+    ".\n\006filter\030\003 \001(\0132\026.google.protobuf.ValueR"
+    "\006filter\0220\n\005patch\030\004 \001(\0132\032.loams.collectio"
+    "n.v1.PatchR\005patch\022\036\n\010max_rows\030\005 \001(\004H\000R\007m"
+    "axRows\210\001\001\022#\n\rallow_partial\030\006 \001(\010R\014allowP"
+    "artial\022>\n\006cursor\030\007 \001(\0132&.loams.collectio"
+    "n.v1.FilterWriteCursorR\006cursor\022B\n\013consis"
+    "tency\030\010 \001(\0132 .loams.collection.v1.Consis"
+    "tencyR\013consistency\022-\n\005where\030\t \001(\0132\027.goog"
+    "le.protobuf.StructR\005whereB\013\n\t_max_rows\"\253"
+    "\003\n\023FilterWriteResponse\022\035\n\007matched\030\001 \001(\004H"
+    "\000R\007matched\210\001\001\022\037\n\010affected\030\002 \001(\004H\001R\010affec"
+    "ted\210\001\001\022\035\n\007written\030\003 \001(\004H\002R\007written\210\001\001\022\035\n"
+    "\007batches\030\004 \001(\004H\003R\007batches\210\001\001\022%\n\016rows_rem"
+    "aining\030\005 \001(\010R\rrowsRemaining\022>\n\006cursor\030\006 "
+    "\001(\0132&.loams.collection.v1.FilterWriteCur"
+    "sorR\006cursor\022\024\n\005token\030\007 \001(\tR\005token\022*\n\003pin"
+    "\030\010 \001(\0132\030.loams.collection.v1.PinR\003pin\022)\n"
+    "\016retry_after_ms\030\t \001(\004H\004R\014retryAfterMs\210\001\001"
+    "B\n\n\010_matchedB\013\n\t_affectedB\n\n\010_writtenB\n\n"
+    "\010_batchesB\021\n\017_retry_after_ms\"\213\001\n\021FilterW"
+    "riteCursor\0225\n\005after\030\001 \001(\0132\037.loams.collec"
+    "tion.v1.DocumentIdR\005after\022)\n\020manifest_ve"
+    "rsion\030\002 \001(\004R\017manifestVersion\022\024\n\005token\030\003 "
+    "\001(\tR\005token\"\225\005\n\010Document\022/\n\002id\030\001 \001(\0132\037.lo"
+    "ams.collection.v1.DocumentIdR\002id\022/\n\006sour"
+    "ce\030\002 \001(\0132\027.google.protobuf.StructR\006sourc"
+    "e\022D\n\007vectors\030\003 \003(\0132*.loams.collection.v1"
+    ".Document.VectorsEntryR\007vectors\022W\n\016spars"
+    "e_vectors\030\004 \003(\01320.loams.collection.v1.Do"
+    "cument.SparseVectorsEntryR\rsparseVectors"
+    "\022A\n\006fields\030\005 \003(\0132).loams.collection.v1.D"
+    "ocument.FieldsEntryR\006fields\022\032\n\006seq_no\030\006 "
+    "\001(\004H\000R\005seqNo\210\001\001\022\034\n\tpartition\030\007 \001(\rR\tpart"
+    "ition\032R\n\014VectorsEntry\022\020\n\003key\030\001 \001(\tR\003key\022"
+    ",\n\005value\030\002 \001(\0132\026.google.protobuf.ValueR\005"
+    "value:\0028\001\032Y\n\022SparseVectorsEntry\022\020\n\003key\030\001"
+    " \001(\tR\003key\022-\n\005value\030\002 \001(\0132\027.google.protob"
+    "uf.StructR\005value:\0028\001\032Q\n\013FieldsEntry\022\020\n\003k"
+    "ey\030\001 \001(\tR\003key\022,\n\005value\030\002 \001(\0132\026.google.pr"
+    "otobuf.ValueR\005value:\0028\001B\t\n\007_seq_no\"\222\001\n\013C"
+    "onsistency\022<\n\tfreshness\030\001 \001(\0162\036.loams.co"
+    "llection.v1.FreshnessR\tfreshness\022\031\n\010at_l"
+    "east\030\002 \001(\tR\007atLeast\022*\n\003pin\030\003 \001(\0132\030.loams"
+    ".collection.v1.PinR\003pin\"F\n\003Pin\022)\n\020manife"
+    "st_version\030\001 \001(\004R\017manifestVersion\022\024\n\005tok"
+    "en\030\002 \001(\tR\005token*\257\001\n\010OpResult\022\031\n\025OP_RESUL"
+    "T_UNSPECIFIED\020\000\022\025\n\021OP_RESULT_CREATED\020\001\022\025"
+    "\n\021OP_RESULT_UPDATED\020\002\022\025\n\021OP_RESULT_DELET"
+    "ED\020\003\022\027\n\023OP_RESULT_NOT_FOUND\020\004\022\022\n\016OP_RESU"
+    "LT_NOOP\020\005\022\026\n\022OP_RESULT_ACCEPTED\020\006*T\n\tFre"
+    "shness\022\031\n\025FRESHNESS_UNSPECIFIED\020\000\022\024\n\020FRE"
+    "SHNESS_STRONG\020\001\022\026\n\022FRESHNESS_EVENTUAL\020\0022"
+    "\321\006\n\017DocumentService\022v\n\016WriteDocuments\022*."
+    "loams.collection.v1.WriteDocumentsReques"
+    "t\032+.loams.collection.v1.WriteDocumentsRe"
+    "sponse\"\013\222\265\030\007\022\005write\022q\n\014GetDocuments\022(.lo"
+    "ams.collection.v1.GetDocumentsRequest\032)."
+    "loams.collection.v1.GetDocumentsResponse"
+    "\"\014\220\002\001\222\265\030\005\022\003get\022}\n\017ScrollDocuments\022+.loam"
+    "s.collection.v1.ScrollDocumentsRequest\032,"
+    ".loams.collection.v1.ScrollDocumentsResp"
+    "onse\"\017\220\002\001\222\265\030\010\022\006scroll\022y\n\016CountDocuments\022"
+    "*.loams.collection.v1.CountDocumentsRequ"
+    "est\032+.loams.collection.v1.CountDocuments"
+    "Response\"\016\220\002\001\222\265\030\007\022\005count\022~\n\016DeleteByFilt"
+    "er\022*.loams.collection.v1.DeleteByFilterR"
+    "equest\032(.loams.collection.v1.FilterWrite"
+    "Response\"\026\222\265\030\022\022\020delete_by_filter\022{\n\rPatc"
+    "hByFilter\022).loams.collection.v1.PatchByF"
+    "ilterRequest\032(.loams.collection.v1.Filte"
+    "rWriteResponse\"\025\222\265\030\021\022\017patch_by_filter\032\\\212"
+    "\265\030X\n\tdocuments\022KDocuments: write, get, s"
+    "croll, count, delete by filter and patch"
+    " by filter.b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_loams_2fcollection_2fv1_2fdocument_2eproto_deps[2] = {
@@ -5494,7 +5573,7 @@ static ::absl::once_flag descriptor_table_loams_2fcollection_2fv1_2fdocument_2ep
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_loams_2fcollection_2fv1_2fdocument_2eproto = {
     false,
     false,
-    6585,
+    6859,
     descriptor_table_protodef_loams_2fcollection_2fv1_2fdocument_2eproto,
     "loams/collection/v1/document.proto",
     &descriptor_table_loams_2fcollection_2fv1_2fdocument_2eproto_once,
@@ -8928,6 +9007,11 @@ void ScrollDocumentsRequest::clear_select() {
   if (_impl_.select_ != nullptr) _impl_.select_->Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
 }
+void ScrollDocumentsRequest::clear_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.where_ != nullptr) _impl_.where_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000080U);
+}
 ScrollDocumentsRequest::ScrollDocumentsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : Super_(arena, ScrollDocumentsRequest_get_class_data()) {
@@ -8975,6 +9059,9 @@ ScrollDocumentsRequest::ScrollDocumentsRequest(
   _impl_.page_token_ = (CheckHasBit(cached_has_bits, 0x00000040U))
                  ? Super_::CopyConstruct(arena, *from._impl_.page_token_)
                  : nullptr;
+  _impl_.where_ = (CheckHasBit(cached_has_bits, 0x00000080U))
+                 ? Super_::CopyConstruct(arena, *from._impl_.where_)
+                 : nullptr;
   _impl_.limit_ = from._impl_.limit_;
 
   // @@protoc_insertion_point(copy_constructor:loams.collection.v1.ScrollDocumentsRequest)
@@ -9012,6 +9099,7 @@ inline void ScrollDocumentsRequest::SharedDtor(MessageLite& self) {
   delete this_._impl_.select_;
   delete this_._impl_.consistency_;
   delete this_._impl_.page_token_;
+  delete this_._impl_.where_;
   this_._impl_.~Impl_();
 }
 
@@ -9048,7 +9136,7 @@ PROTOBUF_NOINLINE void ScrollDocumentsRequest::Clear() {
   ::uint32_t cached_has_bits [[maybe_unused]] = 0;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       this_._impl_.namespace__.ClearNonDefaultToEmpty();
     }
@@ -9074,6 +9162,10 @@ PROTOBUF_NOINLINE void ScrollDocumentsRequest::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       ABSL_DCHECK(this_._impl_.page_token_ != nullptr);
       this_._impl_.page_token_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      ABSL_DCHECK(this_._impl_.where_ != nullptr);
+      this_._impl_.where_->Clear();
     }
   }
   this_._impl_.limit_ = 0u;
@@ -9135,7 +9227,7 @@ PROTOBUF_NOINLINE void ScrollDocumentsRequest::Clear() {
   }
 
   // optional uint32 limit = 5 [json_name = "limit"];
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     target = stream->EnsureSpace(target);
     target = ::_pbi::WireFormatLite::WriteUInt32ToArray(
         5, this_._internal_limit(), target);
@@ -9159,6 +9251,13 @@ PROTOBUF_NOINLINE void ScrollDocumentsRequest::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         8, *this_._impl_.page_token_, this_._impl_.page_token_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .google.protobuf.Struct where = 9 [json_name = "where"];
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        9, *this_._impl_.where_, this_._impl_.where_->GetCachedSize(), target,
         stream);
   }
 
@@ -9225,8 +9324,15 @@ PROTOBUF_NOINLINE void ScrollDocumentsRequest::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.page_token_);
     }
-    // optional uint32 limit = 5 [json_name = "limit"];
+    // .google.protobuf.Struct where = 9 [json_name = "where"];
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.where_);
+    }
+  }
+   {
+    // optional uint32 limit = 5 [json_name = "limit"];
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       total_size += ::_pbi::WireFormatLite::UInt32SizePlusOne(
           this_._internal_limit());
     }
@@ -9309,8 +9415,16 @@ void ScrollDocumentsRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      _this->_impl_.limit_ = from._impl_.limit_;
+      ABSL_DCHECK(from._impl_.where_ != nullptr);
+      if (_this->_impl_.where_ == nullptr) {
+        _this->_impl_.where_ = Super_::CopyConstruct(arena, *from._impl_.where_);
+      } else {
+        _this->_impl_.where_->MergeFrom(*from._impl_.where_);
+      }
     }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    _this->_impl_.limit_ = from._impl_.limit_;
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -9637,6 +9751,11 @@ void CountDocumentsRequest::clear_filter() {
   if (_impl_.filter_ != nullptr) _impl_.filter_->Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
+void CountDocumentsRequest::clear_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.where_ != nullptr) _impl_.where_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
 CountDocumentsRequest::CountDocumentsRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : Super_(arena, CountDocumentsRequest_get_class_data()) {
@@ -9675,6 +9794,9 @@ CountDocumentsRequest::CountDocumentsRequest(
   _impl_.consistency_ = (CheckHasBit(cached_has_bits, 0x00000008U))
                  ? Super_::CopyConstruct(arena, *from._impl_.consistency_)
                  : nullptr;
+  _impl_.where_ = (CheckHasBit(cached_has_bits, 0x00000010U))
+                 ? Super_::CopyConstruct(arena, *from._impl_.where_)
+                 : nullptr;
 
   // @@protoc_insertion_point(copy_constructor:loams.collection.v1.CountDocumentsRequest)
 }
@@ -9689,9 +9811,9 @@ inline void CountDocumentsRequest::SharedCtor(::_pb::Arena* PROTOBUF_NULLABLE ar
   ::memset(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, filter_),
            0,
-           offsetof(Impl_, consistency_) -
+           offsetof(Impl_, where_) -
                offsetof(Impl_, filter_) +
-               sizeof(Impl_::consistency_));
+               sizeof(Impl_::where_));
 }
 CountDocumentsRequest::~CountDocumentsRequest() {
   // @@protoc_insertion_point(destructor:loams.collection.v1.CountDocumentsRequest)
@@ -9708,6 +9830,7 @@ inline void CountDocumentsRequest::SharedDtor(MessageLite& self) {
   this_._impl_.collection_.Destroy();
   delete this_._impl_.filter_;
   delete this_._impl_.consistency_;
+  delete this_._impl_.where_;
   this_._impl_.~Impl_();
 }
 
@@ -9744,7 +9867,7 @@ PROTOBUF_NOINLINE void CountDocumentsRequest::Clear() {
   ::uint32_t cached_has_bits [[maybe_unused]] = 0;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       this_._impl_.namespace__.ClearNonDefaultToEmpty();
     }
@@ -9758,6 +9881,10 @@ PROTOBUF_NOINLINE void CountDocumentsRequest::Clear() {
     if (CheckHasBit(cached_has_bits, 0x00000008U)) {
       ABSL_DCHECK(this_._impl_.consistency_ != nullptr);
       this_._impl_.consistency_->Clear();
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(this_._impl_.where_ != nullptr);
+      this_._impl_.where_->Clear();
     }
   }
   _impl_._has_bits_.Clear();
@@ -9817,6 +9944,13 @@ PROTOBUF_NOINLINE void CountDocumentsRequest::Clear() {
         stream);
   }
 
+  // .google.protobuf.Struct where = 5 [json_name = "where"];
+  if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        5, *this_._impl_.where_, this_._impl_.where_->GetCachedSize(), target,
+        stream);
+  }
+
   if (ABSL_PREDICT_FALSE(this_._internal_metadata_.have_unknown_fields())) {
     target =
         ::_pbi::WireFormat::InternalSerializeUnknownFieldsToArray(
@@ -9840,7 +9974,7 @@ PROTOBUF_NOINLINE void CountDocumentsRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     // string namespace = 1 [json_name = "namespace"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_namespace_().empty()) {
@@ -9865,6 +9999,11 @@ PROTOBUF_NOINLINE void CountDocumentsRequest::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.consistency_);
     }
+    // .google.protobuf.Struct where = 5 [json_name = "where"];
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.where_);
+    }
   }
   return this_.MaybeComputeUnknownFieldsSize(total_size,
                                              &this_._impl_._cached_size_);
@@ -9884,7 +10023,7 @@ void CountDocumentsRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000000fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_namespace_().empty()) {
         _this->_internal_set_namespace_(from._internal_namespace_());
@@ -9919,6 +10058,14 @@ void CountDocumentsRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
         _this->_impl_.consistency_->MergeFrom(*from._impl_.consistency_);
       }
     }
+    if (CheckHasBit(cached_has_bits, 0x00000010U)) {
+      ABSL_DCHECK(from._impl_.where_ != nullptr);
+      if (_this->_impl_.where_ == nullptr) {
+        _this->_impl_.where_ = Super_::CopyConstruct(arena, *from._impl_.where_);
+      } else {
+        _this->_impl_.where_->MergeFrom(*from._impl_.where_);
+      }
+    }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;
   _this->_internal_metadata_.MergeFrom<::google::protobuf::UnknownFieldSet>(
@@ -9942,8 +10089,8 @@ void CountDocumentsRequest::InternalSwap(CountDocumentsRequest* PROTOBUF_RESTRIC
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.namespace__, &other->_impl_.namespace__, arena);
   ::_pbi::ArenaStringPtr::InternalSwap(&_impl_.collection_, &other->_impl_.collection_, arena);
   ::google::protobuf::internal::memswap<
-      PROTOBUF_FIELD_OFFSET(CountDocumentsRequest, _impl_.consistency_)
-      + sizeof(CountDocumentsRequest::_impl_.consistency_)
+      PROTOBUF_FIELD_OFFSET(CountDocumentsRequest, _impl_.where_)
+      + sizeof(CountDocumentsRequest::_impl_.where_)
       - PROTOBUF_FIELD_OFFSET(CountDocumentsRequest, _impl_.filter_)>(
           reinterpret_cast<char*>(&_impl_.filter_),
           reinterpret_cast<char*>(&other->_impl_.filter_));
@@ -10190,6 +10337,11 @@ void DeleteByFilterRequest::clear_filter() {
   if (_impl_.filter_ != nullptr) _impl_.filter_->Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
 }
+void DeleteByFilterRequest::clear_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.where_ != nullptr) _impl_.where_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000020U);
+}
 DeleteByFilterRequest::DeleteByFilterRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
     : Super_(arena, DeleteByFilterRequest_get_class_data()) {
@@ -10230,6 +10382,9 @@ DeleteByFilterRequest::DeleteByFilterRequest(
                  : nullptr;
   _impl_.consistency_ = (CheckHasBit(cached_has_bits, 0x00000010U))
                  ? Super_::CopyConstruct(arena, *from._impl_.consistency_)
+                 : nullptr;
+  _impl_.where_ = (CheckHasBit(cached_has_bits, 0x00000020U))
+                 ? Super_::CopyConstruct(arena, *from._impl_.where_)
                  : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, max_rows_),
@@ -10272,6 +10427,7 @@ inline void DeleteByFilterRequest::SharedDtor(MessageLite& self) {
   delete this_._impl_.filter_;
   delete this_._impl_.cursor_;
   delete this_._impl_.consistency_;
+  delete this_._impl_.where_;
   this_._impl_.~Impl_();
 }
 
@@ -10308,7 +10464,7 @@ PROTOBUF_NOINLINE void DeleteByFilterRequest::Clear() {
   ::uint32_t cached_has_bits [[maybe_unused]] = 0;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000001fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       this_._impl_.namespace__.ClearNonDefaultToEmpty();
     }
@@ -10327,8 +10483,12 @@ PROTOBUF_NOINLINE void DeleteByFilterRequest::Clear() {
       ABSL_DCHECK(this_._impl_.consistency_ != nullptr);
       this_._impl_.consistency_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      ABSL_DCHECK(this_._impl_.where_ != nullptr);
+      this_._impl_.where_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x00000060U)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
     ::memset(&this_._impl_.max_rows_, 0,
              static_cast<::size_t>(
                  reinterpret_cast<char*>(&this_._impl_.allow_partial_) -
@@ -10386,14 +10546,14 @@ PROTOBUF_NOINLINE void DeleteByFilterRequest::Clear() {
   }
 
   // optional uint64 max_rows = 4 [json_name = "maxRows"];
-  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
     target = stream->EnsureSpace(target);
     target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
         4, this_._internal_max_rows(), target);
   }
 
   // bool allow_partial = 5 [json_name = "allowPartial"];
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     if (this_._internal_allow_partial() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -10412,6 +10572,13 @@ PROTOBUF_NOINLINE void DeleteByFilterRequest::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000010U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         7, *this_._impl_.consistency_, this_._impl_.consistency_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .google.protobuf.Struct where = 8 [json_name = "where"];
+  if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        8, *this_._impl_.where_, this_._impl_.where_->GetCachedSize(), target,
         stream);
   }
 
@@ -10438,7 +10605,7 @@ PROTOBUF_NOINLINE void DeleteByFilterRequest::Clear() {
 
   ::_pbi::Prefetch5LinesFrom7Lines(&this_);
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     // string namespace = 1 [json_name = "namespace"];
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!this_._internal_namespace_().empty()) {
@@ -10468,13 +10635,18 @@ PROTOBUF_NOINLINE void DeleteByFilterRequest::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.consistency_);
     }
-    // optional uint64 max_rows = 4 [json_name = "maxRows"];
+    // .google.protobuf.Struct where = 8 [json_name = "where"];
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.where_);
+    }
+    // optional uint64 max_rows = 4 [json_name = "maxRows"];
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
       total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
           this_._internal_max_rows());
     }
     // bool allow_partial = 5 [json_name = "allowPartial"];
-    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (this_._internal_allow_partial() != 0) {
         total_size += 2;
       }
@@ -10498,7 +10670,7 @@ void DeleteByFilterRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
   (void)cached_has_bits;
 
   cached_has_bits = from._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x000000ffU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       if (!from._internal_namespace_().empty()) {
         _this->_internal_set_namespace_(from._internal_namespace_());
@@ -10542,9 +10714,17 @@ void DeleteByFilterRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000020U)) {
-      _this->_impl_.max_rows_ = from._impl_.max_rows_;
+      ABSL_DCHECK(from._impl_.where_ != nullptr);
+      if (_this->_impl_.where_ == nullptr) {
+        _this->_impl_.where_ = Super_::CopyConstruct(arena, *from._impl_.where_);
+      } else {
+        _this->_impl_.where_->MergeFrom(*from._impl_.where_);
+      }
     }
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      _this->_impl_.max_rows_ = from._impl_.max_rows_;
+    }
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       if (from._internal_allow_partial() != 0) {
         _this->_impl_.allow_partial_ = from._impl_.allow_partial_;
       }
@@ -10588,6 +10768,11 @@ void PatchByFilterRequest::clear_filter() {
   ::google::protobuf::internal::TSanWrite(&_impl_);
   if (_impl_.filter_ != nullptr) _impl_.filter_->Clear();
   ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+void PatchByFilterRequest::clear_where() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.where_ != nullptr) _impl_.where_->Clear();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000040U);
 }
 PatchByFilterRequest::PatchByFilterRequest(::google::protobuf::Arena* PROTOBUF_NULLABLE arena)
 #if defined(PROTOBUF_CUSTOM_VTABLE)
@@ -10633,6 +10818,9 @@ PatchByFilterRequest::PatchByFilterRequest(
   _impl_.consistency_ = (CheckHasBit(cached_has_bits, 0x00000020U))
                  ? Super_::CopyConstruct(arena, *from._impl_.consistency_)
                  : nullptr;
+  _impl_.where_ = (CheckHasBit(cached_has_bits, 0x00000040U))
+                 ? Super_::CopyConstruct(arena, *from._impl_.where_)
+                 : nullptr;
   ::memcpy(reinterpret_cast<char*>(&_impl_) +
                offsetof(Impl_, max_rows_),
            reinterpret_cast<const char*>(&from._impl_) +
@@ -10675,6 +10863,7 @@ inline void PatchByFilterRequest::SharedDtor(MessageLite& self) {
   delete this_._impl_.patch_;
   delete this_._impl_.cursor_;
   delete this_._impl_.consistency_;
+  delete this_._impl_.where_;
   this_._impl_.~Impl_();
 }
 
@@ -10711,7 +10900,7 @@ PROTOBUF_NOINLINE void PatchByFilterRequest::Clear() {
   ::uint32_t cached_has_bits [[maybe_unused]] = 0;
 
   cached_has_bits = this_._impl_._has_bits_[0];
-  if (BatchCheckHasBit(cached_has_bits, 0x0000003fU)) {
+  if (BatchCheckHasBit(cached_has_bits, 0x0000007fU)) {
     if (CheckHasBit(cached_has_bits, 0x00000001U)) {
       this_._impl_.namespace__.ClearNonDefaultToEmpty();
     }
@@ -10734,14 +10923,13 @@ PROTOBUF_NOINLINE void PatchByFilterRequest::Clear() {
       ABSL_DCHECK(this_._impl_.consistency_ != nullptr);
       this_._impl_.consistency_->Clear();
     }
+    if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      ABSL_DCHECK(this_._impl_.where_ != nullptr);
+      this_._impl_.where_->Clear();
+    }
   }
-  if (BatchCheckHasBit(cached_has_bits, 0x000000c0U)) {
-    ::memset(&this_._impl_.max_rows_, 0,
-             static_cast<::size_t>(
-                 reinterpret_cast<char*>(&this_._impl_.allow_partial_) -
-                 reinterpret_cast<char*>(&this_._impl_.max_rows_)) +
-                 sizeof(_impl_.allow_partial_));
-  }
+  this_._impl_.max_rows_ = ::uint64_t{0u};
+  this_._impl_.allow_partial_ = false;
   _impl_._has_bits_.Clear();
   _internal_metadata_.Clear<::google::protobuf::UnknownFieldSet>();
 }
@@ -10800,14 +10988,14 @@ PROTOBUF_NOINLINE void PatchByFilterRequest::Clear() {
   }
 
   // optional uint64 max_rows = 5 [json_name = "maxRows"];
-  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
     target = stream->EnsureSpace(target);
     target = ::_pbi::WireFormatLite::WriteUInt64ToArray(
         5, this_._internal_max_rows(), target);
   }
 
   // bool allow_partial = 6 [json_name = "allowPartial"];
-  if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
     if (this_._internal_allow_partial() != 0) {
       target = stream->EnsureSpace(target);
       target = ::_pbi::WireFormatLite::WriteBoolToArray(
@@ -10826,6 +11014,13 @@ PROTOBUF_NOINLINE void PatchByFilterRequest::Clear() {
   if (CheckHasBit(cached_has_bits, 0x00000020U)) {
     target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
         8, *this_._impl_.consistency_, this_._impl_.consistency_->GetCachedSize(), target,
+        stream);
+  }
+
+  // .google.protobuf.Struct where = 9 [json_name = "where"];
+  if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+    target = ::google::protobuf::internal::WireFormatLite::InternalWriteMessage(
+        9, *this_._impl_.where_, this_._impl_.where_->GetCachedSize(), target,
         stream);
   }
 
@@ -10887,13 +11082,20 @@ PROTOBUF_NOINLINE void PatchByFilterRequest::Clear() {
       total_size += 1 +
                     ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.consistency_);
     }
-    // optional uint64 max_rows = 5 [json_name = "maxRows"];
+    // .google.protobuf.Struct where = 9 [json_name = "where"];
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
+      total_size += 1 +
+                    ::google::protobuf::internal::WireFormatLite::MessageSize(*this_._impl_.where_);
+    }
+    // optional uint64 max_rows = 5 [json_name = "maxRows"];
+    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
       total_size += ::_pbi::WireFormatLite::UInt64SizePlusOne(
           this_._internal_max_rows());
     }
+  }
+   {
     // bool allow_partial = 6 [json_name = "allowPartial"];
-    if (CheckHasBit(cached_has_bits, 0x00000080U)) {
+    if (CheckHasBit(cached_has_bits, 0x00000100U)) {
       if (this_._internal_allow_partial() != 0) {
         total_size += 2;
       }
@@ -10969,12 +11171,20 @@ void PatchByFilterRequest::MergeImpl(::google::protobuf::MessageLite& to_msg,
       }
     }
     if (CheckHasBit(cached_has_bits, 0x00000040U)) {
-      _this->_impl_.max_rows_ = from._impl_.max_rows_;
+      ABSL_DCHECK(from._impl_.where_ != nullptr);
+      if (_this->_impl_.where_ == nullptr) {
+        _this->_impl_.where_ = Super_::CopyConstruct(arena, *from._impl_.where_);
+      } else {
+        _this->_impl_.where_->MergeFrom(*from._impl_.where_);
+      }
     }
     if (CheckHasBit(cached_has_bits, 0x00000080U)) {
-      if (from._internal_allow_partial() != 0) {
-        _this->_impl_.allow_partial_ = from._impl_.allow_partial_;
-      }
+      _this->_impl_.max_rows_ = from._impl_.max_rows_;
+    }
+  }
+  if (CheckHasBit(cached_has_bits, 0x00000100U)) {
+    if (from._internal_allow_partial() != 0) {
+      _this->_impl_.allow_partial_ = from._impl_.allow_partial_;
     }
   }
   _this->_impl_._has_bits_[0] |= cached_has_bits;

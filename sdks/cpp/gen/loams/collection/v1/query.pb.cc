@@ -10512,12 +10512,12 @@ const char descriptor_table_protodef_loams_2fcollection_2fv1_2fquery_2eproto[] A
     "ED\020\001\022\026\n\022EXPAND_OUTPUT_FLAT\020\002*^\n\rTotalRel"
     "ation\022\036\n\032TOTAL_RELATION_UNSPECIFIED\020\000\022\025\n"
     "\021TOTAL_RELATION_EQ\020\001\022\026\n\022TOTAL_RELATION_G"
-    "TE\020\0022\275\001\n\014QueryService\022V\n\006Search\022\".loams."
+    "TE\020\0022\334\001\n\014QueryService\022u\n\006Search\022\".loams."
     "collection.v1.SearchRequest\032#.loams.coll"
-    "ection.v1.SearchResponse\"\003\220\002\001\032U\212\265\030Q\n\006sea"
-    "rch\022GQueries: one search over one collec"
-    "tion, dense, sparse, text or hybrid.b\006pr"
-    "oto3"
+    "ection.v1.SearchResponse\"\"\220\002\001\222\265\030\007\022\005query"
+    "\222\265\030\020\n\006vector\022\006search\032U\212\265\030Q\n\006search\022GQuer"
+    "ies: one search over one collection, den"
+    "se, sparse, text or hybrid.b\006proto3"
 };
 static const ::_pbi::DescriptorTable* PROTOBUF_NONNULL const
     descriptor_table_loams_2fcollection_2fv1_2fquery_2eproto_deps[4] = {
@@ -10530,7 +10530,7 @@ static ::absl::once_flag descriptor_table_loams_2fcollection_2fv1_2fquery_2eprot
 PROTOBUF_CONSTINIT const ::_pbi::DescriptorTable descriptor_table_loams_2fcollection_2fv1_2fquery_2eproto = {
     false,
     false,
-    11644,
+    11675,
     descriptor_table_protodef_loams_2fcollection_2fv1_2fquery_2eproto,
     "loams/collection/v1/query.proto",
     &descriptor_table_loams_2fcollection_2fv1_2fquery_2eproto_once,
