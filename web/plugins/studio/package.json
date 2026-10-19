@@ -47,7 +47,8 @@
       ],
       "permissions": [
         "agentd:use",
-        "agentd:git-write"
+        "agentd:git-write",
+        "ui:notifications"
       ],
       "requires": {
         "console": "^0.1.0",
