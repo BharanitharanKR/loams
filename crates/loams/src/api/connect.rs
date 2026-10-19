@@ -133,6 +133,16 @@ const CATALOGUE: &[Package] = &[
         unstable: false,
     },
     Package {
+        // Streams: create, describe and list a namespace's logs; produce and
+        // fetch records and CloudEvents, with an idempotent produce and a long
+        // poll (API2 Task 2, SDKP P0c, `super::connect_streams`). The tonic
+        // listener of `--stream-grpc-listen` keeps serving its subset.
+        package: "loams.stream.v1",
+        services: &["loams.stream.v1.StreamService"],
+        available: true,
+        unstable: false,
+    },
+    Package {
         // Sign-in providers, first-run setup, console sessions and OAuth
         // consent (API2 Task 6, `super::connect_auth`), over the principal
         // store in the metastore (`crate::auth::directory`).
@@ -563,6 +573,7 @@ pub(crate) fn routes(state: &AppState, hot_default: bool) -> AxumRouter {
     rpc = super::connect_documents::register(rpc, state);
     rpc = super::connect_query::register(rpc, state);
     rpc = super::connect_sql::register(rpc, state);
+    rpc = super::connect_streams::register(rpc, state);
     rpc = super::connect_auth::register(rpc, &state.principals);
     rpc = super::connect_admin::register(rpc, &state.principals);
     let (rpc, _health) =

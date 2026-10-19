@@ -67,6 +67,7 @@ const FILES: &[&str] = &[
     "loams/admin/v1/audit.proto",
     "loams/auth/v1/auth.proto",
     "loams/sql/v1/sql.proto",
+    "loams/stream/v1/stream.proto",
 ];
 
 fn main() {

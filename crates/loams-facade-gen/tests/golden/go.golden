@@ -349,6 +349,7 @@ var ProtoPackages = []string{
 	"loams.postgres.v1",
 	"loams.repos.v1",
 	"loams.sql.v1",
+	"loams.stream.v1",
 }
 
 // Pagination is AIP-158 paging, named by FacadeOptions.pagination.
