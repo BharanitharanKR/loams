@@ -21,8 +21,11 @@ package loams
 
 import (
 	"context"
+	"errors"
 	"net/http"
+	"os"
 	"strings"
+	"time"
 
 	"loams.dev/go/gen/facade"
 	instancev1 "loams.dev/go/gen/loams/instance/v1"
@@ -62,13 +65,27 @@ type Options struct {
 	MaxRetries int
 	// NoRetries turns off automatic retries for the whole client.
 	NoRetries bool
-	// SessionConsistency holds a session consistency token across calls (D609).
+	// SessionConsistency holds a session consistency token across calls (D609,
+	// R4).
 	//
 	// **Off by default**: every read is then `STRONG` on its own, which is
-	// correct but does not give read-your-writes across processes. Turn it on
-	// when one process is both writing and reading, and remember it keeps the
-	// token it was given rather than merging — see `consistency.go`.
+	// correct but does not give read-your-writes across processes. On, every
+	// token a response carries merges into the session, and every read whose
+	// request has a `consistency` field is sent `at_least` the session unless the
+	// call set `consistency` itself or passed `WithoutSessionConsistency()`.
 	SessionConsistency bool
+	// Namespace is the default namespace (R11): it fills the `namespace` field
+	// of any request that has one and leaves it empty. An explicit namespace
+	// always wins; with neither, the call fails with `*InvalidArgumentError`
+	// before any network call.
+	Namespace string
+	// Timeout is the budget of every unary call, retries included (R12).
+	// **Zero means `DefaultTimeout` (30 s)**, for the reason `MaxRetries` gives;
+	// set NoTimeout to turn it off. `WithTimeout` overrides it per call. Streams
+	// have no default deadline.
+	Timeout time.Duration
+	// NoTimeout turns off the default unary deadline for the whole client.
+	NoTimeout bool
 	// Protocol overrides the wire protocol. Unset means Connect.
 	Protocol Protocol
 }
@@ -94,6 +111,11 @@ type Client struct {
 	modules map[string]any
 
 	transport TransportConfig
+	// namespace is the default namespace (R11), or "".
+	namespace string
+	// handleModules are the calls a collection handle delegates to. Empty
+	// until the facade has the app modules (SDKP P0a).
+	handleModules HandleModules
 }
 
 // New builds a Client.
@@ -147,7 +169,22 @@ func New(options Options) (*Client, error) {
 		maxRetries = 0
 	}
 	clients := facade.NewServiceClients(config.HTTPClient, endpoint, clientOptions...)
-	client.invoker = NewCallInvoker(clients, options.Auth, maxRetries, client.session)
+	// A nil *ConsistencySession must not reach the invoker as a non-nil
+	// interface: "no session" has to stay nil.
+	var store ConsistencyTokenStore
+	if client.session != nil {
+		store = client.session
+	}
+	client.invoker = NewCallInvoker(clients, options.Auth, maxRetries, store)
+	timeout := options.Timeout
+	if timeout <= 0 {
+		timeout = DefaultTimeout
+	}
+	if options.NoTimeout {
+		timeout = 0
+	}
+	client.invoker.SetDefaults(InvokerDefaults{Namespace: options.Namespace, Timeout: timeout})
+	client.namespace = options.Namespace
 	// ExtraHeaders were accepted and never sent (B17), so a client configured to
 	// address one Live app silently addressed the server's default app instead.
 	// They go through the invoker, which is the one place every unary call and
@@ -169,6 +206,49 @@ func New(options Options) (*Client, error) {
 	}
 	return client, nil
 }
+
+// The environment FromEnv reads (R1, R11).
+const (
+	EnvEndpoint  = "LOAMS_ENDPOINT"
+	EnvNamespace = "LOAMS_NAMESPACE"
+)
+
+// FromEnv builds a Client from the environment: `LOAMS_ENDPOINT`, then
+// `LOAMS_API_KEY` or `LOAMS_TOKEN` (through `EnvToken`), then `LOAMS_NAMESPACE`.
+// A field already set in `options` wins over the environment.
+func FromEnv(options Options) (*Client, error) {
+	return fromEnv(options, os.LookupEnv)
+}
+
+func fromEnv(options Options, lookup func(string) (string, bool)) (*Client, error) {
+	if options.Endpoint == "" {
+		endpoint, _ := lookup(EnvEndpoint)
+		if endpoint == "" {
+			return nil, &InvalidArgumentError{LoamsError{
+				Code:     CodeInvalidArgument,
+				Reason:   ReasonInvalidArgument,
+				Metadata: map[string]string{"field": EnvEndpoint},
+				Cause:    errors.New("loams.FromEnv: LOAMS_ENDPOINT is not set"),
+			}}
+		}
+		options.Endpoint = endpoint
+	}
+	if options.Auth == nil {
+		for _, name := range EnvNames {
+			if value, ok := lookup(name); ok && value != "" {
+				options.Auth = &EnvTokenSource{Lookup: lookup}
+				break
+			}
+		}
+	}
+	if options.Namespace == "" {
+		options.Namespace, _ = lookup(EnvNamespace)
+	}
+	return New(options)
+}
+
+// Namespace is the client's default namespace (R11), or "".
+func (c *Client) Namespace() string { return c.namespace }
 
 // MustNew is New for a program that cannot usefully continue without a client —
 // a `main`, a `TestMain`, an example. It panics on the error, which is a usage
