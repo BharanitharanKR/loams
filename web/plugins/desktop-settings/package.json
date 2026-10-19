@@ -27,6 +27,7 @@
       "slots": [
         "console.page",
         "shell.nav.section",
+        "shell.overlay",
         "console.settings.section"
       ],
       "permissions": [],

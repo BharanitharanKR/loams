@@ -130,6 +130,11 @@ export interface ConnectorValidation {
 /** The theme choice (D1074): System follows the OS, Dark and Light are explicit. */
 export type ThemeChoice = "system" | "dark" | "light";
 
+/** The updater's state, as `update.state()` returns it and `update.onState` pushes it. */
+export type UpdateState = Awaited<
+	ReturnType<LoamsDesktopApi["update"]["state"]>
+>;
+
 export interface LoamsDesktopApi {
 	version: string;
 	platform: DesktopPlatform;
@@ -212,7 +217,12 @@ export interface LoamsDesktopApi {
 			/** 0-100 while phase is "downloading". */
 			percent?: number;
 		}>;
+		/** A manual check: it offers a skipped version again (D1085). */
 		check(): Promise<void>;
+		/** Main pushes every state change (the update toast, D1085). */
+		onState(cb: (s: UpdateState) => void): () => void;
+		/** "Skip this version": automatic checks no longer offer it. */
+		skip(version: string): Promise<void>;
 		/**
 		 * "Check for updates automatically" (`update.autoCheck`, default on). `locked` is
 		 * true when `LOAMS_DESKTOP_NO_UPDATE_CHECK=1` forces updates off.
@@ -331,6 +341,7 @@ export const CH = {
 	updateAutoSet: "update:auto-set",
 	updateDownload: "update:download",
 	updateInstall: "update:install",
+	updateSkip: "update:skip",
 	stacksState: "stacks:state",
 	stacksStart: "stacks:start",
 	stacksStop: "stacks:stop",

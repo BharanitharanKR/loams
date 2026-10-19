@@ -3,7 +3,7 @@
 // it with the sections that need only the `desktop` bridge: Local stacks,
 // Updates and About. Other plugins add their section through the
 // `console.settings.section` slot (Servers, Agent providers); this plugin
-// does not know them.
+// does not know them. It also mounts the update toast in `shell.overlay` (CF1 Task 16).
 
 import { type PluginModule, service } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
@@ -12,12 +12,14 @@ import type {} from '@loams/platform-electron';
 import { AboutSection } from './about.js';
 import { SettingsPage } from './settings-page.js';
 import { StacksSection } from './stacks.js';
+import { UpdateToast } from './update-toast.js';
 import { UpdatesSection } from './updates.js';
 
 export { AboutSection } from './about.js';
 export { LiveStoreCard, useLiveNotice } from './live-store.js';
 export { SettingsPage } from './settings-page.js';
 export { StacksSection, useStacks } from './stacks.js';
+export { UPDATE_TOAST_ID, UpdateToast, updateToast } from './update-toast.js';
 export { UpdatesSection } from './updates.js';
 
 const plugin: PluginModule = {
@@ -62,6 +64,12 @@ const plugin: PluginModule = {
         },
         () => null,
       ),
+    );
+    // The update toast (D1085): offer, download on consent, restart; skip a version.
+    ctx.effect(() =>
+      slots.register({ name: 'shell.overlay', plugin: 'desktop-settings' }, () => (
+        <UpdateToast update={desktop.update} />
+      )),
     );
     const sections = [
       {

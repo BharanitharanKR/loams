@@ -31,6 +31,7 @@ import type {
   SqlResult,
   StackId,
   StackState,
+  UpdateState,
 } from '@loams/desktop/contracts';
 import { validateConfig } from '@loams/desktop/validate';
 import { createMockAgentdApi } from '@loams/plugin-desktop-agentd';
@@ -1006,18 +1007,34 @@ function createFakeChat(): LoamsDesktopApi['chat'] {
 
 /** The preview's updater: a manual-mode feed that finds v0.2.0 on "Check now". */
 function previewUpdate(): LoamsDesktopApi['update'] {
-  let state: Awaited<ReturnType<LoamsDesktopApi['update']['state']>> = { phase: 'idle' };
+  let state: UpdateState = { phase: 'idle' };
   let auto = true;
+  let skipped: string | undefined;
+  const listeners = new Set<(s: UpdateState) => void>();
+  const set = (s: UpdateState) => {
+    state = s;
+    for (const cb of listeners) cb(s);
+  };
   return {
     state: async () => state,
+    // The update toast follows these pushes (CF1 Task 16).
+    onState: (cb) => {
+      listeners.add(cb);
+      return () => void listeners.delete(cb);
+    },
     autoCheck: async () => ({ enabled: auto, locked: false }),
     setAutoCheck: async (enabled) => {
       auto = enabled;
     },
+    // "Check now" is a manual check: it offers a skipped version again.
     check: async () => {
-      state = { phase: 'checking' };
+      set({ phase: 'checking' });
       await new Promise((r) => globalThis.setTimeout(r, 500));
-      state = { phase: 'available', version: '0.2.0', mode: 'manual' };
+      set({ phase: 'available', version: '0.2.0', mode: 'manual' });
+    },
+    skip: async (version) => {
+      skipped = version;
+      if (state.phase === 'available' && state.version === skipped) set({ phase: 'idle' });
     },
     download: async () => undefined,
     installAndRestart: async () => undefined,
