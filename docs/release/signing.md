@@ -47,6 +47,15 @@ the `.sig` files.
 - **Fingerprint:** `333AC94599D5A1EB2A416D1E83DC134D8CAF895D` (`333A C945 99D5 A1EB 2A41 6D1E 83DC 134D 8CAF 895D`). This is the value of `LOAMS_GPG_KEY_ID`.
 - **Created** 2026-10-16, **expires** 2028-10-15. Extend the expiry before then, and re-publish the public key.
 - **Public key:** [`loams-release-key.asc`](loams-release-key.asc), in this directory. Also publish it at `https://loams.dev/gpg.asc` and on keys.openpgp.org.
+- **The release's `SHA256SUMS`** lists every file attached to a product release, and `SHA256SUMS.asc` is its detached signature with this key. [`release-checksums.yml`](../../.github/workflows/release-checksums.yml) writes both at the end of `release-package.yml`, verifies the signature against `loams-release-key.asc` before uploading, and can be dispatched for a published release (`gh workflow run release-checksums.yml --ref main -f tag=vX.Y.Z`). Verify a download with:
+
+  ```sh
+  gpg --import loams-release-key.asc
+  gpg --verify SHA256SUMS.asc SHA256SUMS
+  sha256sum -c --ignore-missing SHA256SUMS
+  ```
+
+  The desktop files also have their own `DESKTOP-SHA256SUMS` and `DESKTOP-SHA256SUMS.asc`.
 - **Set up** on 2026-10-16: the secret `LOAMS_GPG_PRIVATE_KEY` and the variable `LOAMS_GPG_KEY_ID` are repository-scoped. The maintainers hold an offline backup of the private key and its revocation certificate. If the key is ever exposed, revoke it, publish the revocation, and replace both settings.
 
 ## What SignPath's free programme can and cannot sign
