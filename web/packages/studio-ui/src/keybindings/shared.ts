@@ -31,9 +31,9 @@ export type ThreadJumpKeybindingCommand = (typeof THREAD_JUMP_KEYBINDING_COMMAND
 
 /**
  * The commands a Studio keybinding can run. Upstream's names where the command is
- * upstream's; `files.toggle` and `settings.open` are Studio's. The shell's own keys
- * (Mod+K the palette, Mod+J the agent panel, Mod+Shift+M the mode) are not here:
- * the shell owns them in both modes.
+ * upstream's; `files.toggle` and `settings.open` are Studio's. The shell owns its
+ * chords in both modes (D1081, `SHELL_KEYBINDINGS`) and sends Studio's half of them
+ * (`chat.new`, `thread.jump.N`, `thread.next`) as commands.
  */
 export const STUDIO_KEYBINDING_COMMANDS = [
   "sidebar.toggle",
