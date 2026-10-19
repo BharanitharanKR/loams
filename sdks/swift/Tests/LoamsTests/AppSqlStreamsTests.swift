@@ -44,5 +44,17 @@ final class AppSqlStreamsTests: XCTestCase {
             return String(decoding: data, as: UTF8.self)
         }
         XCTAssertEqual(values, ["text", "{\"n\":1}"])
+        XCTAssertNil(keyed.calls[0].body["partition"], "proto3 JSON omits a zero partition")
+    }
+
+    /// The recorded `app_streams` bodies are proto3 JSON: a zero partition or offset is omitted.
+    func test_swift_streams_fetch_omits_zero_partition_and_offset() async throws {
+        let stub = StubTransport(replies: [.success([:]), .success([:])])
+        let loams = try client(stub)
+        _ = try await loams.streams.fetch("note-events", offset: 0, maxRecords: 10)
+        XCTAssertEqual(stub.calls[0].body, ["stream": .string("note-events"), "maxRecords": .int(10), "namespace": .string("app")])
+        _ = try await loams.streams.fetch("note-events", partition: 1, offset: 2, maxRecords: 10)
+        XCTAssertEqual(stub.calls[1].body["partition"], .int(1))
+        XCTAssertEqual(stub.calls[1].body["offset"], .string("2"))
     }
 }

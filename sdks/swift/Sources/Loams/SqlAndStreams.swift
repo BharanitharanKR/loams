@@ -81,10 +81,11 @@ public struct StreamsModule: Sendable {
                         options: CallOptions = .init()) async throws -> DynamicMessage {
         var fields: [String: JSONValue] = [
             "stream": .string(stream),
-            "partition": .int(partition),
             "records": .array(try records.map { .object(["value": .string(try Self.encode($0).base64EncodedString())]) }),
         ]
         var settings = options
+        // proto3 JSON omits a zero partition, as the recorded app_streams bodies do.
+        if partition != 0 { fields["partition"] = .int(partition) }
         if let producerId, let producerSeq {
             fields["producerId"] = .string(producerId)
             fields["producerSeq"] = .string(String(producerSeq))
@@ -110,8 +111,11 @@ public struct StreamsModule: Sendable {
     public func fetch(_ stream: String, partition: Int = 0, offset: UInt64, maxRecords: Int? = nil, maxWaitMs: Int? = nil,
                       namespace: String? = nil, options: CallOptions = .init()) async throws -> DynamicMessage {
         var fields: [String: JSONValue] = [
-            "stream": .string(stream), "partition": .int(partition), "offset": .string(String(offset)),
+            "stream": .string(stream),
         ]
+        // proto3 JSON omits a zero partition and offset, as the recorded app_streams bodies do.
+        if partition != 0 { fields["partition"] = .int(partition) }
+        if offset != 0 { fields["offset"] = .string(String(offset)) }
         if let maxRecords { fields["maxRecords"] = .int(maxRecords) }
         var settings = options
         if let maxWaitMs {
