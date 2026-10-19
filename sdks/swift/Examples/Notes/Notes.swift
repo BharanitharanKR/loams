@@ -77,7 +77,7 @@ struct Notes {
             let rows = try await loams.graph.query("notes_graph", "MATCH (n:Note)-[:TAGGED]->(t:Tag) RETURN n.title, t.name", readOnly: true)
             if case .object(let set)? = rows.fields["rows"], case .array(let list)? = set["rows"] { print("graph: \(list.count) row(s)") }
             _ = try await loams.graph.delete("notes_graph")
-        } catch let error as LoamsError where error.code == .unimplemented {
+        } catch where LoamsError.code(of: error) == .unimplemented {
             print("graph: not in this build")
         }
 
