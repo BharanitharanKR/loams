@@ -1000,6 +1000,453 @@
         "finished_at",
         "last_seen_at"
       ]
+    },
+    {
+      "fixture": "app_collections",
+      "about": "The notes app, part one: create a namespace and a collection from the Schema builder, page the collections, upsert five notes with an idempotency key and replay it, read them back at the write's token, patch and delete, count with a typed `where`, scroll every page, and the two refusals an app meets first (`not_found`, `filter_conflict`).",
+      "required": false,
+      "pinnedBy": [
+        "R3",
+        "R4",
+        "R6",
+        "R8",
+        "R11"
+      ],
+      "transport": "connect",
+      "server": "loams dev",
+      "steps": [
+        {
+          "step": 0,
+          "about": "Feature detection: what this instance serves.",
+          "method": "POST",
+          "path": "/loams.instance.v1.InstanceService/GetInstance",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200,
+            "apiVersions": [
+              "loams.collection.v1"
+            ]
+          }
+        },
+        {
+          "step": 1,
+          "about": "Create the namespace.",
+          "method": "POST",
+          "path": "/loams.collection.v1.NamespaceService/CreateNamespace",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 2,
+          "about": "Create it again: `already_exists`, which `retry_safe` callers treat as done.",
+          "method": "POST",
+          "path": "/loams.collection.v1.NamespaceService/CreateNamespace",
+          "contentType": "application/json",
+          "httpStatus": 409,
+          "expect": {
+            "status": 409,
+            "reason": "already_exists"
+          }
+        },
+        {
+          "step": 3,
+          "about": "Create `notes` with the Schema builder's `schema_notes` output.",
+          "method": "POST",
+          "path": "/loams.collection.v1.CollectionService/CreateCollection",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 4,
+          "about": "Read it back.",
+          "method": "POST",
+          "path": "/loams.collection.v1.CollectionService/GetCollection",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 5,
+          "about": "A second collection, so the list has two pages.",
+          "method": "POST",
+          "path": "/loams.collection.v1.CollectionService/CreateCollection",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 6,
+          "about": "List one collection a page: the first page, with a `next_page_token`.",
+          "method": "POST",
+          "path": "/loams.collection.v1.CollectionService/ListCollections",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 7,
+          "about": "The second page, from the first page's token (`list_all` follows it).",
+          "method": "POST",
+          "path": "/loams.collection.v1.CollectionService/ListCollections",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 8,
+          "about": "Upsert the five notes, keyed (R3).",
+          "method": "POST",
+          "path": "/loams.collection.v1.DocumentService/WriteDocuments",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 9,
+          "about": "The same write with the same key: the first answer, not a second write.",
+          "method": "POST",
+          "path": "/loams.collection.v1.DocumentService/WriteDocuments",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200,
+            "identicalToStep": 8
+          }
+        },
+        {
+          "step": 10,
+          "about": "Read the notes at the write's token: read-your-writes (R4).",
+          "method": "POST",
+          "path": "/loams.collection.v1.DocumentService/GetDocuments",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 11,
+          "about": "Patch note 2 (`documents.patch`).",
+          "method": "POST",
+          "path": "/loams.collection.v1.DocumentService/WriteDocuments",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 12,
+          "about": "Delete note 5 (`documents.delete`).",
+          "method": "POST",
+          "path": "/loams.collection.v1.DocumentService/WriteDocuments",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 13,
+          "about": "Count the policy notes with a typed `where` (the Filter builder's `filter_term`).",
+          "method": "POST",
+          "path": "/loams.collection.v1.DocumentService/CountDocuments",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 14,
+          "about": "Scroll two at a time: the first page.",
+          "method": "POST",
+          "path": "/loams.collection.v1.DocumentService/ScrollDocuments",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 15,
+          "about": "The second and last page, `after` the first page's `next`: it answers no `next`, which is where `scroll_all` stops.",
+          "method": "POST",
+          "path": "/loams.collection.v1.DocumentService/ScrollDocuments",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 16,
+          "about": "A collection that is not there: `not_found` (R8).",
+          "method": "POST",
+          "path": "/loams.collection.v1.CollectionService/GetCollection",
+          "contentType": "application/json",
+          "httpStatus": 404,
+          "expect": {
+            "status": 404,
+            "reason": "not_found"
+          }
+        },
+        {
+          "step": 17,
+          "about": "Both `filter` and `where`: `filter_conflict`, refused before anything is read.",
+          "method": "POST",
+          "path": "/loams.collection.v1.DocumentService/CountDocuments",
+          "contentType": "application/json",
+          "httpStatus": 400,
+          "expect": {
+            "status": 400,
+            "reason": "filter_conflict"
+          }
+        },
+        {
+          "step": 18,
+          "about": "Drop `scratch`.",
+          "method": "POST",
+          "path": "/loams.collection.v1.CollectionService/DropCollection",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        }
+      ],
+      "invariant": null,
+      "volatile": [
+        "token",
+        "readToken",
+        "consistencyToken",
+        "collectionId",
+        "namespaceId",
+        "createdAtMs",
+        "updatedAtMs",
+        "instanceId",
+        "performance",
+        "manifestVersion",
+        "version",
+        "seqNo",
+        "positions",
+        "pin"
+      ]
+    },
+    {
+      "fixture": "app_graph",
+      "about": "The notes app, part three: a graph of notes and tags, queried with GQL and walked from a search. Recorded from `loams dev`'s default build, which carries no `graph` feature, so each step is the `feature_not_in_variant` refusal an SDK reports as `FeatureNotInVariant` — and the expand stage of a search is refused the same way.",
+      "required": false,
+      "pinnedBy": [
+        "R5",
+        "R8"
+      ],
+      "transport": "connect",
+      "server": "loams dev",
+      "steps": [
+        {
+          "step": 0,
+          "about": "Create the graph.",
+          "method": "POST",
+          "path": "/loams.graph.v1.GraphAdminService/CreateGraph",
+          "contentType": "application/json",
+          "httpStatus": 501,
+          "expect": {
+            "status": 501,
+            "reason": "feature_not_in_variant"
+          }
+        },
+        {
+          "step": 1,
+          "about": "Insert notes, tags and `TAGGED` edges with GQL and parameters, keyed.",
+          "method": "POST",
+          "path": "/loams.graph.v1.GraphService/Execute",
+          "contentType": "application/json",
+          "httpStatus": 501,
+          "expect": {
+            "status": 501,
+            "reason": "feature_not_in_variant"
+          }
+        },
+        {
+          "step": 2,
+          "about": "Read it back, read-only.",
+          "method": "POST",
+          "path": "/loams.graph.v1.GraphService/Execute",
+          "contentType": "application/json",
+          "httpStatus": 501,
+          "expect": {
+            "status": 501,
+            "reason": "feature_not_in_variant"
+          }
+        },
+        {
+          "step": 3,
+          "about": "The builder corpus case `search_expand`: a search that walks the graph from its hits. Without the graph feature the expand stage is refused as `invalid_argument` (\"expand runs on Loams Graph, which this server does not run\"), not `feature_not_in_variant`: the search itself is served.",
+          "method": "POST",
+          "path": "/loams.collection.v1.QueryService/Search",
+          "contentType": "application/json",
+          "httpStatus": 400,
+          "expect": {
+            "status": 400,
+            "reason": "invalid_argument"
+          }
+        },
+        {
+          "step": 4,
+          "about": "Delete the graph.",
+          "method": "POST",
+          "path": "/loams.graph.v1.GraphAdminService/DeleteGraph",
+          "contentType": "application/json",
+          "httpStatus": 501,
+          "expect": {
+            "status": 501,
+            "reason": "feature_not_in_variant"
+          }
+        }
+      ],
+      "invariant": null,
+      "volatile": [
+        "token",
+        "readToken",
+        "consistencyToken",
+        "collectionId",
+        "namespaceId",
+        "createdAtMs",
+        "updatedAtMs",
+        "instanceId",
+        "performance",
+        "manifestVersion",
+        "version",
+        "seqNo",
+        "positions",
+        "pin"
+      ]
+    },
+    {
+      "fixture": "app_search",
+      "about": "The notes app, part two: every search the builder corpus spells, against the notes `app_collections` wrote (four of them, after its delete). Text with a filter, highlights and a projection; its next page through `search_after`; a vector search; hybrid with RRF, DBSF and a weighted sum; and the weighted sum refused for the wrong number of weights.",
+      "required": false,
+      "pinnedBy": [
+        "R6",
+        "R8"
+      ],
+      "transport": "connect",
+      "server": "loams dev",
+      "steps": [
+        {
+          "step": 0,
+          "about": "The builder corpus case `search_text_filter_highlight_select`, sent as `search.query`.",
+          "method": "POST",
+          "path": "/loams.collection.v1.QueryService/Search",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 1,
+          "about": "The next page, `search_after` the last hit's `sort_values` (`query_all`). The builder corpus's `search_after_page` is this body.",
+          "method": "POST",
+          "path": "/loams.collection.v1.QueryService/Search",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 2,
+          "about": "The builder corpus case `search_vector_ann_params`, sent as `vector.search`.",
+          "method": "POST",
+          "path": "/loams.collection.v1.QueryService/Search",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 3,
+          "about": "The builder corpus case `search_hybrid_rrf`, sent as `search.query`.",
+          "method": "POST",
+          "path": "/loams.collection.v1.QueryService/Search",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 4,
+          "about": "The builder corpus case `search_hybrid_dbsf`, sent as `search.query`.",
+          "method": "POST",
+          "path": "/loams.collection.v1.QueryService/Search",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 5,
+          "about": "The builder corpus case `search_hybrid_weighted`, sent as `search.query`.",
+          "method": "POST",
+          "path": "/loams.collection.v1.QueryService/Search",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 6,
+          "about": "A weighted sum with one weight for two retrievers: refused. The builders refuse it before sending; this is the server's own refusal of the raw request.",
+          "method": "POST",
+          "path": "/loams.collection.v1.QueryService/Search",
+          "contentType": "application/json",
+          "httpStatus": 400,
+          "expect": {
+            "status": 400,
+            "reason": "invalid_argument"
+          }
+        }
+      ],
+      "invariant": null,
+      "volatile": [
+        "token",
+        "readToken",
+        "consistencyToken",
+        "collectionId",
+        "namespaceId",
+        "createdAtMs",
+        "updatedAtMs",
+        "instanceId",
+        "performance",
+        "manifestVersion",
+        "version",
+        "seqNo",
+        "positions",
+        "pin"
+      ]
     }
   ]
 }
