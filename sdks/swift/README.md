@@ -83,7 +83,7 @@ _ = try await loams.collections.create("notes",
     schema: Schema().text("title").text("body").keyword("tags").i64("n").vector("embedding", dim: 4))
 
 let notes = loams.collection("notes")
-_ = try await notes.upsert([Doc(1, ["title": "Refund policy", "tags": ["policy"].json, "n": 1],
+_ = try await notes.upsert([Doc(1, ["title": .string("Refund policy"), "tags": ["policy"].json, "n": .int(1)],
                                 vectors: ["embedding": [1, 0, 0, 0]])])
 
 let hits = try await loams.search.query(
