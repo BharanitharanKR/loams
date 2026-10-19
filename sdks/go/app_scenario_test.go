@@ -1,6 +1,7 @@
 // SDKP Parts B and C for Go: the app scenario through the public facade.
 //
-// go_app_collections, go_app_search, go_app_graph and go_app_sql (Part C) replay
+// go_app_collections, go_app_search, go_app_graph, and (Part C) go_app_sql and
+// go_app_streams replay
 // sdks/fixtures/recorded/app/ against the shared fixture server
 // (sdks/fixtures/app-scenario.md says how): each step's facade call is made on
 // a Client with the recorded request — built with the builders when the step
@@ -30,6 +31,7 @@ import (
 	graphv1 "loams.dev/go/gen/loams/graph/v1"
 	operationsv1 "loams.dev/go/gen/loams/operations/v1"
 	sqlv1 "loams.dev/go/gen/loams/sql/v1"
+	streamv1 "loams.dev/go/gen/loams/stream/v1"
 )
 
 // Canonical test names, for check-languages --suite app.
@@ -38,6 +40,7 @@ const (
 	AppSearch      = "go_app_search"
 	AppGraph       = "go_app_graph"
 	AppSql         = "go_app_sql"
+	AppStreams     = "go_app_streams"
 )
 
 type appStep struct {
@@ -153,6 +156,27 @@ var appCalls = map[string]appCall{
 	}),
 	"sql.query_arrow": unaryCall[sqlv1.QueryArrowRequest, sqlv1.QueryArrowResponse](func(c *Client) func(context.Context, *sqlv1.QueryArrowRequest, ...CallOption) (*sqlv1.QueryArrowResponse, error) {
 		return c.Sql().QueryArrow
+	}),
+	"streams.create": unaryCall[streamv1.CreateStreamRequest, streamv1.CreateStreamResponse](func(c *Client) func(context.Context, *streamv1.CreateStreamRequest, ...CallOption) (*streamv1.CreateStreamResponse, error) {
+		return c.Streams().Create
+	}),
+	"streams.get": unaryCall[streamv1.DescribeStreamRequest, streamv1.DescribeStreamResponse](func(c *Client) func(context.Context, *streamv1.DescribeStreamRequest, ...CallOption) (*streamv1.DescribeStreamResponse, error) {
+		return c.Streams().Get
+	}),
+	"streams.list": unaryCall[streamv1.ListStreamsRequest, streamv1.ListStreamsResponse](func(c *Client) func(context.Context, *streamv1.ListStreamsRequest, ...CallOption) (*streamv1.ListStreamsResponse, error) {
+		return c.Streams().List
+	}),
+	"streams.produce": unaryCall[streamv1.ProduceRequest, streamv1.ProduceResponse](func(c *Client) func(context.Context, *streamv1.ProduceRequest, ...CallOption) (*streamv1.ProduceResponse, error) {
+		return c.Streams().Produce
+	}),
+	"streams.fetch": unaryCall[streamv1.FetchRequest, streamv1.FetchResponse](func(c *Client) func(context.Context, *streamv1.FetchRequest, ...CallOption) (*streamv1.FetchResponse, error) {
+		return c.Streams().Fetch
+	}),
+	"streams.produce_events": unaryCall[streamv1.ProduceCloudEventsRequest, streamv1.ProduceCloudEventsResponse](func(c *Client) func(context.Context, *streamv1.ProduceCloudEventsRequest, ...CallOption) (*streamv1.ProduceCloudEventsResponse, error) {
+		return c.Streams().ProduceEvents
+	}),
+	"streams.fetch_events": unaryCall[streamv1.FetchCloudEventsRequest, streamv1.FetchCloudEventsResponse](func(c *Client) func(context.Context, *streamv1.FetchCloudEventsRequest, ...CallOption) (*streamv1.FetchCloudEventsResponse, error) {
+		return c.Streams().FetchEvents
 	}),
 }
 
@@ -312,6 +336,44 @@ func TestGoAppGraph(t *testing.T) {
 
 func TestGoAppSql(t *testing.T) {
 	t.Run(AppSql, func(t *testing.T) { replayOnOwnServer(t, "app_sql") })
+}
+
+func TestGoAppStreams(t *testing.T) {
+	t.Run(AppStreams, func(t *testing.T) { replayOnOwnServer(t, "app_streams") })
+}
+
+// Streams().Subscribe reads the recorded fetch page of app_streams and knows
+// where to resume.
+func TestGoStreamsSubscribeReadsTheRecordedPage(t *testing.T) {
+	server, err := startNodeFixtureServer(t)
+	if err != nil {
+		t.Skipf("the shared fixture server needs node: %v", err)
+	}
+	t.Cleanup(server.stop)
+	client, err := New(Options{
+		Endpoint:  server.endpoint,
+		Namespace: "app",
+		NoRetries: true,
+		Transport: TransportConfig{ConnectOptions: []connect.ClientOption{connect.WithProtoJSON()}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	maxRecords := uint32(10)
+	sub := client.Streams().Subscribe(context.Background(),
+		&streamv1.FetchRequest{Stream: "note-events", MaxRecords: &maxRecords},
+		WithHeader("loams-fixture-name", "app_streams"), WithHeader("loams-fixture-step", "5"))
+	defer sub.Close()
+	var offsets []uint64
+	for len(offsets) < 2 && sub.Next() {
+		offsets = append(offsets, sub.Record().GetOffset())
+	}
+	if err := sub.Err(); err != nil {
+		t.Fatal(err)
+	}
+	if fmt.Sprint(offsets) != "[0 1]" || sub.Offset() != 2 {
+		t.Fatalf("offsets %v, resume at %d; want [0 1] and 2", offsets, sub.Offset())
+	}
 }
 
 // Sql().Records sends the `$1` value and reads the rows as records, against

@@ -18,6 +18,7 @@ import (
 
 	loams "loams.dev/go"
 	collectionv1 "loams.dev/go/gen/loams/collection/v1"
+	streamv1 "loams.dev/go/gen/loams/stream/v1"
 )
 
 func main() {
@@ -99,6 +100,28 @@ func run(ctx context.Context) error {
 	}
 	for _, row := range perTag {
 		fmt.Println(row["tags"], row["c"])
+	}
+
+	// A stream of note events: produce with a producer key, then read it back.
+	if _, err := client.Streams().Create(ctx, &streamv1.CreateStreamRequest{Name: "note-events", Partitions: 1}); err != nil {
+		return err
+	}
+	producer, seq := "notes-example", uint64(1)
+	if _, err := client.Streams().Produce(ctx, &streamv1.ProduceRequest{
+		Stream:      "note-events",
+		Records:     []*streamv1.Record{{Value: []byte(`{"note":1,"op":"created"}`)}},
+		ProducerId:  &producer,
+		ProducerSeq: &seq,
+	}); err != nil {
+		return err
+	}
+	events := client.Streams().Subscribe(ctx, &streamv1.FetchRequest{Stream: "note-events"})
+	defer events.Close()
+	if events.Next() {
+		fmt.Println("event at", events.Record().GetOffset())
+	}
+	if err := events.Err(); err != nil {
+		return err
 	}
 
 	// A bulk load: chunked, one idempotency key per chunk, the tokens merged.

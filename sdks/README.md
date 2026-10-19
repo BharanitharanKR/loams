@@ -34,8 +34,7 @@ A row is added by that language's SDKP task; the app suite is
 | Python | yes, sync and async | yes | yes | `app_collections`, `app_search`, `app_graph`, `app_sql`, `app_streams` |
 | TypeScript | yes | with P0b/P0c | yes | `app_collections`, `app_search`, `app_graph` |
 | Python | yes, sync and async | with P0b/P0c | yes | `app_collections`, `app_search`, `app_graph` |
-| Go | yes | with P0b/P0c | yes | `app_collections`, `app_search`, `app_graph` |
-| Go | yes | sql: yes; streams with P0c | yes | `app_collections`, `app_search`, `app_graph`, `app_sql` |
+| Go | yes | yes | yes | `app_collections`, `app_search`, `app_graph`, `app_sql`, `app_streams` |
 
 ## Installing
 

@@ -365,6 +365,8 @@ func testPaginationIterator(t *testing.T) {
 				paged := map[string]bool{
 					"live.admin.ListApps": true, "collections.List": true,
 					"collections.ListVersions": true, "namespaces.List": true, "graph.List": true,
+					// `streams.ListAll` (SDKP Part C) is the same Paginate over List.
+					"streams.List": true,
 				}
 				if call.Pagination != nil && !paged[module.Name+"."+call.Name] {
 					t.Fatalf("%s.%s is paged, so the end-to-end half of %s must be written now",

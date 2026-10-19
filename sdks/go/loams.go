@@ -114,6 +114,7 @@ type Client struct {
 	vector      VectorModule
 	graph       GraphModule
 	sql         SqlModule
+	streams     StreamsModule
 
 	// modules is every generated module, by name: the catalogue a caller
 	// iterates when it wants to feature-detect without hard-coding a field.
@@ -217,6 +218,7 @@ func New(options Options) (*Client, error) {
 	client.vector = &vectorModule{app("vector")}
 	client.graph = &graphModule{app("graph")}
 	client.sql = &sqlModule{app("sql")}
+	client.streams = &streamsModule{app("streams")}
 	client.modules["namespaces"] = client.namespaces
 	client.modules["collections"] = client.collections
 	client.modules["documents"] = client.documents
@@ -224,6 +226,7 @@ func New(options Options) (*Client, error) {
 	client.modules["vector"] = client.vector
 	client.modules["graph"] = client.graph
 	client.modules["sql"] = client.sql
+	client.modules["streams"] = client.streams
 	client.handleModules = HandleModules{
 		Documents:      DocumentCalls{Write: client.documents.Write, Scroll: client.documents.Scroll},
 		GetDocuments:   client.documents.Get,
@@ -343,6 +346,10 @@ func (c *Client) Graph() GraphModule { return c.graph }
 // Sql is `loams.sql` (SDKP §2.5): one read-only SQL statement over a
 // namespace's collections.
 func (c *Client) Sql() SqlModule { return c.sql }
+
+// Streams is `loams.streams` (SDKP §2.5): a namespace's logs, with
+// Subscribe (R14).
+func (c *Client) Streams() StreamsModule { return c.streams }
 
 // Module returns a generated module by name, so a caller can feature-detect
 // without a hard-coded field:

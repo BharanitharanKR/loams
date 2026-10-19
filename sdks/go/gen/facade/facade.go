@@ -36,6 +36,7 @@ import (
 	instancev1connect "loams.dev/go/gen/loams/instance/v1/instancev1connect"
 	livev1connect "loams.dev/go/gen/loams/live/v1/livev1connect"
 	sqlv1connect "loams.dev/go/gen/loams/sql/v1/sqlv1connect"
+	streamv1connect "loams.dev/go/gen/loams/stream/v1/streamv1connect"
 )
 
 // ProtoRev is the proto revision this SDK was generated from
@@ -505,6 +506,60 @@ var Modules = []ModuleBinding{
 		},
 	},
 	{
+		Name:    "streams",
+		Summary: "Streams: create, list and describe a namespace's logs; produce and fetch records and CloudEvents.",
+		Service: streamv1connect.StreamServiceName,
+		Package: "loams.stream.v1",
+		Calls: []CallBinding{
+			{
+				Module: "streams", Name: "Create", ProtoName: "create",
+				Method: "CreateStream", RPC: streamv1connect.StreamServiceName + "/CreateStream",
+				Service: streamv1connect.StreamServiceName, Package: "loams.stream.v1",
+				Idempotency: None, Retry: RetrySafe, Streaming: Unary,
+			},
+			{
+				Module: "streams", Name: "Fetch", ProtoName: "fetch",
+				Method: "Fetch", RPC: streamv1connect.StreamServiceName + "/Fetch",
+				Service: streamv1connect.StreamServiceName, Package: "loams.stream.v1",
+				Idempotency: NoSideEffects, Retry: RetrySafe, Streaming: Unary,
+			},
+			{
+				Module: "streams", Name: "FetchEvents", ProtoName: "fetch_events",
+				Method: "FetchCloudEvents", RPC: streamv1connect.StreamServiceName + "/FetchCloudEvents",
+				Service: streamv1connect.StreamServiceName, Package: "loams.stream.v1",
+				Idempotency: NoSideEffects, Retry: RetrySafe, Streaming: Unary,
+			},
+			{
+				Module: "streams", Name: "Get", ProtoName: "get",
+				Method: "DescribeStream", RPC: streamv1connect.StreamServiceName + "/DescribeStream",
+				Service: streamv1connect.StreamServiceName, Package: "loams.stream.v1",
+				Idempotency: NoSideEffects, Retry: RetrySafe, Streaming: Unary,
+			},
+			{
+				Module: "streams", Name: "List", ProtoName: "list",
+				Method: "ListStreams", RPC: streamv1connect.StreamServiceName + "/ListStreams",
+				Service: streamv1connect.StreamServiceName, Package: "loams.stream.v1",
+				Idempotency: NoSideEffects, Retry: RetrySafe, Streaming: Unary,
+				Pagination: &Pagination{
+					ItemsField: "Streams", NextPageTokenField: "NextPageToken",
+					PageSizeField: "PageSize", PageTokenField: "PageToken",
+				},
+			},
+			{
+				Module: "streams", Name: "Produce", ProtoName: "produce",
+				Method: "Produce", RPC: streamv1connect.StreamServiceName + "/Produce",
+				Service: streamv1connect.StreamServiceName, Package: "loams.stream.v1",
+				Idempotency: None, Retry: RetryManual, Streaming: Unary,
+			},
+			{
+				Module: "streams", Name: "ProduceEvents", ProtoName: "produce_events",
+				Method: "ProduceCloudEvents", RPC: streamv1connect.StreamServiceName + "/ProduceCloudEvents",
+				Service: streamv1connect.StreamServiceName, Package: "loams.stream.v1",
+				Idempotency: None, Retry: RetryManual, Streaming: Unary,
+			},
+		},
+	},
+	{
 		Name:     "tables",
 		Service:  livev1connect.LiveServiceName,
 		Package:  "loams.live.v1",
@@ -593,5 +648,6 @@ func NewServiceClients(httpClient connect.HTTPClient, baseURL string, opts ...co
 		graphv1connect.GraphAdminServiceName:      graphv1connect.NewGraphAdminServiceClient(httpClient, baseURL, opts...),
 		graphv1connect.GraphServiceName:           graphv1connect.NewGraphServiceClient(httpClient, baseURL, opts...),
 		sqlv1connect.SqlServiceName:               sqlv1connect.NewSqlServiceClient(httpClient, baseURL, opts...),
+		streamv1connect.StreamServiceName:         streamv1connect.NewStreamServiceClient(httpClient, baseURL, opts...),
 	}
 }

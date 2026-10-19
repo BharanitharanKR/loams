@@ -133,9 +133,11 @@ All notable changes to this project are documented here. The format follows [Kee
   `Vector()` and `Graph()` (the binding table checked against
   `facade-index.json` by `go_facade_matches_index`), the app scenario replayed
   through them (`go_app_*`), and `examples/notes`.
-- Go SDK: `client.Sql()` (SDKP L3 part C): `Query`, `QueryArrow`,
-  `Records(ctx, statement, params)` and `SqlRecords(answer)`, replayed by
-  `go_app_sql`.
+- Go SDK: `client.Sql()` and `client.Streams()` (SDKP L3 part C): `Query`,
+  `QueryArrow`, `Records(ctx, statement, params)` and `SqlRecords(answer)`;
+  `Create`, `Get`, `List`/`ListAll`, `Produce`, `Fetch`, `ProduceEvents`,
+  `FetchEvents` and `Subscribe`; replayed by `go_app_sql` and
+  `go_app_streams`.
 
 ### Fixed
 
