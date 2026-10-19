@@ -760,6 +760,12 @@ jobs:
             node apps/desktop-electron/scripts/sign-manifest.mjs "$y"
           done
 
+      # A product release carries no update manifests (they are only served from desktop-v releases),
+      # so drop them before the checksums: DESKTOP-SHA256SUMS must list only files that are attached.
+      - name: no update manifests on a product release
+        if: env.MODE == 'product'
+        run: rm -f "$RUNNER_TEMP"/release/latest*.yml "$RUNNER_TEMP"/release/latest*.yml.sig
+
       - name: checksums
         run: node apps/desktop-electron/scripts/checksums.mjs "$RUNNER_TEMP/release"
 
@@ -815,7 +821,6 @@ jobs:
         run: |
           set -euo pipefail
           cd "$RUNNER_TEMP/release"
-          rm -f latest*.yml
           mv SHA256SUMS DESKTOP-SHA256SUMS
           [ ! -e SHA256SUMS.asc ] || mv SHA256SUMS.asc DESKTOP-SHA256SUMS.asc
           ls -l
