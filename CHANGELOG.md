@@ -27,9 +27,18 @@ All notable changes to this project are documented here. The format follows [Kee
   `producer_id` and `producer_seq` is idempotent (a repeat answers the first append with `duplicate`);
   `Fetch` takes `max_records` and a long poll (`max_wait_ms`, at most 30 s). The tonic listener of
   `--stream-grpc-listen` is unchanged and wire-compatible.
+- **Desktop: Settings > Postgres** (PG2 R9.1): the pg-control URL (default `127.0.0.1:7680`) and the
+  API key file (`postgres.control.apiKeyFile`), with checks, a Test connection button, and a file
+  picker. Main reads the key file; the key never reaches the renderer. The Postgres page follows a
+  saved change without a restart, and its subtitle names pg-control's own address. The environment
+  variables `LOAMS_PG_CONTROL_URL`, `LOAMS_PG_CONTROL_API_KEY` and `_API_KEY_FILE` still win, and the
+  page says so when they are set.
 
 ### Changed
-
+- **Desktop: Durable on a remote server**: the protocol proxy forwards `/durable/` to the active
+  remote server's main port (`POST /durable/`, B12) with the session the other engine routes use,
+  instead of answering 404. The Durable page and the Overview's Durable card work on remote servers;
+  an engine without the API reads as "Not on this server".
 - Loams is fully open source; there is no open core (D1119). README, CONTRIBUTING, GOVERNANCE, ECOSYSTEM, the design docs and the decision log now say so; the metering, billing and control-plane code is moving into the open repo now (design §63). Ostrium Labs offers services (infrastructure efficiency, SLAs, support).
 
 ## [0.1.0] - 2026-10-19

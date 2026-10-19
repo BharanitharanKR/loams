@@ -81,6 +81,13 @@ const api: LoamsDesktopApi = {
 		chooseEditorCommand: () => invoke(CH.studioEditorChooseCommand),
 		setNotifications: (prefs) => invoke(CH.studioNotifySet, prefs),
 	},
+	pgControl: {
+		settings: () => invoke(CH.pgControlSettings),
+		save: (input) => invoke(CH.pgControlSave, input),
+		test: (input) => invoke(CH.pgControlTest, input),
+		pickKeyFile: () => invoke(CH.pgControlPickKeyFile),
+		onChanged: (cb) => subscribe(CH.pgControlEvent, cb),
+	},
 	update: {
 		state: () => invoke(CH.updateState),
 		check: () => invoke(CH.updateCheck),

@@ -1,7 +1,7 @@
 // @loams/plugin-desktop-settings: Loams Desktop's Settings area. It owns the
 // Settings nav entry, the `/settings` pages and the sub-navigation, and fills
 // it with the sections that need only the `desktop` bridge: Local stacks,
-// Updates and About. Other plugins add their section through the
+// Postgres (where pg-control is), Updates and About. Other plugins add their section through the
 // `console.settings.section` slot (Servers, Agent providers); this plugin
 // does not know them. It also mounts the update toast in `shell.overlay` (CF1 Task 16).
 
@@ -10,6 +10,7 @@ import type { Context } from '@loams/cordis';
 // Brings in the `desktop` service type (a module augmentation of `Services`).
 import type {} from '@loams/platform-electron';
 import { AboutSection } from './about.js';
+import { PgControlSection } from './pg-control.js';
 import { SettingsPage } from './settings-page.js';
 import { StacksSection } from './stacks.js';
 import { UpdateToast } from './update-toast.js';
@@ -17,6 +18,7 @@ import { UpdatesSection } from './updates.js';
 
 export { AboutSection } from './about.js';
 export { LiveStoreCard, useLiveNotice } from './live-store.js';
+export { PgControlSection } from './pg-control.js';
 export { SettingsPage } from './settings-page.js';
 export { StacksSection, useStacks } from './stacks.js';
 export { UPDATE_TOAST_ID, UpdateToast, updateToast } from './update-toast.js';
@@ -71,6 +73,7 @@ const plugin: PluginModule = {
         <UpdateToast update={desktop.update} />
       )),
     );
+    const pgControl = desktop.pgControl;
     const sections = [
       {
         id: 'stacks',
@@ -78,6 +81,17 @@ const plugin: PluginModule = {
         order: 20,
         node: () => <StacksSection desktop={desktop} />,
       },
+      // An older desktop bridge has no pg-control settings: no section.
+      ...(pgControl
+        ? [
+            {
+              id: 'postgres',
+              label: 'Postgres',
+              order: 25,
+              node: () => <PgControlSection api={pgControl} />,
+            },
+          ]
+        : []),
       {
         id: 'updates',
         label: 'Updates',

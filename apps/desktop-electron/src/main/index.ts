@@ -40,6 +40,7 @@ import { FactoryHost } from "./factory/host";
 import { registerFactoryIpc } from "./factory/ipc.electron";
 import { Vault } from "./factory/vault";
 import { FactoryViews } from "./factory/views.electron";
+import { registerPgControlIpc } from "./pgcontrol/ipc.electron";
 import { readPgControlTarget } from "./pgcontrol/target";
 import { registerPreviewIpc } from "./preview/ipc.electron";
 import { StudioPreviewView } from "./preview/view.electron";
@@ -370,6 +371,8 @@ const singleInstance = initSingleInstance({
 			}, 5_000);
 			// SD1 Task 28: Studio's editor hand-off and notification choices.
 			registerStudioIpc({ settingsFile: settingsFile() });
+			// PG2 R9.1: App settings > Postgres control plane.
+			registerPgControlIpc({ settingsFile });
 			// With the TiKV stack chosen, a stack left running from last time starts the engine
 			// with Live on it directly, but a slow or absent runtime must not hold the engine
 			// back for long.

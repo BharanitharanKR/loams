@@ -179,6 +179,29 @@ describe('settings area', () => {
     ]);
     expect(slots.entries('shell.nav.section')[0]?.meta?.href).toBe('/settings');
   });
+
+  it('plugin_adds_the_postgres_section_when_the_bridge_has_pg_control', () => {
+    const slots = new SlotRegistry();
+    const ctx = { effect: (fn: () => unknown) => void fn(), root: {} };
+    const desktop = {
+      ...fake().api,
+      pgControl: {
+        settings: async () => ({}),
+        save: async () => ({}),
+        test: async () => ({}),
+        pickKeyFile: async () => null,
+        onChanged: () => () => undefined,
+      },
+    };
+    const services = { desktop, slots, router: { page: () => () => undefined } };
+    plugin.apply(Object.assign(ctx, services) as never, {});
+    expect(slots.entries('console.settings.section').map((e) => e.meta?.id)).toEqual([
+      'stacks',
+      'postgres',
+      'updates',
+      'about',
+    ]);
+  });
 });
 
 describe('local stacks section', () => {

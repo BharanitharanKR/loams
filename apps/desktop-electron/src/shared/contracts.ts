@@ -135,6 +135,69 @@ export type UpdateState = Awaited<
 	ReturnType<LoamsDesktopApi["update"]["state"]>
 >;
 
+// ---- PG2 R9.1: where pg-control is, set in App settings ----
+
+/**
+ * Settings > Postgres control plane, as main reads it. The key itself never
+ * crosses IPC: main reads the file, and says only where its key comes from.
+ */
+export interface PgControlSettings {
+	/** settings.json's `postgres.control.url`, as an origin; "" uses `defaultUrl`. */
+	url: string;
+	/** settings.json's `postgres.control.apiKeyFile`; "" for none. */
+	apiKeyFile: string;
+	defaultUrl: string;
+	/** The URL requests go to now: the environment's, else `url`, else `defaultUrl`. */
+	effectiveUrl: string;
+	/** Environment variables set for this app that win over these settings. */
+	envOverrides: (
+		| "LOAMS_PG_CONTROL_URL"
+		| "LOAMS_PG_CONTROL_API_KEY"
+		| "LOAMS_PG_CONTROL_API_KEY_FILE"
+	)[];
+	/** Where the key main sends comes from, or "none" (no key is sent). */
+	keySource: "env" | "env-file" | "settings-file" | "none";
+}
+
+/** The two values the Settings form edits. */
+export interface PgControlSettingsInput {
+	url: string;
+	apiKeyFile: string;
+}
+
+/** A message per field that does not pass main's checks. */
+export type PgControlFieldErrors = Partial<
+	Record<keyof PgControlSettingsInput, string>
+>;
+
+export type PgControlSaveResult =
+	| { ok: true; value: PgControlSettings }
+	| {
+			ok: false;
+			code: string;
+			message: string;
+			errors?: PgControlFieldErrors;
+	  };
+
+/** "Test connection": one ListOperations call with the form's values, not yet saved. */
+export interface PgControlTestResult {
+	ok: boolean;
+	code:
+		| "ok"
+		| "invalid"
+		| "unreachable"
+		| "unauthenticated"
+		| "permission_denied"
+		| "not_pg_control"
+		| "error";
+	message: string;
+	/** The origin that was tried. */
+	url: string;
+	/** Round trip of the call, when one answered. */
+	ms?: number;
+	errors?: PgControlFieldErrors;
+}
+
 export interface LoamsDesktopApi {
 	version: string;
 	platform: DesktopPlatform;
@@ -259,6 +322,20 @@ export interface LoamsDesktopApi {
 			name: string,
 			text: string,
 		): Promise<IpcResult<{ saved: boolean }>>;
+	};
+	/**
+	 * PG2 R9.1: where pg-control is, and the file its API key is in (App settings >
+	 * Postgres). Missing on an older desktop bridge.
+	 */
+	pgControl?: {
+		settings(): Promise<PgControlSettings>;
+		/** Checks and saves both values; the Postgres page picks them up at once. */
+		save(input: PgControlSettingsInput): Promise<PgControlSaveResult>;
+		test(input: PgControlSettingsInput): Promise<PgControlTestResult>;
+		/** The OS file picker for the key file; null when cancelled. Main never reads it here. */
+		pickKeyFile(): Promise<string | null>;
+		/** After a save, from any window. */
+		onChanged(cb: (s: PgControlSettings) => void): () => void;
 	};
 	/** D675: the agent panel. The loop runs in main; keys never cross IPC. */
 	chat: {
@@ -389,6 +466,11 @@ export const CH = {
 	studioEditorSet: "studio:editor-set",
 	studioEditorChooseCommand: "studio:editor-choose-command",
 	studioNotifySet: "studio:notify-set",
+	pgControlSettings: "pg-control:settings",
+	pgControlSave: "pg-control:save",
+	pgControlTest: "pg-control:test",
+	pgControlPickKeyFile: "pg-control:pick-key-file",
+	pgControlEvent: "pg-control:event",
 } as const;
 
 // ---- D675: the agent panel ----
