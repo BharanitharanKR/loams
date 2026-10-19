@@ -86,6 +86,25 @@ All notable changes to this project are documented here. The format follows [Kee
   `fetch_events` from `loams.stream.v1`, the Python and Go stubs for both, and
   the `app_sql` and `app_streams` scenarios recorded from `loams dev`
   (`record-fixtures.mjs --source app --scenario …`).
+- Python SDK (`loams`): the app-building layer of SDKP, in both `Loams` and
+  `AsyncLoams`. `Schema`, `Filter` and `Search` builders checked against the
+  builder corpus (`sdks/fixtures/builders/`); `loams.collection(name)` handles;
+  `ConsistencyToken` parse/merge/print checked against
+  `sdks/fixtures/tokens.json`, and a session store that merges every response
+  token (fields and the `loams-consistency-token` header) and sends
+  `consistency.at_least`; a default namespace (R11); a 30 s unary deadline
+  raising `client_deadline_exceeded` (R12); `documents.write_batch` (R13);
+  `streams.subscribe` (R14); `search.text`, `search.hybrid`,
+  `search.query_all`, `documents.upsert/delete/patch/scroll_all` and
+  `<call>_all` for paged calls; `Loams.from_env()`. The package now carries the
+  `loams.collection.v1` and `loams.graph.v1` messages and Connect stubs.
+
+### Changed
+
+- Python SDK: `session_consistency=True` now works: the response header is read
+  through `connectrpc.client.ResponseMetadata`, and two different tokens merge
+  instead of being refused. `timeout_ms` is now the SDK's own deadline over all
+  of a call's retries rather than the transport's per-attempt one.
 
 ### Fixed
 

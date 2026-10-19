@@ -160,11 +160,11 @@ def test_caller_headers_reach_the_wire_on_the_async_client(server: _EchoServer) 
 
 def test_call_headers_assembles_the_three_sources() -> None:
     headers = call_headers(
-        CallOptions(headers={"x-a": "1"}), "tok", f"{TOKEN_PREFIX}3/7"
+        CallOptions(headers={"x-a": "1"}), "tok", f"{TOKEN_PREFIX}s3/p0@7"
     )
     assert headers["x-a"] == "1"
     assert headers["authorization"] == "Bearer tok"
-    assert headers["loams-consistency"] == f"{TOKEN_PREFIX}3/7"
+    assert headers["loams-consistency"] == f"{TOKEN_PREFIX}s3/p0@7"
 
 
 def test_call_headers_omits_what_it_does_not_have() -> None:
@@ -247,12 +247,12 @@ def test_the_consistency_header_goes_out_when_the_store_has_a_token() -> None:
             store = client.consistency
             assert store is not None, "session_consistency=True built no store"
             assert store.current() is None, "the store started out holding a token"
-            store.record(f"{TOKEN_PREFIX}3/7")
+            store.record(f"{TOKEN_PREFIX}s3/p0@7")
             client.instance.get_instance(GetInstanceRequest())
     finally:
         started.close()
 
-    assert started.headers.get("loams-consistency") == f"{TOKEN_PREFIX}3/7", (
+    assert started.headers.get("loams-consistency") == f"{TOKEN_PREFIX}s3/p0@7", (
         f"the session token was not sent: {started.headers.get('loams-consistency')!r}"
     )
 

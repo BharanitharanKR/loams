@@ -58,21 +58,86 @@ which is smaller.
 ### Consistency
 
 `session_consistency=False` by default: every read is then `STRONG` on its own,
-which is correct but does not give read-your-writes across processes. Turn it
-on (D609) to hold a session consistency token across calls.
+which is correct but does not give read-your-writes across processes. With it on
+(D609, R4), every consistency token a response carries — the
+`consistency_token`, `token` and `read_token` fields and the
+`loams-consistency-token` header — merges into `loams.consistency` (the max
+offset per stream and partition), and every later read whose request has a
+`consistency` field is sent `at_least` the session. `ConsistencyToken.parse`,
+`merge` and `str` work on tokens directly.
+
+## Build an app
+
+The app-building layer (SDKP) adds builders, a collection handle and the runtime
+an app needs. The builders, the handle and the runtime work today; the module
+objects they drive (`loams.namespaces`, `collections`, `documents`, `search`,
+`vector`, `graph`, `sql`, `streams`) are generated from the protos' facade
+annotations and appear as those land (SDKP P0a–P0c).
+
+```python
+from loams import Filter, Loams, Schema, Search, Sort, rrf
+
+loams = Loams.from_env()   # LOAMS_ENDPOINT, LOAMS_API_KEY or LOAMS_TOKEN, LOAMS_NAMESPACE
+# or: Loams(endpoint, api_key=key, namespace="app", session_consistency=True)
+
+schema = Schema().text("title").text("body").keyword("tags").i64("n").vector("embedding", 4)
+
+notes = loams.collection("notes")          # calls with `collection` filled in
+notes.upsert([
+    {"id": 1, "source": {"title": "Refunds", "body": "refund policy", "tags": "policy", "n": 1},
+     "vectors": {"embedding": [1, 0, 0, 0]}},
+])
+
+hits = notes.search(
+    notes.query()
+    .text("refund", fields=["body"])
+    .vector("embedding", [1, 0, 0, 0], k=10)
+    .fuse(rrf(60))
+    .filter(Filter.and_(Filter.eq("tags", "policy"), Filter.range("n", gte=1)))
+    .highlight("body")
+    .select(include=["title"])
+    .limit(5)
+)
+
+for hit in loams.search.query_all(
+    Search("notes").text("refund").sort(Sort.score(), Sort.pk()).limit(100)
+):
+    ...                                     # every hit, page by page
+
+notes.write_batch(rows)                     # 10 000 rows / 4 MiB a chunk, one key per chunk
+```
+
+`AsyncLoams` has the same surface, awaited: `await notes.upsert(...)`,
+`async for hit in loams.search.query_all(...)`,
+`async for record in loams.streams.subscribe("events")`.
+
+- **Default namespace (R11).** `namespace=` fills every app request
+  (`loams.collection.v1`, `graph`, `sql`, `stream`) that leaves `namespace`
+  empty; an explicit one wins, and neither raises `InvalidArgumentError` before
+  any network call.
+- **Deadlines (R12).** Unary calls default to 30 s (`timeout_ms=` on the client
+  or `CallOptions(timeout_ms=...)` per call; `0` disables). One budget covers a
+  call's retries; running out raises `DeadlineExceededError` with reason
+  `client_deadline_exceeded`, which is never retried. Streams have no default.
+- **Bulk writes (R13).** `documents.write_batch` sends one chunk at a time, each
+  with its own idempotency key, returns a `BatchResult` with the merged token,
+  and stops at the first failed chunk with a `BatchError` (`chunks_applied`,
+  `rows_applied`, `token`).
+- **Subscriptions (R14).** `streams.subscribe("events", partition=0,
+  from_offset=1)` is an iterator over `Fetch` that exposes `offset` for
+  resuming and `cancel()`.
+
+Durable workflows use the Resonate SDK pointed at `LOAMS_ENDPOINT/durable/`
+(SDKP-1).
 
 ## What is not here yet
 
-These are refused by name rather than stubbed, so a caller finds out at the
-call instead of at runtime:
-
-- **The hybrid query builder.** Blocked on API1 Task 2. There is no
-  hand-written builder here; when the proto lands, the generator emits one.
-- **Bulk ingest and bulk results.** Blocked on API1 Tasks 3 and 4. They go over
-  Arrow Flight SQL through ADBC, which is why the `flight`, `arrow` and
-  `polars` extras already exist — the code that uses them lands with the write
-  RPCs.
-- **`listAll` per call.** Blocked on the same API1 tasks; paging is explicit.
+- **The app modules themselves** (`namespaces`, `collections`, `documents`,
+  `search`, `vector`, `graph`, `sql`, `streams`): they arrive with the facade
+  annotations of SDKP P0a–P0c. Their messages and Connect stubs
+  (`loams.collection.v1`, `loams.graph.v1`) are already in the package.
+- **Bulk ingest and bulk results over Arrow Flight SQL.** They go through ADBC,
+  which is why the `flight`, `arrow` and `polars` extras already exist.
 
 ## Development
 
