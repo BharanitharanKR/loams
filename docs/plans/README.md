@@ -337,7 +337,7 @@ Design: [§44](../design/44-unified-api-and-sdks.md), D600–D619. All 13 gRPC-s
 
 ## Track IS: Loams Infra, the HashiCorp stack's roles in Rust
 
-Design reference: [64 Loams Infra](../design/64-loams-infra-stack.md) (D1150–D1171, Q970–Q983, Proposed). Owner request, 2026-10-19: "I want all of the HashiCorp stack in Loams, in Rust." IS1 is the minimum viable slice; IS2–IS4 get plans when their gates are met.
+Design reference: [64 Loams Infra](../design/64-loams-infra-stack.md) (D1150–D1171, Q970–Q983, approved by the owner 2026-10-19). Owner request, 2026-10-19: "I want all of the HashiCorp stack in Loams, in Rust." IS1 is the minimum viable slice; IS2–IS4 get plans when their gates are met.
 
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|

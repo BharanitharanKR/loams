@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, test first. Where this plan gives exact names, paths, branches or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end of this file.
 >
-> **Status: Stub** (2026-10-19). Track IS, design [§64](../design/64-loams-infra-stack.md) (D1150–D1171, Q970–Q983, all Proposed). Owner request, 2026-10-19: **"I want all of the HashiCorp stack in Loams, in Rust."** This plan covers only the minimum viable slice, IS1a–IS1c (§64 §12). IS2–IS4 get their own plans once their gates are met (D1171). **Nothing here starts before v0.1.0 ships (Q983) and the owner approves §64.** Each task lists its files, the tests that must exist and pass, and its gate. Interfaces are fixed in §64; Task 0 of each milestone checks the code as it stands and records rulings.
+> **Status: Stub** (2026-10-19). Track IS, design [§64](../design/64-loams-infra-stack.md) (D1150–D1171, Q970–Q983, approved by the owner on 2026-10-19 with every default). Owner request, 2026-10-19: **"I want all of the HashiCorp stack in Loams, in Rust."** This plan covers only the minimum viable slice, IS1a–IS1c (§64 §12). IS2–IS4 get their own plans once their gates are met (D1171). **Nothing here starts before v0.1.0 ships (Q983).** Each task lists its files, the tests that must exist and pass, and its gate. Interfaces are fixed in §64; Task 0 of each milestone checks the code as it stands and records rulings.
 
 **Goal:**
 - a team manages its Loams namespaces, Postgres projects, branches, roles, databases, collections, streams, API keys, secrets and config from OpenTofu, with no secret in state;
@@ -58,7 +58,7 @@
 | 11 | `loams-secrets` crate: folders, secrets, versions over `loams-vault`; `SecretService` | `crates/loams-secrets/`, `proto/loams/secrets/v1/` | `secret_versions_create_only`, `secret_destroy_keeps_record` | — |
 | 12 | Leases in `loams_secrets` (TiKV, redb in dev); `LeaseService`; revocation, renewal and expiry workflows on `loams-durable` | `crates/loams-secrets/src/lease/` | Review Focus 3 | — |
 | 13 | Engine `loams-postgres` over `IssueConnectCredential` (D711) | `crates/loams-secrets/src/engines/` | `pg_lease_connects_through_pgdog`, `lease_expiry_drops_role` | — |
-| 14 | Engine `loams-sql` | same | `sql_lease_connects_through_sqlgate` | §47's RPC confirmed (verify) |
+| 14 | Engine `loams-sql`, with the user-issuing RPC Loams SQL lacks today (no `loams.sqldb.v1` proto on `dev` at `034c8cb4`) | same, plus §47's control plane | `sql_lease_connects_through_sqlgate`, `sql_lease_expiry_drops_user` | — |
 | 15 | Engines `postgres` and `mysql` (external) with SQL templates; `random`; `webhook` (D843) | same | `external_pg_lease_lifecycle`, `external_mysql_lease_lifecycle` | Q973 |
 | 16 | `IdentityService`: trust policies and the RFC 8693 exchange for external OIDC tokens | `crates/loams/src/auth/`, `proto/loams/secrets/v1/identity.proto` | Review Focus 4; `github_actions_token_exchanged` (recorded fixture) | — |
 | 17 | The Loams workload issuer: SPIFFE-shaped JWTs, JWKS under `/.well-known/`, key rotation | same | `workload_jwt_verifies_with_jwks`, `jwks_rotation_overlap` | Q975 |
@@ -79,7 +79,6 @@
 
 ## Owner actions
 
-- Approve §64 and the IS1 scope (D1150–D1171).
 - Q974: counsel on the `terraform-provider-` repository name and nominative use of HashiCorp marks, before Task 9's registry submission.
 - Create the mirror repository `ostrium-labs/terraform-provider-loams` and submit the provider and its signing key to the OpenTofu registry (Task 9).
 
