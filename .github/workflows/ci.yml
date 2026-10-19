@@ -1497,6 +1497,11 @@ jobs:
       - name: the Python SDK's tests
         working-directory: sdks/python
         run: uv run pytest -q
+      # SDKP: the app suite (the app scenario replayed through the public
+      # facade, sync and async, and every app test named). It reads the report
+      # the tests above just wrote; S1 folds it into the plain check.
+      - name: the app suite
+        run: node sdks/conformance/check-languages.mjs --check python --suite app
       - name: the SDK typechecks under --strict
         working-directory: sdks/python
         run: uv run mypy --strict src
