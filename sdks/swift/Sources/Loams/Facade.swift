@@ -230,7 +230,9 @@ enum LoamsService {
 /// `Deploy` is `live.admin`'s, not `tables`': LV1 Task 10 moved it from
 /// `LiveService` to `LiveAdminService`, and the engine no longer serves
 /// `loams.live.v1.LiveService/Deploy` (T10-7, T12-1).
-public let loamsModules: [ModuleBinding] = [
+public let loamsModules: [ModuleBinding] = loamsCoreModules + loamsAppModules
+
+let loamsCoreModules: [ModuleBinding] = [
     ModuleBinding(
         name: "instance",
         summary: "What this instance is, and who the caller is on it.",
@@ -496,8 +498,10 @@ public let loamsModules: [ModuleBinding] = [
 public let loamsProtoPackages: [String] = [
     "google.protobuf",
     "loams.approvals.v1",
+    "loams.collection.v1",
     "loams.devices.v1",
     "loams.errors.v1",
+    "loams.graph.v1",
     "loams.instance.v1",
     "loams.live.v1",
     "loams.notifications.v1",
