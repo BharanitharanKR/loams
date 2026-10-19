@@ -283,7 +283,8 @@ public final class Values {
             case STRUCT_VALUE -> {
                 out.append('{');
                 boolean first = true;
-                for (Map.Entry<String, Value> entry : value.getStructValue().getFieldsMap().entrySet()) {
+                // Keys sorted, so a value encodes to the same bytes however its map was built.
+                for (Map.Entry<String, Value> entry : new java.util.TreeMap<>(value.getStructValue().getFieldsMap()).entrySet()) {
                     if (!first) {
                         out.append(',');
                     }

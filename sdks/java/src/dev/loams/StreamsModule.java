@@ -10,6 +10,7 @@ import dev.loams.gen.loams.stream.v1.FetchCloudEventsResponse;
 import dev.loams.gen.loams.stream.v1.FetchRequest;
 import dev.loams.gen.loams.stream.v1.FetchResponse;
 import dev.loams.gen.loams.stream.v1.FetchedRecord;
+import dev.loams.gen.loams.stream.v1.Header;
 import dev.loams.gen.loams.stream.v1.ListStreamsRequest;
 import dev.loams.gen.loams.stream.v1.ListStreamsResponse;
 import dev.loams.gen.loams.stream.v1.ProduceCloudEventsRequest;
@@ -21,6 +22,7 @@ import dev.loams.gen.loams.stream.v1.StreamInfo;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * {@code loams.streams} (SDKP §2.5, Part C): a namespace's logs over {@code loams.stream.v1} (SDKP
@@ -75,8 +77,25 @@ public final class StreamsModule {
         return Values.json(Values.of(record)).getBytes(StandardCharsets.UTF_8);
     }
 
+    /** One {@code loams.stream.v1.Record}: a {@link ProducerRecord} with its key and headers, or a bare value. */
+    static Record record(Object record) {
+        if (!(record instanceof ProducerRecord keyed)) {
+            return Record.newBuilder().setValue(ByteString.copyFrom(encode(record))).build();
+        }
+        Record.Builder out = Record.newBuilder().setValue(ByteString.copyFrom(encode(keyed.value())));
+        if (keyed.key() != null) {
+            out.setKey(ByteString.copyFrom(encode(keyed.key())));
+        }
+        for (Map.Entry<String, ?> header : keyed.headers().entrySet()) {
+            out.addHeaders(Header.newBuilder().setKey(header.getKey())
+                    .setValue(ByteString.copyFrom(encode(header.getValue()))));
+        }
+        return out.build();
+    }
+
     /**
-     * Appends records to one partition. Each record is bytes, a string (UTF-8) or a value (as JSON).
+     * Appends records to one partition. Each record is bytes, a string (UTF-8) or a value (as JSON),
+     * or a {@link ProducerRecord} to give it a key and headers.
      * With {@code producerId} and {@code producerSeq} (both or neither) a repeat answers the first
      * append with {@code duplicate} set, so the SDK retries it; without them a produce is a plain
      * append and is never retried.
@@ -85,7 +104,7 @@ public final class StreamsModule {
             CallOptions... options) {
         ProduceRequest.Builder request = ProduceRequest.newBuilder().setStream(stream).setPartition(partition);
         for (Object record : records) {
-            request.addRecords(Record.newBuilder().setValue(ByteString.copyFrom(encode(record))));
+            request.addRecords(record(record));
         }
         CallOptions merged = CallOptions.merge(options);
         if (producerId != null && producerSeq != null) {
@@ -141,7 +160,8 @@ public final class StreamsModule {
         return new Subscription(offset -> {
             List<Subscription.Record> out = new ArrayList<>();
             for (FetchedRecord r : fetch(stream, partition, offset, null, maxWaitMs, options).getRecordsList()) {
-                out.add(new Subscription.Record(partition, r.getOffset(), r.getValue().toByteArray(), r.getTimestampMs()));
+                out.add(new Subscription.Record(partition, r.getOffset(), r.getValue().toByteArray(), r.getTimestampMs(),
+                        r.hasKey() ? r.getKey().toByteArray() : null));
             }
             return out;
         }, fromOffset);

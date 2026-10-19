@@ -41,6 +41,27 @@ public class AppSqlStreamsTest {
         }
     }
 
+    /** Keyed records (SDKP-25) carry the recorded app_streams produce body's keys and values. */
+    @Test
+    public void java_streams_produce_keyed_records() throws Exception {
+        try (AppStub stub = new AppStub(AppStub.ok(ProduceResponse.newBuilder().setLastOffset(1).build()))) {
+            stub.client("app", false).streams().produce("note-events", 0, List.of(
+                    ProducerRecord.of("1", Map.of("op", "created", "note", 1)),
+                    new ProducerRecord("5", Map.of("op", "deleted", "note", 5), Map.of("source", "notes")),
+                    "plain"), "app-producer-1", 1L);
+            ProduceRequest sent = ProduceRequest.parseFrom(stub.requests.get(0).body());
+            assertEquals(3, sent.getRecordsCount());
+            assertEquals("MQ==", java.util.Base64.getEncoder().encodeToString(sent.getRecords(0).getKey().toByteArray()));
+            assertEquals("eyJub3RlIjoxLCJvcCI6ImNyZWF0ZWQifQ==",
+                    java.util.Base64.getEncoder().encodeToString(sent.getRecords(0).getValue().toByteArray()));
+            assertEquals("eyJub3RlIjo1LCJvcCI6ImRlbGV0ZWQifQ==",
+                    java.util.Base64.getEncoder().encodeToString(sent.getRecords(1).getValue().toByteArray()));
+            assertEquals("source", sent.getRecords(1).getHeaders(0).getKey());
+            assertEquals("notes", sent.getRecords(1).getHeaders(0).getValue().toString(StandardCharsets.UTF_8));
+            assertEquals(false, sent.getRecords(2).hasKey());
+        }
+    }
+
     @Test
     public void java_streams_produce_is_retried_only_with_a_producer_key() throws Exception {
         ProduceResponse ok = ProduceResponse.newBuilder().setLastOffset(2).build();

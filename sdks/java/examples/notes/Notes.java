@@ -15,6 +15,7 @@ import dev.loams.Filter;
 import dev.loams.Fusion;
 import dev.loams.NotFoundException;
 import dev.loams.Options;
+import dev.loams.ProducerRecord;
 import dev.loams.Schema;
 import dev.loams.Search;
 import dev.loams.Sort;
@@ -113,7 +114,9 @@ public final class Notes {
         }
         loams.streams().create("events", 1);
         var produced = loams.streams().produce("events", 0, List.of(
-                Map.of("kind", "created", "note", 1), Map.of("kind", "patched", "note", 2), Map.of("kind", "deleted", "note", 4)),
+                ProducerRecord.of("1", Map.of("kind", "created", "note", 1)),
+                ProducerRecord.of("2", Map.of("kind", "patched", "note", 2)),
+                ProducerRecord.of("4", Map.of("kind", "deleted", "note", 4))),
                 "notes-demo", 1L);
         System.out.println("events at " + produced.getBaseOffset() + ".." + produced.getLastOffset()
                 + (produced.getDuplicate() ? " (already produced)" : ""));
