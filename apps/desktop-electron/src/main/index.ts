@@ -59,10 +59,10 @@ import {
 	readThemeChoice,
 	writeSetting,
 } from "./settings";
+import { installContextMenu } from "./shell/context-menu.electron";
 import { getMainWindow, setMainWindow } from "./shell/main-window";
 import { installAppMenu } from "./shell/menu.electron";
 import { DOCS_URL, ISSUES_URL, menuCommand } from "./shell/menu-model";
-import { installContextMenu } from "./shell/context-menu.electron";
 import { quitSequence } from "./shell/quit";
 import { reveal } from "./shell/reveal";
 import { registerShellIpc } from "./shell/shell-ipc.electron";
@@ -406,7 +406,10 @@ const singleInstance = initSingleInstance({
 						showMainWindow(open);
 						void updater?.check();
 					} else if (id === "restart-server")
-						void engine?.stop().then(() => engine?.start());
+						void engine
+							?.stop()
+							.then(() => engine?.start())
+							.catch((e) => console.error("restart local server:", e));
 					else if (id === "report-issue") void shell.openExternal(ISSUES_URL);
 				},
 			});
