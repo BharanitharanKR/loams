@@ -8222,6 +8222,7 @@ dependencies = [
  "keyring",
  "libc",
  "loams-agentd-doc",
+ "loams-agentd-factory",
  "loams-agentd-harness",
  "loams-agentd-preview",
  "loams-agentd-proto",
