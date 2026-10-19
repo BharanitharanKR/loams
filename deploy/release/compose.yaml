@@ -212,9 +212,16 @@ services:
       LOAMS_OIDC_ALLOWED_GROUPS: ${LOAMS_OIDC_ALLOWED_GROUPS:-}
       LOAMS_TAILSCALE_ALLOWED_USERS: ${LOAMS_TAILSCALE_ALLOWED_USERS:-}
       LOAMS_API_KEYS_FILE: /etc/loams/secrets/api-keys
+    # LOAMS_SETUP_TOKEN, for first-run setup with auth on (the console's
+    # setup page asks for it once, to create the org and its owner), comes
+    # through config/setup-token.env: it reads the value from .env, and
+    # secrets/engine.env, listed after it, wins when both set one. It is not
+    # under `environment:`, which would override secrets/engine.env.
     # Further engine settings, such as AWS_* credentials for an s3://
     # LOAMS_BUCKET, kept out of compose.yaml.
     env_file:
+      - path: ./config/setup-token.env
+        required: false
       - path: ./secrets/engine.env
         required: false
     networks: [default, house-link]

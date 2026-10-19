@@ -224,8 +224,20 @@ You need Docker with the Compose plugin (v2.20.3 or later, for `include`), sever
 memory (TiKV, TiDB and the Postgres stack are the large ones), and the Tailscale client on the
 machine whose browser you will use.
 
+Use the files of the release you run, so `compose.yaml` matches the images that
+`LOAMS_VERSION` pins. Either download the compose bundle attached to the release:
+
 ```sh
-git clone https://github.com/ostrium-labs/loams.git
+curl -fLO https://github.com/ostrium-labs/loams/releases/download/v0.1.0/loams-compose-0.1.0.tar.gz
+tar -xzf loams-compose-0.1.0.tar.gz
+cd loams-compose-0.1.0/release
+cp .env.example .env
+```
+
+or clone the release tag (not the default branch, which moves ahead of the images):
+
+```sh
+git clone --branch v0.1.0 https://github.com/ostrium-labs/loams.git
 cd loams/deploy/release
 cp .env.example .env
 ```
@@ -235,8 +247,13 @@ Edit `.env`:
 - `TS_AUTHKEY`: an auth key from your Tailscale admin console (Settings, Keys). A tagged,
   non-ephemeral, single-use key is the right shape; see [the tailnet](#the-tailnet).
 - `TS_HOSTNAME=loams`: the stack's name on the tailnet. Keep it unless you run two stacks.
-- `LOAMS_AUTH_MODE`: `tailscale` by default, which needs nothing more. Set
-  `LOAMS_TAILSCALE_ALLOWED_USERS` to narrow who is admitted. See [Auth modes](#auth-modes).
+- `LOAMS_AUTH_MODE`: `tailscale` by default. Set `LOAMS_TAILSCALE_ALLOWED_USERS` to narrow
+  who is admitted: Tailscale logins, comma-separated, case-insensitive (for example
+  `alice@example.com,bob@github`). See [Auth modes](#auth-modes).
+- `LOAMS_SETUP_TOKEN`: a random secret for [first-run setup](#first-run-setup), for example
+  the output of `openssl rand -hex 32`. Every mode except `off` turns authentication on, and
+  with authentication on the engine refuses first-run setup without this token. Set it in
+  `.env` or in `secrets/engine.env`; when both set it, `secrets/engine.env` wins.
 
 Then start it:
 
@@ -260,12 +277,66 @@ and use the same tailnet URL.
 To stop, `docker compose down`. Your data stays in the compose volumes; `docker compose
 down -v` deletes it.
 
+### First-run setup
+
+A new engine has no organization. First-run setup (`AuthService/CompleteSetup`) creates it,
+with you as its owner, and runs once. With authentication on (`tailscale`, the default, or
+`oidc` or `apikey`) it needs `LOAMS_SETUP_TOKEN`; without it the engine answers
+`first-run setup on an engine with authentication on needs LOAMS_SETUP_TOKEN; set it and
+restart`, and the console does not offer setup at all. If you started the stack before setting
+the token, add it to `.env` (or `secrets/engine.env`) and recreate the engine with
+`docker compose up -d loams`.
+
+**In the console.** Open the console with your engine URL. While the engine has no
+organization and a setup token is set, the console opens on **Set up this install**
+(`#/setup`). Enter the setup token (the value of `LOAMS_SETUP_TOKEN`), the
+organization name, your name, your email and a password of 12 characters or more. The console
+signs you in as the owner.
+
+**From the command line.** The same call from inside the engine's container, over its
+loopback port, reading the token from the engine's environment so it never appears on your
+command line:
+
+```sh
+# Is setup still to do? Prints "setupRequired":true until it has run.
+docker compose exec loams curl -sS http://127.0.0.1:8080/loams.instance.v1.InstanceService/GetInstance \
+  -H 'content-type: application/json' -d '{}'
+
+docker compose exec -e ORG='Acme' -e NAME='Your Name' -e EMAIL='you@example.com' \
+  -e PASSWORD='at-least-12-characters' loams sh -c '
+  curl -sS http://127.0.0.1:8080/loams.auth.v1.AuthService/CompleteSetup \
+    -H "content-type: application/json" \
+    -d "{\"setupToken\":\"$LOAMS_SETUP_TOKEN\",\"orgName\":\"$ORG\",\"name\":\"$NAME\",\"email\":\"$EMAIL\",\"password\":\"$PASSWORD\"}"'
+```
+
+A wrong token is refused with `permission_denied`. After setup has run, every further
+`CompleteSetup` is refused with `setup has already run`, whatever the token, so you can empty
+`LOAMS_SETUP_TOKEN` where you set it and run `docker compose up -d loams` to drop it from the
+engine.
+With `LOAMS_AUTH_MODE=off` setup needs no token, and only loopback clients can reach it.
+
 ### Without a tailnet
 
 For a laptop-only trial with nothing on any network, set `LOAMS_AUTH_MODE=off` and use the
 optional local `console` service. `off` is accepted only for loopback clients: the engine
 refuses every request that does not come from loopback, so this mode cannot be reached over
 the tailnet. Do not use it on a shared machine.
+
+The local `console` service (`--profile console`) serves `LOAMS_CONSOLE_DIR`, by default
+`./console/dist`. In a git clone, and in the 0.1.0 compose bundle, that directory holds only a
+placeholder `index.html` that says "Put the built console here". Build the console from the
+same checkout and point `LOAMS_CONSOLE_DIR` at it:
+
+```sh
+# from the repository root
+corepack enable
+pnpm install --frozen-lockfile
+(cd web && pnpm build)          # writes web/apps/console/dist
+# then in deploy/release/.env
+LOAMS_CONSOLE_DIR=../../web/apps/console/dist
+```
+
+A console served from your own origin also needs that origin in `LOAMS_CORS_ORIGINS`.
 
 ### The bucket: a local directory or S3
 
@@ -351,7 +422,9 @@ once the stack is up.
 
 From a checkout on your own machine, `deploy/release/byoc/install.sh` does it over SSH: it
 installs Docker if missing, copies the compose bundle, writes `.env` (asking for your
-Tailscale auth key) and starts the stack.
+Tailscale auth key, and generating a `LOAMS_SETUP_TOKEN` for [first-run setup](#first-run-setup),
+which it does not print) and starts the stack. Read the token on the VM with
+`grep LOAMS_SETUP_TOKEN ~/loams/release/.env` (`~/loams` is the default `--dir`).
 
 ```sh
 deploy/release/byoc/install.sh -i ~/.ssh/id_ed25519 you@your-vm
@@ -361,7 +434,7 @@ By default it starts `loams`, `tailscale` and `tidb`; `--all` starts every servi
 the Postgres stack included, and `--version` picks the image tag (default `0.1.0`).
 Add the House with `--services "loams tailscale tidb house house-tailscale"`.
 `byoc/uninstall.sh` removes it. To do it by hand instead, copy `deploy/release` to the VM,
-`cp .env.example .env`, set `TS_AUTHKEY` and run `docker compose up -d`.
+`cp .env.example .env`, set `TS_AUTHKEY` and `LOAMS_SETUP_TOKEN`, and run `docker compose up -d`.
 
 Your device then reaches the engine at `https://loams.<tailnet>.ts.net`, exactly as in the
 local quick start. Nothing on the VM listens on its public address.
