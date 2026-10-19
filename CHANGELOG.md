@@ -129,6 +129,10 @@ All notable changes to this project are documented here. The format follows [Kee
   `DocumentCalls` (Upsert, Delete, Patch, WriteBatch, ScrollAll) and
   `SearchCalls` (Text, Hybrid, QueryAll). The generated stubs now include
   `loams.collection.v1` and `loams.graph.v1`.
+  The app modules `Namespaces()`, `Collections()`, `Documents()`, `Search()`,
+  `Vector()` and `Graph()` (the binding table checked against
+  `facade-index.json` by `go_facade_matches_index`), the app scenario replayed
+  through them (`go_app_*`), and `examples/notes`.
 
 ### Fixed
 

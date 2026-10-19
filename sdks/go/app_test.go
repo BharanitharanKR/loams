@@ -781,11 +781,20 @@ func Test_go_collection_handle_delegates(t *testing.T) {
 	if searches[1].GetLimit() != 3 || searches[1].GetRetrievers()[0].GetVector().GetField() != "embedding" {
 		t.Errorf("vector search %v", searches[1])
 	}
-	t.Run("a handle over a facade without the module is unimplemented", func(t *testing.T) {
-		client := MustNew(Options{Endpoint: "http://127.0.0.1:1"})
-		_, err := client.Collection("notes").Upsert(ctx, notes(1))
+	t.Run("a handle over modules without the call is unimplemented", func(t *testing.T) {
+		_, err := NewCollectionHandle(HandleModules{}, "notes").Upsert(ctx, notes(1))
 		var unimplemented *UnimplementedError
 		if !errors.As(err, &unimplemented) {
+			t.Errorf("got %v", err)
+		}
+	})
+	t.Run("a client's handle reaches its app modules", func(t *testing.T) {
+		// The client's handle is wired to `documents.write`: with no namespace
+		// anywhere the call is refused before the network, which proves the
+		// call went through the module (R11) rather than answering unimplemented.
+		client := MustNew(Options{Endpoint: "http://127.0.0.1:1"})
+		_, err := client.Collection("notes").Upsert(ctx, notes(1))
+		if ReasonOf(err) != ReasonNamespaceRequired {
 			t.Errorf("got %v", err)
 		}
 	})

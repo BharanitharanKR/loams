@@ -203,11 +203,16 @@ hits, err := notes.Search(ctx, notes.Query().
 - **Subscriptions (R14).** `loams.Subscribe(ctx, fetch, offsetOf, from)` is a
   `*Subscription` with `Next`, `Record`, `Err`, `Offset` and `Close`.
 
-**The app modules arrive with the protos' facade annotations (SDKP P0a–P0c).**
-Until then `client.Collection(...)` answers `*UnimplementedError`, and the
-builders, `DocumentCalls`, `SearchCalls`, `WriteBatch` and `Subscribe` work
-over any function with the generated signature. Durable workflows use the
-Resonate SDK pointed at `LOAMS_ENDPOINT/durable/` (SDKP-1).
+**The app modules** are `client.Namespaces()`, `Collections()`, `Documents()`,
+`Search()`, `Vector()` and `Graph()`, one method per facade call, with the
+conveniences on `client.DocumentCalls()`, `client.SearchCalls()` and
+`client.Collection(name)`. `Sql()` and `Streams()` arrive with
+`loams.sql.v1` and `loams.stream.v1` (SDKP P0b, P0c). `examples/notes` is the
+whole app scenario as a program, built by `go vet ./...`. The session's token
+is used only for collection and SQL reads: a graph's token names one graph
+(SDKP-17). The binding table is checked against
+`sdks/fixtures/facade-index.json` by `go_facade_matches_index`. Durable
+workflows use the Resonate SDK pointed at `LOAMS_ENDPOINT/durable/` (SDKP-1).
 
 ## Not here, and why
 

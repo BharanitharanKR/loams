@@ -43,9 +43,8 @@ func NewCollectionHandle(modules HandleModules, name string, namespace ...string
 	return &CollectionHandle{modules: modules, name: name, namespace: first(namespace)}
 }
 
-// Collection is a handle on one collection (SDKP §2.8). Its calls reach the
-// app modules once the facade has them (SDKP P0a); until then they answer
-// `*UnimplementedError`.
+// Collection is a handle on one collection (SDKP §2.8): its calls are the app
+// modules' with `collection` (and `namespace`) filled in.
 func (c *Client) Collection(name string, namespace ...string) *CollectionHandle {
 	return NewCollectionHandle(c.handleModules, name, namespace...)
 }

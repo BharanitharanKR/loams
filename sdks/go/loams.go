@@ -106,6 +106,14 @@ type Client struct {
 	tables    TablesModule
 	system    *System
 
+	// The app modules (SDKP).
+	namespaces  NamespacesModule
+	collections CollectionsModule
+	documents   DocumentsModule
+	search      SearchModule
+	vector      VectorModule
+	graph       GraphModule
+
 	// modules is every generated module, by name: the catalogue a caller
 	// iterates when it wants to feature-detect without hard-coding a field.
 	modules map[string]any
@@ -113,8 +121,7 @@ type Client struct {
 	transport TransportConfig
 	// namespace is the default namespace (R11), or "".
 	namespace string
-	// handleModules are the calls a collection handle delegates to. Empty
-	// until the facade has the app modules (SDKP P0a).
+	// handleModules are the calls a collection handle delegates to.
 	handleModules HandleModules
 }
 
@@ -199,6 +206,29 @@ func New(options Options) (*Client, error) {
 	client.modules["live"] = client.live
 	client.modules["live.admin"] = client.liveAdmin
 	client.modules["tables"] = client.tables
+	app := func(name string) moduleInfo {
+		return moduleInfo{invoker: client.invoker, registry: client.modules, name: name}
+	}
+	client.namespaces = &namespacesModule{app("namespaces")}
+	client.collections = &collectionsModule{app("collections")}
+	client.documents = &documentsModule{app("documents")}
+	client.search = &searchModule{app("search")}
+	client.vector = &vectorModule{app("vector")}
+	client.graph = &graphModule{app("graph")}
+	client.modules["namespaces"] = client.namespaces
+	client.modules["collections"] = client.collections
+	client.modules["documents"] = client.documents
+	client.modules["search"] = client.search
+	client.modules["vector"] = client.vector
+	client.modules["graph"] = client.graph
+	client.handleModules = HandleModules{
+		Documents:      DocumentCalls{Write: client.documents.Write, Scroll: client.documents.Scroll},
+		GetDocuments:   client.documents.Get,
+		CountDocuments: client.documents.Count,
+		Search:         SearchCalls{Query: client.search.Query},
+		GetCollection:  client.collections.Get,
+		DropCollection: client.collections.Drop,
+	}
 	client.system = &System{
 		client:   client,
 		endpoint: endpoint,
@@ -279,6 +309,33 @@ func (c *Client) Tables() TablesModule { return c.tables }
 
 // System is the module catalogue, feature detection and the version check.
 func (c *Client) System() *System { return c.system }
+
+// Namespaces is `loams.namespaces` (SDKP §2.2).
+func (c *Client) Namespaces() NamespacesModule { return c.namespaces }
+
+// Collections is `loams.collections` (SDKP §2.2).
+func (c *Client) Collections() CollectionsModule { return c.collections }
+
+// Documents is `loams.documents` (SDKP §2.3): the generated calls. The
+// conveniences (Upsert, Delete, Patch, WriteBatch, ScrollAll) are on
+// DocumentCalls and on a collection handle (`Collection`).
+func (c *Client) Documents() DocumentsModule { return c.documents }
+
+// DocumentCalls are the document conveniences over this client's calls.
+func (c *Client) DocumentCalls() DocumentCalls { return c.handleModules.Documents }
+
+// Search is `loams.search` (SDKP §2.4); build a request with NewSearch.
+func (c *Client) Search() SearchModule { return c.search }
+
+// SearchCalls are the search conveniences (Text, Hybrid, QueryAll) over this
+// client's `search.query`.
+func (c *Client) SearchCalls() SearchCalls { return c.handleModules.Search }
+
+// Vector is `loams.vector` (SDKP §2.4, Q613).
+func (c *Client) Vector() VectorModule { return c.vector }
+
+// Graph is `loams.graph` (SDKP §2.5). Its package is unstable.
+func (c *Client) Graph() GraphModule { return c.graph }
 
 // Module returns a generated module by name, so a caller can feature-detect
 // without a hard-coded field:
