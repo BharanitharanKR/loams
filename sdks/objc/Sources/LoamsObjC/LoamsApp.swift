@@ -9,9 +9,12 @@ public struct LoamsAppCall: Sendable {
     public let read: Bool
 
     /// The proto package: the session's scope.
+    /// The session's scope: the proto package, except that SQL reads (and adds
+    /// to) the collection token, since it reads collections.
     public var scope: String {
         let service = rpc.split(separator: "/")[0]
-        return String(service[..<service.lastIndex(of: ".")!])
+        let package = String(service[..<service.lastIndex(of: ".")!])
+        return package == "loams.sql.v1" ? "loams.collection.v1" : package
     }
 }
 
@@ -53,11 +56,20 @@ public let loamsAppCalls: [String: LoamsAppCall] = {
         "graph.query": c(gr + "GraphService/Execute", "keyed", read: true),
         "graph.query_batch": c(gr + "GraphService/ExecuteBatch", "keyed"),
         "graph.explain": c(gr + "GraphService/Explain", "safe", read: true),
+        "sql.query": c("loams.sql.v1.SqlService/Query", "safe", read: true),
+        "sql.query_arrow": c("loams.sql.v1.SqlService/QueryArrow", "safe", read: true),
+        "streams.create": c("loams.stream.v1.StreamService/CreateStream", "safe"),
+        "streams.get": c("loams.stream.v1.StreamService/DescribeStream", "safe"),
+        "streams.list": c("loams.stream.v1.StreamService/ListStreams", "safe"),
+        "streams.produce": c("loams.stream.v1.StreamService/Produce", "never"),
+        "streams.fetch": c("loams.stream.v1.StreamService/Fetch", "safe"),
+        "streams.produce_events": c("loams.stream.v1.StreamService/ProduceCloudEvents", "never"),
+        "streams.fetch_events": c("loams.stream.v1.StreamService/FetchCloudEvents", "safe"),
     ]
 }()
 
 /// The packages whose reads take the session's token (SDKP-17).
-public let loamsSessionScopes: Set<String> = ["loams.collection.v1", "loams.sql.v1"]
+public let loamsSessionScopes: Set<String> = ["loams.collection.v1"]
 
 /// What every app call takes besides its arguments.
 #if canImport(ObjectiveC)

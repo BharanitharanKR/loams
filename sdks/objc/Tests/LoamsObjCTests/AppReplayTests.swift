@@ -60,6 +60,8 @@ final class AppReplayTests: XCTestCase {
     func test_objc_app_collections() throws { try replay("app_collections") }
     func test_objc_app_search() throws { try replay("app_search") }
     func test_objc_app_graph() throws { try replay("app_graph") }
+    func test_objc_app_sql() throws { try replay("app_sql") }
+    func test_objc_app_streams() throws { try replay("app_streams") }
 
     func replay(_ name: String) throws {
         let file = fixturesDir().appendingPathComponent("recorded/app/\(name).json")

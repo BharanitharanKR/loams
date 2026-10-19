@@ -280,6 +280,8 @@ public class LoamsClient: NSObject {
     public private(set) var vector: LoamsVectorModule!
     /// Experimental: `loams.graph.v1` is unstable.
     public private(set) var graph: LoamsGraphModule!
+    public private(set) var sql: LoamsSqlModule!
+    public private(set) var streams: LoamsStreamsModule!
     private var raw: LoamsRawModule!
 
     public init(configuration: LoamsClientConfiguration) {
@@ -299,6 +301,8 @@ public class LoamsClient: NSObject {
         self.search = LoamsSearchModule(context: context)
         self.vector = LoamsVectorModule(context: context)
         self.graph = LoamsGraphModule(context: context)
+        self.sql = LoamsSqlModule(context: context)
+        self.streams = LoamsStreamsModule(context: context)
         self.raw = LoamsRawModule(context: context)
     }
 
