@@ -18,6 +18,10 @@ import (
 	adminv1connect "loams.dev/go/gen/loams/admin/v1/v1connect"
 	authv1 "loams.dev/go/gen/loams/auth/v1"
 	authv1connect "loams.dev/go/gen/loams/auth/v1/v1connect"
+	collectionv1 "loams.dev/go/gen/loams/collection/v1"
+	collectionv1connect "loams.dev/go/gen/loams/collection/v1/v1connect"
+	graphv1 "loams.dev/go/gen/loams/graph/v1"
+	graphv1connect "loams.dev/go/gen/loams/graph/v1/v1connect"
 	instancev1 "loams.dev/go/gen/loams/instance/v1"
 	instancev1connect "loams.dev/go/gen/loams/instance/v1/v1connect"
 	livev1 "loams.dev/go/gen/loams/live/v1"
@@ -146,6 +150,7 @@ var Reasons = []Reason{
 	"live_worker_crashed",
 	"live_deploy_conflict",
 	"live_schema_violation",
+	"filter_conflict",
 	"live_index_not_ready",
 	"live_app_disabled",
 	"live_app_exists",
@@ -275,6 +280,7 @@ var ReasonCodes = map[Reason]string{
 	"live_worker_crashed":           "internal",
 	"live_deploy_conflict":          "failed_precondition",
 	"live_schema_violation":         "invalid_argument",
+	"filter_conflict":               "invalid_argument",
 	"live_index_not_ready":          "failed_precondition",
 	"live_app_disabled":             "failed_precondition",
 	"live_app_exists":               "failed_precondition",
@@ -502,6 +508,62 @@ var Modules = []ModuleBinding{
 		},
 	},
 	{
+		Name:     "collections",
+		Summary:  "Collections: schema, aliases, versions, scan plans and the hot tier.",
+		Service:  "loams.collection.v1.CollectionService",
+		Package:  "loams.collection.v1",
+		Unstable: false,
+		Derived:  false,
+		Calls: []CallBinding{
+			{Module: "collections", Name: "AddFields", ProtoName: "add_fields", Method: "AddFields", RPC: "loams.collection.v1.CollectionService/AddFields", Service: "loams.collection.v1.CollectionService", Package: "loams.collection.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "collections", Name: "Create", ProtoName: "create", Method: "CreateCollection", RPC: "loams.collection.v1.CollectionService/CreateCollection", Service: "loams.collection.v1.CollectionService", Package: "loams.collection.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "collections", Name: "Drop", ProtoName: "drop", Method: "DropCollection", RPC: "loams.collection.v1.CollectionService/DropCollection", Service: "loams.collection.v1.CollectionService", Package: "loams.collection.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "collections", Name: "Get", ProtoName: "get", Method: "GetCollection", RPC: "loams.collection.v1.CollectionService/GetCollection", Service: "loams.collection.v1.CollectionService", Package: "loams.collection.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "collections", Name: "List", ProtoName: "list", Method: "ListCollections", RPC: "loams.collection.v1.CollectionService/ListCollections", Service: "loams.collection.v1.CollectionService", Package: "loams.collection.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "collections", NextPageToken: "next_page_token"}},
+			{Module: "collections", Name: "ListVersions", ProtoName: "list_versions", Method: "ListVersions", RPC: "loams.collection.v1.CollectionService/ListVersions", Service: "loams.collection.v1.CollectionService", Package: "loams.collection.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "versions", NextPageToken: "next_page_token"}},
+			{Module: "collections", Name: "Scan", ProtoName: "scan", Method: "Scan", RPC: "loams.collection.v1.CollectionService/Scan", Service: "loams.collection.v1.CollectionService", Package: "loams.collection.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "collections", Name: "SetHot", ProtoName: "set_hot", Method: "SetHot", RPC: "loams.collection.v1.CollectionService/SetHot", Service: "loams.collection.v1.CollectionService", Package: "loams.collection.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "collections", Name: "UpdateAliases", ProtoName: "update_aliases", Method: "UpdateAliases", RPC: "loams.collection.v1.CollectionService/UpdateAliases", Service: "loams.collection.v1.CollectionService", Package: "loams.collection.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "collections", Name: "Warm", ProtoName: "warm", Method: "WarmCollection", RPC: "loams.collection.v1.CollectionService/WarmCollection", Service: "loams.collection.v1.CollectionService", Package: "loams.collection.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+		},
+	},
+	{
+		Name:     "documents",
+		Summary:  "Documents: write, get, scroll, count, delete by filter and patch by filter.",
+		Service:  "loams.collection.v1.DocumentService",
+		Package:  "loams.collection.v1",
+		Unstable: false,
+		Derived:  false,
+		Calls: []CallBinding{
+			{Module: "documents", Name: "Count", ProtoName: "count", Method: "CountDocuments", RPC: "loams.collection.v1.DocumentService/CountDocuments", Service: "loams.collection.v1.DocumentService", Package: "loams.collection.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "documents", Name: "DeleteByFilter", ProtoName: "delete_by_filter", Method: "DeleteByFilter", RPC: "loams.collection.v1.DocumentService/DeleteByFilter", Service: "loams.collection.v1.DocumentService", Package: "loams.collection.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "documents", Name: "Get", ProtoName: "get", Method: "GetDocuments", RPC: "loams.collection.v1.DocumentService/GetDocuments", Service: "loams.collection.v1.DocumentService", Package: "loams.collection.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "documents", Name: "PatchByFilter", ProtoName: "patch_by_filter", Method: "PatchByFilter", RPC: "loams.collection.v1.DocumentService/PatchByFilter", Service: "loams.collection.v1.DocumentService", Package: "loams.collection.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "documents", Name: "Scroll", ProtoName: "scroll", Method: "ScrollDocuments", RPC: "loams.collection.v1.DocumentService/ScrollDocuments", Service: "loams.collection.v1.DocumentService", Package: "loams.collection.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "documents", Name: "Write", ProtoName: "write", Method: "WriteDocuments", RPC: "loams.collection.v1.DocumentService/WriteDocuments", Service: "loams.collection.v1.DocumentService", Package: "loams.collection.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+		},
+	},
+	{
+		Name:     "graph",
+		Summary:  "Loams Graph: stored property graphs, queried with GQL.",
+		Service:  "loams.graph.v1.GraphAdminService",
+		Package:  "loams.graph.v1",
+		Unstable: true,
+		Derived:  false,
+		Calls: []CallBinding{
+			{Module: "graph", Name: "Create", ProtoName: "create", Method: "CreateGraph", RPC: "loams.graph.v1.GraphAdminService/CreateGraph", Service: "loams.graph.v1.GraphAdminService", Package: "loams.graph.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "graph", Name: "Delete", ProtoName: "delete", Method: "DeleteGraph", RPC: "loams.graph.v1.GraphAdminService/DeleteGraph", Service: "loams.graph.v1.GraphAdminService", Package: "loams.graph.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "graph", Name: "Explain", ProtoName: "explain", Method: "Explain", RPC: "loams.graph.v1.GraphService/Explain", Service: "loams.graph.v1.GraphService", Package: "loams.graph.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "graph", Name: "Get", ProtoName: "get", Method: "GetGraph", RPC: "loams.graph.v1.GraphAdminService/GetGraph", Service: "loams.graph.v1.GraphAdminService", Package: "loams.graph.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "graph", Name: "List", ProtoName: "list", Method: "ListGraphs", RPC: "loams.graph.v1.GraphAdminService/ListGraphs", Service: "loams.graph.v1.GraphAdminService", Package: "loams.graph.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "graphs", NextPageToken: "next_page_token"}},
+			{Module: "graph", Name: "Query", ProtoName: "query", Method: "Execute", RPC: "loams.graph.v1.GraphService/Execute", Service: "loams.graph.v1.GraphService", Package: "loams.graph.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "graph", Name: "QueryBatch", ProtoName: "query_batch", Method: "ExecuteBatch", RPC: "loams.graph.v1.GraphService/ExecuteBatch", Service: "loams.graph.v1.GraphService", Package: "loams.graph.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "graph", Name: "QueryStream", ProtoName: "query_stream", Method: "ExecuteStream", RPC: "loams.graph.v1.GraphService/ExecuteStream", Service: "loams.graph.v1.GraphService", Package: "loams.graph.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingServer, Pagination: nil},
+			{Module: "graph", Name: "Schema", ProtoName: "schema", Method: "GetSchema", RPC: "loams.graph.v1.GraphAdminService/GetSchema", Service: "loams.graph.v1.GraphAdminService", Package: "loams.graph.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "graph", Name: "Update", ProtoName: "update", Method: "UpdateGraph", RPC: "loams.graph.v1.GraphAdminService/UpdateGraph", Service: "loams.graph.v1.GraphAdminService", Package: "loams.graph.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+		},
+	},
+	{
 		Name:     "instance",
 		Summary:  "What this instance is, and who the caller is on it.",
 		Service:  "loams.instance.v1.InstanceService",
@@ -548,6 +610,29 @@ var Modules = []ModuleBinding{
 		},
 	},
 	{
+		Name:     "namespaces",
+		Summary:  "Namespaces: the container every collection and stream lives in.",
+		Service:  "loams.collection.v1.NamespaceService",
+		Package:  "loams.collection.v1",
+		Unstable: false,
+		Derived:  false,
+		Calls: []CallBinding{
+			{Module: "namespaces", Name: "Create", ProtoName: "create", Method: "CreateNamespace", RPC: "loams.collection.v1.NamespaceService/CreateNamespace", Service: "loams.collection.v1.NamespaceService", Package: "loams.collection.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "namespaces", Name: "List", ProtoName: "list", Method: "ListNamespaces", RPC: "loams.collection.v1.NamespaceService/ListNamespaces", Service: "loams.collection.v1.NamespaceService", Package: "loams.collection.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "namespaces", NextPageToken: "next_page_token"}},
+		},
+	},
+	{
+		Name:     "search",
+		Summary:  "Queries: one search over one collection, dense, sparse, text or hybrid.",
+		Service:  "loams.collection.v1.QueryService",
+		Package:  "loams.collection.v1",
+		Unstable: false,
+		Derived:  false,
+		Calls: []CallBinding{
+			{Module: "search", Name: "Query", ProtoName: "query", Method: "Search", RPC: "loams.collection.v1.QueryService/Search", Service: "loams.collection.v1.QueryService", Package: "loams.collection.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+		},
+	},
+	{
 		Name:     "tables",
 		Summary:  "",
 		Service:  "loams.live.v1.LiveService",
@@ -557,6 +642,17 @@ var Modules = []ModuleBinding{
 		Calls: []CallBinding{
 			{Module: "tables", Name: "Mutate", ProtoName: "mutate", Method: "Mutate", RPC: "loams.live.v1.LiveService/Mutate", Service: "loams.live.v1.LiveService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
 			{Module: "tables", Name: "Query", ProtoName: "query", Method: "Query", RPC: "loams.live.v1.LiveService/Query", Service: "loams.live.v1.LiveService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+		},
+	},
+	{
+		Name:     "vector",
+		Summary:  "",
+		Service:  "loams.collection.v1.QueryService",
+		Package:  "loams.collection.v1",
+		Unstable: false,
+		Derived:  true,
+		Calls: []CallBinding{
+			{Module: "vector", Name: "Search", ProtoName: "search", Method: "Search", RPC: "loams.collection.v1.QueryService/Search", Service: "loams.collection.v1.QueryService", Package: "loams.collection.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
 		},
 	},
 }
@@ -723,6 +819,97 @@ type AuthModule interface {
 	ListProviders(ctx context.Context, req *connect.Request[authv1.ListProvidersRequest], opts *CallOptions) (*connect.Response[authv1.ListProvidersResponse], error)
 }
 
+// CollectionsModule is loams.collections — Collections: schema, aliases, versions, scan plans and the hot tier.
+//
+// It wraps loams.collection.v1.CollectionService.
+type CollectionsModule interface {
+	// Module is the SDK module, as it appears on loams.collections.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable reports that the package's wire contract may still change.
+	Unstable() bool
+
+	// AddFields calls loams.collection.v1.CollectionService/AddFields, retried: safe.
+	AddFields(ctx context.Context, req *connect.Request[collectionv1.AddFieldsRequest], opts *CallOptions) (*connect.Response[collectionv1.AddFieldsResponse], error)
+	// Create calls loams.collection.v1.CollectionService/CreateCollection, retried: safe.
+	Create(ctx context.Context, req *connect.Request[collectionv1.CreateCollectionRequest], opts *CallOptions) (*connect.Response[collectionv1.CollectionInfo], error)
+	// Drop calls loams.collection.v1.CollectionService/DropCollection, retried: safe.
+	Drop(ctx context.Context, req *connect.Request[collectionv1.DropCollectionRequest], opts *CallOptions) (*connect.Response[collectionv1.DropCollectionResponse], error)
+	// Get calls loams.collection.v1.CollectionService/GetCollection, retried: safe.
+	Get(ctx context.Context, req *connect.Request[collectionv1.GetCollectionRequest], opts *CallOptions) (*connect.Response[collectionv1.CollectionInfo], error)
+	// List calls loams.collection.v1.CollectionService/ListCollections, retried: safe. AIP-158: page with Collections and follow NextPageToken through loams.Paginate.
+	List(ctx context.Context, req *connect.Request[collectionv1.ListCollectionsRequest], opts *CallOptions) (*connect.Response[collectionv1.ListCollectionsResponse], error)
+	// ListVersions calls loams.collection.v1.CollectionService/ListVersions, retried: safe. AIP-158: page with Versions and follow NextPageToken through loams.Paginate.
+	ListVersions(ctx context.Context, req *connect.Request[collectionv1.ListVersionsRequest], opts *CallOptions) (*connect.Response[collectionv1.ListVersionsResponse], error)
+	// Scan calls loams.collection.v1.CollectionService/Scan, retried: manual.
+	Scan(ctx context.Context, req *connect.Request[collectionv1.ScanRequest], opts *CallOptions) (*connect.Response[collectionv1.ScanPlan], error)
+	// SetHot calls loams.collection.v1.CollectionService/SetHot, retried: safe.
+	SetHot(ctx context.Context, req *connect.Request[collectionv1.SetHotRequest], opts *CallOptions) (*connect.Response[collectionv1.SetHotResponse], error)
+	// UpdateAliases calls loams.collection.v1.CollectionService/UpdateAliases, retried: safe.
+	UpdateAliases(ctx context.Context, req *connect.Request[collectionv1.UpdateAliasesRequest], opts *CallOptions) (*connect.Response[collectionv1.UpdateAliasesResponse], error)
+	// Warm calls loams.collection.v1.CollectionService/WarmCollection, retried: safe.
+	Warm(ctx context.Context, req *connect.Request[collectionv1.WarmCollectionRequest], opts *CallOptions) (*connect.Response[collectionv1.WarmCollectionResponse], error)
+}
+
+// DocumentsModule is loams.documents — Documents: write, get, scroll, count, delete by filter and patch by filter.
+//
+// It wraps loams.collection.v1.DocumentService.
+type DocumentsModule interface {
+	// Module is the SDK module, as it appears on loams.documents.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable reports that the package's wire contract may still change.
+	Unstable() bool
+
+	// Count calls loams.collection.v1.DocumentService/CountDocuments, retried: safe.
+	Count(ctx context.Context, req *connect.Request[collectionv1.CountDocumentsRequest], opts *CallOptions) (*connect.Response[collectionv1.CountDocumentsResponse], error)
+	// DeleteByFilter calls loams.collection.v1.DocumentService/DeleteByFilter, retried: manual.
+	DeleteByFilter(ctx context.Context, req *connect.Request[collectionv1.DeleteByFilterRequest], opts *CallOptions) (*connect.Response[collectionv1.FilterWriteResponse], error)
+	// Get calls loams.collection.v1.DocumentService/GetDocuments, retried: safe.
+	Get(ctx context.Context, req *connect.Request[collectionv1.GetDocumentsRequest], opts *CallOptions) (*connect.Response[collectionv1.GetDocumentsResponse], error)
+	// PatchByFilter calls loams.collection.v1.DocumentService/PatchByFilter, retried: manual.
+	PatchByFilter(ctx context.Context, req *connect.Request[collectionv1.PatchByFilterRequest], opts *CallOptions) (*connect.Response[collectionv1.FilterWriteResponse], error)
+	// Scroll calls loams.collection.v1.DocumentService/ScrollDocuments, retried: safe.
+	Scroll(ctx context.Context, req *connect.Request[collectionv1.ScrollDocumentsRequest], opts *CallOptions) (*connect.Response[collectionv1.ScrollDocumentsResponse], error)
+	// Write calls loams.collection.v1.DocumentService/WriteDocuments, retried: manual.
+	Write(ctx context.Context, req *connect.Request[collectionv1.WriteDocumentsRequest], opts *CallOptions) (*connect.Response[collectionv1.WriteDocumentsResponse], error)
+}
+
+// GraphModule is loams.graph — Loams Graph: stored property graphs, queried with GQL.
+//
+// It wraps loams.graph.v1.GraphAdminService. Its wire contract may still change, so buf breaking skips it and an SDK marks it experimental (§44 §10.3).
+type GraphModule interface {
+	// Module is the SDK module, as it appears on loams.graph.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable reports that the package's wire contract may still change.
+	Unstable() bool
+
+	// Create calls loams.graph.v1.GraphAdminService/CreateGraph, retried: manual.
+	Create(ctx context.Context, req *connect.Request[graphv1.CreateGraphRequest], opts *CallOptions) (*connect.Response[graphv1.Graph], error)
+	// Delete calls loams.graph.v1.GraphAdminService/DeleteGraph, retried: manual.
+	Delete(ctx context.Context, req *connect.Request[graphv1.DeleteGraphRequest], opts *CallOptions) (*connect.Response[operationsv1.Operation], error)
+	// Explain calls loams.graph.v1.GraphService/Explain, retried: safe.
+	Explain(ctx context.Context, req *connect.Request[graphv1.ExplainRequest], opts *CallOptions) (*connect.Response[graphv1.Plan], error)
+	// Get calls loams.graph.v1.GraphAdminService/GetGraph, retried: safe.
+	Get(ctx context.Context, req *connect.Request[graphv1.GetGraphRequest], opts *CallOptions) (*connect.Response[graphv1.Graph], error)
+	// List calls loams.graph.v1.GraphAdminService/ListGraphs, retried: safe. AIP-158: page with Graphs and follow NextPageToken through loams.Paginate.
+	List(ctx context.Context, req *connect.Request[graphv1.ListGraphsRequest], opts *CallOptions) (*connect.Response[graphv1.ListGraphsResponse], error)
+	// Query calls loams.graph.v1.GraphService/Execute, retried: manual.
+	Query(ctx context.Context, req *connect.Request[graphv1.ExecuteRequest], opts *CallOptions) (*connect.Response[graphv1.ExecuteResponse], error)
+	// QueryBatch calls loams.graph.v1.GraphService/ExecuteBatch, retried: manual.
+	QueryBatch(ctx context.Context, req *connect.Request[graphv1.ExecuteBatchRequest], opts *CallOptions) (*connect.Response[graphv1.ExecuteBatchResponse], error)
+	// QueryStream calls loams.graph.v1.GraphService/ExecuteStream, retried: manual.
+	QueryStream(ctx context.Context, req *connect.Request[graphv1.ExecuteStreamRequest], opts *CallOptions) (*connect.ServerStreamForClient[graphv1.ResultChunk], error)
+	// Schema calls loams.graph.v1.GraphAdminService/GetSchema, retried: safe.
+	Schema(ctx context.Context, req *connect.Request[graphv1.GetSchemaRequest], opts *CallOptions) (*connect.Response[graphv1.GraphSchema], error)
+	// Update calls loams.graph.v1.GraphAdminService/UpdateGraph, retried: manual.
+	Update(ctx context.Context, req *connect.Request[graphv1.UpdateGraphRequest], opts *CallOptions) (*connect.Response[graphv1.Graph], error)
+}
+
 // InstanceModule is loams.instance — What this instance is, and who the caller is on it.
 //
 // It wraps loams.instance.v1.InstanceService.
@@ -794,6 +981,38 @@ type LiveAdminModule interface {
 	UpdateApp(ctx context.Context, req *connect.Request[livev1.UpdateAppRequest], opts *CallOptions) (*connect.Response[livev1.UpdateAppResponse], error)
 }
 
+// NamespacesModule is loams.namespaces — Namespaces: the container every collection and stream lives in.
+//
+// It wraps loams.collection.v1.NamespaceService.
+type NamespacesModule interface {
+	// Module is the SDK module, as it appears on loams.namespaces.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable reports that the package's wire contract may still change.
+	Unstable() bool
+
+	// Create calls loams.collection.v1.NamespaceService/CreateNamespace, retried: safe.
+	Create(ctx context.Context, req *connect.Request[collectionv1.CreateNamespaceRequest], opts *CallOptions) (*connect.Response[collectionv1.CreateNamespaceResponse], error)
+	// List calls loams.collection.v1.NamespaceService/ListNamespaces, retried: safe. AIP-158: page with Namespaces and follow NextPageToken through loams.Paginate.
+	List(ctx context.Context, req *connect.Request[collectionv1.ListNamespacesRequest], opts *CallOptions) (*connect.Response[collectionv1.ListNamespacesResponse], error)
+}
+
+// SearchModule is loams.search — Queries: one search over one collection, dense, sparse, text or hybrid.
+//
+// It wraps loams.collection.v1.QueryService.
+type SearchModule interface {
+	// Module is the SDK module, as it appears on loams.search.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable reports that the package's wire contract may still change.
+	Unstable() bool
+
+	// Query calls loams.collection.v1.QueryService/Search, retried: safe.
+	Query(ctx context.Context, req *connect.Request[collectionv1.SearchRequest], opts *CallOptions) (*connect.Response[collectionv1.SearchResponse], error)
+}
+
 // TablesModule is a second facade name for the same RPCs, exposed as loams.tables.
 //
 // It wraps loams.live.v1.LiveService. Its wire contract may still change, so buf breaking skips it and an SDK marks it experimental (§44 §10.3).
@@ -809,6 +1028,21 @@ type TablesModule interface {
 	Mutate(ctx context.Context, req *connect.Request[livev1.MutateRequest], opts *CallOptions) (*connect.Response[livev1.MutateResponse], error)
 	// Query calls loams.live.v1.LiveService/Query, retried: manual.
 	Query(ctx context.Context, req *connect.Request[livev1.QueryRequest], opts *CallOptions) (*connect.Response[livev1.QueryResponse], error)
+}
+
+// VectorModule is a second facade name for the same RPCs, exposed as loams.vector.
+//
+// It wraps loams.collection.v1.QueryService.
+type VectorModule interface {
+	// Module is the SDK module, as it appears on loams.vector.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable reports that the package's wire contract may still change.
+	Unstable() bool
+
+	// Search calls loams.collection.v1.QueryService/Search, retried: safe.
+	Search(ctx context.Context, req *connect.Request[collectionv1.SearchRequest], opts *CallOptions) (*connect.Response[collectionv1.SearchResponse], error)
 }
 
 // NewServiceClient builds the Connect client for a service, by fully
@@ -833,6 +1067,21 @@ func NewServiceClient(name string, httpClient connect.HTTPClient, baseURL string
 
 	case "loams.auth.v1.AuthService":
 		return authv1connect.NewAuthServiceClient(httpClient, baseURL, opts...)
+
+	case "loams.collection.v1.CollectionService":
+		return collectionv1connect.NewCollectionServiceClient(httpClient, baseURL, opts...)
+
+	case "loams.collection.v1.DocumentService":
+		return collectionv1connect.NewDocumentServiceClient(httpClient, baseURL, opts...)
+
+	case "loams.collection.v1.NamespaceService":
+		return collectionv1connect.NewNamespaceServiceClient(httpClient, baseURL, opts...)
+
+	case "loams.collection.v1.QueryService":
+		return collectionv1connect.NewQueryServiceClient(httpClient, baseURL, opts...)
+
+	case "loams.graph.v1.GraphAdminService":
+		return graphv1connect.NewGraphAdminServiceClient(httpClient, baseURL, opts...)
 
 	case "loams.instance.v1.InstanceService":
 		return instancev1connect.NewInstanceServiceClient(httpClient, baseURL, opts...)
