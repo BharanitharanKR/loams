@@ -2,6 +2,8 @@
 
 # Loams
 
+[![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/eK6NanHQq)
+
 **One bucket, every index: hybrid retrieval on object storage, with reactive data and durable agent runs beside it.**
 
 Loams is an open-source, AI-native data platform in Rust. It keeps your data in *your* object-storage bucket (S3, GCS, Azure Blob, RustFS or a local directory) in open formats: Lance and Tantivy today, Iceberg next. Compute is stateless and holds only caches.
@@ -72,7 +74,9 @@ The engine crates, the web console, Loams Desktop, the mobile apps, SDKs, protos
 
 Bug reports, client compatibility reports, docs fixes, tests and code are all welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md) and issues labelled [`good first issue`](https://github.com/ostrium-labs/loams/issues?q=is%3Aissue+is%3Aopen+label%3A%22good+first+issue%22); open an issue before changing a format, protocol or design decision.
 
-[Discussions](https://github.com/ostrium-labs/loams/discussions) · [Issues](https://github.com/ostrium-labs/loams/issues) · [Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Governance](GOVERNANCE.md) · [Ecosystem](ECOSYSTEM.md) · [Privacy](PRIVACY.md)
+Questions and chat are welcome on [Discord](https://discord.gg/eK6NanHQq); bugs and feature requests belong in GitHub issues.
+
+[Discord](https://discord.gg/eK6NanHQq) · [Discussions](https://github.com/ostrium-labs/loams/discussions) · [Issues](https://github.com/ostrium-labs/loams/issues) · [Security](SECURITY.md) · [Code of Conduct](CODE_OF_CONDUCT.md) · [Governance](GOVERNANCE.md) · [Ecosystem](ECOSYSTEM.md) · [Privacy](PRIVACY.md)
 
 ## Code signing policy
 
