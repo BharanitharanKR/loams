@@ -1,6 +1,6 @@
 # 64 — Loams Infra: the HashiCorp Stack, Loams-Native and in Rust
 
-Status: **Proposed** · 2026-10-19. Source: the owner's request of 2026-10-19, **"I want all of the HashiCorp stack in Loams, in Rust."** Decisions **D1150–D1171** and questions **Q970–Q983** are in the [decision log](13-decision-log.md), all *Proposed* with a recommended default. The numbers leave a gap: D1119 is the no-open-core ruling of the same day, and D1120–D1149 and Q960–Q969 are left for §63 (Loams Meter), which is being written in parallel. Plan stub: [IS1](../plans/2026-10-19-is1-infra-stack.md). **This document writes no code.**
+Status: **Approved** · 2026-10-19 (owner approved all decisions and questions, 2026-10-19). Source: the owner's request of 2026-10-19, **"I want all of the HashiCorp stack in Loams, in Rust."** Decisions **D1150–D1171** and questions **Q970–Q983** are in the [decision log](13-decision-log.md), all approved by the owner on 2026-10-19 with their recommended defaults. The numbers leave a gap: D1119 is the no-open-core ruling of the same day, and D1120–D1149 and Q960–Q969 are left for §63 (Loams Meter), which is being written in parallel. Plan stub: [IS1](../plans/2026-10-19-is1-infra-stack.md). **This document writes no code.**
 
 Builds on:
 - [§36](36-loams-git.md) §19.13: `env/` secrets as code, the `loams-vault` crate and its `SecretBackend` (D839–D847).
@@ -53,14 +53,24 @@ Build **Loams Infra** as a few small Rust services inside the `loams` binary, sh
 ### 2.1 Licences after the BSL change and IBM
 
 - **The change.** On 2023-08-10 HashiCorp moved future releases of its products to the Business Source License 1.1. APIs, SDKs and almost all libraries stayed MPL-2.0 ([announcement](https://www.hashicorp.com/en/blog/hashicorp-adopts-business-source-license), [licence FAQ](https://www.hashicorp.com/en/license-faq)).
-- **The terms today.** The `LICENSE` files of Vault and Nomad name International Business Machines Corporation as licensor. Production use is allowed except offering the software to third parties, hosted or embedded, in competition with IBM's paid versions. Each release converts to MPL-2.0 four years after it ships ([Vault LICENSE](https://raw.githubusercontent.com/hashicorp/vault/main/LICENSE), [Nomad LICENSE](https://raw.githubusercontent.com/hashicorp/nomad/main/LICENSE)). Terraform, Consul, Packer and Vagrant are assumed to carry the same terms (verify per product).
+- **The terms today** (the `LICENSE` file on each repository's `main`, read 2026-10-19). All six name International Business Machines Corporation as licensor and carry the same Additional Use Grant: production use is allowed except offering the software to third parties, hosted or embedded, in competition with IBM's paid versions. Each release converts to MPL-2.0 four years after it is published. The first BSL version of each:
+
+  | Product | BSL from | Licence file |
+  |---|---|---|
+  | Terraform | 1.6.0 | [LICENSE](https://raw.githubusercontent.com/hashicorp/terraform/main/LICENSE) |
+  | Vault | 1.15.0 | [LICENSE](https://raw.githubusercontent.com/hashicorp/vault/main/LICENSE) |
+  | Consul | 1.17.0 | [LICENSE](https://raw.githubusercontent.com/hashicorp/consul/main/LICENSE) |
+  | Nomad | 1.7.0 | [LICENSE](https://raw.githubusercontent.com/hashicorp/nomad/main/LICENSE) |
+  | Packer | 1.10.0 | [LICENSE](https://raw.githubusercontent.com/hashicorp/packer/main/LICENSE) |
+  | Vagrant | 2.4.3 (as the file states) | [LICENSE](https://raw.githubusercontent.com/hashicorp/vagrant/main/LICENSE) |
+
 - **IBM.** The acquisition closed on 2025-02-27 ([Consulting](https://www.consultingmag.com/2025/03/04/ibm-completes-acquisition-of-hashicorp)). No relicensing has followed; only the named licensor changed.
 - **Products HashiCorp has wound down:**
   - Waypoint Community Edition: archived 2024-01-08 ([repo](https://github.com/hashicorp/waypoint)).
   - CDK for Terraform: archived 2025-12-10 ([repo](https://github.com/hashicorp/terraform-cdk)).
   - HCP Vault Secrets: end of sale 2025-06-30 ([notice](https://support.hashicorp.com/hc/en-us/articles/41802449287955-HCP-Vault-Secrets-End-Of-Life)).
   - HCP Consul Dedicated: retired 2025-11-12; the legacy HCP Terraform free plan ended 2026-03-31 ([notice](https://support.hashicorp.com/hc/en-us/articles/47520801288083-End-of-Life-Notice-for-HCP-Terraform-Legacy-Free-Plan-HCP-Consul-Dedicated)).
-  - HCP Vagrant (the box registry): being retired through 2026–27; HashiCorp's blog and docs give conflicting dates ([blog](https://hashicorp.com/blog/hcp-vagrant-deprecation-important-dates-and-migration-guidance), [docs](https://developer.hashicorp.com/hcp/docs/vagrant/hcp-vagrant-eol)).
+  - HCP Vagrant (the box registry): no new boxes or registries from 2026-10-01, end of support 2026-11-02, end of operations 2026-12-31. The blog (2026-09-17) and the docs page agree as of 2026-10-19 ([blog](https://hashicorp.com/blog/hcp-vagrant-deprecation-important-dates-and-migration-guidance), [docs](https://developer.hashicorp.com/hcp/docs/vagrant/hcp-vagrant-eol)).
   - **Boundary Community Edition: archived on 2026-10-08/09**, with no further releases or security fixes; HashiCorp points users to HCP Boundary and Boundary Enterprise ([repo](https://github.com/hashicorp/boundary)).
 - **Still moving.** Vault 2.0 shipped around April 2026 with SPIFFE JWT-SVIDs and workload identity federation, still under BSL ([InfoQ](https://infoq.com/news/2026/04/vault-2-0-ibm-identity/)).
 
@@ -73,14 +83,14 @@ The pattern matters for Loams: the open user base of the HashiCorp tools is look
 | IaC | **OpenTofu** | MPL-2.0; Linux Foundation; CNCF Sandbox since 2025-04-23 ([CNCF](https://www.cncf.io/projects/opentofu/)) | **The engine Loams supports.** Loams writes a provider and a backend for it; it never forks it |
 | Secrets | **OpenBao** | MPL-2.0; OpenSSF Sandbox; forked from Vault 1.14, the last MPL release ([docs](https://openbao.org/docs/what-is-openbao/)) | An interop target: a `SecretBackend` (D840), a dynamic-credential consumer, and a client-compatible subset (IS2). Ideas only, never code (§11) |
 | Secrets (Rust) | **RustyVault** (Tongsuo) | Apache-2.0; small, not clearly production-ready ([repo](https://github.com/Tongsuo-Project/RustyVault)) | Read for design ideas. Not adopted: its storage model and API scope are not Loams' |
-| Discovery and mesh | Consul and Nomad have no community forks ([search, unverified](https://github.com/hashicorp/consul)) | — | Nothing to adopt |
+| Discovery and mesh | No community fork of Consul or Nomad was found in a search on 2026-10-19 (unverified) | — | Nothing to adopt |
 | Mesh data plane (Rust) | **linkerd2-proxy** | Apache-2.0; CNCF; open stable releases stopped in 2024 ([releases](https://linkerd.io/releases/)) | Not adopted: no sidecar mesh (D1010, §9) |
 | Access | **Teleport** | AGPL-3.0 since 2023-12, Community Edition binaries under a commercial licence from v16 ([blog](https://goteleport.com/blog/teleport-oss-switches-to-agpl-v3/), [discussion](https://github.com/gravitational/teleport/discussions/39158)) | Excluded by licence (AGPL, D1023) |
 | Access | **Pomerium**, **OpenZiti** | Apache-2.0, Go ([Pomerium](https://github.com/pomerium/pomerium), [OpenZiti](https://github.com/openziti/ziti)) | References. Loams' tailnet and gateway already cover their transport |
 | Dev environments | **devcontainer.json** | Spec under CC-BY-4.0 ([spec](https://github.com/devcontainers/spec)) | The descriptor Loams workspaces read (IS4) |
 | Dev environments | **DevPod** | MPL-2.0 ([repo](https://github.com/loft-sh/devpod)) | Reference; not linked |
 | Workload identity | **SPIFFE** and the `spiffe` crate | Apache-2.0 ([rust-spiffe](https://github.com/maxlambrecht/rust-spiffe)) | Loams workload IDs are SPIFFE-shaped; the crate is optional |
-| Policy (Rust) | **Cedar**; **regorus** (Rego) | Apache-2.0 ([Cedar](https://github.com/cedar-policy/cedar)); regorus licence (verify) ([repo](https://github.com/microsoft/regorus)) | Not adopted now (Q979) |
+| Policy (Rust) | **Cedar**; **regorus** (Rego) | Cedar Apache-2.0 ([repo](https://github.com/cedar-policy/cedar)); regorus `MIT AND Apache-2.0 AND BSD-3-Clause` per its `Cargo.toml` and crates.io 0.13.0 ([repo](https://github.com/microsoft/regorus)) | Not adopted now (Q979) |
 
 ### 2.3 Rust building blocks
 
@@ -177,7 +187,7 @@ What Vault adds beyond this (transit encryption as a service, a PKI, dozens of e
 | Engine | How it issues | Revokes by | Built on |
 |---|---|---|---|
 | `loams-postgres` | `IssueConnectCredential` (D711): a `tok_<hash>` login role `VALID UNTIL` the lease end, granted the configured role, rendered into PgDog | `DROP ROLE` after terminating its sessions, and the `VALID UNTIL` as a backstop | `pg-control`, built (`crates/loams/src/api/connect_postgres.rs`) |
-| `loams-sql` | A MySQL user with `PASSWORD EXPIRE INTERVAL` and the configured grants, through `loams.sqldb.v1` | `DROP USER` | §47's control plane (verify which RPC exists) |
+| `loams-sql` | A MySQL user with `PASSWORD EXPIRE INTERVAL` and the configured grants, through `loams.sqldb.v1` | `DROP USER` | §47's control plane. No `loams.sqldb.v1` proto or user-issuing RPC exists on `dev` at `034c8cb4` (checked 2026-10-19); IS1 Task 14 adds it |
 | `postgres`, `mysql` (external) | SQL templates run with an admin credential stored as a secret, as OpenBao's database engine does | The revocation template | New; tested against stock Postgres 16–18 and MySQL 8.4 |
 
 The lease is the record; D711's role naming and TTL limits (15 minutes default, 1 hour maximum for agents) carry over. The OpenTofu ephemeral resource (§4.2), `loams env run`, the Data API and agent sessions all issue through the same `LeaseService.Issue`.
@@ -258,7 +268,7 @@ These four have the weakest case for new code. Each section says what Loams alre
 
 - **Already there:** Jobs with leases and fencing (§26), Durable schedules and flows, the `Runner` trait with the node supervisor, process, Lambda and Knative runners (D375, D441), and `loams-sandbox` for isolation.
 - **Missing:** placement of long-running services across a handful of VMs, restart on failure, rolling updates, and health. That is the gap Nomad fills for teams without Kubernetes.
-- **Smallest useful addition:** a scheduler in the `worker` role that places `RunSpec`s (task groups of `SandboxSpec`s plus an OCI image or a binary) onto node agents by spread or bin-pack, holds each placement as a lease, and restarts on lease loss. OCI images are unpacked to a rootfs with `oci-client` (Apache-2.0) and run under the `linux` adapter; youki (Rust OCI runtime, Apache-2.0, verify) is the recorded alternative.
+- **Smallest useful addition:** a scheduler in the `worker` role that places `RunSpec`s (task groups of `SandboxSpec`s plus an OCI image or a binary) onto node agents by spread or bin-pack, holds each placement as a lease, and restarts on lease loss. OCI images are unpacked to a rootfs with `oci-client` (Apache-2.0) and run under the `linux` adapter; youki (Rust OCI runtime, Apache-2.0, [repo](https://github.com/youki-dev/youki)) is the recorded alternative.
 - **Gate:** built only when at least three BYOC users run long-lived services on Loams VMs without Kubernetes (Q980). On Kubernetes, Loams uses Kubernetes.
 - **Never:** a general cluster scheduler at Nomad's or Kubernetes' scale, CSI or CNI plugins, Windows drivers, multi-region federation.
 
@@ -406,7 +416,7 @@ Said plainly, so later plans do not drift:
 | D1022 (gateway modules) | The `http` module reads upstreams from the catalog (D1161) |
 | D1096, D1103 (Jailer actuators) | `RevokeByRun` is the "revoke token" actuator for database and cloud credentials |
 
-## 16. Decisions (D1150–D1171, all Proposed)
+## 16. Decisions (D1150–D1171, approved by the owner on 2026-10-19)
 
 | ID | Decision |
 |---|---|
@@ -435,7 +445,7 @@ Said plainly, so later plans do not drift:
 
 ## 17. Open questions (Q970–Q983)
 
-| ID | Question | Default |
+| ID | Question | Default (all answered by the owner on 2026-10-19: the default) |
 |---|---|---|
 | Q970 | Provider in Rust (`loams-tfplugin`) or Go (`terraform-plugin-framework`)? | Rust, with a one-week spike gate; Go if the spike fails |
 | Q971 | Default state encryption: server-side (console can show diffs and outputs) or OpenTofu client-side? | Server-side by default; client-side documented and supported |
