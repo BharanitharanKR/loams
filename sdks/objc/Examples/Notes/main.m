@@ -41,8 +41,9 @@ int main(void) {
       return 1;
     }
 
-    LoamsSearch *search = [[[[[LoamsSearch on:@"notes"] text:@"refund" fields:@[ @"body" ] k:nil]
-        vector:@"embedding" values:@[ @1, @0, @0, @0 ] k:nil exact:nil nprobes:nil refineFactor:nil ef:nil
+    // k is explicit so the example also runs on a 0.1.0 engine, which has no default k.
+    LoamsSearch *search = [[[[[LoamsSearch on:@"notes"] text:@"refund" fields:@[ @"body" ] k:@10]
+        vector:@"embedding" values:@[ @1, @0, @0, @0 ] k:@10 exact:nil nprobes:nil refineFactor:nil ef:nil
               oversampling:nil distance:nil filter:nil]
         fuse:[LoamsFusion rrf:@60]] filter:[LoamsFilter eq:@"tags" value:@"policy"]];
     NSDictionary *page = [notes search:[search limit:5] options:nil error:&error];
