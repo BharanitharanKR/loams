@@ -782,7 +782,7 @@ final class FacadeContractTests: XCTestCase {
     func testProtoPackagesIncludeTheWellKnownTypes() {
         XCTAssertTrue(loamsProtoPackages.contains("google.protobuf"))
         let loamsOnes = loamsProtoPackages.filter { $0.hasPrefix("loams.") }
-        XCTAssertEqual(loamsOnes.count, 10, "ten loams.* packages (with SDKP's collection and graph), which is what R9 compares")
+        XCTAssertEqual(loamsOnes.count, 12, "twelve loams.* packages (with SDKP's collection, graph, sql and stream), which is what R9 compares")
     }
 }
 

@@ -1,0 +1,48 @@
+// SDKP Part C (L7): the `sql` and `streams` modules, against the stub transport.
+
+import Foundation
+import XCTest
+@testable import Loams
+
+final class AppSqlStreamsTests: XCTestCase {
+    private func client(_ transport: StubTransport) throws -> Loams {
+        try Loams(Options(endpoint: URL(string: "http://stub.invalid")!, maxRetries: 3, namespace: "app"), transport: transport)
+    }
+
+    func test_swift_sql_params_bind_and_rows_read_as_records() async throws {
+        let stub = StubTransport(replies: [.success([
+            "columns": .array([.object(["name": .string("tags")]), .object(["name": .string("c")])]),
+            "rows": .array([.array([.string("a"), .int(2)])]),
+        ])])
+        let answer = try await client(stub).sql.query("SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags",
+                                                     params: [.int(1)])
+        XCTAssertEqual(stub.calls[0].rpc, "loams.sql.v1.SqlService/Query")
+        XCTAssertEqual(stub.calls[0].body["params"], .array([.int(1)]))
+        XCTAssertEqual(stub.calls[0].body["namespace"], .string("app"))
+        XCTAssertEqual(SqlModule.records(answer), [["tags": .string("a"), "c": .int(2)]])
+    }
+
+    func test_swift_streams_produce_is_retried_only_with_a_producer_key() async throws {
+        let unkeyed = StubTransport(replies: [.failure(code: .unavailable, message: "restarting", info: nil)])
+        do {
+            _ = try await client(unkeyed).streams.produce("events", records: ["a"])
+            XCTFail("an unkeyed produce succeeded")
+        } catch {}
+        XCTAssertEqual(unkeyed.calls.count, 1)
+
+        let keyed = StubTransport(replies: [
+            .failure(code: .unavailable, message: "restarting", info: nil),
+            .success(["lastOffset": .string("2")]),
+        ])
+        _ = try await client(keyed).streams.produce("events", records: ["text", JSONValue.object(["n": .int(1)])],
+                                                    producerId: "app-1", producerSeq: 7)
+        XCTAssertEqual(keyed.calls.count, 2)
+        XCTAssertEqual(keyed.calls[0].body["producerId"], .string("app-1"))
+        guard case .array(let records)? = keyed.calls[0].body["records"] else { return XCTFail("no records") }
+        let values = records.compactMap { record -> String? in
+            guard case .object(let r) = record, let b64 = r["value"]?.stringValue, let data = Data(base64Encoded: b64) else { return nil }
+            return String(decoding: data, as: UTF8.self)
+        }
+        XCTAssertEqual(values, ["text", "{\"n\":1}"])
+    }
+}

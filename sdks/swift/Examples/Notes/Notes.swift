@@ -81,7 +81,26 @@ struct Notes {
             print("graph: not in this build")
         }
 
-        // 5. A missing collection is a typed error; then clean up.
+        // 5. SQL with $n parameters over the same collection, and a stream of events.
+        let sql = try await loams.sql.query("SELECT n, title FROM notes WHERE n > $1 ORDER BY n", params: [.int(1)])
+        for row in SqlModule.records(sql) {
+            print("  sql row \(show(row["n"])): \(show(row["title"]))")
+        }
+        _ = try await loams.streams.create("events")
+        let produced = try await loams.streams.produce("events", records: [
+            JSONValue.object(["kind": .string("created"), "note": .int(1)]),
+            JSONValue.object(["kind": .string("patched"), "note": .int(2)]),
+            JSONValue.object(["kind": .string("deleted"), "note": .int(4)]),
+        ], producerId: "notes-demo", producerSeq: 1)
+        let base = UInt64(produced.fields["baseOffset"]?.stringValue ?? "0") ?? 0
+        let last = UInt64(produced.fields["lastOffset"]?.stringValue ?? "0") ?? 0
+        print("events at \(base)..\(last)\(produced.fields["duplicate"] == .bool(true) ? " (already produced)" : "")")
+        for try await record in loams.streams.subscribe("events", from: base) {
+            print("  event \(record.offset): \(record.text)")
+            if record.offset >= last { break }
+        }
+
+        // 6. A missing collection is a typed error; then clean up.
         do {
             _ = try await loams.collections.get("missing")
         } catch let error as LoamsError where error.code == .notFound {
@@ -89,6 +108,16 @@ struct Notes {
         }
         _ = try await notes.drop()
         print("done")
+    }
+
+    static func show(_ value: JSONValue?) -> String {
+        switch value {
+        case .string(let s)?: return s
+        case .int(let n)?: return String(n)
+        case .number(let d)?: return d == d.rounded() ? String(Int(d)) : String(d)
+        case .bool(let b)?: return String(b)
+        default: return ""
+        }
     }
 
     static func ids(_ response: DynamicMessage) -> String {
