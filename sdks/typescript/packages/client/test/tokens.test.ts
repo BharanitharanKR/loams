@@ -67,7 +67,7 @@ describe('typescript_session_read_your_writes', () => {
     invoker.register('loams.collection.v1.DocumentService', DocumentService);
 
     await invoker.unary(WRITE, { collection: 'notes', ops: [] });
-    expect(session.current()).toBe('v1:s4/p0@12');
+    expect(session.current('loams.collection.v1')).toBe('v1:s4/p0@12');
 
     await invoker.unary(GET, { collection: 'notes', ids: [] });
     const read = sent[1]?.input as { consistency?: { atLeast?: string } };
@@ -91,7 +91,7 @@ describe('typescript_session_read_your_writes', () => {
 
     await invoker.unary(WRITE, { collection: 'notes', ops: [] });
     await invoker.unary(WRITE, { collection: 'notes', ops: [] });
-    expect(session.current()).toBe('v1:s4/p0@12,s4/p1@3');
+    expect(session.current('loams.collection.v1')).toBe('v1:s4/p0@12,s4/p1@3');
 
     await invoker.unary(GET, { collection: 'notes', ids: [], consistency: { freshness: 2 } });
     expect((sent[2]?.input as { consistency: unknown }).consistency).toEqual({ freshness: 2 });
@@ -113,17 +113,30 @@ describe('typescript_session_read_your_writes', () => {
     const invoker = new CallInvoker(transport as never, undefined, 0, session, { namespace: 'app' });
     invoker.register('loams.collection.v1.DocumentService', DocumentService);
     await invoker.unary(WRITE, { collection: 'notes', ops: [] });
-    expect(session.current()).toBe('v1:s9/p0@1');
+    expect(session.current('loams.collection.v1')).toBe('v1:s9/p0@1');
+  });
+
+  it('keeps one token per proto package', async () => {
+    // A Graph read refuses a token naming another package's stream (SDKP-17),
+    // so a collection write's token is the collection reads' business only.
+    const session = new ConsistencySession();
+    const { transport } = messageTransport(() => ({ token: 'v1:s4/p0@12' }));
+    const invoker = new CallInvoker(transport as never, undefined, 0, session, { namespace: 'app' });
+    invoker.register('loams.collection.v1.DocumentService', DocumentService);
+    await invoker.unary(WRITE, { collection: 'notes', ops: [] });
+    expect(session.current('loams.collection.v1')).toBe('v1:s4/p0@12');
+    expect(session.current('loams.graph.v1')).toBeUndefined();
+    expect(session.current()).toBeUndefined();
   });
 
   it('opts a call out with session: false', async () => {
     const session = new ConsistencySession();
-    session.record('v1:s1/p0@1');
+    session.record('v1:s1/p0@1', 'loams.collection.v1');
     const { sent, transport } = messageTransport(() => ({ readToken: 'v1:s1/p0@9' }));
     const invoker = new CallInvoker(transport as never, undefined, 0, session, { namespace: 'app' });
     invoker.register('loams.collection.v1.DocumentService', DocumentService);
     await invoker.unary(GET, { collection: 'notes', ids: [] }, { consistency: { session: false } });
     expect((sent[0]?.input as { consistency?: unknown }).consistency).toBeUndefined();
-    expect(session.current()).toBe('v1:s1/p0@1');
+    expect(session.current('loams.collection.v1')).toBe('v1:s1/p0@1');
   });
 });

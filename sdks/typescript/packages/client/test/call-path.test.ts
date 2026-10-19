@@ -247,7 +247,7 @@ describe('the call path', () => {
     // write answered with has to go out on the next read, or read-your-writes
     // is a promise the SDK does not keep.
     const session = new ConsistencySession();
-    session.record('v1:s1/p0@7');
+    session.record('v1:s1/p0@7', GET_INSTANCE.package);
     const { seen, transport } = recordingTransport(() => ({ instanceId: '01' }));
     const invoker = invokerWith(transport, { consistency: session });
 
@@ -261,7 +261,7 @@ describe('the call path', () => {
     const invoker = invokerWith(transport, { consistency: session });
 
     await invoker.unary(TABLES_QUERY, {}, { consistency: { session: true } });
-    expect(session.current()).toBe('v1:s2/p1@1');
+    expect(session.current(TABLES_QUERY.package)).toBe('v1:s2/p1@1');
   });
 
   it('does not fail a committed write because the session cannot parse a token', async () => {
@@ -270,7 +270,7 @@ describe('the call path', () => {
     // write twice. A string that is not a `v1:` token at all is not the
     // session's business and is not counted.
     const session = new ConsistencySession();
-    session.record('v1:s1/p0@1');
+    session.record('v1:s1/p0@1', TABLES_QUERY.package);
     const { transport } = recordingTransport(() => ({ consistencyToken: 'v1:garbage' }));
     const invoker = invokerWith(transport, { consistency: session });
 
@@ -278,7 +278,7 @@ describe('the call path', () => {
       invoker.unary(TABLES_QUERY, {}, { consistency: { session: true } }),
     ).resolves.toBeDefined();
     expect(session.rejected).toBe(1);
-    expect(session.current()).toBe('v1:s1/p0@1');
+    expect(session.current(TABLES_QUERY.package)).toBe('v1:s1/p0@1');
 
     const other = recordingTransport(() => ({ token: 'page-2' }));
     await invokerWith(other.transport, { consistency: session }).unary(TABLES_QUERY, {}, {});

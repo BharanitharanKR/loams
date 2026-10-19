@@ -79,10 +79,11 @@ export interface ConsistencyOptions {
 
 /** A session's merged consistency token (D609). Off unless a call opts in. */
 export interface ConsistencyTokenStore {
-  /** The token to attach to the next read, or undefined for none. */
-  current(): string | undefined;
-  /** Folds a token the server returned into the session's. */
-  record(token: string | undefined): void;
+  /** The token to attach to the next read in `scope` (a proto package), or
+   * undefined for none. */
+  current(scope?: string): string | undefined;
+  /** Folds a token the server returned, in `scope`, into the session's. */
+  record(token: string | undefined, scope?: string): void;
 }
 
 /** One attempt of a call, as the transport sees it. */
@@ -422,7 +423,9 @@ export class CallInvoker {
     const session = resolveSession(options.consistency, this.consistency);
     // An explicit token wins; otherwise the session's, which is what makes a
     // session read-your-writes rather than record it and never send it (R4).
-    const consistency = options.consistency?.token ?? session?.current();
+    // R4 (SDKP-17): one token per proto package, so a collection write's token
+    // never becomes a graph read's `at_least`.
+    const consistency = options.consistency?.token ?? session?.current(binding.package);
     const prepared = this.prepare(binding, request, consistency);
     const { request: keyed, keyed: hasKey } = withIdempotencyKey(
       prepared,
@@ -487,7 +490,7 @@ export class CallInvoker {
         },
         binding.rpc,
       )) as Record<string, unknown> | undefined;
-      this.recordConsistency(session, result, headerToken);
+      this.recordConsistency(session, result, headerToken, binding.package);
       return result;
     } catch (thrown) {
       if (expired) {
@@ -545,7 +548,7 @@ export class CallInvoker {
       options: CallOptions,
     ) => AsyncIterable<unknown>;
     const session = resolveSession(options.consistency, this.consistency);
-    const consistency = options.consistency?.token ?? session?.current();
+    const consistency = options.consistency?.token ?? session?.current(binding.package);
     const prepared = this.prepare(binding, request, consistency);
     const asHeader = this.shape(binding).atLeast === undefined;
     const self = this;
@@ -612,6 +615,7 @@ export class CallInvoker {
     session: ConsistencyTokenStore | undefined,
     result: Record<string, unknown> | undefined,
     headerToken?: string,
+    scope?: string,
   ): void {
     if (session === undefined) {
       return;
@@ -634,7 +638,7 @@ export class CallInvoker {
         continue;
       }
       try {
-        session.record(token);
+        session.record(token, scope);
       } catch {
         // The RPC already succeeded. A token the session cannot parse must not
         // turn a committed write into a thrown error, because a caller that

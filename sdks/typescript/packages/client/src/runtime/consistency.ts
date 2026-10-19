@@ -200,30 +200,42 @@ export class ConsistencyToken {
 }
 
 /**
- * A session's consistency token: every token a response carried, merged.
+ * A session's consistency tokens: every token a response carried, merged, kept
+ * **per proto package** (R4, SDKP-17).
  *
- * `record` folds a token in; `current` is the merge, as text, for the next
- * read. A token that does not parse is counted in `rejected` and otherwise
- * ignored: the write that answered with it has already happened, and turning a
- * committed write into a thrown error invites a caller to retry it.
+ * A Graph read refuses a token naming another package's stream, so a
+ * collection write's token must never become a graph read's `at_least`: the
+ * session holds one merged token per scope, and the call path passes the
+ * call's package as the scope. A caller using the store directly may leave the
+ * scope out, which is one shared scope.
+ *
+ * `record` folds a token in; `current` is the scope's merge, as text. A token
+ * that does not parse is counted in `rejected` and otherwise ignored: the write
+ * that answered with it has already happened, and turning a committed write
+ * into a thrown error invites a caller to retry it.
  */
 export class ConsistencySession {
-  #token: ConsistencyToken | undefined;
+  readonly #tokens = new Map<string, ConsistencyToken>();
   #rejected = 0;
 
-  /** The token to attach to the next read, or undefined before any write. */
-  current(): string | undefined {
-    return this.#token?.toString();
+  /** The token to attach to the next read in `scope`, or undefined. */
+  current(scope = ''): string | undefined {
+    return this.#tokens.get(scope)?.toString();
   }
 
-  /** The merged token, parsed. */
-  token(): ConsistencyToken | undefined {
-    return this.#token;
+  /** The merged token of `scope`, parsed. */
+  token(scope = ''): ConsistencyToken | undefined {
+    return this.#tokens.get(scope);
   }
 
-  /** Folds a token the server returned in. Throws `InvalidArgumentError` on
-   * a malformed token, after counting it. */
-  record(token: string | ConsistencyToken | undefined): void {
+  /** The scopes the session holds a token for. */
+  scopes(): string[] {
+    return [...this.#tokens.keys()];
+  }
+
+  /** Folds a token the server returned, in `scope`, in. Throws
+   * `InvalidArgumentError` on a malformed token, after counting it. */
+  record(token: string | ConsistencyToken | undefined, scope = ''): void {
     if (token === undefined || token === '') {
       return;
     }
@@ -234,7 +246,8 @@ export class ConsistencySession {
       this.#rejected += 1;
       throw error;
     }
-    this.#token = this.#token === undefined ? parsed.normalized() : this.#token.merge(parsed);
+    const held = this.#tokens.get(scope);
+    this.#tokens.set(scope, held === undefined ? parsed.normalized() : held.merge(parsed));
   }
 
   /** How many tokens the session could not parse. */
@@ -247,9 +260,9 @@ export class ConsistencySession {
     return this.#rejected;
   }
 
-  /** Forgets the token, so the next read is not held to it. */
+  /** Forgets every token, so the next read is not held to one. */
   clear(): void {
-    this.#token = undefined;
+    this.#tokens.clear();
     this.#rejected = 0;
   }
 }
