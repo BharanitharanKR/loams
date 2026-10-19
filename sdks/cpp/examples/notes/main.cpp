@@ -38,9 +38,12 @@ int main() {
 
     loams::SelectOptions title;
     title.include = {"title"};
+    // k is explicit so the example also runs on a 0.1.0 engine, which has no default k.
+    loams::VectorOptions ten;
+    ten.k = 10;
     const auto hits = notes.Search(loams::Search()
-                                       .Text("refund", {{"body"}, {}})
-                                       .Vector("embedding", {1, 0, 0, 0})
+                                       .Text("refund", {{"body"}, 10})
+                                       .Vector("embedding", {1, 0, 0, 0}, ten)
                                        .Fuse(loams::Fusion::Rrf(60))
                                        .Where(loams::Filter::Eq("tags", loams::Json("policy")))
                                        .Highlight("body")
