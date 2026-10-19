@@ -6,25 +6,12 @@ Part of [design §44](../../docs/design/44-unified-api-and-sdks.md). One `Loams`
 client with namespaced modules, speaking the Connect and gRPC-Web protocols on the
 one port an instance serves.
 
-> ## Status: written but **never compiled**
+> ## Status: built and tested in CI
 >
-> The machine this SDK was written on **has no Swift toolchain**: `command -v
-> swift swiftc` returns nothing. Every file here is therefore **UNVERIFIED** — it
-> has never been compiled, and **no test in this directory has ever been run**.
->
-> That is not a formality. Read `Tests/LoamsTests/` as the specification and
-> `Sources/Loams/` as an unexecuted proposal to meet it. Before this SDK is
-> trusted, somebody with a toolchain has to run:
->
-> ```sh
-> swift build
-> swift test
-> ```
->
-> and expect to find compile errors. Expect them. This is a first draft against a
-> contract, not a passing suite.
->
-> Two concrete things a toolchain will settle, both called out where they bite:
+> `swift build` and `swift test` run on macOS in CI (`ci.yml`'s `sdk-swift` job, and
+> the `Swift: build and test` job of `sdk-release.yml`, which passed for `v0.1.0`), and
+> the release job also builds the `Loams` product from the repository root's
+> `Package.swift`, which is what a consumer resolves. Two design notes:
 >
 >  - **The transport is written against the Connect wire protocol directly, over
 >   `URLSession`, with no dependency.** The language matrix says Swift should use
@@ -92,7 +79,7 @@ The names `sdks/conformance/check-languages.mjs` looks for, declared in
 | `swift_token_source_refresh` | R1 — exactly one refresh and one retry; a second expiry is reported; an API key's refresh is a no-op |
 | `swift_pagination_iterator` | R6 — the token threading and the stop condition, and a refusal through the sequence for an unpaged binding |
 
-**All six are UNVERIFIED.** They have not been compiled or run.
+All six run in CI with `swift test`.
 
 ## Running the suite
 
