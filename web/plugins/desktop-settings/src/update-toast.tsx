@@ -29,7 +29,7 @@ export function updateToast(
         type: 'info',
         timeout: 0,
         actionProps: {
-          children: s.mode === 'manual' ? `Download ${version}` : 'Download',
+          children: s.mode === 'manual' ? `Download v${version}` : 'Download',
           onClick: () => void update.download(),
         },
         data: {

@@ -56,7 +56,7 @@ describe('the update toast (D1085)', () => {
     const { update, push } = fakeUpdate();
     show(update);
     push({ phase: 'available', version: '0.3.0', mode: 'manual' });
-    expect(await screen.findByRole('button', { name: 'Download 0.3.0' })).toBeTruthy();
+    expect(await screen.findByRole('button', { name: 'Download v0.3.0' })).toBeTruthy();
     fireEvent.click(await screen.findByRole('button', { name: 'Skip this version' }));
     expect(update.skip).toHaveBeenCalledWith('0.3.0');
   });
