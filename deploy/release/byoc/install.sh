@@ -143,6 +143,9 @@ else
   setkv TS_AUTHKEY "$authkey"
   setkv TS_LOGIN_SERVER "$login_server"
   setkv TS_SERVE_MODE "$serve_mode"
+  # First-run setup with auth on needs a setup token (docs/release/preview.md,
+  # "First-run setup"). It stays in the host's .env, mode 0600, and is not printed.
+  setkv LOAMS_SETUP_TOKEN "$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
   if [[ -n "$headscale" ]]; then
     setkv HEADSCALE_SERVER_URL "$headscale"
     setkv HEADSCALE_BIND "0.0.0.0"
@@ -190,6 +193,7 @@ name="$($dc exec -T tailscale tailscale status --json 2>/dev/null | tr -d "\n" |
 mode="$(sed -n "s/^TS_SERVE_MODE=//p" .env)"
 if [ -n "$name" ]; then
   echo "Engine on your tailnet: ${mode:-https}://$name  (LOAMS_ENGINE_URL for the console)"
+  echo "First-run setup: the console asks for LOAMS_SETUP_TOKEN, in $1/release/.env on this host"
 else
   echo "The sidecar has not joined a tailnet yet: $dc logs tailscale"
 fi
