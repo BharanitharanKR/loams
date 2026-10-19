@@ -96,7 +96,24 @@ fun main() {
         println("graph: not in this build")
     }
 
-    // 5. A missing collection is a typed error; then clean up.
+    // 5. SQL with $n parameters over the same collection, and a stream of events.
+    val sql = loams.sql.query("SELECT n, title FROM notes WHERE n > \$1 ORDER BY n", listOf(1))
+    for (row in dev.loams.SqlModule.records(sql)) println("  sql row ${row["n"]}: ${row["title"]}")
+    loams.streams.create("events", 1)
+    val produced = loams.streams.produce("events", 0, listOf(
+        mapOf("kind" to "created", "note" to 1), mapOf("kind" to "patched", "note" to 2), mapOf("kind" to "deleted", "note" to 4),
+    ), producerId = "notes-demo", producerSeq = 1)
+    val base = produced.field("base_offset") as Long
+    val last = produced.field("last_offset") as Long
+    println("events at $base..$last${if (produced.field("duplicate") == true) " (already produced)" else ""}")
+    loams.streams.subscribe("events", 0, fromOffset = base).use { subscription ->
+        for (record in subscription) {
+            println("  event ${record.offset}: ${record.text}")
+            if (record.offset >= last) break
+        }
+    }
+
+    // 6. A missing collection is a typed error; then clean up.
     try {
         loams.collections.get("missing")
     } catch (missing: NotFoundException) {
