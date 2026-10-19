@@ -109,6 +109,8 @@ The hosted console is the cordis console (`cordis.html`) served at `/`. On first
 
 **Coming soon** (shown as such on the connect screen, not linked): deploying this console to your own Vercel or Cloudflare account, self-service client registration at auth.loams.dev (`https://auth.loams.dev/register`, URL to confirm), and Headscale networks.
 
+**Demo mode**: `?demo` boots the console with no engine at all — the built-in sample data over an in-browser mock of the Loams APIs (`@loams/console-host/testing`), a **Demo data** badge in the header, and a link back to the connect screen. The gate screens link to it (and to `?demo=1`), because it is the one way in that needs no engine, no tailnet and no sign-in: [console.loams.dev/?demo](https://console.loams.dev/?demo). Nothing is sent anywhere and nothing is stored.
+
 Pages whose backend the engine serves (Live, Graph, Analytics/House, Status, Namespaces, Approvals) are on; pages that still run on built-in sample data (Deployments, Live deployments, SQL, Metrics, Pipelines, Git) appear only with the **Demo data** toggle in the header. Every page shows the **Preview** badge.
 
 Runtime config is written at deploy time from the environment by `apps/console/deploy/config.mjs` (and by the stage step), never baked into the bundle:
