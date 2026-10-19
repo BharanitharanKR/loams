@@ -64,6 +64,16 @@ All notable changes to this project are documented here. The format follows [Kee
   `batch_partially_applied`, in every SDK's reason list. The SDK runtime
   contract gains R11 (default namespace), R12 (timeouts), R13 (`write_batch`)
   and R14 (`subscribe`), and R4 the token encoding and the session store.
+- TypeScript SDK (`@loams/client`): the app-building layer of SDKP. `Schema`,
+  `Filter` and `Search` builders checked against the new builder corpus
+  (`sdks/fixtures/builders/`); `loams.collection(name)` handles;
+  `ConsistencyToken` parse/merge/print checked against `sdks/fixtures/tokens.json`,
+  and a session store that merges every response token and sends
+  `consistency.at_least`; a default namespace (R11); a 30 s unary deadline
+  raising `client_deadline_exceeded` (R12); `documents.writeBatch` (R13);
+  `streams.subscribe` (R14); `search.text`, `search.hybrid`, `search.queryAll`,
+  `documents.upsert/delete/patch/scrollAll` and `<call>All` for paged calls;
+  `Loams.fromEnv()`.
 
 - The `sql` and `streams` modules in every generated SDK facade (SDKP Part C):
   `sql.query` and `sql.query_arrow` from facade annotations on `loams.sql.v1`,
@@ -80,6 +90,10 @@ All notable changes to this project are documented here. The format follows [Kee
   returned (a `google.protobuf.Value` number is a double): a whole double is now
   the key it names, and an id past 2^53 is answered as `{"uint": "…"}` and read
   back exactly.
+- TypeScript SDK: a facade call whose name differs from its RPC
+  (`admin.keys.create` for `KeyService/CreateKey`) failed with "has no method";
+  and the paging iterator dropped items whose field name has an underscore
+  (`service_accounts`).
 
 ## [0.1.0] - 2026-10-19
 

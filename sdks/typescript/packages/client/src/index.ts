@@ -19,9 +19,76 @@ export {
   Loams,
   type AdminNamespace,
   type LiveNamespace,
+  type LoamsEnvironment,
   type LoamsModules,
   type LoamsOptions,
 } from './loams.js';
+
+// The app-building layer (SDKP): the builders, the collection handle and the
+// hand-written conveniences the module objects carry.
+export { Schema, type DynamicMapping, type FieldOptions, type TextOptions as SchemaTextOptions } from './builders/schema.js';
+export {
+  Filter,
+  idValue,
+  toQuery,
+  type Bounds,
+  type DocId,
+  type FilterJson,
+  type Fuzziness,
+  type MatchOptions,
+  type MultiMatchOptions,
+  type QueryStringOptions,
+} from './builders/filter.js';
+export {
+  Fusion,
+  Search,
+  Sort,
+  consistencyJson,
+  dbsf,
+  rrf,
+  weighted,
+  type ConsistencyLevel,
+  type ExpandOptions,
+  type FusionJson,
+  type HighlightOptions,
+  type SelectOptions,
+  type SortJson,
+  type SortValue,
+  type SparseOptions,
+  type TextOptions,
+  type VectorOptions,
+} from './builders/search.js';
+export { CollectionHandle, type HandleModules } from './handle.js';
+export {
+  WriteOps,
+  attachAppCalls,
+  documentCalls,
+  documentIdJson,
+  searchCalls,
+  streamCalls,
+  type DocumentInput,
+  type PatchChange,
+  type ScrollOptions,
+  type SearchShorthandOptions,
+  type Target,
+} from './app.js';
+export {
+  DEFAULT_CHUNK_BYTES,
+  DEFAULT_CHUNK_ROWS,
+  writeBatch,
+  type BatchOptions,
+  type BatchResult,
+  type ChunkWriter,
+} from './runtime/batch.js';
+export {
+  SUBSCRIBE_MAX_BACKOFF_MS,
+  SUBSCRIBE_MIN_BACKOFF_MS,
+  subscribe,
+  type OffsetRecord,
+  type RecordFetcher,
+  type SubscribeRequest,
+  type Subscription,
+} from './runtime/subscribe.js';
 export {
   SystemApi,
   type Catalogue,
@@ -50,20 +117,31 @@ export {
 
 // The runtime, for a caller who composes rather than uses.
 export {
+  CONSISTENCY_TOKEN_HEADER,
   CallInvoker,
+  DEFAULT_TIMEOUT_MS,
   callWithRetry,
   withIdempotencyKey,
   type Attempt,
   type CallOptions,
   type ConsistencyOptions,
   type ConsistencyTokenStore,
+  type InvokerDefaults,
   type RetryPlan,
   type Send,
 } from './runtime/call.js';
-export { ConsistencySession, TOKEN_PREFIX, isConsistencyToken } from './runtime/consistency.js';
+export {
+  ConsistencySession,
+  ConsistencyToken,
+  TOKEN_PREFIX,
+  isConsistencyToken,
+  type TokenPosition,
+} from './runtime/consistency.js';
 export {
   AlreadyExistsError,
   AbortedError,
+  BatchError,
+  CLIENT_REASONS,
   DeadlineExceededError,
   FailedPreconditionError,
   FeatureNotInVariantError,
@@ -79,6 +157,7 @@ export {
   UnimplementedError,
   errorInfo,
   isLoamsError,
+  type ClientReason,
   toLoamsError,
   type ErrorInfoShape,
 } from './runtime/errors.js';

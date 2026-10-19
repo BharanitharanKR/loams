@@ -65,6 +65,72 @@ The `/node` subpath exists so a bundler never follows `@connectrpc/connect-node`
 into a browser build it cannot satisfy; the conformance suite checks that
 statically.
 
+## Build an app
+
+The app-building layer (SDKP) adds builders, a collection handle and the
+runtime an app needs: a default namespace, deadlines, read-your-writes
+consistency tokens, chunked bulk writes and stream subscriptions.
+
+```ts
+import { Filter, Loams, Schema, Search, Sort, rrf } from '@loams/client';
+
+const loams = Loams.fromEnv();              // LOAMS_ENDPOINT, LOAMS_API_KEY, LOAMS_NAMESPACE
+// or: new Loams({ endpoint, auth: key, namespace: 'app', sessionConsistency: true })
+
+await loams.collections.create({
+  name: 'notes',
+  schema: new Schema().text('title').text('body').keyword('tags').i64('n')
+    .vector('embedding', 4).toJson(),
+});
+
+const notes = loams.collection('notes');    // calls with `collection` filled in
+await notes.upsert([
+  { id: 1, source: { title: 'Refunds', body: 'refund policy', tags: 'policy', n: 1 },
+    vectors: { embedding: [1, 0, 0, 0] } },
+]);
+
+const hits = await notes.search(
+  notes.query()
+    .text('refund', { fields: ['body'] })
+    .vector('embedding', [1, 0, 0, 0], { k: 10 })
+    .fuse(rrf(60))
+    .filter(Filter.and(Filter.eq('tags', 'policy'), Filter.range('n', { gte: 1 })))
+    .highlight('body')
+    .select({ include: ['title'] })
+    .limit(5),
+);
+
+for await (const hit of loams.search.queryAll(
+  Search.on('notes').text('refund').sort(Sort.score(), Sort.pk()).limit(100),
+)) { /* every hit, page by page */ }
+
+await notes.writeBatch(rows);               // 10 000 rows / 4 MiB a chunk, one key per chunk
+```
+
+- **Default namespace (R11).** `namespace` fills every request that has a
+  `namespace` field and leaves it empty; an explicit one wins, and neither is
+  `InvalidArgumentError` before any network call.
+- **Deadlines (R12).** Unary calls default to 30 s (`timeoutMs` on the client
+  or per call; `0` disables). Running out raises `DeadlineExceededError` with
+  reason `client_deadline_exceeded`, which is never retried. Streams have no
+  default deadline.
+- **Consistency tokens (R4).** `ConsistencyToken.parse/merge/toString`; with
+  `sessionConsistency: true` every token a response carries merges into
+  `loams.consistency`, and every read with a `consistency` field is sent
+  `at_least` the session.
+- **Bulk writes (R13).** `documents.writeBatch` sends one chunk at a time,
+  each with its own idempotency key, returns the merged token, and stops at
+  the first failed chunk with a `BatchError` (`chunksApplied`, `rowsApplied`).
+- **Subscriptions (R14).** `streams.subscribe({ stream, partition, fromOffset })`
+  is an async iterable over `Fetch` that exposes `offset` for resuming.
+
+The module objects (`loams.namespaces`, `loams.collections`, `loams.documents`,
+`loams.search`, `loams.vector`, `loams.graph`, `loams.sql`, `loams.streams`) are
+generated from the protos' facade annotations, and appear as those
+annotations land (SDKP P0a–P0c); the builders, the handle and the runtime above
+work today. Durable workflows use the Resonate SDK pointed at
+`LOAMS_ENDPOINT/durable/` (SDKP-1).
+
 ## What is generated and what is hand-written
 
 Design §44 §7.3 draws the line, and this SDK follows it exactly.

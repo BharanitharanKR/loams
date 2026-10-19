@@ -35,13 +35,20 @@ import {
   type ModuleBinding,
   type TablesModule,
 } from './gen/facade.js';
-import { CallInvoker, type CallOptions, type ConsistencyTokenStore } from './runtime/call.js';
+import { attachAppCalls } from './app.js';
+import { CollectionHandle, type HandleModules } from './handle.js';
+import {
+  CallInvoker,
+  DEFAULT_TIMEOUT_MS,
+  type CallOptions,
+  type ConsistencyTokenStore,
+} from './runtime/call.js';
 import { ConsistencySession } from './runtime/consistency.js';
 import { LoamsError } from './runtime/errors.js';
 import { paginate, type PageRequestOptions } from './runtime/pagination.js';
 import { SystemApi, type VersionReport } from './system.js';
 import { DEFAULT_MAX_RETRIES } from './runtime/retry.js';
-import { apiKey, type TokenSource } from './runtime/token-source.js';
+import { apiKey, envToken, type TokenSource } from './runtime/token-source.js';
 import { createLoamsTransport, type TransportOptions } from './runtime/transports.js';
 import { watch, type ResumeOptions } from './runtime/streams.js';
 
@@ -77,8 +84,30 @@ export interface LoamsOptions {
    * read-your-writes across processes.
    */
   sessionConsistency?: boolean;
-  /** The client's deadline, when the transport does not set one. */
+  /**
+   * The deadline of every unary call that does not set its own `timeoutMs`
+   * (runtime contract R12). Default 30 000 ms; `0` disables it. Streams have
+   * no default deadline. The budget covers a call's retries, and a call that
+   * runs out raises `DeadlineExceededError` with reason
+   * `client_deadline_exceeded`, which is never retried.
+   */
   timeoutMs?: number;
+  /**
+   * The namespace of every request that has a `namespace` field and leaves it
+   * empty (runtime contract R11). An explicit `namespace` always wins; with
+   * neither, such a call fails with `InvalidArgumentError` before any network
+   * call.
+   */
+  namespace?: string;
+}
+
+/** The environment `Loams.fromEnv` reads (R1). */
+export interface LoamsEnvironment {
+  readonly LOAMS_ENDPOINT?: string;
+  readonly LOAMS_API_KEY?: string;
+  readonly LOAMS_TOKEN?: string;
+  readonly LOAMS_NAMESPACE?: string;
+  readonly [name: string]: string | undefined;
 }
 
 export type { Catalogue, VersionReport } from './system.js';
@@ -127,6 +156,8 @@ export class Loams {
    * catalogue a caller iterates. The same objects are reachable as
    * properties, `loams.live.admin` for `'live.admin'`. */
   readonly modules: Readonly<Record<string, unknown>>;
+  /** The default namespace (R11), if the client has one. */
+  readonly namespace: string | undefined;
 
   readonly #invoker: CallInvoker;
   readonly #consistency: ConsistencySession | undefined;
@@ -151,9 +182,15 @@ export class Loams {
       tokenSource,
       options.maxRetries ?? DEFAULT_MAX_RETRIES,
       this.#consistency,
+      {
+        namespace: options.namespace,
+        timeoutMs: options.timeoutMs ?? DEFAULT_TIMEOUT_MS,
+      },
     );
+    this.namespace = options.namespace;
 
     this.modules = buildModules(this.#invoker);
+    attachAppCalls(this.modules as Record<string, unknown>, MODULES);
     const tree = nestModules(this.modules);
     this.instance = tree.instance as InstanceModule;
     this.live = tree.live as LiveNamespace;
@@ -168,6 +205,41 @@ export class Loams {
         timeoutMs: options.timeoutMs,
       },
     );
+  }
+
+  /**
+   * A client from the environment: `LOAMS_ENDPOINT`, then `LOAMS_API_KEY` or
+   * `LOAMS_TOKEN`, then `LOAMS_NAMESPACE` (R1). `options` wins over the
+   * environment where both say something.
+   */
+  static fromEnv(
+    options: Partial<LoamsOptions> = {},
+    environment: LoamsEnvironment = readEnvironment(),
+  ): Loams {
+    const endpoint = options.endpoint ?? environment.LOAMS_ENDPOINT;
+    if (endpoint === undefined || endpoint === '') {
+      throw new LoamsError('Loams.fromEnv: LOAMS_ENDPOINT is not set', {
+        code: Code.InvalidArgument,
+        metadata: { field: 'LOAMS_ENDPOINT' },
+      });
+    }
+    const hasKey =
+      (environment.LOAMS_API_KEY ?? '') !== '' || (environment.LOAMS_TOKEN ?? '') !== '';
+    const namespace = options.namespace ?? environment.LOAMS_NAMESPACE;
+    return new Loams({
+      ...options,
+      endpoint,
+      ...(options.auth === undefined && hasKey ? { auth: envToken(environment) } : {}),
+      ...(namespace === undefined || namespace === '' ? {} : { namespace }),
+    });
+  }
+
+  /**
+   * A handle on one collection: its document and search calls with
+   * `collection` (and `namespace`) filled in (SDKP §2.8). Holds no state.
+   */
+  collection(name: string, options: { namespace?: string } = {}): CollectionHandle {
+    return new CollectionHandle(this.modules as HandleModules, name, options);
   }
 
   /** The session consistency token store, when `sessionConsistency` is on. */
@@ -255,6 +327,13 @@ export class Loams {
   invalidateCatalogue(): void {
     this.system.invalidate();
   }
+}
+
+/** The process environment, where there is one (Node, Deno, Bun); empty in a
+ * browser. */
+function readEnvironment(): LoamsEnvironment {
+  const scope = globalThis as { process?: { env?: Record<string, string | undefined> } };
+  return scope.process?.env ?? {};
 }
 
 /**
