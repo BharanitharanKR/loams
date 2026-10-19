@@ -223,13 +223,15 @@ jobs:
           if [ -f "$stage/release/.env.example" ]; then
             sed -i "s/^LOAMS_VERSION=.*/LOAMS_VERSION=$VERSION/" "$stage/release/.env.example"
           fi
-          # First-run checks on the staged bundle (#870), so a bundle that
+          # First-run checks on the staged bundle (#870, #871), so a bundle that
           # cannot finish first-run setup does not ship. `compose config` only
           # resolves the files (it runs nothing); the checks name no version.
           # - the engine reads config/setup-token.env, the file is in the bundle,
           #   and a LOAMS_SETUP_TOKEN set for compose reaches the engine;
           # - every file the stack mounts or reads as an env_file from inside
-          #   the bundle is in it (secrets/ is the user's, so it is skipped).
+          #   the bundle is in it (secrets/ is the user's, so it is skipped);
+          # - when the Postgres stack's compute1 is in it, it starts after the
+          #   one-shot pg-bootstrap that creates its tenant and timeline.
           cfg=$(cd "$stage/release" && docker compose --env-file .env.example --profile '*' \
             config --no-env-resolution --format json)
           test -f "$stage/release/config/setup-token.env" \
@@ -249,6 +251,11 @@ jobs:
              | unique[] | select(startswith($stage) and (startswith($secrets) | not))' <<<"$cfg" \
             | while read -r f; do [ -e "$f" ] || echo "$f"; done)
           [ -z "$missing" ] || { echo "the bundle lacks files its compose file uses:"; echo "$missing"; exit 1; }
+          if jq -e '.services | has("compute1")' <<<"$cfg" >/dev/null; then
+            jq -e '.services.compute1.depends_on["pg-bootstrap"].condition == "service_completed_successfully"
+                   and .services["pg-bootstrap"].restart == "no"' <<<"$cfg" >/dev/null \
+              || { echo "compute1 does not wait for the one-shot pg-bootstrap"; exit 1; }
+          fi
           tar -C "$RUNNER_TEMP" --sort=name --owner=0 --group=0 --numeric-owner \
             --mtime="$mtime" -czf "$OUT/$name.tar.gz" "$name"
           (cd "$OUT" && sha256sum -- * > SHA256SUMS)
