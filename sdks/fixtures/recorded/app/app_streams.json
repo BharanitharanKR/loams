@@ -14,7 +14,7 @@
   "source": {
     "server": "loams dev",
     "commit": "unknown",
-    "recordedAt": "2026-10-19T20:05:15.736Z"
+    "recordedAt": "2026-10-19T20:09:03.419Z"
   },
   "volatile": [
     "token",
@@ -144,7 +144,7 @@
         "headers": {
           "content-type": "application/json"
         },
-        "body": "{\"namespace\":\"app\",\"stream\":\"note-events\",\"partition\":0,\"records\":[{\"key\":\"MQ==\",\"value\":\"eyJub3RlIjoxLCJvcCI6ImNyZWF0ZWQifQ==\"},{\"key\":\"NQ==\",\"value\":\"eyJub3RlIjo1LCJvcCI6ImRlbGV0ZWQifQ==\"}],\"producerId\":\"app-producer-1\",\"producerSeq\":\"1\"}"
+        "body": "{\"namespace\":\"app\",\"stream\":\"note-events\",\"records\":[{\"key\":\"MQ==\",\"value\":\"eyJub3RlIjoxLCJvcCI6ImNyZWF0ZWQifQ==\"},{\"key\":\"NQ==\",\"value\":\"eyJub3RlIjo1LCJvcCI6ImRlbGV0ZWQifQ==\"}],\"producerId\":\"app-producer-1\",\"producerSeq\":\"1\"}"
       },
       "response": {
         "status": 200,
@@ -170,7 +170,7 @@
         "headers": {
           "content-type": "application/json"
         },
-        "body": "{\"namespace\":\"app\",\"stream\":\"note-events\",\"partition\":0,\"records\":[{\"key\":\"MQ==\",\"value\":\"eyJub3RlIjoxLCJvcCI6ImNyZWF0ZWQifQ==\"},{\"key\":\"NQ==\",\"value\":\"eyJub3RlIjo1LCJvcCI6ImRlbGV0ZWQifQ==\"}],\"producerId\":\"app-producer-1\",\"producerSeq\":\"1\"}"
+        "body": "{\"namespace\":\"app\",\"stream\":\"note-events\",\"records\":[{\"key\":\"MQ==\",\"value\":\"eyJub3RlIjoxLCJvcCI6ImNyZWF0ZWQifQ==\"},{\"key\":\"NQ==\",\"value\":\"eyJub3RlIjo1LCJvcCI6ImRlbGV0ZWQifQ==\"}],\"producerId\":\"app-producer-1\",\"producerSeq\":\"1\"}"
       },
       "response": {
         "status": 200,
@@ -197,7 +197,7 @@
         "headers": {
           "content-type": "application/json"
         },
-        "body": "{\"namespace\":\"app\",\"stream\":\"note-events\",\"partition\":0,\"offset\":\"0\",\"maxRecords\":10}"
+        "body": "{\"namespace\":\"app\",\"stream\":\"note-events\",\"maxRecords\":10}"
       },
       "response": {
         "status": 200,
@@ -209,13 +209,13 @@
             {
               "key": "MQ==",
               "value": "eyJub3RlIjoxLCJvcCI6ImNyZWF0ZWQifQ==",
-              "timestampMs": "1792440314945"
+              "timestampMs": "1792440542846"
             },
             {
               "offset": "1",
               "key": "NQ==",
               "value": "eyJub3RlIjo1LCJvcCI6ImRlbGV0ZWQifQ==",
-              "timestampMs": "1792440314945"
+              "timestampMs": "1792440542846"
             }
           ],
           "nextOffset": "2",
@@ -235,7 +235,7 @@
         "headers": {
           "content-type": "application/json"
         },
-        "body": "{\"namespace\":\"app\",\"stream\":\"note-events\",\"partition\":0,\"offset\":\"2\",\"maxRecords\":10}"
+        "body": "{\"namespace\":\"app\",\"stream\":\"note-events\",\"offset\":\"2\",\"maxRecords\":10}"
       },
       "response": {
         "status": 200,
@@ -359,7 +359,7 @@
         "headers": {
           "content-type": "application/json"
         },
-        "body": "{\"namespace\":\"app\",\"stream\":\"note-audit\",\"partition\":0,\"offset\":\"0\"}"
+        "body": "{\"namespace\":\"app\",\"stream\":\"note-audit\"}"
       },
       "response": {
         "status": 200,
@@ -386,7 +386,7 @@
         "headers": {
           "content-type": "application/json"
         },
-        "body": "{\"namespace\":\"app\",\"stream\":\"no-such-stream\",\"partition\":0,\"offset\":\"0\"}"
+        "body": "{\"namespace\":\"app\",\"stream\":\"no-such-stream\"}"
       },
       "response": {
         "status": 404,

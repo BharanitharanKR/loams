@@ -498,6 +498,9 @@ const EVENTS = "[{\"specversion\":\"1.0\",\"id\":\"evt-1\",\"source\":\"/notes\"
  * `not_found`. `streams.subscribe` (R14) is a loop over `fetch`, so the two
  * fetches are the pages it reads.
  */
+// A request is recorded in the proto3 JSON an SDK sends: a field at its zero
+// value (`partition: 0`, `offset: "0"`) is left out, an `optional` one set to
+// zero (`ProduceCloudEvents.partition`) is kept.
 const APP_STREAMS = {
   name: 'app_streams',
   kind: 'app',
@@ -535,7 +538,6 @@ const APP_STREAMS = {
       request: post(`${STREAM}/Produce`, {
         namespace: APP_NAMESPACE,
         stream: 'note-events',
-        partition: 0,
         records: [
           { key: b64('1'), value: b64('{"note":1,"op":"created"}') },
           { key: b64('5'), value: b64('{"note":5,"op":"deleted"}') },
@@ -551,7 +553,6 @@ const APP_STREAMS = {
       request: post(`${STREAM}/Produce`, {
         namespace: APP_NAMESPACE,
         stream: 'note-events',
-        partition: 0,
         records: [
           { key: b64('1'), value: b64('{"note":1,"op":"created"}') },
           { key: b64('5'), value: b64('{"note":5,"op":"deleted"}') },
@@ -567,8 +568,6 @@ const APP_STREAMS = {
       request: post(`${STREAM}/Fetch`, {
         namespace: APP_NAMESPACE,
         stream: 'note-events',
-        partition: 0,
-        offset: '0',
         maxRecords: 10,
       }),
       expect: { status: 200 },
@@ -579,7 +578,6 @@ const APP_STREAMS = {
       request: post(`${STREAM}/Fetch`, {
         namespace: APP_NAMESPACE,
         stream: 'note-events',
-        partition: 0,
         offset: '2',
         maxRecords: 10,
       }),
@@ -614,8 +612,6 @@ const APP_STREAMS = {
       request: post(`${STREAM}/FetchCloudEvents`, {
         namespace: APP_NAMESPACE,
         stream: 'note-audit',
-        partition: 0,
-        offset: '0',
       }),
       expect: { status: 200 },
     },
@@ -625,8 +621,6 @@ const APP_STREAMS = {
       request: post(`${STREAM}/Fetch`, {
         namespace: APP_NAMESPACE,
         stream: 'no-such-stream',
-        partition: 0,
-        offset: '0',
       }),
       expect: { status: 404, reason: 'not_found' },
     },
