@@ -283,7 +283,26 @@ async fn suspended_workflow_survives_a_server_restart() {
         BEFORE_SLEEP.load(Ordering::SeqCst) == 1
     })
     .await;
-    tokio::time::sleep(Duration::from_millis(300)).await;
+    // The counter moves before the step's promise is settled: wait until the
+    // store has it resolved (this test's root holds no other resolved
+    // promise before the sleep ends), so stopping cannot re-run the step.
+    let deadline = Instant::now() + Duration::from_secs(60);
+    loop {
+        let resolved = call(
+            &server,
+            "promise.search",
+            json!({ "state": "resolved", "limit": 10 }),
+        )
+        .await;
+        if resolved["data"]["promises"]
+            .as_array()
+            .is_some_and(|p| !p.is_empty())
+        {
+            break;
+        }
+        assert!(Instant::now() < deadline, "the first step never settled");
+        tokio::time::sleep(Duration::from_millis(50)).await;
+    }
     runtime.stop().await;
     server.stop().await;
     assert_eq!(AFTER_SLEEP.load(Ordering::SeqCst), 0, "still asleep");
