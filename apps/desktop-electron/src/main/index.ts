@@ -66,9 +66,9 @@ import { DOCS_URL, ISSUES_URL, menuCommand } from "./shell/menu-model";
 import { quitSequence } from "./shell/quit";
 import { reveal } from "./shell/reveal";
 import { registerShellIpc } from "./shell/shell-ipc.electron";
+import { initSingleInstance } from "./shell/single-instance.electron";
 import { SPLASH_TIMEOUT_MS, SplashGate } from "./shell/splash";
 import { showSplash } from "./shell/splash.electron";
-import { initSingleInstance } from "./shell/single-instance.electron";
 import {
 	EMPTY_STUDIO,
 	notificationContent,
