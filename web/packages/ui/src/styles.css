@@ -461,7 +461,7 @@
   color: var(--op-faint);
 }
 
-.loams-input:hover:not(:disabled) {
+.loams-input:hover:not(:disabled, [aria-invalid="true"]) {
   border-color: var(--op-muted);
 }
 
@@ -989,6 +989,25 @@ button.loams-row,
   from {
     opacity: 0;
     transform: translateY(8px);
+  }
+}
+
+/* The palette's opening rows rise in order, 25ms apart, capped at 8 (UI2; LIST_STAGGER's
+   numbers). Rows a query brings in later carry no data-enter and just appear. */
+@keyframes loams-row-in {
+  from {
+    opacity: 0;
+    transform: translateY(3px);
+  }
+}
+[data-slot="command-item"][data-enter] {
+  animation: loams-row-in var(--op-duration-enter) var(--op-ease-out) both;
+  animation-delay: calc(min(var(--loams-i, 0), 8) * 25ms);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  [data-slot="command-item"][data-enter] {
+    animation: none;
   }
 }
 

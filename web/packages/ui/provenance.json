@@ -114,7 +114,7 @@
       "upstreamPath": "apps/web/src/components/ui/command.tsx",
       "commit": "6524a8d43795dc543f7cfb572388cdea3662ad48",
       "upstreamSha256": "b295fcfed11b65ad8cb156bd6458cafa59d626b7f55949098045a9f831ad700f",
-      "localSha256": "d4bf8f6a5967aadbfbb6c37cd7ea386f79a7d9e7f205ec7cdf6dbd2209192713",
+      "localSha256": "8eecfe72a8ec59014d5fa81b42115114170e9bec1e3e3f90279b38d5c08eb412",
       "verdict": "adapt",
       "group": "k",
       "note": "merges apps/web/src/components/ui/dialog-styles.ts; autocomplete's popup parts are src/autocomplete.tsx since CF1; @legendapp/list replaced by TanStack Virtual"
@@ -170,7 +170,7 @@
       "upstreamPath": "apps/web/src/components/ui/input.tsx",
       "commit": "33aa4614783e856977a5f0b856dc65ebc1ce6794",
       "upstreamSha256": "3da4013e812d00d8a3f9795825625ab098bf4e14c360b20fcd653ca1f8b77f57",
-      "localSha256": "61855b491f674289949473b732f4a26649b55695cdeb4ae541b75a97684002b2",
+      "localSha256": "efe86a888ee12e1b582932d19792311c1a2b9e7dd32a7977770c7aeb5b658886",
       "verdict": "adapt",
       "group": "k"
     },

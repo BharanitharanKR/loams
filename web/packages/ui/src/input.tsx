@@ -11,7 +11,7 @@ import { cx, type WithClass } from './cx';
 export const CONTROL_BOX =
   'relative inline-flex w-full rounded-md border border-input bg-bg text-body text-ink ' +
   'transition-colors duration-(--op-duration-fast) motion-reduce:transition-none ' +
-  'hover:not-has-disabled:border-muted ' +
+  'hover:not-has-disabled:not-has-aria-invalid:border-muted ' +
   'has-focus-visible:outline-2 has-focus-visible:outline-offset-2 has-focus-visible:outline-focus ' +
   'has-aria-invalid:border-danger has-aria-invalid:has-focus-visible:outline-danger ' +
   'has-disabled:cursor-not-allowed has-disabled:opacity-60';

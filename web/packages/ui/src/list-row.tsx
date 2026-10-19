@@ -3,8 +3,13 @@
 
 import { mergeProps } from '@base-ui/react/merge-props';
 import { useRender } from '@base-ui/react/use-render';
-import type { ReactNode } from 'react';
+import type { MouseEvent, ReactNode } from 'react';
 import { cx } from './cx';
+
+const ignorePress = (event: MouseEvent) => {
+  event.preventDefault();
+  event.stopPropagation();
+};
 
 export type ListRowProps = useRender.ComponentProps<'div'> & {
   /** `compact` is the 28px sidebar row at 12px; `default` is 32px at 13px. */
@@ -52,9 +57,9 @@ export function ListRow({
       </>
     ),
   };
-  return useRender({
-    defaultTagName: 'div',
-    props: mergeProps<'div'>(defaults, props),
-    render,
-  });
+  const merged = mergeProps<'div'>(defaults, props);
+  // A disabled row ignores presses: a caller's onClick (merged above) never runs, and a link
+  // row does not follow its href.
+  if (disabled) merged.onClick = ignorePress;
+  return useRender({ defaultTagName: 'div', props: merged, render });
 }
