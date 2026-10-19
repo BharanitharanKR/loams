@@ -3,8 +3,9 @@
 # in loam-platform to the OSS repo"), starting with `loams-meter`, the node
 # metering agent (docs/platform/design/01-metering-and-billing.md). It is
 # separate from the engine workspace at the repository root, as `fabric/` is:
-# its dependency set (reqwest 0.12, base64 0.22) predates the root's, and
-# design 63 (Loams Meter) decides where the meter lives in the engine.
+# its dependency set (reqwest 0.12, base64 0.22) predates the root's. Design 63
+# (Loams Meter, D1135) moves the agent to crates/loams-meter-agent in the root
+# workspace and removes this workspace (plan ME1, Task 0b).
 [workspace]
 resolver = "3"
 members = ["crates/*"]
