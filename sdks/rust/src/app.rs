@@ -100,7 +100,18 @@ mod impls {
     use loams_proto::loams::collection::v1 as c;
     use loams_proto::loams::graph::v1 as g;
     use loams_proto::loams::sql::v1 as s;
+    use loams_proto::loams::stream::v1 as st;
 
+    // `loams.stream.v1` requests carry a namespace and no consistency.
+    namespaced!(
+        st::CreateStreamRequest,
+        st::DescribeStreamRequest,
+        st::ListStreamsRequest,
+        st::ProduceRequest,
+        st::FetchRequest,
+        st::ProduceCloudEventsRequest,
+        st::FetchCloudEventsRequest,
+    );
     namespaced!(
         c::CreateNamespaceRequest,
         c::CreateCollectionRequest,

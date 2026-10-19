@@ -34,8 +34,6 @@ A row is added by that language's SDKP task; the app suite is
 | Python | yes, sync and async | yes | yes | `app_collections`, `app_search`, `app_graph`, `app_sql`, `app_streams` |
 | Go | yes | yes | yes | `app_collections`, `app_search`, `app_graph`, `app_sql`, `app_streams` |
 | Go | yes | with P0b/P0c | yes | `app_collections`, `app_search`, `app_graph` |
-| Rust | yes | with P0b/P0c | yes | `app_collections`, `app_search`, `app_graph` |
-| Rust | yes | sql: yes; streams with P0c | yes | `app_collections`, `app_search`, `app_graph`, `app_sql` |
 
 ## Installing
 

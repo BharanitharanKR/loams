@@ -72,8 +72,13 @@ method per facade call; `loams.collection("notes", None)` returns a
 `query` answers `columns` and `rows`, `records(statement, vec![$1, …])`
 answers one JSON object per row, and `loams::sql_records(&answer)` reads an
 answer in hand; `query_arrow` answers Arrow IPC bytes (`arrow_ipc`), which the
-`arrow-ipc` crate's `StreamReader` reads. `loams.streams()` arrives with
-`loams.stream.v1` (SDKP P0c).
+`arrow-ipc` crate's `StreamReader` reads. `loams.streams()` is
+`loams.streams`: `create`, `get`, `list` (and `list_all`), `produce` (set
+`producer_id` and `producer_seq` so a retry cannot append twice), `fetch`,
+`produce_events` and `fetch_events` (CloudEvents as a JSON batch); and
+`loams.subscribe(request, options)` (R14) is a `futures::Stream` over `fetch`
+whose `offset()` is where to resume. It is not `Send`: poll it on the task
+that made it.
 `examples/notes/main.rs` is the whole app scenario as a program. The session's
 token is used only for collection and SQL reads: a graph's token names one
 graph (SDKP-17). Durable workflows use the Resonate SDK pointed at

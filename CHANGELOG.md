@@ -149,9 +149,11 @@ All notable changes to this project are documented here. The format follows [Kee
   modules `namespaces()`, `collections()`, `documents()`, `search()`,
   `vector()` and `graph()`, `loams.collection(name)`, and the app scenario
   replayed through them (`rust_app_*`); `examples/notes`.
-- Rust SDK: `loams.sql()` (SDKP L4 part C): `query`, `query_arrow`,
-  `records(statement, params)` and `sql_records(&answer)`, replayed by
-  `rust_app_sql`.
+- Rust SDK: `loams.sql()` and `loams.streams()` (SDKP L4 part C): `query`,
+  `query_arrow`, `records(statement, params)` and `sql_records(&answer)`;
+  `create`, `get`, `list`/`list_all`, `produce`, `fetch`, `produce_events`,
+  `fetch_events`, and `Loams::subscribe` over `fetch` (now a local, not
+  `Send`, stream); replayed by `rust_app_sql` and `rust_app_streams`.
 
 ### Fixed
 

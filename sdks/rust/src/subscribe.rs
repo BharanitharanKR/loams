@@ -10,6 +10,10 @@
 //!   can drop the stream and resume without losing or repeating a record;
 //! * dropping the stream stops the loop: no further fetch is sent.
 //!
+//! The stream is not `Send`: a unary call's future holds the client's runtime
+//! by reference across its await, so poll it on the task that made it (or a
+//! `LocalSet`).
+//!
 //! A fetch that fails ends the stream with that error (the call path has
 //! already retried it as a `safe` call), and the offset still says where to
 //! resume.
@@ -23,7 +27,7 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 
 use futures::Stream;
-use futures::stream::BoxStream;
+use futures::stream::LocalBoxStream;
 
 use crate::error::LoamsError;
 
@@ -40,7 +44,7 @@ pub trait OffsetRecord {
 
 /// A running subscription.
 pub struct Subscription<R> {
-    inner: BoxStream<'static, Result<R, LoamsError>>,
+    inner: LocalBoxStream<'static, Result<R, LoamsError>>,
     offset: Arc<AtomicU64>,
 }
 
@@ -80,9 +84,9 @@ struct State<R, F> {
 /// from that offset. Nothing is sent until the stream is first polled.
 pub fn subscribe<R, F, Fut>(from_offset: u64, fetch: F) -> Subscription<R>
 where
-    R: OffsetRecord + Send + 'static,
-    F: FnMut(u64) -> Fut + Send + 'static,
-    Fut: Future<Output = Result<Vec<R>, LoamsError>> + Send + 'static,
+    R: OffsetRecord + 'static,
+    F: FnMut(u64) -> Fut + 'static,
+    Fut: Future<Output = Result<Vec<R>, LoamsError>> + 'static,
 {
     let offset = Arc::new(AtomicU64::new(from_offset));
     let state = State {

@@ -1,7 +1,7 @@
 //! SDKP Parts B and C for Rust: the app scenario through the public facade.
 //!
-//! `rust_app_collections`, `rust_app_search`, `rust_app_graph` and
-//! `rust_app_sql` (Part C) replay
+//! `rust_app_collections`, `rust_app_search`, `rust_app_graph`, and (Part C)
+//! `rust_app_sql` and `rust_app_streams` replay
 //! `sdks/fixtures/recorded/app/` against the conformance fixture server
 //! (`sdks/fixtures/app-scenario.md` says how): each step's facade call is made
 //! on a `Loams` client with the recorded request — built with the builders when
@@ -19,6 +19,7 @@ use std::process::{Child, Command, Stdio};
 
 use http::{HeaderName, HeaderValue};
 use loams::sql_v1 as sql;
+use loams::stream_v1 as st;
 use loams::{
     CallOptionsOverrides, Loams, LoamsError, TransportOptions, collection_v1 as c, graph_v1 as g,
     instance_v1 as i,
@@ -276,6 +277,62 @@ async fn replay(url: &str, name: &str) -> Result<(), String> {
                 sql::QueryArrowResponse,
                 sql().query_arrow
             ),
+            "streams.create" => call!(
+                loams,
+                json,
+                options,
+                st::CreateStreamRequest,
+                st::CreateStreamResponse,
+                streams().create
+            ),
+            "streams.get" => call!(
+                loams,
+                json,
+                options,
+                st::DescribeStreamRequest,
+                st::DescribeStreamResponse,
+                streams().get
+            ),
+            "streams.list" => call!(
+                loams,
+                json,
+                options,
+                st::ListStreamsRequest,
+                st::ListStreamsResponse,
+                streams().list
+            ),
+            "streams.produce" => call!(
+                loams,
+                json,
+                options,
+                st::ProduceRequest,
+                st::ProduceResponse,
+                streams().produce
+            ),
+            "streams.fetch" => call!(
+                loams,
+                json,
+                options,
+                st::FetchRequest,
+                st::FetchResponse,
+                streams().fetch
+            ),
+            "streams.produce_events" => call!(
+                loams,
+                json,
+                options,
+                st::ProduceCloudEventsRequest,
+                st::ProduceCloudEventsResponse,
+                streams().produce_events
+            ),
+            "streams.fetch_events" => call!(
+                loams,
+                json,
+                options,
+                st::FetchCloudEventsRequest,
+                st::FetchCloudEventsResponse,
+                streams().fetch_events
+            ),
             other => return Err(format!("{place}: no replay for {other}")),
         };
         let status = step["expect"]["status"].as_u64().expect("a status");
@@ -353,6 +410,51 @@ async fn rust_app_graph() {
 #[tokio::test]
 async fn rust_app_sql() {
     replay_on_own_server("app_sql").await;
+}
+
+#[tokio::test]
+async fn rust_app_streams() {
+    replay_on_own_server("app_streams").await;
+}
+
+/// `Loams::subscribe` reads the recorded fetch page of `app_streams` and knows
+/// where to resume.
+#[tokio::test]
+async fn rust_streams_subscribe_reads_the_recorded_page() {
+    use futures::StreamExt;
+    let server = FixtureServer::start();
+    let loams = Loams::connect(TransportOptions::new(&server.url).json(true))
+        .expect("a client")
+        .with_namespace("app")
+        .max_retries(0);
+    let options = CallOptionsOverrides::new()
+        .header(
+            HeaderName::from_static("loams-fixture-name"),
+            HeaderValue::from_static("app_streams"),
+        )
+        .header(
+            HeaderName::from_static("loams-fixture-step"),
+            HeaderValue::from_static("5"),
+        );
+    let mut subscription = loams.subscribe(
+        st::FetchRequest {
+            stream: "note-events".into(),
+            max_records: Some(10),
+            ..Default::default()
+        },
+        options,
+    );
+    let mut offsets = Vec::new();
+    while offsets.len() < 2 {
+        let record = subscription
+            .next()
+            .await
+            .expect("a record")
+            .expect("the recorded page");
+        offsets.push(record.offset);
+    }
+    assert_eq!(offsets, vec![0, 1]);
+    assert_eq!(subscription.offset(), 2);
 }
 
 /// `sql().records` sends the `$1` value and reads the rows as records, against

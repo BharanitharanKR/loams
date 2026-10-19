@@ -101,7 +101,7 @@ pub use crate::app::{
 };
 pub use crate::app_modules::{
     CollectionsModule, DocumentsModule, GraphModule, NamespacesModule, SearchModule, SqlModule,
-    VectorModule, sql_records,
+    StreamsModule, VectorModule, sql_records,
 };
 pub use crate::batch::{BatchError, BatchOptions, BatchResult, write_batch};
 pub use crate::binding::{binding_of, module_of};
@@ -143,6 +143,7 @@ pub use loams_proto::loams::collection::v1 as collection_v1;
 pub use loams_proto::loams::graph::v1 as graph_v1;
 pub use loams_proto::loams::instance::v1 as instance_v1;
 pub use loams_proto::loams::sql::v1 as sql_v1;
+pub use loams_proto::loams::stream::v1 as stream_v1;
 
 /// The RPC `Loams::watch` resumes, named for the error a failure carries.
 pub(crate) const WATCH_RPC: &str = "loams.live.v1.LiveService/Watch";

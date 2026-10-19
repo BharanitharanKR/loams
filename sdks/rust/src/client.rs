@@ -469,6 +469,42 @@ where
         }
     }
 
+    /// `loams.streams` (SDKP §2.5): a namespace's logs.
+    #[must_use]
+    pub fn streams(&self) -> crate::app_modules::StreamsModule<'_, T> {
+        crate::app_modules::StreamsModule {
+            client: loams_proto::loams::stream::v1::StreamServiceClient::new(
+                self.inner.transport.clone(),
+                self.inner.config.clone(),
+            ),
+            runtime: &self.inner.runtime,
+        }
+    }
+
+    /// Every record of one partition from `request.offset` on (R14): a loop
+    /// over `streams().fetch` that backs off on an empty page, as a
+    /// `futures::Stream` whose [`crate::subscribe::Subscription::offset`] is
+    /// where to resume. `options` go on every fetch.
+    #[must_use]
+    pub fn subscribe(
+        &self,
+        request: loams_proto::loams::stream::v1::FetchRequest,
+        options: CallOptionsOverrides,
+    ) -> crate::subscribe::Subscription<loams_proto::loams::stream::v1::FetchedRecord>
+    where
+        T: Clone,
+    {
+        let from = request.offset;
+        let loams = self.clone();
+        crate::subscribe::subscribe(from, move |offset| {
+            let loams = loams.clone();
+            let options = options.clone();
+            let mut page = request.clone();
+            page.offset = offset;
+            fetch_page(loams, page, options)
+        })
+    }
+
     /// `loams.graph` (SDKP §2.5). Its package is `unstable`.
     #[must_use]
     pub fn graph(&self) -> crate::app_modules::GraphModule<'_, T> {
@@ -1025,6 +1061,20 @@ where
     ) -> Result<loams_proto::loams::collection::v1::DropCollectionResponse, LoamsError> {
         self.collections().drop(request, options).await
     }
+}
+
+/// One `streams().fetch` over an owned client, for `Loams::subscribe`.
+async fn fetch_page<T>(
+    loams: Loams<T>,
+    page: loams_proto::loams::stream::v1::FetchRequest,
+    options: CallOptionsOverrides,
+) -> Result<Vec<loams_proto::loams::stream::v1::FetchedRecord>, LoamsError>
+where
+    T: ClientTransport + Send + Sync + 'static,
+    T::ResponseBody: Unpin,
+    <T::ResponseBody as Body>::Error: std::fmt::Display,
+{
+    Ok(loams.streams().fetch(page, options).await?.records)
 }
 
 #[cfg(test)]

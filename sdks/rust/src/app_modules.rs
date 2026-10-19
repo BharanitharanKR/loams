@@ -1,5 +1,5 @@
 //! The app modules (SDKP §2.2–§2.5): `namespaces`, `collections`,
-//! `documents`, `search`, `vector`, `graph` and `sql`.
+//! `documents`, `search`, `vector`, `graph`, `sql` and `streams`.
 //!
 //! One method per facade call of [`crate::facade::MODULES`] (the protos'
 //! `loams.options.v1.facade` annotations), typed with the generated messages,
@@ -27,6 +27,7 @@ use loams_proto::loams::collection::v1 as c;
 use loams_proto::loams::graph::v1 as g;
 use loams_proto::loams::operations::v1::Operation;
 use loams_proto::loams::sql::v1 as s;
+use loams_proto::loams::stream::v1 as st;
 
 /// A request whose message declares `idempotency_key` (R3).
 pub trait KeyedRequest {
@@ -198,6 +199,13 @@ module!(
     /// collections, with `$1…$n` parameters (SDKP §2.5).
     SqlModule,
     s::SqlServiceClient<T>
+);
+
+module!(
+    /// `loams.streams`: a namespace's logs — produce and fetch records and
+    /// CloudEvents (SDKP §2.5). `Loams::subscribe` is the R14 loop over `fetch`.
+    StreamsModule,
+    st::StreamServiceClient<T>
 );
 
 /// The two services behind `loams.graph`.
@@ -565,6 +573,68 @@ where
             ..Default::default()
         };
         Ok(sql_records(&self.query(request, options).await?))
+    }
+}
+
+impl<T> StreamsModule<'_, T>
+where
+    T: ClientTransport + Send + Sync + 'static,
+    T::ResponseBody: Unpin,
+    <T::ResponseBody as Body>::Error: std::fmt::Display,
+{
+    unary!(
+        /// `StreamService/CreateStream`, retried: idempotent by name.
+        create, "streams", "create", st::CreateStreamRequest, st::CreateStreamResponse, create_stream_with_options
+    );
+    unary!(
+        /// `StreamService/DescribeStream`: one stream and its partitions' offsets.
+        get, "streams", "get", st::DescribeStreamRequest, st::DescribeStreamResponse, describe_stream_with_options
+    );
+    unary!(
+        /// `StreamService/ListStreams`, one page.
+        list, "streams", "list", st::ListStreamsRequest, st::ListStreamsResponse, list_streams_with_options
+    );
+    unary!(
+        /// `StreamService/Produce`, never retried by the SDK: set `producer_id`
+        /// and `producer_seq` so a retry of yours cannot append twice.
+        produce, "streams", "produce", st::ProduceRequest, st::ProduceResponse, produce_with_options
+    );
+    unary!(
+        /// `StreamService/Fetch`: one partition's records from an offset.
+        fetch, "streams", "fetch", st::FetchRequest, st::FetchResponse, fetch_with_options
+    );
+    unary!(
+        /// `StreamService/ProduceCloudEvents`, never retried by the SDK.
+        produce_events, "streams", "produce_events", st::ProduceCloudEventsRequest, st::ProduceCloudEventsResponse, produce_cloud_events_with_options
+    );
+    unary!(
+        /// `StreamService/FetchCloudEvents`: records as a CloudEvents JSON batch.
+        fetch_events, "streams", "fetch_events", st::FetchCloudEventsRequest, st::FetchCloudEventsResponse, fetch_cloud_events_with_options
+    );
+
+    /// Every stream, page after page (R6).
+    pub fn list_all(
+        &self,
+        request: st::ListStreamsRequest,
+        options: CallOptionsOverrides,
+    ) -> impl Stream<Item = Result<st::StreamInfo, LoamsError>> + '_ {
+        pages(
+            request,
+            move |request| {
+                let options = options.clone();
+                async move {
+                    let page = self.list(request, options).await?;
+                    Ok((page.streams, page.next_page_token))
+                }
+            },
+            |request, token| request.page_token = token,
+        )
+    }
+}
+
+impl crate::subscribe::OffsetRecord for st::FetchedRecord {
+    fn offset(&self) -> u64 {
+        self.offset
     }
 }
 

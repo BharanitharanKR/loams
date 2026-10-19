@@ -12,7 +12,9 @@ use futures::StreamExt;
 use loams::builders::search::{HighlightOptions, SelectOptions};
 use loams::builders::{Filter, Fusion, Schema, Search, Sort, TextRetriever, VectorOptions};
 use loams::collection_v1::{CreateCollectionRequest, CreateNamespaceRequest};
-use loams::{BatchOptions, CallOptionsOverrides, Document, ErrorKind, Loams, LoamsError};
+use loams::{
+    BatchOptions, CallOptionsOverrides, Document, ErrorKind, Loams, LoamsError, stream_v1,
+};
 use serde_json::json;
 
 #[tokio::main]
@@ -114,6 +116,45 @@ async fn main() -> Result<(), LoamsError> {
         .await?;
     for row in &per_tag {
         println!("{} {}", row["tags"], row["c"]);
+    }
+
+    // A stream of note events: produce with a producer key, then read it back.
+    loams
+        .streams()
+        .create(
+            stream_v1::CreateStreamRequest {
+                name: "note-events".into(),
+                partitions: 1,
+                ..Default::default()
+            },
+            none(),
+        )
+        .await?;
+    loams
+        .streams()
+        .produce(
+            stream_v1::ProduceRequest {
+                stream: "note-events".into(),
+                records: vec![stream_v1::Record {
+                    value: Some(br#"{"note":1,"op":"created"}"#.to_vec()),
+                    ..Default::default()
+                }],
+                producer_id: Some("notes-example".into()),
+                producer_seq: Some(1),
+                ..Default::default()
+            },
+            none(),
+        )
+        .await?;
+    let mut events = loams.subscribe(
+        stream_v1::FetchRequest {
+            stream: "note-events".into(),
+            ..Default::default()
+        },
+        none(),
+    );
+    if let Some(event) = events.next().await {
+        println!("event at {}", event?.offset);
     }
 
     // A bulk load: chunked, one idempotency key per chunk, the tokens merged.
