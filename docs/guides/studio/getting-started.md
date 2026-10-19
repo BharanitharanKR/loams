@@ -18,15 +18,15 @@ The desktop also gives Studio:
 
 ## In a browser
 
-**Studio in the browser is behind the instance feature `studio` until SD1 Task 32.** The browser console shows the mode switcher only when the server's `GetInstance` lists `studio: true` among its features. No Loams server sets that feature on `dev` yet, so outside the dev server's demo (below) the browser console has no Studio today.
+The browser console shows the **Console | Studio** switch in every edition. Without a reachable agentd, Studio's home says **Connect an agentd host**. The hosted console, `https://console.loams.dev`, works against a 0.1.0 `loams-agentd`: threads, runs, approvals and diffs.
 
-Where Studio is available, it needs a remote `loams-agentd`:
+Studio in the browser needs a remote `loams-agentd`:
 
-1. Run `loams-agentd serve --remote` on a machine you control ([Remote agentd](remote-agentd.md)).
-2. In Studio, open **Settings** (Mod+,) and add the host under **Agentd hosts**, with a pasted access token for now.
+1. Run `loams-agentd serve --remote` on a machine you control, on your tailnet ([Remote agentd](remote-agentd.md)). For the hosted console it must be a `*.ts.net` name on port 443, with `--allow-origin https://console.loams.dev`.
+2. In Studio, open **Settings** (Mod+,) and add the host under **Agentd hosts**, with a pasted access token for now (MT1).
 3. **Add** (beside **Projects**) asks for a git URL (`https://`, `ssh://` or `user@host:path`) and clones it on the remote machine. The daemon checks the URL again and refuses local paths, `file:` and `ext::` URLs, and anything that starts with `-`.
 
-**Pending:** the browser console's Content-Security-Policy does not name your agentd host yet, so a production console reaches only some hosts ([details](remote-agentd.md#the-consoles-content-security-policy)).
+**Not yet:** previews don't render in the hosted console (its `frame-src` is `'self'`), and the agentd token is pasted rather than issued by the console's sign-in. See [the console's Content-Security-Policy](remote-agentd.md#the-consoles-content-security-policy) and [Previews](remote-agentd.md#previews).
 
 ## Trying Studio without a daemon: the dev preview
 
@@ -38,6 +38,6 @@ cd web && pnpm dev                      # the console on http://localhost:5173/u
 ```
 
 - `http://localhost:5173/ui/?desktop` is the **desktop edition with a fake bridge** (`web/apps/console/src/cordis/fake-desktop.ts`). Its fake agentd (`fake-agentd.ts`) answers Studio's calls with sample projects, threads, worktrees, a run group and a diff, so every Studio page has something to show. It opens in Studio.
-- `http://localhost:5173/ui/?demo` is the **browser edition with an in-browser mock server**, which turns the `studio` feature on in dev builds only. Studio there has no host until you add one.
+- `http://localhost:5173/ui/?demo` is the **browser edition with an in-browser mock server**, in dev builds only. Studio there has no host until you add one.
 
 Neither runs agents. Both exist only in dev builds (`import.meta.env.DEV`); a production build drops them. The rest of the dev setup (the console API mock, `protoc`) is in [`web/README.md`](../../../web/README.md#develop).
