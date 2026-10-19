@@ -1027,7 +1027,89 @@ These are §52 §19's questions, with the task that needs each answer. Every one
 
 ## Rulings made during execution
 
-(None yet. Task 0 starts this section.)
+Task 0 was done on 2026-10-18 against `dev` at `222ccafe`. Paths are relative to the repository root. No code changed.
+
+**R0.1 The collection API is a struct, not a trait.** An in-process role uses `loams_query::CollectionService` (`crates/loams-query/src/service.rs`). The server holds it as `Arc<CollectionService>` (`crates/loams/src/api/mod.rs`), and the Connect handlers are thin wrappers over it (`connect_collections.rs`, `connect_documents.rs`, `connect_query.rs`). `loams-memory` takes an `Arc<CollectionService>` at construction:
+- **Create:** `create_collection(ns, name, CollectionSchema, partitions)`, or `create_collection_owned` when the caller needs to know whether this call created it. Also `add_fields` and `drop_collection`. A missing namespace is created (`ensure_namespace`).
+- **Write:** `write(ns, name, Vec<DocOp>, WriteOptions) -> WriteResult` (`write.rs`). `DocOp` is `Upsert(Document)`, `Delete(PrimaryKey)` or `Patch` (`crates/loams-collection/src/doc.rs`). `WriteResult.token` is the write's `ConsistencyToken`.
+- **Search:** `search(ns, SearchRequest)`, or `search_as(ns, SearchRequest, &GraphCaller)` when the request has `expand`. `SearchRequest` (`ir.rs`) takes `retrievers` (`Vector`, `Text` (BM25), `Fused`, `Rescore`, `Sparse`), `fusion` (`Rrf{k=60}`, `Dbsf`, `WeightedSum`), `filter`, `expand` and `rerank`. Hybrid BM25 + vector with RRF is built.
+- **Delete by filter:** `delete_by_filter(ns, name, Query, FilterWriteOptions)` (`filter_write.rs`). `patch_by_filter` is next to it. Task 9's forget uses both.
+- **Tokens:** `loams_collection::ConsistencyToken` (`token.rs`). A read waits for a token through `ReadConsistency::AtLeast(token)` on the request (`Reads::view`, 10 s default timeout, `read.rs`). There is no separate wait call. A read returns its token in `SearchResponse.read_token`, `get_with_token`, `count_with_token` and `scroll_with_token`.
+- **Shared contracts:** `SpaceScope::filter_for` returns `loams_query::ir::Query` (a `Query::Terms` on `space_id`). No `loams_query::Filter` type exists.
+
+**R0.2 One collection may have several named vectors.** `CollectionSchema.vectors: Vec<VectorSpec>` takes unique names (`crates/loams-common/src/schema.rs`). The plan's default still holds: one vector, `embedding`, per collection. Entities may add a second vector later without a format change.
+
+**R0.3 Managed objects do not exist, and today's name rules refuse the planned names.**
+- `Collection` (`crates/loams-common/src/meta/types.rs`) and `GraphMeta` (`crates/loams-graph/src/catalog.rs`) have no managed, hidden or system flag. Task 4 adds `managed_by: Option<String>` to both records, as the plan's default says, with the owners of those crates.
+- `refuse_reserved` (`crates/loams-meta/src/state/mod.rs`) refuses every collection name that starts with `_` ("reserved for implicit objects").
+- Graph names must match `[a-z][a-z0-9_-]{0,62}` (`validate_names`, `crates/loams-graph/src/engine.rs`). That refuses the leading `_`, the dots and upper-case ULIDs.
+- So neither `_mem.<store>.<shard>.*` collections nor the `_mem.<store>.<shard>` graph can be created today.
+- Task 4 must add an internal creation path that sets `managed_by` and is the only path allowed to use the `_mem.` and `_code.` prefixes. The owner ruled on the managed graph's name grammar on 2026-10-18 (Owner rulings). Until the owner answers, Task 4 uses §52's names and lower-cases the ids inside graph names.
+- `_system` and `_graph.<gr_id>` show that the leading `_` is already the system convention, so a managed prefix fits it.
+
+**R0.4 GR1's state.**
+- **Merged on `dev`:** Tasks 1–24 and the R24.x rulings: 15 (tokens and followers), 17 (`GraphMapping`), 18 (the `collection → graph` link), 20 (`Search.expand`), 22 (algorithms: `pagerank`, `wcc`, `leiden` on the change-log adjacency index) and 24 (per-graph authorization, including R24.12's reader check on expand).
+- **Not merged:** 25 (quotas), 26 (memory governance) and 29 (PITR, export, import).
+- Q670 was answered on 2026-10-16 (the default). Tasks 14–15 can start once MM1a is done, and Task 20 uses GR1's `leiden`.
+- **The mapping as built** (`crates/loams-graph/src/mapping.rs`, R17.1):
+  - `GraphMapping { vertices: Vec<VertexMap{label, collection, key_field}>, edges: Vec<EdgeMap{name, type_field: Option<String>, collection, source: Endpoint, destination: Endpoint}>, streams }`, with `Endpoint { label, field }`.
+  - `Search.expand` is `loams_query::expand::Expand`, run by `CollectionService::search_expanded`. `loams_graph::retrieval::LoamsGraphExpander` implements it, and `crates/loams/src/server.rs` wires it in.
+- **No per-row endpoint labels.** An `EdgeMap`'s endpoint labels are fixed. Only the key (`Endpoint.field`) and the edge type (`TYPE FROM`) come from the row. Several `EdgeMap`s over one collection would each map every row.
+  - So §52 §6.3's fallback applies: `edges` splits into one collection per structural edge type. The names are `_mem.<store>.<shard>.mentions`, `.alias_of`, `.in_community` and `.derived_from`. Each gets one `EdgeMap` with fixed labels. Tasks 4 and 14 follow this. A later per-row label field in `loams.graph.v1` would be an API change and is not assumed.
+- **No property projection (R17.1).** A vertex's or edge's properties are all of its document's `source` fields. Vectors are excluded (`properties()`, `crates/loams-graph/src/link/collection.rs`). §52 §6.3's `PROPERTIES (...)` lists therefore cannot be expressed, and fact and episode text reaches the graph, its `_graph.<gr_id>` stream and its snapshots. Task 23's purge must cover them. The owner ruled on 2026-10-18 that GR1 adds an optional `properties` projection in Task 14 (Owner rulings).
+
+**R0.5 `loams-durable` is used only by its own tests.**
+- **Embed:** `DurableServer::start(DurableConfig, node_id)` (`crates/loams-durable/src/embed.rs`).
+- **Runtime:** `DurableRuntime::start_with(&server, node_id, RuntimeOptions, |sdk| { sdk.register(f)?; … })` (`runtime.rs`), over the in-process network (`inproc.rs`).
+- **Functions:** `#[resonate_sdk::function] async fn f(ctx: &Context, …)`. Checkpointed steps are `ctx.run(step, arg).await?` and `ctx.sleep`. Invocation is `runtime.sdk().run(id, f, args)` or `.spawn()`. `crates/loams-durable/tests/inproc.rs` is the only example.
+- `crates/loams/src/server.rs` (`start_runtime`, feature `durable`) calls `DurableRuntime::start` and registers no functions. Task 6 changes it to `start_with` with a registration hook that `loams-memory` fills, and the `memory` feature enables `durable`.
+- DD1 §11's `serve_http` flag and durable turns (DD1 Task 25) are not built. No `loams-agentd*` crate depends on `loams-durable`.
+- **Schedules:** the pinned Resonate fork (rev `31ffb20`) has `Resonate::schedule(name, cron, func, args)`, and its SQLite and blob servers handle `schedule.*` and fire `ScheduleDue`. Nothing in Loams uses or tests schedules. Task 18 first writes `durable_schedule_fires_in_embedded_server`. If that test passes, dream schedules use Resonate schedules. Otherwise Task 18 builds the in-process cron as a cluster-singleton `loams-worker` task (`TaskKey::cluster`, the lease `task/<key>` over `MetaStore::acquire_lease`, as `MEMBERSHIP_TASK` in `crates/loams/src/cluster.rs`).
+
+**R0.6 JB1 has not started.** There is no `loams-jobs` crate and no `proto/loams/jobs`. Task 6 builds `InProcessQueue` on `loams-durable`. `JobsQueue` (Task 6b) waits for JB1.
+
+**R0.7 DD1 is merged through Task 8.** Task 18 (providers, `loams-agentd-llm`), Task 19 (the tool registry), Task 24 (the harness) and Task 25 (durable turns) are not merged. No crate calls a chat, messages or embeddings API.
+- Q795's default applies. Task 2 creates `crates/loams-llm`, and DD1 Task 18 becomes "the daemon depends on `loams-llm`" and does not create `loams-agentd-llm`. The DD1 owner records this in DD1's rulings when Task 18 starts.
+- Task 51 waits for DD1 Tasks 19 and 24.
+
+**R0.8 What API2 provides.**
+- **Merged:** Task 0, the console protos, `loams.auth.v1` and `loams.admin.v1` (Tasks 6–7), and the Task 10 rulings.
+- **Not merged:** Tasks 1–5 (including the cluster-wide `IdempotencyStore`), 9, 11 and 12 onward.
+- **Adding `loams.memory.v1` (Task 1)** touches these files:
+  - A `CATALOGUE` row in `crates/loams/src/api/connect.rs`: `Package { package, services, available: cfg!(feature = "memory"), unstable: true }`. `unstable` must match `ModuleOptions.unstable`.
+  - The file in `const FILES` in `crates/loams-proto/build.rs`.
+  - `(loams.options.v1.module)` and `(loams.options.v1.facade)` annotations (`proto/loams/options/v1/options.proto`).
+  - A `package=loams.memory.v1=…` line in every `sdks/*/buf.gen.yaml` (enforced by `crates/loams-facade-gen/tests/package_map.rs`).
+  - A "Planned:" section in `docs/api/route-map.md` (a pure-RPC package, as `loams.repos.v1`).
+  - `proto/loams/memory` under `buf.yaml`'s `breaking.ignore`.
+  - Rows in `docs/api/reasons.md`'s `## Registry` table.
+  - `crates/loams-proto/tests/memory.rs`, modelled on `tests/postgres.rs`.
+  - **Also:** `crates/loams/tests/route_map.rs`'s `the_catalogue_declares_only_packages_the_design_enumerates` and `no_proto_declares_a_package_the_design_does_not_enumerate` read §44. Task 1 adds `loams.memory.v1` to §44 §8's "New protos" sentence (a pointer to §52 §9.1).
+- **Auth:**
+  - `crate::auth::Principal { subject, kind, display_name, email, grant: Grant{org, environment, scopes, expires_at_ms} }` and `trait Authenticator` are in `crates/loams/src/auth/mod.rs`. `trait Authorizer` is in `auth/authorizer.rs`.
+  - A handler reads the principal with `ctx.extensions().get::<Principal>()` (as `connect_admin.rs`'s `Admin::actor`).
+  - `loams-memory` must not depend on `loams`, so Task 11's handler maps `Principal` into `loams-memory`'s own `RequestCtx`, which carries the subject, kind, org and scopes.
+- **Idempotency:** `connect_idempotency::Ledger` is per process (300 s window, 1 024 entries) and typed to `WriteDocumentsResponse`. It cannot serve `Add`, whose test `add_replay_returns_same_episode` uses two nodes. Until API2's `IdempotencyStore` lands, Task 5 keeps a durable record per key in the space. That needs a new field in §52 §6.1's tables; the owner accepted `idempotency_fp` on 2026-10-18 (Owner rulings). Errors use `connect::refuse(code, reason, message, metadata)` and the helpers in `connect_errors.rs`.
+
+**R0.9 Nothing serves MCP over HTTP.** API2 R0.6 still holds. `crates/loams-agentd-mcp` is a hand-written stdio JSON-RPC proxy to agentd (`serve_stdio`) and does not use `rmcp`. The workspace pins `rmcp` 3.4.1 with `server` and `transport-streamable-http-server`, but no crate depends on it (it is not in `Cargo.lock`). `crates/loams` has no `/mcp` route and nothing listens on 8083. Task 12 creates `crates/loams-mcp` on the workspace `rmcp` pin.
+
+**R0.10 Erasure is not built.** There is no erasure request store, forced purge or erasure hook in `loams-meta`, `loams-collection` or `loams-graph`. The `purge` code that exists is unrelated: Raft log purge, and `GraphCatalog::purge` for deleted graphs. GR1 Task 29's plan text does not mention erasure. Task 23 must build:
+1. §18 §9's erasure request record and its state machine (the `Erasure` resource behind `GetErasure`);
+2. the physical collection purge to §18 §9's design;
+3. with the GR1 owner, the "rebuild linked graph and trim the `_graph.<gr_id>` log and snapshots below an offset" call that §52 §14 names. It now covers the text properties of R0.4.
+
+MM1a's `Forget` stays logical (Task 9).
+
+**R0.11 D846's secret rules are not in any crate.** There is no scanner in `loams-git*` or elsewhere. GT1 Task 67 plans one in `crates/loams-env/src/scan/` with gitleaks-derived rules, but `loams-env` does not exist. The nearest code is a prefix redactor, `crates/loams-agentd-harness/src/redact.rs`. Task 5 creates `crates/loams-secretscan` as the plan's default says: `Scanner::scan(path, bytes) -> Vec<Finding{rule, line, certain}>` with the rule file and NOTICE. GT1 Task 67's `loams-env::scan` then wraps it and adds known-value matching. The GT1 owner records this when Task 67 starts.
+
+**R0.12 GT1's state, for MM1b and MM1c.**
+- **Merged:** Tasks 0–26, including the `_git` event-stream mirror (`crates/loams-git/src/mirror_events.rs`, Task 15), the ref log (`reflog.rs`), derived data (`derived/`), `Log`/`DiffStat`/`Blame`/`Grep` (`history/`) and the server-side diff (`diff/`). Task 51 (`git-remote-loams`) is also merged.
+- **Not built:** Smart HTTP (Tasks 46–50). The listener exists (GT1 Task 16, `crates/loams/tests/git/http.rs`), but `upload-pack`/`receive-pack` are not served. There is also no history-purge call.
+- MM1c's Tasks 30–34 can use the ref log events, derived data and diff now. Task 26 (the mirror, deferred past GA by the owner's Q785/Q786 ruling) still waits for Smart HTTP and the purge call.
+
+**R0.13 The decision and question numbers are taken by §52, as intended.** D870–D891 are each one row in `docs/design/13-decision-log.md` (all "Proposed", 2026-10-13, citing §52), and no other design document uses them. Q780–Q795 are each one row: Q780, Q781, Q783, Q785, Q786, Q789 and Q790 are marked answered by the owner's 2026-10-13 rulings, and the rest are open with their defaults. §53's header refers to D891 and Q795 only as the end of §52's range. No renumbering is needed.
+
+**R0.14 Features.** `crates/loams/Cargo.toml` has `durable = ["dep:loams-durable"]` and `graph = ["dep:loams-graph"]`, and neither is a default feature. In Task 11, `memory` enables `durable` (MM1a needs the extraction functions). It adds `graph` only from Task 14 on. Before then, MM1a runs without graphs, as §52 §14 says.
 
 ## Owner rulings (2026-10-13)
 
@@ -1040,5 +1122,15 @@ The owner accepted the controller's recommendations:
 | Q783 | Run LoCoMo internally. Publishing LoCoMo scores waits for a legal check of CC BY-NC 4.0. LongMemEval results may be published. |
 | Q785 / Q786 | No two-way Git mirror at GA: export and import in the Agent Memory Repo format only. The mirror follows once Loams Git can purge history. |
 | Q789 / Q790 | On the desktop, learning from sessions is opt-in. Memory writes to the user's own space need no approval. |
+
+### 2026-10-18 (Task 0's questions, PR #768)
+
+The owner accepted Task 0's three recommendations:
+
+| Question | Ruling |
+|---|---|
+| Managed object names (R0.3) | Only the `managed_by` creation path may create the `_mem.` and `_code.` names. The graph-name rule is widened for managed graphs only. |
+| Graph property projection (R0.4) | GR1 adds an optional `properties` field to `GraphMapping`. The field is additive in `loams.graph.v1`. It lands in MM1 Task 14, with the GR1 owner. |
+| Durable idempotency for `Add` (R0.8) | Episodes get a keyword field, `idempotency_fp`, with §52 §6.1's episode table updated. It holds the key's fingerprint and the request digest and is looked up through `SpaceScope`. It is used until API2's `IdempotencyStore` lands. |
 
 Implementation has not started; the owner will say when.
