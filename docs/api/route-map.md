@@ -58,7 +58,7 @@ Served by `api::router` on `--listen` (gateway role). Tests are in `crates/loams
 | PUT | `/v1/namespaces/{ns}/collections/{c}/hot` | app | `loams.collection.v1.CollectionService/SetHot` | `MetaStore::set_collection_hot`, `hot::local_status` | `hot_http.rs::put_hot_sets_the_catalog_and_returns_status`, `put_hot_on_a_missing_collection_is_404`, `a_malformed_hot_body_is_400`, `hot_routes_accept_aliases` |
 | POST | `/v1/namespaces/{ns}/collections/{c}/warm` | app | `loams.collection.v1.CollectionService/WarmCollection` | `hot::warm_local` or the owner's `/internal/v1/hot/warm` | `hot_http.rs::warm_prefetches_an_unpinned_collection`, `loams_warm_posts_the_warm_request` |
 | POST | `/v1/namespaces/{ns}/query` | app | `loams.collection.v1.QueryService/Search` | `CollectionService::search` | `native_query.rs` (6 tests), `hot_http.rs::the_hot_off_header_gives_identical_results_and_reports_none`, `connect_query.rs` (10 tests) |
-| POST | `/v1/namespaces/{ns}/sql` | app | `loams.sql.v1.SqlService/Query` | `CollectionService::sql_context_with`, `loams_query::sql::run_read_only` | `native_sql.rs::sql_over_http_returns_columns_and_rows`, `sql_ddl_is_400` |
+| POST | `/v1/namespaces/{ns}/sql` | app | `loams.sql.v1.SqlService/Query` | `CollectionService::sql_context_with`, `loams_query::sql::run_read_only` | `native_sql.rs::sql_over_http_returns_columns_and_rows`, `sql_ddl_is_400`; `connect_sql.rs::sql_over_http_returns_columns_and_rows_rpc`, `sql_ddl_is_400_rpc` |
 
 Router-level behaviour pinned by `http.rs::framework_rejections_use_the_json_error_body` (the `no_route` fallback and `method_not_allowed`) is replaced by connect-rust's error envelope for RPC paths; the fallback stays for unknown paths.
 

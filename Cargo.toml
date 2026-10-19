@@ -23,6 +23,7 @@ anyhow = "1"
 arrow = "58.4"
 arrow-array = "58.4"
 arrow-flight = { version = "58.4", features = ["flight-sql-experimental"] }
+arrow-ipc = "58.4"
 arrow-schema = "58.4"
 async-trait = "0.1"
 axum = "0.8"

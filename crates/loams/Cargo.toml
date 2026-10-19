@@ -212,6 +212,8 @@ failpoints = [
 [dev-dependencies]
 arrow-array.workspace = true
 arrow-flight.workspace = true
+# `connect_sql.rs` decodes `QueryArrow`'s IPC stream (API2 Task 1).
+arrow-ipc.workspace = true
 arrow-schema.workspace = true
 futures.workspace = true
 # `connect_admin.rs`'s `mock_and_server_answer_alike` runs the console mock

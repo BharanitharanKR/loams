@@ -7889,6 +7889,7 @@ dependencies = [
  "argon2",
  "arrow-array",
  "arrow-flight",
+ "arrow-ipc",
  "arrow-schema",
  "async-trait",
  "axum 0.8.9",

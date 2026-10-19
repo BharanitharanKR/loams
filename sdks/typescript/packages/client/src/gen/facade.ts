@@ -819,6 +819,7 @@ export const PROTO_PACKAGES = [
   'loams.options.v1',
   'loams.postgres.v1',
   'loams.repos.v1',
+  'loams.sql.v1',
 ] as const;
 
 /**

@@ -124,6 +124,15 @@ const CATALOGUE: &[Package] = &[
         unstable: false,
     },
     Package {
+        // One read-only SQL statement over a namespace's collections, with
+        // `$n` parameters, as rows or as Arrow IPC (API2 Task 1, SDKP P0b,
+        // `super::connect_sql`). Flight SQL is unchanged.
+        package: "loams.sql.v1",
+        services: &["loams.sql.v1.SqlService"],
+        available: true,
+        unstable: false,
+    },
+    Package {
         // Sign-in providers, first-run setup, console sessions and OAuth
         // consent (API2 Task 6, `super::connect_auth`), over the principal
         // store in the metastore (`crate::auth::directory`).
@@ -553,6 +562,7 @@ pub(crate) fn routes(state: &AppState, hot_default: bool) -> AxumRouter {
     rpc = super::connect_collections::register(rpc, state);
     rpc = super::connect_documents::register(rpc, state);
     rpc = super::connect_query::register(rpc, state);
+    rpc = super::connect_sql::register(rpc, state);
     rpc = super::connect_auth::register(rpc, &state.principals);
     rpc = super::connect_admin::register(rpc, &state.principals);
     let (rpc, _health) =
