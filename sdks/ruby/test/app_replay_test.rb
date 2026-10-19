@@ -21,4 +21,6 @@ class AppReplayTest < Minitest::Test
   def test_ruby_app_collections = replay("app_collections")
   def test_ruby_app_search = replay("app_search")
   def test_ruby_app_graph = replay("app_graph")
+  def test_ruby_app_sql = replay("app_sql")
+  def test_ruby_app_streams = replay("app_streams")
 end

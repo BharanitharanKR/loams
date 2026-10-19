@@ -347,6 +347,55 @@ class AppTest < Minitest::Test
 
   # --- The facade index ----------------------------------------------------------
 
+  def test_ruby_sql_and_streams_send_the_recorded_bodies
+    tp = Loams::Test::StubTransport.new
+    answer(tp, RPC[%w[sql query]], { "columns" => [{ "name" => "tags" }, { "name" => "c" }], "rows" => [["policy", 2]] })
+    answer(tp, RPC[%w[sql query]], {})
+    answer(tp, RPC[%w[streams create]], {})
+    answer(tp, RPC[%w[streams produce]], {})
+    answer(tp, RPC[%w[streams fetch]], {})
+    answer(tp, RPC[%w[streams fetch]], {})
+    answer(tp, RPC[%w[streams get]], {})
+    client = stub_client(tp, namespace: "app")
+    body = ->(i, path) { JSON.parse(binding(path).request.msgclass.encode_json(sent(tp, path, i))) }
+
+    res = client.sql.query("SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags", params: [1])
+    assert_equal({ "namespace" => "app", "sql" => "SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags", "params" => [1.0] }, body.call(0, RPC[%w[sql query]]))
+    assert_equal [{ "tags" => "policy", "c" => 2.0 }], Loams::App::Sql.records(res)
+    client.sql.query("SELECT title, n FROM notes ORDER BY n", max_rows: 2)
+    assert_equal({ "namespace" => "app", "sql" => "SELECT title, n FROM notes ORDER BY n", "maxRows" => 2 }, body.call(1, RPC[%w[sql query]]))
+    client.streams.create("note-events")
+    assert_equal({ "namespace" => "app", "name" => "note-events", "partitions" => 1 }, body.call(2, RPC[%w[streams create]]))
+    client.streams.produce("note-events", [{ key: "1", value: { "note" => 1, "op" => "created" } }, { key: "5", value: { "note" => 5, "op" => "deleted" } }],
+      producer_id: "app-producer-1", producer_seq: 1)
+    assert_equal({ "namespace" => "app", "stream" => "note-events", "records" => [
+      { "key" => "MQ==", "value" => "eyJub3RlIjoxLCJvcCI6ImNyZWF0ZWQifQ==" },
+      { "key" => "NQ==", "value" => "eyJub3RlIjo1LCJvcCI6ImRlbGV0ZWQifQ==" },
+    ], "producerId" => "app-producer-1", "producerSeq" => "1" }, body.call(3, RPC[%w[streams produce]]))
+    client.streams.fetch("note-events", max_records: 10)
+    assert_equal({ "namespace" => "app", "stream" => "note-events", "maxRecords" => 10 }, body.call(4, RPC[%w[streams fetch]]), "a zero partition and offset are omitted")
+    client.streams.fetch("note-events", offset: 2, max_records: 10)
+    assert_equal({ "namespace" => "app", "stream" => "note-events", "offset" => "2", "maxRecords" => 10 }, body.call(5, RPC[%w[streams fetch]]))
+    client.streams.get("note-events")
+    assert_equal({ "namespace" => "app", "stream" => "note-events" }, body.call(6, RPC[%w[streams get]]))
+  end
+
+  def test_ruby_streams_module_subscribe
+    tp = Loams::Test::StubTransport.new
+    answer(tp, RPC[%w[streams fetch]], { "records" => [{ "offset" => "1", "value" => ["a"].pack("m0") }, { "offset" => "2", "value" => ["b"].pack("m0") }] })
+    answer(tp, RPC[%w[streams fetch]], { "records" => [{ "offset" => "3", "value" => ["c"].pack("m0") }] })
+    sub = stub_client(tp, namespace: "app").streams.subscribe("events", from_offset: 1)
+    got = []
+    sub.each do |record|
+      got << record.value
+      sub.cancel if got.size == 3
+    end
+    assert_equal %w[a b c], got
+    assert_equal 4, sub.offset
+    assert_equal 1, sent(tp, RPC[%w[streams fetch]], 0).offset
+    assert_equal 3, sent(tp, RPC[%w[streams fetch]], 1).offset, "the next fetch starts after the last record"
+  end
+
   def test_ruby_facade_matches_index
     path = File.expand_path("../../fixtures/facade-index.json", __dir__)
     app_modules = Loams::App::CALLS.keys.map(&:first).uniq
