@@ -4,7 +4,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, **test first**. Each task lists the interfaces it must produce and the tests that must exist and pass before it is done. Where this plan gives exact values (names, paths, flags, field names, limits), use them verbatim. The code is not pre-written in this plan. Record every deviation in "Rulings made during execution" at the end of this file.
 
-> **Status: Planned; re-targeted, awaiting the owner's approval** (written 2026-10-02, re-targeted 2026-10-18). **No SO2 code starts until the owner approves this re-target and answers the owner questions.** **Slot: track SO, second plan** (proposed; D528–D530, D538). Branches `so2-t<N>`, stacked, based on `dev`; PRs target `dev` of `ostrium-labs/loams`. Depends on [SO1](2026-10-02-so1-systemone.md) Tasks 1 to 10 (merged; SO1's Task 0 is being reconciled on branch `so1-t0`, and SO2's Task 0 reads its outcome), on DD1 and SD1 as built (see "Dependencies on other plans"), and on nothing in SF3 for Tasks 1 to 5.
+> **Status: Approved** (written 2026-10-02, re-targeted and approved by the owner 2026-10-18; see "Owner rulings"). **Slot: track SO, second plan** (D528–D530, D538; D528 and D538 amended 2026-10-18). Branches `so2-t<N>`, stacked, based on `dev`; PRs target `dev` of `ostrium-labs/loams`. Depends on [SO1](2026-10-02-so1-systemone.md) Tasks 1 to 10 (merged; SO1's Task 0 is being reconciled on branch `so1-t0`, and SO2's Task 0 reads its outcome), on DD1 and SD1 as built (see "Dependencies on other plans"), and on nothing in SF3 for Tasks 1 to 5.
 
 **Goal:** Put SystemOne in Loams Desktop (the owner's request of 2026-10-02: "add this to our desktop app"):
 - a **Swift Core ML sidecar** (`loams-coreml`) for Apple silicon, built on FluidInference's Apache-2.0 `FluidUse` library, shipped with the Electron app and **supervised by `loams-agentd`** (Re-target ruling R1);
@@ -86,7 +86,7 @@
 
 ## Owner questions
 
-Each changes the text of a design decision. Nothing here is applied to design 40 or the decision log; the PR body proposes the wording.
+Each changes the text of a design decision. The owner answered all five on 2026-10-18 (see "Owner rulings"), and the wording is applied to design 40 and to D528 and D538 in the decision log.
 
 | # | Question | Recommendation |
 |---|---|---|
@@ -95,6 +95,16 @@ Each changes the text of a design decision. Nothing here is applied to design 40
 | SO2-Q3 | **One registry per desktop.** The daemon also supervises `loams dev`, whose SystemOne route SO1 Task 10 turns on by default. Two registries would mean two model caches and possibly two sidecars on one laptop. Should the daemon start the supervised engine with its SystemOne route off, so the daemon is the desktop's only SystemOne host? | **Yes**, with a supervisor flag set by `loams-agentd-supervisor` (DD1 Task 14) and documented in design 40 §8. `loams dev` run by hand keeps SO1's default |
 | SO2-Q4 | **The instance as the second source needs a daemon sign-in.** D538's `RemoteBackend` needs a Loams token in the daemon; that is `loams-agentd-link`'s Authentik sign-in, still open as Q703. Ship local-only first and add the `RemoteBackend` when Q703 is answered? | **Yes.** Task 2 builds the backend and its tests against a fake token source; it is registered only when the link reports a signed-in principal, so it is inert until Q703 lands |
 | SO2-Q5 | **D538's "notification priority on phones"** has no desktop path. On the desktop `needs_person` raises the OS notification and Studio toast priority only (R6). Leave the phone policy to the mobile and SF3 plans? | **Yes**; record it as out of SO2's scope in design 40 §8 |
+
+## Owner rulings (2026-10-18)
+
+| # | Ruling | Applied to |
+|---|---|---|
+| O1 | **SO2-Q1 accepted.** D528's location and supervisor change as in R1: source in `apps/desktop-electron/sidecars/coreml/`, shipped in `Contents/Resources/bin/`, copied into the daemon's runtime directory and supervised by `loams-agentd`; socket under the daemon's data directory | D528 (amended 2026-10-18), design 40 §7.3 |
+| O2 | **SO2-Q2 accepted.** D538's hosts move to the daemon (`loams-agentd-systemone`), the cordis Settings section, the Loams Bot ACP shim and agentd's MCP shim and tool registry | D538 (amended 2026-10-18), design 40 §8, §14 |
+| O3 | **SO2-Q3 accepted.** The daemon is the desktop's only SystemOne host; the `loams dev` engine it supervises runs with its SystemOne route off | D538, design 40 §8 |
+| O4 | **SO2-Q4 accepted.** Local-only first; the `RemoteBackend` is built but registered only once the daemon can sign in (Q703) | D538, design 40 §8 |
+| O5 | **SO2-Q5 accepted.** Phone notification priority is out of SO2's scope | D538, design 40 §8 |
 
 ## Dependencies on other plans
 
