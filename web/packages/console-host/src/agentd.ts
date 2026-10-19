@@ -7,7 +7,7 @@
 //                    only `@loams/plugin-rpc` reads it.
 //   agentd           the reach of the daemon and its transport, always provided by
 //                    `@loams/plugin-rpc`, so a page can say "Start the daemon" or
-//                    "Connect an agentd host" while there is none.
+//                    "Studio needs a Loams server with agentd" while there is none.
 //   agentd.transport and one `rpc.agentd.<service>` per `loams.agentd.v1` service,
 //                    provided only while a daemon is reachable.
 // A plugin injects any of them only if it is core, or first-party and holds

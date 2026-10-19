@@ -160,6 +160,18 @@ impl<P: Pointers> FileCatalog<P> {
 
 #[async_trait]
 impl<P: Pointers> HouseCatalog for FileCatalog<P> {
+    async fn list_root_databases(&self) -> Result<Vec<NamespaceIdent>, CatalogError> {
+        let mut roots: Vec<NamespaceIdent> = self
+            .pointers
+            .namespaces()?
+            .into_iter()
+            .filter(|ns| ns.len() == 1)
+            .filter_map(|ns| NamespaceIdent::from_vec(ns).ok())
+            .collect();
+        roots.sort_by(|a, b| a.as_ref().cmp(b.as_ref()));
+        Ok(roots)
+    }
+
     async fn list_databases(
         &self,
         parent: &NamespaceIdent,
@@ -362,6 +374,11 @@ macro_rules! delegate_house_catalog {
     ($name:ident) => {
         #[async_trait::async_trait]
         impl $crate::catalog::HouseCatalog for $name {
+            async fn list_root_databases(
+                &self,
+            ) -> Result<Vec<loams_house_lake::NamespaceIdent>, $crate::catalog::CatalogError> {
+                self.0.list_root_databases().await
+            }
             async fn list_databases(
                 &self,
                 parent: &loams_house_lake::NamespaceIdent,

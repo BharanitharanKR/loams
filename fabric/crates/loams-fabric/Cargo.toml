@@ -28,6 +28,8 @@ loams-house = { path = "../loams-house" }
 # configuration it is built with.
 loams-house-cache = { path = "../loams-house-cache" }
 loams-cache = { path = "../../../crates/loams-cache" }
+# The format registry and the directory stamp check (UP1 Task 4).
+loams-common = { path = "../../../crates/loams-common" }
 # The catalog's metadata files go to `--store` (HS1 Task 10).
 loams-store = { path = "../../../crates/loams-store" }
 # `--single-node`'s generated local key.
@@ -40,6 +42,8 @@ tokio = { workspace = true, features = ["rt-multi-thread", "signal", "macros"] }
 loams-chdb-sys = { path = "../loams-chdb-sys", optional = true }
 
 [dev-dependencies]
+# The data directory stamp's tests (UP1 Task 6).
+tempfile.workspace = true
 # `tls_listener_serves_with_its_certificate` (HS1 Task 20): a TLS client that
 # trusts only the House's own certificate.
 rustls.workspace = true

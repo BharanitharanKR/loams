@@ -6,7 +6,8 @@ import { create, fromJson, type JsonObject } from '@bufbuild/protobuf';
 import { Code, ConnectError, createRouterTransport } from '@connectrpc/connect';
 import { validateManifest } from '@loams/console-host';
 import { graph, instance } from '@loams/proto';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { setCodeEditorText } from '@loams/ui';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import pkg from '../package.json';
 import { PAGE_MAX_ROWS, STREAM_MAX_ROWS, withProfile } from '../src/client.js';
@@ -19,6 +20,10 @@ import { collectElements, parametersFromJson, valueText, valueType } from '../sr
 import { type Call, type FakeOptions, FIXTURES, fakeServer, memoryStorage } from './fixtures.js';
 
 afterEach(cleanup);
+
+// jsdom has no layout: the code editor measures text ranges for its selection and tooltips.
+Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect ??= () => new DOMRect();
 
 // The empty state's grain canvas observes its size; jsdom has no ResizeObserver.
 globalThis.ResizeObserver ??= class {
@@ -49,9 +54,8 @@ async function openMovies(opts: FakeOptions = {}) {
   return m;
 }
 
-const statementBox = () => screen.getByLabelText('Statement') as HTMLTextAreaElement;
-const setStatement = (text: string) =>
-  fireEvent.change(statementBox(), { target: { value: text } });
+const statementBox = () => screen.getByLabelText('Statement');
+const setStatement = (text: string) => act(() => setCodeEditorText(statementBox(), text));
 const run = () => fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
 function last(calls: Call[], method: string): JsonObject {
@@ -182,7 +186,8 @@ describe('graph page', () => {
     });
     setStatement('RETURN 9007199254740993 AS big');
     run();
-    const big = await screen.findByText('9007199254740993');
+    // The editor highlights the literal too: look in the results table.
+    const big = await within(await screen.findByRole('table')).findByText('9007199254740993');
     expect(big.getAttribute('data-type')).toBe('INT64');
   });
 
@@ -289,13 +294,12 @@ describe('graph page', () => {
     ).toBeTruthy();
     const mark = within(screen.getByTestId('error-span')).getByText('RETURN');
     expect(mark.tagName).toBe('MARK');
-    const box = statementBox();
-    expect(box.getAttribute('aria-invalid')).toBe('true');
-    // The editor moves its selection to the error span after the render that shows it,
-    // so wait for it rather than reading it once (it raced on a busy CI runner).
-    await waitFor(() =>
-      expect(box.value.slice(box.selectionStart, box.selectionEnd)).toBe('RETURN'),
-    );
+    // The shared editor marks itself invalid after the render that shows the
+    // error; wait for it (it raced on a busy CI runner).
+    await waitFor(() => expect(statementBox().getAttribute('aria-invalid')).toBe('true'));
+    // The editor underlines the span after the render that shows it, so wait for it
+    // rather than reading it once (it raced on a busy CI runner).
+    await waitFor(() => expect(document.querySelector('[data-error]')?.textContent).toBe('RETURN'));
     // Columns count characters, not UTF-16 units.
     expect(spanRange('é\n𝔾 X', { line: 2, column: 3, length: 1 })).toEqual([5, 6]);
   });

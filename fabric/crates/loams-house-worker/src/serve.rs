@@ -966,6 +966,13 @@ fn probe(probe: &SandboxProbe) -> Vec<Frame> {
                 nix::sys::signal::kill(nix::unistd::Pid::from_raw(pid), None)
                     .map_err(std::io::Error::from)
             }),
+        SandboxProbe::Allocate(bytes) => usize::try_from(*bytes)
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))
+            .map(|bytes| {
+                // Every page written, so it is resident and charged to the cgroup.
+                let held = vec![1u8; bytes];
+                std::hint::black_box(&held);
+            }),
     };
     match outcome {
         Ok(()) => vec![Frame::Done],

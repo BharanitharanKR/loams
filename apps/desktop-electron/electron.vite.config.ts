@@ -10,6 +10,15 @@ const def = (k: string) => ({
 export default defineConfig({
 	main: {
 		define: { ...def("LOAMS_UPDATE_PUBKEY"), ...def("LOAMS_UPDATE_FEED") },
+		build: {
+			rollupOptions: {
+				// `pg`'s optional native binding. Bundled, Vite replaces the missing optional
+				// peer with a stub that throws at load in development builds ("Could not
+				// resolve "pg-native" imported by "pg""). External, it stays a lazy `require`
+				// that `pg` only reaches for `pg.native` and catches when it is absent.
+				external: ["pg-native"],
+			},
+		},
 		// The workspace adapters are raw TypeScript: bundle them (and cordis, zod)
 		// so the packaged app does not need the workspace.
 		plugins: [

@@ -40,7 +40,8 @@ export function buildCreateRunGroupRequest(input: {
 }): MessageInitShape<typeof CreateRunGroupRequestSchema> {
   const { choices } = input;
   return {
-    spaceId: input.spaceId ?? '',
+    // `optional` on the wire: an empty id would name a project space that does not exist.
+    ...(input.spaceId ? { spaceId: input.spaceId } : {}),
     repoPath: input.repoPath,
     base: choices.base,
     prompt: input.prompt,
@@ -129,9 +130,7 @@ export function RunInParallelDialog({
           keep one when they finish.
         </p>
         <fieldset className="m-0 flex flex-col gap-2 border-0 p-0">
-          <legend className="mb-1 font-mono text-[0.7rem] text-faint uppercase tracking-[0.14em]">
-            Variants
-          </legend>
+          <legend className="mb-1 text-micro font-medium text-faint">Variants</legend>
           {variants.map((variant, index) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: rows are positional.
             <div key={index} className="flex items-center gap-2">

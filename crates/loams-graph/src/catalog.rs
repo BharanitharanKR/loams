@@ -62,7 +62,8 @@ pub enum GraphMode {
     /// Written with GQL.
     #[default]
     Owned,
-    /// Fed by links (Task 17).
+    /// Fed by links from collections or streams through its mapping; read-only to GQL (GR1
+    /// Task 17).
     Linked,
 }
 
@@ -134,6 +135,9 @@ pub struct GraphMeta {
     /// client sets it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream: Option<loams_common::StreamId>,
+    /// A LINKED graph's mapping over collections (GR1 Task 17); `None` for an OWNED one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mapping: Option<crate::mapping::GraphMapping>,
 }
 
 /// How many write tokens a record remembers.
@@ -171,8 +175,10 @@ impl GraphMeta {
 /// What a new graph is created with.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct NewGraph {
-    /// OWNED (LINKED is Task 17's).
+    /// OWNED, or LINKED with `mapping`.
     pub mode: GraphMode,
+    /// A LINKED graph's mapping, checked by the caller (GR1 Task 17).
+    pub mapping: Option<crate::mapping::GraphMapping>,
     /// Languages; empty means `["GQL"]`.
     pub languages: Vec<String>,
     /// Limits.
@@ -429,6 +435,7 @@ impl GraphCatalog {
                         || existing.languages != languages
                         || existing.limits != new.limits
                         || existing.replicas != new.replicas
+                        || existing.mapping != new.mapping
                     {
                         return Err(CatalogError::Invalid(format!(
                             "idempotency_key {:?} was used to create {namespace}/{name} with different settings",
@@ -461,6 +468,7 @@ impl GraphCatalog {
                 delete_key: None,
                 recent_writes: Vec::new(),
                 stream,
+                mapping: new.mapping.clone(),
             };
             // A graph being deleted under this name keeps its record (under its id) until it
             // is purged, so the name is free for the new one.
@@ -1092,11 +1100,17 @@ impl GraphCatalog {
             return Ok(0);
         };
         let target_written = target.last_modified_ms;
+        // An upgrade snapshot's metastore may point at an older document
+        // (UP1 Task 8): keep what it may name.
+        let floor = loams_common::meta::snapshot_gc_floor(&*self.meta)
+            .await
+            .map_err(unavailable)?;
         let mut deleted = 0;
         for object in &objects {
             let older = ulid_of(&object.path).is_some_and(|u| u < target_ulid);
             let aged = object.last_modified_ms.saturating_add(grace_ms) <= target_written;
-            if object.path == current || !older || !aged {
+            let pinned = loams_common::meta::pinned_by(floor, object.last_modified_ms);
+            if object.path == current || !older || !aged || pinned {
                 continue;
             }
             match self.store.delete(&object.path).await {

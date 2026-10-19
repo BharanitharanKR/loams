@@ -60,6 +60,22 @@ extern const ::google::protobuf::internal::ClassDataFull AppDef_class_data_;
 #else
 extern const AppDefGlobalsTypeInternal AppDef_globals_;
 #endif  // PROTOBUF_MESSAGE_GLOBALS
+class AppIntent;
+struct AppIntentGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern AppIntentGlobalsTypeInternal AppIntent_globals_;
+extern const ::google::protobuf::internal::ClassDataFull AppIntent_class_data_;
+#else
+extern const AppIntentGlobalsTypeInternal AppIntent_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
+class AppRecord;
+struct AppRecordGlobalsTypeInternal;
+#ifndef PROTOBUF_MESSAGE_GLOBALS
+extern AppRecordGlobalsTypeInternal AppRecord_globals_;
+extern const ::google::protobuf::internal::ClassDataFull AppRecord_class_data_;
+#else
+extern const AppRecordGlobalsTypeInternal AppRecord_globals_;
+#endif  // PROTOBUF_MESSAGE_GLOBALS
 class DeploymentRecord;
 struct DeploymentRecordGlobalsTypeInternal;
 #ifndef PROTOBUF_MESSAGE_GLOBALS
@@ -669,6 +685,265 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED IndexDef final : public ::google::p
 };
 // -------------------------------------------------------------------
 
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AppIntent final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:loams.live.v1.AppIntent) */ {
+  using Super_ = ::google::protobuf::Message;
+
+ public:
+  inline AppIntent() : AppIntent(nullptr) {}
+  ~AppIntent() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AppIntent* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AppIntent));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AppIntent(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AppIntent(const AppIntent& from) : AppIntent(nullptr, from) {}
+  inline AppIntent(AppIntent&& from) noexcept : AppIntent(nullptr, ::std::move(from)) {}
+  inline AppIntent& operator=(const AppIntent& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AppIntent& operator=(AppIntent&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AppIntent& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AppIntent>(&AppIntent_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 8;
+  friend void swap(AppIntent& a, AppIntent& b) { a.Swap(&b); }
+  inline void Swap(AppIntent* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AppIntent* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AppIntent* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return Super_::DefaultConstruct<AppIntent>(arena);
+  }
+  using Super_::CopyFrom;
+  void CopyFrom(const AppIntent& from);
+  using Super_::MergeFrom;
+  void MergeFrom(const AppIntent& from) { AppIntent::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AppIntent* PROTOBUF_NONNULL other);
+ private:
+  static ::absl::string_view FullMessageName() { return "loams.live.v1.AppIntent"; }
+
+  explicit AppIntent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AppIntent(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AppIntent& from);
+  AppIntent(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AppIntent&& from) noexcept
+      : AppIntent(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kNameFieldNumber = 3,
+    kKeyspaceFieldNumber = 4,
+    kFormatFieldNumber = 1,
+    kIdFieldNumber = 2,
+    kStartedAtMsFieldNumber = 5,
+  };
+  // string name = 3 [json_name = "name"];
+  void clear_name() ;
+  [[nodiscard]] const ::std::string& name() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_name(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_name();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_name();
+  void set_allocated_name(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_name() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_name(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_name();
+
+  public:
+  // string keyspace = 4 [json_name = "keyspace"];
+  void clear_keyspace() ;
+  [[nodiscard]] const ::std::string& keyspace() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_keyspace(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_keyspace();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_keyspace();
+  void set_allocated_keyspace(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_keyspace() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_keyspace(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_keyspace();
+
+  public:
+  // uint32 format = 1 [json_name = "format"];
+  void clear_format() ;
+  [[nodiscard]] ::uint32_t format() const;
+  void set_format(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_format() const;
+  void _internal_set_format(::uint32_t value);
+
+  public:
+  // uint32 id = 2 [json_name = "id"];
+  void clear_id() ;
+  [[nodiscard]] ::uint32_t id() const;
+  void set_id(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_id() const;
+  void _internal_set_id(::uint32_t value);
+
+  public:
+  // uint64 started_at_ms = 5 [json_name = "startedAtMs"];
+  void clear_started_at_ms() ;
+  [[nodiscard]] ::uint64_t started_at_ms() const;
+  void set_started_at_ms(::uint64_t value);
+
+  private:
+  ::uint64_t _internal_started_at_ms() const;
+  void _internal_set_started_at_ms(::uint64_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:loams.live.v1.AppIntent)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<3, 5,
+                          0, 44,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AppIntent& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr name_;
+    ::google::protobuf::internal::ArenaStringPtr keyspace_;
+    ::uint32_t format_;
+    ::uint32_t id_;
+    ::uint64_t started_at_ms_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_loams_2flive_2fv1_2fcatalog_2eproto;
+};
+// -------------------------------------------------------------------
+
 class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AppDef final : public ::google::protobuf::Message
 /* @@protoc_insertion_point(class_definition:loams.live.v1.AppDef) */ {
   using Super_ = ::google::protobuf::Message;
@@ -1209,6 +1484,241 @@ class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED TableJobRecord final : public ::goo
     ::uint32_t table_id_;
     bool done_;
     ::uint64_t scanned_;
+    PROTOBUF_TSAN_DECLARE_MEMBER
+  };
+  union { Impl_ _impl_; };
+  friend struct ::TableStruct_loams_2flive_2fv1_2fcatalog_2eproto;
+};
+// -------------------------------------------------------------------
+
+class  PROTOBUF_FUTURE_ADD_EARLY_WARN_UNUSED AppRecord final : public ::google::protobuf::Message
+/* @@protoc_insertion_point(class_definition:loams.live.v1.AppRecord) */ {
+  using Super_ = ::google::protobuf::Message;
+
+ public:
+  inline AppRecord() : AppRecord(nullptr) {}
+  ~AppRecord() PROTOBUF_FINAL;
+
+#if defined(PROTOBUF_CUSTOM_VTABLE)
+  void operator delete(AppRecord* PROTOBUF_NONNULL msg, ::std::destroying_delete_t) {
+    SharedDtor(*msg);
+    ::google::protobuf::internal::SizedDelete(msg, sizeof(AppRecord));
+  }
+#endif
+
+  template <typename = void>
+  explicit constexpr AppRecord(::google::protobuf::internal::ConstantInitialized,
+                           const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL
+                               class_data);
+
+  inline AppRecord(const AppRecord& from) : AppRecord(nullptr, from) {}
+  inline AppRecord(AppRecord&& from) noexcept : AppRecord(nullptr, ::std::move(from)) {}
+  inline AppRecord& operator=(const AppRecord& from) {
+    CopyFrom(from);
+    return *this;
+  }
+  inline AppRecord& operator=(AppRecord&& from) noexcept {
+    if (this == &from) return *this;
+    if (::google::protobuf::internal::CanMoveWithInternalSwap(GetArena(), from.GetArena())) {
+      InternalSwap(&from);
+    } else {
+      CopyFrom(from);
+    }
+    return *this;
+  }
+
+  [[nodiscard]] inline const ::google::protobuf::UnknownFieldSet& unknown_fields() const
+      ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.unknown_fields<::google::protobuf::UnknownFieldSet>(::google::protobuf::UnknownFieldSet::default_instance);
+  }
+  [[nodiscard]] inline ::google::protobuf::UnknownFieldSet* PROTOBUF_NONNULL
+  mutable_unknown_fields() ABSL_ATTRIBUTE_LIFETIME_BOUND {
+    return _internal_metadata_.mutable_unknown_fields<::google::protobuf::UnknownFieldSet>();
+  }
+
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL descriptor() {
+    return GetDescriptor();
+  }
+  [[nodiscard]] static const ::google::protobuf::Descriptor* PROTOBUF_NONNULL
+  GetDescriptor() {
+    return default_instance().GetMetadata().descriptor;
+  }
+  [[nodiscard]] static const ::google::protobuf::Reflection* PROTOBUF_NONNULL GetReflection() {
+    return default_instance().GetMetadata().reflection;
+  }
+  [[nodiscard]] static const AppRecord& default_instance() {
+    return *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<AppRecord>(&AppRecord_globals_);
+  }
+  static constexpr int kIndexInFileMessages = 7;
+  friend void swap(AppRecord& a, AppRecord& b) { a.Swap(&b); }
+  inline void Swap(AppRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    if (::google::protobuf::internal::CanUseInternalSwap(GetArena(), other->GetArena())) {
+      InternalSwap(other);
+    } else {
+      ::google::protobuf::internal::GenericSwap(this, other);
+    }
+  }
+  void UnsafeArenaSwap(AppRecord* PROTOBUF_NONNULL other) {
+    if (other == this) return;
+    ABSL_DCHECK(GetArena() == other->GetArena());
+    InternalSwap(other);
+  }
+
+  // implements Message ----------------------------------------------
+
+  [[nodiscard]] AppRecord* PROTOBUF_NONNULL
+  New(::google::protobuf::Arena* PROTOBUF_NULLABLE arena = nullptr) const {
+    return Super_::DefaultConstruct<AppRecord>(arena);
+  }
+  using Super_::CopyFrom;
+  void CopyFrom(const AppRecord& from);
+  using Super_::MergeFrom;
+  void MergeFrom(const AppRecord& from) { AppRecord::MergeImpl(*this, from); }
+
+  private:
+  static void MergeImpl(::google::protobuf::MessageLite& to_msg,
+                        const ::google::protobuf::MessageLite& from_msg);
+
+  public:
+  [[nodiscard]] bool IsInitialized() const {
+    return true;
+  }
+  ABSL_ATTRIBUTE_REINITIALIZES void Clear() PROTOBUF_FINAL;
+  #if defined(PROTOBUF_CUSTOM_VTABLE)
+  private:
+  [[nodiscard]] static ::size_t ByteSizeLong(const ::google::protobuf::MessageLite& msg);
+  [[nodiscard]] static ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      const ::google::protobuf::MessageLite& msg, ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream);
+
+  public:
+  [[nodiscard]] ::size_t ByteSizeLong() const { return ByteSizeLong(*this); }
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const {
+    return _InternalSerialize(*this, target, stream);
+  }
+  #else   // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] ::size_t ByteSizeLong() const final;
+  [[nodiscard]] ::uint8_t* PROTOBUF_NONNULL _InternalSerialize(
+      ::uint8_t* PROTOBUF_NONNULL target,
+      ::google::protobuf::io::EpsCopyOutputStream* PROTOBUF_NONNULL stream) const final;
+  #endif  // PROTOBUF_CUSTOM_VTABLE
+  [[nodiscard]] int GetCachedSize() const {
+    return _impl_._cached_size_.Get();
+  }
+
+  private:
+  void SharedCtor(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static void SharedDtor(MessageLite& self);
+  void InternalSwap(AppRecord* PROTOBUF_NONNULL other);
+ private:
+  static ::absl::string_view FullMessageName() { return "loams.live.v1.AppRecord"; }
+
+  explicit AppRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  AppRecord(::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const AppRecord& from);
+  AppRecord(
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, AppRecord&& from) noexcept
+      : AppRecord(arena) {
+    *this = ::std::move(from);
+  }
+  const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL GetClassData() const PROTOBUF_FINAL;
+  static void* PROTOBUF_NONNULL PlacementNew_(
+      const void* PROTOBUF_NONNULL, void* PROTOBUF_NONNULL mem,
+      ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+  static constexpr auto InternalNewImpl_();
+
+ public:
+  static constexpr auto InternalGenerateClassData_(
+      const MessageLite& prototype,
+      const ::google::protobuf::internal::TcParseTableBase* PROTOBUF_NULLABLE tc_table = nullptr);
+
+  [[nodiscard]] ::google::protobuf::Metadata GetMetadata() const;
+  // nested types ----------------------------------------------------
+
+  // accessors -------------------------------------------------------
+  enum : int {
+    kCursorKeyRefFieldNumber = 3,
+    kAppFieldNumber = 2,
+    kFormatFieldNumber = 1,
+  };
+  // string cursor_key_ref = 3 [json_name = "cursorKeyRef"];
+  void clear_cursor_key_ref() ;
+  [[nodiscard]] const ::std::string& cursor_key_ref() const;
+  template <typename Arg_ = const ::std::string&, typename... Args_>
+  void set_cursor_key_ref(Arg_&& arg, Args_... args);
+  ::std::string* PROTOBUF_NONNULL mutable_cursor_key_ref();
+  [[nodiscard]] ::std::string* PROTOBUF_NULLABLE release_cursor_key_ref();
+  void set_allocated_cursor_key_ref(::std::string* PROTOBUF_NULLABLE value);
+
+  private:
+  const ::std::string& _internal_cursor_key_ref() const;
+  PROTOBUF_ALWAYS_INLINE void _internal_set_cursor_key_ref(const ::std::string& value);
+  ::std::string* PROTOBUF_NONNULL _internal_mutable_cursor_key_ref();
+
+  public:
+  // .loams.live.v1.App app = 2 [json_name = "app"];
+  [[nodiscard]] bool has_app() const;
+  void clear_app() ;
+  [[nodiscard]] const ::loams::live::v1::App& app() const;
+  [[nodiscard]] ::loams::live::v1::App* PROTOBUF_NULLABLE release_app();
+  ::loams::live::v1::App* PROTOBUF_NONNULL mutable_app();
+  void set_allocated_app(::loams::live::v1::App* PROTOBUF_NULLABLE value);
+  void unsafe_arena_set_allocated_app(::loams::live::v1::App* PROTOBUF_NULLABLE value);
+  ::loams::live::v1::App* PROTOBUF_NULLABLE unsafe_arena_release_app();
+
+  private:
+  const ::loams::live::v1::App& _internal_app() const;
+  ::loams::live::v1::App* PROTOBUF_NONNULL _internal_mutable_app();
+
+  public:
+  // uint32 format = 1 [json_name = "format"];
+  void clear_format() ;
+  [[nodiscard]] ::uint32_t format() const;
+  void set_format(::uint32_t value);
+
+  private:
+  ::uint32_t _internal_format() const;
+  void _internal_set_format(::uint32_t value);
+
+  public:
+  // @@protoc_insertion_point(class_scope:loams.live.v1.AppRecord)
+ private:
+  class _Internal;
+  using ParseTableT_ =
+      ::google::protobuf::internal::TcParseTable<2, 3,
+                          1, 46,
+                          2>;
+  static constexpr ParseTableT_ InternalGenerateParseTable_(
+      const ::google::protobuf::internal::ClassData* PROTOBUF_NONNULL class_data);
+  friend class ::google::protobuf::internal::TcParser;
+  #ifndef PROTOBUF_MESSAGE_GLOBALS
+  static const ParseTableT_ _table_;
+  #endif
+
+  friend class ::google::protobuf::MessageLite;
+  friend class ::google::protobuf::Arena;
+  friend ::google::protobuf::internal::PrivateAccess;
+  template <typename T>
+  friend class ::google::protobuf::Arena::InternalHelper;
+  using InternalArenaConstructable_ = void;
+  using DestructorSkippable_ = void;
+  struct Impl_ {
+    inline explicit constexpr Impl_(::google::protobuf::internal::InternalVisibility visibility,
+                                    ::google::protobuf::internal::ConstantInitialized) noexcept;
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena);
+    inline explicit Impl_(
+        ::google::protobuf::internal::InternalVisibility visibility,
+        ::google::protobuf::Arena* PROTOBUF_NULLABLE arena, const Impl_& from,
+        const AppRecord& from_msg);
+    ::google::protobuf::internal::HasBits<1> _has_bits_;
+    ::google::protobuf::internal::CachedSize _cached_size_;
+    ::google::protobuf::internal::ArenaStringPtr cursor_key_ref_;
+    ::loams::live::v1::App* PROTOBUF_NULLABLE app_;
+    ::uint32_t format_;
     PROTOBUF_TSAN_DECLARE_MEMBER
   };
   union { Impl_ _impl_; };
@@ -4093,6 +4603,395 @@ inline ::google::protobuf::RepeatedPtrField<::loams::live::v1::FunctionInfo>* PR
 DeploymentRecord::_internal_mutable_functions() {
   ::google::protobuf::internal::TSanRead(&_impl_);
   return &_impl_.functions_;
+}
+
+// -------------------------------------------------------------------
+
+// AppRecord
+
+// uint32 format = 1 [json_name = "format"];
+inline void AppRecord::clear_format() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.format_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t AppRecord::format() const {
+  // @@protoc_insertion_point(field_get:loams.live.v1.AppRecord.format)
+  return _internal_format();
+}
+inline void AppRecord::set_format(::uint32_t value) {
+  _internal_set_format(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:loams.live.v1.AppRecord.format)
+}
+inline ::uint32_t AppRecord::_internal_format() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.format_;
+}
+inline void AppRecord::_internal_set_format(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.format_ = value;
+}
+
+// .loams.live.v1.App app = 2 [json_name = "app"];
+inline bool AppRecord::has_app() const {
+  bool value = CheckHasBit(_impl_._has_bits_[0], 0x00000002U);
+  PROTOBUF_ASSUME(!value || _impl_.app_ != nullptr);
+  return value;
+}
+inline const ::loams::live::v1::App& AppRecord::_internal_app() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  const ::loams::live::v1::App* p = _impl_.app_;
+  return p != nullptr ? *p : *::google::protobuf::internal::MessageGlobalsBase::ToDefaultInstance<::loams::live::v1::App>(&::loams::live::v1::App_globals_);
+}
+inline const ::loams::live::v1::App& AppRecord::app() const ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.AppRecord.app)
+  return _internal_app();
+}
+inline void AppRecord::unsafe_arena_set_allocated_app(
+    ::loams::live::v1::App* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (GetArena() == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.app_);
+  }
+  _impl_.app_ = reinterpret_cast<::loams::live::v1::App*>(value);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  // @@protoc_insertion_point(field_unsafe_arena_set_allocated:loams.live.v1.AppRecord.app)
+}
+inline ::loams::live::v1::App* PROTOBUF_NULLABLE AppRecord::release_app() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::loams::live::v1::App* released = _impl_.app_;
+  _impl_.app_ = nullptr;
+  if (::google::protobuf::internal::DebugHardenForceCopyInRelease()) {
+    auto* old = reinterpret_cast<::google::protobuf::MessageLite*>(released);
+    released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    if (GetArena() == nullptr) {
+      delete old;
+    }
+  } else {
+    if (GetArena() != nullptr) {
+      released = ::google::protobuf::internal::DuplicateIfNonNull(released);
+    }
+  }
+  return released;
+}
+inline ::loams::live::v1::App* PROTOBUF_NULLABLE AppRecord::unsafe_arena_release_app() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.AppRecord.app)
+
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::loams::live::v1::App* temp = _impl_.app_;
+  _impl_.app_ = nullptr;
+  return temp;
+}
+inline ::loams::live::v1::App* PROTOBUF_NONNULL AppRecord::_internal_mutable_app() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (_impl_.app_ == nullptr) {
+    auto* p = Super_::DefaultConstruct<::loams::live::v1::App>(GetArena());
+    _impl_.app_ = reinterpret_cast<::loams::live::v1::App*>(p);
+  }
+  return _impl_.app_;
+}
+inline ::loams::live::v1::App* PROTOBUF_NONNULL AppRecord::mutable_app()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::loams::live::v1::App* _msg = _internal_mutable_app();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.AppRecord.app)
+  return _msg;
+}
+inline void AppRecord::set_allocated_app(::loams::live::v1::App* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::Arena* message_arena = GetArena();
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (message_arena == nullptr) {
+    delete reinterpret_cast<::google::protobuf::MessageLite*>(_impl_.app_);
+  }
+
+  if (value != nullptr) {
+    ::google::protobuf::Arena* submessage_arena = reinterpret_cast<::google::protobuf::Message*>(value)->GetArena();
+    if (message_arena != submessage_arena) {
+      value = ::google::protobuf::internal::GetOwnedMessage(message_arena, value, submessage_arena);
+    }
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+
+  _impl_.app_ = reinterpret_cast<::loams::live::v1::App*>(value);
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.AppRecord.app)
+}
+
+// string cursor_key_ref = 3 [json_name = "cursorKeyRef"];
+inline void AppRecord::clear_cursor_key_ref() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cursor_key_ref_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& AppRecord::cursor_key_ref() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.AppRecord.cursor_key_ref)
+  return _internal_cursor_key_ref();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AppRecord::set_cursor_key_ref(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.cursor_key_ref_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:loams.live.v1.AppRecord.cursor_key_ref)
+}
+inline ::std::string* PROTOBUF_NONNULL AppRecord::mutable_cursor_key_ref()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_cursor_key_ref();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.AppRecord.cursor_key_ref)
+  return _s;
+}
+inline const ::std::string& AppRecord::_internal_cursor_key_ref() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.cursor_key_ref_.Get();
+}
+inline void AppRecord::_internal_set_cursor_key_ref(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.cursor_key_ref_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AppRecord::_internal_mutable_cursor_key_ref() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.cursor_key_ref_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AppRecord::release_cursor_key_ref() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.AppRecord.cursor_key_ref)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.cursor_key_ref_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.cursor_key_ref_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AppRecord::set_allocated_cursor_key_ref(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.cursor_key_ref_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.cursor_key_ref_.IsDefault()) {
+    _impl_.cursor_key_ref_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.AppRecord.cursor_key_ref)
+}
+
+// -------------------------------------------------------------------
+
+// AppIntent
+
+// uint32 format = 1 [json_name = "format"];
+inline void AppIntent::clear_format() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.format_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000004U);
+}
+inline ::uint32_t AppIntent::format() const {
+  // @@protoc_insertion_point(field_get:loams.live.v1.AppIntent.format)
+  return _internal_format();
+}
+inline void AppIntent::set_format(::uint32_t value) {
+  _internal_set_format(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000004U);
+  // @@protoc_insertion_point(field_set:loams.live.v1.AppIntent.format)
+}
+inline ::uint32_t AppIntent::_internal_format() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.format_;
+}
+inline void AppIntent::_internal_set_format(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.format_ = value;
+}
+
+// uint32 id = 2 [json_name = "id"];
+inline void AppIntent::clear_id() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.id_ = 0u;
+  ClearHasBit(_impl_._has_bits_[0], 0x00000008U);
+}
+inline ::uint32_t AppIntent::id() const {
+  // @@protoc_insertion_point(field_get:loams.live.v1.AppIntent.id)
+  return _internal_id();
+}
+inline void AppIntent::set_id(::uint32_t value) {
+  _internal_set_id(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000008U);
+  // @@protoc_insertion_point(field_set:loams.live.v1.AppIntent.id)
+}
+inline ::uint32_t AppIntent::_internal_id() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.id_;
+}
+inline void AppIntent::_internal_set_id(::uint32_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.id_ = value;
+}
+
+// string name = 3 [json_name = "name"];
+inline void AppIntent::clear_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+}
+inline const ::std::string& AppIntent::name() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.AppIntent.name)
+  return _internal_name();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AppIntent::set_name(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  _impl_.name_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:loams.live.v1.AppIntent.name)
+}
+inline ::std::string* PROTOBUF_NONNULL AppIntent::mutable_name()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  ::std::string* _s = _internal_mutable_name();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.AppIntent.name)
+  return _s;
+}
+inline const ::std::string& AppIntent::_internal_name() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.name_.Get();
+}
+inline void AppIntent::_internal_set_name(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.name_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AppIntent::_internal_mutable_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.name_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AppIntent::release_name() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.AppIntent.name)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000001U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  auto* released = _impl_.name_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AppIntent::set_allocated_name(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000001U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000001U);
+  }
+  _impl_.name_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.name_.IsDefault()) {
+    _impl_.name_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.AppIntent.name)
+}
+
+// string keyspace = 4 [json_name = "keyspace"];
+inline void AppIntent::clear_keyspace() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.keyspace_.ClearToEmpty();
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+}
+inline const ::std::string& AppIntent::keyspace() const
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  // @@protoc_insertion_point(field_get:loams.live.v1.AppIntent.keyspace)
+  return _internal_keyspace();
+}
+template <typename Arg_, typename... Args_>
+PROTOBUF_ALWAYS_INLINE void AppIntent::set_keyspace(Arg_&& arg, Args_... args) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  _impl_.keyspace_.Set(static_cast<Arg_&&>(arg), args..., GetArena());
+  // @@protoc_insertion_point(field_set:loams.live.v1.AppIntent.keyspace)
+}
+inline ::std::string* PROTOBUF_NONNULL AppIntent::mutable_keyspace()
+    ABSL_ATTRIBUTE_LIFETIME_BOUND {
+  SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  ::std::string* _s = _internal_mutable_keyspace();
+  // @@protoc_insertion_point(field_mutable:loams.live.v1.AppIntent.keyspace)
+  return _s;
+}
+inline const ::std::string& AppIntent::_internal_keyspace() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.keyspace_.Get();
+}
+inline void AppIntent::_internal_set_keyspace(const ::std::string& value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.keyspace_.Set(value, GetArena());
+}
+inline ::std::string* PROTOBUF_NONNULL AppIntent::_internal_mutable_keyspace() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  return _impl_.keyspace_.Mutable( GetArena());
+}
+inline ::std::string* PROTOBUF_NULLABLE AppIntent::release_keyspace() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  // @@protoc_insertion_point(field_release:loams.live.v1.AppIntent.keyspace)
+  if (!CheckHasBit(_impl_._has_bits_[0], 0x00000002U)) {
+    return nullptr;
+  }
+  ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  auto* released = _impl_.keyspace_.Release();
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString()) {
+    _impl_.keyspace_.Set("", GetArena());
+  }
+  return released;
+}
+inline void AppIntent::set_allocated_keyspace(::std::string* PROTOBUF_NULLABLE value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  if (value != nullptr) {
+    SetHasBit(_impl_._has_bits_[0], 0x00000002U);
+  } else {
+    ClearHasBit(_impl_._has_bits_[0], 0x00000002U);
+  }
+  _impl_.keyspace_.SetAllocated(value, GetArena());
+  if (::google::protobuf::internal::DebugHardenForceCopyDefaultString() && _impl_.keyspace_.IsDefault()) {
+    _impl_.keyspace_.Set("", GetArena());
+  }
+  // @@protoc_insertion_point(field_set_allocated:loams.live.v1.AppIntent.keyspace)
+}
+
+// uint64 started_at_ms = 5 [json_name = "startedAtMs"];
+inline void AppIntent::clear_started_at_ms() {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.started_at_ms_ = ::uint64_t{0u};
+  ClearHasBit(_impl_._has_bits_[0], 0x00000010U);
+}
+inline ::uint64_t AppIntent::started_at_ms() const {
+  // @@protoc_insertion_point(field_get:loams.live.v1.AppIntent.started_at_ms)
+  return _internal_started_at_ms();
+}
+inline void AppIntent::set_started_at_ms(::uint64_t value) {
+  _internal_set_started_at_ms(value);
+  SetHasBit(_impl_._has_bits_[0], 0x00000010U);
+  // @@protoc_insertion_point(field_set:loams.live.v1.AppIntent.started_at_ms)
+}
+inline ::uint64_t AppIntent::_internal_started_at_ms() const {
+  ::google::protobuf::internal::TSanRead(&_impl_);
+  return _impl_.started_at_ms_;
+}
+inline void AppIntent::_internal_set_started_at_ms(::uint64_t value) {
+  ::google::protobuf::internal::TSanWrite(&_impl_);
+  _impl_.started_at_ms_ = value;
 }
 
 #ifdef __GNUC__

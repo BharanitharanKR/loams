@@ -29,7 +29,7 @@ use loams_agentd_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SandboxLevel,
     SteeringMode,
 };
-use loams_agentd_sessions::{EngineCore, HarnessRegistry, RunJournal};
+use loams_agentd_sessions::{ApprovalSettings, EngineCore, HarnessRegistry, RunJournal};
 use loams_agentd_store::DocsStore;
 
 const CHAT: &str = "chat-restart";
@@ -138,7 +138,13 @@ impl Harness for RecordingHarness {
 fn assemble(dir: &std::path::Path, harness: RecordingHarness) -> EngineCore {
     let registry = HarnessRegistry::new();
     registry.register(Arc::new(harness));
-    EngineCore::assemble(dir, Arc::new(registry), HarnessId::Mock).expect("engine core assembles")
+    EngineCore::assemble_with_approvals(
+        dir,
+        Arc::new(registry),
+        HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
+    )
+    .expect("engine core assembles")
 }
 
 fn queue_run(core: &EngineCore, prompt: &str, cwd: &str, message_id: &str) {
@@ -530,8 +536,13 @@ async fn persistent_session_serves_multiple_turns_on_one_child() {
     registry.register(Arc::new(PersistentHarness {
         runs_started: runs_started.clone(),
     }));
-    let core = EngineCore::assemble(&dir, Arc::new(registry), HarnessId::Mock)
-        .expect("engine core assembles");
+    let core = EngineCore::assemble_with_approvals(
+        &dir,
+        Arc::new(registry),
+        HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
+    )
+    .expect("engine core assembles");
     pre_title(&core);
 
     queue_run(&core, "first", "/tmp", "msg-user-1");
@@ -859,10 +870,11 @@ async fn real_claude_remembers_codeword_across_engine_restart() {
         resume: None,
     };
     let assemble_real = || {
-        EngineCore::assemble(
+        EngineCore::assemble_with_approvals(
             &dir,
             Arc::new(loams_agentd_sessions::default_registry()),
             HarnessId::ClaudeCode,
+            ApprovalSettings::full_access_default(),
         )
         .expect("engine core assembles")
     };

@@ -1,0 +1,54 @@
+# The release train (design §54 §5.1, §11; D925, D936). Each release names its
+# predecessor (`from`) and the migrations it introduced, in order:
+#
+# - before v0.1.0, `from` is the exact previous release (each preview is a
+#   step), and v0.1.0 itself names the last preview;
+# - from v0.1.0, a patch release declares its minor line (`from = "0.1"`): any
+#   earlier 0.1.x upgrades to it in one step;
+# - the first release of a new line (0.2.0) names the last patch of the
+#   previous line;
+# - `fresh` means the release keeps no data from its predecessor.
+#
+# `loams-migrate` compiles this file in (`include_str!`) and refuses a stored
+# release that is not an accepted source (`upgrade_step_not_adjacent`). UP1
+# Task 11 adds the components, `.env` changes, the checks
+# (`scripts/release/check-upgrade-path.sh`) and the signed manifest's copy.
+
+[[release]]
+version     = "0.1.0"
+from        = "0.1.0-preview.2"
+free_factor = 1.5
+# Expected downtime of the upgrade, excluding image pulls (Q833's target).
+downtime_seconds = 300
+
+[[release.migration]]
+id      = "0000-adopt-preview-2"
+store   = "meta"
+class   = "reversible"
+summary = "Record preview.2's versions (preview.2 writes no stack record)"
+
+[[release.migration]]
+id      = "0001-safekeeper-volume"
+store   = "host"
+class   = "reversible"
+summary = "Give the safekeeper a volume (after a drain)"
+
+# Third-party pins: scripts/release/check-upgrade-path.sh checks them
+# against .env.example, release/sqldb-images.toml,
+# deploy/pins/loams-postgres-images.toml, loams-chdb-sys and Cargo.toml.
+[release.components]
+pd             = "v8.5.8"
+tikv           = "v8.5.8"
+tidb           = "v8.5.8-loams.1"
+loams_postgres = "sha256:4dcec4cbef637b92b1088ea2c0bc857f3b5ef4318f02e8d2d4a0f9263ed4140e"
+chdb           = "26.9.0"
+grafeo         = "0.5.43"
+
+# `.env` changes `loams upgrade` applies (old values kept).
+[[release.env]]
+add     = "LOAMS_UPGRADE_SNAPSHOT_DIR"
+default = ""
+
+[[release]]
+version = "0.1.0-preview.2"
+from    = "fresh"   # preview.1 → preview.2 keeps no data

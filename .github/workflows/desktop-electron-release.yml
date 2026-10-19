@@ -209,7 +209,21 @@ jobs:
           key: desktop-release-linux-${{ matrix.arch }}
       - name: engine (live and durable)
         run: cargo build --release -p loams --features live,durable,live-tikv,graph
+      # The agent daemon behind Studio (0.1.0 release fix B9); fetch-engine.mjs bundles it with
+      # SHA256SUMS and VERSION, and fails the package without it (LOAMS_REQUIRE_AGENTD).
+      - name: agent daemon
+        env:
+          DESKTOP_VERSION: ${{ needs.plan.outputs.desktop_version }}
+          LOAMS_BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # The daemon reports the app's version; empty (a dry run) keeps the crate's.
+          [ -n "$DESKTOP_VERSION" ] && export LOAMS_AGENTD_VERSION="$DESKTOP_VERSION"
+          cargo build --release -p loams-agentd
+          target/release/loams-agentd version
       - name: package
+        env:
+          LOAMS_REQUIRE_AGENTD: "1"
         run: pnpm nx run loams-desktop-electron:package-linux --outputStyle=static
       - name: split the rpm (SignPath) from the rest
         run: |
@@ -252,8 +266,8 @@ jobs:
     name: "Windows: package the unpacked app"
     needs: plan
     runs-on: windows-2025
-    # A cold Windows engine build takes about an hour.
-    timeout-minutes: 150
+    # A cold Windows engine build takes about an hour, the agent daemon about 16 more minutes.
+    timeout-minutes: 180
     env:
       LOAMS_DESKTOP_VERSION: ${{ needs.plan.outputs.desktop_version }}
     steps:
@@ -296,8 +310,36 @@ jobs:
         run: |
           echo "::warning::the Windows engine did not build or pass its smoke test; shipping without it"
           echo "LOAMS_DESKTOP_NO_LOCAL_ENGINE=1" >> "$GITHUB_ENV"
+      # The agent daemon behind Studio (release fix B9), required: unlike the engine, a Windows build
+      # without it fails (LOAMS_REQUIRE_AGENTD), so Studio never says "not bundled" on a release.
+      - name: agent daemon
+        shell: bash
+        env:
+          DESKTOP_VERSION: ${{ needs.plan.outputs.desktop_version }}
+          LOAMS_BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # The daemon reports the app's version; empty (a dry run) keeps the crate's.
+          [ -n "$DESKTOP_VERSION" ] && export LOAMS_AGENTD_VERSION="$DESKTOP_VERSION"
+          rustup target add x86_64-pc-windows-msvc
+          cargo build --release -p loams-agentd --target x86_64-pc-windows-msvc
+          exe=target/x86_64-pc-windows-msvc/release/loams-agentd.exe
+          "$exe" version
+          echo "LOAMS_AGENTD_BIN=$(cygpath -m "$PWD/$exe")" >> "$GITHUB_ENV"
       - name: unpacked app (unsigned)
+        env:
+          LOAMS_REQUIRE_AGENTD: "1"
         run: pnpm nx run loams-desktop-electron:package-windows-unpacked --outputStyle=static
+      - name: the daemon is bundled
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin=apps/desktop-electron/dist/win-unpacked/resources/bin
+          ls -l "$bin"
+          for f in loams-agentd.exe SHA256SUMS VERSION; do
+            [ -s "$bin/$f" ] || { echo "::error::$bin/$f is missing"; exit 1; }
+          done
+          (cd "$bin" && sha256sum -c SHA256SUMS)
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: win-unpacked-in
@@ -357,6 +399,7 @@ jobs:
             $root = 'apps/desktop-electron/dist/win-unpacked'
             $files = @("$root/Loams Desktop.exe")
             if (Test-Path "$root/resources/bin/loams.exe") { $files += "$root/resources/bin/loams.exe" }
+            $files += "$root/resources/bin/loams-agentd.exe"
             $bad = @()
             foreach ($f in $files) {
               $st = (Get-AuthenticodeSignature -LiteralPath $f).Status
@@ -370,6 +413,15 @@ jobs:
           "signed=$($signed.ToString().ToLower())" >> $env:GITHUB_OUTPUT
           $sfx = if ($signed) { '' } else { '-unsigned' }
           "LOAMS_SUFFIX_WIN=$sfx" >> $env:GITHUB_ENV
+      # Authenticode signing rewrote loams-agentd.exe and loams.exe: SHA256SUMS, which
+      # `loams-agentd install-runtime` checks, must list the signed files (release fix B9).
+      - name: SHA256SUMS of the shipped binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          bin=apps/desktop-electron/dist/win-unpacked/resources/bin
+          node apps/desktop-electron/scripts/bin-sums.cjs "$bin" win32
+          (cd "$bin" && sha256sum -c SHA256SUMS)
       - name: NSIS installer from the unpacked app
         shell: bash
         run: pnpm --filter @loams/desktop run package --win nsis --x64 --prepackaged dist/win-unpacked --publish never
@@ -443,8 +495,9 @@ jobs:
     # The Apple signing secrets, when they exist, live with the others in this environment.
     environment: desktop-release
     runs-on: ${{ matrix.runner }}
-    # The Intel engine build alone takes 90+ minutes.
-    timeout-minutes: 150
+    # A cold Intel engine build took 2h04m and the agent daemon 23 more minutes (Desktop run
+    # 39099462854 hit the old 150-minute limit while packaging).
+    timeout-minutes: 240
     strategy:
       fail-fast: true
       matrix:
@@ -505,6 +558,31 @@ jobs:
           else
             "$bin" --version
           fi
+      # The agent daemon behind Studio (release fix B9), built for the same target as the engine.
+      # scripts/mac-sign.cjs signs it with the app and writes SHA256SUMS again from the signed file.
+      - name: agent daemon
+        env:
+          DESKTOP_VERSION: ${{ needs.plan.outputs.desktop_version }}
+          LOAMS_BUILD_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+          # The daemon reports the app's version; empty (a dry run) keeps the crate's.
+          [ -n "$DESKTOP_VERSION" ] && export LOAMS_AGENTD_VERSION="$DESKTOP_VERSION"
+          if [ -n "${RUST_TARGET:-}" ]; then
+            cargo build --release -p loams-agentd --target "$RUST_TARGET"
+            bin="$PWD/target/$RUST_TARGET/release/loams-agentd"
+            echo "LOAMS_AGENTD_BIN=$bin" >> "$GITHUB_ENV"
+          else
+            cargo build --release -p loams-agentd
+            bin=target/release/loams-agentd
+          fi
+          if [ "${RUST_TARGET:-}" = x86_64-apple-darwin ]; then
+            arch -x86_64 "$bin" version
+          elif [ "${RUST_TARGET:-}" = aarch64-apple-darwin ]; then
+            [ "$(lipo -archs "$bin")" = arm64 ]
+          else
+            "$bin" version
+          fi
       # electron-builder.config.cjs: with CSC_LINK it signs with the Developer ID under the hardened
       # runtime and notarizes when the APPLE_API_* variables are set; without it, an ad-hoc signature.
       # The .p8 key is written to a file because notarytool takes a path.
@@ -524,7 +602,15 @@ jobs:
           CSC_KEY_PASSWORD: ${{ needs.plan.outputs.sign_mac == 'true' && secrets.MACOS_CERTIFICATE_PASSWORD || '' }}
           APPLE_API_KEY_ID: ${{ needs.plan.outputs.notarize_mac == 'true' && secrets.APPLE_API_KEY_ID || '' }}
           APPLE_API_ISSUER: ${{ needs.plan.outputs.notarize_mac == 'true' && secrets.APPLE_API_ISSUER || '' }}
-        run: pnpm nx run loams-desktop-electron:package-macos --outputStyle=static
+        # An empty CSC_LINK is not "no certificate" to electron-builder: it resolves ''
+        # against the project directory and fails with "<dir> not a file" (v0.1.0-preview.2,
+        # run 38733095344). Unset the empty ones so the ad-hoc path is taken.
+        run: |
+          set -euo pipefail
+          [ -n "${CSC_LINK:-}" ] || { unset CSC_LINK CSC_KEY_PASSWORD; export CSC_IDENTITY_AUTO_DISCOVERY=false; }
+          [ -n "${APPLE_API_KEY_ID:-}" ] || unset APPLE_API_KEY_ID APPLE_API_ISSUER
+          export LOAMS_REQUIRE_AGENTD=1
+          pnpm nx run loams-desktop-electron:package-macos --outputStyle=static
       - name: verify the signature
         env:
           SIGN_MAC: ${{ needs.plan.outputs.sign_mac }}
@@ -537,6 +623,13 @@ jobs:
           codesign -dv "$app" 2>&1 | grep -E 'Signature|Identifier|Authority|TeamIdentifier' || true
           lipo -archs "$app/Contents/MacOS/Loams Desktop"
           lipo -archs "$app/Contents/Resources/bin/loams"
+          # The bundled daemon (release fix B9): signed, the right architecture, and SHA256SUMS
+          # matching the signed files, as `loams-agentd install-runtime` checks.
+          bin="$app/Contents/Resources/bin"
+          [ "$(lipo -archs "$bin/loams-agentd")" = "$([ "$LOAMS_DESKTOP_MAC_ARCH" = x64 ] && echo x86_64 || echo arm64)" ]
+          codesign --verify --strict --verbose=2 "$bin/loams-agentd"
+          [ -s "$bin/VERSION" ] || { echo "::error::$bin/VERSION is missing"; exit 1; }
+          (cd "$bin" && shasum -a 256 -c SHA256SUMS)
           if [ "$SIGN_MAC" = true ]; then
             codesign -dv "$app" 2>&1 | grep -q '^Authority=Developer ID Application' \
               || { echo "::error::a Developer ID certificate was configured but the app is not signed with it"; exit 1; }
@@ -728,7 +821,7 @@ jobs:
           ls -l
 
       # The product release is created by release-github.yml; this only adds the desktop files and a
-      # section of notes, once. A published product release is updated in place (it is a preview).
+      # section of notes, once. A published product release is updated in place.
       - name: attach to the product release
         if: env.MODE == 'product'
         env:

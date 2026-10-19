@@ -1,9 +1,9 @@
 // `/sql`: the Loams SQL page (§47, SQ1). Databases on the left; the selected database's
 // lifecycle (suspend, resume), its branches, the connection panel and an SQL editor on
-// the right. It supersedes the local WeSQL page (web/plugins/wesql).
+// the right.
 
 import { PageHead } from '@loams/desktop-ui';
-import { Badge, Button, Empty, formatBytes, Notice } from '@loams/ui';
+import { Badge, Button, Empty, formatBytes, Notice, SampleDataNotice } from '@loams/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { Connection } from './Connection.js';
 import {
@@ -70,7 +70,7 @@ export function SqlPage({ client, copy, namespace = 'default', mocked }: SqlPage
   const head = (
     <PageHead
       title="Loams SQL"
-      badge={<Badge>{mocked ? 'loams.sqldb.v1 · sample data' : 'loams.sqldb.v1'}</Badge>}
+      badge={<Badge>loams.sqldb.v1</Badge>}
       subtitle="MySQL-compatible databases on TiDB. Each branch is a copy with its own compute, which suspends when idle."
     />
   );
@@ -111,9 +111,9 @@ export function SqlPage({ client, copy, namespace = 'default', mocked }: SqlPage
     <div className="lc-page flex flex-col gap-4">
       {head}
       {mocked && (
-        <Notice title="Sample data">
-          The loams.sqldb.v1 API has not landed yet; this page runs against built-in fixtures.
-        </Notice>
+        <SampleDataNotice>
+          The loams.sqldb.v1 API has not landed yet; nothing here reaches a database.
+        </SampleDataNotice>
       )}
       <div className="grid gap-4 md:grid-cols-[16rem_1fr]">
         <DatabaseList databases={dbs.value} selected={selected} onSelect={setSelected} />
@@ -143,12 +143,12 @@ function DatabaseList({
 }) {
   return (
     <nav aria-label="Databases">
-      <ul className="flex flex-col gap-1">
+      <ul className="m-0 flex list-none flex-col gap-1 p-0">
         {databases.map((d) => (
           <li key={d.id}>
             <button
               type="button"
-              className="w-full text-left rounded px-2 py-1.5 flex items-center justify-between gap-2 hover:bg-[var(--loams-surface-2)] focus-visible:outline focus-visible:outline-2"
+              className="flex w-full cursor-pointer items-center justify-between gap-2 rounded-sm border-0 bg-transparent px-2 py-1.5 text-left text-ink hover:bg-raised aria-[current=true]:bg-accent-soft"
               aria-current={d.id === selected ? 'true' : undefined}
               onClick={() => onSelect(d.id)}
             >
@@ -233,7 +233,7 @@ function DatabaseDetail({
         <span role="status" aria-label={`State of ${db.name}`}>
           <Stage stage={db.stage} />
         </span>
-        <span className="text-faint text-xs font-mono">
+        <span className="text-faint text-xs tabular-nums">
           {db.engineVersion} · class {db.computeClass} · {formatBytes(db.storageBytes)}
         </span>
         <div className="ml-auto flex gap-2">
@@ -327,13 +327,13 @@ function BranchTable({
             <tr key={b.id} aria-selected={b.id === selected}>
               <td>
                 <span className="font-medium">{b.name}</span>{' '}
-                <span className="text-faint text-xs font-mono">{b.id}</span>
+                <span className={/* mono-ok: id */ 'text-faint text-xs font-mono'}>{b.id}</span>
               </td>
               <td>
                 <Stage stage={b.stage} />
               </td>
               <td>{b.parentId ? nameOf(b.parentId) : '—'}</td>
-              <td className="font-mono">{b.pointTs || '—'}</td>
+              <td className={/* mono-ok: id */ 'font-mono'}>{b.pointTs || '—'}</td>
               <td>
                 <Button
                   size="sm"

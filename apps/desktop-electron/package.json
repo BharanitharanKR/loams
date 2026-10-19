@@ -6,7 +6,8 @@
 	"license": "Apache-2.0",
 	"main": "out/main/index.js",
 	"scripts": {
-		"dev": "node scripts/connectors-catalog.mjs && electron-vite dev",
+		"dev": "install-electron && node scripts/connectors-catalog.mjs && electron-vite dev",
+		"preview": "install-electron && electron-vite preview",
 		"catalog": "node scripts/connectors-catalog.mjs",
 		"build": "node scripts/connectors-catalog.mjs && electron-vite build",
 		"test": "vitest run",
@@ -36,7 +37,7 @@
 		"@loams-plugins/plugin-openpanel-adapter": "workspace:*",
 		"@loams-plugins/plugin-zulip-adapter": "workspace:*",
 		"@loams/proto": "workspace:*",
-		"@playwright/test": "1.63.0",
+		"@playwright/test": "catalog:",
 		"@types/node": "24.13.6",
 		"@types/pg": "8.23.1",
 		"@types/pg-cursor": "2.7.2",

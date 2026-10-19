@@ -80,6 +80,21 @@ public sealed record CallOptions
     public IReadOnlyDictionary<string, string> Headers { get; init; } =
         new Dictionary<string, string>();
 
+    /// <summary>
+    /// The request header that selects one of a Live node's apps (LV1 Task 13). A
+    /// request without it addresses the server's own app (<c>--live-app</c>). To
+    /// address one app on every call, put it in <c>LoamsClientOptions.Headers</c>.
+    /// </summary>
+    public const string LiveAppHeader = "loams-live-app";
+
+    /// <summary>These options, addressing the Live app <paramref name="name"/>.</summary>
+    public CallOptions WithLiveApp(string name)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(name);
+        var headers = new Dictionary<string, string>(Headers) { [LiveAppHeader] = name };
+        return this with { Headers = headers };
+    }
+
     /// <summary>Reads at this consistency token (D609).</summary>
     public string? ConsistencyToken { get; init; }
 

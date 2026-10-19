@@ -6,6 +6,8 @@ deploy/loams-pg-bench/compose.yaml: -x-neon-image: &neon-image ${NEON_IMAGE:-ghc
 deploy/loams-pg-bench/compose.yaml: -x-compute-image: &compute-image ${COMPUTE_IMAGE:-ghcr.io/neondatabase/compute-node-v17@sha256:13ab146d3e7bbabb25a8532f315ac443e7512351d1ede0bab586def5c70e26c3}
 deploy/loams-pg-bench/compose.yaml: +x-neon-image: &neon-image ${NEON_IMAGE:-ghcr.io/ostrium-labs/loams-postgres-storage@sha256:1111111111111111111111111111111111111111111111111111111111111111}
 deploy/loams-pg-bench/compose.yaml: +x-compute-image: &compute-image ${COMPUTE_IMAGE:-ghcr.io/ostrium-labs/loams-postgres-compute-v17@sha256:2222222222222222222222222222222222222222222222222222222222222222}
+deploy/release/compose.yaml: -    image: ${NEON_IMAGE:-ghcr.io/neondatabase/neon@sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f}
+deploy/release/compose.yaml: +    image: ${NEON_IMAGE:-ghcr.io/ostrium-labs/loams-postgres-storage@sha256:1111111111111111111111111111111111111111111111111111111111111111}
 .github/workflows/pg2.yml: -  PG_HEADERS_IMAGE: ghcr.io/neondatabase/neon@sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f
 .github/workflows/pg2.yml: +  PG_HEADERS_IMAGE: ghcr.io/ostrium-labs/loams-postgres-storage@sha256:1111111111111111111111111111111111111111111111111111111111111111
 .github/workflows/pg2-e2e.yml: -  PG_HEADERS_IMAGE: ghcr.io/neondatabase/neon@sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f

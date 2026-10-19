@@ -1372,7 +1372,7 @@ Fork PRs, all merged with merge commits by the org admin's PR bypass: ostrium-la
 1. **No teams were created; CODEOWNERS uses the organisation's admins.** The plan lists the three teams as an owner action (Q722, Q734), and `codeowners_valid` needs `codeowners/errors` to be `[]`, which an owner that does not exist fails ("Unknown owner"). Every file keeps §51 §3.5's sections: storage, compute and CI; Postgres (`/vendor/`, `/pgxn/`, `/compute/`); security (`/deny.toml`, `/.github/`, `/LOAMS_PATCHES.md`, `/NOTICE`). Each section names the team that will own it in a comment, and each is owned by the three org admins (`@dina-kar`, `@Kesh3805`, `@ostrium-tech`) until then. Swapping in a team is a one-line edit per section. The security section also owns `/CODEOWNERS` and `/SECURITY.md`. In the small forks, `*` names the future `loams-postgres-maintainers` (`postgres-maintainers` in `postgres`), and `/.github/` (and `/deny.toml` in `tokio-epoll-uring`) names `security`. `codeowners/errors` is `[]` on all four branches; Neon's file on `loams-postgres` `main` had 22 errors (its `@neondatabase/*` teams). With CODEOWNERS present, `main`'s ruleset (code-owner review) now needs an approval from one of the admins other than the author, or the admin PR bypass (Task 3 ruling 4).
 2. **`check-dco.sh` exempts the trailer exception table.** `1218fb7a` has no `Signed-off-by` either, and cannot be rewritten, so a check from `neon-fork-point` failed on it. The script reads the 40-hex shas of `LOAMS_PATCHES.md`'s `## Commits without a trailer` section and skips them (one list of pre-rule commits, not two); a sha elsewhere in the file exempts nothing. The table is read from a trusted revision, `EXEMPT_FROM` (default `HEAD`; the workflow passes the pull request's base commit), so a pull request cannot exempt its own unsigned commit by adding a row (CodeRabbit on fork PR #3, fixed in `2ba913b0`). The sign-off is matched by the author's email, as in Loams' original; CodeRabbit's request to also match the name was declined, since the copy should not diverge from Loams' rule alone. `BASE` defaults to `neon-fork-point` and `HEAD` to `HEAD`, and the workflow runs it over `neon-fork-point..HEAD` (on a PR, GitHub's merge commit; merges are skipped). One fix to the copy: the range is computed in an assignment, so a missing ref fails instead of checking an empty range (the Loams original's `for sha in $(git rev-list …)` passes on a bad ref). The test is `scripts/loams/tests/test-dco.sh` (Loams' six cases plus: Neon history exempt, an unsigned commit fails, the table exempts it, the table in the wrong section does not, a bad ref fails). `test_governance.py` runs it as `dco_rejects_unsigned`, beside `notice_retains_upstream` and `codeowners_valid`.
 3. **No required check.** `loams-dco.yml` has the jobs `dco` and `governance`. Actions are disabled on `loams-postgres` (Task 4 ruling 6), so neither is added to the `main` ruleset; whoever enables Actions adds `dco` (and `patches`) in the same step.
-4. **Security contact and private reporting.** `SECURITY.md` names `security@ostriumlabs.com` and 3 business days, as §51 §3.7 does (Loams' `SECURITY.md` uses the same address); no other address was invented. Each `SECURITY.md` links Loams' policy (`ostrium-labs/loams/security/policy`) and its own repository's private reporting. Private vulnerability reporting was off on every fork and is now enabled (`PUT …/private-vulnerability-reporting`) on `loams-postgres`, `postgres`, `tokio-epoll-uring`, `pg_session_jwt`, `rust-postgres` and `azure-sdk-for-rust` (§3.7: "every fork"); `autoscaling` and `framed-websockets` are archived and were left alone. Response targets (Q724) are not stated: they are Task 6's. `postgres`'s file sends vulnerabilities in PostgreSQL itself to the PostgreSQL Security Team and ones in the fork's changes to us.
+4. **Security contact and private reporting.** `SECURITY.md` names `security@ostriumlabs.org` and 3 business days, as §51 §3.7 does (Loams' `SECURITY.md` uses the same address); no other address was invented. Each `SECURITY.md` links Loams' policy (`ostrium-labs/loams/security/policy`) and its own repository's private reporting. Private vulnerability reporting was off on every fork and is now enabled (`PUT …/private-vulnerability-reporting`) on `loams-postgres`, `postgres`, `tokio-epoll-uring`, `pg_session_jwt`, `rust-postgres` and `azure-sdk-for-rust` (§3.7: "every fork"); `autoscaling` and `framed-websockets` are archived and were left alone. Response targets (Q724) are not stated: they are Task 6's. `postgres`'s file sends vulnerabilities in PostgreSQL itself to the PostgreSQL Security Team and ones in the fork's changes to us.
 5. **`postgres`: `loams/meta` was created at `REL_17_STABLE_neon`'s head (`56692dfb`)**, as the plan says, and the files go there by PR. **This amends Task 15:** `loams/REL_17_STABLE` should start from `loams/meta`'s tip (one commit on `56692dfb`) rather than "unchanged", and Task 15 adds the same two files to `loams/REL_16_STABLE` and `loams/REL_18_STABLE`.
 6. **`NOTICE`** keeps Neon's five lines unchanged and appends the plan's text one sentence per line ("Loams Postgres." / "Based on Neon by Databricks/Neon Inc. (…), licensed under the Apache License 2.0." / "Modifications Copyright 2026 Ostrium Labs and the Loams Authors." / "Changes from Neon are listed in LOAMS_PATCHES.md."). Shipping it in images under `/usr/share/doc/loams-postgres/` stays with Tasks 10 and 11.
 7. **`LOAMS_PATCHES.md` and `LOAMS.md`.** LP-0000's title now covers this task ("…; CODEOWNERS, DCO check, SECURITY.md, NOTICE"), and the exception table says the DCO check uses it too. `LOAMS.md` names the DCO script, CODEOWNERS and SECURITY.md in one sentence.
@@ -1622,3 +1622,157 @@ Fork PR ostrium-labs/loams-postgres#11 (branch `loams/nf1-release`, LP-0013) mer
 5. **Cadence.** Weekly on Tuesdays: in a month's first week, if no `lp-YYYY.MM.*` tag exists yet, the job opens one issue on `ostrium-labs/loams` (issues are off on the fork). It needs the bot token.
 6. **`docs/loams/release.md`**: the cadence table, cutting a release, what it needs, and verifying with `verify-pins.sh`.
 7. **Not run:** a real release needs Actions, package publishing and the bot token (owner). Task 14 cuts the first one.
+
+### Task 14 rulings (2026-10-16, at `dev` `c8bcf4d8`)
+
+Loams PR #679 (branch `nf1-b2-t14`). There is no fork change: the release was cut with Task 13's workflow.
+
+1. **The parity release is `lp-2026.10.1`** (`78b24759`, the merge of fork PR #17).
+   - `lp-2026.10.0`'s run failed in the compute sources step and created no git tag or Release. Fork PR #17 ("the sources check reads the whole tar listing") fixed that step, and `.1` is the plan's re-release (step 4).
+   - The Postgres revisions equal the mirror's: `vendor/revisions.json` and both submodules are identical at `78b24759` and `77e22e4b` (17.5 `1e01fcea`, 16.9 `a42351fc`).
+   - The three packages are public.
+2. **The pin PR was opened by hand.** The release's `pin-pr` job has no `LOAMS_BOT_TOKEN` (Q733), so it printed the command. This PR runs `pins.py set --from-release https://github.com/ostrium-labs/loams-postgres/releases/download/lp-2026.10.1/loams-postgres-images.toml`, and the diff is the release asset's document.
+3. **New consumer: the release stack's `endpoint-storage`** (`deploy/release/compose.yaml`, `image: ${NEON_IMAGE:-…}`).
+   - It still defaulted to Neon's image and nothing checked it, so `pins.py` now generates and checks it (7 consumers).
+   - The release stack's computes need no line: `loams-pg-control` compiles the pin file in.
+   - `release/upgrade-path.toml`'s preview.3 `loams_postgres` component follows, as `check-upgrade-path.sh` requires. The PR carries `ci:upgrade`, so the upgrade gate runs a preview.2 stack upgraded onto these images.
+4. **`test_pins.py` no longer reads the live pin file as its starting state.** Each scratch tree is rendered from `fixtures/pins/pins-mirror-77e22e4b.toml` (the Task 2 file), so the golden diffs stay put when the pins move. `test_the_repository_pins_our_own_release` checks:
+   - an `lp-` release;
+   - every repository under `ghcr.io/ostrium-labs/loams-postgres-`;
+   - every source equal to `ostrium-labs/loams-postgres@<fork_commit>`;
+   - no `ghcr.io/neondatabase/` in any consumer outside the README's Mirror history.
+
+   That is "no `mirror:` source left".
+5. **Step 3, as run:**
+   - **`verify-pins.sh` on the real pins** (cosign v3.0.6, oras 1.3.1, locally and in a dispatched `nf1-pins.yml`): all three images verified. This confirms the Fulcio identity Task 12 left open: `loams-sign.yml`'s certificate passes the shared regex.
+   - **`pg2-e2e.yml` dispatched on the branch**: every job green (Deploy, Pageserver ingest, pg-control deploy, Compose runtime with `it_endpoint`, Kubernetes runtime).
+   - **The decoder's golden tests** (`pg2.yml` WAL decoder, headers from the new storage digest): green. The headers extracted from our image are identical to those from Neon's `neon` image, per file, for v16 and v17 (R31.6).
+   - **The fixtures:** re-captured against our images and byte-equal except two timestamps (`crates/loams-postgres/tests/fixtures/README.md`).
+   - **The desktop's stack copy:** the desktop ships `deploy/loams-postgres-dev` unchanged (`electron-builder.config.cjs`). It was run under a scratch compose project, not the Electron app: start, a tenant and timeline, `SELECT 1` (17.5), a branch, and `SELECT 1` on the branch's compute. Torn down with `down -v` of that project only.
+6. **A dev breakage fixed on the way:** `crates/loams-wal-decoder/deny.toml` lacked the root's `zip@7.2.0` ignore (61cc37cb), so `check-decoder-deny.py` failed `pg2.yml`'s WAL decoder job. The entry is copied, with its removal date.
+7. **Left:** `loams-pg-control`'s tests still name Neon's compute digest as an arbitrary pinned image (fakes, not consumers). Q715's default path is closed: the defaults are `ghcr.io/ostrium-labs`, and the neon-archive packages stay private. Until the bot token exists, every release's pin PR is opened by hand.
+
+### Task 15 rulings (2026-10-16, at `dev` `c30e36c0`)
+
+Fork PR ostrium-labs/loams-postgres#18 (branch `loams/nf1-postgres-branches`, LP-0014) merged into `main` as `b9b9becd`. CodeRabbit does not review the fork repositories, so it was self-reviewed.
+
+1. **The branches were created through the REST API** (`POST repos/ostrium-labs/postgres/git/refs`), with no clone (Task 0 ruling).
+   - `loams/REL_17_STABLE` = `efecf23b`, the tip of `loams/meta`: `REL_17_STABLE_neon` `56692dfb` plus Task 5's governance merge (`SECURITY.md`, `CODEOWNERS`). Task 5 ruling 5 already amended "unchanged" for 17.
+   - `loams/REL_16_STABLE` = `2e2cf61f`: `REL_16_STABLE_neon` `59027122` plus one commit adding the same two blobs (`Loams-Patch: LP-0000`, signed off).
+   - `loams/REL_18_STABLE` = `05e445f1`: `REL_18_STABLE_neon` `a616eefe` plus the same commit.
+
+   So "unchanged" (the plan's interface) becomes "unchanged except the governance files". Every branch we maintain carries `SECURITY.md` and `CODEOWNERS`.
+2. **Protection is Task 3's rulesets, unchanged.** `loams/**` has no force-push and no deletion, `REL_*_STABLE_neon` is frozen (update, non-fast-forward and deletion refused), and the tags are immutable. `gh api repos/ostrium-labs/postgres/rules/branches/loams/REL_17_STABLE` lists `non_fast_forward` and `deletion`.
+3. **The tests are one script in the fork,** `scripts/loams/check-postgres-branches.py` (stdlib). It runs in `loams-hygiene.yml` on every PR and push to `main`, with 12 unit tests on a fake API in `test_postgres_branches.py`.
+   - `branches_exist_and_protected`: each `loams/REL_<N>_STABLE` exists, descends from its `_neon` branch, carries both governance files, and refuses force-push and deletion. Each `_neon` branch refuses updates. It reads the public rules endpoint, so the hygiene job needs no extra token.
+   - `submodule_url_relative`: every `.gitmodules` URL in the fork is `../postgres.git`.
+
+   The live check failed before the branches existed (`missing` for all three) and passes now: `check-postgres-branches: ok (.gitmodules and ostrium-labs/postgres loams/REL_{16,17,18}_STABLE)`.
+4. **The submodules still point at Neon's revisions** (17.5 `1e01fcea`, 16.9 `a42351fc`), with `branch = REL_<N>_STABLE_neon` in `.gitmodules`. Task 17 moves them to `loams/REL_<N>_STABLE` with the 17.11 and 16.15 merges. Postgres 18 has no submodule until Task 24.
+5. **Q733 is answered (owner, 2026-10-16).** The owner set `LOAMS_BOT_TOKEN` as an organisation secret visible to every repository. From the next release on, `loams-release.yml`'s `pin-pr` job opens the pin PR itself, and the cadence check can open its issue. Task 18's pushes to `ostrium-labs/postgres` use the same secret. The rest of Q733 is now moot: the bot is a token, so nobody needs to refresh the `gh` token's scopes for it. The token's scopes were not inspected, so the first real use is its check.
+6. **Clone approval (Task 0).** The owner approved cloning `ostrium-labs/postgres` for Task 17 (2026-10-16). The clone must be blobless or treeless, outside `/tmp` and `/mnt/Projects`, and deleted afterwards. A CI job that does the upstream merge is preferred, because it can be repeated for every later minor.
+
+### Task 16 rulings (2026-10-16, at `dev` `f329a139`)
+
+Fork PRs ostrium-labs/loams-postgres#19 (`6212f59e`, the gate), #21 (a mode bit), #22 (concurrency, protobuf) and #23 (clippy `--no-deps`), plus the shellcheck fix carried in #20; all are LP-0015. Loams PR #698 (`nf1-candidate.yml`). CodeRabbit skips the fork repositories and was rate-limited on #698, so all of these were self-reviewed.
+
+1. **When the gate runs (owner, 2026-10-16; this answers Q721):**
+   - on GitHub-hosted standard runners;
+   - **nightly** at 21:07 UTC, away from Loams' nightly at 02:17;
+   - **on every release:** `loams-release.yml` calls G0–G2 before it builds, and G3 before it tags;
+   - **by hand** (`workflow_dispatch`, any set of tiers).
+
+   It does **not** run on pull requests.
+   - **Concurrency.** The organisation's concurrent-job limit is shared with Loams' CI. So there is one gate per caller and ref: a newer nightly or dispatch cancels the older one, and a release's calls queue and are never cancelled. At most two heavy jobs run at once: G1 beside G2's build, then the G2 majors with `max-parallel: 2`.
+   - **No image builds from these PRs.** A fork PR that touches Rust code also starts the storage and compute image builds. Those were cancelled on these PRs, because the only Rust change was rustfmt and G1/G2 compile it.
+2. **Required checks (deviation).** The plan's `required_checks_configured` lists `g0`, `g1`, `dco` and `patches`. A tier that does not run on pull requests cannot be a required check, so `main`'s new ruleset `main: required checks (hygiene, patches, dco)` requires the pull-request tier instead. It has the same admin bypass as the PR rule. `gate.py required-checks` verifies the ruleset live in `loams-hygiene`. G0–G2 gate releases instead.
+3. **G0** runs rustfmt, clippy `-D warnings` on G1's crates, `cargo deny check bans licenses sources`, actionlint (with shellcheck), and the `hygiene`, `patches` and `dco` workflows.
+   - **Advisories are not in G0 (deviation).** `cargo deny check advisories` fails at today's `main`. `loams-advisories.yml` already gives each advisory a tracked issue with a due date (D805), and putting advisories in G0 would stop every release at once.
+   - **Fixes the first runs needed:**
+     - `libs/remote_storage/src/gcs_bucket.rs` was the workspace's one unformatted file; it is now formatted (formatting only).
+     - A shellcheck finding in `loams-build-compute.yml` (SC2153) was fixed.
+     - `libprotobuf-dev` is installed, because `storage_broker`'s build script needs `google/protobuf/empty.proto` for clippy.
+     - Clippy runs with `--no-deps`: it lints G1's crates themselves, not every workspace crate they depend on. `remote_storage`'s GCS backend has 41 findings at `main`; cleaning it up is a follow-up.
+4. **G1 runs once, not once per major (deviation).** The Rust tests do not take the major from the environment: `postgres_ffi` is generic over every major it has bindings for, and the pageserver's WAL-redo tests use `DEFAULT_PG_VERSION` (17). So G1 builds Postgres and Neon's extensions for every major (`make neon-pg-ext`), then runs:
+   - `cargo nextest` on `postgres_ffi`, `wal_decoder`, `pageserver_api`, `compute_api` and `compute_tools`;
+   - the pageserver's tests twice, with `NEON_PAGESERVER_UNIT_TEST_VIRTUAL_FILE_IOENGINE=std-fs` and with `tokio-epoll-uring`.
+
+   The per-major tier is G2.
+   - It runs in the pinned `loams-postgres-build-tools` image (`scripts/loams/gate-docker.sh`) as uid 1000, because Postgres refuses root, with seccomp unconfined so io_uring is available.
+   - **The first run passed:** 105, 283 and 283 tests, in 20 minutes.
+5. **G2** is one release build (`make all`, feature `testing`, 38 minutes), shared as an artifact, then `test_runner` per pinned major (16, 17) on `scripts/loams/gate-subset.txt`. The subset has 9 functions, 18 tests with their parameters:
+   - `test_pg_regress`;
+   - `test_branch_behind` and `test_branching_with_pgbench`;
+   - `test_compute_reconfigure`;
+   - `test_pgdata_import_smoke`;
+   - `test_lfc_resize` and `test_local_file_cache_unlink`;
+   - `test_wal_acceptor.py::test_restarts` and `::test_restart_endpoint`.
+
+   `gate.py subset-check` (in `loams-hygiene`) checks that each name exists. A flake is skipped only by a `deselect <node> <issue URL>` line.
+   - **The first run passed:** 18 tests on pg16 and 18 on pg17, about 15 minutes each.
+6. **`gate_fails_on_red_tier`:**
+   - **Unit tests:** `gate.py verdict` fails the job `gate` when a job of a requested tier failed, was cancelled or was skipped.
+   - **Live:** the first run (https://github.com/ostrium-labs/loams-postgres/actions/runs/38935843561) had G1 and G2 green and G0's lint red, and the job `gate` failed.
+7. **G3 (deviation: a pin document, not per-image digests).** The fork sends the candidate's whole pin document (`release-notes.py pin-doc`), because a minor release changes `pg_minor` too, not only digests.
+   - **In Loams:** `scripts/nf1/candidate.py` accepts an image only when it is built from the candidate's commit (in a `ghcr.io/ostrium-labs/loams-postgres-*` repository), or when it is exactly what Loams pins today. `pg2-e2e.yml` and `pg2.yml`'s WAL decoder job became callable (`candidate-pins`). `candidate-smoke.sh` checks the version, an extension smoke and a branch; it passed locally on 17.5. The status goes back as `loams-gate / g3`.
+   - **In the release:** `tag-images` is split. `candidate` resolves the digests and writes the documents; G3 then runs on that document; only then does `tag-images` tag the images.
+8. **`g3_reports_status` is blocked on the owner.** The dry run with today's pins (https://github.com/ostrium-labs/loams-postgres/actions/runs/38941121083) failed at the dispatch: `HTTP 403: Resource not accessible by personal access token`. `LOAMS_BOT_TOKEN` is a fine-grained token, and it lacks **Actions: read and write on `ostrium-labs/loams`**. The report also needs **Commit statuses: read and write on `ostrium-labs/loams-postgres`**.
+
+   Until the token has both, G3 fails, so **no release can be tagged**. That is deliberate: a release without Loams' integration is not a release.
+
+### Task 17 rulings (2026-10-16 and 2026-10-17)
+
+Fork PR ostrium-labs/loams-postgres#20 (LP-0016) merged.
+
+1. **The merge runs in CI, not on a workstation** (owner, 2026-10-16: prefer a repeatable CI job). `loams-postgres-merge.yml` runs `scripts/loams/postgres-merge.sh`:
+   - a blobless clone of `ostrium-labs/postgres` inside the job;
+   - the upstream tag from `postgres/postgres`;
+   - `git merge --no-ff` with `Loams-Sync: <tag>`;
+   - `push` writes `loams/minor-<N>-<tag>`; `promote` fast-forwards `loams/REL_<N>_STABLE`;
+   - a conflict uploads the files and the diff.
+
+   `test_postgres_merge.sh` covers it with 5 cases. Nothing was cloned locally.
+2. **Starting points.** `loams/REL_17_STABLE` is at 17.8 and `loams/REL_16_STABLE` at 16.12, from Neon's branches.
+3. **Dry runs (no push):**
+   - **`REL_16_15`** (https://github.com/ostrium-labs/loams-postgres/actions/runs/38937088537): 5 conflicted files.
+     - `hash_xlog.c`: Neon's `am_wal_redo_postgres` guard against upstream's new `XLogFlushBufferForRedoIfInit` helper.
+     - `walsender.c`.
+     - `pgstat.c`: includes.
+     - `encoding.out` and `encoding.sql`: tests added on both sides.
+   - **`REL_17_11`** (https://github.com/ostrium-labs/loams-postgres/actions/runs/38937081682): 10 conflicted files. They are the same kinds as in 16, plus `read_stream.c`, `postgres.c`, `injection_point.c`, the injection-points test module, and **`heapam.c`**.
+4. **A maintainer must decide 17.11's `heapam.c` before the 17 merge.** Upstream 17.11 includes "Fix VM clear WAL logging by registering VM blocks": heap insert, delete, update and lock records now register the visibility-map page as an extra block reference. Neon writes those records as its own `RM_NEON_ID` records (`xl_neon_heap_*`). The pageserver ingests them (`wal_decoder`, `walingest.rs`), and `neon_rmgr` replays them, and the pageserver clears visibility-map bits from the record's flags itself. There are two ways forward:
+   - **(a)** Keep Neon's records without the new block reference, and confirm that the pageserver's own VM handling already covers the case the fix is for.
+   - **(b)** Add the VM block reference to the `RM_NEON_ID` records, and change `neon_rmgr`, `wal_decoder`, the pageserver's ingest and Loams' `loams-wal-decoder` fixtures to match.
+
+   Either way it is a WAL-format question (Review Focus 7), so it is not settled inside a merge commit. 16.15 does not have this change, so its five conflicts are mechanical.
+5. **Still to do for `lp-2026.11.0` (deadline 2026-11-19):**
+   - resolve both merges on `loams/minor-<N>-<tag>`, recording each resolution in its merge commit;
+   - move `vendor/postgres-v16` and `vendor/postgres-v17`, `.gitmodules` (`branch = loams/REL_<N>_STABLE`) and `vendor/revisions.json`;
+   - run G1 and G2 on that branch, and G3 once the token is fixed;
+   - release.
+
+   17.12 and 16.16 follow on 2026-11-12, through the same workflow.
+6. **17.11's `heapam.c`: option (a) (owner, 2026-10-17).** The fork keeps its heap WAL record format and does not take upstream `c0d9864f`'s VM block references.
+   - **The premise holds.** The pageserver derives every VM clear from the records' `*_ALL_VISIBLE_CLEARED` and `XLH_LOCK_ALL_FROZEN_CLEARED` flags and stores it on the VM page itself. Computes WAL-log every VM page they evict, replicas clear the bits from the same flags, and nothing in Neon's storage model reads a WAL summary or a missing VM full-page image. The citations are in the fork's `docs/loams/pg17-vm-clear.md` (LP-0016).
+   - **The resolution.** `heapam.c` is a three-way merge of ours with REL_17_11's `heapam.c` minus `c0d9864f`. That also drops the two additions that would otherwise have merged into the fork's records without a conflict. Upstream's tests of the registration (`pg_walsummary` `t/002_blocks.pl`, `pg_combinebackup` `t/012_vm_consistency.pl`) are reverted with it.
+   - **The test.** `test_loams_vm_clear.py` runs the bug's scenario through the pageserver, the primary and a replica. It also guards the format: no heap record registers a VM block. It passes at 16.15 and at 17.11.
+7. **The recut (owner, 2026-10-17, option 1).**
+   - **Why.** Task 15's `loams/REL_<N>_STABLE` started at Neon's `REL_<N>_STABLE_neon` heads, 387 (16) and 475 (17) commits past the revisions `main` pins. That range holds Neon's own Postgres-side changes ("Remove unnecessary set_lwlsn_block_* hooks", "Move LastWrittenLsnLock to neon extension", `smgr_read_slru_segment` gone). Those pair with `pgxn/neon` changes Neon never published, so our `pgxn/neon` did not build at 16.15 (gate run https://github.com/ostrium-labs/loams-postgres/actions/runs/38991579525).
+   - **The new branches.** `loams/pg16` starts at `a42351fc` (16.9) and `loams/pg17` at `1e01fcea` (17.5), the revisions `main` pinned. Both were created through the API, each has the governance commit, and the existing `loams/**` rulesets protect them.
+   - **Retired, never deleted.** `loams/REL_16_STABLE`, `loams/REL_17_STABLE` and `loams/REL_18_STABLE` (`REL_18_STABLE_neon` has the same changes) are kept protected and marked superseded in the fork's `docs/loams/postgres-branches.md`. Task 24 chooses the base for 18.
+   - **The check.** `check-postgres-branches.py` now checks the new layout: each branch descends from its pinned base, the retired branches still exist, and the submodules track `loams/pg<N>`.
+   - **The merge job** uses `loams/pg<N>` and `loams/minor-pg<N>-<tag>`. On `promote` it reuses an existing minor branch (a hand resolution), so it never re-merges.
+8. **The merges (resolved by hand in an approved blobless clone, now deleted).**
+   - **16.15:** `loams/minor-pg16-REL_16_15` `23f0d68a`. Conflicts in `hash_xlog.c` (upstream's `XLogFlushBufferForRedoIfInit()`, with Neon's `!am_wal_redo_postgres` moved into the helper), `walsender.c`, `pgstat.c`, `pg_restore.c` and `002_pg_dump.pl`.
+   - **17.11:** `loams/minor-pg17-REL_17_11` `aef0fc52`. Conflicts in `heapam.c` (as in ruling 6), `hash_xlog.c`, `walsender.c`, `read_stream.c`, `postgres.c` and `pgstat.c`.
+   - **One fix with no textual conflict, in both merges:** upstream's new `_bt_get_endpoint()` call needs Neon's extra `parent` argument.
+   - Each resolution is recorded in its merge commit. Both minor branches were promoted: `loams/pg16` = `23f0d68a` and `loams/pg17` = `aef0fc52`, through `loams-postgres-merge.yml` with `promote`.
+9. **A storage fix the minors require.** Upstream `8ba61bc0` ("Set next multixid's offset when creating a new multixid", in 16.15 and 17.11) makes readers rely on the next multixid's offset being set. The pageserver did not set it: `test_pg_regress`'s basebackup comparison differed in `pg_multixact/offsets/0000` at both majors. `ingest_multixact_create` now follows upstream (fork `88b997ad`, LP-0016):
+   - a new `NeonWalRecord::MultixactOffsetCreatePair` when the next multixid is on the same page. It is added before the testing-only variant, so no serialized index moves.
+   - an offset record on the next page when that page exists;
+   - otherwise (WAL from an older minor) the next page is initialized with the offset, and its later zero-page record is skipped, as upstream's `pre_initialized_offsets_page`.
+
+   `test_multixact` joined G2.
+10. **Gated at both majors:** https://github.com/ostrium-labs/loams-postgres/actions/runs/38999301976. Every tier passed: G0, G1, and G2 at 21 tests per major (pg16, pg17). Fork PR ostrium-labs/loams-postgres#24 merged as `e69172aa`.
+11. **G3 and Q733.** With the owner's fix to `LOAMS_BOT_TOKEN` (it lacked access to `loams-postgres`), G3 runs end to end and posts `loams-gate / g3`. The first full run failed only in `decoder / WAL decoder`, and that was not the candidate: `dev`'s `crates/loams-wal-decoder/deny.toml` lacked the root's graspologic `allow-git` entry (`check-decoder-deny.py`), and Loams #707 fixed it. **Q733 is fully resolved.**
+12. **Next: `lp-2026.11.0`** (16.15 and 17.11; due 2026-11-19). The release builds the images and runs G0–G3 before tagging; 17.12 and 16.16 follow on 2026-11-12 through the same merge job.

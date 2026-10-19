@@ -11,7 +11,9 @@ import {
   Empty,
   Field,
   Notice,
+  SampleDataNotice,
   Select,
+  SkeletonList,
   type Status,
   StatusTag,
   Table,
@@ -29,13 +31,12 @@ import {
 } from './admin.js';
 import { errorText } from './pages.js';
 
-export const PREVIEW_NOTICE =
-  'This page shows sample data, not your engine, and actions here change nothing.';
+export const PREVIEW_NOTICE = 'Actions here change nothing.';
 /** The most log lines kept on screen; older lines drop off the top. */
 export const LOG_CAP = 500;
 
 const Mono = ({ children }: { children: ReactNode }) => (
-  <span className="font-mono text-xs">{children}</span>
+  <span className={/* mono-ok: id */ 'font-mono text-xs'}>{children}</span>
 );
 const shortId = (id: string) => id.slice(-8);
 const when = (ms: number) => new Date(ms).toLocaleString();
@@ -163,7 +164,7 @@ export function DeploymentsTable({
               aria-label={`Show functions of deployment ${d.id}`}
               className={
                 d.id === selected
-                  ? 'bg-transparent border-0 p-0 text-left cursor-pointer text-accent font-medium'
+                  ? 'bg-transparent border-0 p-0 text-left cursor-pointer text-accent-fg font-medium'
                   : 'bg-transparent border-0 p-0 text-left cursor-pointer text-ink'
               }
               onClick={() => onSelect(d.id)}
@@ -389,7 +390,9 @@ export function LogsCard({
           aria-label="Function log lines"
           // biome-ignore lint/a11y/noNoninteractiveTabindex: the scrolled log must be reachable by keyboard
           tabIndex={0}
-          className="font-mono text-xs border border-rule rounded p-2 overflow-auto max-h-80"
+          className={
+            /* mono-ok: code */ 'font-mono text-xs border border-rule rounded p-2 overflow-auto max-h-80'
+          }
         >
           {lines.length === 0 ? (
             <p className="m-0 text-muted">
@@ -503,8 +506,8 @@ export function DeploymentsPage({
   const functionPaths = shown?.functions.map((f) => f.path) ?? [];
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-6xl">
-      <header className="flex items-start justify-between gap-4">
+    <div className="lc-page">
+      <header className="lc-page-head flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="m-0">Live deployments</h1>
           <p className="text-muted m-0">
@@ -516,11 +519,7 @@ export function DeploymentsPage({
           <Button onClick={reload}>Refresh</Button>
         </div>
       </header>
-      {api.mocked && (
-        <Notice tone="info" title="Preview">
-          {PREVIEW_NOTICE}
-        </Notice>
-      )}
+      {api.mocked && <SampleDataNotice>{PREVIEW_NOTICE}</SampleDataNotice>}
       {done && (
         <div role="status">
           <Notice tone="success" title="Done">
@@ -528,11 +527,7 @@ export function DeploymentsPage({
           </Notice>
         </div>
       )}
-      {loaded.state === 'loading' && (
-        <p className="text-muted" role="status">
-          Loading deployments...
-        </p>
-      )}
+      {loaded.state === 'loading' && <SkeletonList label="Loading deployments" rows={4} />}
       {loaded.state === 'error' && (
         <div className="flex flex-col gap-3">
           <Notice tone="danger" title="Could not load deployments">

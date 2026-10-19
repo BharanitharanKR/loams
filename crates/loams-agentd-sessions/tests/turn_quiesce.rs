@@ -32,7 +32,7 @@ use loams_agentd_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SandboxLevel,
     SessionStatus, SteeringMode, ToolCall,
 };
-use loams_agentd_sessions::{EngineCore, HarnessRegistry, SteerOutcome};
+use loams_agentd_sessions::{ApprovalSettings, EngineCore, HarnessRegistry, SteerOutcome};
 
 const CHAT: &str = "chat-quiesce";
 /// Watchdog window for every test in this file (the process-global env knob
@@ -192,8 +192,13 @@ fn assemble(main_prompt: &str) -> Rig {
         feed: Mutex::new(Some(rx)),
     }));
     let dir = tempfile::tempdir().unwrap();
-    let core = EngineCore::assemble(dir.path(), Arc::new(registry), HarnessId::Mock)
-        .expect("engine core assembles");
+    let core = EngineCore::assemble_with_approvals(
+        dir.path(),
+        Arc::new(registry),
+        HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
+    )
+    .expect("engine core assembles");
     Rig {
         core,
         feed,

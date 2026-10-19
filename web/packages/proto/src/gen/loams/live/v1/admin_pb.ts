@@ -1,6 +1,6 @@
 // The Loams Live admin API (design §45 §6.3, D689; LV1 plan Task 10):
 // deploying functions and schemas, listing deployments, rollback, index
-// status and function logs. App lifecycle (Task 13) and backups (Tasks
+// status, function logs, and the app directory (Task 13). Backups (Tasks
 // 29–30) join it later.
 //
 // Platform principals only, never an app's end users (§45 §5.3). The
@@ -24,7 +24,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file loams/live/v1/admin.proto.
  */
 export const file_loams_live_v1_admin: GenFile = /*@__PURE__*/
-  fileDesc("Chlsb2Ftcy9saXZlL3YxL2FkbWluLnByb3RvEg1sb2Ftcy5saXZlLnYxIsIBCgpEZXBsb3ltZW50EgoKAmlkGAEgASgJEhUKDWJ1bmRsZV9zaGEyNTYYAiABKAkSFQoNY3JlYXRlZF9hdF9tcxgDIAEoBBISCgpjcmVhdGVkX2J5GAQgASgJEg8KB21lc3NhZ2UYBSABKAkSDgoGcGFyZW50GAYgASgJEi0KBXN0YXRlGAcgASgOMh4ubG9hbXMubGl2ZS52MS5EZXBsb3ltZW50U3RhdGUSFgoOZmFpbHVyZV9yZWFzb24YCCABKAkipgEKDEZ1bmN0aW9uSW5mbxIMCgRwYXRoGAEgASgJEikKBGtpbmQYAiABKA4yGy5sb2Ftcy5saXZlLnYxLkZ1bmN0aW9uS2luZBI1Cgp2aXNpYmlsaXR5GAMgASgOMiEubG9hbXMubGl2ZS52MS5GdW5jdGlvblZpc2liaWxpdHkSJgoEYXJncxgEIAEoCzIYLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yIpoBCg1EZXBsb3lSZXF1ZXN0Eg4KBmJ1bmRsZRgBIAEoDBIlCgZzY2hlbWEYAiABKAsyFS5sb2Ftcy5saXZlLnYxLlNjaGVtYRIcCg9leHBlY3RlZF9hY3RpdmUYAyABKAlIAIgBARIPCgdtZXNzYWdlGAQgASgJEg8KB2RyeV9ydW4YBSABKAhCEgoQX2V4cGVjdGVkX2FjdGl2ZSJuCg5EZXBsb3lSZXNwb25zZRItCgpkZXBsb3ltZW50GAEgASgLMhkubG9hbXMubGl2ZS52MS5EZXBsb3ltZW50Ei0KB2NoYW5nZXMYAiABKAsyHC5sb2Ftcy5saXZlLnYxLlNjaGVtYUNoYW5nZXMivwEKDVNjaGVtYUNoYW5nZXMSFgoOdGFibGVzX2NyZWF0ZWQYASADKAkSGgoSdmFsaWRhdG9yc19jaGFuZ2VkGAIgAygJEhgKEHRhYmxlc192YWxpZGF0ZWQYAyADKAkSLgoNaW5kZXhlc19hZGRlZBgEIAMoCzIXLmxvYW1zLmxpdmUudjEuSW5kZXhSZWYSMAoPaW5kZXhlc19kcm9wcGVkGAUgAygLMhcubG9hbXMubGl2ZS52MS5JbmRleFJlZiIoCghJbmRleFJlZhINCgV0YWJsZRgBIAEoCRINCgVpbmRleBgCIAEoCSI/ChZMaXN0RGVwbG95bWVudHNSZXF1ZXN0EhEKCXBhZ2Vfc2l6ZRgBIAEoBRISCgpwYWdlX3Rva2VuGAIgASgJImIKF0xpc3REZXBsb3ltZW50c1Jlc3BvbnNlEi4KC2RlcGxveW1lbnRzGAEgAygLMhkubG9hbXMubGl2ZS52MS5EZXBsb3ltZW50EhcKD25leHRfcGFnZV90b2tlbhgCIAEoCSIiChRHZXREZXBsb3ltZW50UmVxdWVzdBIKCgJpZBgBIAEoCSKdAQoVR2V0RGVwbG95bWVudFJlc3BvbnNlEi0KCmRlcGxveW1lbnQYASABKAsyGS5sb2Ftcy5saXZlLnYxLkRlcGxveW1lbnQSJQoGc2NoZW1hGAIgASgLMhUubG9hbXMubGl2ZS52MS5TY2hlbWESLgoJZnVuY3Rpb25zGAMgAygLMhsubG9hbXMubGl2ZS52MS5GdW5jdGlvbkluZm8iWQoZQWN0aXZhdGVEZXBsb3ltZW50UmVxdWVzdBIKCgJpZBgBIAEoCRIcCg9leHBlY3RlZF9hY3RpdmUYAiABKAlIAIgBAUISChBfZXhwZWN0ZWRfYWN0aXZlInoKGkFjdGl2YXRlRGVwbG95bWVudFJlc3BvbnNlEi0KCmRlcGxveW1lbnQYASABKAsyGS5sb2Ftcy5saXZlLnYxLkRlcGxveW1lbnQSLQoHY2hhbmdlcxgCIAEoCzIcLmxvYW1zLmxpdmUudjEuU2NoZW1hQ2hhbmdlcyI1ChVHZXRJbmRleFN0YXR1c1JlcXVlc3QSDQoFdGFibGUYASABKAkSDQoFaW5kZXgYAiABKAkiaAoWR2V0SW5kZXhTdGF0dXNSZXNwb25zZRIoCgVzdGF0ZRgBIAEoDjIZLmxvYW1zLmxpdmUudjEuSW5kZXhTdGF0ZRIMCgRkb25lGAIgASgEEhYKDnRvdGFsX2VzdGltYXRlGAMgASgEImkKD1RhaWxMb2dzUmVxdWVzdBIOCgZmb2xsb3cYASABKAgSFQoIc2luY2VfbXMYAiABKARIAIgBARIVCghmdW5jdGlvbhgDIAEoCUgBiAEBQgsKCV9zaW5jZV9tc0ILCglfZnVuY3Rpb24iTQoQVGFpbExvZ3NSZXNwb25zZRIoCgdlbnRyaWVzGAEgAygLMhcubG9hbXMubGl2ZS52MS5Mb2dFbnRyeRIPCgdza2lwcGVkGAIgASgEIpwBCghMb2dFbnRyeRINCgV0c19tcxgBIAEoBBISCgpyZXF1ZXN0X2lkGAIgASgJEhAKCGZ1bmN0aW9uGAMgASgJEhIKCmRlcGxveW1lbnQYBCABKAkSJgoFbGV2ZWwYBSABKA4yFy5sb2Ftcy5saXZlLnYxLkxvZ0xldmVsEgwKBGxpbmUYBiABKAkSEQoJdHJ1bmNhdGVkGAcgASgIKo4CCg9EZXBsb3ltZW50U3RhdGUSIAocREVQTE9ZTUVOVF9TVEFURV9VTlNQRUNJRklFRBAAEhwKGERFUExPWU1FTlRfU1RBVEVfUEVORElORxABEh8KG0RFUExPWU1FTlRfU1RBVEVfVkFMSURBVElORxACEiAKHERFUExPWU1FTlRfU1RBVEVfQkFDS0ZJTExJTkcQAxIbChdERVBMT1lNRU5UX1NUQVRFX0FDVElWRRAEEh8KG0RFUExPWU1FTlRfU1RBVEVfU1VQRVJTRURFRBAFEhsKF0RFUExPWU1FTlRfU1RBVEVfRkFJTEVEEAYSHQoZREVQTE9ZTUVOVF9TVEFURV9ERUdSQURFRBAHKmIKDEZ1bmN0aW9uS2luZBIdChlGVU5DVElPTl9LSU5EX1VOU1BFQ0lGSUVEEAASFwoTRlVOQ1RJT05fS0lORF9RVUVSWRABEhoKFkZVTkNUSU9OX0tJTkRfTVVUQVRJT04QAip7ChJGdW5jdGlvblZpc2liaWxpdHkSIwofRlVOQ1RJT05fVklTSUJJTElUWV9VTlNQRUNJRklFRBAAEh4KGkZVTkNUSU9OX1ZJU0lCSUxJVFlfUFVCTElDEAESIAocRlVOQ1RJT05fVklTSUJJTElUWV9JTlRFUk5BTBACKncKCkluZGV4U3RhdGUSGwoXSU5ERVhfU1RBVEVfVU5TUEVDSUZJRUQQABIbChdJTkRFWF9TVEFURV9CQUNLRklMTElORxABEhUKEUlOREVYX1NUQVRFX1JFQURZEAISGAoUSU5ERVhfU1RBVEVfRFJPUFBJTkcQAyqKAQoITG9nTGV2ZWwSGQoVTE9HX0xFVkVMX1VOU1BFQ0lGSUVEEAASEwoPTE9HX0xFVkVMX0RFQlVHEAESEQoNTE9HX0xFVkVMX0xPRxACEhIKDkxPR19MRVZFTF9JTkZPEAMSEgoOTE9HX0xFVkVMX1dBUk4QBBITCg9MT0dfTEVWRUxfRVJST1IQBTKsBgoQTGl2ZUFkbWluU2VydmljZRJTCgZEZXBsb3kSHC5sb2Ftcy5saXZlLnYxLkRlcGxveVJlcXVlc3QaHS5sb2Ftcy5saXZlLnYxLkRlcGxveVJlc3BvbnNlIgyStRgIEgZkZXBsb3kSlgEKD0xpc3REZXBsb3ltZW50cxIlLmxvYW1zLmxpdmUudjEuTGlzdERlcGxveW1lbnRzUmVxdWVzdBomLmxvYW1zLmxpdmUudjEuTGlzdERlcGxveW1lbnRzUmVzcG9uc2UiNJK1GDASD2xpc3REZXBsb3ltZW50cxgBIhtkZXBsb3ltZW50czpuZXh0X3BhZ2VfdG9rZW4ScQoNR2V0RGVwbG95bWVudBIjLmxvYW1zLmxpdmUudjEuR2V0RGVwbG95bWVudFJlcXVlc3QaJC5sb2Ftcy5saXZlLnYxLkdldERlcGxveW1lbnRSZXNwb25zZSIVkrUYERINZ2V0RGVwbG95bWVudBgBEoMBChJBY3RpdmF0ZURlcGxveW1lbnQSKC5sb2Ftcy5saXZlLnYxLkFjdGl2YXRlRGVwbG95bWVudFJlcXVlc3QaKS5sb2Ftcy5saXZlLnYxLkFjdGl2YXRlRGVwbG95bWVudFJlc3BvbnNlIhiStRgUEhJhY3RpdmF0ZURlcGxveW1lbnQSdQoOR2V0SW5kZXhTdGF0dXMSJC5sb2Ftcy5saXZlLnYxLkdldEluZGV4U3RhdHVzUmVxdWVzdBolLmxvYW1zLmxpdmUudjEuR2V0SW5kZXhTdGF0dXNSZXNwb25zZSIWkrUYEhIOZ2V0SW5kZXhTdGF0dXMYARJdCghUYWlsTG9ncxIeLmxvYW1zLmxpdmUudjEuVGFpbExvZ3NSZXF1ZXN0Gh8ubG9hbXMubGl2ZS52MS5UYWlsTG9nc1Jlc3BvbnNlIg6StRgKEgh0YWlsTG9nczABGluKtRhXCgpsaXZlLmFkbWluEkdMaXZlIGFkbWluaXN0cmF0aW9uOiBkZXBsb3ksIHJvbGwgYmFjaywgaW5kZXggc3RhdHVzIGFuZCBmdW5jdGlvbiBsb2dzLhgBYgZwcm90bzM", [file_loams_live_v1_live, file_loams_options_v1_options]);
+  fileDesc("Chlsb2Ftcy9saXZlL3YxL2FkbWluLnByb3RvEg1sb2Ftcy5saXZlLnYxIsIBCgpEZXBsb3ltZW50EgoKAmlkGAEgASgJEhUKDWJ1bmRsZV9zaGEyNTYYAiABKAkSFQoNY3JlYXRlZF9hdF9tcxgDIAEoBBISCgpjcmVhdGVkX2J5GAQgASgJEg8KB21lc3NhZ2UYBSABKAkSDgoGcGFyZW50GAYgASgJEi0KBXN0YXRlGAcgASgOMh4ubG9hbXMubGl2ZS52MS5EZXBsb3ltZW50U3RhdGUSFgoOZmFpbHVyZV9yZWFzb24YCCABKAkipgEKDEZ1bmN0aW9uSW5mbxIMCgRwYXRoGAEgASgJEikKBGtpbmQYAiABKA4yGy5sb2Ftcy5saXZlLnYxLkZ1bmN0aW9uS2luZBI1Cgp2aXNpYmlsaXR5GAMgASgOMiEubG9hbXMubGl2ZS52MS5GdW5jdGlvblZpc2liaWxpdHkSJgoEYXJncxgEIAEoCzIYLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yIpoBCg1EZXBsb3lSZXF1ZXN0Eg4KBmJ1bmRsZRgBIAEoDBIlCgZzY2hlbWEYAiABKAsyFS5sb2Ftcy5saXZlLnYxLlNjaGVtYRIcCg9leHBlY3RlZF9hY3RpdmUYAyABKAlIAIgBARIPCgdtZXNzYWdlGAQgASgJEg8KB2RyeV9ydW4YBSABKAhCEgoQX2V4cGVjdGVkX2FjdGl2ZSJuCg5EZXBsb3lSZXNwb25zZRItCgpkZXBsb3ltZW50GAEgASgLMhkubG9hbXMubGl2ZS52MS5EZXBsb3ltZW50Ei0KB2NoYW5nZXMYAiABKAsyHC5sb2Ftcy5saXZlLnYxLlNjaGVtYUNoYW5nZXMivwEKDVNjaGVtYUNoYW5nZXMSFgoOdGFibGVzX2NyZWF0ZWQYASADKAkSGgoSdmFsaWRhdG9yc19jaGFuZ2VkGAIgAygJEhgKEHRhYmxlc192YWxpZGF0ZWQYAyADKAkSLgoNaW5kZXhlc19hZGRlZBgEIAMoCzIXLmxvYW1zLmxpdmUudjEuSW5kZXhSZWYSMAoPaW5kZXhlc19kcm9wcGVkGAUgAygLMhcubG9hbXMubGl2ZS52MS5JbmRleFJlZiIoCghJbmRleFJlZhINCgV0YWJsZRgBIAEoCRINCgVpbmRleBgCIAEoCSI/ChZMaXN0RGVwbG95bWVudHNSZXF1ZXN0EhEKCXBhZ2Vfc2l6ZRgBIAEoBRISCgpwYWdlX3Rva2VuGAIgASgJImIKF0xpc3REZXBsb3ltZW50c1Jlc3BvbnNlEi4KC2RlcGxveW1lbnRzGAEgAygLMhkubG9hbXMubGl2ZS52MS5EZXBsb3ltZW50EhcKD25leHRfcGFnZV90b2tlbhgCIAEoCSIiChRHZXREZXBsb3ltZW50UmVxdWVzdBIKCgJpZBgBIAEoCSKdAQoVR2V0RGVwbG95bWVudFJlc3BvbnNlEi0KCmRlcGxveW1lbnQYASABKAsyGS5sb2Ftcy5saXZlLnYxLkRlcGxveW1lbnQSJQoGc2NoZW1hGAIgASgLMhUubG9hbXMubGl2ZS52MS5TY2hlbWESLgoJZnVuY3Rpb25zGAMgAygLMhsubG9hbXMubGl2ZS52MS5GdW5jdGlvbkluZm8iWQoZQWN0aXZhdGVEZXBsb3ltZW50UmVxdWVzdBIKCgJpZBgBIAEoCRIcCg9leHBlY3RlZF9hY3RpdmUYAiABKAlIAIgBAUISChBfZXhwZWN0ZWRfYWN0aXZlInoKGkFjdGl2YXRlRGVwbG95bWVudFJlc3BvbnNlEi0KCmRlcGxveW1lbnQYASABKAsyGS5sb2Ftcy5saXZlLnYxLkRlcGxveW1lbnQSLQoHY2hhbmdlcxgCIAEoCzIcLmxvYW1zLmxpdmUudjEuU2NoZW1hQ2hhbmdlcyI1ChVHZXRJbmRleFN0YXR1c1JlcXVlc3QSDQoFdGFibGUYASABKAkSDQoFaW5kZXgYAiABKAkiaAoWR2V0SW5kZXhTdGF0dXNSZXNwb25zZRIoCgVzdGF0ZRgBIAEoDjIZLmxvYW1zLmxpdmUudjEuSW5kZXhTdGF0ZRIMCgRkb25lGAIgASgEEhYKDnRvdGFsX2VzdGltYXRlGAMgASgEImkKD1RhaWxMb2dzUmVxdWVzdBIOCgZmb2xsb3cYASABKAgSFQoIc2luY2VfbXMYAiABKARIAIgBARIVCghmdW5jdGlvbhgDIAEoCUgBiAEBQgsKCV9zaW5jZV9tc0ILCglfZnVuY3Rpb24iTQoQVGFpbExvZ3NSZXNwb25zZRIoCgdlbnRyaWVzGAEgAygLMhcubG9hbXMubGl2ZS52MS5Mb2dFbnRyeRIPCgdza2lwcGVkGAIgASgEIpwBCghMb2dFbnRyeRINCgV0c19tcxgBIAEoBBISCgpyZXF1ZXN0X2lkGAIgASgJEhAKCGZ1bmN0aW9uGAMgASgJEhIKCmRlcGxveW1lbnQYBCABKAkSJgoFbGV2ZWwYBSABKA4yFy5sb2Ftcy5saXZlLnYxLkxvZ0xldmVsEgwKBGxpbmUYBiABKAkSEQoJdHJ1bmNhdGVkGAcgASgIIqYCCgNBcHASCgoCaWQYASABKA0SDAoEbmFtZRgCIAEoCRIRCgluYW1lc3BhY2UYAyABKAkSEAoIa2V5c3BhY2UYBCABKAkSJgoFc3RhdGUYBSABKA4yFy5sb2Ftcy5saXZlLnYxLkFwcFN0YXRlEhYKDnB1cmdlX2FmdGVyX21zGAYgASgEEigKBmxpbWl0cxgHIAEoCzIYLmxvYW1zLmxpdmUudjEuQXBwTGltaXRzEi0KB2lzc3VlcnMYCCADKAsyHC5sb2Ftcy5saXZlLnYxLlRydXN0ZWRJc3N1ZXISFwoPYWxsb3dlZF9vcmlnaW5zGAkgAygJEhcKD2FsbG93X2Fub255bW91cxgKIAEoCBIVCg1jcmVhdGVkX2F0X21zGAsgASgEIscCCglBcHBMaW1pdHMSGgoNbWF4X2pzX2NwdV9tcxgBIAEoBEgAiAEBEiEKFG11dGF0aW9uX2RlYWRsaW5lX21zGAIgASgESAGIAQESHQoQbWF4X3Jlc3VsdF9ieXRlcxgDIAEoBEgCiAEBEh0KEG1heF9zY2FubmVkX2RvY3MYBCABKARIA4gBARIdChBtYXhfd3JpdHRlbl9kb2NzGAUgASgESASIAQESHgoRbWF4X3dyaXR0ZW5fYnl0ZXMYBiABKARIBYgBAUIQCg5fbWF4X2pzX2NwdV9tc0IXChVfbXV0YXRpb25fZGVhZGxpbmVfbXNCEwoRX21heF9yZXN1bHRfYnl0ZXNCEwoRX21heF9zY2FubmVkX2RvY3NCEwoRX21heF93cml0dGVuX2RvY3NCFAoSX21heF93cml0dGVuX2J5dGVzIlYKDVRydXN0ZWRJc3N1ZXISDgoGaXNzdWVyGAEgASgJEhEKCWF1ZGllbmNlcxgCIAMoCRIVCghqd2tzX3VyaRgDIAEoCUgAiAEBQgsKCV9qd2tzX3VyaSK+AQoQQ3JlYXRlQXBwUmVxdWVzdBIMCgRuYW1lGAEgASgJEhEKCW5hbWVzcGFjZRgCIAEoCRIoCgZsaW1pdHMYAyABKAsyGC5sb2Ftcy5saXZlLnYxLkFwcExpbWl0cxItCgdpc3N1ZXJzGAQgAygLMhwubG9hbXMubGl2ZS52MS5UcnVzdGVkSXNzdWVyEhcKD2FsbG93ZWRfb3JpZ2lucxgFIAMoCRIXCg9hbGxvd19hbm9ueW1vdXMYBiABKAgiNAoRQ3JlYXRlQXBwUmVzcG9uc2USHwoDYXBwGAEgASgLMhIubG9hbXMubGl2ZS52MS5BcHAiOAoPTGlzdEFwcHNSZXF1ZXN0EhEKCXBhZ2Vfc2l6ZRgBIAEoBRISCgpwYWdlX3Rva2VuGAIgASgJIk0KEExpc3RBcHBzUmVzcG9uc2USIAoEYXBwcxgBIAMoCzISLmxvYW1zLmxpdmUudjEuQXBwEhcKD25leHRfcGFnZV90b2tlbhgCIAEoCSIdCg1HZXRBcHBSZXF1ZXN0EgwKBG5hbWUYASABKAkiMQoOR2V0QXBwUmVzcG9uc2USHwoDYXBwGAEgASgLMhIubG9hbXMubGl2ZS52MS5BcHAimwIKEFVwZGF0ZUFwcFJlcXVlc3QSDAoEbmFtZRgBIAEoCRIrCgVzdGF0ZRgCIAEoDjIXLmxvYW1zLmxpdmUudjEuQXBwU3RhdGVIAIgBARIoCgZsaW1pdHMYAyABKAsyGC5sb2Ftcy5saXZlLnYxLkFwcExpbWl0cxIuCgdpc3N1ZXJzGAQgASgLMh0ubG9hbXMubGl2ZS52MS5UcnVzdGVkSXNzdWVycxI2Cg9hbGxvd2VkX29yaWdpbnMYBSABKAsyHS5sb2Ftcy5saXZlLnYxLkFsbG93ZWRPcmlnaW5zEhwKD2FsbG93X2Fub255bW91cxgGIAEoCEgBiAEBQggKBl9zdGF0ZUISChBfYWxsb3dfYW5vbnltb3VzIj8KDlRydXN0ZWRJc3N1ZXJzEi0KB2lzc3VlcnMYASADKAsyHC5sb2Ftcy5saXZlLnYxLlRydXN0ZWRJc3N1ZXIiIQoOQWxsb3dlZE9yaWdpbnMSDwoHb3JpZ2lucxgBIAMoCSI0ChFVcGRhdGVBcHBSZXNwb25zZRIfCgNhcHAYASABKAsyEi5sb2Ftcy5saXZlLnYxLkFwcCIgChBEZWxldGVBcHBSZXF1ZXN0EgwKBG5hbWUYASABKAkiNAoRRGVsZXRlQXBwUmVzcG9uc2USHwoDYXBwGAEgASgLMhIubG9hbXMubGl2ZS52MS5BcHAqjgIKD0RlcGxveW1lbnRTdGF0ZRIgChxERVBMT1lNRU5UX1NUQVRFX1VOU1BFQ0lGSUVEEAASHAoYREVQTE9ZTUVOVF9TVEFURV9QRU5ESU5HEAESHwobREVQTE9ZTUVOVF9TVEFURV9WQUxJREFUSU5HEAISIAocREVQTE9ZTUVOVF9TVEFURV9CQUNLRklMTElORxADEhsKF0RFUExPWU1FTlRfU1RBVEVfQUNUSVZFEAQSHwobREVQTE9ZTUVOVF9TVEFURV9TVVBFUlNFREVEEAUSGwoXREVQTE9ZTUVOVF9TVEFURV9GQUlMRUQQBhIdChlERVBMT1lNRU5UX1NUQVRFX0RFR1JBREVEEAcqYgoMRnVuY3Rpb25LaW5kEh0KGUZVTkNUSU9OX0tJTkRfVU5TUEVDSUZJRUQQABIXChNGVU5DVElPTl9LSU5EX1FVRVJZEAESGgoWRlVOQ1RJT05fS0lORF9NVVRBVElPThACKnsKEkZ1bmN0aW9uVmlzaWJpbGl0eRIjCh9GVU5DVElPTl9WSVNJQklMSVRZX1VOU1BFQ0lGSUVEEAASHgoaRlVOQ1RJT05fVklTSUJJTElUWV9QVUJMSUMQARIgChxGVU5DVElPTl9WSVNJQklMSVRZX0lOVEVSTkFMEAIqdwoKSW5kZXhTdGF0ZRIbChdJTkRFWF9TVEFURV9VTlNQRUNJRklFRBAAEhsKF0lOREVYX1NUQVRFX0JBQ0tGSUxMSU5HEAESFQoRSU5ERVhfU1RBVEVfUkVBRFkQAhIYChRJTkRFWF9TVEFURV9EUk9QUElORxADKooBCghMb2dMZXZlbBIZChVMT0dfTEVWRUxfVU5TUEVDSUZJRUQQABITCg9MT0dfTEVWRUxfREVCVUcQARIRCg1MT0dfTEVWRUxfTE9HEAISEgoOTE9HX0xFVkVMX0lORk8QAxISCg5MT0dfTEVWRUxfV0FSThAEEhMKD0xPR19MRVZFTF9FUlJPUhAFKmsKCEFwcFN0YXRlEhkKFUFQUF9TVEFURV9VTlNQRUNJRklFRBAAEhQKEEFQUF9TVEFURV9BQ1RJVkUQARIWChJBUFBfU1RBVEVfRElTQUJMRUQQAhIWChJBUFBfU1RBVEVfREVMRVRJTkcQAzKhCgoQTGl2ZUFkbWluU2VydmljZRJTCgZEZXBsb3kSHC5sb2Ftcy5saXZlLnYxLkRlcGxveVJlcXVlc3QaHS5sb2Ftcy5saXZlLnYxLkRlcGxveVJlc3BvbnNlIgyStRgIEgZkZXBsb3kSlgEKD0xpc3REZXBsb3ltZW50cxIlLmxvYW1zLmxpdmUudjEuTGlzdERlcGxveW1lbnRzUmVxdWVzdBomLmxvYW1zLmxpdmUudjEuTGlzdERlcGxveW1lbnRzUmVzcG9uc2UiNJK1GDASD2xpc3REZXBsb3ltZW50cxgBIhtkZXBsb3ltZW50czpuZXh0X3BhZ2VfdG9rZW4ScQoNR2V0RGVwbG95bWVudBIjLmxvYW1zLmxpdmUudjEuR2V0RGVwbG95bWVudFJlcXVlc3QaJC5sb2Ftcy5saXZlLnYxLkdldERlcGxveW1lbnRSZXNwb25zZSIVkrUYERINZ2V0RGVwbG95bWVudBgBEoMBChJBY3RpdmF0ZURlcGxveW1lbnQSKC5sb2Ftcy5saXZlLnYxLkFjdGl2YXRlRGVwbG95bWVudFJlcXVlc3QaKS5sb2Ftcy5saXZlLnYxLkFjdGl2YXRlRGVwbG95bWVudFJlc3BvbnNlIhiStRgUEhJhY3RpdmF0ZURlcGxveW1lbnQSdQoOR2V0SW5kZXhTdGF0dXMSJC5sb2Ftcy5saXZlLnYxLkdldEluZGV4U3RhdHVzUmVxdWVzdBolLmxvYW1zLmxpdmUudjEuR2V0SW5kZXhTdGF0dXNSZXNwb25zZSIWkrUYEhIOZ2V0SW5kZXhTdGF0dXMYARJdCghUYWlsTG9ncxIeLmxvYW1zLmxpdmUudjEuVGFpbExvZ3NSZXF1ZXN0Gh8ubG9hbXMubGl2ZS52MS5UYWlsTG9nc1Jlc3BvbnNlIg6StRgKEgh0YWlsTG9nczABEl8KCUNyZWF0ZUFwcBIfLmxvYW1zLmxpdmUudjEuQ3JlYXRlQXBwUmVxdWVzdBogLmxvYW1zLmxpdmUudjEuQ3JlYXRlQXBwUmVzcG9uc2UiD5K1GAsSCWNyZWF0ZUFwcBJzCghMaXN0QXBwcxIeLmxvYW1zLmxpdmUudjEuTGlzdEFwcHNSZXF1ZXN0Gh8ubG9hbXMubGl2ZS52MS5MaXN0QXBwc1Jlc3BvbnNlIiaStRgiEghsaXN0QXBwcxgBIhRhcHBzOm5leHRfcGFnZV90b2tlbhJVCgZHZXRBcHASHC5sb2Ftcy5saXZlLnYxLkdldEFwcFJlcXVlc3QaHS5sb2Ftcy5saXZlLnYxLkdldEFwcFJlc3BvbnNlIg6StRgKEgZnZXRBcHAYARJfCglVcGRhdGVBcHASHy5sb2Ftcy5saXZlLnYxLlVwZGF0ZUFwcFJlcXVlc3QaIC5sb2Ftcy5saXZlLnYxLlVwZGF0ZUFwcFJlc3BvbnNlIg+StRgLEgl1cGRhdGVBcHASXwoJRGVsZXRlQXBwEh8ubG9hbXMubGl2ZS52MS5EZWxldGVBcHBSZXF1ZXN0GiAubG9hbXMubGl2ZS52MS5EZWxldGVBcHBSZXNwb25zZSIPkrUYCxIJZGVsZXRlQXBwGmGKtRhdCgpsaXZlLmFkbWluEk1MaXZlIGFkbWluaXN0cmF0aW9uOiBhcHBzLCBkZXBsb3ksIHJvbGwgYmFjaywgaW5kZXggc3RhdHVzIGFuZCBmdW5jdGlvbiBsb2dzLhgBYgZwcm90bzM", [file_loams_live_v1_live, file_loams_options_v1_options]);
 
 /**
  * A deployment as the admin API shows it (the catalog's record without the
@@ -601,6 +601,473 @@ export const LogEntrySchema: GenMessage<LogEntry> = /*@__PURE__*/
   messageDesc(file_loams_live_v1_admin, 16);
 
 /**
+ * One Live app of the cluster (design §45 §7, D690).
+ *
+ * @generated from message loams.live.v1.App
+ */
+export type App = Message<"loams.live.v1.App"> & {
+  /**
+   * Cluster-unique and permanent.
+   *
+   * @generated from field: uint32 id = 1;
+   */
+  id: number;
+
+  /**
+   * Unique among the cluster's apps; the `loams-live-app` header names it.
+   *
+   * @generated from field: string name = 2;
+   */
+  name: string;
+
+  /**
+   * The org and environment the app belongs to (Q639: one app per
+   * environment); free text until the authorization of LV1 Task 15.
+   *
+   * @generated from field: string namespace = 3;
+   */
+  namespace: string;
+
+  /**
+   * Where its data lives: `loams_live_a<id>`, or the server's own keyspace
+   * for its default app (`--live-app`).
+   *
+   * @generated from field: string keyspace = 4;
+   */
+  keyspace: string;
+
+  /**
+   * @generated from field: loams.live.v1.AppState state = 5;
+   */
+  state: AppState;
+
+  /**
+   * When a deleted app's data is purged (Unix ms); 0 unless deleting.
+   *
+   * @generated from field: uint64 purge_after_ms = 6;
+   */
+  purgeAfterMs: bigint;
+
+  /**
+   * @generated from field: loams.live.v1.AppLimits limits = 7;
+   */
+  limits?: AppLimits | undefined;
+
+  /**
+   * @generated from field: repeated loams.live.v1.TrustedIssuer issuers = 8;
+   */
+  issuers: TrustedIssuer[];
+
+  /**
+   * The browser origins allowed to call the app (CORS, LV1 Task 18).
+   *
+   * @generated from field: repeated string allowed_origins = 9;
+   */
+  allowedOrigins: string[];
+
+  /**
+   * Whether calls without a credential are accepted (LV1 Task 16).
+   *
+   * @generated from field: bool allow_anonymous = 10;
+   */
+  allowAnonymous: boolean;
+
+  /**
+   * Unix ms.
+   *
+   * @generated from field: uint64 created_at_ms = 11;
+   */
+  createdAtMs: bigint;
+};
+
+/**
+ * Describes the message loams.live.v1.App.
+ * Use `create(AppSchema)` to create a new message.
+ */
+export const AppSchema: GenMessage<App> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_admin, 17);
+
+/**
+ * Per-app limits. Each one only tightens the server's own; absent means
+ * the server's.
+ *
+ * @generated from message loams.live.v1.AppLimits
+ */
+export type AppLimits = Message<"loams.live.v1.AppLimits"> & {
+  /**
+   * JavaScript CPU time of one call, in ms.
+   *
+   * @generated from field: optional uint64 max_js_cpu_ms = 1;
+   */
+  maxJsCpuMs?: bigint | undefined;
+
+  /**
+   * The wall-clock deadline of one mutation, in ms.
+   *
+   * @generated from field: optional uint64 mutation_deadline_ms = 2;
+   */
+  mutationDeadlineMs?: bigint | undefined;
+
+  /**
+   * The value one call returns, in bytes.
+   *
+   * @generated from field: optional uint64 max_result_bytes = 3;
+   */
+  maxResultBytes?: bigint | undefined;
+
+  /**
+   * Documents one function scans.
+   *
+   * @generated from field: optional uint64 max_scanned_docs = 4;
+   */
+  maxScannedDocs?: bigint | undefined;
+
+  /**
+   * Documents one mutation writes.
+   *
+   * @generated from field: optional uint64 max_written_docs = 5;
+   */
+  maxWrittenDocs?: bigint | undefined;
+
+  /**
+   * Bytes one mutation writes.
+   *
+   * @generated from field: optional uint64 max_written_bytes = 6;
+   */
+  maxWrittenBytes?: bigint | undefined;
+};
+
+/**
+ * Describes the message loams.live.v1.AppLimits.
+ * Use `create(AppLimitsSchema)` to create a new message.
+ */
+export const AppLimitsSchema: GenMessage<AppLimits> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_admin, 18);
+
+/**
+ * An OIDC issuer whose tokens identify the app's end users (design §45
+ * §5.3; used from LV1 Task 16).
+ *
+ * @generated from message loams.live.v1.TrustedIssuer
+ */
+export type TrustedIssuer = Message<"loams.live.v1.TrustedIssuer"> & {
+  /**
+   * The issuer URL, as the tokens' `iss` names it.
+   *
+   * @generated from field: string issuer = 1;
+   */
+  issuer: string;
+
+  /**
+   * The `aud` values accepted; at least one.
+   *
+   * @generated from field: repeated string audiences = 2;
+   */
+  audiences: string[];
+
+  /**
+   * The JWKS URL; absent means OIDC discovery.
+   *
+   * @generated from field: optional string jwks_uri = 3;
+   */
+  jwksUri?: string | undefined;
+};
+
+/**
+ * Describes the message loams.live.v1.TrustedIssuer.
+ * Use `create(TrustedIssuerSchema)` to create a new message.
+ */
+export const TrustedIssuerSchema: GenMessage<TrustedIssuer> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_admin, 19);
+
+/**
+ * @generated from message loams.live.v1.CreateAppRequest
+ */
+export type CreateAppRequest = Message<"loams.live.v1.CreateAppRequest"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * @generated from field: string namespace = 2;
+   */
+  namespace: string;
+
+  /**
+   * @generated from field: loams.live.v1.AppLimits limits = 3;
+   */
+  limits?: AppLimits | undefined;
+
+  /**
+   * @generated from field: repeated loams.live.v1.TrustedIssuer issuers = 4;
+   */
+  issuers: TrustedIssuer[];
+
+  /**
+   * @generated from field: repeated string allowed_origins = 5;
+   */
+  allowedOrigins: string[];
+
+  /**
+   * @generated from field: bool allow_anonymous = 6;
+   */
+  allowAnonymous: boolean;
+};
+
+/**
+ * Describes the message loams.live.v1.CreateAppRequest.
+ * Use `create(CreateAppRequestSchema)` to create a new message.
+ */
+export const CreateAppRequestSchema: GenMessage<CreateAppRequest> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_admin, 20);
+
+/**
+ * @generated from message loams.live.v1.CreateAppResponse
+ */
+export type CreateAppResponse = Message<"loams.live.v1.CreateAppResponse"> & {
+  /**
+   * @generated from field: loams.live.v1.App app = 1;
+   */
+  app?: App | undefined;
+};
+
+/**
+ * Describes the message loams.live.v1.CreateAppResponse.
+ * Use `create(CreateAppResponseSchema)` to create a new message.
+ */
+export const CreateAppResponseSchema: GenMessage<CreateAppResponse> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_admin, 21);
+
+/**
+ * @generated from message loams.live.v1.ListAppsRequest
+ */
+export type ListAppsRequest = Message<"loams.live.v1.ListAppsRequest"> & {
+  /**
+   * AIP-158 page size: 100 when 0, at most 1 000.
+   *
+   * @generated from field: int32 page_size = 1;
+   */
+  pageSize: number;
+
+  /**
+   * The `next_page_token` of the previous page; empty starts at the first.
+   *
+   * @generated from field: string page_token = 2;
+   */
+  pageToken: string;
+};
+
+/**
+ * Describes the message loams.live.v1.ListAppsRequest.
+ * Use `create(ListAppsRequestSchema)` to create a new message.
+ */
+export const ListAppsRequestSchema: GenMessage<ListAppsRequest> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_admin, 22);
+
+/**
+ * @generated from message loams.live.v1.ListAppsResponse
+ */
+export type ListAppsResponse = Message<"loams.live.v1.ListAppsResponse"> & {
+  /**
+   * By id. Deleted apps are listed until they are purged.
+   *
+   * @generated from field: repeated loams.live.v1.App apps = 1;
+   */
+  apps: App[];
+
+  /**
+   * Empty on the last page.
+   *
+   * @generated from field: string next_page_token = 2;
+   */
+  nextPageToken: string;
+};
+
+/**
+ * Describes the message loams.live.v1.ListAppsResponse.
+ * Use `create(ListAppsResponseSchema)` to create a new message.
+ */
+export const ListAppsResponseSchema: GenMessage<ListAppsResponse> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_admin, 23);
+
+/**
+ * @generated from message loams.live.v1.GetAppRequest
+ */
+export type GetAppRequest = Message<"loams.live.v1.GetAppRequest"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message loams.live.v1.GetAppRequest.
+ * Use `create(GetAppRequestSchema)` to create a new message.
+ */
+export const GetAppRequestSchema: GenMessage<GetAppRequest> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_admin, 24);
+
+/**
+ * @generated from message loams.live.v1.GetAppResponse
+ */
+export type GetAppResponse = Message<"loams.live.v1.GetAppResponse"> & {
+  /**
+   * @generated from field: loams.live.v1.App app = 1;
+   */
+  app?: App | undefined;
+};
+
+/**
+ * Describes the message loams.live.v1.GetAppResponse.
+ * Use `create(GetAppResponseSchema)` to create a new message.
+ */
+export const GetAppResponseSchema: GenMessage<GetAppResponse> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_admin, 25);
+
+/**
+ * @generated from message loams.live.v1.UpdateAppRequest
+ */
+export type UpdateAppRequest = Message<"loams.live.v1.UpdateAppRequest"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+
+  /**
+   * `APP_STATE_ACTIVE` or `APP_STATE_DISABLED`; a deleted app cannot
+   * change state.
+   *
+   * @generated from field: optional loams.live.v1.AppState state = 2;
+   */
+  state?: AppState | undefined;
+
+  /**
+   * Replaces the limits.
+   *
+   * @generated from field: loams.live.v1.AppLimits limits = 3;
+   */
+  limits?: AppLimits | undefined;
+
+  /**
+   * Replaces the issuers.
+   *
+   * @generated from field: loams.live.v1.TrustedIssuers issuers = 4;
+   */
+  issuers?: TrustedIssuers | undefined;
+
+  /**
+   * Replaces the allowed origins.
+   *
+   * @generated from field: loams.live.v1.AllowedOrigins allowed_origins = 5;
+   */
+  allowedOrigins?: AllowedOrigins | undefined;
+
+  /**
+   * @generated from field: optional bool allow_anonymous = 6;
+   */
+  allowAnonymous?: boolean | undefined;
+};
+
+/**
+ * Describes the message loams.live.v1.UpdateAppRequest.
+ * Use `create(UpdateAppRequestSchema)` to create a new message.
+ */
+export const UpdateAppRequestSchema: GenMessage<UpdateAppRequest> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_admin, 26);
+
+/**
+ * A list that replaces the app's issuers (empty removes them all).
+ *
+ * @generated from message loams.live.v1.TrustedIssuers
+ */
+export type TrustedIssuers = Message<"loams.live.v1.TrustedIssuers"> & {
+  /**
+   * @generated from field: repeated loams.live.v1.TrustedIssuer issuers = 1;
+   */
+  issuers: TrustedIssuer[];
+};
+
+/**
+ * Describes the message loams.live.v1.TrustedIssuers.
+ * Use `create(TrustedIssuersSchema)` to create a new message.
+ */
+export const TrustedIssuersSchema: GenMessage<TrustedIssuers> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_admin, 27);
+
+/**
+ * A list that replaces the app's allowed origins (empty removes them all).
+ *
+ * @generated from message loams.live.v1.AllowedOrigins
+ */
+export type AllowedOrigins = Message<"loams.live.v1.AllowedOrigins"> & {
+  /**
+   * @generated from field: repeated string origins = 1;
+   */
+  origins: string[];
+};
+
+/**
+ * Describes the message loams.live.v1.AllowedOrigins.
+ * Use `create(AllowedOriginsSchema)` to create a new message.
+ */
+export const AllowedOriginsSchema: GenMessage<AllowedOrigins> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_admin, 28);
+
+/**
+ * @generated from message loams.live.v1.UpdateAppResponse
+ */
+export type UpdateAppResponse = Message<"loams.live.v1.UpdateAppResponse"> & {
+  /**
+   * @generated from field: loams.live.v1.App app = 1;
+   */
+  app?: App | undefined;
+};
+
+/**
+ * Describes the message loams.live.v1.UpdateAppResponse.
+ * Use `create(UpdateAppResponseSchema)` to create a new message.
+ */
+export const UpdateAppResponseSchema: GenMessage<UpdateAppResponse> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_admin, 29);
+
+/**
+ * @generated from message loams.live.v1.DeleteAppRequest
+ */
+export type DeleteAppRequest = Message<"loams.live.v1.DeleteAppRequest"> & {
+  /**
+   * @generated from field: string name = 1;
+   */
+  name: string;
+};
+
+/**
+ * Describes the message loams.live.v1.DeleteAppRequest.
+ * Use `create(DeleteAppRequestSchema)` to create a new message.
+ */
+export const DeleteAppRequestSchema: GenMessage<DeleteAppRequest> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_admin, 30);
+
+/**
+ * @generated from message loams.live.v1.DeleteAppResponse
+ */
+export type DeleteAppResponse = Message<"loams.live.v1.DeleteAppResponse"> & {
+  /**
+   * The app, now `APP_STATE_DELETING`.
+   *
+   * @generated from field: loams.live.v1.App app = 1;
+   */
+  app?: App | undefined;
+};
+
+/**
+ * Describes the message loams.live.v1.DeleteAppResponse.
+ * Use `create(DeleteAppResponseSchema)` to create a new message.
+ */
+export const DeleteAppResponseSchema: GenMessage<DeleteAppResponse> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_admin, 31);
+
+/**
  * Where a deployment is in its life (design §45 §3.3). The catalog's
  * records store it too.
  *
@@ -817,6 +1284,43 @@ export const LogLevelSchema: GenEnum<LogLevel> = /*@__PURE__*/
   enumDesc(file_loams_live_v1_admin, 4);
 
 /**
+ * @generated from enum loams.live.v1.AppState
+ */
+export enum AppState {
+  /**
+   * @generated from enum value: APP_STATE_UNSPECIFIED = 0;
+   */
+  UNSPECIFIED = 0,
+
+  /**
+   * Calls are served.
+   *
+   * @generated from enum value: APP_STATE_ACTIVE = 1;
+   */
+  ACTIVE = 1,
+
+  /**
+   * Every call is FAILED_PRECONDITION, reason `live_app_disabled`.
+   *
+   * @generated from enum value: APP_STATE_DISABLED = 2;
+   */
+  DISABLED = 2,
+
+  /**
+   * Deleted: refused as disabled, and purged at `purge_after_ms`.
+   *
+   * @generated from enum value: APP_STATE_DELETING = 3;
+   */
+  DELETING = 3,
+}
+
+/**
+ * Describes the enum loams.live.v1.AppState.
+ */
+export const AppStateSchema: GenEnum<AppState> = /*@__PURE__*/
+  enumDesc(file_loams_live_v1_admin, 5);
+
+/**
  * @generated from service loams.live.v1.LiveAdminService
  */
 export const LiveAdminService: GenService<{
@@ -886,6 +1390,61 @@ export const LiveAdminService: GenService<{
     methodKind: "server_streaming";
     input: typeof TailLogsRequestSchema;
     output: typeof TailLogsResponseSchema;
+  },
+  /**
+   * Creates an app (design §45 §7, D690): its dedicated keyspace
+   * `loams_live_a<id>` first, then its directory record. A taken name is
+   * FAILED_PRECONDITION, reason `live_app_exists`; more apps than the
+   * cluster allows is RESOURCE_EXHAUSTED.
+   *
+   * @generated from rpc loams.live.v1.LiveAdminService.CreateApp
+   */
+  createApp: {
+    methodKind: "unary";
+    input: typeof CreateAppRequestSchema;
+    output: typeof CreateAppResponseSchema;
+  },
+  /**
+   * The cluster's apps, by id.
+   *
+   * @generated from rpc loams.live.v1.LiveAdminService.ListApps
+   */
+  listApps: {
+    methodKind: "unary";
+    input: typeof ListAppsRequestSchema;
+    output: typeof ListAppsResponseSchema;
+  },
+  /**
+   * One app, by name.
+   *
+   * @generated from rpc loams.live.v1.LiveAdminService.GetApp
+   */
+  getApp: {
+    methodKind: "unary";
+    input: typeof GetAppRequestSchema;
+    output: typeof GetAppResponseSchema;
+  },
+  /**
+   * Changes an app's settings, or disables and enables it. Fields left out
+   * are kept.
+   *
+   * @generated from rpc loams.live.v1.LiveAdminService.UpdateApp
+   */
+  updateApp: {
+    methodKind: "unary";
+    input: typeof UpdateAppRequestSchema;
+    output: typeof UpdateAppResponseSchema;
+  },
+  /**
+   * Deletes an app softly: it is `APP_STATE_DELETING` (every call refused)
+   * and its data is purged after the retention, 7 days by default.
+   *
+   * @generated from rpc loams.live.v1.LiveAdminService.DeleteApp
+   */
+  deleteApp: {
+    methodKind: "unary";
+    input: typeof DeleteAppRequestSchema;
+    output: typeof DeleteAppResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_loams_live_v1_admin, 0);

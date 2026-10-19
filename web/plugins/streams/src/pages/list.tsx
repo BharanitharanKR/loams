@@ -8,6 +8,7 @@ import {
   Field,
   Input,
   Select,
+  SkeletonList,
   StatusTag,
   Table,
   Textarea,
@@ -291,7 +292,7 @@ function NewLink({
             <Textarea
               {...p}
               rows={3}
-              className="font-mono"
+              className={/* mono-ok: code */ 'font-mono'}
               value={options}
               onChange={(e) => setOptions(e.target.value)}
             />
@@ -339,7 +340,7 @@ export function ListPage({
   const active = tab === 'streams' ? streams : links;
 
   return (
-    <div className="lc-page max-w-[1180px]">
+    <div className="lc-page">
       <PageHead
         title="Streams & Links"
         subtitle="Append-only logs and the links that apply them to a target."
@@ -378,7 +379,13 @@ export function ListPage({
         />
       </div>
       <Card title={tab === 'streams' ? `Streams in ${ns}` : `Links in ${ns}`} flush>
-        {active.state === 'loading' && <p className="lc-muted p-4">Loading…</p>}
+        {active.state === 'loading' && (
+          <SkeletonList
+            className="p-4"
+            label={tab === 'streams' ? 'Loading streams' : 'Loading links'}
+            rows={5}
+          />
+        )}
         {active.state === 'error' && active.message === NOT_SERVED && (
           <Empty title="Streams are not on this server">
             Streams and links live on a Loams engine. Switch to a server that runs one, such as This
@@ -390,6 +397,7 @@ export function ListPage({
             <ErrorNotice
               title={tab === 'streams' ? 'Could not list streams' : 'Could not list links'}
               message={active.message}
+              retry={tab === 'streams' ? reloadStreams : reloadLinks}
             />
           </div>
         )}

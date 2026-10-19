@@ -28,14 +28,22 @@
         "platform",
         "flags",
         "agentd",
+        "inspector",
+        "drawer",
         "desktop"
       ],
       "provides": [],
       "slots": [
         "console.page",
         "shell.nav.section",
-        "shell.header.server",
-        "palette.command"
+        "palette.command",
+        "shell.palette.source",
+        "shell.sidebar.threads",
+        "shell.home",
+        "shell.inspector.tab",
+        "shell.drawer.tab",
+        "shell.topbar.left",
+        "shell.topbar.right"
       ],
       "permissions": [
         "agentd:use",

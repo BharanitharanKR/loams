@@ -60,7 +60,7 @@ export function resolveStatic(distRoot: string, url: URL): StaticResult {
  * production build writes into index.html and cordis.html (a test compares the two).
  */
 export const CONSOLE_CSP =
-	"default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+	"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
 	"img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'self'; " +
 	"object-src 'none'; base-uri 'none'; form-action 'self'";
 
@@ -90,8 +90,8 @@ export function ensureCspMeta(html: string): string {
 	const hashes = inlineScriptHashes(html);
 	const csp = hashes.length
 		? CONSOLE_CSP.replace(
-				"script-src 'self'",
-				`script-src 'self' ${hashes.join(" ")}`,
+				"script-src 'self' 'wasm-unsafe-eval'",
+				`script-src 'self' 'wasm-unsafe-eval' ${hashes.join(" ")}`,
 			)
 		: CONSOLE_CSP;
 	const meta = `<meta http-equiv="Content-Security-Policy" content="${csp}" />`;

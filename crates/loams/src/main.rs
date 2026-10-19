@@ -9,6 +9,7 @@ use std::collections::BTreeMap;
 
 use clap::{Parser, Subcommand};
 
+mod migrate_cli;
 #[cfg(feature = "postgres")]
 mod pg_control_cli;
 use loams::{ClusterConfig, MetaBackend, Server, ServerConfig};
@@ -229,6 +230,10 @@ struct Native {
     /// its grant (namespace, repositories, access, branch prefixes).
     #[arg(long)]
     git_tokens: Option<PathBuf>,
+    /// Lets only a workspace's owner and org admins read it (feature `git`); by default
+    /// whoever may read a repository reads its workspaces.
+    #[arg(long)]
+    git_workspace_reads_owner: bool,
     /// Loams Graph's data directory (feature `graph`): graphs live under
     /// <DIR>/graphs/<graph_id>/ [default: <data-dir>/graph for dev; required
     /// for standalone unless --graph-ephemeral or --no-graph].
@@ -577,11 +582,15 @@ impl Native {
         {
             config.git.listen = self.git_listen;
             config.git.tokens = self.git_tokens.clone();
+            config.git.workspace_reads_owner_only = self.git_workspace_reads_owner;
         }
         #[cfg(not(feature = "git"))]
         {
             let _ = config;
-            if self.git_listen.is_some() || self.git_tokens.is_some() {
+            if self.git_listen.is_some()
+                || self.git_tokens.is_some()
+                || self.git_workspace_reads_owner
+            {
                 tracing::warn!("this build has no Loams Git (the git feature is off)");
             }
         }
@@ -876,10 +885,22 @@ struct LiveArgs {
     /// --live-isolation isolated).
     #[arg(long, value_enum, default_value_t = LiveTenancy::Single)]
     live_tenancy: LiveTenancy,
+    /// This Live node's id, unique among the Live nodes of one store: the
+    /// prefix of its session ids and its journal consumer (LV1 Task 24).
+    #[arg(long, default_value = "1", value_parser = parse_live_node)]
+    live_node: String,
+    /// The base URL other Live nodes of the store forward this node's
+    /// session calls to (its main port, for example
+    /// https://live-2.internal:7700) [default: http://<Live's own listener>].
+    #[arg(long, value_parser = parse_live_advertise)]
+    live_advertise: Option<String>,
     /// Serve no Loams Live API.
     #[arg(
         long,
-        conflicts_with_all = ["live_listen", "live_store", "live_pd", "live_keyspace", "live_app"]
+        conflicts_with_all = [
+            "live_listen", "live_store", "live_pd", "live_keyspace", "live_app",
+            "live_advertise"
+        ]
     )]
     no_live: bool,
 }
@@ -949,6 +970,22 @@ fn parse_live_tikv_alias(value: &str) -> Result<String, String> {
     }
 }
 
+/// `--live-node`: 1 to 64 ASCII letters, digits, `.`, `_` or `-`.
+#[cfg(feature = "live")]
+fn parse_live_node(value: &str) -> Result<String, String> {
+    loams_live::forward::check_node_id(value)
+        .map(|()| value.to_string())
+        .map_err(|e| e.to_string())
+}
+
+/// `--live-advertise`: an http:// or https:// base URL.
+#[cfg(feature = "live")]
+fn parse_live_advertise(value: &str) -> Result<String, String> {
+    loams_live::forward::check_url(value)
+        .map(|()| value.trim_end_matches('/').to_string())
+        .map_err(|e| e.to_string())
+}
+
 /// `--live-store`: `embedded` or `tikv://<pd>[,<pd>][/<keyspace>]`; the
 /// latter only in a build with the live-tikv feature.
 #[cfg(feature = "live")]
@@ -1011,6 +1048,8 @@ impl LiveArgs {
             );
         }
         live.listen = self.live_listen.unwrap_or(LIVE_LISTEN_DEFAULT);
+        live.node = self.live_node.clone();
+        live.forward.advertise = self.live_advertise.clone();
         live.subs.tick_read_lag = Duration::from_millis(self.live_tick_read_lag_ms);
         live.isolation = match self.live_isolation {
             LiveIsolation::InProcess => loams_live::Isolation::InProcess,
@@ -1200,6 +1239,15 @@ enum Command {
         #[command(subcommand)]
         command: DurableCommand,
     },
+    /// Upgrades (design §54): migrate the stack's stores to this release,
+    /// before the engine starts (the compose `migrate` service).
+    Migrate {
+        #[command(subcommand)]
+        command: migrate_cli::MigrateCommand,
+    },
+    /// Upgrade a self-hosted compose stack one release at a time, with a
+    /// snapshot first (design §54 §10): `check`, `status`, `snapshots`.
+    Upgrade(loams_upgrade::UpgradeArgs),
     /// Engine authentication (LOAMS_AUTH_MODE): API keys.
     Auth {
         #[command(subcommand)]
@@ -1357,6 +1405,8 @@ fn config(command: Command) -> ServerConfig {
         Command::Warm { .. } => unreachable!("loams warm starts no server"),
         Command::Durable { .. } => unreachable!("loams durable starts no server"),
         Command::Auth { .. } => unreachable!("loams auth starts no server"),
+        Command::Migrate { .. } => unreachable!("loams migrate starts no server"),
+        Command::Upgrade(_) => unreachable!("loams upgrade starts no server"),
         #[cfg(feature = "live")]
         Command::LiveWorker => unreachable!("loams live-worker starts no server"),
         #[cfg(feature = "postgres")]
@@ -1560,17 +1610,32 @@ fn main() -> ExitCode {
     if let Command::LiveWorker = cli.command {
         return loams_live_js::worker_main();
     }
+    // A client (UP1 Task 12): it drives the container runtime, never the
+    // stores, and needs no async runtime.
+    if let Command::Upgrade(args) = &cli.command {
+        return loams_upgrade::run(args);
+    }
     serve(cli)
 }
 
 #[tokio::main]
 async fn serve(cli: Cli) -> ExitCode {
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,openraft=warn")),
-        )
-        .init();
+    // The one-shot commands print their result (JSON with `--output json`)
+    // on stdout, so their logs go to stderr: a warning (the embedded
+    // metastore's election under load) must not come before the JSON.
+    let logs_to_stderr = matches!(
+        cli.command,
+        Command::Migrate { .. } | Command::Warm { .. } | Command::Auth { .. }
+    );
+    let logs = tracing_subscriber::fmt().with_env_filter(
+        tracing_subscriber::EnvFilter::try_from_default_env()
+            .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("info,openraft=warn")),
+    );
+    if logs_to_stderr {
+        logs.with_writer(std::io::stderr).init();
+    } else {
+        logs.init();
+    }
     if let Command::Warm { target, server } = &cli.command {
         return warm(target, server).await;
     }
@@ -1579,6 +1644,12 @@ async fn serve(cli: Cli) -> ExitCode {
     }
     if let Command::Auth { command } = &cli.command {
         return auth_command(command);
+    }
+    if let Command::Migrate { .. } = &cli.command {
+        let Command::Migrate { command } = cli.command else {
+            unreachable!("matched above")
+        };
+        return migrate_cli::run(command).await;
     }
     #[cfg(feature = "postgres")]
     let cli = match cli.command {
@@ -1599,8 +1670,21 @@ async fn serve(cli: Cli) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    config.tls = match loams::tls::TlsConfig::from_env() {
+        Ok(tls) => tls,
+        Err(err) => {
+            eprintln!("loams: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
     let server = match Server::start(config).await {
         Ok(server) => server,
+        Err(loams::ServerError::Startup { code, detail }) => {
+            // Design §54 §4.3: one line with the code, exit 78 (EX_CONFIG).
+            tracing::error!(code, %detail, "refusing to start");
+            eprintln!("loams: refusing to start: {code}: {detail}");
+            return ExitCode::from(loams_migrate::startup::EXIT_REFUSED);
+        }
         Err(err) => {
             eprintln!("loams: {err}");
             return ExitCode::FAILURE;
@@ -2750,6 +2834,115 @@ mod tests {
         }
         parse_error(&["--durable-set", "no-equals"]);
         parse_error(&["--durable-store", "redis://x"]);
+    }
+
+    /// `loams migrate` (UP1 Task 7): every subcommand and its flags.
+    #[test]
+    fn migrate_subcommands_parse() {
+        for args in [
+            &["loams", "migrate", "run", "--data-dir", "/d"][..],
+            &[
+                "loams",
+                "migrate",
+                "run",
+                "--bucket",
+                "file:///var/lib/loams/bucket",
+                "--data-dir",
+                "/var/lib/loams",
+                "--house-dir",
+                "/var/lib/loams-house",
+                "--pg-control-dir",
+                "/var/lib/loams-pg-control",
+                "--declared-release",
+                "0.1.0-preview.2",
+                "--target-release",
+                "0.1.0",
+                "--no-snapshot-i-accept-data-loss",
+                "--output",
+                "json",
+            ],
+            &[
+                "loams",
+                "migrate",
+                "run",
+                "--data-dir",
+                "/d",
+                "--abandon",
+                "0001-x",
+            ],
+            &["loams", "migrate", "plan", "--data-dir", "/d"],
+            &[
+                "loams",
+                "migrate",
+                "status",
+                "--data-dir",
+                "/d",
+                "--output",
+                "text",
+            ],
+            &[
+                "loams",
+                "migrate",
+                "verify",
+                "--data-dir",
+                "/d",
+                "--engine",
+                "http://127.0.0.1:8080",
+            ],
+        ] {
+            let cli = Cli::try_parse_from(args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
+            assert!(matches!(cli.command, Command::Migrate { .. }), "{args:?}");
+        }
+        // The compose service's stores (a TiKV build).
+        #[cfg(feature = "live-tikv")]
+        Cli::try_parse_from([
+            "loams",
+            "migrate",
+            "run",
+            "--meta",
+            "tikv://pd:2379/loams_meta",
+            "--live-store",
+            "tikv://pd:2379/loams_live_dev",
+            "--data-dir",
+            "/var/lib/loams",
+        ])
+        .expect("tikv stores");
+        // --data-dir is required; an unknown subcommand is refused.
+        assert!(Cli::try_parse_from(["loams", "migrate", "run"]).is_err());
+        assert!(Cli::try_parse_from(["loams", "migrate", "rollback", "--data-dir", "/d"]).is_err());
+    }
+
+    /// UP1 Task 12: `loams upgrade` is flattened into the binary.
+    #[test]
+    fn upgrade_subcommands_parse() {
+        for args in [
+            &["loams", "upgrade", "check", "--dir", "/s", "--to", "0.1.0"][..],
+            &["loams", "upgrade", "status", "--output", "text"],
+            &["loams", "upgrade", "snapshots", "list"],
+            &[
+                "loams",
+                "upgrade",
+                "snapshots",
+                "prune",
+                "--id",
+                "01J",
+                "--yes",
+            ],
+            &["loams", "upgrade", "--to", "latest", "--bundle", "/b"],
+            &["loams", "upgrade", "rollback", "--keep-writes", "--yes"],
+            &["loams", "upgrade", "rollback", "--snapshot", "01J"],
+            &[
+                "loams",
+                "upgrade",
+                "--to",
+                "0.1.0",
+                "--no-auto-rollback",
+                "--keep-snapshot",
+            ],
+        ] {
+            let cli = Cli::try_parse_from(args).unwrap_or_else(|e| panic!("{args:?}: {e}"));
+            assert!(matches!(cli.command, Command::Upgrade(_)), "{args:?}");
+        }
     }
 
     /// `loams durable migrate --durable-store …` (D1 Task 4): a store is

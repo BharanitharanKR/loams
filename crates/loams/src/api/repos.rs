@@ -9,8 +9,8 @@
 //! like every RPC of the main port. Without it every RPC answers `unimplemented` with the reason
 //! `feature_not_in_variant` ([`ReposAbsent`]), so a caller can tell "not in this build" from a
 //! missing route, and reflection lists a service a route answers. The package's other services
-//! (`WorkspaceService`, `ObjectService`, `EnvService`) have no RPCs until GT1 Tasks 25, 18 and
-//! 61 fill their stub files in.
+//! are `ObjectService` (GT1 Task 18, `super::objects`), `WorkspaceService` (Task 25,
+//! `super::workspaces`) and `EnvService` (Task 61).
 
 use std::sync::Arc;
 
@@ -142,7 +142,7 @@ impl RepoService for ReposAbsent {
 
 /// `RepoService` over the bucket catalog and the repository sequencers (GT1 Task 13).
 #[cfg(feature = "git")]
-mod served {
+pub(crate) mod served {
     use std::collections::BTreeMap;
     use std::sync::Arc;
     use std::time::Duration;
@@ -192,18 +192,31 @@ mod served {
         pub(crate) sequencers: Arc<RepoSequencers>,
         /// How long a `WatchRepo` stream stays quiet before a heartbeat (15 s, AP0).
         pub(crate) watch_heartbeat: Duration,
+        /// The bucket, where packs and derived data are read (GT1 Task 18).
+        pub(crate) store: loams_store::Store,
+        /// The H1 range cache over `store` that object reads go through.
+        pub(crate) h1: loams_cache::RangeCache,
+        /// Finds workspaces for object reads: `loams_git::ws::StoreWsLookup` over `store`
+        /// (GT1 Task 25, ruling T18.1).
+        pub(crate) workspaces: Arc<dyn loams_git::objects::WsLookup>,
+        /// Tells this node's `WatchWorkspace` streams that a workspace saved (repository and
+        /// workspace ids); streams also poll, for saves through other nodes.
+        pub(crate) ws_saved: tokio::sync::broadcast::Sender<(RepoId, loams_git::WsId)>,
+        /// Workspaces are read only by their owner and org admins (GT-Q13's alternative);
+        /// `false`, the default, lets whoever reads the repository read them.
+        pub(crate) ws_reads_owner_only: bool,
     }
 
     /// `RepoService`, served.
     #[derive(Debug)]
-    pub(super) struct ReposServed {
-        pub(super) meta: Arc<dyn MetaStore>,
-        pub(super) git: Arc<GitRuntime>,
+    pub(crate) struct ReposServed {
+        pub(crate) meta: Arc<dyn MetaStore>,
+        pub(crate) git: Arc<GitRuntime>,
         /// Who may do what (GT1 Task 16): the engine's principal store and authorizer.
-        pub(super) principals: crate::auth::Principals,
+        pub(crate) principals: crate::auth::Principals,
     }
 
-    fn invalid(field: &str, message: impl Into<String>) -> ConnectError {
+    pub(crate) fn invalid(field: &str, message: impl Into<String>) -> ConnectError {
         refuse(
             ErrorCode::InvalidArgument,
             "invalid_argument",
@@ -212,7 +225,7 @@ mod served {
         )
     }
 
-    fn repo_not_found(name: &str) -> ConnectError {
+    pub(crate) fn repo_not_found(name: &str) -> ConnectError {
         refuse(
             ErrorCode::NotFound,
             "repo_not_found",
@@ -221,7 +234,7 @@ mod served {
         )
     }
 
-    fn unavailable(what: &str, err: &dyn std::fmt::Display) -> ConnectError {
+    pub(crate) fn unavailable(what: &str, err: &dyn std::fmt::Display) -> ConnectError {
         tracing::warn!(error = %err, "{what} failed");
         refuse(
             ErrorCode::Unavailable,
@@ -269,7 +282,7 @@ mod served {
         }
     }
 
-    fn key_reused() -> ConnectError {
+    pub(crate) fn key_reused() -> ConnectError {
         refuse(
             ErrorCode::FailedPrecondition,
             "idempotency_key_reused",
@@ -279,7 +292,7 @@ mod served {
     }
 
     /// A ref log error as the RPC answers it.
-    fn ref_error(name: &str, err: RefError) -> ConnectError {
+    pub(crate) fn ref_error(name: &str, err: RefError) -> ConnectError {
         match err {
             RefError::Rejected(rejected) => {
                 let Some((name, reason)) = rejected.into_iter().next() else {
@@ -337,7 +350,7 @@ mod served {
         }
     }
 
-    fn timestamp(ms: i64) -> Timestamp {
+    pub(crate) fn timestamp(ms: i64) -> Timestamp {
         Timestamp {
             seconds: ms.div_euclid(1000),
             nanos: i32::try_from(ms.rem_euclid(1000) * 1_000_000).unwrap_or(0),
@@ -345,20 +358,24 @@ mod served {
         }
     }
 
-    fn now_ms() -> i64 {
+    pub(crate) fn now_ms() -> i64 {
         std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map_or(0, |d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
     }
 
     /// `git:<repo_id>:<seq>` (§36 §4.6).
-    fn token(repo: &RepoId, seq: Seq) -> String {
+    pub(crate) fn token(repo: &RepoId, seq: Seq) -> String {
         format!("git:{repo}:{}", seq.0)
     }
 
     /// The seq a token names for `repo`: `None` for an empty token, `invalid_argument` for a
     /// malformed one or one of another repository (one of the same name deleted before).
-    fn parse_token(field: &str, value: &str, repo: &RepoId) -> Result<Option<Seq>, ConnectError> {
+    pub(crate) fn parse_token(
+        field: &str,
+        value: &str,
+        repo: &RepoId,
+    ) -> Result<Option<Seq>, ConnectError> {
         if value.is_empty() {
             return Ok(None);
         }
@@ -376,11 +393,11 @@ mod served {
         seq.parse::<u64>().map(|n| Some(Seq(n))).map_err(|_| bad())
     }
 
-    fn repo_name(field: &str, value: &str) -> Result<RepoName, ConnectError> {
+    pub(crate) fn repo_name(field: &str, value: &str) -> Result<RepoName, ConnectError> {
         RepoName::parse(value).map_err(|err| invalid(field, err.to_string()))
     }
 
-    fn idem_key(value: &str) -> Result<Option<IdemKey>, ConnectError> {
+    pub(crate) fn idem_key(value: &str) -> Result<Option<IdemKey>, ConnectError> {
         if value.is_empty() {
             return Ok(None);
         }
@@ -566,7 +583,10 @@ mod served {
     }
 
     /// A page size from a request: `default` for 0, `invalid_argument` past `max` or below 0.
-    fn page_size(value: i32, (default, max): (usize, usize)) -> Result<usize, ConnectError> {
+    pub(crate) fn page_size(
+        value: i32,
+        (default, max): (usize, usize),
+    ) -> Result<usize, ConnectError> {
         match usize::try_from(value) {
             Ok(0) => Ok(default),
             Ok(n) if n <= max => Ok(n),
@@ -577,7 +597,11 @@ mod served {
     impl ReposServed {
         /// Refuses a caller below `need` (GT1 Task 16): reads and writes need the org role
         /// `member`, administration `admin`; the operator always passes.
-        async fn require(&self, ctx: &RequestContext, need: GitAccess) -> Result<(), ConnectError> {
+        pub(crate) async fn require(
+            &self,
+            ctx: &RequestContext,
+            need: GitAccess,
+        ) -> Result<(), ConnectError> {
             let principal = ctx
                 .extensions()
                 .get::<crate::auth::Principal>()
@@ -595,13 +619,17 @@ mod served {
         }
 
         /// The namespace named `name`; with `create`, made when it does not exist.
-        async fn namespace(&self, name: &str, create: bool) -> Result<NamespaceId, ConnectError> {
+        pub(crate) async fn namespace(
+            &self,
+            name: &str,
+            create: bool,
+        ) -> Result<NamespaceId, ConnectError> {
             if name.is_empty() {
                 return Err(invalid("namespace", "a namespace is required"));
             }
             if loams_common::meta::is_reserved_namespace(name) {
-                return Err(super::connect_errors::refused(
-                    super::errors::ApiError::namespace_reserved(name),
+                return Err(crate::api::connect_errors::refused(
+                    crate::api::errors::ApiError::namespace_reserved(name),
                 ));
             }
             let found = self
@@ -621,7 +649,7 @@ mod served {
         }
 
         /// The active repository `name` of `ns`.
-        async fn active(
+        pub(crate) async fn active(
             &self,
             ns: NamespaceId,
             name: &RepoName,
@@ -657,7 +685,7 @@ mod served {
         }
 
         /// `record`'s state at least as new as `token` (or the latest).
-        async fn read(
+        pub(crate) async fn read(
             &self,
             ns_name: &str,
             record: &RepoRecord,

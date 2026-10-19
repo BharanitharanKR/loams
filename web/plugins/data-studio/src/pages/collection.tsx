@@ -1,9 +1,9 @@
 import type { JsonObject, JsonValue } from '@bufbuild/protobuf';
 import type { documents } from '@loams/proto';
-import { Badge, Button, Card, Empty, Stat, Stats, Table } from '@loams/ui';
+import { Badge, Button, Card, Empty, SkeletonList, Stat, Stats, Table } from '@loams/ui';
 import { useCallback, useEffect, useState } from 'react';
 import { type DataClient, type DocRow, schemaOf } from '../client.js';
-import { ErrorNotice, errorText, PageHead, type Tab, Tabs, useLoad } from '../shared.js';
+import { ErrorNotice, errorText, PageHead, type Tab, Tabs, tabPath, useLoad } from '../shared.js';
 import { IngestTab } from './ingest.js';
 import { SearchTab } from './search.js';
 
@@ -37,7 +37,8 @@ export function DocumentsTab({
     setCursors(next);
   };
 
-  if (page.state === 'loading') return <p className="lc-muted ds-pad">Loading documents…</p>;
+  if (page.state === 'loading')
+    return <SkeletonList className="ds-pad" label="Loading documents" rows={6} />;
   if (page.state === 'error')
     return <ErrorNotice title="Could not read documents" message={page.message} />;
   const { rows, next } = page.data;
@@ -160,12 +161,15 @@ export function CollectionPage({
   coll,
   tab,
   navigate,
+  params,
 }: {
   client: DataClient;
   ns: string;
   coll: string;
   tab: Exclude<Tab, 'sql'>;
-  navigate: (to: string) => void;
+  navigate: (to: string, opts?: { replace?: boolean }) => void;
+  /** The route's parameters, its query included (the Search tab's state). */
+  params?: Record<string, string | undefined>;
 }) {
   const [info] = useLoad(() => client.getCollection(ns, coll), [client, ns, coll]);
   const [count, setCount] = useState<number>();
@@ -202,7 +206,17 @@ export function CollectionPage({
       <Tabs ns={ns} coll={coll} active={tab} navigate={navigate} />
       {tab === 'documents' && <DocumentsTab client={client} ns={ns} coll={coll} />}
       {tab === 'search' && info.state === 'ready' && (
-        <SearchTab client={client} ns={ns} coll={coll} schema={schemaOf(info.data)} />
+        <SearchTab
+          key={`${ns}/${coll}`}
+          client={client}
+          ns={ns}
+          coll={coll}
+          schema={schemaOf(info.data)}
+          params={params}
+          onParams={(query) =>
+            navigate(`${tabPath(ns, coll, 'search')}${query ? `?${query}` : ''}`, { replace: true })
+          }
+        />
       )}
       {tab === 'ingest' && info.state === 'ready' && (
         <IngestTab

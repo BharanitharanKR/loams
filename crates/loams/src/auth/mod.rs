@@ -89,6 +89,54 @@ pub struct Principal {
     pub display_name: String,
     /// A verified email, for users.
     pub email: Option<String>,
+    /// What the credential reaches (LV1 plan Task 14): its org,
+    /// environment, scopes and expiry where its source names them. Empty
+    /// is the self-hosted default: the install's one org and environment,
+    /// every scope, no expiry beyond the credential's own checks.
+    pub grant: Grant,
+}
+
+/// What a credential reaches, as its source states it (LV1 plan Task 14,
+/// design §45 §5). `None` in a field means the source does not say, which
+/// on a self-hosted install is its one org, its one environment, and every
+/// scope. MT1 and API2 fill these for every credential later.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Grant {
+    /// The org's slug (an OIDC `org` claim; the org of a session or of a
+    /// key `KeyService/CreateKey` made).
+    pub org: Option<String>,
+    /// The environment the credential is bound to, `<project>/<environment>`
+    /// (an OIDC `env` claim; a `KeyService` key's project and environment).
+    pub environment: Option<String>,
+    /// The scopes it carries (an OIDC `scp` or `scope` claim; a key's
+    /// scopes). `None`: every scope.
+    pub scopes: Option<BTreeSet<String>>,
+    /// When it expires, Unix ms (a token's `exp`, a session's or a key's
+    /// expiry).
+    pub expires_at_ms: Option<u64>,
+}
+
+impl Grant {
+    /// Whether the credential carries `scope` (every scope when it names
+    /// none).
+    pub fn has_scope(&self, scope: &str) -> bool {
+        self.scopes.as_ref().is_none_or(|s| s.contains(scope))
+    }
+
+    /// Scopes from a list, `None` when it is empty (a key or token that
+    /// names no scope keeps the self-hosted default: every scope).
+    pub fn scopes_of<I, S>(scopes: I) -> Option<BTreeSet<String>>
+    where
+        I: IntoIterator<Item = S>,
+        S: AsRef<str>,
+    {
+        let set: BTreeSet<String> = scopes
+            .into_iter()
+            .map(|s| s.as_ref().trim().to_owned())
+            .filter(|s| !s.is_empty())
+            .collect();
+        (!set.is_empty()).then_some(set)
+    }
 }
 
 impl fmt::Debug for Principal {
@@ -790,6 +838,7 @@ impl Auth {
             kind: PrincipalKind::DevLoopback,
             display_name: "Local developer".to_owned(),
             email: None,
+            grant: Grant::default(),
         }
     }
 }

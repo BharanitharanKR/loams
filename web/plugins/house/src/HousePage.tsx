@@ -16,9 +16,23 @@ import {
   ComingSoon,
   Dialog,
   Empty,
+  formatSql,
   isNotServed,
   Notice,
+  QueryResults,
+  SampleDataNotice,
+  SchemaPanel,
   Select,
+  SkeletonList,
+  SqlEditor,
+  type SqlEditorHandle,
+  SqlExamples,
+  type SqlFunction,
+  type SqlSchema,
+  type SqlTable,
+  SqlToolbar,
+  sqlErrorPosition,
+  sqlExamples,
 } from '@loams/ui';
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import {
@@ -36,22 +50,94 @@ import {
   type Summary,
   toFailure,
 } from './client.js';
-import { Editor } from './Editor.js';
 import { FailureView } from './FailureView.js';
-import { KEYWORDS } from './fixtures.js';
 import { HistoryPanel } from './HistoryPanel.js';
-import { ResultsGrid } from './ResultsGrid.js';
 import { SettingsPanel } from './SettingsPanel.js';
 import { type SettingRow, settingsMap } from './settings.js';
 
 export const PACKAGE = 'loams.house.v1';
-const FIRST_SQL = 'SELECT kind, count() AS n\nFROM default.events\nGROUP BY kind\nORDER BY n DESC';
+/** A ClickHouse string literal. */
+const chString = (s: string) => `'${s.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 const fmt = new Intl.NumberFormat('en');
 
 export interface HousePageProps {
   client: HouseClient;
   /** The client answers from built-in sample data, not a server. */
   sample?: boolean;
+  /** The server this page talks to, so the chosen database is remembered per server. */
+  serverKey?: string;
+}
+
+/** Databases a person does not pick from: ClickHouse's own catalogs. */
+const HIDDEN_DATABASES = new Set(['system', 'INFORMATION_SCHEMA', 'information_schema']);
+
+const DATABASE_KEY = 'loams.house.database';
+
+/** The database last chosen on `serverKey`, if storage allows. */
+export function rememberedDatabase(serverKey: string): string | undefined {
+  try {
+    const raw = JSON.parse(globalThis.localStorage?.getItem(DATABASE_KEY) ?? '{}');
+    const name = raw && typeof raw === 'object' ? raw[serverKey] : undefined;
+    return typeof name === 'string' && name ? name : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function rememberDatabase(serverKey: string, name: string) {
+  try {
+    const raw = JSON.parse(globalThis.localStorage?.getItem(DATABASE_KEY) ?? '{}');
+    const all = raw && typeof raw === 'object' && !Array.isArray(raw) ? raw : {};
+    globalThis.localStorage?.setItem(DATABASE_KEY, JSON.stringify({ ...all, [serverKey]: name }));
+  } catch {
+    // Storage is a convenience: the page still works on `default`.
+  }
+}
+
+/**
+ * The databases to offer: `ListDatabases`, else (a House that does not serve it, or
+ * lists none) the names in `system.databases`, read from `default` like the function list.
+ */
+async function loadDatabases(
+  client: HouseClient,
+  signal: AbortSignal,
+  onNotServed: () => void,
+): Promise<Database[]> {
+  try {
+    const page = await client.listDatabases();
+    if (page.items.length) return page.items;
+  } catch (e) {
+    // No House at all is the page's "coming soon"; a House without ListDatabases
+    // (`unimplemented`, `not_implemented`) still has system.databases.
+    if (toFailure(e).reason?.endsWith('not_configured')) {
+      onNotServed();
+      return [];
+    }
+  }
+  const names: Database[] = [];
+  try {
+    for await (const f of client.executeQuery(
+      {
+        sql: 'SELECT name FROM system.databases ORDER BY name',
+        database: 'default',
+        settings: {},
+        params: {},
+        format: 'ARROW_IPC',
+        maxRows: SERVER_MAX_ROWS,
+        timeoutMs: PAGE_TIMEOUT_MS,
+        readOnly: true,
+      },
+      signal,
+    )) {
+      if (f.kind !== 'batch') continue;
+      for (const [name] of f.rows)
+        if (typeof name === 'string' && !HIDDEN_DATABASES.has(name))
+          names.push({ name, tableCount: 0, comment: '' });
+    }
+  } catch {
+    // No list: the page stays on `default`.
+  }
+  return names;
 }
 
 /**
@@ -62,7 +148,7 @@ const houseNotServed = (f: HouseFailure) => isNotServed({ reason: f.reason });
 
 type Detected = 'loading' | 'available' | 'absent' | 'not-served' | { error: string };
 
-export function HousePage({ client, sample }: HousePageProps) {
+export function HousePage({ client, sample, serverKey = '' }: HousePageProps) {
   const [detected, setDetected] = useState<Detected>('loading');
   const [tick, setTick] = useState(0);
   const notServed = useCallback(() => setDetected('not-served'), []);
@@ -89,9 +175,7 @@ export function HousePage({ client, sample }: HousePageProps) {
     return (
       <div className="lc-page">
         {head}
-        <p className="text-muted" role="status">
-          Asking the server about Loams House…
-        </p>
+        <SkeletonList label="Asking the server about Loams House" layout="cards" rows={3} />
       </div>
     );
   }
@@ -102,7 +186,9 @@ export function HousePage({ client, sample }: HousePageProps) {
         <Notice tone="danger" title="Could not reach the server">
           {detected.error}
         </Notice>
-        <Button onClick={() => setTick((t) => t + 1)}>Try again</Button>
+        <div>
+          <Button onClick={() => setTick((t) => t + 1)}>Try again</Button>
+        </div>
       </div>
     );
   }
@@ -127,7 +213,9 @@ export function HousePage({ client, sample }: HousePageProps) {
       </div>
     );
   }
-  return <Workspace client={client} sample={sample} onNotServed={notServed} />;
+  return (
+    <Workspace client={client} sample={sample} serverKey={serverKey} onNotServed={notServed} />
+  );
 }
 
 interface RunState {
@@ -142,18 +230,31 @@ interface RunState {
 function Workspace({
   client,
   sample,
+  serverKey,
   onNotServed,
 }: {
   client: HouseClient;
   sample?: boolean;
+  serverKey: string;
   /** The House answered house_not_configured: the page shows "coming soon" instead. */
   onNotServed: () => void;
 }) {
   const ids = useId();
   const failureId = `${ids}-failure`;
   const [databases, setDatabases] = useState<Database[]>([]);
-  const [database, setDatabase] = useState('default');
-  const [sql, setSql] = useState(FIRST_SQL);
+  const [database, setDatabase] = useState(() => rememberedDatabase(serverKey) ?? 'default');
+  const chooseDatabase = (name: string) => {
+    setDatabase(name);
+    rememberDatabase(serverKey, name);
+  };
+  // No query to start with: the examples below the editor are built from the tables this
+  // House has, so the first run never names a table that does not exist.
+  const [sql, setSql] = useState('');
+  const [failedSql, setFailedSql] = useState<string>();
+  const [tables, setTables] = useState<SqlTable[]>([]);
+  const [schemaError, setSchemaError] = useState<string>();
+  const [schemaLoading, setSchemaLoading] = useState(true);
+  const editor = useRef<SqlEditorHandle>(null);
   const [settings, setSettings] = useState<SettingRow[]>([]);
   const [allowWrites, setAllowWrites] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -165,7 +266,7 @@ function Workspace({
   const [plan, setPlan] = useState<string>();
   const [confirm, setConfirm] = useState<{ sql: string }>();
   const [historyTick, setHistoryTick] = useState(0);
-  const [functions, setFunctions] = useState<string[]>([]);
+  const [functions, setFunctions] = useState<SqlFunction[]>([]);
   const abort = useRef<AbortController | undefined>(undefined);
   const queryId = useRef<string | undefined>(undefined);
 
@@ -174,25 +275,28 @@ function Workspace({
   useEffect(() => {
     let live = true;
     const ac = new AbortController();
-    client.listDatabases().then(
-      (p) => {
-        if (!live) return;
-        setDatabases(p.items);
-        if (p.items.length && !p.items.some((d) => d.name === 'default'))
-          setDatabase(p.items[0]?.name ?? 'default');
-      },
-      (e) => {
-        if (live && houseNotServed(toFailure(e))) onNotServed();
-      },
-    );
-    // The function list, fetched once through ExecuteQuery (§49 §18.3).
+    void loadDatabases(client, ac.signal, () => live && onNotServed()).then((items) => {
+      if (!live || !items.length) return;
+      setDatabases(items);
+      // The remembered database while the server still has it, else `default`, else the first.
+      setDatabase((current) =>
+        items.some((d) => d.name === current)
+          ? current
+          : items.some((d) => d.name === 'default')
+            ? 'default'
+            : (items[0]?.name ?? 'default'),
+      );
+    });
+    // The function list, fetched once through ExecuteQuery (§49 §18.3). The House runs a
+    // statement only in a database it serves (it refuses `system`), so the qualified
+    // system table is read from `default`.
     (async () => {
-      const names: string[] = [];
+      const names: SqlFunction[] = [];
       try {
         for await (const f of client.executeQuery(
           {
             sql: 'SELECT name, is_aggregate FROM system.functions ORDER BY name',
-            database: 'system',
+            database: 'default',
             settings: {},
             params: {},
             format: 'ARROW_IPC',
@@ -203,7 +307,12 @@ function Workspace({
           ac.signal,
         )) {
           if (f.kind === 'batch')
-            for (const r of f.rows) if (typeof r[0] === 'string') names.push(r[0]);
+            for (const r of f.rows)
+              if (typeof r[0] === 'string')
+                names.push({
+                  name: r[0],
+                  kind: r[1] === 1 || r[1] === true ? 'aggregate' : 'scalar',
+                });
         }
       } catch {
         // completions are a convenience: keywords alone still work
@@ -217,7 +326,58 @@ function Workspace({
     };
   }, [client, onNotServed]);
 
-  const words = useMemo(() => [...KEYWORDS, ...functions], [functions]);
+  // The selected database's tables and typed columns, for completion, the schema panel and
+  // the examples (system.columns, read-only, through the same ExecuteQuery).
+  useEffect(() => {
+    let live = true;
+    const ac = new AbortController();
+    setSchemaLoading(true);
+    setSchemaError(undefined);
+    (async () => {
+      const byTable = new Map<string, SqlTable>();
+      try {
+        for await (const f of client.executeQuery(
+          {
+            sql: `SELECT table, name, type FROM system.columns WHERE database = ${chString(database)} ORDER BY table, position`,
+            database,
+            settings: {},
+            params: {},
+            format: 'ARROW_IPC',
+            maxRows: SERVER_MAX_ROWS,
+            timeoutMs: PAGE_TIMEOUT_MS,
+            readOnly: true,
+          },
+          ac.signal,
+        )) {
+          if (f.kind !== 'batch') continue;
+          for (const [table, name, type] of f.rows) {
+            if (typeof table !== 'string' || typeof name !== 'string') continue;
+            let t = byTable.get(table);
+            if (!t) {
+              t = { name: table, schema: database, kind: 'table', columns: [] };
+              byTable.set(table, t);
+            }
+            t.columns.push({ name, type: typeof type === 'string' ? type : undefined });
+          }
+        }
+        if (live) setTables([...byTable.values()]);
+      } catch (e) {
+        if (live) setSchemaError(`Could not read the tables: ${toFailure(e).message}`);
+      } finally {
+        if (live) setSchemaLoading(false);
+      }
+    })();
+    return () => {
+      live = false;
+      ac.abort();
+    };
+  }, [client, database]);
+
+  const schema = useMemo<SqlSchema>(
+    () => ({ tables, functions, defaultSchema: database }),
+    [tables, functions, database],
+  );
+  const examples = useMemo(() => sqlExamples(schema, 'clickhouse'), [schema]);
 
   const execute = useCallback(
     async (text: string, readOnly: boolean, maxRows = PAGE_MAX_ROWS) => {
@@ -240,6 +400,7 @@ function Workspace({
       setVersion((v) => v + 1);
       setBusy(true);
       setFailure(undefined);
+      setFailedSql(undefined);
       setNotice(undefined);
       setPlan(undefined);
       setRun({ columns: [], queryId: id, sql: text, maxRows });
@@ -290,6 +451,7 @@ function Workspace({
         } else {
           setRun(undefined);
           setFailure(f);
+          setFailedSql(text);
         }
       } finally {
         if (abort.current === c) {
@@ -343,8 +505,11 @@ function Workspace({
               <Select
                 id={`${ids}-db`}
                 value={database}
-                onChange={(e) => setDatabase(e.target.value)}
+                onChange={(e) => chooseDatabase(e.target.value)}
               >
+                {databases.some((d) => d.name === database) ? null : (
+                  <option value={database}>{database}</option>
+                )}
                 {databases.map((d) => (
                   <option key={d.name} value={d.name}>
                     {d.name}
@@ -356,48 +521,51 @@ function Workspace({
         }
       />
       {sample && (
-        <Notice tone="warn" title="Sample data">
-          This page runs against a built-in sample House until the server serves {PACKAGE}. Nothing
-          you run here reaches a server.
-        </Notice>
+        <SampleDataNotice>
+          The server does not serve {PACKAGE} yet. Nothing you run here reaches a server.
+        </SampleDataNotice>
       )}
       <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,1fr)_300px]">
         <div className="flex min-w-0 flex-col gap-4">
-          <section aria-label="Editor" className="flex flex-col gap-3">
-            <Editor
-              value={sql}
-              onChange={setSql}
+          <section aria-label="Editor" className="loams-sql-frame">
+            <SqlToolbar
+              busy={busy}
+              disabled={!sql.trim()}
               onRun={() => void execute(sql, true)}
-              words={words}
-              disabled={busy}
-              describedBy={failure ? failureId : undefined}
-              invalid={!!failure}
-            />
-            <div className="flex flex-wrap items-center gap-2">
-              <Button
-                variant="primary"
-                onClick={() => void execute(sql, true)}
-                disabled={busy || !sql.trim()}
-              >
-                Run
-              </Button>
-              <Button onClick={() => void explain()} disabled={busy || !sql.trim()}>
+              onRunSelection={() =>
+                void execute(editor.current?.selectionOrStatement() || sql, true)
+              }
+              onFormat={() => editor.current?.replace(formatSql(sql))}
+              onCancel={cancel}
+            >
+              <Button size="sm" onClick={() => void explain()} disabled={busy || !sql.trim()}>
                 Explain
               </Button>
-              {busy && (
-                <Button variant="quiet" onClick={cancel}>
-                  Cancel
-                </Button>
-              )}
               <Checkbox
                 label="Allow writes"
                 checked={allowWrites}
                 onChange={(e) => setAllowWrites(e.target.checked)}
               />
-              <span className="text-xs text-muted">
-                Ctrl or Cmd + Enter runs. Ctrl + Space completes.
-              </span>
-            </div>
+            </SqlToolbar>
+            <SqlEditor
+              handle={editor}
+              label="SQL"
+              dialect="clickhouse"
+              schema={schema}
+              value={sql}
+              onChange={setSql}
+              onRun={(text) => {
+                if (!busy && text.trim()) void execute(text, true);
+              }}
+              describedBy={failure ? failureId : undefined}
+              invalid={!!failure}
+              errorAt={
+                failure && failedSql !== undefined && failedSql === sql
+                  ? sqlErrorPosition(failure.message, failedSql)
+                  : undefined
+              }
+              placeholder="SELECT … FROM a table of this House. Ctrl+Space completes."
+            />
           </section>
 
           {failure && <FailureView id={failureId} failure={failure} writesAllowed={allowWrites} />}
@@ -426,16 +594,18 @@ function Workspace({
             </section>
           )}
 
+          {!run && !failure && !busy && plan === undefined && (
+            <SqlExamples
+              examples={examples}
+              onPick={(text) => {
+                editor.current?.replace(text);
+                void execute(text, true);
+              }}
+            />
+          )}
+
           {run && (run.columns.length > 0 || summary) && (
-            <section aria-label="Results" className="flex flex-col gap-3">
-              <p className="m-0 text-sm text-muted" role="status">
-                {fmt.format(rows.length)} {rows.length === 1 ? 'row' : 'rows'}
-                {summary &&
-                  ` in ${fmt.format(summary.elapsedMs)} ms · ${fmt.format(summary.readRows)} rows read`}
-                {summary &&
-                  summary.writtenRows > 0 &&
-                  ` · ${fmt.format(summary.writtenRows)} written`}
-              </p>
+            <div className="flex flex-col gap-3">
               {summary?.truncated && (
                 <div
                   className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-solid border-rule bg-accent-soft px-3 py-2"
@@ -456,12 +626,32 @@ function Workspace({
                   )}
                 </div>
               )}
-              <ResultsGrid columns={run.columns} rows={rows} />
-            </section>
+              <QueryResults
+                columns={run.columns.map((c) => ({ name: c.name, type: c.clickhouseType }))}
+                rows={rows}
+                elapsedMs={summary?.elapsedMs}
+                extra={
+                  summary
+                    ? `${fmt.format(summary.readRows)} rows read${
+                        summary.writtenRows > 0
+                          ? ` · ${fmt.format(summary.writtenRows)} written`
+                          : ''
+                      }`
+                    : undefined
+                }
+              />
+            </div>
           )}
         </div>
 
-        <aside className="flex flex-col gap-6" aria-label="Settings and history">
+        <aside className="flex flex-col gap-6" aria-label="Schema, settings and history">
+          <SchemaPanel
+            title={`Tables in ${database}`}
+            schema={schema}
+            loading={schemaLoading}
+            error={schemaError}
+            onInsert={(name) => editor.current?.insert(name)}
+          />
           <SettingsPanel rows={settings} onChange={setSettings} />
           <HistoryPanel client={client} refresh={historyTick} onOpen={setSql} />
         </aside>
@@ -489,7 +679,7 @@ function Workspace({
       >
         <p className="m-0 text-sm">
           The House says this statement writes. It runs once more, with writes allowed, on{' '}
-          <span className="font-mono">{database}</span>.
+          <span className={/* mono-ok: id */ 'font-mono'}>{database}</span>.
         </p>
         <pre className="m-0 mt-2 max-h-48 overflow-auto rounded-md bg-surface p-2 font-mono text-xs">
           {confirm?.sql}

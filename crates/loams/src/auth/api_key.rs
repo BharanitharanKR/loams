@@ -294,6 +294,9 @@ fn principal(id: &str, entry: &Entry) -> Principal {
         kind: PrincipalKind::ApiKey,
         display_name: entry.label.clone(),
         email: None,
+        // A key file names no org, environment or scope (the self-hosted
+        // default, LV1 plan Task 14).
+        grant: super::Grant::default(),
     }
 }
 

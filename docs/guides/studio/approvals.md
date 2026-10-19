@@ -10,10 +10,10 @@ Destructive git actions (commit, push, merge, discard, restore) always ask in St
 ## Which mode a thread gets
 
 - **Every thread Studio starts** (the **+** on a project's row, Mod+N, a project page's composer, and a run group's judge) gets the mode from **Settings › Approvals** before its first run. **Supervised** is the default (Q803).
-- **The daemon's default** is `[approvals] default_mode` in its `config.toml`. Unset, it is `full-access`, or `supervised` when the remote listener is on (`serve --remote` or `[remote] enabled = true`).
+- **The daemon's default** is `[approvals] default_mode` in its `config.toml`. Unset, it is `supervised`, on your own machine as on the remote listener (threat model I-1, decided 2026-10-15). Full access is only ever asked for: by Studio from **Settings › Approvals**, by a run group's mode, by `SetThreadApprovalMode`, or by setting `default_mode = "full-access"` yourself.
 - **A side chat takes its parent's mode**, up the chain, so an agent can't leave supervision by spawning one; a chain deeper than the daemon follows (16 parents) is supervised. **A fork keeps its source's mode**, whatever thread it is listed under.
-- **A thread another client creates** without a mode (the dock, the CLI) takes the daemon's default.
-- **A [run group](parallel-runs.md)** sets every variant to the group's mode before any variant runs.
+- **A thread another client creates** without a mode takes the daemon's default, so it is supervised.
+- **A [run group](parallel-runs.md)** sets every variant to the group's mode before any variant runs. A group created without a mode is supervised.
 
 The thread header shows the thread's effective mode as the daemon reports it. There is no switch in the header yet: the mode is set when the thread is created. The daemon method is `ApprovalService.SetThreadApprovalMode`; only the owner (or the remote `studio` role) can call it, never an agent's MCP tools.
 

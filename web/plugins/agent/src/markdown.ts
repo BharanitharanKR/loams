@@ -46,14 +46,14 @@ const marked = new Marked({
       const safe = safeHref(href);
       if (!safe) return inner;
       const t = title ? ` title="${escapeHtml(title)}"` : '';
-      return `<a href="${escapeHtml(safe)}"${t} class="text-accent underline">${inner}</a>`;
+      return `<a href="${escapeHtml(safe)}"${t} class="text-accent-fg underline">${inner}</a>`;
     },
     code({ text, lang }: Tokens.Code) {
       const label = (lang ?? '').trim().split(/\s+/)[0] ?? '';
       return (
         '<div class="lc-code my-2 border border-rule bg-raised">' +
         '<div class="flex items-center justify-between px-2 py-1 border-b border-rule-soft text-xs text-muted">' +
-        `<span class="font-mono">${escapeHtml(label)}</span>` +
+        `<span class="font-mono">${escapeHtml(label)}</span>` + // mono-ok: code
         '<button type="button" data-copy="" class="text-xs text-ink bg-surface border border-rule px-2 py-0.5 cursor-pointer">Copy</button>' +
         '</div>' +
         `<pre class="m-0 p-2 overflow-x-auto text-xs font-mono"><code>${escapeHtml(text)}</code></pre>` +

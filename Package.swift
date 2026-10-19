@@ -4,9 +4,9 @@
 // root of a git repository and versions it by that repository's tags, so this
 // file is what makes
 //
-//     .package(url: "https://github.com/ostrium-labs/loams.git", exact: "0.1.0-preview.2")
+//     .package(url: "https://github.com/ostrium-labs/loams.git", from: "0.1.0")
 //
-// work: the release tag `v0.1.0-preview.2` is the Swift package's version, and
+// work: the release tag `v0.1.0` is the Swift package's version, and
 // there is no mirror repository and no second tag to keep in step. It exposes
 // the library only, from `sdks/swift/Sources/Loams`. The SDK's own manifest,
 // tests and quickstart stay in `sdks/swift/Package.swift`; this file must keep
@@ -14,7 +14,7 @@
 // .github/workflows/sdk-release.yml checks by building both.
 //
 // SwiftPM selects a prerelease only when the requirement names one, so a
-// `from: "0.1.0"` requirement does not pick up a preview by accident.
+// `from: "0.1.0"` requirement does not pick up a prerelease by accident.
 
 import PackageDescription
 

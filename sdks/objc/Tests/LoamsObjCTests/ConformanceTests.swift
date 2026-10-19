@@ -82,13 +82,20 @@ func getEndpoint() -> String {
     let cwd = URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
     let fixtureScript = cwd.deletingLastPathComponent().appendingPathComponent("conformance/fixture-server.mjs").path
 
+    // Node from PATH: it is not at /usr/bin/node on the macOS runners. A fixture server
+    // that cannot start must not leave the read below waiting on a pipe nobody writes.
     let proc = Process()
-    proc.executableURL = URL(fileURLWithPath: "/usr/bin/node")
-    proc.arguments = [fixtureScript, "--port", "0"]
+    proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    proc.arguments = ["node", fixtureScript, "--port", "0"]
     let pipe = Pipe()
     proc.standardOutput = pipe
     proc.standardError = Pipe()
-    try? proc.run()
+    do {
+        try proc.run()
+    } catch {
+        print("the fixture server did not start: \(error)")
+        return lastEndpoint
+    }
 
     let handle = pipe.fileHandleForReading
     let data = handle.availableData

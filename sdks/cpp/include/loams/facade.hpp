@@ -114,9 +114,55 @@ class LiveModule {
   /// standard variant arrives inside the envelope, after HTTP 200.
   MessageStream Watch(live_v1::WatchRequest* request);
 
+  /// `LiveService/Authenticate` (LV1 Task 17). Replaces an open session's identity
+  /// with this call's credential: `request->session_id()` names the session and the
+  /// credential is the client's own `Options::token_source`, so to re-authenticate as
+  /// another caller use a client built with that caller's source. `response->identity()`
+  /// is the session's identity version after the call: the same caller only extends the
+  /// session and leaves it unchanged, and a different caller (a sign-in or a sign-out)
+  /// bumps it, after which the next transition reruns every query as the new caller.
+  /// Compare it with the version you hold. An unknown session throws a `NotFoundError`.
+  /// Never retried: the request has no idempotency key.
+  void Authenticate(live_v1::AuthenticateRequest* request, live_v1::AuthenticateResponse* response);
+
   /// `LiveService/Query` in a chosen encoding, for the conformance suite.
   void QueryWith(live_v1::QueryRequest* request, live_v1::QueryResponse* response,
                  ContentType content_type);
+
+ private:
+  Client* client_;
+};
+
+/// The request header that selects one of a Live node's apps
+/// (`LiveAdminService`, LV1 Task 13). A request without it addresses the
+/// server's own app (`--live-app`). To address one app on every call, put it in
+/// `Options::headers`.
+inline constexpr char kLiveAppHeader[] = "loams-live-app";
+
+/// `loams.live.admin`: the Live app directory (LV1 Task 13).
+///
+/// Every method takes an optional trailing `app`: when it is not empty the call
+/// carries `loams-live-app: <app>`, so it addresses that app rather than the
+/// server's own.
+class LiveAdminModule {
+ public:
+  explicit LiveAdminModule(Client* client) : client_(client) {}
+
+  /// `LiveAdminService/CreateApp`. Registers an app in the node's directory. An existing name throws a `FailedPreconditionError` with reason `live_app_exists`; a node without the app directory, `live_app_disabled`. Never retried: it has no idempotency key.
+  void CreateApp(live_v1::CreateAppRequest* request, live_v1::CreateAppResponse* response,
+                 const std::string& app = "");
+  /// `LiveAdminService/ListApps`. One page of the node's apps (AIP-158: `apps`, `next_page_token`). Retry-safe. `PageIterator::For` follows the tokens.
+  void ListApps(live_v1::ListAppsRequest* request, live_v1::ListAppsResponse* response,
+                const std::string& app = "");
+  /// `LiveAdminService/GetApp`. One app by name. Retry-safe.
+  void GetApp(live_v1::GetAppRequest* request, live_v1::GetAppResponse* response,
+              const std::string& app = "");
+  /// `LiveAdminService/UpdateApp`. Updates an app's settings. Never retried.
+  void UpdateApp(live_v1::UpdateAppRequest* request, live_v1::UpdateAppResponse* response,
+                 const std::string& app = "");
+  /// `LiveAdminService/DeleteApp`. Removes an app from the directory. The server's own app (`--live-app`) cannot be deleted. Never retried.
+  void DeleteApp(live_v1::DeleteAppRequest* request, live_v1::DeleteAppResponse* response,
+                 const std::string& app = "");
 
  private:
   Client* client_;
@@ -240,6 +286,7 @@ class Loams {
 
   InstanceModule* Instance();
   LiveModule* Live();
+  LiveAdminModule* LiveAdmin();
   TablesModule* Tables();
   ApprovalsModule* Approvals();
   DevicesModule* Devices();
@@ -251,6 +298,7 @@ class Loams {
   std::shared_ptr<Client> client_;
   InstanceModule instance_;
   LiveModule live_;
+  LiveAdminModule live_admin_;
   TablesModule tables_;
   ApprovalsModule approvals_;
   DevicesModule devices_;

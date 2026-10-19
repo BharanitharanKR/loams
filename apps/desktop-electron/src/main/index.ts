@@ -7,18 +7,21 @@ import {
 	BrowserWindow,
 	crashReporter,
 	Notification,
+	nativeTheme,
 	safeStorage,
 	screen,
 	session,
 	shell,
 } from "electron";
 import { CH, type EngineState } from "../shared/contracts";
-import { VERSION_ARG } from "../shared/version";
+import { THEME_ARG, VERSION_ARG } from "../shared/version";
 import { registerChatIpc } from "./agent/ipc.electron";
 import type { ChatService } from "./agent/service";
 import { registerTools } from "./agent/tools";
 import { agentdDir, readAgentdTarget } from "./agentd/discover";
 import { registerAgentdIpc } from "./agentd/ipc.electron";
+import { type AgentdLauncher, createAgentdLauncher } from "./agentd/launch";
+import type { AgentdService } from "./agentd/service";
 import { createAgentdService } from "./agentd/setup";
 import { type StudioWatch, watchStudio } from "./agentd/studio-watch";
 import { appPaths } from "./app-paths";
@@ -37,6 +40,7 @@ import { FactoryHost } from "./factory/host";
 import { registerFactoryIpc } from "./factory/ipc.electron";
 import { Vault } from "./factory/vault";
 import { FactoryViews } from "./factory/views.electron";
+import { readPgControlTarget } from "./pgcontrol/target";
 import { registerPreviewIpc } from "./preview/ipc.electron";
 import { StudioPreviewView } from "./preview/view.electron";
 import {
@@ -52,6 +56,7 @@ import {
 	readLiveStore,
 	readNotifyPrefs,
 	readSetting,
+	readThemeChoice,
 	writeSetting,
 } from "./settings";
 import { getMainWindow, setMainWindow } from "./shell/main-window";
@@ -69,6 +74,7 @@ import {
 	shouldNotify,
 	studioTrayRoute,
 } from "./shell/studio-tray-model";
+import { registerThemeIpc } from "./shell/theme-ipc.electron";
 import { createTray, type TrayHandle } from "./shell/tray.electron";
 import { closeAction, TRAY_ROUTES } from "./shell/tray-model";
 import {
@@ -104,6 +110,9 @@ let studioPreview: StudioPreviewView | undefined;
 let chat: ChatService | undefined;
 let tray: TrayHandle | undefined;
 let studioWatch: StudioWatch | undefined;
+let agentdLauncher: AgentdLauncher | undefined;
+let agentdService: AgentdService | undefined;
+let agentdPoll: NodeJS.Timeout | undefined;
 let studio: StudioSnapshot = EMPTY_STUDIO;
 let isQuitting = false;
 const settingsFile = (): string =>
@@ -153,7 +162,10 @@ function createWindow(): BrowserWindow {
 			nodeIntegration: false,
 			webSecurity: true,
 			webviewTag: false,
-			additionalArguments: [`${VERSION_ARG}${app.getVersion()}`],
+			additionalArguments: [
+				`${VERSION_ARG}${app.getVersion()}`,
+				`${THEME_ARG}${readThemeChoice(settingsFile())}`,
+			],
 		},
 	});
 	secureWindow(win);
@@ -204,6 +216,9 @@ const singleInstance = initSingleInstance({
 	onPrimary: () => {
 		void app.whenReady().then(async () => {
 			app.setAppUserModelId("dev.loams.desktop");
+			// The theme choice (D1074): OS dialogs and menus follow it; Task 13 syncs the chrome.
+			nativeTheme.themeSource = readThemeChoice(settingsFile());
+			registerThemeIpc({ settingsFile, onTheme: () => {} });
 			registry = new ServerRegistry(
 				join(app.getPath("userData"), "servers.json"),
 				{ devDemo: !app.isPackaged },
@@ -290,15 +305,37 @@ const singleInstance = initSingleInstance({
 			});
 			registerStacksIpc(stacks, paths.logs);
 			registerSqlIpc(sql);
-			// DD1: the agent daemon's status panel (mock daemon in development builds).
+			// DD1: the agent daemon behind Studio and the status panel. It attaches to a
+			// running loams-agentd, else starts the bundled one (a child of the app until
+			// the user turns background agents on). The fixture mock is opt-in in development.
+			agentdLauncher = createAgentdLauncher({
+				dir: agentdDir(app.getPath("userData")),
+				logsDir: paths.logs,
+				candidates: paths.agentdBin,
+			});
 			const agentd = createAgentdService({
 				userData: app.getPath("userData"),
 				settingsFile: settingsFile(),
 				version: app.getVersion(),
-				mock: !app.isPackaged,
+				mock: !app.isPackaged && process.env.LOAMS_DESKTOP_AGENTD_MOCK === "1",
+				launcher: agentdLauncher,
 			});
+			agentdService = agentd;
 			registerAgentdIpc(agentd);
-			void agentd.attach();
+			void agentd.attach().then(async () => {
+				if (
+					agentd.status().state === "stopped" &&
+					process.env.LOAMS_DESKTOP_AGENTD_AUTOSTART !== "0" &&
+					agentdLauncher?.binary()
+				) {
+					const r = await agentd.start();
+					if (!r.ok) console.error("[agentd] start failed:", r.message);
+				}
+			});
+			// A daemon started outside the app (or restarted) is picked up within seconds.
+			agentdPoll = setInterval(() => {
+				if (agentd.status().state !== "running") void agentd.attach();
+			}, 5_000);
 			// SD1 Task 28: Studio's editor hand-off and notification choices.
 			registerStudioIpc({ settingsFile: settingsFile() });
 			// With the TiKV stack chosen, a stack left running from last time starts the engine
@@ -319,6 +356,8 @@ const singleInstance = initSingleInstance({
 				),
 				// SD1 Task 5: the daemon's loams.agentd.v1 listener; main alone reads its token.
 				agentd: () => readAgentdTarget(agentdDir(app.getPath("userData"))),
+				// PG2 R9.1: loams.postgres.v1 on pg-control's own listener.
+				pgControl: () => readPgControlTarget(settingsFile()),
 			});
 			const open = (): BrowserWindow => {
 				const w = createWindow();
@@ -333,6 +372,7 @@ const singleInstance = initSingleInstance({
 				},
 			});
 			updater = startUpdater({
+				settingsFile: settingsFile(),
 				prepareToInstall: async () => {
 					await engine?.stop();
 				},
@@ -421,6 +461,10 @@ const singleInstance = initSingleInstance({
 			if (quitting) return;
 			quitting = true;
 			studioWatch?.stop();
+			clearInterval(agentdPoll);
+			void agentdService?.dispose();
+			// A child daemon stops with the app; the background service keeps running.
+			agentdLauncher?.killChild();
 			tray?.destroy();
 			factoryEmbed?.closeAll();
 			factoryViews?.closeAll();

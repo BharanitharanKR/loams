@@ -97,9 +97,12 @@ function connectorCatalog(): Plugin {
 /**
  * The console's CSP, in production builds only (Vite's dev server injects
  * inline scripts): no `unsafe-eval` and no remote source (§37 §6.3).
+ * `wasm-unsafe-eval` lets WebAssembly compile (and nothing else): the code
+ * viewers highlight with Shiki's WASM engine (@pierre/diffs `shiki-wasm`), and
+ * without it every diff and file view rendered empty in a production build.
  */
 const CSP =
-  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; " +
+  "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; " +
   "img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-src 'self'; " +
   "object-src 'none'; base-uri 'none'; form-action 'self'";
 
@@ -130,6 +133,8 @@ export default defineConfig({
     proxy: {
       '/api': api,
       '/v1': api,
+      // The durable API (promises and schedules) on the engine's main port (B12).
+      '/durable/': api,
       // The app protos over Connect (`/loams.<package>.<Service>/<Method>`), as the
       // desktop shell proxies them: the `?desktop` preview's pages read them here.
       '^/loams\\.[a-z0-9_.]+\\.[A-Za-z0-9]+/': api,
@@ -156,6 +161,7 @@ export default defineConfig({
     // So do the browser tests (AP1d Task 4, D638), which need a real Chrome and
     // run under `test:browser`. Under jsdom `document.modelContext` does not
     // exist at all, which is the whole reason that harness is separate.
-    exclude: [...configDefaults.exclude, 'deploy/**', 'browser/**'],
+    // Studio's end-to-end specs are Playwright's (SD1 Task 29, `test:e2e`).
+    exclude: [...configDefaults.exclude, 'deploy/**', 'browser/**', 'test/e2e/**'],
   },
 });

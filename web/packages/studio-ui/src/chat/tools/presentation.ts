@@ -1,7 +1,7 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // packages/client-runtime/src/work-log/presentation.ts at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// the tool presentation rules (action per call, present and past tense labels, group summaries of at most two actions plus a remainder, the live thought line) retargeted from T3's turn items to agentd's `ToolCall` kinds; no MCP-app, pull-request, image or source tables. Loams' changes are Apache-2.0.
+// the tool presentation rules (action per call, present and past tense labels, group summaries of at most two actions plus a remainder, the live thought line) retargeted from T3's turn items to agentd's `ToolCall` kinds; no MCP-app, pull-request, image or source tables; the live thought line's link pattern made linear-time (CodeQL js/polynomial-redos). Loams' changes are Apache-2.0.
 
 // How a tool call reads in Studio's timeline (SD1 Task 18, inventory (b)): each agentd
 // `ToolCall` kind maps to an action, a verb in two tenses and a one-line detail. A run
@@ -230,7 +230,7 @@ export function summarizeToolGroup(parts: ReadonlyArray<ToolPart>): {
 export function liveThoughtLine(markdown: string): string {
   const heading = /^\s*\*\*([^*\r\n]+)\*\*[ \t]*\r?(?:\n|$)/.exec(markdown)?.[1];
   const text = (heading ?? markdown)
-    .replace(/!?\[([^\]]*)\]\([^)]*\)/g, "$1")
+    .replace(/!?\[([^[\]]*)\]\([^)[\]]*\)/g, "$1")
     .replace(/^[ \t]*(?:#{1,6}|[-*+]|\d+\.)[ \t]+/gm, "")
     .replace(/`+|\*\*|~~/g, "")
     .replace(/(^|[^\w*])[*_]([^*_\n]+)[*_](?![\w*])/g, "$1$2")

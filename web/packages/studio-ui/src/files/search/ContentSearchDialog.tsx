@@ -57,7 +57,7 @@ function SearchOptionButton(props: {
         pressed={props.active}
         onPressedChange={props.onClick}
       >
-        <span className="font-mono">{props.children}</span>
+        <span className={/* mono-ok: code */ "font-mono"}>{props.children}</span>
       </Toggle>
     </Tooltip>
   );
@@ -270,7 +270,7 @@ export function ContentSearchDialog(props: {
                           data-content-search-result={match.resultIndex}
                           aria-label={`${match.path}, line ${match.line}`}
                           className={cx(
-                            "flex h-7 w-full min-w-0 cursor-pointer items-center gap-3 border-0 bg-transparent px-1 text-left font-mono text-[0.78rem] text-ink hover:bg-raised",
+                            /* mono-ok: path */ "flex h-7 w-full min-w-0 cursor-pointer items-center gap-3 border-0 bg-transparent px-1 text-left font-mono text-[0.78rem] text-ink hover:bg-raised",
                             match.resultIndex === selectedIndex && "bg-raised",
                           )}
                           onMouseEnter={() => setSelectedIndex(match.resultIndex)}

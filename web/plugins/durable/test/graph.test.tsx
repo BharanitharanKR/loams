@@ -416,7 +416,7 @@ describe('graph ui', () => {
       'nightly-report · sample:report-2210 (sample)',
     ]);
     const list = await screen.findByRole('list', { name: 'Steps of fulfil-order' });
-    expect(screen.getByText('Sample run')).toBeTruthy();
+    expect(screen.getAllByText('Sample data').length).toBeGreaterThanOrEqual(2);
     expect(
       screen.getByRole('region', { name: /Execution graph of fulfil-order: 9 steps/ }),
     ).toBeTruthy();

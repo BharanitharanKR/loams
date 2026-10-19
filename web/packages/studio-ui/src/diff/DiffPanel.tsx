@@ -1,7 +1,7 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/DiffPanel.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/studio-ui/LICENSE.t3code). Modified by The Loams Authors:
-// data from the DiffSource seam (agentd's DiffService, ReviewService and GitService) with TanStack Query in place of atoms and Effect; agentd's four sources (working tree, branch against a base, commit, latest turn); @loams/ui primitives on tokens; review comments stored by the daemon with "send to the agent" and "post to PR"; discard with confirmation and the expected checksum; viewed marks and word diff added; no find-in-diff (§53 §9.1), editor hand-off, context menu, settings store or lazy per-file patches. Loams' changes are Apache-2.0.
+// data from the DiffSource seam (agentd's DiffService, ReviewService and GitService) with TanStack Query in place of atoms and Effect; agentd's four sources (working tree, branch against a base, commit, latest turn); @loams/ui primitives on tokens; review comments stored by the daemon with "send to the agent" and "post to PR"; discard with confirmation and the expected checksum; viewed marks and word diff added; no find-in-diff (§53 §9.1), editor hand-off, context menu, settings store or lazy per-file patches; the panel's state kept per source key and an unchanged snapshot kept as is, so a draft survives the thread's updates. Loams' changes are Apache-2.0.
 
 // The thread panel's diff (SD1 Task 20; §53 §5.6, D905). The working tree against HEAD is
 // the default; a branch against a base, one commit, or the latest turn are the other
@@ -94,9 +94,14 @@ function errorText(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
-function newCommentId(): string {
+/** The same snapshot of the same checkout: what the reader sees would not change. */
+function sameDiff(a: CheckoutDiffView, b: CheckoutDiffView): boolean {
   return (
-    globalThis.crypto?.randomUUID?.() ?? `c-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    a.checkoutId === b.checkoutId &&
+    a.cwd === b.cwd &&
+    a.checksum === b.checksum &&
+    a.truncated === b.truncated &&
+    a.patch === b.patch
   );
 }
 
@@ -127,15 +132,33 @@ export function DiffPanel({ threadId, source, onOpenFile, className }: DiffPanel
   const viewedPaths = useDiffPanelStore((state) => state.viewedByThread[threadId]);
   const { select, selectBranchBaseRef, setView, setViewed } = useDiffPanelStore.getState();
 
-  // The working tree's diff follows the daemon's watch.
+  // The panel's diff, comments and drafts belong to the source's key (the daemon and the
+  // thread). A host may hand over a new source object for the same key, as the thread's row
+  // changes (its branch renamed after the first turn, its checkout stamped): the watches
+  // stay open and the viewer stays mounted, so a half-written comment is kept. Calls that
+  // read the thread (the open pull request, the branches) take the newest object.
+  const [keyed, setKeyed] = useState(source);
+  if (keyed.key !== source.key) setKeyed(source);
+  const stable = keyed.key === source.key ? keyed : source;
+
+  // The working tree's diff follows the daemon's watch. A snapshot with the diff the panel
+  // already shows (the watch's first frame after the one-shot read, or any re-send) keeps
+  // the current object, so the viewer does not render the file again.
   const [working, setWorking] = useState<{ diff?: CheckoutDiffView; error?: Error }>({});
   useEffect(() => {
     setWorking({});
-    return source.watchWorkingDiff(
-      (diff) => setWorking({ diff }),
+    return stable.watchWorkingDiff(
+      (diff) =>
+        setWorking((current) =>
+          current.diff && sameDiff(current.diff, diff)
+            ? current.error
+              ? { diff: current.diff }
+              : current
+            : { diff },
+        ),
       (error) => setWorking((current) => ({ ...current, error })),
     );
-  }, [source]);
+  }, [stable]);
 
   const branches = useQuery({
     queryKey: ["studio-diff", source.key, "branches"],
@@ -195,8 +218,8 @@ export function DiffPanel({ threadId, source, onOpenFile, className }: DiffPanel
     setComments([]);
     setCommentsError(null);
     if (!checkoutId) return;
-    return source.watchComments(checkoutId, setComments, setCommentsError);
-  }, [checkoutId, source]);
+    return stable.watchComments(checkoutId, setComments, setCommentsError);
+  }, [checkoutId, stable]);
 
   // The open pull request, for "Post to PR".
   const [changeRequest, setChangeRequest] = useState<ChangeRequestInfo | null>(null);
@@ -253,9 +276,9 @@ export function DiffPanel({ threadId, source, onOpenFile, className }: DiffPanel
   const loadDiffFiles = useMemo(
     () =>
       diff && effective && !diff.truncated
-        ? createDiffFileContentsLoader(source, effective, diff)
+        ? createDiffFileContentsLoader(stable, effective, diff)
         : undefined,
-    [diff, effective, source],
+    [diff, effective, stable],
   );
 
   // Review actions and discards report here.
@@ -289,7 +312,9 @@ export function DiffPanel({ threadId, source, onOpenFile, className }: DiffPanel
     const existing = save.id ? comments.find((comment) => comment.id === save.id) : undefined;
     try {
       await source.upsertComment({
-        id: save.id ?? newCommentId(),
+        // A new comment has no id: the daemon assigns one, and refuses an id it does not
+        // know (UpsertReviewComment, G9; SD1 Task 29 found the client inventing one).
+        id: save.id ?? "",
         checkoutId,
         path: save.path,
         side: save.anchor.side,
@@ -375,7 +400,7 @@ export function DiffPanel({ threadId, source, onOpenFile, className }: DiffPanel
       <div className="flex shrink-0 flex-wrap items-center gap-0.5">
         {diff && files.length > 0 ? (
           <span
-            className="mr-1 font-mono text-[0.72rem] tabular-nums"
+            className="mr-1 text-[0.72rem] tabular-nums"
             title={`${diff.additions} additions, ${diff.deletions} deletions`}
           >
             <span className="text-grow">+{diff.additions}</span>{" "}
@@ -567,7 +592,7 @@ export function DiffPanel({ threadId, source, onOpenFile, className }: DiffPanel
         <p className="m-0 mb-2 text-[0.75rem] text-muted">{renderable.reason}</p>
         <pre
           className={cx(
-            "m-0 border border-rule-soft bg-surface p-3 font-mono text-[0.75rem] leading-relaxed text-ink",
+            /* mono-ok: code */ "m-0 border border-rule-soft bg-surface p-3 font-mono text-[0.75rem] leading-relaxed text-ink",
             view.wrap ? "whitespace-pre-wrap break-words" : "overflow-auto",
           )}
         >

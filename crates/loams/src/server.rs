@@ -8,7 +8,7 @@ use std::collections::BTreeMap;
 use std::net::SocketAddr;
 #[cfg(unix)]
 use std::os::fd::AsFd;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -294,6 +294,11 @@ pub struct ServerConfig {
     /// `dev` and `standalone` only: a cluster node refuses any other mode
     /// until MT1.
     pub auth: crate::auth::AuthConfig,
+    /// TLS on `--listen` (`LOAMS_TLS_*`, [`crate::tls`]; LV1 plan Task 18).
+    /// Off by default. `dev` and `standalone` only. Loams Live on a
+    /// non-loopback `--listen` needs it (or TLS ended at a trusted proxy)
+    /// and authentication.
+    pub tls: crate::tls::TlsConfig,
 }
 
 /// Loams Git's server settings (GT1 Task 13).
@@ -317,6 +322,10 @@ pub struct GitConfig {
     /// How often the `_git` mirror is repaired: whatever a crash left unmirrored is published
     /// (GT1 Task 15; default 1 h).
     pub mirror_repair_every: Duration,
+    /// Workspaces are read only by their owner and org admins (`--git-workspace-reads-owner`,
+    /// GT-Q13's alternative). Off by default: whoever may read a repository reads its
+    /// workspaces (GT1 Task 25).
+    pub workspace_reads_owner_only: bool,
 }
 
 #[cfg(feature = "git")]
@@ -330,6 +339,7 @@ impl Default for GitConfig {
             listen: None,
             tokens: None,
             mirror_repair_every: Duration::from_secs(3600),
+            workspace_reads_owner_only: false,
         }
     }
 }
@@ -477,6 +487,7 @@ impl ServerConfig {
             git: GitConfig::default(),
             house: crate::api::house_proxy::HouseProxyConfig::default(),
             auth: crate::auth::AuthConfig::off(),
+            tls: crate::tls::TlsConfig::off(),
         }
     }
 
@@ -539,6 +550,13 @@ impl ServerConfig {
             }
             if loams_live::check_listen(live.listen).is_err() {
                 return Err(ServerError::LiveListenNotLoopback { addr: live.listen });
+            }
+            // LV1 plan Task 18 (the rule of MT1 Task 7): beyond loopback,
+            // Live is served only behind TLS and authentication.
+            if !self.listen.ip().to_canonical().is_loopback()
+                && !(self.tls.secures() && self.auth.enforced())
+            {
+                return Err(ServerError::LiveListenNeedsTlsAndAuth { addr: self.listen });
             }
             // LV1 plan Task 5: strangers' code never runs in this process.
             loams_live::check_isolation(live).map_err(|e| ServerError::Config(e.to_string()))?;
@@ -607,6 +625,14 @@ impl ServerConfig {
     /// `off` only on loopback (preview contract); a cluster node keeps its
     /// private-network routes and refuses any other mode until MT1.
     fn validate_auth(&self) -> Result<(), ServerError> {
+        self.tls.check().map_err(ServerError::Config)?;
+        if self.cluster.is_some() && self.tls.configured() {
+            return Err(ServerError::Config(
+                "LOAMS_TLS_* are for dev and standalone; a cluster node's listeners stay on a \
+                 private network until MT1"
+                    .to_string(),
+            ));
+        }
         if self.cluster.is_some() {
             if self.auth.enforced() {
                 return Err(ServerError::Config(format!(
@@ -640,8 +666,8 @@ impl ServerConfig {
     }
 
     /// Loams Graph (GR1 Task 5): graphs need a data directory unless they are explicitly
-    /// ephemeral, and with no authorizer before MT1 (D750) graph RPCs are served on a loopback
-    /// address only.
+    /// ephemeral, and graph RPCs are authorized per graph from the admitted principal (GR1
+    /// Task 24, D750), so without authentication they are served on a loopback address only.
     #[cfg(feature = "graph")]
     fn validate_graph(&self) -> Result<(), ServerError> {
         if !self.serves_graph() {
@@ -650,9 +676,9 @@ impl ServerConfig {
         if self.graph.data_dir.is_none() && !self.graph.ephemeral {
             return Err(ServerError::GraphNeedsDataDir);
         }
-        // Authenticated principals stand in for D750's authorizer until MT1:
-        // the preview engine is single-tenant, so everyone admitted is its
-        // owner.
+        // The graph authorizer reads the admitted principal's roles (GR1 Task
+        // 24): with authentication off everyone is the operator, which only a
+        // loopback listener may serve.
         if !self.listen.ip().is_loopback() && !self.auth.enforced() {
             return Err(ServerError::GraphListenNotLoopback { addr: self.listen });
         }
@@ -717,6 +743,24 @@ impl ServerConfig {
     }
 }
 
+/// Runs the startup gate (design §54 §4.3, UP1 Task 4) before any listener
+/// of the node opens: a refused start is [`ServerError::Startup`], and an
+/// empty store is stamped at this release.
+async fn startup_gate(meta: &Arc<dyn MetaStore>, data_dir: &Path) -> Result<(), ServerError> {
+    use loams_migrate::startup::{self, StartupVerdict};
+    let release = env!("CARGO_PKG_VERSION");
+    match startup::check_startup(meta.clone(), data_dir, release).await? {
+        StartupVerdict::Ready => Ok(()),
+        StartupVerdict::NewStack => {
+            let holder = format!("loams-{}-{}", std::process::id(), Ulid::generate());
+            startup::stamp_new_stack(meta.clone(), release, &holder, None).await?;
+            tracing::info!(release, "new stack: stamped the stack record");
+            Ok(())
+        }
+        StartupVerdict::Refuse { code, detail } => Err(ServerError::Startup { code, detail }),
+    }
+}
+
 /// Why the server could not start.
 #[derive(Debug, thiserror::Error)]
 pub enum ServerError {
@@ -732,6 +776,14 @@ pub enum ServerError {
     Store(#[from] loams_store::StoreError),
     #[error("metastore: {0}")]
     Meta(#[from] loams_meta::MetaError),
+    /// The startup gate refused the data (design §54 §4.3, UP1 Task 4):
+    /// `format_unreadable`, `migration_incomplete` or `stack_unrecognised`.
+    /// The process exits 78.
+    #[error("{code}: {detail}")]
+    Startup { code: &'static str, detail: String },
+    /// The startup gate could not read the ledger.
+    #[error("the upgrade ledger: {0}")]
+    Ledger(#[from] loams_migrate::ledger::Error),
     /// The TiKV metastore's GC loop could not start (R1 plan Task 6).
     #[cfg(feature = "tikv")]
     #[error("TiKV: {0}")]
@@ -744,11 +796,13 @@ pub enum ServerError {
          --no-graph"
     )]
     GraphNeedsDataDir,
-    /// Graph RPCs on a non-loopback address before the authorizer exists (D750, until MT1).
+    /// Graph RPCs on a non-loopback address without authentication (D750): every caller would
+    /// be the operator.
     #[cfg(feature = "graph")]
     #[error(
-        "--listen {addr} is not a loopback address, and Loams Graph has no authorizer until the \
-         unified auth plan (D750, MT1); listen on a loopback address or pass --no-graph"
+        "--listen {addr} is not a loopback address, and authentication is off, so every Loams \
+         Graph caller would be the operator (D750); turn authentication on, listen on a loopback \
+         address, or pass --no-graph"
     )]
     GraphListenNotLoopback { addr: SocketAddr },
     /// `--git-listen` is not a loopback address (GT1 Task 16, D111): the git listener's tokens
@@ -771,6 +825,16 @@ pub enum ServerError {
          until the unified auth plan (D111)"
     )]
     LiveListenNotLoopback { addr: SocketAddr },
+    /// Loams Live on a non-loopback `--listen` without TLS and
+    /// authentication (LV1 plan Task 18, design §45 §6.1, MT1 Task 7).
+    #[cfg(feature = "live")]
+    #[error(
+        "--listen listen on {addr}: non-loopback addresses need [tls] and [auth] (MT1): set \
+         LOAMS_TLS_CERT_FILE and LOAMS_TLS_KEY_FILE (or LOAMS_TLS_TERMINATED_BY_PROXY=true with \
+         LOAMS_TLS_TRUSTED_PROXIES) and LOAMS_AUTH_MODE, bind --listen to 127.0.0.1, or pass \
+         --no-live"
+    )]
+    LiveListenNeedsTlsAndAuth { addr: SocketAddr },
     /// Loams Live could not start (R1 plan Task 12).
     #[cfg(feature = "live")]
     #[error("Loams Live: {0}")]
@@ -867,13 +931,32 @@ impl Durable {
     #[cfg(feature = "durable")]
     async fn start(config: &ServerConfig, node_id: u64) -> Result<Self, ServerError> {
         match &config.durable {
-            Some(durable) => Ok(Self {
-                server: Some(
-                    loams_durable::DurableServer::start(durable.clone(), &node_id.to_string())
-                        .await?,
-                ),
-                runtime: None,
-            }),
+            Some(durable) => {
+                let server = match loams_durable::DurableServer::start(
+                    durable.clone(),
+                    &node_id.to_string(),
+                )
+                .await
+                {
+                    Ok(server) => server,
+                    // A store whose schema is behind is not migrated by
+                    // serving (UP1 Task 6): the startup gate's refusal.
+                    Err(err) if err.to_string().contains("database is at migration") => {
+                        return Err(ServerError::Startup {
+                            code: "migration_incomplete",
+                            detail: format!(
+                                "the durable store needs its migrations: {err}; run \
+                                     `loams migrate run` (or `loams durable migrate`)"
+                            ),
+                        });
+                    }
+                    Err(err) => return Err(err.into()),
+                };
+                Ok(Self {
+                    server: Some(server),
+                    runtime: None,
+                })
+            }
             None => Ok(Self::none()),
         }
     }
@@ -925,6 +1008,20 @@ impl Durable {
         if let Some(server) = self.server {
             server.stop().await;
         }
+    }
+
+    /// The server's protocol endpoint, for `POST /durable/` on the main
+    /// port (B12).
+    #[cfg(feature = "durable")]
+    fn endpoint(&self) -> Option<api::durable::DurableHandle> {
+        self.server
+            .as_ref()
+            .map(|server| Arc::new(server.gateway()) as api::durable::DurableHandle)
+    }
+
+    #[cfg(not(feature = "durable"))]
+    fn endpoint(&self) -> Option<api::durable::DurableHandle> {
+        None
     }
 
     #[cfg(feature = "durable")]
@@ -1111,11 +1208,14 @@ impl LiveRuntime {
     /// 10), which names the caller for the admin service.
     #[cfg_attr(not(feature = "live-tikv"), allow(unused_variables))]
     async fn start(
-        config: loams_live::LiveConfig,
+        mut config: loams_live::LiveConfig,
         bundles: Store,
         own_gc: bool,
         auth: Arc<crate::auth::Auth>,
     ) -> Result<Self, ServerError> {
+        // A node that authenticates its callers forwards session calls only
+        // to nodes that do too (LV1 plan Task 24).
+        config.forward.authenticated = auth.enforced();
         let loader = loams_live_js::JsLoader::new(loams_live_js::JsConfig {
             isolation: config.isolation,
             ..loams_live_js::JsConfig::default()
@@ -1125,7 +1225,9 @@ impl LiveRuntime {
             bundles,
             loader: Arc::new(loader),
         };
-        let layer = crate::auth::AuthLayerState::new(auth, &[]);
+        let layer = crate::auth::AuthLayerState::new(auth, &[])
+            .leaving_to_apps()
+            .with_app_origins(app_origin_set(&config));
         let guard: loams_live::service::Guard = Arc::new(move |router: axum::Router| {
             layer.wrap(router.layer(axum::middleware::from_fn(crate::api::live::caller)))
         });
@@ -1168,21 +1270,57 @@ impl LiveRuntime {
     }
 }
 
-/// The main port's state without Loams Live when `listen` is not loopback
-/// (`None`: serve `state` as it is). Until LV1 Task 18 brings TLS and the
-/// non-loopback rule, Live is served on a loopback main port and on the
-/// `tailscale serve` target only (itself loopback, reached over the tailnet
-/// with the tailnet's TLS); elsewhere the main port answers
-/// `feature_not_in_variant` for it, and the start says so once.
+/// The browser origins Live's active apps list, for the engine's CORS
+/// layer (LV1 plan Task 18): the handle `live`'s app engines keep current.
 #[cfg(feature = "live")]
-fn without_live_beyond_loopback(state: &AppState, listen: SocketAddr) -> Option<AppState> {
-    if state.live.is_none() || listen.ip().is_loopback() {
+fn app_origin_set(live: &loams_live::LiveConfig) -> crate::auth::layer::AppOriginSet {
+    let origins = live.app_origins.clone();
+    crate::auth::layer::AppOriginSet::new(move |origin| origins.contains(origin))
+}
+
+/// Whether the main port may serve Loams Live (LV1 plan Task 18, design
+/// §45 §6.1): on loopback, or behind TLS (here or at a trusted proxy) and
+/// authentication. [`ServerConfig::validate`] refuses to start Live on any
+/// other `--listen`, so this only guards the router.
+#[cfg(feature = "live")]
+fn main_port_serves_live(config: &ServerConfig) -> bool {
+    config.listen.ip().to_canonical().is_loopback()
+        || (config.tls.secures() && config.auth.enforced())
+}
+
+/// Whether the main port may serve the durable API under `/durable/` (B12):
+/// as for Loams Live ([`main_port_serves_live`]), on loopback, or behind TLS
+/// and authentication. The durable listener itself is loopback only (D111).
+fn main_port_serves_durable(config: &ServerConfig) -> bool {
+    let serves = config.cluster.is_none()
+        && (config.listen.ip().to_canonical().is_loopback()
+            || (config.tls.secures() && config.auth.enforced()));
+    #[cfg(feature = "durable")]
+    if !serves && config.durable.is_some() {
+        tracing::warn!(
+            listen = %config.listen,
+            "the durable API is not served under /durable/ on --listen {}: beyond loopback it \
+             needs TLS and authentication",
+            config.listen
+        );
+    }
+    serves
+}
+
+/// The main port's state without Loams Live when it may not serve it
+/// ([`main_port_serves_live`]; `None`: serve `state` as it is). The
+/// `tailscale serve` target (loopback, with the tailnet's TLS) serves it
+/// regardless.
+#[cfg(feature = "live")]
+fn without_live_beyond_loopback(state: &AppState, config: &ServerConfig) -> Option<AppState> {
+    if state.live.is_none() || main_port_serves_live(config) {
         return None;
     }
     tracing::warn!(
-        %listen,
-        "Loams Live is not served on --listen {listen}: until it has TLS (LV1 Task 18) it is \
-         served on a loopback --listen and over the tailnet (LOAMS_TAILSCALE_LISTEN) only"
+        listen = %config.listen,
+        "Loams Live is not served on --listen {}: beyond loopback it needs TLS and \
+         authentication (LV1 Task 18)",
+        config.listen
     );
     Some(AppState {
         live: None,
@@ -1232,6 +1370,10 @@ struct NodeSetup {
     /// What the start built before the node (Loams Live, and the
     /// authentication its listener shares with the node's surfaces).
     pre: Prebuilt,
+    /// The embedded durable server's endpoint for `POST /durable/` on the
+    /// main port (B12); `None` on a cluster node, whose main port is not
+    /// guarded.
+    durable: Option<api::durable::DurableHandle>,
 }
 
 /// What `start_with_live` builds before the node: the authentication (LV1
@@ -1291,6 +1433,8 @@ struct GraphRuntime {
     data_dir: Option<PathBuf>,
     stop: CancellationToken,
     maintenance: JoinHandle<()>,
+    /// The task applying the LINKED graphs' links this node serves (GR1 Task 18).
+    links: (loams_graph::link::LinkRunner, JoinHandle<()>),
     shutdown_wait: Duration,
     /// Catalog sweeps the maintenance task has completed.
     sweeps: Arc<std::sync::atomic::AtomicU64>,
@@ -1311,6 +1455,7 @@ impl GraphRuntime {
         reader: LogReader,
         log_node: u64,
         registry: Option<Arc<NodeRegistry>>,
+        link: LinkConfig,
     ) -> Result<Self, ServerError> {
         use loams_graph::Engine;
         use loams_graph::catalog::GraphCatalog;
@@ -1415,12 +1560,34 @@ impl GraphRuntime {
                 }
             })
         };
+        // The links of the LINKED graphs this node owns (GR1 Task 18): every pass applies each
+        // link whose collection has records the graph has not.
+        let links = {
+            let runner = loams_graph::link::LinkRunner::new((*admin).clone(), link);
+            let (task_runner, stop) = (runner.clone(), stop.clone());
+            let task = tokio::spawn(async move {
+                let mut tick = tokio::time::interval(loams_graph::link::LinkRunner::EVERY);
+                tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+                loop {
+                    tokio::select! {
+                        () = stop.cancelled() => return,
+                        _ = tick.tick() => {}
+                    }
+                    let committed = task_runner.run_once().await;
+                    if committed > 0 {
+                        tracing::debug!(links = committed, "applied graph links");
+                    }
+                }
+            });
+            (runner, task)
+        };
         Ok(Self {
             admin,
             log,
             data_dir: config.data_dir.clone(),
             stop,
             maintenance,
+            links,
             shutdown_wait: config.shutdown_wait,
             sweeps,
             checkpoints,
@@ -1434,6 +1601,15 @@ impl GraphRuntime {
     /// [`GraphConfig::shutdown_wait`]).
     async fn stop(self) {
         self.stop.cancel();
+        let (runner, mut links) = self.links;
+        runner.stop();
+        if tokio::time::timeout(self.shutdown_wait, &mut links)
+            .await
+            .is_err()
+        {
+            tracing::warn!("a graph link pass outlasted the shutdown wait; abandoned");
+            links.abort();
+        }
         let mut maintenance = self.maintenance;
         if tokio::time::timeout(self.shutdown_wait, &mut maintenance)
             .await
@@ -1473,6 +1649,7 @@ impl GitRuntimeHandle {
         config: &GitConfig,
         meta: Arc<dyn MetaStore>,
         store: Store,
+        h1: RangeCache,
         sink: Arc<api::git_events::StreamSink>,
         cluster: Option<loams_git::Cluster>,
         listener: Option<(
@@ -1511,6 +1688,12 @@ impl GitRuntimeHandle {
             catalog: catalog.clone(),
             sequencers: Arc::new(sequencers),
             watch_heartbeat: config.watch_heartbeat,
+            store: store.clone(),
+            h1,
+            // The workspace store (GT1 Task 25, ruling T18.1).
+            workspaces: Arc::new(loams_git::ws::StoreWsLookup::new(store.clone())),
+            ws_saved: tokio::sync::broadcast::channel(256).0,
+            ws_reads_owner_only: config.workspace_reads_owner_only,
         });
         let stop = CancellationToken::new();
         let purge = {
@@ -1590,6 +1773,19 @@ async fn purge_deleted_repos(
     catalog: &loams_git::BucketRepoCatalog,
     grace: Duration,
 ) {
+    // A kept upgrade snapshot may restore a repository deleted since: purge
+    // nothing until it is pruned (UP1 Task 8).
+    match loams_common::meta::snapshot_gc_floor(meta).await {
+        Ok(None) => {}
+        Ok(Some(_)) => {
+            tracing::debug!("an upgrade snapshot is kept: the repository purge waits");
+            return;
+        }
+        Err(err) => {
+            tracing::warn!(%err, "reading the upgrade snapshots for the repository purge failed");
+            return;
+        }
+    }
     let namespaces = match meta
         .namespaces(loams_common::meta::Consistency::Local)
         .await
@@ -1701,6 +1897,7 @@ impl Flight {
         streams: Arc<dyn StreamProducer>,
         config: FlightConfig,
         guard: crate::auth::AuthLayerState,
+        graph_callers: loams_query::flight::GraphCallers,
     ) -> Self {
         let stop = CancellationToken::new();
         let puts = PutTasks::new();
@@ -1712,6 +1909,7 @@ impl Flight {
             stop.clone(),
             puts.clone(),
             guard,
+            graph_callers,
         ));
         Self {
             addr,
@@ -1745,6 +1943,7 @@ impl Flight {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 async fn serve(
     listener: tokio::net::TcpListener,
     collections: Arc<CollectionService>,
@@ -1753,6 +1952,7 @@ async fn serve(
     stop: CancellationToken,
     puts: PutTasks,
     guard: crate::auth::AuthLayerState,
+    graph_callers: loams_query::flight::GraphCallers,
 ) {
     let served = serve_flight_sql_wrapped(
         listener,
@@ -1761,6 +1961,7 @@ async fn serve(
         config,
         stop,
         puts,
+        graph_callers,
         |routes| guard.wrap_grpc(routes),
     )
     .await;
@@ -1963,7 +2164,11 @@ impl Server {
         mut config: ServerConfig,
         pre: Prebuilt,
     ) -> Result<Self, ServerError> {
+        startup_gate(&meta_store, &config.data_dir).await?;
         let (listener, local_addr) = bind(config.listen).await?;
+        // LV1 plan Task 18: TLS (or a trusted proxy's connections only).
+        let listener =
+            crate::tls::MainListener::new(listener, &config.tls).map_err(ServerError::Config)?;
         // After the leader, before the collection service (row T0-6).
         let durable = Durable::start(&config, NODE_ID).await?;
         let setup = NodeSetup {
@@ -1976,6 +2181,7 @@ impl Server {
             extra_sources: Vec::new(),
             node_info: None,
             pre,
+            durable: durable.endpoint(),
         };
         let parts = match Self::assemble(&mut config, store, setup).await {
             Ok(parts) => parts,
@@ -2308,6 +2514,7 @@ impl Server {
                 join_changed,
             })),
             pre: Prebuilt::default(),
+            durable: None,
         };
         // After the leader, before the collection service (row T0-6).
         let durable = match Durable::start(config, node_id).await {
@@ -2349,6 +2556,7 @@ impl Server {
             extra_sources,
             node_info,
             pre,
+            durable,
         } = setup;
         // Built before anything is bound: a bad key file or OIDC setting
         // stops the start with nothing to undo. A cluster node is not
@@ -2365,13 +2573,44 @@ impl Server {
         // The principal store (API2 Tasks 6 and 7): its sessions and API
         // keys authenticate through `auth` from here on.
         let principals = crate::auth::Principals::attach(&auth, meta_store.clone(), store.clone());
+        // LV1 plan Task 17: a revoked key or a removed member closes its
+        // Live sessions.
+        #[cfg(feature = "live")]
+        if let Some(live) = &live {
+            tokio::spawn(crate::api::live::close_revoked(
+                principals.directory.subscribe(),
+                live.clone(),
+            ));
+        }
         let guard = crate::auth::AuthLayerState::new(auth.clone(), &[]);
+        // Whether requests are authenticated, for the wire listeners' graph caller below.
+        #[cfg(any(feature = "pgwire", feature = "mysql-wire"))]
+        let auth_enforced = auth.enforced();
         let main_guard =
             crate::auth::AuthLayerState::new(auth.clone(), crate::auth::layer::MAIN_PUBLIC_PATHS);
         let tailscale_guard = crate::auth::AuthLayerState::tailscale_target(
             auth,
             crate::auth::layer::MAIN_PUBLIC_PATHS,
         );
+        // LV1 plan Task 16: where Live is served, its end users' calls go to
+        // the app (the main port serves Live on loopback, or behind TLS and
+        // authentication, Task 18).
+        #[cfg(feature = "live")]
+        let (main_guard, tailscale_guard) = match &live {
+            Some(_) if main_port_serves_live(config) => {
+                let origins = config.live.as_ref().map(app_origin_set);
+                let main_guard = main_guard.leaving_to_apps();
+                (
+                    match origins {
+                        Some(origins) => main_guard.with_app_origins(origins),
+                        None => main_guard,
+                    },
+                    tailscale_guard.leaving_to_apps(),
+                )
+            }
+            Some(_) => (main_guard, tailscale_guard.leaving_to_apps()),
+            None => (main_guard, tailscale_guard),
+        };
         // Scan plans name the Lance datasets under the bucket (Task 14 rule 8).
         config.query.lance_base_url = Some(bucket_url(config)?);
         let cache = RangeCache::new(store.clone(), config.cache.clone()).await?;
@@ -2706,12 +2945,27 @@ impl Server {
         if let Some((placement, remote)) = routing {
             collections.set_placement(placement, remote);
         }
+        // Who the PostgreSQL and MySQL wire sessions' graph reads are for (GR1 R24.12): they
+        // authenticate nobody (loopback only), so with authentication off it is the operator,
+        // as on the main port, and with it on nobody, who reads no graph.
+        #[cfg(any(feature = "pgwire", feature = "mysql-wire"))]
+        let wire_caller = {
+            let operator = (!auth_enforced).then(crate::auth::Auth::dev_loopback);
+            api::graph_caller(&principals, operator.as_ref())
+        };
         // Every fallible PostgreSQL step (the `pg_catalog` setup) runs here,
         // before the worker starts; the accept loop is spawned only after.
         #[cfg(feature = "pgwire")]
         let pg = match pg_listener {
             Some((bound, pg_config)) => {
-                match crate::pg::prepare(collections.clone(), bound, pg_config.clone()).await {
+                match crate::pg::prepare(
+                    collections.clone(),
+                    bound,
+                    pg_config.clone(),
+                    wire_caller.clone(),
+                )
+                .await
+                {
                     Ok(prepared) => Some(prepared),
                     Err(source) => {
                         collections.shutdown().await;
@@ -2735,7 +2989,7 @@ impl Server {
         // After every fallible step, like the PostgreSQL accept loop.
         #[cfg(feature = "mysql-wire")]
         let mysql_wire = mysql_listener.map(|(bound, mysql_config)| {
-            crate::mysql_wire::start(collections.clone(), bound, mysql_config)
+            crate::mysql_wire::start(collections.clone(), bound, mysql_config, wire_caller)
         });
         #[cfg(feature = "qdrant")]
         let qdrant = match qdrant_listeners {
@@ -2779,9 +3033,20 @@ impl Server {
                 reader.clone(),
                 config.log.node_id,
                 node_registry,
+                config.link.clone(),
             )?),
             false => None,
         };
+        // `Search.expand` runs on this node's graphs (GR1 Task 20).
+        #[cfg(feature = "graph")]
+        if let Some(graph) = &graph {
+            let expander = Arc::new(loams_graph::retrieval::LoamsGraphExpander::new(
+                (*graph.admin).clone(),
+            ));
+            collections.set_graph_expander(expander.clone());
+            // And the graph table functions (GR1 Task 21).
+            collections.set_graph_tables(expander);
+        }
         let house = match roles.gateway {
             true => crate::api::house_proxy::HouseProxy::start(&config.house)
                 .map_err(|err| ServerError::Config(format!("the House proxy: {err}")))?,
@@ -2818,6 +3083,7 @@ impl Server {
                 &config.git,
                 meta_store.clone(),
                 store.clone(),
+                cache.clone(),
                 sink,
                 cluster,
                 git_listener,
@@ -2850,14 +3116,15 @@ impl Server {
             house,
             #[cfg(feature = "git")]
             git: git.as_ref().map(|g| g.runtime.clone()),
-            principals,
+            principals: principals.clone(),
             #[cfg(feature = "live")]
             live,
+            durable: durable.filter(|_| main_port_serves_durable(config)),
         };
         let (app, tailscale) = match (roles.gateway, config.cluster.is_some()) {
             (true, false) => {
                 #[cfg(feature = "live")]
-                let main_state = without_live_beyond_loopback(&state, config.listen);
+                let main_state = without_live_beyond_loopback(&state, config);
                 let router = api::router(state);
                 #[cfg(feature = "live")]
                 let main_router = match main_state {
@@ -2881,6 +3148,11 @@ impl Server {
                 meta: meta_store.clone(),
                 writer: writer.clone(),
             });
+            // Each statement's graph reads are its principal's (GR1 R24.12).
+            let principals = principals.clone();
+            let graph_callers: loams_query::flight::GraphCallers = Arc::new(move |extensions| {
+                api::graph_caller(&principals, extensions.get::<crate::auth::Principal>())
+            });
             Flight::start(
                 listener,
                 addr,
@@ -2888,6 +3160,7 @@ impl Server {
                 streams,
                 config.flight.clone(),
                 guard.clone(),
+                graph_callers,
             )
         });
         #[cfg(feature = "stream-grpc")]

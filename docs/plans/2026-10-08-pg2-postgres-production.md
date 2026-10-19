@@ -671,7 +671,7 @@ Commit `feat(pgdog): config push with sidecar`.
 
 **Files:**
 - MT4's tenant renderer hook: a `postgres` addon in `tenants/<org>/namespaces/<ns>.yaml` that renders a PgDog Deployment (×2, anti-affinity across AZs) with its sidecar, Service, NetworkPolicy and PodDisruptionBudget into `loams-pg-<ns>`. If MT4 has not landed, ship these as Helm templates in Task 48's chart, keyed by namespace values, and record the ruling.
-- `deploy/helm/loams-postgres/templates/sni-listener.yaml`: an Envoy (or Kourier/Traefik, per MT2's choice) TCP route per namespace hostname `<ns>.<region>.pg.<base-domain>` with TLS passthrough, plus a non-SNI port per namespace.
+- ~~`deploy/helm/loams-postgres/templates/sni-listener.yaml`: an Envoy (or Kourier/Traefik, per MT2's choice) TCP route per namespace hostname `<ns>.<region>.pg.<base-domain>` with TLS passthrough, plus a non-SNI port per namespace.~~ **Replaced by ruling R22.0:** the SNI listener is `loams-gateway` ([GW1](2026-10-16-gw1-loams-gateway.md) Tasks 1–11), and `sni_route_per_namespace_golden` checks the gateway's rendered routes.
 - `deploy/loams-postgres-single/` gets one PgDog service.
 
 Tests:
@@ -681,6 +681,8 @@ Tests:
 - `it_kind_two_namespaces_isolated`: a client of namespace A's hostname cannot reach B's databases.
 
 Commit `deploy(pgdog): per-namespace deployments and SNI routing`.
+
+**Amended 2026-10-16 (R22.0):** the SNI listener is built by GW1; this task deploys PgDog and consumes GW1's gateway.
 
 ### Task 23: TLS on both hops
 
@@ -704,6 +706,8 @@ Tests:
 - `unauthorized_database_refused_before_backend`: the compute's `pg_stat_activity` shows no connection attempt.
 - `revoked_grant_removed_after_push`
 - `reset_password_rotates_at_pgdog_and_compute`
+
+*(0.1.0 blocker, 2026-10-18: the compute half, before PgDog.)* `src/scram.rs` derives each role's SCRAM-SHA-256 verifier from its stored password, salted from its `SecretRef` (fresh per password) so the spec stays a pure function of the records; `RoleVerifiers` caches it per reference and is shared by the upcall listener and the reconciler (`Sources.verifiers`). The spec's `encrypted_password` is the verifier, never the password. Role and database writes kick the reconciler, whose `push_spec` sends `/configure` to the running compute; a compute started later reads it in its spec. Tests: `scram::tests` (a reference vector), `upcall::spec_carries_scram_verifier_never_password`, `it_endpoint::it_role_password_reaches_compute_and_rotates` (in `pg2-e2e.yml`). `GetConnectionInfo` answers the endpoint's `backend_addr` directly until Task 20's PgDog fronts it (`service/connect.rs`). The PgDog half (`users.toml`, `scram_login_through_pgdog`, `md5_and_plain_refused`) stays with this task.
 
 Commit `feat(pg): scram through pgdog`.
 
@@ -975,6 +979,8 @@ Commit `feat(wal): membership, failover and pool moves`.
 - `recover_from_bucket_drill` (lose every hot-tier copy, recover up to `backup_lsn`, restart the compute, data up to `backup_lsn` present);
 - `archive_restore_matches_checksums` (vanilla Postgres from basebackup plus `.lwal` equals the pageserver branch at the same LSN).
 
+> **Pointer (2026-10-16, [§58](../design/58-data-access-and-htap.md) §8.5, D1060, Q924):** the offload's create-only `.lwal` writes, unknown-outcome resolution, framing and GC go into the shared bucket-segment library `loams-seglog`, extracted from `loams-git`'s `StoreWalStore` in this task ([DA1](2026-10-16-da1-data-access.md) Task F1). The `.lwal` format is unchanged.
+
 Commit `feat(wal): offload, recover and archive restore`.
 
 ### Task 41: Chaos and nemesis
@@ -1003,6 +1009,8 @@ Commit `test(wal): nemesis and simulation`.
 4. The chosen store becomes `pg-control`'s default pool. The other stays behind the setting `postgres.wal.store`.
 
 **Gate:** every §46 §9.3 row green for the chosen store, or an owner-approved revision recorded in §46.
+
+> **Pointer (2026-10-16, [§58](../design/58-data-access-and-htap.md) §8.3, D1058):** the proposed default going into this bake-off (a lean, not a ruling) is Arm A for production, with the TiKV store behind `WalStore` for small and single-node deployments. This task's results and Q652 decide.
 
 Commit `bench(wal): launch gate run <date>`.
 
@@ -2009,3 +2017,221 @@ No task of this plan put `pg-control` in the preview release stack: R10.10 noted
   - `tests/runtime_kube.rs` has `pod_cpu_from_the_metrics_api`, and `role.json` is re-blessed.
   - `loams-postgres`'s client test parses the exposition.
   - No kind run: metrics-server and storage in kind wait for Task 48. That the cache reloads without a restart (§46 §7.4's "verify") is Task 17's to measure on a real compute.
+
+### Task 16 rulings (2026-10-15)
+
+- **R16.1 Read-only endpoints.**
+  - A branch may have any number of read-only endpoints (Task 11 already allowed them). Their computes get a `Replica` spec, a hot standby following the branch's head.
+  - The warm pool binds to them too: the spec decides the mode.
+  - A `CreateEndpoint` of a read-write endpoint now also counts a read-only endpoint that is being promoted as the branch's read-write endpoint.
+- **R16.2 `standby_horizon` from `loams-wal` (Task 32's review M4).**
+  - The replication reader parses each replica's `'r'` standby status. Each connection keeps its last applied LSN; an applied LSN of 0 means none, and the entry goes when the connection closes.
+  - `WalService::standby_horizon(tl)` is the least of those LSNs on this instance, as the fork's `walsenders.get_hotstandby()` computes it. It is published as `standby_horizon` in `SafekeeperTimelineInfo` and in discovery responses.
+  - Hot-standby `'h'` feedback is not relayed to the proposer. Replica queries can then be cancelled by conflicts, which does not affect correctness. Relaying it is left for Task 39 (HA).
+  - Test: `standby_horizon_published_from_replica_feedback`.
+- **R16.3 Promotion (`RestartEndpoint{promote}`).**
+  - **The service** (`promote_endpoint`). The endpoint must be read-only, running, and not already being promoted. The branch's read-write endpoint must be down: no compute, and not asked to run. Otherwise the answer is `failed_precondition`.
+  - The batch sets `EndpointRec.promote`. It also checks the read-write endpoint's version and rewrites the branch's guard unchanged, so a racing start or create conflicts with it.
+  - The operation is `postgres.endpoint.restart` on the wire, as the proto says. Internally it is a new `OperationKind::EndpointPromote`, appended.
+  - **The reconciler**, on the running replica, under the project's lease:
+    1. It checks again that the read-write endpoint is down. If it is not, the operation fails.
+    2. It prewarms: `/lfc/prewarm`, from the read-write endpoint's saved cache state. It waits up to `PREWARM_WAIT` (2 min) for it.
+    3. It calls `/promote` with a primary's spec, at the flushed LSN from `loams-wal`.
+    4. One batch swaps the two endpoints' types and records the primary spec's version.
+  - A refusal (R2.13: an unprewarmed replica) fails the operation with `failed_precondition`, and nothing changes.
+  - The same compute keeps serving behind the same address. The old read-write endpoint starts as a replica afterwards.
+- **R16.4 Endpoint storage (R2.13: "this task deploys endpoint storage for the stacks that promote").**
+  - **Tokens and key.** `ComputeKeys` signs endpoint storage's EdDSA tokens, with claims `{tenant_id, timeline_id, endpoint_id, exp}`. It also writes its public key as an SPKI PEM, the `pemfile` endpoint storage reads.
+    - The upcall and `compute_ctl` tokens have other claims, so no verifier takes another's token, and one key serves all three.
+    - A token's expiry is the compute's creation time (from its ULID id) plus `COMPUTE_TOKEN_TTL`. The same records therefore still give the same spec bytes.
+  - **Verified against the pinned image's `endpoint_storage`.** It loaded our PEM. Our token could PUT and GET its own endpoint's state. Another key's token got 400. A PUT to another endpoint's path got 401. A GET of another endpoint's state is allowed, which is Neon's design so a promoted replica can read the primary's state.
+  - **The spec.** With `--endpoint-storage <host:port>`, every compute gets endpoint storage's address and token and `autoprewarm`. A primary also gets `offload_lfc_interval_seconds = 300`, a new spec field in `loams-postgres`.
+  - **Deployment.** The release stack's `postgres-control` profile runs `endpoint-storage` from the included storage stack's pinned `neon` image. That image is not a neon-archive copy, and the service is not one of the barred proxies.
+    - It uses the stack's RustFS bucket `neon` under `endpoint-storage/`, and publishes no ports.
+    - `pg-control` writes the key into a shared volume (`--endpoint-storage-pem-out`). Endpoint storage mounts it read-only and waits for it.
+    - The `loams-pg-control` image creates `/run/endpoint-storage`.
+    - `release-compose.yml`'s checks pass locally.
+  - The Helm chart's deployment is Task 48's.
+  - **Without endpoint storage** (`deploy/loams-postgres-dev`, single node), `/lfc/prewarm` ends `failed` ("endpoint_storage_addr missing"). The pinned `compute_ctl` promotes after a failed prewarm (it refuses only `not_prewarmed` and `prewarming`), so the promoted compute starts with a cold cache.
+- **R16.5 Tests.**
+  - `tests/replicas.rs` covers the four named cases: `ro_endpoint_starts_replica_spec`, `promote_swaps_types`, `promote_refused_while_rw_running` and `promote_refuses_an_unprewarmed_replica`. Specs are read through a real upcall listener (`Env::upcall_spec`).
+  - Unit test `endpoint_storage_takes_our_tokens_and_only_them`.
+  - `loams-postgres`'s spec test covers the offload field.
+  - The plan's `ro_rejects_writes` (`it_compose`) is `it_ro_endpoint_rejects_writes_then_promotes` in `tests/it_endpoint.rs`, run in `pg2-e2e.yml`'s compose job. On the dev stack, with real computes, it checks:
+    - the replica replays a row;
+    - it refuses an INSERT with `read_only_sql_transaction`;
+    - the promotion is refused while the read-write endpoint runs;
+    - once that endpoint is suspended, the replica is promoted behind the same address and takes writes.
+- **R16.6 The pinned `compute_ctl` panics in `/promote` (found by the real-compute test).**
+  - After `pg_promote()` succeeds, `promote_impl` runs on a tokio worker and calls the synchronous `reconfigure`. That calls `apply_spec_sql`, which does `Handle::current().block_on` ("Cannot start a runtime from within a runtime", `compute_tools/src/spec_apply.rs:50`). The task dies, and the answer is 500 "promote sender dropped". The fork's source at the pinned commit has the same code.
+  - Neon's own test escapes it because `neon_local`'s specs set `skip_pg_catalog_updates`.
+  - **Workaround here:** the promotion's spec sets `skip_pg_catalog_updates: true`, a new field in `loams-postgres`'s spec, sent only with `/promote`. The replica already has the primary's catalog. The compute's spec version is recorded as unknown, so the next pass pushes the full primary spec through `/configure`, which applies the catalog on a safe path.
+  - **Carry to NF1's patch queue:** run the catalog step of `promote_impl` off the async worker (`spawn_blocking`), or make it async.
+- **R16.7 Replicas never streamed WAL (found by the real-compute test; a gap since Task 8's spec).**
+  - Neon's control plane gives a hot standby `primary_conninfo` naming the safekeepers (`host=h1,h2 port=p1,p2 options='-c timeline_id=… tenant_id=…' application_name=replica replication=true`), `primary_slot_name = repl_<timeline>_`, `hot_standby = on` and `recovery_prefetch = off` (`control_plane/src/endpoint.rs`). Our spec gave none of these, so a read-only compute stayed at its base backup.
+  - The spec now sets them for `Replica` mode, after the endpoint's settings, which cannot name them (R11.3).
+  - `it_ro_endpoint_rejects_writes_then_promotes` checks that a row inserted after the replica started reaches it.
+- **R16.8 Real-compute runs (2026-10-15).** On `deploy/loams-postgres-dev`, as compose project `pg2-b2-it` under rootless Podman:
+  - `it_ro_endpoint_rejects_writes_then_promotes` passed twice. The promotion target is safekeeper1's flushed LSN after the read-write endpoint's suspend; the test reads it from safekeeper1's HTTP API (`IT_SAFEKEEPER_HTTP`), because its Neon is a fake.
+  - `it_endpoint_starts_suspends_and_deletes`, `it_idle_long_query_is_activity_then_suspends` and `it_compose_compute_answers_select_1` also pass. They now carry Task 15's file cache settings, so real computes start with the LFC on (R15.3).
+- **R16.9 No second primary (from CodeRabbit's review of #635).**
+  - **Ambiguous `/promote` errors.** Only `compute_ctl`'s refusals before `pg_promote()` keep the compute as the replica: not a replica, not prewarmed or prewarming, not caught up, or a 4xx. Any other error (a lost answer, "promote sender dropped", a failure after `pg_promote()`, or no answer within `PROMOTE_WAIT`, 45 s, which is less than the 60 s lease) means the outcome is unknown. In that case the promotion fails and the compute is replaced by a fresh replica (`replace_compute` in the same batch).
+  - **Starts during a promotion.** While a read-only endpoint of a branch is being promoted, the branch's read-write endpoint is not started or restarted (`failed_precondition`). Both requests rewrite the branch's guard unchanged, so a start and a promotion conflict whichever commits first.
+  - **A replica that stops.** A replica that is suspended or fails ends its pending promotion as `aborted`, and the flag is cleared in the same write.
+  - The PEM is written to a temporary file and renamed into place.
+  - Tests: `suspend_ends_a_pending_promotion`, `rw_start_refused_while_promoting`, `an_unknown_promotion_outcome_replaces_the_compute` and `promote_errors_are_refusals_only_before_pg_promote`.
+
+### Task 17 rulings (2026-10-15)
+
+- **R17.1 What is measured.** The time from `StartEndpoint` on a suspended endpoint to the first `SELECT 1` that answers through the endpoint's address, as a login role, tried every 25 ms.
+  - The reconciler is driven as its run loop paces it: a pass, then the wait the pass asks for, at most 500 ms (`Computes::poll` while a compute starts).
+  - The first start is not counted: it pulls the images and makes the role.
+  - The measurement is `it_cold_start_samples` in `tests/it_endpoint.rs`. It uses the API service, the endpoint reconciler and the compose runtime, with real computes on `deploy/loams-postgres-dev`.
+  - `scripts/pg2/cold-start.sh` brings up the storage as its own compose project (`pg2-coldstart`), runs it, and writes `bench/results/<date>-<sha>-coldstart.json` through `scripts/pg2/coldstart_stats.py`. That helper takes p50, p90 and p99 by nearest rank (as the WAL benchmark's `stats.py`), min, max and mean, and §46 §16's target per variant.
+  - `stats_from_samples` is in the helper's `--self-test`, which CI's light job runs.
+  - `loams-pg-bench.yml` gains `suite: coldstart` (a `workflow_dispatch` on the `loam-bench` runner) with `runs`.
+- **R17.2 Variants.**
+  - Recorded now: compose with the pool off. Compose has no warm pool (R14.2).
+  - Kind with the pool on and off needs storage in the cluster, which Task 48's chart brings. The kind variants are added to the script then.
+  - **`scripts/pg2/wake-bench.sh` is not written here.** It measures from the first client connection through PgDog and the waker, so it belongs to Task 26, which builds the waker. The plan's PG2b exit records the numbers without gating.
+- **R17.3 The recorded run** (2026-10-15, at `b8da2481` plus this task's test; Linux x86_64, 14 CPUs, rootless Podman, images cached), 50 cold starts on compose with the pool off:
+  - p50 1417 ms, p90 2271 ms, p99 6594 ms; min 1026 ms, max 6594 ms, mean 1760 ms.
+  - This meets §46 §16's compose target (p99 ≤ 20 s). The samples are in `bench/results/20261015-b8da248180df-coldstart.json`.
+  - The few slow samples (3.3 s to 6.6 s) were not diagnosed: the shared build machine was busy.
+- **R17.4 PG2b exit.**
+  - Done: endpoints start, suspend when idle, restart and promote on compose (real computes: `it_endpoint`). The Kubernetes runtime's objects and lifecycle are tested against a stand-in API, and kind starts its Pods.
+  - The autoscaler is built (Task 15). It resizes only on Kubernetes, and real resizes wait for Task 48's cluster.
+  - Not yet run: Kubernetes end to end (storage in kind, Task 48).
+
+### Task 18 rulings (2026-10-15): PgDog, checked
+
+The checks ran on the scratch stack `deploy/pgdog/compose.yaml`: the pinned PgDog, two `postgres:17.11` backends (`pg1`, `pg2`), and `pg3`, which starts later. Configs are in `deploy/pgdog/scratch/`. They were run locally under rootless Podman with `psql` 17 as the client. Nothing of PgDog's is in the repository: these are field names and observed behaviour.
+
+- **R18.1 The pin.**
+  - PgDog **v0.1.60** (2026-09-24, git `0d040f9`), the newest release at least 14 days old. v0.1.61 (2026-10-09) is six days old.
+  - Image `ghcr.io/pgdogdev/pgdog@sha256:25d1908886f595a2e3b00ec59783326712e3c0f75f91d29f032ff712b30f2266`, the multi-arch index (linux/amd64 is `sha256:1bf5346d…`). This is the same pin as `conformance/router` and RT1's inventory.
+  - Still **AGPL-3.0** (`gh api repos/pgdogdev/pgdog`: `license: AGPL-3.0`, not archived).
+- **R18.2 Q640: PgDog queues a client while its backend is down.**
+  - A client of a database whose server cannot be reached waits in the pool's queue. `SHOW POOLS` shows `cl_waiting = 1`, and `SHOW CLIENTS` shows the client's `state` as `waiting`.
+  - Meanwhile PgDog asks for a new server connection about every `connect_attempt_delay` (500 ms here; reason `client_waiting`), each with `connect_timeout` (1 s).
+  - With `pg3` started 3 s after the client connected, the client's query answered **5.1 s** after it connected, once Postgres was up.
+  - A backend that never comes back fails the client with `FATAL: checkout timeout` after **`checkout_timeout`** (15 s set; it took 16.1 s).
+  - The pool of a lone primary is **not banned** (`banned = f`), so the next client waits the full `checkout_timeout` again (15.0 s).
+  - The settings, in ms in `[general]`: `checkout_timeout`, `connect_timeout`, `connect_attempts`, `connect_attempt_delay`, `ban_timeout`, `healthcheck_interval`, `idle_healthcheck_interval`, `idle_healthcheck_delay`, `healthcheck_timeout`, `min_pool_size`, `idle_timeout`.
+- **R18.3 Q643: `users.toml` takes a SCRAM verifier.**
+  - `password_hash` holds Postgres's own verifier (`SCRAM-SHA-256$4096:…`, as `pg_authid.rolpassword` shows it). The right password logs in over SCRAM, and a wrong one is refused ("password … is wrong").
+  - The backend login is separate: `server_user` and `server_password`. `current_user` on the backend was the server user.
+  - `passwords` (several) and `server_auth` (`rds_iam`, `azure_workload_identity`, `vault_dynamic`, `vault_static`) also exist.
+  - **Ruling for Task 24:** `users.toml` holds each role's SCRAM verifier, so the plaintext is never stored there. It also holds a backend-only password that `pg-control` generates per role and that the user never sees, with `server_user` as the same role. §46's assumption that PgDog needs the user's plaintext is withdrawn.
+- **R18.4 Q642: no JWT or OIDC client auth, and no SNI routing in PgDog.**
+  - Client `auth_type` is one of `scram`, `md5`, `plain` or `trust`. `jwt` appears only as Vault's Kubernetes login path. Nothing reads the TLS server name.
+  - So the credential exchange (Task 25) and the L4 SNI listener in front (Task 22) stay as designed.
+- **R18.5 Other settings.**
+  - **Pool mode.** Per database (`[[databases]].pooler_mode`) and per user (`users.pooler_mode`): `transaction`, `session` or `statement`.
+  - **Replicas.** A `[[databases]]` entry has `role = "primary" | "replica" | "auto"`. Replicas get `read_only = true`. Load balancing is `load_balancing_strategy` (default `random`). The read/write split is `read_write_split` (default `include_primary`) and `read_write_strategy` (default `conservative`). A user can be `read_only`.
+  - **No allowed-address or `hba`-style setting** exists, so NetworkPolicy alone decides who reaches PgDog (Tasks 22 and 48).
+  - **TLS.** Clients: `tls_certificate`, `tls_private_key`, `tls_client_required`, and `tls_client_ca_certificate` for mTLS. Backends: `tls_verify` (`disabled`, `prefer` (default), `verify_ca`, `verify_full`), `tls_server_ca_certificate`, and client certificates per `[[databases]]` entry (Task 23).
+- **R18.6 `RELOAD` re-reads both files and keeps connections.**
+  - Users added to `users.toml` and 1,000 databases added to `pgdog.toml` were all served after one `RELOAD` (1,004 pools; `db999` answered).
+  - The admin command answered in **1.85 s** with 1,000 databases.
+  - A client connected across the reload ran its next query on the **same backend** (pid unchanged).
+- **R18.7 The admin database** (`[admin]` `name`, `user`, `password`).
+  - `SHOW POOLS`: `id, database, user, addr, port, shard, role, cl_waiting, sv_idle, sv_active, sv_idle_xact, sv_total, maxwait, maxwait_us, pool_mode, paused, banned, healthy, errors, re_synced, out_of_sync, force_closed, online, schema_admin`. **There is no `cl_active`.**
+  - `SHOW CLIENTS`: `id, user, database, addr, port, state (active|idle|waiting), replication, connect_time, last_request, queries, transactions, transactions_2pc, wait_time, query_time, transaction_time, bytes_received, bytes_sent, errors, application_name, locked, prepared_statements`.
+  - `SHOW SERVERS`: `pool_id, database, user, addr, port, state, connect_time, request_time, remote_pid, client_id, transactions, queries, rollbacks, prepared_statements, healthchecks, errors, bytes_received, bytes_sent, last_sent, last_received, age, application_name`.
+  - `SHOW DATABASES` and `SHOW USERS` answer one empty column in this version. `SHOW CONFIG` lists the effective settings.
+  - **Change to R12.3's `PoolRow`, carried to Task 21's admin adapter:** `cl_active` is not a column. The idle monitor's clients of an endpoint are `sv_active + cl_waiting` from `SHOW POOLS`, which counts a client holding a server in a query or transaction. Alternatively they are the `active` and `waiting` rows of `SHOW CLIENTS` for the pool's database.
+- **R18.8 Metrics.** OpenMetrics is on `openmetrics_port` and `openmetrics_host`, with no prefix unless `openmetrics_namespace` is set. The series include `cl_waiting`, `clients`, `sv_active`, `sv_idle`, `sv_idle_xact`, `maxwait`, `banned`, `errors`, `max_connections`, and the `avg_*` family (`avg_query_time`, `avg_wait_time`, `avg_xact_time`, `avg_checkout_timeouts`, …). Task 28 maps them.
+- **R18.9 §46 §8.4's path: PgDog's own queue, with the waker.** No Neon proxy and no shim.
+  - **What Tasks 20, 26 and 27 render:**
+    - `checkout_timeout` **20 s** above the compose cold-start p99 (6.6 s, R17.3) and §46's Kubernetes no-pool target of 15 s. §46 §8.4's 15 s is amended.
+    - `connect_timeout` 1 s, `connect_attempts` 1 and `connect_attempt_delay` 500 ms, so a waiting client sees its compute within about 0.5 s of it listening.
+    - `ban_timeout` short (1 s) for replica pools.
+  - **What the waker does.** It reads `cl_waiting > 0` on a suspended endpoint's pool, as R12.3 and §46 §8.4 have it.
+  - **Health checks must not keep computes awake** (the carry from Task 12). An idle-connection health check runs a query on the compute, which moves `compute_ctl`'s `last_active` (R12.1). The rendering therefore uses:
+    - `idle_healthcheck_interval = 0` (off);
+    - `min_pool_size = 0` (no connection is kept open, so none is checked and a suspended endpoint is not dialled for `below_min`);
+    - `idle_timeout` below the shortest suspend timeout (30 s, under the 60 s minimum), so PgDog lets go of an idle compute.
+  - Checking out a connection still health-checks it when it is older than `healthcheck_interval`, but only on behalf of a client, which is activity anyway.
+
+### Task 19 rulings (2026-10-15)
+
+- **R19.1 The bundle files.**
+  - `deploy/pgdog/LICENSE-NOTICE.md` gives the program, the version, the image digest, the exact source tag (`https://github.com/pgdogdev/pgdog/tree/v0.1.60`), the licence and "no modifications".
+  - `deploy/pgdog/LICENSE.AGPL-3.0` is PgDog's `LICENSE` at that tag: the FSF's AGPL v3 text, unchanged, with no PgDog-specific content.
+  - `deploy/pgdog/README.md` states §46 §8.3 verbatim.
+  - Bundles that reference the image carry both files: the single-node compose (Task 56), the Helm chart (Task 48) and the desktop's stack.
+- **R19.2 `LICENSES.md` is new, at the root.** None existed. `NOTICE` lists code derived into Loams, while `LICENSES.md` lists programs Loams runs as separate, unmodified processes. Its first row is PgDog.
+- **R19.3 The check** (`scripts/ci/pgdog-licence.sh`, over tracked files) fails in four cases:
+  - **A PgDog package:** a `pgdog`-named package in a `Cargo.lock`, `pnpm-lock.yaml`, `package-lock.json` or `yarn.lock`, or a vendored `pgdog*` directory under `vendor/`, `vendored/` or `third_party/`.
+  - **A reference in the wrong place:** a reference to `ghcr.io/pgdogdev/pgdog` outside the three bundles.
+    - The router conformance harness (`scripts/router/inventory`, RT1's, never distributed) is allowed.
+    - Prose (`*.md`) may name the image.
+  - **An unpinned reference:** one with no full `sha256` digest. An `@$var` reference counts as pinned when its file pins a full digest, as the harness's `digest="${PGDOG_DIGEST:-sha256:…}"` does.
+  - **A bundle without its notice:** a bundle that references the image but has no `LICENSE-NOTICE.md`.
+  - It then runs `scripts/spec/provenance.sh`.
+  - Its `--self-test` covers `no_pgdog_in_lockfiles`, `pgdog_image_pinned_by_digest` and `licence_bundle_present` (eleven fixture repositories).
+- **R19.4 Where it runs.** It runs in `ci.yml`'s unconditional light job, not in `pg2.yml` as the plan said. `pg2.yml` runs only when Postgres paths change, and a PgDog package could arrive through any lockfile or deploy file. It is part of `CI required`.
+
+### Task 20 rulings (2026-10-15)
+
+- **R20.1 Where the renderer lives.** It is `crates/loams-pg-control/src/pgdog/render.rs`: pure and deterministic, from the records.
+  - RT1's renderer was planned as `loams-sqlrouter/src/render/pgdog.rs`, and RT1 has not built it or `loams-sqlrouter-io`. This task does not create another track's crates.
+  - When RT1's sharded renderer exists, a sharded project delegates to it. Until then, sharded projects (a shard map, R2.14) are left out and listed in `RenderedConfig::left_out` (`sharded_project_is_left_out`, in place of `sharded_project_delegates_to_rt1_renderer`).
+- **R20.2 Routed names.** They follow §46 §8.1 through `format_routed` only.
+  - `<project>` (the default branch) and `<project>__<branch>` reach the branch's `postgres` database. No record names a default database, and every compute has `postgres`.
+  - `<project>__<branch>.<db>` reaches each database record of the branch.
+  - `<project>__<branch>__ro` reaches each read-only endpoint as a `replica` (`read_only = true`) of one cluster, so PgDog balances them. Primary names never list replicas, so no read/write split happens on them (§46 §8.1's default).
+  - Hosts are the endpoints' recorded backend addresses. An endpoint without an address is left out. Compose's network alias (R10.10) is Task 22's mapping.
+- **R20.3 Pool sizes and `max_connections`.**
+  - `max_connections(cu)` follows Neon's table: about 450 per CU, 112 at 0.25 CU, at most 4,000. It is computed at the endpoint's largest size (`max_cu`), because it is a start-time setting.
+  - The spec now sets it, after the endpoint's settings (R11.3 already reserves it).
+  - Each `[[databases]]` entry's `pool_size` is 80 % of it (§46 §8.1). The role limit is absent: no role record has one yet.
+  - The pool mode is the endpoint's, and a role's `pool_mode` overrides it in `users.toml`.
+- **R20.4 Users and grants.**
+  - A login, non-system role is granted every routed name of its own branch, and only those. That is until Task 24's explicit grants.
+  - One `[[users]]` entry per role lists its names, with `password_hash` (the role's SCRAM verifier), `server_user` (the same role) and `server_password` (the backend-only secret, R18.3).
+  - A role without credentials is left out. `NamespaceRecords::read` reads the records without credentials, and Task 24 supplies them.
+- **R20.5 Both files are secrets.** `RenderedConfig` returns `pgdog_toml: Secret<String>`, not a plain string, because `[admin] password` lives in `pgdog.toml` (PgDog takes it from nowhere else). Both go to a Secret, not a ConfigMap (Task 21).
+- **R20.6 `[general]`.**
+  - Listener 6432, OpenMetrics 9090, `auth_type = "scram"`, transaction pooling, and R18.9's timeouts:
+    - `checkout_timeout` 20 s, `connect_timeout` 1 s, `connect_attempts` 1, `connect_attempt_delay` 500 ms, `ban_timeout` 1 s, `healthcheck_interval` 30 s;
+    - `idle_healthcheck_interval` 0, `min_pool_size` 0, `idle_timeout` 30 s, so health checks never keep a compute awake.
+  - TLS toward clients (`tls_certificate`, `tls_private_key`, `tls_client_required = true`) and toward computes (`tls_verify = "verify_ca"` with the compute CA) when configured; otherwise off (Task 23).
+- **R20.7 Checked against the pinned PgDog.** v0.1.60 loaded the rendered golden (TLS paths dropped) and built one pool per (routed name, role) as rendered: `migrator`'s pools in session mode, and `shop__main__ro` as a replica. Tests in `tests/render.rs`:
+  - `render_is_deterministic`, `render_golden_two_projects_three_branches` (goldens in `tests/golden/pgdog/`), `ungranted_role_absent_from_users`, `ro_endpoint_rendered_as_replica`, `pool_size_follows_cu`;
+  - `sharded_project_is_left_out`, `plain_settings_and_addressless_endpoints` and `records_are_read_from_the_store`.
+
+### Task 21 rulings (2026-10-16)
+
+- **R21.1 The sidecar.** `crates/loams-pgdog-sync` builds `pgdog-config-sync` (Apache-2.0, a separate process; PgDog stays unmodified).
+  - It listens on 7695 with mutual TLS only: a client certificate must chain to the configured CA (`pg-control`'s), and anything else fails the handshake, because the files hold secrets (R20.5).
+  - Routes: `PUT /v1/config` (JSON `{generation, pgdog_toml, users_toml}`, at most 16 MiB) and `GET /v1/generation` (the plan's `GET /generation`, versioned).
+  - Each file goes to a temporary file in the same directory, is fsynced, and is renamed over the old one, so a reader sees a whole old or a whole new file; the generation is written last.
+  - At start, `--persisted` (the mounted Secret) is copied in unless the directory already holds a generation, so a restarted PgDog serves the last pushed config before `pg-control` pushes again.
+- **R21.2 The generation is Task 20's digest of both files**, not a counter. Identical records give the same generation on every `pg-control` instance and after a restart, so the acknowledgement is "the sink answers the rendered generation".
+- **R21.3 Where the applied generation lives.** RT1's `ConfigPush` machine is not built, so `PgDogPusher` keeps the generation each replica applied (sent, acknowledged, reloaded) in memory. After a restart it knows none, so the first drift check pushes every replica once; that is harmless, because `RELOAD` keeps live connections (R18.6).
+- **R21.4 Drift.** The pinned PgDog's `SHOW DATABASES` answers one empty column and `SHOW USERS` gives nothing to compare with a render (R18.7). So a replica has drifted when its sink holds another generation than the records render, or when this pusher has not reloaded it at that generation (a failed `RELOAD`). `PgDogAdmin::show_databases` answers the distinct `database` of `SHOW POOLS`.
+- **R21.5 Order per replica:** send, poll the sink's generation (every 100 ms, up to 5 s), then `RELOAD`. A replica that does not acknowledge is never reloaded and is reported in `Pushed::failed`; the other replicas still get the push.
+- **R21.6 Compose and single node.** `DirSink` writes `<root>/<namespace>/`, which PgDog's container mounts as a directory (not as single files, so the renames are visible inside it), then sends `RELOAD`. `it_pgdog` checks this against the pinned PgDog: a pushed read-only endpoint shows in `SHOW POOLS` without a restart.
+- **R21.7 The idle monitor** counts `sv_active + cl_waiting` (R18.7's carry); `PoolRow.cl_active` is gone.
+- **R21.8 What waits.**
+  - Task 22, which deploys PgDog: the binary's flags, the kicks (a store watch on the namespace's records into `PgDogPusher::run`), a periodic `resync`, and the sidecar's image and Helm templates. Until then nothing runs PgDog, and `pg-control` keeps `NoPgDog`.
+  - Task 23: the admin connection is plaintext until then.
+  - Task 24: credentials. `NoCredentials` renders no users.
+  - `run` pushes due namespaces one after another, so one slow replica (up to the 5 s acknowledgement timeout) delays the others. Task 22 decides whether to push namespaces concurrently.
+- Tests: `crates/loams-pgdog-sync/tests/sync.rs` (`sync_writes_atomically`, `sync_requires_mtls`, `pgdog_restart_loads_persisted_copy`); `tests/push.rs` (`push_debounces`, `reload_after_generation_ack`, `drift_triggers_repush`, `failed_reload_is_retried_by_resync`, `sidecar_sink_pushes_over_mtls`, `dir_sink_writes_the_namespace_directory`); `tests/it_pgdog.rs` (`it_reload_picks_up_a_pushed_change`, ignored by default, run locally with Podman).
+
+### Task 22 rulings (2026-10-16, before any code)
+
+- **R22.0 The SNI listener is `loams-gateway`, not Envoy, Kourier or Traefik** (owner, 2026-10-16: "build a crate"; design [§57](../design/57-loams-gateway.md), D1011, amending D708).
+  - **Why a generic L4 router cannot do it:** a Postgres client sends a plaintext `SSLRequest` before its ClientHello, so the first bytes carry no SNI; PgDog does TLS only after `SSLRequest` and reads no SNI (R18.4); and PgDog negotiates no ALPN, which libpq 17's `sslnegotiation=direct` requires (§57 §3).
+  - **What the gateway does** (D1014–D1017): it answers `SSLRequest` with `S`, reads SNI, sends its own `SSLRequest` to the namespace's PgDog and splices the client's TLS bytes, so PgDog still terminates that TLS (D710). It terminates direct-TLS clients with ALPN `postgresql` and re-encrypts to PgDog, verifying PgDog's certificate. Plaintext is refused with `FATAL 28000`. Dedicated ports are allocated on request (`dedicated_port`), and upstream choice is ordered, so cancels reach the issuing replica.
+  - **Split of the work:** GW1 Tasks 1–8 build the gateway and its image. GW1 Task 9 adds `pg-control`'s routes renderer and dedicated-port records. GW1 Tasks 10–11 add the compose service and the Helm templates. This task keeps the PgDog Deployments (×2, sidecar, Service, NetworkPolicy, PDB), and its tests become:
+    - `pgdog_manifests_golden`;
+    - `sni_route_per_namespace_golden` (the rendered gateway routes, GW1 Task 9);
+    - `kubeconform_passes`;
+    - `it_kind_two_namespaces_isolated` (through the gateway, GW1 Task 11).
+  - **PgDog's Service** is headless, so the gateway resolves every replica and tries them in order (D1017).
+  - **PgDog's certificate** is one per namespace hostname (Task 23), mounted by that namespace's PgDog only, and the gateway reads a copy of each: on the terminate path it must present PgDog's exact certificate, because libpq's SCRAM-SHA-256-PLUS binds to the certificate the client saw (§57 §7.3, Q905).
+  - **NetworkPolicy:** PgDog's port 6432 admits only the gateway's pods and `pg-control`.

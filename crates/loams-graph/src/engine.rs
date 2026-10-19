@@ -176,6 +176,9 @@ pub enum GraphError {
     /// (a forwarded call is never forwarded again); retry, and it reaches the owner (GR1 Task 12).
     #[error("{0}")]
     OwnerMoved(String),
+    /// A writing statement on a LINKED graph: only its links write it (GR1 Task 17).
+    #[error("this graph is LINKED: its links write it, and GQL may only read it")]
+    Linked,
     /// An `at_least` read waited its `consistency_wait` and the replica serving it had not yet
     /// applied the token's offset (GR1 Task 15, §48 §7.2); retry, or read `strong`.
     #[error(
@@ -247,6 +250,7 @@ impl GraphError {
             Self::VersionMismatch { .. } => "graph_version_mismatch",
             Self::LogUnavailable(_) => "unavailable",
             Self::ConsistencyWaitTimeout { .. } => "consistency_wait_timeout",
+            Self::Linked => "graph_is_linked",
         }
     }
 }
@@ -271,6 +275,9 @@ pub struct OpenSpec {
     /// A follower (GR1 Task 15): a durable graph's read-only replica, which tails its stream
     /// ([`crate::replica`]) and never appends. Every writing statement is refused.
     follower: bool,
+    /// A LINKED graph (GR1 Task 17): only its links write it, so every writing statement is
+    /// refused (`graph_is_linked`).
+    linked: bool,
 }
 
 impl OpenSpec {
@@ -291,6 +298,7 @@ impl OpenSpec {
             read_only: false,
             durable: None,
             follower: false,
+            linked: false,
         })
     }
 
@@ -321,6 +329,14 @@ impl OpenSpec {
     #[must_use]
     pub fn durable(mut self, durable: crate::durable::DurableSpec) -> Self {
         self.durable = Some(durable);
+        self
+    }
+
+    /// The same spec for a LINKED graph when `linked` (GR1 Task 17): every writing statement is
+    /// refused with `graph_is_linked`.
+    #[must_use]
+    pub fn linked(mut self, linked: bool) -> Self {
+        self.linked = linked;
         self
     }
 
@@ -758,6 +774,47 @@ impl Graph {
         self.call(|| durable.follow(&self.db, records))
     }
 
+    /// Commits a link target's batch through the write lane (GR1 Task 18), at the link's expected
+    /// version, and waits until it is durable. Answers the graph's version after it (its token's
+    /// offset). Blocks: run it on the statement pool. Only the owner commits: a follower's engine
+    /// has no lane that appends.
+    ///
+    /// # Errors
+    ///
+    /// [`GraphError::VersionMismatch`] when the link's version moved, [`GraphError::Reloading`]
+    /// when the record could not be made durable (the graph reloads; whether it landed, the
+    /// stream tells), and what [`Graph::call`] answers.
+    pub(crate) fn commit_link(
+        &self,
+        job: crate::durable::lane::LinkJob,
+    ) -> Result<u64, GraphError> {
+        let durable = self
+            .durable
+            .as_ref()
+            .filter(|_| !self.spec.follower)
+            .ok_or_else(|| GraphError::engine("only a durable graph's owner commits a link"))?;
+        let job = crate::durable::lane::LaneJob {
+            statements: Vec::new(),
+            access: Access::Write,
+            writes: true,
+            options: crate::durable::WriteOptions::default(),
+            max_rows: None,
+            link: Some(job),
+        };
+        let committed = self.call(|| durable.lane.submit(self, durable, job))?;
+        Ok(committed.commit.token.offset)
+    }
+
+    /// Link `link`'s latest durable progress in this graph (GR1 Task 18).
+    pub(crate) fn link_progress(
+        &self,
+        link: loams_common::meta::LinkId,
+    ) -> Option<crate::changeset::LinkApply> {
+        self.durable
+            .as_ref()
+            .and_then(|durable| durable.link_progress(link))
+    }
+
     /// Whether writes to this graph are durable in Loams' log (GR1 Task 11).
     pub fn is_durable(&self) -> bool {
         self.durable.is_some()
@@ -991,7 +1048,8 @@ impl Graph {
     /// schema DDL outright.
     ///
     /// Schema DDL (`Access::Admin`: node, edge and graph types, indexes, constraints, schemas,
-    /// procedures) is not served until Task 24 (fix round 2). Grafeo's `Session::execute`, which
+    /// procedures) is not served yet (fix round 2; GR1 R24.6): Task 24 gives it to the graph's
+    /// `admin` only, and it runs once a portable snapshot carries schema changes. Grafeo's `Session::execute`, which
     /// a statement without parameters takes for the engine's time limit, runs it directly, with
     /// no Loams authorisation and outside CDC; the parameterised path is refused the same way so
     /// the answer does not depend on the bindings.
@@ -1004,12 +1062,23 @@ impl Graph {
         #[cfg(feature = "failpoints")]
         fail::fail_point!("loams_graph::gate");
         let verdict = gate_verdict(statement, QueryLanguage::Gql, limits)?;
+        if let Some(engine) = verdict.engine
+            && engine != verdict.guard
+        {
+            crate::authz::note_disagreement(statement, verdict.guard, engine);
+        }
         let access = verdict.access;
         if access == Access::Admin {
             return Err(GraphError::StatementNotAllowed {
                 file_access: false,
-                what: "schema DDL is not served until Task 24".to_string(),
+                what: "schema DDL is not served yet: it needs the graph's admin relation (GR1 \
+                       Task 24), and runs once a schema change is carried by every snapshot \
+                       (R24.6)"
+                    .to_string(),
             });
+        }
+        if self.spec.linked && access != Access::Read {
+            return Err(GraphError::Linked);
         }
         if (read_only || self.read_only) && access != Access::Read {
             return Err(GraphError::ReadOnly);
@@ -1145,6 +1214,7 @@ impl Graph {
                 writes: verdict.writes(),
                 options: options.clone(),
                 max_rows,
+                link: None,
             };
             let committed = self.call(|| durable.lane.submit(self, durable, job))?;
             return Ok(batch_results(committed, 1).pop().unwrap_or_default());
@@ -1351,6 +1421,7 @@ impl Graph {
                 writes,
                 options: options.clone(),
                 max_rows,
+                link: None,
             };
             let committed = self.call(|| durable.lane.submit(self, durable, job))?;
             return Ok(batch_results(committed, statements.len()));

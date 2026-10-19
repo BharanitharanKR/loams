@@ -146,10 +146,15 @@ impl QueryService for Query {
         // The same rule the REST route applies after its own parse (rule 1).
         search.consistency =
             read_consistency(ctx.headers(), Some(search.consistency)).map_err(refused)?;
+        // An `expand` reads its graph as the caller (GR1 R24.12).
+        let caller = super::graph_caller(
+            &self.state.principals,
+            ctx.extensions().get::<crate::auth::Principal>(),
+        );
         let response = self
             .state
             .collections
-            .search(namespace, search)
+            .search_as(namespace, search, &caller)
             .await
             .map_err(refused_service)?;
         let token = response.read_token.to_string();

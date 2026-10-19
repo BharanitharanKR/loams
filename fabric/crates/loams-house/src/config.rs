@@ -85,6 +85,15 @@ pub struct HouseConfig {
     pub session_limits: crate::settings::SessionLimits,
     /// Sessions live at once (FL2 Ruling 10).
     pub max_live_sessions: usize,
+    /// Sessions one user may hold at once (HS1 Task 21; Task 4's I5).
+    pub max_sessions_per_user: usize,
+    /// Workers one user's sessions may pin (HS1 Task 21; Task 4's I5).
+    pub max_pinned_workers_per_user: usize,
+    /// The namespace queues and node memory admission (§49 §12, HS1 Task 21).
+    pub admission: crate::limits::AdmissionLimits,
+    /// Pipes and materialized views per namespace (§49 §12, HS1 Task 21); the
+    /// lake holds them ([`crate::catalog::Lake::with_object_caps`]).
+    pub object_caps: crate::catalog::ObjectCaps,
     /// The TLS listener (8443, HS1 Task 20), which may face other hosts:
     /// where it listens and its rustls configuration ([`crate::tls`]).
     pub tls: Option<TlsListener>,
@@ -99,6 +108,55 @@ pub struct HouseConfig {
     /// How often background compaction looks at tables that took commits
     /// (HS1 Task 13): 30 s; zero turns it off.
     pub compaction_interval: Duration,
+    /// How long lake tables keep their snapshots, and dropped tables wait for
+    /// `UNDROP` (`loams_snapshot_retention`, §49 §11): 7 days, at least 24 h
+    /// (HS1 Task 15).
+    pub snapshot_retention: Duration,
+    /// How often snapshot expiry, orphan removal and purges sweep the
+    /// catalog (HS1 Task 15): 1 h; zero turns it off.
+    pub retention_interval: Duration,
+    /// The admin listener (`--admin-listen`, 8125, loopback only): `GET
+    /// /metrics` (HS1 Task 23). `None`: not served.
+    pub admin_listen: Option<SocketAddr>,
+    /// The engine whose streams `LoamsStream` pipes read (HS1 Task 16);
+    /// `None`: no pipe can be made.
+    pub engine: Option<EngineLink>,
+    /// How often the pipe runner looks for records (HS1 Task 16): 1 s; zero
+    /// turns it off.
+    pub pipe_interval: Duration,
+    /// How often materialized views over lake tables catch up on commits no
+    /// `INSERT` ran them for (HS1 Task 17): 5 s; zero turns it off.
+    pub view_interval: Duration,
+    /// Where each namespace's quotas come from (HS1 Task 22): `[house.quotas]`
+    /// by default; none set, none limit.
+    pub quotas: std::sync::Arc<dyn crate::quota::QuotaSource>,
+    /// Where usage events go (HS1 Task 22, §27); nowhere by default.
+    pub usage: std::sync::Arc<dyn crate::usage::UsageObserver>,
+    /// How often every lake table's bytes are measured (`house.storage`, HS1
+    /// Task 22): daily; zero turns it off.
+    pub storage_usage_interval: Duration,
+}
+
+/// The House's link to the engine's stream API (HS1 Task 16, `[house.engine]`).
+#[derive(Clone, PartialEq, Eq)]
+pub struct EngineLink {
+    /// The engine's HTTP API (`https://engine:8080`).
+    pub url: String,
+    /// The House's own API key for it (never a caller's).
+    pub key: Option<String>,
+    /// Which engine namespace each House namespace's pipes read; a House
+    /// namespace not listed has no pipes.
+    pub namespaces: std::collections::BTreeMap<u64, String>,
+}
+
+impl fmt::Debug for EngineLink {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("EngineLink")
+            .field("url", &self.url)
+            .field("key", &self.key.as_ref().map(|_| "[redacted]"))
+            .field("namespaces", &self.namespaces)
+            .finish()
+    }
 }
 
 /// A TLS listener (HS1 Task 20).
@@ -133,6 +191,15 @@ impl Default for HouseConfig {
             unmapped_principals: None,
             audit: None,
             compaction_interval: Duration::from_secs(30),
+            snapshot_retention: crate::catalog::DEFAULT_RETENTION,
+            retention_interval: crate::retention::DEFAULT_SWEEP_INTERVAL,
+            admin_listen: None,
+            engine: None,
+            pipe_interval: Duration::from_secs(1),
+            view_interval: Duration::from_secs(5),
+            quotas: std::sync::Arc::new(crate::quota::ConfigQuotas::default()),
+            usage: std::sync::Arc::new(crate::usage::NoUsageObserver),
+            storage_usage_interval: crate::usage::DEFAULT_STORAGE_INTERVAL,
             default_buffer_size: 1024 * 1024,
             max_query_size: 256 * 1024,
             receive_timeout: Duration::from_secs(30),
@@ -145,6 +212,10 @@ impl Default for HouseConfig {
             body_limits: crate::compress::BodyLimits::default(),
             session_limits: crate::settings::SessionLimits::default(),
             max_live_sessions: crate::session::MAX_LIVE_SESSIONS,
+            max_sessions_per_user: crate::limits::MAX_SESSIONS_PER_USER,
+            max_pinned_workers_per_user: crate::limits::MAX_PINNED_WORKERS_PER_USER,
+            admission: crate::limits::AdmissionLimits::default(),
+            object_caps: crate::catalog::ObjectCaps::default(),
         }
     }
 }
@@ -393,6 +464,10 @@ pub struct HouseSection {
     pub principals: Vec<FilePrincipal>,
     /// The file the audit is appended to (HS1 Task 20); `--audit-log`.
     pub audit_log: Option<PathBuf>,
+    /// How long lake tables keep their snapshots and dropped tables wait for
+    /// `UNDROP`, in hours (`loams_snapshot_retention`; 168, at least 24; HS1
+    /// Task 15).
+    pub snapshot_retention_hours: Option<u64>,
     /// `[house.limits]`.
     #[serde(default)]
     pub limits: LimitsSection,
@@ -408,6 +483,64 @@ pub struct HouseSection {
     /// `[house.tls]`: the certificate and key HS1 Task 20's listeners use.
     #[serde(default)]
     pub tls: TlsSection,
+    /// `[house.engine]`: the engine whose streams pipes read (HS1 Task 16).
+    #[serde(default)]
+    pub engine: EngineSection,
+    /// `[house.quotas]`: every namespace's quotas, and per-namespace ones
+    /// (HS1 Task 22).
+    #[serde(default)]
+    pub quotas: crate::quota::QuotasSection,
+}
+
+/// `[house.engine]` (HS1 Task 16).
+///
+/// ```toml
+/// [house.engine]
+/// url = "https://engine:8080"
+/// key_file = "/run/secrets/house-engine-key"
+/// [house.engine.namespaces]
+/// 7 = "orders"
+/// ```
+#[derive(Debug, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct EngineSection {
+    /// The engine's HTTP API.
+    pub url: Option<String>,
+    /// A file holding the House's API key for the engine.
+    pub key_file: Option<PathBuf>,
+    /// House namespace id → the engine namespace its pipes read.
+    #[serde(default)]
+    pub namespaces: std::collections::BTreeMap<String, String>,
+}
+
+impl EngineSection {
+    /// The link, when a URL is set; the key file is read here.
+    pub fn link(&self) -> Result<Option<EngineLink>, String> {
+        let Some(url) = &self.url else {
+            return Ok(None);
+        };
+        let key = match &self.key_file {
+            Some(path) => Some(
+                std::fs::read_to_string(path)
+                    .map_err(|err| format!("[house.engine] key_file {}: {err}", path.display()))?
+                    .trim()
+                    .to_string(),
+            ),
+            None => None,
+        };
+        let mut namespaces = std::collections::BTreeMap::new();
+        for (id, name) in &self.namespaces {
+            let id: u64 = id
+                .parse()
+                .map_err(|_| format!("[house.engine.namespaces] {id:?} is not a namespace id"))?;
+            namespaces.insert(id, name.clone());
+        }
+        Ok(Some(EngineLink {
+            url: url.clone(),
+            key,
+            namespaces,
+        }))
+    }
 }
 
 /// One `[[house.users]]` entry.
@@ -538,6 +671,28 @@ pub struct LimitsSection {
     pub max_execution_time_s: Option<f64>,
     /// The `max_threads` cap (§49 §12).
     pub max_threads: Option<u64>,
+    /// The `max_bytes_to_read` cap (§49 §12); the worker profile's is 1 TiB.
+    pub max_bytes_to_read: Option<u64>,
+    /// The `max_result_bytes` cap (§49 §12); the worker profile's is 10 GiB.
+    pub max_result_bytes: Option<u64>,
+    /// [`HouseConfig::max_sessions_per_user`].
+    pub max_sessions_per_user: Option<usize>,
+    /// [`HouseConfig::max_pinned_workers_per_user`].
+    pub max_pinned_workers_per_user: Option<usize>,
+    /// Statements running at once per namespace (§49 §12: 16).
+    pub max_running_per_namespace: Option<usize>,
+    /// Statements queued per namespace (§49 §12: 64).
+    pub max_queued_per_namespace: Option<usize>,
+    /// How long a queued statement waits before `202`, in milliseconds (§49
+    /// §12: 30 000).
+    pub queue_timeout_ms: Option<u64>,
+    /// The node's memory, in bytes, of which admitted statements' caps may use
+    /// 85 % (default: the front's cgroup limit, else the machine's memory).
+    pub node_memory_bytes: Option<u64>,
+    /// Pipes per namespace (§49 §12: 32).
+    pub max_pipes_per_namespace: Option<usize>,
+    /// Materialized views per namespace (§49 §12: 64).
+    pub max_views_per_namespace: Option<usize>,
 }
 
 impl LimitsSection {
@@ -563,6 +718,33 @@ impl LimitsSection {
         set(&mut caps.max_memory_usage, self.max_memory_usage);
         set(&mut caps.max_execution_time_s, self.max_execution_time_s);
         set(&mut caps.max_threads, self.max_threads);
+        set(&mut caps.max_bytes_to_read, self.max_bytes_to_read);
+        set(&mut caps.max_result_bytes, self.max_result_bytes);
+        set(
+            &mut config.max_sessions_per_user,
+            self.max_sessions_per_user,
+        );
+        set(
+            &mut config.max_pinned_workers_per_user,
+            self.max_pinned_workers_per_user,
+        );
+        let admission = &mut config.admission;
+        set(
+            &mut admission.max_running_per_namespace,
+            self.max_running_per_namespace,
+        );
+        set(
+            &mut admission.max_queued_per_namespace,
+            self.max_queued_per_namespace,
+        );
+        set(&mut admission.queue_timeout, self.queue_timeout_ms.map(ms));
+        set(
+            &mut admission.node_memory_budget,
+            self.node_memory_bytes
+                .map(crate::limits::node_memory_budget),
+        );
+        set(&mut config.object_caps.pipes, self.max_pipes_per_namespace);
+        set(&mut config.object_caps.views, self.max_views_per_namespace);
     }
 }
 
@@ -675,6 +857,11 @@ impl HouseFile {
                 crate::identity::Grants::parse(tables).map_err(bad)?;
             }
         }
+        file.house.quotas.to_quotas().map_err(|why| {
+            HouseError::from(ChError::bad_arguments(format!(
+                "the house configuration file: {why}"
+            )))
+        })?;
         for principal in &file.house.principals {
             principal.to_map().map_err(|why| {
                 HouseError::from(ChError::bad_arguments(format!(

@@ -28,7 +28,7 @@ async fn clone_of_missing_repo_fails() {
     let err = env.fails(env.path(), &["clone", "-q", &bad, "y"]);
     assert!(
         err.contains(&format!(
-            "fatal: loams: expected <store-url>/ns/<ns>/repos/<repo_id>, got {}/nope",
+            "fatal: loams: expected <store-url>/ns/<namespace-id>/repos/<repo>, got {}/nope",
             env.store_url()
         )),
         "{err}"
@@ -45,6 +45,7 @@ async fn push_to_missing_repo_fails_without_create_flag() {
     env.commit(&dir, "a.txt", "a\n");
     let err = env.fails(&dir, &["push", &env.url(&repo), "main"]);
     assert!(err.contains("not found"), "{err}");
+    assert!(err.contains("LOAMS_GIT_CREATE_ON_PUSH=1"), "{err}");
     let checkpoint = env
         .wal(&repo)
         .latest_checkpoint(loams_git::Seq(u64::MAX))
@@ -469,4 +470,19 @@ async fn push_ref_limit_at_and_past() {
         String::from_utf8_lossy(&past.stderr)
     );
     assert!(env.ref_txns(&repo).await.is_empty());
+}
+
+/// The release packages' smoke test: the installed helper answers
+/// `--version` without a remote, a bucket or a repository.
+#[test]
+fn version_flag_prints_the_version() {
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_git-remote-loams"))
+        .arg("--version")
+        .output()
+        .expect("run git-remote-loams");
+    assert!(out.status.success(), "{out:?}");
+    assert_eq!(
+        String::from_utf8_lossy(&out.stdout).trim(),
+        format!("git-remote-loams {}", env!("CARGO_PKG_VERSION"))
+    );
 }

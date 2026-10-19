@@ -1,0 +1,17 @@
+# Scratch users for Task 18's checks.
+[[users]]
+name = "app"
+databases = ["one", "two", "sleepy"]
+password = "app-pw"
+
+# Q643: a client login checked against a SCRAM verifier (no plaintext), and
+# the backend login as another user. The verifier is Postgres's own, read
+# from a backend:
+#   CREATE ROLE verif_tmp PASSWORD 'verif-pw';
+#   SELECT rolpassword FROM pg_authid WHERE rolname = 'verif_tmp';
+# [[users]]
+# name = "verif"
+# database = "one"
+# password_hash = "SCRAM-SHA-256$4096:<salt>$<stored key>:<server key>"
+# server_user = "app"
+# server_password = "app-pw"

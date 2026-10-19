@@ -1,5 +1,9 @@
 import { readFileSync, renameSync, writeFileSync } from "node:fs";
-import type { LiveStoreChoice, StudioNotifyPrefs } from "../shared/contracts";
+import type {
+	LiveStoreChoice,
+	StudioNotifyPrefs,
+	ThemeChoice,
+} from "../shared/contracts";
 
 /** Reads one key from userData/settings.json; `fallback` when missing or unreadable. */
 export function readSetting<T>(file: string, key: string, fallback: T): T {
@@ -61,4 +65,12 @@ export function readNotifyPrefs(file: string): StudioNotifyPrefs {
 			approval: true,
 		}
 	);
+}
+
+/** The theme choice (D1074): `ui.theme` in settings.json, "system" by default. */
+export const THEME_SETTING = "ui.theme";
+
+export function readThemeChoice(file: string): ThemeChoice {
+	const v = readSetting<unknown>(file, THEME_SETTING, "system");
+	return v === "dark" || v === "light" ? v : "system";
 }

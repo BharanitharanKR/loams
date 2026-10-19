@@ -8,6 +8,7 @@
 // for it here, so the preview keeps working. Namespaces without data yet
 // return empty or "unconfigured" results.
 
+import { parseThemeChoice } from '@loams/console-host/theme';
 import type {
   ChatApproval,
   ChatEvent,
@@ -364,8 +365,13 @@ export function createFakeDesktop(): LoamsDesktopApi {
   const later = (ms: number, fn: () => void) => globalThis.setTimeout(fn, ms);
 
   return {
-    version: '0.1.0-preview.1',
+    version: '0.1.0',
     platform: 'linux',
+    // The preload passes the saved choice; the dev preview keeps it in local storage.
+    theme: {
+      initial: parseThemeChoice(localStorage.getItem('loams-theme')),
+      set: async () => {},
+    },
     servers: {
       list: async () => ({ servers: [...data.servers], activeId: data.activeId }),
       add: async (e) => {
@@ -679,7 +685,7 @@ function fakeSql(sql: string): IpcResult<SqlResult> | undefined {
 
 // ---- Overview and Settings preview (Task 30) ----
 
-/** The preview's stacks: Postgres running, WeSQL stopped, TiKV without a runtime. Start and stop work. */
+/** The preview's stacks: Postgres running, MySQL (dev) stopped, TiKV without a runtime. Start and stop work. */
 function previewStacks(): LoamsDesktopApi['stacks'] {
   const states: Record<StackId, StackState> = {
     postgres: {
@@ -997,8 +1003,13 @@ function createFakeChat(): LoamsDesktopApi['chat'] {
 /** The preview's updater: a manual-mode feed that finds v0.2.0 on "Check now". */
 function previewUpdate(): LoamsDesktopApi['update'] {
   let state: Awaited<ReturnType<LoamsDesktopApi['update']['state']>> = { phase: 'idle' };
+  let auto = true;
   return {
     state: async () => state,
+    autoCheck: async () => ({ enabled: auto, locked: false }),
+    setAutoCheck: async (enabled) => {
+      auto = enabled;
+    },
     check: async () => {
       state = { phase: 'checking' };
       await new Promise((r) => globalThis.setTimeout(r, 500));

@@ -7,24 +7,12 @@ import { type FormEvent, type ReactNode, useEffect, useRef, useState } from 'rea
 import type { AuthMode } from '../runtime-config.js';
 import { checkHealth, type Health, isTailnetHost, parseEngineUrl } from './engine.js';
 
-export function PreviewBadge() {
-  return (
-    <span
-      className="lc-preview"
-      title="Loams is in preview: interfaces and data formats may change between releases."
-    >
-      Preview
-    </span>
-  );
-}
-
 function Frame({ title, children }: { title: string; children: ReactNode }) {
   return (
     <main className="lc-gate">
       <div className="lc-gate-card">
         <div className="lc-gate-brand">
           <Logo />
-          <PreviewBadge />
         </div>
         <h1>{title}</h1>
         {children}
@@ -289,7 +277,9 @@ export function ConnectScreen({
       )}
       {tested && !tested.ok && parsed.ok && (
         <Notice tone="danger" title="This browser cannot reach the engine">
-          {tested.message} <Unreachable origin={parsed.origin} result={tested} />
+          {/* The browser's own words for a network failure ("Failed to fetch") say nothing. */}
+          {tested.kind !== 'unreachable' && <>{tested.message} </>}
+          <Unreachable origin={parsed.origin} result={tested} />
         </Notice>
       )}
       <details className="lc-gate-help">
@@ -331,6 +321,17 @@ function Unreachable({ origin, result }: { origin: string; result: Health }) {
       Check that this device can reach that address (VPN or tailnet up), that the engine is running,
       and that it allows this console's origin.
     </>
+  );
+}
+
+/** While a remembered engine's /health is checked (up to a few seconds when it is down). */
+export function ConnectingScreen({ engine }: { engine: string }) {
+  return (
+    <Frame title="Connecting">
+      <p className="lc-gate-lead" role="status">
+        Checking the engine at <code>{new URL(engine).host}</code>…
+      </p>
+    </Frame>
   );
 }
 

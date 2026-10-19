@@ -136,6 +136,7 @@ impl<N: NeonRead> PgService<N> {
                 .apply("CreateDatabase", claim.as_ref(), mutation)
                 .await?
             {
+                self.kick(&created.record.project_id);
                 return Ok(created);
             }
         }
@@ -208,6 +209,7 @@ impl<N: NeonRead> PgService<N> {
                 .apply("DeleteDatabase", claim.as_ref(), mutation)
                 .await?
             {
+                self.kick(&current.record.project_id);
                 return Ok(());
             }
         }

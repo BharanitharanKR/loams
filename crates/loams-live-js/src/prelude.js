@@ -1348,10 +1348,29 @@
     return metas;
   }
 
-  // Runs the function `path` with `args`; the result is a promise.
-  function invoke(path, args) {
+  // `ctx.auth` (LV1 plan Task 16): `getUserIdentity()` resolves to the app
+  // end user's `{ issuer, subject, tokenIdentifier, email?, name?, claims }`,
+  // or null for an anonymous call or a platform principal.
+  function makeAuth(identity) {
+    const frozen = identity === null ? null : deepFreeze(identity);
+    return freeze({ getUserIdentity: async () => frozen });
+  }
+
+  function deepFreeze(value) {
+    if (value !== null && typeof value === "object") {
+      for (const key of keys(value)) {
+        deepFreeze(value[key]);
+      }
+      freeze(value);
+    }
+    return value;
+  }
+
+  // Runs the function `path` with `args` as `identity` (an object or null);
+  // the result is a promise.
+  function invoke(path, args, identity) {
     const fn = table.get(path);
-    const ctx = freeze({ db: makeDb(fn.kind === "mutation") });
+    const ctx = freeze({ db: makeDb(fn.kind === "mutation"), auth: makeAuth(identity) });
     return (async () => apply(fn.handler, undefined, [ctx, args]))();
   }
 

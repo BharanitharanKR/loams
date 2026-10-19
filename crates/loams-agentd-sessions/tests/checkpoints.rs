@@ -19,7 +19,7 @@ use loams_agentd_proto::{
     SessionStatus, SteeringMode,
 };
 use loams_agentd_rpc::{RpcClient, methods};
-use loams_agentd_sessions::{Checkpoints, EngineCore, HarnessRegistry, Repos};
+use loams_agentd_sessions::{ApprovalSettings, Checkpoints, EngineCore, HarnessRegistry, Repos};
 use serde_json::{Value, json};
 
 const CHAT: &str = "chat-checkpoints";
@@ -143,10 +143,11 @@ impl Daemon {
                 },
             ],
         })));
-        let core = EngineCore::assemble(
+        let core = EngineCore::assemble_with_approvals(
             &tmp.path().join("data"),
             Arc::new(registry),
             HarnessId::Mock,
+            ApprovalSettings::full_access_default(),
         )
         .unwrap();
         let client = loams_agentd_rpc::memory_client(core.rpc_service());

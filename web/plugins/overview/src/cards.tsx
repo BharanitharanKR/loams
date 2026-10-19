@@ -34,7 +34,7 @@ export function OverviewCard({
         <div className="flex flex-col gap-3">
           {children}
           <a
-            className="text-sm text-accent no-underline"
+            className="text-sm text-accent-fg no-underline"
             href={`#${href}`}
             aria-label={`Open ${title}`}
           >
@@ -158,7 +158,7 @@ export function EngineCard({
           ).map(([k, v]) => (
             <div key={k} className="contents">
               <dt className="text-muted">{k}</dt>
-              <dd className="m-0 font-mono truncate" title={v}>
+              <dd className={/* mono-ok: path */ 'm-0 font-mono truncate'} title={v}>
                 {v}
               </dd>
             </div>

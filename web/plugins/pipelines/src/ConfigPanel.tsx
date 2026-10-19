@@ -218,7 +218,7 @@ function MapEditor({
                   onChange={(e) => set(f.name, e.target.checked ? f.name : undefined)}
                 />
               </td>
-              <td className="font-mono text-xs">
+              <td className={/* mono-ok: code */ 'font-mono text-xs'}>
                 {f.name}:{f.type}
               </td>
               <td>
@@ -257,7 +257,10 @@ function CastEditor({
     <ul className="m-0 flex list-none flex-col gap-2 p-0">
       {fields.map((f) => (
         <li key={f.name} className="flex items-center justify-between gap-2">
-          <label htmlFor={`${node.id}-cast-${f.name}`} className="font-mono text-xs">
+          <label
+            htmlFor={`${node.id}-cast-${f.name}`}
+            className={/* mono-ok: id */ 'font-mono text-xs'}
+          >
             {f.name}:{f.type} →
           </label>
           <Select
@@ -443,7 +446,7 @@ export function ConfigPanel(props: ConfigPanelProps) {
               <Textarea
                 {...ids}
                 rows={3}
-                className="font-mono"
+                className={/* mono-ok: code */ 'font-mono'}
                 spellCheck={false}
                 value={String(node.config.expression ?? '')}
                 onChange={(e) => setConfig('expression', e.target.value || undefined)}
@@ -473,19 +476,21 @@ export function ConfigPanel(props: ConfigPanelProps) {
         {node.kind !== 'source' && (
           <>
             <dt className="text-muted">Input</dt>
-            <dd className="m-0 break-words font-mono">{schemaText(input)}</dd>
+            <dd className={/* mono-ok: code */ 'm-0 break-words font-mono'}>{schemaText(input)}</dd>
           </>
         )}
         {node.kind !== 'sink' && (
           <>
             <dt className="text-muted">Output</dt>
-            <dd className="m-0 break-words font-mono">{schemaText(output)}</dd>
+            <dd className={/* mono-ok: code */ 'm-0 break-words font-mono'}>
+              {schemaText(output)}
+            </dd>
           </>
         )}
         {node.kind === 'sink' && def?.accepts && (
           <>
             <dt className="text-muted">Accepts</dt>
-            <dd className="m-0 break-words font-mono">
+            <dd className={/* mono-ok: code */ 'm-0 break-words font-mono'}>
               {def.accepts.open
                 ? 'any record'
                 : def.accepts.fields

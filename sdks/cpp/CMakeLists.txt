@@ -23,7 +23,7 @@ project(loams-cpp VERSION 0.1.0 LANGUAGES CXX)
 # SemVer prerelease lives here; `scripts/sdk/sdk-version.py` sets both lines and
 # the release workflow checks them against the tag. It is compiled into
 # `loams::SdkVersion()` and the user agent.
-set(LOAMS_SDK_VERSION "0.1.0-preview.2")
+set(LOAMS_SDK_VERSION "0.1.0")
 
 # Tests and the quickstart are on for a checkout of this repository and off for a
 # consumer: the release's source archive carries no `sdks/fixtures` corpus, and a
@@ -172,6 +172,11 @@ endforeach()
 add_executable(conformance_test_names tests/test_names.cpp)
 target_link_libraries(conformance_test_names PRIVATE loams loams_warnings)
 add_test(NAME cpp_conformance_test_names COMMAND conformance_test_names)
+
+# The Live app directory (LV1 Task 13). Not one of the six: see the file's header.
+add_executable(live_admin_test tests/live_admin_test.cpp)
+target_link_libraries(live_admin_test PRIVATE loams_test_support loams_warnings)
+add_test(NAME cpp_live_admin COMMAND live_admin_test)
 endif()
 
 # The quickstart is compiled, so a change that breaks it breaks the build rather

@@ -25,7 +25,7 @@ export type TrafficSample = {
   v: number;
 };
 
-export type Product = 'Postgres' | 'WeSQL' | 'Streams' | 'Durable' | 'Live';
+export type Product = 'Postgres' | 'Loams SQL' | 'Streams' | 'Durable' | 'Live';
 export type Resource = 'cpu' | 'memory' | 'storage';
 
 /** One usage sample: how much of `resource` a `product` used at `t`. */

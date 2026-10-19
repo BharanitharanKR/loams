@@ -22,7 +22,7 @@ use loams_agentd_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SandboxLevel,
     SteeringMode,
 };
-use loams_agentd_sessions::{EngineCore, HarnessRegistry};
+use loams_agentd_sessions::{ApprovalSettings, EngineCore, HarnessRegistry};
 
 const CHAT: &str = "chat-queued-att";
 
@@ -142,10 +142,11 @@ async fn run_defers_until_attachment_bytes_land_then_executes_rewritten() {
     let tmp = tempfile::tempdir().unwrap();
     let registry = HarnessRegistry::new();
     registry.register(Arc::new(AckHarness));
-    let core = EngineCore::assemble(
+    let core = EngineCore::assemble_with_approvals(
         &tmp.path().join("data"),
         Arc::new(registry),
         HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
     )
     .expect("engine core assembles");
 
@@ -247,10 +248,11 @@ async fn queued_row_waits_for_attachment_bytes_then_sends_resolved_paths() {
     let tmp = tempfile::tempdir().unwrap();
     let registry = HarnessRegistry::new();
     registry.register(Arc::new(AckHarness));
-    let core = EngineCore::assemble(
+    let core = EngineCore::assemble_with_approvals(
         &tmp.path().join("data"),
         Arc::new(registry),
         HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
     )
     .expect("engine core assembles");
 

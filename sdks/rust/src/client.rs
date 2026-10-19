@@ -34,8 +34,9 @@ use connectrpc::client::{ClientConfig, ClientTransport, HttpClient, UnaryRespons
 use connectrpc::http_body::Body;
 use futures::Stream;
 use loams_live_proto::loams::live::v1::{
-    LiveServiceClient, ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest,
-    MutateResponse, QueryRequest, QueryResponse, Transition, TransitionView, WatchRequest,
+    AuthenticateRequest, AuthenticateResponse, LiveServiceClient, ModifyQuerySetRequest,
+    ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse, Transition,
+    TransitionView, WatchRequest,
 };
 use loams_proto::loams::instance::v1::{
     GetInstanceRequest, GetInstanceResponse, InstanceServiceClient, WhoAmIRequest, WhoAmIResponse,
@@ -350,15 +351,33 @@ where
         request: WatchRequest,
         options: WatchOptions<WatchRequest, Transition>,
     ) -> Result<impl Stream<Item = Result<Transition, LoamsError>>, LoamsError> {
+        self.watch_with(request, options, CallOptionsOverrides::new())
+            .await
+    }
+
+    /// [`Loams::watch`] with per-call settings: headers (a `loams-live-app`,
+    /// a trace id), the deadline, the retries of the first open.
+    ///
+    /// The first open **and every re-open** carry the same plan: the caller's
+    /// headers, the deadline, and a bearer fetched fresh from the token source
+    /// for each open. A re-open used to carry only the client's deadline, so a
+    /// reconnect went out with no `authorization` and no caller headers.
+    ///
+    /// # Errors
+    ///
+    /// As [`Loams::watch`].
+    pub async fn watch_with(
+        &self,
+        request: WatchRequest,
+        options: WatchOptions<WatchRequest, Transition>,
+        overrides: CallOptionsOverrides,
+    ) -> Result<impl Stream<Item = Result<Transition, LoamsError>>, LoamsError> {
         let binding = crate::binding::binding_of("live", "watch").expect("generated");
         let rpc = binding.rpc;
         let runtime = self.inner.runtime.clone();
         let client = self.live().client.clone();
-        let mut call_options = connectrpc::client::CallOptions::default();
-        if let Some(timeout) = runtime.default_timeout {
-            call_options = call_options.with_timeout(timeout);
-        }
-        let opener_options = call_options.clone();
+        let plan = runtime.plan(&overrides, binding, false);
+        let opener_plan = plan.clone();
         let opener_client = client.clone();
         let opened = call_with_retry(
             request.clone(),
@@ -371,7 +390,7 @@ where
                         .map(opened_transitions)
                 }
             },
-            &runtime.plan(&CallOptionsOverrides::new(), binding, false),
+            &plan,
             rpc,
         )
         .await?;
@@ -384,12 +403,17 @@ where
         Ok(streams::watch(
             move |request: WatchRequest| {
                 let client = client.clone();
-                let options = opener_options.clone();
+                let plan = opener_plan.clone();
                 let first = Arc::clone(&first);
                 Box::pin(async move {
                     if let Some(opened) = first.lock().expect("not poisoned").take() {
                         return Ok(opened);
                     }
+                    // The same headers, deadline and bearer as the first open,
+                    // the bearer re-read so a refreshed token is the one sent.
+                    let options = plan.call_options().await.map_err(|error| {
+                        connectrpc::ConnectError::new(error.code, error.to_string())
+                    })?;
                     client
                         .watch_with_options(request, options)
                         .await
@@ -563,6 +587,31 @@ where
         )
         .await
     }
+
+    /// `loams.live.v1.LiveService/Authenticate`: replaces an open session's
+    /// identity with this call's credential (LV1 plan Task 17).
+    ///
+    /// # Errors
+    ///
+    /// Returns a [`LoamsError`] for an unknown session or a credential the
+    /// app does not accept.
+    pub async fn authenticate(
+        &self,
+        request: AuthenticateRequest,
+        options: CallOptionsOverrides,
+    ) -> Result<AuthenticateResponse, LoamsError> {
+        let binding = crate::binding::binding_of("live", "authenticate").expect("generated");
+        let client = &self.client;
+        send(
+            binding,
+            request,
+            false,
+            options,
+            self.runtime,
+            |request, opts| client.authenticate_with_options(request, opts),
+        )
+        .await
+    }
 }
 
 /// `loams.tables` — the table half of the same service (design §44 §7.2).
@@ -709,6 +758,136 @@ where
 mod tests {
     use super::*;
     use crate::transport::TransportOptions;
+
+    /// A transport that answers from a script and records every request's
+    /// headers, so a re-open's headers can be compared with the first open's.
+    #[derive(Clone, Default)]
+    struct Recording {
+        seen: Arc<Mutex<Vec<http::HeaderMap>>>,
+        answers: Arc<Mutex<std::collections::VecDeque<bytes::Bytes>>>,
+    }
+
+    impl ClientTransport for Recording {
+        type ResponseBody = http_body_util::Full<bytes::Bytes>;
+        type Error = std::io::Error;
+
+        fn send(
+            &self,
+            request: http::Request<connectrpc::client::ClientBody>,
+        ) -> connectrpc::client::BoxFuture<
+            'static,
+            Result<http::Response<Self::ResponseBody>, Self::Error>,
+        > {
+            self.seen
+                .lock()
+                .expect("not poisoned")
+                .push(request.headers().clone());
+            let body = self
+                .answers
+                .lock()
+                .expect("not poisoned")
+                .pop_front()
+                .unwrap_or_else(|| frame(0x02, b"{}"));
+            Box::pin(async move {
+                Ok(http::Response::builder()
+                    .status(200)
+                    .header("content-type", "application/connect+proto")
+                    .body(http_body_util::Full::new(body))
+                    .expect("a response"))
+            })
+        }
+    }
+
+    /// One Connect envelope frame.
+    fn frame(flags: u8, payload: &[u8]) -> bytes::Bytes {
+        let mut out = vec![flags];
+        out.extend_from_slice(&u32::try_from(payload.len()).expect("small").to_be_bytes());
+        out.extend_from_slice(payload);
+        out.into()
+    }
+
+    fn transition(session: &str) -> bytes::Bytes {
+        use buffa::Message as _;
+        let message = Transition {
+            session_id: session.to_owned(),
+            ..Default::default()
+        };
+        frame(0x00, &message.encode_to_vec())
+    }
+
+    /// The resuming watch's reconnect carries the same bearer, caller headers
+    /// and deadline as its first open. It used to carry only the client's
+    /// deadline, so the reconnect was unauthenticated and addressed the
+    /// server's default Live app.
+    #[tokio::test]
+    async fn a_watch_reconnect_carries_the_bearer_and_the_callers_headers() {
+        let transport = Recording::default();
+        {
+            let mut answers = transport.answers.lock().expect("not poisoned");
+            // First open: one transition, then a retryable refusal.
+            let mut first = transition("s1").to_vec();
+            first.extend_from_slice(&frame(
+                0x02,
+                br#"{"error":{"code":"unavailable","message":"the node is restarting"}}"#,
+            ));
+            answers.push_back(first.into());
+            // The reconnect: one more, then a clean end.
+            let mut second = transition("s2").to_vec();
+            second.extend_from_slice(&frame(0x02, b"{}"));
+            answers.push_back(second.into());
+        }
+        let loams = Loams::with_transport(
+            transport.clone(),
+            TransportOptions::new("http://127.0.0.1:1"),
+        )
+        .expect("a base URL")
+        .with_auth(Arc::new(
+            crate::token::StaticToken::new("real-key").expect("a token"),
+        ));
+
+        let options = WatchOptions::new(
+            streams::resume_from_cursor(|_cursor: Option<&str>, base: &WatchRequest| base.clone()),
+            streams::cursor_of(|message: &Transition| Some(message.session_id.clone())),
+        )
+        .random(streams::no_jitter);
+        let overrides = CallOptionsOverrides::new().header(
+            http::HeaderName::from_static("loams-live-app"),
+            http::HeaderValue::from_static("blog"),
+        );
+        let stream = loams
+            .watch_with(WatchRequest::default(), options, overrides)
+            .await
+            .expect("the first open");
+        let sessions: Vec<String> = futures::StreamExt::collect::<Vec<_>>(stream)
+            .await
+            .into_iter()
+            .map(|item| item.expect("no failure surfaces").session_id)
+            .collect();
+        assert_eq!(
+            sessions,
+            ["s1", "s2"],
+            "the stream resumed after the refusal"
+        );
+
+        let seen = transport.seen.lock().expect("not poisoned").clone();
+        assert_eq!(seen.len(), 2, "the first open and one reconnect");
+        for (at, headers) in seen.iter().enumerate() {
+            assert_eq!(
+                headers
+                    .get(http::header::AUTHORIZATION)
+                    .map(|v| v.to_str().expect("ascii")),
+                Some("Bearer real-key"),
+                "open {at} carries the bearer"
+            );
+            assert_eq!(
+                headers
+                    .get("loams-live-app")
+                    .map(|v| v.to_str().expect("ascii")),
+                Some("blog"),
+                "open {at} carries the caller's app"
+            );
+        }
+    }
 
     fn client() -> Loams<HttpClient> {
         Loams::with_transport(

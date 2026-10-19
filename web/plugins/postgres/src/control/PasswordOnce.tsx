@@ -49,7 +49,7 @@ export function PasswordOnce({
           <div className="flex gap-2">
             <input
               id={fieldId}
-              className="loams-input font-mono"
+              className={/* mono-ok: id */ 'loams-input font-mono'}
               type={shown ? 'text' : 'password'}
               value={issued.password}
               readOnly

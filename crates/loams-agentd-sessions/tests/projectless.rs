@@ -18,7 +18,7 @@ use loams_agentd_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SandboxLevel,
     SteeringMode,
 };
-use loams_agentd_sessions::{EngineCore, HarnessRegistry};
+use loams_agentd_sessions::{ApprovalSettings, EngineCore, HarnessRegistry};
 
 const CHAT: &str = "chat-projectless";
 
@@ -119,10 +119,11 @@ async fn projectless_terminal_resolves_home_and_preserves_explicit_paths() {
     use loams_agentd_rpc::methods;
 
     let tmp = tempfile::tempdir().unwrap();
-    let core = EngineCore::assemble(
+    let core = EngineCore::assemble_with_approvals(
         &tmp.path().join("data"),
         Arc::new(HarnessRegistry::new()),
         HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
     )
     .expect("engine core assembles");
     let client = loams_agentd_rpc::memory_client(core.rpc_service());
@@ -237,8 +238,13 @@ async fn exercise_projectless(command_first: bool) {
         requests: requests.clone(),
     }));
     let registry = Arc::new(registry);
-    let core = EngineCore::assemble(&tmp.path().join("data"), registry.clone(), HarnessId::Mock)
-        .expect("engine core assembles");
+    let core = EngineCore::assemble_with_approvals(
+        &tmp.path().join("data"),
+        registry.clone(),
+        HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
+    )
+    .expect("engine core assembles");
 
     // The composer's exact wire shape for "Don't work in a project": a
     // deviceId, no spaceId, no cwd.
@@ -338,8 +344,13 @@ async fn exercise_projectless(command_first: bool) {
     drop(client);
     drop(core);
 
-    let core = EngineCore::assemble(&tmp.path().join("data"), registry, HarnessId::Mock)
-        .expect("reopen persisted engine");
+    let core = EngineCore::assemble_with_approvals(
+        &tmp.path().join("data"),
+        registry,
+        HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
+    )
+    .expect("reopen persisted engine");
     let chat = core.workspace.chat(CHAT).unwrap().unwrap();
     assert_eq!(chat.space_id, None);
     assert_eq!(chat.cwd.as_deref(), Some("~"));

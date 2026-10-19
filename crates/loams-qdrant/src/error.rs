@@ -119,6 +119,7 @@ fn service_status(err: &ServiceError) -> (StatusCode, Code) {
         ServiceError::ResourceExhausted { .. } => {
             (StatusCode::TOO_MANY_REQUESTS, Code::ResourceExhausted)
         }
+        ServiceError::PermissionDenied { .. } => (StatusCode::FORBIDDEN, Code::PermissionDenied),
     }
 }
 
@@ -150,5 +151,6 @@ fn service_message(err: &ServiceError) -> String {
         ServiceError::ResourceExhausted { message, .. } => {
             format!("Rate limiting exceeded: {message}")
         }
+        ServiceError::PermissionDenied { message, .. } => format!("Forbidden: {message}"),
     }
 }

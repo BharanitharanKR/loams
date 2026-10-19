@@ -56,7 +56,9 @@ describe('Settings › Studio on the desktop', () => {
   it('mirrors the notification choices to Electron main', async () => {
     const bridge = fakeBridge();
     const { agentd } = desktopFake();
-    const page = render(wrap(<SettingsPage agentd={studioAgentd(agentd, undefined, bridge)} />));
+    const page = render(
+      wrap(<SettingsPage agentd={studioAgentd(agentd, undefined, bridge)} navigate={vi.fn()} />),
+    );
     await waitFor(() =>
       expect(bridge.setNotifications).toHaveBeenLastCalledWith({ turnDone: true, approval: true }),
     );
@@ -72,7 +74,9 @@ describe('Settings › Studio on the desktop', () => {
   it('chooses an editor scheme, or a program through the OS picker', async () => {
     const bridge = fakeBridge();
     const { agentd } = desktopFake();
-    const page = render(wrap(<SettingsPage agentd={studioAgentd(agentd, undefined, bridge)} />));
+    const page = render(
+      wrap(<SettingsPage agentd={studioAgentd(agentd, undefined, bridge)} navigate={vi.fn()} />),
+    );
     const select = (await page.findByLabelText('Open threads in')) as HTMLSelectElement;
     expect(select.value).toBe('vscode');
     fireEvent.change(select, { target: { value: 'zed' } });
@@ -84,7 +88,7 @@ describe('Settings › Studio on the desktop', () => {
 
   it('has no editor card on the web', () => {
     const { agentd } = desktopFake();
-    const page = render(wrap(<SettingsPage agentd={agentd} />));
+    const page = render(wrap(<SettingsPage agentd={agentd} navigate={vi.fn()} />));
     expect(page.queryByText('Editor')).toBeNull();
   });
 });

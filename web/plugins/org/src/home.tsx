@@ -1,4 +1,4 @@
-import { createClient } from '@connectrpc/connect';
+import { Code, ConnectError, createClient } from '@connectrpc/connect';
 import { useQuery, useTransport } from '@connectrpc/connect-query';
 import {
   AuditTable,
@@ -13,9 +13,9 @@ import {
   useTrail,
 } from '@loams/admin-ui';
 import type { RouterService, SessionService } from '@loams/console-host';
-import { admin } from '@loams/proto';
-import { Badge, Card, formatBytes, formatNumber, Stat, Stats } from '@loams/ui';
-import { useQueries } from '@tanstack/react-query';
+import { admin, collection } from '@loams/proto';
+import { Badge, Card, Empty, formatBytes, formatNumber, Stat, Stats } from '@loams/ui';
+import { useQueries, useQuery as useTanstackQuery } from '@tanstack/react-query';
 import { Bot, Lock } from 'lucide-react';
 import { type CSSProperties, useMemo } from 'react';
 
@@ -37,6 +37,7 @@ export function Home({
     () => ({
       projects: createClient(admin.ProjectService, transport),
       agents: createClient(admin.AgentService, transport),
+      namespaces: createClient(collection.NamespaceService, transport),
     }),
     [transport],
   );
@@ -56,38 +57,84 @@ export function Home({
     })),
   });
   const audit = useQuery(admin.AuditService.method.listAuditEvents, { pageSize: 8 });
+  // B7: every namespace the caller reaches, project environment or not. `null` on an
+  // engine without ListNamespaces, and the tile then counts environments.
+  const namespaces = useTanstackQuery({
+    queryKey: ['org-home', 'namespaces'],
+    queryFn: async () => {
+      try {
+        const res = await clients.namespaces.listNamespaces({ pageSize: 1000 });
+        return {
+          count: res.namespaces.length,
+          more: res.nextPageToken !== '',
+          collections: res.namespaces.reduce((n, ns) => n + ns.collectionCount, 0),
+        };
+      } catch (err) {
+        const code = ConnectError.from(err).code;
+        if (code === Code.Unimplemented || code === Code.NotFound) return null;
+        throw err;
+      }
+    },
+    retry: false,
+  });
 
-  const envsReady = list.length > 0 && envs.every((q) => q.data);
+  // Ready once the project list is in and every project's query answered: an org with
+  // no projects is ready at once (B7: the tiles stayed at "…" forever).
+  const envsReady = projects.data !== undefined && envs.every((q) => q.data);
   const envError = envs.find((q) => q.error)?.error ?? projects.error;
-  const agentsReady = list.length > 0 && agents.every((q) => q.data);
+  const agentsReady = projects.data !== undefined && agents.every((q) => q.data);
   const all = envs.flatMap((q) => q.data?.environments ?? []);
   const sum = (f: (e: admin.Environment) => bigint | undefined) =>
     all.reduce((n, e) => n + num(f(e)), 0);
+  // The engine does not measure environments yet (their stats are all zero), and data
+  // written straight to a namespace is in no environment: a 0 would read as "empty", so
+  // the tiles show a dash until some environment reports a number.
+  const reported = all.some(
+    (e) =>
+      num(e.stats?.documents) > 0 || num(e.stats?.storageBytes) > 0 || num(e.stats?.queries24h) > 0,
+  );
+  const stat = (text: string) => (envsReady ? reported ? text : <NotReported /> : '…');
   const allAgents = agents.flatMap((q) => q.data?.agents ?? []);
   const liveTokens = allAgents.reduce((n, a) => n + a.activeTokens, 0);
 
   return (
     <Page>
       <PageHead title={orgName} eyebrow="Organization">
-        {list.length} projects, {all.length || '…'} environments. Each environment is one namespace
-        in your bucket.
+        {projects.data ? list.length : '…'} projects, {envsReady ? all.length : '…'} environments.
+        Each environment is one namespace in your bucket.
       </PageHead>
 
       <Stats>
         <Stat
+          label="Namespaces"
+          value={
+            namespaces.data
+              ? `${formatNumber(namespaces.data.count)}${namespaces.data.more ? '+' : ''}`
+              : namespaces.data === null || namespaces.error
+                ? envsReady
+                  ? formatNumber(all.length)
+                  : '…'
+                : '…'
+          }
+          detail={
+            namespaces.data
+              ? `${formatNumber(namespaces.data.collections)} collections`
+              : namespaces.data === null || namespaces.error
+                ? 'Project environments'
+                : undefined
+          }
+        />
+        <Stat
           label="Documents"
-          value={envsReady ? formatNumber(sum((e) => e.stats?.documents)) : '…'}
-          detail="Across every environment"
+          value={stat(formatNumber(sum((e) => e.stats?.documents)))}
+          detail={list.length > 0 ? 'Across every environment' : 'No project environments yet'}
         />
         <Stat
           label="Storage"
-          value={envsReady ? formatBytes(sum((e) => e.stats?.storageBytes)) : '…'}
+          value={stat(formatBytes(sum((e) => e.stats?.storageBytes)))}
           detail="In object storage"
         />
-        <Stat
-          label="Queries, 24 h"
-          value={envsReady ? formatNumber(sum((e) => e.stats?.queries24h)) : '…'}
-        />
+        <Stat label="Queries, 24 h" value={stat(formatNumber(sum((e) => e.stats?.queries24h)))} />
         <Stat
           label="Agent tokens live"
           value={agentsReady ? liveTokens : '…'}
@@ -111,6 +158,13 @@ export function Home({
       )}
       {projects.isPending ? (
         <Loading />
+      ) : projects.data && list.length === 0 ? (
+        <Empty title="No projects yet">
+          A project groups environments, each one namespace in your bucket, with their agents and
+          keys. Data written straight to a namespace (with the SDK, the CLI or a wire protocol) does
+          not need one: open it in the <RouteLink to="/data">Data explorer</RouteLink> or under{' '}
+          <RouteLink to="/namespaces">Namespaces</RouteLink>.
+        </Empty>
       ) : (
         <div className="project-grid">
           {list.map((p, i) => (
@@ -169,5 +223,18 @@ export function Home({
         </p>
       )}
     </Page>
+  );
+}
+
+const NOT_REPORTED =
+  'Not reported: this server does not measure environments yet. Each namespace shows its own size under Namespaces.';
+
+/** A tile's value the server does not report: a dash, with why on hover. */
+function NotReported() {
+  return (
+    <span title={NOT_REPORTED}>
+      <span aria-hidden="true">—</span>
+      <span className="sr-only">Not reported</span>
+    </span>
   );
 }

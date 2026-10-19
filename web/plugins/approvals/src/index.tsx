@@ -259,7 +259,11 @@ export function InboxPage({
     <div className="lc-page">
       <header className="lc-page-head">
         <h1>Approvals</h1>
-        <p>{state.connected ? 'Live' : 'Connecting…'}</p>
+        <p role="status">
+          {state.connected
+            ? 'Requests that wait for a person, updated as they arrive.'
+            : 'Connecting to the approvals stream…'}
+        </p>
       </header>
       {state.error && (
         <Notice tone="warn" title="The approvals stream dropped">

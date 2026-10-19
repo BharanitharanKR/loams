@@ -252,6 +252,12 @@ fn call_of(invoke: Invoke) -> Result<Call, String> {
         .transpose()
         .map_err(|e| format!("the host sent bad arguments: {e}"))?
         .unwrap_or(LiveValue::Null);
+    let identity = ctx
+        .identity
+        .into_option()
+        .map(LiveValue::from_proto)
+        .transpose()
+        .map_err(|e| format!("the host sent a bad identity: {e}"))?;
     Ok(Call::new(
         invoke.path,
         args,
@@ -259,7 +265,8 @@ fn call_of(invoke: Invoke) -> Result<Call, String> {
         &ctx.request_id,
         usize::try_from(ctx.result_bytes).unwrap_or(usize::MAX),
         usize::try_from(ctx.host_bytes).unwrap_or(usize::MAX),
-    ))
+    )
+    .with_identity(identity))
 }
 
 /// The `Done` frame of an outcome.

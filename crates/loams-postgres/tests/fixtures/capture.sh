@@ -5,7 +5,7 @@
 # Responses go to *.response.json and their HTTP statuses to statuses.txt.
 #
 #   (cd deploy/loams-postgres-dev && docker compose up -d rustfs create-bucket storage_broker pageserver)
-#   crates/loams-postgres/tests/fixtures/capture.sh [pageserver URL] [loams-wal URL] [compute_ctl URL]
+#   crates/loams-postgres/tests/fixtures/capture.sh [pageserver URL] [loams-wal URL] [compute_ctl URL] [safekeeper URL]
 #
 # With a compute_ctl URL and COMPUTE_JWT (README.md: compute-jwt.py and
 # compose.capture.yaml), compute_ctl's /status is recorded too, with and
@@ -14,6 +14,10 @@
 # With a loams-wal HTTP URL (for example a `loams-wal --listen-http
 # 127.0.0.1:57701` started for the purpose), WalClient's fixtures are
 # recorded too (wal_*).
+#
+# With the stack's stock safekeeper's HTTP URL (`safekeeper1`,
+# http://127.0.0.1:7676), the same WalClient requests are recorded against it
+# (sk_*; 0.1.0 blocker B2: the release stack's pg-control talks to it).
 #   (cd deploy/loams-postgres-dev && docker compose down -v)
 #
 # The ids are fixed ("LoamsNeonTenant1", "LoamsNeonTimeln1", "LoamsNeonBranch1"
@@ -24,6 +28,7 @@ cd "$(dirname "$0")"
 PS=${1:-http://127.0.0.1:9898}
 WAL=${2:-}
 CTL=${3:-}
+SK=${4:-}
 T=4c6f616d734e656f6e54656e616e7431
 TL=4c6f616d734e656f6e54696d656c6e31
 BR=4c6f616d734e656f6e4272616e636831
@@ -74,6 +79,13 @@ if [ -n "$WAL" ]; then
   call wal_timeline_status GET "/v1/tenant/$T/timeline/$TL" "" "$WAL"
   call wal_create_conflict POST "/v1/tenant/timeline" conflict_wal.request.json "$WAL"
   call wal_not_found GET "/v1/tenant/$T/timeline/00000000000000000000000000000000" "" "$WAL"
+fi
+
+if [ -n "$SK" ]; then
+  call sk_create_timeline POST "/v1/tenant/timeline" wal_create_timeline.request.json "$SK"
+  call sk_timeline_status GET "/v1/tenant/$T/timeline/$TL" "" "$SK"
+  call sk_create_conflict POST "/v1/tenant/timeline" conflict_wal.request.json "$SK"
+  call sk_not_found GET "/v1/tenant/$T/timeline/00000000000000000000000000000000" "" "$SK"
 fi
 
 if [ -n "$CTL" ]; then

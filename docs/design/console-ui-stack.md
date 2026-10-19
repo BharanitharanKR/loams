@@ -19,6 +19,11 @@ Connect-porting work that follows does not re-open them.
    `rgb()`, `hsl()`, `oklch()` (and similar) literal in `web/plugins/**` or
    `web/packages/**` outside `tokens.css`; tests and generated code are exempt. Chart
    series colours are tokens too (`--op-chart-1` .. `--op-chart-8`).
+   Design 59 (D1073) set the values: dark is direction B, light direction A, the radius
+   scale `--op-radius-xs`…`-xl`, and new tokens `--op-window`, `--op-input`,
+   `--op-accent-fg`, `--op-warn(-soft)`, `--op-row-*`, `--op-shadow-chip`,
+   `--op-shadow-composer`; `web/packages/ui/test/contrast.test.ts` checks every text pair
+   for AA.
 
 2. **Headless primitives, owned in `@loams/ui`.** Dialog, menu, popover, select,
    combobox, tabs, tooltip and toast are Base UI (`@base-ui/react`), wrapped once in

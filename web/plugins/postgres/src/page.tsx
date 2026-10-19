@@ -6,8 +6,8 @@ import { ControlPlane } from './control/ControlPlane.js';
 import type { PgControlClient } from './control/types.js';
 
 /**
- * `/postgres`: the local Neon stack, and the Loams control plane (loams.postgres.v1:
- * projects, branches, roles, databases, operations) when `control` is given.
+ * `/postgres`: the local Neon stack, and pg-control (loams.postgres.v1: projects,
+ * branches, roles, databases, operations) when `control` is given.
  */
 export function PostgresPage({
   desktop,
@@ -27,15 +27,11 @@ export function PostgresPage({
     <div className="lc-page flex flex-col gap-4">
       <PageHead
         title="Postgres"
-        badge={<Badge>Local stack</Badge>}
+        badge={control && !control.mock ? <Badge>pg-control</Badge> : undefined}
         subtitle={
-          <>
-            A Loams control plane will manage this on remote servers.
-            <span className="block text-xs text-faint">
-              Branches via the local Neon stack; the Loams control plane takes over on servers that
-              offer loams.postgres.v1.
-            </span>
-          </>
+          control && !control.mock
+            ? `Connected to pg-control${control.endpoint ? ` at ${control.endpoint}` : ''}.`
+            : 'Postgres branches, connection details and SQL for the local stack.'
         }
       />
       <StackCard desktop={desktop} id="postgres" />

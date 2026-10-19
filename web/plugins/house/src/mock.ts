@@ -164,6 +164,29 @@ function answer(sql: string, database: string): Answer {
       total: FUNCTIONS.length,
     };
   }
+  if (/\bFROM\s+system\.databases\b/i.test(text)) {
+    const names = ['INFORMATION_SCHEMA', ...DATABASES.map((d) => d.name), 'system'].sort();
+    return {
+      columns: [{ name: 'name', clickhouseType: 'String' }],
+      rows: (o, c) => names.slice(o, o + c).map((n) => [n]),
+      total: names.length,
+    };
+  }
+  if (/\bFROM\s+system\.columns\b/i.test(text)) {
+    // The editor's schema: only default.events has columns in the sample.
+    const db = /database\s*=\s*'(\w+)'/i.exec(sql)?.[1] ?? database;
+    const rows: Cell[][] =
+      db === 'default' ? EVENTS.columns.map((c) => ['events', c.name, c.clickhouseType]) : [];
+    return {
+      columns: [
+        { name: 'table', clickhouseType: 'String' },
+        { name: 'name', clickhouseType: 'String' },
+        { name: 'type', clickhouseType: 'String' },
+      ],
+      rows: (o, c) => rows.slice(o, o + c),
+      total: rows.length,
+    };
+  }
   const from = /\bFROM\s+(?:(\w+)\.)?(\w+)\b/i.exec(text);
   if (from) {
     const db = from[1] ?? database;
@@ -202,7 +225,7 @@ function answer(sql: string, database: string): Answer {
   return refuse({
     code: 'unimplemented',
     message:
-      'The sample House answers SELECT version(), numbers(N), system.functions and default.events only.',
+      'The sample House answers SELECT version(), numbers(N), system.functions, system.columns, system.databases and default.events only.',
   });
 }
 

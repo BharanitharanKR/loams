@@ -130,10 +130,12 @@ export function Branches({ pg }: { pg: Pg }) {
                     <strong>{t.name ?? 'unnamed'}</strong>
                   </span>
                 </td>
-                <td className="font-mono text-xs">{t.timelineId}</td>
-                <td className="font-mono text-xs">{t.ancestorLsn ?? '—'}</td>
-                <td className="font-mono text-xs">{t.lastRecordLsn}</td>
-                <td className="font-mono text-xs">{load.wal[t.timelineId]?.commitLsn ?? '—'}</td>
+                <td className={/* mono-ok: id */ 'font-mono text-xs'}>{t.timelineId}</td>
+                <td className={/* mono-ok: id */ 'font-mono text-xs'}>{t.ancestorLsn ?? '—'}</td>
+                <td className={/* mono-ok: id */ 'font-mono text-xs'}>{t.lastRecordLsn}</td>
+                <td className={/* mono-ok: id */ 'font-mono text-xs'}>
+                  {load.wal[t.timelineId]?.commitLsn ?? '—'}
+                </td>
                 <td>
                   <Button
                     size="sm"
@@ -173,7 +175,7 @@ export function Branches({ pg }: { pg: Pg }) {
             {(p) => (
               <Input
                 {...p}
-                className="font-mono"
+                className={/* mono-ok: id */ 'font-mono'}
                 placeholder="0/16B3748"
                 value={lsn}
                 onChange={(e) => setLsn(e.target.value)}

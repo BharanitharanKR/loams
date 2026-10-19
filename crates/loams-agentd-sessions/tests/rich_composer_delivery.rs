@@ -20,7 +20,7 @@ use loams_agentd_rpc::RpcService;
 use loams_agentd_sessions::doc_host::{
     BeginQueueEditOutcome, FinishQueueEditAction, FinishQueueEditOutcome,
 };
-use loams_agentd_sessions::{EngineCore, HarnessRegistry, SteerOutcome};
+use loams_agentd_sessions::{ApprovalSettings, EngineCore, HarnessRegistry, SteerOutcome};
 use tokio::sync::mpsc;
 
 const CHAT: &str = "rich-delivery";
@@ -220,7 +220,13 @@ async fn setup(
     });
     let registry = HarnessRegistry::new();
     registry.register(harness.clone());
-    let core = EngineCore::assemble(&tmp.path().join("data"), Arc::new(registry), id).unwrap();
+    let core = EngineCore::assemble_with_approvals(
+        &tmp.path().join("data"),
+        Arc::new(registry),
+        id,
+        ApprovalSettings::full_access_default(),
+    )
+    .unwrap();
     let client = loams_agentd_rpc::memory_client(core.rpc_service());
     client
         .call(

@@ -484,6 +484,9 @@ pub struct ReadContext<'a> {
     /// The tables the user may read (HS1 Task 20); `None`, every table of the
     /// namespace.
     pub grants: Option<&'a crate::identity::Grants>,
+    /// The records a materialized view reads under its pipe's name (HS1 Task
+    /// 16); a pipe read without them is `620`.
+    pub batch: Option<&'a crate::pipes::PipeBatch>,
 }
 
 /// Whether a setting is on (`1`, `true`).
@@ -515,6 +518,7 @@ pub async fn plan(
         databases.insert(ctx.database.to_string());
     }
     let mut tables = Vec::new();
+    let mut batch_views: Vec<String> = Vec::new();
     if let Some(lake) = ctx.lake {
         let as_of = as_of(settings)?;
         let final_all = refs.final_setting || setting_on(settings, "final");
@@ -537,6 +541,22 @@ pub async fn plan(
                          this identity's tables.",
                         ctx.user
                     ))));
+                }
+                // A materialized view's source reads its block: a pipe's
+                // records (HS1 Task 16) or the files one commit added (Task
+                // 17). A pipe is read no other way.
+                if let Some(batch) = ctx.batch
+                    && batch.database == database
+                    && batch.name == name
+                {
+                    if !batch_views.contains(&batch.view) {
+                        batch_views.push(batch.view.clone());
+                    }
+                    databases.insert(database);
+                    continue;
+                }
+                if crate::ddl::class_of(&table.metadata) == TableClass::Pipe {
+                    return Err(crate::pipes::direct_read(&database, &name));
                 }
                 let fin = final_all || refs.finals.iter().any(|f| f == printed);
                 add(database, name, table, fin);
@@ -562,7 +582,9 @@ pub async fn plan(
                 if ctx.grants.is_some_and(|g| !g.allows(&database, &name)) {
                     continue;
                 }
-                if let Some(table) = lake.load(ctx.namespace, &database, &name).await? {
+                if let Some(table) = lake.load(ctx.namespace, &database, &name).await?
+                    && crate::ddl::class_of(&table.metadata) != TableClass::Pipe
+                {
                     add(database.clone(), name, table, final_all);
                 }
             }
@@ -587,6 +609,7 @@ pub async fn plan(
             plan.views.push(views::database_ddl(database));
         }
     }
+    plan.views.extend(batch_views);
     for (pin, fin, files) in tables {
         let Some(endpoint) = endpoint.as_deref() else {
             return Err(HouseError::from(ChError::not_implemented(format!(

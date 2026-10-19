@@ -42,6 +42,24 @@ describe('SlotRegistry', () => {
     expect(() => slots.register({ name: 'root', plugin: 'other' }, () => null)).toThrow(/single/);
   });
 
+  it('knows the design 59 shell slots', () => {
+    const r = new SlotRegistry();
+    for (const name of [
+      'shell.sidebar.server',
+      'shell.sidebar.threads',
+      'shell.topbar.left',
+      'shell.topbar.center',
+      'shell.topbar.right',
+      'shell.inspector.tab',
+      'shell.drawer.tab',
+      'shell.palette.source',
+    ] as const) {
+      expect(() => r.register({ name, plugin: 't' }, () => null)).not.toThrow();
+    }
+    r.register({ name: 'shell.home', plugin: 'a' }, () => null);
+    expect(() => r.register({ name: 'shell.home', plugin: 'b' }, () => null)).toThrow(/single/);
+  });
+
   it('entry_error_is_contained', () => {
     const spy = vi.spyOn(console, 'error').mockImplementation(() => {});
     const slots = new SlotRegistry();

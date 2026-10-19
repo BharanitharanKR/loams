@@ -70,7 +70,9 @@ export function MentionChips({ mentions }: { mentions: ComposerMentions }) {
           <li
             key={path}
             title={path}
-            className="inline-flex items-center gap-1 rounded-pill border border-rule bg-surface py-0.5 pr-1 pl-2 font-mono text-[0.75rem] text-ink"
+            className={
+              /* mono-ok: path */ 'inline-flex items-center gap-1 rounded-pill border border-rule bg-surface py-0.5 pr-1 pl-2 font-mono text-[0.75rem] text-ink'
+            }
           >
             @{basename(path)}
             <button

@@ -1,5 +1,5 @@
 // A project, its environments and its access, ported from the original console
-// (API2 Task 10), and the sidebar's project switcher.
+// (API2 Task 10), and the top bar's project pill (CF1 Task 10).
 
 import { Code, ConnectError } from '@connectrpc/connect';
 import {
@@ -9,12 +9,13 @@ import {
   withConsole,
 } from '@loams/admin-ui/testing';
 import type { admin } from '@loams/proto';
+import type { PaletteCommand } from '@loams/slots';
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import { AccessPage } from '../src/access.js';
-import { ProjectContext } from '../src/context.js';
+import { ProjectPill } from '../src/context.js';
 import { connectSnippet, EnvironmentPage } from '../src/environment.js';
-import { projectOf } from '../src/index.js';
+import { ProjectsSource, projectOf } from '../src/index.js';
 import { ProjectPage } from '../src/project.js';
 
 afterEach(() => {
@@ -28,6 +29,26 @@ const noCollections = () => {
 };
 
 describe('@loams/plugin-projects', () => {
+  it('the palette lists every project, once something is typed (T11-3)', async () => {
+    const published: PaletteCommand[][] = [];
+    const router = stubRouter('/');
+    const publish = (c: readonly PaletteCommand[]) => published.push([...c]);
+    const { rerender } = render(
+      withConsole(<ProjectsSource query="" publish={publish} router={router} />),
+    );
+    await waitFor(() => expect(published.length).toBeGreaterThan(0));
+    expect(published.at(-1)).toEqual([]);
+    rerender(withConsole(<ProjectsSource query="docs" publish={publish} router={router} />));
+    await waitFor(() =>
+      expect(published.at(-1)?.map((c) => c.title)).toContain('Go to project Docs search'),
+    );
+    published
+      .at(-1)
+      ?.find((c) => c.title === 'Go to project Docs search')
+      ?.run();
+    expect(router.navigated).toEqual(['/projects/docs-search']);
+  });
+
   it('project_page_lists_environments_and_agents', async () => {
     const router = stubRouter('/projects/docs-search');
     render(
@@ -157,17 +178,19 @@ describe('@loams/plugin-projects', () => {
     expect(await screen.findByText('CI deploys')).toBeTruthy();
   });
 
-  it('project_context_switches_projects_and_lists_environments', async () => {
+  it('project_pill_switches_projects_and_keeps_the_last_one', async () => {
     const router = stubRouter('/projects/docs-search/environments/production');
-    render(withConsole(<ProjectContext router={router} />));
-    const prod = (await screen.findByText('Production')).closest('a') as HTMLElement;
-    expect(prod.getAttribute('href')).toBe('#/projects/docs-search/environments/production');
-    expect(prod.getAttribute('aria-current')).toBe('page');
-    expect(screen.getByLabelText('protected')).toBeTruthy();
+    render(withConsole(<ProjectPill router={router} />));
+    const pill = await screen.findByRole('combobox', { name: 'Project' });
+    expect(pill.textContent).toContain('Docs search');
     expect(localStorage.getItem('loams-project')).toBe('docs-search');
+    // The project's pages are pages now (W20): the pill lists no links.
+    expect(screen.queryByRole('link')).toBeNull();
     // An org page: the last project stays, marked as last opened.
     router.go('/teams');
-    await waitFor(() => expect(screen.getByText(/last opened/)).toBeTruthy());
+    expect(
+      await screen.findByRole('combobox', { name: 'Open a project (last opened shown)' }),
+    ).toBeTruthy();
   });
 
   it('reads the project from a route and writes the SDK snippet', () => {

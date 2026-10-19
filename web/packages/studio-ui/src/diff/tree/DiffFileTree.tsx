@@ -160,7 +160,10 @@ export function DiffFileTree({
           const mark = STATUS_MARK[status];
           return (
             <span
-              className={cx("shrink-0 px-1 font-mono text-[0.7rem]", mark.className)}
+              className={cx(
+                /* mono-ok: code */ "shrink-0 px-1 font-mono text-[0.7rem]",
+                mark.className,
+              )}
               title={mark.label}
             >
               <span aria-hidden="true">{mark.letter}</span>

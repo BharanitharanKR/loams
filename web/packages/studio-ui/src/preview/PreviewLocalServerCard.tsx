@@ -21,12 +21,14 @@ export function PreviewLocalServerCard({ server, onOpen }: Props) {
         className="flex w-full items-center gap-3 border border-rule-soft bg-bg px-3 py-2 text-left text-ink transition-colors duration-150 ease-op hover:border-rule hover:bg-surface focus-visible:outline-2 focus-visible:outline-accent"
         data-preview-server={server.previewName}
       >
-        <RadioTower aria-hidden className="size-4 shrink-0 text-accent" />
+        <RadioTower aria-hidden className="size-4 shrink-0 text-accent-fg" />
         <span className="flex min-w-0 flex-1 flex-col">
           <span className="truncate text-sm font-medium">{subtitle}</span>
-          <span className="truncate font-mono text-xs text-muted">{server.hostname}</span>
+          <span className={/* mono-ok: id */ "truncate font-mono text-xs text-muted"}>
+            {server.hostname}
+          </span>
         </span>
-        <span className="shrink-0 font-mono text-xs text-faint">:{server.port}</span>
+        <span className="shrink-0 tabular-nums text-xs text-faint">:{server.port}</span>
       </button>
     </li>
   );

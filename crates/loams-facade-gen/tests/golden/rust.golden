@@ -159,6 +159,17 @@ pub const REASONS: &[Reason] = &[
     "live_deploy_conflict",
     "live_schema_violation",
     "live_index_not_ready",
+    "live_app_disabled",
+    "live_app_exists",
+    "live_function_error",
+    "live_function_timeout",
+    "live_function_out_of_memory",
+    "live_limit_exceeded",
+    "live_app_mismatch",
+    "live_origin_not_allowed",
+    "session_rotate",
+    "session_gone",
+    "node_draining",
     "role_required",
     "setup_required",
     "token_missing",
@@ -255,6 +266,17 @@ pub const REASON_CODES: &[(Reason, &str)] = &[
     ("live_deploy_conflict", "failed_precondition"),
     ("live_schema_violation", "invalid_argument"),
     ("live_index_not_ready", "failed_precondition"),
+    ("live_app_disabled", "failed_precondition"),
+    ("live_app_exists", "failed_precondition"),
+    ("live_function_error", "unknown"),
+    ("live_function_timeout", "deadline_exceeded"),
+    ("live_function_out_of_memory", "resource_exhausted"),
+    ("live_limit_exceeded", "resource_exhausted"),
+    ("live_app_mismatch", "permission_denied"),
+    ("live_origin_not_allowed", "permission_denied"),
+    ("session_rotate", "unavailable"),
+    ("session_gone", "not_found"),
+    ("node_draining", "unavailable"),
     ("role_required", "permission_denied"),
     ("setup_required", "failed_precondition"),
     ("token_missing", "unauthenticated"),
@@ -518,24 +540,30 @@ pub static MODULES: &[ModuleBinding] = &[
         unstable: true,
         derived: false,
         calls: &[
+            CallBinding { module: "live", name: "authenticate", proto_name: "authenticate", method: "Authenticate", rpc: "loams.live.v1.LiveService/Authenticate", service: "loams.live.v1.LiveService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
             CallBinding { module: "live", name: "modify_query_set", proto_name: "modifyQuerySet", method: "ModifyQuerySet", rpc: "loams.live.v1.LiveService/ModifyQuerySet", service: "loams.live.v1.LiveService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
             CallBinding { module: "live", name: "watch", proto_name: "watch", method: "Watch", rpc: "loams.live.v1.LiveService/Watch", service: "loams.live.v1.LiveService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Server, pagination: None },
         ],
     },
     ModuleBinding {
         name: "live.admin",
-        summary: "Live administration: deploy, roll back, index status and function logs.",
+        summary: "Live administration: apps, deploy, roll back, index status and function logs.",
         service: "loams.live.v1.LiveAdminService",
         package: "loams.live.v1",
         unstable: true,
         derived: false,
         calls: &[
             CallBinding { module: "live.admin", name: "activate_deployment", proto_name: "activateDeployment", method: "ActivateDeployment", rpc: "loams.live.v1.LiveAdminService/ActivateDeployment", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "live.admin", name: "create_app", proto_name: "createApp", method: "CreateApp", rpc: "loams.live.v1.LiveAdminService/CreateApp", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "live.admin", name: "delete_app", proto_name: "deleteApp", method: "DeleteApp", rpc: "loams.live.v1.LiveAdminService/DeleteApp", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
             CallBinding { module: "live.admin", name: "deploy", proto_name: "deploy", method: "Deploy", rpc: "loams.live.v1.LiveAdminService/Deploy", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "live.admin", name: "get_app", proto_name: "getApp", method: "GetApp", rpc: "loams.live.v1.LiveAdminService/GetApp", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
             CallBinding { module: "live.admin", name: "get_deployment", proto_name: "getDeployment", method: "GetDeployment", rpc: "loams.live.v1.LiveAdminService/GetDeployment", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
             CallBinding { module: "live.admin", name: "get_index_status", proto_name: "getIndexStatus", method: "GetIndexStatus", rpc: "loams.live.v1.LiveAdminService/GetIndexStatus", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "live.admin", name: "list_apps", proto_name: "listApps", method: "ListApps", rpc: "loams.live.v1.LiveAdminService/ListApps", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "apps", next_page_token: "next_page_token" }) },
             CallBinding { module: "live.admin", name: "list_deployments", proto_name: "listDeployments", method: "ListDeployments", rpc: "loams.live.v1.LiveAdminService/ListDeployments", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "deployments", next_page_token: "next_page_token" }) },
             CallBinding { module: "live.admin", name: "tail_logs", proto_name: "tailLogs", method: "TailLogs", rpc: "loams.live.v1.LiveAdminService/TailLogs", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Server, pagination: None },
+            CallBinding { module: "live.admin", name: "update_app", proto_name: "updateApp", method: "UpdateApp", rpc: "loams.live.v1.LiveAdminService/UpdateApp", service: "loams.live.v1.LiveAdminService", package: "loams.live.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
         ],
     },
     ModuleBinding {
@@ -963,6 +991,13 @@ pub trait LiveModule {
     /// Whether the package's wire contract may still change.
     const UNSTABLE: bool = true;
 
+    /// `loams.live.v1.LiveService/Authenticate`, retried: manual.
+    fn authenticate(
+        &self,
+        request: loams_live_proto::loams::live::v1::AuthenticateRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::AuthenticateResponse, LoamsError>> + Send;
+
     /// `loams.live.v1.LiveService/ModifyQuerySet`, retried: manual.
     fn modify_query_set(
         &self,
@@ -978,7 +1013,7 @@ pub trait LiveModule {
     ) -> impl std::future::Future<Output = Result<ResponseStream<loams_live_proto::loams::live::v1::Transition>, LoamsError>> + Send;
 }
 
-/// `LiveAdminModule` is `loams.live.admin` — Live administration: deploy, roll back, index status and function logs.
+/// `LiveAdminModule` is `loams.live.admin` — Live administration: apps, deploy, roll back, index status and function logs.
 ///
 /// Wraps `loams.live.v1.LiveAdminService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
 #[rustfmt::skip]
@@ -997,12 +1032,33 @@ pub trait LiveAdminModule {
         options: Option<&CallOptions>,
     ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::ActivateDeploymentResponse, LoamsError>> + Send;
 
+    /// `loams.live.v1.LiveAdminService/CreateApp`, retried: manual.
+    fn create_app(
+        &self,
+        request: loams_live_proto::loams::live::v1::CreateAppRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::CreateAppResponse, LoamsError>> + Send;
+
+    /// `loams.live.v1.LiveAdminService/DeleteApp`, retried: manual.
+    fn delete_app(
+        &self,
+        request: loams_live_proto::loams::live::v1::DeleteAppRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::DeleteAppResponse, LoamsError>> + Send;
+
     /// `loams.live.v1.LiveAdminService/Deploy`, retried: manual.
     fn deploy(
         &self,
         request: loams_live_proto::loams::live::v1::DeployRequest,
         options: Option<&CallOptions>,
     ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::DeployResponse, LoamsError>> + Send;
+
+    /// `loams.live.v1.LiveAdminService/GetApp`, retried: safe.
+    fn get_app(
+        &self,
+        request: loams_live_proto::loams::live::v1::GetAppRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::GetAppResponse, LoamsError>> + Send;
 
     /// `loams.live.v1.LiveAdminService/GetDeployment`, retried: safe.
     fn get_deployment(
@@ -1018,6 +1074,13 @@ pub trait LiveAdminModule {
         options: Option<&CallOptions>,
     ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::GetIndexStatusResponse, LoamsError>> + Send;
 
+    /// `loams.live.v1.LiveAdminService/ListApps`, retried: safe. AIP-158: page with `apps` and follow `next_page_token` through `loams::paginate`.
+    fn list_apps(
+        &self,
+        request: loams_live_proto::loams::live::v1::ListAppsRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::ListAppsResponse, LoamsError>> + Send;
+
     /// `loams.live.v1.LiveAdminService/ListDeployments`, retried: safe. AIP-158: page with `deployments` and follow `next_page_token` through `loams::paginate`.
     fn list_deployments(
         &self,
@@ -1031,6 +1094,13 @@ pub trait LiveAdminModule {
         request: loams_live_proto::loams::live::v1::TailLogsRequest,
         options: Option<&CallOptions>,
     ) -> impl std::future::Future<Output = Result<ResponseStream<loams_live_proto::loams::live::v1::TailLogsResponse>, LoamsError>> + Send;
+
+    /// `loams.live.v1.LiveAdminService/UpdateApp`, retried: manual.
+    fn update_app(
+        &self,
+        request: loams_live_proto::loams::live::v1::UpdateAppRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_live_proto::loams::live::v1::UpdateAppResponse, LoamsError>> + Send;
 }
 
 /// `TablesModule` is a second facade name for the same RPCs, exposed as `loams.tables`.

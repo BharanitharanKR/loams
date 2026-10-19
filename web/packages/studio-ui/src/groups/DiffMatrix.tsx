@@ -47,7 +47,7 @@ export function DiffMatrix({
           <tr>
             <th
               scope="col"
-              className="border-b border-rule px-2 py-1.5 text-left font-mono text-[0.68rem] font-normal text-faint uppercase tracking-[0.12em]"
+              className="border-b border-rule px-2 py-1.5 text-left text-micro font-medium text-faint"
             >
               File
             </th>
@@ -67,7 +67,9 @@ export function DiffMatrix({
             <tr key={row.path} className="border-b border-rule-soft">
               <th
                 scope="row"
-                className="max-w-[28rem] truncate px-2 py-1 text-left font-mono text-[0.76rem] font-normal text-ink"
+                className={
+                  /* mono-ok: path */ "max-w-[28rem] truncate px-2 py-1 text-left font-mono text-[0.76rem] font-normal text-ink"
+                }
                 title={row.path}
               >
                 {row.path}
@@ -89,7 +91,7 @@ export function DiffMatrix({
                         aria-pressed={isSelected}
                         onClick={() => onSelect({ path: row.path, chatId: cell.chatId })}
                         className={cx(
-                          "flex w-full cursor-pointer items-center gap-1.5 rounded-none border-0 px-2 py-1 font-mono text-[0.74rem] tabular-nums",
+                          "flex w-full cursor-pointer items-center gap-1.5 rounded-sm border-0 px-2 py-1 text-[0.74rem] tabular-nums",
                           LEVEL_CLASS[cell.level],
                           isSelected && "outline-2 outline-accent -outline-offset-2",
                         )}
@@ -98,7 +100,7 @@ export function DiffMatrix({
                         <span>−{cell.deletions}</span>
                       </button>
                     ) : (
-                      <span className="block px-2 py-1 font-mono text-[0.74rem] text-faint">
+                      <span className="block px-2 py-1 text-[0.74rem] text-faint">
                         <span aria-hidden="true">—</span>
                         <span className="sr-only">
                           {label} did not change {row.path}

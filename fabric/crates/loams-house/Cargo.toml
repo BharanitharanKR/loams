@@ -91,6 +91,8 @@ loams-house-worker = { path = "../loams-house-worker", optional = true, features
 loams-chdb-sys = { path = "../loams-chdb-sys", optional = true }
 
 [dev-dependencies]
+# `format_constants_match_registry` (UP1 Task 6).
+loams-common = { path = "../../../crates/loams-common" }
 # `api/frames.rs`'s tests build Arrow streams to frame.
 arrow-schema.workspace = true
 # `tests/request_fuzz.rs`: the `request_parse` fuzz target's body on stable.

@@ -141,9 +141,21 @@ impl TestStore {
         self.config.clone()
     }
 
-    /// App `app` on this store, with [`LiveConfig::with_store`]'s defaults.
+    /// App `app` on this store, with [`LiveConfig::with_store`]'s defaults,
+    /// and the directory and other apps under this store's root
+    /// ([`Layout::Rooted`](crate::apps::Layout::Rooted)): a test cluster has
+    /// only its fixed keyspaces.
     pub fn live_config(&self, app: &str) -> LiveConfig {
-        LiveConfig::with_store(app, self.store_config())
+        LiveConfig {
+            layout: crate::apps::Layout::Rooted,
+            ..LiveConfig::with_store(app, self.store_config())
+        }
+    }
+
+    /// The keyspaces beside this store, as [`live_config`](Self::live_config)
+    /// lays them out.
+    pub fn keyspaces(&self) -> crate::apps::Keyspaces {
+        crate::apps::Keyspaces::new(self.store_config(), crate::apps::Layout::Rooted)
     }
 
     /// Which backend this is.

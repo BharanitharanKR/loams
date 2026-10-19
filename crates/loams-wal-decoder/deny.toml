@@ -55,6 +55,15 @@ ignore = [
     # only through sqlx-mysql, which uses it for the RSA password exchange of
     # caching_sha2_password/sha256_password on a non-TLS connection.
     { id = "RUSTSEC-2023-0071", reason = "rsa via sqlx-mysql: used only for RSA password exchange on non-TLS MySQL connections; Loams connects to TiDB over TLS or the cluster network with mysql_native_password (§21 §11.2)" },
+    # The root's entry, kept here because scripts/pg2/check-decoder-deny.py
+    # requires every root ignore (this workspace does not depend on zip).
+    # Remove both with the bump to zip 9.x, after 2026-10-27.
+    { crate = "zip@7.2.0", reason = "yanked upstream with its whole major line; the replacement 9.0.3 is under 14 days old (revisit 2026-10-27)" },
+    # The root's entries, kept here because scripts/pg2/check-decoder-deny.py
+    # requires every root ignore (this workspace does not depend on zip).
+    { id = "RUSTSEC-2026-0367", reason = "zip SUID/SGID bit preservation: not reachable. Loams never calls ZipArchive::extract or ZipStreamReader::extract: archive_install.rs extracts entry by entry, rejects link and special-file entries, confines paths with enclosed_name, and never applies archive permission bits; remove with the zip 9.x bump on or after 2026-10-30 (zip 9.0.4 turns 14 days old)" },
+    { id = "RUSTSEC-2026-0368", reason = "zip symlink target escape in extract: not reachable. Loams never calls ZipArchive::extract or ZipStreamReader::extract: archive_install.rs extracts entry by entry, rejects link and special-file entries, confines paths with enclosed_name, and never applies archive permission bits; remove with the zip 9.x bump on or after 2026-10-30 (zip 9.0.4 turns 14 days old)" },
+    { id = "RUSTSEC-2026-0369", reason = "zip permissions applied through symlinks in extract: not reachable. Loams never calls ZipArchive::extract or ZipStreamReader::extract: archive_install.rs extracts entry by entry, rejects link and special-file entries, confines paths with enclosed_name, and never applies archive permission bits; remove with the zip 9.x bump on or after 2026-10-30 (zip 9.0.4 turns 14 days old)" },
 ]
 
 [sources]
@@ -63,13 +72,12 @@ unknown-git = "deny"
 # tikv-client is pinned by rev to Loams's fork, branch `loam` (R1 plan rows R4
 # and F1). Resonate is pinned by rev to the fork's loam/0.10.1 (D1 plan Task
 # 1, D140).
-# Decoder-only: Loams' forks of Neon (pinned to the loams/decoder-trim
-# commit) and of Neon's rust-postgres (the `neon` branch head, through
-# [patch] in Cargo.toml). Both Apache-2.0 / MIT.
+# Decoder-only: Loams' fork of Neon (pinned to the loams-decoder-trim-3
+# tag), Apache-2.0. Neon's rust-postgres fork left the graph with that trim.
 allow-git = [
     "https://github.com/ostrium-labs/client-rust",
     "https://github.com/ostrium-labs/resonate",
     "https://github.com/ostrium-labs/grafeo",
+    "https://github.com/microsoft/graspologic-native",
     "https://github.com/ostrium-labs/loams-postgres",
-    "https://github.com/ostrium-labs/rust-postgres",
 ]

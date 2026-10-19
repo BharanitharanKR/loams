@@ -6,6 +6,14 @@ name: Postgres benchmark
 on:
   workflow_dispatch:
     inputs:
+      suite:
+        description: "wal: the WAL gate; coldstart: PG2 Task 17's cold starts"
+        type: choice
+        options: ["wal", "coldstart"]
+        default: "wal"
+      runs:
+        description: "Cold starts per variant (coldstart)"
+        default: "50"
       replicas:
         description: "Safekeepers / TiKV stores"
         type: choice
@@ -26,6 +34,7 @@ permissions:
 
 jobs:
   gate:
+    if: inputs.suite == 'wal'
     name: WAL benchmark
     runs-on: [self-hosted, loam-bench]
     timeout-minutes: 720
@@ -38,7 +47,7 @@ jobs:
       - name: build loams-wal-interpreted
         env:
           # images.storage in deploy/pins/loams-postgres-images.toml (scripts/nf1/pins.py, NF1 Task 2).
-          PG_HEADERS_IMAGE: ghcr.io/neondatabase/neon@sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f
+          PG_HEADERS_IMAGE: ghcr.io/ostrium-labs/loams-postgres-storage@sha256:4dcec4cbef637b92b1088ea2c0bc857f3b5ef4318f02e8d2d4a0f9263ed4140e
           CARGO_NET_GIT_FETCH_WITH_CLI: "true"
         run: |
           scripts/pg2/pg-headers.sh "$PG_HEADERS_IMAGE" crates/loams-wal-decoder/pg_install
@@ -82,3 +91,30 @@ jobs:
           compose=(docker-compose); command -v docker-compose >/dev/null || compose=(docker compose)
           "${compose[@]}" -f deploy/loams-pg-bench/compose.yaml \
             --profile sk --profile sk3 down -v || true
+
+  # PG2 Task 17: suspended endpoint -> StartEndpoint -> first SELECT 1, on
+  # compose (deploy/loams-postgres-dev), recorded in bench/results/. Not a
+  # gate yet (PG2b exit); kind and PgDog follow (Tasks 48 and 26).
+  coldstart:
+    if: inputs.suite == 'coldstart'
+    name: Cold start
+    runs-on: [self-hosted, loam-bench]
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: protoc
+        run: command -v protoc || { sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev; }
+      - name: cold starts
+        env:
+          RUNS: ${{ inputs.runs }}
+          # This run's results only (bench/results holds earlier ones).
+          OUT_DIR: ${{ runner.temp }}/coldstart
+        run: scripts/pg2/cold-start.sh
+      - name: results
+        if: always()
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: loams-pg-coldstart
+          path: ${{ runner.temp }}/coldstart/

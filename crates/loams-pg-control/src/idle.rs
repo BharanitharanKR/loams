@@ -14,7 +14,8 @@
 //!   logical subscription's worker runs, and while autovacuum works; and to
 //!   an `idle` backend's `state_change` otherwise. So a long query is
 //!   activity for as long as it runs, not only when it starts.
-//! - PgDog's `cl_active` and `cl_waiting` on the endpoint's pools, on every
+//! - PgDog's `sv_active` and `cl_waiting` on the endpoint's pools (R18.7: the
+//!   pinned PgDog reports no `cl_active`), on every
 //!   replica of the namespace ([`PgDogAdmin`]; no replicas until PG2c).
 //!   Any client there is activity at the sample, whether or not it sent a
 //!   command since the last one.
@@ -112,7 +113,7 @@ impl IdleMonitor {
             for pool in self.pgdog.show_pools(&instance).await? {
                 if pool_serves(&pool.database, project, branch, ep) {
                     clients = clients
-                        .saturating_add(pool.cl_active)
+                        .saturating_add(pool.sv_active)
                         .saturating_add(pool.cl_waiting);
                 }
             }

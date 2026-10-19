@@ -302,23 +302,33 @@ fn segments(url: &mut Url, parts: &[&str]) {
     }
 }
 
-#[async_trait]
-impl HouseCatalog for RestCatalog {
-    async fn list_databases(
+impl RestCatalog {
+    /// The namespaces directly under `parent`, or the top-level ones, every
+    /// page of them.
+    async fn namespaces_under(
         &self,
-        parent: &NamespaceIdent,
+        parent: Option<&NamespaceIdent>,
     ) -> Result<Vec<NamespaceIdent>, CatalogError> {
+        // Only named in errors about the top level.
+        let root = NamespaceIdent::new(String::new());
         let mut out = Vec::new();
         let mut token: Option<String> = None;
         loop {
             let mut url = self.url(&["namespaces"]);
-            url.query_pairs_mut()
-                .append_pair("parent", &parent.to_url_string());
+            if let Some(parent) = parent {
+                url.query_pairs_mut()
+                    .append_pair("parent", &parent.to_url_string());
+            }
             if let Some(t) = &token {
                 url.query_pairs_mut().append_pair("pageToken", t);
             }
             let answer = self
-                .call(Method::GET, url, None, Subject::Namespace(parent))
+                .call(
+                    Method::GET,
+                    url,
+                    None,
+                    Subject::Namespace(parent.unwrap_or(&root)),
+                )
                 .await?;
             for ns in answer
                 .get("namespaces")
@@ -345,6 +355,21 @@ impl HouseCatalog for RestCatalog {
                 break;
             }
         }
+        Ok(out)
+    }
+}
+
+#[async_trait]
+impl HouseCatalog for RestCatalog {
+    async fn list_root_databases(&self) -> Result<Vec<NamespaceIdent>, CatalogError> {
+        self.namespaces_under(None).await
+    }
+
+    async fn list_databases(
+        &self,
+        parent: &NamespaceIdent,
+    ) -> Result<Vec<NamespaceIdent>, CatalogError> {
+        let mut out = self.namespaces_under(Some(parent)).await?;
         // Some catalogs answer an unknown parent with an empty list: the House
         // asks for the parent itself so a missing namespace is one.
         if out.is_empty() {

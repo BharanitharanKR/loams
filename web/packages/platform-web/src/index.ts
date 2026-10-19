@@ -11,7 +11,12 @@
 
 import type { Transport } from '@connectrpc/connect';
 import { createConnectTransport } from '@connectrpc/connect-web';
-import type { PlatformService, PluginModule } from '@loams/console-host';
+import {
+  localThemeStore,
+  type PlatformService,
+  type PluginModule,
+  ThemeController,
+} from '@loams/console-host';
 import type { Context } from '@loams/cordis';
 
 export interface WebPlatformOptions {
@@ -88,6 +93,8 @@ export function createWebPlatform(options: WebPlatformOptions = {}): PluginModul
         },
       };
       ctx.provide('platform', platform);
+      // System, Dark or Light, kept in this browser (D1074).
+      ctx.provide('theme', new ThemeController(localThemeStore()));
       ctx.provide(
         'transport',
         options.transport ?? createConnectTransport({ baseUrl, useBinaryFormat: true, fetch }),
@@ -95,7 +102,7 @@ export function createWebPlatform(options: WebPlatformOptions = {}): PluginModul
       // No `agentd.endpoint` yet: the browser reaches a remote agentd through the
       // host registry of SD1 Task 7, which provides it here (an `AgentdService` over
       // `createAgentdTransport({ kind: 'remote', … })`). Until then `agentd` says
-      // "no host" and Studio shows "Connect an agentd host".
+      // "no host" and Studio shows "Studio needs a Loams server with agentd".
     },
   };
 }

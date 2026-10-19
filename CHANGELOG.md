@@ -4,7 +4,53 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-10-18
+
+### Upgrading
+
+From **0.1.0-preview.2** (one step at a time): `loams upgrade --to 0.1.0`.
+
+It takes a snapshot first, and `loams upgrade rollback` restores it.
+
+| Migration | Store | Class | What it does |
+|---|---|---|---|
+| `0000-adopt-preview-2` | meta | Reversible | Record preview.2's versions (preview.2 writes no stack record) |
+| `0001-safekeeper-volume` | host | Reversible | Give the safekeeper a volume (after a drain) |
+
+Third-party bumps: none.
+Free space needed: 1.5× the snapshot estimate (`loams upgrade check` shows it).
+Expected downtime: about 5 minutes, excluding image pulls.
+
+See [docs/release/upgrades.md](docs/release/upgrades.md).
+
 ### Added
+- **`NamespaceService/ListNamespaces`** (B7): the namespaces the caller can reach, by name and paged, with
+  their collection and stream counts. The console's Namespaces page and the org home's Namespaces tile
+  read it, and fall back to the browser's list on an older engine.
+- **Durable on the main port** (B12): `POST /durable/` on `--listen` is the embedded Resonate server's
+  protocol endpoint, behind the engine's authentication (org members and the operator; a credential bound
+  to one environment is refused), on a loopback main port or behind TLS and authentication. The loopback
+  durable listener keeps working. The browser console now has the Durable page.
+- **Upgrades that keep data** (design §54, plan UP1). `loams upgrade check|--to|rollback|status|snapshots`
+  upgrades a self-hosted compose stack one release at a time:
+  - it takes a snapshot of every store first (TiKV by BR or a cold copy, the bucket's pointers and a GC
+    root, Postgres drained and branched, House, `pg-control`, Durable);
+  - it runs the release's migrations in the new one-shot `migrate` service, restarts in order and verifies;
+  - on a failure it rolls back automatically.
+
+  The engine, the House and `pg-control` refuse data they cannot read (exit 78). Every persisted format
+  has a version in one registry. The console works with the engine before it, and an older engine gets an
+  upgrade page. CI gains `Upgrade: previous release → candidate`, which upgrades the previous release's
+  stack with fixtures in every product and rolls it back.
+- **Git push and fetch to the bucket from the release packages.** `git-remote-loams`, git's
+  remote helper for `loams::<store-url>/ns/<namespace-id>/repos/<repo>` URLs (`crates/loams-git-remote`),
+  now ships next to `loams` in the .deb, .rpm and .pkg.tar.zst (`/usr/bin`), the macOS
+  tarballs and the Windows zip, so `git clone`, `fetch` and `push` reach a Loams Git
+  repository on a bucket with no server in between. The namespace is its numeric id (the bucket
+  has no namespace names), and a push with `LOAMS_GIT_CREATE_ON_PUSH=1` creates the repository:
+  the repository service (`loams.repos.v1`, cargo feature `git`) is not in the release images.
+  It is not published to crates.io.
+  `git-remote-loams --version` prints its version. See `docs/release/packaging.md`.
 - **Loams Studio, an agentic development environment in the console** (design §53, plan SD1).
   The console has two modes, Console and Studio. Studio runs coding agents in threads, each
   with its own git worktree. Around them it has a chat timeline, a composer, diff review with
@@ -36,6 +82,24 @@ All notable changes to this project are documented here. The format follows [Kee
   statement writes at most 1 GiB.
 
 ### Changed
+- **Loams Postgres `lp-2026.11.0`: Postgres 16.15 and 17.11.** The Postgres stack's images move
+  from the fork's `lp-2026.10.1` (16.9 and 17.5) to `lp-2026.11.0`
+  (`deploy/pins/loams-postgres-images.toml`). 17.11 keeps the fork's heap WAL format (upstream's
+  visibility-map block references are not taken), so existing timelines read as before. Logical
+  decoding now accepts only the output plugins `pgoutput`, `test_decoding` and `wal2json`
+  (`output_plugin_libraries`, the fix for CVE-2026-6471).
+- **`loams-agentd` supervises new threads by default, on your own machine too.** Unset,
+  `[approvals] default_mode` is now `supervised` on a local daemon as on the remote
+  listener, so a thread that has no approval mode of its own (including older threads that
+  never had one set), and a run group created without one, asks before each tool call.
+  **Existing local users will start seeing approval prompts** for threads that used to run
+  unattended; Pi threads without a mode are refused until set to full access. Full access is
+  now always asked for: choose it in Studio's Settings › Approvals, call
+  `SetThreadApprovalMode`, pass a run group's `approvalMode`, or set
+  `default_mode = "full-access"` in the daemon's `config.toml` to keep the old behaviour. An
+  engine embedded with `EngineCore::assemble` is supervised too; pass
+  `ApprovalSettings::full_access_default()` to `assemble_with_approvals` for the old default
+  (threat model I-1, owner decision 2026-10-15).
 - **Loams Live on the main port.** `LiveService` and `LiveAdminService` are served on the
   engine's `--listen` port and on the `tailscale serve` target, behind the engine's auth, so
   the console and SDKs reach Live over the tailnet (LV1 Task 12). Until Live has TLS of its own
@@ -60,8 +124,80 @@ All notable changes to this project are documented here. The format follows [Kee
   journal in its own transaction, and each node's subscription manager reloads at the tick
   that holds it (LV1 Task 11). A deploy or rollback on one node no longer takes up to 60
   seconds to reach live queries on another.
+- **Loams Live serves many apps per engine.** `LiveAdminService` gains `CreateApp`,
+  `ListApps`, `GetApp`, `UpdateApp` and `DeleteApp`; each app has its own keyspace, and a call
+  names its app with the `loams-live-app` header (the engine's own `--live-app` without it).
+  An app's engine starts on its first request and stops after 10 minutes idle. A disabled or
+  deleted app refuses calls (`live_app_disabled`), and a deleted app's data is purged after 7
+  days (LV1 Task 13).
+- **Loams Live errors carry a stable reason.** Every Live error has a
+  `loams.errors.v1.ErrorInfo` with a registered reason (new: `live_function_error`,
+  `live_function_timeout`, `live_function_out_of_memory`, `live_limit_exceeded`). A function's
+  own error is now Connect `unknown` rather than `internal`, a CPU timeout `deadline_exceeded`.
+  An internal error no longer shows raw store keys; it names a request id the server log
+  carries. Function arguments are limited to 4 MiB and bundles to 16 MiB before decoding (a
+  bundle over 4 MB can now be deployed), and a read timestamp ahead of the server's clock is
+  refused (LV1 Task 19).
+- **Loams Live authorizes every call per app and per table.** A credential bound to an
+  environment (a `KeyService` key, or a token with an `env` claim) reaches only that
+  environment's app (`live_app_mismatch`) and addresses it without the `loams-live-app` header.
+  Scopes `live:call`, `live:read`, `live:write` (or `live:read:<table>`/`live:write:<table>`),
+  `live:deploy` and `live:admin` gate functions, `_system:*` reads and writes, deploys and the
+  app directory; a credential that names no scopes keeps every scope. Deploys and writes are
+  audited in the log (LV1 Tasks 14 and 15).
+- **Loams Live apps have end users.** An app's trusted issuers (`CreateApp`/`UpdateApp`
+  `issuers`: any OIDC provider, by discovery or a `jwks_uri`) now sign its end users in: a
+  token from one of them calls the app's public functions on `LiveService`, and
+  `ctx.auth.getUserIdentity()` returns `{ issuer, subject, tokenIdentifier, email, name, claims }`
+  (null otherwise). End users never reach internal functions, `_system:*` or
+  `LiveAdminService`. A `LiveService` call with no credential is admitted only when the app's
+  `allow_anonymous` is on; otherwise it is `unauthenticated` with the reason `token_missing`
+  in the error's `ErrorInfo` (no longer in the `loams-auth-reason` header) (LV1 Task 16).
+- **TLS on the main port, and Loams Live beyond loopback.** `LOAMS_TLS_CERT_FILE` and
+  `LOAMS_TLS_KEY_FILE` put `--listen` on TLS (HTTP/2 and HTTP/1.1 by ALPN), with
+  `LOAMS_TLS_CLIENT_CA_FILE` for client certificates; `LOAMS_TLS_TERMINATED_BY_PROXY=true` with
+  `LOAMS_TLS_TRUSTED_PROXIES` (addresses or CIDR blocks) takes plain connections from those
+  proxies only. Live is now served on a non-loopback `--listen` behind TLS (either way) and
+  authentication. Browsers on an app's `allowed_origins` get CORS on `LiveService`, and a call
+  from an origin the addressed app does not list is refused with `live_origin_not_allowed`
+  (the console's origins keep working for platform credentials). `Access-Control-Allow-Credentials`
+  is never sent (LV1 Task 18).
+- **A non-loopback `--listen` with Loams Live needs TLS and authentication.** Without them the
+  engine refuses to start with `--listen listen on <addr>: non-loopback addresses need [tls] and
+  [auth] (MT1)`. Set the `LOAMS_TLS_*` variables and `LOAMS_AUTH_MODE`, bind `--listen` to
+  loopback (the compose stack does), or pass `--no-live` (LV1 Task 18).
+- **Loams Live sessions follow who is signed in.** `LiveService/Authenticate{session_id}` replaces
+  an open session's identity with the call's credential: the same user only extends the session,
+  another user (a sign-in or sign-out) bumps `StateVersion.identity` and reruns every query as
+  them in one Transition. Subscriptions are keyed by who runs them, so a result is never shared
+  across users. A session closes with `unauthenticated` (`token_expired`) 60 s after its token
+  expires, with `token_revoked` when its API key is revoked or its member removed, and with
+  `unavailable` (`session_rotate`, new) after 24 h; clients resume (LV1 Task 17).
+- **Several Loams Live nodes serve one store.** Give each node its own `--live-node` and the
+  URL its peers reach it at (`--live-advertise`, its main port). A `ModifyQuerySet` or
+  `Authenticate` that lands on a node that does not hold the session is forwarded to the one
+  that does, with the caller's own credential, so a load balancer needs no session affinity; a
+  session whose node is gone is `not_found` (`session_gone`, new) and the client resumes it. On
+  `SIGTERM` a node drains: `/ready` answers `503`, its streams close and new calls are refused
+  with `unavailable` (`node_draining`, new), and running mutations finish first (LV1 Task 24).
 
-## [0.1.0-preview.2] - unreleased
+### Fixed
+- **`loams upgrade` on Podman.** Closing the door now removes the Tailscale sidecars (and any other service with
+  `network_mode: service:…`) instead of stopping them, and restarting the old release after a failure removes them
+  first, so compose can recreate the engine and the House: Podman refuses to remove a container while another one,
+  even stopped, is in its network namespace ("has dependent containers"). Opening the door creates them again.
+  To recreate the engine by hand after an `.env` change: `docker compose rm -sf tailscale && docker compose up -d
+  loams tailscale` ([upgrades](docs/release/upgrades.md#recreating-a-service-by-hand)).
+- **Postgres role passwords work.** The password `CreateRole` or `ResetRolePassword` answers now logs in:
+  the compute spec carries each role's SCRAM-SHA-256 verifier (never the password), so `compute_ctl` sets it
+  at start, and a reset reaches a running compute through `/configure` within seconds (the old password is
+  then refused). Roles made earlier get their stored password applied on the next spec push.
+- **`GetConnectionInfo`** answers the endpoint's host and port, the database, the role and `sslmode` (no
+  password) instead of `not_implemented`.
+- **`endpoint-storage` no longer restart-loops** ("Unterminated quoted string" in its wait loop), so
+  computes start with their file cache prewarmed.
+
+## [0.1.0-preview.2] - 2026-10-15
 
 The second preview. Everything marked **Preview** in the [feature status table](docs/release/preview.md#feature-status)
 ships in it, built from `dev` with the work held back from preview.1 merged. Same shape as

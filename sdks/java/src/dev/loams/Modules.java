@@ -9,6 +9,18 @@ import dev.loams.gen.loams.instance.v1.GetInstanceRequest;
 import dev.loams.gen.loams.instance.v1.GetInstanceResponse;
 import dev.loams.gen.loams.instance.v1.WhoAmIRequest;
 import dev.loams.gen.loams.instance.v1.WhoAmIResponse;
+import dev.loams.gen.loams.live.v1.AuthenticateRequest;
+import dev.loams.gen.loams.live.v1.AuthenticateResponse;
+import dev.loams.gen.loams.live.v1.CreateAppRequest;
+import dev.loams.gen.loams.live.v1.CreateAppResponse;
+import dev.loams.gen.loams.live.v1.ListAppsRequest;
+import dev.loams.gen.loams.live.v1.ListAppsResponse;
+import dev.loams.gen.loams.live.v1.GetAppRequest;
+import dev.loams.gen.loams.live.v1.GetAppResponse;
+import dev.loams.gen.loams.live.v1.UpdateAppRequest;
+import dev.loams.gen.loams.live.v1.UpdateAppResponse;
+import dev.loams.gen.loams.live.v1.DeleteAppRequest;
+import dev.loams.gen.loams.live.v1.DeleteAppResponse;
 import dev.loams.gen.loams.live.v1.DeployRequest;
 import dev.loams.gen.loams.live.v1.DeployResponse;
 import dev.loams.gen.loams.live.v1.ModifyQuerySetRequest;
@@ -155,6 +167,26 @@ public final class Modules {
         }
 
         /**
+         * {@code loams.live.v1.LiveService/Authenticate}, retried: manual.
+         *
+         * <p>Replaces an open session's identity with this call's credential (LV1 Task 17). The
+         * credential is the client's own {@link TokenSource}, so to re-authenticate as another
+         * caller, call this on a client built with that caller's source. The response's {@code
+         * identity} is the session's identity version after the call: the same caller only extends
+         * the session and leaves it unchanged, and a different caller (a sign-in or a sign-out)
+         * bumps it, after which the next transition reruns every query as the new caller. Compare
+         * it with the version you hold. An unknown session is {@code not_found}. Never retried: the
+         * request has no idempotency key.
+         */
+        public AuthenticateResponse authenticate(AuthenticateRequest request, CallOptions... options) {
+            return invoker.unary(
+                    binding("live", "Authenticate"),
+                    request,
+                    CallOptions.merge(options),
+                    AuthenticateResponse.parser());
+        }
+
+        /**
          * {@code loams.live.v1.LiveService/ModifyQuerySet}, retried: manual.
          *
          * <p>Adds and removes queries in an open session; the next transition reflects the change.
@@ -235,6 +267,101 @@ public final class Modules {
                         "a stream message is not a loams.live.v1.Transition",
                         e);
             }
+        }
+    }
+
+    /**
+     * {@code loams.live.admin}: the app directory of {@code LiveAdminService} (LV1 Task 13).
+     *
+     * <p>Its wire contract may still change (§44 §10.3). The server's own app is addressed by
+     * default; {@link CallOptions#withLiveApp} names another one.
+     */
+    public static final class LiveAdmin {
+
+        private final CallInvoker invoker;
+
+        LiveAdmin(CallInvoker invoker) {
+            this.invoker = invoker;
+        }
+
+        /** The SDK module's name, as it appears on the client. */
+        public String module() {
+            return "live.admin";
+        }
+
+        /** The service behind the module, from the binding table. */
+        public String service() {
+            return Modules.module("live.admin").service();
+        }
+
+        /** Whether the package's wire contract may still change. */
+        public boolean unstable() {
+            return Modules.module("live.admin").unstable();
+        }
+
+        /**
+         * {@code loams.live.v1.LiveAdminService/CreateApp}, retried: manual.
+         *
+         * <p>Registers an app in the node's directory. An existing name answers {@code live_app_exists}; a node without the app directory answers {@code live_app_disabled}. Address an app with {@link CallOptions#withLiveApp}.
+         */
+        public CreateAppResponse createApp(CreateAppRequest request, CallOptions... options) {
+            return invoker.unary(
+                    binding("live.admin", "CreateApp"),
+                    request,
+                    CallOptions.merge(options),
+                    CreateAppResponse.parser());
+        }
+
+        /**
+         * {@code loams.live.v1.LiveAdminService/ListApps}, retried: safe.
+         *
+         * <p>One page of the node's apps (AIP-158: {@code apps}, {@code next_page_token}). Address an app with {@link CallOptions#withLiveApp}.
+         */
+        public ListAppsResponse listApps(ListAppsRequest request, CallOptions... options) {
+            return invoker.unary(
+                    binding("live.admin", "ListApps"),
+                    request,
+                    CallOptions.merge(options),
+                    ListAppsResponse.parser());
+        }
+
+        /**
+         * {@code loams.live.v1.LiveAdminService/GetApp}, retried: safe.
+         *
+         * <p>One app by name. Address an app with {@link CallOptions#withLiveApp}.
+         */
+        public GetAppResponse getApp(GetAppRequest request, CallOptions... options) {
+            return invoker.unary(
+                    binding("live.admin", "GetApp"),
+                    request,
+                    CallOptions.merge(options),
+                    GetAppResponse.parser());
+        }
+
+        /**
+         * {@code loams.live.v1.LiveAdminService/UpdateApp}, retried: manual.
+         *
+         * <p>Updates an app's settings. Address an app with {@link CallOptions#withLiveApp}.
+         */
+        public UpdateAppResponse updateApp(UpdateAppRequest request, CallOptions... options) {
+            return invoker.unary(
+                    binding("live.admin", "UpdateApp"),
+                    request,
+                    CallOptions.merge(options),
+                    UpdateAppResponse.parser());
+        }
+
+        /**
+         * {@code loams.live.v1.LiveAdminService/DeleteApp}, retried: manual.
+         *
+         * <p>Removes an app from the directory. The server's own app ({@code --live-app}) cannot be deleted. Address an app with {@link CallOptions#withLiveApp}.
+         */
+        public DeleteAppResponse deleteApp(DeleteAppRequest request, CallOptions... options) {
+            return invoker.unary(
+                    binding("live.admin", "DeleteApp"),
+                    request,
+                    CallOptions.merge(options),
+                    DeleteAppResponse.parser());
         }
     }
 

@@ -78,8 +78,9 @@ pub const GRANTS: &[&str] = &[
 pub const OPEN_GRANTS: &[&str] = &["GRANT ALL ON *.*"];
 
 pub use crate::settings::{
-    MAX_EXECUTION_TIME_S, MAX_QUERY_MEMORY, MIN_EXECUTION_TIME_S, PINNED_OFF, PINNED_PATHS,
-    PINNED_SWITCHES, PINNED_VALUES, max_threads_cap, pinned_by_default,
+    MAX_BYTES_TO_READ, MAX_EXECUTION_TIME_S, MAX_QUERY_MEMORY, MAX_RESULT_BYTES,
+    MIN_EXECUTION_TIME_S, PINNED_OFF, PINNED_PATHS, PINNED_SWITCHES, PINNED_VALUES,
+    max_threads_cap, pinned_by_default,
 };
 
 /// `user_scripts_path`: a directory that cannot exist, so `executable()` and
@@ -358,6 +359,17 @@ fn worker_profile() -> String {
         "        <max_threads><max>{}</max></max_threads>",
         max_threads_cap()
     );
+    // HS1 Task 21: §49 §12's read and result caps, held the same way.
+    for (name, cap) in [
+        ("max_bytes_to_read", MAX_BYTES_TO_READ),
+        ("max_result_bytes", MAX_RESULT_BYTES),
+    ] {
+        let _ = writeln!(pinned, "      <{name}>{cap}</{name}>");
+        let _ = writeln!(
+            constraints,
+            "        <{name}><min>1</min><max>{cap}</max></{name}>"
+        );
+    }
     format!("{pinned}      <constraints>\n{constraints}      </constraints>\n")
 }
 
@@ -609,6 +621,16 @@ mod tests {
         ));
         assert!(users.contains("<max_execution_time>300</max_execution_time>"));
         assert!(users.contains("<max_threads><max>"));
+        assert!(users.contains("<max_bytes_to_read>1099511627776</max_bytes_to_read>"));
+        assert!(users.contains(
+            "<max_bytes_to_read><min>1</min><max>1099511627776</max></max_bytes_to_read>"
+        ));
+        assert!(users.contains("<max_result_bytes>10737418240</max_result_bytes>"));
+        assert!(
+            users.contains(
+                "<max_result_bytes><min>1</min><max>10737418240</max></max_result_bytes>"
+            )
+        );
         let none = users_xml(&WorkerArgs {
             s3_endpoint: None,
             ..args()

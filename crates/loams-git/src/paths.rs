@@ -166,6 +166,11 @@ impl RepoPaths {
         format!("{}/ws/{ws}/", self.root)
     }
 
+    /// `…/ws/`: every workspace's objects, for listings.
+    pub fn workspaces_prefix(&self) -> String {
+        format!("{}/ws/", self.root)
+    }
+
     /// `…/ws/<ws_id>/snap/`.
     pub fn ws_snapshot_prefix(&self, ws: &WsId) -> String {
         format!("{}snap/", self.ws_prefix(ws))
@@ -205,6 +210,26 @@ impl RepoPaths {
         )
     }
 
+    /// `…/ws/<ws_id>/salvage/`, for listings.
+    pub fn ws_salvage_prefix(&self, ws: &WsId) -> String {
+        format!("{}salvage/", self.ws_prefix(ws))
+    }
+
+    /// The mount and id of a salvage path
+    /// `…ws/<ws_id>/salvage/<mount_id>/<ulid>.lws`.
+    pub fn parse_ws_salvage(path: &str) -> Option<(MountId, Ulid)> {
+        let (_, rest) = path.rsplit_once("/salvage/")?;
+        let (mount, name) = rest.split_once('/')?;
+        let mount = MountId::parse(mount).ok()?;
+        let id = name.strip_suffix(".lws")?;
+        // Only the lowercase spelling `ws_salvage` writes.
+        if id.bytes().any(|b| b.is_ascii_uppercase()) {
+            return None;
+        }
+        let id = Ulid::from_string(id).ok()?;
+        Some((mount, id))
+    }
+
     /// The name record of `owner`'s workspace `name` (§19.4.1).
     pub fn ws_name(&self, owner: &Principal, name: &WsName) -> String {
         format!("{}{name}.json", self.ws_names_prefix(owner))
@@ -215,6 +240,13 @@ impl RepoPaths {
         format!("{}/_ws_names/{owner}/", self.root)
     }
 
+    /// The name a workspace name record path `…_ws_names/<owner>/<name>.json`
+    /// holds.
+    pub fn parse_ws_name(path: &str) -> Option<WsName> {
+        let name = path.rsplit_once('/').map_or(path, |(_, name)| name);
+        WsName::parse(name.strip_suffix(".json")?).ok()
+    }
+
     /// The tree aux record (entry sizes) of a tree (§19.5, D830).
     pub fn derived_tree_aux(&self, tree: &ObjectId) -> String {
         format!("{}/derived/tree-aux/{}.lta", self.root, tree.to_hex())
@@ -223,6 +255,11 @@ impl RepoPaths {
     /// A commit-graph layer for commits since the last compaction (§19.8, D833).
     pub fn derived_graph(&self, seq: Seq) -> String {
         format!("{}/derived/graph/{seq}.graph", self.root)
+    }
+
+    /// The prefix of every commit-graph layer (§19.8).
+    pub fn derived_graph_prefix(&self) -> String {
+        format!("{}/derived/graph/", self.root)
     }
 
     /// The blame of `path` at `commit` (§19.8): the path is hashed, so any

@@ -97,11 +97,15 @@ public struct WireRequest: Sendable {
     public let body: [String: JSONValue]
     /// Whether this is a server-streaming call, which changes the framing.
     public let serverStreaming: Bool
+    /// Headers for this call only (`CallOptions.headers`), applied after the
+    /// client's `extraHeaders` so a call's own value wins.
+    public let headers: [String: String]
 
-    public init(rpc: String, body: [String: JSONValue], serverStreaming: Bool) {
+    public init(rpc: String, body: [String: JSONValue], serverStreaming: Bool, headers: [String: String] = [:]) {
         self.rpc = rpc
         self.body = body
         self.serverStreaming = serverStreaming
+        self.headers = headers
     }
 }
 
@@ -324,13 +328,20 @@ public final class ConnectTransport: HTTPTransport, @unchecked Sendable {
             forHTTPHeaderField: "Content-Type"
         )
         urlRequest.setValue(String(payload.count), forHTTPHeaderField: "Content-Length")
+        // The client's headers, then this call's (which replace one of the same
+        // name), then the bearer **last**: it was set first, so an
+        // `Authorization` in `extraHeaders` replaced the token source's bearer and
+        // R1's refresh could never take effect.
+        for (name, value) in config.extraHeaders {
+            urlRequest.setValue(value, forHTTPHeaderField: name)
+        }
+        for (name, value) in request.headers where name.lowercased() != "authorization" {
+            urlRequest.setValue(value, forHTTPHeaderField: name)
+        }
         // The bearer travels in a header and **never** in the URL: a query string
         // ends up in proxy logs, in browser history and in `Referer` (R1).
         if let bearer, !bearer.isEmpty {
             urlRequest.setValue("Bearer \(bearer)", forHTTPHeaderField: "Authorization")
-        }
-        for (name, value) in config.extraHeaders {
-            urlRequest.setValue(value, forHTTPHeaderField: name)
         }
 
         let (data, response) = try await session.data(for: urlRequest)

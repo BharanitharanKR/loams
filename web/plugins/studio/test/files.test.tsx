@@ -21,8 +21,8 @@ import { fileLinkOf, routeOf, studioHref } from '../src/routes.js';
 import { FilesTab } from '../src/thread/FilesTab.js';
 import { agentdFilesSource } from '../src/thread/files-source.js';
 import { createComposerMentions, mentionsFor } from '../src/thread/mentions.js';
-import { StudioView } from '../src/view.js';
 import { webFake, wrap } from './fakes.js';
+import { StudioInShell } from './shell.js';
 
 beforeAll(() => {
   globalThis.ResizeObserver ??= class {
@@ -304,7 +304,7 @@ describe('the thread route', () => {
     const { agentd } = webFake({ host: { id: 'h1', name: 'Host' } });
     render(
       wrap(
-        <StudioView
+        <StudioInShell
           agentd={agentd}
           route={{ kind: 'thread', threadId: 'chat-7', panel: 'files' }}
           navigate={vi.fn()}

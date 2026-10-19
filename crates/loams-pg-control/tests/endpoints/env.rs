@@ -23,7 +23,7 @@ use loams_pg_control::observer::{ComputeLifecycleEvent, ComputeLifecycleObserver
 use loams_pg_control::pgdog::{InstanceId, PgDogAdmin, PgDogError, PoolRow};
 use loams_pg_control::pool::{PoolConfig, WarmPool};
 use loams_pg_control::reconcile::endpoint::{
-    Activity, ComputeCtl, Computes, CtlError, CtlReport, CtlStatus,
+    Activity, ComputeCtl, Computes, CtlError, CtlReport, CtlStatus, Prewarm, PromoteError,
 };
 use loams_pg_control::reconcile::{Pass, Reconciler, ReconcilerConfig};
 use loams_pg_control::runtime::{
@@ -231,11 +231,32 @@ pub struct CtlInner {
     pub terminated: Vec<String>,
     /// The runtime whose `order` hears each `/configure` (Task 15).
     pub runtime: Option<FakeRuntime>,
+    /// Each compute's prewarm (Task 16); not prewarmed by default.
+    pub prewarm: BTreeMap<String, Prewarm>,
+    /// A prewarm that is asked never ends.
+    pub prewarm_sticks: bool,
+    /// Every `/lfc/prewarm`: (compute, from endpoint).
+    pub prewarms: Vec<(String, Option<String>)>,
+    /// Every `/promote`: (compute, the spec's mode).
+    pub promotes: Vec<(String, String)>,
+    /// The specs `/promote` got.
+    pub promote_specs: Vec<ComputeSpec>,
+    /// `/promote` promotes, but its answer is lost (R16.9).
+    pub promote_lost: bool,
 }
 
 /// A fake `compute_ctl` of every compute.
 #[derive(Debug, Clone, Default)]
 pub struct FakeCtl(pub Arc<Mutex<CtlInner>>);
+
+impl CtlInner {
+    pub fn prewarm_of(&self, compute: &str) -> Prewarm {
+        self.prewarm
+            .get(compute)
+            .cloned()
+            .unwrap_or(Prewarm::NotPrewarmed)
+    }
+}
 
 impl FakeCtl {
     pub fn lock(&self) -> std::sync::MutexGuard<'_, CtlInner> {
@@ -302,6 +323,49 @@ impl ComputeCtl for FakeCtl {
         self.lock().terminated.push(c.id.clone());
         Ok(())
     }
+    async fn prewarm(&self, c: &ComputeRec, from: Option<&str>) -> Result<(), CtlError> {
+        let mut inner = self.lock();
+        inner.prewarms.push((c.id.clone(), from.map(str::to_owned)));
+        let next = if inner.prewarm_sticks {
+            Prewarm::Prewarming
+        } else {
+            Prewarm::Done("completed".into())
+        };
+        inner.prewarm.insert(c.id.clone(), next);
+        Ok(())
+    }
+    async fn prewarm_state(&self, c: &ComputeRec) -> Result<Prewarm, CtlError> {
+        let mut inner = self.lock();
+        // A prewarm that no longer sticks ends.
+        if !inner.prewarm_sticks && inner.prewarm_of(&c.id) == Prewarm::Prewarming {
+            inner
+                .prewarm
+                .insert(c.id.clone(), Prewarm::Done("completed".into()));
+        }
+        Ok(inner.prewarm_of(&c.id))
+    }
+    async fn promote(
+        &self,
+        c: &ComputeRec,
+        spec: &ComputeSpec,
+        _wal_flush_lsn: loams_postgres::Lsn,
+    ) -> Result<(), PromoteError> {
+        let mut inner = self.lock();
+        let mode = serde_json::to_value(spec).expect("a spec")["mode"]
+            .as_str()
+            .unwrap_or_default()
+            .to_owned();
+        inner.promotes.push((c.id.clone(), mode));
+        inner.promote_specs.push(spec.clone());
+        // The pinned compute_ctl refuses an unprewarmed replica (R2.13).
+        match inner.prewarm_of(&c.id) {
+            Prewarm::Done(_) if inner.promote_lost => {
+                Err(PromoteError::Unknown("promote sender dropped".into()))
+            }
+            Prewarm::Done(_) => Ok(()),
+            other => Err(PromoteError::Refused(format!("compute {other:?}"))),
+        }
+    }
 }
 
 #[derive(Debug, Default)]
@@ -330,7 +394,6 @@ impl FakePgDog {
         inner.pools.push(PoolRow {
             database: database.into(),
             user: "app".into(),
-            cl_active: active,
             cl_waiting: waiting,
             sv_active: active,
         });
@@ -413,6 +476,8 @@ pub fn sources() -> SpecSources {
         ]),
         default_pageserver: Some(1),
         wal_pools: BTreeMap::from([("default".to_string(), vec!["wal:5454".to_string()])]),
+        endpoint_storage: None,
+        verifiers: None,
     }
 }
 
@@ -531,6 +596,58 @@ impl Env {
         )
         .with_computes(self.computes(image, Some(pool.clone())));
         (r, pool)
+    }
+
+    /// `compute`'s spec upcall as the compute would read it, through a real
+    /// upcall listener on this store (`{status: empty}` or `{status:
+    /// attached, spec, ...}`).
+    pub async fn upcall_spec(&self, compute: &str) -> serde_json::Value {
+        use loams_pg_control::upcall::{
+            COMPUTE_TOKEN_TTL, ComputeCtlConfigurer, UpcallConfig, UpcallServer,
+        };
+        let at = self.h.clock.0.clone();
+        let src = sources();
+        let server = UpcallServer::bind(
+            self.h.store.clone(),
+            self.keys.clone(),
+            Arc::new(ComputeCtlConfigurer::new(
+                self.keys.clone(),
+                Clock::from_fn(|| 0),
+            )),
+            UpcallConfig {
+                pageservers: src.pageservers.clone(),
+                default_pageserver: src.default_pageserver,
+                wal_pools: src.wal_pools.clone(),
+                clock: Clock::from_fn(move || at.load(Ordering::SeqCst)),
+                ..UpcallConfig::defaults("127.0.0.1:0".parse().expect("an address"))
+            },
+        )
+        .await
+        .expect("the upcall listener");
+        let base = format!("http://{}", server.local_addr());
+        let (stop, stopped) = tokio::sync::oneshot::channel::<()>();
+        tokio::spawn(server.serve(async move {
+            let _ = stopped.await;
+        }));
+        let id: ComputeId = compute.parse().expect("a compute id");
+        let token = self
+            .keys
+            .issue_upcall_token(
+                &id,
+                self.h.clock.0.load(Ordering::SeqCst),
+                COMPUTE_TOKEN_TTL,
+            )
+            .expect("a token");
+        let resp = reqwest::Client::new()
+            .get(format!("{base}/compute/api/v2/computes/{id}/spec"))
+            .bearer_auth(token.expose())
+            .send()
+            .await
+            .expect("the upcall");
+        assert_eq!(resp.status().as_u16(), 200, "the spec upcall");
+        let body = resp.json().await.expect("json");
+        let _ = stop.send(());
+        body
     }
 
     /// One pass over `project`.

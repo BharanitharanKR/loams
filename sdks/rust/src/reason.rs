@@ -147,6 +147,28 @@ pub enum Reason {
     LiveSchemaViolation,
     /// A Live function read an index a deploy is still backfilling.
     LiveIndexNotReady,
+    /// A call to a Live app that is disabled or deleted.
+    LiveAppDisabled,
+    /// CreateApp named a Live app that already exists.
+    LiveAppExists,
+    /// A deployed Live function threw.
+    LiveFunctionError,
+    /// A Live function ran past its CPU limit.
+    LiveFunctionTimeout,
+    /// A Live function ran past its memory limit.
+    LiveFunctionOutOfMemory,
+    /// A Live call exceeded one of the app's limits.
+    LiveLimitExceeded,
+    /// A credential reached a Live app outside its environment.
+    LiveAppMismatch,
+    /// A browser origin the addressed Live app does not allow.
+    LiveOriginNotAllowed,
+    /// A Live session reached its maximum age; resume it.
+    SessionRotate,
+    /// No Live node holds the session any more; resume it.
+    SessionGone,
+    /// The Live node is shutting down; resume on another node.
+    NodeDraining,
     /// The caller's org role is below the one the admin RPC needs, or the caller is not in the org.
     RoleRequired,
     /// First-run setup has not created the org yet.
@@ -273,6 +295,17 @@ impl Reason {
         Reason::LiveDeployConflict,
         Reason::LiveSchemaViolation,
         Reason::LiveIndexNotReady,
+        Reason::LiveAppDisabled,
+        Reason::LiveAppExists,
+        Reason::LiveFunctionError,
+        Reason::LiveFunctionTimeout,
+        Reason::LiveFunctionOutOfMemory,
+        Reason::LiveLimitExceeded,
+        Reason::LiveAppMismatch,
+        Reason::LiveOriginNotAllowed,
+        Reason::SessionRotate,
+        Reason::SessionGone,
+        Reason::NodeDraining,
         Reason::RoleRequired,
         Reason::SetupRequired,
         Reason::TokenMissing,
@@ -370,6 +403,17 @@ impl Reason {
             Reason::LiveDeployConflict => "live_deploy_conflict",
             Reason::LiveSchemaViolation => "live_schema_violation",
             Reason::LiveIndexNotReady => "live_index_not_ready",
+            Reason::LiveAppDisabled => "live_app_disabled",
+            Reason::LiveAppExists => "live_app_exists",
+            Reason::LiveFunctionError => "live_function_error",
+            Reason::LiveFunctionTimeout => "live_function_timeout",
+            Reason::LiveFunctionOutOfMemory => "live_function_out_of_memory",
+            Reason::LiveLimitExceeded => "live_limit_exceeded",
+            Reason::LiveAppMismatch => "live_app_mismatch",
+            Reason::LiveOriginNotAllowed => "live_origin_not_allowed",
+            Reason::SessionRotate => "session_rotate",
+            Reason::SessionGone => "session_gone",
+            Reason::NodeDraining => "node_draining",
             Reason::RoleRequired => "role_required",
             Reason::SetupRequired => "setup_required",
             Reason::TokenMissing => "token_missing",
@@ -431,6 +475,8 @@ impl Reason {
             | Reason::SecretAlreadyIssued
             | Reason::LiveDeployConflict
             | Reason::LiveIndexNotReady
+            | Reason::LiveAppDisabled
+            | Reason::LiveAppExists
             | Reason::RepoDeleting
             | Reason::RefProtected
             | Reason::ForkTooDeep
@@ -451,6 +497,8 @@ impl Reason {
             | Reason::CsrfTokenInvalid
             | Reason::PrincipalNotAllowed
             | Reason::CorsOriginNotAllowed
+            | Reason::LiveAppMismatch
+            | Reason::LiveOriginNotAllowed
             | Reason::PermissionDenied => Code::PermissionDenied,
             Reason::StepUpRequired
             | Reason::DeviceRevoked
@@ -482,6 +530,7 @@ impl Reason {
             | Reason::ProjectNotFound
             | Reason::RepoNotFound
             | Reason::WorkspaceNotFound
+            | Reason::SessionGone
             | Reason::NotFound => Code::NotFound,
             Reason::NotImplemented
             | Reason::FeatureNotInVariant
@@ -495,17 +544,23 @@ impl Reason {
             | Reason::HouseTooManyQueries
             | Reason::HouseQuotaExceeded
             | Reason::QuotaExceeded
+            | Reason::LiveFunctionOutOfMemory
+            | Reason::LiveLimitExceeded
             | Reason::ResourceExhausted => Code::ResourceExhausted,
             Reason::ComputeStartFailed
             | Reason::StorageUnavailable
             | Reason::SequencerUnavailable
             | Reason::AuthUnavailable
+            | Reason::SessionRotate
+            | Reason::NodeDraining
             | Reason::Unavailable => Code::Unavailable,
-            Reason::HouseTimeout | Reason::DeadlineExceeded => Code::DeadlineExceeded,
+            Reason::HouseTimeout | Reason::LiveFunctionTimeout | Reason::DeadlineExceeded => {
+                Code::DeadlineExceeded
+            }
             Reason::RefStale | Reason::WorkspaceFenced | Reason::Aborted => Code::Aborted,
             Reason::LiveWorkerCrashed | Reason::Internal => Code::Internal,
             Reason::HouseCancelled => Code::Canceled,
-            Reason::HouseQueryFailed => Code::Unknown,
+            Reason::HouseQueryFailed | Reason::LiveFunctionError => Code::Unknown,
         }
     }
 }
@@ -549,7 +604,7 @@ mod tests {
 
     #[test]
     fn every_reason_round_trips_through_its_wire_form() {
-        assert!(Reason::ALL.len() >= 91, "the registry has 91 rows");
+        assert!(Reason::ALL.len() >= 102, "the registry has 102 rows");
         for reason in Reason::ALL {
             assert_eq!(Reason::parse(reason.as_str()), Some(*reason));
         }

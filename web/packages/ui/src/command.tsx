@@ -4,8 +4,9 @@
 // ported to Loams tokens, rounded-none and rounded-pill, and cx, with Base UI underneath; no cva, lucide or Effect. Loams' changes are Apache-2.0.
 
 // The command palette primitive: Base UI's Dialog around an inline, always-open Base UI
-// Autocomplete (no cmdk). T3 Code's ui/autocomplete.tsx is folded in here, and its
-// @legendapp/list virtualisation is replaced by TanStack Virtual, the library behind
+// Autocomplete (no cmdk). T3 Code's ui/autocomplete.tsx was folded in here before CF1; its
+// popup parts are src/autocomplete.tsx since CF1 Task 4. The @legendapp/list virtualisation
+// is replaced by TanStack Virtual, the library behind
 // @loams/ui's VirtualList, so a long list (every file in a project) stays cheap.
 //
 // The palette owns the keyboard: the first row is highlighted from the start, the arrow

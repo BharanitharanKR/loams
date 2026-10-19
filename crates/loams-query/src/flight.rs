@@ -48,6 +48,7 @@ use crate::flight_ingest::{
     Acks, ID_TYPE_METADATA, IngestAction, Put, PutTarget, Sink, StreamProducer, ingest_action,
     put_target_from_ingest, put_target_from_path,
 };
+use crate::graph::GraphCaller;
 use crate::hot::HotLayer;
 use crate::ir::ReadConsistency;
 use crate::scan::PIN_MANIFEST_METADATA;
@@ -250,8 +251,18 @@ pub fn status_of(err: &ServiceError) -> Status {
             }
             status
         }
+        ServiceError::PermissionDenied { need, .. } => {
+            let mut status = Status::permission_denied(message);
+            if let Ok(value) = need.parse() {
+                status.metadata_mut().insert(NEED_METADATA, value);
+            }
+            status
+        }
     }
 }
+
+/// The metadata of a `PERMISSION_DENIED` status: the relation the call needed (GR1 R24.12).
+pub const NEED_METADATA: &str = "need";
 
 /// The metadata of a `RESOURCE_EXHAUSTED` status: how long to wait, in
 /// milliseconds (Task 15 rule 5).
@@ -299,7 +310,14 @@ pub struct LoamsFlightSql {
     puts: PutTasks,
     /// Cancelled when the server shuts down; stops the puts.
     stop: CancellationToken,
+    /// Who a statement is for, from its request (GR1 R24.12).
+    graph_callers: GraphCallers,
 }
+
+/// How a Flight SQL server tells who a request is for, from the request's extensions (the
+/// server's authentication layer puts its principal there). Without one
+/// ([`LoamsFlightSql::with_graph_callers`]) a statement reads no graph.
+pub type GraphCallers = Arc<dyn Fn(&tonic::Extensions) -> GraphCaller + Send + Sync>;
 
 impl std::fmt::Debug for LoamsFlightSql {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -406,6 +424,16 @@ impl LoamsFlightSql {
             sql_info: Arc::new(sql_info_data()),
             puts: PutTasks::new(),
             stop: CancellationToken::new(),
+            graph_callers: Arc::new(|_| GraphCaller::nobody()),
+        }
+    }
+
+    /// Tells who each request is for, so its graph and algorithm table functions are checked
+    /// for that caller (GR1 R24.12).
+    pub fn with_graph_callers(self, graph_callers: GraphCallers) -> Self {
+        Self {
+            graph_callers,
+            ..self
         }
     }
 
@@ -523,9 +551,10 @@ impl FlightSqlService for LoamsFlightSql {
             token: token.as_ref().map(ToString::to_string),
             pinned_manifest,
         };
-        let ctx = self
-            .service
-            .sql_context_with(&ticket.namespace, ticket_consistency(&ticket)?);
+        let caller = (self.graph_callers)(request.extensions());
+        let ctx =
+            self.service
+                .sql_context_with(&ticket.namespace, ticket_consistency(&ticket)?, caller);
         let frame = plan_read_only(&ctx, &ticket.query).await?;
         let schema: Schema = frame.schema().as_arrow().clone();
         let handle = TicketStatementQuery {
@@ -547,14 +576,15 @@ impl FlightSqlService for LoamsFlightSql {
     async fn do_get_statement(
         &self,
         ticket: TicketStatementQuery,
-        _request: Request<Ticket>,
+        request: Request<Ticket>,
     ) -> Result<Response<DoGetStream>, Status> {
         let ticket = decode_ticket(&ticket.statement_handle)?;
+        let caller = (self.graph_callers)(request.extensions());
         let consistency = ticket_consistency(&ticket)?;
         let deadline = tokio::time::Instant::now() + self.config.max_duration;
         let ctx = self
             .service
-            .sql_context_with(&ticket.namespace, consistency);
+            .sql_context_with(&ticket.namespace, consistency, caller);
         let stream = tokio::time::timeout_at(deadline, async {
             let frame = plan_read_only(&ctx, &ticket.query).await?;
             execute_read_only(frame).await
@@ -879,11 +909,24 @@ pub async fn serve_flight_sql_tracked(
     shutdown: CancellationToken,
     puts: PutTasks,
 ) -> Result<(), tonic::transport::Error> {
-    serve_flight_sql_wrapped(listener, service, streams, config, shutdown, puts, |r| r).await
+    let nobody: GraphCallers = Arc::new(|_| GraphCaller::nobody());
+    serve_flight_sql_wrapped(
+        listener,
+        service,
+        streams,
+        config,
+        shutdown,
+        puts,
+        nobody,
+        |r| r,
+    )
+    .await
 }
 
 /// [`serve_flight_sql_tracked`], with the Flight service's routes passed
-/// through `wrap` first (the server's authentication layer).
+/// through `wrap` first (the server's authentication layer), and each request's
+/// graph caller told by `graph_callers` (GR1 R24.12).
+#[allow(clippy::too_many_arguments)]
 pub async fn serve_flight_sql_wrapped(
     listener: tokio::net::TcpListener,
     service: Arc<CollectionService>,
@@ -891,12 +934,14 @@ pub async fn serve_flight_sql_wrapped(
     config: FlightConfig,
     shutdown: CancellationToken,
     puts: PutTasks,
+    graph_callers: GraphCallers,
     wrap: impl FnOnce(tonic::service::Routes) -> tonic::service::Routes,
 ) -> Result<(), tonic::transport::Error> {
     let hot = HotLayer::new(service.config().hot_default);
     let max_message_bytes = config.max_message_bytes;
-    let mut flight_sql =
-        LoamsFlightSql::new(service, config).with_put_tasks(puts.clone(), shutdown.clone());
+    let mut flight_sql = LoamsFlightSql::new(service, config)
+        .with_put_tasks(puts.clone(), shutdown.clone())
+        .with_graph_callers(graph_callers);
     if let Some(streams) = streams {
         flight_sql = flight_sql.with_streams(streams);
     }

@@ -12,12 +12,15 @@
 //! endpoint's address; `SuspendEndpoint` stops the compute; a second start
 //! runs a new compute at the same address; `DeleteEndpoint` removes it and
 //! gives the address up. A query longer than the suspend timeout keeps the
-//! compute running, which then suspends once idle (Task 12). Each case has
+//! compute running, which then suspends once idle (Task 12). A read-only
+//! endpoint's compute is a hot standby that refuses writes, and promoted
+//! once the read-write endpoint is suspended it takes them (Task 16). Each case has
 //! its own namespace and compose project. The settings are `it_compose`'s
 //! (environment):
 //! `NEON_PAGESERVER`, `IT_COMPOSE_NETWORK`, `IT_COMPOSE_PAGESERVER`,
 //! `IT_PAGESERVER_ID`, `IT_COMPOSE_SAFEKEEPERS`, `IT_UPCALL_HOST`,
-//! `IT_EXTRA_HOSTS`, `COMPUTE_IMAGE`. With `IT_COMPUTE_RUNNER=1` the
+//! `IT_EXTRA_HOSTS`, `COMPUTE_IMAGE`, `IT_SAFEKEEPER_HTTP` (safekeeper1's
+//! HTTP API, for the promotion's flushed LSN). With `IT_COMPUTE_RUNNER=1` the
 //! reconciler drives the compose runtime through a compute runner over
 //! HTTP (R-REL.1), as the release stack's `pg-control` does.
 #![allow(clippy::unwrap_used)]
@@ -36,7 +39,7 @@ use loams_pg_control::model::{
     EndpointType, OperationState, ProjectRec, ProjectState, WalService,
 };
 use loams_pg_control::reconcile::endpoint::{Activity, ComputeCtl, Computes, HttpComputeCtl};
-use loams_pg_control::reconcile::{Reconciler, ReconcilerConfig};
+use loams_pg_control::reconcile::{Pass, Reconciler, ReconcilerConfig};
 use loams_pg_control::runtime::compose::{
     ComposeBin, ComposeConfig, ComposeRuntime, TokioCommandRunner,
 };
@@ -44,9 +47,12 @@ use loams_pg_control::runtime::images;
 use loams_pg_control::runtime::remote::RemoteRuntime;
 use loams_pg_control::runtime::runner::{RunnerPolicy, RunnerServer};
 use loams_pg_control::runtime::{ComputeRuntime, RuntimeStatus};
+use loams_pg_control::scram::RoleVerifiers;
 use loams_pg_control::secrets::Secret;
 use loams_pg_control::service::Clock;
+use loams_pg_control::service::connect::GetConnectionInfo;
 use loams_pg_control::service::endpoints::{CreateEndpoint, DeleteEndpoint, EndpointAction};
+use loams_pg_control::service::roles::{CreateRole, ResetRolePassword};
 use loams_pg_control::store::conformance::{Factory, local_factory};
 use loams_pg_control::upcall::{
     ComputeCtlConfigurer, ComputeKeys, SpecSources, UpcallConfig, UpcallServer,
@@ -194,6 +200,9 @@ fn port_range(ns: &str) -> std::ops::Range<u16> {
     match ns {
         "it-ep" => 55_500..55_750,
         "it-idle" => 55_750..56_000,
+        "it-ro" => 56_000..56_250,
+        "it-cold" => 56_250..56_500,
+        "it-roles" => 56_500..56_750,
         other => panic!("no port range for the case {other}"),
     }
 }
@@ -243,6 +252,9 @@ async fn stack(ns: &'static str) -> Stack {
     let h = common::harness_on(store.clone());
     let keys = Arc::new(ComputeKeys::generate().unwrap());
     let pageserver_id: u64 = env("IT_PAGESERVER_ID", "1234").parse().unwrap();
+    // Roles' password verifiers (Task 24), for the upcall's specs and the
+    // reconciler's pushes alike.
+    let verifiers = Arc::new(RoleVerifiers::new(h.secrets.clone()));
     let sources = SpecSources {
         pageservers: BTreeMap::from([(
             pageserver_id,
@@ -259,6 +271,8 @@ async fn stack(ns: &'static str) -> Stack {
                 .map(str::to_owned)
                 .collect(),
         )]),
+        endpoint_storage: None,
+        verifiers: Some(verifiers.clone()),
     };
     let upcall = UpcallServer::bind(
         store.clone(),
@@ -268,6 +282,7 @@ async fn stack(ns: &'static str) -> Stack {
             pageservers: sources.pageservers.clone(),
             default_pageserver: sources.default_pageserver,
             wal_pools: sources.wal_pools.clone(),
+            verifiers: Some(verifiers.clone()),
             ..UpcallConfig::defaults("0.0.0.0:0".parse().unwrap())
         },
     )
@@ -709,4 +724,610 @@ async fn it_idle_long_query_is_activity_then_suspends() {
         st.rt.status(st.ns, &id).await.unwrap(),
         RuntimeStatus::Missing
     );
+}
+
+/// `psql -c sql` as `cloud_admin` inside `compute`'s container.
+fn psql(st: &Stack, compute: &str, sql: &str) -> String {
+    compose(
+        &st.bin,
+        &st.compose_dir,
+        st.ns,
+        &[
+            "exec",
+            "-T",
+            &compute.to_lowercase(),
+            "/usr/local/bin/psql",
+            "-h",
+            "127.0.0.1",
+            "-p",
+            "55433",
+            "-U",
+            "cloud_admin",
+            "-d",
+            "postgres",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-At",
+            "-c",
+            sql,
+        ],
+    )
+}
+
+/// A client of `addr` (`host:port`) as `user`.
+async fn connect(addr: &str, user: &str, password: &str) -> tokio_postgres::Client {
+    let (host, port) = addr.rsplit_once(':').unwrap();
+    let (client, conn) = tokio_postgres::connect(
+        &format!(
+            "host={host} port={port} user={user} password={password} dbname=postgres \
+             connect_timeout=10"
+        ),
+        tokio_postgres::NoTls,
+    )
+    .await
+    .unwrap();
+    tokio::spawn(conn);
+    client
+}
+
+/// PG2 Task 16 on real computes: a read-only endpoint runs a hot standby
+/// of the branch (its rows replayed, its writes refused); with the
+/// read-write endpoint suspended, `RestartEndpoint{promote}` makes it the
+/// primary behind the same address, which then takes writes, and the two
+/// endpoints' types are swapped. No endpoint storage runs here, so the
+/// replica's prewarm ends `failed`, which `compute_ctl` promotes after (a
+/// cold cache).
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs deploy/loams-postgres-dev running, and docker or podman"]
+async fn it_ro_endpoint_rejects_writes_then_promotes() {
+    let logs = common::captured_logs();
+    let st = stack("it-ro").await;
+    let (ns, project, store, h, r) = (st.ns, st.project.to_string(), &st.store, &st.h, &st.r);
+    let create = |kind: EndpointType, key: &'static str| CreateEndpoint {
+        namespace: ns.into(),
+        project_id: project.clone(),
+        kind,
+        idempotency_key: key.into(),
+        ..CreateEndpoint::default()
+    };
+    let action = |id: &str, key: &str| EndpointAction {
+        namespace: ns.into(),
+        project_id: project.clone(),
+        endpoint_id: id.into(),
+        idempotency_key: key.into(),
+    };
+    let rw = h
+        .service
+        .create_endpoint(&user(), create(EndpointType::ReadWrite, "rw"))
+        .await
+        .unwrap()
+        .endpoint
+        .record
+        .id;
+    h.service
+        .start_endpoint(&user(), action(&rw, "start-rw"))
+        .await
+        .unwrap();
+    settle(r, store, ns, &project, &rw, Some(EndpointState::Running)).await;
+    let primary = endpoint(store, &project, &rw).await.unwrap();
+    let password = format!("it-{}", now_ms());
+    psql(
+        &st,
+        primary.compute_id.as_deref().unwrap(),
+        &format!(
+            "CREATE ROLE it_ro LOGIN PASSWORD '{password}'; CREATE TABLE t (i int); \
+             INSERT INTO t VALUES (1); GRANT ALL ON t TO it_ro"
+        ),
+    );
+
+    // The read-only endpoint: the row replayed, a write refused.
+    let ro = h
+        .service
+        .create_endpoint(&user(), create(EndpointType::ReadOnly, "ro"))
+        .await
+        .unwrap()
+        .endpoint
+        .record
+        .id;
+    h.service
+        .start_endpoint(&user(), action(&ro, "start-ro"))
+        .await
+        .unwrap();
+    settle(r, store, ns, &project, &ro, Some(EndpointState::Running)).await;
+    let replica = endpoint(store, &project, &ro).await.unwrap();
+    let addr = replica.backend_addr.clone().unwrap();
+    // A row written after the replica started reaches it through the WAL
+    // (the first came with its base backup).
+    psql(
+        &st,
+        primary.compute_id.as_deref().unwrap(),
+        "INSERT INTO t VALUES (2)",
+    );
+    let client = connect(&addr, "it_ro", &password).await;
+    let start = Instant::now();
+    loop {
+        if let Ok(row) = client.query_one("SELECT count(*) FROM t", &[]).await
+            && row.get::<_, i64>(0) == 2
+        {
+            break;
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(60),
+            "the row never replayed"
+        );
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    let refused = client
+        .execute("INSERT INTO t VALUES (3)", &[])
+        .await
+        .unwrap_err();
+    assert_eq!(
+        refused.code(),
+        Some(&tokio_postgres::error::SqlState::READ_ONLY_SQL_TRANSACTION),
+        "{refused}"
+    );
+    drop(client);
+
+    // Promoting while the read-write endpoint runs is refused.
+    assert!(
+        h.service
+            .promote_endpoint(&user(), action(&ro, "promote-early"))
+            .await
+            .is_err()
+    );
+    h.service
+        .suspend_endpoint(&user(), action(&rw, "suspend-rw"))
+        .await
+        .unwrap();
+    settle(r, store, ns, &project, &rw, Some(EndpointState::Suspended)).await;
+    // The WAL's flushed LSN once the primary stopped, which the promotion
+    // waits for the replica to replay: safekeeper1's (the reconciler's Neon
+    // is a fake here; pg-control asks loams-wal).
+    let main = store
+        .get::<ProjectRec>(&loams_pg_control::model::ProjectKey {
+            namespace: ns.into(),
+            id: project.clone(),
+        })
+        .await
+        .unwrap()
+        .unwrap()
+        .record;
+    let branch = store
+        .get::<BranchRec>(&loams_pg_control::model::BranchKey {
+            project_id: project.clone(),
+            id: main.default_branch_id.clone().unwrap(),
+        })
+        .await
+        .unwrap()
+        .unwrap()
+        .record;
+    // The stock safekeeper's status (not loams-wal's shape): its LSNs.
+    let status: serde_json::Value = reqwest::get(format!(
+        "{}/v1/tenant/{}/timeline/{}",
+        env("IT_SAFEKEEPER_HTTP", "http://127.0.0.1:7676"),
+        TenantId(main.tenant_id),
+        TimelineId(branch.timeline_id)
+    ))
+    .await
+    .unwrap()
+    .json()
+    .await
+    .unwrap();
+    let lsn = |field: &str| -> loams_postgres::Lsn {
+        status[field]
+            .as_str()
+            .unwrap_or_else(|| panic!("{field} in {status}"))
+            .parse()
+            .unwrap()
+    };
+    let flushed = lsn("flush_lsn");
+    h.neon.set_wal(
+        main.tenant_id,
+        branch.timeline_id,
+        loams_pg_control::neon::WalHeads {
+            commit_lsn: lsn("commit_lsn"),
+            flush_lsn: flushed,
+            remote_consistent_lsn: flushed,
+            backup_lsn: flushed,
+        },
+    );
+    // The service's clock is the harness's (frozen); the reconciler's is
+    // the system's, which dates the prewarm's wait from the operation.
+    h.clock
+        .0
+        .store(now_ms(), std::sync::atomic::Ordering::SeqCst);
+    let op = h
+        .service
+        .promote_endpoint(&user(), action(&ro, "promote"))
+        .await
+        .unwrap();
+    let start = Instant::now();
+    loop {
+        let state = h.service.get_operation(&op.id).await.unwrap().state;
+        if state == OperationState::Succeeded {
+            break;
+        }
+        if state == OperationState::Failed {
+            let text = String::from_utf8_lossy(&logs.lock().unwrap()).into_owned();
+            let lines: Vec<&str> = text
+                .lines()
+                .filter(|l| l.contains("promot") || l.contains("prewarm"))
+                .collect();
+            panic!(
+                "the promotion failed (safekeeper1 then: commit {} flush {}):\n{}",
+                status["commit_lsn"],
+                status["flush_lsn"],
+                lines.join("\n")
+            );
+        }
+        assert!(
+            start.elapsed() < Duration::from_secs(300),
+            "the promotion stayed {state:?}"
+        );
+        if let Err(e) = r.reconcile_project(ns, &project).await {
+            eprintln!("pass: {e}");
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    let promoted = endpoint(store, &project, &ro).await.unwrap();
+    assert_eq!(promoted.kind, EndpointType::ReadWrite);
+    assert_eq!(promoted.compute_id, replica.compute_id, "the same compute");
+    assert_eq!(
+        endpoint(store, &project, &rw).await.unwrap().kind,
+        EndpointType::ReadOnly
+    );
+    let client = connect(&addr, "it_ro", &password).await;
+    client
+        .execute("INSERT INTO t VALUES (3)", &[])
+        .await
+        .unwrap();
+    let n: i64 = client
+        .query_one("SELECT count(*) FROM t", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(n, 3);
+}
+
+/// A login as `user` with `password` at `host:port`, database `db`.
+async fn login(
+    host: &str,
+    port: u16,
+    db: &str,
+    user: &str,
+    password: &str,
+) -> Result<tokio_postgres::Client, tokio_postgres::Error> {
+    let mut config = tokio_postgres::Config::new();
+    config
+        .host(host)
+        .port(port)
+        .dbname(db)
+        .user(user)
+        .password(password)
+        .connect_timeout(Duration::from_secs(10));
+    let (client, conn) = config.connect(tokio_postgres::NoTls).await?;
+    tokio::spawn(conn);
+    Ok(client)
+}
+
+/// Whether `e` is Postgres refusing the password (SQLSTATE 28P01).
+fn bad_password(e: &tokio_postgres::Error) -> bool {
+    e.code() == Some(&tokio_postgres::error::SqlState::INVALID_PASSWORD)
+}
+
+/// PG2 Task 24 (0.1.0 blocker): a role's password reaches the compute as a
+/// SCRAM verifier. `CreateRole`'s password logs in through
+/// `GetConnectionInfo`'s address; the compute's `pg_authid` holds a
+/// verifier, never the password; `ResetRolePassword` reaches the running
+/// compute (the reconciler's `/configure`): the new password logs in and
+/// the old one is refused; after a suspend, the next compute has the new
+/// password from its spec.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "needs deploy/loams-postgres-dev running, and docker or podman"]
+async fn it_role_password_reaches_compute_and_rotates() {
+    let st = stack("it-roles").await;
+    let (ns, bin, project, store, h, r, compose_dir) = (
+        st.ns,
+        &st.bin,
+        st.project.to_string(),
+        &st.store,
+        &st.h,
+        &st.r,
+        &st.compose_dir,
+    );
+    let ep = h
+        .service
+        .create_endpoint(
+            &user(),
+            CreateEndpoint {
+                namespace: ns.into(),
+                project_id: project.clone(),
+                kind: EndpointType::ReadWrite,
+                idempotency_key: "ep".into(),
+                ..CreateEndpoint::default()
+            },
+        )
+        .await
+        .unwrap();
+    let id = ep.endpoint.record.id.clone();
+    let action = |key: &str| EndpointAction {
+        namespace: ns.into(),
+        project_id: project.clone(),
+        endpoint_id: id.clone(),
+        idempotency_key: key.into(),
+    };
+    // A role made before the compute starts reaches it through the spec.
+    let created = h
+        .service
+        .create_role(
+            &user(),
+            CreateRole {
+                namespace: ns.into(),
+                project_id: project.clone(),
+                name: "app".into(),
+                idempotency_key: "role".into(),
+                ..CreateRole::default()
+            },
+        )
+        .await
+        .unwrap();
+    let first = created.password.expose().clone();
+    h.service
+        .start_endpoint(&user(), action("start1"))
+        .await
+        .unwrap();
+    settle(r, store, ns, &project, &id, Some(EndpointState::Running)).await;
+
+    // GetConnectionInfo: the endpoint's address, the role, no password.
+    let info = h
+        .service
+        .connection_info(GetConnectionInfo {
+            namespace: ns.into(),
+            project_id: project.clone(),
+            ..GetConnectionInfo::default()
+        })
+        .await
+        .unwrap();
+    assert_eq!(info.user, "app");
+    assert_eq!(info.database, "postgres");
+    assert!(!info.uri.contains(&first), "{}", info.uri);
+    let running = endpoint(store, &project, &id).await.unwrap();
+    assert_eq!(
+        format!("{}:{}", info.host, info.port),
+        running.backend_addr.clone().unwrap()
+    );
+    let client = login(&info.host, info.port, &info.database, &info.user, &first)
+        .await
+        .expect("CreateRole's password logs in");
+    let who: String = client
+        .query_one("SELECT current_user::text", &[])
+        .await
+        .unwrap()
+        .get(0);
+    assert_eq!(who, "app");
+    drop(client);
+
+    // The compute holds a SCRAM verifier, not the password.
+    let compute = running.compute_id.clone().unwrap().to_lowercase();
+    let stored = compose(
+        bin,
+        compose_dir,
+        ns,
+        &[
+            "exec",
+            "-T",
+            &compute,
+            "/usr/local/bin/psql",
+            "-h",
+            "127.0.0.1",
+            "-p",
+            "55433",
+            "-U",
+            "cloud_admin",
+            "-d",
+            "postgres",
+            "-At",
+            "-v",
+            "ON_ERROR_STOP=1",
+            "-c",
+            "SELECT rolpassword FROM pg_authid WHERE rolname = 'app'",
+        ],
+    );
+    assert!(stored.trim().starts_with("SCRAM-SHA-256$4096:"), "{stored}");
+    assert!(!stored.contains(&first));
+
+    // ResetRolePassword on the running compute: the reconciler pushes the
+    // new spec; the new password logs in and the old one is refused.
+    let reset = h
+        .service
+        .reset_role_password(
+            &user(),
+            ResetRolePassword {
+                namespace: ns.into(),
+                project_id: project.clone(),
+                name: "app".into(),
+                idempotency_key: "reset".into(),
+                ..ResetRolePassword::default()
+            },
+        )
+        .await
+        .unwrap();
+    let second = reset.password.expose().clone();
+    assert_ne!(first, second);
+    let start = Instant::now();
+    loop {
+        if let Err(e) = r.reconcile_project(ns, &project).await {
+            eprintln!("pass: {e}");
+        }
+        match login(&info.host, info.port, &info.database, "app", &second).await {
+            Ok(_) => break,
+            Err(e) => {
+                assert!(
+                    start.elapsed() < Duration::from_secs(90),
+                    "the new password never logged in: {e}"
+                );
+            }
+        }
+        tokio::time::sleep(Duration::from_millis(500)).await;
+    }
+    let old = login(&info.host, info.port, &info.database, "app", &first)
+        .await
+        .expect_err("the old password is refused after the reset");
+    assert!(bad_password(&old), "{old}");
+    // The compute did not restart for it.
+    assert_eq!(
+        endpoint(store, &project, &id).await.unwrap().compute_id,
+        running.compute_id
+    );
+
+    // The next compute (after a suspend) has the new password from its spec.
+    h.service
+        .suspend_endpoint(&user(), action("suspend1"))
+        .await
+        .unwrap();
+    settle(r, store, ns, &project, &id, Some(EndpointState::Suspended)).await;
+    h.service
+        .start_endpoint(&user(), action("start2"))
+        .await
+        .unwrap();
+    settle(r, store, ns, &project, &id, Some(EndpointState::Running)).await;
+    let client = login(&info.host, info.port, &info.database, "app", &second)
+        .await
+        .expect("the new password logs in to the next compute");
+    let one: i32 = client.query_one("SELECT 1", &[]).await.unwrap().get(0);
+    assert_eq!(one, 1);
+    let old = login(&info.host, info.port, &info.database, "app", &first)
+        .await
+        .expect_err("the old password is refused by the next compute");
+    assert!(bad_password(&old), "{old}");
+
+    h.service
+        .delete_endpoint(
+            &user(),
+            DeleteEndpoint {
+                namespace: ns.into(),
+                project_id: project.clone(),
+                endpoint_id: id.clone(),
+                idempotency_key: "delete".into(),
+                ..DeleteEndpoint::default()
+            },
+        )
+        .await
+        .unwrap();
+    settle(r, store, ns, &project, &id, None).await;
+}
+
+/// PG2 Task 17's cold start on compose, for `scripts/pg2/cold-start.sh`: a
+/// suspended endpoint, then `StartEndpoint`, until the first `SELECT 1`
+/// through the endpoint's address answers, `COLDSTART_RUNS` times (50).
+/// The reconciler is driven as its run loop paces it (a pass, then the
+/// wait the pass asks for). Each sample (ms) goes to `COLDSTART_OUT` (JSON)
+/// when set. Compose has no warm pool (R14.2), so this is the pool-off
+/// figure; the images are cached by the first start, which is not counted.
+#[tokio::test(flavor = "multi_thread")]
+#[ignore = "the cold-start harness (scripts/pg2/cold-start.sh); needs deploy/loams-postgres-dev"]
+async fn it_cold_start_samples() {
+    let runs: usize = env("COLDSTART_RUNS", "50").parse().unwrap();
+    let st = stack("it-cold").await;
+    let (ns, project, store, h, r) = (st.ns, st.project.to_string(), &st.store, &st.h, &st.r);
+    let id = h
+        .service
+        .create_endpoint(
+            &user(),
+            CreateEndpoint {
+                namespace: ns.into(),
+                project_id: project.clone(),
+                kind: EndpointType::ReadWrite,
+                idempotency_key: "cold".into(),
+                ..CreateEndpoint::default()
+            },
+        )
+        .await
+        .unwrap()
+        .endpoint
+        .record
+        .id;
+    let action = |key: String| EndpointAction {
+        namespace: ns.into(),
+        project_id: project.clone(),
+        endpoint_id: id.clone(),
+        idempotency_key: key,
+    };
+    // A first start (not counted): the images are pulled, a login role made.
+    h.service
+        .start_endpoint(&user(), action("warm".into()))
+        .await
+        .unwrap();
+    settle(r, store, ns, &project, &id, Some(EndpointState::Running)).await;
+    let running = endpoint(store, &project, &id).await.unwrap();
+    let addr = running.backend_addr.clone().unwrap();
+    let password = format!("cold-{}", now_ms());
+    psql(
+        &st,
+        running.compute_id.as_deref().unwrap(),
+        &format!("CREATE ROLE cold LOGIN PASSWORD '{password}'"),
+    );
+    let mut samples = Vec::with_capacity(runs);
+    for i in 0..runs {
+        h.service
+            .suspend_endpoint(&user(), action(format!("suspend-{i}")))
+            .await
+            .unwrap();
+        settle(r, store, ns, &project, &id, Some(EndpointState::Suspended)).await;
+        let (addr, password) = (addr.clone(), password.clone());
+        let t0 = Instant::now();
+        h.service
+            .start_endpoint(&user(), action(format!("start-{i}")))
+            .await
+            .unwrap();
+        // The first SELECT 1 that answers, tried every 25 ms.
+        let probe = tokio::spawn(async move {
+            let (host, port) = addr.rsplit_once(':').unwrap();
+            loop {
+                let conf = format!(
+                    "host={host} port={port} user=cold password={password} dbname=postgres \
+                     connect_timeout=1"
+                );
+                if let Ok((client, conn)) =
+                    tokio_postgres::connect(&conf, tokio_postgres::NoTls).await
+                {
+                    tokio::spawn(conn);
+                    if client.query_one("SELECT 1", &[]).await.is_ok() {
+                        return t0.elapsed();
+                    }
+                }
+                tokio::time::sleep(Duration::from_millis(25)).await;
+            }
+        });
+        // The reconciler, as its run loop paces it.
+        let elapsed = loop {
+            if probe.is_finished() {
+                break probe.await.unwrap();
+            }
+            assert!(
+                t0.elapsed() < Duration::from_secs(180),
+                "run {i}: no SELECT 1"
+            );
+            let wait = match r.reconcile_project(ns, &project).await {
+                Ok(Pass::Again(after)) => after,
+                Ok(_) => Duration::from_millis(50),
+                Err(e) => {
+                    eprintln!("pass: {e}");
+                    Duration::from_millis(250)
+                }
+            };
+            tokio::time::sleep(wait.min(Duration::from_millis(500))).await;
+        };
+        let ms = elapsed.as_secs_f64() * 1000.0;
+        eprintln!("cold start {i}: {ms:.0} ms");
+        samples.push(ms);
+    }
+    if let Ok(out) = std::env::var("COLDSTART_OUT") {
+        let body = serde_json::json!({
+            "runtime": "compose",
+            "pool": "off",
+            "samples_ms": samples,
+        });
+        std::fs::write(out, body.to_string()).unwrap();
+    }
 }

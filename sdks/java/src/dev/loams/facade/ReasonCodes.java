@@ -85,6 +85,17 @@ public final class ReasonCodes {
         map.put(Reason.LIVE_DEPLOY_CONFLICT, "failed_precondition");
         map.put(Reason.LIVE_SCHEMA_VIOLATION, "invalid_argument");
         map.put(Reason.LIVE_INDEX_NOT_READY, "failed_precondition");
+        map.put(Reason.LIVE_APP_DISABLED, "failed_precondition");
+        map.put(Reason.LIVE_APP_EXISTS, "failed_precondition");
+        map.put(Reason.LIVE_FUNCTION_ERROR, "unknown");
+        map.put(Reason.LIVE_FUNCTION_TIMEOUT, "deadline_exceeded");
+        map.put(Reason.LIVE_FUNCTION_OUT_OF_MEMORY, "resource_exhausted");
+        map.put(Reason.LIVE_LIMIT_EXCEEDED, "resource_exhausted");
+        map.put(Reason.LIVE_APP_MISMATCH, "permission_denied");
+        map.put(Reason.LIVE_ORIGIN_NOT_ALLOWED, "permission_denied");
+        map.put(Reason.SESSION_ROTATE, "unavailable");
+        map.put(Reason.SESSION_GONE, "not_found");
+        map.put(Reason.NODE_DRAINING, "unavailable");
         map.put(Reason.ROLE_REQUIRED, "permission_denied");
         map.put(Reason.SETUP_REQUIRED, "failed_precondition");
         map.put(Reason.TOKEN_MISSING, "unauthenticated");

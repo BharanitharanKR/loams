@@ -1,0 +1,35 @@
+# PG2 Task 18: a scratch stack to check what the pinned PgDog does (Q640–Q643;
+# the answers are the plan's Task 18 rulings). Never deployed: Loams runs PgDog
+# from deploy/helm/loams-postgres and deploy/loams-postgres-single (Task 22).
+#
+#   docker compose -p pg2-pgdog up -d pg1 pg2 pgdog   # pg3 starts later (Q640)
+#
+# PgDog is unmodified (AGPL-3.0), pinned by its multi-arch index digest
+# (v0.1.60). Its two config files are scratch/, written for these checks.
+name: pg2-pgdog
+
+x-postgres: &postgres
+  image: docker.io/library/postgres:17.11
+  environment:
+    POSTGRES_PASSWORD: scratch-superuser
+  command: ["postgres", "-c", "password_encryption=scram-sha-256"]
+  volumes:
+    - ./scratch/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
+
+services:
+  pg1: *postgres
+  pg2: *postgres
+  # Stopped while a client waits (Q640).
+  pg3:
+    <<: *postgres
+    profiles: [later]
+
+  pgdog:
+    image: ghcr.io/pgdogdev/pgdog@sha256:25d1908886f595a2e3b00ec59783326712e3c0f75f91d29f032ff712b30f2266
+    command: ["pgdog", "--config", "/etc/pgdog/pgdog.toml", "--users", "/etc/pgdog/users.toml"]
+    volumes:
+      - ./scratch:/etc/pgdog:ro
+    ports:
+      - 127.0.0.1:${PGDOG_PORT:-46432}:6432
+      - 127.0.0.1:${PGDOG_METRICS_PORT:-49090}:9090
+    depends_on: [pg1, pg2]

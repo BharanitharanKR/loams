@@ -15,6 +15,10 @@
       "types": "./src/query.ts",
       "default": "./src/query.ts"
     },
+    "./theme": {
+      "types": "./src/theme.ts",
+      "default": "./src/theme.ts"
+    },
     "./testing": {
       "types": "./src/testing/index.ts",
       "default": "./src/testing/index.ts"

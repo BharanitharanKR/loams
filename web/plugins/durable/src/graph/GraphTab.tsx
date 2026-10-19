@@ -3,7 +3,17 @@
 
 import { type ChartSpec, LiveChart, Sparkline, useMetricStream } from '@loams/charts';
 import { useLoad } from '@loams/desktop-ui';
-import { Button, Card, Empty, Field, Notice, Select, StatusTag } from '@loams/ui';
+import {
+  Button,
+  Card,
+  Empty,
+  Field,
+  Notice,
+  SampleDataBadge,
+  SampleDataNotice,
+  Select,
+  StatusTag,
+} from '@loams/ui';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { EnvelopeError } from '../envelope.js';
 import { ExecutionGraph, formatMs, STATUS_LABEL } from './ExecutionGraph.js';
@@ -190,10 +200,10 @@ export function GraphTab({ source }: { source: RunGraphSource }) {
         </Notice>
       )}
       {run?.sample && (
-        <Notice title="Sample run">
-          Played from fixtures. The engine does not serve attempt history or a run change stream
-          yet; runs of this engine show what their promises record.
-        </Notice>
+        <SampleDataNotice>
+          This run is played from fixtures: the engine does not serve attempt history or a run
+          change stream yet. Runs of this engine show what their promises record.
+        </SampleDataNotice>
       )}
 
       {run && (
@@ -202,11 +212,14 @@ export function GraphTab({ source }: { source: RunGraphSource }) {
             <Card
               title={run.name}
               actions={
-                progress && (
-                  <span className="text-muted text-sm">
-                    {progress.done} of {progress.total} steps settled
-                  </span>
-                )
+                <span className="flex items-center gap-2">
+                  {run.sample && <SampleDataBadge />}
+                  {progress && (
+                    <span className="text-muted text-sm">
+                      {progress.done} of {progress.total} steps settled
+                    </span>
+                  )}
+                </span>
               }
             >
               <ExecutionGraph run={run} selectedId={selected} onSelect={setSelected} />

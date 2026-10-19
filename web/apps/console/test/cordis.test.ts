@@ -1,9 +1,11 @@
 // The cordis console end to end in jsdom: the real catalog (base.yml), the
 // real plugins, the browser platform over the in-memory mock.
 
+import type { ConsoleHandle } from '@loams/console-host';
 import { parsePatch, THIRD_PARTY_FLAG } from '@loams/console-host';
 import { createMockTransport } from '@loams/console-host/testing';
 import { createWebPlatform } from '@loams/platform-web';
+import { pageEntries } from '@loams/plugin-shell';
 import { waitFor } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import samplesYml from '../catalog/samples.yml?raw';
@@ -35,15 +37,42 @@ async function start(
   return { root, handle };
 }
 
-const navLabels = (root: HTMLElement) =>
-  [...root.querySelectorAll('.lc-nav a')].map((a) => a.textContent);
+/** Every page the plugins register (design 59 D1080: the sidebar pins only a few). */
+const navLabels = (handle: { slots: ConsoleHandle['slots'] }) =>
+  pageEntries(
+    handle.slots.entries('shell.nav.section'),
+    handle.slots.entries('console.nav'),
+    undefined,
+  ).map((p) => p.label);
+/**
+ * Waits until Studio's plugin is active. Design 59 (W10): every available mode's plugins load
+ * at boot, after the boot mode's, so Studio's pages ("Studio settings") join the list a moment
+ * after Console's; a list read before that raced the load (it passed on fast runners only).
+ */
+const studioLoaded = (handle: ConsoleHandle) =>
+  waitFor(() => expect(handle.plugins().find((p) => p.id === 'studio')?.status).toBe('active'), {
+    timeout: 10_000,
+  });
+/** The sidebar's pinned Pages. */
+const pinnedLabels = (root: HTMLElement) =>
+  [...root.querySelectorAll('.lc-pages ul a')].map((a) => a.textContent);
 
 describe('the cordis console', () => {
   it('boots the oss catalog and renders the first-party pages', async () => {
     const { root, handle } = await start();
+    await studioLoaded(handle);
     await waitFor(() =>
-      expect(navLabels(root)).toEqual(['Status', 'Namespaces', 'Deployments', 'Approvals']),
+      expect(navLabels(handle)).toEqual([
+        'Status',
+        'Namespaces',
+        'Deployments',
+        'Approvals',
+        'Studio settings',
+        'Preferences',
+      ]),
     );
+    // The sidebar pins Q932's defaults that this catalog serves (D1080).
+    await waitFor(() => expect(pinnedLabels(root)).toEqual(['Deployments']));
     const status = Object.fromEntries(handle.plugins().map((p) => [p.id, p.status]));
     expect(status).toMatchObject({
       shell: 'active',
@@ -72,16 +101,29 @@ describe('the cordis console', () => {
 
   it('disabling a plugin removes its page and nav entry without a reload', async () => {
     const { root, handle } = await start();
-    await waitFor(() => expect(navLabels(root)).toContain('Approvals'));
+    // waitFor's 1 s default is too short on a cold macOS runner (as above).
+    const slow = { timeout: 10_000 };
+    await waitFor(() => expect(navLabels(handle)).toContain('Approvals'), slow);
+    await studioLoaded(handle);
     await handle.disable('approvals');
-    await waitFor(() => expect(navLabels(root)).toEqual(['Status', 'Namespaces', 'Deployments']));
+    await waitFor(
+      () =>
+        expect(navLabels(handle)).toEqual([
+          'Status',
+          'Namespaces',
+          'Deployments',
+          'Studio settings',
+          'Preferences',
+        ]),
+      slow,
+    );
     expect(root.querySelector('.lc-chip')).toBeNull();
-  });
+  }, 20_000);
 
   it('runs the third-party sample in a sandboxed frame when the instance allows it', async () => {
     const { root, handle } = await start({ [THIRD_PARTY_FLAG]: true }, true, true);
     expect(handle.plugins().find((p) => p.id === 'hello')?.tier).toBe('third-party');
-    await waitFor(() => expect(navLabels(root)).toContain('hello'));
+    await waitFor(() => expect(navLabels(handle)).toContain('hello'));
     window.location.hash = '#/plugins/hello';
     window.dispatchEvent(new HashChangeEvent('hashchange'));
     const frame = await waitFor(() => {

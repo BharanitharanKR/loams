@@ -17,7 +17,7 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   return (
     <div className="grid grid-cols-[8rem_1fr] items-center gap-3 border-b border-rule-soft py-2 text-sm">
       <dt className="text-muted">{label}</dt>
-      <dd className="m-0 flex items-center gap-2 font-mono">{children}</dd>
+      <dd className={/* mono-ok: id */ 'm-0 flex items-center gap-2 font-mono'}>{children}</dd>
     </div>
   );
 }

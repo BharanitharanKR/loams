@@ -124,6 +124,10 @@ async fn namespaces_nest(subject: Subject) {
         c.list_databases(&root).await.expect("lists"),
         vec![child.clone()]
     );
+    // The top level lists the root and not its child (HS1 Task 15's sweep).
+    let top = c.list_root_databases().await.expect("lists the top level");
+    assert!(top.contains(&root), "{top:?}");
+    assert!(!top.contains(&child), "{top:?}");
     assert_eq!(
         c.database_properties(&child)
             .await
@@ -559,4 +563,61 @@ async fn rest_catalog_refuses_a_token_over_http() {
         }
         other => panic!("{other:?}"),
     }
+}
+
+/// UP1 Task 6: the local catalog carries `PRAGMA user_version` (registry id
+/// `house.catalog`): a catalog from before UP1 reads 0 and is stamped 1 on
+/// open, keeping its tables; a newer version is refused.
+#[test]
+fn local_catalog_user_version_is_stamped_and_checked() {
+    let dir = tempfile::tempdir().expect("tempdir");
+    std::fs::create_dir_all(dir.path().join("bucket")).expect("bucket");
+    let store = || {
+        Store::from_url(
+            &format!("file://{}", dir.path().join("bucket").display()),
+            Vec::<(String, String)>::new(),
+        )
+        .expect("store")
+    };
+    let path = dir.path().join("catalog.sqlite");
+    // A preview.2 catalog: the tables, no user_version.
+    {
+        let conn = rusqlite::Connection::open(&path).expect("sqlite");
+        conn.execute_batch(
+            "CREATE TABLE namespaces (name TEXT PRIMARY KEY NOT NULL, properties TEXT NOT NULL);
+             CREATE TABLE tables (namespace TEXT NOT NULL, name TEXT NOT NULL,
+                                  metadata_location TEXT NOT NULL, PRIMARY KEY (namespace, name));
+             INSERT INTO namespaces VALUES ('ns_1', '{}');",
+        )
+        .expect("schema");
+    }
+    let user_version = || -> i64 {
+        rusqlite::Connection::open(&path)
+            .expect("sqlite")
+            .query_row("PRAGMA user_version", [], |row| row.get(0))
+            .expect("pragma")
+    };
+    assert_eq!(user_version(), 0);
+    drop(LocalCatalog::open(&path, store(), LakeRoot::local()).expect("opens"));
+    assert_eq!(user_version(), loams_house::catalog::CATALOG_USER_VERSION);
+    let kept: i64 = rusqlite::Connection::open(&path)
+        .expect("sqlite")
+        .query_row("SELECT count(*) FROM namespaces", [], |row| row.get(0))
+        .expect("count");
+    assert_eq!(kept, 1, "the stamp changes nothing else");
+    rusqlite::Connection::open(&path)
+        .expect("sqlite")
+        .execute_batch("PRAGMA user_version = 2")
+        .expect("pragma");
+    let err = LocalCatalog::open(&path, store(), LakeRoot::local()).expect_err("refused");
+    assert!(err.to_string().contains("format_unreadable"), "{err}");
+}
+
+#[test]
+fn format_constants_match_registry() {
+    use loams_common::formats::{HOUSE_CATALOG, spec_of};
+    assert_eq!(
+        loams_house::catalog::CATALOG_USER_VERSION,
+        i64::from(spec_of(HOUSE_CATALOG).current)
+    );
 }

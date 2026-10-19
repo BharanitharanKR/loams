@@ -1,0 +1,39 @@
+// Loams Git's derived data (design §36 §19.5.1, §19.8, D830, D833; plan GT1
+// Tasks 19 and 21): immutable objects under `derived/`, keyed by the object id they describe.
+// Crate-local and pinned by the golden files in crates/loams-git/tests/golden/.
+
+syntax = "proto3";
+package loams.git.v1;
+
+// A tree's entries with their sizes, as `git ls-tree -l` lists them.
+message TreeAux {
+  bytes tree = 1;                       // the tree's object id
+  repeated TreeAuxEntry entries = 2;    // in the tree's order
+}
+
+message TreeAuxEntry {
+  bytes name = 1;
+  uint32 mode = 2;                      // git's mode bits (0o100644, 0o40000, ...)
+  bytes oid = 3;
+  optional uint64 size = 4;             // blobs and symlinks; unset for trees and submodules
+}
+
+// The blame of one file at one commit (plan GT1 Task 21): which commit each
+// run of lines came from, as `git blame --porcelain` attributes them.
+message Blame {
+  bytes commit = 1;                     // the commit blamed at
+  bytes path = 2;                       // the file's path in that commit
+  bytes blob = 3;                       // the file's blob
+  uint32 lines = 4;                     // lines in the blob
+  repeated BlameHunk hunks = 5;         // in the file's order, covering every line once
+}
+
+message BlameHunk {
+  uint32 start = 1;                     // the first line, 0-based, in the blamed file
+  uint32 source_start = 2;              // the same line, 0-based, in the commit that wrote it
+  uint32 len = 3;                       // lines
+  bytes commit = 4;                     // the commit that wrote them
+  optional bytes source_path = 5;       // the path there, when it differs from `path`
+  bytes previous = 6;                   // the parent compared against; empty for none
+  bytes previous_path = 7;              // the path in `previous`
+}

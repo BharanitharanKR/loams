@@ -199,7 +199,7 @@ Design reference: [54 Upgrades](../design/54-upgrades.md) (D923–D945, Q820–Q
 
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|
-| [UP1: Upgrades](2026-10-14-up1-upgrades.md) | **UP1a** (Tasks 0–7): reconcile and verify BR, TiDB and the pageserver APIs; the format registry and range checks in every reader; the ledger and lease in the reserved `_system` namespace; the migration runner with failpoints; the startup gate (exit 78); preview.2 adoption by fingerprint; store contexts; `loams migrate` and the compose `migrate` service. **UP1b** (8–10): snapshots and restore of every store, GC roots, TiKV and Postgres, the safekeeper drain and volume. **UP1c** (11): `release/upgrade-path.toml`, the signed manifest, the bundle and the "Upgrading" notes. **UP1d** (12–15): `loams upgrade check\|--to\|rollback\|status\|snapshots`, local stacks. **UP1e** (16–18): the console with engine N−1, additive-only protos and SDKs, the desktop's `migrate`. **UP1f** (19–20): upgrade fixtures for every product and the `Upgrade: previous release → candidate` gate in `CI required`. **UP1g** (21–24): the pin policy, BYOC, docs and the preview.3 rehearsal. 25 tasks | The preview.2 bundle; CL1 Task 1 (else `crates/loams-upgrade`); CLI2's signed manifest; DD1 for Task 18's daemon half | Planned |
+| [UP1: Upgrades](2026-10-14-up1-upgrades.md) | **UP1a** (Tasks 0–7): reconcile and verify BR, TiDB and the pageserver APIs; the format registry and range checks in every reader; the ledger and lease in the reserved `_system` namespace; the migration runner with failpoints; the startup gate (exit 78); preview.2 adoption by fingerprint; store contexts; `loams migrate` and the compose `migrate` service. **UP1b** (8–10): snapshots and restore of every store, GC roots, TiKV and Postgres, the safekeeper drain and volume. **UP1c** (11): `release/upgrade-path.toml`, the signed manifest, the bundle and the "Upgrading" notes. **UP1d** (12–15): `loams upgrade check\|--to\|rollback\|status\|snapshots`, local stacks. **UP1e** (16–18): the console with engine N−1, additive-only protos and SDKs, the desktop's `migrate`. **UP1f** (19–20): upgrade fixtures for every product and the `Upgrade: previous release → candidate` gate in `CI required`. **UP1g** (21–24): the pin policy, BYOC, docs and the preview.3 rehearsal. 25 tasks | The preview.2 bundle; CL1 Task 1 (else `crates/loams-upgrade`); CLI2's signed manifest; DD1 for Task 18's daemon half | **In progress**: Tasks 0–14, 16, 17, 19, 20 and 23 built for v0.1.0-preview.3; Task 24 is the release pull request; Tasks 15, 18, 21 and 22 follow |
 
 ## Track DT: commit-path determinism
 
@@ -216,6 +216,30 @@ Design reference: [56 Loams Sandbox](../design/56-loams-sandbox.md) (D990–D100
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|
 | [SB1: Loams Sandbox](2026-10-15-sb1-loams-sandbox.md) | Task 0: reconcile with House's and Live's sandbox code and tests, and verify rustix, Landlock, gVisor, Firecracker and Windows facts. **SB1a** (Tasks 1–3): the crate, the spec, cgroups and `linux::seal_self`; House and Live moved onto it with golden rules and filters (Live gains `RLIMIT_CPU`). **SB1b** (4–5): the escape conformance kit and probe binary, resource and cross-tenant probes, CI and nightly matrix. **SB1c** (6–8): `spawn` through the `__loams-sandbox-exec` trampoline with mount and PID namespaces and the `shell` profile; the allowlisting proxy and reverse forwards; `kill`, `stats`, deadlines, `io.max`. **SB1d** (9–13): agentd enforces `SandboxLevel` on Linux, harness sandboxes defer to it, `seatbelt`, `appcontainer`, Studio shows who enforces. **SB1e** (14–15): `gvisor` (functions T0/T2) and `wasm` (T1). **SB1f** (16–17): `microvm` on Firecracker with snapshot, restore and fork. **SB1g** (18–20): security review, docs and amendments, exit. 21 tasks | v0.1.0-preview.3 ([UP1](2026-10-14-up1-upgrades.md)); F1 and §15 W2 for Tasks 14–17's consumers | **Planned: starts after v0.1.0-preview.3** |
+
+## Track GW: the Loams gateway
+
+Design reference: [57 Loams Gateway](../design/57-loams-gateway.md) (D1010–D1024, Q895–Q905). The owner's decision of 2026-10-16: build a Rust gateway crate instead of adding Envoy or Traefik. Its first job is PG2 Task 22's SNI listener (amends D708); the API, LLM and MCP modules come later on the same core. (The name GW1 was last used for the protocol gateway's plans, which moved to `loams-platform` with §34; this track is unrelated to them.)
+
+| Plan | Scope | Depends on | Status |
+|---|---|---|---|
+| [GW1: Loams Gateway, the Postgres front door](2026-10-16-gw1-loams-gateway.md) | **GW1a** (Tasks 1–8): the `loams-gateway` crate, its config and admin listener; the validated, hot-reloaded route table; ordered PgDog upstreams; Postgres sniffing, refusals and the TLS splice for `SSLRequest` clients; direct TLS terminated with ALPN `postgresql` and re-encrypted; dedicated namespace ports; `psql` through the gateway to the pinned PgDog in CI; the image. **GW1b** (9–11): `pg-control`'s routes renderer and dedicated-port records; the single-node compose service; the Helm templates and PG2 Task 22's isolation test. **GW1c** (12–14): PROXY protocol v2, metrics with no tenant label and the connection observer, fuzzing | PG2 Tasks 20–21 (built); PG2 Tasks 48 and 56 for GW1b's bundles | Planned |
+
+## Track DA: data access and HTAP
+
+Design reference: [58 Data Access and HTAP](../design/58-data-access-and-htap.md) (D1030–D1061, Q910–Q925). The owner approved the direction on 2026-10-16.
+
+| Plan | Scope | Depends on | Status |
+|---|---|---|---|
+| [DA1: Data access and HTAP](2026-10-16-da1-data-access.md) | A task list only: **DA1a** Loams protocol extensions in `loams-gateway`; **DA1b** `loams.plan.v1`; **DA1c** the Loams Data API, its spec, and MCP tools; **DA1d** HTAP phases 1–3; **DA1e** ADBC and Power BI; **DA1f** the shared bucket-segment library `loams-seglog` (Task F1, with PG2 Task 40) | GW1, API2 Task 1, PG2, HS1, NF1f | **Stub** |
+
+## Track CF: the console and desktop redesign
+
+Design reference: [59 Console and Desktop Redesign, Part 1: the Foundation](../design/59-console-foundation.md) (D1073–D1086, Q928–Q935). The owner approved the direction, the mockups and the spec on 2026-10-17: a T3 Code-, Codex- and DSH Desktop-like, agent-first console, in four parts. CF1 is Part 1.
+
+| Plan | Scope | Depends on | Status |
+|---|---|---|---|
+| [CF1: Console foundation](2026-10-17-cf1-console-foundation.md) | Task 0: reconcile. **CF1a** (Tasks 1–3): token values (dark B, light A), the radius scale, system fonts, the contrast and forced-colour tests; System/Dark/Light per device; monospace only for code. **CF1b** (4–6): the rest of T3 Code's `components/ui` in `@loams/ui` with provenance; toasts, destructive and typed confirmation. **CF1c** (7–12): the six shell regions on `@loams/slots` (sidebar, top bar drag region, main and the home slot, inspector and drawer with `inspector.open()`, palette sources); Studio's threads, panels and terminal in them; pinned Pages, Settings and the palette; one keymap. **CF1d** (13–16): per-OS window chrome synced to the theme, native menus and context menu, the splash and dsh-desktop provenance, notifications and the update toast. **CF1e** (17): screenshots in both themes, axe, the desktop chrome e2e. 18 tasks | SD1 (built) | **Planned** |
 
 ## Track RN: runners and the usage hooks
 

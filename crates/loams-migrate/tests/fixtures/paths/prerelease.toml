@@ -1,0 +1,12 @@
+# A pre-release train: each preview upgrades from exactly the previous one.
+[[release]]
+version = "0.1.0-preview.4"
+from    = "0.1.0-preview.3"
+
+[[release]]
+version = "0.1.0-preview.3"
+from    = "0.1.0-preview.2"
+
+[[release]]
+version = "0.1.0-preview.2"
+from    = "fresh"

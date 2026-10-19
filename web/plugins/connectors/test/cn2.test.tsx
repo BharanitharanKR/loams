@@ -263,8 +263,8 @@ describe('running instances', () => {
     expect(await screen.findByRole('heading', { name: 'clicks-to-house' })).toBeTruthy();
   });
 
-  it('labels fixture data as demo data', async () => {
+  it('labels fixture data as sample data', async () => {
     render(<InstancesPage flow={createMockFlowClient()} navigate={() => undefined} />);
-    expect(screen.getByText('Demo data')).toBeTruthy();
+    expect(screen.getByText('Sample data')).toBeTruthy();
   });
 });

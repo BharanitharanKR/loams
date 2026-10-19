@@ -111,7 +111,7 @@ describe('primitives adapted from T3 Code', () => {
         '// (see web/packages/ui/LICENSE.t3code). Modified by The Loams Authors:',
       );
       expect(row.upstreamSha256).toMatch(/^[0-9a-f]{64}$/);
-      expect(row.verdict).toBe('adapt');
+      expect(['as-is', 'adapt', 'rewrite']).toContain(row.verdict);
     },
   );
 
@@ -121,6 +121,51 @@ describe('primitives adapted from T3 Code', () => {
       .filter((p) => readFileSync(p, 'utf8').includes('Portions of this file are from T3 Code'))
       .map((p) => relative(UI, p));
     expect(headed.filter((p) => !rows.has(p))).toEqual([]);
+  });
+
+  it('has a row for every design 59 primitive (D1077)', () => {
+    const rows = new Set(prov.files.map((r) => r.upstreamPath));
+    const ts = new Set(['dialog-styles', 'sidebarState', 'toastHelpers']);
+    const expected = [
+      'alert',
+      'alert-dialog',
+      'autocomplete',
+      'badge',
+      'button',
+      'checkbox',
+      'collapsible-section-header',
+      'combobox',
+      'command',
+      'dialog',
+      'dialog-styles',
+      'empty',
+      'group',
+      'input',
+      'input-group',
+      'kbd',
+      'menu',
+      'middle-truncate',
+      'number-field',
+      'popover',
+      'preview-card',
+      'radio-group',
+      'scroll-area',
+      'select',
+      'separator',
+      'sheet',
+      'sidebar',
+      'sidebarState',
+      'skeleton',
+      'spinner',
+      'switch',
+      'table',
+      'textarea',
+      'toast',
+      'toastHelpers',
+      'toggle-group',
+      'tooltip',
+    ].map((n) => `apps/web/src/components/ui/${n}.${ts.has(n) ? 'ts' : 'tsx'}`);
+    expect(expected.filter((p) => !rows.has(p))).toEqual([]);
   });
 
   it('ships the MIT text and a NOTICE, and says so in its licence field', () => {

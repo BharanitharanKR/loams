@@ -582,6 +582,9 @@ def self_test() -> int:
         binary = root / "loams"
         binary.write_text("#!/bin/sh\necho loams\n")
         binary.chmod(0o755)
+        git_remote = root / builder.GIT_REMOTE
+        git_remote.write_text("#!/bin/sh\necho git-remote-loams\n")
+        git_remote.chmod(0o755)
         console = root / "console"
         console.mkdir()
         (console / "index.html").write_text("<!doctype html>\n")
@@ -596,7 +599,7 @@ def self_test() -> int:
             return 0
 
         builder.effective_config(root / "nfpm.yaml", "2026-01-01T00:00:00Z", None, None)
-        builder.build_stage(root / "staging", binary, console)
+        builder.build_stage(root / "staging", binary, console, git_remote)
         for fmt, suffix in (("deb", ".deb"), ("rpm", ".rpm"), ("archlinux", ".pkg.tar.zst")):
             target = packages / builder.package_name(fmt, "9.9.9", builder.TARGET_ARCH[
                 "x86_64-unknown-linux-gnu"][fmt])

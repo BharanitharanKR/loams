@@ -1,0 +1,30 @@
+# Rendered by pg-control (PG2 Task 20); do not edit.
+
+[[users]]
+name = "app"
+databases = ["shop", "shop__main", "shop__main.catalog", "shop__main.orders", "shop__main__ro"]
+password_hash = "SCRAM-SHA-256$4096:c2FsdC00000000000001-app$c3RvcmVk:c2VydmVy"
+server_user = "app"
+server_password = "backend-0000000000001-app"
+
+[[users]]
+name = "migrator"
+databases = ["shop", "shop__main", "shop__main.catalog", "shop__main.orders", "shop__main__ro"]
+password_hash = "SCRAM-SHA-256$4096:c2FsdC00000000000001-migrator$c3RvcmVk:c2VydmVy"
+server_user = "migrator"
+server_password = "backend-0000000000001-migrator"
+pooler_mode = "session"
+
+[[users]]
+name = "app"
+databases = ["shop__dev"]
+password_hash = "SCRAM-SHA-256$4096:c2FsdC00000000000002-app$c3RvcmVk:c2VydmVy"
+server_user = "app"
+server_password = "backend-0000000000002-app"
+
+[[users]]
+name = "writer"
+databases = ["blog", "blog__main", "blog__main.posts"]
+password_hash = "SCRAM-SHA-256$4096:c2FsdC00000000000003-writer$c3RvcmVk:c2VydmVy"
+server_user = "writer"
+server_password = "backend-0000000000003-writer"

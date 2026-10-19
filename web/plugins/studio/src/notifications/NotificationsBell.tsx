@@ -30,7 +30,7 @@ const ICON: Record<NotificationKind, typeof Bell> = {
 const TONE: Record<NotificationKind, string> = {
   [NotificationKind.UNSPECIFIED]: 'text-muted',
   [NotificationKind.TURN_DONE]: 'text-grow',
-  [NotificationKind.APPROVAL]: 'text-accent',
+  [NotificationKind.APPROVAL]: 'text-accent-fg',
   [NotificationKind.QUESTION]: 'text-info',
   [NotificationKind.ERROR]: 'text-danger',
   [NotificationKind.GROUP_READY]: 'text-grow',
@@ -54,7 +54,7 @@ function Row({ n, onOpen }: { n: StudioNotification; onOpen: (href: string) => v
       </span>
     </>
   );
-  const row = 'flex w-full items-start gap-2 rounded-none px-2 py-1.5 text-left';
+  const row = 'flex w-full items-start gap-2 rounded-md px-2 py-1.5 text-left';
   return (
     <li>
       {n.href ? (

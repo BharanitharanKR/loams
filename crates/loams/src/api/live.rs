@@ -21,11 +21,14 @@ use std::sync::Arc;
 
 use connectrpc::{RequestContext, Router, ServiceRequest, ServiceResult, ServiceStream};
 use loams_live_proto::loams::live::v1::{
-    ActivateDeploymentRequest, ActivateDeploymentResponse, DeployRequest, DeployResponse,
-    GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse,
-    ListDeploymentsRequest, ListDeploymentsResponse, LiveAdminService, LiveAdminServiceExt,
-    LiveService, LiveServiceExt, ModifyQuerySetRequest, ModifyQuerySetResponse, MutateRequest,
-    MutateResponse, QueryRequest, QueryResponse, TailLogsRequest, TailLogsResponse, Transition,
+    ActivateDeploymentRequest, ActivateDeploymentResponse, AuthenticateRequest,
+    AuthenticateResponse, CreateAppRequest, CreateAppResponse, DeleteAppRequest, DeleteAppResponse,
+    DeployRequest, DeployResponse, GetAppRequest, GetAppResponse, GetDeploymentRequest,
+    GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse, ListAppsRequest,
+    ListAppsResponse, ListDeploymentsRequest, ListDeploymentsResponse, LiveAdminService,
+    LiveAdminServiceExt, LiveService, LiveServiceExt, ModifyQuerySetRequest,
+    ModifyQuerySetResponse, MutateRequest, MutateResponse, QueryRequest, QueryResponse,
+    TailLogsRequest, TailLogsResponse, Transition, UpdateAppRequest, UpdateAppResponse,
     WatchRequest,
 };
 
@@ -64,13 +67,91 @@ pub(crate) async fn caller(
     mut request: axum::extract::Request,
     next: axum::middleware::Next,
 ) -> axum::response::Response {
+    // LV1 plan Task 18: an origin the engine itself allows (the console's).
+    if request
+        .extensions()
+        .get::<crate::auth::layer::EngineOrigin>()
+        .is_some()
+    {
+        request.extensions_mut().insert(loams_live::ConsoleOrigin);
+    }
     if let Some(principal) = request.extensions().get::<crate::auth::Principal>() {
-        let caller = loams_live::admin::Caller {
-            id: principal.subject.clone(),
-        };
+        let caller = live_caller(principal);
         request.extensions_mut().insert(caller);
+    } else if request
+        .extensions()
+        .get::<crate::auth::layer::LeftToApp>()
+        .is_some()
+    {
+        // LV1 plan Task 16: no engine principal; Live identifies the app's
+        // end user (or an anonymous caller) itself.
+        request
+            .extensions_mut()
+            .insert(loams_live::auth::Caller::anonymous());
     }
     next.run(request).await
+}
+
+/// Closes the Live sessions of every principal the directory's audit
+/// stream says lost its access (LV1 plan Task 17): a revoked API key
+/// (`apikey:<id>`) or a removed member (their user id). Ends with the
+/// stream.
+#[cfg(feature = "live")]
+pub(crate) async fn close_revoked(
+    mut events: tokio::sync::broadcast::Receiver<crate::auth::directory::AuditRec>,
+    live: loams_live::LiveRoutes,
+) {
+    use tokio::sync::broadcast::error::RecvError;
+    loop {
+        match events.recv().await {
+            Ok(rec) => {
+                if let Some(principal) = revoked_principal(&rec.event) {
+                    live.revoke(&principal);
+                }
+            }
+            Err(RecvError::Lagged(missed)) => {
+                tracing::warn!(
+                    missed,
+                    "Live missed directory audit events; sessions of a revoked credential may stay open until they expire"
+                );
+            }
+            Err(RecvError::Closed) => return,
+        }
+    }
+}
+
+/// The principal an audit event takes access from, if any.
+#[cfg(feature = "live")]
+fn revoked_principal(event: &loams_proto::loams::admin::v1::AuditEvent) -> Option<String> {
+    let target = event.target.as_option()?;
+    match event.action.as_str() {
+        "api_key.revoke" => Some(format!("apikey:{}", target.id)),
+        "member.remove" => Some(target.id.clone()),
+        _ => None,
+    }
+}
+
+/// The Live caller of an admitted principal (LV1 plan Task 14): its id,
+/// its kind and what its credential reaches.
+#[cfg(feature = "live")]
+pub(crate) fn live_caller(principal: &crate::auth::Principal) -> loams_live::auth::Caller {
+    use crate::auth::PrincipalKind;
+    use loams_live::auth::{Caller, CallerKind};
+    let kind = match principal.kind {
+        PrincipalKind::User => CallerKind::User,
+        PrincipalKind::Session => CallerKind::Session,
+        PrincipalKind::ApiKey => CallerKind::ApiKey,
+        PrincipalKind::Tailscale => CallerKind::Tailscale,
+        PrincipalKind::DevLoopback => CallerKind::DevLoopback,
+    };
+    let grant = &principal.grant;
+    Caller {
+        org: grant.org.clone(),
+        environment: grant.environment.clone(),
+        scopes: grant.scopes.clone(),
+        expires_at_ms: grant.expires_at_ms,
+        ..Caller::new(principal.subject.clone(), kind)
+    }
 }
 
 /// `loams.live.v1.LiveService` as this binary answers it: every RPC refuses
@@ -83,6 +164,66 @@ pub(crate) async fn caller(
 /// Live running, the main port answers with this.
 #[derive(Debug)]
 struct LiveAbsent;
+
+#[cfg(all(test, feature = "live"))]
+mod tests {
+    use super::*;
+    use crate::auth::{Grant, Principal, PrincipalKind};
+    use loams_live::auth::CallerKind;
+
+    /// LV1 plan Task 17: a revoked key and a removed member close their
+    /// sessions; other audit events do not.
+    #[test]
+    fn revocations_name_the_principal() {
+        use loams_proto::loams::admin::v1::{AuditEvent, ResourceRef};
+        let event = |action: &str, id: &str| AuditEvent {
+            action: action.to_owned(),
+            target: buffa::MessageField::some(ResourceRef {
+                id: id.to_owned(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert_eq!(
+            revoked_principal(&event("api_key.revoke", "01")).as_deref(),
+            Some("apikey:01")
+        );
+        assert_eq!(
+            revoked_principal(&event("member.remove", "u1")).as_deref(),
+            Some("u1")
+        );
+        assert_eq!(revoked_principal(&event("api_key.create", "01")), None);
+    }
+
+    /// LV1 plan Task 14: the caller carries the principal's kind and grant.
+    #[test]
+    fn the_live_caller_carries_the_grant() {
+        let principal = Principal {
+            subject: "apikey:01".to_owned(),
+            kind: PrincipalKind::ApiKey,
+            display_name: "ci".to_owned(),
+            email: None,
+            grant: Grant {
+                org: Some("acme".to_owned()),
+                environment: Some("shop/prod".to_owned()),
+                scopes: Grant::scopes_of(["live:call"]),
+                expires_at_ms: Some(42),
+            },
+        };
+        let caller = live_caller(&principal);
+        assert_eq!(caller.id, "apikey:01");
+        assert_eq!(caller.kind, CallerKind::ApiKey);
+        assert_eq!(caller.environment.as_deref(), Some("shop/prod"));
+        assert!(caller.has_scope("live:call") && !caller.has_scope("live:deploy"));
+        assert_eq!(caller.expires_at_ms, Some(42));
+        let open = live_caller(&Principal {
+            grant: Grant::default(),
+            kind: PrincipalKind::DevLoopback,
+            ..principal
+        });
+        assert!(open.has_scope("live:deploy") && open.environment.is_none());
+    }
+}
 
 impl LiveService for LiveAbsent {
     async fn watch(
@@ -99,6 +240,14 @@ impl LiveService for LiveAbsent {
         _request: ServiceRequest<'_, ModifyQuerySetRequest>,
     ) -> ServiceResult<ModifyQuerySetResponse> {
         Err(not_in_variant("loams.live.v1.LiveService/ModifyQuerySet"))
+    }
+
+    async fn authenticate(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, AuthenticateRequest>,
+    ) -> ServiceResult<AuthenticateResponse> {
+        Err(not_in_variant("loams.live.v1.LiveService/Authenticate"))
     }
 
     async fn query(
@@ -178,5 +327,45 @@ impl LiveAdminService for LiveAdminAbsent {
         _request: ServiceRequest<'_, TailLogsRequest>,
     ) -> ServiceResult<ServiceStream<TailLogsResponse>> {
         Err(not_in_variant("loams.live.v1.LiveAdminService/TailLogs"))
+    }
+
+    async fn create_app(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, CreateAppRequest>,
+    ) -> ServiceResult<CreateAppResponse> {
+        Err(not_in_variant("loams.live.v1.LiveAdminService/CreateApp"))
+    }
+
+    async fn list_apps(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, ListAppsRequest>,
+    ) -> ServiceResult<ListAppsResponse> {
+        Err(not_in_variant("loams.live.v1.LiveAdminService/ListApps"))
+    }
+
+    async fn get_app(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, GetAppRequest>,
+    ) -> ServiceResult<GetAppResponse> {
+        Err(not_in_variant("loams.live.v1.LiveAdminService/GetApp"))
+    }
+
+    async fn update_app(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, UpdateAppRequest>,
+    ) -> ServiceResult<UpdateAppResponse> {
+        Err(not_in_variant("loams.live.v1.LiveAdminService/UpdateApp"))
+    }
+
+    async fn delete_app(
+        &self,
+        _ctx: RequestContext,
+        _request: ServiceRequest<'_, DeleteAppRequest>,
+    ) -> ServiceResult<DeleteAppResponse> {
+        Err(not_in_variant("loams.live.v1.LiveAdminService/DeleteApp"))
     }
 }

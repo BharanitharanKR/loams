@@ -36,11 +36,12 @@ use super::faults::KillPoint;
 use super::idempotency::Outcome;
 use super::{Commit, ConsistencyToken, Durable, Isolation, WriteOptions};
 use crate::changeset::capture::{CdcCapture, CommitEvents};
-use crate::changeset::{Counters, GraphChangeSet, GraphRecord, encode};
+use crate::changeset::{ChangeOp, Counters, GraphChangeSet, GraphRecord, LinkApply, encode};
 use crate::classify::Access;
 use crate::engine::{
     BatchStatement, Graph, GraphError, GraphResult, as_engine_error, run_on_session,
 };
+use loams_common::meta::LinkId;
 
 /// The most records one group appends: well under the log writer's 10 000 per append.
 pub const MAX_GROUP_RECORDS: usize = 1_024;
@@ -57,6 +58,31 @@ pub(crate) struct LaneJob {
     pub(crate) options: WriteOptions,
     /// Rows kept per result.
     pub(crate) max_rows: Option<usize>,
+    /// A link target's commit instead of statements (GR1 Task 18; `statements` is empty).
+    pub(crate) link: Option<LinkJob>,
+}
+
+/// What a link writes into a graph's engine: given the engine and the links' index of its
+/// elements, applies a batch and answers the change operations it applied, in order.
+pub(crate) type LinkApplyFn = Box<
+    dyn FnOnce(&grafeo::GrafeoDB, &mut crate::link::LinkIndex) -> Result<Vec<ChangeOp>, GraphError>
+        + Send,
+>;
+
+/// A link target's commit (R0.17, GR1 Task 18): a batch of its source applied in one record
+/// together with the link's progress, at the link's expected version.
+///
+/// The batch is applied to the engine's store directly, as a replay applies a record (no Grafeo
+/// transaction, no change capture: the operations are the record), under the exclusive gate that
+/// already keeps every non-durable write from clients. A failure after the first write, or an
+/// append that fails, reloads the graph from its stream, as for a GQL write.
+pub(crate) struct LinkJob {
+    /// The link's progress once the record is durable. Its `version` is the target's expected
+    /// version plus one: the commit is refused (`VersionMismatch`) at any other version. `None`
+    /// for a batch of operations no link writes: an algorithm's write-back (GR1 Task 22).
+    pub(crate) progress: Option<LinkApply>,
+    /// Applies the batch.
+    pub(crate) apply: LinkApplyFn,
 }
 
 /// A transaction the lane made durable (or answered from the idempotency index).
@@ -107,6 +133,8 @@ struct Ran {
     commit_epoch: u64,
     counters: Counters,
     key: Option<String>,
+    /// The link progress its record carries.
+    link: Option<LinkApply>,
 }
 
 /// What one queued writer is answered once the group ends.
@@ -206,6 +234,8 @@ impl WriteLane {
         let mut records: Vec<Bytes> = Vec::new();
         let mut bytes = 0;
         let mut keys: HashMap<String, usize> = HashMap::new();
+        // Each link's version after the records this group has taken so far.
+        let mut link_versions: HashMap<LinkId, u64> = HashMap::new();
         let mut fatal = None;
 
         if graph.needs_reopen() {
@@ -217,7 +247,7 @@ impl WriteLane {
             return out;
         }
 
-        while let Some(Queued { job, reply }) = self.next(!records.is_empty()) {
+        while let Some(Queued { mut job, reply }) = self.next(!records.is_empty()) {
             let now = durable.log.now_ms();
             if let Some(key) = &job.options.idempotency_key {
                 if let Some(&first) = keys.get(key) {
@@ -244,18 +274,37 @@ impl WriteLane {
                     continue;
                 }
             }
-            match run(graph, &job) {
+            let ran = match job.link.take() {
+                Some(link) => {
+                    let current = link.progress.as_ref().map(|progress| {
+                        link_versions
+                            .get(&progress.link)
+                            .copied()
+                            .unwrap_or_else(|| {
+                                durable
+                                    .link_progress(progress.link)
+                                    .map_or(0, |progress| progress.version)
+                            })
+                    });
+                    run_link(graph, durable, link, current)
+                }
+                None => run(graph, &job).map(|(results, captured, commit_epoch)| {
+                    (results, captured, commit_epoch, None)
+                }),
+            };
+            match ran {
                 Err(Step::Refused(err)) => answers.push((reply, Answer::Settled(Err(err)))),
                 Err(Step::Fatal(err)) => {
                     fatal = Some(err);
                     answers.push((reply, Answer::Settled(Err(GraphError::Reloading))));
                     break;
                 }
-                Ok((results, captured, commit_epoch)) => {
+                Ok((results, captured, commit_epoch, link)) => {
                     let key = job.options.idempotency_key.clone();
                     // A keyed transaction that changed nothing is appended anyway, so its key is
-                    // durable (Task 11 ruling); an unkeyed one has nothing to log.
-                    let record = if captured.ops.is_empty() && key.is_none() {
+                    // durable (Task 11 ruling), and so is a link's commit, for its progress; an
+                    // unkeyed one has nothing to log.
+                    let record = if captured.ops.is_empty() && key.is_none() && link.is_none() {
                         None
                     } else {
                         let record = GraphRecord::ChangeSet(GraphChangeSet {
@@ -264,7 +313,7 @@ impl WriteLane {
                             commit_epoch,
                             txn_seq: durable.take_txn_seq(),
                             idempotency_key: key.clone(),
-                            link: None,
+                            link: link.clone(),
                             ops: captured.ops,
                         });
                         match encode(&record) {
@@ -299,6 +348,9 @@ impl WriteLane {
                     if let Some(key) = &key {
                         keys.insert(key.clone(), answers.len());
                     }
+                    if let Some(link) = &link {
+                        link_versions.insert(link.link, link.version);
+                    }
                     answers.push((
                         reply,
                         Answer::Ran(Ran {
@@ -307,6 +359,7 @@ impl WriteLane {
                             commit_epoch: if record.is_some() { commit_epoch } else { 0 },
                             counters: captured.counters,
                             key,
+                            link,
                         }),
                     ));
                 }
@@ -385,6 +438,19 @@ impl WriteLane {
                 _ => offset,
             },
         };
+        // The links' progress is theirs once durable: their targets' `load` reads it.
+        {
+            let mut links = durable.links.lock().unwrap_or_else(PoisonError::into_inner);
+            for (_, answer) in &answers {
+                if let Answer::Ran(Ran {
+                    link: Some(progress),
+                    ..
+                }) = answer
+                {
+                    super::note_link(&mut links, progress);
+                }
+            }
+        }
         if let Some((_, _, recorded)) = base {
             let mut index = durable
                 .idempotency
@@ -498,6 +564,77 @@ pub(crate) fn log_record(value: Bytes, now_ms: u64) -> loams_log::Record {
         headers: Vec::new(),
         timestamp_ms: i64::try_from(now_ms).unwrap_or(i64::MAX),
     }
+}
+
+/// Runs a link's commit (GR1 Task 18) at the link's `current` version: applies its batch to the
+/// engine's store, with the links' index of the graph's elements (built here the first time),
+/// and answers the operations as its capture. A batch no link writes (`current` and the job's
+/// progress `None`: a write-back, GR1 Task 22) is not version-checked and gets an empty index.
+/// The caller holds the gate exclusively.
+#[allow(clippy::type_complexity)]
+fn run_link(
+    graph: &Graph,
+    durable: &Durable,
+    job: LinkJob,
+    current: Option<u64>,
+) -> Result<
+    (
+        Vec<GraphResult>,
+        crate::changeset::capture::Captured,
+        u64,
+        Option<LinkApply>,
+    ),
+    Step,
+> {
+    if let (Some(progress), Some(current)) = (&job.progress, current) {
+        let expected = progress.version.saturating_sub(1);
+        if expected != current {
+            return Err(Step::Refused(GraphError::VersionMismatch {
+                expected,
+                current,
+            }));
+        }
+    }
+    reach(graph, KillPoint::Begin);
+    let db = graph.db();
+    let mut slot = durable
+        .link_index
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner);
+    let mut unlinked = crate::link::LinkIndex::default();
+    let index = if job.progress.is_some() {
+        slot.get_or_insert_with(|| crate::link::LinkIndex::build(db))
+    } else {
+        &mut unlinked
+    };
+    let applied = (job.apply)(db, index);
+    let ops = match applied {
+        Ok(ops) => ops,
+        Err(err) => {
+            // Some of the batch may be in the engine: the graph reloads, and the index with it.
+            *slot = None;
+            return Err(Step::Fatal(err));
+        }
+    };
+    drop(slot);
+    for point in [
+        KillPoint::Executed,
+        KillPoint::Committed,
+        KillPoint::Captured,
+    ] {
+        reach(graph, point);
+    }
+    // A link's answer carries no rows or counters: its target answers only its version.
+    let captured = crate::changeset::capture::Captured {
+        counters: Counters::default(),
+        ops,
+    };
+    Ok((
+        Vec::new(),
+        captured,
+        graph.db().current_epoch().as_u64(),
+        job.progress,
+    ))
 }
 
 /// Runs one transaction: `begin` with its isolation, its statements, `commit`, then the capture

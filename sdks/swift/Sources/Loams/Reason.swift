@@ -38,6 +38,22 @@ public enum Reason: String, Sendable, Hashable, CaseIterable {
     case invalidDecision = "invalid_decision"
     case pairingExpired = "pairing_expired"
     case pairingUsed = "pairing_used"
+    case liveBadCursor = "live_bad_cursor"
+    case liveWorkerCrashed = "live_worker_crashed"
+    case liveDeployConflict = "live_deploy_conflict"
+    case liveSchemaViolation = "live_schema_violation"
+    case liveIndexNotReady = "live_index_not_ready"
+    case liveAppDisabled = "live_app_disabled"
+    case liveAppExists = "live_app_exists"
+    case liveFunctionError = "live_function_error"
+    case liveFunctionTimeout = "live_function_timeout"
+    case liveFunctionOutOfMemory = "live_function_out_of_memory"
+    case liveLimitExceeded = "live_limit_exceeded"
+    case liveAppMismatch = "live_app_mismatch"
+    case liveOriginNotAllowed = "live_origin_not_allowed"
+    case sessionRotate = "session_rotate"
+    case sessionGone = "session_gone"
+    case nodeDraining = "node_draining"
     case deviceRevoked = "device_revoked"
     case pushTargetUnknown = "push_target_unknown"
     case notImplemented = "not_implemented"
@@ -47,6 +63,7 @@ public enum Reason: String, Sendable, Hashable, CaseIterable {
     case alreadyExists = "already_exists"
     case permissionDenied = "permission_denied"
     case tokenExpired = "token_expired"
+    case tokenRevoked = "token_revoked"
     case unauthenticated = "unauthenticated"
     case failedPrecondition = "failed_precondition"
     case resourceExhausted = "resource_exhausted"
@@ -87,6 +104,22 @@ public let loamsReasonCodes: [Reason: Code] = [
     .invalidDecision: .invalidArgument,
     .pairingExpired: .failedPrecondition,
     .pairingUsed: .failedPrecondition,
+    .liveBadCursor: .invalidArgument,
+    .liveWorkerCrashed: .internal,
+    .liveDeployConflict: .failedPrecondition,
+    .liveSchemaViolation: .invalidArgument,
+    .liveIndexNotReady: .failedPrecondition,
+    .liveAppDisabled: .failedPrecondition,
+    .liveAppExists: .failedPrecondition,
+    .liveFunctionError: .unknown,
+    .liveFunctionTimeout: .deadlineExceeded,
+    .liveFunctionOutOfMemory: .resourceExhausted,
+    .liveLimitExceeded: .resourceExhausted,
+    .liveAppMismatch: .permissionDenied,
+    .liveOriginNotAllowed: .permissionDenied,
+    .sessionRotate: .unavailable,
+    .sessionGone: .notFound,
+    .nodeDraining: .unavailable,
     .deviceRevoked: .unauthenticated,
     .pushTargetUnknown: .notFound,
     .notImplemented: .unimplemented,
@@ -96,6 +129,7 @@ public let loamsReasonCodes: [Reason: Code] = [
     .alreadyExists: .alreadyExists,
     .permissionDenied: .permissionDenied,
     .tokenExpired: .unauthenticated,
+    .tokenRevoked: .unauthenticated,
     .unauthenticated: .unauthenticated,
     .failedPrecondition: .failedPrecondition,
     .resourceExhausted: .resourceExhausted,

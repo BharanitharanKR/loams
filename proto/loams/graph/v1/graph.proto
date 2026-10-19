@@ -220,10 +220,68 @@ message GraphLimits {
   uint32 max_path_hops = 5;
 }
 
-// How collections feed a LINKED graph (design §07 §2.1).
+// How collections and streams feed a LINKED graph (design §07 §2.1, §48
+// §10.2).
 message GraphMapping {
   repeated VertexMapping vertices = 1;
   repeated EdgeMapping edges = 2;
+  // `stream → graph` links (GR1 Task 19): records of Loams streams, JSON or
+  // CloudEvents, mapped to node and edge operations.
+  repeated StreamMapping streams = 3;
+}
+
+// One stream feeding a LINKED graph. Each record is a JSON object, or a
+// CloudEvent (structured mode, or binary mode with `ce_*` headers and the
+// data as the value). A record is matched against the rules in order; every
+// rule that matches applies. A record no rule matches is skipped; one a
+// matching rule cannot read (not JSON, a key field missing or not a key) is
+// dead-lettered, and the link goes on.
+message StreamMapping {
+  // The stream's name in the graph's namespace.
+  string stream = 1;
+  repeated StreamRule rules = 2;
+}
+
+// What a stream rule does with a record.
+enum StreamOperation {
+  STREAM_OPERATION_UNSPECIFIED = 0;
+  // Creates the node, or merges the record's properties into it.
+  STREAM_OPERATION_UPSERT_NODE = 1;
+  // Deletes the node and its edges.
+  STREAM_OPERATION_DELETE_NODE = 2;
+  // Creates the edge (and stub endpoints), or merges its properties.
+  STREAM_OPERATION_UPSERT_EDGE = 3;
+  // Deletes the edge.
+  STREAM_OPERATION_DELETE_EDGE = 4;
+}
+
+// One rule of a stream mapping. The `*_field` values are dot-separated field
+// selectors from the record's root (not file paths): for a CloudEvent, its
+// attributes (`type`, `id`, `source`) and `data.<field>`.
+message StreamRule {
+  // The rule's name, unique among the mapping's edges and rules.
+  string name = 1;
+  // Applies only to CloudEvents of this `type`; empty matches every record.
+  string event_type = 2;
+  StreamOperation operation = 3;
+  // Node operations: the node's label and the field holding its key.
+  string label = 4;
+  string key_field = 5;
+  // Edge operations: the endpoints' labels and the fields holding their keys.
+  string source_label = 6;
+  string source_key_field = 7;
+  string destination_label = 8;
+  string destination_key_field = 9;
+  // Edge operations: the edge's type, or the field holding it.
+  string edge_type = 10;
+  string edge_type_field = 11;
+  // Edge operations: the field holding the edge's own key, which identifies it
+  // among the stream's edges (so another rule of the stream can delete it).
+  // Empty: the edge is identified by its type and endpoints.
+  string edge_key_field = 12;
+  // Upserts: the field holding the object whose fields are the properties. Empty:
+  // `data` for a CloudEvent, the whole record otherwise.
+  string properties_field = 13;
 }
 
 // `VERTEX <label> KEY (<key_field>) FROM COLLECTION <collection>`.

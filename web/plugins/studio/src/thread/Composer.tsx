@@ -95,7 +95,7 @@ import {
   useRef,
   useState,
 } from 'react';
-import { applyNewThreadApprovalMode } from '../sidebar/useThreadActions.js';
+import { applyNewThreadApprovalMode, newThreadSandbox } from '../sidebar/useThreadActions.js';
 import { agentdFilesSource } from './files-source.js';
 import { isBusy, useChat, useQueue, useSessionStatus } from './live.js';
 import { mentionsFor, useMentions } from './mentions.js';
@@ -415,6 +415,9 @@ function ComposerWithDaemon({
               ...(harness ? { harness } : {}),
               ...(model ? { model } : {}),
               ...(reasoning ? { reasoning } : {}),
+              // The daemon refuses an unspecified sandbox (SD1 Task 29 found it): the
+              // thread's own, else this device's default for a new thread.
+              sandbox: (!isNew && chat?.config?.sandbox) || newThreadSandbox(),
               cwd: isNew ? (firstRunInWorktree ? '' : (project?.path ?? '')) : (chat?.cwd ?? ''),
               attachments: paths,
               ...(firstRunInWorktree ? { worktree: { repoPath: project.path, base } } : {}),
@@ -435,6 +438,7 @@ function ComposerWithDaemon({
       attachments,
       base,
       busy,
+      chat?.config?.sandbox,
       chat?.cwd,
       clients,
       draftKey,
@@ -644,7 +648,7 @@ function ComposerWithDaemon({
             {attachments.map((a) => (
               <Chip
                 key={a.id}
-                icon={<Paperclip size={12} aria-hidden="true" className="text-accent" />}
+                icon={<Paperclip size={12} aria-hidden="true" className="text-accent-fg" />}
                 label={`${a.name} · ${formatBytes(a.size)}`}
                 onRemove={() => uploads.remove(a.id)}
               />
@@ -904,14 +908,16 @@ function menuRow(item: ComposerMenuItem) {
         icon: item.isDir ? (
           <Folder size={14} aria-hidden="true" className="text-faint" />
         ) : (
-          <FileText size={14} aria-hidden="true" className="text-accent" />
+          <FileText size={14} aria-hidden="true" className="text-accent-fg" />
         ),
         title: item.path.split('/').pop() || item.path,
         detail: item.path,
       };
     case 'slash-command':
       return {
-        icon: <span className="w-3.5 text-center font-mono text-faint">/</span>,
+        icon: (
+          <span className={/* mono-ok: code */ 'w-3.5 text-center font-mono text-faint'}>/</span>
+        ),
         title: `/${item.command.name}`,
         detail: item.command.description,
       };
@@ -944,9 +950,7 @@ function SuggestionMenu({
   const heading = kind === 'path' ? 'Files' : kind === 'skill' ? 'Skills' : 'Commands and skills';
   return (
     <div className="absolute right-0 bottom-full left-0 z-20 mb-1 max-h-72 overflow-auto border border-rule bg-bg shadow-pop">
-      <div className="px-3 pt-2 pb-1 font-mono text-[0.68rem] text-faint uppercase tracking-[0.14em]">
-        {heading}
-      </div>
+      <div className="px-3 pt-2 pb-1 text-micro font-medium text-faint">{heading}</div>
       {items.length === 0 ? (
         <p className="m-0 px-3 pb-2 text-[0.84rem] text-muted">{emptyText}</p>
       ) : (
@@ -996,7 +1000,7 @@ function QueuedMessages({
 }) {
   return (
     <section aria-label="Queued messages" className="border border-rule-soft bg-surface">
-      <h3 className="m-0 px-3 pt-2 font-mono text-[0.68rem] text-faint uppercase tracking-[0.14em]">
+      <h3 className="m-0 px-3 pt-2 text-micro font-medium text-faint">
         Queued for when the turn ends
       </h3>
       <ul className="m-0 list-none p-0 py-1">

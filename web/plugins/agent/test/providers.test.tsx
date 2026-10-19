@@ -103,8 +103,17 @@ describe('agent providers section', () => {
     ) as HTMLInputElement;
     expect(box.checked).toBe(false);
     expect(c.getByText(/price applies/)).toBeTruthy();
-    fireEvent.click(box);
-    fireEvent.click(c.getByRole('button', { name: 'Save' }));
+    // The form resets itself to the saved values in an effect after its first
+    // render; on a busy runner that can land after a click and undo it, and Save
+    // stays disabled until the edit has rendered. So click until the edit holds
+    // (only ever when it is not yet checked), and Save has enabled with it.
+    const save = c.getByRole('button', { name: 'Save' }) as HTMLButtonElement;
+    await waitFor(() => {
+      if (!box.checked) fireEvent.click(box);
+      expect(box.checked).toBe(true);
+      expect(save.disabled).toBe(false);
+    });
+    fireEvent.click(save);
     await waitFor(() => expect(chat.configureProvider).toHaveBeenCalled());
     expect(chat.configureProvider.mock.calls[0]?.[1]).toMatchObject({ fallback: true });
   });
@@ -119,9 +128,12 @@ describe('agent providers section', () => {
     const chat = setup([mk({ hasKey: true, configured: true })]);
     const c = await card('DeepSeek');
     const test = c.getByRole('button', { name: 'Test' }) as HTMLButtonElement;
+    // The button's disabled state follows the edit on a later render; wait for it
+    // rather than reading it at once (it raced on a busy CI runner).
     fireEvent.change(c.getByLabelText('Model'), { target: { value: 'x' } });
-    expect(test.disabled).toBe(true);
+    await waitFor(() => expect(test.disabled).toBe(true));
     fireEvent.change(c.getByLabelText('Model'), { target: { value: 'deepseek-chat' } });
+    await waitFor(() => expect(test.disabled).toBe(false));
     fireEvent.click(test);
     expect(await c.findByText('The provider answered')).toBeTruthy();
     expect(chat.testProvider).toHaveBeenCalledWith('deepseek');

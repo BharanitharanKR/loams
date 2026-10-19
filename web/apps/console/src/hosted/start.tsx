@@ -28,6 +28,7 @@ import {
   webPatches,
 } from './edition.js';
 import {
+  checkHealth,
   fetchIdentity,
   parseEngineUrl,
   savedEngine,
@@ -38,6 +39,7 @@ import {
 import {
   BootError,
   ConfigErrorScreen,
+  ConnectingScreen,
   type ConnectResult,
   ConnectScreen,
   SignInScreen,
@@ -133,10 +135,19 @@ export async function startHosted(
   }
 
   let apiKey: string | undefined;
+  // A remembered engine is used straight away only while it answers /health: one that is
+  // down (or behind a gateway answering 502) otherwise booted into a console with a green
+  // dot and "No plugin serves /". The connect screen shows why, and Connect retries.
+  let skipScreen = false;
+  if (knownEngine && remembered && mode !== 'apikey' && !reconnect) {
+    const checking = show(root, <ConnectingScreen engine={knownEngine} />);
+    skipScreen = (await checkHealth(knownEngine)).ok;
+    checking.unmount();
+  }
   const engine = await new Promise<string | undefined>((resolve) => {
     // In apikey mode the screen also takes the API key, which lives in memory only, so
     // it is shown on every load (prefilled, and testing the remembered engine at once).
-    if (knownEngine && remembered && mode !== 'apikey' && !reconnect) {
+    if (knownEngine && skipScreen) {
       resolve(knownEngine);
       return;
     }
@@ -172,14 +183,17 @@ export async function startHosted(
 
   let user: string | undefined;
   let identityProblem: string | undefined;
+  let authOff = false;
   if (mode === 'oidc' && auth) {
     user = auth.user()?.email ?? auth.user()?.name;
   } else if (mode === 'tailscale') {
     // Not a gate: the engine refuses what it cannot attribute, and the header says why
     // it shows no one.
     const identity = await fetchIdentity(engine);
-    if (identity.ok) user = identity.user;
-    else identityProblem = identity.message;
+    if (identity.ok) {
+      user = identity.user;
+      authOff = identity.authOff === true;
+    } else identityProblem = identity.message;
   }
 
   const demo = demoEnabled();
@@ -188,6 +202,7 @@ export async function startHosted(
     authMode: mode,
     user,
     identityProblem,
+    authOff,
     demo,
     setDemo(on) {
       setDemoEnabled(on);

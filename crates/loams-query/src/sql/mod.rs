@@ -6,6 +6,9 @@
 
 mod catalog;
 mod exprs;
+pub mod graph_algos;
+pub mod graph_ddl;
+pub mod graph_udtf;
 mod json_rows;
 mod provider;
 mod udtf;
@@ -26,6 +29,7 @@ use loams_common::meta::Collection;
 
 pub use catalog::{CollectionsSchema, NamespaceCatalog};
 pub use exprs::expr_to_query;
+pub use graph_ddl::{CreateGraph, GraphDdlError, is_create_graph, parse_create_graph};
 pub use json_rows::{rows_to_json, value_to_json};
 pub use provider::{CollectionProvider, CollectionScanExec, collection_arrow_schema};
 pub use udtf::{
@@ -80,6 +84,8 @@ pub(crate) struct SqlScope {
     pub(crate) ns: String,
     pub(crate) consistency: ReadConsistency,
     pub(crate) hot: RequestHot,
+    /// Who the statement is for: the graph and algorithm functions check it (GR1 R24.12).
+    pub(crate) caller: crate::graph::GraphCaller,
 }
 
 impl fmt::Debug for SqlScope {
@@ -110,6 +116,7 @@ pub(crate) fn context(
     service: Arc<CollectionService>,
     ns: &str,
     consistency: ReadConsistency,
+    caller: crate::graph::GraphCaller,
 ) -> SessionContext {
     let hot = service.request_hot();
     let scope = SqlScope {
@@ -117,6 +124,7 @@ pub(crate) fn context(
         ns: ns.to_string(),
         consistency,
         hot,
+        caller,
     };
     let ctx = SessionContext::new_with_config(
         SessionConfig::new()
@@ -138,6 +146,28 @@ pub(crate) fn context(
     );
     ctx.register_udtf("rrf", Arc::new(RrfFunction::new(scope.clone())));
     ctx.register_udtf("rerank", Arc::new(RerankFunction));
+    // The graph table functions (GR1 Task 21), answered by Loams Graph when the server runs it.
+    for function in [
+        graph_udtf::GraphFunction::Expand,
+        graph_udtf::GraphFunction::Neighbors,
+        graph_udtf::GraphFunction::Degree,
+        graph_udtf::GraphFunction::ShortestPath,
+    ] {
+        ctx.register_udtf(
+            function.name(),
+            Arc::new(graph_udtf::GraphTableFunction::new(scope.clone(), function)),
+        );
+    }
+    // The graph algorithms (GR1 Task 22), on Loams Graph's adjacency index.
+    for function in graph_algos::AlgorithmFunction::ALL {
+        ctx.register_udtf(
+            function.name(),
+            Arc::new(graph_algos::AlgorithmTableFunction::new(
+                scope.clone(),
+                function,
+            )),
+        );
+    }
     for name in udtf::DESCRIPTOR_FUNCTIONS {
         ctx.register_udf(ScalarUDF::new_from_impl(RetrieverDescriptorUdf::new(name)));
     }

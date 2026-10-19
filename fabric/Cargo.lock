@@ -4574,7 +4574,7 @@ checksum = "47d9d19d1d6efa0109d2f65ff4c85cddd50bd572e5a00127ab10987290bcefae"
 
 [[package]]
 name = "loams-cache"
-version = "0.1.0-preview.2"
+version = "0.1.0"
 dependencies = [
  "bytes",
  "crc32c",
@@ -4608,6 +4608,16 @@ dependencies = [
  "sha2 0.10.9",
  "tar",
  "ureq",
+]
+
+[[package]]
+name = "loams-common"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "serde",
+ "thiserror",
+ "tracing",
 ]
 
 [[package]]
@@ -5024,10 +5034,12 @@ dependencies = [
  "clap",
  "loams-cache",
  "loams-chdb-sys",
+ "loams-common",
  "loams-house",
  "loams-house-cache",
  "loams-store",
  "rustls",
+ "tempfile",
  "tokio",
  "uuid",
 ]
@@ -5109,6 +5121,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "loams-chdb-sys",
+ "loams-common",
  "loams-house-ipc",
  "loams-house-lake",
  "loams-house-proto",
@@ -5230,7 +5243,7 @@ dependencies = [
 
 [[package]]
 name = "loams-store"
-version = "0.1.0-preview.2"
+version = "0.1.0"
 dependencies = [
  "async-trait",
  "bytes",

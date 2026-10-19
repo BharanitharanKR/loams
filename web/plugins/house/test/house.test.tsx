@@ -2,17 +2,20 @@
 // `loams.house.v1` contract of §49 §18.2 until HS1 Task 8's service is served.
 
 import { validateManifest } from '@loams/console-host';
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { codeEditorText, resultWindow, setCodeEditorText } from '@loams/ui';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { afterEach, describe, expect, it } from 'vitest';
 import pkg from '../package.json';
 import { HouseError, PAGE_MAX_ROWS, type QueryFrame, SERVER_MAX_ROWS } from '../src/client.js';
-import { suggest, wordAt } from '../src/Editor.js';
 import { HousePage } from '../src/HousePage.js';
 import { classify, createMockHouseClient, type MockOptions } from '../src/mock.js';
-import { windowFor } from '../src/ResultsGrid.js';
 import { isAllowedSetting, settingProblem, settingsMap } from '../src/settings.js';
 
 afterEach(cleanup);
+
+// jsdom has no layout: the code editor measures text ranges for its selection and tooltips.
+Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList;
+Range.prototype.getBoundingClientRect ??= () => new DOMRect();
 
 globalThis.ResizeObserver ??= class {
   observe() {}
@@ -34,8 +37,8 @@ function mount(opts: MockOptions = {}) {
   return client;
 }
 
-const sqlBox = () => screen.getByLabelText('SQL') as HTMLTextAreaElement;
-const setSql = (text: string) => fireEvent.change(sqlBox(), { target: { value: text } });
+const sqlBox = () => screen.getByLabelText('SQL');
+const setSql = (text: string) => act(() => setCodeEditorText(sqlBox(), text));
 const run = () => fireEvent.click(screen.getByRole('button', { name: 'Run' }));
 
 async function collect(it: AsyncIterable<QueryFrame>): Promise<QueryFrame[]> {
@@ -142,14 +145,8 @@ describe('settings', () => {
 });
 
 describe('editor helpers', () => {
-  it('completes_keywords_and_functions', () => {
-    expect(wordAt('SELECT cou', 10)).toEqual({ start: 7, word: 'cou' });
-    expect(suggest(['count', 'countIf', 'sum'], 'cou')).toEqual(['count', 'countIf']);
-    expect(suggest(['count'], 'c')).toEqual([]);
-  });
-
   it('grid_draws_only_rows_in_view', () => {
-    const w = windowFor(28 * 5000, 100_000);
+    const w = resultWindow(28 * 5000, 100_000);
     expect(w.first).toBeGreaterThan(4900);
     expect(w.last - w.first).toBeLessThan(60);
   });
@@ -199,6 +196,7 @@ describe('analytics page', () => {
   it('console_runs_read_only_by_default', async () => {
     const client = mount();
     await screen.findByLabelText('SQL');
+    setSql('SELECT kind, count() AS n FROM default.events GROUP BY kind');
     run();
     const results = await screen.findByRole('region', { name: 'Result rows' });
     expect(within(results).getByText('kind')).toBeTruthy();
@@ -206,7 +204,7 @@ describe('analytics page', () => {
     // The page also loads system.functions for completion in the background, through
     // the same client and at its own row cap; under CI load that request can land after
     // this one, so look for the console's own query, not whichever came last.
-    const req = client.requests.filter((r) => !r.sql.includes('FROM system.functions')).at(-1);
+    const req = client.requests.filter((r) => !r.sql.includes('FROM system.')).at(-1);
     expect(req?.readOnly).toBe(true);
     expect(req?.maxRows).toBe(PAGE_MAX_ROWS);
     expect(req?.format).toBe('ARROW_IPC');
@@ -232,7 +230,9 @@ describe('analytics page', () => {
     run();
     const alert = await screen.findByTestId('house-failure');
     expect(within(alert).getByText(/^Code 344 · SUPPORT_IS_DISABLED · /)).toBeTruthy();
-    expect(sqlBox().getAttribute('aria-invalid')).toBe('true');
+    // The shared editor marks itself invalid after the render that shows the
+    // error; wait for it (it raced on a busy CI runner).
+    await waitFor(() => expect(sqlBox().getAttribute('aria-invalid')).toBe('true'));
   });
 
   it('write_requires_confirmation', async () => {
@@ -262,6 +262,7 @@ describe('analytics page', () => {
     });
     fireEvent.change(screen.getByLabelText('Setting 1 value'), { target: { value: '/x' } });
     expect(screen.getByText(/cannot be changed on the House/)).toBeTruthy();
+    setSql('SELECT 1');
     run();
     expect(await screen.findByTestId('house-failure')).toBeTruthy();
     // Not a count: the page's own mount-time queries may still be landing.
@@ -277,7 +278,26 @@ describe('analytics page', () => {
     // Scope MINE: a teammate's query is not listed.
     expect(within(list).queryByText('SELECT count() FROM analytics.daily')).toBeNull();
     fireEvent.click(open.at(-1) as HTMLElement);
-    await waitFor(() => expect(sqlBox().value).toMatch(/GROUP BY kind/));
+    await waitFor(() => expect(codeEditorText(sqlBox())).toMatch(/GROUP BY kind/));
+  });
+
+  it('examples_come_from_the_schema_not_a_fixed_table', async () => {
+    mount();
+    await screen.findByLabelText('SQL');
+    expect(codeEditorText(sqlBox())).toBe('');
+    const examples = await screen.findByRole('region', { name: 'Example queries' });
+    const first = await within(examples).findByRole('button', { name: /Rows of events/ });
+    fireEvent.click(first);
+    expect(await screen.findByRole('region', { name: 'Result rows' })).toBeTruthy();
+  });
+
+  it('syntax_error_marks_the_span', async () => {
+    mount();
+    await screen.findByLabelText('SQL');
+    setSql('SELEC 1');
+    run();
+    await screen.findByTestId('house-failure');
+    await waitFor(() => expect(document.querySelector('[data-error]')?.textContent).toBe('SELEC'));
   });
 
   it('cancel_stops_the_run', async () => {
@@ -288,5 +308,66 @@ describe('analytics page', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Cancel' }));
     expect(await screen.findByText(/Cancelled/)).toBeTruthy();
     expect(client.cancelled.length).toBe(1);
+  });
+});
+
+describe('databases and history on a partial House', () => {
+  const unimplemented = (what: string) =>
+    new HouseError({
+      code: 'unimplemented',
+      message: `${what} is served from a later task`,
+      reason: 'not_implemented',
+      metadata: {},
+    });
+
+  afterEach(() => localStorage.clear());
+
+  it('an_unimplemented_history_is_a_notice_not_an_error', async () => {
+    const client = createMockHouseClient({ delayMs: 0 });
+    client.listQueryHistory = async () => {
+      throw unimplemented('The query log');
+    };
+    render(<HousePage client={client} />);
+    await screen.findByLabelText('SQL');
+    expect(await screen.findByText('Query history is not available on this server.')).toBeTruthy();
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(screen.queryByText(/later task/)).toBeNull();
+  });
+
+  it('databases_come_from_system_databases_without_list_databases', async () => {
+    const client = createMockHouseClient({ delayMs: 0 });
+    client.listDatabases = async () => {
+      throw unimplemented('ListDatabases');
+    };
+    render(<HousePage client={client} />);
+    const picker = (await screen.findByLabelText('Database')) as HTMLSelectElement;
+    const names = [...picker.options].map((o) => o.value);
+    expect(names).toEqual(['analytics', 'default']);
+    expect(picker.value).toBe('default');
+    expect(screen.queryByText('Analytics — coming soon in a later preview')).toBeNull();
+  });
+
+  it('the_chosen_database_is_remembered_per_server', async () => {
+    const first = render(
+      <HousePage client={createMockHouseClient({ delayMs: 0 })} serverKey="https://a" />,
+    );
+    const picker = (await screen.findByLabelText('Database')) as HTMLSelectElement;
+    fireEvent.change(picker, { target: { value: 'analytics' } });
+    expect(await screen.findByText('Tables in analytics')).toBeTruthy();
+    first.unmount();
+
+    const again = render(
+      <HousePage client={createMockHouseClient({ delayMs: 0 })} serverKey="https://a" />,
+    );
+    await waitFor(() =>
+      expect((screen.getByLabelText('Database') as HTMLSelectElement).value).toBe('analytics'),
+    );
+    expect(screen.getByText('Tables in analytics')).toBeTruthy();
+    again.unmount();
+
+    render(<HousePage client={createMockHouseClient({ delayMs: 0 })} serverKey="https://b" />);
+    await waitFor(() =>
+      expect((screen.getByLabelText('Database') as HTMLSelectElement).value).toBe('default'),
+    );
   });
 });

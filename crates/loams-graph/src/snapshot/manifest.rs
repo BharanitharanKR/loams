@@ -13,7 +13,7 @@
 //! below the oldest retained snapshot, never inside the PITR window, and never past the newest
 //! portable snapshot (the fallback for an engine that cannot read the native one, §48 §6.5).
 
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -100,6 +100,59 @@ pub struct SnapshotEntry {
     pub nodes: u64,
     /// Edges in the snapshot.
     pub edges: u64,
+    /// Each link's progress at `offset` (R0.17, GR1 Task 18): a link's last record may be below
+    /// the trim point, so its target's state is kept here. Absent for a graph no link writes.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub links: Vec<LinkProgress>,
+}
+
+/// A link's progress as a snapshot keeps it: a [`crate::changeset::LinkApply`] in JSON.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct LinkProgress {
+    /// The link's id.
+    pub link: u64,
+    /// Its target's version.
+    pub version: u64,
+    /// The next source offset to apply, by partition.
+    pub applied_after: BTreeMap<u32, u64>,
+}
+
+impl LinkProgress {
+    /// Every link's progress, by link id.
+    #[must_use]
+    pub fn all(
+        links: &BTreeMap<loams_common::meta::LinkId, crate::changeset::LinkApply>,
+    ) -> Vec<Self> {
+        links
+            .values()
+            .map(|apply| Self {
+                link: apply.link.0,
+                version: apply.version,
+                applied_after: apply.applied_after.clone(),
+            })
+            .collect()
+    }
+
+    /// The progress kept by `entries`, by link id.
+    #[must_use]
+    pub fn by_link(
+        entries: &[Self],
+    ) -> BTreeMap<loams_common::meta::LinkId, crate::changeset::LinkApply> {
+        entries
+            .iter()
+            .map(|entry| {
+                let link = loams_common::meta::LinkId(entry.link);
+                (
+                    link,
+                    crate::changeset::LinkApply {
+                        link,
+                        version: entry.version,
+                        applied_after: entry.applied_after.clone(),
+                    },
+                )
+            })
+            .collect()
+    }
 }
 
 /// A graph's manifest (shared contract `GraphManifest`).
@@ -113,6 +166,58 @@ pub struct GraphManifest {
     pub snapshots: Vec<SnapshotEntry>,
     /// The graph's stream is trimmed below this offset: every offset below it is unreadable.
     pub log_trim_offset: u64,
+    /// The graph's current adjacency index (GR1 Task 22, D1063): derived state, absent until an
+    /// algorithm first runs on the graph. Additive: a manifest without it reads as before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adjacency: Option<AdjacencyEntry>,
+    /// The adjacency indexes retained before the current one, newest first (`adjacency.keep`
+    /// minus one of them, default one), so a reader that pinned one still finds its file.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub adjacency_previous: Vec<AdjacencyEntry>,
+}
+
+/// How an adjacency index was made.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AdjacencyMode {
+    /// A scan of the engine.
+    Full,
+    /// The previous index patched with the stream's records after it.
+    Incremental,
+}
+
+impl AdjacencyMode {
+    /// The mode's name, as the counters label it.
+    #[must_use]
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Full => "full",
+            Self::Incremental => "incremental",
+        }
+    }
+}
+
+/// A published adjacency index (GR1 Task 22; design §48 §26.3 step 5).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdjacencyEntry {
+    /// Its object, `ns/<ns_id>/graphs/<gr_id>/adj/<covered_offset:020>-<sha256>.adj`.
+    pub key: String,
+    /// Every record of the graph's stream below this offset is in it.
+    pub covered_offset: u64,
+    /// The SHA-256 of the file, in lowercase hex: its content address, checked when it is read.
+    pub sha256: String,
+    /// The file's size.
+    pub bytes: u64,
+    /// Vertices in it.
+    pub nodes: u64,
+    /// Edges in it.
+    pub edges: u64,
+    /// Its format, `loams.graph.adjacency/1`.
+    pub format: String,
+    /// How it was made.
+    pub mode: AdjacencyMode,
+    /// When it was published, on the metastore clock.
+    pub created_at_ms: u64,
 }
 
 impl GraphManifest {
@@ -124,6 +229,8 @@ impl GraphManifest {
             graph: graph.to_string(),
             snapshots: Vec::new(),
             log_trim_offset: 0,
+            adjacency: None,
+            adjacency_previous: Vec::new(),
         }
     }
 
@@ -142,6 +249,16 @@ impl GraphManifest {
         self.snapshots
             .iter()
             .flat_map(|entry| entry.keys.iter().map(String::as_str))
+            .collect()
+    }
+
+    /// Every adjacency index file a retained entry names (GR1 Task 22).
+    #[must_use]
+    pub fn adjacency_keys(&self) -> BTreeSet<&str> {
+        self.adjacency
+            .iter()
+            .chain(self.adjacency_previous.iter())
+            .map(|entry| entry.key.as_str())
             .collect()
     }
 
@@ -552,7 +669,9 @@ impl ManifestStore {
     /// upload order, each only when written at least `grace` before the current manifest
     /// document (bucket timestamps, never this node's clock). A checkpoint in flight wrote its
     /// objects after the current document, so they are never deleted; the objects of a
-    /// checkpoint refused by its fence, and retired snapshots, are. Answers how many went.
+    /// checkpoint refused by its fence, and retired snapshots, are. Adjacency index files
+    /// (`adj/`, GR1 Task 22) go the same way once no retained entry names them. Answers how many
+    /// went.
     ///
     /// A reader that read the manifest before a sweep and finds a snapshot gone reads the
     /// manifest again (GR1 Tasks 14 and 29).
@@ -585,6 +704,8 @@ impl ManifestStore {
         };
         let manifests = format!("{prefix}manifest/");
         let snapshots = format!("{prefix}snap/");
+        let adjacency = format!("{prefix}{}", crate::adjacency::publish::ADJ_DIR);
+        let indexes = current.manifest.adjacency_keys();
         let ulid_of = |path: &str| {
             path.strip_prefix(&manifests)
                 .and_then(|name| name.strip_suffix(".json"))
@@ -593,12 +714,22 @@ impl ManifestStore {
         let current_ulid = ulid_of(&current.key);
         let referenced = current.manifest.keys();
         let grace_ms = u64::try_from(grace.as_millis()).unwrap_or(u64::MAX);
+        // Objects an upgrade snapshot may name stay while it is kept (UP1
+        // Task 8).
+        let floor = loams_common::meta::snapshot_gc_floor(&*self.meta)
+            .await
+            .map_err(|err| unavailable("reading the upgrade snapshots", &err))?;
         let mut deleted = 0;
         for object in &objects {
-            let aged = object.last_modified_ms.saturating_add(grace_ms) <= current_written;
+            let aged = object.last_modified_ms.saturating_add(grace_ms) <= current_written
+                && !loams_common::meta::pinned_by(floor, object.last_modified_ms);
             let stale = if object.path.starts_with(&manifests) {
                 object.path != current.key
                     && matches!((ulid_of(&object.path), current_ulid), (Some(a), Some(b)) if a < b)
+            } else if object.path.starts_with(&adjacency) {
+                // An index file no retained entry names: superseded past `keep`, or a build whose
+                // CAS lost to a newer index (GR1 Task 22).
+                !indexes.contains(object.path.as_str())
             } else {
                 object.path.starts_with(&snapshots) && !referenced.contains(object.path.as_str())
             };
@@ -634,16 +765,26 @@ impl ManifestStore {
             .list(&prefix)
             .await
             .map_err(|err| unavailable("listing a purged graph's objects", &err))?;
+        // An upgrade snapshot taken while the graph lived may restore it:
+        // its objects stay while the snapshot is kept (UP1 Task 8).
+        let floor = loams_common::meta::snapshot_gc_floor(&*self.meta)
+            .await
+            .map_err(|err| unavailable("reading the upgrade snapshots", &err))?;
+        let mut deleted = 0;
         for object in &objects {
+            if loams_common::meta::pinned_by(floor, object.last_modified_ms) {
+                continue;
+            }
             self.store
                 .delete(&object.path)
                 .await
                 .map_err(|err| unavailable("deleting a purged graph's objects", &err))?;
+            deleted += 1;
         }
         if let Ok(mut cache) = self.cache.lock() {
             cache.remove(&graph);
         }
-        Ok(objects.len())
+        Ok(deleted)
     }
 }
 
@@ -673,6 +814,7 @@ mod tests {
             created_at_ms,
             nodes: 0,
             edges: 0,
+            links: Vec::new(),
         }
     }
 

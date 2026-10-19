@@ -171,7 +171,9 @@ function WorkspaceRow({ ws }: { ws: WorkspaceSummary }) {
   return (
     <span className="flex min-w-0 flex-1 flex-col">
       <span className="flex min-w-0 items-center gap-2">
-        <span className="truncate font-mono text-sm text-ink">{ws.name || ws.wsId}</span>
+        <span className={/* mono-ok: id */ 'truncate font-mono text-sm text-ink'}>
+          {ws.name || ws.wsId}
+        </span>
         {ws.agent && <Badge>agent</Badge>}
       </span>
       <span className="truncate text-xs text-muted">

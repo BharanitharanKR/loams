@@ -1,4 +1,4 @@
-# The Loams preview stack: everything a user runs themselves, on one machine
+# The Loams stack: everything a user runs themselves, on one machine
 # or a VM of their own (BYOC, see byoc/install.sh). Configure it in .env (copy
 # .env.example). Start the engine and its storage with
 #
@@ -67,8 +67,17 @@ services:
       - --advertise-status-addr=tikv:20180
       - --data-dir=/data/tikv
       - --config=/etc/tikv.toml
+    # TiKV refuses to start below 82920 open files (Docker often defaults to
+    # 65536).
+    ulimits:
+      nofile:
+        soft: 1048576
+        hard: 1048576
     volumes:
       - tikv-data:/data/tikv
+      # BR's `local://` backups of an upgrade snapshot (design §54 §7.2,
+      # UP1 Task 9): TiKV writes the SSTs where the BR helper reads them.
+      - ${LOAMS_UPGRADE_SNAPSHOT_DIR:-upgrade-snapshots}:/var/lib/loams-upgrade-snapshots
       - ./config/tikv.toml:/etc/tikv.toml:ro
     depends_on:
       pd:
@@ -101,9 +110,60 @@ services:
       tikv:
         condition: service_healthy
 
+  # Upgrades (design §54 §6.1, UP1 Task 7): one-shot, before the engine, the
+  # House and pg-control. It reads the stack record and the ledger in the
+  # metastore, runs this release's pending migrations (and Durable's own),
+  # and exits 0; on an ordinary restart there is nothing to do and it exits
+  # in about a second. A failed migration exits non-zero, so nothing that
+  # depends on it starts, and the old data stays readable. `loams upgrade`
+  # runs it with the stack's previous release (--declared-release) and a
+  # snapshot first. No listener, no published port, no tailnet door, no
+  # container socket.
+  migrate:
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.0}
+    command:
+      - migrate
+      - run
+      - --meta=tikv://pd:2379/loams_meta
+      - --live-store=tikv://pd:2379/loams_live_dev
+      - --bucket=${LOAMS_BUCKET:-file:///var/lib/loams/bucket}
+      - --data-dir=/var/lib/loams
+      - --house-dir=/var/lib/loams-house
+      - --pg-control-dir=/var/lib/loams-pg-control
+      # Loams Postgres's storage APIs: `0001-safekeeper-volume` drains the
+      # safekeeper before it is recreated. A stack composed without Postgres
+      # (postgres-off.yaml) has no such names, and nothing to drain.
+      - --pageserver=http://pageserver:9898
+      - --safekeeper=http://safekeeper1:7676
+    restart: "no"
+    environment:
+      RUST_LOG: ${RUST_LOG:-info}
+    # The engine's own settings (AWS_* for an s3:// LOAMS_BUCKET): no new
+    # credentials (D944).
+    env_file:
+      - path: ./secrets/engine.env
+        required: false
+    read_only: true
+    tmpfs: [/tmp]
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    volumes:
+      - loams-data:/var/lib/loams
+      - house-data:/var/lib/loams-house
+      - pg-control-data:/var/lib/loams-pg-control
+      # Upgrade snapshots (design §54 §7.3): mode 0700, kept on this host,
+      # never uploaded. LOAMS_UPGRADE_SNAPSHOT_DIR puts them in a host
+      # directory instead of the volume.
+      - ${LOAMS_UPGRADE_SNAPSHOT_DIR:-upgrade-snapshots}:/var/lib/loams-upgrade-snapshots
+    depends_on:
+      pd:
+        condition: service_healthy
+      tikv:
+        condition: service_healthy
+
   loams:
     <<: *restart
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.0-preview.2}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.0}
     command:
       - standalone
       - --bucket=${LOAMS_BUCKET:-file:///var/lib/loams/bucket}
@@ -112,6 +172,13 @@ services:
       # standalone defaults Flight SQL to 0.0.0.0, which would put it on the
       # compose network; keep it on loopback like every other engine listener.
       - --flight-sql-listen=127.0.0.1:8082
+      # The Postgres and MySQL wire listeners over collections (namespace
+      # `default`). Loopback in the engine's network namespace, like Qdrant
+      # (6333/6334), Elasticsearch (9200) and Flight SQL: they authenticate
+      # nobody yet, so they are not on the tailnet (docs/release/preview.md,
+      # "Keep the other listeners inside the stack").
+      - --pg-listen=127.0.0.1:5432
+      - --mysql-listen=127.0.0.1:3306
       - --graph-data-dir=/var/lib/loams/graph
       - --meta=tikv://pd:2379/loams_meta
       - --live-store=tikv://pd:2379/loams_live_dev
@@ -128,7 +195,7 @@ services:
       LOAMS_HOUSE_ENDPOINT: ${LOAMS_HOUSE_ENDPOINT:-}
       LOAMS_HOUSE_CA: /var/lib/loams-house-link/house.crt
       LOAMS_HOUSE_KEY_FILE: /var/lib/loams-house-link/link.key
-      # Engine auth (preview): tailscale | oidc | apikey | off (loopback only).
+      # Engine auth: tailscale | oidc | apikey | off (loopback only).
       # tailscale trusts the Tailscale-User-Login headers that the sidecar's
       # `tailscale serve` proxy adds, on LOAMS_TAILSCALE_LISTEN only: a loopback
       # port of its own that is the serve target and nothing else.
@@ -160,6 +227,8 @@ services:
         condition: service_healthy
       tikv:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
       interval: 10s
@@ -201,7 +270,7 @@ services:
   house:
     <<: *restart
     profiles: [house]
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-fabric:${LOAMS_VERSION:-0.1.0-preview.2}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-fabric:${LOAMS_VERSION:-0.1.0}
     command:
       - house
       - --single-node
@@ -221,6 +290,9 @@ services:
     volumes:
       - house-data:/var/lib/loams-house
       - house-link:/var/lib/loams-house-link
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
 
   # The House's tailnet node, in the House's network namespace (its only
   # neighbour there). A second node on the tailnet: give it its own auth key
@@ -259,7 +331,7 @@ services:
       TS_USERSPACE: "true"
       TS_AUTH_ONCE: "true"
       # https (Tailscale: MagicDNS + HTTPS certificates), or http for Headscale
-      # (coming soon, unsupported in 0.1.0-preview.2); see tailscale/serve-*.json.
+      # (coming soon, unsupported in 0.1.0); see tailscale/serve-*.json.
       TS_SERVE_CONFIG: /config/serve-${TS_SERVE_MODE:-https}.json
       TS_EXTRA_ARGS: --login-server=${TS_LOGIN_SERVER:-https://controlplane.tailscale.com} ${TS_EXTRA_ARGS:-}
     volumes:
@@ -269,7 +341,7 @@ services:
       loams:
         condition: service_started
 
-  # COMING SOON, unsupported in 0.1.0-preview.2: Headscale issues no ts.net
+  # COMING SOON, unsupported in 0.1.0: Headscale issues no ts.net
   # HTTPS certificates, so the hosted console cannot reach an engine on it.
   # A self-hosted tailnet control server (`--profile headscale`). Clients,
   # including the browser's device, must reach HEADSCALE_SERVER_URL, so on a VM
@@ -316,7 +388,7 @@ services:
   pg-control:
     <<: *restart
     profiles: [postgres-control]
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-pg-control:${LOAMS_VERSION:-0.1.0-preview.2}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-pg-control:${LOAMS_VERSION:-0.1.0}
     command:
       - pg-control
       - --store=local
@@ -335,6 +407,10 @@ services:
       - --pageserver-pg=1234=postgresql://no_user@pageserver:6400
       - --default-pageserver=1234
       - --wal-pool=default=safekeeper1:5454
+      # Endpoint storage (below): the computes keep their file cache's state
+      # there, and pg-control writes the key it checks their tokens with.
+      - --endpoint-storage=endpoint-storage:51243
+      - --endpoint-storage-pem-out=/run/endpoint-storage/key.pem
     environment:
       RUST_LOG: ${RUST_LOG:-info}
     networks: [default, pg-runner]
@@ -343,6 +419,7 @@ services:
     volumes:
       - pg-control-data:/var/lib/loams-pg-control
       - pg-runner-token:/run/pg-runner:ro
+      - pg-endpoint-storage-key:/run/endpoint-storage
       - type: bind
         source: ./secrets/pg-api-keys.json
         target: /etc/loams-pg-control/api-keys.json
@@ -352,6 +429,39 @@ services:
     depends_on:
       pg-runner:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  # Endpoint storage (PG2 Task 16, the fork's endpoint_storage from the
+  # storage image the included stack runs): where computes keep their local
+  # file cache's state in the stack's bucket, so a promoted read-only
+  # endpoint starts with a warm cache. It checks the computes' tokens with
+  # pg-control's public key, which pg-control writes at start into a volume
+  # mounted read-only here. Only computes reach it (no ports). Nothing
+  # orders it before the first compute starts (`service_started` only orders
+  # the containers): a compute that prewarms before it listens starts with a
+  # cold cache, which is all that is lost.
+  endpoint-storage:
+    <<: *restart
+    profiles: [postgres-control]
+    image: ${NEON_IMAGE:-ghcr.io/ostrium-labs/loams-postgres-storage@sha256:4dcec4cbef637b92b1088ea2c0bc857f3b5ef4318f02e8d2d4a0f9263ed4140e}
+    environment:
+      AWS_ACCESS_KEY_ID: ${RUSTFS_ACCESS_KEY:-rustfsadmin}
+      AWS_SECRET_ACCESS_KEY: ${RUSTFS_SECRET_KEY:-rustfsadmin}
+      AWS_REGION: us-east-1
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - >
+        until [ -s /run/endpoint-storage/key.pem ]; do echo "waiting for the pg-control key"; sleep 1; done;
+        exec endpoint_storage --config='{"listen": "0.0.0.0:51243",
+        "pemfile": "/run/endpoint-storage/key.pem", "type": "AwsS3",
+        "bucket_name": "neon", "bucket_region": "us-east-1",
+        "prefix_in_bucket": "endpoint-storage/", "endpoint": "http://rustfs:9000"}'
+    volumes:
+      - pg-endpoint-storage-key:/run/endpoint-storage:ro
+    depends_on:
+      pg-control:
+        condition: service_started
 
   # The compute runner: the only service given a container runtime's socket
   # (CONTAINER_SOCKET; prefer rootless Podman's, see the README). It runs
@@ -366,7 +476,7 @@ services:
   pg-runner:
     <<: *restart
     profiles: [postgres-control]
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-pg-control:${LOAMS_VERSION:-0.1.0-preview.2}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-pg-control:${LOAMS_VERSION:-0.1.0}
     command:
       - pg-runner
       - --listen=0.0.0.0:7691
@@ -404,7 +514,7 @@ services:
   agentd:
     <<: *restart
     profiles: [agentd]
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-agentd:${LOAMS_VERSION:-0.1.0-preview.2}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-agentd:${LOAMS_VERSION:-0.1.0}
     # The daemon writes its token, lock and store beside its config.toml, in
     # a directory it makes owner-only (0700): that is /home/loams/agentd, in
     # the data volume. Only config.toml comes from ./agentd, read-only, and
@@ -442,3 +552,5 @@ volumes:
   pg-control-data:
   pg-runner-data:
   pg-runner-token:
+  pg-endpoint-storage-key:
+  upgrade-snapshots:

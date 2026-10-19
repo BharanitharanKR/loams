@@ -26,7 +26,7 @@ const plugin: PluginModule = {
     ctx.effect(() =>
       router.page(
         { id: 'pipelines', path: '/pipelines', title: 'Pipelines', plugin: 'pipelines' },
-        () => <PipelinesPage client={client} />,
+        () => <PipelinesPage client={client} sample />,
       ),
     );
     ctx.effect(() =>

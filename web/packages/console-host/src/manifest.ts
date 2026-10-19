@@ -29,7 +29,14 @@ export interface PluginManifest {
    */
   actions: string[];
   permissions: Permission[];
-  requires: { console: string; api: string[] };
+  /**
+   * `console`: a semver range of the console host. `api`: the
+   * `loams.<area>.v<N>` packages the plugin needs the engine to serve.
+   * `engine`: the oldest engine version it works with (§54 §13.1). A plugin
+   * whose requirement fails does not run, so its pages and nav items are
+   * not there.
+   */
+  requires: { console: string; api: string[]; engine?: string };
   editions: Edition[];
   /**
    * The console modes the plugin belongs to (§53 §4.1, D901); `["console"]` when
@@ -141,7 +148,7 @@ export function validateManifest(pkg: unknown): PluginManifest {
     throw new ManifestError(`${name}: "requires" must be an object`);
   }
   for (const key of Object.keys(requires)) {
-    if (key !== 'console' && key !== 'api') {
+    if (key !== 'console' && key !== 'api' && key !== 'engine') {
       throw new ManifestError(`${name}: unknown "requires" key "${key}"`);
     }
   }
@@ -155,6 +162,13 @@ export function validateManifest(pkg: unknown): PluginManifest {
         `${name}: "requires.api" entry "${pkg}" is not a loams.<area>.v<N> package`,
       );
     }
+  }
+  if (
+    requires.engine !== undefined &&
+    (typeof requires.engine !== 'string' ||
+      !/^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?$/.test(requires.engine))
+  ) {
+    throw new ManifestError(`${name}: "requires.engine" must be an engine version (0.1.0)`);
   }
   const server = block.server ?? null;
   if (server !== null) {
@@ -185,6 +199,7 @@ export function validateManifest(pkg: unknown): PluginManifest {
     requires: {
       console: typeof requires.console === 'string' ? requires.console : '*',
       api,
+      ...(typeof requires.engine === 'string' ? { engine: requires.engine } : {}),
     },
     editions: editions as Edition[],
     modes: modes as Mode[],

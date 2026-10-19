@@ -225,11 +225,13 @@ message SearchRequest {
   // Whether and how far to count the matches. A `Value` and not a message,
   // for the reason the header gives.
   google.protobuf.Value track_total_hits = 16;
-  // **Always `invalid_argument`.** Re-scoring arrives in M3; the field exists
-  // so a body carrying it is refused rather than silently dropped.
-  google.protobuf.Struct rerank = 17;
-  // **Always `invalid_argument`.** Graph expansion arrives in M3; see `rerank`.
-  google.protobuf.Struct expand = 18;
+  // **Deprecated; always `invalid_argument`.** `rerank_spec` carries the
+  // stage (GR1 Task 20). The field stays so a body carrying it is refused
+  // rather than silently dropped.
+  google.protobuf.Struct rerank = 17 [deprecated = true];
+  // **Deprecated; always `invalid_argument`.** `expand_spec` carries the
+  // stage; see `rerank`.
+  google.protobuf.Struct expand = 18 [deprecated = true];
   // Design §05 §4's `from`, verbatim: `"collections.<name>"` or `"<name>"`.
   // An alias of `collection` (see the header).
   string from = 19;
@@ -239,6 +241,11 @@ message SearchRequest {
   // Design §05 §4's `fuse`, verbatim: `{"method": "rrf", "k": 60}`. A `Struct`
   // for the reason the header gives, and an alias of `fusion`.
   google.protobuf.Struct fuse = 21;
+  // Walks a Loams Graph graph from the top hits (design §07 §5.2, GR1 Task
+  // 20). Needs the server's `graph` feature.
+  ExpandSpec expand_spec = 22;
+  // Re-scores the final candidates, seeds and neighbors (§07 §5.2).
+  RerankSpec rerank_spec = 23;
 }
 
 // One source of ranked candidates. A proto oneof, so the JSON is the REST
@@ -412,7 +419,9 @@ message Query {
   // values are strings, so a `u64::MAX` id stays exact and `{"uuid": "…"}` keeps
   // the REST spelling verbatim. The handler reads each back through the same
   // `loams_query::json::pk::from_json` `GetDocumentsRequest.ids` goes through, so
-  // the three arms and their refusals are the document RPCs'.
+  // the three arms and their refusals are the document RPCs'. A whole number
+  // (`{"uint": 1}` or a bare `1`, exact up to 2^53) is a `uint` id too, and a
+  // bare string is a `string` id, as the REST route spells them.
   repeated google.protobuf.Value ids = 16;
 }
 
@@ -446,7 +455,8 @@ message MatchPhraseQuery {
 }
 
 message MultiMatchQuery {
-  // The fields to search, each with its boost.
+  // The fields to search, each with its boost. None is every indexed text
+  // field at boost 1, as Elasticsearch's `index.query.default_field` of `*`.
   repeated MultiMatchField fields = 1;
   string text = 2;
   // How the fields are combined; absent is `MULTI_MATCH_KIND_BEST_FIELDS`.
@@ -459,6 +469,7 @@ message MultiMatchQuery {
 
 message MultiMatchField {
   string field = 1;
+  // Absent (0) is 1, as a bare field name is in Elasticsearch.
   float boost = 2;
 }
 
@@ -520,7 +531,8 @@ message FuzzyQuery {
 message QueryStringQuery {
   // The Lucene query language, as the REST route's `query_string` takes it.
   string query = 1;
-  // The fields to search when the query names none.
+  // The fields to search when the query names none. None is every indexed
+  // text field, as Elasticsearch's `index.query.default_field` of `*`.
   repeated string default_fields = 2;
   BoolOperator default_operator = 3;
 }
@@ -687,6 +699,8 @@ message SearchResponse {
   // adding it to one surface only is exactly what this package's equality test
   // exists to prevent.
   google.protobuf.Struct performance = 7;
+  // What the expansion did, when the request expanded (GR1 Task 20).
+  ExpandStats expand = 8;
 }
 
 // One hit.
@@ -715,6 +729,133 @@ message Hit {
   map<string, google.protobuf.Value> highlight = 7;
   // The typed field values per name, as the REST route's JSON (Ruling 9).
   map<string, google.protobuf.Value> fields = 8;
+  // The vertices an expansion reached from this hit (`EXPAND_OUTPUT_NESTED`).
+  repeated Neighbor neighbors = 9;
+  // What the hit is in the graph (`EXPAND_OUTPUT_FLAT`).
+  GraphHit graph = 10;
+}
+
+// The `expand` stage (design §07 §5.2): the top `seeds` hits seed a walk of
+// a graph. Zero takes each number's default.
+message ExpandSpec {
+  // The graph, in the request's namespace.
+  string graph = 1;
+  // The hit's source field holding the seed vertex's key; empty: the hit's id.
+  string from_field = 2;
+  // The seeds' vertex label; empty: any label.
+  string seed_label = 3;
+  // How many top hits seed the walk; 0 is 10.
+  uint32 seeds = 4;
+  // 1 or 2; 0 is 1.
+  uint32 hops = 5;
+  // Unspecified is out.
+  ExpandDirection direction = 6;
+  // Edge types walked; empty walks every type.
+  repeated string edge_types = 7;
+  // Over the edges' properties (the structured subset of `Query`).
+  Query edge_filter = 8;
+  // Over the reached vertices' properties.
+  Query vertex_filter = 9;
+  // Neighbors per seed; 0 is 50.
+  uint32 limit_per_seed = 10;
+  // Neighbors in all; 0 is 100.
+  uint32 limit = 11;
+  // The neighbors' document fields, as `select` spells a projection; absent
+  // fetches none.
+  google.protobuf.Struct select = 12;
+  // Unspecified is nested.
+  ExpandOutput output = 13;
+  // A `loams.graph.v1` consistency token: the walk sees at least its writes.
+  string consistency_token = 14;
+}
+
+// Which way an expansion walks the edges.
+enum ExpandDirection {
+  EXPAND_DIRECTION_UNSPECIFIED = 0;
+  EXPAND_DIRECTION_OUT = 1;
+  EXPAND_DIRECTION_IN = 2;
+  EXPAND_DIRECTION_BOTH = 3;
+}
+
+// How the neighbors come back.
+enum ExpandOutput {
+  EXPAND_OUTPUT_UNSPECIFIED = 0;
+  // Under each seed hit, in `Hit.neighbors`.
+  EXPAND_OUTPUT_NESTED = 1;
+  // Seeds and neighbors in one ranked list, each neighbor a hit with
+  // `Hit.graph`.
+  EXPAND_OUTPUT_FLAT = 2;
+}
+
+// The `rerank` stage (design §07 §5.2).
+message RerankSpec {
+  oneof method {
+    // A neighbor scores the most, over its seeds, of seed score × decay^hop.
+    InheritRerank inherit = 1;
+    // The cosine similarity of each candidate's vector to a query vector.
+    VectorRerank vector = 2;
+    // An external reranker: off on every server (§05 §4), always refused.
+    ModelRerank model = 3;
+  }
+}
+
+// See `RerankSpec.inherit`.
+message InheritRerank {
+  // 0 to 1; absent is 0.5.
+  optional float decay = 1;
+}
+
+// See `RerankSpec.vector`.
+message VectorRerank {
+  // A dense vector field of the candidates' collections.
+  string field = 1;
+  repeated float query = 2;
+}
+
+// See `RerankSpec.model`.
+message ModelRerank {
+  string endpoint = 1;
+  string text_field = 2;
+  string query = 3;
+  uint32 top_n = 4;
+}
+
+// A vertex an expansion reached.
+message Neighbor {
+  string label = 1;
+  // Its key: its document's id when a link wrote it.
+  DocumentId key = 2;
+  uint32 hop = 3;
+  // The vertex it was reached from: the seed for hop 1.
+  DocumentId via = 4;
+  string edge_type = 5;
+  // The edge's key (its document's id).
+  DocumentId edge = 6;
+  float score = 7;
+  // The vertex's collection, when a collection link wrote it.
+  string collection = 8;
+  // Its document, when `ExpandSpec.select` asked for one.
+  google.protobuf.Struct source = 9;
+}
+
+// What a flat answer's hit is in the graph.
+message GraphHit {
+  string label = 1;
+  // 0 for a seed.
+  uint32 hop = 2;
+  // The seeds it was reached from.
+  repeated DocumentId seeds = 3;
+  string collection = 4;
+}
+
+// What an expansion did.
+message ExpandStats {
+  uint64 seeds = 1;
+  // Seeds with no key or no vertex.
+  uint64 seeds_skipped = 2;
+  uint64 neighbors = 3;
+  // The graph state the walk read.
+  string graph_token = 4;
 }
 
 // One group of a grouped search.

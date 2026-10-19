@@ -2,7 +2,7 @@
 // types with their counts, its property keys and its indexes.
 
 import type { graph } from '@loams/proto';
-import { Button } from '@loams/ui';
+import { Button, SkeletonList } from '@loams/ui';
 import { type ReactNode, useEffect, useState } from 'react';
 import { type GraphClient, type GraphFailure, toFailure } from './client.js';
 
@@ -13,12 +13,15 @@ export function Schema({
   namespace,
   name,
   refresh,
+  onSchema,
 }: {
   client: GraphClient;
   namespace: string;
   name: string;
   /** Changes after each statement that wrote, so counts follow. */
   refresh: number;
+  /** Gets the schema each time it is read (the editor completes its names). */
+  onSchema?: (schema: graph.GraphSchema | undefined) => void;
 }) {
   const [schema, setSchema] = useState<graph.GraphSchema>();
   const [error, setError] = useState<GraphFailure>();
@@ -30,7 +33,11 @@ export function Schema({
     setError(undefined);
     client
       .getSchema(namespace, name)
-      .then((s) => live && setSchema(s))
+      .then((s) => {
+        if (!live) return;
+        setSchema(s);
+        onSchema?.(s);
+      })
       .catch((e) => {
         if (!live) return;
         setSchema(undefined);
@@ -50,7 +57,7 @@ export function Schema({
         </Button>
       </div>
       {error && <p className="m-0 text-danger">{error.message}</p>}
-      {!schema && !error && <p className="m-0 text-muted">Loading…</p>}
+      {!schema && !error && <SkeletonList label="Loading the schema" rows={4} />}
       {schema && (
         <>
           <Group title="Labels" empty="No labels.">
@@ -65,7 +72,7 @@ export function Schema({
           </Group>
           <Group title="Property keys" empty="No property keys.">
             {schema.propertyKeys.map((k) => (
-              <li key={k} className="font-mono">
+              <li key={k} className={/* mono-ok: id */ 'font-mono'}>
                 {k}
               </li>
             ))}
@@ -73,7 +80,7 @@ export function Schema({
           <Group title="Indexes" empty="No indexes.">
             {schema.indexes.map((i) => (
               <li key={i.name} className="flex flex-col">
-                <span className="font-mono">{i.name}</span>
+                <span className={/* mono-ok: id */ 'font-mono'}>{i.name}</span>
                 <span className="text-xs text-muted">
                   {[i.kind, i.target, i.properties.join(', ')].filter(Boolean).join(' · ')}
                 </span>
@@ -112,7 +119,7 @@ function Group({
 function Row({ name, count }: { name: string; count: bigint }) {
   return (
     <li className="flex items-center justify-between gap-2">
-      <span className="font-mono">{name}</span>
+      <span className={/* mono-ok: id */ 'font-mono'}>{name}</span>
       <span className="text-muted tabular-nums">{fmt.format(count)}</span>
     </li>
   );

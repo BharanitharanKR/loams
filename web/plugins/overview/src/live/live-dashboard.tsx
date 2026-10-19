@@ -4,7 +4,7 @@
 // client serves fixtures the section says "Sample data" so nobody mistakes it
 // for their own numbers.
 
-import { Badge, Notice } from '@loams/ui';
+import { Notice, SampleDataNotice } from '@loams/ui';
 import { useLoad } from '../load.js';
 import { TrafficChart, UsageChart } from './charts.js';
 import { KpiStrip } from './kpis.js';
@@ -28,10 +28,10 @@ export function LiveDashboard({
         <h2 id="overview-live" className="m-0">
           Activity
         </h2>
-        {client.sample && (
-          <Badge title="Generated in the browser, not read from a server">Sample data</Badge>
-        )}
       </div>
+      {client.sample && (
+        <SampleDataNotice>The numbers below are generated in the browser.</SampleDataNotice>
+      )}
       {kpis.state === 'ok' && <KpiStrip kpis={kpis.data} client={client} />}
       {kpis.state === 'error' && (
         <Notice tone="danger" title="Not reachable">

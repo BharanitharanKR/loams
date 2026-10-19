@@ -146,12 +146,12 @@ export function MarkdownCodeBlockFrame({
 }) {
   return (
     <div
-      className="my-2 overflow-hidden rounded-none border border-rule bg-raised"
+      className="my-2 overflow-hidden rounded-lg border border-rule bg-raised"
       data-language={language}
       data-wrap={wrapped ? "true" : "false"}
     >
       <div className="flex items-center justify-between gap-2 border-b border-rule-soft py-1 pr-1 pl-3 select-none">
-        <span className="min-w-0 truncate font-mono text-xs text-muted">
+        <span className={/* mono-ok: code */ "min-w-0 truncate font-mono text-xs text-muted"}>
           {fenceTitle ?? language}
         </span>
         {actions}
@@ -251,8 +251,8 @@ function MarkdownCodeBlock({
       <pre
         className={
           wrapped
-            ? "m-0 overflow-x-auto px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap"
-            : "m-0 overflow-x-auto px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre"
+            ? "m-0 overflow-x-auto px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre-wrap" // mono-ok: code
+            : "m-0 overflow-x-auto px-3 py-2 font-mono text-xs leading-relaxed whitespace-pre" // mono-ok: code
         }
       >
         <code data-code-block="">
@@ -273,7 +273,7 @@ function MarkdownLink({ href, children }: ComponentProps<"a"> & ReactMarkdownExt
         target="_blank"
         rel="noopener noreferrer"
         referrerPolicy="no-referrer"
-        className="text-accent underline underline-offset-2"
+        className="text-accent-fg underline underline-offset-2"
         onClick={(event) => {
           if (!onOpenLink) return;
           event.preventDefault();
@@ -289,7 +289,9 @@ function MarkdownLink({ href, children }: ComponentProps<"a"> & ReactMarkdownExt
     return (
       <button
         type="button"
-        className="cursor-pointer border-0 bg-transparent p-0 font-mono text-[0.95em] text-accent underline underline-offset-2"
+        className={
+          /* mono-ok: path */ "cursor-pointer border-0 bg-transparent p-0 font-mono text-[0.95em] text-accent-fg underline underline-offset-2"
+        }
         title={`Open ${path}`}
         data-file-link={path}
         onClick={() => onOpenFile(path)}
@@ -332,7 +334,7 @@ const CHAT_MARKDOWN_COMPONENTS = {
   },
   code({ children }: ComponentProps<"code"> & ReactMarkdownExtraProps) {
     return (
-      <code className="rounded-none bg-raised px-1 py-px font-mono text-[0.9em]">{children}</code>
+      <code className="rounded-xs bg-raised px-1 py-px font-mono text-[0.9em]">{children}</code>
     );
   },
   p: ({ children }: ComponentProps<"p">) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,

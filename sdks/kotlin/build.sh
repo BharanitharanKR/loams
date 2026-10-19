@@ -6,6 +6,7 @@
 #   ./build.sh test            # compile and run
 #   ./build.sh test -t name    # run only the tests whose name contains `name`
 #   ./build.sh descriptors     # regenerate gen/loams-descriptor.binpb from proto/ (needs `buf`)
+#   ./build.sh package DIR     # the Maven Central files for dev.loams:loams-kotlin in DIR
 #   ./build.sh clean
 #
 # ## Why not Gradle
@@ -201,6 +202,36 @@ than transcribed (D652)."
   say "build.sh: commit it if it changed; the descriptor set is generated, never hand-edited"
 }
 
+# The files Maven Central wants for dev.loams:loams-kotlin, unsigned: the POM,
+# the jar, the sources jar and a javadoc jar. There is no Dokka here, so the
+# javadoc jar holds a README pointing at the sources, which Central accepts for
+# a library without generated docs. sdk-release.yml signs and uploads them; the
+# version is pom.xml's, and the kotlin-stdlib version in pom.xml is the
+# compiler sdk-release.yml builds with.
+package_artifacts() {
+  local out="${1:?usage: build.sh package DIR}"
+  need jar
+  compile
+  local version
+  version="$(sed -n 's|^  <version>\(.*\)</version>$|\1|p' "$root/pom.xml")"
+  [ -n "$version" ] || die "no project <version> in pom.xml"
+  local base="loams-kotlin-$version"
+  mkdir -p "$out"
+  out="$(cd "$out" && pwd)"
+  rm -rf "$build/meta" "$build/doc" && mkdir -p "$build/meta/META-INF" "$build/doc"
+  cp "$root/LICENSE" "$root/NOTICE" "$build/meta/META-INF/"
+  printf 'Automatic-Module-Name: dev.loams.kotlin\nImplementation-Title: Loams Kotlin SDK\nImplementation-Version: %s\n' \
+    "$version" >"$build/manifest.txt"
+  jar --create --file "$out/$base.jar" --manifest "$build/manifest.txt" -C "$classes" . -C "$build/meta" META-INF
+  jar --create --file "$out/$base-sources.jar" -C "$root/src/main/kotlin" . -C "$build/meta" META-INF
+  printf 'Loams Kotlin SDK %s (preview). API documentation: the sources jar, and\nhttps://github.com/ostrium-labs/loams/tree/main/sdks/kotlin\n' \
+    "$version" >"$build/doc/README.txt"
+  jar --create --file "$out/$base-javadoc.jar" -C "$build/doc" README.txt -C "$build/meta" META-INF
+  cp "$root/pom.xml" "$out/$base.pom"
+  say "build.sh: dev.loams:loams-kotlin:$version in $out"
+  ls -l "$out" >&2
+}
+
 case "${1:-test}" in
   clean)
     rm -rf "$build"
@@ -212,12 +243,15 @@ case "${1:-test}" in
   compile)
     compile
     ;;
+  package)
+    package_artifacts "${2:-}"
+    ;;
   test)
     compile
     shift || true
     run_tests "$@"
     ;;
   *)
-    die "unknown command '$1'. Use clean, descriptors, compile or test."
+    die "unknown command '$1'. Use clean, descriptors, compile, package or test."
     ;;
 esac

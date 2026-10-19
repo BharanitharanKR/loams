@@ -29,7 +29,6 @@ import pipelinesPkg from '@loams/plugin-pipelines/package.json';
 import postgresPkg from '@loams/plugin-postgres/package.json';
 import sqlPkg from '@loams/plugin-sql/package.json';
 import streamsPkg from '@loams/plugin-streams/package.json';
-import wesqlPkg from '@loams/plugin-wesql/package.json';
 import desktopYml from '../../catalog/desktop.yml?raw';
 import type { modules } from './modules.js';
 import { startConsole } from './start.js';
@@ -52,7 +51,6 @@ export const desktopModules: typeof modules = {
   '@loams/plugin-live': () => import('@loams/plugin-live'),
   '@loams/plugin-agent': () => import('@loams/plugin-agent'),
   '@loams/plugin-postgres': () => import('@loams/plugin-postgres'),
-  '@loams/plugin-wesql': () => import('@loams/plugin-wesql'),
   '@loams/plugin-sql': () => import('@loams/plugin-sql'),
   '@loams/plugin-desktop-agentd': () => import('@loams/plugin-desktop-agentd'),
   '@loams/plugin-canvas': () => import('@loams/plugin-canvas'),
@@ -76,7 +74,6 @@ export const desktopManifests: unknown[] = [
   livePkg,
   agentPkg,
   postgresPkg,
-  wesqlPkg,
   sqlPkg,
   desktopAgentdPkg,
   canvasPkg,

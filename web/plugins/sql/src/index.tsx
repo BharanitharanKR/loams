@@ -1,5 +1,5 @@
 // @loams/plugin-sql: the Loams SQL page (§47, SQ1): TiDB-based, MySQL-compatible
-// databases with branches and a serverless lifecycle. It supersedes @loams/plugin-wesql.
+// databases with branches and a serverless lifecycle.
 // loams.sqldb.v1 is not in @loams/proto yet (SQ1 Task 7), so the page runs on the
 // fixture-backed client in mock.ts; a Connect client of the same SqlClient interface
 // replaces it when the protos land.
@@ -41,7 +41,7 @@ const plugin: PluginModule = {
           name: 'shell.nav.section',
           plugin: 'sql',
           order: 39,
-          meta: { id: 'sql', label: 'SQL', href: '/sql', icon: 'sql', group: 'Data' },
+          meta: { id: 'sql', label: 'Loams SQL', href: '/sql', icon: 'sql', group: 'Data' },
         },
         () => null,
       ),

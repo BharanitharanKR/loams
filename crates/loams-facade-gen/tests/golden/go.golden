@@ -125,6 +125,17 @@ var Reasons = []Reason{
 	"live_deploy_conflict",
 	"live_schema_violation",
 	"live_index_not_ready",
+	"live_app_disabled",
+	"live_app_exists",
+	"live_function_error",
+	"live_function_timeout",
+	"live_function_out_of_memory",
+	"live_limit_exceeded",
+	"live_app_mismatch",
+	"live_origin_not_allowed",
+	"session_rotate",
+	"session_gone",
+	"node_draining",
 	"role_required",
 	"setup_required",
 	"token_missing",
@@ -221,6 +232,17 @@ var ReasonCodes = map[Reason]string{
 	"live_deploy_conflict":        "failed_precondition",
 	"live_schema_violation":       "invalid_argument",
 	"live_index_not_ready":        "failed_precondition",
+	"live_app_disabled":           "failed_precondition",
+	"live_app_exists":             "failed_precondition",
+	"live_function_error":         "unknown",
+	"live_function_timeout":       "deadline_exceeded",
+	"live_function_out_of_memory": "resource_exhausted",
+	"live_limit_exceeded":         "resource_exhausted",
+	"live_app_mismatch":           "permission_denied",
+	"live_origin_not_allowed":     "permission_denied",
+	"session_rotate":              "unavailable",
+	"session_gone":                "not_found",
+	"node_draining":               "unavailable",
 	"role_required":               "permission_denied",
 	"setup_required":              "failed_precondition",
 	"token_missing":               "unauthenticated",
@@ -452,24 +474,30 @@ var Modules = []ModuleBinding{
 		Unstable: true,
 		Derived:  false,
 		Calls: []CallBinding{
+			{Module: "live", Name: "Authenticate", ProtoName: "authenticate", Method: "Authenticate", RPC: "loams.live.v1.LiveService/Authenticate", Service: "loams.live.v1.LiveService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
 			{Module: "live", Name: "ModifyQuerySet", ProtoName: "modifyQuerySet", Method: "ModifyQuerySet", RPC: "loams.live.v1.LiveService/ModifyQuerySet", Service: "loams.live.v1.LiveService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
 			{Module: "live", Name: "Watch", ProtoName: "watch", Method: "Watch", RPC: "loams.live.v1.LiveService/Watch", Service: "loams.live.v1.LiveService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingServer, Pagination: nil},
 		},
 	},
 	{
 		Name:     "live.admin",
-		Summary:  "Live administration: deploy, roll back, index status and function logs.",
+		Summary:  "Live administration: apps, deploy, roll back, index status and function logs.",
 		Service:  "loams.live.v1.LiveAdminService",
 		Package:  "loams.live.v1",
 		Unstable: true,
 		Derived:  false,
 		Calls: []CallBinding{
 			{Module: "live.admin", Name: "ActivateDeployment", ProtoName: "activateDeployment", Method: "ActivateDeployment", RPC: "loams.live.v1.LiveAdminService/ActivateDeployment", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "live.admin", Name: "CreateApp", ProtoName: "createApp", Method: "CreateApp", RPC: "loams.live.v1.LiveAdminService/CreateApp", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "live.admin", Name: "DeleteApp", ProtoName: "deleteApp", Method: "DeleteApp", RPC: "loams.live.v1.LiveAdminService/DeleteApp", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
 			{Module: "live.admin", Name: "Deploy", ProtoName: "deploy", Method: "Deploy", RPC: "loams.live.v1.LiveAdminService/Deploy", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "live.admin", Name: "GetApp", ProtoName: "getApp", Method: "GetApp", RPC: "loams.live.v1.LiveAdminService/GetApp", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
 			{Module: "live.admin", Name: "GetDeployment", ProtoName: "getDeployment", Method: "GetDeployment", RPC: "loams.live.v1.LiveAdminService/GetDeployment", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
 			{Module: "live.admin", Name: "GetIndexStatus", ProtoName: "getIndexStatus", Method: "GetIndexStatus", RPC: "loams.live.v1.LiveAdminService/GetIndexStatus", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "live.admin", Name: "ListApps", ProtoName: "listApps", Method: "ListApps", RPC: "loams.live.v1.LiveAdminService/ListApps", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "apps", NextPageToken: "next_page_token"}},
 			{Module: "live.admin", Name: "ListDeployments", ProtoName: "listDeployments", Method: "ListDeployments", RPC: "loams.live.v1.LiveAdminService/ListDeployments", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "deployments", NextPageToken: "next_page_token"}},
 			{Module: "live.admin", Name: "TailLogs", ProtoName: "tailLogs", Method: "TailLogs", RPC: "loams.live.v1.LiveAdminService/TailLogs", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingServer, Pagination: nil},
+			{Module: "live.admin", Name: "UpdateApp", ProtoName: "updateApp", Method: "UpdateApp", RPC: "loams.live.v1.LiveAdminService/UpdateApp", Service: "loams.live.v1.LiveAdminService", Package: "loams.live.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
 		},
 	},
 	{
@@ -676,13 +704,15 @@ type LiveModule interface {
 	// Unstable reports that the package's wire contract may still change.
 	Unstable() bool
 
+	// Authenticate calls loams.live.v1.LiveService/Authenticate, retried: manual.
+	Authenticate(ctx context.Context, req *connect.Request[livev1.AuthenticateRequest], opts *CallOptions) (*connect.Response[livev1.AuthenticateResponse], error)
 	// ModifyQuerySet calls loams.live.v1.LiveService/ModifyQuerySet, retried: manual.
 	ModifyQuerySet(ctx context.Context, req *connect.Request[livev1.ModifyQuerySetRequest], opts *CallOptions) (*connect.Response[livev1.ModifyQuerySetResponse], error)
 	// Watch calls loams.live.v1.LiveService/Watch, retried: manual.
 	Watch(ctx context.Context, req *connect.Request[livev1.WatchRequest], opts *CallOptions) (*connect.ServerStreamForClient[livev1.Transition], error)
 }
 
-// LiveAdminModule is loams.live.admin — Live administration: deploy, roll back, index status and function logs.
+// LiveAdminModule is loams.live.admin — Live administration: apps, deploy, roll back, index status and function logs.
 //
 // It wraps loams.live.v1.LiveAdminService. Its wire contract may still change, so buf breaking skips it and an SDK marks it experimental (§44 §10.3).
 type LiveAdminModule interface {
@@ -695,16 +725,26 @@ type LiveAdminModule interface {
 
 	// ActivateDeployment calls loams.live.v1.LiveAdminService/ActivateDeployment, retried: manual.
 	ActivateDeployment(ctx context.Context, req *connect.Request[livev1.ActivateDeploymentRequest], opts *CallOptions) (*connect.Response[livev1.ActivateDeploymentResponse], error)
+	// CreateApp calls loams.live.v1.LiveAdminService/CreateApp, retried: manual.
+	CreateApp(ctx context.Context, req *connect.Request[livev1.CreateAppRequest], opts *CallOptions) (*connect.Response[livev1.CreateAppResponse], error)
+	// DeleteApp calls loams.live.v1.LiveAdminService/DeleteApp, retried: manual.
+	DeleteApp(ctx context.Context, req *connect.Request[livev1.DeleteAppRequest], opts *CallOptions) (*connect.Response[livev1.DeleteAppResponse], error)
 	// Deploy calls loams.live.v1.LiveAdminService/Deploy, retried: manual.
 	Deploy(ctx context.Context, req *connect.Request[livev1.DeployRequest], opts *CallOptions) (*connect.Response[livev1.DeployResponse], error)
+	// GetApp calls loams.live.v1.LiveAdminService/GetApp, retried: safe.
+	GetApp(ctx context.Context, req *connect.Request[livev1.GetAppRequest], opts *CallOptions) (*connect.Response[livev1.GetAppResponse], error)
 	// GetDeployment calls loams.live.v1.LiveAdminService/GetDeployment, retried: safe.
 	GetDeployment(ctx context.Context, req *connect.Request[livev1.GetDeploymentRequest], opts *CallOptions) (*connect.Response[livev1.GetDeploymentResponse], error)
 	// GetIndexStatus calls loams.live.v1.LiveAdminService/GetIndexStatus, retried: safe.
 	GetIndexStatus(ctx context.Context, req *connect.Request[livev1.GetIndexStatusRequest], opts *CallOptions) (*connect.Response[livev1.GetIndexStatusResponse], error)
+	// ListApps calls loams.live.v1.LiveAdminService/ListApps, retried: safe. AIP-158: page with Apps and follow NextPageToken through loams.Paginate.
+	ListApps(ctx context.Context, req *connect.Request[livev1.ListAppsRequest], opts *CallOptions) (*connect.Response[livev1.ListAppsResponse], error)
 	// ListDeployments calls loams.live.v1.LiveAdminService/ListDeployments, retried: safe. AIP-158: page with Deployments and follow NextPageToken through loams.Paginate.
 	ListDeployments(ctx context.Context, req *connect.Request[livev1.ListDeploymentsRequest], opts *CallOptions) (*connect.Response[livev1.ListDeploymentsResponse], error)
 	// TailLogs calls loams.live.v1.LiveAdminService/TailLogs, retried: manual.
 	TailLogs(ctx context.Context, req *connect.Request[livev1.TailLogsRequest], opts *CallOptions) (*connect.ServerStreamForClient[livev1.TailLogsResponse], error)
+	// UpdateApp calls loams.live.v1.LiveAdminService/UpdateApp, retried: manual.
+	UpdateApp(ctx context.Context, req *connect.Request[livev1.UpdateAppRequest], opts *CallOptions) (*connect.Response[livev1.UpdateAppResponse], error)
 }
 
 // TablesModule is a second facade name for the same RPCs, exposed as loams.tables.

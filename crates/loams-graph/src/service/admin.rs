@@ -143,9 +143,24 @@ pub struct GraphAdmin {
     /// Takes the graphs' snapshots, commits their manifests and trims their streams (GR1 Task
     /// 13). Set with the log: a graph with no log has no snapshots.
     checkpointer: Option<Checkpointer>,
+    /// Builds, publishes and serves the graphs' adjacency indexes (GR1 Task 22). Set with the
+    /// log: an index is built from a graph's stream.
+    indexer: Option<crate::adjacency::Indexer>,
+    /// Where an algorithm's write-back patches a LINKED graph's vertex documents (GR1 Task 22):
+    /// the server's collections.
+    documents: Option<Arc<dyn crate::retrieval::algos::DocumentPatcher>>,
     /// This call came from another node (`GraphForward`): it is served here or refused, never
-    /// forwarded again.
+    /// forwarded again. The node it came from authorized it (GR1 R24.4).
     forwarded: bool,
+    /// Who may do what to which graph (GR1 Task 24, §48 §11). `None`: every call is allowed
+    /// (an embedder or a test without authorization); the server always sets one.
+    authorizer: Option<Arc<dyn crate::authz::GraphAuthorizer>>,
+    /// The caller this handle serves ([`GraphAdmin::for_caller`]). `None` is a call Loams makes
+    /// itself (a link, a write-back, a forwarded call, maintenance), which is not checked here;
+    /// every RPC handler sets one. A search's expansion and the SQL table functions read through
+    /// this unchecked handle too, but only after their `loams_query::graph::GraphCaller` passed
+    /// (GR1 R24.12, [`crate::authz::PrincipalReads`]).
+    caller: Option<Arc<crate::authz::Caller>>,
     /// When open graphs are evicted (GR1 Task 14).
     evict_policy: EvictPolicy,
     /// The graphs this node evicted and its rehydrations, shared by every clone (GR1 Task 14).
@@ -272,6 +287,16 @@ fn shutting_down() -> ConnectError {
     )
 }
 
+/// A statement's gate verdict (`None`: refused by the gate) and the access it needs.
+type Classified = (Option<crate::classify::Verdict>, crate::Access);
+
+/// Whether a statement only reads, as the server's gate classified it (`verdict`): only a read
+/// may be served by a follower (GR1 Task 15). A statement the gate refused goes to the owner,
+/// which answers the refusal.
+fn reads(verdict: Option<&crate::classify::Verdict>) -> bool {
+    verdict.is_some_and(|verdict| verdict.access == crate::Access::Read)
+}
+
 /// A short operation id: `op-` and 26 hex characters (D146).
 fn operation_id() -> String {
     let hex = format!("{:032x}", u128::from(ulid::Ulid::generate()));
@@ -303,7 +328,11 @@ impl GraphAdmin {
             log: None,
             ownership: None,
             checkpointer: None,
+            indexer: None,
+            documents: None,
             forwarded: false,
+            authorizer: None,
+            caller: None,
             evict_policy: EvictPolicy::default(),
             evictor: Arc::default(),
             replicas: None,
@@ -319,10 +348,13 @@ impl GraphAdmin {
     #[must_use]
     pub fn with_log(mut self, log: crate::durable::GraphLog) -> Self {
         let ownership = Ownership::single(log.meta().clone());
-        self.checkpointer = Some(Checkpointer::new(
-            ManifestStore::new(log.meta().clone(), self.catalog.store().clone()),
-            CheckpointPolicy::default(),
+        let manifests = ManifestStore::new(log.meta().clone(), self.catalog.store().clone());
+        self.indexer = Some(crate::adjacency::Indexer::new(
+            manifests.clone(),
+            crate::adjacency::AdjacencyConfig::default(),
+            self.engine.data_dir().map(std::path::Path::to_path_buf),
         ));
+        self.checkpointer = Some(Checkpointer::new(manifests, CheckpointPolicy::default()));
         self.log = Some(log);
         self.replicas = Some(Arc::new(Replicas::new(&self.engine)));
         self.with_ownership(ownership)
@@ -362,6 +394,37 @@ impl GraphAdmin {
     #[must_use]
     pub fn checkpointer(&self) -> Option<&Checkpointer> {
         self.checkpointer.as_ref()
+    }
+
+    /// The same admin with another adjacency index configuration (GR1 Task 22). Only after
+    /// [`GraphAdmin::with_log`]; the indexer's counters and cache are kept.
+    #[must_use]
+    pub fn with_adjacency_config(mut self, config: crate::adjacency::AdjacencyConfig) -> Self {
+        self.indexer = self.indexer.map(|indexer| indexer.with_config(config));
+        self
+    }
+
+    /// The adjacency indexer, when graphs are durable (GR1 Task 22).
+    #[must_use]
+    pub fn indexer(&self) -> Option<&crate::adjacency::Indexer> {
+        self.indexer.as_ref()
+    }
+
+    /// The same admin writing algorithm results back into LINKED graphs' vertex documents
+    /// through `documents` (GR1 Task 22).
+    #[must_use]
+    pub fn with_documents(
+        mut self,
+        documents: Arc<dyn crate::retrieval::algos::DocumentPatcher>,
+    ) -> Self {
+        self.documents = Some(documents);
+        self
+    }
+
+    /// Where write-backs patch LINKED graphs' documents, when set.
+    #[must_use]
+    pub fn documents(&self) -> Option<&Arc<dyn crate::retrieval::algos::DocumentPatcher>> {
+        self.documents.as_ref()
     }
 
     /// The same admin with another eviction policy (GR1 Task 14). Its clones share what was
@@ -479,6 +542,119 @@ impl GraphAdmin {
     #[must_use]
     pub fn namespace_statements(&self) -> usize {
         self.namespaces.per_namespace()
+    }
+
+    /// The same admin with `authorizer` deciding every RPC a caller makes (GR1 Task 24).
+    #[must_use]
+    pub fn with_authorizer(mut self, authorizer: Arc<dyn crate::authz::GraphAuthorizer>) -> Self {
+        self.authorizer = Some(authorizer);
+        self
+    }
+
+    /// The authorizer, if any.
+    #[must_use]
+    pub fn authorizer(&self) -> Option<&Arc<dyn crate::authz::GraphAuthorizer>> {
+        self.authorizer.as_ref()
+    }
+
+    /// This admin for one RPC of `caller`: each call checks what the caller may do before it
+    /// reads or changes anything (GR1 Task 24).
+    #[must_use]
+    pub fn for_caller(&self, caller: crate::authz::Caller) -> Self {
+        Self {
+            caller: Some(Arc::new(caller)),
+            ..self.clone()
+        }
+    }
+
+    /// Checks that this handle's caller may make `rpc` on `graph` of `namespace` (or on the
+    /// namespace): always allowed without an authorizer, without a caller (a call Loams makes),
+    /// and for a call another node forwarded, which that node authorized.
+    async fn check(
+        &self,
+        rpc: &str,
+        namespace: &str,
+        graph: Option<&str>,
+        need: crate::authz::Need,
+    ) -> Result<(), ConnectError> {
+        let (Some(authorizer), Some(caller), false) =
+            (&self.authorizer, &self.caller, self.forwarded)
+        else {
+            return Ok(());
+        };
+        crate::authz::authorize(authorizer.as_ref(), caller, rpc, namespace, graph, need)
+            .await
+            .map(|_| ())
+    }
+
+    /// Whether this handle checks its caller (an authorizer, a caller, not forwarded).
+    fn checks(&self) -> bool {
+        self.authorizer.is_some() && self.caller.is_some() && !self.forwarded
+    }
+
+    /// Audits an allowed lifecycle change by this handle's caller.
+    fn audit(&self, rpc: &str, namespace: &str, graph: &str) {
+        if let (true, Some(caller)) = (self.checks(), &self.caller) {
+            crate::authz::audit_allowed(caller, rpc, namespace, graph);
+        }
+    }
+
+    /// The gate's verdicts on `statements`, as the server's gate classifies them, each with the
+    /// access it needs: the verdict's, or, for a statement the gate refuses (the serving node
+    /// answers the refusal), the keyword guard's, which never calls a write a read. The gate
+    /// parses, so it runs off the async runtime.
+    async fn verdicts(&self, statements: Vec<String>) -> Vec<Classified> {
+        let limits = self.limits;
+        let count = statements.len();
+        blocking(move || {
+            Ok(statements
+                .iter()
+                .map(|statement| {
+                    match crate::classify::gate_verdict(statement, pb::QueryLanguage::Gql, &limits)
+                    {
+                        Ok(verdict) => (Some(verdict), verdict.access),
+                        Err(_) => (
+                            None,
+                            crate::classify::classify(statement, pb::QueryLanguage::Gql),
+                        ),
+                    }
+                })
+                .collect())
+        })
+        .await
+        .unwrap_or_else(|_| vec![(None, crate::Access::Admin); count])
+    }
+
+    /// What running `statements` needs (§48 §11.1): the strongest access among them, and
+    /// `reader` for none.
+    fn need_of(classified: &[Classified]) -> crate::authz::Need {
+        let access = classified
+            .iter()
+            .map(|(_, access)| *access)
+            .max()
+            .unwrap_or(crate::Access::Read);
+        crate::authz::Need::statement(access)
+    }
+
+    /// Checks a statement call: the verdict decides the need. Answers the verdict, for routing.
+    async fn check_statement(
+        &self,
+        rpc: &str,
+        namespace: &str,
+        graph: &str,
+        statement: &str,
+        classify: bool,
+    ) -> Result<Option<crate::classify::Verdict>, ConnectError> {
+        if !classify && !self.checks() {
+            return Ok(None);
+        }
+        let classified = self.verdicts(vec![statement.to_string()]).await;
+        self.check(rpc, namespace, Some(graph), Self::need_of(&classified))
+            .await?;
+        Ok(classified
+            .into_iter()
+            .next()
+            .and_then(|(verdict, _)| verdict))
     }
 
     /// This admin for one call whose client set its own deadline (Connect's timeout header):
@@ -762,6 +938,35 @@ impl GraphAdmin {
         &self.catalog
     }
 
+    /// Loams' log the graphs are durable in, when the admin has one.
+    #[must_use]
+    pub fn log(&self) -> Option<&crate::durable::GraphLog> {
+        self.log.as_ref()
+    }
+
+    /// Opens catalog graph `meta` here, as its owner, for one of its links (GR1 Task 18).
+    ///
+    /// # Errors
+    ///
+    /// As [`GraphAdmin::open`]: `NOT_FOUND` for a deleted graph, `UNAVAILABLE` when another
+    /// node owns it.
+    pub(crate) async fn link_graph(&self, meta: &GraphMeta) -> Result<Arc<Graph>, ConnectError> {
+        self.open_meta(meta).await
+    }
+
+    /// Commits a link's batch to `graph` on the statement pool (GR1 Task 18). The outer error is
+    /// the pool's; the inner one the graph's.
+    pub(crate) async fn link_commit(
+        &self,
+        graph: Arc<Graph>,
+        job: crate::durable::lane::LinkJob,
+    ) -> Result<Result<u64, crate::GraphError>, ConnectError> {
+        if self.is_shutting_down() {
+            return Err(shutting_down());
+        }
+        self.on_pool(move || Ok(graph.commit_link(job))).await
+    }
+
     /// Fills a `Graph` message: the catalog record, with the engine's state and counts when the
     /// graph is open.
     fn message(&self, meta: &GraphMeta) -> pb::Graph {
@@ -804,6 +1009,11 @@ impl GraphAdmin {
                 .collect(),
             limits: limits_to(&meta.limits).into(),
             replicas: meta.replicas,
+            mapping: meta
+                .mapping
+                .as_ref()
+                .map(crate::mapping::GraphMapping::to_proto)
+                .into(),
             state: state.into(),
             stats: stats.into(),
             create_time: Timestamp {
@@ -815,6 +1025,25 @@ impl GraphAdmin {
             version: meta.version,
             ..Default::default()
         }
+    }
+
+    /// The id of namespace `namespace`, which holds graph `name`: `NOT_FOUND` for the graph
+    /// when the namespace is gone.
+    pub async fn namespace_of(
+        &self,
+        namespace: &str,
+        name: &str,
+    ) -> Result<loams_common::NamespaceId, ConnectError> {
+        self.catalog
+            .namespace_id(namespace)
+            .await
+            .map_err(map_catalog)?
+            .ok_or_else(|| {
+                map_catalog(CatalogError::NotFound {
+                    namespace: namespace.to_string(),
+                    name: name.to_string(),
+                })
+            })
     }
 
     /// The engine's open graph under a name, if any.
@@ -983,6 +1212,7 @@ impl GraphAdmin {
         };
         for _ in 0..2 {
             let graph = {
+                let linked = meta.mode == GraphMode::Linked;
                 let (engine, ns, nm, durable) = (
                     Arc::clone(&self.engine),
                     namespace.to_string(),
@@ -991,7 +1221,7 @@ impl GraphAdmin {
                 );
                 self.on_pool(move || {
                     Graph::open_or_existing(&engine, &ns, &nm, || {
-                        let spec = OpenSpec::for_catalog(&engine, id);
+                        let spec = OpenSpec::for_catalog(&engine, id).linked(linked);
                         match durable {
                             Some(durable) => spec.durable(durable),
                             None => spec,
@@ -1112,17 +1342,21 @@ impl GraphAdmin {
         &self,
         req: pb::CreateGraphRequest,
     ) -> Result<pb::Graph, ConnectError> {
+        // `admin` on the namespace, which also creates the namespace when it does not exist
+        // (Task 4 review M6; GR1 R24.3).
+        self.check(
+            "CreateGraph",
+            &req.namespace,
+            None,
+            crate::authz::Need::At(crate::authz::Relation::Admin),
+        )
+        .await?;
         crate::engine::validate_names(&req.namespace, &req.name).map_err(map_engine)?;
-        if req.mode.as_known() == Some(pb::GraphMode::Linked) {
-            return Err(refuse(
-                ErrorCode::Unimplemented,
-                "not_implemented",
-                "LINKED graphs are not served yet (GR1 Task 17)",
-            ));
-        }
         check_replicas(req.replicas)?;
+        let (mode, mapping) = self.mode_of(&req).await?;
         let new = NewGraph {
-            mode: GraphMode::Owned,
+            mode,
+            mapping,
             languages: languages(&req.languages)?,
             limits: limits_from(req.limits.as_option(), self.timeout_ceiling()),
             replicas: req.replicas,
@@ -1134,7 +1368,109 @@ impl GraphAdmin {
             .create(&req.namespace, &req.name, new)
             .await
             .map_err(map_catalog)?;
+        self.audit("CreateGraph", &req.namespace, &req.name);
         Ok(self.message(&meta))
+    }
+
+    /// A `CreateGraph`'s mode and mapping (GR1 Task 17): an OWNED graph has no mapping, and a
+    /// LINKED one has a mapping valid on its own and against its collections' schemas.
+    async fn mode_of(
+        &self,
+        req: &pb::CreateGraphRequest,
+    ) -> Result<(GraphMode, Option<crate::mapping::GraphMapping>), ConnectError> {
+        let invalid =
+            |message: String| refuse(ErrorCode::InvalidArgument, "invalid_argument", message);
+        let given = req.mapping.as_option();
+        match req.mode.as_known() {
+            Some(pb::GraphMode::Linked) => {}
+            Some(pb::GraphMode::Unspecified | pb::GraphMode::Owned) => {
+                if given.is_some_and(|m| !m.vertices.is_empty() || !m.edges.is_empty()) {
+                    return Err(invalid(
+                        "a mapping is for a LINKED graph; an OWNED graph is written with GQL"
+                            .to_string(),
+                    ));
+                }
+                return Ok((GraphMode::Owned, None));
+            }
+            // A wire number that names no mode is refused, not read as OWNED.
+            None => {
+                return Err(invalid(format!("mode {:?} is not a graph mode", req.mode)));
+            }
+        }
+        let mapping = crate::mapping::GraphMapping::try_from_proto(
+            given.ok_or_else(|| invalid("a LINKED graph needs a mapping".to_string()))?,
+        )
+        .map_err(|err| invalid(err.to_string()))?;
+        mapping.check().map_err(|err| invalid(err.to_string()))?;
+        // The collections are the namespace's, read now: a mapping is checked when it is
+        // created, as an index is (a collection dropped later leaves its labels empty).
+        let meta = self.catalog.meta();
+        let namespace = self
+            .catalog
+            .namespace_id(&req.namespace)
+            .await
+            .map_err(map_catalog)?;
+        let mut schemas = std::collections::HashMap::new();
+        for collection in mapping
+            .vertices
+            .iter()
+            .map(|v| v.collection.as_str())
+            .chain(mapping.edges.iter().map(|e| e.collection.as_str()))
+        {
+            if schemas.contains_key(collection) {
+                continue;
+            }
+            let found = match namespace {
+                Some(namespace) => meta
+                    .resolve_collection(
+                        loams_common::meta::Consistency::Linearizable,
+                        namespace,
+                        collection,
+                    )
+                    .await
+                    .map_err(|err| {
+                        tracing::warn!(error = %err, "reading a LINKED graph's collections failed");
+                        refuse(
+                            ErrorCode::Unavailable,
+                            "unavailable",
+                            "the namespace's collections could not be read; retry",
+                        )
+                    })?,
+                None => None,
+            };
+            schemas.insert(collection.to_string(), found.map(|c| c.schema));
+        }
+        mapping
+            .check_against(|collection| schemas.get(collection).cloned().flatten())
+            .map_err(|err| invalid(err.to_string()))?;
+        // Its streams exist now (GR1 Task 19); one deleted later stops its link.
+        for stream in &mapping.streams {
+            let found = match namespace {
+                Some(namespace) => meta
+                    .stream_by_name(
+                        loams_common::meta::Consistency::Linearizable,
+                        namespace,
+                        &stream.stream,
+                    )
+                    .await
+                    .map_err(|err| {
+                        tracing::warn!(error = %err, "reading a LINKED graph's streams failed");
+                        refuse(
+                            ErrorCode::Unavailable,
+                            "unavailable",
+                            "the namespace's streams could not be read; retry",
+                        )
+                    })?,
+                None => None,
+            };
+            if found.is_none() {
+                return Err(invalid(format!(
+                    "no stream {:?} in the namespace",
+                    stream.stream
+                )));
+            }
+        }
+        Ok((GraphMode::Linked, Some(mapping)))
     }
 
     /// `GetGraph`.
@@ -1143,6 +1479,13 @@ impl GraphAdmin {
     ///
     /// `INVALID_ARGUMENT`, `NOT_FOUND` or `UNAVAILABLE`.
     pub async fn get_graph(&self, req: pb::GetGraphRequest) -> Result<pb::Graph, ConnectError> {
+        self.check(
+            "GetGraph",
+            &req.namespace,
+            Some(&req.name),
+            crate::authz::Need::At(crate::authz::Relation::Reader),
+        )
+        .await?;
         let meta = self
             .catalog
             .get_by_name(&req.namespace, &req.name)
@@ -1165,8 +1508,24 @@ impl GraphAdmin {
             .list(&req.namespace, req.page_size, &req.page_token)
             .await
             .map_err(map_catalog)?;
+        // Only the graphs the caller may read (controller ruling M5; GR1 Task 24). A page may
+        // then hold fewer than `page_size` graphs, which AIP-158 allows; the token still moves
+        // past every graph of the page.
+        let graphs = match (&self.authorizer, &self.caller) {
+            (Some(authorizer), Some(caller)) if self.checks() => {
+                crate::authz::filter_visible(
+                    authorizer.as_ref(),
+                    caller,
+                    &req.namespace,
+                    page.graphs,
+                    |g: &GraphMeta| g.name.as_str(),
+                )
+                .await?
+            }
+            _ => page.graphs,
+        };
         Ok(pb::ListGraphsResponse {
-            graphs: page.graphs.iter().map(|g| self.message(g)).collect(),
+            graphs: graphs.iter().map(|g| self.message(g)).collect(),
             next_page_token: page.next_page_token.unwrap_or_default(),
             ..Default::default()
         })
@@ -1184,6 +1543,13 @@ impl GraphAdmin {
         req: pb::UpdateGraphRequest,
     ) -> Result<pb::Graph, ConnectError> {
         let graph = req.graph.as_option().cloned().unwrap_or_default();
+        self.check(
+            "UpdateGraph",
+            &graph.namespace,
+            Some(&graph.name),
+            crate::authz::Need::Destroy,
+        )
+        .await?;
         let mut paths: Vec<String> = req
             .update_mask
             .as_option()
@@ -1233,6 +1599,7 @@ impl GraphAdmin {
             )
             .await
             .map_err(map_catalog)?;
+        self.audit("UpdateGraph", &graph.namespace, &graph.name);
         Ok(self.message(&meta))
     }
 
@@ -1247,12 +1614,20 @@ impl GraphAdmin {
         &self,
         req: pb::DeleteGraphRequest,
     ) -> Result<ops::Operation, ConnectError> {
+        self.check(
+            "DeleteGraph",
+            &req.namespace,
+            Some(&req.name),
+            crate::authz::Need::Destroy,
+        )
+        .await?;
         let key = check_key("idempotency_key", &req.idempotency_key)?;
         let meta = self
             .catalog
             .mark_deleting(&req.namespace, &req.name, key)
             .await
             .map_err(map_catalog)?;
+        self.audit("DeleteGraph", &req.namespace, &req.name);
         if let Some(open) = self.open_graph(&req.namespace, &req.name)
             && open.id().is_some_and(|id| id.to_string() == meta.id)
         {
@@ -1298,6 +1673,13 @@ impl GraphAdmin {
         &self,
         req: pb::GetSchemaRequest,
     ) -> Result<pb::GraphSchema, ConnectError> {
+        self.check(
+            "GetSchema",
+            &req.namespace,
+            Some(&req.name),
+            crate::authz::Need::At(crate::authz::Relation::Reader),
+        )
+        .await?;
         if let Some(owner) = self.owner_elsewhere(&req.namespace, &req.name).await? {
             return self
                 .forward(&owner, ForwardMethod::GetSchema, &req, 0)
@@ -1354,7 +1736,16 @@ impl GraphAdmin {
         let (namespace, name, timeout) = (req.namespace.clone(), req.graph.clone(), req.timeout_ms);
         let consistency =
             Consistency::from_proto(req.consistency.as_option()).map_err(map_engine)?;
-        let reads = consistency.any_replica() && self.reads(&req.statement).await;
+        let verdict = self
+            .check_statement(
+                "Execute",
+                &namespace,
+                &name,
+                &req.statement,
+                consistency.any_replica(),
+            )
+            .await?;
+        let reads = consistency.any_replica() && reads(verdict.as_ref());
         let serve = match self.route(&namespace, &name, consistency, reads).await? {
             Route::There(owner) => {
                 return self
@@ -1389,7 +1780,16 @@ impl GraphAdmin {
         );
         let consistency =
             Consistency::from_proto(request.consistency.as_option()).map_err(map_engine)?;
-        let reads = consistency.any_replica() && self.reads(&request.statement).await;
+        let verdict = self
+            .check_statement(
+                "ExecuteStream",
+                &namespace,
+                &name,
+                &request.statement,
+                consistency.any_replica(),
+            )
+            .await?;
+        let reads = consistency.any_replica() && reads(verdict.as_ref());
         let route = self.route(&namespace, &name, consistency, reads).await?;
         if let Route::There(owner) = route {
             let body = self
@@ -1432,6 +1832,17 @@ impl GraphAdmin {
         req: pb::ExecuteBatchRequest,
     ) -> Result<pb::ExecuteBatchResponse, ConnectError> {
         let (namespace, name, timeout) = (req.namespace.clone(), req.graph.clone(), req.timeout_ms);
+        if self.checks() {
+            let statements = req.statements.iter().map(|s| s.statement.clone()).collect();
+            let verdicts = self.verdicts(statements).await;
+            self.check(
+                "ExecuteBatch",
+                &namespace,
+                Some(&name),
+                Self::need_of(&verdicts),
+            )
+            .await?;
+        }
         if let Some(owner) = self.owner_elsewhere(&namespace, &name).await? {
             return self
                 .forward(&owner, ForwardMethod::ExecuteBatch, &req, timeout)
@@ -1452,8 +1863,18 @@ impl GraphAdmin {
         let (namespace, name, timeout) = (req.namespace.clone(), req.graph.clone(), req.timeout_ms);
         let consistency =
             Consistency::from_proto(req.consistency.as_option()).map_err(map_engine)?;
-        // An EXPLAIN only plans; a PROFILE runs the statement, so it must read.
-        let reads = consistency.any_replica() && (!req.profile || self.reads(&req.statement).await);
+        // An EXPLAIN only plans; a PROFILE runs the statement, so it must read. Either needs what
+        // the statement needs (§48 §11.1).
+        let verdict = self
+            .check_statement(
+                "Explain",
+                &namespace,
+                &name,
+                &req.statement,
+                consistency.any_replica() && req.profile,
+            )
+            .await?;
+        let reads = consistency.any_replica() && (!req.profile || reads(verdict.as_ref()));
         let serve = match self.route(&namespace, &name, consistency, reads).await? {
             Route::There(owner) => {
                 return self
@@ -1466,21 +1887,6 @@ impl GraphAdmin {
             data::explain_on(graph, req, limits)
         })
         .await
-    }
-
-    /// Whether `statement` only reads, as the server's gate classifies it: only a read may be
-    /// served by a follower (GR1 Task 15). A statement the gate refuses goes to the owner, which
-    /// answers the refusal. The gate parses the statement, so it runs off the async runtime.
-    async fn reads(&self, statement: &str) -> bool {
-        let (statement, limits) = (statement.to_string(), self.limits);
-        blocking(move || {
-            Ok(
-                crate::classify::gate_verdict(&statement, pb::QueryLanguage::Gql, &limits)
-                    .is_ok_and(|verdict| verdict.access == crate::Access::Read),
-            )
-        })
-        .await
-        .unwrap_or(false)
     }
 
     /// Where a data-plane call on `namespace/name` runs (GR1 Task 15; §48 §7.2).
@@ -1613,6 +2019,7 @@ impl GraphAdmin {
             fence: None,
             snapshots: self.snapshot_source(namespace).await?,
         };
+        let linked = meta.mode == GraphMode::Linked;
         let (engine, ns, nm) = (
             Arc::clone(replicas.engine()),
             namespace.to_string(),
@@ -1623,6 +2030,7 @@ impl GraphAdmin {
                 let spec = || {
                     OpenSpec::in_memory_for(id)
                         .follower()
+                        .linked(linked)
                         .durable(durable.clone())
                 };
                 let mut graph =
@@ -1849,6 +2257,7 @@ impl GraphAdmin {
         }
         let this = Self {
             forwarded: true,
+            caller: None,
             ..self.clone()
         };
         Ok(match method {
@@ -2239,8 +2648,9 @@ impl GraphAdmin {
     }
 
     /// Takes every snapshot that is due of every durable graph open (and so owned) here, under
-    /// the checkpoint policy (GR1 Task 13). Run periodically by the server. Answers how many
-    /// graphs were checkpointed; a failure is logged and the graph is tried again next time.
+    /// the checkpoint policy (GR1 Task 13), and keeps each one's adjacency index fresh, if it has
+    /// one (GR1 Task 22). Run periodically by the server. Answers how many graphs were
+    /// checkpointed; a failure is logged and the graph is tried again next time.
     pub async fn checkpoint_due(&self) -> usize {
         let Some(checkpointer) = &self.checkpointer else {
             return 0;
@@ -2290,6 +2700,13 @@ impl GraphAdmin {
             };
             if graph.is_poisoned_or_failed() || graph.is_fenced() {
                 continue;
+            }
+            // The adjacency index, when an algorithm gave the graph one (GR1 Task 22): kept
+            // within `rebuild_after_records` and `interval`, off the write lane.
+            if let Some(indexer) = &self.indexer
+                && let Err(err) = indexer.maintain(Arc::clone(&graph), ns).await
+            {
+                tracing::warn!(%namespace, %name, error = %err, "maintaining a graph's adjacency index failed; retried next time");
             }
             let kinds = match checkpointer.due(&graph, ns).await {
                 Ok(kinds) if kinds.is_empty() => continue,

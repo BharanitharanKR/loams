@@ -24,40 +24,81 @@
 
 @theme inline {
   --color-*: initial;
+  --color-window: var(--op-window);
   --color-bg: var(--op-bg);
   --color-surface: var(--op-surface);
   --color-raised: var(--op-raised);
   --color-rule: var(--op-rule);
   --color-rule-soft: var(--op-rule-soft);
+  --color-input: var(--op-input);
   --color-ink: var(--op-ink);
   --color-muted: var(--op-muted);
   --color-faint: var(--op-faint);
   --color-accent: var(--op-accent);
+  --color-accent-fg: var(--op-accent-fg);
   --color-accent-soft: var(--op-accent-soft);
   --color-accent-ink: var(--op-accent-ink);
   --color-grow: var(--op-grow);
   --color-grow-soft: var(--op-grow-soft);
   --color-grow-deep: var(--op-grow-deep);
   --color-grow-on: var(--op-grow-on);
+  --color-warn: var(--op-warn);
+  --color-warn-soft: var(--op-warn-soft);
   --color-info: var(--op-info);
   --color-info-soft: var(--op-info-soft);
   --color-danger: var(--op-danger);
   --color-danger-soft: var(--op-danger-soft);
+  --color-row-hover: var(--op-row-hover);
+  --color-row-selected: var(--op-row-selected);
+  --color-scrim: var(--op-scrim);
+  --color-code-keyword: var(--op-code-keyword);
+  --color-code-string: var(--op-code-string);
+  --color-code-number: var(--op-code-number);
+  --color-code-comment: var(--op-code-comment);
+  --color-code-function: var(--op-code-function);
+  --color-code-type: var(--op-code-type);
+  --color-code-param: var(--op-code-param);
+  --color-code-operator: var(--op-code-operator);
   --color-transparent: transparent;
   --color-current: currentColor;
 
   --font-sans: var(--loams-font-sans);
-  --font-mono: var(--loams-font-mono);
+  --font-mono: var(--loams-font-mono); /* mono-ok: code */
   --ease-op: var(--op-ease);
+  --ease-panel: var(--op-ease-panel);
 
-  /* Spacing, corners and shadows are tokens too: panels keep hard corners,
-     anything you press is a pill. */
+  /* The type scale (D1075): text-micro … text-hero. */
+  --text-micro: var(--op-text-micro);
+  --text-micro--line-height: 16px;
+  --text-small: var(--op-text-small);
+  --text-small--line-height: 16px;
+  --text-body: var(--op-text-body);
+  --text-body--line-height: 20px;
+  --text-emphasis: var(--op-text-emphasis);
+  --text-emphasis--line-height: 20px;
+  --text-section: var(--op-text-section);
+  --text-section--line-height: 24px;
+  --text-title: var(--op-text-title);
+  --text-title--line-height: 28px;
+  --text-title--letter-spacing: -0.02em;
+  --text-hero: var(--op-text-hero);
+  --text-hero--line-height: 32px;
+
+  /* Spacing, corners and shadows are tokens too (D1073). rounded-none is a real 0
+     (W5); rounded-panel is the panel corner. */
   --spacing: var(--op-space);
   --radius-*: initial;
-  --radius-none: var(--op-radius);
+  --radius-none: 0px;
+  --radius-xs: var(--op-radius-xs);
   --radius-sm: var(--op-radius-sm);
+  --radius-md: var(--op-radius-md);
+  --radius-lg: var(--op-radius-lg);
+  --radius-xl: var(--op-radius-xl);
   --radius-pill: var(--op-radius-pill);
+  --radius-panel: var(--op-radius);
   --shadow-*: initial;
   --shadow-pop: var(--op-shadow-pop);
   --shadow-modal: var(--op-shadow-modal);
+  --shadow-composer: var(--op-shadow-composer);
+  --shadow-chip: var(--op-shadow-chip);
 }

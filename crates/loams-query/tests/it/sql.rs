@@ -25,6 +25,7 @@ use loams_collection::{
     SparseVector, SparseVectorSpec,
 };
 use loams_common::meta::AliasAction;
+use loams_query::graph::GraphCaller;
 use loams_query::sql::{
     CollectionProvider, RetrieverDescriptorUdf, SqlResult, rows_to_json, run_read_only,
 };
@@ -135,7 +136,7 @@ async fn with_kb() -> (Fixture, Arc<CollectionService>) {
 }
 
 async fn sql(service: &CollectionService, query: &str) -> Result<SqlResult, ServiceError> {
-    let ctx = service.sql_context(NS);
+    let ctx = service.sql_context(NS, GraphCaller::Internal);
     run_read_only(&ctx, query, &service.config().sql).await
 }
 
@@ -558,7 +559,7 @@ async fn pushed_down_filters_equal_unpushed_results() {
     write(&service, "pd", tail).await;
 
     let config = service.config().sql.clone();
-    let pushed = service.sql_context(NS);
+    let pushed = service.sql_context(NS, GraphCaller::Internal);
     let provider = pushed.table_provider("pd").await.expect("pd");
     let provider = (provider.as_ref() as &dyn Any)
         .downcast_ref::<CollectionProvider>()
@@ -865,7 +866,7 @@ async fn tables_resolve_by_name_alias_and_qualified_name() {
         )
         .await
         .expect("alias");
-    let ctx = service.sql_context(NS);
+    let ctx = service.sql_context(NS, GraphCaller::Internal);
     // Created after the context exists.
     service
         .create_collection(NS, "later", kb_schema(), None)
@@ -1076,4 +1077,38 @@ fn rows_to_json_formats_every_type() {
         ])
     );
     assert_eq!(out["truncated"], json!(false));
+}
+
+/// GR1 Task 21: a graph table function cannot take a `LATERAL` outer column (DataFusion plans a
+/// table function before the join's rows), so one is refused with the query-string form as the
+/// advice; without Loams Graph on the server, the functions are refused as such.
+#[tokio::test]
+async fn lateral_join_with_collection() {
+    let (f, service) = with_kb().await;
+    let message = invalid(
+        sql(
+            &service,
+            "SELECT n.key FROM kb CROSS JOIN LATERAL graph_expand('kg', kb._id) n",
+        )
+        .await,
+    );
+    assert!(
+        message.contains("LATERAL") && message.contains("SELECT key FROM"),
+        "{message}"
+    );
+    let message = invalid(
+        sql(
+            &service,
+            "SELECT * FROM graph_expand('kg', 'SELECT _id FROM kb', 'entity', 1)",
+        )
+        .await,
+    );
+    assert!(message.contains("does not run"), "{message}");
+    // Named arguments are DataFusion's to refuse; positional ones are §07 §5.1's order.
+    let message = invalid(sql(&service, "SELECT * FROM graph_degree(graph => 'kg')").await);
+    assert!(
+        message.contains("Unsupported function argument"),
+        "{message}"
+    );
+    f.shutdown().await;
 }

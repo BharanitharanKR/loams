@@ -4,8 +4,10 @@ import { protocol, type Session } from "electron";
 import type { EngineState, ServerEntry } from "../../shared/contracts";
 import { isAgentdPath } from "../agentd/allowlist";
 import type { AgentdTarget } from "../agentd/discover";
+import type { PgControlTarget } from "../pgcontrol/target";
 import { handleAgentdRequest } from "./agentd";
 import { upstream } from "./inflight";
+import { handlePgControlRequest, isPgControlPath } from "./pg-control";
 import { isProxied, proxyRequest } from "./proxy";
 import { routeRequest } from "./route";
 import { ensureCspMeta, resolveStatic } from "./static";
@@ -32,6 +34,8 @@ export interface AppProtocolDeps {
 	localShim: LocalShim;
 	/** The local daemon's Connect listener and token (SD1 Task 5), or null. */
 	agentd: () => AgentdTarget | null;
+	/** pg-control's API listener and key (PG2 R9.1), read per request. */
+	pgControl: () => PgControlTarget;
 }
 
 /** Must run before app ready. */
@@ -83,9 +87,21 @@ export function installAppProtocol(ses: Session, deps: AppProtocolDeps): void {
 		if (url.hostname !== "console") return text(404, "not found");
 
 		// Before the server routes: `/loams.` is otherwise the active server's.
+		// Node's fetch, not `ses.fetch`: the daemon's loopback listener is plain
+		// HTTP/1.1, where Chromium's network stack allows six connections per host,
+		// and Studio keeps six Watch* server streams open. Through the session the
+		// seventh request (AddRepo, a thread's turn, ...) queued behind them for
+		// ever. The daemon needs no cookie or session state (they are dropped).
 		if (isAgentdPath(url.pathname))
 			return handleAgentdRequest(req, deps.agentd, (r) =>
-				ses.fetch(r as Request),
+				globalThis.fetch(r as Request),
+			);
+
+		// loams.postgres.v1 is pg-control's, on its own listener, never the
+		// engine's; main adds the API key (Node's fetch: no session state).
+		if (isPgControlPath(url.pathname))
+			return handlePgControlRequest(req, deps.pgControl, (r) =>
+				globalThis.fetch(r as Request),
 			);
 
 		if (isProxied(url.pathname)) {

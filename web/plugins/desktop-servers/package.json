@@ -26,7 +26,7 @@
       "provides": [],
       "slots": [
         "console.settings.section",
-        "shell.header.server"
+        "shell.sidebar.server"
       ],
       "permissions": [],
       "requires": {

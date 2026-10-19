@@ -130,7 +130,8 @@ pub async fn compact(
         settings: &pinned,
         ..*ctx
     };
-    let lease = ctx.pool.acquire(&namespace.to_string()).await?;
+    let mut lease = ctx.pool.acquire(&namespace.to_string()).await?;
+    lease.account_as(compaction_of(database, name));
     let written = crate::insert::write_files(&pinned_ctx, lease, &target).await?;
 
     // The `replace`, on the snapshot that was read.
@@ -172,6 +173,15 @@ pub async fn compact(
         Ok(_) => Ok(Compacted::Committed(built.snapshot_id)),
         Err(CatalogError::Conflict { .. }) => Ok(Compacted::Abandoned),
         Err(err) => Err(err.into()),
+    }
+}
+
+/// A compaction's leases are `house.compaction`, not `house.query` (HS1 Task
+/// 22), whether the scheduler or an `OPTIMIZE` asked for it.
+fn compaction_of(database: &str, name: &str) -> crate::usage::Purpose {
+    crate::usage::Purpose::Compaction {
+        database: database.to_string(),
+        table: name.to_string(),
     }
 }
 
@@ -236,7 +246,7 @@ pub async fn needs_compaction(
     let Some(table) = ctx.lake.load(ctx.user.namespace, database, name).await? else {
         return Ok(false);
     };
-    if ddl::class_of(&table.metadata) == ddl::TableClass::External {
+    if ddl::class_of(&table.metadata) != ddl::TableClass::Lake {
         return Ok(false);
     }
     let Some(snapshot) = table.metadata.current_snapshot() else {
@@ -283,6 +293,7 @@ async fn count_final(
         quote_name(name)
     );
     let mut lease = ctx.pool.acquire(&ctx.user.namespace.to_string()).await?;
+    lease.account_as(compaction_of(database, name));
     let result = async {
         let analysis = lease
             .analyze(&sql, &[])
@@ -299,6 +310,7 @@ async fn count_final(
             &analysis,
             &sql,
             &pinned,
+            None,
         )
         .await?;
         let out = lease
@@ -377,6 +389,8 @@ impl Scheduler {
                 limits: &self.config.session_limits,
                 known: &known,
                 max_insert_bytes: self.config.lake_insert_max_bytes,
+                pipe_batch: None,
+                admitted: None,
             };
             let outcome = match needs_compaction(&ctx, &database, &name).await {
                 Ok(true) => compact(&ctx, &database, &name, false).await,

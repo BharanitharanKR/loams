@@ -25,13 +25,14 @@ use async_trait::async_trait;
 use bytes::{Bytes, BytesMut};
 use futures::stream::{self, BoxStream};
 use futures::{StreamExt, TryStreamExt};
+use loams_cache::{CacheError, RangeCache};
 use loams_fs::{Fs, FsError, FsPath, MemFs, SpillDir};
 use loams_store::{Store, StoreError};
 
 use crate::error::IdError;
 use crate::format::lpk::{LPK_FOOTER_LEN, encode_footer, pack_checksum};
 use crate::format::pb;
-use crate::ids::ObjectId;
+use crate::ids::{ObjectId, WsId};
 use crate::limits::MULTIPART_THRESHOLD;
 use crate::paths::RepoPaths;
 use crate::retry::{self, BACKOFF, is_transient, pause};
@@ -141,6 +142,10 @@ pub enum BlobError {
     /// A pack and an idx that do not form a pack bundle.
     #[error("invalid pack bundle: {0}")]
     InvalidPack(String),
+    /// The H1 range cache failed in a way that is not a store error
+    /// (plan GT1 Task 17).
+    #[error("range cache: {0}")]
+    Cache(String),
     /// A streamed body failed.
     #[error("blob body failed: {0}")]
     Body(#[source] io::Error),
@@ -183,11 +188,15 @@ const SPILL_BODY: &str = "body";
 pub const DEFAULT_MEMORY_SPILL_BYTES: u64 = 256 * 1024 * 1024;
 
 /// [`BlobStore`] over a `loams_store::Store`: blobs are a repository's pack
-/// objects, `ns/<ns>/repos/<repo_id>/packs/<id>.lpk`.
+/// objects, `ns/<ns>/repos/<repo_id>/packs/<id>.lpk`, or a workspace's,
+/// `…/ws/<ws_id>/packs/<id>.lpk` ([`StoreBlobStore::workspace`]).
 #[derive(Clone, Debug)]
 pub struct StoreBlobStore {
     store: Store,
-    paths: RepoPaths,
+    /// Where the blobs live: `…/packs/` or `…/ws/<ws_id>/packs/`.
+    prefix: String,
+    /// The H1 cache range reads go through, when there is one (Task 17).
+    h1: Option<RangeCache>,
     spill: Arc<dyn Fs>,
     spill_parent: FsPath,
     atomic_multipart: bool,
@@ -200,9 +209,21 @@ impl StoreBlobStore {
     /// assumed atomic until [`StoreBlobStore::with_atomic_multipart`] says
     /// otherwise.
     pub fn new(store: Store, paths: RepoPaths) -> Self {
+        Self::at(store, paths.pack_prefix())
+    }
+
+    /// The packs of workspace `ws` of the repository at `paths`
+    /// (`…/ws/<ws_id>/packs/<id>.lpk`, §36 §19.4.1), configured as
+    /// [`StoreBlobStore::new`] is.
+    pub fn workspace(store: Store, paths: &RepoPaths, ws: &WsId) -> Self {
+        Self::at(store, format!("{}packs/", paths.ws_prefix(ws)))
+    }
+
+    fn at(store: Store, prefix: String) -> Self {
         Self {
             store,
-            paths,
+            prefix,
+            h1: None,
             spill: Arc::new(MemFs::new(DEFAULT_MEMORY_SPILL_BYTES)),
             spill_parent: FsPath::root(),
             atomic_multipart: true,
@@ -218,6 +239,15 @@ impl StoreBlobStore {
         self
     }
 
+    /// Serves [`BlobStore::get_range`] through `cache`, the H1 range cache
+    /// (§04; plan GT1 Task 17), which must read the same store this blob
+    /// store writes. Blobs are immutable, so nothing is ever invalidated;
+    /// puts and heads go to the store.
+    pub fn with_range_cache(mut self, cache: RangeCache) -> Self {
+        self.h1 = Some(cache);
+        self
+    }
+
     /// Declares whether the store completes a multipart upload atomically,
     /// so no reader sees part of the object. S3, R2, GCS and Azure document
     /// it, and RustFS 1.0.0 was checked (Q385, ruling T6.2). When `false`,
@@ -230,7 +260,40 @@ impl StoreBlobStore {
 
     /// The object path of blob `id`.
     pub fn path(&self, id: &BlobId) -> String {
-        format!("{}{id}.lpk", self.paths.pack_prefix())
+        format!("{}{id}.lpk", self.prefix)
+    }
+
+    /// `range` of blob `id` (at `path`) through the H1 cache, retrying
+    /// transient store errors as the direct path does.
+    async fn get_range_cached(
+        &self,
+        h1: &RangeCache,
+        id: &BlobId,
+        path: &str,
+        range: Range<u64>,
+    ) -> Result<Bytes, BlobError> {
+        let mut attempt = 0;
+        loop {
+            match h1.read(path, range.clone()).await {
+                Ok(bytes) => return Ok(bytes),
+                Err(CacheError::OutOfRange { size, .. }) => {
+                    return Err(BlobError::OutOfRange {
+                        id: id.clone(),
+                        range,
+                        len: size,
+                    });
+                }
+                Err(CacheError::Store(StoreError::NotFound { .. })) => {
+                    return Err(BlobError::NotFound { id: id.clone() });
+                }
+                Err(CacheError::Store(err)) if is_transient(&err) && attempt < BACKOFF.len() => {
+                    pause(attempt).await;
+                    attempt += 1;
+                }
+                Err(CacheError::Store(err)) => return Err(err.into()),
+                Err(err) => return Err(BlobError::Cache(err.to_string())),
+            }
+        }
     }
 
     /// Refuses a large blob where multipart completion may not be atomic.
@@ -441,6 +504,9 @@ impl BlobStore for StoreBlobStore {
             return Ok(Bytes::new());
         }
         let path = self.path(id);
+        if let Some(h1) = &self.h1 {
+            return self.get_range_cached(h1, id, &path, range).await;
+        }
         let mut attempt = 0;
         loop {
             match self.store.get_range_with_info(&path, range.clone()).await {
@@ -505,21 +571,34 @@ impl LpkWriter {
     /// its `PackRef`. Checks that `idx` is a version 2 idx of `pack`: the
     /// same object count and the pack's checksum in the idx trailer.
     pub fn from_parts(pack: Bytes, idx: Bytes) -> Result<(BlobId, pb::PackRef, Bytes), BlobError> {
+        let (id, pack_ref) = Self::check_parts(&pack, &idx)?;
+        let footer = encode_footer(&pack, &idx);
+        let mut bundle = BytesMut::with_capacity(pack.len() + idx.len() + LPK_FOOTER_LEN);
+        bundle.extend_from_slice(&pack);
+        bundle.extend_from_slice(&idx);
+        bundle.extend_from_slice(&footer);
+        Ok((id, pack_ref, bundle.freeze()))
+    }
+
+    /// The checks of [`LpkWriter::from_parts`] without building the bundle:
+    /// its blob id and `PackRef` (Task 24 verifies an uploaded bundle in
+    /// place).
+    pub fn check_parts(pack: &[u8], idx: &[u8]) -> Result<(BlobId, pb::PackRef), BlobError> {
         let invalid = |reason: String| BlobError::InvalidPack(reason);
-        let checksum = pack_checksum(&pack).map_err(|err| invalid(err.to_string()))?;
-        let pack_version = be_u32(&pack, 4);
+        let checksum = pack_checksum(pack).map_err(|err| invalid(err.to_string()))?;
+        let pack_version = be_u32(pack, 4);
         if !(2..=3).contains(&pack_version) {
             return Err(invalid(format!("pack version {pack_version}")));
         }
-        let count = be_u32(&pack, 8);
+        let count = be_u32(pack, 8);
         if idx.len() < IDX_HEADER_LEN + IDX_TRAILER_LEN || idx[..4] != IDX_MAGIC {
             return Err(invalid("not a version 2 idx".into()));
         }
-        let idx_version = be_u32(&idx, 4);
+        let idx_version = be_u32(idx, 4);
         if idx_version != 2 {
             return Err(invalid(format!("idx version {idx_version}")));
         }
-        let fanout: Vec<u32> = (0..256).map(|i| be_u32(&idx, 8 + i * 4)).collect();
+        let fanout: Vec<u32> = (0..256).map(|i| be_u32(idx, 8 + i * 4)).collect();
         if fanout.windows(2).any(|w| w[0] > w[1]) {
             return Err(invalid("idx fan-out is not monotonic".into()));
         }
@@ -547,11 +626,6 @@ impl LpkWriter {
         if idx[trailer..trailer + 20] != *checksum.as_bytes() {
             return Err(invalid("the idx names another pack".into()));
         }
-        let footer = encode_footer(&pack, &idx);
-        let mut bundle = BytesMut::with_capacity(pack.len() + idx.len() + LPK_FOOTER_LEN);
-        bundle.extend_from_slice(&pack);
-        bundle.extend_from_slice(&idx);
-        bundle.extend_from_slice(&footer);
         let pack_ref = pb::PackRef {
             checksum: checksum.to_hex().to_string(),
             object_count: u64::from(count),
@@ -560,7 +634,7 @@ impl LpkWriter {
             idx_len: idx.len() as u64,
             has_bitmap: false,
         };
-        Ok((BlobId::from_checksum(&checksum), pack_ref, bundle.freeze()))
+        Ok((BlobId::from_checksum(&checksum), pack_ref))
     }
 }
 

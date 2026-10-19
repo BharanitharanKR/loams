@@ -50,6 +50,14 @@ export {
   invokeOn,
 } from './bridge.js';
 export {
+  type Capabilities,
+  capabilities,
+  compareVersions,
+  MIN_ENGINE,
+  UPGRADE_COMMAND,
+  unmet,
+} from './capabilities.js';
+export {
   type CatalogEntry,
   CatalogError,
   type CatalogPatch,
@@ -104,6 +112,8 @@ export {
   type Location,
   type PageProps,
   type PageSpec,
+  type PanelService,
+  type PanelState,
   type PlatformService,
   type RouterService,
   type RpcServices,
@@ -112,8 +122,21 @@ export {
   type SessionGate,
   type SessionService,
   service,
+  type ThemeService,
   watch,
 } from './services.js';
+export {
+  applyTheme,
+  localThemeStore,
+  MOTION_KEY,
+  parseThemeChoice,
+  resolveDark,
+  THEME_KEY,
+  type ThemeChoice,
+  ThemeController,
+  type ThemeEnv,
+  type ThemeStore,
+} from './theme.js';
 export { CORE_PLUGINS, DEFAULT_TRUSTED_PUBLISHERS, type PluginSource, tierOf } from './tiers.js';
 
 /** The console host's semver; plugins declare `requires.console` against it. */

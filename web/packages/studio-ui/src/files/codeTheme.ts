@@ -43,7 +43,7 @@ export const CODE_SURFACE_CSS = `
   :host {
     display: block;
     min-height: 100%;
-    --diffs-font-family: var(--loams-font-mono);
+    --diffs-font-family: var(--loams-font-mono); /* mono-ok: code */
     --diffs-bg-selection-override: var(--op-accent-soft);
     --diffs-bg-selection-number-override: var(--op-accent-soft);
     --diffs-fg-number-override: var(--op-faint);

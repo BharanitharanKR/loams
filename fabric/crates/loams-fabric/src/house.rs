@@ -20,8 +20,9 @@
 //! * `--sandbox=none` needs `--unsafe-no-sandbox` (HS1 R1.10, R6.8), except on a
 //!   system with no L3 (macOS) in `--single-node` mode, and is logged either way.
 //! * `--workers=inproc` needs `--single-node` and a build with `inproc-worker`.
-//! * The native listener (Task 31) and admin (Task 23) are resolved and
-//!   validated now, and [`start`] says on stderr that they are not served yet.
+//! * The native listener (Task 31) is resolved and validated now, and
+//!   [`start`] says on stderr that it is not served yet. The admin listener
+//!   serves `GET /metrics` (Task 23), loopback only.
 //!   The store is read through `house-cache` by process workers (Task 9) and
 //!   written by the front (Task 12).
 //! * `--catalog` (HS1 Task 10) needs `--store`: the catalog of lake tables writes
@@ -33,6 +34,7 @@ use std::net::SocketAddr;
 use std::os::unix::fs::OpenOptionsExt as _;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 
 use loams_cache::RangeCacheConfig;
 use loams_house::catalog::{
@@ -89,7 +91,7 @@ pub struct HouseSettings {
     pub data_dir: PathBuf,
     /// The native listener (not served until HS1 Task 31).
     pub native_listen: Option<SocketAddr>,
-    /// Admin and metrics (not served until HS1 Task 23).
+    /// Admin and metrics: `GET /metrics` (HS1 Task 23).
     pub admin_listen: SocketAddr,
     /// The catalog (used from HS1 Task 10).
     pub catalog: Option<CatalogSpec>,
@@ -213,8 +215,22 @@ pub fn resolve(args: &HouseArgs, file: HouseFile) -> Result<HouseSettings, House
         ..HouseConfig::default()
     };
     house.limits.apply(&mut http);
+    // Namespace quotas (HS1 Task 22): `[house.quotas]` until the control plane
+    // serves them.
+    http.quotas = std::sync::Arc::new(house.quotas.to_quotas().map_err(bad)?);
+    http.admin_listen = Some(admin_listen);
+    // The engine whose streams pipes read (HS1 Task 16).
+    http.engine = house.engine.link().map_err(bad)?;
+    if let Some(hours) = house.snapshot_retention_hours {
+        http.snapshot_retention = loams_house::retention::check_retention(Duration::from_secs(
+            hours.saturating_mul(3600),
+        ))
+        .map_err(|err| bad(format!("[house] snapshot_retention_hours: {err}")))?;
+    }
     let mut pool = PoolConfig::default();
     house.pool.apply(&mut pool);
+    // The watchdog's cap is the front's `max_execution_time` cap (HS1 Task 21).
+    pool.max_execution_time = Duration::from_secs_f64(http.session_limits.max_execution_time_s);
 
     let catalog = match (&args.catalog, &house.catalog.url) {
         (Some(spec), _) => Some(spec.clone()),
@@ -353,6 +369,11 @@ impl Running {
         self.handle.tls_addr()
     }
 
+    /// Where the admin listener (`GET /metrics`) listens (HS1 Task 23).
+    pub fn admin_addr(&self) -> Option<SocketAddr> {
+        self.handle.admin_addr()
+    }
+
     /// The worker pool.
     pub fn pool(&self) -> &WorkerPool {
         &self.pool
@@ -364,6 +385,24 @@ impl Running {
     }
 }
 
+/// The House data directory's format version (registry id `house.dir`, UP1
+/// Task 6).
+pub const DATA_DIR_VERSION: u16 = 1;
+
+/// Writes the data directory's `FORMAT` stamp when it has none: absent means
+/// 1 (design §54 §4.1), so this records what is already there.
+fn stamp_data_dir(dir: &Path) -> Result<(), HouseError> {
+    use loams_common::formats::{HOUSE_DIR, STAMP_FILE};
+    let stamp = dir.join(STAMP_FILE);
+    if stamp.exists() {
+        return Ok(());
+    }
+    let tmp = dir.join(format!("{STAMP_FILE}.tmp"));
+    std::fs::write(&tmp, format!("{} {DATA_DIR_VERSION}\n", HOUSE_DIR.as_str()))
+        .and_then(|()| std::fs::rename(&tmp, &stamp))
+        .map_err(|err| bad(format!("stamping {}: {err}", stamp.display())))
+}
+
 /// Starts the pool (booting one worker first, HS1 R1.12) and the HTTP interface.
 pub async fn start(mut settings: HouseSettings) -> Result<Running, HouseError> {
     std::fs::create_dir_all(&settings.data_dir).map_err(|err| {
@@ -372,6 +411,7 @@ pub async fn start(mut settings: HouseSettings) -> Result<Running, HouseError> {
             settings.data_dir.display()
         ))
     })?;
+    stamp_data_dir(&settings.data_dir)?;
     if let Some(path) = &settings.local_key {
         let password = local_key(path)?;
         settings
@@ -430,10 +470,6 @@ pub fn not_served_yet(settings: &HouseSettings) -> Vec<String> {
             "native protocol {native}: not served until HS1 Task 31"
         ));
     }
-    out.push(format!(
-        "admin and metrics {}: not served until HS1 Task 23",
-        settings.admin_listen
-    ));
     if let Some(store) = &settings.store {
         out.push(match settings.workers {
             WorkersMode::Process => {
@@ -494,7 +530,10 @@ async fn lake(
     // from the same store.
     let files = loams_store::Store::from_url(store_url, Vec::<(String, String)>::new())
         .map_err(|err| bad(format!("--store {store_url:?}: {err}")))?;
-    let mut lake = Lake::new(catalog, root).with_store(files);
+    let mut lake = Lake::new(catalog, root)
+        .with_store(files)
+        .with_retention(settings.http.snapshot_retention)
+        .with_object_caps(settings.http.object_caps);
     if let Some(cache) = cache {
         lake = lake.with_grants(Arc::new(cache.clone()) as Arc<dyn PrefixGrants>);
     }
@@ -657,4 +696,39 @@ fn addr(text: &str) -> SocketAddr {
 
 fn bad(message: String) -> HouseError {
     HouseError::from(ChError::bad_arguments(message))
+}
+
+/// UP1 Task 6: the data directory's stamp.
+#[cfg(test)]
+mod format_tests {
+    use loams_common::formats::{self, HOUSE_DIR, STAMP_FILE};
+
+    use super::*;
+
+    #[test]
+    fn format_constants_match_registry() {
+        assert_eq!(DATA_DIR_VERSION, formats::spec_of(HOUSE_DIR).current);
+    }
+
+    #[test]
+    fn house_dir_format_stamp_absent_reads_as_one() {
+        let dir = tempfile::tempdir().expect("dir");
+        // A preview.2 directory has no stamp: it reads as 1.
+        assert_eq!(
+            formats::check_dir_stamp(dir.path(), HOUSE_DIR).expect("absent"),
+            1
+        );
+        stamp_data_dir(dir.path()).expect("stamp");
+        assert_eq!(
+            std::fs::read_to_string(dir.path().join(STAMP_FILE)).expect("read"),
+            "house.dir 1\n"
+        );
+        assert_eq!(
+            formats::check_dir_stamp(dir.path(), HOUSE_DIR).expect("stamped"),
+            1
+        );
+        // A stamp already there is kept.
+        std::fs::write(dir.path().join(STAMP_FILE), "house.dir 1\n").expect("write");
+        stamp_data_dir(dir.path()).expect("again");
+    }
 }

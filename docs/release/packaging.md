@@ -12,9 +12,19 @@ is [`publishing.md`](publishing.md), which this does not change.
 
 ## What ships
 
-One binary is packaged: **`loams`**, `crates/loams/src/main.rs`. Its
-subcommands are `dev`, `standalone`, `cluster`, `warm`, `durable` and
-`migrate`. **[verified]** — read from the `Command` enum in that file.
+Two binaries are packaged: **`loams`**, `crates/loams/src/main.rs`, and, from
+0.1.0, **`git-remote-loams`**, `crates/loams-git-remote` (git's
+remote helper for `loams::` URLs; see [Git push and fetch to the
+bucket](#git-push-and-fetch-to-the-bucket)). The `loams` subcommands are
+`dev`, `standalone`, `cluster`, `warm`, `durable` and `migrate`.
+**[verified]** — read from the `Command` enum in that file.
+
+`git-remote-loams` is installed next to `loams` in every artifact (`/usr/bin`
+in the Linux packages, the top level of the Windows zip and of the macOS
+tarballs) because git finds a remote helper by its name on PATH. It is not
+published to crates.io (`publish = false`; owner, 2026-10-15). It is built by
+its own `cargo build -p loams-git-remote` call, so its dependencies cannot
+change the server binary's feature set.
 
 The workspace has five other `[[bin]]` targets. **None of them is packaged**,
 deliberately:
@@ -69,6 +79,7 @@ at all. It can now.
 
 ```
 /usr/bin/loams                        the server binary, 0755
+/usr/bin/git-remote-loams             git's remote helper for loams:: URLs, 0755
 /usr/share/loams/console/             the built web console, 0644
 /usr/share/doc/loams/LICENSE
 /usr/share/doc/loams/NOTICE
@@ -107,6 +118,11 @@ package already ships it — `libc6` on Debian and Ubuntu (glibc has carried lib
 since 2.34), `glibc` on Fedora/RHEL/openSUSE, and `glibc` on Arch and CachyOS
 (`pacman -Qo` confirms the last). There is no `libm` package on Debian to name,
 so declaring one would produce a dependency that does not exist.
+
+`git-remote-loams` needs the same four libraries and nothing else, so the one
+`depends` list covers both binaries. The workflow's "the binaries' dynamic
+dependencies" step fails the build if the helper ever needs a library the
+server does not.
 
 The list this short is a consequence of the server's `reqwest` being
 `default-features = false`, so it links no TLS or proxy library.
@@ -152,9 +168,9 @@ right answer here.
 The artifact is a **`.zip`, not an `.msi`**: there is no installer UI in this
 project, and wrapping a console server binary in one would add a WiX build, a
 code-signing requirement, and nothing a user of the zip does not already do by
-hand. The zip holds `loams.exe`, the built console, `LICENSE`, `NOTICE` and
-`README.md` — the same content the Linux packages install, minus the systemd
-units.
+hand. The zip holds `loams.exe`, `git-remote-loams.exe`, the built console,
+`LICENSE`, `NOTICE` and `README.md` — the same content the Linux packages
+install, minus the systemd units.
 
 A **downloaded** copy triggers SmartScreen's *"Windows protected your PC"*. That
 is an **unknown-publisher** warning, not a malware detection, and it clears per
@@ -219,9 +235,54 @@ package.
 
 ```powershell
 Expand-Archive .\loams-0.0.1-windows-x86_64.zip -DestinationPath loams
-Get-Item .\loams\loams.exe | Unblock-File
+Get-Item .\loams\loams.exe, .\loams\git-remote-loams.exe | Unblock-File
 .\loams\loams.exe dev
 ```
+
+Add the `loams` directory to PATH for `git-remote-loams.exe` to be found.
+
+### Git push and fetch to the bucket
+
+Every package installs `git-remote-loams` next to `loams`. git runs a helper
+named `git-remote-<scheme>` for a `<scheme>::<address>` URL, so with the helper
+on PATH, plain git reaches a Loams Git repository in the bucket directly, with
+no Loams server in between:
+
+```sh
+git-remote-loams --version
+# The first push creates the repository (only with this variable set, so a typo
+# in a URL never creates one).
+LOAMS_GIT_CREATE_ON_PUSH=1 git -C myrepo push loams::<store-url>/ns/<namespace-id>/repos/<repo> main
+git clone loams::<store-url>/ns/<namespace-id>/repos/<repo> work
+git -C work push origin main
+```
+
+The URL's parts:
+
+- `<store-url>` is the bucket the engine uses (`LOAMS_BUCKET`, for example
+  `s3://bucket/prefix` or `file:///var/lib/loams/bucket`). The helper opens it
+  itself, with the backend's credentials from the environment (`AWS_*`,
+  `GOOGLE_*`, `AZURE_*`).
+- `<namespace-id>` is the namespace's **numeric id**, not its name. The bucket
+  keys everything by namespace id; the names live in the engine's metadata
+  store, which the helper never reaches, so a name there is refused with a
+  message that says so. The engine answers the id as `namespace_id` from
+  `loams.collection.v1.NamespaceService/CreateNamespace` (for a namespace that
+  already exists, the `already_exists` error carries it as `id`), and as `id`
+  from `POST /v1/namespaces`.
+- `<repo>` is the repository's id (`[a-z0-9][a-z0-9._-]{0,99}`); a push with
+  `LOAMS_GIT_CREATE_ON_PUSH=1` creates the repository under that id. The
+  helper also accepts a repository name from `loams.repos.v1`'s catalog, but
+  that service (cargo feature `git`) is not in the release images, so there
+  `CreateRepo` and the other `RepoService` calls answer
+  `feature_not_in_variant`: repositories are created by `git-remote-loams`
+  push, and the console does not list them.
+
+The helper reads refs from the repository's WAL in the bucket, fetches stored
+packs, and pushes by uploading one pack and committing one ref transaction
+(design §36 §6.2). It runs `git` as a process, so git must be installed. On
+Linux the packages put it in `/usr/bin`; from the zip or a tarball, put the
+unpacked directory on PATH (or copy both binaries into a directory that is).
 
 ## systemd
 

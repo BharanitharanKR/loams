@@ -1,7 +1,16 @@
 // `/connectors/instances` and `/connectors/instances/:name`: running connector instances (CN2),
 // with pause and resume, per-split checkpoints, lag, throughput and errors.
 
-import { Badge, Button, Card, Empty, Notice, type Status, StatusTag } from '@loams/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  Notice,
+  SampleDataNotice,
+  type Status,
+  StatusTag,
+} from '@loams/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
   type FlowClient,
@@ -29,10 +38,10 @@ const message = (e: unknown) => (e instanceof Error ? e.message : String(e));
 export function FixtureNotice({ flow }: { flow: FlowClient }) {
   if (!flow.fixture) return null;
   return (
-    <Notice title="Demo data">
+    <SampleDataNotice>
       No FlowService is served yet: these instances are fixtures, and anything created, paused or
       resumed here lasts only until the app reloads.
-    </Notice>
+    </SampleDataNotice>
   );
 }
 
@@ -169,7 +178,7 @@ export function InstancesPage({
                 <th scope="row" className="py-2 text-left font-normal">
                   <a
                     href={`#/connectors/instances/${encodeURIComponent(i.name)}`}
-                    className="font-mono"
+                    className={/* mono-ok: id */ 'font-mono'}
                     onClick={(e) => {
                       e.preventDefault();
                       navigate(`/connectors/instances/${encodeURIComponent(i.name)}`);
@@ -178,7 +187,7 @@ export function InstancesPage({
                     {i.name}
                   </a>
                 </th>
-                <td className="font-mono text-xs">{i.connector}</td>
+                <td className={/* mono-ok: id */ 'font-mono text-xs'}>{i.connector}</td>
                 <td>{i.direction}</td>
                 <td>
                   <Badge>{i.runtime}</Badge>
@@ -294,8 +303,8 @@ export function InstanceDetailPage({
         title={d.name}
         subtitle={
           <>
-            <span className="font-mono">{d.connector}</span> · {d.direction} · {d.runtime}{' '}
-            <StatusTag status={STATE_TONE[d.state]}>{d.state}</StatusTag>
+            <span className={/* mono-ok: id */ 'font-mono'}>{d.connector}</span> · {d.direction} ·{' '}
+            {d.runtime} <StatusTag status={STATE_TONE[d.state]}>{d.state}</StatusTag>
           </>
         }
         actions={
@@ -328,7 +337,7 @@ export function InstanceDetailPage({
           <Card title="Delivery">
             <dl className="m-0 text-sm">
               <dt className="text-muted">Mode</dt>
-              <dd className="m-0 font-mono">{d.delivery}</dd>
+              <dd className="m-0">{d.delivery}</dd>
               <dt className="mt-2 text-muted">Dead-lettered</dt>
               <dd className="m-0 tabular-nums">{d.dlqCount}</dd>
             </dl>
@@ -358,10 +367,13 @@ export function InstanceDetailPage({
               <tbody>
                 {d.checkpoints.map((c) => (
                   <tr key={c.split} className="border-t border-rule-soft">
-                    <th scope="row" className="py-1 text-left font-mono font-normal">
+                    <th
+                      scope="row"
+                      className={/* mono-ok: id */ 'py-1 text-left font-mono font-normal'}
+                    >
                       {c.split}
                     </th>
-                    <td className="font-mono text-xs">{c.position}</td>
+                    <td className={/* mono-ok: id */ 'font-mono text-xs'}>{c.position}</td>
                     <td className="text-right tabular-nums">{c.epoch}</td>
                     <td>
                       <time dateTime={c.committedAt}>
@@ -389,7 +401,9 @@ export function InstanceDetailPage({
                   <time dateTime={e.at} className="text-xs text-muted">
                     {e.at.replace('T', ' ').slice(0, 19)}
                   </time>
-                  {e.split && <span className="ml-2 font-mono text-xs">{e.split}</span>}
+                  {e.split && (
+                    <span className={/* mono-ok: id */ 'ml-2 font-mono text-xs'}>{e.split}</span>
+                  )}
                   <p className="m-0 mt-1">{e.message}</p>
                   {e.hint && <p className="m-0 text-xs text-muted">{e.hint}</p>}
                 </li>
@@ -400,7 +414,7 @@ export function InstanceDetailPage({
         <Card title="Config and Fabric binding">
           <dl className="m-0 mb-3 grid grid-cols-[10rem_1fr] gap-2 text-sm">
             <dt className="text-muted">Fabric</dt>
-            <dd className="m-0 font-mono">
+            <dd className={/* mono-ok: id */ 'm-0 font-mono'}>
               {d.fabric.kind}{' '}
               {d.fabric.kind === 'topic'
                 ? d.fabric.topic

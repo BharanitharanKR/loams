@@ -102,8 +102,8 @@ const type = (text: string) =>
 const CID = 'c_abcdefgh';
 
 describe('agent panel', () => {
-  it('manifest declares the dock and settings slots, desktop only', () => {
-    expect(pkg.loams.plugin.slots).toEqual(['shell.dock.right', 'console.settings.section']);
+  it('manifest declares the inspector tab and settings slots, desktop only', () => {
+    expect(pkg.loams.plugin.slots).toEqual(['shell.inspector.tab', 'console.settings.section']);
     expect(pkg.loams.plugin.editions).toEqual(['desktop']);
     expect(pkg.loams.plugin.inject).toContain('desktop');
   });

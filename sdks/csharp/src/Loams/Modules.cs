@@ -105,12 +105,80 @@ public sealed class LiveModule
         _invoker.ServerStreamAsync<Transition>(Facade.Binding("live", "Watch"), request, options,
             cancellationToken);
 
+    /// <summary>
+    /// Replaces an open watch session's identity with this call's credential
+    /// (<c>AuthenticateRequest.SessionId</c>; LV1 Task 17).
+    /// </summary>
+    /// <remarks>
+    /// The credential is the client's own <see cref="ITokenSource"/>, so to
+    /// re-authenticate as another caller, call this on a client built with that
+    /// caller's source. The response's <c>Identity</c> is the session's identity
+    /// version after the call: the same caller only extends the session and leaves it
+    /// unchanged, and a different caller (a sign-in or a sign-out) bumps it, after which
+    /// the next transition reruns every query as the new caller. Compare it with the
+    /// version you hold. An unknown session is <c>not_found</c>. A mutation with no
+    /// idempotency key, so it is never retried.
+    /// </remarks>
+    public Task<AuthenticateResponse> AuthenticateAsync(
+        AuthenticateRequest request,
+        CallOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        _invoker.UnaryAsync<AuthenticateResponse>(Facade.Binding("live", "Authenticate"), request, options, cancellationToken);
+
     /// <summary>Changes what a query set watches.</summary>
     public Task<ModifyQuerySetResponse> ModifyQuerySetAsync(
         ModifyQuerySetRequest request,
         CallOptions? options = null,
         CancellationToken cancellationToken = default) =>
         _invoker.UnaryAsync<ModifyQuerySetResponse>(Facade.Binding("live", "ModifyQuerySet"), request, options, cancellationToken);
+}
+
+/// <summary>
+/// <c>loams.live.admin</c> — the Live app directory (<c>LiveAdminService</c>, LV1
+/// Task 13). Its package is unstable. Address one app with
+/// <see cref="CallOptions.WithLiveApp"/>; a call without it addresses the server's own
+/// app (<c>--live-app</c>).
+/// </summary>
+public sealed class LiveAdminModule
+{
+    private readonly CallInvoker _invoker;
+
+    internal LiveAdminModule(CallInvoker invoker) => _invoker = invoker;
+
+    /// <summary>Registers an app in the node's directory. An existing name answers <c>live_app_exists</c>; a node without the app directory answers <c>live_app_disabled</c>. Never retried: it carries no idempotency key.</summary>
+    public Task<CreateAppResponse> CreateAppAsync(
+        CreateAppRequest request,
+        CallOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        _invoker.UnaryAsync<CreateAppResponse>(Facade.Binding("live.admin", "CreateApp"), request, options, cancellationToken);
+
+    /// <summary>One page of the node's apps (AIP-158: <c>Apps</c>, <c>NextPageToken</c>). Retry-safe.</summary>
+    public Task<ListAppsResponse> ListAppsAsync(
+        ListAppsRequest request,
+        CallOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        _invoker.UnaryAsync<ListAppsResponse>(Facade.Binding("live.admin", "ListApps"), request, options, cancellationToken);
+
+    /// <summary>One app by name. Retry-safe.</summary>
+    public Task<GetAppResponse> GetAppAsync(
+        GetAppRequest request,
+        CallOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        _invoker.UnaryAsync<GetAppResponse>(Facade.Binding("live.admin", "GetApp"), request, options, cancellationToken);
+
+    /// <summary>Updates an app's settings. Never retried.</summary>
+    public Task<UpdateAppResponse> UpdateAppAsync(
+        UpdateAppRequest request,
+        CallOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        _invoker.UnaryAsync<UpdateAppResponse>(Facade.Binding("live.admin", "UpdateApp"), request, options, cancellationToken);
+
+    /// <summary>Removes an app from the directory. The server's own app (<c>--live-app</c>) cannot be deleted. Never retried.</summary>
+    public Task<DeleteAppResponse> DeleteAppAsync(
+        DeleteAppRequest request,
+        CallOptions? options = null,
+        CancellationToken cancellationToken = default) =>
+        _invoker.UnaryAsync<DeleteAppResponse>(Facade.Binding("live.admin", "DeleteApp"), request, options, cancellationToken);
 }
 
 /// <summary>

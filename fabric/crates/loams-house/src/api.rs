@@ -53,13 +53,13 @@ use connectrpc::{
 use loams_house_proto::loams::errors::v1::ErrorInfo;
 use loams_house_proto::loams::house::v1 as pb;
 use loams_house_proto::loams::house::v1::{HouseService, HouseServiceExt};
-use loams_house_proto::loams::operations::v1::Operation;
+use loams_house_proto::loams::operations::v1::{Operation, OperationState};
 
 pub use catalog::{ApiCatalog, FixtureCatalog, LakeCatalog};
 
 use crate::catalog::Lake;
 use frames::Caps;
-use run::{Output, Running, Statement, sorted};
+use run::{Output, Statement, sorted};
 
 use crate::admission::WorkerPool;
 use crate::auth;
@@ -102,7 +102,17 @@ pub struct HouseApi {
     catalog: Arc<dyn ApiCatalog>,
     /// The catalog of lake tables (HS1 Task 10), when the House has one.
     lake: Option<Arc<Lake>>,
-    running: Arc<Running>,
+    governance: Governance,
+}
+
+/// What the API shares with the front's HTTP interface (HS1 Task 21): its
+/// admission and its process list.
+#[derive(Debug, Clone)]
+pub struct Governance {
+    /// Namespace queues and node memory.
+    pub admission: Arc<crate::admission::Admission>,
+    /// Running statements, both surfaces.
+    pub processes: Arc<crate::watchdog::Processes>,
 }
 
 impl HouseApi {
@@ -113,13 +123,14 @@ impl HouseApi {
         pool: WorkerPool,
         catalog: Arc<dyn ApiCatalog>,
         lake: Option<Arc<Lake>>,
+        governance: Governance,
     ) -> Arc<Self> {
         Arc::new(Self {
             config,
             pool,
             catalog,
             lake,
-            running: Arc::new(Running::default()),
+            governance,
         })
     }
 
@@ -231,7 +242,25 @@ fn clickhouse_metadata(err: &HouseError) -> [(&'static str, String); 2] {
 
 /// A House error as a Connect error: [`reason_for`] its code, the message, and
 /// `clickhouse_code` and `clickhouse_name` in `metadata`.
+///
+/// A namespace quota's refusal (HS1 Task 22, `202` or `164`) is
+/// `resource_exhausted`, `house_quota_exceeded`, with the `quota` and its
+/// `limit` in `metadata` too.
 pub fn to_connect(err: &HouseError) -> ConnectError {
+    if let Some((quota, limit)) = crate::quota::refusal_parts(err.message()) {
+        let [code, name] = clickhouse_metadata(err);
+        return refuse(
+            ErrorCode::ResourceExhausted,
+            crate::quota::QUOTA_EXCEEDED,
+            err.message(),
+            &[
+                code,
+                name,
+                ("quota", quota.to_string()),
+                ("limit", limit.to_string()),
+            ],
+        );
+    }
     let (code, reason) = reason_for(err.code());
     refuse(code, reason, err.message(), &clickhouse_metadata(err))
 }
@@ -436,7 +465,34 @@ impl HouseService for HouseApi {
         if request.query_id.is_empty() {
             return Err(invalid("query_id", "query_id is empty"));
         }
-        self.running.cancel(&request.query_id, &user)?;
+        // One process list for both surfaces (HS1 Task 21): the caller's own,
+        // or any of its namespace's with `house:admin`.
+        match self
+            .governance
+            .processes
+            .kill(&request.query_id, &user, false)
+        {
+            Ok(_) => {}
+            Err(crate::watchdog::KillRefusal::NotFound) => {
+                return Err(refuse(
+                    ErrorCode::NotFound,
+                    "house_query_not_found",
+                    format!("No running query has the id {}", request.query_id),
+                    &[("query_id", request.query_id.clone())],
+                ));
+            }
+            Err(crate::watchdog::KillRefusal::Denied) => {
+                return Err(refuse(
+                    ErrorCode::PermissionDenied,
+                    "house_access_denied",
+                    format!(
+                        "Query {} is another user's: cancelling it needs house:admin",
+                        request.query_id
+                    ),
+                    &[("query_id", request.query_id.clone())],
+                ));
+            }
+        }
         Response::ok(pb::CancelQueryResponse::default())
     }
 
@@ -698,9 +754,27 @@ impl HouseService for HouseApi {
     ) -> ServiceResult<pb::ListPipesResponse> {
         let user = self.caller(&ctx)?;
         let request = request.to_owned_message();
-        let Some(pipes) = self.catalog.pipes(user.namespace) else {
-            return Err(not_yet("Pipes", catalog::PIPES_TASK));
+        let pipes = self
+            .catalog
+            .pipes(user.namespace)
+            .await
+            .map_err(|err| to_connect(&err))?;
+        let Some(pipes) = pipes else {
+            return Err(refuse(
+                ErrorCode::Unimplemented,
+                "not_implemented",
+                "Pipes need lake tables: this House was started without a catalog",
+                &[],
+            ));
         };
+        // Only the views the identity may touch (HS1 Task 20).
+        let pipes: Vec<pb::Pipe> = pipes
+            .into_iter()
+            .filter(|p| match p.name.split_once('.') {
+                Some((database, name)) => crate::identity::granted(&user, database, name),
+                None => true,
+            })
+            .collect();
         let (pipes, next_page_token) = page(pipes, request.page_size, &request.page_token)?;
         Response::ok(pb::ListPipesResponse {
             pipes,
@@ -712,10 +786,111 @@ impl HouseService for HouseApi {
     async fn restore_table(
         &self,
         ctx: RequestContext,
-        _request: ServiceRequest<'_, pb::RestoreTableRequest>,
+        request: ServiceRequest<'_, pb::RestoreTableRequest>,
     ) -> ServiceResult<Operation> {
-        let _user = self.caller(&ctx)?;
-        Err(not_yet("RestoreTable", catalog::RESTORE_TASK))
+        let user = self.caller(&ctx)?;
+        let request = request.to_owned_message();
+        let Some(lake) = &self.lake else {
+            return Err(refuse(
+                ErrorCode::Unimplemented,
+                "not_implemented",
+                "RestoreTable restores lake tables: this House was started without a catalog",
+                &[],
+            ));
+        };
+        let database = database_or_default(&request.database).to_string();
+        let result = self.restore(lake, &user, &database, &request).await;
+        if let Some(sink) = &self.config.audit {
+            let mut event = crate::audit::AuditEvent::now("api", "");
+            event.user = user.user.clone();
+            event.principal = user.principal.clone();
+            event.namespace = Some(user.namespace);
+            event.statement = Some("RestoreTable".to_string());
+            event.code = result.as_ref().map_or_else(HouseError::code, |_| 0);
+            sink.record(&event);
+        }
+        let restored = result.map_err(|err| to_connect(&err))?;
+        let at = catalog::timestamp(restored.at_ms);
+        let mut fields = std::collections::HashMap::new();
+        fields.insert(
+            "snapshot_id".to_string(),
+            loams_house_proto::google::protobuf::Value::from(restored.snapshot_id.to_string()),
+        );
+        Response::ok(Operation {
+            id: restored.operation_id,
+            kind: RESTORE_KIND.to_string(),
+            namespace: user.namespace.to_string(),
+            target: [
+                ("database".to_string(), database),
+                ("table".to_string(), request.table.clone()),
+            ]
+            .into_iter()
+            .collect(),
+            state: OperationState::OPERATION_STATE_SUCCEEDED.into(),
+            created_at: buffa::MessageField::some(at.clone()),
+            updated_at: buffa::MessageField::some(at),
+            result: buffa::MessageField::some(loams_house_proto::google::protobuf::Struct {
+                fields: fields.into_iter().collect(),
+                ..Default::default()
+            }),
+            ..Default::default()
+        })
+    }
+}
+
+/// `RestoreTable`'s operation kind.
+pub const RESTORE_KIND: &str = "house.restore_table";
+
+impl HouseApi {
+    /// `RestoreTable` for `user` (HS1 Task 15): the `admin` scope, a grant on
+    /// the table, then [`crate::retention::restore_table`].
+    async fn restore(
+        &self,
+        lake: &Lake,
+        user: &UserMap,
+        database: &str,
+        request: &pb::RestoreTableRequest,
+    ) -> Result<crate::retention::Restored, HouseError> {
+        use crate::retention::RestorePoint;
+        use loams_house_proto::loams::house::v1::__buffa::oneof::restore_table_request::Point;
+        if !user.scopes.admin {
+            return Err(crate::identity::lacks(
+                user,
+                crate::identity::Scope::Admin,
+                "RestoreTable",
+            ));
+        }
+        if request.table.is_empty() {
+            return Err(HouseError::from(ChError::bad_arguments(
+                "RestoreTable needs the table to restore",
+            )));
+        }
+        if !crate::identity::granted(user, database, &request.table) {
+            return Err(crate::identity::not_granted(user, database, &request.table));
+        }
+        let point = match &request.point {
+            Some(Point::SnapshotId(id)) => RestorePoint::Snapshot(*id),
+            Some(Point::Timestamp(at)) => RestorePoint::Timestamp(
+                at.seconds
+                    .saturating_mul(1000)
+                    .saturating_add(i64::from(at.nanos) / 1_000_000),
+            ),
+            None => {
+                return Err(HouseError::from(ChError::bad_arguments(
+                    "RestoreTable needs a snapshot_id or a timestamp to restore to",
+                )));
+            }
+        };
+        crate::retention::restore_table(
+            lake,
+            user.namespace,
+            database,
+            &request.table,
+            point,
+            &request.idempotency_key,
+            crate::retention::now_ms(),
+        )
+        .await
     }
 }
 
@@ -776,6 +951,42 @@ mod tests {
                 code.as_str()
             );
         }
+    }
+
+    /// A quota's refusal (HS1 Task 22) is `house_quota_exceeded` whatever its
+    /// ClickHouse code, with the quota and its limit.
+    #[test]
+    fn quota_refusals_are_house_quota_exceeded() {
+        use base64::Engine as _;
+        use buffa::Message as _;
+        for code in [202, 164] {
+            let err = crate::quota::refusal(code, "scan_bytes_per_day", 1000, "used");
+            let connect = to_connect(&err);
+            assert_eq!(connect.code, ErrorCode::ResourceExhausted);
+            let detail = connect
+                .details
+                .iter()
+                .find(|d| d.type_url.ends_with("loams.errors.v1.ErrorInfo"))
+                .expect("an ErrorInfo");
+            let value = detail.value.as_deref().expect("a value");
+            let bytes = base64::engine::general_purpose::STANDARD_NO_PAD
+                .decode(value.trim_end_matches('='))
+                .expect("base64");
+            let info = ErrorInfo::decode_from_slice(&bytes).expect("decodes");
+            assert_eq!(info.reason, "house_quota_exceeded");
+            assert_eq!(
+                info.metadata.get("quota").map(String::as_str),
+                Some("scan_bytes_per_day")
+            );
+            assert_eq!(info.metadata.get("limit").map(String::as_str), Some("1000"));
+            assert_eq!(
+                info.metadata.get("clickhouse_code").map(String::as_str),
+                Some(code.to_string().as_str())
+            );
+        }
+        // Admission's own 202 stays `house_too_many_queries`.
+        let busy = HouseError::from(ChError::too_many_simultaneous_queries("busy"));
+        assert!(crate::quota::refusal_parts(busy.message()).is_none());
     }
 
     #[test]

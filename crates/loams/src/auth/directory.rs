@@ -39,7 +39,7 @@ use sha2::{Digest, Sha256};
 use subtle::ConstantTimeEq;
 use tokio::sync::broadcast;
 
-use super::{AuthError, Credential, Principal, PrincipalKind, api_key, reason};
+use super::{AuthError, Credential, Grant, Principal, PrincipalKind, api_key, reason};
 
 /// The prefix of a console session token.
 pub const SESSION_PREFIX: &str = "ls_";
@@ -255,6 +255,24 @@ pub struct AuditRec {
     pub event: pb::AuditEvent,
 }
 
+/// What a `KeyService` key reaches (LV1 plan Task 14): the org, its
+/// project's environment (`<project>/<environment>`), its scopes (every
+/// scope when it lists none) and its expiry.
+pub fn key_grant(record: &KeyRec, org: Option<String>) -> Grant {
+    let environment = (!record.key.environment.is_empty())
+        .then(|| format!("{}/{}", record.project, record.key.environment));
+    Grant {
+        org,
+        environment,
+        scopes: Grant::scopes_of(&record.key.scopes),
+        expires_at_ms: record
+            .key
+            .expires_at
+            .as_option()
+            .and_then(|t| u64::try_from(ms_of(t)).ok()),
+    }
+}
+
 /// The whole directory.
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 #[serde(default)]
@@ -438,6 +456,22 @@ impl MetaDirectoryStore {
         }
     }
 
+    /// Whether an upgrade snapshot may name directory object `path` (its
+    /// ULID is not newer than the oldest kept snapshot, UP1 Task 8): it then
+    /// stays, so a rollback finds the directory it restores.
+    async fn pinned_by_snapshot(&self, path: &str) -> bool {
+        let written_ms = path
+            .strip_prefix(OBJECT_PREFIX)
+            .and_then(|name| name.strip_suffix(".json"))
+            .and_then(|id| id.parse::<ulid::Ulid>().ok())
+            .map(|id| id.timestamp_ms());
+        match loams_common::meta::snapshot_gc_floor(&*self.meta).await {
+            Ok(floor) => written_ms.is_none_or(|ms| loams_common::meta::pinned_by(floor, ms)),
+            // Unknown: keep it; it only costs storage.
+            Err(_) => true,
+        }
+    }
+
     /// The reserved namespace, if it exists yet (reads never create it).
     async fn existing_namespace(&self) -> Result<Option<NamespaceId>, Unavailable> {
         if let Some(id) = self.namespace.get() {
@@ -536,6 +570,7 @@ impl DirectoryStore for MetaDirectoryStore {
             match cas.result {
                 Ok(version) => {
                     if let Some(old) = previous.filter(|old| *old != object)
+                        && !self.pinned_by_snapshot(&old).await
                         && let Err(err) = self.store.delete(&old).await
                     {
                         tracing::debug!(%err, "the replaced directory object stays");
@@ -747,6 +782,13 @@ impl Directory {
             kind: PrincipalKind::Session,
             display_name: member.user.name.clone(),
             email: Some(member.user.email.clone()),
+            // A person in the org: every environment of it (LV1 plan Task
+            // 14).
+            grant: Grant {
+                org: doc.org.as_ref().map(|o| o.slug.clone()),
+                expires_at_ms: u64::try_from(session.expires_ms).ok(),
+                ..Grant::default()
+            },
         })
     }
 
@@ -762,7 +804,8 @@ impl Directory {
             }
         };
         let record = doc.key(id)?;
-        Some(self.check_key(key, id, record).await)
+        let org = doc.org.as_ref().map(|o| o.slug.clone());
+        Some(self.check_key(key, id, record, org).await)
     }
 
     async fn check_key(
@@ -770,6 +813,7 @@ impl Directory {
         key: &str,
         id: &str,
         record: &KeyRec,
+        org: Option<String>,
     ) -> Result<Principal, AuthError> {
         if record.revoked {
             return Err(AuthError::unauthenticated(
@@ -809,6 +853,7 @@ impl Directory {
             kind: PrincipalKind::ApiKey,
             display_name: record.key.name.clone(),
             email: None,
+            grant: key_grant(record, org),
         })
     }
 
@@ -868,6 +913,41 @@ mod tests {
         );
         assert_eq!(session_token(&bearer).as_deref(), Some(token.as_str()));
         assert_ne!(token_digest(&token), token);
+    }
+
+    /// LV1 plan Task 14: a `KeyService` key reaches its project's
+    /// environment with its scopes and expiry; a key with no environment or
+    /// scopes keeps the self-hosted default.
+    #[test]
+    fn key_grants_name_the_environment_and_scopes() {
+        let mut record = KeyRec {
+            key: pb::ApiKey {
+                id: "k".to_owned(),
+                environment: "prod".to_owned(),
+                scopes: vec!["live:call".to_owned(), " ".to_owned()],
+                expires_at: buffa::MessageField::some(Timestamp {
+                    seconds: 1_800_000_000,
+                    ..Default::default()
+                }),
+                ..Default::default()
+            },
+            project: "shop".to_owned(),
+            hash: String::new(),
+            role: Role::Member,
+            idempotency_key: String::new(),
+            created_by: String::new(),
+            revoked: false,
+        };
+        let grant = key_grant(&record, Some("acme".to_owned()));
+        assert_eq!(grant.org.as_deref(), Some("acme"));
+        assert_eq!(grant.environment.as_deref(), Some("shop/prod"));
+        assert!(grant.has_scope("live:call") && !grant.has_scope("live:deploy"));
+        assert_eq!(grant.expires_at_ms, Some(1_800_000_000_000));
+        record.key.environment.clear();
+        record.key.scopes.clear();
+        record.key.expires_at = buffa::MessageField::none();
+        let open = key_grant(&record, None);
+        assert_eq!(open, Grant::default());
     }
 
     #[test]

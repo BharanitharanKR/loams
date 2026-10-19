@@ -24,7 +24,7 @@ mod gc;
 mod registry;
 mod target;
 
-pub use apply::{LinkApplySource, LinkConfig};
+pub use apply::{LinkApplySource, LinkConfig, apply_link};
 pub use counter::{COUNTER_KIND, CounterSnapshot, CounterTable, MAX_COMMIT_DELAY};
 pub use error::LinkError;
 pub use gc::LinkGcRoots;

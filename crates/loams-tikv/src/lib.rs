@@ -39,7 +39,7 @@ pub use config::{
 };
 pub use faults::{Fault, FaultPlan, FaultPoint};
 pub use gc::{DEFAULT_GC_INTERVAL, GC_LEASE_KEY, GcBarrier, GcConfig, GcHandle, GcLoop, GcReport};
-pub use keyspace::{KeyspaceMeta, ensure_keyspace};
+pub use keyspace::{KeyspaceMeta, ensure_keyspace, set_keyspace_state};
 pub use runner::{CommitMode, Committed, Mode, RunTxn, TikvStats, TxnError, TxnOptions};
 /// The pinned `tikv-client` (Loams's fork), for callers that need its raw API
 /// (the WAL's raw store) without their own git dependency.

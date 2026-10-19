@@ -597,6 +597,83 @@ async fn wal_client_matches_fixtures() {
     assert_eq!(e.reason(), "not_found");
 }
 
+/// The release stack's stock safekeeper (`safekeeper1`, 0.1.0 blocker B2):
+/// the same request (with `mconf`), its `null` answer to a create, then its
+/// nested head, read into the same status as `loams-wal`'s.
+#[tokio::test]
+async fn wal_client_speaks_to_the_stock_safekeeper() {
+    let (fake, url) = serve().await;
+    let wal = WalClient::new(url.parse().unwrap(), None).unwrap();
+    let create = WalTimelineCreate {
+        tenant_id: t(),
+        timeline_id: tl(),
+        pg_version: 17,
+        start_lsn: "0/14E8F98".parse().unwrap(),
+        system_id: None,
+        wal_seg_size: None,
+        commit_lsn: None,
+    };
+    fake.answer(200, &fixture("sk_create_timeline.response.json"));
+    fake.answer(200, &fixture("sk_timeline_status.response.json"));
+    let st = wal.create_timeline(&create).await.unwrap();
+    let seen = fake.seen.lock().unwrap().clone();
+    assert_eq!(seen.len(), 2, "a create, then a read of the head");
+    assert_eq!(
+        (seen[0].method.as_str(), seen[0].path_and_query.as_str()),
+        ("POST", "/v1/tenant/timeline")
+    );
+    assert_eq!(
+        canonical(&seen[0].body),
+        canonical(&fixture("wal_create_timeline.request.json"))
+    );
+    assert_eq!(
+        (seen[1].method.as_str(), seen[1].path_and_query.clone()),
+        ("GET", format!("/v1/tenant/{T}/timeline/{TL}"))
+    );
+    let lsn: loams_postgres::Lsn = "0/14E8F98".parse().unwrap();
+    assert_eq!((st.tenant_id, st.timeline_id), (t(), tl()));
+    assert_eq!((st.term, st.last_log_term), (0, 0));
+    assert_eq!(
+        (st.flush_lsn, st.commit_lsn, st.timeline_start_lsn),
+        (lsn, lsn, lsn)
+    );
+    assert_eq!(st.trimmed_lsn, lsn, "local_start_lsn stands in");
+    assert_eq!(st.remote_consistent_lsn, "0/0".parse().unwrap());
+    assert_eq!(
+        (st.pg_version, st.system_id, st.wal_seg_size),
+        (170_000, 0, 16 << 20)
+    );
+
+    // An existing timeline: `null` again, and the head unchanged.
+    fake.answer(200, &fixture("sk_create_conflict.response.json"));
+    fake.answer(200, &fixture("sk_timeline_status.response.json"));
+    assert_eq!(wal.create_timeline(&create).await.unwrap(), st);
+
+    fake.answer(404, &fixture("sk_not_found.response.json"));
+    let e = wal.timeline_status(t(), tl()).await.unwrap_err();
+    assert_eq!(e.reason(), "not_found");
+}
+
+/// Both services' heads read the same; a head with neither shape is refused.
+#[test]
+fn wal_status_shapes() {
+    use loams_postgres::wal::WalTimelineStatus;
+    let loams: WalTimelineStatus =
+        serde_json::from_str(&fixture("wal_timeline_status.response.json")).unwrap();
+    let stock: WalTimelineStatus =
+        serde_json::from_str(&fixture("sk_timeline_status.response.json")).unwrap();
+    assert_eq!(
+        WalTimelineStatus {
+            remote_consistent_lsn: loams.remote_consistent_lsn,
+            ..stock
+        },
+        loams
+    );
+    let neither = r#"{"tenant_id":"4c6f616d734e656f6e54656e616e7431","timeline_id":"4c6f616d734e656f6e54696d656c6e31","flush_lsn":"0/1","commit_lsn":"0/1","backup_lsn":"0/1","remote_consistent_lsn":"0/1","peer_horizon_lsn":"0/1","timeline_start_lsn":"0/1"}"#;
+    let e = serde_json::from_str::<WalTimelineStatus>(neither).unwrap_err();
+    assert!(e.to_string().contains("without term"), "{e}");
+}
+
 /// compute_ctl: the per-compute JWT on every call, and its request shapes
 /// (`compute_api::requests::ConfigurationRequest`, `responses::PromoteConfig`,
 /// `/terminate?mode=`).
@@ -738,11 +815,19 @@ fn spec_prewarm_fields() {
     assert_eq!(v["endpoint_storage_token"], "es-token");
     assert_eq!(v["autoprewarm"], true);
     assert_eq!(v["mode"], "Replica");
+    // A primary saves its cache's state for a later promotion (Task 16).
+    let primary = golden_builder()
+        .endpoint_storage("endpoint-storage:9993", Secret::new("es-token".into()))
+        .offload_lfc_interval(300)
+        .build();
+    let v = serde_json::to_value(&primary).unwrap();
+    assert_eq!(v["offload_lfc_interval_seconds"], 300);
     let plain = serde_json::to_value(golden_builder().build()).unwrap();
     for k in [
         "endpoint_storage_addr",
         "endpoint_storage_token",
         "autoprewarm",
+        "offload_lfc_interval_seconds",
     ] {
         assert!(plain.get(k).is_none(), "{k}");
     }

@@ -2,13 +2,14 @@
 // and model, approval mode (Q803: supervised), parallel runs — and notifications.
 // They are this device's preferences, kept under `loams.studio.settings`; the
 // composer (Task 19) and run groups (Task 25) read them. The web edition also
-// lists its agentd hosts (Hosts.tsx).
+// lists its agentd hosts (Hosts.tsx). Archived threads are here too (design 59, D1079).
 
 import type { StudioEditor, StudioEditorId, StudioNotifyPrefs } from '@loams/desktop/contracts';
 import { Card, Checkbox, Field, Input, Notice, Select, Spinner } from '@loams/ui';
 import { useEffect, useState } from 'react';
 import type { StudioAgentd, StudioDesktop } from '../agentd.js';
 import type { StudioKeys } from '../palette/commands.js';
+import { ArchivedThreads } from './Archived.js';
 import { Hosts } from './Hosts.js';
 import { KeybindingsCard } from './Keybindings.js';
 
@@ -176,7 +177,16 @@ function EditorCard({ desktop }: { desktop: StudioDesktop }) {
   );
 }
 
-export function SettingsPage({ agentd, keys }: { agentd: StudioAgentd; keys?: StudioKeys }) {
+export function SettingsPage({
+  agentd,
+  keys,
+  navigate,
+}: {
+  agentd: StudioAgentd;
+  keys?: StudioKeys;
+  /** Where Unarchive's follow-ups go (the archived list, D1079). */
+  navigate: (to: string) => void;
+}) {
   const [s, update] = useSettings();
   // Electron main shows the daemon's notifications (SD1 Task 28): it keeps a copy of
   // these two choices.
@@ -273,6 +283,7 @@ export function SettingsPage({ agentd, keys }: { agentd: StudioAgentd; keys?: St
         </div>
       </Card>
       {keys && <KeybindingsCard store={keys.keybindings} platform={keys.platform} />}
+      <ArchivedThreads agentd={agentd} navigate={navigate} />
     </div>
   );
 }

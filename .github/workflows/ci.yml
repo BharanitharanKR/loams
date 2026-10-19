@@ -242,6 +242,8 @@ jobs:
               - "crates/loams/src/server.rs"
               - "crates/loams/tests/connect_graph.rs"
               - "connectors/licences.toml"
+              - "examples/graphrag/**"
+              - "bench/graph/**"
               - "fabric/Cargo.lock"
             # Shared pnpm tooling uses the root workspace and lockfile.
             pnpm-workspace: &pnpm-workspace
@@ -265,6 +267,9 @@ jobs:
               - "buf.yaml"
               - "buf.gen.*.yaml"
               - "web/packages/proto/**"
+              # UP1 Task 17: the SDKs stay additive against the previous release.
+              - "sdks/**"
+              - "release/upgrade-path.toml"
             # SDK2 Task 0: the TypeScript SDK (@loams/client, @loams/live), its
             # generator (crates/loams-facade-gen), and the conformance corpus.
             sdk-typescript:
@@ -427,8 +432,10 @@ jobs:
       # Owner ruling T7-3: the TiKV metastore is behind loams's `tikv`
       # feature (off by default), so lint that code too, and keep the default
       # build free of the git-pinned tikv-client.
-      - name: clippy (loams with the tikv, graph and optional listener features)
-        run: cargo clippy -p loams --all-targets --features tikv,live-tikv,durable-tikv,stream-grpc,pgwire,mysql-wire,graph --locked -- -D warnings
+      # The product features (git, buildcache, registry, sqldb, postgres) are linted here too:
+      # dev once stopped building with `--features git` and no fast-tier job noticed (GT1 T18.4).
+      - name: clippy (loams with the tikv, graph, product and optional listener features)
+        run: cargo clippy -p loams --all-targets --features tikv,live-tikv,durable-tikv,stream-grpc,pgwire,mysql-wire,graph,git,buildcache,registry,sqldb,postgres --locked -- -D warnings
       # The release images build `loams` with these feature sets (deploy/release/Containerfile.*);
       # `postgres,tikv` turns on loams-kv's TiKV store without loams-live's `tikv`, a combination
       # nothing else here builds (v0.1.0-preview.2's loams-pg-control image broke on it).
@@ -524,8 +531,11 @@ jobs:
   # `rust-tests` jobs unify features across the whole workspace).
   agentd:
     name: "Agentd: guard, clippy and tests"
+    # Fast tier: agentd is security-sensitive (approvals, sandbox levels) and this job
+    # runs only when agentd's paths change. On the full tier it let #623 merge with
+    # ~80 agentd-sessions tests unrun.
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.agentd == 'true'))) && needs.changes.outputs.heavy != 'false' }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.agentd == 'true') && needs.changes.outputs.heavy != 'false' }}
     runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
     # PTY, shell and harness-fixture tests; a hung one fails the job.
     timeout-minutes: 60
@@ -594,6 +604,8 @@ jobs:
         run: cargo test -p loams-link --features failpoints --locked
       - name: collection with failpoints
         run: cargo test -p loams-collection --features failpoints --locked
+      - name: migration runner crash matrix (UP1 Task 3)
+        run: cargo test -p loams-migrate --features failpoints --test runner_failpoints --locked
       - name: WAL service over TCP and the NVMe store (loams-safekeeper, features server, nvme)
         run: cargo test -p loams-safekeeper --features server,nvme --locked
       - name: WAL restart regression (20 consecutive runs, no retries)
@@ -921,6 +933,7 @@ jobs:
           cargo test -p loams-durable --features tikv --lib --test tikv --locked
           cargo test -p loams-safekeeper --features tikv --test tikv --locked
           cargo test -p loams-pg-control --features tikv --test store_tikv --test service_tikv --test reconcile_tikv --test endpoints_tikv --locked
+          cargo test -p loams-migrate --test adopt preview2_tikv_dump_is_recognised --locked
       - name: playground logs
         if: failure()
         uses: actions/upload-artifact@v7.0.1
@@ -1237,6 +1250,21 @@ jobs:
       # buf.yaml ignores loams.live.v1 for breaking changes (R1).
       - name: buf breaking (against main)
         run: web/packages/proto/node_modules/.bin/buf breaking --against ".git#branch=origin/main"
+      # Design §54 §13.2 (D939, UP1 Task 17): also against the previous
+      # release's tag (the newest release's `from` in release/upgrade-path.toml),
+      # so a break that reached main between releases is still caught at the
+      # release; and the supported SDKs keep every public symbol of that release.
+      - name: buf breaking (against the previous release)
+        run: |
+          prev="$(python3 -c 'import sys; sys.path.insert(0, "sdks/fixtures"); import removed_symbols as r; print(r.previous_release(r.ROOT) or "")')"
+          if [ -z "$prev" ]; then echo "no previous release keeps data"; exit 0; fi
+          git rev-parse --verify --quiet "refs/tags/$prev" >/dev/null || git fetch --no-tags origin "refs/tags/$prev:refs/tags/$prev"
+          web/packages/proto/node_modules/.bin/buf breaking --against ".git#tag=$prev"
+      - if: ${{ !cancelled() }}
+        name: SDK public symbols (against the previous release)
+        run: |
+          python3 sdks/fixtures/removed_symbols.py --self-test
+          python3 sdks/fixtures/removed_symbols.py
       - name: regenerate @loams/proto
         working-directory: web
         run: pnpm --filter @loams/proto generate
@@ -1857,6 +1885,8 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.sdk-objc == 'true'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: macos-latest
+    # A hung suite once held the runner for the 6 h job limit.
+    timeout-minutes: 30
     # issues: write is for the nightly-failure issue step only (schedule only).
     permissions:
       contents: read
@@ -1925,6 +1955,29 @@ jobs:
         run: cargo test -p loams --features graph --locked --test connect_graph --test connect_api
       - name: loams answers feature_not_in_variant (default build)
         run: cargo test -p loams --locked --test connect_graph
+      # GR1 Task 23: the GraphRAG example end to end (`example_runs_end_to_end_in_ci`) and
+      # its harness (`harness_reports_recall_and_latency`) against `loams dev` with graph.
+      - name: build loams with graph
+        run: cargo build -p loams --features graph --locked
+      - name: start loams dev (graph)
+        run: |
+          nohup target/debug/loams dev --data-dir "$RUNNER_TEMP/loams-graphrag" \
+            --listen 127.0.0.1:18080 --no-qdrant --no-es \
+            > "$RUNNER_TEMP/loams-graphrag.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            curl -s -o /dev/null http://127.0.0.1:18080/ && exit 0
+            sleep 1
+          done
+          echo "loams dev did not answer on 18080 within 60 s"; exit 1
+      - name: GraphRAG example and harness
+        env:
+          LOAMS_URL: http://127.0.0.1:18080
+        run: |
+          python3 -m unittest discover -s examples/graphrag/tests -v
+          python3 -m unittest discover -s bench/graph/graphrag/tests -v
+      - name: loams log
+        if: failure()
+        run: tail -n 200 "$RUNNER_TEMP/loams-graphrag.log" || true
 
   # SQ1 Task 3: the gate's sans-I/O MySQL codec parses untrusted client
   # packets. Each cargo-fuzz target runs 60 s from its seed corpus; the same
@@ -2277,6 +2330,41 @@ jobs:
       - if: ${{ !cancelled() }} # report every check, not only the first failure
         name: Unique decision and question declarations
         run: scripts/docs/check-decision-ids.sh
+      # Design §54 §11 (UP1 Task 11): the release train lists every compiled
+      # migration once and chains to `fresh`, its pins match the pin files,
+      # and a release pull request's CHANGELOG entry has its Upgrading section.
+      # UP1 Task 20's gate_in_ci_required.
+      - if: ${{ !cancelled() }}
+        name: the upgrade gate is in CI required
+        run: python3 scripts/ci/check-upgrade-gate.py --self-test && python3 scripts/ci/check-upgrade-gate.py
+      - if: ${{ !cancelled() }}
+        name: upgrade path checker self-test
+        run: scripts/release/check-upgrade-path.sh --self-test
+      - if: ${{ !cancelled() }}
+        name: the upgrade path matches the migrations and the pins
+        run: scripts/release/check-upgrade-path.sh
+      # Design §54 §9.2 (UP1 Task 21): a pull request into dev that changes a
+      # third-party pin runs the upgrade gate, by the `ci:upgrade` label.
+      - if: ${{ !cancelled() && github.event_name == 'pull_request' && github.base_ref == 'dev' }}
+        name: a third-party pin change carries ci:upgrade
+        env:
+          LABELS: ${{ join(github.event.pull_request.labels.*.name, ',') }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          git fetch --no-tags --depth=1 origin "$BASE_SHA"
+          changed="$(python3 scripts/release/upgrade_path.py pins-changed "$BASE_SHA")"
+          if [ -n "$changed" ] && [[ ",$LABELS," != *",ci:upgrade,"* ]]; then
+            echo "::error::this pull request changes third-party pins; add the ci:upgrade label so the upgrade gate runs:"
+            echo "$changed"
+            exit 1
+          fi
+      - if: ${{ !cancelled() && github.event_name == 'pull_request' && github.base_ref == 'main' }}
+        name: the release's CHANGELOG entry has its Upgrading section
+        run: python3 scripts/release/upgrade_path.py check-changelog
+      # Stable (no `-`) vs prerelease channel flags and image tags of a release.
+      - if: ${{ !cancelled() }}
+        name: release channel (stable vs prerelease) self-test
+        run: scripts/release/channel.sh --self-test
       # API2 Task 19's every_sdk_dir_has_a_job and only_wave1_is_required. Here
       # because this job is unconditional and light, so a new sdks/<lang>
       # without a job fails every pull request that adds it.
@@ -2285,9 +2373,24 @@ jobs:
         run: |
           python3 scripts/ci/check-sdk-jobs.py --self-test
           python3 scripts/ci/check-sdk-jobs.py
+      # GR1 Task 23: the GraphRAG example's and harness's offline tests (the end-to-end
+      # tests skip without LOAMS_URL; the Graph job runs them against a server).
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: GraphRAG example and harness (offline)
+        run: |
+          python3 -m unittest discover -s examples/graphrag/tests
+          python3 -m unittest discover -s bench/graph/graphrag/tests
       - if: ${{ !cancelled() }} # report every check, not only the first failure
         name: the SignPath artifact guard self-test
         run: python3 scripts/ci/signpath-artifacts.py --self-test
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: the cold-start statistics self-test (PG2 Task 17)
+        run: python3 scripts/pg2/coldstart_stats.py --self-test
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: PgDog's licence boundary (PG2 Task 19, design §46 §8.3)
+        run: |
+          scripts/ci/pgdog-licence.sh --self-test
+          scripts/ci/pgdog-licence.sh
       - if: ${{ !cancelled() }} # report every check, not only the first failure
         name: PyYAML
         run: python3 -m pip install --quiet --disable-pip-version-check PyYAML
@@ -2303,6 +2406,43 @@ jobs:
         name: the repository builder self-test
         run: python3 scripts/release/make-repo.py --self-test
 
+
+  # Design §54 §14 (D941, UP1 Task 20): the previous release's stack, with
+  # fixture data in every product (conformance/upgrade), upgraded to the
+  # candidate built from this checkout, checked, rolled back and checked
+  # again; with every migration reversible, also `rollback --keep-writes`.
+  # The full tier (pull requests into main), the nightly on dev, and a pull
+  # request labelled `ci:upgrade` (a pin bump, §9.2).
+  upgrade-gate:
+    name: "Upgrade: previous release → candidate"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.full == 'true' || contains(github.event.pull_request.labels.*.name, 'ci:upgrade')) }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
+      - name: the upgrade gate
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: scripts/release/upgrade-gate.sh "$RUNNER_TEMP/upgrade-gate"
+      - if: ${{ always() }}
+        name: the ledger, the snapshot, check's JSON, timings and logs
+        uses: actions/upload-artifact@v7.0.1
+        with:
+          name: upgrade-gate
+          path: |
+            ${{ runner.temp }}/upgrade-gate/*.json
+            ${{ runner.temp }}/upgrade-gate/*.txt
+            ${{ runner.temp }}/upgrade-gate/*.log
+            ${{ runner.temp }}/upgrade-gate/state/state.json
+          if-no-files-found: ignore
 
   required:
     name: CI required
@@ -2344,6 +2484,7 @@ jobs:
       - deny
       - web
       - dapr-edge
+      - upgrade-gate
     runs-on: ubuntu-24.04
     steps:
       - name: Require all selected CI jobs to pass

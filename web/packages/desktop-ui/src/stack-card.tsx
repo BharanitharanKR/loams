@@ -5,7 +5,7 @@ import { useStack } from './use-stack.js';
 
 const LABEL: Record<StackId, string> = {
   postgres: 'Postgres (Neon)',
-  wesql: 'WeSQL',
+  wesql: 'MySQL (dev)',
   tikv: 'TiKV',
 };
 
@@ -168,10 +168,10 @@ export function StackCard({
           <ul className="m-0 flex list-none flex-col gap-1 p-0">
             {state.services.map((s) => (
               <li key={s.name} className="flex flex-wrap items-center gap-2 text-sm">
-                <span className="font-mono">{s.name}</span>
+                <span className={/* mono-ok: id */ 'font-mono'}>{s.name}</span>
                 <span className="text-muted">{s.state}</span>
                 {s.ports.length > 0 && (
-                  <span className="font-mono text-xs text-faint">{s.ports.join(', ')}</span>
+                  <span className="tabular-nums text-xs text-faint">{s.ports.join(', ')}</span>
                 )}
               </li>
             ))}

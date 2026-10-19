@@ -1,0 +1,11 @@
+# Helper images `loams upgrade` runs beside a stack (design §54 §10.1's
+# helper-container boundary), pinned by digest. CL1 adds the CLI's other
+# companions here.
+
+# BR, the TiKV backup and restore tool (UP1 ruling T0-7: `br backup txn` /
+# `br restore txn` over every API V2 keyspace). Same version as the stack's
+# PD and TiKV (TIKV_TAG). Pulled 2026-10-14; built 2026-08-27.
+[br]
+image   = "docker.io/pingcap/br"
+version = "v8.5.8"
+digest  = "sha256:cddec1ce88dfe1f81afdd23f0024233fecde87ee2a6997d705c8b77eb9aa76eb"

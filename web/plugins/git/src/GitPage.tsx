@@ -6,7 +6,7 @@
 // served, that client is the fixture-backed mock, and the page says so.
 
 import { NamespacePicker, PageHead } from '@loams/desktop-ui';
-import { Badge, Notice } from '@loams/ui';
+import { SampleDataNotice } from '@loams/ui';
 import { useCallback, useState } from 'react';
 import type { GitClient, Repo, WorkspaceSummary } from './client.js';
 import { EnvView } from './EnvView.js';
@@ -54,14 +54,11 @@ export function GitPage(p: GitPageProps) {
       <PageHead
         title="Git"
         subtitle="Repositories, virtual workspaces and env secrets on the bucket."
-        badge={
-          p.preview ? <Badge title="Answers from built-in fixtures">preview</Badge> : undefined
-        }
       />
       {p.preview && (
-        <Notice title="Preview data">
-          This server does not serve loams.repos.v1 yet. The page shows built-in example data.
-        </Notice>
+        <SampleDataNotice>
+          This server does not serve loams.repos.v1 yet. Nothing here touches a repository.
+        </SampleDataNotice>
       )}
       <NamespacePicker ns={ns} onOpen={selectNs} storageKey={NAMESPACES_KEY} idPrefix="git" />
       <div className="grid items-start gap-6 xl:grid-cols-[220px_minmax(0,1fr)]">
@@ -69,7 +66,7 @@ export function GitPage(p: GitPageProps) {
         {repo ? (
           <section className="flex min-w-0 flex-col gap-3" aria-label={`Repository ${repo.name}`}>
             <h2 className="m-0 text-base">
-              <span className="font-mono">{repo.name}</span>
+              <span className={/* mono-ok: id */ 'font-mono'}>{repo.name}</span>
               <span className="ml-2 text-sm font-normal text-muted">in {ns}</span>
             </h2>
             <Tabs<RepoTab>

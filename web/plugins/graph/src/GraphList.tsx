@@ -5,7 +5,7 @@
 
 import { Code } from '@connectrpc/connect';
 import { graph } from '@loams/proto';
-import { Badge, Button, Checkbox, Dialog, Field, Input, Notice } from '@loams/ui';
+import { Badge, Button, Checkbox, Dialog, Field, Input, Notice, SkeletonList } from '@loams/ui';
 import { type FormEvent, useCallback, useEffect, useState } from 'react';
 import { type GraphClient, type GraphFailure, type Language, toFailure } from './client.js';
 
@@ -101,7 +101,9 @@ export function GraphList(p: GraphListProps) {
                 }`}
                 onClick={() => onSelect(g)}
               >
-                <span className="flex items-center gap-2 font-mono text-sm text-ink">
+                <span
+                  className={/* mono-ok: id */ 'flex items-center gap-2 font-mono text-sm text-ink'}
+                >
                   {g.name}
                   {g.mode === graph.GraphMode.LINKED && <Badge>linked</Badge>}
                   {state && <Badge>{state}</Badge>}
@@ -126,7 +128,7 @@ export function GraphList(p: GraphListProps) {
           );
         })}
       </ul>
-      {loading && <p className="m-0 text-sm text-muted">Loading…</p>}
+      {loading && <SkeletonList label="Loading graphs" rows={3} />}
       {next && !loading && (
         <Button size="sm" variant="quiet" onClick={() => void load(next)}>
           Load more
@@ -209,7 +211,8 @@ function CreateDialog({
     <Dialog open onClose={onClose} title="New graph">
       <form className="flex flex-col gap-3" onSubmit={submit}>
         <p className="m-0 text-sm text-muted">
-          An owned graph in <span className="font-mono">{namespace}</span>, written with GQL.
+          An owned graph in <span className={/* mono-ok: id */ 'font-mono'}>{namespace}</span>,
+          written with GQL.
         </p>
         <Field
           label="Name"
@@ -219,7 +222,7 @@ function CreateDialog({
           {(a) => (
             <Input
               {...a}
-              className="font-mono"
+              className={/* mono-ok: id */ 'font-mono'}
               value={name}
               onChange={(e) => setName(e.target.value)}
               spellCheck={false}
@@ -284,13 +287,13 @@ function DeleteDialog({
       <form className="flex flex-col gap-3" onSubmit={submit}>
         <p className="m-0">
           This deletes the graph and everything in it. Type{' '}
-          <strong className="font-mono">{target.name}</strong> to confirm.
+          <strong className={/* mono-ok: id */ 'font-mono'}>{target.name}</strong> to confirm.
         </p>
         <Field label="Graph name" error={error}>
           {(a) => (
             <Input
               {...a}
-              className="font-mono"
+              className={/* mono-ok: id */ 'font-mono'}
               value={typed}
               onChange={(e) => setTyped(e.target.value)}
               spellCheck={false}

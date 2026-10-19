@@ -6,8 +6,10 @@
 //! What it reads: the project (tenant, `loams-wal` pool), the endpoint
 //! (branch, kind, settings, suspend timeout, current compute), the branch
 //! (timeline, the pageserver of `notify-attach`), and the branch's roles
-//! and databases in key order. Roles carry no password verifier yet: wiring
-//! the role secrets into the spec as SCRAM verifiers is Task 24's.
+//! and databases in key order. Each role carries its password's
+//! SCRAM-SHA-256 verifier ([`crate::scram`], Task 24), never the password:
+//! `compute_ctl` sets the role's `rolpassword` to it at start and on every
+//! `/configure`, so a reset reaches a running compute with the next push.
 //!
 //! Task 11: endpoint settings outside the allow-list
 //! ([`ALLOWED_PG_SETTINGS`](crate::service::endpoints::ALLOWED_PG_SETTINGS))
@@ -24,12 +26,14 @@ use loams_postgres::spec::{
 use loams_postgres::{TenantId, TimelineId};
 use sha2::{Digest, Sha256};
 
-use crate::autoscale::{MAX_CU, file_cache_mb};
+use crate::autoscale::{MAX_CU, file_cache_mb, max_connections};
 use crate::model::{
     BranchKey, BranchRec, BranchScope, BranchState, ComputeBinding, ComputeRec, Cu, DatabaseRec,
     EndpointKey, EndpointRec, EndpointType, ProjectKey, ProjectRec, ProjectState, Record, RoleRec,
     WalService,
 };
+use crate::scram::RoleVerifiers;
+use crate::secrets::SecretError;
 use crate::service::endpoints::setting_allowed;
 use crate::store::{MAX_PAGE_SIZE, Page, PgControlStore, StoreError, Versioned};
 
@@ -45,7 +49,43 @@ pub struct Sources {
     pub default_pageserver: Option<u64>,
     /// Pool name → the connection strings of its acceptors or Service.
     pub wal_pools: BTreeMap<String, Vec<String>>,
+    /// Endpoint storage, where computes keep their file cache's state so a
+    /// promoted replica can prewarm (R2.13, Task 16); `None`: not run.
+    pub endpoint_storage: Option<EndpointStorage>,
+    /// Where roles' password verifiers come from (Task 24); `None`: roles
+    /// get no password (tests that never log in).
+    pub verifiers: Option<std::sync::Arc<RoleVerifiers>>,
 }
+
+/// Endpoint storage (the fork's `endpoint_storage`, Task 16): its address
+/// as computes reach it, and the key whose public half it verifies tokens
+/// with ([`ComputeKeys::public_key_pem`]).
+#[derive(Clone)]
+pub struct EndpointStorage {
+    /// `host:port`.
+    pub addr: String,
+    pub keys: std::sync::Arc<crate::upcall::ComputeKeys>,
+}
+
+impl std::fmt::Debug for EndpointStorage {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("EndpointStorage")
+            .field("addr", &self.addr)
+            .field("kid", &self.keys.kid())
+            .finish()
+    }
+}
+
+impl PartialEq for EndpointStorage {
+    fn eq(&self, other: &Self) -> bool {
+        self.addr == other.addr && self.keys.kid() == other.keys.kid()
+    }
+}
+
+impl Eq for EndpointStorage {}
+
+/// How often a primary saves its file cache's state to endpoint storage.
+pub const LFC_OFFLOAD_INTERVAL_S: u64 = 300;
 
 /// Why no spec.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -89,6 +129,9 @@ pub(crate) struct Inputs {
     pub(crate) endpoint: EndpointRec,
     pub(crate) branch: Versioned<BranchRec>,
     pub(crate) roles: Vec<Versioned<RoleRec>>,
+    /// Role name → its password's SCRAM verifier; a role missing here gets
+    /// no password.
+    pub(crate) verifiers: BTreeMap<String, std::sync::Arc<str>>,
     pub(crate) databases: Vec<Versioned<DatabaseRec>>,
 }
 
@@ -97,6 +140,7 @@ pub(crate) struct Inputs {
 /// (`NotCurrent` otherwise): a replaced compute must not run.
 pub(crate) async fn read_inputs<S: PgControlStore>(
     store: &S,
+    sources: &Sources,
     binding: &ComputeBinding,
     current: Option<&str>,
 ) -> Result<Inputs, SpecError> {
@@ -139,14 +183,56 @@ pub(crate) async fn read_inputs<S: PgControlStore>(
         branch_id: branch.record.id.clone(),
     };
     let roles = list_all::<S, RoleRec>(store, &scope).await?;
+    let verifiers = match &sources.verifiers {
+        Some(v) => read_verifiers(store, v, &roles).await?,
+        None => BTreeMap::new(),
+    };
     let databases = list_all::<S, DatabaseRec>(store, &scope).await?;
     Ok(Inputs {
         project,
         endpoint,
         branch,
         roles,
+        verifiers,
         databases,
     })
+}
+
+/// The verifiers of `roles`' passwords. A password that is gone because a
+/// reset or delete moved its role on meanwhile makes the inputs not ready
+/// (the caller reads again); one gone while its record still names it is
+/// lost (the role's password must be reset), and the role gets none.
+async fn read_verifiers<S: PgControlStore>(
+    store: &S,
+    verifiers: &RoleVerifiers,
+    roles: &[Versioned<RoleRec>],
+) -> Result<BTreeMap<String, std::sync::Arc<str>>, SpecError> {
+    let mut out = BTreeMap::new();
+    for r in roles {
+        match verifiers.get(&r.record.secret_ref).await {
+            Ok(v) => {
+                out.insert(r.record.name.clone(), v);
+            }
+            Err(SecretError::NotFound(_)) => {
+                let now = store.get::<RoleRec>(&r.record.key()).await?;
+                if now.is_some_and(|n| n.record.secret_ref == r.record.secret_ref) {
+                    tracing::error!(branch = %r.record.branch_id, role = %r.record.name, secret_ref = %r.record.secret_ref, "a role's password is missing from the credential store: the role gets none until its password is reset");
+                } else {
+                    return Err(SpecError::NotReady(format!(
+                        "role {} changed while its spec was read",
+                        r.record.name
+                    )));
+                }
+            }
+            Err(e) => {
+                return Err(SpecError::NotReady(format!(
+                    "the password of role {}: {e}",
+                    r.record.name
+                )));
+            }
+        }
+    }
+    Ok(out)
 }
 
 /// The spec of `compute`, bound by `binding`.
@@ -156,7 +242,7 @@ pub(crate) async fn attached<S: PgControlStore>(
     compute: &ComputeRec,
     binding: &ComputeBinding,
 ) -> Result<ComputeSpec, SpecError> {
-    let inputs = read_inputs(store, binding, Some(&compute.id)).await?;
+    let inputs = read_inputs(store, sources, binding, Some(&compute.id)).await?;
     Ok(build(sources, &compute.id, compute.cu, &inputs)?.0)
 }
 
@@ -210,6 +296,38 @@ fn pageserver(sources: &Sources, branch: &BranchRec) -> Result<(u64, String), Sp
     Ok((node, url.clone()))
 }
 
+/// A hot standby's settings: `primary_conninfo` naming every safekeeper of
+/// the pool (`host=h1,h2 port=p1,p2`, the timeline and tenant as options),
+/// its slot, `hot_standby` and no recovery prefetch (Neon reads pages from
+/// the pageserver).
+fn replica_settings(
+    project: &ProjectRec,
+    branch: &BranchRec,
+    safekeepers: &[String],
+) -> Vec<(&'static str, String, &'static str)> {
+    let (hosts, ports): (Vec<&str>, Vec<&str>) = safekeepers
+        .iter()
+        .map(|sk| sk.rsplit_once(':').unwrap_or((sk.as_str(), "5454")))
+        .unzip();
+    let tenant = TenantId(project.tenant_id);
+    let timeline = TimelineId(branch.timeline_id);
+    vec![
+        (
+            "primary_conninfo",
+            format!(
+                "host={} port={} options='-c timeline_id={timeline} tenant_id={tenant}' \
+                 application_name=replica replication=true",
+                hosts.join(","),
+                ports.join(","),
+            ),
+            "string",
+        ),
+        ("primary_slot_name", format!("repl_{timeline}_"), "string"),
+        ("hot_standby", "on".into(), "bool"),
+        ("recovery_prefetch", "off".into(), "string"),
+    ]
+}
+
 /// The spec of compute `compute_id`, of size `cu`, from `inputs`, and its
 /// inputs' version.
 pub(crate) fn build(
@@ -244,6 +362,30 @@ pub(crate) fn build(
             .pageserver(node, &url)
             .suspend_timeout_seconds(suspend)
             .mode(mode);
+    // Endpoint storage (Task 16): every compute prewarms its cache from its
+    // endpoint's saved state at start, and a primary saves it, so a replica
+    // promoted in its place prewarms from it. The token's expiry follows
+    // from the compute's id (a ULID holds its creation time), so the same
+    // records still give the same bytes.
+    if let Some(es) = &sources.endpoint_storage {
+        let created_s = compute_id
+            .parse::<crate::ids::ComputeId>()
+            .map(|c| c.ulid().timestamp_ms() / 1000)
+            .unwrap_or_default();
+        let token = es
+            .keys
+            .issue_endpoint_storage_token(
+                &TenantId(project.tenant_id).to_string(),
+                &TimelineId(branch.timeline_id).to_string(),
+                &endpoint.id,
+                created_s.saturating_add(crate::upcall::COMPUTE_TOKEN_TTL.as_secs()),
+            )
+            .map_err(|e| SpecError::NotReady(format!("the endpoint storage token: {e}")))?;
+        builder = builder.endpoint_storage(&es.addr, token).autoprewarm(true);
+        if mode == ComputeMode::Primary {
+            builder = builder.offload_lfc_interval(LFC_OFFLOAD_INTERVAL_S);
+        }
+    }
     for (name, value) in &endpoint.pg_settings {
         // The API refuses these (Task 11); a record written before the
         // allow-list still never overrides what the platform owns.
@@ -264,6 +406,13 @@ pub(crate) fn build(
             &crate::runtime::COMPUTE_PG_PORT.to_string(),
             "integer",
         ))
+        // Connections (Task 20, R20.3): at the endpoint's largest size, as
+        // PgDog's pool sizes assume.
+        .setting(Setting::new(
+            "max_connections",
+            &max_connections(endpoint.max_cu.max(endpoint.min_cu)).to_string(),
+            "integer",
+        ))
         // The local file cache (Task 15, R15.3): its ceiling is the
         // largest compute's (a start-time setting), its limit the
         // compute's size, which the autoscaler moves.
@@ -277,10 +426,18 @@ pub(crate) fn build(
             &file_cache_mb(cu).to_string(),
             "integer",
         ));
+    // A replica streams the branch's WAL from the safekeepers (Task 16), as
+    // Neon's control plane configures one (`control_plane/src/endpoint.rs`):
+    // without `primary_conninfo` a standby never leaves its base backup.
+    if mode == ComputeMode::Replica {
+        for (name, value, vartype) in replica_settings(project, branch, safekeepers) {
+            builder = builder.setting(Setting::new(name, &value, vartype));
+        }
+    }
     for r in &inputs.roles {
         builder = builder.role(SpecRole {
             name: r.record.name.clone(),
-            encrypted_password: None,
+            encrypted_password: inputs.verifiers.get(&r.record.name).map(|v| v.to_string()),
         });
     }
     for d in &inputs.databases {

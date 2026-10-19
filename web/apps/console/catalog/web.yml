@@ -1,6 +1,7 @@
 # The browser edition's catalog patch: the hosted console (console.loams.dev)
 # and the same build deployed on Vercel, Cloudflare or the Compose `console`
-# service (BYOC). Applied after base.yml by src/hosted/edition.ts.
+# service (BYOC). Applied after base.yml by src/hosted/edition.ts. Its inserted
+# pages also go into the engine-served edition (`servedPagesPatch`, main.tsx).
 #
 # Only pages whose backend the engine actually serves are on by default; each
 # detects its package from GetInstance and says so when the engine lacks it.
@@ -19,3 +20,18 @@
       name: '@loams/plugin-graph'
     - id: house
       name: '@loams/plugin-house'
+    # The data pages (B3): collections over loams.collection.v1 (Connect) plus the
+    # REST SQL route, and streams and links over the native REST routes, both on the
+    # engine's main port. Neither uses the desktop bridge, so the rows leave it out.
+    - id: data-studio
+      name: '@loams/plugin-data-studio'
+      inject: [router, slots, transport, platform, flags, session]
+    - id: streams
+      name: '@loams/plugin-streams'
+      inject: [router, slots, platform]
+    # Durable execution over the engine's main port: `POST /durable/` is the embedded
+    # Resonate server's protocol endpoint behind the engine's auth (B12). No desktop
+    # bridge here, so the row leaves `desktop` out of `inject`.
+    - id: durable
+      name: '@loams/plugin-durable'
+      inject: [router, slots, platform]

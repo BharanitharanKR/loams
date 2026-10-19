@@ -139,8 +139,12 @@ describe('overview cards', () => {
   });
 
   it('every_card_links_to_its_page', () => {
-    render(<StackCard id="wesql" title="WeSQL" href="/wesql" state={{ phase: 'stopped' }} />);
-    expect(screen.getByRole('link', { name: 'Open WeSQL' }).getAttribute('href')).toBe('#/wesql');
+    render(
+      <StackCard id="postgres" title="Postgres" href="/postgres" state={{ phase: 'stopped' }} />,
+    );
+    expect(screen.getByRole('link', { name: 'Open Postgres' }).getAttribute('href')).toBe(
+      '#/postgres',
+    );
   });
 });
 
@@ -270,10 +274,9 @@ describe('overview page', () => {
     expect(within(card('connectors')).getByText('Preview')).toBeTruthy();
     expect(within(card('factory')).getByText('1 of 2 connected')).toBeTruthy();
     expect(within(card('postgres')).getByText('Running')).toBeTruthy();
-    expect(within(card('wesql')).getByText('Not running')).toBeTruthy();
     // The live dashboard sits above the cards, on sample data until a server API exists.
     expect(screen.getByRole('heading', { name: 'Activity' })).toBeTruthy();
-    expect(screen.getByText('Sample data')).toBeTruthy();
+    expect(screen.getAllByText('Sample data')).not.toHaveLength(0);
   });
 
   it('refresh_re_reads_everything_and_keeps_data_on_screen', async () => {
@@ -296,11 +299,11 @@ describe('overview page', () => {
     expect(calls.filter((c) => c === 'stacks.state:postgres')).toHaveLength(2);
   });
 
-  it('remote_server_shows_local_only_for_live_postgres_and_wesql', async () => {
+  it('remote_server_shows_local_only_for_live_and_postgres', async () => {
     const { api } = fakeDesktop({ engine: ready, active: 'demo' });
     render(page(api));
     await waitFor(() => expect(within(card('engine')).getByText('Connected')).toBeTruthy());
-    for (const id of ['live', 'postgres', 'wesql']) {
+    for (const id of ['live', 'postgres']) {
       expect(within(card(id)).getByText('Local only')).toBeTruthy();
       expect(
         within(card(id)).getByText(/available when this computer is the active server/),

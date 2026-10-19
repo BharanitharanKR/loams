@@ -24,7 +24,7 @@ import type { CompleteSetupRequestSchema, CompleteSetupResponse, CreateSessionRe
 import { InstanceService } from '@loams/proto/instance';
 import type { GetInstanceRequestSchema, GetInstanceResponse, WhoAmIRequestSchema, WhoAmIResponse } from '@loams/proto/instance';
 import { LiveAdminService, LiveService } from '@loams/live/live';
-import type { ActivateDeploymentRequestSchema, ActivateDeploymentResponse, DeployRequestSchema, DeployResponse, GetDeploymentRequestSchema, GetDeploymentResponse, GetIndexStatusRequestSchema, GetIndexStatusResponse, ListDeploymentsRequestSchema, ListDeploymentsResponse, ModifyQuerySetRequestSchema, ModifyQuerySetResponse, MutateRequestSchema, MutateResponse, QueryRequestSchema, QueryResponse, TailLogsRequestSchema, TailLogsResponse, Transition, WatchRequestSchema } from '@loams/live/live';
+import type { ActivateDeploymentRequestSchema, ActivateDeploymentResponse, AuthenticateRequestSchema, AuthenticateResponse, CreateAppRequestSchema, CreateAppResponse, DeleteAppRequestSchema, DeleteAppResponse, DeployRequestSchema, DeployResponse, GetAppRequestSchema, GetAppResponse, GetDeploymentRequestSchema, GetDeploymentResponse, GetIndexStatusRequestSchema, GetIndexStatusResponse, ListAppsRequestSchema, ListAppsResponse, ListDeploymentsRequestSchema, ListDeploymentsResponse, ModifyQuerySetRequestSchema, ModifyQuerySetResponse, MutateRequestSchema, MutateResponse, QueryRequestSchema, QueryResponse, TailLogsRequestSchema, TailLogsResponse, Transition, UpdateAppRequestSchema, UpdateAppResponse, WatchRequestSchema } from '@loams/live/live';
 /**
  *  `loams.admin.agents` — Agents, their tokens and trust policies, and service accounts.
  *
@@ -444,6 +444,13 @@ export interface LiveModule {
   /** Whether the package's wire contract may still change. */
   readonly unstable: true;
   /**
+   *  `loams.live.v1.LiveService/Authenticate`, retried: manual.
+   */
+  authenticate(
+    request: MessageInitShape<typeof AuthenticateRequestSchema>,
+    options?: CallOptions,
+  ): Promise<AuthenticateResponse>;
+  /**
    *  `loams.live.v1.LiveService/ModifyQuerySet`, retried: manual.
    */
   modifyQuerySet(
@@ -460,7 +467,7 @@ export interface LiveModule {
 }
 
 /**
- *  `loams.live.admin` — Live administration: deploy, roll back, index status and function logs.
+ *  `loams.live.admin` — Live administration: apps, deploy, roll back, index status and function logs.
  *
  *  Wraps `loams.live.v1.LiveAdminService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
  */
@@ -479,12 +486,33 @@ export interface LiveAdminModule {
     options?: CallOptions,
   ): Promise<ActivateDeploymentResponse>;
   /**
+   *  `loams.live.v1.LiveAdminService/CreateApp`, retried: manual.
+   */
+  createApp(
+    request: MessageInitShape<typeof CreateAppRequestSchema>,
+    options?: CallOptions,
+  ): Promise<CreateAppResponse>;
+  /**
+   *  `loams.live.v1.LiveAdminService/DeleteApp`, retried: manual.
+   */
+  deleteApp(
+    request: MessageInitShape<typeof DeleteAppRequestSchema>,
+    options?: CallOptions,
+  ): Promise<DeleteAppResponse>;
+  /**
    *  `loams.live.v1.LiveAdminService/Deploy`, retried: manual.
    */
   deploy(
     request: MessageInitShape<typeof DeployRequestSchema>,
     options?: CallOptions,
   ): Promise<DeployResponse>;
+  /**
+   *  `loams.live.v1.LiveAdminService/GetApp`, retried: safe.
+   */
+  getApp(
+    request: MessageInitShape<typeof GetAppRequestSchema>,
+    options?: CallOptions,
+  ): Promise<GetAppResponse>;
   /**
    *  `loams.live.v1.LiveAdminService/GetDeployment`, retried: safe.
    */
@@ -500,6 +528,13 @@ export interface LiveAdminModule {
     options?: CallOptions,
   ): Promise<GetIndexStatusResponse>;
   /**
+   *  `loams.live.v1.LiveAdminService/ListApps`, retried: safe. AIP-158: page with `apps` and follow `next_page_token` through `loams.paginate`.
+   */
+  listApps(
+    request: MessageInitShape<typeof ListAppsRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListAppsResponse>;
+  /**
    *  `loams.live.v1.LiveAdminService/ListDeployments`, retried: safe. AIP-158: page with `deployments` and follow `next_page_token` through `loams.paginate`.
    */
   listDeployments(
@@ -513,6 +548,13 @@ export interface LiveAdminModule {
     request: MessageInitShape<typeof TailLogsRequestSchema>,
     options?: CallOptions,
   ): AsyncIterable<TailLogsResponse>;
+  /**
+   *  `loams.live.v1.LiveAdminService/UpdateApp`, retried: manual.
+   */
+  updateApp(
+    request: MessageInitShape<typeof UpdateAppRequestSchema>,
+    options?: CallOptions,
+  ): Promise<UpdateAppResponse>;
 }
 
 /**
@@ -699,24 +741,30 @@ export const MODULES: readonly ModuleBinding[] = [
     unstable: true,
     derived: false,
     calls: [
+      { module: 'live', name: 'authenticate', protoName: 'authenticate', method: 'Authenticate', rpc: 'loams.live.v1.LiveService/Authenticate', service: 'loams.live.v1.LiveService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
       { module: 'live', name: 'modifyQuerySet', protoName: 'modifyQuerySet', method: 'ModifyQuerySet', rpc: 'loams.live.v1.LiveService/ModifyQuerySet', service: 'loams.live.v1.LiveService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
       { module: 'live', name: 'watch', protoName: 'watch', method: 'Watch', rpc: 'loams.live.v1.LiveService/Watch', service: 'loams.live.v1.LiveService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'server', pagination: null },
     ],
   },
   {
     name: 'live.admin',
-    summary: 'Live administration: deploy, roll back, index status and function logs.',
+    summary: 'Live administration: apps, deploy, roll back, index status and function logs.',
     service: 'loams.live.v1.LiveAdminService',
     package: 'loams.live.v1',
     unstable: true,
     derived: false,
     calls: [
       { module: 'live.admin', name: 'activateDeployment', protoName: 'activateDeployment', method: 'ActivateDeployment', rpc: 'loams.live.v1.LiveAdminService/ActivateDeployment', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'live.admin', name: 'createApp', protoName: 'createApp', method: 'CreateApp', rpc: 'loams.live.v1.LiveAdminService/CreateApp', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'live.admin', name: 'deleteApp', protoName: 'deleteApp', method: 'DeleteApp', rpc: 'loams.live.v1.LiveAdminService/DeleteApp', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
       { module: 'live.admin', name: 'deploy', protoName: 'deploy', method: 'Deploy', rpc: 'loams.live.v1.LiveAdminService/Deploy', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'live.admin', name: 'getApp', protoName: 'getApp', method: 'GetApp', rpc: 'loams.live.v1.LiveAdminService/GetApp', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'safe', streaming: 'unary', pagination: null },
       { module: 'live.admin', name: 'getDeployment', protoName: 'getDeployment', method: 'GetDeployment', rpc: 'loams.live.v1.LiveAdminService/GetDeployment', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'safe', streaming: 'unary', pagination: null },
       { module: 'live.admin', name: 'getIndexStatus', protoName: 'getIndexStatus', method: 'GetIndexStatus', rpc: 'loams.live.v1.LiveAdminService/GetIndexStatus', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'live.admin', name: 'listApps', protoName: 'listApps', method: 'ListApps', rpc: 'loams.live.v1.LiveAdminService/ListApps', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'safe', streaming: 'unary', pagination: { items: 'apps', nextPageToken: 'nextPageToken' } },
       { module: 'live.admin', name: 'listDeployments', protoName: 'listDeployments', method: 'ListDeployments', rpc: 'loams.live.v1.LiveAdminService/ListDeployments', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'safe', streaming: 'unary', pagination: { items: 'deployments', nextPageToken: 'nextPageToken' } },
       { module: 'live.admin', name: 'tailLogs', protoName: 'tailLogs', method: 'TailLogs', rpc: 'loams.live.v1.LiveAdminService/TailLogs', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'server', pagination: null },
+      { module: 'live.admin', name: 'updateApp', protoName: 'updateApp', method: 'UpdateApp', rpc: 'loams.live.v1.LiveAdminService/UpdateApp', service: 'loams.live.v1.LiveAdminService', package: 'loams.live.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
     ],
   },
   {
@@ -839,6 +887,17 @@ export const REASONS = [
   'live_deploy_conflict',
   'live_schema_violation',
   'live_index_not_ready',
+  'live_app_disabled',
+  'live_app_exists',
+  'live_function_error',
+  'live_function_timeout',
+  'live_function_out_of_memory',
+  'live_limit_exceeded',
+  'live_app_mismatch',
+  'live_origin_not_allowed',
+  'session_rotate',
+  'session_gone',
+  'node_draining',
   'role_required',
   'setup_required',
   'token_missing',
@@ -937,6 +996,17 @@ export const REASON_CODES: Readonly<Record<Reason, string>> = {
   live_deploy_conflict: 'failed_precondition',
   live_schema_violation: 'invalid_argument',
   live_index_not_ready: 'failed_precondition',
+  live_app_disabled: 'failed_precondition',
+  live_app_exists: 'failed_precondition',
+  live_function_error: 'unknown',
+  live_function_timeout: 'deadline_exceeded',
+  live_function_out_of_memory: 'resource_exhausted',
+  live_limit_exceeded: 'resource_exhausted',
+  live_app_mismatch: 'permission_denied',
+  live_origin_not_allowed: 'permission_denied',
+  session_rotate: 'unavailable',
+  session_gone: 'not_found',
+  node_draining: 'unavailable',
   role_required: 'permission_denied',
   setup_required: 'failed_precondition',
   token_missing: 'unauthenticated',

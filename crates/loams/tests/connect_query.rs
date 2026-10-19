@@ -1378,10 +1378,10 @@ async fn the_section_05_body_is_accepted_rpc() {
     );
     assert_eq!(pks(&body), pks(&rest), "{body} vs {rest}");
 
-    // `rerank` arrives in M3: `invalid_argument`, with the same prose, on both
-    // surfaces. This is the assertion that fails if the hybrid body is decoded
-    // **after** the typed message, because proto3 JSON ignores an unknown
-    // field and the request would silently drop the stage.
+    // The deprecated untyped `rerank` field is `invalid_argument` (GR1 Task 20:
+    // `rerank_spec` carries the stage). This is the assertion that fails if the
+    // hybrid body is decoded **after** the typed message, because proto3 JSON
+    // ignores an unknown field and the request would silently drop the stage.
     let mut rpc = fixture.rpc.clone();
     rpc.as_object_mut()
         .expect("an object")
@@ -1391,7 +1391,7 @@ async fn the_section_05_body_is_accepted_rpc() {
     let error = error.expect_error(StatusCode::BAD_REQUEST);
     assert_eq!(error["code"], "invalid_argument", "{error}");
     assert_reason(&error, "invalid_argument");
-    assert!(message.contains("rerank arrives in M3"), "{message}");
+    assert!(message.contains("rerank_spec"), "{message}");
 
     let mut rest = fixture.rest.clone();
     rest.as_object_mut()
@@ -1949,6 +1949,245 @@ async fn filter_ir_is_accepted_in_every_form_the_rest_route_takes() {
         );
     }
 
+    running.shutdown().await;
+}
+
+/// What a console (or any proto3 JSON caller) sends without thinking about
+/// it: a whole-number id as a JSON number, a `multiMatch` field without a
+/// boost, a `queryString` without default fields. Each is answered as the REST
+/// route and Elasticsearch answer it.
+#[tokio::test]
+async fn ids_multi_match_and_query_string_defaults_rpc() {
+    let running = Running::start().await;
+    kb(&running, "w").await;
+
+    // Ids: `{"uint": 1}`, a bare `3`, a bare string and `{"string": …}` are
+    // all ids; a fraction, a negative and a double past 2^53 are not.
+    let body = running
+        .connect(
+            SEARCH,
+            &kb_request(&[
+                (
+                    "filter",
+                    json!({"ids": [{"uint": 1}, 3, "k-str", {"string": "k-str"}, {"uint": "2"}]}),
+                ),
+                ("limit", json!(10)),
+            ]),
+        )
+        .await
+        .expect_ok();
+    assert_eq!(
+        sorted(pks(&body)),
+        sorted(vec![json!(1u64), json!(2u64), json!(3u64), json!("k-str")]),
+        "{body}"
+    );
+    for bad in [
+        json!({"uint": 1.5}),
+        json!(-1),
+        json!(18_014_398_509_481_984.0_f64),
+        json!({"uint": true}),
+    ] {
+        let reply = running
+            .connect(
+                SEARCH,
+                &kb_request(&[("filter", json!({"ids": [bad.clone()]}))]),
+            )
+            .await;
+        let error = reply.expect_error(StatusCode::BAD_REQUEST);
+        assert_eq!(error["code"], "invalid_argument", "{bad}: {error}");
+    }
+
+    let text = |query: Value| {
+        kb_request(&[
+            ("retrievers", json!([{"text": {"query": query, "k": 10}}])),
+            ("limit", json!(10)),
+        ])
+    };
+    let ranked = |body: &Value, what: &str| {
+        let scores = scores(body);
+        assert_eq!(
+            sorted(pks(body)),
+            vec![json!(1u64), json!(3u64)],
+            "{what}: {body}"
+        );
+        assert!(
+            scores.iter().all(|s| *s > 0.0),
+            "{what}: every hit scores: {body}"
+        );
+        assert!(
+            scores.windows(2).all(|w| w[0] >= w[1]),
+            "{what}: best first: {body}"
+        );
+        scores
+    };
+
+    // multiMatch: a field without a boost is boost 1, so the hits score as
+    // `match` does (BM25, best_fields), not 0.
+    let single = running
+        .connect(
+            SEARCH,
+            &text(json!({"match": {"field": "body", "text": "refund"}})),
+        )
+        .await
+        .expect_ok();
+    let want = ranked(&single, "match");
+    for (what, query) in [
+        (
+            "multiMatch without boosts",
+            json!({"multiMatch": {"fields": [{"field": "body"}], "text": "refund"}}),
+        ),
+        (
+            "multiMatch with boost 1",
+            json!({"multiMatch": {"fields": [{"field": "body", "boost": 1.0}], "text": "refund"}}),
+        ),
+        (
+            "multiMatch without fields",
+            json!({"multiMatch": {"text": "refund"}}),
+        ),
+        (
+            "multiMatch best_fields",
+            json!({"multiMatch": {"fields": [{"field": "body"}, {"field": "tenant"}],
+                   "text": "refund", "kind": "MULTI_MATCH_KIND_BEST_FIELDS"}}),
+        ),
+    ] {
+        let body = running.connect(SEARCH, &text(query)).await.expect_ok();
+        let got = ranked(&body, what);
+        assert_eq!(pks(&body), pks(&single), "{what}: the ranking of match");
+        for (g, w) in got.iter().zip(&want) {
+            assert!((g - w).abs() < 1e-4, "{what}: {got:?} vs {want:?}");
+        }
+    }
+
+    // queryString without default fields searches every text field, on both
+    // surfaces.
+    let body = running
+        .connect(SEARCH, &text(json!({"queryString": {"query": "refund"}})))
+        .await
+        .expect_ok();
+    ranked(&body, "queryString without defaultFields");
+    let rest = running
+        .rest_query(
+            "w",
+            &json!({"collection": "kb", "limit": 10, "retrievers": [
+                {"text": {"query": {"query_string": {"query": "refund"}}, "k": 10}}]}),
+        )
+        .await
+        .expect_ok();
+    ranked(&rest, "REST query_string without default_fields");
+
+    running.shutdown().await;
+}
+
+/// `select` restricts each hit's `source`, whatever retrieves the hits: a
+/// text, a vector or a fused retriever, a filter alone, with or without
+/// highlighting, over the RPC and the REST route alike.
+#[tokio::test]
+async fn select_restricts_the_returned_source_rpc() {
+    let running = Running::start().await;
+    kb(&running, "w").await;
+    let text =
+        json!([{"text": {"query": {"match": {"field": "body", "text": "refund"}}, "k": 10}}]);
+    let vector = json!([{"vector": {"field": "embedding", "query": [1.0, 0.0, 0.0], "k": 10}}]);
+    let fused = json!([{"fused": {"inputs": [text[0].clone(), vector[0].clone()],
+                                  "fusion": {"rrf": {"k": 60}}, "k": 10}}]);
+    let shapes: Vec<(&str, Vec<(&str, Value)>)> = vec![
+        ("text", vec![("retrievers", text.clone())]),
+        ("vector", vec![("retrievers", vector.clone())]),
+        ("fused", vec![("retrievers", fused.clone())]),
+        ("filter", vec![("filter", tenant("a"))]),
+        (
+            "text + highlight",
+            vec![
+                ("retrievers", text.clone()),
+                (
+                    "highlight",
+                    json!({"fields": [{"field": "body", "preTag": "[", "postTag": "]",
+                                                  "fragmentSize": 100, "numberOfFragments": 1}]}),
+                ),
+            ],
+        ),
+    ];
+    // (select, the source keys every hit may have).
+    let selects: Vec<(Value, Vec<&str>)> = vec![
+        (json!({"source": {"include": ["body"]}}), vec!["body"]),
+        (
+            json!({"source": {"include": ["tenant", "n"]}}),
+            vec!["n", "tenant"],
+        ),
+        (
+            json!({"source": {"exclude": ["body"]}}),
+            vec!["n", "tenant"],
+        ),
+        (json!({"source": "none"}), vec![]),
+        // Elasticsearch's `_source` spellings.
+        (json!({"source": ["body"]}), vec!["body"]),
+        (json!({"source": {"includes": ["body"]}}), vec!["body"]),
+        (
+            json!({"source": {"excludes": ["body"]}}),
+            vec!["n", "tenant"],
+        ),
+        (json!({"source": false}), vec![]),
+    ];
+    for (shape, extra) in &shapes {
+        for (select, keys) in &selects {
+            let mut fields: Vec<(&str, Value)> = extra.clone();
+            fields.push(("select", select.clone()));
+            fields.push(("limit", json!(10)));
+            let body = running
+                .connect(SEARCH, &kb_request(&fields))
+                .await
+                .expect_ok();
+            let hits = hits(&body);
+            assert!(!hits.is_empty(), "{shape} {select}: {body}");
+            for hit in &hits {
+                let got: Vec<&str> = hit
+                    .get("source")
+                    .and_then(Value::as_object)
+                    .map(|source| source.keys().map(String::as_str).collect())
+                    .unwrap_or_default();
+                assert!(
+                    got.iter().all(|key| keys.contains(key)),
+                    "{shape} {select}: source keys {got:?}, expected within {keys:?}: {hit}"
+                );
+            }
+        }
+    }
+    // A `select` the engine cannot read is refused, never the whole source.
+    for select in [
+        json!({"include": ["body"]}),
+        json!({"source": {"only": ["body"]}}),
+    ] {
+        let reply = running
+            .connect(
+                SEARCH,
+                &kb_request(&[("retrievers", text.clone()), ("select", select.clone())]),
+            )
+            .await;
+        let error = reply.expect_error(StatusCode::BAD_REQUEST);
+        assert_eq!(error["code"], "invalid_argument", "{select}: {error}");
+    }
+    // The REST route's §05 projection and its IR projection.
+    for select in [
+        json!({"source": {"include": ["body"]}}),
+        json!(["id", "body"]),
+    ] {
+        let rest = if select.is_array() {
+            json!({"from": "collections.kb", "limit": 10, "select": select,
+                   "retrieve": [{"text": {"field": "body", "query": "refund", "k": 10}}]})
+        } else {
+            json!({"collection": "kb", "limit": 10, "select": select, "retrievers": text})
+        };
+        let body = running.rest_query("w", &rest).await.expect_ok();
+        let hits = hits(&body);
+        assert!(!hits.is_empty(), "REST {select}: {body}");
+        for hit in &hits {
+            let keys: Vec<&str> = hit["source"]
+                .as_object()
+                .map(|source| source.keys().map(String::as_str).collect())
+                .unwrap_or_default();
+            assert_eq!(keys, ["body"], "REST {select}: {hit}");
+        }
+    }
     running.shutdown().await;
 }
 

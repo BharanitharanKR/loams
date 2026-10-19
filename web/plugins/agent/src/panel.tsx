@@ -1,6 +1,6 @@
 // The agent panel: chat list, messages, tool and approval cards, composer
 // with the provider picker. State lives in AgentStore; the shell keeps the
-// dock mounted, so a hidden panel keeps its draft and its running turn.
+// inspector tab mounted, so a hidden panel keeps its draft and its running turn.
 
 import type { ChatApproval, ChatStopReason, LoamsDesktopApi } from '@loams/desktop/contracts';
 import { Button, Input, Select } from '@loams/ui';
@@ -81,7 +81,7 @@ export function Markdown({ text, desktop }: { text: string; desktop: LoamsDeskto
       {pending && (
         <div className="mt-2 flex flex-col gap-2 border border-rule p-2">
           <p className="m-0 text-xs text-muted">Open this address in your browser?</p>
-          <p className="m-0 font-mono text-xs break-all">{pending}</p>
+          <p className={/* mono-ok: path */ 'm-0 font-mono text-xs break-all'}>{pending}</p>
           <div className="flex gap-2">
             <Button
               size="sm"
@@ -117,7 +117,7 @@ export function ToolCard({ item }: { item: Extract<Item, { kind: 'tool' }> }) {
   return (
     <details className="border border-rule bg-surface text-xs">
       <summary className="cursor-pointer px-2 py-1 flex items-center gap-2">
-        <span className="font-mono font-medium">{item.tool}</span>
+        <span className={/* mono-ok: id */ 'font-mono font-medium'}>{item.tool}</span>
         {item.risk === 'write' && <span className="text-muted">write</span>}
         <span className={failed ? 'text-danger' : 'text-muted'}>{STATUS_TEXT[item.status]}</span>
       </summary>
@@ -239,12 +239,16 @@ function Messages({
           case 'model':
             return (
               <p key={key} className="m-0 text-xs text-muted">
-                Answered by <span className="box-border font-mono">{item.model}</span>
+                Answered by{' '}
+                <span className={/* mono-ok: id */ 'box-border font-mono'}>{item.model}</span>
                 {item.fallbackFrom && (
                   <>
                     {' '}
                     (server-side fallback from{' '}
-                    <span className="box-border font-mono">{item.fallbackFrom}</span>)
+                    <span className={/* mono-ok: id */ 'box-border font-mono'}>
+                      {item.fallbackFrom}
+                    </span>
+                    )
                   </>
                 )}
               </p>
@@ -413,7 +417,7 @@ function Composer({ store }: { store: AgentStore }) {
         <div className="flex-1 min-w-0">
           <Input
             aria-label="Model"
-            className="box-border font-mono"
+            className={/* mono-ok: id */ 'box-border font-mono'}
             value={snap.pick?.model ?? ''}
             disabled={running}
             onChange={(e) =>

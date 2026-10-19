@@ -102,6 +102,35 @@ pub const MAX_ENV_KEYS: usize = 2048;
 /// Files larger than this are scanned in their first and last 8 MiB, and
 /// binary files are skipped (§36 §19.13.9).
 pub const SCAN_MAX_FILE_BYTES: u64 = 8 * MIB;
+/// Paths (changed files and their directories) a commit may change against
+/// its first parent and still get a changed-path Bloom filter; above it the
+/// filter answers "maybe" to every path (git's value; §36 §19.8).
+pub const BLOOM_MAX_CHANGED_PATHS: usize = 512;
+/// Layers in one commit-graph chain; a new layer merges the ones below it
+/// to stay within this (§36 §19.8).
+pub const MAX_GRAPH_LAYERS: usize = 16;
+/// Revisions in one `Log` call (§36 §19.8).
+pub const MAX_LOG_REVS: usize = 64;
+/// Pathspecs in one `Log` or `DiffStat` call (§36 §19.8).
+pub const MAX_HISTORY_PATHS: usize = 64;
+/// How long one `Grep` call searches; past it the answer is what was found,
+/// flagged `deadline_exceeded` (§36 §19.8).
+pub const GREP_DEADLINE: Duration = Duration::from_secs(30);
+/// Matching lines (or, with `-l`, files) one `Grep` call answers; past it
+/// the answer is flagged `truncated` (§36 §19.8).
+pub const GREP_MAX_MATCHES: usize = 10_000;
+/// Patterns (`-e`) in one `Grep` call (§36 §19.8).
+pub const MAX_GREP_PATTERNS: usize = 64;
+/// `PutWorkspacePack` uploads one node buffers and verifies at once; past
+/// it a call is refused `resource_exhausted` before any byte is read, so a
+/// node holds at most this many bundles of up to `MAX_PACK_BYTES`
+/// (§36 §19.5.2; plan GT1 ruling T24.7).
+pub const MAX_WS_PACK_UPLOADS: usize = 4;
+/// Edits (writes, deletes, renames) in one `ApplyEdits` call (§36 §19.10;
+/// plan GT1 ruling T26.3).
+pub const MAX_EDITS: usize = 10_000;
+/// Paths in one `ReadFiles` call (§36 §19.10; plan GT1 ruling T26.3).
+pub const MAX_READ_PATHS: usize = 1_000;
 
 /// One limit as the limits table prints it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -166,4 +195,14 @@ pub const LIMITS: &[Limit] = &[
     limit("MAX_ENV_FILE_BYTES", "256 KiB", "§36 §19.13.2"),
     limit("MAX_ENV_KEYS", "2,048", "§36 §19.13.2"),
     limit("SCAN_MAX_FILE_BYTES", "8 MiB", "§36 §19.13.9"),
+    limit("BLOOM_MAX_CHANGED_PATHS", "512 paths", "§36 §19.8"),
+    limit("MAX_GRAPH_LAYERS", "16", "§36 §19.8"),
+    limit("MAX_LOG_REVS", "64", "§36 §19.8"),
+    limit("MAX_HISTORY_PATHS", "64", "§36 §19.8"),
+    limit("GREP_DEADLINE", "30 s", "§36 §19.8"),
+    limit("GREP_MAX_MATCHES", "10,000", "§36 §19.8"),
+    limit("MAX_GREP_PATTERNS", "64", "§36 §19.8"),
+    limit("MAX_WS_PACK_UPLOADS", "4", "§36 §19.5.2"),
+    limit("MAX_EDITS", "10,000", "§36 §19.10"),
+    limit("MAX_READ_PATHS", "1,000", "§36 §19.10"),
 ];

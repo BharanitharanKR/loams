@@ -26,15 +26,17 @@ pub const FEATURE: &str = "approvals.supervised";
 /// `failed_precondition`).
 pub const APPROVAL_NOT_PENDING: &str = "approval_not_pending";
 
-/// How a thread's agent tool calls are answered (§53 §8.1).
+/// How a thread's agent tool calls are answered (§53 §8.1). The default is
+/// `supervised` (threat model I-1, owner 2026-10-15): a request that leaves
+/// the mode out, such as a run group without `approvalMode`, is supervised.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 pub enum ApprovalMode {
     /// The harness answers every tool permission itself (the behaviour before
-    /// SD1 Task 13), labelled plainly in the thread header.
-    #[default]
+    /// SD1 Task 13), labelled plainly in the thread header. Only when asked.
     #[serde(rename = "full-access")]
     FullAccess,
     /// Every tool permission waits for a person's decision.
+    #[default]
     #[serde(rename = "supervised")]
     Supervised,
 }

@@ -2,6 +2,8 @@
 
 > **Revised 2026-10-10: monorepo mode (§19).** The owner directed on 2026-10-10: *"loam git should be similar to google monorepo, download only touched file, spawn million of worktrees on s3, it should wrap git command and take over"*. §19 designs it: server-side workspaces on the bucket (CitC-style overlays with a snapshot per save), a lazy FUSE client (`loams-vfs`), and a `git` shim that takes over porcelain and falls through to real git. The WAL core (§4–§5, D388–D392) and the build cache and mirror (§8–§9) stand. **Superseded or amended by §19:** §6.4 and D397 (amended by D826–D829), §13's phases and D411's schedule (D825), §2.2's LFS non-goal (D837). The owner added the same day **secrets as code** (§19.13): `env/` files committed like normal files whose values never become git objects. New decisions are **proposed D825–D847** and open questions **Q750–Q760**; they are not yet in the decision log (Q735–Q747 are reserved by the CL1 plan, so this document starts at Q750; numbers are confirmed when the log is updated). The plan is [GT1 (2026-10-10, rewritten for monorepo mode)](../plans/2026-10-10-gt1-loams-git.md).
 
+> **Added 2026-10-16: §20 (proposed).** After comparing Loams Git with Enroute and Anthropic's Scion, the owner approved five proposals: a TiKV-backed `RefLog` for hot repositories (D1025), a server-side `Land` RPC (D1026), per-commit object locality in packs (D1027), a regional cache tier (D1028), and licensing and positioning (D1029); open questions Q906–Q909. They are Proposed in the decision log, with GT1 Tasks 88–92.
+
 Status: **Approved** (owner defaults, 2026-10-02: "do suggested for all") · 2026-10-01; §19 **Proposed** (2026-10-10). Source: §14 "Loams Git (hosting, WAL, build cache)" and the related open questions in §15 of the owner's draft "Loams Serverless Runtime — Consolidated Plan" (2026-09-30, `chatdump.md` lines 868–946). The owner asked on 2026-10-01 to fold that draft into the design docs, the decision log and the plans. This document **extends §15 §3 (repos on the bucket)**; it does not fork that design. Where it changes an approved part of §15, the change is marked with its D-number and listed in §15 "Conflicts". The `Fs` trait is §17 below. Running Loams Git on Cloudflare (Workers, Durable Objects, Containers) is a commercial Cloudflare target (`loams-platform`): since the owner's ruling of 2026-10-02 ("move Cloudflare, OpenRTB etc. commercial to private repos"; §38 D440 on PR #182) the former §35 lives there (private). This repository's Git core stays portable to it but does not depend on it.
 
 Decisions **D388–D399**; open questions **Q384–Q395** (the range D380–D399 / Q380–Q399 was shared with the former §35; D381 and D382 stay here, in §17, and D380, D383–D387 moved to `loams-platform`, private). Plans: [GT1](../plans/2026-10-01-gt1-wal-git-core.md) (the WAL git core and `git-remote-loams`), [GT2](../plans/2026-10-01-gt2-smart-http.md) (Smart HTTP for stock git) and [GT3](../plans/2026-10-01-gt3-build-cache-and-mirror.md) (the sccache backend and the crates mirror). GT4 and GT5 are not yet planned.
@@ -60,6 +62,8 @@ Markers: **(source)** means read in the upstream repository or documentation on 
 | **go-git** (Apache-2.0, v5.19.2 2026-07-29) | Server-side `upload-pack` and `receive-pack` with a pluggable `storage.Storer`; its v6 `main` has v2 code while its compatibility table still lists v2 as unsupported (source) | A reference for the server loop. Not a dependency (Go; Loams’ core is Rust and must run in Workers) |
 
 ## 4. The WAL on the bucket (D388–D391)
+
+> **Durability substrates (2026-10-16, [§58](58-data-access-and-htap.md) §8.4–§8.5, D1059, D1060).** Loams Git uses no `loams-wal`, which is the Postgres WAL service. Objects stay on the bucket. The bucket WAL below stays the default `RefLog`, and hot repositories may opt into the TiKV `RefLog` (§20.4, D1025). The segment code of `wal/*.lgw` (create-only PUTs, unknown-outcome resolution, framing, checkpoints, GC) moves into the shared bucket-segment library `loams-seglog`, which `loams-wal`'s `.lwal` offload also uses. The formats here do not change.
 
 ### 4.1 Layout
 
@@ -854,6 +858,8 @@ message WorkspaceSnapshot {
 - **Complete, not a delta.** Mounting reads one snapshot, plus the hint and a probe, as WAL readers do (§4.6). The tree objects carry the size of the overlay, so the record stays small. A change to `k` files writes about `k × depth` new tree objects into the save's pack.
 - **Status is O(changed).** The `changed` hint lists every path that differs among HEAD, the index and the worktree. Past `MAX_CHANGED_HINT` (10,000 paths) it is omitted and readers diff the trees, which skips equal subtrees by object id.
 
+**As built (GT1d, Task 22; `crates/loams-git/src/format/snapshot.rs`).** The framing above is exact: the header's `format_version` is u16 LE and `n` u64 LE, the CRC32C covers header and body, and both encoder and decoder refuse a body over 1 MiB. The snapshot commit (D835) has tree `worktree_tree`, parent `head` (none for an unborn workspace), author and committer `Loams Snapshot <snapshot@loams.invalid>` at `created_unix_ms` truncated to seconds in `+0000`, and message `loams snapshot <ws_id>@<n>` with a final newline. Plan ruling T22.1.
+
 #### 19.4.3 Writers, readers and takeover (D827)
 
 ```
@@ -875,6 +881,8 @@ save: PUT ws/<ws_id>/snap/<n+1>.lws  If-None-Match: *
 - **Fork** (`ForkWorkspace(ws@n)`) writes the new workspace's snapshot 0 as a copy of snapshot `n`, with `fork` set and the source's packs referenced by the source's paths. GC counts those references (§19.4.5).
 - **Listing** pages through `_ws_names/<owner>/` (named workspaces) or `ws/` (all of them, for administrators and GC).
 
+**As built (GT1d, Task 23; `crates/loams-git/src/ws/`).** `WorkspaceStore` is implemented by `BucketWorkspaceStore` and `MemWorkspaceStore`. The name record is `{ws_id, created_unix_ms}` and the hint `{n, written_unix_ms}`. Create and fork are idempotent on a caller-chosen `ws_id`. An unnamed create or fork is one create-only PUT, and a named one is two. A fork copies snapshot `n` whole, with `fork` set and no label. Its `packs` name the source's packs by checksum, and readers find those packs under the source's prefix by following `fork`. `latest` reads the hint and probes forward, or lists `snap/` when there is no usable hint. Listing all workspaces skips past each workspace's objects (`ws/<ws_id>/~`). Plan rulings T23.1–T23.6.
+
 #### 19.4.5 Retention and GC (D836)
 
 | What | Rule |
@@ -894,10 +902,18 @@ save: PUT ws/<ws_id>/snap/<n+1>.lws  If-None-Match: *
 - `GET /git/<ns>/<repo>.git/loams/objects/<oid>` returns one object, zlib-compressed in the loose format, with `Cache-Control: private, max-age=31536000, immutable`. An organisation's caching proxy can serve it; R2 charges no egress for it.
 - **Prefetch.** `.loams/profiles/<name>.txt` holds gitignore-style patterns, committed to the repository; `loams vfs prefetch --profile <name>` uses one. vfsd's fetch log records the paths a command (`cargo build`, `pytest`) read first and suggests a profile (`loams vfs profile suggest`). On `readdir`, vfsd prefetches that directory's trees to depth 2.
 
+**As built (GT1c, Tasks 17 and 19; `crates/loams-git/src/odb/range.rs`, `src/derived/tree_aux.rs`; plan rulings T17.1–T17.5, T19.1–T19.2).** `RangeOdb` reads idx fan-outs once per pack, the 4 KiB oid pages of one bucket per lookup, and entries in reads of at least 64 KiB, through the blob store's H1 cache; `header` answers a delta's result size from at most 20 inflated bytes of its delta data. `WsOdb` searches a workspace's packs after the repository's, so they never shadow an object. Tree aux data is `derived/tree-aux/<tree_oid>.lta`: magic `LGITTAUX`, version 1, the tree id, a `loams.git.v1.TreeAux` body (name, mode, object id, and a size for blobs and symlinks), CRC32C and the end magic `LGITTEND`.
+
 #### 19.5.2 Upload
 
 - `HasObjects(ws, oids[])` returns a bitmap over the repository and the workspace packs.
 - `PutWorkspacePack(ws, lpk)` checks that every object hashes to its id, applies the hardening limits of §6.3, runs secret scanning (§19.13.9), and stores `ws/<ws_id>/packs/<checksum>.lpk` (create-only, content-named). The snapshot that names the pack is the commit point. An unnamed pack is garbage after `GC_GRACE`.
+
+**As built (GT1d, Task 24; `crates/loams-git/src/ws/{tree_build.rs,pack.rs}`).** A save's trees come from `TreeBuilder::apply(base_tree, edits, odb)`, which reads and writes only the trees along the changed paths and gives what `git update-index` plus `git write-tree` give. `PutWorkspacePack` is a client stream: the first message names the repository and the workspace, and each message carries the next bytes of the bundle. Before anything is stored, the server checks the footer, the pack and idx trailers, and the idx's order, fan-out and offsets. It reads every entry from that pack alone, with deltas resolved, so each object must hash to the id its idx gives and parse as its kind. A workspace pack must be self-contained: a thin pack is refused. Each object then goes to the scanner hook (a no-op until GT1 Task 67). A workspace's owner, an org admin or the operator may upload. A forked workspace reads packs from its own prefix and then from each fork source's (`WsPackBlobs`, `fork_sources`). Plan rulings T24.1–T24.6.
+
+**As built (GT1d, Task 25; `crates/loams/src/api/workspaces.rs`, `crates/loams-git/src/ws/{lookup.rs,save.rs,salvage.rs,pack_write.rs}`).** `WorkspaceService` serves the lifecycle, snapshots and salvage over the workspace store, and the server's `WsLookup` reads workspaces from it, so object reads and uploads that name a workspace work end to end, through fork chains (at most 8 deep: `fork_too_deep`). `SaveSnapshot` is fenced on `n`; it first checks that the snapshot commit is the snapshot's own, that the packs it names are held, and that its trees, `head` and snapshot commit exist with every new tree connected. A fenced save is kept as salvage under its writer. `RestoreSalvage` replays salvage path by path: paths both writers changed keep the latest entry and become conflicts, and the new trees go into one pack the server writes. Repository readers read workspaces unless the server limits that to owners (`--git-workspace-reads-owner`). Writing needs the owner, an org admin or the operator. `DeleteWorkspace` writes the final `deleted` snapshot. Plan rulings T25.1–T25.9.
+
+**As built (GT1d, Task 26; `crates/loams-git/src/diff/`, `crates/loams-git/src/ws/{edits.rs,merge3.rs}`).** `ReadFiles`, `ApplyEdits`, `Diff` and `Rebase` are served for mount-less agents. `ApplyEdits` builds the trees, writes one server pack and appends `expect_n + 1`; `Diff` prints what `git diff --no-renames --no-indent-heuristic` prints, from Loams' own Myers diff; `Rebase` replays uncommitted changes onto the track's tip with a clean-room diff3 (`merge3`, diff3-style markers), reading only the paths both sides changed. Until env sealing (GT1 Task 62) env files are read redacted and cannot be written. Plan rulings T26.1–T26.6.
 
 #### 19.5.3 The save pipeline (vfsd)
 
@@ -1010,6 +1026,10 @@ The projection is **always present** as `.git` at the workspace root, so tools t
 - **`Grep(rev, pattern, pathspec, flags)`** runs the `grep-regex` and `grep-searcher` crates (MIT OR Unlicense) in parallel over the tree's blobs, with a deadline and a match limit. It uses §15 §4's code index when one exists. The shim adds a local search of overlay paths, and lets an overlay path's result replace the server's.
 - **`DiffStat(a, b, pathspec)`** returns tree-diff statistics. Line counts need blob reads, which the server does and caches per (a, b) pair.
 - **`env/` files** in all four return keys and fingerprints only (§19.13.8).
+
+**As built (GT1c, Task 20; `crates/loams-git/src/derived/{graph.rs,bloom.rs}`, `src/history/`).** A `derived/graph/<seq:020>.graph` layer is git's commit-graph format with version 2 changed-path Bloom filters, a `BASE` chain and one Loams chunk, `LOAM`, naming each base's seq; `gix-commitgraph` reads it, and it matches `git commit-graph write --changed-paths` chunk for chunk. A layer holds the commits its seq's refs reach that the newest stored chain lacks, and layers merge geometrically (at most 16 in a chain). Two details differ from git's format page and follow git 2.55 instead: a filter is `ceil(10n/8)` bytes, and the 512-path limit counts directories. `Log` emulates git's default walk (date order, ties in the order reached, the excluded side walked in the same queue with git's slop, default history simplification in which only excluded tips count among excluded parents) and checks a commit's filter before its trees. Pathspecs are literal. `DiffStat` counts lines with Myers' shortest edit script, without rename detection, and is not cached yet. Compaction's `commit-graph/` joins as a base kind with Task 53. Plan rulings T20.1–T20.6.
+
+**As built (GT1c, Task 21; `crates/loams-git/src/derived/blame.rs`, `src/history/grep.rs`).** `Blame` runs `gix-blame` (Myers, whole-file renames followed, every blob diffed as text) and stores each file's blame at a commit in `derived/blame/<commit>/<sha256(path)>.lbl` (`LGITBLAM` v1, CRC32C, `LGITBEND`); a file `gix-blame` cannot walk (a path that was a directory in an ancestor) answers `not_implemented` rather than a partial blame. `Grep` translates POSIX basic and extended patterns to the regex crate, refuses back-references and patterns that match an empty line, searches regular files only, treats a NUL in the first 8,000 bytes as binary, and stops at `GREP_DEADLINE` (30 s) or `GREP_MAX_MATCHES` (10,000), flagging which. The code index is not used yet. Plan rulings T21.1–T21.3.
 
 ### 19.9 Interop (D835)
 
@@ -1196,3 +1216,209 @@ From the author's knowledge, not re-read on 2026-10-10 (Task 0 of the plan check
 - Jujutsu (https://github.com/jj-vcs/jj, Apache-2.0): working-copy commits and the operation log.
 - `fuser` (https://github.com/cberner/fuser, MIT); Linux FUSE passthrough (6.9).
 - SOPS (MPL-2.0), git-crypt (GPL-3.0), External Secrets Operator (Apache-2.0), gitleaks (MIT), OpenBao (MPL-2.0; KV v2 API), HashiCorp Vault KV v2 API, AWS Secrets Manager, Azure Key Vault and GCP Secret Manager APIs; `dotenvy` (MIT).
+
+---
+
+## 20. Landscape: Enroute and Scion, and what Loams Git takes from them (2026-10-16)
+
+Status: **Approved** (owner, 2026-10-16: D1025–D1029 with the defaults of Q906–Q909). The owner compared Loams Git with Enroute and with Anthropic's Scion and on 2026-10-16 approved writing five proposals into this document. They are decisions **D1025–D1029** and open questions **Q906–Q909**, entered in the decision log as Proposed with their defaults filled. The plan tasks are [GT1](../plans/2026-10-10-gt1-loams-git.md) Tasks 88–92. Nothing here changes an approved decision until the owner confirms it. §20.9 lists what each proposal would amend.
+
+Markers as in the rest of this document: **(source)** means read on 2026-10-16 at the URL in §20.11, as the vendor or author states it, not checked by Loams. **(target)** means a number Loams sets out to reach and has not measured. **(verify)** means the task that builds it checks it first.
+
+### 20.1 The two systems
+
+**Enroute** (https://enroute.sh, `github.com/enroute-sh/enroute`; Apache-2.0, Rust; v0.2.0 on 2026-09-25 and v0.3.0 on 2026-10-14 per the GitHub releases API, whose dates carry the year that the release page omits). Enroute is a git-compatible server on object storage, aimed at CI, agent artifacts and embedded version control. As described in its README, its v0.3.0 release notes and its article "Everyone is doing Git on S3 wrong" (2026-10-13) (source):
+- **A ledger.** Each repository's refs and its list of layers live in a per-repository Raft log on the ledger nodes' disks, "CockroachDB-style MultiRaft". A push is acknowledged once a majority of ledger nodes hold its entry. Ref updates are compare-and-swap in that log, so pushes to different branches do not conflict.
+- **Segments and layers.** Each commit becomes a *segment*: the objects that make up its change from its parents. Consecutive segments are grouped into immutable *layers*, which are pack-like files with an index and a table of contents at the end. A delta only points to the same path in a parent commit, so a client that has the parent can use it directly. A fetch sends the segments of the missing commits, without a tree walk.
+- **Small layers inline.** Small pushes are stored in the log itself. Only layers over 1 MiB go straight to the bucket. About once a second, a compute node merges the recent inline layers into one file, uploads it and swaps it into the log, like an LSM memtable flush. Compaction merges about eight similar-sized layers at a time, copying bytes without recompressing them. There is no `git repack`.
+- **Stateless compute.** Compute nodes build layers, serve clones and fetches, and compact. They keep only caches: a buffer pool over layers in memory and on disk, filled by parallel ranged GETs.
+- **Numbers.** With its own benchmark, forgemark, on EC2 and S3: a peak of 7,619 pushes/s into one repository with 512 concurrent pushers, and a median push latency of 4.4 ms for one pusher. Against stock git 2.56.0 (`git http-backend`, a repacked linux.git): shallow clones more than 2x faster, partial clones on par, full clones about 17% slower, incremental fetches about 13% slower (attributed to the client decoding Enroute's deltas). A cold node cloned linux.git in 128.6 s against 126.0 s warm (source).
+- **Not yet built** (the article): SSH and the less common parts of the protocol (smart HTTP only), garbage collection of unreachable objects, and a gRPC write API for server-side commits and merges. The v0.3.0 release notes, a day later, list "commits made through the API without a Git client" (source). 0.x releases are not backward compatible: 0.3.0 cannot read repositories that 0.2.0 wrote.
+- **Its critique of WAL-on-S3 designs** (Cursor's Continuity, §3, and open-source followers such as walgit): every push contends on one WAL index object and one machine applies pushes in order, so one repository's write throughput is capped by that machine. Continuity's own figures (120 pushes/s on S3 Standard, over 300 on S3 Express One Zone) are limited by git compaction on disk. Read replicas need a full copy of the repository on disk (source).
+
+**Scion** (Anthropic Engineering, "Redesigning source control at Anthropic", 2026-10-13, updated 2026-10-15). Scion is Anthropic's internal version control system for its monorepo. It is **not git-compatible**: its client departs from git's fetch protocol, history was ingested from git, and the article calls it "by no means a suitable replacement for git for general use". It is not open source. As described (source):
+- **Changesets in a WAL.** The unit is a changeset: the files changed relative to its first parent, with content-addressed pointers to compressed contents in blob storage. Spanner holds refs and metadata. Moving a ref is a compare-and-swap on a single Spanner row, separate from creating changesets, and refs other than main and release branches are discouraged.
+- **The server does the work.** Commits, rebases and merges happen on the server, so there is no push. There is no global merge-queue lock: Anthropic relies on post-merge and pre-deploy testing, accepts that concurrent changes can conflict, and has Claude fix the conflicts.
+- **Derived data** (blame, path history, commit-graph skip lists) is computed by one generic mechanism, recursively from parent values, eagerly or deferred, and written back to Spanner.
+- **Strict tiers.** A `scion-daemon` per node stores objects for the whole node and starts from a periodically refreshed snapshot. A regional `scion-cache` streams objects from memory. `scion-server` is authoritative. The tiers are strictly enforced to isolate failure domains, and each tier's hit rate is over 99%.
+- **Checkouts** are optional, sparse or virtualised; many CI and write workloads use the API with no checkout. A fetch starts from a root tree and requests only missing trees and blobs, so it is resumable. There is no packfile and no repository maintenance.
+- **Numbers.** Merges grew from about 2,500 a day (May 2026) to over 30,000 a day (September 2026). About 25 million CI checkouts a day. Infrastructure CPU and memory are about 200x smaller than the previous several hundred git mirrors. The review tool, Antique, can express semantic constraints on approvals (for example, comment-only changes against sensitive logic).
+
+**Unofficial projects** after the article: `CarterT27/scion` (Apache-2.0, Rust; it calls itself an independent clean-room implementation; CockroachDB for metadata and S3-compatible storage for objects; early; git protocol compatibility and two-way sync are out of scope) and `tinyhumansai/openscion` (**GPL-3.0-only**, Rust; it follows Scion's design with BLAKE3-named objects, a per-node daemon, a regional cache and a server). §20.8 sets how Loams may use each.
+
+### 20.2 Comparison
+
+| | **Loams Git** (§4–§19) | **Enroute** (v0.3.0) | **Scion** (internal) |
+|---|---|---|---|
+| Git compatibility | Full: Smart HTTP, `git-remote-loams`, stock clients; SHA-1 commits with matching ids (D831) | Full over smart HTTP; no SSH yet | None; own client and protocol |
+| Where refs are ordered | The bucket: a create-only segment PUT is the commit point (D389), one sequencer per repository with group commit (D391) | A per-repository Raft log on ledger nodes | A single-row CAS in Spanner |
+| Acknowledged when | Pack and segment are in the bucket | A ledger majority holds the entry | The Spanner commit |
+| Data layout | One `.lpk` per push or save (pack, idx, footer); geometric repack by stock git off the push path (D396) | Per-commit segments in immutable layers with a table of contents; deltas only to the same path in a parent; LSM-style merges | Changesets plus content-addressed blobs; no packfiles |
+| Server-side commit, rebase, merge | Workspaces: saves, `ApplyEdits`, `Rebase`, `PushWorkspace` (D831, D834); no land with retry yet | Listed in v0.3.0 notes; called unbuilt a day earlier | Yes; no push at all |
+| Merge queue | None; Q392 left a queue to a later phase | None stated | None; post-merge testing, agents fix conflicts |
+| History on the server | `Log`, `Blame`, `Grep`, `DiffStat` over derived data (D833) | Not stated | Blame, path history, skip lists as derived data |
+| Client and caches | `loams-vfsd` per host with a shared content-addressed cache (D828); no regional tier | Buffer pool on compute nodes | Per-node daemon, regional cache, server; strict tiers |
+| Workspaces | Server-side, any machine can mount, one PUT to create (D826) | None | Sparse and virtualised checkouts |
+| Licence | Apache-2.0 | Apache-2.0 (CLA to OpenCanopy GmbH for patches) | Closed |
+| **Single-repository push throughput** | **Bounded by group size over segment PUT latency.** At most 64 transactions per segment (`MAX_GROUP_TXNS`) per segment PUT, so at most `64 / L` per second. Measured on one machine (§4.4): 145 commits/s in memory and 93 on RustFS with 100 ms added per PUT and 32 pushers. **Unmeasured on R2, S3 Standard and S3 Express One Zone** (GT-Q8) | 7,619 pushes/s claimed with 512 pushers (source) | About 30,000 merges a day reported, about 0.35 a second on average (source) |
+
+**The honest reading.** Loams' weak point is one hot repository's push rate. Every push to the repository, whatever its branch, waits for the next segment PUT, so the rate is the group size divided by the store's PUT latency. Group commit makes it grow with load (§4.4), and the D391 target of 30 pushes/s is met on RustFS, but Enroute's claim is fifty times Loams' measured figure, and Loams has not measured a cloud store at all. Loams' strengths are full git compatibility together with Scion-style server-side workspaces and history, a bucket as the only durable state, and O(1) forks and workspaces. D1025 addresses the weak point without giving up the strengths.
+
+### 20.3 Decisions (proposed)
+
+| # | Decision (proposed) | § |
+|---|---|---|
+| D1025 | **A TiKV-backed `RefLog` for hot repositories.** `TikvRefLog` implements D392's `RefLog` with ref transactions ordered by TiKV's Raft, so a push waits for a TiKV commit (milliseconds) rather than a bucket segment PUT. The bucket WAL (D388–D391) stays the default, and the bucket stays the source of truth for the layout: `TikvRefLog` mirrors every log entry into `wal/` with the same sequence numbers and bytes, and checkpoints, packs and workspaces stay on the bucket. The choice is per repository (`RepoConfig.ref_log`: `bucket` by default, or `tikv` where the deployment runs TiKV, which the Loams stack already ships for Live and the metastore). A benchmark task runs a forgemark-style push workload against both adapters | §20.4 |
+| D1026 | **`Land` in `WorkspaceService`.** A server-side rebase of a workspace's stack of local commits onto a target ref, then a `RefTxn` compare-and-swap, retried with backoff when another land wins. There is no global merge queue. Conflicts come back as a structured result that an agent can act on. An optional pre-land checks hook runs before the CAS. `Land` is idempotent on a caller-chosen land id (the request's `idempotency_key`) | §20.5 |
+| D1027 | **Per-commit object locality.** Packs written at push, save or land time group each commit's new objects (Enroute's segment idea) and carry a table of contents (`.lpk` format version 2), so fetch and `loams-vfs` read a commit's closure with a few ranged GETs and no object-by-object tree walk on the bucket. Objects are also clustered by kind (commits, then trees, then blobs), so `--filter=blob:none` reads one prefix. Compaction stays off the push path with stock `git repack` (D396) | §20.6 |
+| D1028 | **A regional cache tier, `loams-git-cache`,** between `loams-vfsd` or CI nodes and the gateway's `ObjectService` and the bucket. It speaks the same RPCs, caches immutable data only, and tiers are strict: a client talks only to its configured cache, and a cache only to the server. On CI nodes, one shared `loams-vfsd` in system mode serves several jobs from one cache | §20.7 |
+| D1029 | **Licensing and positioning.** Extends D838. Ideas may be taken from Enroute and `CarterT27/scion` (Apache-2.0; their code may be read), but no code is copied unless a later decision allows it, with attribution. Nothing is taken from `openscion` (GPL-3.0), whose source is not read; Scion's ideas come only from Anthropic's public article. Positioning: **Loams Git keeps full git compatibility while offering Scion-style server-side workspaces, history and landing** | §20.8 |
+
+### 20.4 A TiKV-backed `RefLog` (D1025)
+
+**Why TiKV and not a new consensus layer.** Enroute's ledger is a per-repository Raft log. Loams already runs TiKV (Raft per region, PD's timestamp oracle, Percolator transactions) through `crates/loams-tikv` (R1, D124) for the metastore (D179) and Live (D130). A TiKV transaction commits in milliseconds and is replicated to three zones, so it gives the same property without a second consensus system.
+
+**Shape.** `TikvRefLog` lives in a new crate, `crates/loams-git-tikv`, so `loams-git` keeps no TiKV dependency and stays portable (§5, §17). It reuses the §4.4 sequencer, the state machine (§4.5) and the segment format (D390) unchanged. Only the commit point moves. Concretely, a `TikvWalStore` implements `WalStore` (§5.1): `append` is the TiKV transaction below (it derives the `ref` keys from the batch's `RefTransaction` events), `read_from` reads `log/`, the hint is `tail`, and checkpoints go to the bucket through the repository's `StoreWalStore`. `TikvRefLog` is the existing sequencer over `TikvWalStore`, plus the bucket mirror and point reads for `snapshot`:
+
+| Key (under the Loams keyspace's `git/` root, `loams_tikv::codec::tuple`) | Value |
+|---|---|
+| `(ns, repo_id, "tail")` | the last committed seq and the checkpoint seq |
+| `(ns, repo_id, "log", seq)` | the encoded segment `wal/<seq>.lgw` would hold (D390 bytes, at most 1 MiB) |
+| `(ns, repo_id, "ref", name)` | the ref's object id, for point reads without replay |
+| `(ns, repo_id, "mirrored")` | the highest seq copied to the bucket |
+
+- **Commit.** The sequencer forms a group as in §4.4 and commits it as one TiKV transaction through `Tikv::run`. The transaction locks `tail` (`get_for_update`), checks that it still equals the sequencer's state, writes `log/<seq+1>`, the changed `ref` keys and `tail`, and commits. The TiKV commit is the commit point, as the segment PUT is in §4.2.
+- **Fencing.** A second writer (a zombie owner, a fallback after a forward timeout, Task 14) finds `tail` moved, reads the log entries past its state, applies them and re-validates, exactly as on a 412. An unknown outcome is resolved by reading `log/<seq+1>` and comparing `batch_id`. Correctness still never depends on there being one sequencer (D391).
+- **Reads.** `snapshot(Latest)` on any node reads `tail` and the `ref` keys at one TSO timestamp. `watch(from)` reads `log/` in order. Receipts, sequence numbers, consistency tokens and idempotency (§4.5) are unchanged, so callers cannot tell the adapters apart.
+- **Throughput.** Pushes to different branches still share one sequence, but a group now waits about one TiKV commit (single-digit milliseconds on a local cluster (verify)) instead of one segment PUT. Per-ref transactions with no shared `tail`, ordered by commit timestamp, would remove the shared key too. They are not built unless Task 89 shows `tail` is the limit (Q906 records the default).
+- **The bucket stays complete.** A mirror task beside the sequencer copies each `log/<seq>` into `wal/<seq:020>.lgw` with a create-only PUT and the same bytes, then advances `mirrored`. The checkpointer keeps writing `checkpoints/` from the sequencer's state. TiKV log entries are deleted only once they are both mirrored and below the newest checkpoint. Any bucket reader (`git-remote-loams` fetch, `state_at`, the restore drill, Task 77) therefore sees the repository, at most `TIKV_MIRROR_LAG` (1 s (target)) behind. Packs, workspaces, derived data and the `_git` event mirror (§4.8) do not change.
+- **Acknowledgement.** A push is acknowledged after its pack PUT and the TiKV commit, not after the mirror. For a repository that opts in, this amends goal 2 of §2.1 and D1 the way D130 does for Live: the refs' source of truth is TiKV until mirrored. Q906 asks the owner to confirm it.
+- **Switching adapters.** `bucket` to `tikv`: the owner sequencer commits a handover event through the bucket WAL, of a new type `io.loams.dev.git.handover.v1` whose data is `RefLogHandover { RefLogKind to = 1; }` (`BUCKET = 0`, `TIKV = 1`). It then writes `tail` at that seq into TiKV and commits from there. A current bucket writer that reads the handover refuses to append, and `git-remote-loams` answers `fatal: repository '<address>' is ordered by a Loams server; push through loams://<host>/…`. A reader built before the handover type existed refuses the segment, because the event reader refuses an unknown `type` (`format/event.rs`), so an older helper stops rather than writes past it. `tikv` to `bucket`: stop accepting, let the mirror catch up, commit the reverse handover through TiKV (mirrored like any entry), and continue on the bucket WAL from the next seq.
+- **Selection.** `RepoConfig.ref_log` is set at `CreateRepo` or by `UpdateRepoConfig` (admin access). `tikv` is refused with the reason `ref_log_unavailable` (`failed_precondition`) where the deployment has no TiKV, which includes `loams dev`, the desktop and every local-first `DirectBackend`. The default stays `bucket` everywhere.
+- **The benchmark** (Task 89, `bench/git-forge`) is a forgemark-style workload written from Enroute's published description, not its code: N concurrent pushers, each pushing a small commit to its own branch of one repository over Smart HTTP, with N from 1 to 512. It runs against both adapters on the same machine (RustFS with and without 100 ms added per PUT; a three-node TiKV in compose) and records pushes/s, p50 and p99. Targets for the TiKV adapter on the reference machine: **at least 1,000 pushes/s at 512 pushers with p99 under 250 ms, and a p50 under 20 ms for one pusher (target)**. The bucket adapter's figures are recorded, not gated. Enroute's 7,619 pushes/s ran on EC2 and S3 across machines, so it is cited, not used as a target.
+
+### 20.5 `Land` (D1026)
+
+`Land` turns §19.7.5's pull-then-push into one server-side call with retries, which is what Scion's server-side merges give agents. It extends D834:
+
+```proto
+rpc Land(LandRequest) returns (LandResponse);
+message LandRequest {
+  string repo = 1; string ws_id = 2; uint64 expect_n = 3;   // the snapshot whose stack lands; 0 = latest
+  string target_ref = 4;                                    // "refs/heads/main"
+  LandStrategy strategy = 6;                                // REBASE (default) | FAST_FORWARD_ONLY
+  bool run_checks = 7;                                      // the repository's pre-land hook, if configured
+  google.protobuf.Duration deadline = 8;                    // default LAND_DEADLINE (60 s)
+  string idempotency_key = 15;                              // AP0; this is the land id
+}
+message LandResponse {
+  oneof outcome { Landed landed = 1; LandConflicts conflicts = 2; ChecksFailed checks_failed = 3; }
+}
+message Landed { uint64 seq = 1; bytes new_tip = 2; string consistency_token = 3; uint32 attempts = 4; bool workspace_updated = 5; }
+message LandConflicts { bytes target_tip = 1; bytes at_commit = 2; repeated LandConflict conflicts = 3; }
+message LandConflict { string path = 1; ConflictKind kind = 2; bytes base = 3; bytes ours = 4; bytes theirs = 5; uint32 mode = 6; repeated string env_keys = 7; }
+// ConflictKind: CONTENT, MODIFY_DELETE, ADD_ADD, MODE, ENV_KEY (D845: keys and fingerprints, never values)
+```
+
+1. Read the workspace at `expect_n`. Its **stack** is the commits from `base` to `head`.
+2. Read `target_ref`'s tip `T` at `snapshot(Latest)`. If `T` equals `base`, the stack fast-forwards. Otherwise replay each commit of the stack onto `T` with the clean-room `merge3` (Task 26), touching only the paths that changed on either side. The author is kept; the committer is the landing principal, at the land's start time.
+3. A conflict stops the land and returns `LandConflicts`, naming the stack commit that failed. Nothing is written. The agent fixes the conflict in its workspace (`Rebase` writes the conflicts there, §19.10) and lands again.
+4. If `run_checks` is set and the repository configures a pre-land hook, call it with the rebased tip and its changed paths, within `LAND_CHECK_TIMEOUT` (5 min). A failure returns `ChecksFailed` with the hook's report. The hook is an HTTPS webhook signed like D843's, or an in-process `LandCheck` for embedders. It is **off by default**: testing is post-merge, as Scion's is.
+5. Write one `.lpk` with the new commits and the closure the repository lacks (D831's assembly, D1027's layout), then commit a `RefTxn` with `Expect::Oid(T)` through the repository's sequencer. Protection, scope, secret scanning and env sealing are checked as in `PushWorkspace`. A land is always a fast-forward of the tip it read, so `deny_force` does not refuse it.
+6. On `Stale` (another land or push won), wait with jittered exponential backoff (10 ms doubling to 1 s), read the new tip and repeat from step 2, re-merging only commits whose paths the new tip changed. Give up after `LAND_MAX_ATTEMPTS` (16) or the deadline with `aborted` (reason `land_contended`). Checks re-run after a retry only when the repository sets `land.rerun_checks_on_retry` (default off).
+7. On success, if the workspace is still at `expect_n`, append a snapshot with `base = head = new_tip` and the local branch moved, fenced like any save (`workspace_updated: true`). If it has moved on, leave it: the writer's next pull rebases onto the landed commits.
+
+- **Idempotency.** The `RefTxn`'s key is `land:` plus SHA-256 over the principal and the land id, and its request digest covers `(repo, ws_id, expect_n, target_ref, strategy)`, never the rebased tip, which changes between attempts. A retry within the 1 h window (§4.5) is answered with the original receipt, and `Land` reads the ref at that seq to return the landed tip. A create-only land record, `ws/<ws_id>/land/<sha256(land id)>.json`, keeps the outcome for `LAND_RECORD_RETENTION` (7 days) past the window. The same land id with another request is `idempotency_key_reused`.
+- **No merge queue.** Lands contend only at the CAS. The cost is a re-merge per lost race, which touches only the changed paths. Q392's answer (a queue in a later phase, on demand) stands for a queue; `Land` is not one. Q907 asks whether a branch should be able to require it.
+- **Mount-less agents** (§19.11) land with `ApplyEdits` then `Land`, and never fetch the tree. The shim maps nothing to `Land` at GA: `git push` keeps its git semantics, and `loams ws land` (CL1's vocabulary) is the command.
+
+### 20.6 Per-commit object locality (D1027)
+
+**The problem.** A fetch of one new commit, or `loams-vfs` reading a fresh commit's trees, resolves object by object through the idx (§5.3, Task 17), which costs a ranged GET per scattered object on a cold cache. Enroute's segments put a commit's objects together and index them, so the read is a few ranges.
+
+**`.lpk` format version 2** adds a table of contents between the idx and the footer:
+
+```
+pack ‖ idx ‖ toc ‖ footer v2 (40 bytes: magic "LGITLPK2" | pack_len u64 | idx_len u64 | toc_len u64 | crc32c u32 | reserved u32)
+```
+
+```protobuf
+message ByteRange { uint64 offset = 1; uint64 len = 2; }      // within the pack section
+message CommitExtent {
+  bytes commit = 1;
+  repeated ByteRange trees = 2;            // the trees this commit introduces, coalesced
+  repeated ByteRange blobs = 3;            // the blobs this commit introduces, coalesced
+  repeated ByteRange external_bases = 4;   // delta bases in this pack outside the commit's own ranges
+}
+message PackToc {
+  ByteRange commits = 1;  ByteRange trees = 2;  ByteRange blobs = 3;   // kind clusters, when contiguous
+  repeated CommitExtent extents = 4;       // in topological order, oldest first
+}
+```
+
+- **Packs Loams writes** (workspace saves, `PushWorkspace`, `Land`, compaction's own merges of workspace packs) are written in the order *all commits, then trees grouped by the commit that introduces them, then blobs grouped the same way*. Each commit's trees and blobs are then one range each, and the kind clusters are three ranges. An object belongs to the oldest commit in the pack that reaches it. Delta bases precede their deltas, as ofs-deltas require, and a base outside the commit's ranges is listed in `external_bases`, so a reader knows every range it needs without parsing entries.
+- **Packs Loams receives** (stock `git push`, the helper) are stored exactly as received (D390, Q908's default). git's `pack-objects` already writes commits, then trees, then blobs (its write order (verify)), so the kind clusters usually hold. The receive path already walks each new commit's closure to check connectivity (§6.3 step 3, `missing_from_closure`), so it builds the per-commit extents in that walk, with no second pass, and writes the TOC in the same create-only PUT. Ranges may be fragmented. That is correct, only less compact.
+- **Readers.** `ObjectService.GetTrees` for a commit that has an extent reads its tree ranges in one coalesced GET. `upload-pack` serving wants whose haves include their parents streams the extents' ranges in pack-copy mode (§6.1); a delta whose base is not sent is converted to a ref-delta for a client that has the base, or resolved, as the assembler already does. `filter=blob:none` reads the commit and tree clusters only. `loams-vfs` prefetch (§19.5.1) reads a new commit's trees as one range. A pack without a TOC (format version 1, or a damaged TOC) falls back to idx lookups, so the TOC is an optimisation and never needed for correctness.
+- **Compatible with D396.** The pack section stays a valid git pack and the idx stays version 2, so compaction's local mirror splits `.lpk` files into `pack-<checksum>.pack` and `.idx` as before and ignores the TOC. Stock `git repack --geometric=2` stays the only repacker, never on the push path. Geometric repacking leaves the youngest small packs alone until they roll up, and the youngest commits are the ones CI and agents read, so locality is kept where reads concentrate. When the compactor uploads a pack that git wrote, it computes that pack's TOC from the new pack's commits and idx (on the worker, beside the commit-graph step) and writes it in the `.lpk`, so older history keeps its kind clusters and gets extents, possibly fragmented. Readers accept versions 1 and 2 (§03 §6's N and N−1 rule), and existing version 1 packs gain a TOC only when compaction rewrites them.
+- **Not taken from Enroute:** "deltas only against the same path in a parent". Loams cannot write deltas (gitoxide has no delta compression, §6.1), so Loams-written packs have none beyond those copied from stored packs, and stock git chooses the deltas of the packs it writes.
+
+### 20.7 A regional cache tier (D1028)
+
+`loams-git-cache` is Scion's `scion-cache` for Loams: a stateless read-through cache in a region or site, between hosts and the server.
+
+```
+loams-vfsd (per host; per CI node in system mode) ──► loams-git-cache (per region or site) ──► gateway: ObjectService ──► bucket
+```
+
+- **Same RPCs.** It serves `ObjectService` (`GetObjects`, `GetTrees`, `HasObjects`, `Log`, `Blame`, `Grep`, `DiffStat`) and the immutable object route (`GET …/loams/objects/<oid>`, §19.5.1). A client points its `ApiBackend` at the cache instead of the gateway, with no other change.
+- **Immutable data only.** It caches responses keyed by content: objects by id, tree aux by tree id, blame by (commit, path), derived graph layers by seq, pack ranges by pack checksum. It forwards everything mutable or ref-relative (`HasObjects` misses, history by ref name, workspace and snapshot calls, saves, pushes, `Land`) to the server without caching. A positive `HasObjects` answer is cached, because objects are never removed while reachable; a negative one is not.
+- **Strict tiering.** vfsd talks only to its configured upstream, and the cache talks only to the server. Neither skips a tier when the next one fails: a client fails over to another cache in the same tier, or waits. A cache outage therefore cannot shift a region's whole read load onto the server, which is the reason Scion gives. The server limits each cache's request rate.
+- **Access.** The cache decides nothing by itself. It asks the server once per (token, repository, workspace) and keeps the answer for `CACHE_AUTHZ_TTL` (60 s). Entries are partitioned by namespace and fork family (§4.7), and objects from a workspace pack by workspace, so a hit is served only to a caller the server has authorised for that partition, and nothing is shared across tenants (§8.3's rule).
+- **Shared node daemon for CI.** On a CI node, one `loams-vfsd --system` serves every job: each job mounts its own workspace with its own scoped token through the control socket (its group `loams-ci`, D788's peer checks), and all jobs share one content-addressed cache (§19.6.2). The node daemon warms its cache at boot from a prefetch profile (`loams vfs prefetch --profile ci`, §19.5.1), as Scion's daemon starts from a snapshot.
+- **Storage.** Memory first, then a local disk (an `Fs`, §17), LRU, both rebuildable (D1). Target: a hit rate of at least 99% at each tier for a CI fleet checking out recent tips (target).
+- **Not GT5.** GT5's NVMe replicas hold whole repositories and could accept writes. This cache holds immutable objects only and never orders anything.
+
+### 20.8 Licensing and positioning (D1029)
+
+| Project | Licence | What Loams may do |
+|---|---|---|
+| Enroute | Apache-2.0 | Read its documentation and source and take ideas. Copy no code unless a later decision allows it, with attribution in `NOTICE` |
+| `CarterT27/scion` | Apache-2.0 | The same as Enroute |
+| `tinyhumansai/openscion` | GPL-3.0-only | Nothing. Its source is not read for Loams work. Scion's ideas come only from Anthropic's article |
+| Scion | Closed | Ideas from the public article only |
+| walgit (`tobi/walgit`) | MIT (source) | Reference only; a Continuity-style design that §3 already covers |
+
+This extends D838's rule to these projects. Every PR implementing a §20 idea cites the public document it worked from. **Positioning:** *Loams Git keeps full git compatibility while offering Scion-style server-side workspaces, history and landing.*
+
+### 20.9 Conflicts with earlier decisions
+
+| Earlier | §20 | Resolution |
+|---|---|---|
+| D1 and §2.1 goal 2 (a push is acknowledged when pack and ref update are in the bucket) | D1025: acknowledged at the TiKV commit, mirrored within about 1 s | Amended only for repositories that opt in, as D130 amends D1 for Live. The bucket default is unchanged. Q906 |
+| D389, D391 (the segment PUT is the commit point; fencing on the segment name) | D1025 | For a `tikv` repository, the TiKV transaction on `tail` is the commit point and the fence. The bucket WAL is a mirror with identical segments. D390's event types gain `io.loams.dev.git.handover.v1` |
+| D395 (the serverless helper writes the bucket directly) | D1025 | The helper refuses to push to a repository ordered by TiKV; fetch is unchanged |
+| D397 and Q391 (no per-scope WAL partitions until contention is measured) | D1025 | Unchanged: one log per repository. A faster log, not more logs, is the answer for hot repositories |
+| Q392 (a server-side merge queue in a later phase, on demand) | D1026 | `Land` is server-side rebase and CAS without a queue. A queue stays unplanned |
+| D390 (`.lpk` = pack ‖ idx ‖ footer; packs stored as received) | D1027 | Format version 2 adds a TOC; received bytes stay verbatim; Loams-written packs are ordered per commit |
+| D396 (compaction by stock `git repack`, off the push path) | D1027 | Kept. The compactor adds a TOC to the packs it uploads |
+| D838 (licences) | D1029 | Extended to Enroute, `CarterT27/scion`, `openscion` and walgit |
+| §3 (reference systems) | §20.1 | Enroute and Scion are compared here rather than in §3's table |
+
+### 20.10 Open questions
+
+| # | Question | Default | Owner | Needed by |
+|---|---|---|---|---|
+| Q906 | **TiKV adapter acknowledgement.** Acknowledge a push to a `tikv` repository at the TiKV commit (three-zone Raft, mirrored to the bucket within about 1 s), or wait for the mirror too? Waiting for the mirror would bring back the segment PUT latency. | At the TiKV commit, amending D1 for opted-in repositories as D130 does for Live. Per-ref commits without the shared `tail` key are built only if Task 89 shows `tail` is the limit | Founder | GT1 Task 88 |
+| Q907 | **Requiring `Land`.** Should a protection rule be able to refuse direct pushes to a branch and accept only `Land` (so every change is rebased on the server)? | Yes, as a `land_only` flag on `Protection`, off by default | Founder | GT1 Task 90 |
+| Q908 | **Received packs.** Rewrite pushed packs into per-commit order (CPU on the push path, and no longer the bytes received), or store them verbatim with a TOC? | Verbatim with a TOC (D390 unchanged); only Loams-written packs are reordered | Eng | GT1 Task 91 |
+| Q909 | **Where the cache tier runs.** As its own optional binary and image, one per region or self-hosted site, or as a role of the `loams` binary? | Its own binary and image (`loams-git-cache`), optional in the compose stack and off in `loams dev` | Eng | GT1 Task 92 |
+
+### 20.11 Sources for §20
+
+Read on 2026-10-16.
+
+- Enroute: https://enroute.sh; https://enroute.sh/blog/everyone-is-doing-git-on-s3-wrong (2026-10-13: ledger, segments, layers, delta rule, inline layers and flush, buffer pool, forgemark figures, comparison with git 2.56.0, the critique of WAL-on-S3 designs, what is unbuilt); https://github.com/enroute-sh/enroute (README; Apache-2.0; Rust); https://github.com/enroute-sh/enroute/releases and the GitHub releases API (v0.2.0 2026-09-25T16:13Z, v0.3.0 2026-10-14T11:15Z). All Enroute figures are the vendor's, not reproduced.
+- Scion: Anthropic Engineering, "Redesigning source control at Anthropic", https://www.anthropic.com/engineering/redesigning-source-control (2026-10-13, updated 2026-10-15). All figures are Anthropic's.
+- https://github.com/CarterT27/scion (Apache-2.0; README: CockroachDB and S3-compatible storage, v1 scope, git protocol compatibility out of scope); https://github.com/tinyhumansai/openscion (GPL-3.0-only per the GitHub API; only its README and licence were read, to classify it).
+- walgit: https://github.com/tobi/walgit (MIT and a Continuity-style manifest CAS, per search summaries; not read).
+- Repository: §4.4's measurements (`bench/results/git-wal/20261012T0955Z-gt1-t11.jsonl`), `crates/loams-tikv` (R1, D124), D130, D179, D838.

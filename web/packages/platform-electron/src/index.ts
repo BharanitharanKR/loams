@@ -9,11 +9,15 @@ import { createAgentdTransport } from '@loams/agentd-client/connect';
 import {
   type AgentdReach,
   type AgentdService,
+  localThemeStore,
   MODE_HOME,
   type ModeService,
   type PlatformService,
   type PluginModule,
+  parseThemeChoice,
   SHELL_COMMAND_EVENT,
+  ThemeController,
+  type ThemeStore,
 } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
 import type { AgentdStatus, LoamsDesktopApi, ShellCommand } from '@loams/desktop/contracts';
@@ -78,6 +82,20 @@ export function instanceFeaturesInterceptor(kind: () => Promise<string | undefin
   };
 }
 
+/** The desktop keeps the choice in settings.json (D1074); local storage mirrors it for `?desktop`. */
+export function desktopThemeStore(api: LoamsDesktopApi): ThemeStore {
+  const local = localThemeStore();
+  return {
+    read: () => (api.theme ? parseThemeChoice(api.theme.initial) : local.read()),
+    write: (choice, dark) => {
+      local.write(choice, dark);
+      void api.theme?.set(choice, dark).catch(() => {
+        // Main did not save it: the choice holds for this window.
+      });
+    },
+  };
+}
+
 export function createElectronPlatform(api: LoamsDesktopApi): PluginModule {
   return {
     name: 'platform-electron',
@@ -117,6 +135,7 @@ export function createElectronPlatform(api: LoamsDesktopApi): PluginModule {
         }),
       );
       ctx.provide('desktop', api);
+      ctx.provide('theme', new ThemeController(desktopThemeStore(api)));
       // loams-agentd through Electron main's route (SD1 Tasks 5–6); only
       // @loams/plugin-rpc reads it, and turns it into `agentd` and `rpc.agentd.*`.
       ctx.provide('agentd.endpoint', desktopAgentdEndpoint(api));

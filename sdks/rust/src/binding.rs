@@ -200,8 +200,10 @@ mod tests {
         assert_eq!(
             promoted,
             [
+                "loams.live.v1.LiveAdminService/GetApp",
                 "loams.live.v1.LiveAdminService/GetDeployment",
                 "loams.live.v1.LiveAdminService/GetIndexStatus",
+                "loams.live.v1.LiveAdminService/ListApps",
                 "loams.live.v1.LiveAdminService/ListDeployments",
             ],
             "a proto changed which calls set retry_safe: a behaviour change"
@@ -263,7 +265,8 @@ mod tests {
         }
     }
 
-    /// Only `LiveAdminService.ListDeployments` (LV1 Task 10) and the lists of
+    /// Only `LiveAdminService.ListDeployments` and `ListApps` (LV1 Tasks 10
+    /// and 13) and the lists of
     /// `loams.admin.v1` (API2 Task 7) declare paging, and the table says so: a
     /// row that claimed pagination for an RPC that does not read a page token
     /// would send one anyway. (The name predates the admin lists.)
@@ -290,6 +293,7 @@ mod tests {
                 "loams.admin.v1.ProjectService/ListAccess",
                 "loams.admin.v1.ProjectService/ListEnvironments",
                 "loams.admin.v1.ProjectService/ListProjects",
+                "loams.live.v1.LiveAdminService/ListApps",
                 "loams.live.v1.LiveAdminService/ListDeployments",
             ]
         );
@@ -329,9 +333,12 @@ mod tests {
     #[test]
     fn the_table_covers_every_generated_spec_and_nothing_more() {
         use loams_live_proto::loams::live::v1::{
-            LIVE_ADMIN_SERVICE_ACTIVATE_DEPLOYMENT_SPEC, LIVE_ADMIN_SERVICE_DEPLOY_SPEC,
-            LIVE_ADMIN_SERVICE_GET_DEPLOYMENT_SPEC, LIVE_ADMIN_SERVICE_GET_INDEX_STATUS_SPEC,
+            LIVE_ADMIN_SERVICE_ACTIVATE_DEPLOYMENT_SPEC, LIVE_ADMIN_SERVICE_CREATE_APP_SPEC,
+            LIVE_ADMIN_SERVICE_DELETE_APP_SPEC, LIVE_ADMIN_SERVICE_DEPLOY_SPEC,
+            LIVE_ADMIN_SERVICE_GET_APP_SPEC, LIVE_ADMIN_SERVICE_GET_DEPLOYMENT_SPEC,
+            LIVE_ADMIN_SERVICE_GET_INDEX_STATUS_SPEC, LIVE_ADMIN_SERVICE_LIST_APPS_SPEC,
             LIVE_ADMIN_SERVICE_LIST_DEPLOYMENTS_SPEC, LIVE_ADMIN_SERVICE_TAIL_LOGS_SPEC,
+            LIVE_ADMIN_SERVICE_UPDATE_APP_SPEC, LIVE_SERVICE_AUTHENTICATE_SPEC,
             LIVE_SERVICE_MODIFY_QUERY_SET_SPEC, LIVE_SERVICE_MUTATE_SPEC, LIVE_SERVICE_QUERY_SPEC,
             LIVE_SERVICE_WATCH_SPEC,
         };
@@ -410,6 +417,7 @@ mod tests {
             INSTANCE_SERVICE_GET_INSTANCE_SPEC,
             INSTANCE_SERVICE_WHO_AM_I_SPEC,
             LIVE_SERVICE_WATCH_SPEC,
+            LIVE_SERVICE_AUTHENTICATE_SPEC,
             LIVE_SERVICE_MODIFY_QUERY_SET_SPEC,
             LIVE_SERVICE_MUTATE_SPEC,
             LIVE_SERVICE_QUERY_SPEC,
@@ -419,6 +427,11 @@ mod tests {
             LIVE_ADMIN_SERVICE_ACTIVATE_DEPLOYMENT_SPEC,
             LIVE_ADMIN_SERVICE_GET_INDEX_STATUS_SPEC,
             LIVE_ADMIN_SERVICE_TAIL_LOGS_SPEC,
+            LIVE_ADMIN_SERVICE_CREATE_APP_SPEC,
+            LIVE_ADMIN_SERVICE_LIST_APPS_SPEC,
+            LIVE_ADMIN_SERVICE_GET_APP_SPEC,
+            LIVE_ADMIN_SERVICE_UPDATE_APP_SPEC,
+            LIVE_ADMIN_SERVICE_DELETE_APP_SPEC,
         ];
         let table = every_binding();
         assert_eq!(

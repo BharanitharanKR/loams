@@ -37,8 +37,8 @@ const CSS = `
 .ld-keys li { color: var(--op-muted); }
 .ld-keys li[data-kind="rotated"] code { color: var(--op-accent); }
 .ld-keys li[data-kind="removed"] code { text-decoration: line-through; }
-.ld-keys code { font-family: var(--loams-font-mono); font-size: 11px; color: var(--op-ink); }
-.ld-logs { margin: 0; padding: 8px; background: var(--op-surface); font-family: var(--loams-font-mono); font-size: 12px;
+.ld-keys code { font-family: var(--loams-font-mono); font-size: 11px; color: var(--op-ink); } /* mono-ok: code */
+.ld-logs { margin: 0; padding: 8px; background: var(--op-surface); font-family: var(--loams-font-mono); font-size: 12px; /* mono-ok: code */
   max-height: 320px; overflow: auto; list-style: none; }
 .ld-logs li[data-level="error"] { color: var(--op-danger); }
 .ld-charts { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 16px; }

@@ -324,6 +324,35 @@ async fn the_namespace_header_selects_the_namespace() {
     es.server.shutdown().await.expect("shutdown");
 }
 
+/// A body over axum's own 2 MB default but under the configured limit
+/// (100 MiB by default) is read and applied (0.1.0 release e2e, B16: a
+/// 2.8 MB `_bulk` was a plain 413 from the `Bytes` extractor).
+#[tokio::test]
+async fn a_body_over_two_megabytes_is_accepted() {
+    let es = Es::start().await;
+    let field = "x".repeat(100 * 1024);
+    let mut body = String::new();
+    for n in 0..35 {
+        body.push_str(&format!(
+            "{{\"index\":{{\"_index\":\"big\",\"_id\":\"{n}\"}}}}\n"
+        ));
+        body.push_str(&format!("{{\"field\":\"{field}\"}}\n"));
+    }
+    assert!(body.len() > 3 * 1024 * 1024, "{}", body.len());
+    let a = es
+        .send_raw(
+            Method::POST,
+            "/_bulk",
+            Some(("application/x-ndjson", body.into_bytes())),
+            &[],
+        )
+        .await;
+    assert_eq!(a.status, 200, "{:?}", a.body);
+    assert_eq!(a.body["errors"], false, "{:?}", a.body);
+    assert_eq!(a.body["items"].as_array().map(Vec::len), Some(35));
+    es.server.shutdown().await.expect("shutdown");
+}
+
 #[tokio::test]
 async fn a_body_over_the_limit_is_413() {
     let es = Es::start_with(|config| {

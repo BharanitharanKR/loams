@@ -134,7 +134,7 @@ export const QuestionCard = memo(function QuestionCard({
       }}
     >
       <div className="flex items-center gap-2 border-b border-rule-soft px-3 py-1.5 text-xs text-muted">
-        <MessageCircleQuestion className="size-3.5 text-accent" aria-hidden />
+        <MessageCircleQuestion className="size-3.5 text-accent-fg" aria-hidden />
         <span className="font-medium text-ink">{activeQuestion.header}</span>
         {questions.length > 1 ? (
           <span className="ml-auto tabular-nums">
@@ -161,7 +161,7 @@ export const QuestionCard = memo(function QuestionCard({
                   aria-pressed={isSelected}
                   onClick={() => select(activeQuestion, option)}
                   className={cx(
-                    "flex w-full items-center gap-2 rounded-none border-0 px-2.5 py-1.5 text-left text-sm",
+                    "flex w-full items-center gap-2 rounded-md border-0 px-2.5 py-1.5 text-left text-sm",
                     isSelected
                       ? "bg-accent-soft text-ink"
                       : "bg-transparent text-ink hover:bg-raised",
@@ -170,7 +170,7 @@ export const QuestionCard = memo(function QuestionCard({
                 >
                   <span className="min-w-0 flex-1 font-medium">{option}</span>
                   {isSelected ? (
-                    <CheckIcon className="size-3.5 shrink-0 text-accent" aria-hidden />
+                    <CheckIcon className="size-3.5 shrink-0 text-accent-fg" aria-hidden />
                   ) : shortcutKey !== null ? (
                     <kbd className="text-xs text-faint tabular-nums">{shortcutKey}</kbd>
                   ) : null}
@@ -195,7 +195,7 @@ export const QuestionCard = memo(function QuestionCard({
                   [activeQuestion.id]: { customAnswer: event.target.value },
                 })
               }
-              className="min-w-0 flex-1 rounded-none border border-rule bg-bg px-2 py-1 text-sm text-ink"
+              className="min-w-0 flex-1 rounded-md border border-input bg-bg px-2 py-1 text-sm text-ink"
             />
           ) : (
             <input
@@ -218,7 +218,7 @@ export const QuestionCard = memo(function QuestionCard({
                   advance(answers);
                 }
               }}
-              className="min-w-0 flex-1 rounded-none border border-rule bg-bg px-2 py-1 text-sm text-ink"
+              className="min-w-0 flex-1 rounded-md border border-input bg-bg px-2 py-1 text-sm text-ink"
             />
           )}
           <Button

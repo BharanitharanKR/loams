@@ -66,6 +66,23 @@ arrow-schema.workspace = true
 parquet.workspace = true
 # The CRC-32C a native snapshot's manifest entry carries, checked when it is read back.
 crc32c.workspace = true
+# The `collection → graph` link (GR1 Task 18): `loams-link`'s target contract and its apply loop,
+# and the collections' `DocOp` records and their codec. `loams` depends on both already, so the
+# server build gains no crate.
+async-trait.workspace = true
+loams-collection.workspace = true
+loams-link.workspace = true
+loams-worker.workspace = true
+tokio-util.workspace = true
+# `Search.expand` (GR1 Task 20): `loams-query`'s graph expander and its IR. `loams` depends on it
+# already, so the server build gains no crate.
+loams-query.workspace = true
+# `leiden` (GR1 Task 22, R22.3): hierarchical Leiden from graspologic-native (MIT).
+network_partitions.workspace = true
+rand_010.workspace = true
+# The adjacency index's content address (GR1 Task 22): `adj/<offset>-<sha256>.adj`.
+sha2.workspace = true
+hex.workspace = true
 
 [features]
 # `engine_panic_poisons_one_graph`: `cargo test -p loams-graph --features failpoints`.
@@ -84,6 +101,8 @@ loams-meta.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 loams-graph = { path = ".", features = ["test-hooks"] }
+# `denials_are_audited` reads the audit lines (GR1 Task 24).
+tracing-subscriber.workspace = true
 # `licences_cover_every_grafeo_crate` reads `Cargo.lock` and `connectors/licences.toml`.
 toml.workspace = true
 # `proto_has_no_path_fields` walks `loams_proto::FILE_DESCRIPTOR_SET`.

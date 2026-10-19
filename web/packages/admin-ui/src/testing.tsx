@@ -177,6 +177,11 @@ export interface AdminImpl {
   audit?: Partial<ServiceImpl<typeof admin.AuditService>>;
   /** The engine's loams.collection.v1, for the environment page's collections. */
   collections?: Partial<ServiceImpl<typeof collection.CollectionService>>;
+  /**
+   * The engine's NamespaceService, for the org home's Namespaces tile. Absent, the
+   * service is not served (an engine before ListNamespaces answers `unimplemented`).
+   */
+  namespaces?: Partial<ServiceImpl<typeof collection.NamespaceService>>;
 }
 
 function withStatus(id: string, status: admin.AgentStatus): admin.Agent {
@@ -331,6 +336,7 @@ export function createAdminTransport(impl: AdminImpl = {}): Transport {
       }),
       ...impl.collections,
     });
+    if (impl.namespaces) service(collection.NamespaceService, impl.namespaces);
     service(admin.AuditService, {
       listAuditEvents: () => ({ events: SEED.events }),
       async *watchAuditEvents() {

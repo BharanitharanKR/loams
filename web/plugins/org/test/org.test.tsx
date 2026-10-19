@@ -43,6 +43,61 @@ describe('@loams/plugin-org', () => {
     expect(router.trail()).toEqual([{ label: 'Acme Robotics' }]);
   });
 
+  it('home_with_no_projects_fills_its_tiles_and_says_where_the_data_is', async () => {
+    const router = stubRouter('/');
+    const transport = createAdminTransport({
+      projects: { listProjects: () => ({ projects: [] }) },
+    });
+    render(
+      withConsole(<Home router={router} session={stubSession()} auditPath="/audit" />, transport),
+    );
+    expect(await screen.findByText('No projects yet')).toBeTruthy();
+    expect(screen.getByText(/0 projects, 0 environments/)).toBeTruthy();
+    // B7: every tile resolves; none stays at the "…" placeholder.
+    await waitFor(() => expect(screen.queryByText('…')).toBeNull());
+    expect(screen.getByRole('link', { name: 'Data explorer' }).getAttribute('href')).toBe('#/data');
+    // Nothing reports a size: a dash with the reason, not "0" and "0 B".
+    const dashes = screen.getAllByText('—');
+    expect(dashes).toHaveLength(3);
+    expect(dashes[0]?.parentElement?.getAttribute('title')).toMatch(
+      /does not measure environments/,
+    );
+    expect(screen.queryByText('0 B')).toBeNull();
+  });
+
+  it('home_shows_the_numbers_an_environment_reports', async () => {
+    const router = stubRouter('/');
+    render(withConsole(<Home router={router} session={stubSession()} auditPath="/audit" />));
+    await screen.findByText(/2 projects, 2 environments/);
+    await waitFor(() => expect(screen.queryByText('…')).toBeNull());
+    expect(screen.queryByText('—')).toBeNull();
+  });
+
+  it('home_namespaces_tile_counts_what_the_engine_lists_or_falls_back_to_environments', async () => {
+    const router = stubRouter('/');
+    const listed = createAdminTransport({
+      projects: { listProjects: () => ({ projects: [] }) },
+      namespaces: {
+        listNamespaces: () => ({
+          namespaces: [
+            { namespace: 'default', collectionCount: 2 },
+            { namespace: 'e2e', collectionCount: 3, streamCount: 1 },
+          ],
+        }),
+      },
+    });
+    render(
+      withConsole(<Home router={router} session={stubSession()} auditPath="/audit" />, listed),
+    );
+    expect(await screen.findByText('5 collections')).toBeTruthy();
+    cleanup();
+    // An engine without ListNamespaces: the tile counts project environments (none here).
+    const older = createAdminTransport({ projects: { listProjects: () => ({ projects: [] }) } });
+    render(withConsole(<Home router={router} session={stubSession()} auditPath="/audit" />, older));
+    expect(await screen.findByText('Project environments')).toBeTruthy();
+    await waitFor(() => expect(screen.queryByText('…')).toBeNull());
+  });
+
   it('teams_page_lists_teams_and_creates_one', async () => {
     const created: string[] = [];
     const transport = createAdminTransport({

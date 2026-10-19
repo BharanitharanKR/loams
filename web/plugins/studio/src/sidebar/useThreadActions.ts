@@ -56,8 +56,9 @@ export function newThreadApprovalMode(): ApprovalMode {
  * Records Settings › Studio's approval mode for a new thread `chatId`, before its first
  * run (G22, SD1 Task 13). Every way a thread starts calls it: New thread and Mod+N, the
  * project page's composer, the judge (SD1 Task 30: the composer never did, so on a
- * desktop daemon its threads ran at the daemon's `full-access` default). The daemon keys
- * the mode by id, so it can be set before `Send` creates the thread. A daemon without
+ * desktop daemon its threads ran at the daemon's then `full-access` default; since T30-19
+ * the default is `supervised`, so `full-access` is only ever this explicit choice). The
+ * daemon keys the mode by id, so it can be set before `Send` creates the thread. A daemon without
  * approvals answers `unimplemented`: its threads run as before.
  */
 export async function applyNewThreadApprovalMode(
@@ -77,11 +78,15 @@ export function newThreadConfig() {
   return create(ChatConfigSchema, {
     harness: HARNESS[settings.harness],
     ...(settings.model ? { model: settings.model } : {}),
-    sandbox:
-      settings.approvalMode === 'full-access'
-        ? SandboxLevel.DANGER_FULL_ACCESS
-        : SandboxLevel.WORKSPACE_WRITE,
+    sandbox: newThreadSandbox(),
   });
+}
+
+/** A new thread's sandbox: full access with Settings › Studio's full-access mode, else workspace writes. */
+export function newThreadSandbox(): SandboxLevel {
+  return readSettings().approvalMode === 'full-access'
+    ? SandboxLevel.DANGER_FULL_ACCESS
+    : SandboxLevel.WORKSPACE_WRITE;
 }
 
 type PinChange = MessageInitShape<typeof SidebarPinChangeSchema>['change'];

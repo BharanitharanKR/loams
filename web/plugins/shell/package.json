@@ -22,10 +22,13 @@
         "slots",
         "session",
         "flags",
-        "mode"
+        "mode",
+        "theme"
       ],
       "provides": [
-        "router"
+        "router",
+        "inspector",
+        "drawer"
       ],
       "slots": [
         "root",
@@ -36,7 +39,17 @@
         "shell.dock.right",
         "shell.header.server",
         "shell.nav.context",
-        "palette.command"
+        "shell.sidebar.server",
+        "shell.sidebar.threads",
+        "shell.topbar.left",
+        "shell.topbar.center",
+        "shell.topbar.right",
+        "shell.home",
+        "shell.inspector.tab",
+        "shell.drawer.tab",
+        "palette.command",
+        "shell.palette.source",
+        "console.settings.section"
       ],
       "permissions": [],
       "requires": {
@@ -69,6 +82,7 @@
   },
   "devDependencies": {
     "@testing-library/react": "16.3.3",
+    "@types/node": "24.13.6",
     "@types/react": "catalog:",
     "@types/react-dom": "catalog:",
     "jsdom": "30.1.1",

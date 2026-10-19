@@ -40,7 +40,7 @@ const plugin: PluginModule = {
     const navigate = (to: string) => router.navigate(to);
     ctx.effect(() =>
       router.page({ id: 'canvas', path: '/canvas', title: 'Canvas', plugin: 'canvas' }, () => (
-        <CanvasPage client={client} projectId={SEED_PROJECT_ID} navigate={navigate} />
+        <CanvasPage client={client} projectId={SEED_PROJECT_ID} navigate={navigate} sample />
       )),
     );
     ctx.effect(() =>
@@ -51,6 +51,7 @@ const plugin: PluginModule = {
             client={client}
             projectId={params.project ?? SEED_PROJECT_ID}
             navigate={navigate}
+            sample
           />
         ),
       ),

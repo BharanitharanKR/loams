@@ -1,4 +1,15 @@
-import { Badge, Button, Card, Empty, Field, Input, Select, Table, Textarea } from '@loams/ui';
+import {
+  Badge,
+  Button,
+  Card,
+  Empty,
+  Field,
+  Input,
+  Select,
+  SkeletonList,
+  Table,
+  Textarea,
+} from '@loams/ui';
 import { type FormEvent, useCallback, useEffect, useRef, useState } from 'react';
 import {
   ApiError,
@@ -278,7 +289,7 @@ function ProduceCard({
             <Textarea
               {...p}
               rows={6}
-              className="font-mono"
+              className={/* mono-ok: code */ 'font-mono'}
               value={body}
               onChange={(e) => setBody(e.target.value)}
             />
@@ -319,7 +330,7 @@ export function StreamPage({
   const back = `/streams/${encodeURIComponent(ns)}`;
   const count = detail.state === 'ready' ? detail.data.partitions.length : 0;
   return (
-    <div className="lc-page max-w-[1180px]">
+    <div className="lc-page">
       <PageHead
         crumbs={
           <>
@@ -334,7 +345,7 @@ export function StreamPage({
           </>
         }
       />
-      {detail.state === 'loading' && <p className="lc-muted">Loading stream…</p>}
+      {detail.state === 'loading' && <SkeletonList label="Loading the stream" rows={4} />}
       {detail.state === 'error' && (
         <ErrorNotice title="Could not load the stream" message={detail.message} />
       )}

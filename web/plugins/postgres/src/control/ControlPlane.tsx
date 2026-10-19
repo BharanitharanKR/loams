@@ -5,7 +5,17 @@
 // branches when one finishes.
 
 import { NamespacePicker } from '@loams/desktop-ui';
-import { Badge, Button, Dialog, Empty, Field, Input, Notice, Select } from '@loams/ui';
+import {
+  Badge,
+  Button,
+  Dialog,
+  Empty,
+  Field,
+  Input,
+  Notice,
+  SampleDataNotice,
+  Select,
+} from '@loams/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BranchAccess } from './BranchAccess.js';
 import { BranchTree } from './BranchTree.js';
@@ -155,10 +165,10 @@ export function ControlPlane({
   return (
     <div className="flex flex-col gap-4">
       {client.mock && (
-        <Notice title="Preview data">
-          This view runs on sample data until the server offers loams.postgres.v1. Nothing here
-          changes a database.
-        </Notice>
+        <SampleDataNotice>
+          pg-control isn't reachable, so this is fixture data and nothing here changes a database.
+          Set LOAMS_PG_CONTROL_API_KEY_FILE (and start pg-control) to connect.
+        </SampleDataNotice>
       )}
       <div className="flex flex-wrap items-end gap-3">
         <NamespacePicker

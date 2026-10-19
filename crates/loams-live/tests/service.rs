@@ -1163,3 +1163,163 @@ async fn logs_ring_drops_oldest_and_counts() {
     assert_eq!(tailed.len(), 1);
     assert_eq!((tailed[0].entries.len(), tailed[0].skipped), (3, 0));
 }
+
+// ---- LV1 plan Task 19: error scrubbing and edge limits ----
+
+/// The `loams.errors.v1.ErrorInfo` of a refusal.
+fn error_info(e: &ConnectError) -> loams_proto::loams::errors::v1::ErrorInfo {
+    use buffa::Message as _;
+    let detail = e
+        .details
+        .iter()
+        .find(|d| d.type_url.ends_with("loams.errors.v1.ErrorInfo"))
+        .unwrap_or_else(|| panic!("no ErrorInfo in {e:?}"));
+    let value = detail.value.as_deref().expect("a value");
+    let bytes = data_encoding::BASE64_NOPAD
+        .decode(value.trim_end_matches('=').as_bytes())
+        .expect("base64");
+    loams_proto::loams::errors::v1::ErrorInfo::decode_from_slice(&bytes).expect("an ErrorInfo")
+}
+
+/// A `Query` at a timestamp ahead of the store's clock is refused at the
+/// edge, before it reaches a snapshot; the store's clock does not move.
+async fn future_read_ts_refused_at_the_edge(store: TestStore) {
+    let handle = server(&store, SessionConfig::default()).await;
+    let c = client(&handle, false);
+    let before = store.now().await.expect("a timestamp");
+    let years_ahead = loams_kv::Ts::from_parts(before.physical_ms() + 3 * 365 * 86_400_000, 0);
+    for ts in [u64::MAX, years_ahead.0] {
+        let mut req = spec(0, "notes");
+        let e = c
+            .query(pb::QueryRequest {
+                function: QUERY.into(),
+                args: std::mem::take(&mut req.args),
+                ts: Some(ts),
+                ..Default::default()
+            })
+            .await
+            .expect_err("a future read");
+        assert_eq!(e.code, ErrorCode::InvalidArgument, "{e:?}");
+        assert_eq!(error_info(&e).reason, "invalid_argument");
+    }
+    // A read at the current time still works.
+    let now = store.now().await.expect("a timestamp");
+    c.query(pb::QueryRequest {
+        function: QUERY.into(),
+        args: spec(0, "notes").args,
+        ts: Some(now.0),
+        ..Default::default()
+    })
+    .await
+    .expect("a read now");
+    let after = store.now().await.expect("a timestamp");
+    assert!(
+        after.physical_ms() < before.physical_ms() + 60_000,
+        "the clock jumped: {before:?} -> {after:?}"
+    );
+    handle.stop().await;
+}
+live_test!(future_read_ts_refused_at_the_edge);
+
+/// Captures the log lines written while it is the default subscriber.
+#[derive(Clone, Default)]
+struct Captured(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for Captured {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().expect("the log").extend_from_slice(buf);
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+/// A store error carrying a raw key reaches the client without it, with a
+/// request id that the server's log line carries (without the key too).
+#[test]
+fn tikv_errors_never_leak_raw_keys() {
+    let log = Captured::default();
+    let writer = log.clone();
+    let subscriber = tracing_subscriber::fmt()
+        .with_writer(move || writer.clone())
+        .with_ansi(false)
+        .finish();
+    let raw = loams_kv::TxnError::NotApplied(
+        "KeyIsLocked { key: [0, 0, 1, 120, 1, 2, 3, 4, 5], primary: \
+         b\"\\x00\\x01doc\\x02\", lock_version: 42 } region 0a0b0c0d0e0f1011121314"
+            .into(),
+    );
+    let e = tracing::subscriber::with_default(subscriber, || {
+        loams_live::service::connect_error(&LiveError::Txn(raw))
+    });
+    let info = error_info(&e);
+    let id = info
+        .metadata
+        .get("request_id")
+        .expect("a request id")
+        .clone();
+    assert!(e.message.as_deref().unwrap_or("").contains(&id), "{e:?}");
+    let logged = String::from_utf8(log.0.lock().expect("the log").clone()).expect("utf-8");
+    assert!(logged.contains(&id), "the log names the request: {logged}");
+    for text in [e.message.clone().unwrap_or_default(), logged] {
+        for key_part in ["120, 1, 2", "x01doc", "0a0b0c0d0e0f"] {
+            assert!(!text.contains(key_part), "{key_part} leaked: {text}");
+        }
+    }
+    assert_eq!(e.code, ErrorCode::Unavailable);
+    assert_eq!(info.reason, "unavailable");
+}
+
+/// Every reason a Live error carries is registered in
+/// `docs/api/reasons.md`.
+#[test]
+fn every_live_reason_is_registered() {
+    let page = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../docs/api/reasons.md"
+    ))
+    .expect("the reasons page");
+    let generic = [
+        "invalid_argument",
+        "not_found",
+        "failed_precondition",
+        "resource_exhausted",
+        "unavailable",
+        "internal",
+    ];
+    for reason in loams_live::LIVE_REASONS.iter().chain(generic.iter()) {
+        assert!(
+            page.contains(&format!("| `{reason}` |")),
+            "{reason} is not registered in docs/api/reasons.md"
+        );
+    }
+}
+
+/// Arguments over the limit are refused before the message is decoded; a
+/// deploy carries a bundle beyond the default 4 MB.
+async fn oversized_arguments_refused_before_decode(store: TestStore) {
+    let handle = server(&store, SessionConfig::default()).await;
+    let c = client(&handle, false);
+    let big = "x".repeat(loams_live::service::MAX_ARGS_BYTES + 2 * 1024 * 1024);
+    let e = c
+        .query(pb::QueryRequest {
+            function: QUERY.into(),
+            args: MessageField::some(obj(&[("table", LiveValue::Str(big))]).to_proto()),
+            ..Default::default()
+        })
+        .await
+        .expect_err("too large");
+    assert_eq!(e.code, ErrorCode::ResourceExhausted, "{e:?}");
+    // A 6 MB bundle passes the size check (and fails later: no runtime).
+    let e = admin(&handle, false)
+        .deploy(pb::DeployRequest {
+            bundle: vec![b' '; 6 * 1024 * 1024],
+            ..Default::default()
+        })
+        .await
+        .expect_err("this server has no function runtime");
+    assert_eq!(e.code, ErrorCode::FailedPrecondition, "{e:?}");
+    handle.stop().await;
+}
+live_test!(oversized_arguments_refused_before_decode);

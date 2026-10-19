@@ -54,6 +54,13 @@ lint:
       # `loams.house.v1`: `loams.operations.v1.Operation` answers RestoreTable
       # here and other packages' slow RPCs.
       - proto/loams/house/v1/house.proto
+# `buf breaking` runs twice in CI (`app-protos`): against `main`, and against
+# the previous release's tag (design §54 §13.2, D939). A package listed under
+# `ignore` below is `unstable`. It leaves the list only by a deliberate change
+# to this file, in its own pull request that names the package's GA; from then
+# on it is additive-only, against both, and the supported SDKs keep every
+# public symbol it had at the previous release
+# (`sdks/fixtures/removed_symbols.py`).
 breaking:
   use:
     - FILE

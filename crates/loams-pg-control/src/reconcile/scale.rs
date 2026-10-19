@@ -250,7 +250,14 @@ async fn configure<S: PgControlStore, N: NeonWrite>(
     let Some(binding) = &compute.binding else {
         return Err(ReconcileError::Runtime("an unbound compute".into()));
     };
-    let inputs = match spec::read_inputs(&act.ctx.store, binding, Some(&compute.id)).await {
+    let inputs = match spec::read_inputs(
+        &act.ctx.store,
+        &computes.sources,
+        binding,
+        Some(&compute.id),
+    )
+    .await
+    {
         Ok(i) => i,
         Err(SpecError::Store(e)) => return Err(e.into()),
         Err(e) => return Err(ReconcileError::Runtime(format!("no spec: {e:?}"))),

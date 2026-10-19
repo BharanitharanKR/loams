@@ -3,20 +3,25 @@
 // commands from a `StudioPaletteSource`; keybindings run the commands the mounted
 // view handles; Settings › Studio edits them.
 
-import type { Location } from '@loams/console-host';
+import { create } from '@bufbuild/protobuf';
+import { createRouterTransport } from '@connectrpc/connect';
+import type { AgentdService, Location } from '@loams/console-host';
+import { GitService, ProjectService, RepoSchema } from '@loams/proto/agentd';
 import type { PaletteCommand } from '@loams/slots';
-import { KEYBINDINGS_KEY, KeybindingStore } from '@loams/studio-ui';
+import { buildThreadActionItems, KEYBINDINGS_KEY, KeybindingStore } from '@loams/studio-ui';
+import { rankCommands } from '@loams/ui';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { StudioAgentd } from '../src/agentd.js';
+import { type StudioAgentd, studioAgentd } from '../src/agentd.js';
+import { BranchesSource } from '../src/palette/BranchesSource.js';
 import { createStudioKeys, type StudioKeys } from '../src/palette/commands.js';
 import { StudioPalette } from '../src/palette/StudioPalette.js';
 import { pendingPaletteSource, type StudioPaletteSource } from '../src/palette/source.js';
 import { SETTINGS_KEY } from '../src/settings/Settings.js';
-import { StudioView } from '../src/view.js';
-import { desktopFake } from './fakes.js';
+import { desktopFake, wrap as wrapServerState } from './fakes.js';
+import { StudioInShell } from './shell.js';
 
 const LINUX = 'Linux x86_64';
 
@@ -214,7 +219,7 @@ describe("Studio's keybindings in the view", () => {
     const navigate = vi.fn();
     render(
       wrap(
-        <StudioView
+        <StudioInShell
           agentd={agentdReady()}
           route={{ kind: 'thread', threadId: 'c_1', panel: 'diff' }}
           navigate={navigate}
@@ -235,15 +240,17 @@ describe("Studio's keybindings in the view", () => {
   it('Mod+D on the shown diff hides the panel, and not while typing in a terminal', async () => {
     showThread(keysFor());
     await screen.findByRole('tab', { name: 'Diff' });
-    expect(screen.getByRole('complementary', { name: 'Panel' })).toBeTruthy();
+    expect(screen.getByRole('complementary', { name: 'Inspector' })).toBeTruthy();
     const terminal = document.createElement('div');
     terminal.setAttribute('data-terminal', '');
     terminal.tabIndex = 0;
     document.body.append(terminal);
     fireEvent.keyDown(terminal, { key: 'd', code: 'KeyD', ctrlKey: true });
-    expect(screen.queryByRole('complementary', { name: 'Panel' })).toBeTruthy();
+    expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeTruthy();
     fireEvent.keyDown(document.body, { key: 'd', code: 'KeyD', ctrlKey: true });
-    await waitFor(() => expect(screen.queryByRole('complementary', { name: 'Panel' })).toBeNull());
+    await waitFor(() =>
+      expect(screen.queryByRole('complementary', { name: 'Inspector' })).toBeNull(),
+    );
     terminal.remove();
   });
 
@@ -252,7 +259,7 @@ describe("Studio's keybindings in the view", () => {
     const keys = keysFor();
     render(
       wrap(
-        <StudioView
+        <StudioInShell
           agentd={agentdReady()}
           route={{ kind: 'settings' }}
           navigate={navigate}
@@ -281,5 +288,94 @@ describe("Studio's keybindings in the view", () => {
     expect(await screen.findByText('Conflicts with Shell: Command Palette')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Reset Settings: Open' }));
     expect(JSON.parse(localStorage.getItem(KEYBINDINGS_KEY) ?? '[]')).toEqual([]);
+  });
+});
+
+describe("the palette's branches and thread text (CF1 Task 11)", () => {
+  it('matches a thread by its last message (thread text, W13)', () => {
+    const items = buildThreadActionItems({
+      threads: [
+        {
+          id: 't1',
+          title: 'Untitled',
+          projectId: '',
+          updatedAt: 1,
+          preview: 'migrate the orders table to v2',
+        },
+        { id: 't2', title: 'Orders page copy', projectId: '', updatedAt: 2 },
+      ],
+      projectTitleById: new Map(),
+      open: () => {},
+    });
+    const ranked = rankCommands(
+      items.map((i) => ({ ...i, text: i.title })),
+      'migrate the orders',
+    );
+    expect(ranked[0]?.id).toBe('thread:t1');
+  });
+
+  it("lists each project's branches once typed, and a branch opens its project (never a checkout)", async () => {
+    const calls: string[] = [];
+    const transport = createRouterTransport(({ service }) => {
+      service(ProjectService, {
+        listRepos: () => ({
+          repos: [
+            create(RepoSchema, { path: '~/src/loams', name: 'loams', defaultBranch: 'dev' }),
+            create(RepoSchema, { path: '~/src/site', name: 'site', defaultBranch: 'main' }),
+          ],
+        }),
+      });
+      service(GitService, {
+        listBranches: ({ repoPath }) => {
+          calls.push(`ListBranches:${repoPath}`);
+          return { branches: repoPath === '~/src/loams' ? ['dev', 'cf1d-t11'] : ['main'] };
+        },
+        switchRef: () => {
+          calls.push('SwitchRef');
+          return {};
+        },
+      });
+    });
+    const ready = { state: 'ready' } as const;
+    const host = { id: 'h', name: 'Host' };
+    const service: AgentdService = {
+      kind: 'web',
+      reach: () => ready,
+      subscribe: () => () => {},
+      transport: () => transport,
+      host: () => host,
+    };
+    const agentd = studioAgentd(service);
+    const published: PaletteCommand[][] = [];
+    const navigate = vi.fn();
+    const source = (query: string) =>
+      wrapServerState(
+        <BranchesSource
+          query={query}
+          publish={(c) => published.push([...c])}
+          agentd={agentd}
+          navigate={navigate}
+        />,
+      );
+    const { rerender } = render(source(''));
+    // An empty query lists no branches and reads none (T11-3).
+    await waitFor(() => expect(published.at(-1)).toEqual([]));
+    expect(calls).toEqual([]);
+    rerender(source('d'));
+    await waitFor(() =>
+      expect(
+        published
+          .at(-1)
+          ?.map((c) => `${c.title} · ${c.detail}`)
+          .sort(),
+      ).toEqual(['cf1d-t11 · loams', 'dev · loams', 'main · site']),
+    );
+    expect(new Set(published.at(-1)?.map((c) => c.group))).toEqual(new Set(['Branches']));
+    published
+      .at(-1)
+      ?.find((c) => c.title === 'cf1d-t11')
+      ?.run();
+    expect(navigate).toHaveBeenCalledWith(`/studio/p/${encodeURIComponent('~/src/loams')}`);
+    expect(calls).not.toContain('SwitchRef');
   });
 });

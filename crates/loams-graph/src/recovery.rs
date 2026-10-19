@@ -118,6 +118,9 @@ struct Stamp {
     bytes: u64,
     crc32c: u32,
     keys: Vec<StampKey>,
+    /// Each link's progress at `offset` (GR1 Task 18). Absent from a stamp no link wrote.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    links: Vec<crate::snapshot::manifest::LinkProgress>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -161,6 +164,7 @@ impl PendingStamp {
                         commit_epoch: outcome.commit_epoch,
                     })
                     .collect(),
+                links: crate::snapshot::manifest::LinkProgress::all(&durable.link_entries()),
             },
         }
     }
@@ -455,6 +459,7 @@ fn take_stamp(
                 })
                 .collect(),
         ),
+        links: crate::snapshot::manifest::LinkProgress::by_link(&stamp.links),
     })
 }
 
@@ -558,6 +563,7 @@ mod tests {
                 token_offset: 3,
                 commit_epoch: 2,
             }],
+            links: Vec::new(),
         };
         let text = serde_json::to_string(&stamp).expect("encode");
         assert!(text.contains("\"offset\":12") && text.contains("\"crc32c\""));

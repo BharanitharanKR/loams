@@ -90,7 +90,11 @@ export interface HistoryCommit {
 export type ReviewEvent = "comment" | "request-changes";
 
 export interface DiffSource {
-  /** Names the daemon and thread, for query keys. */
+  /**
+   * Names the daemon and thread, for query keys. It is the panel's identity: a new source
+   * object with the same key (the thread's branch renamed, say) keeps the panel's diff,
+   * comments and open draft; only `watchChangeRequest` follows the new object.
+   */
   readonly key: string;
   /** The working tree's diff now and on every change; returns the unsubscribe. */
   watchWorkingDiff(
@@ -117,6 +121,7 @@ export interface DiffSource {
     listener: (comments: readonly ReviewComment[]) => void,
     onError: (error: Error) => void,
   ): () => void;
+  /** Creates (an empty `id`: the daemon assigns one) or edits a comment; answers its id. */
   upsertComment(comment: ReviewCommentDraft): Promise<string>;
   deleteComment(checkoutId: string, id: string): Promise<void>;
   resolveComment(checkoutId: string, id: string, resolved: boolean): Promise<void>;

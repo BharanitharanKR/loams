@@ -83,11 +83,11 @@ import '@loams/ui/styles.css';
 import { Button, Card, Logo } from '@loams/ui';
 ```
 
-Put the class `dark` on `<html>` for dark mode, and set `--loams-font-sans` and `--loams-font-mono` to your loaded Archivo and Martian Mono. Inside the workspace the package resolves to its TypeScript sources; `pnpm --filter @loams/ui publish` publishes the built `dist` (`publishConfig`).
+Put the class `dark` on `<html>` for dark mode. The tokens use the system UI and monospace stacks (`--loams-font-sans`, `--loams-font-mono`), so no font needs loading. Inside the workspace the package resolves to its TypeScript sources; `pnpm --filter @loams/ui publish` publishes the built `dist` (`publishConfig`).
 
 ## Fonts
 
-The console bundles Archivo and Martian Mono from Fontsource, both under the SIL Open Font License 1.1 (see `NOTICE`).
+The console bundles no font: it uses the system UI and monospace stacks (design 59, D1075). Monospace is for code, ids and SQL only. The wordmark is outlined from Archivo (see `NOTICE`).
 
 ## Deploy the console (hosted, Cloudflare, Vercel) — preview
 

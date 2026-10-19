@@ -64,6 +64,18 @@ catalog:
   rehype-sanitize: 6.0.0
   unified: 11.0.5
   shiki: 4.2.0
+  # Playwright for the console's and the desktop's end-to-end tests (SD1 Task 29):
+  # Apache-2.0, published 2026-09-04: the version the desktop smoke already pinned.
+  '@playwright/test': 1.63.0
+  # The shared SQL editor in @loams/ui (UX polish before 0.1.0): CodeMirror 6, MIT; npm
+  # licence and publish time checked 2026-10-18, each release at least 14 days old.
+  '@codemirror/autocomplete': 6.20.3
+  '@codemirror/commands': 6.11.1
+  '@codemirror/lang-sql': 6.10.0
+  '@codemirror/language': 6.12.4
+  '@codemirror/state': 6.7.6
+  '@codemirror/view': 6.43.13
+  '@lezer/highlight': 1.2.5
 
 # Keep Vite+ isolated from the console's ordinary Vite/Vitest toolchain.
 overrides:
@@ -76,6 +88,15 @@ overrides:
   'nx@23.2.1>axios': 1.20.0
   'nx@23.2.1>smol-toml': 1.9.0
   'nx@23.2.1>brace-expansion': 5.0.12
+  # Security (GHSA-g7r4-m6w7-qqqr, esbuild >=0.27.3 <0.28.1): tsup 8.5.1 asks for
+  # esbuild ^0.27; 0.28.2 (2026-08-08) is the release the rest of the tree uses.
+  # tsup 9 moves to ^0.28.2 but is under 14 days old; drop this with that bump.
+  'tsup@8.5.1>esbuild': 0.28.2
+  # Security (GHSA-hp3w-g68c-fv3c): sprintf-js has no fixed release. It comes only
+  # through global-agent > roarr, the optional proxy module of @electron/get, which
+  # loads it in a try/catch only when ELECTRON_GET_USE_PROXY is set. Without it,
+  # Electron downloads ignore that variable (use a mirror via ELECTRON_MIRROR).
+  '@electron/get@3.1.0>global-agent': '-'
   # Licences (SD1 T2-5, CONTRIBUTING rule 3): sax moved from ISC to BlueOak-1.0.0 in
   # 1.4.2; builder-util-runtime asks for ^1.2.4, so keep the last ISC release.
   'builder-util-runtime@9.7.0>sax': 1.4.1
@@ -100,6 +121,11 @@ overrides:
   mdast-util-find-and-replace: 3.0.2
   mdast-util-from-markdown: 2.0.3
   mdast-util-to-markdown: 2.1.3
+  # The 14-day rule for CodeMirror's own ranges: @codemirror/view 6.43.14,
+  # @codemirror/language 6.13.1 and @lezer/lr 1.4.11 are from 2026-10-07.
+  '@codemirror/view': 6.43.13
+  '@codemirror/language': 6.12.4
+  '@lezer/lr': 1.4.10
 
 allowBuilds:
   esbuild: true
@@ -107,5 +133,7 @@ allowBuilds:
   '@bufbuild/buf': false
   vite-plus: true
   msw: false
+  # Electron 44 has no install script any more (the binary downloads on first use; the
+  # desktop's dev and preview scripts run install-electron). Kept for older Electrons.
   electron: true
   electron-winstaller: false

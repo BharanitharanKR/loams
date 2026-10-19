@@ -33,7 +33,15 @@ use loams_house_proto::loams::house::v1::HouseServiceClient;
 fn users() -> Vec<UserMap> {
     vec![
         UserMap::dev("alice", "secret", 2, false),
-        UserMap::dev("bob", "builder", 2, false),
+        // Not namespace 2's admin: another user's query is not bob's to cancel
+        // (HS1 Task 21).
+        UserMap {
+            scopes: loams_house::identity::Scopes {
+                admin: false,
+                ..loams_house::identity::Scopes::ALL
+            },
+            ..UserMap::dev("bob", "builder", 2, false)
+        },
         UserMap::dev("reader", "books", 2, true),
     ]
 }
@@ -828,14 +836,12 @@ async fn browsing_answers_from_the_catalog_and_names_later_tasks() {
         info(&err).metadata.get("task").map(String::as_str),
         Some("HS1 Task 23")
     );
+    // A House without a catalog has no pipes to list.
     let err = alice
         .list_pipes(pb::ListPipesRequest::default())
         .await
-        .expect_err("no pipes yet");
-    assert_eq!(
-        info(&err).metadata.get("task").map(String::as_str),
-        Some("HS1 Task 16")
-    );
+        .expect_err("no pipes without a catalog");
+    assert_refused(&err, ErrorCode::Unimplemented, "not_implemented", None);
     let err = alice
         .restore_table(pb::RestoreTableRequest {
             table: "events".to_string(),

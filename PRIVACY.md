@@ -31,9 +31,15 @@ The request goes to GitHub and carries what any download carries: your IP addres
 agent. It carries no account, no usage data and nothing about your engines or data. GitHub's own
 privacy statement covers that request.
 
-A setting to turn update checks off is planned. Until it ships, every packaged build makes this
-check. The only way to stop it is to block `github.com` for the app. Builds you compile yourself
-(unpackaged) never check.
+You can turn the check off. In **Settings › Updates**, untick **Check for updates automatically**
+(on by default). While it is off the app makes no update request on its own: the start-up, 6-hour
+and wake-up checks are not scheduled. The **Check now** button still works and makes the request
+only when you press it. The choice is saved as `update.autoCheck` in the app's `settings.json`.
+
+To turn updates off entirely, start the app with the environment variable
+`LOAMS_DESKTOP_NO_UPDATE_CHECK=1`. That overrides the setting: the app makes no update request at
+all, including from **Check now**, and the setting is shown as off and cannot be changed. There is
+no policy file for this yet. Builds you compile yourself (unpackaged) never check.
 
 ## Services we run
 

@@ -2,7 +2,8 @@
 // Mod+K in both modes, on @loams/ui's CommandPalette, ranked as T3 Code ranks
 // (@loams/ui `rankCommands`).
 //
-// Plugins contribute through the `palette.command` slot: an entry renders nothing and,
+// Plugins contribute through the `shell.palette.source` slot (design 59, W9; its older
+// name `palette.command` stays an alias): an entry renders nothing and,
 // while the palette is open, publishes its commands for the current query (so a plugin
 // can read server state with its own hooks, and only while someone is looking). The
 // shell adds "Go to" rows from the nav and its own general commands.
@@ -10,9 +11,10 @@
 // The mode scope: an entry's mode is its `meta.mode`, else its plugin's (the current
 // mode when the plugin is in both). An entry whose `meta.mode` its plugin does not
 // declare is refused (§53 §4.1). The current mode's commands come first under their
-// own headings; the other mode's follow under one heading, "Console" or "Studio". A
-// plugin of a mode not yet entered is not loaded, so its commands appear once that mode
-// has been visited.
+// own headings; the other mode's follow under one heading, "Console" or "Studio". The
+// shell's "Go to" rows reach every page in either mode (D1080), so they are the current
+// mode's. A plugin of a mode not yet entered is not loaded, so its commands appear once
+// that mode has been visited.
 
 import type { Mode } from '@loams/console-host';
 import { type PaletteCommand, SlotBoundary, type SlotEntry, useSlot } from '@loams/slots';
@@ -146,17 +148,36 @@ export function ShellPalette({
   modes,
   nav,
   general,
+  open: given,
+  onOpenChange,
 }: {
   /** The current and available modes; absent, everything is Console's. */
   modes?: PaletteModes;
-  /** The "Go to" commands of each mode, from the nav. */
-  nav: (mode: Mode) => ScopedCommand[];
+  /** The "Go to" (and pin) commands of each mode for the query, from the pages. */
+  nav: (mode: Mode, query: string) => ScopedCommand[];
   /** The shell's own commands (switch mode, theme, agent panel), in the current mode. */
   general: ScopedCommand[];
+  /** Open state, when the caller owns it (the top bar's search button opens it too). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
-  const [open, setOpen] = useState(false);
+  const [own, setOwn] = useState(false);
+  const open = given ?? own;
+  const openRef = useRef(open);
+  openRef.current = open;
+  const setOpen = useCallback(
+    (next: boolean) => {
+      if (onOpenChange) onOpenChange(next);
+      if (given === undefined) setOwn(next);
+    },
+    [given, onOpenChange],
+  );
   const [query, setQuery] = useState('');
-  const entries = useSlot('palette.command');
+  // `shell.palette.source` (design 59, W9) and its alias `palette.command` have the same
+  // props, so their entries mount the same way.
+  const legacy = useSlot('palette.command');
+  const sources = useSlot('shell.palette.source');
+  const entries = [...legacy, ...(sources as unknown as SlotEntry<'palette.command'>[])];
   const toast = useToast();
   const published = useRef(new Map<number, { sig: string; commands: readonly PaletteCommand[] }>());
   const [, bump] = useState(0);
@@ -165,11 +186,11 @@ export function ShellPalette({
     const onKey = (e: KeyboardEvent) => {
       if (!isPaletteShortcut(e)) return;
       e.preventDefault();
-      setOpen((was) => !was);
+      setOpen(!openRef.current);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [setOpen]);
 
   useEffect(() => {
     if (open) return;
@@ -195,7 +216,7 @@ export function ShellPalette({
   });
   const byMode = (m: Mode) => contributed.filter((c) => c.mode === m);
   for (const m of [current, ...available.filter((a) => a !== current)]) {
-    scoped.push(...byMode(m), ...nav(m));
+    scoped.push(...byMode(m), ...nav(m, query));
     if (m === current) scoped.push(...general);
   }
   const rows = scopePalette(scoped, current, available, query);

@@ -700,6 +700,72 @@
       "standIn": null
     },
     {
+      "reason": "live_app_disabled",
+      "code": "failed_precondition",
+      "why": "Needs a Live app that was disabled or deleted through LiveAdminService; the recorder creates no apps (LV1 Task 13).",
+      "standIn": null
+    },
+    {
+      "reason": "live_app_exists",
+      "code": "failed_precondition",
+      "why": "Needs a second CreateApp under a taken name; the recorder creates no apps (LV1 Task 13).",
+      "standIn": null
+    },
+    {
+      "reason": "live_app_mismatch",
+      "code": "permission_denied",
+      "why": "Needs a credential bound to another environment's Live app; the recorder's credentials are bound to none (LV1 Task 15).",
+      "standIn": null
+    },
+    {
+      "reason": "live_origin_not_allowed",
+      "code": "permission_denied",
+      "why": "Needs a browser Origin a Live app does not list; the recorder sends no Origin and creates no apps (LV1 Task 18).",
+      "standIn": null
+    },
+    {
+      "reason": "session_rotate",
+      "code": "unavailable",
+      "why": "Needs a Watch stream held open for 24 hours; the recorder's sessions are short (LV1 Task 17).",
+      "standIn": null
+    },
+    {
+      "reason": "session_gone",
+      "code": "not_found",
+      "why": "Needs a second Live node whose session a call names; the recorder runs one engine (LV1 Task 24).",
+      "standIn": null
+    },
+    {
+      "reason": "node_draining",
+      "code": "unavailable",
+      "why": "Needs an engine shutting down while the recorder calls it (LV1 Task 24).",
+      "standIn": null
+    },
+    {
+      "reason": "live_function_error",
+      "code": "unknown",
+      "why": "Needs a deployed function that throws; the recorder deploys nothing (LV1 Task 19).",
+      "standIn": null
+    },
+    {
+      "reason": "live_function_timeout",
+      "code": "deadline_exceeded",
+      "why": "Needs a deployed function that runs past its CPU limit; the recorder deploys nothing (LV1 Task 19).",
+      "standIn": null
+    },
+    {
+      "reason": "live_function_out_of_memory",
+      "code": "resource_exhausted",
+      "why": "Needs a deployed function that runs past its memory limit; the recorder deploys nothing (LV1 Task 19).",
+      "standIn": null
+    },
+    {
+      "reason": "live_limit_exceeded",
+      "code": "resource_exhausted",
+      "why": "Needs a Live write past an app limit; the recorder writes nothing to Live (LV1 Task 19).",
+      "standIn": null
+    },
+    {
       "reason": "role_required",
       "code": "permission_denied",
       "why": "Raised by `loams.admin.v1` (API2 Task 7); the recorder's servers do not serve the admin RPCs it guards, so no recording carries it.",

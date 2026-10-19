@@ -21,7 +21,8 @@
       "inject": [
         "router",
         "slots",
-        "transport"
+        "transport",
+        "platform"
       ],
       "provides": [],
       "slots": [

@@ -66,6 +66,16 @@ public final class LiveProto {
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_loams_live_v1_ModifyQuerySetResponse_fieldAccessorTable;
   static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_AuthenticateRequest_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_AuthenticateRequest_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_loams_live_v1_AuthenticateResponse_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_loams_live_v1_AuthenticateResponse_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
     internal_static_loams_live_v1_Transition_descriptor;
   static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
@@ -172,85 +182,91 @@ public final class LiveProto {
       "v1.QuerySetChangeR\007changes\"b\n\016QuerySetCh" +
       "ange\022,\n\003add\030\001 \001(\0132\030.loams.live.v1.QueryS" +
       "pecH\000R\003add\022\030\n\006remove\030\002 \001(\rH\000R\006removeB\010\n\006" +
-      "change\"\030\n\026ModifyQuerySetResponse\"\327\001\n\nTra" +
-      "nsition\022\035\n\nsession_id\030\001 \001(\tR\tsessionId\0221" +
-      "\n\005start\030\002 \001(\0132\033.loams.live.v1.StateVersi" +
-      "onR\005start\022-\n\003end\030\003 \001(\0132\033.loams.live.v1.S" +
-      "tateVersionR\003end\0224\n\007updates\030\004 \003(\0132\032.loam" +
-      "s.live.v1.QueryUpdateR\007updates\022\022\n\004more\030\005" +
-      " \001(\010R\004more\"\306\001\n\013QueryUpdate\022\031\n\010query_id\030\001" +
-      " \001(\rR\007queryId\022,\n\005value\030\002 \001(\0132\024.loams.liv" +
-      "e.v1.ValueH\000R\005value\0220\n\005error\030\003 \001(\0132\030.loa" +
-      "ms.live.v1.LiveErrorH\000R\005error\0222\n\007removed" +
-      "\030\004 \001(\0132\026.loams.live.v1.RemovedH\000R\007remove" +
-      "dB\010\n\006update\"\t\n\007Removed\"p\n\014QueryRequest\022\032" +
-      "\n\010function\030\001 \001(\tR\010function\022(\n\004args\030\002 \001(\013" +
-      "2\024.loams.live.v1.ValueR\004args\022\023\n\002ts\030\003 \001(\004" +
-      "H\000R\002ts\210\001\001B\005\n\003_ts\"M\n\rQueryResponse\022\016\n\002ts\030" +
-      "\001 \001(\004R\002ts\022,\n\006result\030\002 \001(\0132\024.loams.live.v" +
-      "1.ValueR\006result\"\227\001\n\rMutateRequest\022\032\n\010fun" +
-      "ction\030\001 \001(\tR\010function\022(\n\004args\030\002 \001(\0132\024.lo" +
-      "ams.live.v1.ValueR\004args\022,\n\017idempotency_k" +
-      "ey\030\003 \001(\tH\000R\016idempotencyKey\210\001\001B\022\n\020_idempo" +
-      "tency_key\"[\n\016MutateResponse\022\033\n\tcommit_ts" +
-      "\030\001 \001(\004R\010commitTs\022,\n\006result\030\002 \001(\0132\024.loams" +
-      ".live.v1.ValueR\006result\"<\n\006Schema\0222\n\006tabl" +
-      "es\030\001 \003(\0132\032.loams.live.v1.TableSchemaR\006ta" +
-      "bles\"\327\001\n\013TableSchema\022\022\n\004name\030\001 \001(\tR\004name" +
-      "\0224\n\007indexes\030\002 \003(\0132\032.loams.live.v1.IndexS" +
-      "chemaR\007indexes\0226\n\tvalidator\030\003 \001(\0132\030.loam" +
-      "s.live.v1.ValidatorR\tvalidator\0220\n\021schema" +
-      "_validation\030\004 \001(\010H\000R\020schemaValidation\210\001\001" +
-      "B\024\n\022_schema_validation\"9\n\013IndexSchema\022\022\n" +
-      "\004name\030\001 \001(\tR\004name\022\026\n\006fields\030\002 \003(\tR\006field" +
-      "s\"\365\002\n\tValidator\022A\n\tprimitive\030\001 \001(\0162!.loa" +
-      "ms.live.v1.ValidatorPrimitiveH\000R\tprimiti" +
-      "ve\0220\n\005array\030\002 \001(\0132\030.loams.live.v1.Valida" +
-      "torH\000R\005array\0228\n\006object\030\003 \001(\0132\036.loams.liv" +
-      "e.v1.ValidatorObjectH\000R\006object\0220\n\007litera" +
-      "l\030\004 \001(\0132\024.loams.live.v1.ValueH\000R\007literal" +
-      "\0225\n\005union\030\005 \001(\0132\035.loams.live.v1.Validato" +
-      "rUnionH\000R\005union\0226\n\010optional\030\006 \001(\0132\030.loam" +
-      "s.live.v1.ValidatorH\000R\010optional\022\020\n\002id\030\007 " +
-      "\001(\tH\000R\002idB\006\n\004kind\"\252\001\n\017ValidatorObject\022B\n" +
-      "\006fields\030\001 \003(\0132*.loams.live.v1.ValidatorO" +
-      "bject.FieldsEntryR\006fields\032S\n\013FieldsEntry" +
-      "\022\020\n\003key\030\001 \001(\tR\003key\022.\n\005value\030\002 \001(\0132\030.loam" +
-      "s.live.v1.ValidatorR\005value:\0028\001\"D\n\016Valida" +
-      "torUnion\0222\n\007members\030\001 \003(\0132\030.loams.live.v" +
-      "1.ValidatorR\007members\"S\n\tLiveError\022,\n\004cod" +
-      "e\030\001 \001(\0162\030.loams.live.v1.ErrorCodeR\004code\022" +
-      "\030\n\007message\030\002 \001(\tR\007message*\224\002\n\022ValidatorP" +
-      "rimitive\022#\n\037VALIDATOR_PRIMITIVE_UNSPECIF" +
-      "IED\020\000\022\034\n\030VALIDATOR_PRIMITIVE_NULL\020\001\022\035\n\031V" +
-      "ALIDATOR_PRIMITIVE_INT64\020\002\022\037\n\033VALIDATOR_" +
-      "PRIMITIVE_FLOAT64\020\003\022\037\n\033VALIDATOR_PRIMITI" +
-      "VE_BOOLEAN\020\004\022\036\n\032VALIDATOR_PRIMITIVE_STRI" +
-      "NG\020\005\022\035\n\031VALIDATOR_PRIMITIVE_BYTES\020\006\022\033\n\027V" +
-      "ALIDATOR_PRIMITIVE_ANY\020\007*\305\002\n\tErrorCode\022\032" +
-      "\n\026ERROR_CODE_UNSPECIFIED\020\000\022\037\n\033ERROR_CODE" +
-      "_INVALID_ARGUMENT\020\001\022\030\n\024ERROR_CODE_NOT_FO" +
-      "UND\020\002\022\"\n\036ERROR_CODE_FAILED_PRECONDITION\020" +
-      "\003\022!\n\035ERROR_CODE_RESOURCE_EXHAUSTED\020\004\022\035\n\031" +
-      "ERROR_CODE_FUNCTION_ERROR\020\005\022\037\n\033ERROR_COD" +
-      "E_FUNCTION_TIMEOUT\020\006\022%\n!ERROR_CODE_FUNCT" +
-      "ION_OUT_OF_MEMORY\020\007\022\032\n\026ERROR_CODE_UNAVAI" +
-      "LABLE\020\010\022\027\n\023ERROR_CODE_INTERNAL\020\t2\312\003\n\013Liv" +
-      "eService\022N\n\005Watch\022\033.loams.live.v1.WatchR" +
-      "equest\032\031.loams.live.v1.Transition\"\013\222\265\030\007\022" +
-      "\005watch0\001\022s\n\016ModifyQuerySet\022$.loams.live." +
-      "v1.ModifyQuerySetRequest\032%.loams.live.v1" +
-      ".ModifyQuerySetResponse\"\024\222\265\030\020\022\016modifyQue" +
-      "rySet\022W\n\005Query\022\033.loams.live.v1.QueryRequ" +
-      "est\032\034.loams.live.v1.QueryResponse\"\023\222\265\030\017\n" +
-      "\006tables\022\005query\022[\n\006Mutate\022\034.loams.live.v1" +
-      ".MutateRequest\032\035.loams.live.v1.MutateRes" +
-      "ponse\"\024\222\265\030\020\n\006tables\022\006mutate\032@\212\265\030<\n\004live\022" +
-      "2Live sync: watch a query set over a ser" +
-      "ver stream.\030\001B~\n\033dev.loams.gen.loams.liv" +
-      "e.v1B\tLiveProtoP\001\242\002\003LLX\252\002\rLoams.Live.V1\312" +
-      "\002\rLoams\\Live\\V1\342\002\031Loams\\Live\\V1\\GPBMetad" +
-      "ata\352\002\017Loams::Live::V1b\006proto3"
+      "change\"\030\n\026ModifyQuerySetResponse\"4\n\023Auth" +
+      "enticateRequest\022\035\n\nsession_id\030\001 \001(\tR\tses" +
+      "sionId\"2\n\024AuthenticateResponse\022\032\n\010identi" +
+      "ty\030\001 \001(\004R\010identity\"\327\001\n\nTransition\022\035\n\nses" +
+      "sion_id\030\001 \001(\tR\tsessionId\0221\n\005start\030\002 \001(\0132" +
+      "\033.loams.live.v1.StateVersionR\005start\022-\n\003e" +
+      "nd\030\003 \001(\0132\033.loams.live.v1.StateVersionR\003e" +
+      "nd\0224\n\007updates\030\004 \003(\0132\032.loams.live.v1.Quer" +
+      "yUpdateR\007updates\022\022\n\004more\030\005 \001(\010R\004more\"\306\001\n" +
+      "\013QueryUpdate\022\031\n\010query_id\030\001 \001(\rR\007queryId\022" +
+      ",\n\005value\030\002 \001(\0132\024.loams.live.v1.ValueH\000R\005" +
+      "value\0220\n\005error\030\003 \001(\0132\030.loams.live.v1.Liv" +
+      "eErrorH\000R\005error\0222\n\007removed\030\004 \001(\0132\026.loams" +
+      ".live.v1.RemovedH\000R\007removedB\010\n\006update\"\t\n" +
+      "\007Removed\"p\n\014QueryRequest\022\032\n\010function\030\001 \001" +
+      "(\tR\010function\022(\n\004args\030\002 \001(\0132\024.loams.live." +
+      "v1.ValueR\004args\022\023\n\002ts\030\003 \001(\004H\000R\002ts\210\001\001B\005\n\003_" +
+      "ts\"M\n\rQueryResponse\022\016\n\002ts\030\001 \001(\004R\002ts\022,\n\006r" +
+      "esult\030\002 \001(\0132\024.loams.live.v1.ValueR\006resul" +
+      "t\"\227\001\n\rMutateRequest\022\032\n\010function\030\001 \001(\tR\010f" +
+      "unction\022(\n\004args\030\002 \001(\0132\024.loams.live.v1.Va" +
+      "lueR\004args\022,\n\017idempotency_key\030\003 \001(\tH\000R\016id" +
+      "empotencyKey\210\001\001B\022\n\020_idempotency_key\"[\n\016M" +
+      "utateResponse\022\033\n\tcommit_ts\030\001 \001(\004R\010commit" +
+      "Ts\022,\n\006result\030\002 \001(\0132\024.loams.live.v1.Value" +
+      "R\006result\"<\n\006Schema\0222\n\006tables\030\001 \003(\0132\032.loa" +
+      "ms.live.v1.TableSchemaR\006tables\"\327\001\n\013Table" +
+      "Schema\022\022\n\004name\030\001 \001(\tR\004name\0224\n\007indexes\030\002 " +
+      "\003(\0132\032.loams.live.v1.IndexSchemaR\007indexes" +
+      "\0226\n\tvalidator\030\003 \001(\0132\030.loams.live.v1.Vali" +
+      "datorR\tvalidator\0220\n\021schema_validation\030\004 " +
+      "\001(\010H\000R\020schemaValidation\210\001\001B\024\n\022_schema_va" +
+      "lidation\"9\n\013IndexSchema\022\022\n\004name\030\001 \001(\tR\004n" +
+      "ame\022\026\n\006fields\030\002 \003(\tR\006fields\"\365\002\n\tValidato" +
+      "r\022A\n\tprimitive\030\001 \001(\0162!.loams.live.v1.Val" +
+      "idatorPrimitiveH\000R\tprimitive\0220\n\005array\030\002 " +
+      "\001(\0132\030.loams.live.v1.ValidatorH\000R\005array\0228" +
+      "\n\006object\030\003 \001(\0132\036.loams.live.v1.Validator" +
+      "ObjectH\000R\006object\0220\n\007literal\030\004 \001(\0132\024.loam" +
+      "s.live.v1.ValueH\000R\007literal\0225\n\005union\030\005 \001(" +
+      "\0132\035.loams.live.v1.ValidatorUnionH\000R\005unio" +
+      "n\0226\n\010optional\030\006 \001(\0132\030.loams.live.v1.Vali" +
+      "datorH\000R\010optional\022\020\n\002id\030\007 \001(\tH\000R\002idB\006\n\004k" +
+      "ind\"\252\001\n\017ValidatorObject\022B\n\006fields\030\001 \003(\0132" +
+      "*.loams.live.v1.ValidatorObject.FieldsEn" +
+      "tryR\006fields\032S\n\013FieldsEntry\022\020\n\003key\030\001 \001(\tR" +
+      "\003key\022.\n\005value\030\002 \001(\0132\030.loams.live.v1.Vali" +
+      "datorR\005value:\0028\001\"D\n\016ValidatorUnion\0222\n\007me" +
+      "mbers\030\001 \003(\0132\030.loams.live.v1.ValidatorR\007m" +
+      "embers\"S\n\tLiveError\022,\n\004code\030\001 \001(\0162\030.loam" +
+      "s.live.v1.ErrorCodeR\004code\022\030\n\007message\030\002 \001" +
+      "(\tR\007message*\224\002\n\022ValidatorPrimitive\022#\n\037VA" +
+      "LIDATOR_PRIMITIVE_UNSPECIFIED\020\000\022\034\n\030VALID" +
+      "ATOR_PRIMITIVE_NULL\020\001\022\035\n\031VALIDATOR_PRIMI" +
+      "TIVE_INT64\020\002\022\037\n\033VALIDATOR_PRIMITIVE_FLOA" +
+      "T64\020\003\022\037\n\033VALIDATOR_PRIMITIVE_BOOLEAN\020\004\022\036" +
+      "\n\032VALIDATOR_PRIMITIVE_STRING\020\005\022\035\n\031VALIDA" +
+      "TOR_PRIMITIVE_BYTES\020\006\022\033\n\027VALIDATOR_PRIMI" +
+      "TIVE_ANY\020\007*\305\002\n\tErrorCode\022\032\n\026ERROR_CODE_U" +
+      "NSPECIFIED\020\000\022\037\n\033ERROR_CODE_INVALID_ARGUM" +
+      "ENT\020\001\022\030\n\024ERROR_CODE_NOT_FOUND\020\002\022\"\n\036ERROR" +
+      "_CODE_FAILED_PRECONDITION\020\003\022!\n\035ERROR_COD" +
+      "E_RESOURCE_EXHAUSTED\020\004\022\035\n\031ERROR_CODE_FUN" +
+      "CTION_ERROR\020\005\022\037\n\033ERROR_CODE_FUNCTION_TIM" +
+      "EOUT\020\006\022%\n!ERROR_CODE_FUNCTION_OUT_OF_MEM" +
+      "ORY\020\007\022\032\n\026ERROR_CODE_UNAVAILABLE\020\010\022\027\n\023ERR" +
+      "OR_CODE_INTERNAL\020\t2\267\004\n\013LiveService\022N\n\005Wa" +
+      "tch\022\033.loams.live.v1.WatchRequest\032\031.loams" +
+      ".live.v1.Transition\"\013\222\265\030\007\022\005watch0\001\022s\n\016Mo" +
+      "difyQuerySet\022$.loams.live.v1.ModifyQuery" +
+      "SetRequest\032%.loams.live.v1.ModifyQuerySe" +
+      "tResponse\"\024\222\265\030\020\022\016modifyQuerySet\022k\n\014Authe" +
+      "nticate\022\".loams.live.v1.AuthenticateRequ" +
+      "est\032#.loams.live.v1.AuthenticateResponse" +
+      "\"\022\222\265\030\016\022\014authenticate\022W\n\005Query\022\033.loams.li" +
+      "ve.v1.QueryRequest\032\034.loams.live.v1.Query" +
+      "Response\"\023\222\265\030\017\n\006tables\022\005query\022[\n\006Mutate\022" +
+      "\034.loams.live.v1.MutateRequest\032\035.loams.li" +
+      "ve.v1.MutateResponse\"\024\222\265\030\020\n\006tables\022\006muta" +
+      "te\032@\212\265\030<\n\004live\0222Live sync: watch a query" +
+      " set over a server stream.\030\001B~\n\033dev.loam" +
+      "s.gen.loams.live.v1B\tLiveProtoP\001\242\002\003LLX\252\002" +
+      "\rLoams.Live.V1\312\002\rLoams\\Live\\V1\342\002\031Loams\\L" +
+      "ive\\V1\\GPBMetadata\352\002\017Loams::Live::V1b\006pr" +
+      "oto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -306,74 +322,86 @@ public final class LiveProto {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_ModifyQuerySetResponse_descriptor,
         new java.lang.String[] { });
-    internal_static_loams_live_v1_Transition_descriptor =
+    internal_static_loams_live_v1_AuthenticateRequest_descriptor =
       getDescriptor().getMessageTypes().get(8);
+    internal_static_loams_live_v1_AuthenticateRequest_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_AuthenticateRequest_descriptor,
+        new java.lang.String[] { "SessionId", });
+    internal_static_loams_live_v1_AuthenticateResponse_descriptor =
+      getDescriptor().getMessageTypes().get(9);
+    internal_static_loams_live_v1_AuthenticateResponse_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_loams_live_v1_AuthenticateResponse_descriptor,
+        new java.lang.String[] { "Identity", });
+    internal_static_loams_live_v1_Transition_descriptor =
+      getDescriptor().getMessageTypes().get(10);
     internal_static_loams_live_v1_Transition_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_Transition_descriptor,
         new java.lang.String[] { "SessionId", "Start", "End", "Updates", "More", });
     internal_static_loams_live_v1_QueryUpdate_descriptor =
-      getDescriptor().getMessageTypes().get(9);
+      getDescriptor().getMessageTypes().get(11);
     internal_static_loams_live_v1_QueryUpdate_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_QueryUpdate_descriptor,
         new java.lang.String[] { "QueryId", "Value", "Error", "Removed", "Update", });
     internal_static_loams_live_v1_Removed_descriptor =
-      getDescriptor().getMessageTypes().get(10);
+      getDescriptor().getMessageTypes().get(12);
     internal_static_loams_live_v1_Removed_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_Removed_descriptor,
         new java.lang.String[] { });
     internal_static_loams_live_v1_QueryRequest_descriptor =
-      getDescriptor().getMessageTypes().get(11);
+      getDescriptor().getMessageTypes().get(13);
     internal_static_loams_live_v1_QueryRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_QueryRequest_descriptor,
         new java.lang.String[] { "Function", "Args", "Ts", });
     internal_static_loams_live_v1_QueryResponse_descriptor =
-      getDescriptor().getMessageTypes().get(12);
+      getDescriptor().getMessageTypes().get(14);
     internal_static_loams_live_v1_QueryResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_QueryResponse_descriptor,
         new java.lang.String[] { "Ts", "Result", });
     internal_static_loams_live_v1_MutateRequest_descriptor =
-      getDescriptor().getMessageTypes().get(13);
+      getDescriptor().getMessageTypes().get(15);
     internal_static_loams_live_v1_MutateRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_MutateRequest_descriptor,
         new java.lang.String[] { "Function", "Args", "IdempotencyKey", });
     internal_static_loams_live_v1_MutateResponse_descriptor =
-      getDescriptor().getMessageTypes().get(14);
+      getDescriptor().getMessageTypes().get(16);
     internal_static_loams_live_v1_MutateResponse_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_MutateResponse_descriptor,
         new java.lang.String[] { "CommitTs", "Result", });
     internal_static_loams_live_v1_Schema_descriptor =
-      getDescriptor().getMessageTypes().get(15);
+      getDescriptor().getMessageTypes().get(17);
     internal_static_loams_live_v1_Schema_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_Schema_descriptor,
         new java.lang.String[] { "Tables", });
     internal_static_loams_live_v1_TableSchema_descriptor =
-      getDescriptor().getMessageTypes().get(16);
+      getDescriptor().getMessageTypes().get(18);
     internal_static_loams_live_v1_TableSchema_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_TableSchema_descriptor,
         new java.lang.String[] { "Name", "Indexes", "Validator", "SchemaValidation", });
     internal_static_loams_live_v1_IndexSchema_descriptor =
-      getDescriptor().getMessageTypes().get(17);
+      getDescriptor().getMessageTypes().get(19);
     internal_static_loams_live_v1_IndexSchema_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_IndexSchema_descriptor,
         new java.lang.String[] { "Name", "Fields", });
     internal_static_loams_live_v1_Validator_descriptor =
-      getDescriptor().getMessageTypes().get(18);
+      getDescriptor().getMessageTypes().get(20);
     internal_static_loams_live_v1_Validator_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_Validator_descriptor,
         new java.lang.String[] { "Primitive", "Array", "Object", "Literal", "Union", "Optional", "Id", "Kind", });
     internal_static_loams_live_v1_ValidatorObject_descriptor =
-      getDescriptor().getMessageTypes().get(19);
+      getDescriptor().getMessageTypes().get(21);
     internal_static_loams_live_v1_ValidatorObject_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_ValidatorObject_descriptor,
@@ -385,13 +413,13 @@ public final class LiveProto {
         internal_static_loams_live_v1_ValidatorObject_FieldsEntry_descriptor,
         new java.lang.String[] { "Key", "Value", });
     internal_static_loams_live_v1_ValidatorUnion_descriptor =
-      getDescriptor().getMessageTypes().get(20);
+      getDescriptor().getMessageTypes().get(22);
     internal_static_loams_live_v1_ValidatorUnion_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_ValidatorUnion_descriptor,
         new java.lang.String[] { "Members", });
     internal_static_loams_live_v1_LiveError_descriptor =
-      getDescriptor().getMessageTypes().get(21);
+      getDescriptor().getMessageTypes().get(23);
     internal_static_loams_live_v1_LiveError_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_loams_live_v1_LiveError_descriptor,

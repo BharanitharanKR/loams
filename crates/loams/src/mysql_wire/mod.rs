@@ -2,7 +2,11 @@
 //!
 //! This accepts MySQL client TCP connections and implements text-protocol
 //! SELECT queries. It deliberately rejects writes and prepared statements;
-//! multi-statement transactions require a transactional SQL backend.
+//! multi-statement transactions require a transactional SQL backend. The
+//! session statements drivers send at connect (`SET NAMES`, `SET autocommit`,
+//! `SELECT @@version`, …) are answered by [`session`].
+
+mod session;
 
 use std::io;
 use std::net::SocketAddr;
@@ -20,7 +24,7 @@ use datafusion::sql::sqlparser::parser::Parser;
 use loams_query::{CollectionService, SqlConfig};
 use opensrv_mysql::{
     AsyncMysqlIntermediary, AsyncMysqlShim, Column, ColumnFlags, ColumnType, ErrorKind, InitWriter,
-    ParamParser, QueryResultWriter, StatementMetaWriter,
+    OkResponse, ParamParser, QueryResultWriter, StatementMetaWriter, StatusFlags,
 };
 use tokio::io::{AsyncRead, AsyncWrite, ReadBuf};
 use tokio::net::TcpListener;
@@ -118,9 +122,11 @@ pub fn start(
     service: Arc<CollectionService>,
     bound: MysqlListener,
     config: MysqlConfig,
+    caller: loams_query::graph::GraphCaller,
 ) -> MysqlHandle {
     let MysqlListener { listener, addr } = bound;
-    let context = Arc::new(service.sql_context(&config.namespace));
+    // Every session's graph reads are `caller`'s (GR1 R24.12): the listener authenticates nobody.
+    let context = Arc::new(service.sql_context(&config.namespace, caller));
     let sql_config = service.config().sql.clone();
     let shutdown = CancellationToken::new();
     let disconnect_clients = CancellationToken::new();
@@ -132,6 +138,7 @@ pub fn start(
     let namespace = config.namespace;
     let (handshake_timeout, idle_timeout) = (config.handshake_timeout, config.idle_timeout);
     let accept_task = tokio::spawn(async move {
+        let mut next_id: u32 = 0;
         loop {
             let socket = tokio::select! {
                 _ = stop.cancelled() => break,
@@ -152,11 +159,13 @@ pub fn start(
                 drop(socket);
                 continue;
             };
-            let backend = Backend {
-                context: context.clone(),
-                sql_config: sql_config.clone(),
-                namespace: namespace.clone(),
-            };
+            next_id = next_id.wrapping_add(1).max(1);
+            let backend = Backend::new(
+                context.clone(),
+                sql_config.clone(),
+                namespace.clone(),
+                next_id,
+            );
             let disconnect = force_disconnect.clone();
             active.spawn(async move {
                 let _permit = permit;
@@ -241,6 +250,86 @@ struct Backend {
     context: Arc<SessionContext>,
     sql_config: SqlConfig,
     namespace: String,
+    session: session::Session,
+    connection_id: u32,
+}
+
+impl Backend {
+    fn new(
+        context: Arc<SessionContext>,
+        sql_config: SqlConfig,
+        namespace: String,
+        connection_id: u32,
+    ) -> Self {
+        Self {
+            session: session::Session::new(namespace.clone(), connection_id),
+            context,
+            sql_config,
+            namespace,
+            connection_id,
+        }
+    }
+
+    /// The `OK` packet of a session statement: its status carries
+    /// `autocommit`, which PyMySQL reads back.
+    fn ok_packet(&self) -> OkResponse {
+        let mut status_flags = StatusFlags::empty();
+        status_flags.set(
+            StatusFlags::SERVER_STATUS_AUTOCOMMIT,
+            self.session.autocommit(),
+        );
+        OkResponse {
+            status_flags,
+            ..OkResponse::default()
+        }
+    }
+}
+
+/// Writes a session statement's answer.
+async fn write_answer<W: AsyncWrite + Send + Unpin>(
+    answer: session::Answer,
+    ok: OkResponse,
+    results: QueryResultWriter<'_, W>,
+) -> io::Result<()> {
+    match answer {
+        session::Answer::Ok => results.completed(ok).await,
+        session::Answer::Refuse(kind, message) => results.error(kind, message.as_bytes()).await,
+        session::Answer::Rows { columns, rows } => {
+            let first = rows.first();
+            let metadata: Vec<Column> = columns
+                .into_iter()
+                .enumerate()
+                .map(|(index, column)| {
+                    let int = matches!(
+                        first.and_then(|row| row.get(index)),
+                        Some(session::Value::Int(_))
+                    );
+                    Column {
+                        table: String::new(),
+                        column,
+                        coltype: if int {
+                            ColumnType::MYSQL_TYPE_LONGLONG
+                        } else {
+                            ColumnType::MYSQL_TYPE_VAR_STRING
+                        },
+                        colflags: ColumnFlags::empty(),
+                    }
+                })
+                .collect();
+            let mut writer = results.start(&metadata).await?;
+            for row in rows {
+                for value in row {
+                    match value {
+                        session::Value::Int(n) => writer.write_col(n)?,
+                        session::Value::Text(text) => writer.write_col(text)?,
+                        session::Value::Null => writer.write_col(Option::<String>::None)?,
+                    }
+                }
+                writer.end_row().await?;
+            }
+            writer.finish().await
+        }
+    }
 }
 
 fn column_type(data_type: &DataType) -> (ColumnType, ColumnFlags) {
@@ -288,6 +377,14 @@ fn one_read_query(sql: &str) -> Result<(), ErrorKind> {
 #[async_trait]
 impl<W: AsyncWrite + Send + Unpin> AsyncMysqlShim<W> for Backend {
     type Error = io::Error;
+
+    fn version(&self) -> String {
+        session::SERVER_VERSION.to_owned()
+    }
+
+    fn connect_id(&self) -> u32 {
+        self.connection_id
+    }
 
     async fn on_prepare<'a>(
         &'a mut self,
@@ -340,6 +437,10 @@ impl<W: AsyncWrite + Send + Unpin> AsyncMysqlShim<W> for Backend {
         query: &'a str,
         results: QueryResultWriter<'a, W>,
     ) -> io::Result<()> {
+        if let Some(answer) = self.session.answer(query) {
+            let ok = self.ok_packet();
+            return write_answer(answer, ok, results).await;
+        }
         if let Err(kind) = one_read_query(query) {
             return results
                 .error(kind, b"only one read-only SELECT is supported")
@@ -464,6 +565,101 @@ mod tests {
         let mut reader = DeadlineReader::new(server, first, idle);
         let err = reader.read_exact(&mut buf).await.unwrap_err();
         assert_eq!(err.kind(), io::ErrorKind::TimedOut);
+    }
+
+    /// A MySQL wire server over a bare SQL context on a loopback port,
+    /// one [`Backend`] per connection as [`start`] runs it.
+    async fn serve() -> SocketAddr {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let context = Arc::new(SessionContext::new());
+        tokio::spawn(async move {
+            let mut id = 0;
+            loop {
+                let Ok((socket, _)) = listener.accept().await else {
+                    return;
+                };
+                id += 1;
+                let backend = Backend::new(
+                    context.clone(),
+                    SqlConfig::default(),
+                    "default".to_owned(),
+                    id,
+                );
+                tokio::spawn(async move {
+                    let (reader, writer) = socket.into_split();
+                    let _ = AsyncMysqlIntermediary::run_on(backend, reader, writer).await;
+                });
+            }
+        });
+        addr
+    }
+
+    /// B15 (0.1.0 release e2e): a real client connects, and the session
+    /// statements PyMySQL, mysql-connector-python, Connector/J and
+    /// go-sql-driver send at connect are answered before a `SELECT` runs.
+    #[tokio::test]
+    async fn drivers_connect_time_statements_over_the_wire() {
+        use mysql_async::prelude::Queryable;
+        let addr = serve().await;
+        let opts = mysql_async::OptsBuilder::default()
+            .ip_or_hostname(addr.ip().to_string())
+            .tcp_port(addr.port())
+            .user(Some("anyone"))
+            .pass(Some("anything"))
+            .db_name(Some("default"))
+            .prefer_socket(false);
+        let mut conn = mysql_async::Conn::new(opts).await.expect("connects");
+        for sql in [
+            // PyMySQL.
+            "SET NAMES utf8mb4",
+            "SET AUTOCOMMIT = 0",
+            "COMMIT",
+            "ROLLBACK",
+            // mysql-connector-python.
+            "SET NAMES 'utf8mb4' COLLATE 'utf8mb4_0900_ai_ci'",
+            "SET @@session.autocommit = OFF",
+            // Connector/J.
+            "SET character_set_results = NULL",
+            "SET autocommit=1",
+            // go-sql-driver.
+            "SET NAMES utf8mb4 COLLATE utf8mb4_unicode_ci",
+            "START TRANSACTION",
+            "COMMIT",
+        ] {
+            conn.query_drop(sql)
+                .await
+                .unwrap_or_else(|e| panic!("{sql}: {e}"));
+        }
+        let version: Option<String> = conn.query_first("SELECT @@version").await.unwrap();
+        assert_eq!(version.as_deref(), Some(session::SERVER_VERSION));
+        let row: Option<(u64, u64)> = conn
+            .query_first("SELECT @@max_allowed_packet, @@session.autocommit")
+            .await
+            .unwrap();
+        assert_eq!(row, Some((67_108_864, 1)));
+        conn.query_drop("SET character_set_results = NULL")
+            .await
+            .unwrap();
+        let jdbc: Option<(u64, String, Option<String>)> = conn
+            .query_first(
+                "/* mysql-connector-j-8.4.0 */SELECT @@session.auto_increment_increment AS \
+                 auto_increment_increment, @@character_set_client AS character_set_client, \
+                 @@character_set_results AS character_set_results",
+            )
+            .await
+            .unwrap();
+        assert_eq!(jdbc, Some((1, "utf8mb4".to_owned(), None)));
+        let warnings: Vec<(String, u64, String)> = conn.query("SHOW WARNINGS").await.unwrap();
+        assert!(warnings.is_empty());
+        let one: Option<i64> = conn.query_first("SELECT 1").await.unwrap();
+        assert_eq!(one, Some(1));
+        let err = conn
+            .query_drop("INSERT INTO x VALUES (1)")
+            .await
+            .expect_err("still read-only");
+        assert!(err.to_string().contains("read-only"), "{err}");
+        conn.disconnect().await.unwrap();
     }
 
     #[test]

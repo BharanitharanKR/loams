@@ -32,7 +32,7 @@ const plugin: PluginModule = {
       ),
     );
     ctx.effect(() =>
-      slots.register({ name: 'shell.header.server', plugin: 'desktop-servers' }, () => (
+      slots.register({ name: 'shell.sidebar.server', plugin: 'desktop-servers' }, () => (
         <Switcher desktop={desktop} navigate={(p) => router.navigate(p)} />
       )),
     );

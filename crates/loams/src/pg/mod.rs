@@ -156,9 +156,11 @@ pub async fn prepare(
     service: Arc<CollectionService>,
     bound: PgListener,
     config: PgConfig,
+    caller: loams_query::graph::GraphCaller,
 ) -> io::Result<PgPrepared> {
     let PgListener { listener, addr } = bound;
-    let context = Arc::new(service.sql_context(&config.namespace));
+    // Every session's graph reads are `caller`'s (GR1 R24.12): the listener authenticates nobody.
+    let context = Arc::new(service.sql_context(&config.namespace, caller));
     setup_pg_catalog(&context, &config.namespace, EmptyContextProvider)
         .map_err(io::Error::other)?;
     let sql = service.config().sql.clone();

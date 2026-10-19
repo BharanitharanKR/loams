@@ -1,0 +1,38 @@
+// Loams Git's workspace snapshot, `ws/<ws_id>/snap/<n:020>.lws`, verbatim
+// from design §36 §19.4.2 (D826, D827, D836; plan GT1 Task 22).
+// Crate-local and pinned by tests/golden/snapshot_v1.lws, not by buf
+// (plan GT1 R0.5).
+
+syntax = "proto3";
+package loams.git.v1;
+
+import "loams/git/v1/wal.proto";
+
+message ChangedPath {
+  string path = 1;
+  enum Kind { MODIFIED = 0; ADDED = 1; DELETED = 2; UNTRACKED = 3; TYPE_CHANGED = 4; }
+  Kind kind = 2;
+  bool staged = 3;                    // the index differs from HEAD at this path
+}
+message LocalRef { string name = 1; bytes oid = 2; string upstream = 3; }
+message Conflict { string path = 1; bytes base = 2; bytes ours = 3; bytes theirs = 4; uint32 mode = 5; }
+message Takeover { string from_mount = 1; uint64 from_n = 2; string reason = 3; }
+message ForkOrigin { string repo_id = 1; string ws_id = 2; uint64 n = 3; }
+
+message WorkspaceSnapshot {
+  string ws_id = 1;  uint64 n = 2;  ObjectFormat object_format = 3;
+  string repo_id = 4;  string owner = 5;  string name = 6;          // "" for unnamed workspaces
+  string track = 7;                    // "refs/heads/main": what `pull` rebases onto
+  bytes base = 8;  uint64 base_seq = 9;    // the commit last rebased onto, and the repository seq it was read at
+  bytes head = 10;  string head_ref = 11;  // HEAD; "" when detached
+  repeated LocalRef refs = 12;             // workspace-local branches and lightweight tags
+  bytes index_tree = 13;                   // the staged tree; conflicts live in `conflicts`
+  bytes worktree_tree = 14;                // tracked + untracked, without ignored paths
+  bytes snapshot_commit = 15;              // D835
+  repeated ChangedPath changed = 16;  bool changed_overflow = 17;   // capped at MAX_CHANGED_HINT
+  repeated PackRef packs = 18;             // the live workspace pack set
+  string writer = 19;  string principal = 20;  int64 created_unix_ms = 21;
+  string label = 22;                       // a named snapshot (`loams ws snapshot --name`)
+  Takeover takeover = 23;  ForkOrigin fork = 24;
+  repeated Conflict conflicts = 25;
+}

@@ -84,7 +84,9 @@ function ToolLabel({ part }: { part: ToolPart }) {
       <span className={presentation.status === "failed" ? "text-danger" : "text-ink"}>
         {presentation.label}
       </span>{" "}
-      <span className="font-mono text-xs text-muted">{presentation.detail}</span>
+      <span className={/* mono-ok: code */ "font-mono text-xs text-muted"}>
+        {presentation.detail}
+      </span>
     </span>
   );
 }
@@ -133,13 +135,18 @@ function FileButton({
   path: string;
   onOpen?: ((path: string) => void) | undefined;
 }) {
-  if (!onOpen) return <span className="min-w-0 truncate font-mono text-ink">{path}</span>;
+  if (!onOpen)
+    return (
+      <span className={/* mono-ok: path */ "min-w-0 truncate font-mono text-ink"}>{path}</span>
+    );
   return (
     <button
       type="button"
       onClick={() => onOpen(path)}
       title={`Open ${path}`}
-      className="min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-mono text-ink hover:text-accent hover:underline"
+      className={
+        /* mono-ok: path */ "min-w-0 cursor-pointer truncate border-0 bg-transparent p-0 text-left font-mono text-ink hover:text-accent-fg hover:underline"
+      }
     >
       {path}
     </button>
@@ -277,7 +284,7 @@ function UserRow({ text }: { text: string }) {
           <button
             type="button"
             onClick={() => setExpanded((v) => !v)}
-            className="mt-1 cursor-pointer border-0 bg-transparent p-0 text-xs text-accent"
+            className="mt-1 cursor-pointer border-0 bg-transparent p-0 text-xs text-accent-fg"
           >
             {expanded ? "Show less" : "Show more"}
           </button>
@@ -405,7 +412,7 @@ function RowBody({ row }: { row: TimelineRow }): ReactNode {
                       ? "Subagent failed"
                       : "Subagent done"}
                 </span>{" "}
-                <span className="font-mono text-xs text-muted">
+                <span className={/* mono-ok: code */ "font-mono text-xs text-muted"}>
                   {resolveToolPresentation(row.part).detail}
                 </span>
                 {row.part.subagentTail ? (

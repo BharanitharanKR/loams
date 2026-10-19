@@ -1,13 +1,14 @@
 // Studio's home and project pages (§53 §4.4: "home: recent threads, projects, run
-// groups"). Threads and run groups arrive with SD1 Tasks 17 and 25; until then
-// both say there are none.
+// groups"). The recent threads are the sidebar's rows (it publishes them to the query
+// cache), so the home opens no stream of its own.
 
-import { Badge, Card, Empty } from '@loams/ui';
+import { Badge, Card, Empty, formatRelative, SkeletonList } from '@loams/ui';
 import { FolderGit2, GitBranch } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { StudioAgentd } from '../agentd.js';
+import type { Project, StudioAgentd } from '../agentd.js';
 import { useProjects } from '../projects/queries.js';
 import { studioHref } from '../routes.js';
+import { usePublishedSidebar } from '../sidebar/data.js';
 import { ThreadComposer } from '../thread/Composer.js';
 
 function Padded({ children }: { children: ReactNode }) {
@@ -19,7 +20,7 @@ export function Home({ agentd }: { agentd: StudioAgentd }) {
   if (projects.isPending)
     return (
       <Padded>
-        <Empty title="Loading projects…" />
+        <SkeletonList label="Loading projects" layout="cards" rows={3} />
       </Padded>
     );
   if (projects.isError) {
@@ -44,7 +45,7 @@ export function Home({ agentd }: { agentd: StudioAgentd }) {
     );
   }
   return (
-    <div className="mx-auto flex max-w-[960px] flex-col gap-6 px-6 py-8">
+    <div className="mx-auto flex w-full max-w-[960px] flex-col gap-6 px-6 py-8">
       <header>
         <h1 className="m-0 text-[1.6rem] font-semibold text-ink tracking-[-0.01em]">
           Loams Studio
@@ -52,10 +53,7 @@ export function Home({ agentd }: { agentd: StudioAgentd }) {
         <p className="m-0 mt-1 text-muted">Pick a project to start a thread in it.</p>
       </header>
       <section aria-labelledby="studio-projects" className="flex flex-col gap-3">
-        <h2
-          id="studio-projects"
-          className="m-0 font-mono text-[0.7rem] text-faint uppercase tracking-[0.14em]"
-        >
+        <h2 id="studio-projects" className="m-0 text-micro font-medium text-faint">
           Projects
         </h2>
         <ul className="m-0 grid list-none grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3 p-0">
@@ -70,11 +68,15 @@ export function Home({ agentd }: { agentd: StudioAgentd }) {
                     size={16}
                     strokeWidth={1.75}
                     aria-hidden="true"
-                    className="text-accent"
+                    className="text-accent-fg"
                   />
                   {p.name}
                 </span>
-                <span className="truncate font-mono text-[0.72rem] text-faint">{p.path}</span>
+                <span
+                  className={/* mono-ok: path */ 'truncate font-mono text-[0.72rem] text-faint'}
+                >
+                  {p.path}
+                </span>
                 {p.branch && (
                   <span className="flex items-center gap-1.5 text-[0.8rem] text-muted">
                     <GitBranch size={13} aria-hidden="true" />
@@ -86,10 +88,56 @@ export function Home({ agentd }: { agentd: StudioAgentd }) {
           ))}
         </ul>
       </section>
-      <Card title="Recent threads">
-        <Empty title="No threads yet">Threads you start in a project show here.</Empty>
-      </Card>
+      <RecentThreads agentd={agentd} projects={projects.data} />
     </div>
+  );
+}
+
+const RECENT = 8;
+
+/** The last threads touched, newest first, from the sidebar's published rows. */
+function RecentThreads({
+  agentd,
+  projects,
+}: {
+  agentd: StudioAgentd;
+  projects: readonly Project[];
+}) {
+  const sidebar = usePublishedSidebar(agentd);
+  const recent = (sidebar?.threads ?? [])
+    .filter((t) => !t.archived)
+    .sort((a, b) => b.updatedAt - a.updatedAt)
+    .slice(0, RECENT);
+  const projectName = (id: string | null) => projects.find((p) => p.id === id)?.name;
+  return (
+    <Card title="Recent threads">
+      {recent.length === 0 ? (
+        <Empty title="No threads yet">
+          Open a project above and describe a change to start one.
+        </Empty>
+      ) : (
+        <ul className="m-0 flex list-none flex-col p-0">
+          {recent.map((t) => (
+            <li key={t.id}>
+              <a
+                href={`#${studioHref({ kind: 'thread', threadId: t.id })}`}
+                className="flex items-baseline gap-3 rounded-md px-2 py-1.5 text-ink no-underline hover:bg-raised"
+              >
+                <span className="min-w-0 flex-1 truncate">{t.title || 'Untitled thread'}</span>
+                {projectName(t.projectId) && (
+                  <span className="shrink-0 text-[0.8rem] text-muted">
+                    {projectName(t.projectId)}
+                  </span>
+                )}
+                <span className="shrink-0 text-[0.8rem] text-faint">
+                  {formatRelative(new Date(t.updatedAt).toISOString())}
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }
 
@@ -130,7 +178,7 @@ export function ProjectPage({
     );
   }
   return (
-    <div className="mx-auto flex max-w-[960px] flex-col gap-6 px-6 py-8">
+    <div className="mx-auto flex w-full max-w-[960px] flex-col gap-6 px-6 py-8">
       <header className="flex flex-col gap-1">
         <h1 className="m-0 text-[1.5rem] font-semibold text-ink">{project.name}</h1>
         <p className="m-0 flex flex-wrap items-center gap-2 text-muted">
@@ -139,9 +187,7 @@ export function ProjectPage({
         </p>
       </header>
       <section aria-label="New thread" className="flex flex-col gap-2">
-        <h2 className="m-0 font-mono text-[0.7rem] text-faint uppercase tracking-[0.14em]">
-          New thread
-        </h2>
+        <h2 className="m-0 text-micro font-medium text-faint">New thread</h2>
         <ThreadComposer
           project={{ path: project.path, name: project.name, branch: project.branch }}
           {...(navigate

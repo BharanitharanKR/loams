@@ -12,6 +12,7 @@ import {
   Field,
   Input,
   Select,
+  SkeletonList,
   StatusTag,
   Table,
 } from '@loams/ui';
@@ -25,11 +26,20 @@ export function rememberNamespace(ns: string): void {
   rememberShared(RECENT_KEY, ns);
 }
 
-export function NamespacePicker({ ns, navigate }: { ns: string; navigate: (to: string) => void }) {
+export function NamespacePicker({
+  ns,
+  navigate,
+  href = (next) => `/data/${encodeURIComponent(next)}`,
+}: {
+  ns: string;
+  navigate: (to: string) => void;
+  /** Where another namespace opens; the Data explorer's own list by default. */
+  href?: (ns: string) => string;
+}) {
   return (
     <SharedPicker
       ns={ns}
-      onOpen={(next) => navigate(`/data/${encodeURIComponent(next)}`)}
+      onOpen={(next) => navigate(href(next))}
       storageKey={RECENT_KEY}
       idPrefix="ds"
     />
@@ -225,16 +235,27 @@ function NewCollection({
   );
 }
 
-/** `/data` and `/data/:ns`: the collections of one namespace. */
+/** The Search entry's route (UX-2): the collections of a namespace, each opening its Search. */
+export const SEARCH_PATH = '/search';
+
+/**
+ * `/data` and `/data/:ns`: the collections of one namespace. With `target="search"` it is
+ * the Search entry (`/search`, `?ns=`), where a collection opens on its Search tab.
+ */
 export function CollectionsPage({
   client,
   ns,
   navigate,
+  target = 'documents',
 }: {
   client: DataClient;
   ns: string;
   navigate: (to: string) => void;
+  target?: 'documents' | 'search';
 }) {
+  const search = target === 'search';
+  const open = (name: string) =>
+    `/data/${encodeURIComponent(ns)}/${encodeURIComponent(name)}${search ? '/search' : ''}`;
   const [list, reload] = useLoad(() => client.listCollections(ns), [client, ns]);
   const [creating, setCreating] = useState(false);
   const [nsError, setNsError] = useState<string>();
@@ -254,24 +275,37 @@ export function CollectionsPage({
   return (
     <div className="lc-page ds-page">
       <PageHead
-        title="Data explorer"
-        subtitle="Browse, query and load the collections of a namespace."
+        title={search ? 'Search' : 'Data explorer'}
+        subtitle={
+          search
+            ? 'Pick a collection to search its documents.'
+            : 'Browse, query and load the collections of a namespace.'
+        }
         actions={
-          <>
-            <Button onClick={createNs}>New namespace</Button>
-            <Button variant="primary" onClick={() => setCreating(true)}>
-              New collection
-            </Button>
-          </>
+          search ? undefined : (
+            <>
+              <Button onClick={createNs}>New namespace</Button>
+              <Button variant="primary" onClick={() => setCreating(true)}>
+                New collection
+              </Button>
+            </>
+          )
         }
       />
       <div className="ds-toolbar">
-        <NamespacePicker key={ns} ns={ns} navigate={navigate} />
-        <Tabs ns={ns} active="documents" navigate={navigate} />
+        <NamespacePicker
+          key={ns}
+          ns={ns}
+          navigate={navigate}
+          href={search ? (next) => `${SEARCH_PATH}?ns=${encodeURIComponent(next)}` : undefined}
+        />
+        {!search && <Tabs ns={ns} active="documents" navigate={navigate} />}
       </div>
       {nsError && <ErrorNotice title="Could not create the namespace" message={nsError} />}
       <Card title={`Collections in ${ns}`} flush>
-        {list.state === 'loading' && <p className="lc-muted ds-pad">Loading collections…</p>}
+        {list.state === 'loading' && (
+          <SkeletonList className="ds-pad" label="Loading collections" rows={4} />
+        )}
         {list.state === 'error' && (
           <div className="ds-pad">
             <ErrorNotice title="Could not list collections" message={list.message} />
@@ -282,9 +316,7 @@ export function CollectionsPage({
             caption="Collections"
             rows={list.data}
             rowKey={(c) => c.name}
-            onRowClick={(c) =>
-              navigate(`/data/${encodeURIComponent(ns)}/${encodeURIComponent(c.name)}`)
-            }
+            onRowClick={(c) => navigate(open(c.name))}
             empty={
               <Empty title="No collections yet">
                 Create a collection, then ingest a file into it.
@@ -295,10 +327,7 @@ export function CollectionsPage({
                 key: 'name',
                 header: 'Name',
                 cell: (c) => (
-                  <a
-                    className="ds-link"
-                    href={`#/data/${encodeURIComponent(ns)}/${encodeURIComponent(c.name)}`}
-                  >
+                  <a className="ds-link" href={`#${open(c.name)}`}>
                     <code>{c.name}</code>
                   </a>
                 ),

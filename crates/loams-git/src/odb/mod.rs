@@ -5,10 +5,13 @@
 //! and bytes (deltas resolved), and the connectivity check of the receive
 //! path (§36 §6.3 step 3). [`PackCacheOdb`] implements it by downloading
 //! whole pack sections into a [`PackCache`]; it serves the helper,
-//! compaction and tests. `RangeOdb` (Task 17) serves Smart HTTP with range
-//! reads.
+//! compaction and tests. [`RangeOdb`] (Task 17) serves Smart HTTP and
+//! `ObjectService` with range reads, and [`WsOdb`] layers a workspace's
+//! packs over it.
 
 mod pack_cache;
+mod range;
+mod ws;
 
 use std::collections::{HashSet, VecDeque};
 use std::fmt;
@@ -21,6 +24,8 @@ use crate::blob::BlobError;
 use crate::ids::ObjectId;
 
 pub use pack_cache::{PackCache, PackCacheOdb};
+pub use range::{DeltaBase, EntryHeader, Location, OdbStats, RangeOdb, RangeSource, StoreRange};
+pub use ws::WsOdb;
 
 /// Errors of an [`ObjectDb`].
 #[derive(Debug, thiserror::Error)]

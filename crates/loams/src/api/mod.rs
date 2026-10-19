@@ -25,6 +25,7 @@ pub(crate) mod connect_postgres;
 mod connect_query;
 mod connect_query_filters;
 mod connect_query_ir;
+pub mod durable;
 mod errors;
 pub mod events;
 // Loams Git's forwarded commits and cluster seams (GT1 Task 14).
@@ -37,16 +38,21 @@ pub mod git_auth;
 #[cfg(feature = "git")]
 pub mod git_events;
 pub(crate) mod graph;
+#[cfg(feature = "graph")]
+pub(crate) mod graph_auth;
 pub mod hot;
 pub mod house_proxy;
 pub mod internal;
 pub(crate) mod live;
+mod namespace_reach;
+pub(crate) mod objects;
 #[cfg(feature = "postgres")]
 mod postgres_messages;
 mod query;
 pub mod repos;
 mod sql;
 pub mod streams;
+pub(crate) mod workspaces;
 
 use std::collections::HashMap;
 use std::str::FromStr;
@@ -166,6 +172,10 @@ pub struct AppState {
     /// LV1 Task 18), and then the package answers `feature_not_in_variant`.
     #[cfg(feature = "live")]
     pub live: Option<loams_live::LiveRoutes>,
+    /// The embedded durable server's protocol endpoint, served as
+    /// `POST /durable/` (B12, [`durable`]); `None` when this port does not
+    /// serve it, and then the route answers `404 durable_not_served`.
+    pub durable: Option<durable::DurableHandle>,
 }
 
 /// What a query node needs to run forwarded reads (plan M1.3 Task 11).
@@ -227,6 +237,7 @@ pub fn router(state: AppState) -> Router {
     let routes = Router::new()
         .route("/health", get(health))
         .route("/ready", get(ready))
+        .route("/durable/", post(durable::envelope))
         .route("/v1/namespaces", post(create_namespace))
         .route(
             "/v1/namespaces/{ns}/streams",
@@ -357,6 +368,25 @@ fn with_token(mut response: Response, token: &ConsistencyToken) -> Response {
 /// `loams-consistency-token` are the two request headers that survive the move
 /// to RPCs, and both are read by this one function so the two surfaces cannot
 /// disagree about what a header means.
+/// Who a request's graph reads are for (GR1 R24.12): its principal, checked for `reader` on each
+/// graph a search's `expand` or a SQL graph or algorithm function touches, by the same RBAC as
+/// `loams.graph.v1`'s RPCs ([`graph_auth`]). No principal reads no graph. Without the `graph`
+/// feature no graph is served, and the caller reads none.
+pub(crate) fn graph_caller(
+    principals: &crate::auth::Principals,
+    principal: Option<&crate::auth::Principal>,
+) -> loams_query::graph::GraphCaller {
+    #[cfg(feature = "graph")]
+    {
+        graph_auth::graph_caller(principals, principal)
+    }
+    #[cfg(not(feature = "graph"))]
+    {
+        let _ = (principals, principal);
+        loams_query::graph::GraphCaller::nobody()
+    }
+}
+
 pub(super) fn read_consistency(
     headers: &HeaderMap,
     body: Option<ReadConsistency>,
@@ -387,6 +417,15 @@ async fn health() -> StatusCode {
 }
 
 async fn ready(State(state): State<AppState>) -> StatusCode {
+    // A draining Live node leaves the load balancer first (LV1 plan Task 24).
+    #[cfg(feature = "live")]
+    if state
+        .live
+        .as_ref()
+        .is_some_and(loams_live::LiveRoutes::draining)
+    {
+        return StatusCode::SERVICE_UNAVAILABLE;
+    }
     if state.meta.is_ready() {
         StatusCode::OK
     } else {

@@ -191,6 +191,14 @@ pub(crate) struct PgControlArgs {
     /// (repeated).
     #[arg(long = "wal-pool", value_parser = parse_pool)]
     wal_pool: Vec<(String, Vec<String>)>,
+    /// Endpoint storage (`host:port`, as computes reach it), where they keep
+    /// their file cache's state so a promoted replica can prewarm.
+    #[arg(long)]
+    endpoint_storage: Option<String>,
+    /// Where to write the public key endpoint storage verifies tokens with
+    /// (its `pemfile`), at start.
+    #[arg(long, requires = "endpoint_storage")]
+    endpoint_storage_pem_out: Option<PathBuf>,
     /// A file holding the storage controller's token; without it
     /// /notify-attach is not served.
     #[arg(long)]
@@ -302,6 +310,8 @@ fn config(args: PgControlArgs) -> Result<PgControlConfig, String> {
     config.pageservers = args.pageserver_pg.into_iter().collect::<BTreeMap<_, _>>();
     config.default_pageserver = args.default_pageserver;
     config.wal_pools = args.wal_pool.into_iter().collect::<BTreeMap<_, _>>();
+    config.endpoint_storage = args.endpoint_storage;
+    config.endpoint_storage_pem_out = args.endpoint_storage_pem_out;
     config.notify_token = args
         .storage_controller_token_file
         .as_deref()
@@ -312,6 +322,16 @@ fn config(args: PgControlArgs) -> Result<PgControlConfig, String> {
 
 /// `loams pg-control`: runs until a shutdown signal.
 pub(crate) async fn run(args: PgControlArgs) -> ExitCode {
+    // The startup gate (design §54 §4.3, UP1 Task 4): refuse records this
+    // release does not read, before anything listens.
+    if let Err(err) = loams_common::formats::check_dir_stamp(
+        &args.data_dir,
+        loams_common::formats::PG_CONTROL_RECORD,
+    ) {
+        tracing::error!(code = "format_unreadable", %err, "refusing to start");
+        eprintln!("loams pg-control: refusing to start: format_unreadable: {err}");
+        return ExitCode::from(loams_migrate::startup::EXIT_REFUSED);
+    }
     let config = match config(args) {
         Ok(c) => c,
         Err(e) => {

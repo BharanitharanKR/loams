@@ -24,6 +24,7 @@ import type { ComponentType } from 'react';
 import type { ActionRegistry } from './actions.js';
 import type { AgentdRpcServices, AgentdService } from './agentd.js';
 import type { ModeService } from './mode.js';
+import type { ThemeChoice } from './theme.js';
 
 /** What differs between the shells the console runs in (today: the browser). */
 export interface PlatformService {
@@ -53,6 +54,37 @@ export interface PlatformService {
   onInstanceStale?(callback: () => void): () => void;
 }
 
+/** The theme choice and what it resolves to (design 59, D1074); the platform provides it. */
+export interface ThemeService {
+  readonly choice: ThemeChoice;
+  readonly dark: boolean;
+  set(choice: ThemeChoice): void;
+  subscribe(listener: () => void): () => void;
+}
+
+/** An inspector's or the drawer's state (design 59, D1078). */
+export interface PanelState {
+  open: boolean;
+  /** The selected tab's id (its entry's `meta.id`). */
+  tab: string | undefined;
+  /** What `open({ tab, props })` passed for that tab; not persisted. */
+  props: Readonly<Record<string, unknown>>;
+  /** Width (inspector) or height (drawer) in pixels. */
+  size: number;
+}
+
+/** The shell's right inspector or bottom drawer (design 59, D1078); the shell provides both. */
+export interface PanelService {
+  state(): PanelState;
+  /** Opens the panel, on `tab` when given, passing `props` to that tab. */
+  open(o?: { tab?: string; props?: Record<string, unknown> }): void;
+  close(): void;
+  /** Closes the panel when it is open (on `tab`, when given); else opens it. */
+  toggle(tab?: string): void;
+  resize(size: number): void;
+  subscribe(listener: () => void): () => void;
+}
+
 /** `GetInstance`'s answer, as plugins gate on it (AP1a Ruling 6). */
 export interface FlagsService {
   edition: 'oss' | 'cloud' | 'byoc' | 'unknown';
@@ -62,6 +94,18 @@ export interface FlagsService {
   apiVersions: string[];
   /** True until first-run setup has created the org and its owner. */
   setupRequired?: boolean;
+  /**
+   * The instance offers no sign-in (GetInstance lists only SIGN_IN_KIND_NONE): an
+   * engine with LOAMS_AUTH_MODE=off, loopback only, where first-run setup needs no
+   * token and every caller is the local developer.
+   */
+  signInOff?: boolean;
+  /**
+   * Why GetInstance gave no answer: the engine does not have it
+   * (`unimplemented`, an engine too old for this console), or it could not
+   * be reached (`unreachable`).
+   */
+  instanceError?: 'unimplemented' | 'unreachable';
   has(api: string): boolean;
 }
 
@@ -166,6 +210,11 @@ export interface Services extends RpcServices, AgentdRpcServices {
   actions: ActionRegistry;
   /** Console or Studio (§53 §4.2); the host provides it. */
   mode: ModeService;
+  /** System, Dark or Light, per device (design 59, D1074); the platform provides it. */
+  theme: ThemeService;
+  /** The shell's right inspector and bottom drawer (design 59, D1078). */
+  inspector: PanelService;
+  drawer: PanelService;
   /**
    * loams-agentd (§53 §6.2, SD1 Task 6; see agentd.ts): `agentd` always, from
    * `@loams/plugin-rpc`; `agentd.transport` and `rpc.agentd.*` while a daemon is

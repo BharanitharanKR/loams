@@ -123,7 +123,8 @@ describe('live dashboard', () => {
   it('renders every panel, says the data is a sample, and lists deployments and alerts', async () => {
     const client = mockOverviewMetrics({ now: () => NOW });
     render(<LiveDashboard client={client} now={() => NOW} />);
-    expect(screen.getByText('Sample data')).toBeTruthy();
+    // UX-5: the shared notice only, no second badge beside the heading.
+    expect(screen.getAllByText('Sample data').length).toBe(1);
     await screen.findByRole('list', { name: 'Key metrics' });
     expect(screen.getAllByRole('listitem').length).toBeGreaterThanOrEqual(4);
 

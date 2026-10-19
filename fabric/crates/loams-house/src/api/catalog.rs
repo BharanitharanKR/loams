@@ -33,16 +33,13 @@ pub trait ApiCatalog: Send + Sync + std::fmt::Debug {
     ) -> Result<pb::DescribeTableResponse, HouseError>;
     /// The namespace's query log, newest first, or `None` until it exists.
     fn query_log(&self, namespace: u64) -> Option<Vec<pb::QueryRecord>>;
-    /// The namespace's pipes, by name, or `None` until they exist.
-    fn pipes(&self, namespace: u64) -> Option<Vec<pb::Pipe>>;
+    /// The namespace's pipes, by name, or `None` where there are none to have
+    /// (a House without a catalog).
+    async fn pipes(&self, namespace: u64) -> Result<Option<Vec<pb::Pipe>>, HouseError>;
 }
 
 /// The task that serves the query log (§49 §15).
 pub const QUERY_LOG_TASK: &str = "HS1 Task 23";
-/// The task that serves pipes (§49 §9).
-pub const PIPES_TASK: &str = "HS1 Task 16";
-/// The task that serves `RestoreTable` (§49 §8).
-pub const RESTORE_TASK: &str = "HS1 Task 15";
 
 /// The catalog until Tasks 10, 16 and 23: every namespace has `default`, and
 /// whatever a test adds.
@@ -168,8 +165,8 @@ impl ApiCatalog for FixtureCatalog {
         self.query_log.get(&namespace).cloned()
     }
 
-    fn pipes(&self, namespace: u64) -> Option<Vec<pb::Pipe>> {
-        self.pipes.get(&namespace).cloned()
+    async fn pipes(&self, namespace: u64) -> Result<Option<Vec<pb::Pipe>>, HouseError> {
+        Ok(self.pipes.get(&namespace).cloned())
     }
 }
 
@@ -181,7 +178,8 @@ pub struct LakeCatalog(pub std::sync::Arc<Lake>);
 /// How many snapshots `DescribeTable` lists, newest first.
 pub const DESCRIBED_SNAPSHOTS: usize = 20;
 
-fn timestamp(ms: i64) -> loams_house_proto::google::protobuf::Timestamp {
+/// A time in Unix milliseconds as a `Timestamp`.
+pub(crate) fn timestamp(ms: i64) -> loams_house_proto::google::protobuf::Timestamp {
     loams_house_proto::google::protobuf::Timestamp {
         seconds: ms.div_euclid(1000),
         nanos: (ms.rem_euclid(1000) * 1_000_000) as i32,
@@ -204,6 +202,7 @@ fn api_table(database: &str, name: &str, table: &LakeTable) -> pb::Table {
         TableClass::Lake => pb::TableClass::TABLE_CLASS_LAKE,
         TableClass::Realtime => pb::TableClass::TABLE_CLASS_REALTIME,
         TableClass::External => pb::TableClass::TABLE_CLASS_EXTERNAL,
+        TableClass::Pipe => pb::TableClass::TABLE_CLASS_PIPE,
     };
     let modified = table
         .metadata
@@ -310,7 +309,26 @@ impl ApiCatalog for LakeCatalog {
         None
     }
 
-    fn pipes(&self, _namespace: u64) -> Option<Vec<pb::Pipe>> {
-        None
+    /// One entry per materialized view over a pipe (HS1 Task 16), named
+    /// `<database>.<view>`, with this front's view of its runs.
+    async fn pipes(&self, namespace: u64) -> Result<Option<Vec<pb::Pipe>>, HouseError> {
+        let rows = crate::pipes::rows(&self.0, namespace).await?;
+        Ok(Some(
+            rows.into_iter()
+                .filter(|row| row.over_pipe)
+                .map(|row| pb::Pipe {
+                    name: format!("{}.{}", row.database, row.name),
+                    source: row.source,
+                    target: row.target,
+                    lag_records: row.state.lag_records,
+                    last_commit_at: match row.state.last_commit_ms {
+                        Some(ms) => buffa::MessageField::some(timestamp(ms)),
+                        None => buffa::MessageField::none(),
+                    },
+                    last_error: row.state.last_error,
+                    ..Default::default()
+                })
+                .collect(),
+        ))
     }
 }

@@ -26,7 +26,7 @@ const plugin: PluginModule = {
     const client = createMockMetricsClient({ latencyMs: 150 });
     ctx.effect(() =>
       router.page({ id: 'metrics', path: '/metrics', title: 'Metrics', plugin: 'metrics' }, () => (
-        <MetricsPage client={client} />
+        <MetricsPage client={client} sample />
       )),
     );
     ctx.effect(() =>

@@ -42,7 +42,7 @@ const plugin: PluginModule = {
           bare: true,
           public: true,
         },
-        () => <SetupPage router={router} session={session} />,
+        () => <SetupPage router={router} session={session} tokenNeeded={!flags.signInOff} />,
       ),
     );
     ctx.effect(() =>

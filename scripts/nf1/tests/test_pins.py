@@ -1,9 +1,11 @@
 #!/usr/bin/env python3
 """NF1 Task 2: tests for scripts/nf1/pins.py and the pin file.
 
-Each test copies the pin file, its consumers and the audit files into a
-scratch tree and runs `pins.py --root <tree>` there; the repository is only
-read. `override_envs_still_work` also runs `docker compose config` when a
+Each test copies the consumers and the audit files into a scratch tree,
+renders them from the mirror pin file Task 2 first wrote
+(fixtures/pins/pins-mirror-77e22e4b.toml), and runs `pins.py --root <tree>`
+there; the repository is only read. `Repository` checks the repository's own
+pin file, which names our releases since Task 14. `override_envs_still_work` also runs `docker compose config` when a
 compose CLI is installed (no daemon, no image pulls).
 
 Run: python3 -I scripts/nf1/tests/test_pins.py
@@ -16,6 +18,7 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -28,13 +31,15 @@ FIXTURES = HERE / "fixtures" / "pins"
 PIN_FILE = "deploy/pins/loams-postgres-images.toml"
 README = "deploy/loams-postgres-dev/README.md"
 COMPOSE = ("deploy/loams-postgres-dev/compose.yaml", "deploy/loams-pg-bench/compose.yaml")
+RELEASE_COMPOSE = "deploy/release/compose.yaml"
 WORKFLOWS = (".github/workflows/pg2.yml", ".github/workflows/pg2-e2e.yml", ".github/workflows/loams-pg-bench.yml")
-CONSUMERS = COMPOSE + WORKFLOWS + (README,)
+CONSUMERS = COMPOSE + (RELEASE_COMPOSE,) + WORKFLOWS + (README,)
 MAJORS_RS = "crates/loams-postgres/src/majors.rs"
 
 NEON = "ghcr.io/neondatabase/neon@sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f"
 COMPUTE17 = "ghcr.io/neondatabase/compute-node-v17@sha256:13ab146d3e7bbabb25a8532f315ac443e7512351d1ede0bab586def5c70e26c3"
 OTHER = "sha256:" + "e" * 64
+MIRROR_PINS = FIXTURES / "pins-mirror-77e22e4b.toml"
 
 
 def compose_cli():
@@ -58,6 +63,10 @@ class Tree(unittest.TestCase):
             dst.parent.mkdir(parents=True, exist_ok=True)
             shutil.copyfile(REPO / rel, dst)
         shutil.copytree(REPO / "deploy/pins/audit", self.root / "deploy/pins/audit")
+        # Start every test from the mirror pins, whatever the repository pins now.
+        shutil.copyfile(MIRROR_PINS, self.root / PIN_FILE)
+        r = self.pins("set")
+        assert r.returncode == 0, r.stdout + r.stderr
 
     def tearDown(self):
         self._tmp.cleanup()
@@ -100,14 +109,31 @@ class Repository(unittest.TestCase):
 
     def test_first_content_is_neons_reference_for_private_mirrors(self):
         # Task 2: every mirrored package stayed private (Task 1 ruling 6), so the
-        # pin file keeps Neon's repositories with `mirror:` sources.
-        text = (REPO / PIN_FILE).read_text()
+        # first pin file kept Neon's repositories with `mirror:` sources.
+        text = MIRROR_PINS.read_text()
         self.assertIn('fork_release = "mirror-77e22e4b"', text)
         self.assertIn('fork_commit = "77e22e4bf09d88b70b4a83a38c2f6de6301816b4"', text)
         for ref in (NEON, COMPUTE17):
             repo, digest = ref.split("@")
             self.assertIn(f'repository = "{repo}"\ndigest = "{digest}"\nsource = "mirror:{ref}"', text)
         self.assertNotIn("neon-archive", text)
+
+    def test_the_repository_pins_our_own_release(self):
+        # Task 14: Loams runs our builds. Every pin is a release of the fork,
+        # from the release's commit, and no `mirror:` source is left.
+        pins = tomllib.loads((REPO / PIN_FILE).read_text())
+        self.assertRegex(pins["fork_release"], r"^lp-\d{4}\.\d{2}\.\d+$")
+        self.assertRegex(pins["fork_commit"], r"^[0-9a-f]{40}$")
+        self.assertIn("storage", pins["images"])
+        for key, img in pins["images"].items():
+            with self.subTest(image=key):
+                self.assertTrue(img["repository"].startswith("ghcr.io/ostrium-labs/loams-postgres-"), img)
+                self.assertEqual(img["source"], "ostrium-labs/loams-postgres@" + pins["fork_commit"])
+        for rel in CONSUMERS:
+            with self.subTest(consumer=rel):
+                text = (REPO / rel).read_text()
+                self.assertNotIn("ghcr.io/neondatabase/", text if rel != README else
+                                 re.sub(r"^## Mirror\n.*?(?=^## |\Z)", "", text, flags=re.M | re.S))
 
 
 class PinsMatchConsumers(Tree):
@@ -132,6 +158,10 @@ class PinsMatchConsumers(Tree):
                 self.edit(rel, f"PG_HEADERS_IMAGE: {NEON}", f"PG_HEADERS_IMAGE: ghcr.io/neondatabase/neon@{OTHER}")
                 self.assertFails(rel)
                 self.write(rel, saved)
+
+    def test_release_stack_default_edited_by_hand_fails(self):
+        self.edit(RELEASE_COMPOSE, "${NEON_IMAGE:-" + NEON + "}", "${NEON_IMAGE:-ghcr.io/neondatabase/neon@" + OTHER + "}")
+        self.assertFails(RELEASE_COMPOSE)
 
     def test_readme_table_edited_by_hand_fails(self):
         self.edit(README, NEON, "ghcr.io/neondatabase/neon@" + OTHER)
@@ -305,6 +335,7 @@ class OverrideEnvsStillWork(Tree):
             text = self.read(rel)
             self.assertIn("x-neon-image: &neon-image ${NEON_IMAGE:-" + NEON + "}", text)
             self.assertIn("x-compute-image: &compute-image ${COMPUTE_IMAGE:-" + COMPUTE17 + "}", text)
+        self.assertIn("    image: ${NEON_IMAGE:-" + NEON + "}", self.read(RELEASE_COMPOSE))
 
     def test_compose_config_resolves_overrides(self):
         cli = compose_cli()

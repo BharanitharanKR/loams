@@ -74,7 +74,7 @@ function Section({
   return (
     <section aria-labelledby={id} className="flex flex-col gap-3">
       <div className="flex flex-wrap items-center gap-2">
-        <h2 id={id} className="m-0 font-mono text-[0.7rem] text-faint uppercase tracking-[0.14em]">
+        <h2 id={id} className="m-0 text-micro font-medium text-faint">
           {title}
         </h2>
         {actions && <div className="ml-auto flex flex-wrap items-center gap-2">{actions}</div>}
@@ -439,7 +439,7 @@ export function GroupPage({
     <div className="mx-auto flex w-full max-w-[1200px] flex-col gap-6 px-6 py-6">
       <header className="flex flex-col gap-2">
         <div className="flex flex-wrap items-center gap-2 text-[0.78rem] text-muted">
-          <Layers size={14} aria-hidden="true" className="text-accent" />
+          <Layers size={14} aria-hidden="true" className="text-accent-fg" />
           <span>Run group</span>
           <span aria-hidden="true">·</span>
           <span>

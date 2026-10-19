@@ -2,26 +2,51 @@
 // docs/design/studio-vendor-inventory.md group (k); docs/design/console-ui-stack.md 1–2).
 
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
-import { type ReactElement, useState } from 'react';
+import { type ReactElement, useEffect, useState } from 'react';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
+  Alert,
   AlertDialog,
+  AlertTitle,
+  Badge,
   Button,
+  CheckboxControl,
   Collapsible,
   CollapsiblePanel,
   CollapsibleTrigger,
   type CommandItem,
   CommandPalette,
+  ConfirmDialog,
+  Dialog,
+  InputControl,
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
   Kbd,
   KbdGroup,
   Menu,
+  MenuCheckboxItem,
+  MenuGroupLabel,
   MenuItem,
+  MenuPart,
+  MenuPartSeparator,
+  MenuPopup,
+  MenuRadioGroup,
+  MenuRadioItem,
+  MenuRoot,
+  MenuShortcut,
+  MenuTrigger,
   MiddleTruncate,
+  PopoverPopup,
+  PopoverRoot,
+  PopoverTitle,
+  PopoverTrigger,
+  PreviewCard,
+  PreviewCardPopup,
+  PreviewCardTrigger,
   ResizeHandle,
   ScrollArea,
+  Separator,
   Sheet,
   Sidebar,
   SidebarContent,
@@ -32,11 +57,20 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   Skeleton,
+  SkeletonList,
   Spinner,
   Switch,
   splitForMiddleTruncate,
+  Toaster,
+  ToastProvider,
   Toggle,
   ToggleGroup,
+  TooltipPopup,
+  TooltipProvider,
+  TooltipRoot,
+  TooltipTrigger,
+  TypedConfirmDialog,
+  useToast,
 } from '../src';
 
 afterEach(cleanup);
@@ -56,9 +90,9 @@ const LITERAL =
   /(?<![\w&/-])#(?:[0-9a-f]{8}|[0-9a-f]{6}|[0-9a-f]{3,4})(?![\w-])|\b(?:rgba?|hsla?|hwb|lab|lch|oklab|oklch)\(\s*[-\d.]/i;
 /** Tailwind's default palette, cleared in the console's tailwind.css, and T3 Code's own names. */
 const PALETTE =
-  /^(?:[a-z-]+:)*(?:bg|text|border|ring|fill|stroke|outline|shadow|from|to|via|divide|accent|caret|decoration)-(?:(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d|white$|black$|foreground|background|primary|secondary|popover|sidebar|destructive|input$|muted-foreground)/;
-/** Corners are hard or a pill (`rounded-none`, `rounded-sm`, `rounded-pill`); nothing else. */
-const RADIUS = /^(?:[a-z-]+:)*rounded(?:-[a-z]+)?-(?:xs|md|lg|xl|2xl|3xl|full)$|^rounded$/;
+  /^(?:[a-z-]+:)*(?:bg|text|border|ring|fill|stroke|outline|shadow|from|to|via|divide|accent|caret|decoration)-(?:(?:slate|gray|zinc|neutral|stone|red|orange|amber|yellow|lime|green|emerald|teal|cyan|sky|blue|indigo|violet|purple|fuchsia|pink|rose)-\d|white$|black$|foreground|background|primary|secondary|popover|sidebar|destructive|muted-foreground|placeholder|success|warning|card)/;
+/** Corners come from the scale (D1073): none, xs, sm, md, lg, xl, pill, panel. */
+const RADIUS = /^(?:[a-z-]+:)*rounded(?:-[a-z]+)?-(?:2xl|3xl|full)$|^rounded$/;
 
 /** Every class in the document and every inline style that breaks the token rule. */
 function offTokenClasses(root: ParentNode = document.body): string[] {
@@ -79,6 +113,31 @@ const ITEMS: CommandItem[] = [
   { id: 'open', text: 'Open project', group: 'Projects' },
   { id: 'settings', text: 'Settings', group: 'Go to' },
 ];
+
+/** Every toast type, an action, a secondary action and details, in one stack. */
+function RaiseToasts() {
+  const toast = useToast();
+  useEffect(() => {
+    for (const type of ['success', 'error', 'warning', 'info', 'loading'] as const) {
+      toast.add({ title: `A ${type} toast`, description: 'Details', type });
+    }
+    toast.add({
+      title: 'Table dropped',
+      actionProps: { children: 'Undo' },
+      data: { secondaryActionProps: { children: 'View' }, expandableContent: 'orders' },
+    });
+  }, [toast]);
+  return null;
+}
+
+function ToastSpecimen() {
+  return (
+    <ToastProvider>
+      <RaiseToasts />
+      <Toaster />
+    </ToastProvider>
+  );
+}
 
 const SPECIMENS: [string, () => ReactElement][] = [
   [
@@ -174,6 +233,110 @@ const SPECIMENS: [string, () => ReactElement][] = [
       </Sheet>
     ),
   ],
+  ['Button', () => <Button variant="primary">x</Button>],
+  ['Badge', () => <Badge variant="info">x</Badge>],
+  ['InputControl', () => <InputControl aria-label="x" />],
+  ['CheckboxControl', () => <CheckboxControl aria-label="x" />],
+  [
+    'Alert',
+    () => (
+      <Alert variant="danger">
+        <AlertTitle>x</AlertTitle>
+      </Alert>
+    ),
+  ],
+  ['Separator', () => <Separator />],
+  [
+    'Dialog',
+    () => (
+      <Dialog open onClose={() => {}} title="t" footer={<Button>ok</Button>}>
+        b
+      </Dialog>
+    ),
+  ],
+  [
+    'PopoverPopup',
+    () => (
+      <PopoverRoot open>
+        <PopoverTrigger>Filters</PopoverTrigger>
+        <PopoverPopup>
+          <PopoverTitle>Filters</PopoverTitle>
+          body
+        </PopoverPopup>
+      </PopoverRoot>
+    ),
+  ],
+  [
+    'MenuPopup',
+    () => (
+      <MenuRoot open>
+        <MenuTrigger>Sort</MenuTrigger>
+        <MenuPopup>
+          <MenuRadioGroup value="name">
+            <MenuGroupLabel>Order</MenuGroupLabel>
+            <MenuRadioItem value="name">Name</MenuRadioItem>
+            <MenuRadioItem value="date">Date</MenuRadioItem>
+          </MenuRadioGroup>
+          <MenuPartSeparator />
+          <MenuCheckboxItem checked>Archived</MenuCheckboxItem>
+          <MenuCheckboxItem checked variant="switch">
+            Live
+          </MenuCheckboxItem>
+          <MenuPart variant="danger">
+            Delete <MenuShortcut>⌘⌫</MenuShortcut>
+          </MenuPart>
+        </MenuPopup>
+      </MenuRoot>
+    ),
+  ],
+  [
+    'TooltipPopup',
+    () => (
+      <TooltipProvider>
+        <TooltipRoot open>
+          <TooltipTrigger render={<button type="button">i</button>} />
+          <TooltipPopup>Inspector</TooltipPopup>
+        </TooltipRoot>
+      </TooltipProvider>
+    ),
+  ],
+  [
+    'PreviewCardPopup',
+    () => (
+      <PreviewCard open>
+        <PreviewCardTrigger href="#/data">orders</PreviewCardTrigger>
+        <PreviewCardPopup>12 columns</PreviewCardPopup>
+      </PreviewCard>
+    ),
+  ],
+  ['Toaster', () => <ToastSpecimen />],
+  [
+    'ConfirmDialog',
+    () => (
+      <ConfirmDialog
+        open
+        onClose={() => {}}
+        onConfirm={() => {}}
+        object="the branch fix-cache"
+        impact="Its 3 commits are deleted."
+        confirm="Delete branch"
+      />
+    ),
+  ],
+  [
+    'TypedConfirmDialog',
+    () => (
+      <TypedConfirmDialog
+        open
+        onClose={() => {}}
+        onConfirm={() => {}}
+        object="the table orders on production"
+        impact="Production data is deleted."
+        phrase="production"
+        confirm="Drop table"
+      />
+    ),
+  ],
 ];
 
 describe('renders_with_tokens_only', () => {
@@ -188,11 +351,11 @@ describe('renders_with_tokens_only', () => {
   it('the scan catches what it is meant to', () => {
     const div = document.createElement('div');
     div.innerHTML =
-      '<span class="bg-red-500 rounded-lg text-foreground hover:bg-[#fff] rounded-full"></span>' +
-      '<span class="bg-surface rounded-pill rounded-none text-muted"></span>';
+      '<span class="bg-red-500 rounded-2xl text-foreground hover:bg-[#fff] rounded-full"></span>' +
+      '<span class="bg-surface rounded-pill rounded-md border-input rounded-panel text-muted"></span>';
     expect(offTokenClasses(div)).toEqual([
       'bg-red-500',
-      'rounded-lg',
+      'rounded-2xl',
       'text-foreground',
       'hover:bg-[#fff]',
       'rounded-full',
@@ -609,6 +772,14 @@ describe('Spinner, Skeleton, Kbd, ScrollArea', () => {
   it('a skeleton is hidden from assistive technology', () => {
     const { container } = render(<Skeleton className="h-4" />);
     expect(container.firstElementChild?.getAttribute('aria-hidden')).toBe('true');
+  });
+
+  it('a skeleton list is one labelled status over hidden bars (UX-4)', () => {
+    const { container, rerender } = render(<SkeletonList label="Loading collections" rows={3} />);
+    const status = screen.getByRole('status', { name: 'Loading collections' });
+    expect(status.querySelectorAll('[data-slot="skeleton"][aria-hidden="true"]')).toHaveLength(3);
+    rerender(<SkeletonList label="Loading the graph" layout="cards" />);
+    expect(container.querySelectorAll('[data-slot="skeleton"].h-24')).toHaveLength(4);
   });
 
   it('kbd nests keys inside a group', () => {

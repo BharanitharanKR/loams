@@ -48,6 +48,39 @@ export function Notice({
   );
 }
 
+/** The sentence every fixture-backed page leads with. */
+export const SAMPLE_DATA_TEXT = 'this page is not connected to your Loams server yet.';
+
+/**
+ * The one notice every page that renders demonstration data shows. Pass `children` for what is
+ * specific to the page (what changes only the sample); the lead sentence stays the same.
+ */
+export function SampleDataNotice({ children }: { children?: ReactNode }) {
+  return (
+    <div className="loams-sample-data" role="status" data-sample-data="">
+      <strong>Sample data</strong>
+      <span>
+        {' '}
+        — {SAMPLE_DATA_TEXT}
+        {children && <> {children}</>}
+      </span>
+    </div>
+  );
+}
+
+/** The compact form, for a heading or a single section. */
+export function SampleDataBadge({ title }: { title?: string }) {
+  return (
+    <span
+      className="loams-sample-data-badge"
+      data-sample-data=""
+      title={title ?? `Sample data: ${SAMPLE_DATA_TEXT}`}
+    >
+      Sample data
+    </span>
+  );
+}
+
 /** A command or a value to copy. */
 export function Snippet({
   children,

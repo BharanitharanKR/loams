@@ -89,7 +89,7 @@ export const ThreadHeader = memo(function ThreadHeader({
         {branch ? (
           <Chip title="Branch">
             <GitBranch className="size-3 shrink-0" aria-hidden />
-            <span className="truncate font-mono">{branch}</span>
+            <span className={/* mono-ok: id */ "truncate font-mono"}>{branch}</span>
           </Chip>
         ) : null}
         {totalTokens !== undefined ? (

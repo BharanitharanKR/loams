@@ -13,7 +13,9 @@ import {
   Field,
   Input,
   Notice,
+  plainError,
   Select,
+  SkeletonList,
   StatusTag,
   Table,
   Textarea,
@@ -26,7 +28,9 @@ const PAGE = 50;
 export const DEPLOY_TIP = 'Not yet available (R1 Task 13)';
 
 export function errorText(e: unknown): string {
-  return e instanceof ConnectError ? e.rawMessage : e instanceof Error ? e.message : String(e);
+  return plainError(
+    e instanceof ConnectError ? e.rawMessage : e instanceof Error ? e.message : String(e),
+  );
 }
 
 /**
@@ -45,15 +49,11 @@ const isNotRunning = (e: unknown) =>
 const isUnserved = (e: unknown) => e instanceof ConnectError && e.code === Code.Unimplemented;
 
 const Mono = ({ children }: { children: ReactNode }) => (
-  <span className="font-mono text-xs">{children}</span>
+  <span className={/* mono-ok: id */ 'font-mono text-xs'}>{children}</span>
 );
 
 function Loading({ what }: { what: string }) {
-  return (
-    <p className="text-muted" role="status">
-      Loading {what}...
-    </p>
-  );
+  return <SkeletonList label={`Loading ${what}`} rows={5} />;
 }
 
 function Err({ title, message }: { title: string; message: string }) {
@@ -218,7 +218,7 @@ function Controls({
         {(p) => (
           <Input
             {...p}
-            className="font-mono"
+            className={/* mono-ok: code */ 'font-mono'}
             placeholder='["alice"]'
             value={sel.eq}
             onChange={(e) => onChange({ ...sel, eq: e.target.value })}
@@ -485,7 +485,7 @@ export function MutateTab({ api, tables, sel, onGone }: TabProps) {
               <Textarea
                 {...p}
                 rows={5}
-                className="font-mono"
+                className={/* mono-ok: code */ 'font-mono'}
                 value={insertFields}
                 onChange={(e) => setInsertFields(e.target.value)}
               />
@@ -513,7 +513,7 @@ export function MutateTab({ api, tables, sel, onGone }: TabProps) {
             {(p) => (
               <Input
                 {...p}
-                className="font-mono"
+                className={/* mono-ok: id */ 'font-mono'}
                 value={patchId}
                 onChange={(e) => setPatchId(e.target.value)}
               />
@@ -524,7 +524,7 @@ export function MutateTab({ api, tables, sel, onGone }: TabProps) {
               <Textarea
                 {...p}
                 rows={3}
-                className="font-mono"
+                className={/* mono-ok: code */ 'font-mono'}
                 value={patchFields}
                 onChange={(e) => setPatchFields(e.target.value)}
               />
@@ -551,7 +551,7 @@ export function MutateTab({ api, tables, sel, onGone }: TabProps) {
             {(p) => (
               <Input
                 {...p}
-                className="font-mono"
+                className={/* mono-ok: id */ 'font-mono'}
                 value={deleteId}
                 onChange={(e) => setDeleteId(e.target.value)}
               />
@@ -718,8 +718,8 @@ export function LivePage({
   }, [loaded.state, retryMs]);
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-6xl">
-      <header className="flex items-start justify-between gap-4">
+    <div className="lc-page">
+      <header className="lc-page-head flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="m-0">Live</h1>
           <p className="text-muted m-0">
@@ -795,7 +795,7 @@ export function LivePage({
                       type="button"
                       className={
                         t.name === sel.table
-                          ? 'bg-transparent border-0 p-0 text-left cursor-pointer text-accent font-medium'
+                          ? 'bg-transparent border-0 p-0 text-left cursor-pointer text-accent-fg font-medium'
                           : 'bg-transparent border-0 p-0 text-left cursor-pointer text-ink'
                       }
                       onClick={() => setSel({ table: t.name, index: '', eq: '' })}

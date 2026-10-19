@@ -24,6 +24,7 @@ depends=('gcc-libs')
 optdepends=(
   'qdrant: the Qdrant gateway (`loams dev` expects it on 127.0.0.1:6333)'
   'elasticsearch: the Elasticsearch gateway (`loams dev` expects it on 127.0.0.1:9200)'
+  'git: git clone, fetch and push to loams:: URLs through git-remote-loams'
 )
 provides=('loams-server')
 backup=('etc/default/loams')
@@ -41,6 +42,9 @@ build() {
   cd "$srcdir/loams-$pkgver"
   # --locked so a stale Cargo.lock fails the build instead of silently updating.
   cargo build --release --locked -j "$(nproc)" -p loams --bin loams
+  # git's remote helper for loams:: URLs, as the .deb/.rpm/.pkg.tar.zst ship it.
+  # Its own call, so its dependencies cannot change the server's feature set.
+  cargo build --release --locked -j "$(nproc)" -p loams-git-remote --bin git-remote-loams
 }
 
 # check() runs the crates' own tests. It is commented out on purpose: a full
@@ -56,6 +60,7 @@ package() {
   cd "$srcdir/loams-$pkgver"
 
   install -Dm755 "target/release/loams" "$pkgdir/usr/bin/loams"
+  install -Dm755 "target/release/git-remote-loams" "$pkgdir/usr/bin/git-remote-loams"
 
   install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
   install -Dm644 NOTICE "$pkgdir/usr/share/licenses/$pkgname/NOTICE"

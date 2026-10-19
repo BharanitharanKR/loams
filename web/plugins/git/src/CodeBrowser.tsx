@@ -196,7 +196,9 @@ export function CodeBrowser(p: { client: GitClient; ws: WsRef; n?: number }) {
           <div
             role="tree"
             aria-label={`Files${n !== undefined ? ` at snapshot ${n}` : ''}`}
-            className="m-0 max-h-[560px] overflow-y-auto p-0 font-mono text-sm"
+            className={
+              /* mono-ok: path */ 'm-0 max-h-[560px] overflow-y-auto p-0 font-mono text-sm'
+            }
           >
             {rows.map((row, i) => {
               const { entry, depth } = row;
@@ -238,7 +240,10 @@ export function CodeBrowser(p: { client: GitClient; ws: WsRef; n?: number }) {
                   </span>
                   {entry.env && <Badge title="Env file: values are redacted">env</Badge>}
                   {entry.change && (
-                    <span className="ml-auto text-xs text-accent" title={CHANGE_TEXT[entry.change]}>
+                    <span
+                      className="ml-auto text-xs text-accent-fg"
+                      title={CHANGE_TEXT[entry.change]}
+                    >
                       <span aria-hidden="true">{CHANGE_LABEL[entry.change]}</span>
                       <span className="sr-only">, {CHANGE_TEXT[entry.change]}</span>
                     </span>
@@ -268,7 +273,7 @@ function FileView(p: {
   const isEnv = /^env\/.*\.env$/.test(p.file.path);
   return (
     <section className="flex min-w-0 flex-col gap-2" aria-label={`File ${p.file.path}`}>
-      <h3 className="m-0 flex items-center gap-2 font-mono text-sm">
+      <h3 className={/* mono-ok: path */ 'm-0 flex items-center gap-2 font-mono text-sm'}>
         {p.file.path}
         {p.content && <span className="text-xs text-muted">{formatBytes(p.content.size)}</span>}
       </h3>

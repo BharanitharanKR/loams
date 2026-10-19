@@ -187,6 +187,7 @@ public sealed class LoamsClient : IDisposable, IAsyncDisposable
 
         Instance = new InstanceModule(Invoker);
         Live = new LiveModule(Invoker);
+        LiveAdmin = new LiveAdminModule(Invoker);
         Tables = new TablesModule(Invoker);
         Approvals = new ApprovalsModule(Invoker);
         Devices = new DevicesModule(Invoker);
@@ -198,6 +199,7 @@ public sealed class LoamsClient : IDisposable, IAsyncDisposable
         {
             ["instance"] = Instance,
             ["live"] = Live,
+            ["live.admin"] = LiveAdmin,
             ["tables"] = Tables,
             ["approvals"] = Approvals,
             ["devices"] = Devices,
@@ -217,6 +219,9 @@ public sealed class LoamsClient : IDisposable, IAsyncDisposable
     /// its wire contract may still change (§44 §10.3).
     /// </summary>
     public LiveModule Live { get; }
+
+    /// <summary><c>loams.live.admin</c> — the Live app directory (LV1 Task 13).</summary>
+    public LiveAdminModule LiveAdmin { get; }
 
     /// <summary><c>loams.tables</c> — the table half of <c>loams.live.v1</c>.</summary>
     public TablesModule Tables { get; }

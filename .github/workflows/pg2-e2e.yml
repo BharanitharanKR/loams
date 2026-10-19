@@ -14,8 +14,9 @@
 #
 # pg-control-deploy-neon (Task 9, the PG2a exit): e2e_create_project_and_branch,
 # the service and the reconciler against deploy/loams-postgres-dev's
-# pageserver and a loams-wal (the stack's stock safekeeper refuses
-# loams-wal's timeline create, R2.11).
+# pageserver and a loams-wal; then again against the stack's stock
+# safekeeper1, which the release stack's pg-control uses (0.1.0 blocker B2:
+# the WAL client sends the stock safekeeper's `mconf` and reads its head).
 #
 # pg-control-compose-runtime (Task 10): it_compose_compute_answers_select_1,
 # a compute the compose runtime starts on deploy/loams-postgres-dev's network
@@ -30,6 +31,19 @@ name: Postgres e2e
 
 on:
   workflow_dispatch:
+  # nf1-candidate.yml (NF1 Task 16, G3 of the fork's gate): these jobs on a
+  # release candidate's images, with the pin file and its consumers rewritten
+  # in the job's checkout.
+  workflow_call:
+    inputs:
+      candidate-pins:
+        description: "A Loams Postgres release candidate's pin document (TOML)"
+        type: string
+        default: ""
+      candidate-fork-commit:
+        description: "The ostrium-labs/loams-postgres commit the candidate was built from"
+        type: string
+        default: ""
   # Full tier: pull requests into main (the release gate); the nightly dispatches it on dev.
   pull_request:
     branches: [main]
@@ -61,13 +75,15 @@ permissions:
   contents: read
 
 concurrency:
-  group: pg2-e2e-${{ github.ref }}
+  # A candidate run (workflow_call) is its own group, so it never cancels or
+  # waits on the branch's own runs.
+  group: pg2-e2e-${{ inputs.candidate-pins && format('candidate-{0}', github.run_id) || github.ref }}
   cancel-in-progress: true
 
 env:
   # The server headers' source: images.storage in deploy/pins/loams-postgres-images.toml,
   # written by scripts/nf1/pins.py (as in pg2.yml; NF1 Task 2).
-  PG_HEADERS_IMAGE: ghcr.io/neondatabase/neon@sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f
+  PG_HEADERS_IMAGE: ghcr.io/ostrium-labs/loams-postgres-storage@sha256:4dcec4cbef637b92b1088ea2c0bc857f3b5ef4318f02e8d2d4a0f9263ed4140e
   CARGO_NET_GIT_FETCH_WITH_CLI: "true"
 
 jobs:
@@ -78,6 +94,15 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+      - name: the candidate's pins (nf1-candidate.yml, NF1 Task 16)
+        if: inputs.candidate-pins
+        env:
+          CANDIDATE_PINS: ${{ inputs.candidate-pins }}
+          CANDIDATE_FORK_COMMIT: ${{ inputs.candidate-fork-commit }}
+        run: |
+          printf '%s\n' "$CANDIDATE_PINS" > "$RUNNER_TEMP/candidate.toml"
+          python3 -I scripts/nf1/candidate.py apply --doc "$RUNNER_TEMP/candidate.toml" \
+            --fork-commit "$CANDIDATE_FORK_COMMIT" --env "$GITHUB_ENV"
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       # The cache pg2.yml's neon-client job saves (on dev); this job only reads it.
@@ -122,6 +147,15 @@ jobs:
       - uses: actions/checkout@v7
         with:
           submodules: false
+      - name: the candidate's pins (nf1-candidate.yml, NF1 Task 16)
+        if: inputs.candidate-pins
+        env:
+          CANDIDATE_PINS: ${{ inputs.candidate-pins }}
+          CANDIDATE_FORK_COMMIT: ${{ inputs.candidate-fork-commit }}
+        run: |
+          printf '%s\n' "$CANDIDATE_PINS" > "$RUNNER_TEMP/candidate.toml"
+          python3 -I scripts/nf1/candidate.py apply --doc "$RUNNER_TEMP/candidate.toml" \
+            --fork-commit "$CANDIDATE_FORK_COMMIT" --env "$GITHUB_ENV"
       # The neon image is about 5 GB and the decoder workspace's build several
       # more; the runner's preinstalled toolchains are not needed.
       - name: free disk
@@ -183,6 +217,15 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
+      - name: the candidate's pins (nf1-candidate.yml, NF1 Task 16)
+        if: inputs.candidate-pins
+        env:
+          CANDIDATE_PINS: ${{ inputs.candidate-pins }}
+          CANDIDATE_FORK_COMMIT: ${{ inputs.candidate-fork-commit }}
+        run: |
+          printf '%s\n' "$CANDIDATE_PINS" > "$RUNNER_TEMP/candidate.toml"
+          python3 -I scripts/nf1/candidate.py apply --doc "$RUNNER_TEMP/candidate.toml" \
+            --fork-commit "$CANDIDATE_FORK_COMMIT" --env "$GITHUB_ENV"
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       # The cache pg2.yml's pg-control job saves (on dev); this job only reads it.
@@ -198,24 +241,32 @@ jobs:
         working-directory: deploy/loams-postgres-dev
         run: |
           for i in 1 2 3; do
-            docker compose pull rustfs create-bucket storage_broker pageserver && exit 0
+            docker compose pull rustfs create-bucket storage_broker pageserver safekeeper1 && exit 0
             sleep $((i * 15))
           done
           exit 1
-      - name: deploy/loams-postgres-dev storage, and loams-wal
+      - name: deploy/loams-postgres-dev storage (with its stock safekeeper1), and loams-wal
         working-directory: deploy/loams-postgres-dev
         run: |
-          docker compose up -d --pull never rustfs create-bucket storage_broker pageserver
+          docker compose up -d --pull never rustfs create-bucket storage_broker pageserver safekeeper1
           nohup "$GITHUB_WORKSPACE/target/debug/loams-wal" --store mem \
             --listen-pg 127.0.0.1:5455 --listen-http 127.0.0.1:7677 > "${{ runner.temp }}/loams-wal.log" 2>&1 &
           for _ in $(seq 1 120); do
-            curl -sf localhost:9898/v1/status && curl -sf localhost:7677/v1/status && break
+            curl -sf localhost:9898/v1/status && curl -sf localhost:7677/v1/status \
+              && curl -sf localhost:7676/v1/status && break
             sleep 1
           done
-          curl -sf localhost:9898/v1/status && curl -sf localhost:7677/v1/status
+          curl -sf localhost:9898/v1/status && curl -sf localhost:7677/v1/status && curl -sf localhost:7676/v1/status
       - name: e2e_create_project_and_branch
         env:
           NEON_WAL: http://127.0.0.1:7677
+        run: cargo test -p loams-pg-control --locked --test e2e_deploy_neon -- --ignored
+      # 0.1.0 blocker B2: the release stack points pg-control's --wal at the
+      # stock safekeeper1 of the pinned storage image, not at loams-wal. The
+      # same CreateProject, branch and delete, against it.
+      - name: e2e_create_project_and_branch on the stack's stock safekeeper (B2)
+        env:
+          NEON_WAL: http://127.0.0.1:7676
         run: cargo test -p loams-pg-control --locked --test e2e_deploy_neon -- --ignored
       - name: logs
         if: failure()
@@ -235,6 +286,15 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
+      - name: the candidate's pins (nf1-candidate.yml, NF1 Task 16)
+        if: inputs.candidate-pins
+        env:
+          CANDIDATE_PINS: ${{ inputs.candidate-pins }}
+          CANDIDATE_FORK_COMMIT: ${{ inputs.candidate-fork-commit }}
+        run: |
+          printf '%s\n' "$CANDIDATE_PINS" > "$RUNNER_TEMP/candidate.toml"
+          python3 -I scripts/nf1/candidate.py apply --doc "$RUNNER_TEMP/candidate.toml" \
+            --fork-commit "$CANDIDATE_FORK_COMMIT" --env "$GITHUB_ENV"
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
@@ -277,6 +337,15 @@ jobs:
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v7
+      - name: the candidate's pins (nf1-candidate.yml, NF1 Task 16)
+        if: inputs.candidate-pins
+        env:
+          CANDIDATE_PINS: ${{ inputs.candidate-pins }}
+          CANDIDATE_FORK_COMMIT: ${{ inputs.candidate-fork-commit }}
+        run: |
+          printf '%s\n' "$CANDIDATE_PINS" > "$RUNNER_TEMP/candidate.toml"
+          python3 -I scripts/nf1/candidate.py apply --doc "$RUNNER_TEMP/candidate.toml" \
+            --fork-commit "$CANDIDATE_FORK_COMMIT" --env "$GITHUB_ENV"
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       # The cache pg2.yml's pg-control job saves (on dev); this job only reads it.

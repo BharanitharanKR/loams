@@ -21,7 +21,7 @@ use loams_agentd_proto::{
     AgentEvent, DoneStatus, HarnessId, Model, ReasoningLevel, RunRequest, SandboxLevel,
     SteeringMode,
 };
-use loams_agentd_sessions::{EngineCore, HarnessRegistry};
+use loams_agentd_sessions::{ApprovalSettings, EngineCore, HarnessRegistry};
 
 const CHAT: &str = "chat-born-gen2-race";
 
@@ -79,7 +79,13 @@ impl Harness for OneLinerHarness {
 fn assemble(dir: &std::path::Path) -> EngineCore {
     let registry = HarnessRegistry::new();
     registry.register(Arc::new(OneLinerHarness));
-    EngineCore::assemble(dir, Arc::new(registry), HarnessId::Mock).expect("engine core assembles")
+    EngineCore::assemble_with_approvals(
+        dir,
+        Arc::new(registry),
+        HarnessId::Mock,
+        ApprovalSettings::full_access_default(),
+    )
+    .expect("engine core assembles")
 }
 
 async fn wait_for<F>(mut predicate: F, what: &str)

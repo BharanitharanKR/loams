@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Installs the Loams preview stack on a machine of your own (BYOC) over SSH:
+# Installs the Loams stack on a machine of your own (BYOC) over SSH:
 # installs Docker if it is missing, copies the compose bundle, writes .env
 # (asking for the Tailscale auth key) and starts the stack. The
 # machine needs no inbound port: the engine is reached over your tailnet.
@@ -11,12 +11,12 @@
 #   --dir DIR               install directory on the host, relative to the SSH
 #                           user's home unless absolute [default: loams]
 #   --authkey KEY           tailnet auth key [default: $TS_AUTHKEY, else asked]
-#   --login-server URL      Headscale URL (coming soon, unsupported in 0.1.0-preview.2);
+#   --login-server URL      Headscale URL (coming soon, unsupported in 0.1.0);
 #                           [default: $TS_LOGIN_SERVER, else empty = Tailscale]
-#   --headscale URL         (coming soon, unsupported in 0.1.0-preview.2) also run Headscale on the host (`--profile
+#   --headscale URL         (coming soon, unsupported in 0.1.0) also run Headscale on the host (`--profile
 #                           headscale`) at this public URL, mint the auth key
 #                           there, and serve the engine over http
-#   --version V             image tag [default: 0.1.0-preview.2]
+#   --version V             image tag [default: 0.1.0]
 #   --all                   start every service, the Postgres stack included
 #   --services "A B"        start these services (and what they depend on)
 #                           [default: loams tailscale tidb]
@@ -36,7 +36,7 @@ dir="loams"
 authkey="${TS_AUTHKEY:-}"
 login_server="${TS_LOGIN_SERVER-}"
 headscale=""
-version="0.1.0-preview.2"
+version="0.1.0"
 all=0
 services="loams tailscale tidb"
 reconfigure=0
@@ -121,7 +121,7 @@ if ssh_cmd "test -f $(printf '%q' "$dir")/release/.env" && ((!reconfigure)); the
 else
   [[ -n "$headscale" ]] && login_server="$headscale"
   if [[ -n "$login_server" ]]; then
-    say "warning: Headscale is coming soon and unsupported in 0.1.0-preview.2; the hosted console cannot reach an engine served over its http"
+    say "warning: Headscale is coming soon and unsupported in 0.1.0; the hosted console cannot reach an engine served over its http"
   fi
   if [[ -z "$authkey" && -z "$headscale" && $assume_yes -eq 0 ]]; then
     read -r -s -p "Tailnet auth key (TS_AUTHKEY; empty to log in from the sidecar's log): " authkey

@@ -94,6 +94,14 @@ public final class CallOptions {
     }
 
     /**
+     * Address the Live app {@code name} (the {@code loams-live-app} header, LV1 Task 13). To address
+     * one app on every call, send the header from your {@code HttpClient}.
+     */
+    public static CallOptions withLiveApp(String name) {
+        return withHeader(dev.loams.facade.Facade.LIVE_APP_HEADER, name);
+    }
+
+    /**
      * Read at a consistency token, which is how a caller who just wrote reads its own write
      * (R4).
      */

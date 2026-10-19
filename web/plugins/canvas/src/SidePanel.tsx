@@ -72,7 +72,7 @@ export function SidePanel({
           onClick={() => onFocusService(s.id)}
           aria-label={`Go to ${kindInfo(s.kind).label} ${s.name}`}
         >
-          <span className="font-mono">{s.name}</span>
+          <span className={/* mono-ok: id */ 'font-mono'}>{s.name}</span>
         </Button>
         <span className="text-xs text-faint">
           {kindInfo(s.kind).label} · {relation(e, dir)}
@@ -99,7 +99,7 @@ export function SidePanel({
             id={headingId}
             ref={heading}
             tabIndex={-1}
-            className="m-0 truncate font-mono text-base"
+            className={/* mono-ok: id */ 'm-0 truncate font-mono text-base'}
           >
             {service.name}
           </h2>
@@ -118,7 +118,7 @@ export function SidePanel({
           {service.details.map((d) => (
             <div key={d.label} className="contents">
               <dt className="text-muted">{d.label}</dt>
-              <dd className="m-0 font-mono">{d.value}</dd>
+              <dd className={/* mono-ok: id */ 'm-0 font-mono'}>{d.value}</dd>
             </div>
           ))}
         </dl>

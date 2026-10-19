@@ -122,6 +122,8 @@ fn sparse_retrievers_use_the_json_form() {
         sparse_vectors: BTreeMap::new(),
         highlight: BTreeMap::new(),
         fields: BTreeMap::new(),
+        neighbors: Vec::new(),
+        graph: None,
     };
     let value = obj(to(&hit));
     assert!(!value.contains_key("sparse_vectors"), "{value:?}");
@@ -324,6 +326,17 @@ fn service_errors_round_trip_their_bodies() {
             },
             "resource_exhausted",
             429,
+        ),
+        (
+            ServiceError::PermissionDenied {
+                message: "Search.expand on graph:acme/kg needs reader: the caller holds no \
+                          relation on graph:acme/kg"
+                    .to_string(),
+                need: "reader".to_string(),
+                object: "graph:acme/kg".to_string(),
+            },
+            "permission_denied",
+            403,
         ),
     ];
     for (err, code, status) in cases {
@@ -727,22 +740,27 @@ fn hybrid_body_maps_to_the_ir() {
     };
     assert_eq!(request, expected);
 
+    // GR1 Task 20: the stages parse in the IR's JSON.
     let mut with_expand = obj(body.clone());
     with_expand.insert("expand".to_string(), json!({"graph": "kg", "hops": 2}));
+    with_expand.insert("rerank".to_string(), json!({"inherit": {"decay": 0.7}}));
+    let parsed = json::hybrid::parse_query_body(Value::Object(with_expand), NOW_MS)
+        .expect("expand and rerank parse");
+    let expand = parsed.expand.expect("expand");
     assert_eq!(
-        json::hybrid::parse_query_body(Value::Object(with_expand), NOW_MS),
-        Err(ServiceError::InvalidArgument(
-            "expand needs graphs, which arrive in M3".to_string()
-        ))
+        (expand.graph.as_str(), expand.hops, expand.seeds),
+        ("kg", 2, 10)
+    );
+    assert_eq!(
+        parsed.rerank,
+        Some(loams_query::expand::Rerank::Inherit { decay: 0.7 })
     );
     let mut with_rerank = obj(body.clone());
     with_rerank.insert("rerank".to_string(), json!({"top_n": 20}));
-    assert_eq!(
+    assert!(matches!(
         json::hybrid::parse_query_body(Value::Object(with_rerank), NOW_MS),
-        Err(ServiceError::InvalidArgument(
-            "rerank arrives in M3".to_string()
-        ))
-    );
+        Err(ServiceError::InvalidArgument(message)) if message.starts_with("invalid rerank")
+    ));
     let mut unknown = obj(body.clone());
     unknown.insert("limitt".to_string(), json!(3));
     assert_eq!(
@@ -1221,6 +1239,8 @@ prop_compose! {
             highlight,
             group_by: group_by.map(|(field, group_size, limit)| GroupBy { field, group_size, limit }),
             track_total_hits,
+            expand: None,
+            rerank: None,
         }
     }
 }
@@ -1267,6 +1287,8 @@ fn hit() -> impl Strategy<Value = Hit> {
                 sparse_vectors,
                 highlight,
                 fields,
+                neighbors: Vec::new(),
+                graph: None,
             },
         )
 }
@@ -1289,6 +1311,13 @@ fn service_error() -> impl Strategy<Value = ServiceError> {
             ServiceError::ResourceExhausted {
                 message,
                 retry_after_ms,
+            }
+        }),
+        (".{0,8}", "[a-z_]{0,8}", ".{0,8}").prop_map(|(message, need, object)| {
+            ServiceError::PermissionDenied {
+                message,
+                need,
+                object,
             }
         }),
     ]
@@ -1330,6 +1359,7 @@ fn search_response() -> impl Strategy<Value = SearchResponse> {
                 }),
                 read_token,
                 hot_used,
+                expand: None,
             },
         )
 }
@@ -1539,6 +1569,7 @@ fn search_request_defaults_fill_missing_keys() {
         groups: None,
         read_token: ConsistencyToken::default(),
         hot_used: BTreeSet::new(),
+        expand: None,
     };
     assert!(!obj(to(&response)).contains_key("hot_used"));
     assert_eq!(to(&response)["read_token"], json!("v1:"));

@@ -1,6 +1,6 @@
 // The shell's command palette (SD1 Task 24; §53 §4.5, §5.10; T3-6): Mod+K in both
 // modes, built on @loams/ui's CommandPalette. Plugins contribute through the
-// `palette.command` slot; the current mode's commands come first and the other
+// `shell.palette.source` slot and its alias `palette.command` (CF1 Task 11, W9); the current mode's commands come first and the other
 // mode's follow under their mode's heading.
 
 import { type Mode, ModeController, type SessionService } from '@loams/console-host';
@@ -112,7 +112,13 @@ describe('the shell palette', () => {
           name: 'shell.nav.section',
           plugin: 'studio',
           order: 0,
-          meta: { id: 'home', label: 'Home', href: '/studio', group: 'Studio', mode: 'studio' },
+          meta: {
+            id: 'tasks',
+            label: 'Tasks',
+            href: '/studio/tasks',
+            group: 'Studio',
+            mode: 'studio',
+          },
         },
         () => null,
       );
@@ -133,14 +139,18 @@ describe('the shell palette', () => {
     expect(listed()).toEqual([
       '# Pipelines',
       'Run pipeline',
-      '# Go to',
+      // Every page is the current mode's (D1080), a Studio page too.
+      '# Pages',
+      'Go to Tasks',
       'Go to Jobs',
       '# General',
       'Switch to Studio',
-      'Use dark theme',
+      '# Appearance',
+      'Theme: System',
+      'Theme: Dark',
+      'Theme: Light',
       '# Studio',
       'Fix login',
-      'Go to Home',
     ]);
 
     // In Studio the order flips, and Console's commands sit under "Console".
@@ -156,14 +166,17 @@ describe('the shell palette', () => {
     expect(listed()).toEqual([
       '# Threads',
       'Fix login',
-      '# Go to',
-      'Go to Home',
+      '# Pages',
+      'Go to Tasks',
+      'Go to Jobs',
       '# General',
       'Switch to Console',
-      'Use dark theme',
+      '# Appearance',
+      'Theme: System',
+      'Theme: Dark',
+      'Theme: Light',
       '# Console',
       'Run pipeline',
-      'Go to Jobs',
     ]);
     expect(listed()).not.toContain('Sneaky');
   });
@@ -192,9 +205,29 @@ describe('the shell palette', () => {
     // The query starts empty each time the palette opens.
     expect((again as HTMLInputElement).value).toBe('');
     fireEvent.change(again, { target: { value: 'go jobs' } });
-    await waitFor(() => expect(listed()).toEqual(['# Go to', 'Go to Jobs']));
+    await waitFor(() => expect(listed()).toEqual(['# Pages', 'Go to Jobs']));
     fireEvent.keyDown(again, { key: 'Enter' });
     await waitFor(() => expect(router.current().path).toBe('/jobs'));
+  });
+
+  it('reads shell.palette.source as well as palette.command (W9)', async () => {
+    const { slots } = setup('console');
+    act(() => {
+      slots.register({ name: 'shell.palette.source', plugin: 'pages' }, ({ publish }) => {
+        useEffect(
+          () =>
+            publish([{ id: 'p', title: 'Go to project acme', group: 'Projects', run: () => {} }]),
+          [publish],
+        );
+        return null;
+      });
+    });
+    contribute(slots, { plugin: 'pages' }, [
+      { id: 'old', title: 'An alias row', group: 'Projects', run: () => {} },
+    ]);
+    await openPalette();
+    expect(await screen.findByRole('option', { name: /Go to project acme/ })).toBeTruthy();
+    expect(screen.getByRole('option', { name: /An alias row/ })).toBeTruthy();
   });
 
   it('Mod+K toggles the palette', async () => {

@@ -139,7 +139,10 @@ const PipelineNodeView = memo(function PipelineNodeView({ data, selected }: Node
       </div>
       <div className="truncate text-sm font-medium">{node.label}</div>
       <div className="truncate text-xs text-faint">{subtitle}</div>
-      <div className="truncate font-mono text-[10px] text-muted" title={schema}>
+      <div
+        className={/* mono-ok: code */ 'truncate font-mono text-[10px] text-muted'}
+        title={schema}
+      >
         {schema}
       </div>
       {live && <NodeMetricsMini live={live} nodeId={node.id} label={node.label} />}

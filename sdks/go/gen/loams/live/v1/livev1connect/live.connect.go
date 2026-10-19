@@ -53,6 +53,9 @@ const (
 	// LiveServiceModifyQuerySetProcedure is the fully-qualified name of the LiveService's
 	// ModifyQuerySet RPC.
 	LiveServiceModifyQuerySetProcedure = "/loams.live.v1.LiveService/ModifyQuerySet"
+	// LiveServiceAuthenticateProcedure is the fully-qualified name of the LiveService's Authenticate
+	// RPC.
+	LiveServiceAuthenticateProcedure = "/loams.live.v1.LiveService/Authenticate"
 	// LiveServiceQueryProcedure is the fully-qualified name of the LiveService's Query RPC.
 	LiveServiceQueryProcedure = "/loams.live.v1.LiveService/Query"
 	// LiveServiceMutateProcedure is the fully-qualified name of the LiveService's Mutate RPC.
@@ -72,6 +75,13 @@ type LiveServiceClient interface {
 	// Adds and removes queries in an open session. The next Transition
 	// reflects the change.
 	ModifyQuerySet(context.Context, *connect.Request[v1.ModifyQuerySetRequest]) (*connect.Response[v1.ModifyQuerySetResponse], error)
+	// Replaces an open session's identity with this request's credential
+	// (its `Authorization` header; design §45 §5.4, LV1 plan Task 17). The
+	// same caller only extends the session's expiry; another caller (a
+	// sign-in or a sign-out) increments the identity version, and the next
+	// Transition reruns every query as the new caller. Answered once that
+	// Transition is queued. An unknown session is NOT_FOUND.
+	Authenticate(context.Context, *connect.Request[v1.AuthenticateRequest]) (*connect.Response[v1.AuthenticateResponse], error)
 	// A one-shot query, at the latest tick or at a given timestamp.
 	//
 	// Exposed on `loams.tables`, not on `loams.live`: §44 §7.2 splits the
@@ -105,6 +115,12 @@ func NewLiveServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 			connect.WithSchema(liveServiceMethods.ByName("ModifyQuerySet")),
 			connect.WithClientOptions(opts...),
 		),
+		authenticate: connect.NewClient[v1.AuthenticateRequest, v1.AuthenticateResponse](
+			httpClient,
+			baseURL+LiveServiceAuthenticateProcedure,
+			connect.WithSchema(liveServiceMethods.ByName("Authenticate")),
+			connect.WithClientOptions(opts...),
+		),
 		query: connect.NewClient[v1.QueryRequest, v1.QueryResponse](
 			httpClient,
 			baseURL+LiveServiceQueryProcedure,
@@ -124,6 +140,7 @@ func NewLiveServiceClient(httpClient connect.HTTPClient, baseURL string, opts ..
 type liveServiceClient struct {
 	watch          *connect.Client[v1.WatchRequest, v1.Transition]
 	modifyQuerySet *connect.Client[v1.ModifyQuerySetRequest, v1.ModifyQuerySetResponse]
+	authenticate   *connect.Client[v1.AuthenticateRequest, v1.AuthenticateResponse]
 	query          *connect.Client[v1.QueryRequest, v1.QueryResponse]
 	mutate         *connect.Client[v1.MutateRequest, v1.MutateResponse]
 }
@@ -136,6 +153,11 @@ func (c *liveServiceClient) Watch(ctx context.Context, req *connect.Request[v1.W
 // ModifyQuerySet calls loams.live.v1.LiveService.ModifyQuerySet.
 func (c *liveServiceClient) ModifyQuerySet(ctx context.Context, req *connect.Request[v1.ModifyQuerySetRequest]) (*connect.Response[v1.ModifyQuerySetResponse], error) {
 	return c.modifyQuerySet.CallUnary(ctx, req)
+}
+
+// Authenticate calls loams.live.v1.LiveService.Authenticate.
+func (c *liveServiceClient) Authenticate(ctx context.Context, req *connect.Request[v1.AuthenticateRequest]) (*connect.Response[v1.AuthenticateResponse], error) {
+	return c.authenticate.CallUnary(ctx, req)
 }
 
 // Query calls loams.live.v1.LiveService.Query.
@@ -161,6 +183,13 @@ type LiveServiceHandler interface {
 	// Adds and removes queries in an open session. The next Transition
 	// reflects the change.
 	ModifyQuerySet(context.Context, *connect.Request[v1.ModifyQuerySetRequest]) (*connect.Response[v1.ModifyQuerySetResponse], error)
+	// Replaces an open session's identity with this request's credential
+	// (its `Authorization` header; design §45 §5.4, LV1 plan Task 17). The
+	// same caller only extends the session's expiry; another caller (a
+	// sign-in or a sign-out) increments the identity version, and the next
+	// Transition reruns every query as the new caller. Answered once that
+	// Transition is queued. An unknown session is NOT_FOUND.
+	Authenticate(context.Context, *connect.Request[v1.AuthenticateRequest]) (*connect.Response[v1.AuthenticateResponse], error)
 	// A one-shot query, at the latest tick or at a given timestamp.
 	//
 	// Exposed on `loams.tables`, not on `loams.live`: §44 §7.2 splits the
@@ -190,6 +219,12 @@ func NewLiveServiceHandler(svc LiveServiceHandler, opts ...connect.HandlerOption
 		connect.WithSchema(liveServiceMethods.ByName("ModifyQuerySet")),
 		connect.WithHandlerOptions(opts...),
 	)
+	liveServiceAuthenticateHandler := connect.NewUnaryHandler(
+		LiveServiceAuthenticateProcedure,
+		svc.Authenticate,
+		connect.WithSchema(liveServiceMethods.ByName("Authenticate")),
+		connect.WithHandlerOptions(opts...),
+	)
 	liveServiceQueryHandler := connect.NewUnaryHandler(
 		LiveServiceQueryProcedure,
 		svc.Query,
@@ -208,6 +243,8 @@ func NewLiveServiceHandler(svc LiveServiceHandler, opts ...connect.HandlerOption
 			liveServiceWatchHandler.ServeHTTP(w, r)
 		case LiveServiceModifyQuerySetProcedure:
 			liveServiceModifyQuerySetHandler.ServeHTTP(w, r)
+		case LiveServiceAuthenticateProcedure:
+			liveServiceAuthenticateHandler.ServeHTTP(w, r)
 		case LiveServiceQueryProcedure:
 			liveServiceQueryHandler.ServeHTTP(w, r)
 		case LiveServiceMutateProcedure:
@@ -227,6 +264,10 @@ func (UnimplementedLiveServiceHandler) Watch(context.Context, *connect.Request[v
 
 func (UnimplementedLiveServiceHandler) ModifyQuerySet(context.Context, *connect.Request[v1.ModifyQuerySetRequest]) (*connect.Response[v1.ModifyQuerySetResponse], error) {
 	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("loams.live.v1.LiveService.ModifyQuerySet is not implemented"))
+}
+
+func (UnimplementedLiveServiceHandler) Authenticate(context.Context, *connect.Request[v1.AuthenticateRequest]) (*connect.Response[v1.AuthenticateResponse], error) {
+	return nil, connect.NewError(connect.CodeUnimplemented, errors.New("loams.live.v1.LiveService.Authenticate is not implemented"))
 }
 
 func (UnimplementedLiveServiceHandler) Query(context.Context, *connect.Request[v1.QueryRequest]) (*connect.Response[v1.QueryResponse], error) {

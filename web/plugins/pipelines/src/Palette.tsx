@@ -81,7 +81,7 @@ function Entry({
         onClick={() => onAdd(item)}
         title={title}
         aria-label={`Add ${item.label} ${item.kind}`}
-        className="w-full cursor-grab rounded-none border border-solid border-rule bg-surface px-2 py-1 text-left text-sm text-ink hover:border-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
+        className="w-full cursor-grab rounded-md border border-solid border-rule bg-surface px-2 py-1 text-left text-sm text-ink hover:border-accent focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent"
       >
         {item.label}
       </button>

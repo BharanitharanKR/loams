@@ -2,8 +2,8 @@
 //! D688): with Live running, `LiveService` and `LiveAdminService` answer on
 //! `--listen` over Connect, gRPC and gRPC-Web, behind the port's
 //! authentication layer, and `GetInstance` reports the package available.
-//! Until LV1 Task 18 they are served on a loopback main port and on the
-//! `tailscale serve` target only. Without Live, the package answers
+//! Beyond loopback they need TLS and authentication (LV1 Task 18,
+//! `live_exposure.rs`). Without Live, the package answers
 //! `feature_not_in_variant`.
 
 use std::net::SocketAddr;
@@ -317,12 +317,20 @@ async fn live_on_main_port_sits_behind_the_auth_layer() {
     for path in [
         "/loams.live.v1.LiveAdminService/Deploy",
         "/loams.live.v1.LiveAdminService/ListDeployments",
-        "/loams.live.v1.LiveService/Query",
-        "/loams.live.v1.LiveService/Mutate",
     ] {
         let (status, reason, body) = call(main, path, &json!({}), &[]).await;
         assert_eq!(status, 401, "{path}: {body}");
         assert_eq!(reason.as_deref(), Some("token_missing"), "{path}");
+    }
+    // LiveService leaves a call without a credential to the app (LV1 plan
+    // Task 16), which takes no anonymous calls: Live's own refusal.
+    for path in [
+        "/loams.live.v1.LiveService/Query",
+        "/loams.live.v1.LiveService/Mutate",
+    ] {
+        let (status, _, body) = call(main, path, &json!({"function": "notes:ping"}), &[]).await;
+        assert_eq!(status, 401, "{path}: {body}");
+        assert_eq!(reason(&body), "token_missing", "{path}");
     }
     let bearer = format!("Bearer {key}");
     let (status, deployed) = deploy(main, &[("authorization", &bearer)]).await;
@@ -338,23 +346,172 @@ async fn live_on_main_port_sits_behind_the_auth_layer() {
     server.shutdown().await.expect("stops");
 }
 
-/// In tailscale mode Live is reached over the tailnet: the `tailscale serve`
-/// target (loopback, TLS from the tailnet) serves it and names the tailnet
-/// user as the deployer. A main port bound beyond loopback does not serve
-/// it until LV1 Task 18 (TLS): there the package is unavailable and its
-/// calls answer `feature_not_in_variant`, even with a valid credential.
+/// A stand-in OIDC issuer for an app's end users: discovery and a JWKS with
+/// one Ed25519 key, on loopback.
+#[cfg(feature = "live")]
+struct EndUserIssuer {
+    url: String,
+    signer: jsonwebtoken::EncodingKey,
+    task: tokio::task::JoinHandle<()>,
+}
+
+#[cfg(feature = "live")]
+impl EndUserIssuer {
+    async fn start() -> Self {
+        use base64::Engine as _;
+        use ring::signature::KeyPair as _;
+        let listener = tokio::net::TcpListener::bind(LOOPBACK0)
+            .await
+            .expect("test fixture");
+        let url = format!(
+            "http://{}/o/shop/",
+            listener.local_addr().expect("test fixture")
+        );
+        let pkcs8 =
+            ring::signature::Ed25519KeyPair::generate_pkcs8(&ring::rand::SystemRandom::new())
+                .expect("test fixture");
+        let pair =
+            ring::signature::Ed25519KeyPair::from_pkcs8(pkcs8.as_ref()).expect("test fixture");
+        let x = base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(pair.public_key().as_ref());
+        let jwks = json!({"keys": [{"kty": "OKP", "crv": "Ed25519", "x": x, "kid": "k1", "alg": "EdDSA"}]});
+        let discovery = json!({"issuer": url, "jwks_uri": format!("{url}jwks")});
+        let app = axum::Router::new()
+            .route(
+                "/o/shop/.well-known/openid-configuration",
+                axum::routing::get(move || async move { axum::Json(discovery) }),
+            )
+            .route(
+                "/o/shop/jwks",
+                axum::routing::get(move || async move { axum::Json(jwks) }),
+            );
+        let task = tokio::spawn(async move {
+            axum::serve(listener, app).await.expect("test fixture");
+        });
+        Self {
+            url,
+            signer: jsonwebtoken::EncodingKey::from_ed_der(pkcs8.as_ref()),
+            task,
+        }
+    }
+
+    fn token(&self, sub: &str) -> String {
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("test fixture")
+            .as_secs();
+        let claims = json!({"iss": self.url, "aud": "shop-web", "sub": sub, "exp": now + 300});
+        let mut header = jsonwebtoken::Header::new(jsonwebtoken::Algorithm::EdDSA);
+        header.kid = Some("k1".into());
+        jsonwebtoken::encode(&header, &claims, &self.signer).expect("test fixture")
+    }
+}
+
+#[cfg(feature = "live")]
+impl Drop for EndUserIssuer {
+    fn drop(&mut self) {
+        self.task.abort();
+    }
+}
+
+/// LV1 plan Task 16 through the engine's layer: on an engine that takes only
+/// API keys, an app end user's token from the app's issuer reaches
+/// `LiveService` and calls a public function; a token from another issuer
+/// is refused by Live; the admin service and a malformed bearer stay the
+/// engine's to refuse.
 #[cfg(feature = "live")]
 #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
-async fn live_over_the_tailnet_but_not_on_a_non_loopback_main_port() {
-    use loams::auth::tailscale::TailscaleConfig;
-    use loams::auth::{AuthConfig, AuthMode};
-
+async fn app_end_users_reach_live_through_the_engine_layer() {
+    use base64::Engine as _;
     let dir = TempDir::new().expect("a temp dir");
     let (key, line) = loams::auth::api_key::new_key("live");
     let keys = dir.path().join("api-keys");
     std::fs::write(&keys, format!("{line}\n")).expect("the key file");
     let mut config = config(&dir, true);
-    config.listen = SocketAddr::from(([0, 0, 0, 0], 0));
+    config.auth = loams::auth::AuthConfig::api_keys(&keys);
+    let server = Server::start(config).await.expect("starts");
+    let main = server.local_addr();
+    let issuer = EndUserIssuer::start().await;
+    let stranger = EndUserIssuer::start().await;
+    let bearer = format!("Bearer {key}");
+    let (status, _, body) = call(
+        main,
+        "/loams.live.v1.LiveAdminService/CreateApp",
+        &json!({"name": "shop", "issuers": [{"issuer": issuer.url, "audiences": ["shop-web"]}]}),
+        &[("authorization", &bearer)],
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    let (status, _, body) = call(
+        main,
+        "/loams.live.v1.LiveAdminService/Deploy",
+        &json!({"bundle": base64::engine::general_purpose::STANDARD.encode(BUNDLE)}),
+        &[("authorization", &bearer), ("loams-live-app", "shop")],
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    let ping = json!({"function": "notes:ping"});
+    let end_user = format!("Bearer {}", issuer.token("ada"));
+    let as_end_user = [
+        ("authorization", end_user.as_str()),
+        ("loams-live-app", "shop"),
+    ];
+    let (status, _, body) = call(
+        main,
+        "/loams.live.v1.LiveService/Query",
+        &ping,
+        &as_end_user,
+    )
+    .await;
+    assert_eq!(status, 200, "{body}");
+    let other = format!("Bearer {}", stranger.token("ada"));
+    let (status, _, body) = call(
+        main,
+        "/loams.live.v1.LiveService/Query",
+        &ping,
+        &[("authorization", &other), ("loams-live-app", "shop")],
+    )
+    .await;
+    assert_eq!(status, 401, "{body}");
+    assert_eq!(reason(&body), "token_wrong_issuer");
+    let (status, header, body) = call(
+        main,
+        "/loams.live.v1.LiveAdminService/ListDeployments",
+        &json!({}),
+        &as_end_user,
+    )
+    .await;
+    assert_eq!(status, 401, "{body}");
+    assert_eq!(header.as_deref(), Some("credential_not_accepted"));
+    let (status, header, _) = call(
+        main,
+        "/loams.live.v1.LiveService/Query",
+        &ping,
+        &[
+            ("authorization", "Bearer not-a-token"),
+            ("loams-live-app", "shop"),
+        ],
+    )
+    .await;
+    assert_eq!(status, 401);
+    assert_eq!(header.as_deref(), Some("token_malformed"));
+    server.shutdown().await.expect("stops");
+}
+
+/// In tailscale mode Live is reached over the tailnet: the `tailscale serve`
+/// target (loopback, TLS from the tailnet) serves it and names the tailnet
+/// user as the deployer. (A main port beyond loopback needs TLS: LV1 Task
+/// 18, `live_exposure.rs`.)
+#[cfg(feature = "live")]
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn live_over_the_tailnet() {
+    use loams::auth::tailscale::TailscaleConfig;
+    use loams::auth::{AuthConfig, AuthMode};
+
+    let dir = TempDir::new().expect("a temp dir");
+    let (_, line) = loams::auth::api_key::new_key("live");
+    let keys = dir.path().join("api-keys");
+    std::fs::write(&keys, format!("{line}\n")).expect("the key file");
+    let mut config = config(&dir, true);
     config.auth = AuthConfig {
         mode: AuthMode::On {
             api_keys: true,
@@ -381,21 +538,6 @@ async fn live_over_the_tailnet_but_not_on_a_non_loopback_main_port() {
         deployed["deployment"]["createdBy"],
         "tailscale:me@example.com"
     );
-
-    let main = SocketAddr::from(([127, 0, 0, 1], server.local_addr().port()));
-    let bearer = format!("Bearer {key}");
-    let with_key = [("authorization", bearer.as_str())];
-    let (available, versioned, row) = live_row(main, &with_key).await;
-    assert!(!available && !versioned, "{row}");
-    let (status, _, error) = call(
-        main,
-        "/loams.live.v1.LiveAdminService/ListDeployments",
-        &json!({}),
-        &with_key,
-    )
-    .await;
-    assert_eq!(status, 501, "{error}");
-    assert_eq!(reason(&error), "feature_not_in_variant");
     server.shutdown().await.expect("stops");
 }
 

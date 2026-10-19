@@ -70,7 +70,9 @@ export function RepoList(p: {
                 }`}
                 onClick={() => onSelect(r)}
               >
-                <span className="flex items-center gap-2 font-mono text-sm text-ink">
+                <span
+                  className={/* mono-ok: id */ 'flex items-center gap-2 font-mono text-sm text-ink'}
+                >
                   {r.name}
                   {r.hasEnv && <Badge title="This repository has an env/ folder">env</Badge>}
                 </span>

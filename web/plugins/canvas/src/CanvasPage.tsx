@@ -3,7 +3,7 @@
 // positions persist per project through the client; a node opens a details panel.
 
 import { PageHead } from '@loams/desktop-ui';
-import { Badge, Button, Notice } from '@loams/ui';
+import { Badge, Button, Notice, SampleDataNotice } from '@loams/ui';
 import {
   applyNodeChanges,
   Background,
@@ -43,6 +43,14 @@ import { layeredLayout, nextFreePosition } from './layout.js';
 import { ARROW_DIRECTIONS, nearestInDirection, readingOrder } from './navigate.js';
 import { CanvasContext, nodeLabel, type ServiceFlowNode, ServiceNode } from './ServiceNode.js';
 import { SidePanel } from './SidePanel.js';
+
+/**
+ * Opening and re-laying-out fit the services, but never below 0.75 (UX-6): at 1440 ten
+ * services fitted at once put node text near 6px. A wider project opens readable around
+ * its middle, and the minimap and zoom controls reach the rest. Never above 1 either, so
+ * a project of two services does not open at twice its size.
+ */
+export const FIT_VIEW = { padding: 0.15, minZoom: 0.75, maxZoom: 1 } as const;
 
 const NODE_TYPES = { service: ServiceNode };
 /** How far Shift+arrow nudges a focused node. */
@@ -113,10 +121,13 @@ export function CanvasPage({
   client,
   projectId,
   navigate,
+  sample,
 }: {
   client: CanvasClient;
   projectId: string;
   navigate: (to: string) => void;
+  /** The client is a fixture: the page says so. */
+  sample?: boolean;
 }) {
   const [project, setProject] = useState<Project>();
   const [failure, setFailure] = useState<string>();
@@ -197,6 +208,11 @@ export function CanvasPage({
   return (
     <div className="lc-page">
       {head}
+      {sample && (
+        <SampleDataNotice>
+          Services you add or move here are not saved to a project.
+        </SampleDataNotice>
+      )}
       <CanvasContext.Provider value={{ client, projectId }}>
         <ReactFlowProvider>
           <ProjectCanvas
@@ -302,7 +318,7 @@ function ProjectCanvas({
     save(pos);
     setAnnouncement('Services laid out again.');
     // After React Flow has the new positions.
-    requestAnimationFrame(() => void fitView({ padding: 0.15, duration: reducedMotion ? 0 : 300 }));
+    requestAnimationFrame(() => void fitView({ ...FIT_VIEW, duration: reducedMotion ? 0 : 300 }));
   };
 
   const create = async (req: AddServiceRequest) => {
@@ -417,7 +433,7 @@ function ProjectCanvas({
             edgesFocusable={false}
             elementsSelectable
             fitView
-            fitViewOptions={{ padding: 0.15 }}
+            fitViewOptions={FIT_VIEW}
             minZoom={0.25}
             maxZoom={2}
             proOptions={{ hideAttribution: true }}

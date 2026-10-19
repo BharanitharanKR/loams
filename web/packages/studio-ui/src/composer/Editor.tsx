@@ -232,7 +232,7 @@ function ComposerMentionNodeView({ node }: NodeViewProps) {
           spellCheck={false}
           data-composer-mention-chip="true"
         >
-          <FileText size={12} aria-hidden="true" className="shrink-0 text-accent" />
+          <FileText size={12} aria-hidden="true" className="shrink-0 text-accent-fg" />
           <span className="truncate">{basenameOfPath(path)}</span>
         </button>
       </Tooltip>
@@ -613,8 +613,8 @@ const EDITOR_CONTENT_CLASS_NAME = cx(
   "[&_li[data-type=taskItem]]:flex [&_li[data-type=taskItem]]:gap-2 [&_li[data-type=taskItem]_label]:mt-0.5",
   "[&_blockquote]:m-0 [&_blockquote]:border-l-2 [&_blockquote]:border-rule [&_blockquote]:pl-3 [&_blockquote]:text-muted",
   "[&_hr]:my-2 [&_hr]:border-0 [&_hr]:border-t [&_hr]:border-rule",
-  "[&_code]:bg-raised [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em]",
-  "[&_pre]:my-1 [&_pre]:bg-raised [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-[0.85em] [&_pre_code]:bg-transparent [&_pre_code]:p-0",
+  /* mono-ok: code */ "[&_code]:bg-raised [&_code]:px-1 [&_code]:font-mono [&_code]:text-[0.9em]",
+  /* mono-ok: code */ "[&_pre]:my-1 [&_pre]:bg-raised [&_pre]:p-2 [&_pre]:font-mono [&_pre]:text-[0.85em] [&_pre_code]:bg-transparent [&_pre_code]:p-0",
   "[&_.composer-rich-marker]:text-faint",
   "[&_.composer-chip-range-selected]:bg-accent-soft",
 );

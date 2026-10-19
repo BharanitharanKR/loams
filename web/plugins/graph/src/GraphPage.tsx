@@ -7,7 +7,16 @@
 import { Code, type Transport } from '@connectrpc/connect';
 import { NamespacePicker, PageHead } from '@loams/desktop-ui';
 import { graph } from '@loams/proto';
-import { Badge, Button, ComingSoon, Empty, isNotServed, Notice } from '@loams/ui';
+import {
+  Badge,
+  Button,
+  ComingSoon,
+  Empty,
+  isNotServed,
+  Notice,
+  SkeletonList,
+  type SqlSchema,
+} from '@loams/ui';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   createGraphClient,
@@ -85,9 +94,7 @@ export function GraphPage({ transport, openExternal, storage, namespace }: Graph
     return (
       <div className="lc-page">
         {head}
-        <p className="text-muted" role="status">
-          Asking the server about Loams Graph…
-        </p>
+        <SkeletonList label="Asking the server about Loams Graph" layout="cards" rows={3} />
       </div>
     );
   }
@@ -106,7 +113,9 @@ export function GraphPage({ transport, openExternal, storage, namespace }: Graph
         <Notice tone="danger" title="Could not reach the server">
           {detected.message}
         </Notice>
-        <Button onClick={() => setTick((t) => t + 1)}>Try again</Button>
+        <div>
+          <Button onClick={() => setTick((t) => t + 1)}>Try again</Button>
+        </div>
       </div>
     );
   }
@@ -171,6 +180,19 @@ function Workspace({
   const [status, setStatus] = useState<string>();
   const [recent, setRecent] = useState<string[]>(() => history.list());
   const [schemaTick, setSchemaTick] = useState(0);
+  const [graphSchema, setGraphSchema] = useState<graph.GraphSchema>();
+  // Labels and edge types complete as names; property keys as their columns.
+  const editorSchema = useMemo<SqlSchema>(() => {
+    if (!graphSchema) return { tables: [] };
+    const props = graphSchema.propertyKeys.map((name) => ({ name }));
+    return {
+      tables: [
+        ...graphSchema.labels.map((l) => ({ name: l.label, kind: 'label', columns: props })),
+        ...graphSchema.edgeTypes.map((e) => ({ name: e.type, kind: 'edge type', columns: [] })),
+        ...props.map((p) => ({ name: p.name, kind: 'property', columns: [] })),
+      ],
+    };
+  }, [graphSchema]);
   const abort = useRef<AbortController | undefined>(undefined);
 
   useEffect(() => setRecent(history.list()), [history]);
@@ -344,7 +366,7 @@ function Workspace({
           {selected ? (
             <>
               <h2 className="m-0 text-base">
-                <span className="font-mono">{selected.name}</span>
+                <span className={/* mono-ok: id */ 'font-mono'}>{selected.name}</span>
                 <span className="ml-2 text-sm font-normal text-muted">in {ns}</span>
               </h2>
               <Editor
@@ -364,6 +386,7 @@ function Workspace({
                 onCancel={() => abort.current?.abort()}
                 failure={failure}
                 history={recent}
+                schema={editorSchema}
               />
               {status && <Notice title={status} />}
               {busy && !streaming && (
@@ -386,7 +409,13 @@ function Workspace({
           )}
         </div>
         {selected && (
-          <Schema client={client} namespace={ns} name={selected.name} refresh={schemaTick} />
+          <Schema
+            client={client}
+            namespace={ns}
+            name={selected.name}
+            refresh={schemaTick}
+            onSchema={setGraphSchema}
+          />
         )}
       </div>
     </div>

@@ -41,8 +41,8 @@
   name: '@loams/plugin-deployments'
 
 # Loams Studio (design §53, SD1 Task 15): `modes: [studio]`, so it loads the first
-# time Studio mode is entered. In a browser Studio stays behind the instance
-# feature `studio` (start.ts) until SD1 Task 32; desktop.yml adds the bridge.
+# time Studio mode is entered. The switch shows in every edition; in a browser
+# without an agentd host Studio says how to connect one. desktop.yml adds the bridge.
 - id: studio
   name: '@loams/plugin-studio'
-  inject: [router, slots, mode, platform, flags, agentd]
+  inject: [router, slots, mode, platform, flags, agentd, inspector, drawer]

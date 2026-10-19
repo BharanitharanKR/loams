@@ -109,6 +109,15 @@ func WithHeader(name, value string) CallOption {
 	}
 }
 
+// LiveAppHeader is the request header that selects one of a Live node's apps
+// (`LiveAdminService`, LV1 Task 13). A request without it addresses the server's
+// own app (`--live-app`).
+const LiveAppHeader = "loams-live-app"
+
+// WithLiveApp addresses the Live app `name` on this call. To address one app on
+// every call a client makes, set the same header in `TransportConfig.ExtraHeaders`.
+func WithLiveApp(name string) CallOption { return WithHeader(LiveAppHeader, name) }
+
 // WithStreamResume makes a server stream reconnect from its last cursor on a
 // retryable failure (R7).
 //
@@ -273,6 +282,10 @@ type CallInvoker struct {
 	maxRetries int
 	// session is nil unless the client turned the session store on.
 	session ConsistencyTokenStore
+	// headers are the client's own: `TransportConfig.ExtraHeaders`, sent on
+	// every call, unary and streaming. A call's `WithHeader` replaces one of the
+	// same name, and `Authorization` is the runtime's either way.
+	headers http.Header
 }
 
 // NewCallInvoker builds an invoker over already-constructed Connect clients.
@@ -296,10 +309,27 @@ func (invoker *CallInvoker) client(binding facade.CallBinding) (any, error) {
 
 // bearer returns the `Authorization` header value for one attempt.
 //
+// It starts from the client's `ExtraHeaders`, then the call's own headers, then
+// the bearer.
+//
 // The token is fetched **per attempt**, not per call, because R1's refresh has
 // to change it between two attempts of the same logical call.
 func (invoker *CallInvoker) bearer(ctx context.Context, extra http.Header) (http.Header, error) {
 	headers := http.Header{}
+	// `Add` canonicalises the name, so a client header written in lower case
+	// (`http.Header{"loams-live-app": ...}`) and a call's `WithHeader` of the
+	// same name are one header, not two.
+	for name, values := range invoker.headers {
+		for _, value := range values {
+			headers.Add(name, value)
+		}
+	}
+	// A call's header replaces the client's header of the same name rather than
+	// sitting beside it, so `WithLiveApp` on one call addresses that app even
+	// when the client's `ExtraHeaders` name another.
+	for name := range extra {
+		headers.Del(name)
+	}
 	for name, values := range extra {
 		for _, value := range values {
 			headers.Add(name, value)

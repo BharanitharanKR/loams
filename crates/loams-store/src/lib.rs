@@ -5,6 +5,7 @@
 //! whole-object and range reads, idempotent deletes, and listing.
 //! [`FaultyStore`] injects failures for crash and fault testing.
 
+mod backend;
 mod error;
 mod fault;
 mod store;

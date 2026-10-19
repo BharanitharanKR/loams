@@ -1,0 +1,150 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "CheckReport",
+  "description": "`check`'s JSON.",
+  "type": "object",
+  "required": [
+    "blockers",
+    "components",
+    "current",
+    "downtime_estimate_seconds",
+    "migrations",
+    "path",
+    "point_of_no_return",
+    "snapshot_estimate_bytes",
+    "target"
+  ],
+  "properties": {
+    "blockers": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/Blocker"
+      }
+    },
+    "components": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/CheckComponent"
+      }
+    },
+    "current": {
+      "type": "string"
+    },
+    "downtime_estimate_seconds": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "free_bytes": {
+      "description": "Free bytes where the snapshot goes; `None` when it cannot be told.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "migrations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/definitions/CheckMigration"
+      }
+    },
+    "path": {
+      "description": "The releases the upgrade walks, one step each.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "point_of_no_return": {
+      "type": "boolean"
+    },
+    "snapshot_estimate_bytes": {
+      "type": "integer",
+      "format": "uint64",
+      "minimum": 0.0
+    },
+    "target": {
+      "type": "string"
+    }
+  },
+  "definitions": {
+    "Blocker": {
+      "description": "Something that makes `upgrade` refuse.",
+      "type": "object",
+      "required": [
+        "code",
+        "message"
+      ],
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "message": {
+          "type": "string"
+        }
+      }
+    },
+    "CheckComponent": {
+      "description": "A third-party component's pin, before and after.",
+      "type": "object",
+      "required": [
+        "name",
+        "to"
+      ],
+      "properties": {
+        "from": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "to": {
+          "type": "string"
+        }
+      }
+    },
+    "CheckEstimate": {
+      "type": "object",
+      "required": [
+        "seconds"
+      ],
+      "properties": {
+        "seconds": {
+          "type": "integer",
+          "format": "uint64",
+          "minimum": 0.0
+        }
+      }
+    },
+    "CheckMigration": {
+      "description": "One migration of the step.",
+      "type": "object",
+      "required": [
+        "class",
+        "estimate",
+        "id",
+        "store"
+      ],
+      "properties": {
+        "class": {
+          "description": "`reversible` or `point_of_no_return`.",
+          "type": "string"
+        },
+        "estimate": {
+          "$ref": "#/definitions/CheckEstimate"
+        },
+        "id": {
+          "type": "string"
+        },
+        "store": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

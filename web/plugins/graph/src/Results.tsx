@@ -45,9 +45,11 @@ function Cell({ value }: { value: graph.Value | undefined }) {
   const text = valueText(value);
   return (
     <span
-      className={`inline-block max-w-[420px] truncate align-bottom font-mono text-[13px] ${
-        type === 'NULL' ? 'text-faint' : ''
-      }`}
+      className={
+        /* mono-ok: code */ `inline-block max-w-[420px] truncate align-bottom font-mono text-[13px] ${
+          type === 'NULL' ? 'text-faint' : ''
+        }`
+      }
       data-type={type}
       title={`${type}: ${text}`}
     >
@@ -181,7 +183,7 @@ function RowsView({
           {result.notifications.map((n, i) => (
             // biome-ignore lint/suspicious/noArrayIndexKey: notifications have no id
             <li key={i}>
-              <span className="font-mono">{n.gqlstatus}</span> {n.message}
+              <span className={/* mono-ok: id */ 'font-mono'}>{n.gqlstatus}</span> {n.message}
             </li>
           ))}
         </ul>
@@ -221,7 +223,7 @@ function Operator({ op, profile }: { op: graph.PlanOperator; profile: boolean })
   const detail = op.details.operator ?? op.name;
   return (
     <li>
-      <span className="font-mono">{detail}</span>
+      <span className={/* mono-ok: code */ 'font-mono'}>{detail}</span>
       {profile && (
         <span className="ml-2 text-muted text-xs">
           {fmt.format(Number(op.rows))} rows · {elapsed(op.elapsedNanos)}

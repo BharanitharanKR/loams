@@ -17,6 +17,7 @@ import {
   formatNumber,
   Notice,
   Primary,
+  SampleDataNotice,
   Select,
   Stat,
   Stats,
@@ -76,10 +77,9 @@ export function JobsPage({ client, preview, namespace, initialTab }: JobsPagePro
         }
       />
       {preview && (
-        <Notice title="Sample data">
-          This server does not serve {JOBS_PACKAGE} yet, so the page shows sample queues and jobs.
-          Retry and discard change only the sample.
-        </Notice>
+        <SampleDataNotice>
+          This server does not serve {JOBS_PACKAGE} yet. Retry and discard change only the sample.
+        </SampleDataNotice>
       )}
       <Tabs
         key={ns}
@@ -609,7 +609,7 @@ function JobBody({ job }: { job: JobDetail }) {
           <p className="text-muted text-sm">No log lines.</p>
         ) : (
           <ScrollRegion label="Job logs" className="max-h-64">
-            <ol className="loams-pre font-mono text-sm">
+            <ol className={/* mono-ok: code */ 'loams-pre font-mono text-sm'}>
               {job.logs.map((l, i) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: log lines are append-only and may repeat
                 <li key={i}>

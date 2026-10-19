@@ -28,7 +28,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file loams/live/v1/live.proto.
  */
 export const file_loams_live_v1_live: GenFile = /*@__PURE__*/
-  fileDesc("Chhsb2Ftcy9saXZlL3YxL2xpdmUucHJvdG8SDWxvYW1zLmxpdmUudjEiPwoMU3RhdGVWZXJzaW9uEhEKCXF1ZXJ5X3NldBgBIAEoBBIQCghpZGVudGl0eRgCIAEoBBIKCgJ0cxgDIAEoBCJsCgxXYXRjaFJlcXVlc3QSKgoHaW5pdGlhbBgBIAEoCzIXLmxvYW1zLmxpdmUudjEuUXVlcnlTZXRIABInCgZyZXN1bWUYAiABKAsyFS5sb2Ftcy5saXZlLnYxLlJlc3VtZUgAQgcKBXN0YXJ0ImcKBlJlc3VtZRIxCgxsYXN0X3ZlcnNpb24YASABKAsyGy5sb2Ftcy5saXZlLnYxLlN0YXRlVmVyc2lvbhIqCglxdWVyeV9zZXQYAiABKAsyFy5sb2Ftcy5saXZlLnYxLlF1ZXJ5U2V0IkYKCFF1ZXJ5U2V0Eg8KB3ZlcnNpb24YASABKAQSKQoHcXVlcmllcxgCIAMoCzIYLmxvYW1zLmxpdmUudjEuUXVlcnlTcGVjIlMKCVF1ZXJ5U3BlYxIQCghxdWVyeV9pZBgBIAEoDRIQCghmdW5jdGlvbhgCIAEoCRIiCgRhcmdzGAMgASgLMhQubG9hbXMubGl2ZS52MS5WYWx1ZSKGAQoVTW9kaWZ5UXVlcnlTZXRSZXF1ZXN0EhIKCnNlc3Npb25faWQYASABKAkSFAoMYmFzZV92ZXJzaW9uGAIgASgEEhMKC25ld192ZXJzaW9uGAMgASgEEi4KB2NoYW5nZXMYBCADKAsyHS5sb2Ftcy5saXZlLnYxLlF1ZXJ5U2V0Q2hhbmdlIlUKDlF1ZXJ5U2V0Q2hhbmdlEicKA2FkZBgBIAEoCzIYLmxvYW1zLmxpdmUudjEuUXVlcnlTcGVjSAASEAoGcmVtb3ZlGAIgASgNSABCCAoGY2hhbmdlIhgKFk1vZGlmeVF1ZXJ5U2V0UmVzcG9uc2UisQEKClRyYW5zaXRpb24SEgoKc2Vzc2lvbl9pZBgBIAEoCRIqCgVzdGFydBgCIAEoCzIbLmxvYW1zLmxpdmUudjEuU3RhdGVWZXJzaW9uEigKA2VuZBgDIAEoCzIbLmxvYW1zLmxpdmUudjEuU3RhdGVWZXJzaW9uEisKB3VwZGF0ZXMYBCADKAsyGi5sb2Ftcy5saXZlLnYxLlF1ZXJ5VXBkYXRlEgwKBG1vcmUYBSABKAgipgEKC1F1ZXJ5VXBkYXRlEhAKCHF1ZXJ5X2lkGAEgASgNEiUKBXZhbHVlGAIgASgLMhQubG9hbXMubGl2ZS52MS5WYWx1ZUgAEikKBWVycm9yGAMgASgLMhgubG9hbXMubGl2ZS52MS5MaXZlRXJyb3JIABIpCgdyZW1vdmVkGAQgASgLMhYubG9hbXMubGl2ZS52MS5SZW1vdmVkSABCCAoGdXBkYXRlIgkKB1JlbW92ZWQiXAoMUXVlcnlSZXF1ZXN0EhAKCGZ1bmN0aW9uGAEgASgJEiIKBGFyZ3MYAiABKAsyFC5sb2Ftcy5saXZlLnYxLlZhbHVlEg8KAnRzGAMgASgESACIAQFCBQoDX3RzIkEKDVF1ZXJ5UmVzcG9uc2USCgoCdHMYASABKAQSJAoGcmVzdWx0GAIgASgLMhQubG9hbXMubGl2ZS52MS5WYWx1ZSJ3Cg1NdXRhdGVSZXF1ZXN0EhAKCGZ1bmN0aW9uGAEgASgJEiIKBGFyZ3MYAiABKAsyFC5sb2Ftcy5saXZlLnYxLlZhbHVlEhwKD2lkZW1wb3RlbmN5X2tleRgDIAEoCUgAiAEBQhIKEF9pZGVtcG90ZW5jeV9rZXkiSQoOTXV0YXRlUmVzcG9uc2USEQoJY29tbWl0X3RzGAEgASgEEiQKBnJlc3VsdBgCIAEoCzIULmxvYW1zLmxpdmUudjEuVmFsdWUiNAoGU2NoZW1hEioKBnRhYmxlcxgBIAMoCzIaLmxvYW1zLmxpdmUudjEuVGFibGVTY2hlbWEiqwEKC1RhYmxlU2NoZW1hEgwKBG5hbWUYASABKAkSKwoHaW5kZXhlcxgCIAMoCzIaLmxvYW1zLmxpdmUudjEuSW5kZXhTY2hlbWESKwoJdmFsaWRhdG9yGAMgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3ISHgoRc2NoZW1hX3ZhbGlkYXRpb24YBCABKAhIAIgBAUIUChJfc2NoZW1hX3ZhbGlkYXRpb24iKwoLSW5kZXhTY2hlbWESDAoEbmFtZRgBIAEoCRIOCgZmaWVsZHMYAiADKAkivQIKCVZhbGlkYXRvchI2CglwcmltaXRpdmUYASABKA4yIS5sb2Ftcy5saXZlLnYxLlZhbGlkYXRvclByaW1pdGl2ZUgAEikKBWFycmF5GAIgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3JIABIwCgZvYmplY3QYAyABKAsyHi5sb2Ftcy5saXZlLnYxLlZhbGlkYXRvck9iamVjdEgAEicKB2xpdGVyYWwYBCABKAsyFC5sb2Ftcy5saXZlLnYxLlZhbHVlSAASLgoFdW5pb24YBSABKAsyHS5sb2Ftcy5saXZlLnYxLlZhbGlkYXRvclVuaW9uSAASLAoIb3B0aW9uYWwYBiABKAsyGC5sb2Ftcy5saXZlLnYxLlZhbGlkYXRvckgAEgwKAmlkGAcgASgJSABCBgoEa2luZCKWAQoPVmFsaWRhdG9yT2JqZWN0EjoKBmZpZWxkcxgBIAMoCzIqLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yT2JqZWN0LkZpZWxkc0VudHJ5GkcKC0ZpZWxkc0VudHJ5EgsKA2tleRgBIAEoCRInCgV2YWx1ZRgCIAEoCzIYLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yOgI4ASI7Cg5WYWxpZGF0b3JVbmlvbhIpCgdtZW1iZXJzGAEgAygLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3IiRAoJTGl2ZUVycm9yEiYKBGNvZGUYASABKA4yGC5sb2Ftcy5saXZlLnYxLkVycm9yQ29kZRIPCgdtZXNzYWdlGAIgASgJKpQCChJWYWxpZGF0b3JQcmltaXRpdmUSIwofVkFMSURBVE9SX1BSSU1JVElWRV9VTlNQRUNJRklFRBAAEhwKGFZBTElEQVRPUl9QUklNSVRJVkVfTlVMTBABEh0KGVZBTElEQVRPUl9QUklNSVRJVkVfSU5UNjQQAhIfChtWQUxJREFUT1JfUFJJTUlUSVZFX0ZMT0FUNjQQAxIfChtWQUxJREFUT1JfUFJJTUlUSVZFX0JPT0xFQU4QBBIeChpWQUxJREFUT1JfUFJJTUlUSVZFX1NUUklORxAFEh0KGVZBTElEQVRPUl9QUklNSVRJVkVfQllURVMQBhIbChdWQUxJREFUT1JfUFJJTUlUSVZFX0FOWRAHKsUCCglFcnJvckNvZGUSGgoWRVJST1JfQ09ERV9VTlNQRUNJRklFRBAAEh8KG0VSUk9SX0NPREVfSU5WQUxJRF9BUkdVTUVOVBABEhgKFEVSUk9SX0NPREVfTk9UX0ZPVU5EEAISIgoeRVJST1JfQ09ERV9GQUlMRURfUFJFQ09ORElUSU9OEAMSIQodRVJST1JfQ09ERV9SRVNPVVJDRV9FWEhBVVNURUQQBBIdChlFUlJPUl9DT0RFX0ZVTkNUSU9OX0VSUk9SEAUSHwobRVJST1JfQ09ERV9GVU5DVElPTl9USU1FT1VUEAYSJQohRVJST1JfQ09ERV9GVU5DVElPTl9PVVRfT0ZfTUVNT1JZEAcSGgoWRVJST1JfQ09ERV9VTkFWQUlMQUJMRRAIEhcKE0VSUk9SX0NPREVfSU5URVJOQUwQCTLKAwoLTGl2ZVNlcnZpY2USTgoFV2F0Y2gSGy5sb2Ftcy5saXZlLnYxLldhdGNoUmVxdWVzdBoZLmxvYW1zLmxpdmUudjEuVHJhbnNpdGlvbiILkrUYBxIFd2F0Y2gwARJzCg5Nb2RpZnlRdWVyeVNldBIkLmxvYW1zLmxpdmUudjEuTW9kaWZ5UXVlcnlTZXRSZXF1ZXN0GiUubG9hbXMubGl2ZS52MS5Nb2RpZnlRdWVyeVNldFJlc3BvbnNlIhSStRgQEg5tb2RpZnlRdWVyeVNldBJXCgVRdWVyeRIbLmxvYW1zLmxpdmUudjEuUXVlcnlSZXF1ZXN0GhwubG9hbXMubGl2ZS52MS5RdWVyeVJlc3BvbnNlIhOStRgPCgZ0YWJsZXMSBXF1ZXJ5ElsKBk11dGF0ZRIcLmxvYW1zLmxpdmUudjEuTXV0YXRlUmVxdWVzdBodLmxvYW1zLmxpdmUudjEuTXV0YXRlUmVzcG9uc2UiFJK1GBAKBnRhYmxlcxIGbXV0YXRlGkCKtRg8CgRsaXZlEjJMaXZlIHN5bmM6IHdhdGNoIGEgcXVlcnkgc2V0IG92ZXIgYSBzZXJ2ZXIgc3RyZWFtLhgBYgZwcm90bzM", [file_loams_live_v1_value, file_loams_options_v1_options]);
+  fileDesc("Chhsb2Ftcy9saXZlL3YxL2xpdmUucHJvdG8SDWxvYW1zLmxpdmUudjEiPwoMU3RhdGVWZXJzaW9uEhEKCXF1ZXJ5X3NldBgBIAEoBBIQCghpZGVudGl0eRgCIAEoBBIKCgJ0cxgDIAEoBCJsCgxXYXRjaFJlcXVlc3QSKgoHaW5pdGlhbBgBIAEoCzIXLmxvYW1zLmxpdmUudjEuUXVlcnlTZXRIABInCgZyZXN1bWUYAiABKAsyFS5sb2Ftcy5saXZlLnYxLlJlc3VtZUgAQgcKBXN0YXJ0ImcKBlJlc3VtZRIxCgxsYXN0X3ZlcnNpb24YASABKAsyGy5sb2Ftcy5saXZlLnYxLlN0YXRlVmVyc2lvbhIqCglxdWVyeV9zZXQYAiABKAsyFy5sb2Ftcy5saXZlLnYxLlF1ZXJ5U2V0IkYKCFF1ZXJ5U2V0Eg8KB3ZlcnNpb24YASABKAQSKQoHcXVlcmllcxgCIAMoCzIYLmxvYW1zLmxpdmUudjEuUXVlcnlTcGVjIlMKCVF1ZXJ5U3BlYxIQCghxdWVyeV9pZBgBIAEoDRIQCghmdW5jdGlvbhgCIAEoCRIiCgRhcmdzGAMgASgLMhQubG9hbXMubGl2ZS52MS5WYWx1ZSKGAQoVTW9kaWZ5UXVlcnlTZXRSZXF1ZXN0EhIKCnNlc3Npb25faWQYASABKAkSFAoMYmFzZV92ZXJzaW9uGAIgASgEEhMKC25ld192ZXJzaW9uGAMgASgEEi4KB2NoYW5nZXMYBCADKAsyHS5sb2Ftcy5saXZlLnYxLlF1ZXJ5U2V0Q2hhbmdlIlUKDlF1ZXJ5U2V0Q2hhbmdlEicKA2FkZBgBIAEoCzIYLmxvYW1zLmxpdmUudjEuUXVlcnlTcGVjSAASEAoGcmVtb3ZlGAIgASgNSABCCAoGY2hhbmdlIhgKFk1vZGlmeVF1ZXJ5U2V0UmVzcG9uc2UiKQoTQXV0aGVudGljYXRlUmVxdWVzdBISCgpzZXNzaW9uX2lkGAEgASgJIigKFEF1dGhlbnRpY2F0ZVJlc3BvbnNlEhAKCGlkZW50aXR5GAEgASgEIrEBCgpUcmFuc2l0aW9uEhIKCnNlc3Npb25faWQYASABKAkSKgoFc3RhcnQYAiABKAsyGy5sb2Ftcy5saXZlLnYxLlN0YXRlVmVyc2lvbhIoCgNlbmQYAyABKAsyGy5sb2Ftcy5saXZlLnYxLlN0YXRlVmVyc2lvbhIrCgd1cGRhdGVzGAQgAygLMhoubG9hbXMubGl2ZS52MS5RdWVyeVVwZGF0ZRIMCgRtb3JlGAUgASgIIqYBCgtRdWVyeVVwZGF0ZRIQCghxdWVyeV9pZBgBIAEoDRIlCgV2YWx1ZRgCIAEoCzIULmxvYW1zLmxpdmUudjEuVmFsdWVIABIpCgVlcnJvchgDIAEoCzIYLmxvYW1zLmxpdmUudjEuTGl2ZUVycm9ySAASKQoHcmVtb3ZlZBgEIAEoCzIWLmxvYW1zLmxpdmUudjEuUmVtb3ZlZEgAQggKBnVwZGF0ZSIJCgdSZW1vdmVkIlwKDFF1ZXJ5UmVxdWVzdBIQCghmdW5jdGlvbhgBIAEoCRIiCgRhcmdzGAIgASgLMhQubG9hbXMubGl2ZS52MS5WYWx1ZRIPCgJ0cxgDIAEoBEgAiAEBQgUKA190cyJBCg1RdWVyeVJlc3BvbnNlEgoKAnRzGAEgASgEEiQKBnJlc3VsdBgCIAEoCzIULmxvYW1zLmxpdmUudjEuVmFsdWUidwoNTXV0YXRlUmVxdWVzdBIQCghmdW5jdGlvbhgBIAEoCRIiCgRhcmdzGAIgASgLMhQubG9hbXMubGl2ZS52MS5WYWx1ZRIcCg9pZGVtcG90ZW5jeV9rZXkYAyABKAlIAIgBAUISChBfaWRlbXBvdGVuY3lfa2V5IkkKDk11dGF0ZVJlc3BvbnNlEhEKCWNvbW1pdF90cxgBIAEoBBIkCgZyZXN1bHQYAiABKAsyFC5sb2Ftcy5saXZlLnYxLlZhbHVlIjQKBlNjaGVtYRIqCgZ0YWJsZXMYASADKAsyGi5sb2Ftcy5saXZlLnYxLlRhYmxlU2NoZW1hIqsBCgtUYWJsZVNjaGVtYRIMCgRuYW1lGAEgASgJEisKB2luZGV4ZXMYAiADKAsyGi5sb2Ftcy5saXZlLnYxLkluZGV4U2NoZW1hEisKCXZhbGlkYXRvchgDIAEoCzIYLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yEh4KEXNjaGVtYV92YWxpZGF0aW9uGAQgASgISACIAQFCFAoSX3NjaGVtYV92YWxpZGF0aW9uIisKC0luZGV4U2NoZW1hEgwKBG5hbWUYASABKAkSDgoGZmllbGRzGAIgAygJIr0CCglWYWxpZGF0b3ISNgoJcHJpbWl0aXZlGAEgASgOMiEubG9hbXMubGl2ZS52MS5WYWxpZGF0b3JQcmltaXRpdmVIABIpCgVhcnJheRgCIAEoCzIYLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9ySAASMAoGb2JqZWN0GAMgASgLMh4ubG9hbXMubGl2ZS52MS5WYWxpZGF0b3JPYmplY3RIABInCgdsaXRlcmFsGAQgASgLMhQubG9hbXMubGl2ZS52MS5WYWx1ZUgAEi4KBXVuaW9uGAUgASgLMh0ubG9hbXMubGl2ZS52MS5WYWxpZGF0b3JVbmlvbkgAEiwKCG9wdGlvbmFsGAYgASgLMhgubG9hbXMubGl2ZS52MS5WYWxpZGF0b3JIABIMCgJpZBgHIAEoCUgAQgYKBGtpbmQilgEKD1ZhbGlkYXRvck9iamVjdBI6CgZmaWVsZHMYASADKAsyKi5sb2Ftcy5saXZlLnYxLlZhbGlkYXRvck9iamVjdC5GaWVsZHNFbnRyeRpHCgtGaWVsZHNFbnRyeRILCgNrZXkYASABKAkSJwoFdmFsdWUYAiABKAsyGC5sb2Ftcy5saXZlLnYxLlZhbGlkYXRvcjoCOAEiOwoOVmFsaWRhdG9yVW5pb24SKQoHbWVtYmVycxgBIAMoCzIYLmxvYW1zLmxpdmUudjEuVmFsaWRhdG9yIkQKCUxpdmVFcnJvchImCgRjb2RlGAEgASgOMhgubG9hbXMubGl2ZS52MS5FcnJvckNvZGUSDwoHbWVzc2FnZRgCIAEoCSqUAgoSVmFsaWRhdG9yUHJpbWl0aXZlEiMKH1ZBTElEQVRPUl9QUklNSVRJVkVfVU5TUEVDSUZJRUQQABIcChhWQUxJREFUT1JfUFJJTUlUSVZFX05VTEwQARIdChlWQUxJREFUT1JfUFJJTUlUSVZFX0lOVDY0EAISHwobVkFMSURBVE9SX1BSSU1JVElWRV9GTE9BVDY0EAMSHwobVkFMSURBVE9SX1BSSU1JVElWRV9CT09MRUFOEAQSHgoaVkFMSURBVE9SX1BSSU1JVElWRV9TVFJJTkcQBRIdChlWQUxJREFUT1JfUFJJTUlUSVZFX0JZVEVTEAYSGwoXVkFMSURBVE9SX1BSSU1JVElWRV9BTlkQByrFAgoJRXJyb3JDb2RlEhoKFkVSUk9SX0NPREVfVU5TUEVDSUZJRUQQABIfChtFUlJPUl9DT0RFX0lOVkFMSURfQVJHVU1FTlQQARIYChRFUlJPUl9DT0RFX05PVF9GT1VORBACEiIKHkVSUk9SX0NPREVfRkFJTEVEX1BSRUNPTkRJVElPThADEiEKHUVSUk9SX0NPREVfUkVTT1VSQ0VfRVhIQVVTVEVEEAQSHQoZRVJST1JfQ09ERV9GVU5DVElPTl9FUlJPUhAFEh8KG0VSUk9SX0NPREVfRlVOQ1RJT05fVElNRU9VVBAGEiUKIUVSUk9SX0NPREVfRlVOQ1RJT05fT1VUX09GX01FTU9SWRAHEhoKFkVSUk9SX0NPREVfVU5BVkFJTEFCTEUQCBIXChNFUlJPUl9DT0RFX0lOVEVSTkFMEAkytwQKC0xpdmVTZXJ2aWNlEk4KBVdhdGNoEhsubG9hbXMubGl2ZS52MS5XYXRjaFJlcXVlc3QaGS5sb2Ftcy5saXZlLnYxLlRyYW5zaXRpb24iC5K1GAcSBXdhdGNoMAEScwoOTW9kaWZ5UXVlcnlTZXQSJC5sb2Ftcy5saXZlLnYxLk1vZGlmeVF1ZXJ5U2V0UmVxdWVzdBolLmxvYW1zLmxpdmUudjEuTW9kaWZ5UXVlcnlTZXRSZXNwb25zZSIUkrUYEBIObW9kaWZ5UXVlcnlTZXQSawoMQXV0aGVudGljYXRlEiIubG9hbXMubGl2ZS52MS5BdXRoZW50aWNhdGVSZXF1ZXN0GiMubG9hbXMubGl2ZS52MS5BdXRoZW50aWNhdGVSZXNwb25zZSISkrUYDhIMYXV0aGVudGljYXRlElcKBVF1ZXJ5EhsubG9hbXMubGl2ZS52MS5RdWVyeVJlcXVlc3QaHC5sb2Ftcy5saXZlLnYxLlF1ZXJ5UmVzcG9uc2UiE5K1GA8KBnRhYmxlcxIFcXVlcnkSWwoGTXV0YXRlEhwubG9hbXMubGl2ZS52MS5NdXRhdGVSZXF1ZXN0Gh0ubG9hbXMubGl2ZS52MS5NdXRhdGVSZXNwb25zZSIUkrUYEAoGdGFibGVzEgZtdXRhdGUaQIq1GDwKBGxpdmUSMkxpdmUgc3luYzogd2F0Y2ggYSBxdWVyeSBzZXQgb3ZlciBhIHNlcnZlciBzdHJlYW0uGAFiBnByb3RvMw", [file_loams_live_v1_value, file_loams_options_v1_options]);
 
 /**
  * A session's state: (query-set version, identity version, ts). A client
@@ -252,6 +252,42 @@ export const ModifyQuerySetResponseSchema: GenMessage<ModifyQuerySetResponse> = 
   messageDesc(file_loams_live_v1_live, 7);
 
 /**
+ * @generated from message loams.live.v1.AuthenticateRequest
+ */
+export type AuthenticateRequest = Message<"loams.live.v1.AuthenticateRequest"> & {
+  /**
+   * @generated from field: string session_id = 1;
+   */
+  sessionId: string;
+};
+
+/**
+ * Describes the message loams.live.v1.AuthenticateRequest.
+ * Use `create(AuthenticateRequestSchema)` to create a new message.
+ */
+export const AuthenticateRequestSchema: GenMessage<AuthenticateRequest> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_live, 8);
+
+/**
+ * @generated from message loams.live.v1.AuthenticateResponse
+ */
+export type AuthenticateResponse = Message<"loams.live.v1.AuthenticateResponse"> & {
+  /**
+   * The session's identity version after the call.
+   *
+   * @generated from field: uint64 identity = 1;
+   */
+  identity: bigint;
+};
+
+/**
+ * Describes the message loams.live.v1.AuthenticateResponse.
+ * Use `create(AuthenticateResponseSchema)` to create a new message.
+ */
+export const AuthenticateResponseSchema: GenMessage<AuthenticateResponse> = /*@__PURE__*/
+  messageDesc(file_loams_live_v1_live, 9);
+
+/**
  * One step of a session, from `start` to `end`.
  *
  * @generated from message loams.live.v1.Transition
@@ -295,7 +331,7 @@ export type Transition = Message<"loams.live.v1.Transition"> & {
  * Use `create(TransitionSchema)` to create a new message.
  */
 export const TransitionSchema: GenMessage<Transition> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_live, 8);
+  messageDesc(file_loams_live_v1_live, 10);
 
 /**
  * @generated from message loams.live.v1.QueryUpdate
@@ -335,7 +371,7 @@ export type QueryUpdate = Message<"loams.live.v1.QueryUpdate"> & {
  * Use `create(QueryUpdateSchema)` to create a new message.
  */
 export const QueryUpdateSchema: GenMessage<QueryUpdate> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_live, 9);
+  messageDesc(file_loams_live_v1_live, 11);
 
 /**
  * The query left the query set.
@@ -350,7 +386,7 @@ export type Removed = Message<"loams.live.v1.Removed"> & {
  * Use `create(RemovedSchema)` to create a new message.
  */
 export const RemovedSchema: GenMessage<Removed> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_live, 10);
+  messageDesc(file_loams_live_v1_live, 12);
 
 /**
  * @generated from message loams.live.v1.QueryRequest
@@ -379,7 +415,7 @@ export type QueryRequest = Message<"loams.live.v1.QueryRequest"> & {
  * Use `create(QueryRequestSchema)` to create a new message.
  */
 export const QueryRequestSchema: GenMessage<QueryRequest> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_live, 11);
+  messageDesc(file_loams_live_v1_live, 13);
 
 /**
  * @generated from message loams.live.v1.QueryResponse
@@ -403,7 +439,7 @@ export type QueryResponse = Message<"loams.live.v1.QueryResponse"> & {
  * Use `create(QueryResponseSchema)` to create a new message.
  */
 export const QueryResponseSchema: GenMessage<QueryResponse> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_live, 12);
+  messageDesc(file_loams_live_v1_live, 14);
 
 /**
  * @generated from message loams.live.v1.MutateRequest
@@ -433,7 +469,7 @@ export type MutateRequest = Message<"loams.live.v1.MutateRequest"> & {
  * Use `create(MutateRequestSchema)` to create a new message.
  */
 export const MutateRequestSchema: GenMessage<MutateRequest> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_live, 13);
+  messageDesc(file_loams_live_v1_live, 15);
 
 /**
  * @generated from message loams.live.v1.MutateResponse
@@ -455,7 +491,7 @@ export type MutateResponse = Message<"loams.live.v1.MutateResponse"> & {
  * Use `create(MutateResponseSchema)` to create a new message.
  */
 export const MutateResponseSchema: GenMessage<MutateResponse> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_live, 14);
+  messageDesc(file_loams_live_v1_live, 16);
 
 /**
  * A deployed schema: tables, their indexes and their validators.
@@ -474,7 +510,7 @@ export type Schema = Message<"loams.live.v1.Schema"> & {
  * Use `create(SchemaSchema)` to create a new message.
  */
 export const SchemaSchema: GenMessage<Schema> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_live, 15);
+  messageDesc(file_loams_live_v1_live, 17);
 
 /**
  * @generated from message loams.live.v1.TableSchema
@@ -516,7 +552,7 @@ export type TableSchema = Message<"loams.live.v1.TableSchema"> & {
  * Use `create(TableSchemaSchema)` to create a new message.
  */
 export const TableSchemaSchema: GenMessage<TableSchema> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_live, 16);
+  messageDesc(file_loams_live_v1_live, 18);
 
 /**
  * @generated from message loams.live.v1.IndexSchema
@@ -540,7 +576,7 @@ export type IndexSchema = Message<"loams.live.v1.IndexSchema"> & {
  * Use `create(IndexSchemaSchema)` to create a new message.
  */
 export const IndexSchemaSchema: GenMessage<IndexSchema> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_live, 17);
+  messageDesc(file_loams_live_v1_live, 19);
 
 /**
  * A validator (design §45 §4.1, D684): the `v.*` vocabulary of
@@ -623,7 +659,7 @@ export type Validator = Message<"loams.live.v1.Validator"> & {
  * Use `create(ValidatorSchema)` to create a new message.
  */
 export const ValidatorSchema: GenMessage<Validator> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_live, 18);
+  messageDesc(file_loams_live_v1_live, 20);
 
 /**
  * @generated from message loams.live.v1.ValidatorObject
@@ -640,7 +676,7 @@ export type ValidatorObject = Message<"loams.live.v1.ValidatorObject"> & {
  * Use `create(ValidatorObjectSchema)` to create a new message.
  */
 export const ValidatorObjectSchema: GenMessage<ValidatorObject> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_live, 19);
+  messageDesc(file_loams_live_v1_live, 21);
 
 /**
  * @generated from message loams.live.v1.ValidatorUnion
@@ -659,7 +695,7 @@ export type ValidatorUnion = Message<"loams.live.v1.ValidatorUnion"> & {
  * Use `create(ValidatorUnionSchema)` to create a new message.
  */
 export const ValidatorUnionSchema: GenMessage<ValidatorUnion> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_live, 20);
+  messageDesc(file_loams_live_v1_live, 22);
 
 /**
  * An error for one query in a Transition. Call errors use the Connect error
@@ -684,7 +720,7 @@ export type LiveError = Message<"loams.live.v1.LiveError"> & {
  * Use `create(LiveErrorSchema)` to create a new message.
  */
 export const LiveErrorSchema: GenMessage<LiveError> = /*@__PURE__*/
-  messageDesc(file_loams_live_v1_live, 21);
+  messageDesc(file_loams_live_v1_live, 23);
 
 /**
  * @generated from enum loams.live.v1.ValidatorPrimitive
@@ -840,6 +876,21 @@ export const LiveService: GenService<{
     methodKind: "unary";
     input: typeof ModifyQuerySetRequestSchema;
     output: typeof ModifyQuerySetResponseSchema;
+  },
+  /**
+   * Replaces an open session's identity with this request's credential
+   * (its `Authorization` header; design §45 §5.4, LV1 plan Task 17). The
+   * same caller only extends the session's expiry; another caller (a
+   * sign-in or a sign-out) increments the identity version, and the next
+   * Transition reruns every query as the new caller. Answered once that
+   * Transition is queued. An unknown session is NOT_FOUND.
+   *
+   * @generated from rpc loams.live.v1.LiveService.Authenticate
+   */
+  authenticate: {
+    methodKind: "unary";
+    input: typeof AuthenticateRequestSchema;
+    output: typeof AuthenticateResponseSchema;
   },
   /**
    * A one-shot query, at the latest tick or at a given timestamp.

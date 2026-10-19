@@ -59,6 +59,7 @@ use loams_pg_control::runtime::compose::{
 use loams_pg_control::runtime::remote::RemoteRuntime;
 use loams_pg_control::runtime::runner::{RunnerPolicy, RunnerServer};
 use loams_pg_control::runtime::{ComputeRuntime, images};
+use loams_pg_control::scram::RoleVerifiers;
 use loams_pg_control::secrets::{FileSecretStore, KeySource, Secret, SecretRef, SecretStore};
 use loams_pg_control::service::operations::OPERATION_RETENTION;
 use loams_pg_control::service::{Clock, PgService, ServiceConfig};
@@ -228,6 +229,12 @@ pub struct PgControlConfig {
     pub default_pageserver: Option<u64>,
     /// `loams-wal` pool name → the connection strings computes write to.
     pub wal_pools: BTreeMap<String, Vec<String>>,
+    /// Endpoint storage (`host:port`) for the computes' file cache state
+    /// (Task 16); `None`: not run, and a promotion runs with a cold cache.
+    pub endpoint_storage: Option<String>,
+    /// Where the key endpoint storage verifies tokens with is written at
+    /// start (PEM).
+    pub endpoint_storage_pem_out: Option<PathBuf>,
     /// The storage controller's token for `notify-attach`; without it the
     /// route is not served.
     pub notify_token: Option<Secret<String>>,
@@ -282,6 +289,8 @@ impl PgControlConfig {
             pageservers: BTreeMap::new(),
             default_pageserver: None,
             wal_pools: BTreeMap::new(),
+            endpoint_storage: None,
+            endpoint_storage_pem_out: None,
             notify_token: None,
             audit: Arc::new(LogAuditSink),
             upkeep_every: Duration::from_secs(600),
@@ -518,6 +527,7 @@ fn computes(
     keys: &Arc<ComputeKeys>,
     clock: &Clock,
     upcall_addr: SocketAddr,
+    verifiers: &Arc<RoleVerifiers>,
 ) -> Result<Computes, PgControlError> {
     if upcall_addr.ip().is_loopback() {
         tracing::warn!(
@@ -536,8 +546,23 @@ fn computes(
             pageservers: config.pageservers.clone(),
             default_pageserver: config.default_pageserver,
             wal_pools: config.wal_pools.clone(),
+            endpoint_storage: endpoint_storage(config, keys),
+            verifiers: Some(verifiers.clone()),
         },
     ))
+}
+
+/// Endpoint storage as the specs name it (Task 16), signed with `keys`.
+fn endpoint_storage(
+    config: &PgControlConfig,
+    keys: &Arc<ComputeKeys>,
+) -> Option<loams_pg_control::upcall::spec_sources::EndpointStorage> {
+    config.endpoint_storage.as_ref().map(|addr| {
+        loams_pg_control::upcall::spec_sources::EndpointStorage {
+            addr: addr.clone(),
+            keys: keys.clone(),
+        }
+    })
 }
 
 /// The API listener's routes: every RPC path its own route, so any other
@@ -575,6 +600,21 @@ impl PgControl {
         let secrets = open_secrets(&config).await?;
         let signing_ref = SecretRef::parse(SIGNING_KEY_REF)?;
         let keys = Arc::new(load_or_create_signing_key(secrets.as_ref(), &signing_ref).await?);
+        if let Some(path) = &config.endpoint_storage_pem_out {
+            // The key endpoint storage verifies the computes' tokens with
+            // (its `pemfile`); public, so written plainly.
+            // Written whole, then renamed: endpoint storage waits for the
+            // file and must never read half of it.
+            let tmp = path.with_extension("tmp");
+            std::fs::write(&tmp, keys.public_key_pem())
+                .and_then(|()| std::fs::rename(&tmp, path))
+                .map_err(|e| {
+                    PgControlError::Config(format!(
+                        "--endpoint-storage-pem-out {}: {e}",
+                        path.display()
+                    ))
+                })?;
+        }
         let neon = NeonClients {
             storage: NeonClient::new(
                 NeonEndpoints {
@@ -586,12 +626,9 @@ impl PgControl {
             wal: WalClient::new(config.wal.clone(), None)?,
         };
         let clock = Clock::system();
-        let service = PgService::new(
-            store.clone(),
-            neon.clone(),
-            secrets.clone(),
-            ServiceConfig::default(),
-        );
+        // Roles' password verifiers (Task 24), one cache for the upcall
+        // listener's specs and the reconciler's pushes.
+        let verifiers = Arc::new(RoleVerifiers::new(secrets.clone()));
 
         let listener = tokio::net::TcpListener::bind(config.listen)
             .await
@@ -615,6 +652,8 @@ impl PgControl {
                 pageservers: config.pageservers.clone(),
                 default_pageserver: config.default_pageserver,
                 wal_pools: config.wal_pools.clone(),
+                endpoint_storage: endpoint_storage(&config, &keys),
+                verifiers: Some(verifiers.clone()),
                 ..UpcallConfig::defaults(config.upcall_listen)
             },
         )
@@ -637,14 +676,22 @@ impl PgControl {
                     &keys,
                     &clock,
                     upcall_addr,
+                    &verifiers,
                 )?)
             }
             #[cfg(feature = "postgres-kubernetes")]
             (PgRuntime::Kubernetes { .. }, Some(settings)) => {
                 use loams_pg_control::autoscale::{Combined, CtlMetrics, Policy, Scaling};
                 let kube = kube_runtime(settings, secrets.as_ref()).await?;
-                let mut computes =
-                    computes(&config, settings, kube.clone(), &keys, &clock, upcall_addr)?;
+                let mut computes = computes(
+                    &config,
+                    settings,
+                    kube.clone(),
+                    &keys,
+                    &clock,
+                    upcall_addr,
+                    &verifiers,
+                )?;
                 // The autoscaler (Task 15): CPU from the metrics API, the file
                 // cache from compute_ctl. Compose cannot resize (R10.4).
                 computes.scaling = Some(Arc::new(Scaling::new(
@@ -675,6 +722,20 @@ impl PgControl {
             audit: config.audit.clone(),
             clock: clock.clone(),
         });
+        let holder = format!("pg-control-{}", ulid::Ulid::generate());
+        let mut reconciler = Reconciler::new(
+            store.clone(),
+            neon.clone(),
+            secrets.clone(),
+            ReconcilerConfig::new(holder),
+        );
+        if let Some(computes) = computes {
+            reconciler = reconciler.with_computes(computes);
+        }
+        // Role and database changes kick the project's pass, so a running
+        // compute takes the new spec now rather than at the next resync.
+        let service = PgService::new(store, neon, secrets, ServiceConfig::default())
+            .with_kicker(reconciler.kicker());
         let app = api_routes(service.clone(), gate, config.reflection);
         let stop = CancellationToken::new();
         let mut tasks = Vec::new();
@@ -692,11 +753,6 @@ impl PgControl {
         tasks.push(tokio::spawn(async move {
             upcall.serve(async move { token.cancelled().await }).await;
         }));
-        let holder = format!("pg-control-{}", ulid::Ulid::generate());
-        let mut reconciler = Reconciler::new(store, neon, secrets, ReconcilerConfig::new(holder));
-        if let Some(computes) = computes {
-            reconciler = reconciler.with_computes(computes);
-        }
         let reconciler = Arc::new(reconciler);
         let token = stop.clone();
         tasks.push(tokio::spawn(async move {

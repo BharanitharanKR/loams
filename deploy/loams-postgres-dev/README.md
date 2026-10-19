@@ -19,33 +19,38 @@ Not a production layout: no storage controller, no Neon proxy, no TLS, default c
 `fsync = off` in the compute spec, and the safekeeper keeps WAL in its container filesystem.
 Images are pinned by digest in [`deploy/pins/loams-postgres-images.toml`](../pins/loams-postgres-images.toml)
 (NF1 Task 2). `scripts/nf1/pins.py set` writes that file and generates every consumer from it:
-this stack's and `deploy/loams-pg-bench`'s `x-neon-image` and `x-compute-image`, `PG_HEADERS_IMAGE`
-in `pg2.yml`, `pg2-e2e.yml` and `loams-pg-bench.yml`, and the table below; `pins.py check` fails on
-any difference. `NEON_IMAGE` and `COMPUTE_IMAGE` still override the pins.
+this stack's and `deploy/loams-pg-bench`'s `x-neon-image` and `x-compute-image`, the release
+stack's `endpoint-storage` image (`deploy/release/compose.yaml`), `PG_HEADERS_IMAGE` in `pg2.yml`,
+`pg2-e2e.yml` and `loams-pg-bench.yml`, and the table below; `pins.py check` fails on any
+difference. `NEON_IMAGE` and `COMPUTE_IMAGE` still override the pins.
 
-Until our own builds (NF1 Task 14), the pins are Neon's last public build, 2025-08-26, git
-`77e22e4b`, at Neon's own repositories. Every mirrored package stayed private (see Mirror), so
-the `mirror:` sources record Neon's reference, and no pin names `neon-archive`: those packages
-are never deployed. The amd64 manifests of that build are
-`sha256:ead56a7b33925ca4df9f1ee0d29f55fa25e165a3fee6a4f19055050c68e8cad0` (`neon`) and
-`sha256:9b86e3ecb2267fbdeb0fd2478db0e662959ccdfa4526efa4a558410a93c6c46f` (`compute-node-v17`).
+Since NF1 Task 14 the pins are our own builds: a Loams Postgres release (`lp-YYYY.MM.N`) of
+`ostrium-labs/loams-postgres`, each image signed and attested by the fork's release workflow
+(`scripts/nf1/verify-pins.sh` checks them in `nf1-pins.yml`). The first, `lp-2026.10.1`, has the
+same Postgres revisions as Neon's last public build (16.9 and 17.5); `lp-2026.11.0` moves to the
+minors 16.15 and 17.11 (NF1 Task 17). Until then, the pins were
+that build, 2025-08-26, git `77e22e4b`, at Neon's own repositories, with `mirror:` sources; its
+amd64 manifests were `sha256:ead56a7b33925ca4df9f1ee0d29f55fa25e165a3fee6a4f19055050c68e8cad0`
+(`neon`) and `sha256:9b86e3ecb2267fbdeb0fd2478db0e662959ccdfa4526efa4a558410a93c6c46f`
+(`compute-node-v17`). The mirrored packages (see Mirror) stay private and are never deployed.
 
 <!-- pins.py: begin images (generated from deploy/pins/loams-postgres-images.toml) -->
-Pinned in [`deploy/pins/loams-postgres-images.toml`](../pins/loams-postgres-images.toml): `fork_release` `mirror-77e22e4b`, `fork_commit` `77e22e4bf09d88b70b4a83a38c2f6de6301816b4`.
+Pinned in [`deploy/pins/loams-postgres-images.toml`](../pins/loams-postgres-images.toml): `fork_release` `lp-2026.11.0`, `fork_commit` `a213ec44ac29c31812712ffdd6de7c1f4d4a599c`.
 
 | Pin | Image (multi-arch index) | Source | Postgres |
 |---|---|---|---|
-| `storage` | `ghcr.io/neondatabase/neon@sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f` | `mirror:ghcr.io/neondatabase/neon@sha256:7a4f124917bb929964b2d696d710f19584f80bb9bd51b2af4a6e2425434c761f` | 16.9, 17.5 |
-| `compute-v16` | `ghcr.io/neondatabase/compute-node-v16@sha256:b3e151661bd2ee11eb2843c8926001966cb23969227e9673c5f42fc3fbe14249` | `mirror:ghcr.io/neondatabase/compute-node-v16@sha256:b3e151661bd2ee11eb2843c8926001966cb23969227e9673c5f42fc3fbe14249` | 16.9 |
-| `compute-v17` | `ghcr.io/neondatabase/compute-node-v17@sha256:13ab146d3e7bbabb25a8532f315ac443e7512351d1ede0bab586def5c70e26c3` | `mirror:ghcr.io/neondatabase/compute-node-v17@sha256:13ab146d3e7bbabb25a8532f315ac443e7512351d1ede0bab586def5c70e26c3` | 17.5 |
+| `storage` | `ghcr.io/ostrium-labs/loams-postgres-storage@sha256:4dcec4cbef637b92b1088ea2c0bc857f3b5ef4318f02e8d2d4a0f9263ed4140e` | `ostrium-labs/loams-postgres@a213ec44ac29c31812712ffdd6de7c1f4d4a599c` | 16.15, 17.11 |
+| `compute-v16` | `ghcr.io/ostrium-labs/loams-postgres-compute-v16@sha256:29842a21499b282b97420b141d11fd3923b9102ce0f37c14491581c5f6591434` | `ostrium-labs/loams-postgres@a213ec44ac29c31812712ffdd6de7c1f4d4a599c` | 16.15 |
+| `compute-v17` | `ghcr.io/ostrium-labs/loams-postgres-compute-v17@sha256:210b71416c827b6cf7842853706e1dbdcc870fd4a7af8e235d6e7296b95edb0e` | `ostrium-labs/loams-postgres@a213ec44ac29c31812712ffdd6de7c1f4d4a599c` | 17.11 |
 
 Postgres majors: supported 17; beta none; maintenance 16; default 17.
 <!-- pins.py: end images -->
 
 Postgres is 17 (PG2 Task 0 ruling 7).
 
-Resources in the spike: about 5 GB (`neon`) plus 1.3 GB (`compute-node-v17`) of images; storage
-services under 0.5 GB of RAM together.
+Resources: about 1.9 GB (`loams-postgres-storage`) plus 0.4 GB (`loams-postgres-compute-v17`) of
+compressed amd64 layers to pull; storage services under 0.5 GB of RAM together (measured in the
+spike).
 
 ## Mirror
 
@@ -108,7 +113,7 @@ With Docker, or Podman plus `DOCKER_HOST=unix:///run/user/$UID/podman/podman.soc
 docker compose up -d rustfs create-bucket storage_broker pageserver safekeeper1
 
 # Create a tenant and its first timeline through the pageserver API. The timeline's
-# Postgres version must match the compute image (compute-node-v17).
+# Postgres version must match the compute image (loams-postgres-compute-v17).
 export TENANT_ID=$(openssl rand -hex 16) TIMELINE_ID=$(openssl rand -hex 16)
 curl -X PUT -H 'Content-Type: application/json' \
   -d '{"mode":"AttachedSingle","generation":1,"tenant_conf":{}}' \

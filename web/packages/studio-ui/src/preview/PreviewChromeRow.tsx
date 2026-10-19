@@ -141,7 +141,7 @@ export function PreviewChromeRow({
             spellCheck={false}
             disabled={inputDisabled}
             aria-label="Preview address"
-            className="font-mono"
+            className={/* mono-ok: path */ "font-mono"}
             data-preview-url-input
           />
           {onOpenInBrowser && !inputFocused ? (

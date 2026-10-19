@@ -475,6 +475,9 @@ pub(crate) struct Call {
     pub(crate) result_bytes: usize,
     /// The conversion budget of each `ctx.db` call's arguments.
     pub(crate) host_bytes: usize,
+    /// What `ctx.auth.getUserIdentity()` returns: the end user's identity
+    /// object, `None` (`null`) for any other caller (LV1 plan Task 16).
+    pub(crate) identity: Option<LiveValue>,
 }
 
 impl Call {
@@ -494,7 +497,14 @@ impl Call {
             seed: seed(start_ts.0, request_id),
             result_bytes,
             host_bytes,
+            identity: None,
         }
+    }
+
+    /// This call, run as the end user `identity` (its identity object).
+    pub(crate) fn with_identity(mut self, identity: Option<LiveValue>) -> Self {
+        self.identity = identity;
+        self
     }
 
     /// A call of `path` in `txn`: its start timestamp, request id and
@@ -508,6 +518,12 @@ impl Call {
             &txn.ctx().request_id,
             result_bytes,
             host_bytes,
+        )
+        .with_identity(
+            txn.ctx()
+                .identity
+                .as_ref()
+                .map(loams_live::Identity::to_value),
         )
     }
 }
@@ -1097,6 +1113,7 @@ impl Engine {
             seed,
             result_bytes,
             host_bytes,
+            identity,
         } = call;
         self.state.begin(Some((start_ms, seed, link)));
         self.state.host_bytes.set(host_bytes);
@@ -1113,7 +1130,8 @@ impl Engine {
             let call = || -> rquickjs::Result<Value<'_>> {
                 let invoke: rquickjs::Function = internals.get("invoke")?;
                 let args = to_js(&ctx, &args)?;
-                let done: Promise = invoke.call((path.as_str(), args))?;
+                let identity = to_js(&ctx, identity.as_ref().unwrap_or(&LiveValue::Null))?;
+                let done: Promise = invoke.call((path.as_str(), args, identity))?;
                 self.settle::<Value>(&ctx, &done)
             };
             let phase = Phase::Call(&path);

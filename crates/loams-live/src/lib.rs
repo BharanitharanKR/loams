@@ -24,21 +24,29 @@
 //! deployment declares, with its table validators (LV1 Task 8), is in
 //! [`schema`], and the leased table scans that check them in [`backfill`].
 //! The admin service, `LiveAdminService` (LV1 Task 10), is in [`admin`],
-//! and the function logs it tails in [`logs`].
+//! and the function logs it tails in [`logs`]. The app directory (LV1
+//! Task 13) is in [`apps`], and the per-app engines a server starts on
+//! demand in [`engines`].
 
 pub mod admin;
+pub mod apps;
+pub mod auth;
+pub mod authz;
 pub mod backfill;
 pub mod catalog;
 mod config;
 pub mod cursor;
 pub mod deploy;
 pub mod docs;
+pub mod engines;
 mod error;
+pub mod forward;
 pub mod ids;
 pub mod journal;
 pub mod keys;
 mod limits;
 pub mod logs;
+pub mod origins;
 pub mod query;
 pub mod readset;
 pub mod schema;
@@ -54,20 +62,24 @@ mod value;
 /// The `loams.live.v1` protobuf messages.
 pub use loams_live_proto::loams::live::v1 as pb;
 
+pub use apps::{APP_HEADER, AppRecord, AppState, Apps, Keyspaces, Layout, SYSTEM_KEYSPACE};
 pub use catalog::{IndexDef, IndexSpec, TableDef, TableValidation};
 pub use config::{
-    DEFAULT_JANITOR_INTERVAL, DEFAULT_JOURNAL_SHARDS, DEFAULT_LISTEN, Isolation, KEYSPACE_PREFIX,
-    LiveConfig, Tenancy, check_isolation, check_listen, keyspace_of, store_path,
+    DEFAULT_IDLE_AFTER, DEFAULT_JANITOR_INTERVAL, DEFAULT_JOURNAL_SHARDS, DEFAULT_LISTEN,
+    Isolation, KEYSPACE_PREFIX, LiveConfig, Tenancy, check_isolation, check_listen, keyspace_of,
+    store_path,
 };
 pub use deploy::AppEngine;
 pub use docs::{Doc, IndexRange, Order, Reads, WriteRecord};
-pub use error::LiveError;
+pub use engines::{AppRuntime, Engines};
+pub use error::{LIVE_REASONS, LiveError, scrub};
 pub use ids::{DocId, IndexId, TableId};
 pub use journal::{Batch, Checkpoint, Janitor, JanitorReport, Journal, Tailer};
 pub use keys::{AppKeys, KeyRange};
 pub use limits::Limits;
 /// The store a [`LiveConfig`] names (LV1 row T20-9).
 pub use loams_kv::{Backend, EmbeddedConfig, StoreConfig};
+pub use origins::{AppOrigins, ConsoleOrigin};
 pub use readset::{ReadSetIndex, SubId};
 pub use service::{LiveHandle, LiveRoutes, LiveServer};
 pub use session::{ClientState, SessionConfig, Sessions, Version};

@@ -52,6 +52,10 @@ pub enum Op {
     DeleteTimeline,
     LsnByTimestamp,
     TenantConfig,
+    /// `GET /v1/tenant` (UP1 Task 9).
+    ListTenants,
+    /// `GET /v1/tenant/{t}/config` (UP1 Task 9).
+    GetTenantConfig,
     WalCreateTimeline,
     WalTimelineStatus,
     ComputeStatus,
@@ -158,7 +162,7 @@ impl NeonError {
             "not_found" => {
                 let kind = match self.op {
                     _ if self.msg.contains("tenant is missing") => "tenant",
-                    Op::AttachTenant | Op::TenantConfig => "tenant",
+                    Op::AttachTenant | Op::TenantConfig | Op::GetTenantConfig => "tenant",
                     _ => "timeline",
                 };
                 metadata.insert("kind".to_owned(), kind.to_owned());

@@ -127,9 +127,17 @@ export interface ConnectorValidation {
 	errors: { path: string; message: string }[];
 }
 
+/** The theme choice (D1074): System follows the OS, Dark and Light are explicit. */
+export type ThemeChoice = "system" | "dark" | "light";
+
 export interface LoamsDesktopApi {
 	version: string;
 	platform: DesktopPlatform;
+	/** D1074: the saved choice (passed at window creation) and its setter; `dark` drives the chrome. */
+	theme: {
+		initial: ThemeChoice;
+		set(choice: ThemeChoice, dark: boolean): Promise<void>;
+	};
 	servers: {
 		list(): Promise<{ servers: ServerEntry[]; activeId: string }>;
 		add(e: Omit<ServerEntry, "id">): Promise<IpcResult<ServerEntry>>;
@@ -201,6 +209,12 @@ export interface LoamsDesktopApi {
 			percent?: number;
 		}>;
 		check(): Promise<void>;
+		/**
+		 * "Check for updates automatically" (`update.autoCheck`, default on). `locked` is
+		 * true when `LOAMS_DESKTOP_NO_UPDATE_CHECK=1` forces updates off.
+		 */
+		autoCheck(): Promise<{ enabled: boolean; locked: boolean }>;
+		setAutoCheck(enabled: boolean): Promise<void>;
 		/** "self" mode: fetch the update. "manual" mode: open the release page. */
 		download(): Promise<void>;
 		installAndRestart(): Promise<void>;
@@ -275,6 +289,7 @@ export interface LoamsDesktopApi {
 	};
 }
 export const CH = {
+	themeSet: "theme:set",
 	serversList: "servers:list",
 	serversAdd: "servers:add",
 	serversRemove: "servers:remove",
@@ -306,6 +321,8 @@ export const CH = {
 	shellCommand: "shell:command",
 	updateState: "update:state",
 	updateCheck: "update:check",
+	updateAutoGet: "update:auto-get",
+	updateAutoSet: "update:auto-set",
 	updateDownload: "update:download",
 	updateInstall: "update:install",
 	stacksState: "stacks:state",

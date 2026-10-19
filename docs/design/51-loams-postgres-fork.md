@@ -188,7 +188,7 @@ Not forked, but fetched by upstream's build: `neondatabase/pgrag` (Apache-2.0, `
 
 ### 3.7 Security (D805)
 
-- **Reporting.** Private vulnerability reporting is enabled on every unarchived fork. `SECURITY.md` points at Loams' policy (`security@ostriumlabs.com`, acknowledgement within 3 business days). *As built (NF1 Task 5 ruling 4):* enabled on the six unarchived forks; `SECURITY.md` on `loams-postgres`, `postgres` (`loams/meta`), `tokio-epoll-uring` and `pg_session_jwt`.
+- **Reporting.** Private vulnerability reporting is enabled on every unarchived fork. `SECURITY.md` points at Loams' policy (`security@ostriumlabs.org`, acknowledgement within 3 business days). *As built (NF1 Task 5 ruling 4):* enabled on the six unarchived forks; `SECURITY.md` on `loams-postgres`, `postgres` (`loams/meta`), `tokio-epoll-uring` and `pg_session_jwt`.
 - **Monitoring** (`loams-advisories.yml`, daily):
   - `cargo deny check advisories` on the fork's `Cargo.lock`;
   - Trivy (or Grype) scans of every pinned digest, covering Debian packages and extension binaries;
@@ -702,7 +702,7 @@ MVM is a switch, `vars.MAINTENANCE_MODE = mvm` on the `loams-postgres` repositor
 | Q718 | When is Postgres 19 GA in Loams? Default: NF1f's matrix green twice, upstream 19.1 released, and 30 days of the beta on Loams' own test cluster with no data-loss bug | NF1 Task 35 |
 | Q719 | The catalogue: drop `pgrag`, `pg_mooncake` and `pg_duckdb` (default: yes); keep `plv8` and `rdkit` as `included` (default: yes); ship GPL extensions (PostGIS, pgRouting, postgresql-unit) with an attached source artifact (default: yes) | NF1 Task 21 |
 | Q720 | The Data API: drop the `subzero` REST broker with no replacement in NF1 (default), and consider PostgREST as a separate service after PG2 GA? | NF1 Task 7 |
-| Q721 | The CI budget: standard hosted runners first (free for public repositories), with a cap of $150 a month for larger runners or Blacksmith when cold builds do not fit (default)? Who holds the billing? | NF1 Task 11 |
+| Q721 | ~~The CI budget: standard hosted runners first (free for public repositories), with a cap of $150 a month for larger runners or Blacksmith when cold builds do not fit (default)? Who holds the billing?~~ **Answered** (owner, 2026-10-16): standard hosted runners; the gate nightly, on releases and by hand, not on every PR | NF1 Task 16 |
 | Q722 | The two named maintainers, the CODEOWNERS teams, and the mode: full during NF1 and Loams Postgres beta, then reviewed (default)? | NF1 Task 5 |
 | Q723 | ~~Package names: keep `neon` and `compute-node-v<N>` for continuity, or rename before Cloud GA?~~ **Answered by D822** (owner, 2026-10-09): renamed to `loams-postgres-storage` and `loams-postgres-compute-v<N>` | Answered |
 | Q724 | Security targets: 72 h critical, 7 days high and Postgres security minors, 30 days others (default)? | NF1 Task 6 |
@@ -714,7 +714,7 @@ MVM is a switch, `vars.MAINTENANCE_MODE = mvm` on the `loams-postgres` repositor
 | Q730 | Detach `ostrium-labs/loams-postgres` from `neondatabase/neon`'s fork network through GitHub support (default: yes, the owner files it now)? Do the same for `ostrium-labs/postgres` and the small forks (default: no; they stay forks, frozen or tracking `postgres/postgres`)? | Before NF1 Task 3 |
 | Q731 | The dev stack's new path: `deploy/loams-postgres-dev` (default), plain `deploy/loams-postgres` (which reads like the product next to `deploy/helm/loams-postgres` and `deploy/loams-postgres-single`), or keep `deploy/neon`? | NF1 Task 1b |
 | Q732 | Compatibility names (`neon` extension, `neon.*` GUCs, `neon_superuser`, `NEON_*`, `neon_local`, wire and on-disk names): keep them through NF1 and plan aliases after PG2 GA, one migration task per name (default), or start sooner? | After NF1 |
-| Q733 | The GitHub App `loams-postgres-bot`: may the controller create it through GitHub's App manifest flow once the owner approves (default), or does the owner create it? Either way the owner installs it on the organisation. Until then, the owner refreshes the `gh` token with `write:packages`, `read:packages` and `admin:org` for Tasks 1 and 5 | NF1 Task 1 |
+| Q733 | ~~The GitHub App `loams-postgres-bot`: may the controller create it through GitHub's App manifest flow once the owner approves (default), or does the owner create it? Either way the owner installs it on the organisation. Until then, the owner refreshes the `gh` token with `write:packages`, `read:packages` and `admin:org` for Tasks 1 and 5~~ **Answered** (owner, 2026-10-16): the organisation secret `LOAMS_BOT_TOKEN` | NF1 Task 15 |
 | Q734 | Staffing for the hard fork: one full-time maintainer plus a second at about 0.25 FTE, about 1.25 FTE in full mode (default, D824)? Who are they (with Q722)? | NF1 Task 5 |
 
 ## 17. Contradictions with earlier decisions, and how they are resolved
