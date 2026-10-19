@@ -75,7 +75,10 @@ public sealed class Subscription : IAsyncEnumerable<StreamRecord>
                 yield break;
             }
 
-            if (records.Count == 0)
+            // A page with nothing at or past the offset is an empty one: back off rather
+            // than spin on records already yielded.
+            var from = Offset;
+            if (!records.Any((r) => r.Offset >= from))
             {
                 try
                 {
