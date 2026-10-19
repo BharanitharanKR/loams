@@ -230,78 +230,89 @@ final class AppBuilderTests: XCTestCase {
         "query": .object(["match": .object(["field": .string("body"), "text": .string("refund")])]),
     ])])
 
+    private let unit = [1.0, 0.0, 0.0, 0.0]
+
+    /// Each case's builder output, keyed by its file name in `sdks/fixtures/builders`.
+    private func corpusCases() -> [String: JSONValue] {
+        let hybrid = { (fusion: Fusion) -> JSONValue in
+            .object(Search.on("notes").text("refund", fields: ["body"]).vector("embedding", self.unit, k: 5)
+                .fuse(fusion).limit(3).json)
+        }
+        let page = Search.on("notes").text("refund", fields: ["body"]).filter(Filter.eq("tags", "policy"))
+            .highlight("body").select(include: ["title"]).limit(2).sort(.score(), .pk())
+        return [
+            "schema_notes": Schema().text("title").text("body").keyword("tags").i64("n").vector("embedding", dim: 4).json,
+            "filter_term": Filter.eq("tags", "policy").json,
+            "filter_bool_nested": (Filter.eq("tags", "policy") && (Filter.range("n", gte: 2) || !Filter.exists("archived"))).json,
+            "filter_range_open": Filter.range("n", gt: 1).json,
+            "filter_ids": Filter.ids([1, "k-str", .uuid("0190f5c4-6c1e-7b3a-9d2e-4f5a6b7c8d9e")]).json,
+            "search_text_filter_highlight_select": .object(page.json),
+            "search_after_page": .object(page.after([.number(0.3438858389854431), .int(3)]).json),
+            "search_vector_ann_params": .object(Search.on("notes")
+                .vector("embedding", unit, k: 3, params: ["nprobes": .int(8), "refineFactor": .int(2)]).limit(3).json),
+            "search_hybrid_rrf": hybrid(.rrf(k: 60)),
+            "search_hybrid_dbsf": hybrid(.dbsf),
+            "search_hybrid_weighted": hybrid(.weighted([0.7, 0.3])),
+            "search_expand": .object(Search.on("notes").text("refund", fields: ["body"])
+                .expand(graph: "notes_graph", fromField: "id", hops: 1).json),
+        ]
+    }
+
+    /// Numbers compare by value, as the corpus README asks: `1` and `1.0` are one value.
+    private func normalized(_ value: JSONValue) -> JSONValue {
+        switch value {
+        case .int(let i): return .number(Double(i))
+        case .array(let a): return .array(a.map(normalized))
+        case .object(let o): return .object(o.mapValues(normalized))
+        default: return value
+        }
+    }
+
+    private func decode(_ text: String) throws -> JSONValue {
+        try JSONDecoder().decode(JSONValue.self, from: Data(text.utf8))
+    }
+
     func test_swift_builders_match_corpus() throws {
-        let schema = Schema().text("title").text("body").keyword("tags").i64("n").vector("embedding", dim: 4).json
-        let text: (String) -> JSONValue = { name in
-            .object([
-                "name": .string(name), "source_path": .string(name),
-                "kind": .object(["text": .object(["analyzer": .string("standard"), "positions": .bool(true)])]),
-                "indexed": .bool(true), "fast": .bool(false),
-            ])
+        let cases = corpusCases()
+        let textRefund = #"{"text":{"query":{"match":{"field":"body","text":"refund"}}}}"#
+        let vectorUnit = #"{"vector":{"field":"embedding","query":[1,0,0,0],"k":5}}"#
+        let pageBody = #""collection":"notes","retrievers":[\#(textRefund)],"filter":{"term":{"field":"tags","value":"policy"}},"highlight":{"fields":[{"field":"body"}]},"select":{"source":{"include":["title"]}},"limit":2,"sort":[{"score":{}},{"pk":{}}]"#
+        let text = { (name: String) in
+            #"{"name":"\#(name)","source_path":"\#(name)","kind":{"text":{"analyzer":"standard","positions":true}},"indexed":true,"fast":false}"#
         }
-        XCTAssertEqual(schema, .object([
-            "fields": .array([
-                text("title"), text("body"),
-                .object(["name": .string("tags"), "source_path": .string("tags"), "kind": .string("keyword"),
-                         "indexed": .bool(true), "fast": .bool(true)]),
-                .object(["name": .string("n"), "source_path": .string("n"), "kind": .string("i64"),
-                         "indexed": .bool(true), "fast": .bool(true)]),
-            ]),
-            "vectors": .array([.object(["name": .string("embedding"), "dim": .int(4), "distance": .string("cosine")])]),
-            "sparse_vectors": .array([]),
-            "dynamic": .string("ignore"),
-            "max_fields": .int(1000),
-        ]))
-
-        XCTAssertEqual(Filter.eq("tags", "policy").json,
-                       .object(["term": .object(["field": .string("tags"), "value": .string("policy")])]))
-        XCTAssertEqual(
-            (Filter.eq("tags", "policy") && (Filter.range("n", gte: 2) || !Filter.exists("archived"))).json,
-            .object(["bool": .object(["must": .array([
-                .object(["term": .object(["field": .string("tags"), "value": .string("policy")])]),
-                .object(["bool": .object(["should": .array([
-                    .object(["range": .object(["field": .string("n"), "gte": .int(2)])]),
-                    .object(["bool": .object(["mustNot": .array([.object(["exists": .object(["field": .string("archived")])])])])]),
-                ])])]),
-            ])])])
-        )
-        XCTAssertEqual(Filter.range("n", gt: 1).json, .object(["range": .object(["field": .string("n"), "gt": .int(1)])]))
-        XCTAssertEqual(Filter.ids([1, "k-str"]).json, .object(["ids": .array([.int(1), .string("k-str")])]))
-
-        let text3 = Search.on("notes").text("refund", fields: ["body"]).filter(Filter.eq("tags", "policy"))
-            .highlight("body").select(include: ["title"]).sort(.score(), .pk()).limit(2).json
-        XCTAssertEqual(text3["retrievers"], .array([textRefund]))
-        XCTAssertEqual(text3["sort"], .array([
-            .object(["score": .object(["order": .string("SORT_ORDER_DESC")])]),
-            .object(["pk": .object(["order": .string("SORT_ORDER_ASC")])]),
-        ]))
-        XCTAssertEqual(text3["select"], .object(["source": .object(["include": .array([.string("title")]), "exclude": .array([])])]))
-        XCTAssertEqual(text3["highlight"], .object(["fields": .array([.object(["field": .string("body")])])]))
-        XCTAssertEqual(text3["limit"], .int(2))
-
-        let vector = Search.on("notes").vector("embedding", embedding, k: 3, params: ["ef": .int(64)]).limit(3).json
-        XCTAssertEqual(vector["retrievers"], .array([.object(["vector": .object([
-            "field": .string("embedding"), "query": .array(embedding.map { .number($0) }), "k": .int(3),
-            "params": .object(["ef": .int(64)]),
-        ])])]))
-
-        let hybrid = { (fusion: Fusion) in
-            Search.on("notes").text("refund", fields: ["body"]).vector("embedding", self.embedding).limit(3).fuse(fusion).json
+        // The corpus's `expect`s, inline so the test holds on a tree without the corpus.
+        let expected: [String: String] = [
+            "schema_notes": #"{"fields":[\#(text("title")),\#(text("body")),{"name":"tags","source_path":"tags","kind":"keyword","indexed":true,"fast":true},{"name":"n","source_path":"n","kind":"i64","indexed":true,"fast":true}],"vectors":[{"name":"embedding","dim":4,"distance":"cosine"}],"sparse_vectors":[],"dynamic":"ignore","max_fields":1000}"#,
+            "filter_term": #"{"term":{"field":"tags","value":"policy"}}"#,
+            "filter_bool_nested": #"{"bool":{"must":[{"term":{"field":"tags","value":"policy"}},{"bool":{"should":[{"range":{"field":"n","gte":2}},{"bool":{"mustNot":[{"exists":{"field":"archived"}}]}}]}}]}}"#,
+            "filter_range_open": #"{"range":{"field":"n","gt":1}}"#,
+            "filter_ids": #"{"ids":[{"uint":"1"},"k-str",{"uuid":"0190f5c4-6c1e-7b3a-9d2e-4f5a6b7c8d9e"}]}"#,
+            "search_text_filter_highlight_select": "{\(pageBody)}",
+            "search_after_page": "{\(pageBody),\"searchAfter\":[0.3438858389854431,3]}",
+            "search_vector_ann_params": #"{"collection":"notes","retrievers":[{"vector":{"field":"embedding","query":[1,0,0,0],"k":3,"params":{"nprobes":8,"refineFactor":2}}}],"limit":3}"#,
+            "search_hybrid_rrf": #"{"collection":"notes","retrievers":[\#(textRefund),\#(vectorUnit)],"fusion":{"rrf":{"k":60}},"limit":3}"#,
+            "search_hybrid_dbsf": #"{"collection":"notes","retrievers":[\#(textRefund),\#(vectorUnit)],"fusion":{"dbsf":{}},"limit":3}"#,
+            "search_hybrid_weighted": #"{"collection":"notes","retrievers":[\#(textRefund),\#(vectorUnit)],"fusion":{"weightedSum":{"weights":[0.7,0.3]}},"limit":3}"#,
+            "search_expand": #"{"collection":"notes","retrievers":[\#(textRefund)],"expandSpec":{"graph":"notes_graph","fromField":"id","hops":1}}"#,
+        ]
+        XCTAssertEqual(Set(cases.keys), Set(expected.keys))
+        for (name, json) in expected {
+            XCTAssertEqual(normalized(cases[name] ?? .null), normalized(try decode(json)), name)
         }
-        XCTAssertEqual(hybrid(.rrf(k: 60))["fusion"], .object(["rrf": .object(["k": .int(60)])]))
-        XCTAssertEqual(hybrid(.dbsf)["fusion"], .object(["dbsf": .object([:])]))
-        XCTAssertEqual(hybrid(.weighted([0.7, 0.3]))["fusion"],
-                       .object(["weightedSum": .object(["weights": .array([.number(0.7), .number(0.3)])])]))
-        XCTAssertEqual(hybrid(.dbsf)["retrievers"], .array([textRefund, .object(["vector": .object([
-            "field": .string("embedding"), "query": .array(embedding.map { .number($0) }),
-        ])])]))
 
-        let after = Search.on("notes").text("refund", fields: ["body"]).sort(.score(), .pk())
-            .after([.number(1.5), .int(3)]).limit(2).json
-        XCTAssertEqual(after["searchAfter"], .array([.number(1.5), .int(3)]))
-
-        let expand = Search.on("notes").text("refund", fields: ["body"]).expand(graph: "notes_graph", fromField: "id").json
-        XCTAssertEqual(expand["expandSpec"], .object(["graph": .string("notes_graph"), "fromField": .string("id"), "hops": .int(1)]))
+        // The shared corpus (SDKP P0d), when this tree has it: every file must be a case here.
+        let corpus = URL(fileURLWithPath: #filePath)
+            .deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().appendingPathComponent("fixtures/builders")
+        guard let files = try? FileManager.default.contentsOfDirectory(atPath: corpus.path) else { return }
+        for file in files.sorted() where file.hasSuffix(".json") {
+            let name = String(file.dropLast(5))
+            let data = try Data(contentsOf: corpus.appendingPathComponent(file))
+            guard case .object(let entry) = try JSONDecoder().decode(JSONValue.self, from: data),
+                  let expect = entry["expect"] else { return XCTFail("\(file): no expect") }
+            guard let built = cases[name] else { XCTFail("\(name): a corpus case this test does not build"); continue }
+            XCTAssertEqual(normalized(built), normalized(expect), name)
+        }
     }
 
     func test_swift_filter_ir_matches_the_engine_mapping() {

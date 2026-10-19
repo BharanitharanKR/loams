@@ -51,10 +51,11 @@ public enum DocumentID: Sendable, Equatable, Hashable, ExpressibleByIntegerLiter
         }
     }
 
-    /// The bare form `Query.ids` carries: a number, a string or `{"uuid": …}`.
+    /// The form `Query.ids` carries: `{"uint": "1"}` (exact past 2^53, and the builder
+    /// corpus's spelling), a bare string, or `{"uuid": …}`.
     var bare: JSONValue {
         switch self {
-        case .uint(let n): return n <= 1 << 53 ? .int(Int(n)) : .object(["uint": .string(String(n))])
+        case .uint(let n): return .object(["uint": .string(String(n))])
         case .string(let s): return .string(s)
         case .uuid(let u): return .object(["uuid": .string(u)])
         }
@@ -336,7 +337,10 @@ public enum Filter {
         case "ids":
             guard case .array(let ids) = body else { return value }
             return .object(["ids": .array(ids.map { id in
-                if case .object(let o) = id, let n = o["uint"] { return n.stringValue.flatMap { UInt64($0) }.map { .int(Int($0)) } ?? n }
+                // Exact as a JSON number up to 2^53; past that the IR keeps the string.
+                if case .object(let o) = id, let n = o["uint"] {
+                    return n.stringValue.flatMap { UInt64($0) }.flatMap { $0 <= 1 << 53 ? .int(Int($0)) : nil } ?? n
+                }
                 return id
             })])
         case "bool":
@@ -395,9 +399,11 @@ public enum Sort: Sendable, Equatable {
     public var json: JSONValue {
         switch self {
         case .score(let ascending):
-            return .object(["score": .object(["order": .string(ascending ? "SORT_ORDER_ASC" : "SORT_ORDER_DESC")])])
+            // The default order (best first) is sent unset, as the builder corpus spells it.
+            return .object(["score": .object(ascending ? ["order": .string("SORT_ORDER_ASC")] : [:])])
         case .pk(let descending):
-            return .object(["pk": .object(["order": .string(descending ? "SORT_ORDER_DESC" : "SORT_ORDER_ASC")])])
+            // Ascending, the default, is sent unset.
+            return .object(["pk": .object(descending ? ["order": .string("SORT_ORDER_DESC")] : [:])])
         case .field(let name, let descending, let missingFirst):
             var body: [String: JSONValue] = [
                 "field": .string(name),
@@ -503,10 +509,11 @@ public struct Search: Sendable, Equatable {
                        fields typed: [String]? = nil) -> Search {
         var select: [String: JSONValue] = [:]
         if include != nil || exclude != nil {
-            select["source"] = .object([
-                "include": .array((include ?? []).map { .string($0) }),
-                "exclude": .array((exclude ?? []).map { .string($0) }),
-            ])
+            // Only the lists the caller gave, as the builder corpus spells it.
+            var source: [String: JSONValue] = [:]
+            if let include { source["include"] = .array(include.map { .string($0) }) }
+            if let exclude { source["exclude"] = .array(exclude.map { .string($0) }) }
+            select["source"] = .object(source)
         }
         if let vectors { select["vectors"] = .array(vectors.map { .string($0) }) }
         if let typed { select["fields"] = .array(typed.map { .string($0) }) }
