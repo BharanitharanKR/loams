@@ -20,7 +20,7 @@ This directory contains Loams language implementations, code generation template
 | **C++** | [`cpp/`](cpp/) | `loams` |
 | **Dart** | [`dart/`](dart/) | Implementation and runtime fixtures |
 | **Objective-C** | [`objc/`](objc/) | Implementation and runtime fixtures |
-| **PHP** | [`php/`](php/) | Implementation and runtime fixtures |
+| **PHP** | [`php/`](php/) | `loams/loams` (app modules: namespaces, collections, documents, search, vector, graph) |
 
 ## App modules (SDKP)
 

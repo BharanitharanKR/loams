@@ -1902,6 +1902,11 @@ jobs:
       - name: the PHP SDK's tests
         working-directory: sdks/php
         run: vendor/bin/phpunit
+      # SDKP: the app suite. The tests above replayed the recorded app scenario
+      # and wrote sdks/fixtures/results/php.json; this fails the job unless every
+      # app fixture was replayed and every SDKP test is named.
+      - name: the PHP SDK passes the app suite
+        run: node sdks/conformance/check-languages.mjs --check php --suite app
       - name: the PHP examples parse
         working-directory: sdks/php
         run: for f in examples/*.php examples/*/main.php; do php -l "$f"; done
