@@ -1,6 +1,6 @@
 # SO2 Task 0: spike results and reconciliation
 
-Plan: [SO2](2026-10-02-so2-systemone-desktop.md), Task 0. Design: [§40](../design/40-loams-systemone.md) (D528, D538), [§50](../design/50-loams-desktop-daemon.md), [§53](../design/53-studio-ade.md). Run on **2026-10-19** against `dev` at `8e1ac6ef` (the merge of the SO2 re-target, #770, which already contains SO1 Task 0, #772). The rulings that come out of this page are R0.1 to R0.21 in the plan's "Rulings made during execution" table, and owner questions SO2-Q6 to SO2-Q8 in its "Owner questions from Task 0"; this page holds the evidence.
+Plan: [SO2](2026-10-02-so2-systemone-desktop.md), Task 0. Design: [§40](../design/40-loams-systemone.md) (D528, D538), [§50](../design/50-loams-desktop-daemon.md), [§53](../design/53-studio-ade.md). Run on **2026-10-19** against `dev` at `8e1ac6ef` (the merge of the SO2 re-target, #770, which already contains SO1 Task 0, #772). The rulings that come out of this page are R0.1 to R0.21 in the plan's "Rulings made during execution" table, and owner questions SO2-Q6 to SO2-Q8 (accepted 2026-10-19, O6–O8) in its "Owner questions from Task 0"; this page holds the evidence.
 
 This was a docs-only task on a Linux build machine. Nothing third-party was built or run. Every Swift, Core ML, signing and Gatekeeper check is listed in §6 with the exact commands for a macOS arm64 machine, and **no result is recorded for any of them**.
 
