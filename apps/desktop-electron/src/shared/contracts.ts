@@ -189,6 +189,8 @@ export interface LoamsDesktopApi {
 		onCommand(cb: (command: ShellCommand) => void): () => void;
 		/** The window entered or left fullscreen (D1083); the preload also marks `<html>`. */
 		onFullscreen(cb: (fullscreen: boolean) => void): () => void;
+		/** The console has painted: close the splash and show the window (D1084). */
+		ready(): Promise<void>;
 	};
 	update: {
 		state(): Promise<{
@@ -322,6 +324,7 @@ export const CH = {
 	shellBadge: "shell:badge",
 	shellCommand: "shell:command",
 	shellFullscreen: "shell:fullscreen",
+	shellReady: "shell:ready",
 	updateState: "update:state",
 	updateCheck: "update:check",
 	updateAutoGet: "update:auto-get",

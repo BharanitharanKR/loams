@@ -1,0 +1,97 @@
+{
+  "upstream": "https://github.com/dataelement/dsh-desktop",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2026 DataElement",
+  "files": [
+    {
+      "path": "electron.vite.config.ts",
+      "upstreamPath": "electron.vite.config.ts",
+      "commit": "bc732f5dc4c5465915d5b3f28d9b0b32703fc664",
+      "upstreamSha256": "24d566e753c7d003c5005a68fae198f8446b830393a31cf4f164d4c24d9828e8",
+      "localSha256": "ebf30e9264ba35c29977ceca2ed6b97f2f5b0aa41fa03854c3d9e755f9197780",
+      "verdict": "adapt",
+      "note": "adapted before CF1 (W19)"
+    },
+    {
+      "path": "src/main/engine/ports.ts",
+      "upstreamPath": "src/main/runtime/harness-runtime.ts",
+      "commit": "bc732f5dc4c5465915d5b3f28d9b0b32703fc664",
+      "upstreamSha256": "0b95fdc22f6d8a58bdbb4913862712514bb2352d371e583e79a2eaa0ca9689b9",
+      "localSha256": "d606a2ebe55b88723c77aef81e4e6466eb95479765233d0c9d767adf033d6897",
+      "verdict": "adapt",
+      "note": "adapted before CF1 (W19)"
+    },
+    {
+      "path": "src/main/engine/supervisor.ts",
+      "upstreamPath": "src/main/runtime/harness-runtime.ts",
+      "commit": "bc732f5dc4c5465915d5b3f28d9b0b32703fc664",
+      "upstreamSha256": "0b95fdc22f6d8a58bdbb4913862712514bb2352d371e583e79a2eaa0ca9689b9",
+      "localSha256": "8a2c5a7f1c305539ed8f2c716972ba4128e6a0fe2b2478461615b99633f32f81",
+      "verdict": "adapt",
+      "note": "adapted before CF1 (W19)"
+    },
+    {
+      "path": "src/main/shell/tray.electron.ts",
+      "upstreamPath": "src/main/close-to-tray.ts",
+      "commit": "bc732f5dc4c5465915d5b3f28d9b0b32703fc664",
+      "upstreamSha256": "041107f9aaddd61453d308a41b4620d6a82ef0cca6b2187e0e2ea0b4b14f41f5",
+      "localSha256": "d69ed376fd1cb2d31caafa73d2d477df2d5798872069f2e71ca5f7acbec5b8ca",
+      "verdict": "adapt",
+      "note": "adapted before CF1 (W19)"
+    },
+    {
+      "path": "src/main/security/install.electron.ts",
+      "upstreamPath": "src/main/security.ts",
+      "commit": "bc732f5dc4c5465915d5b3f28d9b0b32703fc664",
+      "upstreamSha256": "1318405bc17a98c3966876a79db71cd3a517ff5c90230a02092301db269df504",
+      "localSha256": "1e41e6661dbef94be361f74fd6bba3106d26ad0b9b0a15efb29cc8244732e04a",
+      "verdict": "adapt",
+      "note": "adapted before CF1 (W19)"
+    },
+    {
+      "path": "src/main/security/policy.ts",
+      "upstreamPath": "src/main/security-policy.ts",
+      "commit": "bc732f5dc4c5465915d5b3f28d9b0b32703fc664",
+      "upstreamSha256": "db34aa24cd7cc691641017955cea260c941ca49df614edb61d1ad8001694e76a",
+      "localSha256": "ecb278b744ec19675c732a28ce7fd882681a45d8e0625187f104727158f17c56",
+      "verdict": "adapt",
+      "note": "adapted before CF1 (W19)"
+    },
+    {
+      "path": "src/main/shell/window-state.ts",
+      "upstreamPath": "src/main/state/window-state.ts",
+      "commit": "bc732f5dc4c5465915d5b3f28d9b0b32703fc664",
+      "upstreamSha256": "7c7bf579f2e07f531429643210d013cbe92c367c6c0eef46e37fefadbb6f067a",
+      "localSha256": "aa83147ab34132bf8bac25d35827bd91d890a9db2624bd13077688168f4b9ef9",
+      "verdict": "adapt",
+      "note": "adapted before CF1 (W19)"
+    },
+    {
+      "path": "src/main/update/updater.electron.ts",
+      "upstreamPath": "src/main/update/update-manager.ts",
+      "commit": "bc732f5dc4c5465915d5b3f28d9b0b32703fc664",
+      "upstreamSha256": "61c0583d9bcb1603c9695760d844b0b32cae79a5482011d253b32226dc84dd81",
+      "localSha256": "3cc5df59be20de99ac094011bff13c7b515ac4f47a31a4bc3aa8939dbeb1511d",
+      "verdict": "adapt",
+      "note": "adapted before CF1 (W19)"
+    },
+    {
+      "path": "build/splash.html",
+      "upstreamPath": "build/splash.html",
+      "commit": "bc732f5dc4c5465915d5b3f28d9b0b32703fc664",
+      "upstreamSha256": "f34df54252f6aa5250e597d7153c2cc632b62a921b56b46ed986104c7d4cb199",
+      "localSha256": "bf73468247c12e190a89c685a763bd770607c00f862ba592c6bc965b4cb0b430",
+      "verdict": "adapt",
+      "note": "CF1 Task 15 (D1084)"
+    },
+    {
+      "path": "scripts/generate-loader-gifs.mjs",
+      "upstreamPath": "scripts/generate-loader-gifs.mjs",
+      "commit": "bc732f5dc4c5465915d5b3f28d9b0b32703fc664",
+      "upstreamSha256": "eca336bce590ce845f2538a92ad128827732200da0b1066f0e4820c0bc7bf6c2",
+      "localSha256": "45245e9415ccc66cab007e69af1abde74ff5edeb85e22e11e1c562a77b3013f4",
+      "verdict": "adapt",
+      "note": "CF1 Task 15 (D1084, W14): the mark drawn from rectangles, gifenc in place of sharp"
+    }
+  ]
+}
