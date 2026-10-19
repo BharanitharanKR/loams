@@ -59,9 +59,10 @@ import {
 	readThemeChoice,
 	writeSetting,
 } from "./settings";
+import { installContextMenu } from "./shell/context-menu.electron";
 import { getMainWindow, setMainWindow } from "./shell/main-window";
 import { installAppMenu } from "./shell/menu.electron";
-import { DOCS_URL, menuCommand } from "./shell/menu-model";
+import { DOCS_URL, ISSUES_URL, menuCommand } from "./shell/menu-model";
 import { quitSequence } from "./shell/quit";
 import { reveal } from "./shell/reveal";
 import { registerShellIpc } from "./shell/shell-ipc.electron";
@@ -169,6 +170,8 @@ function createWindow(): BrowserWindow {
 		},
 	});
 	secureWindow(win);
+	// Cut, copy, paste, links and Look Up (D1084); pages with their own menu keep it.
+	installContextMenu(win);
 	// The console sets document.title per page; the native title stays the product name.
 	win.on("page-title-updated", (e) => e.preventDefault());
 	setMainWindow(win);
@@ -396,8 +399,18 @@ const singleInstance = initSingleInstance({
 						getMainWindow()?.webContents.send(CH.shellCommand, command);
 					} else if (id === "quit") app.quit();
 					else if (id === "docs") void shell.openExternal(DOCS_URL);
-					else if (id === "logs") openLogs();
+					// "logs" is the pre-CF1 id, kept as an alias of show-logs for one release.
+					else if (id === "show-logs" || id === "logs") openLogs();
 					else if (id === "about") app.showAboutPanel();
+					else if (id === "check-updates") {
+						showMainWindow(open);
+						void updater?.check();
+					} else if (id === "restart-server")
+						void engine
+							?.stop()
+							.then(() => engine?.start())
+							.catch((e) => console.error("restart local server:", e));
+					else if (id === "report-issue") void shell.openExternal(ISSUES_URL);
 				},
 			});
 			const eng = engine;

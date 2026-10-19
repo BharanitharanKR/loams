@@ -1,9 +1,10 @@
 // The shell's one keydown listener (D1081): it resolves the event against SHELL_KEYMAP and
 // runs the command. Studio's commands travel as SHELL_COMMAND_EVENT (thread.new → chat.new,
 // thread.jump.N, thread.next); the shell keeps ⌘⇧T's history itself (W12). ⌘⇧M stays
-// `useModeShortcut`'s (D900).
+// `useModeShortcut`'s (D900). The desktop's menu items arrive as SHELL_COMMAND_EVENT and go
+// through the same `run` (CF1 Task 14, D1084).
 
-import { MODE_HOME, type PanelService } from '@loams/console-host';
+import { MODE_HOME, type PanelService, SHELL_COMMAND_EVENT } from '@loams/console-host';
 import { useEffect, useRef } from 'react';
 import { runShellCommand } from './frame.js';
 import {
@@ -71,51 +72,52 @@ export function useShellKeys(o: ShellKeysOptions): void {
     });
   }, [o.router]);
 
+  /** Runs a command; false leaves it to the page. Stable: it reads `latest` and `left`. */
+  const run = useRef((command: ShellKeyCommand): boolean => {
+    const x = latest.current;
+    switch (command) {
+      case 'palette.toggle':
+        x.togglePalette();
+        return true;
+      case 'thread.new':
+        runShellCommand('chat.new', () => x.router.navigate(MODE_HOME.studio));
+        return true;
+      case 'sidebar.toggle':
+        x.toggleSidebar();
+        return true;
+      case 'inspector.toggle':
+        x.inspector.toggle();
+        return true;
+      case 'drawer.toggle':
+        x.drawer.toggle();
+        return true;
+      case 'navigation.back':
+        globalThis.history.back();
+        return true;
+      case 'navigation.forward':
+        globalThis.history.forward();
+        return true;
+      case 'thread.reopen': {
+        const here = x.router.current().path;
+        let last = left.current.pop();
+        while (last === here) last = left.current.pop();
+        if (last) x.router.navigate(last);
+        return true;
+      }
+      case 'settings.open':
+        x.openSettings();
+        return true;
+      case 'overlay.close':
+        return x.closeOverlay();
+      default:
+        // thread.next and thread.jump.N are Studio's; nothing happens where it is not loaded.
+        runShellCommand(command, () => {});
+        return true;
+    }
+  }).current;
+
   useEffect(() => {
     const mac = isMacPlatform();
-    /** Runs a command; false leaves the key press to the page. */
-    const run = (command: ShellKeyCommand): boolean => {
-      const x = latest.current;
-      switch (command) {
-        case 'palette.toggle':
-          x.togglePalette();
-          return true;
-        case 'thread.new':
-          runShellCommand('chat.new', () => x.router.navigate(MODE_HOME.studio));
-          return true;
-        case 'sidebar.toggle':
-          x.toggleSidebar();
-          return true;
-        case 'inspector.toggle':
-          x.inspector.toggle();
-          return true;
-        case 'drawer.toggle':
-          x.drawer.toggle();
-          return true;
-        case 'navigation.back':
-          globalThis.history.back();
-          return true;
-        case 'navigation.forward':
-          globalThis.history.forward();
-          return true;
-        case 'thread.reopen': {
-          const here = x.router.current().path;
-          let last = left.current.pop();
-          while (last === here) last = left.current.pop();
-          if (last) x.router.navigate(last);
-          return true;
-        }
-        case 'settings.open':
-          x.openSettings();
-          return true;
-        case 'overlay.close':
-          return x.closeOverlay();
-        default:
-          // thread.next and thread.jump.N are Studio's; nothing happens where it is not loaded.
-          runShellCommand(command, () => {});
-          return true;
-      }
-    };
     const onKey = (e: KeyboardEvent) => {
       if (e.defaultPrevented || e.isComposing) return;
       const command = matchShellKey(e, { mac, ...contextOf(e.target) });
@@ -126,5 +128,31 @@ export function useShellKeys(o: ShellKeysOptions): void {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [run]);
+
+  // The desktop menu (D1084): its View and Window items name the same commands. Studio's
+  // (`chat.new`, `thread.next`, `thread.jump.N`) are Studio's listener's, and `run` would
+  // send them back out as SHELL_COMMAND_EVENT, so only the shell's own are taken here.
+  useEffect(() => {
+    const onCommand = (event: Event) => {
+      if (event.defaultPrevented) return;
+      const detail = (event as CustomEvent<unknown>).detail;
+      if (typeof detail !== 'string' || !MENU_COMMANDS.has(detail)) return;
+      if (run(detail as ShellKeyCommand)) event.preventDefault();
+    };
+    window.addEventListener(SHELL_COMMAND_EVENT, onCommand);
+    return () => window.removeEventListener(SHELL_COMMAND_EVENT, onCommand);
+  }, [run]);
 }
+
+/** The menu commands the shell runs itself (`ShellCommand` in the desktop's contracts). */
+const MENU_COMMANDS = new Set<string>([
+  'palette.toggle',
+  'sidebar.toggle',
+  'inspector.toggle',
+  'drawer.toggle',
+  'navigation.back',
+  'navigation.forward',
+  'settings.open',
+  'thread.reopen',
+] satisfies ShellKeyCommand[]);

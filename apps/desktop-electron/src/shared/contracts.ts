@@ -625,7 +625,17 @@ export type ShellCommand =
 	| "mode.studio"
 	| "mode.console"
 	| "mode.toggle"
-	| "chat.new";
+	| "chat.new"
+	// The shell's D1081 commands from the application menu (CF1 Task 14).
+	| "palette.toggle"
+	| "sidebar.toggle"
+	| "inspector.toggle"
+	| "drawer.toggle"
+	| "navigation.back"
+	| "navigation.forward"
+	| "settings.open"
+	| "thread.next"
+	| "thread.reopen";
 
 /** "Open in editor" (Q810): an editor's URL scheme, or the program the person picked. */
 export type StudioEditorId = "vscode" | "zed" | "cursor" | "command";
