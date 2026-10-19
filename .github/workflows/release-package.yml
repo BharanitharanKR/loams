@@ -320,8 +320,15 @@ jobs:
             # holds. The .rpm is deliberately left unsigned here.
             printf '%s' "$LOAMS_GPG_PRIVATE_KEY" > "$RUNNER_TEMP/loams-signing-key.asc"
             chmod 600 "$RUNNER_TEMP/loams-signing-key.asc"
+            # nFPM's key_id is a 64-bit long id (16 hex digits) and a 40-digit
+            # fingerprint overflows it ("value out of range", v0.1.0 run
+            # 39186624061). LOAMS_GPG_KEY_ID is the fingerprint, whose last 16
+            # digits are the long id; gpg --local-user takes either.
+            key_id="${LOAMS_GPG_KEY_ID// /}"
+            [[ "$key_id" =~ ^[0-9A-Fa-f]{16}([0-9A-Fa-f]{24})?$ ]] \
+              || { echo "::error::LOAMS_GPG_KEY_ID is not a 16- or 40-digit hex key id"; exit 1; }
             args+=(--gpg-key "$RUNNER_TEMP/loams-signing-key.asc"
-                   --gpg-key-id "$LOAMS_GPG_KEY_ID")
+                   --gpg-key-id "${key_id: -16}")
           fi
 
           python3 scripts/release/build-artifacts.py "${args[@]}"
