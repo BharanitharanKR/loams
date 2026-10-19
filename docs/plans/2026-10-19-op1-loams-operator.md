@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, test first. Where this plan gives exact names, paths, branches or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end of this file.
 >
-> **Status: Stub** (2026-10-19). Track OP, design [§65](../design/65-loams-operator.md) (D1172–D1201, Q984–Q999, **Proposed**). Owner request, 2026-10-19: **"a single operator for the entire Loams platform, with HA. Only design it; we can build it slowly. It should have a conformance suite that inspires all other operators."** This plan covers OP0 (the spike) and OP1 (the minimum viable slice) of §65 §14. OP2 (native PD and TiKV), OP3 (the other components, Day-2) and OP4 (LOC 1.0) get their own plans when their gates are met (D1201). **Nothing here starts before v0.1.0 ships and §65 is approved (Q996).** Each task lists its files, the tests that must exist and pass, and its gate. Interfaces are fixed in §65; Task 0 of each milestone checks the code as it stands and records rulings.
+> **Status: Stub** (2026-10-19). Track OP, design [§65](../design/65-loams-operator.md) (D1172–D1201, Q984–Q999, approved by the owner on 2026-10-19 with every default). Owner request, 2026-10-19: **"a single operator for the entire Loams platform, with HA. Only design it; we can build it slowly. It should have a conformance suite that inspires all other operators."** This plan covers OP0 (the spike) and OP1 (the minimum viable slice) of §65 §14. OP2 (native PD and TiKV), OP3 (the other components, Day-2) and OP4 (LOC 1.0) get their own plans when their gates are met (D1201). **Nothing here starts before v0.1.0 ships (Q996).** Each task lists its files, the tests that must exist and pass, and its gate. Interfaces are fixed in §65; Task 0 of each milestone checks the code as it stands and records rulings.
 
 **Goal:**
 - one `LoamsCluster` object brings up the engine, an object store, PD and TiKV (through tidb-operator v2 or external endpoints), the gateway and tenant namespaces, in order, on kind and on a real three-zone cluster;
@@ -72,7 +72,7 @@
 
 ## Owner actions
 
-- Approve §65 and its defaults (Q984–Q999).
+- §65 and its defaults (Q984–Q999) were approved on 2026-10-19; nothing further for the design.
 - Q991: the LOC name and the mirror repository `ostrium-labs/loams-operator-conformance` (create it before OP4).
 - A three-zone test cluster (or a `loam-bench` profile) for OP1's exit run.
 

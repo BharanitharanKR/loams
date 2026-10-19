@@ -1,6 +1,6 @@
 # 65 — Loams Operator: One Rust Operator for the Whole Platform, and Loams Operator Conformance
 
-Status: **Proposed** · 2026-10-19. Source: the owner's request of 2026-10-19, **"There is a TiDB Rust Kubernetes operator. Fork it and write a plan for the Loams operator: a single operator for the entire Loams platform, with HA. Only design it; we can build it slowly. It should have a conformance suite that inspires all other operators."** Decisions **D1172–D1201** and questions **Q984–Q999** are in the [decision log](13-decision-log.md), all **Proposed**. The numbers follow §64 (D1150–D1171, Q970–Q983). Plan stub: [OP1](../plans/2026-10-19-op1-loams-operator.md). **This document writes no code.**
+Status: **Approved** · 2026-10-19 (owner approved all decisions and questions with their defaults, 2026-10-19). Source: the owner's request of 2026-10-19, **"There is a TiDB Rust Kubernetes operator. Fork it and write a plan for the Loams operator: a single operator for the entire Loams platform, with HA. Only design it; we can build it slowly. It should have a conformance suite that inspires all other operators."** Decisions **D1172–D1201** and questions **Q984–Q999** are in the [decision log](13-decision-log.md), all approved by the owner on 2026-10-19 with their recommended defaults. The numbers follow §64 (D1150–D1171, Q970–Q983). Plan stub: [OP1](../plans/2026-10-19-op1-loams-operator.md). **This document writes no code.**
 
 Builds on:
 - [§10](10-operations.md) §1 and §7: deployment modes, the `loams` binary's roles, the M2 operator that was never built (D46).
@@ -479,7 +479,7 @@ The `loams` CLI gains `loams operator status | plan | upgrade | pause | resume |
 The standing rule (networking map): the engine, admin and data endpoints are never on the public internet; access is over the tailnet or loopback.
 
 - `spec.exposure.mode` is `tailnet` (default; the Tailscale Kubernetes operator or a sidecar, as `net.mode: tailnet` in D587) or `internal` (`ClusterIP`, or a `LoadBalancer` carrying the provider's internal annotation from a fixed list).
-- The operator **never renders** a public `LoadBalancer`, a `NodePort`, an `Ingress` or a Gateway API route for any Loams component, and a CEL rule refuses a spec that asks for one. This narrows D1019's `type: LoadBalancer` for the gateway to an internal load balancer, until the owner rules otherwise (Q992).
+- The operator **never renders** a public `LoadBalancer`, a `NodePort`, an `Ingress` or a Gateway API route for any Loams component, and a CEL rule refuses a spec that asks for one. This amends D1019's `type: LoadBalancer` for the gateway to an internal load balancer (approved by the owner on 2026-10-19 as Q992's default).
 - A ValidatingAdmissionPolicy shipped with the chart also refuses Services of those types in managed namespaces from anyone, so a hand-made Service cannot open a hole the operator would not.
 - `NetworkPolicy` is default-deny in every managed namespace, with per-component allow rules rendered from the component graph (PD ↔ TiKV, engine → TiKV and the bucket, gateway → PgDog, and so on).
 
@@ -764,12 +764,12 @@ The smallest operator worth running replaces the most hand work with the least n
 | D545 (`compatibleWith`, `noDowngrade`) | Enforced by the operator (D1186, D1187) |
 | D718 (`LoamsPostgres` CRD after GA) | `LoamsPostgres` is a component kind of `LoamsCluster`, built in OP3 |
 | D943 (`migrate` in a wave) | The operator runs the `migrate` Job before the engine (D1186) |
-| D1019 (gateway `type: LoadBalancer`) | Internal load balancer or tailnet only, until Q992 is answered (D1195) |
+| D1019 (gateway `type: LoadBalancer`) | **Amended (approved 2026-10-19, Q992's default):** internal load balancer or tailnet only, never a public `LoadBalancer` (D1195); recorded on D1019's row in the decision log |
 | §10 §1, D46 (the M2 operator) | This design is that operator |
 | Q-RT-8 | Answered by D1174 (`loams.dev`, in this repository) |
 | Q-RT-14 | Moot (no fork) |
 
-## 18. Decisions (D1172–D1201, Proposed)
+## 18. Decisions (D1172–D1201, approved by the owner on 2026-10-19)
 
 | ID | Decision |
 |---|---|
@@ -806,7 +806,7 @@ The smallest operator worth running replaces the most hand work with the least n
 
 ## 19. Open questions (Q984–Q999)
 
-| ID | Question | Default |
+| ID | Question | Default (all answered by the owner on 2026-10-19: the default) |
 |---|---|---|
 | Q984 | API group `loams.dev`, with the kinds of §5.2, starting at `v1alpha1`? | Yes |
 | Q985 | PD and TiKV: bridge to tidb-operator v2 in OP1, native Rust reconcilers in OP2, native default at LOC parity? Or native from the start? | Bridge first, then native at parity |

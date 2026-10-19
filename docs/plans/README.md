@@ -347,11 +347,11 @@ Design reference: [64 Loams Infra](../design/64-loams-infra-stack.md) (D1150–D
 
 ## Track OP: the Loams operator and Loams Operator Conformance
 
-Design reference: [65 Loams Operator](../design/65-loams-operator.md) (D1172–D1201, Q984–Q999, Proposed). Owner request, 2026-10-19: "a single operator for the entire Loams platform, with HA … a conformance suite that inspires all other operators". No Rust TiDB operator existed to fork, so `loams-operator` is new Rust on kube-rs. OP1 covers OP0 (spike) and OP1 (the minimum viable slice); OP2–OP4 get plans when their gates are met. Built slowly, after v0.1.0 (Q996).
+Design reference: [65 Loams Operator](../design/65-loams-operator.md) (D1172–D1201, Q984–Q999, approved by the owner 2026-10-19). Owner request, 2026-10-19: "a single operator for the entire Loams platform, with HA … a conformance suite that inspires all other operators". No Rust TiDB operator existed to fork, so `loams-operator` is new Rust on kube-rs. OP1 covers OP0 (spike) and OP1 (the minimum viable slice); OP2–OP4 get plans when their gates are met. Built slowly, after v0.1.0 (Q996).
 
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|
-| [OP1: Loams operator, the minimum viable slice](2026-10-19-op1-loams-operator.md) (stub; OP0 Tasks 0–5, OP1 Tasks 6–21) | `loams-operator-api`, `loams-kube` (Lease, fences, journal, conditions, drift) and `loams-operator`; `LoamsCluster` with the engine, `ObjectStore` (S3 probe, RustFS), PD/TiKV `external` and `bridge` (tidb-operator v2), the gateway and `LoamsNamespace` (CP1 Task 15); RBAC, VAPs, exposure rules, metrics, events, the Helm chart, `loams operator` CLI; LOC spec 0.1, the kind/k3d harness, LOC Core and the operator-HA requirements in CI | v0.1.0 shipped (Q996); §65 approved; CP1 Task 15 (or built here) | Stub |
+| [OP1: Loams operator, the minimum viable slice](2026-10-19-op1-loams-operator.md) (stub; OP0 Tasks 0–5, OP1 Tasks 6–21) | `loams-operator-api`, `loams-kube` (Lease, fences, journal, conditions, drift) and `loams-operator`; `LoamsCluster` with the engine, `ObjectStore` (S3 probe, RustFS), PD/TiKV `external` and `bridge` (tidb-operator v2), the gateway and `LoamsNamespace` (CP1 Task 15); RBAC, VAPs, exposure rules, metrics, events, the Helm chart, `loams operator` CLI; LOC spec 0.1, the kind/k3d harness, LOC Core and the operator-HA requirements in CI | v0.1.0 shipped (Q996); CP1 Task 15 (or built here) | Stub (design approved 2026-10-19) |
 
 ## Later milestones
 
