@@ -78,7 +78,7 @@ Desktop. The patched TiDB image is amd64-only and runs emulated on Apple silicon
 ## SDKs
 
 The seven supported SDKs are released from this tag by one workflow (`sdk-release.yml`).
-<!-- verify after publish: each registry below serves 0.1.0 -->
+Each registry below serves 0.1.0 (checked 2026-10-19).
 
 | SDK | Install | Version |
 |---|---|---|
@@ -90,7 +90,9 @@ The seven supported SDKs are released from this tag by one workflow (`sdk-releas
 | Swift | SwiftPM: `https://github.com/ostrium-labs/loams`, from `0.1.0` | `0.1.0` |
 | C++ | `loams-cpp-0.1.0.tar.gz` from the GitHub release (CMake `find_package(loams)`) | `0.1.0` |
 
-Java, Kotlin, Ruby, PHP, Dart and Objective-C stay in the repository (coming soon).
+Java and Kotlin (`dev.loams:loams`, `dev.loams:loams-kotlin` on Maven Central) and Ruby
+(`gem install loams`) are published as `0.1.0` too, as experimental SDKs. PHP, Dart and
+Objective-C stay in the repository (coming soon).
 
 ## Architecture
 
@@ -496,7 +498,8 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
 
 ## Known limitations
 
-- **SDKs.** Java, Kotlin, Ruby, PHP, Dart and Objective-C are not published yet. The C++ stubs
+- **SDKs.** Java, Kotlin and Ruby are published but experimental; PHP, Dart and Objective-C
+  are not published yet. The C++ stubs
   build against protobuf 36.1 exactly, so there are no vcpkg or Conan ports yet. Building
   `loams-proto` from crates.io needs `protoc` installed.
 

@@ -24,12 +24,12 @@ This directory contains Loams language implementations, code generation template
 
 ## Installing
 
-Every SDK is published as `0.1.0` from the Loams release tag by
+The SDKs are published as `0.1.0` from the Loams release tag by
 [`.github/workflows/sdk-release.yml`](../.github/workflows/sdk-release.yml), to
-npm, PyPI, crates.io, NuGet, the Go proxy, RubyGems, Packagist, pub.dev, Maven
-Central and CocoaPods; Swift resolves from this repository's tag and C++ ships
-as a release tarball. In 0.x an API may change
-between minor versions. <!-- verify after publish -->
+npm, PyPI, crates.io, NuGet, the Go proxy, RubyGems and Maven Central; Swift
+resolves from this repository's tag and C++ ships as a release tarball. PHP
+(Packagist), Dart (pub.dev) and Objective-C (CocoaPods) are not on their
+registries yet. In 0.x an API may change between minor versions.
 
 | Language | Install |
 | --- | --- |
