@@ -1,6 +1,6 @@
 # 40 — Loams SystemOne: One Decision API, a Backend per Host
 
-> **Updated 2026-10-19 ([D1119](13-decision-log.md)): Loams has no open core.** Where this document places metering, billing, the hosted control plane, commercial APIs or other components in the private `loams-platform` repository, or calls something private for open-core reasons, read that as superseded: everything is to be Apache-2.0 in the open repository, and metering, billing and the control plane move in under a separate design (§63, Loams Meter). Ostrium Labs offers services (infrastructure efficiency, SLAs, support), not a paid edition. The rest of the design is unchanged.
+> **Updated 2026-10-19 ([D1119](13-decision-log.md)): Loams has no open core.** Where this document places metering, billing, the hosted control plane, commercial APIs or other components in the private `loams-platform` repository, or calls something private for open-core reasons, read that as superseded: everything is Apache-2.0, and the metering, billing and control-plane code is moving into the open repo now (design §63, Loams Meter). Ostrium Labs offers services (infrastructure efficiency, SLAs, support), not a paid edition. The rest of the design is unchanged.
 
 Status: **Proposed**, 2026-10-02. Decisions **D520–D539**, open questions **Q520–Q539** (recorded in the [decision log](13-decision-log.md)). Plans: [SO1](../plans/2026-10-02-so1-systemone.md) (engine, API, backends, CLI) and [SO2](../plans/2026-10-02-so2-systemone-desktop.md) (desktop, browser, Apple sidecar, Loams Bot).
 
