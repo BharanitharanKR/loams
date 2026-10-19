@@ -1621,3 +1621,35 @@ button.lc-hosted-engine {
   font-weight: 400;
   letter-spacing: 0.02em;
 }
+
+/* Desktop chrome (design 59, D1083) ------------------------------------------ */
+
+/* The desktop's preload sets data-platform and data-fullscreen on <html>; the web edition
+   sets neither, so none of this applies in a browser. macOS: the traffic lights sit at x 16
+   in the 44px bar, so the brand (sidebar open) or the top bar (sidebar closed) starts after
+   them, except in fullscreen, where they are gone. */
+html[data-platform="darwin"]:not([data-fullscreen="true"]) .lc-shell {
+  --lc-traffic: 76px;
+}
+html[data-platform="darwin"] .lc-brand {
+  -webkit-app-region: drag;
+}
+html[data-platform="darwin"] .lc-brand :is(button, a, input, [role="button"], [role="combobox"]) {
+  -webkit-app-region: no-drag;
+}
+/* Vibrancy behind the sidebar only (Q933: in light too); the top bar and work area stay solid. */
+html[data-platform="darwin"],
+html[data-platform="darwin"] body,
+html[data-platform="darwin"] .lc-shell,
+html[data-platform="darwin"] .lc-side {
+  background: transparent;
+}
+html[data-platform="darwin"] .lc-body {
+  background: var(--op-window);
+}
+/* Windows and Linux: keep the top bar's end clear of the title bar overlay's buttons
+   (the Window Controls Overlay area; 0 when the overlay is absent). */
+html[data-platform="win32"] .lc-shell,
+html[data-platform="linux"] .lc-shell {
+  --lc-wco-end: calc(100vw - env(titlebar-area-x, 0px) - env(titlebar-area-width, 100vw));
+}
