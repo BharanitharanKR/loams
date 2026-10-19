@@ -13,6 +13,7 @@ import {
   KeybindingStore,
   resolveShortcutCommand,
   type ShortcutMatchContext,
+  THREAD_JUMP_KEYBINDING_COMMANDS,
 } from '@loams/studio-ui';
 import { useEffect, useRef } from 'react';
 
@@ -65,11 +66,23 @@ export class StudioCommands {
 }
 
 /**
- * The shell's commands for Studio (`SHELL_COMMAND_EVENT`): the desktop menu's "New thread"
- * (SD1 Task 28) and the shell's keymap (D1081: Mod+N → `chat.new`, Mod+1…9 →
- * `thread.jump.N`, Ctrl+Tab → `thread.next`). Studio runs any of its commands that a
- * mounted view handles, and says so with `preventDefault()`; otherwise the sender falls
- * back (for `chat.new`, Studio's home, where a project is chosen).
+ * The commands of Studio's that the shell sends (`SHELL_COMMAND_EVENT`): the desktop menu's
+ * "New thread" and "Next thread" (SD1 Task 28, CF1 Task 14) and the shell's keymap (D1081:
+ * Mod+N → `chat.new`, Mod+1…9 → `thread.jump.N`, Ctrl+Tab → `thread.next`). The shell's own
+ * commands travel on the same event (`settings.open`, `sidebar.toggle`, `navigation.*`),
+ * and Studio's commands of those names are not run from it, so the shell's stay the shell's.
+ */
+const FROM_SHELL = new Set<string>([
+  'chat.new',
+  'thread.next',
+  'thread.previous',
+  ...THREAD_JUMP_KEYBINDING_COMMANDS,
+]);
+
+/**
+ * Runs the Studio commands the shell sends when a mounted view handles them, and says so
+ * with `preventDefault()`; otherwise the sender falls back (for `chat.new`, Studio's home,
+ * where a project is chosen).
  */
 export function listenShellCommands(
   commands: StudioCommands,
@@ -77,7 +90,9 @@ export function listenShellCommands(
 ): () => void {
   const onCommand = (event: Event) => {
     const detail = (event as CustomEvent<unknown>).detail;
-    if (isKeybindingCommand(detail) && commands.run(detail)) event.preventDefault();
+    if (typeof detail !== 'string' || !FROM_SHELL.has(detail) || !isKeybindingCommand(detail))
+      return;
+    if (commands.run(detail)) event.preventDefault();
   };
   target.addEventListener(SHELL_COMMAND_EVENT, onCommand);
   return () => target.removeEventListener(SHELL_COMMAND_EVENT, onCommand);
