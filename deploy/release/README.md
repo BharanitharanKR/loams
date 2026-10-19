@@ -47,7 +47,7 @@ deploy/release/build.sh --version 0.1.0 --push   # CI on a tag
 
 ```sh
 cd deploy/release
-cp .env.example .env            # set TS_AUTHKEY; see the comments
+cp .env.example .env            # set TS_AUTHKEY and LOAMS_SETUP_TOKEN; see the comments
 docker compose up -d loams tailscale     # engine, pd, tikv and the sidecar
 docker compose up -d                     # plus tidb and the Postgres stack
 docker compose logs tailscale            # the node name, or a login URL
@@ -148,6 +148,15 @@ network namespace. `oidc` checks JWTs from
 audience `LOAMS_OIDC_AUDIENCE`; `apikey` checks hashed keys in
 `LOAMS_API_KEYS_FILE`, which compose points at `secrets/api-keys`. See
 `.env.example`.
+
+With any mode but `off`, first-run setup (the console's setup page, which
+creates the org and its owner) needs `LOAMS_SETUP_TOKEN` in `.env`
+(`openssl rand -hex 32`); without it setup is refused. Setup runs once. See
+"First-run setup" in [docs/release/preview.md](../../docs/release/preview.md#first-run-setup).
+
+`console/dist` holds a placeholder page, in a clone and in the compose bundle.
+For `--profile console`, build the console (`cd web && pnpm build`) and set
+`LOAMS_CONSOLE_DIR` to `web/apps/console/dist`.
 
 ### Headscale (coming soon, unsupported in 0.1.0)
 
