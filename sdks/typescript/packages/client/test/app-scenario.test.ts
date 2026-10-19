@@ -1,8 +1,8 @@
 // SDKP Parts B and C for TypeScript: the app scenario through the public facade.
 //
-// `typescript_app_collections`, `typescript_app_search`, `typescript_app_graph`
-// and `typescript_app_sql` (Part C) replay `sdks/fixtures/recorded/app/` against the
-// fixture server (`helpers/app-replay.ts` says how), so each passes only when
+// `typescript_app_collections`, `typescript_app_search`, `typescript_app_graph`,
+// and (Part C) `typescript_app_sql` and `typescript_app_streams` replay
+// `sdks/fixtures/recorded/app/` against the fixture server (`helpers/app-replay.ts` says how), so each passes only when
 // the facade sends exactly the recorded requests and reads the recorded answers
 // the way they mean. A live `loams dev` cannot replay a recording (its tokens
 // and ids are its own), and replaying against one would create the `app`
@@ -63,5 +63,31 @@ describe('typescript_app_sql', () => {
       { tags: 'policy', c: 2 },
       { tags: 'shipping', c: 1 },
     ]);
+  });
+});
+
+describe('typescript_app_streams', () => {
+  it('create, list, describe, a keyed produce and its duplicate, fetch, CloudEvents, not_found', async () => {
+    await expect(replayAppFixture(server.endpoint, 'app_streams')).resolves.toBeUndefined();
+  });
+
+  it('streams.subscribe reads the recorded page and knows where to resume', async () => {
+    const loams = new Loams({
+      endpoint: server.endpoint,
+      namespace: 'app',
+      maxRetries: 0,
+      transportOptions: { useBinaryFormat: false },
+    });
+    const subscription = loams.streams.subscribe(
+      { stream: 'note-events', maxRecords: 10 },
+      { headers: { 'loams-fixture-name': 'app_streams', 'loams-fixture-step': '5' } },
+    );
+    const offsets: bigint[] = [];
+    for await (const record of subscription) {
+      offsets.push(BigInt(record.offset));
+      if (offsets.length === 2) break;
+    }
+    expect(offsets).toEqual([0n, 1n]);
+    expect(subscription.offset).toBe(2n);
   });
 });

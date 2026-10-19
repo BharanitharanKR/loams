@@ -78,6 +78,21 @@ export async function main(): Promise<void> {
   );
   for (const row of perTag) console.log(row.tags, row.c);
 
+  // A stream of note events: produce with a producer key, then read it back.
+  await loams.streams.create({ name: 'note-events', partitions: 1 });
+  const encode = (value: unknown) => new TextEncoder().encode(JSON.stringify(value));
+  await loams.streams.produce({
+    stream: 'note-events',
+    records: [{ value: encode({ note: 1, op: 'created' }) }],
+    producerId: 'notes-example',
+    producerSeq: 1n,
+  });
+  const events = loams.streams.subscribe({ stream: 'note-events' });
+  for await (const event of events) {
+    console.log('event at', event.offset);
+    break;
+  }
+
   // A bulk load: chunked, one idempotency key per chunk, the tokens merged.
   const loaded = await handle.writeBatch(
     Array.from({ length: 100 }, (_, i) => ({ id: 1000 + i, source: { title: `note ${i}`, tags: 'bulk', n: i } })),

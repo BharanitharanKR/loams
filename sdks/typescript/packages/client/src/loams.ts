@@ -33,6 +33,7 @@ import {
   type DocumentsModule,
   type GraphModule,
   type SqlModule,
+  type StreamsModule,
   type NamespacesModule,
   type SearchModule,
   type VectorModule,
@@ -151,8 +152,9 @@ export type DocumentsNamespace = DocumentsModule & ReturnType<typeof documentCal
 export type SearchNamespace = SearchModule & ReturnType<typeof searchCalls>;
 /** `loams.sql`, with `records` (SDKP §2.5). */
 export type SqlNamespace = SqlModule & ReturnType<typeof sqlCalls>;
-/** `loams.streams`, once `loams.stream.v1` is annotated (SDKP P0c). */
-export type StreamsNamespace = Record<string, unknown> & ReturnType<typeof streamCalls>;
+/** `loams.streams`, with `subscribe` and `<call>All` (SDKP §2.5, R14). */
+export type StreamsNamespace = StreamsModule &
+  ReturnType<typeof streamCalls> & { readonly listAll: AllOf<unknown> };
 
 /** `loams.admin`: the console's administration modules (design §44 §7.2). */
 export interface AdminNamespace {
@@ -190,6 +192,8 @@ export class Loams {
   readonly graph: GraphModule;
   /** `loams.sql` — one read-only SQL statement over a namespace's collections. */
   readonly sql: SqlNamespace;
+  /** `loams.streams` — a namespace's logs: produce, fetch, CloudEvents and `subscribe`. */
+  readonly streams: StreamsNamespace;
   /** The module catalogue, feature detection and the version check. */
   readonly system: SystemApi;
   /** Every generated module, by its dotted name (`'live.admin'`): the
@@ -244,6 +248,7 @@ export class Loams {
     this.vector = tree.vector as VectorModule;
     this.graph = tree.graph as GraphModule;
     this.sql = tree.sql as SqlNamespace;
+    this.streams = tree.streams as StreamsNamespace;
     this.system = new SystemApi(
       (request, callOptions) => this.instance.getInstance(request, callOptions),
       {

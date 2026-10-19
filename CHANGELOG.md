@@ -74,9 +74,11 @@ All notable changes to this project are documented here. The format follows [Kee
   `streams.subscribe` (R14); `search.text`, `search.hybrid`, `search.queryAll`,
   `documents.upsert/delete/patch/scrollAll` and `<call>All` for paged calls;
   `Loams.fromEnv()`.
-- TypeScript SDK: `loams.sql` (SDKP L1 part C): `sql.query`, `sql.queryArrow`,
-  `sql.records(statement, [$1, …])` and `sqlRecords(answer)`, replayed by
-  `typescript_app_sql`.
+- TypeScript SDK: `loams.sql` and `loams.streams` (SDKP L1 part C):
+  `sql.query`, `sql.queryArrow`, `sql.records(statement, [$1, …])` and
+  `sqlRecords(answer)`; `streams.create`, `get`, `list`/`listAll`, `produce`,
+  `fetch`, `produceEvents`, `fetchEvents` and `subscribe`; replayed by
+  `typescript_app_sql` and `typescript_app_streams`.
 
 - The `sql` and `streams` modules in every generated SDK facade (SDKP Part C):
   `sql.query` and `sql.query_arrow` from facade annotations on `loams.sql.v1`,

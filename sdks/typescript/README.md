@@ -131,8 +131,12 @@ facade annotations, with the hand-written conveniences above added to them.
 `columns` and `rows`, `sql.records(statement, [$1, …])` answers one object per
 row, and `sqlRecords(answer)` reads an answer already in hand. `sql.queryArrow`
 answers the result as Arrow IPC bytes (`arrowIpc`), which `apache-arrow`'s
-`tableFromIPC` reads; the SDK does not depend on it. `loams.streams` arrives
-with `loams.stream.v1` (SDKP P0c). `examples/notes/main.ts` is the whole app
+`tableFromIPC` reads; the SDK does not depend on it. `loams.streams` is
+generated from `loams.stream.v1`: `create`, `get`, `list` (and `listAll`),
+`produce` (pass `producerId` and `producerSeq` so a retry cannot append
+twice), `fetch`, `produceEvents` and `fetchEvents` (CloudEvents as a JSON
+batch), plus `streams.subscribe(...)` (R14), an async iterable over `fetch`
+whose `offset` is where to resume. `examples/notes/main.ts` is the whole app
 scenario as a program, type-checked in CI. The session's token is used only for
 collection and SQL reads: a graph's token names one graph (SDKP-17). Durable
 workflows use the Resonate SDK pointed at `LOAMS_ENDPOINT/durable/` (SDKP-1).
