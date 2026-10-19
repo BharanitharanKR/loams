@@ -471,6 +471,40 @@
         "R8"
       ],
       "about": "A weighted sum with one weight for two retrievers: refused. The builders refuse it before sending; this is the server's own refusal of the raw request."
+    },
+    {
+      "reason": "sql_param_count",
+      "fixture": "app_sql",
+      "step": 3,
+      "server": "loams dev",
+      "rpc": "Query",
+      "path": "/loams.sql.v1.SqlService/Query",
+      "contentType": "application/json",
+      "httpStatus": 400,
+      "connectCode": "invalid_argument",
+      "carriesErrorInfo": true,
+      "required": false,
+      "pinnedBy": [
+        "R8"
+      ],
+      "about": "A `$1` with no value: `invalid_argument`, reason `sql_param_count`."
+    },
+    {
+      "reason": "invalid_argument",
+      "fixture": "app_sql",
+      "step": 4,
+      "server": "loams dev",
+      "rpc": "Query",
+      "path": "/loams.sql.v1.SqlService/Query",
+      "contentType": "application/json",
+      "httpStatus": 400,
+      "connectCode": "invalid_argument",
+      "carriesErrorInfo": true,
+      "required": false,
+      "pinnedBy": [
+        "R8"
+      ],
+      "about": "A statement that is not a query: `invalid_argument`."
     }
   ],
   "unproducible": [
@@ -1185,13 +1219,7 @@
     {
       "reason": "result_too_large",
       "code": "resource_exhausted",
-      "why": "Recorded by `app_sql` when `loams.sql.v1` lands (SDKP P0b).",
-      "standIn": null
-    },
-    {
-      "reason": "sql_param_count",
-      "code": "invalid_argument",
-      "why": "Recorded by `app_sql` when `loams.sql.v1` lands (SDKP P0b).",
+      "why": "Needs a `QueryArrow` answer past `--sql-arrow-max-bytes` (16 MiB); `app_sql` stays small.",
       "standIn": null
     },
     {
@@ -1210,12 +1238,6 @@
       "reason": "search_after_needs_tiebreak",
       "code": "invalid_argument",
       "why": "Raised by the SDKs before any network call (SDKP section 2.4); no server returns it.",
-      "standIn": null
-    },
-    {
-      "reason": "result_too_large",
-      "code": "resource_exhausted",
-      "why": "Recorded by `app_sql` when `loams.sql.v1` lands (SDKP P0b).",
       "standIn": null
     },
     {

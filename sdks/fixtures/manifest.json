@@ -7,9 +7,9 @@
   },
   "volatile": "The response fields a re-recording is allowed to move: the server-generated `instance_id`, and the mock seed timestamps. `verify-corpus.mjs --drift` masks exactly these and fails on any other difference.",
   "counts": {
-    "total": 36,
+    "total": 37,
     "required": 28,
-    "optional": 8
+    "optional": 9
   },
   "clauses": {
     "R1": {
@@ -93,6 +93,7 @@
         "app_collections",
         "app_graph",
         "app_search",
+        "app_sql",
         "live_query_grpc_web",
         "live_query_grpc_web_json",
         "live_query_json",
@@ -361,6 +362,38 @@
         "pin"
       ],
       "about": "The notes app, part two: every search the builder corpus spells, against the notes `app_collections` wrote (four of them, after its delete). Text with a filter, highlights and a projection; its next page through `search_after`; a vector search; hybrid with RRF, DBSF and a weighted sum; and the weighted sum refused for the wrong number of weights."
+    },
+    {
+      "name": "app_sql",
+      "kind": "app",
+      "server": "loams dev",
+      "file": "recorded/app/app_sql.json",
+      "required": false,
+      "transport": "connect",
+      "grpcOnly": false,
+      "pinnedBy": [
+        "R8"
+      ],
+      "part": "C",
+      "reason": null,
+      "steps": 5,
+      "volatile": [
+        "token",
+        "readToken",
+        "consistencyToken",
+        "collectionId",
+        "namespaceId",
+        "createdAtMs",
+        "updatedAtMs",
+        "instanceId",
+        "performance",
+        "manifestVersion",
+        "version",
+        "seqNo",
+        "positions",
+        "pin"
+      ],
+      "about": "The notes app, part four: SQL over the `notes` collection. A grouped count with a `$1` parameter, its rows as records; a capped read that answers `truncated`; the same statement as Arrow IPC; and the two refusals (`sql_param_count`, a statement that is not a query)."
     },
     {
       "name": "instance_get_instance_grpc_web",

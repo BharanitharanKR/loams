@@ -43,6 +43,7 @@ const QUERY = '/loams.collection.v1.QueryService';
 const GRAPH_ADMIN = '/loams.graph.v1.GraphAdminService';
 const GRAPH = '/loams.graph.v1.GraphService';
 const INSTANCE = '/loams.instance.v1.InstanceService';
+const SQL = '/loams.sql.v1.SqlService';
 
 /** A builder corpus case's `expect`, by name. */
 function builderExpect(name) {
@@ -415,8 +416,74 @@ const APP_GRAPH = {
   ],
 };
 
+/**
+ * `app_sql`: SQL over the notes `app_collections` wrote (four of them, after
+ * its delete), with `$n` parameters (SDKP Part C). Part C: a language is held
+ * to it once its suite names `<lang>_app_sql` (see `required.mjs`).
+ */
+const APP_SQL = {
+  name: 'app_sql',
+  kind: 'app',
+  part: 'C',
+  transport: 'connect',
+  required: false,
+  pinnedBy: ['R8'],
+  about:
+    'The notes app, part four: SQL over the `notes` collection. A grouped count with a `$1` ' +
+    'parameter, its rows as records; a capped read that answers `truncated`; the same ' +
+    'statement as Arrow IPC; and the two refusals (`sql_param_count`, a statement that is not ' +
+    'a query).',
+  steps: [
+    {
+      about: 'Count the notes per tag past `n > $1`, ordered: `rows` in `columns` order.',
+      call: 'sql.query',
+      request: post(`${SQL}/Query`, {
+        namespace: APP_NAMESPACE,
+        sql: 'SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags',
+        params: [1],
+      }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'At most two rows of four: `truncated`.',
+      call: 'sql.query',
+      request: post(`${SQL}/Query`, {
+        namespace: APP_NAMESPACE,
+        sql: 'SELECT title, n FROM notes ORDER BY n',
+        maxRows: 2,
+      }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'The first statement as one Arrow IPC stream (`arrowIpc`, base64 in JSON).',
+      call: 'sql.query_arrow',
+      request: post(`${SQL}/QueryArrow`, {
+        namespace: APP_NAMESPACE,
+        sql: 'SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags',
+        params: [1],
+      }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'A `$1` with no value: `invalid_argument`, reason `sql_param_count`.',
+      call: 'sql.query',
+      request: post(`${SQL}/Query`, {
+        namespace: APP_NAMESPACE,
+        sql: 'SELECT title FROM notes WHERE n > $1',
+      }),
+      expect: { status: 400, reason: 'sql_param_count' },
+    },
+    {
+      about: 'A statement that is not a query: `invalid_argument`.',
+      call: 'sql.query',
+      request: post(`${SQL}/Query`, { namespace: APP_NAMESPACE, sql: 'DELETE FROM notes' }),
+      expect: { status: 400, reason: 'invalid_argument' },
+    },
+  ],
+};
+
 /** The app scenarios this module records, in order: each builds on the last. */
-export const APP_SCENARIOS = [APP_COLLECTIONS, APP_SEARCH, APP_GRAPH];
+export const APP_SCENARIOS = [APP_COLLECTIONS, APP_SEARCH, APP_GRAPH, APP_SQL];
 
 /**
  * The response fields a re-recording may move: consistency tokens (offsets),

@@ -1447,6 +1447,92 @@
         "positions",
         "pin"
       ]
+    },
+    {
+      "fixture": "app_sql",
+      "about": "The notes app, part four: SQL over the `notes` collection. A grouped count with a `$1` parameter, its rows as records; a capped read that answers `truncated`; the same statement as Arrow IPC; and the two refusals (`sql_param_count`, a statement that is not a query).",
+      "required": false,
+      "pinnedBy": [
+        "R8"
+      ],
+      "transport": "connect",
+      "server": "loams dev",
+      "steps": [
+        {
+          "step": 0,
+          "about": "Count the notes per tag past `n > $1`, ordered: `rows` in `columns` order.",
+          "method": "POST",
+          "path": "/loams.sql.v1.SqlService/Query",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 1,
+          "about": "At most two rows of four: `truncated`.",
+          "method": "POST",
+          "path": "/loams.sql.v1.SqlService/Query",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 2,
+          "about": "The first statement as one Arrow IPC stream (`arrowIpc`, base64 in JSON).",
+          "method": "POST",
+          "path": "/loams.sql.v1.SqlService/QueryArrow",
+          "contentType": "application/json",
+          "httpStatus": 200,
+          "expect": {
+            "status": 200
+          }
+        },
+        {
+          "step": 3,
+          "about": "A `$1` with no value: `invalid_argument`, reason `sql_param_count`.",
+          "method": "POST",
+          "path": "/loams.sql.v1.SqlService/Query",
+          "contentType": "application/json",
+          "httpStatus": 400,
+          "expect": {
+            "status": 400,
+            "reason": "sql_param_count"
+          }
+        },
+        {
+          "step": 4,
+          "about": "A statement that is not a query: `invalid_argument`.",
+          "method": "POST",
+          "path": "/loams.sql.v1.SqlService/Query",
+          "contentType": "application/json",
+          "httpStatus": 400,
+          "expect": {
+            "status": 400,
+            "reason": "invalid_argument"
+          }
+        }
+      ],
+      "invariant": null,
+      "volatile": [
+        "token",
+        "readToken",
+        "consistencyToken",
+        "collectionId",
+        "namespaceId",
+        "createdAtMs",
+        "updatedAtMs",
+        "instanceId",
+        "performance",
+        "manifestVersion",
+        "version",
+        "seqNo",
+        "positions",
+        "pin"
+      ]
     }
   ]
 }

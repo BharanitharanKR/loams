@@ -11,8 +11,8 @@
     },
     "connect": {
       "httpStatuses": {
-        "200": 46,
-        "400": 7,
+        "200": 49,
+        "400": 9,
         "401": 2,
         "403": 1,
         "404": 2,
@@ -20,7 +20,7 @@
         "501": 9
       },
       "grpcStatuses": {},
-      "cases": 68
+      "cases": 73
     }
   },
   "rows": [
@@ -1601,6 +1601,106 @@
         "R8"
       ],
       "path": "/loams.collection.v1.QueryService/Search",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 400,
+      "grpcStatus": null,
+      "connectCode": "invalid_argument",
+      "reason": null
+    },
+    {
+      "fixture": "app_sql",
+      "step": 0,
+      "steps": 5,
+      "kind": "app",
+      "about": "Count the notes per tag past `n > $1`, ordered: `rows` in `columns` order.",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R8"
+      ],
+      "path": "/loams.sql.v1.SqlService/Query",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 200,
+      "grpcStatus": null,
+      "connectCode": null,
+      "reason": null
+    },
+    {
+      "fixture": "app_sql",
+      "step": 1,
+      "steps": 5,
+      "kind": "app",
+      "about": "At most two rows of four: `truncated`.",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R8"
+      ],
+      "path": "/loams.sql.v1.SqlService/Query",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 200,
+      "grpcStatus": null,
+      "connectCode": null,
+      "reason": null
+    },
+    {
+      "fixture": "app_sql",
+      "step": 2,
+      "steps": 5,
+      "kind": "app",
+      "about": "The first statement as one Arrow IPC stream (`arrowIpc`, base64 in JSON).",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R8"
+      ],
+      "path": "/loams.sql.v1.SqlService/QueryArrow",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 200,
+      "grpcStatus": null,
+      "connectCode": null,
+      "reason": null
+    },
+    {
+      "fixture": "app_sql",
+      "step": 3,
+      "steps": 5,
+      "kind": "app",
+      "about": "A `$1` with no value: `invalid_argument`, reason `sql_param_count`.",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R8"
+      ],
+      "path": "/loams.sql.v1.SqlService/Query",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 400,
+      "grpcStatus": null,
+      "connectCode": "invalid_argument",
+      "reason": null
+    },
+    {
+      "fixture": "app_sql",
+      "step": 4,
+      "steps": 5,
+      "kind": "app",
+      "about": "A statement that is not a query: `invalid_argument`.",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R8"
+      ],
+      "path": "/loams.sql.v1.SqlService/Query",
       "method": "POST",
       "contentType": "application/json",
       "httpStatus": 400,
