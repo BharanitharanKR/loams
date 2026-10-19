@@ -28,33 +28,12 @@ namespace :test do
   end
 end
 
-# The proto files the committed descriptor set holds (D652). The facade is
-# derived from these at run time, so a package that is not listed here has no
-# module. `buf build` adds every import on its own.
-DESCRIPTOR_PROTOS = %w[
-  instance/v1/instance
-  approvals/v1/approvals
-  devices/v1/devices
-  errors/v1/errors
-  live/v1/catalog
-  live/v1/value
-  live/v1/idempotency
-  live/v1/journal
-  live/v1/live
-  notifications/v1/notifications
-  operations/v1/operations
-  collection/v1/collection
-  collection/v1/document
-  collection/v1/query
-  graph/v1/graph
-].freeze
-
-desc "Regenerate gen/loams-descriptor.binpb from proto/ (needs buf)"
+desc "Regenerate gen/loams-descriptor.binpb from proto/ (needs buf; scripts/sdk/gen.sh descriptors does the same)"
 task :descriptors do
   repo = File.expand_path("../..", __dir__)
   out = File.expand_path("gen/loams-descriptor.binpb", __dir__)
-  paths = DESCRIPTOR_PROTOS.flat_map { |p| ["--path", "proto/loams/#{p}.proto"] }
-  Dir.chdir(repo) { system("buf", "build", *paths, "-o", out) || abort("buf build failed") }
+  # The whole proto module, as gen.sh builds it for Ruby and Kotlin (D652).
+  Dir.chdir(repo) { system("buf", "build", "-o", out) || abort("buf build failed") }
   puts "#{File.size(out)} bytes in gen/loams-descriptor.binpb; commit it if it changed"
 end
 
