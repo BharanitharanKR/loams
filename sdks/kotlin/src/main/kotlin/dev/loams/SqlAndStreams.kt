@@ -91,7 +91,8 @@ class StreamsModule internal constructor(private val client: LoamsClient) {
     }
 
     /**
-     * Appends records to one partition. Each record is bytes, a string (UTF-8) or a value (as JSON).
+     * Appends records to one partition. Each record is bytes, a string (UTF-8) or a value (as JSON),
+     * or a [ProducerRecord] to give it a key and headers.
      * With [producerId] and [producerSeq] a repeat answers the first append with `duplicate` set, so
      * the SDK retries it; without them a produce is a plain append and is never retried.
      */
@@ -101,7 +102,7 @@ class StreamsModule internal constructor(private val client: LoamsClient) {
         return call("Produce", "ProduceRequest", Values.obj(
             "stream" to Values.str(stream),
             "partition" to JsonNumber(partition.toString()),
-            "records" to JsonArray(records.map { Values.obj("value" to Values.str(java.util.Base64.getEncoder().encodeToString(encode(it)))) }),
+            "records" to JsonArray(records.map(::recordJson)),
             "producerId" to producerId?.let { Values.str(it) },
             "producerSeq" to producerSeq?.let { Values.str(it.toString()) },
             "namespace" to namespace?.let { Values.str(it) },
@@ -133,8 +134,10 @@ class StreamsModule internal constructor(private val client: LoamsClient) {
                   options: CallOptions? = null): Subscription = Subscription(fromOffset) { offset ->
         fetch(stream, partition, offset, maxWaitMs = maxWaitMs, namespace = namespace, options = options)
             .messages("records").map { r ->
+                val key = r.descriptorForType.findFieldByName("key")
                 Subscription.Record(partition, r.field("offset") as Long,
-                    (r.field("value") as ByteString).toByteArray(), r.field("timestamp_ms") as Long)
+                    (r.field("value") as ByteString).toByteArray(), r.field("timestamp_ms") as Long,
+                    if (r.hasField(key)) (r.getField(key) as ByteString).toByteArray() else null)
             }
     }
 
@@ -147,12 +150,42 @@ class StreamsModule internal constructor(private val client: LoamsClient) {
         call("FetchCloudEvents", "FetchCloudEventsRequest", request, options)
 
     companion object {
-        /** A record's bytes: as given, a string's UTF-8, or a value's JSON. */
+        /**
+         * A record's bytes: as given, a string's UTF-8, or a value's JSON with object keys sorted, so the
+         * same value is the same bytes however its map was built.
+         */
         fun encode(record: Any): ByteArray = when (record) {
             is ByteArray -> record
             is ByteString -> record.toByteArray()
             is String -> record.toByteArray(Charsets.UTF_8)
-            else -> Json.writeCompact(Values.of(record)).toByteArray(Charsets.UTF_8)
+            else -> Json.writeCompact(sorted(Values.of(record))).toByteArray(Charsets.UTF_8)
+        }
+
+        private fun sorted(value: JsonValue): JsonValue = when (value) {
+            is Json.JsonObject -> Json.JsonObject(value.entries.toSortedMap().mapValues { sorted(it.value) })
+            is JsonArray -> JsonArray(value.items.map(::sorted))
+            else -> value
+        }
+
+        private fun base64(bytes: ByteArray): JsonValue = Values.str(java.util.Base64.getEncoder().encodeToString(bytes))
+
+        /** One `loams.stream.v1.Record` as proto3 JSON: a [ProducerRecord] with its key and headers, or a bare value. */
+        internal fun recordJson(record: Any): JsonValue {
+            if (record !is ProducerRecord) return Values.obj("value" to base64(encode(record)))
+            return Values.obj(
+                "key" to record.key?.let { base64(encode(it)) },
+                "value" to base64(encode(record.value)),
+                "headers" to if (record.headers.isEmpty()) null else JsonArray(record.headers.map { (name, value) ->
+                    Values.obj("key" to Values.str(name), "value" to base64(encode(value)))
+                }),
+            )
         }
     }
 }
+
+/**
+ * A record to produce with a key and headers (SDKP-25). The key (partitioning, compaction), the value
+ * and each header value are bytes, a string (UTF-8) or a value (as JSON), as [StreamsModule.encode]
+ * encodes them; a null key produces an unkeyed record.
+ */
+data class ProducerRecord(val key: Any?, val value: Any, val headers: List<Pair<String, Any>> = emptyList())

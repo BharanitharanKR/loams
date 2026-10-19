@@ -62,6 +62,30 @@ public sealed class AppSqlStreamsTests
         Assert.Equal(7UL, sent.ProducerSeq);
     }
 
+    /// <summary>Keyed records (SDKP-25) carry the recorded app_streams produce body's keys and values.</summary>
+    [Fact]
+    public async Task csharp_streams_produce_keyed_records()
+    {
+        var handler = new StubHandler(StubHandler.ConnectJson(HttpStatusCode.OK, """{"baseOffset":"0","lastOffset":"1"}"""));
+        using (var client = ClientOver(handler))
+        {
+            await client.Streams.ProduceAsync("note-events", 0,
+            [
+                new ProducerRecord("1", new Dictionary<string, object?> { ["op"] = "created", ["note"] = 1 }),
+                new ProducerRecord("5", new Dictionary<string, object?> { ["op"] = "deleted", ["note"] = 5 },
+                    [new KeyValuePair<string, object>("source", "notes")]),
+                "plain",
+            ], producerId: "app-producer-1", producerSeq: 1);
+        }
+        var sent = Body(handler.Requests[0], ProduceRequest.Parser);
+        Assert.Equal("MQ==", Convert.ToBase64String(sent.Records[0].Key.ToByteArray()));
+        Assert.Equal("eyJub3RlIjoxLCJvcCI6ImNyZWF0ZWQifQ==", Convert.ToBase64String(sent.Records[0].Value.ToByteArray()));
+        Assert.Equal("eyJub3RlIjo1LCJvcCI6ImRlbGV0ZWQifQ==", Convert.ToBase64String(sent.Records[1].Value.ToByteArray()));
+        Assert.Equal("source", sent.Records[1].Headers[0].Key);
+        Assert.Equal("notes", Encoding.UTF8.GetString(sent.Records[1].Headers[0].Value.ToByteArray()));
+        Assert.False(sent.Records[2].HasKey);
+    }
+
     [Fact]
     public async Task csharp_streams_subscribe_reads_through_fetch()
     {
