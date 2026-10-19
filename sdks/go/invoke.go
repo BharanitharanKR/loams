@@ -51,7 +51,7 @@ func Unary[Req, Res any](
 	// An explicit token wins; otherwise the session's, which is what makes a
 	// session read-your-writes rather than record a token and never send it
 	// (R4).
-	token := consistencyToken(settings, session)
+	token := consistencyToken(settings, session, binding.Package)
 	prepared, inField, err := prepareRequest(binding, request, invoker.defaults.Namespace, token)
 	if err != nil {
 		return nil, err
@@ -105,7 +105,7 @@ func Unary[Req, Res any](
 	// A token the session cannot parse is counted and dropped: the RPC
 	// succeeded, and turning that into an error would make a caller that
 	// retries on it perform the write twice.
-	recordConsistency(session, response, headerToken)
+	recordConsistency(session, response, headerToken, binding.Package)
 	return response, nil
 }
 
@@ -130,7 +130,7 @@ func ServerStream[Req, Res any](
 	settings.resolve(options)
 
 	session := invoker.sessionFor(settings)
-	token := consistencyToken(settings, session)
+	token := consistencyToken(settings, session, binding.Package)
 	prepared, inField, err := prepareRequest(binding, request, invoker.defaults.Namespace, token)
 	if err != nil {
 		return nil, err
@@ -224,14 +224,19 @@ func newStream[Req, Res any](
 // consistencyToken resolves which token a read goes out with: an explicit one
 // wins, otherwise the session's — which is what makes WithSessionConsistency
 // read-your-writes rather than record a token and never send it (R4).
-func consistencyToken(settings *callSettings, session ConsistencyTokenStore) string {
+func consistencyToken(settings *callSettings, session ConsistencyTokenStore, pkg string) string {
 	if settings.consistency != nil && settings.consistency.Token != "" {
 		return settings.consistency.Token
 	}
 	if session == nil {
 		return ""
 	}
-	return session.Current()
+	// An app package's read takes the session's token only for collections
+	// and SQL (SDKP-17); any other package reads its own scope.
+	if NamespacedPackages[pkg] && !SessionPackages[pkg] {
+		return ""
+	}
+	return currentIn(session, pkg)
 }
 
 // applyHeaders copies headers onto a request, replacing any with the same name.

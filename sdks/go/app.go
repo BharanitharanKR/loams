@@ -391,8 +391,10 @@ func (it *HitIter) Err() error { return it.err }
 // `*InvalidArgumentError` before any call.
 func (c SearchCalls) QueryAll(ctx context.Context, s Search, options ...CallOption) (*HitIter, error) {
 	if !s.HasTiebreak() {
-		return nil, invalidBuild("sort", errors.New(
+		refused := invalidBuild("sort", errors.New(
 			"search.QueryAll needs a sort that ends in the primary key, such as Sort(loams.Sort.Score(), loams.Sort.PK())"))
+		refused.(*InvalidArgumentError).Reason = ReasonSearchAfterNeedsTiebreak
+		return nil, refused
 	}
 	if c.Query == nil {
 		return nil, unimplemented("search.query")

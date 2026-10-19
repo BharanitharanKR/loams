@@ -37,16 +37,21 @@ import (
 // sets one (R12).
 const DefaultTimeout = 30 * time.Second
 
-// The reasons the SDK raises itself, without a server answer (R12, R13). They
-// are registered in `docs/api/reasons.md` as client-side; they are declared
-// here so the SDK does not depend on when that registry entry lands.
+// The reasons the SDK raises itself, without a server answer (R4, R11–R13,
+// SDKP §2.4), registered in `docs/api/reasons.md` as client-side (SDKP P0e).
 const (
-	ReasonClientDeadlineExceeded Reason = "client_deadline_exceeded"
-	ReasonBatchPartiallyApplied  Reason = "batch_partially_applied"
+	ReasonClientDeadlineExceeded = facade.ReasonClientDeadlineExceeded
+	ReasonBatchPartiallyApplied  = facade.ReasonBatchPartiallyApplied
 )
 
 // ClientReasons is every reason the SDK raises itself.
-var ClientReasons = []Reason{ReasonClientDeadlineExceeded, ReasonBatchPartiallyApplied}
+var ClientReasons = []Reason{
+	ReasonClientDeadlineExceeded,
+	ReasonBatchPartiallyApplied,
+	ReasonNamespaceRequired,
+	ReasonInvalidConsistencyToken,
+	ReasonSearchAfterNeedsTiebreak,
+}
 
 // NamespacedPackages are the packages whose `namespace` field is a Loams
 // namespace, and so the packages R11 fills and checks.
@@ -136,7 +141,7 @@ func prepareRequest[Req any](binding facade.CallBinding, request *Req, namespace
 			if namespace == "" {
 				return nil, false, &InvalidArgumentError{LoamsError{
 					Code:     connect.CodeInvalidArgument,
-					Reason:   ReasonInvalidArgument,
+					Reason:   ReasonNamespaceRequired,
 					RPC:      binding.RPC,
 					Metadata: map[string]string{"field": "namespace"},
 					Cause: errors.New(binding.RPC +

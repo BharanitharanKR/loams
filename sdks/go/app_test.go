@@ -226,8 +226,8 @@ func Test_go_session_read_your_writes(t *testing.T) {
 		if _, err := Unary(invoker, ctx, writeBinding, write.call, &collectionv1.WriteDocumentsRequest{Collection: "notes"}); err != nil {
 			t.Fatal(err)
 		}
-		if session.Current() != "v1:s4/p0@12" {
-			t.Fatalf("the session holds %q", session.Current())
+		if session.CurrentIn("loams.collection.v1") != "v1:s4/p0@12" {
+			t.Fatalf("the session holds %q", session.CurrentIn("loams.collection.v1"))
 		}
 		caller := &collectionv1.GetDocumentsRequest{Collection: "notes"}
 		if _, err := Unary(invoker, ctx, getBinding, get.call, caller); err != nil {
@@ -260,8 +260,8 @@ func Test_go_session_read_your_writes(t *testing.T) {
 				t.Fatal(err)
 			}
 		}
-		if session.Current() != "v1:s4/p0@12,s4/p1@3" {
-			t.Fatalf("the session holds %q", session.Current())
+		if session.CurrentIn("loams.collection.v1") != "v1:s4/p0@12,s4/p1@3" {
+			t.Fatalf("the session holds %q", session.CurrentIn("loams.collection.v1"))
 		}
 		get := &stubMethod[collectionv1.GetDocumentsRequest, collectionv1.GetDocumentsResponse]{
 			answer: func(int, context.Context, *collectionv1.GetDocumentsRequest) (*collectionv1.GetDocumentsResponse, http.Header, error) {
@@ -285,9 +285,12 @@ func Test_go_session_read_your_writes(t *testing.T) {
 		}
 	})
 
-	t.Run("a graph read's at_least is the oneof arm", func(t *testing.T) {
+	t.Run("a graph read never takes the session's token (SDKP-17)", func(t *testing.T) {
+		// A graph's token names one graph, and a Graph read refuses any other,
+		// so the session's token, of any scope, never goes out on one.
 		session := NewConsistencySession()
-		_ = session.Record("v1:s2/p0@5")
+		_ = session.RecordIn("v1:s2/p0@5", "loams.graph.v1")
+		_ = session.RecordIn("v1:s4/p0@1", "loams.collection.v1")
 		invoker := newTestInvoker(session, InvokerDefaults{Namespace: "app"}, 0)
 		execute := &stubMethod[graphv1.ExecuteRequest, graphv1.ExecuteResponse]{
 			answer: func(int, context.Context, *graphv1.ExecuteRequest) (*graphv1.ExecuteResponse, http.Header, error) {
@@ -297,11 +300,15 @@ func Test_go_session_read_your_writes(t *testing.T) {
 		if _, err := Unary(invoker, ctx, graphExecute, execute.call, &graphv1.ExecuteRequest{Graph: "g"}); err != nil {
 			t.Fatal(err)
 		}
-		if got := execute.requests[0].GetConsistency().GetAtLeast(); got != "v1:s2/p0@5" {
-			t.Errorf("the graph read went out at_least %q", got)
+		if got := execute.requests[0].GetConsistency(); got != nil {
+			t.Errorf("the graph read went out with %v", got)
 		}
-		if session.Current() != "v1:s2/p0@9" {
-			t.Errorf("the session holds %q", session.Current())
+		// Its answer's token is recorded in its own scope, unused by reads.
+		if session.CurrentIn("loams.graph.v1") != "v1:s2/p0@9" {
+			t.Errorf("the graph scope holds %q", session.CurrentIn("loams.graph.v1"))
+		}
+		if session.CurrentIn("loams.collection.v1") != "v1:s4/p0@1" {
+			t.Errorf("the graph write moved the collection scope: %q", session.CurrentIn("loams.collection.v1"))
 		}
 	})
 
@@ -842,4 +849,29 @@ func Test_go_search_query_all_requires_tiebreak(t *testing.T) {
 			t.Errorf("search_after %v then %v", requests[0].GetSearchAfter(), requests[1].GetSearchAfter())
 		}
 	})
+}
+
+// The client-side refusals carry their registered reasons (SDKP P0e):
+// namespace_required (R11), invalid_consistency_token (R4) and
+// search_after_needs_tiebreak (QueryAll).
+func TestGoClientSideReasons(t *testing.T) {
+	ctx := context.Background()
+	invoker := newTestInvoker(nil, InvokerDefaults{}, 0)
+	get := &stubMethod[collectionv1.GetDocumentsRequest, collectionv1.GetDocumentsResponse]{
+		answer: func(int, context.Context, *collectionv1.GetDocumentsRequest) (*collectionv1.GetDocumentsResponse, http.Header, error) {
+			return &collectionv1.GetDocumentsResponse{}, nil, nil
+		},
+	}
+	if _, err := Unary(invoker, ctx, getBinding, get.call, &collectionv1.GetDocumentsRequest{Collection: "notes"}); ReasonOf(err) != ReasonNamespaceRequired {
+		t.Errorf("no namespace: reason %v", ReasonOf(err))
+	}
+	if _, err := ParseConsistencyToken("v1:s01/p0@1"); ReasonOf(err) != ReasonInvalidConsistencyToken {
+		t.Errorf("a malformed token: reason %v", ReasonOf(err))
+	}
+	calls := SearchCalls{Query: func(context.Context, *collectionv1.SearchRequest, ...CallOption) (*collectionv1.SearchResponse, error) {
+		return &collectionv1.SearchResponse{}, nil
+	}}
+	if _, err := calls.QueryAll(ctx, NewSearch("notes").Text("refund", TextOptions{}).Limit(2)); ReasonOf(err) != ReasonSearchAfterNeedsTiebreak {
+		t.Errorf("no tiebreak: reason %v", ReasonOf(err))
+	}
 }

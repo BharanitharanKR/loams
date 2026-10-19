@@ -117,7 +117,7 @@ func ParseConsistencyToken(text string) (ConsistencyToken, error) {
 	invalid := func() error {
 		return &InvalidArgumentError{LoamsError{
 			Code:     connect.CodeInvalidArgument,
-			Reason:   ReasonInvalidArgument,
+			Reason:   ReasonInvalidConsistencyToken,
 			Metadata: map[string]string{"field": "consistency_token"},
 			Cause:    fmt.Errorf("invalid consistency token %q", text),
 		}}
@@ -227,38 +227,59 @@ type ConsistencyTokenStore interface {
 	Conflicts() int
 }
 
-// ConsistencySession is the default store: the merge of every token recorded.
+// ScopedTokenStore is a store that keeps one token per scope, a proto package
+// (R4, SDKP-17). The call path reads and records in the call's own package
+// when the store offers it, and through ConsistencyTokenStore when it does not.
+type ScopedTokenStore interface {
+	// CurrentIn is the scope's token, or "".
+	CurrentIn(scope string) string
+	// RecordIn folds a token into the scope's.
+	RecordIn(token, scope string) error
+}
+
+// ConsistencySession is the default store: one merged token per scope (a
+// proto package). A Graph read refuses a token naming another package's
+// stream, so a collection write's token must never become a graph read's
+// `at_least`; Current and Record are the default scope, "".
 type ConsistencySession struct {
 	mu       sync.Mutex
-	token    ConsistencyToken
-	has      bool
+	tokens   map[string]ConsistencyToken
 	rejected int
 }
 
 // NewConsistencySession is an empty session.
 func NewConsistencySession() *ConsistencySession { return &ConsistencySession{} }
 
-// Current is the merged token, or "" before anything was recorded.
-func (s *ConsistencySession) Current() string {
+// Current is the default scope's merged token, or "" before anything was
+// recorded there.
+func (s *ConsistencySession) Current() string { return s.CurrentIn("") }
+
+// CurrentIn is the scope's merged token, or "".
+func (s *ConsistencySession) CurrentIn(scope string) string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if !s.has {
+	token, ok := s.tokens[scope]
+	if !ok {
 		return ""
 	}
-	return s.token.String()
+	return token.String()
 }
 
-// Token is the merged token, parsed, and whether there is one.
+// Token is the default scope's merged token, parsed, and whether there is one.
 func (s *ConsistencySession) Token() (ConsistencyToken, bool) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.token, s.has
+	token, ok := s.tokens[""]
+	return token, ok
 }
 
-// Record merges a token in. An empty token is not a token; a malformed one is
-// counted and returned as an `*InvalidArgumentError`, and the session keeps
-// what it had.
-func (s *ConsistencySession) Record(token string) error {
+// Record merges a token into the default scope. An empty token is not a token;
+// a malformed one is counted and returned as an `*InvalidArgumentError`, and
+// the session keeps what it had.
+func (s *ConsistencySession) Record(token string) error { return s.RecordIn(token, "") }
+
+// RecordIn merges a token into the scope's.
+func (s *ConsistencySession) RecordIn(token, scope string) error {
 	if token == "" {
 		return nil
 	}
@@ -269,10 +290,13 @@ func (s *ConsistencySession) Record(token string) error {
 		s.rejected++
 		return err
 	}
-	if s.has {
-		s.token = s.token.Merge(parsed)
+	if s.tokens == nil {
+		s.tokens = map[string]ConsistencyToken{}
+	}
+	if held, ok := s.tokens[scope]; ok {
+		s.tokens[scope] = held.Merge(parsed)
 	} else {
-		s.token, s.has = parsed.Normalized(), true
+		s.tokens[scope] = parsed.Normalized()
 	}
 	return nil
 }
@@ -287,11 +311,25 @@ func (s *ConsistencySession) Rejected() int {
 // Conflicts is Rejected, under the interface's older name.
 func (s *ConsistencySession) Conflicts() int { return s.Rejected() }
 
-// Clear forgets the token, so the next read is not held to it.
+// Clear forgets every token, so the next read is not held to one.
 func (s *ConsistencySession) Clear() {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.token, s.has, s.rejected = ConsistencyToken{}, false, 0
+	s.tokens, s.rejected = nil, 0
+}
+
+// SessionPackages are the packages whose reads take the session's token as
+// `at_least` (R4, SDKP-17): collections and SQL. A graph's token names one
+// graph, and a Graph read refuses any other.
+var SessionPackages = map[string]bool{"loams.collection.v1": true, "loams.sql.v1": true}
+
+// currentIn is a store's token for scope, through ScopedTokenStore when it
+// offers one.
+func currentIn(session ConsistencyTokenStore, scope string) string {
+	if scoped, ok := session.(ScopedTokenStore); ok {
+		return scoped.CurrentIn(scope)
+	}
+	return session.Current()
 }
 
 // tokenFields are the response fields a token is read from (R4, SDKP §2.1).
@@ -303,7 +341,7 @@ var tokenFields = []protoreflect.Name{"consistency_token", "token", "read_token"
 // caller that retries on that error performs the write twice. A string that is
 // not a `v1:` token at all — a page token, a bearer — is not the session's
 // business and is skipped without counting.
-func recordConsistency(session ConsistencyTokenStore, response any, header string) {
+func recordConsistency(session ConsistencyTokenStore, response any, header, scope string) {
 	if session == nil {
 		return
 	}
@@ -313,6 +351,10 @@ func recordConsistency(session ConsistencyTokenStore, response any, header strin
 	}
 	for _, token := range tokens {
 		if !IsConsistencyToken(token) {
+			continue
+		}
+		if scoped, ok := session.(ScopedTokenStore); ok {
+			_ = scoped.RecordIn(token, scope)
 			continue
 		}
 		_ = session.Record(token)
