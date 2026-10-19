@@ -24,6 +24,52 @@ let info = loams.instance().get_instance(GetInstanceRequest::default(), CallOpti
 println!("{} serves {:?}", info.name, info.api_versions);
 ```
 
+## Build an app
+
+The app-building layer (SDKP): builders, a collection handle, and the runtime
+an app needs.
+
+```rust,ignore
+use loams::builders::{Filter, Fusion, Schema, Search, Sort, TextRetriever, VectorOptions};
+use loams::{CallOptionsOverrides, Loams};
+
+let loams = Loams::from_env()?          // LOAMS_ENDPOINT, LOAMS_API_KEY, LOAMS_NAMESPACE
+    .session_consistency(true);         // read-your-writes across calls
+
+let schema = Schema::new().text("title").text("body").keyword("tags").i64("n").vector("embedding", 4);
+
+let request = Search::on("notes")
+    .text(TextRetriever::fields("refund", ["body"]))
+    .vector("embedding", &[1.0, 0.0, 0.0, 0.0], VectorOptions::k(10))
+    .fuse(Fusion::rrf(Some(60)))
+    .filter(Filter::and([Filter::eq("tags", "policy"), Filter::range("n").gte(1).build()]))
+    .sort([Sort::score(None), Sort::pk(None)])
+    .limit(5)
+    .build()?;                           // a loams::collection_v1::SearchRequest
+```
+
+- **Default namespace (R11).** `with_namespace("app")` fills every app request
+  that leaves `namespace` empty; an explicit one wins, and neither is
+  `invalid_argument` before any network call (`loams::prepare_request`).
+- **Deadlines (R12).** Unary calls default to 30 s (`with_timeout`, or
+  `CallOptionsOverrides::timeout`; zero disables). The budget covers retries;
+  running out is `deadline_exceeded` with `client_reason() ==
+  Some("client_deadline_exceeded")`, never retried. Streams have no default.
+- **Consistency tokens (R4).** `ConsistencyToken` parses, prints and merges the
+  server's `v1:` tokens; the session merges every token a response carries.
+- **Bulk writes (R13).** `CollectionHandle::write_batch` sends one chunk at a
+  time with its own idempotency key and stops at the first failed chunk with a
+  `BatchError` (`chunks_applied`, `rows_applied`, `token`).
+- **Subscriptions (R14).** `loams::subscribe(from_offset, fetch)` is a
+  `futures::Stream` over `Fetch` whose `offset()` says where to resume.
+
+The typed module methods (`loams.collections()`, `loams.documents()`,
+`loams.search()`, `loams.graph()`, `loams.sql()`, `loams.streams()`) arrive
+with the protos' facade annotations (SDKP P0a–P0c), and `loams.collection(name)`
+returns a `CollectionHandle` over them; the builders and runtime above work
+today. Durable workflows use the Resonate SDK pointed at
+`LOAMS_ENDPOINT/durable/` (SDKP-1).
+
 ## Building
 
 The generated message and client code comes from `loams-proto` and

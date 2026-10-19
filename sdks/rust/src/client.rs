@@ -61,6 +61,8 @@ pub(crate) struct Runtime {
     pub(crate) consistency: Option<Arc<ConsistencySession>>,
     pub(crate) default_timeout: Option<std::time::Duration>,
     pub(crate) catalogue_cache: Arc<Mutex<crate::system::Cache>>,
+    /// The namespace a request with an empty `namespace` is sent with (R11).
+    pub(crate) namespace: Option<String>,
 }
 
 impl Runtime {
@@ -94,6 +96,19 @@ impl Runtime {
             session: session.clone(),
             timeout: overrides.timeout.or(self.default_timeout),
             random: RetryPlan::jitter(),
+        }
+    }
+
+    /// The plan of a server stream: the unary one, except that a stream has no
+    /// default deadline (R12) — only the one the call sets.
+    pub(crate) fn stream_plan(
+        &self,
+        overrides: &CallOptionsOverrides,
+        binding: &'static CallBinding,
+    ) -> RetryPlan {
+        RetryPlan {
+            timeout: overrides.timeout,
+            ..self.plan(overrides, binding, false)
         }
     }
 }
@@ -131,6 +146,44 @@ impl Loams<HttpClient> {
         Loams::with_transport_and_config(transport, config, options.endpoint.clone())
     }
 
+    /// A client from the environment (R1, R11): `LOAMS_ENDPOINT`, then
+    /// `LOAMS_API_KEY` or `LOAMS_TOKEN` as the bearer, then `LOAMS_NAMESPACE`
+    /// as the default namespace.
+    ///
+    /// # Errors
+    ///
+    /// `invalid_argument` when `LOAMS_ENDPOINT` is unset, or the endpoint's own
+    /// errors.
+    pub fn from_env() -> Result<Self, LoamsError> {
+        Loams::from_env_with(|name| std::env::var(name).ok())
+    }
+
+    /// [`Loams::from_env`] over a lookup the caller supplies, for a test or a
+    /// configuration map.
+    ///
+    /// # Errors
+    ///
+    /// As [`Loams::from_env`].
+    pub fn from_env_with(lookup: impl Fn(&str) -> Option<String>) -> Result<Self, LoamsError> {
+        let get = |name: &str| lookup(name).filter(|value| !value.is_empty());
+        let endpoint = get("LOAMS_ENDPOINT").ok_or_else(|| {
+            LoamsError::new(
+                crate::error::ErrorKind::InvalidArgument,
+                connectrpc::ErrorCode::InvalidArgument,
+                "Loams::from_env: LOAMS_ENDPOINT is not set",
+            )
+            .with_metadata("field", "LOAMS_ENDPOINT")
+        })?;
+        let mut loams = Loams::connect(TransportOptions::new(&endpoint))?;
+        if let Some(bearer) = get("LOAMS_API_KEY").or_else(|| get("LOAMS_TOKEN")) {
+            loams = loams.with_auth(Arc::new(crate::token::StaticToken::new(bearer)?));
+        }
+        if let Some(namespace) = get("LOAMS_NAMESPACE") {
+            loams = loams.with_namespace(namespace);
+        }
+        Ok(loams)
+    }
+
     /// Builds a client for an endpoint with the SDK's defaults: no credential, a
     /// retry budget of [`DEFAULT_MAX_RETRIES`], and no session consistency store.
     ///
@@ -162,8 +215,15 @@ impl<T: Clone> Loams<T> {
             token_source: None,
             max_retries: DEFAULT_MAX_RETRIES,
             consistency: None,
-            default_timeout: config.default_timeout(),
+            // R12: unary calls get 30 s unless the transport options say
+            // otherwise; `stream_plan` keeps streams free of it.
+            default_timeout: Some(
+                config
+                    .default_timeout()
+                    .unwrap_or(crate::call::DEFAULT_TIMEOUT),
+            ),
             catalogue_cache: Arc::new(Mutex::new(crate::system::Cache::default())),
+            namespace: None,
         };
         Ok(Loams {
             inner: Arc::new(Inner {
@@ -189,6 +249,33 @@ impl<T: Clone> Loams<T> {
         let mut runtime = self.inner.runtime.clone();
         runtime.max_retries = retries;
         self.with_runtime(runtime)
+    }
+
+    /// Returns a client with a default namespace (R11): every request with a
+    /// `namespace` field that leaves it empty is sent with this one. An explicit
+    /// namespace always wins; with neither, such a call is refused with
+    /// `invalid_argument` before any network call.
+    #[must_use]
+    pub fn with_namespace(self, namespace: impl Into<String>) -> Self {
+        let mut runtime = self.inner.runtime.clone();
+        let namespace = namespace.into();
+        runtime.namespace = (!namespace.is_empty()).then_some(namespace);
+        self.with_runtime(runtime)
+    }
+
+    /// Returns a client whose unary calls default to `timeout` (R12); a zero
+    /// duration disables the default.
+    #[must_use]
+    pub fn with_timeout(self, timeout: std::time::Duration) -> Self {
+        let mut runtime = self.inner.runtime.clone();
+        runtime.default_timeout = Some(timeout);
+        self.with_runtime(runtime)
+    }
+
+    /// The default namespace, when the client has one (R11).
+    #[must_use]
+    pub fn namespace(&self) -> Option<&str> {
+        self.inner.runtime.namespace.as_deref()
     }
 
     /// Returns a client holding a session consistency token across calls (D609).
@@ -376,7 +463,7 @@ where
         let rpc = binding.rpc;
         let runtime = self.inner.runtime.clone();
         let client = self.live().client.clone();
-        let plan = runtime.plan(&overrides, binding, false);
+        let plan = runtime.stream_plan(&overrides, binding);
         let opener_plan = plan.clone();
         let opener_client = client.clone();
         let opened = call_with_retry(
@@ -545,7 +632,7 @@ where
     ) -> Result<Opened<Transition>, LoamsError> {
         let binding = crate::binding::binding_of("live", "watch").expect("generated");
         let rpc = binding.rpc;
-        let plan = self.runtime.plan(&options, binding, false);
+        let plan = self.runtime.stream_plan(&options, binding);
         let client = self.client.clone();
         call_with_retry(
             request,
@@ -716,6 +803,7 @@ async fn send<Req, V, F, Fut>(
 where
     Req: Clone,
     V: buffa::view::MessageView<'static>,
+    V::Owned: serde::Serialize,
     F: FnMut(Req, connectrpc::client::CallOptions) -> Fut,
     Fut:
         std::future::Future<Output = Result<UnaryResponse<OwnedView<V>>, connectrpc::ConnectError>>,
@@ -729,7 +817,12 @@ where
         rpc,
     )
     .await?;
-    Ok(response.into_owned())
+    let (headers, message, _trailers) = response.into_owned_parts();
+    // R4: every token the response carried merges into the session.
+    if let Some(session) = &plan.session {
+        crate::app::record_response(session, &headers, &message);
+    }
+    Ok(message)
 }
 
 /// Turns connect-rust's stream handle into the [`Opened`] form the runtime
@@ -938,14 +1031,17 @@ mod tests {
     fn a_cloned_client_shares_one_session_store() {
         let loams = client().session_consistency(true);
         let clone = loams.clone();
-        loams.consistency().expect("a session").record(Some("v1:a"));
+        loams
+            .consistency()
+            .expect("a session")
+            .record(Some("v1:s1/p0@1"));
         assert_eq!(
             clone
                 .consistency()
                 .expect("the same session")
                 .current()
                 .as_deref(),
-            Some("v1:a")
+            Some("v1:s1/p0@1")
         );
     }
 
