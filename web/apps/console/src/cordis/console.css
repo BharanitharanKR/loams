@@ -61,6 +61,14 @@ code {
 .lc-side {
   background: var(--op-window);
 }
+/* The sidebar's column (the toggle's target): the sidebar and its splitter. Closing it with
+   Motion on slides its width; the sidebar keeps its own width inside, so nothing reflows. */
+.lc-side-col {
+  display: flex;
+  flex: none;
+  min-height: 0;
+  overflow: hidden;
+}
 /* The splitter between the sidebar and the work card: invisible until hovered or focused. */
 #lc-side > [data-slot="resize-handle"] {
   background: transparent;
@@ -156,9 +164,54 @@ code {
   font-size: var(--op-text-micro);
   font-weight: 500;
 }
-.lc-pages-head h2 {
+.lc-pages-head h2,
+.lc-settings-sub h3 {
+  min-width: 0;
   margin: 0;
   font: inherit;
+}
+/* A group heading that opens and shuts its rows (UI2): the label and a chevron that turns. */
+.lc-nav-disclosure {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 24px;
+  margin-inline-start: -4px;
+  padding: 0 4px;
+  border: 0;
+  border-radius: var(--op-radius-sm);
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: color var(--op-duration-fast) var(--op-ease-out);
+}
+.lc-nav-disclosure:hover {
+  color: var(--op-ink);
+}
+.lc-nav-disclosure:focus-visible {
+  outline-offset: calc(var(--op-focus-width) * -1);
+}
+.lc-nav-chevron {
+  flex: none;
+  opacity: 0;
+  transform: rotate(0deg);
+  transition:
+    transform var(--op-duration-fast) var(--op-ease-out),
+    opacity var(--op-duration-fast) var(--op-ease-out);
+}
+/* The chevron shows on hover and focus, and always while the group is shut. */
+.lc-nav-disclosure:hover .lc-nav-chevron,
+.lc-nav-disclosure:focus-visible .lc-nav-chevron,
+.lc-nav-disclosure[aria-expanded="false"] .lc-nav-chevron {
+  opacity: 1;
+}
+.lc-nav-disclosure[aria-expanded="true"] .lc-nav-chevron {
+  transform: rotate(90deg);
+}
+.lc-nav-body {
+  display: grid;
+  gap: 2px;
 }
 .lc-pages-edit {
   display: inline-grid;
@@ -185,13 +238,35 @@ code {
   padding: 0;
   list-style: none;
 }
+/* No pinned pages: a quiet dashed box that says where pins come from. */
 .lc-pages-empty {
-  margin: 0;
-  padding: 4px 8px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 2px 0;
+  padding: 10px;
+  border: 1px dashed var(--op-rule);
+  border-radius: var(--op-radius-md);
   color: var(--op-faint);
   font-size: var(--op-text-small);
 }
+.lc-pages-empty svg {
+  flex: none;
+  margin-top: 2px;
+}
+.lc-pages-empty p {
+  display: grid;
+  gap: 2px;
+  margin: 0;
+  line-height: 1.4;
+}
+.lc-pages-empty strong {
+  color: var(--op-muted);
+  font-weight: 500;
+}
 .lc-page-link {
+  position: relative;
+  isolation: isolate;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -204,8 +279,13 @@ code {
   font-weight: 500;
   text-decoration: none;
   transition:
-    background-color var(--op-duration) ease,
-    color var(--op-duration) ease;
+    background-color var(--op-duration-fast) var(--op-ease-out),
+    color var(--op-duration-fast) var(--op-ease-out);
+}
+.lc-page-link:focus-visible,
+.lc-side-foot a:focus-visible,
+.lc-new-thread:focus-visible {
+  outline-offset: calc(var(--op-focus-width) * -1);
 }
 .lc-page-link svg {
   flex: none;
@@ -220,11 +300,17 @@ code {
   background: var(--op-row-hover);
   color: var(--op-ink);
 }
-/* The current page: a white chip in light, a soft fill in dark. */
+/* The current page: a white chip in light, a soft fill in dark. The chip is its own element
+   (SelectionIndicator), so it slides to the next current page (UI2). */
 .lc-page-link[aria-current="page"] {
+  color: var(--op-ink);
+}
+.lc-nav-indicator {
+  inset: 0;
+  z-index: -1;
+  border-radius: var(--op-radius-md);
   background: var(--op-row-selected);
   box-shadow: var(--op-shadow-chip);
-  color: var(--op-ink);
 }
 .lc-side-foot a {
   display: flex;
@@ -322,24 +408,15 @@ code {
   justify-content: center;
   gap: 6px;
 }
+/* The top bar's icon buttons are @loams/ui IconButtons (quiet, 28px, a tooltip with the
+   shortcut); the bar keeps its 16px icons and paints a panel toggle that is on. */
 .lc-bar-btn {
-  display: inline-grid;
   flex: none;
-  place-items: center;
-  width: var(--op-control-compact);
-  height: var(--op-control-compact);
-  padding: 0;
-  border: 0;
-  border-radius: var(--op-radius-md);
-  background: none;
-  color: var(--op-muted);
-  cursor: pointer;
-  transition:
-    background-color var(--op-duration) ease,
-    color var(--op-duration) ease;
 }
-/* A panel toggle that is on (the agent dock now; the inspector and drawer from Task 8). */
-.lc-bar-btn:hover,
+.lc-bar-btn svg {
+  width: var(--op-icon);
+  height: var(--op-icon);
+}
 .lc-bar-btn[aria-pressed="true"],
 .lc-bar-btn[aria-expanded="true"]:not(.lc-sidebar-toggle) {
   background: var(--op-row-hover);
@@ -348,6 +425,12 @@ code {
 .lc-bar-btn[aria-pressed="true"] svg,
 .lc-bar-btn[aria-expanded="true"]:not(.lc-sidebar-toggle) svg {
   color: var(--op-accent-fg);
+}
+/* A tooltip's label and its shortcut keys. */
+.lc-tip {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
 }
 .lc-palette-hint {
   display: inline-flex;
@@ -365,6 +448,11 @@ code {
   font: inherit;
   font-size: var(--op-text-small);
   cursor: pointer;
+}
+.lc-palette-hint {
+  transition:
+    border-color var(--op-duration-fast) var(--op-ease-out),
+    color var(--op-duration-fast) var(--op-ease-out);
 }
 .lc-palette-hint:hover {
   border-color: var(--op-input);
@@ -405,12 +493,17 @@ code {
   color: var(--op-faint);
 }
 .lc-trail a {
+  border-radius: var(--op-radius-xs);
   color: inherit;
   text-decoration: none;
+  transition: color var(--op-duration-fast) var(--op-ease-out);
 }
 .lc-trail a:hover,
 .lc-trail [aria-current] {
   color: var(--op-ink);
+}
+.lc-trail [aria-current] {
+  font-weight: 500;
 }
 @media (max-width: 640px) {
   .lc-trail li:not([aria-current]) {
@@ -528,6 +621,11 @@ code {
   color: var(--op-muted);
   cursor: pointer;
 }
+.lc-round-btn {
+  transition:
+    background-color var(--op-duration-fast) var(--op-ease-out),
+    color var(--op-duration-fast) var(--op-ease-out);
+}
 .lc-round-btn:hover {
   color: var(--op-ink);
   background: var(--op-row-hover);
@@ -623,6 +721,23 @@ code {
 .lc-main > :not(.lc-home) {
   max-width: 1600px;
   margin-inline: auto;
+}
+/* A new page rises in (UI2: fadeUp, 220ms). The page's root is a new element only when the
+   route's page changes, so a same-page update (new params, a re-render) does not animate. No
+   fill mode: once done, the page carries no transform. Reduced motion zeroes the duration. */
+@keyframes lc-route-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+.lc-main > * {
+  animation: lc-route-in var(--op-duration-page) var(--op-ease-out);
+}
+@media (prefers-reduced-motion: reduce) {
+  .lc-main > * {
+    animation: none;
+  }
 }
 .lc-home {
   display: grid;
@@ -739,11 +854,24 @@ code {
 .lc-drawer[hidden] {
   display: none;
 }
-.lc-inspector {
+/* The inspector's and the drawer's clip carries the size (regions.tsx): it snaps, or with
+   Motion on slides on the panel curve while the panel inside holds its size. */
+.lc-panel-clip {
+  display: flex;
+  flex: none;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+/* Each panel hangs from its outer edge, so a slide reveals it from there. */
+.lc-inspector-clip {
+  justify-content: flex-end;
   /* Never wider than the card leaves for main. */
   max-width: calc(100% - 240px);
 }
-.lc-drawer {
+.lc-drawer-clip {
+  flex-direction: column;
+  justify-content: flex-end;
   max-height: calc(100% - 120px);
 }
 .lc-inspector:focus,
@@ -1484,8 +1612,10 @@ button.lc-hosted-engine {
   margin-top: 8px;
 }
 .lc-settings-sub {
+  display: flex;
+  align-items: center;
   margin: 0;
-  padding: 4px 8px 2px;
+  padding: 2px 8px 0;
   color: var(--op-faint);
   font-size: var(--op-text-micro);
   font-weight: 400;

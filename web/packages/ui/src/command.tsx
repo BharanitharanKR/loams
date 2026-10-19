@@ -1,7 +1,7 @@
 // Portions of this file are from T3 Code (https://github.com/pingdotgg/t3code),
 // apps/web/src/components/ui/command.tsx at commit 6524a8d4, Copyright (c) 2026 T3 Tools Inc., MIT licence
 // (see web/packages/ui/LICENSE.t3code). Modified by The Loams Authors:
-// ported to Loams tokens, rounded-none and rounded-pill, and cx, with Base UI underneath; no cva, lucide or Effect; the palette is an elevated, rounded surface with the enter and exit timing (UI1). Loams' changes are Apache-2.0.
+// ported to Loams tokens, rounded-none and rounded-pill, and cx, with Base UI underneath; no cva, lucide or Effect; the palette is an elevated, rounded surface with the enter and exit timing (UI1); one focus ring on the search field and the opening rows rise in order (UI2). Loams' changes are Apache-2.0.
 
 // The command palette primitive: Base UI's Dialog around an inline, always-open Base UI
 // Autocomplete (no cmdk). T3 Code's ui/autocomplete.tsx was folded in here before CF1; its
@@ -17,9 +17,8 @@
 import { Autocomplete as BaseAutocomplete } from '@base-ui/react/autocomplete';
 import { Dialog as BaseDialog } from '@base-ui/react/dialog';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { type CSSProperties, Fragment, type ReactNode, useRef } from 'react';
+import { type CSSProperties, Fragment, type ReactNode, useRef, useState } from 'react';
 import { cx } from './cx';
-import { InputGroup, InputGroupAddon } from './input-group';
 import { Kbd, KbdGroup } from './kbd';
 
 export interface CommandItem {
@@ -57,6 +56,8 @@ const ROW =
   '[&>svg]:size-4 [&>svg]:shrink-0 [&>svg]:text-muted';
 const HEADING = 'px-2.5 pt-2.5 pb-1 text-micro font-medium text-faint';
 const ROW_HEIGHT = 36;
+/** How long after opening a row that mounts still counts as one the palette opened with (ms). */
+const ENTER_WINDOW = 200;
 
 export function CommandPalette({
   open,
@@ -98,6 +99,10 @@ export function CommandPalette({
   const scroller = useRef<HTMLDivElement | null>(null);
   const scrollTo = useRef<((index: number) => void) | null>(null);
   const match = filter === undefined ? matchCommand : filter;
+  const openedAt = useRef(Number.NEGATIVE_INFINITY);
+  const wasOpen = useRef(false);
+  if (open && !wasOpen.current) openedAt.current = performance.now();
+  wasOpen.current = open;
   return (
     <BaseDialog.Root open={open} onOpenChange={(next) => onOpenChange(next)}>
       <BaseDialog.Portal>
@@ -130,10 +135,19 @@ export function CommandPalette({
             }}
           >
             <div className="border-b border-rule-soft p-2">
-              <InputGroup className="border-transparent has-[input:focus-visible]:outline-0">
-                <InputGroupAddon>
+              {/* One ring: the field's own 1px border turns the focus colour while the
+                  input has focus (it always does while the palette is open). No outline. */}
+              <div
+                className={
+                  'flex h-10 items-center gap-0.5 rounded-md border border-transparent bg-raised ps-3 ' +
+                  'transition-colors duration-(--op-duration-fast) ease-out motion-reduce:transition-none ' +
+                  'has-[input:focus]:border-focus has-[input:focus]:bg-bg'
+                }
+                data-slot="command-field"
+              >
+                <span className="flex shrink-0 text-faint">
                   <SearchGlyph />
-                </InputGroupAddon>
+                </span>
                 <BaseAutocomplete.Input
                   autoFocus
                   aria-label={label}
@@ -144,7 +158,7 @@ export function CommandPalette({
                   }
                   data-slot="command-input"
                 />
-              </InputGroup>
+              </div>
             </div>
             <BaseAutocomplete.Empty className="px-4 py-6 text-center text-body text-muted empty:hidden">
               {empty}
@@ -158,7 +172,7 @@ export function CommandPalette({
               {virtual ? (
                 <VirtualRows scroller={scroller} scrollTo={scrollTo} onSelect={onSelect} />
               ) : (
-                <Rows onSelect={onSelect} />
+                <Rows onSelect={onSelect} openedAt={openedAt} />
               )}
             </BaseAutocomplete.List>
           </BaseAutocomplete.Root>
@@ -174,7 +188,13 @@ export function CommandPalette({
 }
 
 /** The rows, with a heading where the group changes. */
-function Rows({ onSelect }: { onSelect: (item: CommandItem) => void }) {
+function Rows({
+  onSelect,
+  openedAt,
+}: {
+  onSelect: (item: CommandItem) => void;
+  openedAt: { current: number };
+}) {
   const filtered = BaseAutocomplete.useFilteredItems<CommandItem>();
   return filtered.map((item, i) => (
     <Fragment key={item.id}>
@@ -184,7 +204,7 @@ function Rows({ onSelect }: { onSelect: (item: CommandItem) => void }) {
           {item.group}
         </div>
       )}
-      <Row item={item} index={i} onSelect={onSelect} />
+      <Row item={item} index={i} onSelect={onSelect} openedAt={openedAt} />
     </Fragment>
   ));
 }
@@ -243,14 +263,23 @@ function Row({
   index,
   onSelect,
   groupInline = false,
+  openedAt,
   style,
 }: {
   item: CommandItem;
   index: number;
   onSelect: (item: CommandItem) => void;
   groupInline?: boolean;
+  /** When the palette opened; rows that mount just after it rise in order. */
+  openedAt?: { current: number };
   style?: CSSProperties;
 }) {
+  // One of the rows the palette opens with (mounted within ENTER_WINDOW of opening) rises
+  // into place, `--loams-i` ordering it (styles.css, capped at 8 steps). Rows a query brings
+  // in later just appear, so typing never waits on an animation.
+  const [enter] = useState(
+    () => openedAt !== undefined && performance.now() - openedAt.current < ENTER_WINDOW,
+  );
   return (
     <BaseAutocomplete.Item
       value={item}
@@ -258,7 +287,8 @@ function Row({
       disabled={item.disabled}
       onClick={() => onSelect(item)}
       className={ROW}
-      style={style}
+      style={enter ? ({ ...style, '--loams-i': index } as CSSProperties) : style}
+      data-enter={enter ? '' : undefined}
       data-slot="command-item"
     >
       {item.icon}

@@ -5,7 +5,7 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { useState } from 'react';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Button, IconButton, InputControl, ListRow, SearchInput, TooltipProvider } from '../src';
 
 const STYLES = readFileSync(join(import.meta.dirname, '../src/styles.css'), 'utf8');
@@ -103,7 +103,7 @@ describe('InputControl', () => {
     for (const cls of [
       'has-aria-invalid:border-danger',
       'has-disabled:opacity-60',
-      'hover:not-has-disabled:border-muted',
+      'hover:not-has-disabled:not-has-aria-invalid:border-muted',
       'has-focus-visible:outline-focus',
     ]) {
       expect(box.className).toContain(cls);
@@ -159,6 +159,27 @@ describe('ListRow', () => {
     const jobs = screen.getByRole('button', { name: 'Jobs' });
     expect(jobs.getAttribute('aria-disabled')).toBe('true');
     expect(jobs.getAttribute('data-density')).toBe('compact');
+  });
+
+  it('ignores a press while disabled, whatever onClick the caller passed', () => {
+    const onClick = vi.fn();
+    const outer = vi.fn();
+    render(
+      // biome-ignore lint/a11y/useKeyWithClickEvents lint/a11y/noStaticElementInteractions: a bubble-phase listener the row must not reach
+      <div onClick={outer}>
+        <ListRow render={<button type="button" />} disabled onClick={onClick}>
+          Jobs
+        </ListRow>
+        <ListRow render={<button type="button" />} onClick={onClick}>
+          Data
+        </ListRow>
+      </div>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Jobs' }));
+    expect(onClick).not.toHaveBeenCalled();
+    expect(outer).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Data' }));
+    expect(onClick).toHaveBeenCalledTimes(1);
   });
 
   it('has hover, selected, inset focus and disabled rules', () => {
