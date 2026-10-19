@@ -84,7 +84,10 @@ public final class Subscription implements Iterator<Subscription.Record>, AutoCl
                 }
             }
             List<Record> records = fetch.fetch(offset);
-            if (records.isEmpty()) {
+            // A page with nothing at or past the offset is an empty one: back off rather
+            // than spin on records already yielded.
+            long from = offset;
+            if (records.stream().noneMatch(r -> Long.compareUnsigned(r.offset(), from) >= 0)) {
                 try {
                     sleeper.sleep(backoff);
                 } catch (InterruptedException e) {
