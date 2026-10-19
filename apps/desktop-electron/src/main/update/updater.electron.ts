@@ -33,6 +33,8 @@ export interface UpdaterHandle {
 	state(): State;
 	hasVerifiedDownload(): boolean;
 	installOnQuit(): Promise<boolean>;
+	/** Help › Check for Updates… (CF1 Task 14); its result reaches the renderer as state. */
+	check(): Promise<void>;
 	stop(): void;
 }
 
@@ -146,6 +148,7 @@ export function startUpdater(opts: {
 		state: () => ctl.state(),
 		hasVerifiedDownload: () => ctl.hasVerifiedDownload(),
 		installOnQuit: () => ctl.installOnQuit(),
+		check: () => ctl.check(),
 		stop: () => scheduler.setEnabled(false),
 	};
 }
