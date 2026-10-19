@@ -13,7 +13,7 @@ import { fromJson, type JsonObject } from '@bufbuild/protobuf';
 import { Code } from '@connectrpc/connect';
 import { DocumentIdSchema } from '@loams/proto/documents';
 import type { DocumentInput, PatchChange, ScrollOptions, Target, UnaryCall } from './app.js';
-import { toQuery, type DocId, type FilterJson } from './builders/filter.js';
+import type { DocId, FilterJson } from './builders/filter.js';
 import { Search, type VectorOptions } from './builders/search.js';
 import type { BatchOptions, BatchResult } from './runtime/batch.js';
 import type { CallOptions } from './runtime/call.js';
@@ -111,7 +111,7 @@ export class CollectionHandle {
   count(options: CallOptions & { where?: FilterJson } = {}) {
     const { where, ...call } = options;
     return need(this.#modules.documents?.count, 'documents.count')(
-      { ...this.#fields, ...(where === undefined ? {} : { where: toQuery(where) }) },
+      { ...this.#fields, ...(where === undefined ? {} : { where }) },
       call,
     );
   }

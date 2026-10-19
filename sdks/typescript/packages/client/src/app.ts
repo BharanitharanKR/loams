@@ -20,7 +20,7 @@ import { fromJson, type JsonObject, type JsonValue } from '@bufbuild/protobuf';
 import { Code } from '@connectrpc/connect';
 import { WriteOpSchema } from '@loams/proto/documents';
 import type { ModuleBinding } from './gen/facade.js';
-import { idValue, toQuery, type DocId, type FilterJson } from './builders/filter.js';
+import { idValue, type DocId, type FilterJson } from './builders/filter.js';
 import { Search, consistencyJson, rrf, type ConsistencyLevel, type FusionJson } from './builders/search.js';
 import { writeBatch, type BatchOptions, type BatchResult } from './runtime/batch.js';
 import type { CallOptions } from './runtime/call.js';
@@ -133,7 +133,7 @@ function targetOf(collection: string | Target): Target {
 
 /** The scroll options of `scrollAll`. */
 export interface ScrollOptions extends CallOptions {
-  /** A typed filter (`ScrollDocumentsRequest.where`). */
+  /** A typed filter (`ScrollDocumentsRequest.where`, a `Query`'s proto3 JSON). */
   where?: FilterJson;
   /** Documents per page. */
   limit?: number;
@@ -186,7 +186,9 @@ export function documentCalls(documents: { write: UnaryCall; scroll?: UnaryCall 
           {
             ...(target.namespace === undefined ? {} : { namespace: target.namespace }),
             collection: target.collection,
-            ...(where === undefined ? {} : { where: toQuery(where) }),
+            // `where` is a `Query`'s proto3 JSON (SDKP-12), which is what a
+            // `Filter` already is.
+            ...(where === undefined ? {} : { where }),
             ...(limit === undefined ? {} : { limit }),
             ...(select === undefined ? {} : { select }),
             ...(read === undefined ? {} : { consistency: consistencyJsonMessage(read) }),

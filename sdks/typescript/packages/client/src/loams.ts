@@ -29,13 +29,19 @@ import {
   type AdminProjectsModule,
   type AuthModule,
   type CallBinding,
+  type CollectionsModule,
+  type DocumentsModule,
+  type GraphModule,
+  type NamespacesModule,
+  type SearchModule,
+  type VectorModule,
   type InstanceModule,
   type LiveAdminModule,
   type LiveModule,
   type ModuleBinding,
   type TablesModule,
 } from './gen/facade.js';
-import { attachAppCalls } from './app.js';
+import { attachAppCalls, type documentCalls, type searchCalls, type streamCalls } from './app.js';
 import { CollectionHandle, type HandleModules } from './handle.js';
 import {
   CallInvoker,
@@ -128,6 +134,23 @@ export type LiveNamespace = LiveModule & {
   readonly admin: LiveAdminModule;
 };
 
+/** A paged call's `<call>All` iterator, which `attachAppCalls` adds. */
+type AllOf<Item> = (request?: object, options?: CallOptions) => AsyncGenerator<Item, void, undefined>;
+
+/** `loams.namespaces`, with `listAll`. */
+export type NamespacesNamespace = NamespacesModule & { readonly listAll: AllOf<unknown> };
+/** `loams.collections`, with `listAll` and `listVersionsAll`. */
+export type CollectionsNamespace = CollectionsModule & {
+  readonly listAll: AllOf<unknown>;
+  readonly listVersionsAll: AllOf<unknown>;
+};
+/** `loams.documents`, with the hand-written conveniences (SDKP §2.3). */
+export type DocumentsNamespace = DocumentsModule & ReturnType<typeof documentCalls>;
+/** `loams.search`, with `text`, `hybrid` and `queryAll` (SDKP §2.4). */
+export type SearchNamespace = SearchModule & ReturnType<typeof searchCalls>;
+/** `loams.streams`, once `loams.stream.v1` is annotated (SDKP P0c). */
+export type StreamsNamespace = Record<string, unknown> & ReturnType<typeof streamCalls>;
+
 /** `loams.admin`: the console's administration modules (design §44 §7.2). */
 export interface AdminNamespace {
   readonly agents: AdminAgentsModule;
@@ -150,6 +173,18 @@ export class Loams {
   readonly admin: AdminNamespace;
   /** `loams.auth` — sessions and sign-in. */
   readonly auth: AuthModule;
+  /** `loams.namespaces` — the containers every collection and stream live in. */
+  readonly namespaces: NamespacesNamespace;
+  /** `loams.collections` — collections, their schemas, aliases and versions. */
+  readonly collections: CollectionsNamespace;
+  /** `loams.documents` — write, read, scroll and count documents. */
+  readonly documents: DocumentsNamespace;
+  /** `loams.search` — text, vector and hybrid search (`Search` builds one). */
+  readonly search: SearchNamespace;
+  /** `loams.vector` — the kNN half of `search`, by its own name (Q613). */
+  readonly vector: VectorModule;
+  /** `loams.graph` — Loams Graph, queried with GQL. Its package is `unstable`. */
+  readonly graph: GraphModule;
   /** The module catalogue, feature detection and the version check. */
   readonly system: SystemApi;
   /** Every generated module, by its dotted name (`'live.admin'`): the
@@ -197,6 +232,12 @@ export class Loams {
     this.tables = tree.tables as TablesModule;
     this.admin = tree.admin as AdminNamespace;
     this.auth = tree.auth as AuthModule;
+    this.namespaces = tree.namespaces as NamespacesNamespace;
+    this.collections = tree.collections as CollectionsNamespace;
+    this.documents = tree.documents as DocumentsNamespace;
+    this.search = tree.search as SearchNamespace;
+    this.vector = tree.vector as VectorModule;
+    this.graph = tree.graph as GraphModule;
     this.system = new SystemApi(
       (request, callOptions) => this.instance.getInstance(request, callOptions),
       {
