@@ -477,7 +477,7 @@ public sealed class ConformanceTests
                 binding.Pagination is null || (binding.Module == "live.admin" && binding.Name == "ListApps")
                 // SDKP: the app modules' list calls, driven against stubs in AppBuilderTests
                 // until the app corpus (P0d) records them.
-                || binding.Package is "loams.collection.v1" or "loams.graph.v1"),
+                || binding.Package is "loams.collection.v1" or "loams.graph.v1" or "loams.stream.v1"),
             "no annotated RPC is paged yet; ListCollections arrives with API1 Task 2, and this " +
             "assertion failing is the signal to add an end-to-end half to this test");
     }
