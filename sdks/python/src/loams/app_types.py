@@ -26,6 +26,8 @@ from loams._gen.facade import (
     SearchModuleSync,
     SqlModule,
     SqlModuleSync,
+    StreamsModule,
+    StreamsModuleSync,
 )
 
 if TYPE_CHECKING:
@@ -33,6 +35,7 @@ if TYPE_CHECKING:
     from loams.builders import ConsistencyLevel, DocId, FilterJson, Search
     from loams.runtime.batch import BatchResult
     from loams.runtime.options import CallOptions
+    from loams.runtime.subscribe import AsyncSubscription, Subscription
 
 __all__ = [
     "AsyncCollectionsNamespace",
@@ -40,11 +43,13 @@ __all__ = [
     "AsyncNamespacesNamespace",
     "AsyncSearchNamespace",
     "AsyncSqlNamespace",
+    "AsyncStreamsNamespace",
     "CollectionsNamespace",
     "DocumentsNamespace",
     "NamespacesNamespace",
     "SearchNamespace",
     "SqlNamespace",
+    "StreamsNamespace",
 ]
 
 
@@ -296,3 +301,43 @@ class AsyncSqlNamespace(SqlModule, Protocol):
         max_rows: int | None = None,
         options: CallOptions | None = None,
     ) -> list[dict[str, Any]]: ...
+
+
+class StreamsNamespace(StreamsModuleSync, Protocol):
+    """`loams.streams`, with `list_all` and `subscribe` (SDKP §2.5, R14)."""
+
+    def list_all(
+        self, request: Message | None = None, options: CallOptions | None = None
+    ) -> Iterator[Any]: ...
+
+    def subscribe(
+        self,
+        stream: str,
+        *,
+        partition: int = 0,
+        from_offset: int = 0,
+        namespace: str | None = None,
+        max_records: int | None = None,
+        max_wait_ms: int | None = None,
+        options: CallOptions | None = None,
+    ) -> Subscription: ...
+
+
+class AsyncStreamsNamespace(StreamsModule, Protocol):
+    """`AsyncLoams.streams`, with `list_all` and `subscribe`."""
+
+    def list_all(
+        self, request: Message | None = None, options: CallOptions | None = None
+    ) -> AsyncIterator[Any]: ...
+
+    def subscribe(
+        self,
+        stream: str,
+        *,
+        partition: int = 0,
+        from_offset: int = 0,
+        namespace: str | None = None,
+        max_records: int | None = None,
+        max_wait_ms: int | None = None,
+        options: CallOptions | None = None,
+    ) -> AsyncSubscription: ...

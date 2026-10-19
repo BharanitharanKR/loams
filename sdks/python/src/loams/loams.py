@@ -51,6 +51,7 @@ from loams.app_types import (
     NamespacesNamespace,
     SearchNamespace,
     SqlNamespace,
+    StreamsNamespace,
 )
 from loams.handle import CollectionHandle
 from loams.runtime.call import DEFAULT_TIMEOUT_MS, CallInvoker
@@ -271,6 +272,8 @@ class Loams:
         self.graph = cast(GraphModuleSync, modules["graph"])
         #: `loams.sql`: one read-only SQL statement over a namespace's collections.
         self.sql = cast(SqlNamespace, modules["sql"])
+        #: `loams.streams`: a namespace's logs, with `subscribe` (R14).
+        self.streams = cast(StreamsNamespace, modules["streams"])
         self.system = SystemApi(self.instance.get_instance)
 
     @classmethod

@@ -9,10 +9,13 @@ API; running it needs a `loams dev`.
 
 from __future__ import annotations
 
+import json
+
 from google.protobuf import json_format
 
 from loams import AlreadyExistsError, Document, Filter, Loams, Schema, Search, Sort, rrf
 from loams.collection.v1.collection_pb2 import CreateCollectionRequest, CreateNamespaceRequest
+from loams.stream.v1.stream_pb2 import CreateStreamRequest, ProduceRequest, Record
 
 NOTES = [
     Document(1, {"title": "Refund policy", "body": "refund policy for every order", "tags": "policy", "n": 1},
@@ -78,6 +81,20 @@ def main() -> None:
         )
         for row in per_tag:
             print(row["tags"], row["c"])
+
+        # A stream of note events: produce with a producer key, then read it back.
+        loams.streams.create(CreateStreamRequest(name="note-events", partitions=1))
+        loams.streams.produce(
+            ProduceRequest(
+                stream="note-events",
+                records=[Record(value=json.dumps({"note": 1, "op": "created"}).encode())],
+                producer_id="notes-example",
+                producer_seq=1,
+            )
+        )
+        for event in loams.streams.subscribe("note-events"):
+            print("event at", event.offset)
+            break
 
         # A bulk load: chunked, one idempotency key per chunk, the tokens merged.
         loaded = notes.write_batch(

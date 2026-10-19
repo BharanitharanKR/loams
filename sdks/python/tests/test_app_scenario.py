@@ -1,7 +1,7 @@
 """SDKP Parts B and C for Python: the app scenario through the public facade.
 
-`python_app_collections`, `python_app_search`, `python_app_graph` and
-`python_app_sql` (Part C) replay
+`python_app_collections`, `python_app_search`, `python_app_graph`, and (Part C)
+`python_app_sql` and `python_app_streams` replay
 `sdks/fixtures/recorded/app/` with both `Loams` and `AsyncLoams` against the
 fixture server (`app_replay.py` says how), so each passes only when the facade
 sends exactly the recorded requests and reads the recorded answers the way
@@ -88,3 +88,31 @@ def test_python_sql_records_reads_rows_as_dicts(fixture_server: str) -> None:
             return await client.sql.records(_PER_TAG, [1], options=_STEP0)
 
     assert asyncio.run(run()) == [{"tags": "policy", "c": 2}, {"tags": "shipping", "c": 1}]
+
+
+@pytest.mark.parametrize("replay", [replay_app_fixture, replay_app_fixture_async], ids=["sync", "async"])
+def test_python_app_streams(fixture_server: str, replay: object) -> None:
+    """Part C: create, list, describe, a keyed produce and its duplicate, fetch,
+    CloudEvents and not_found."""
+    replay(fixture_server, "app_streams")  # type: ignore[operator]
+
+
+_FETCH = CallOptions(headers={"loams-fixture-name": "app_streams", "loams-fixture-step": "5"})
+
+
+def test_python_streams_subscribe_reads_the_recorded_page(fixture_server: str) -> None:
+    """`streams.subscribe` reads the recorded fetch page and knows where to resume,
+    on both clients."""
+    with Loams(fixture_server, namespace="app", proto_json=True, max_retries=0) as loams:
+        sub = loams.streams.subscribe("note-events", max_records=10, options=_FETCH)
+        offsets = [next(sub).offset, next(sub).offset]
+        assert offsets == [0, 1]
+        assert sub.offset == 2
+
+    async def run() -> tuple[list[int], int]:
+        async with AsyncLoams(fixture_server, namespace="app", proto_json=True, max_retries=0) as client:
+            sub = client.streams.subscribe("note-events", max_records=10, options=_FETCH)
+            got = [(await sub.__anext__()).offset, (await sub.__anext__()).offset]
+            return got, sub.offset
+
+    assert asyncio.run(run()) == ([0, 1], 2)

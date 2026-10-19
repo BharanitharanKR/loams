@@ -46,6 +46,7 @@ from loams.app_types import (
     AsyncNamespacesNamespace,
     AsyncSearchNamespace,
     AsyncSqlNamespace,
+    AsyncStreamsNamespace,
 )
 from loams.handle import AsyncCollectionHandle
 from loams.runtime.call import DEFAULT_TIMEOUT_MS, AsyncCallInvoker
@@ -182,6 +183,8 @@ class AsyncLoams:
         self.graph = cast(GraphModule, modules["graph"])
         #: `AsyncLoams.sql`: one read-only SQL statement over a namespace's collections.
         self.sql = cast(AsyncSqlNamespace, modules["sql"])
+        #: `AsyncLoams.streams`: a namespace's logs, with `subscribe` (R14).
+        self.streams = cast(AsyncStreamsNamespace, modules["streams"])
         self.system = AsyncSystemApi(self.instance.get_instance)
 
     @classmethod

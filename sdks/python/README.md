@@ -76,8 +76,12 @@ app needs. `loams.sql` is generated from `loams.sql.v1` the same way:
 `sql.query` answers `columns` and `rows`, `sql.records(statement, [$1, …])`
 answers one dict per row, and `loams.sql_records(answer)` reads an answer in
 hand; `sql.query_arrow` answers Arrow IPC bytes (`arrow_ipc`), which
-`pyarrow.ipc.open_stream` reads (the `arrow` extra). `loams.streams` arrives
-with `loams.stream.v1` (SDKP P0c). `examples/notes/main.py`
+`pyarrow.ipc.open_stream` reads (the `arrow` extra). `loams.streams` is
+generated from `loams.stream.v1`: `create`, `get`, `list` (and `list_all`),
+`produce` (pass `producer_id` and `producer_seq` so a retry cannot append
+twice), `fetch`, `produce_events` and `fetch_events` (CloudEvents as a JSON
+batch), plus `streams.subscribe(...)` (R14), an iterator over `fetch` whose
+`offset` is where to resume. `examples/notes/main.py`
 is the whole app scenario as a program, type-checked in CI. The session's
 token is used only for collection and SQL reads: a graph's token names one
 graph (SDKP-17).
@@ -140,8 +144,6 @@ Durable workflows use the Resonate SDK pointed at `LOAMS_ENDPOINT/durable/`
 
 ## What is not here yet
 
-- **`streams`**: it arrives with the facade annotations of `loams.stream.v1`
-  (SDKP P0c).
 - **Bulk ingest and bulk results over Arrow Flight SQL.** They go through ADBC,
   which is why the `flight`, `arrow` and `polars` extras already exist.
 
