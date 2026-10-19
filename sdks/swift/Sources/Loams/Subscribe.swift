@@ -71,8 +71,11 @@ public final class Subscription: AsyncSequence, @unchecked Sendable {
                     owner.lock.withLock { owner.next = record.offset + 1 }
                     return record
                 }
-                let records = try await owner.fetch(owner.offset)
-                if records.isEmpty {
+                let from = owner.offset
+                let records = try await owner.fetch(from)
+                // A page with nothing at or past the offset is an empty one: back off rather
+                // than spin on records already yielded.
+                if !records.contains(where: { $0.offset >= from }) {
                     do {
                         try await owner.sleep(backoff)
                     } catch is CancellationError {
