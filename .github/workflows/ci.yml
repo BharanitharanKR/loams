@@ -889,11 +889,13 @@ jobs:
   # R1 plan Task 1: the TiKV-backed suites against a tiup playground (PD and
   # TiKV v8.5.8 on API v2, port offset 17000). Promotion PRs run it only when
   # they touch the TiKV crates, their cluster config or scripts, or the Live
-  # protos (the `tikv` filter in the changes job). Nightly has its own job.
+  # protos (the `tikv` filter in the changes job). A pull request into dev
+  # with the `ci:tikv` label runs it too, on the same filter (label, then a
+  # push). Nightly has its own job.
   tikv:
     name: "TiKV: suites"
     needs: changes
-    if: ${{ !cancelled() && inputs.nightly != true && (needs.changes.result == 'skipped' || (github.base_ref == 'main' && needs.changes.outputs.tikv == 'true')) }}
+    if: ${{ !cancelled() && inputs.nightly != true && (needs.changes.result == 'skipped' || ((github.base_ref == 'main' || contains(github.event.pull_request.labels.*.name, 'ci:tikv')) && needs.changes.outputs.tikv == 'true')) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
