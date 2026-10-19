@@ -2,11 +2,13 @@
 // command registers a handler on the bus while it is mounted (the layout its panels,
 // the view its routes); a key press resolves to a command through the keybinding model
 // of @loams/studio-ui and runs it when a handler is there, and the palette lists the
-// commands that have one. The shell keeps Mod+K, Mod+J and Mod+Shift+M in both modes.
+// commands that have one. The shell owns D1081's chords in both modes (`SHELL_KEYBINDINGS`)
+// and sends Studio's half of them here (`listenShellCommands`).
 
 import { SHELL_COMMAND_EVENT } from '@loams/console-host';
 import {
   currentPlatform,
+  isKeybindingCommand,
   type KeybindingCommand,
   KeybindingStore,
   resolveShortcutCommand,
@@ -63,9 +65,11 @@ export class StudioCommands {
 }
 
 /**
- * The edition's shell commands (`SHELL_COMMAND_EVENT`; SD1 Task 28: the desktop menu's
- * "New thread"): Studio runs `chat.new` when a mounted view handles it, and says so
- * with `preventDefault()`; otherwise the sender opens Studio's home.
+ * The shell's commands for Studio (`SHELL_COMMAND_EVENT`): the desktop menu's "New thread"
+ * (SD1 Task 28) and the shell's keymap (D1081: Mod+N → `chat.new`, Mod+1…9 →
+ * `thread.jump.N`, Ctrl+Tab → `thread.next`). Studio runs any of its commands that a
+ * mounted view handles, and says so with `preventDefault()`; otherwise the sender falls
+ * back (for `chat.new`, Studio's home, where a project is chosen).
  */
 export function listenShellCommands(
   commands: StudioCommands,
@@ -73,7 +77,7 @@ export function listenShellCommands(
 ): () => void {
   const onCommand = (event: Event) => {
     const detail = (event as CustomEvent<unknown>).detail;
-    if (detail === 'chat.new' && commands.run('chat.new')) event.preventDefault();
+    if (isKeybindingCommand(detail) && commands.run(detail)) event.preventDefault();
   };
   target.addEventListener(SHELL_COMMAND_EVENT, onCommand);
   return () => target.removeEventListener(SHELL_COMMAND_EVENT, onCommand);

@@ -770,7 +770,7 @@ export function StudioSidebar({
   const wantHints =
     keys !== undefined &&
     matchOptions !== undefined &&
-    shouldShowThreadJumpHintsForModifiers(modifiers, keys.keybindings.resolved(), matchOptions);
+    shouldShowThreadJumpHintsForModifiers(modifiers, keys.keybindings.shown(), matchOptions);
   const { showThreadJumpHints, updateThreadJumpHintsVisibility } = useThreadJumpHintVisibility();
   useEffect(
     () => updateThreadJumpHintsVisibility(wantHints),
@@ -785,7 +785,7 @@ export function StudioSidebar({
     };
     for (const [index, id] of ordered.entries()) {
       const label = shortcutLabelForCommand(
-        keys.keybindings.resolved(),
+        keys.keybindings.shown(),
         threadJumpCommandForIndex(index),
         options,
       );
