@@ -5,10 +5,10 @@ syntax = "proto3";
 // allowlist (D660) for the desktop and the browser console's Studio. See
 // studio.proto for the package's rules.
 //
-// Only reads are here. Storing an app's credentials (`FactoryConfigure`) and
-// forgetting them (`FactoryRemove`) carry secrets, so they stay on the
-// daemon's loopback ndjson wire for Electron main alone (F4), as every secret
-// method does: a browser never sends a credential to a daemon.
+// Storing an app's credentials and forgetting them are Electron main's alone
+// (F4): neither is on the renderer's allowlist, and the remote listener's
+// Studio role may not call them, so a browser never sends a credential to a
+// daemon. Main reaches them on the loopback listener with the daemon's token.
 package loams.agentd.v1;
 
 import "loams/options/v1/options.proto";
@@ -33,6 +33,16 @@ service FactoryService {
   rpc QueryFactory(QueryFactoryRequest) returns (QueryFactoryResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
   }
+
+  // Store an app's URL and credentials, then check them (ndjson:
+  // `FactoryConfigure`). Write-only for secrets: no reply carries one. A secret
+  // left out keeps its stored value while the URL's origin is unchanged.
+  // Electron main's alone (F4).
+  rpc ConfigureFactoryApp(ConfigureFactoryAppRequest) returns (ConfigureFactoryAppResponse);
+
+  // Forget an app and its credentials (ndjson: `FactoryRemove`). Electron
+  // main's alone (F4).
+  rpc RemoveFactoryApp(RemoveFactoryAppRequest) returns (RemoveFactoryAppResponse);
 }
 
 enum FactoryHealth {
@@ -115,3 +125,23 @@ message QueryFactoryResponse {
     FactoryError error = 2;
   }
 }
+
+message ConfigureFactoryAppRequest {
+  string app = 1;
+  string url = 2;
+  // By credential field key.
+  map<string, string> fields = 3;
+}
+
+message ConfigureFactoryAppResponse {
+  oneof result {
+    FactoryApp app = 1;
+    FactoryError error = 2;
+  }
+}
+
+message RemoveFactoryAppRequest {
+  string app = 1;
+}
+
+message RemoveFactoryAppResponse {}

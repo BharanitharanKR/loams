@@ -7,10 +7,10 @@
 // allowlist (D660) for the desktop and the browser console's Studio. See
 // studio.proto for the package's rules.
 //
-// Only reads are here. Storing an app's credentials (`FactoryConfigure`) and
-// forgetting them (`FactoryRemove`) carry secrets, so they stay on the
-// daemon's loopback ndjson wire for Electron main alone (F4), as every secret
-// method does: a browser never sends a credential to a daemon.
+// Storing an app's credentials and forgetting them are Electron main's alone
+// (F4): neither is on the renderer's allowlist, and the remote listener's
+// Studio role may not call them, so a browser never sends a credential to a
+// daemon. Main reaches them on the loopback listener with the daemon's token.
 
 import type { GenEnum, GenFile, GenMessage, GenService } from "@bufbuild/protobuf/codegenv2";
 import { enumDesc, fileDesc, messageDesc, serviceDesc } from "@bufbuild/protobuf/codegenv2";
@@ -21,7 +21,7 @@ import type { Message } from "@bufbuild/protobuf";
  * Describes the file loams/agentd/v1/factory.proto.
  */
 export const file_loams_agentd_v1_factory: GenFile = /*@__PURE__*/
-  fileDesc("Ch1sb2Ftcy9hZ2VudGQvdjEvZmFjdG9yeS5wcm90bxIPbG9hbXMuYWdlbnRkLnYxIkQKFkZhY3RvcnlDcmVkZW50aWFsRmllbGQSCwoDa2V5GAEgASgJEg0KBWxhYmVsGAIgASgJEg4KBnNlY3JldBgDIAEoCCLFAgoKRmFjdG9yeUFwcBIKCgJpZBgBIAEoCRINCgVsYWJlbBgCIAEoCRIQCgN1cmwYAyABKAlIAIgBARIuCgZoZWFsdGgYBCABKA4yHi5sb2Ftcy5hZ2VudGQudjEuRmFjdG9yeUhlYWx0aBISCgpoYXNfcGFuZWxzGAUgASgIEkIKEWNyZWRlbnRpYWxfZmllbGRzGAYgAygLMicubG9hbXMuYWdlbnRkLnYxLkZhY3RvcnlDcmVkZW50aWFsRmllbGQSNwoGZmllbGRzGAcgAygLMicubG9hbXMuYWdlbnRkLnYxLkZhY3RvcnlBcHAuRmllbGRzRW50cnkSEgoKcGVyc2lzdGVudBgIIAEoCBotCgtGaWVsZHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBQgYKBF91cmwiLQoMRmFjdG9yeUVycm9yEgwKBGNvZGUYASABKAkSDwoHbWVzc2FnZRgCIAEoCSIYChZMaXN0RmFjdG9yeUFwcHNSZXF1ZXN0IkQKF0xpc3RGYWN0b3J5QXBwc1Jlc3BvbnNlEikKBGFwcHMYASADKAsyGy5sb2Ftcy5hZ2VudGQudjEuRmFjdG9yeUFwcCIkChVUZXN0RmFjdG9yeUFwcFJlcXVlc3QSCwoDYXBwGAEgASgJIn4KFlRlc3RGYWN0b3J5QXBwUmVzcG9uc2USKgoDYXBwGAEgASgLMhsubG9hbXMuYWdlbnRkLnYxLkZhY3RvcnlBcHBIABIuCgVlcnJvchgCIAEoCzIdLmxvYW1zLmFnZW50ZC52MS5GYWN0b3J5RXJyb3JIAEIICgZyZXN1bHQiQwoTUXVlcnlGYWN0b3J5UmVxdWVzdBILCgNhcHAYASABKAkSCgoCb3AYAiABKAkSEwoLcGFyYW1zX2pzb24YAyABKAkiZgoUUXVlcnlGYWN0b3J5UmVzcG9uc2USFAoKdmFsdWVfanNvbhgBIAEoCUgAEi4KBWVycm9yGAIgASgLMh0ubG9hbXMuYWdlbnRkLnYxLkZhY3RvcnlFcnJvckgAQggKBnJlc3VsdCrCAQoNRmFjdG9yeUhlYWx0aBIeChpGQUNUT1JZX0hFQUxUSF9VTlNQRUNJRklFRBAAEhUKEUZBQ1RPUllfSEVBTFRIX09LEAESHgoaRkFDVE9SWV9IRUFMVEhfQVVUSF9GQUlMRUQQAhIeChpGQUNUT1JZX0hFQUxUSF9VTlJFQUNIQUJMRRADEh8KG0ZBQ1RPUllfSEVBTFRIX1VOQ09ORklHVVJFRBAEEhkKFUZBQ1RPUllfSEVBTFRIX0xPQ0tFRBAFMqIDCg5GYWN0b3J5U2VydmljZRJpCg9MaXN0RmFjdG9yeUFwcHMSJy5sb2Ftcy5hZ2VudGQudjEuTGlzdEZhY3RvcnlBcHBzUmVxdWVzdBooLmxvYW1zLmFnZW50ZC52MS5MaXN0RmFjdG9yeUFwcHNSZXNwb25zZSIDkAIBEmEKDlRlc3RGYWN0b3J5QXBwEiYubG9hbXMuYWdlbnRkLnYxLlRlc3RGYWN0b3J5QXBwUmVxdWVzdBonLmxvYW1zLmFnZW50ZC52MS5UZXN0RmFjdG9yeUFwcFJlc3BvbnNlEmAKDFF1ZXJ5RmFjdG9yeRIkLmxvYW1zLmFnZW50ZC52MS5RdWVyeUZhY3RvcnlSZXF1ZXN0GiUubG9hbXMuYWdlbnRkLnYxLlF1ZXJ5RmFjdG9yeVJlc3BvbnNlIgOQAgEaYIq1GFwKDmFnZW50ZC5mYWN0b3J5EkhUaGUgc29mdHdhcmUgZmFjdG9yeSdzIGFwcHM6IHRoZWlyIHN0YXRlIGFuZCB0aGUgcmVhZC1vbmx5IG9wIGFsbG93bGlzdC4YAWIGcHJvdG8z", [file_loams_options_v1_options]);
+  fileDesc("Ch1sb2Ftcy9hZ2VudGQvdjEvZmFjdG9yeS5wcm90bxIPbG9hbXMuYWdlbnRkLnYxIkQKFkZhY3RvcnlDcmVkZW50aWFsRmllbGQSCwoDa2V5GAEgASgJEg0KBWxhYmVsGAIgASgJEg4KBnNlY3JldBgDIAEoCCLFAgoKRmFjdG9yeUFwcBIKCgJpZBgBIAEoCRINCgVsYWJlbBgCIAEoCRIQCgN1cmwYAyABKAlIAIgBARIuCgZoZWFsdGgYBCABKA4yHi5sb2Ftcy5hZ2VudGQudjEuRmFjdG9yeUhlYWx0aBISCgpoYXNfcGFuZWxzGAUgASgIEkIKEWNyZWRlbnRpYWxfZmllbGRzGAYgAygLMicubG9hbXMuYWdlbnRkLnYxLkZhY3RvcnlDcmVkZW50aWFsRmllbGQSNwoGZmllbGRzGAcgAygLMicubG9hbXMuYWdlbnRkLnYxLkZhY3RvcnlBcHAuRmllbGRzRW50cnkSEgoKcGVyc2lzdGVudBgIIAEoCBotCgtGaWVsZHNFbnRyeRILCgNrZXkYASABKAkSDQoFdmFsdWUYAiABKAk6AjgBQgYKBF91cmwiLQoMRmFjdG9yeUVycm9yEgwKBGNvZGUYASABKAkSDwoHbWVzc2FnZRgCIAEoCSIYChZMaXN0RmFjdG9yeUFwcHNSZXF1ZXN0IkQKF0xpc3RGYWN0b3J5QXBwc1Jlc3BvbnNlEikKBGFwcHMYASADKAsyGy5sb2Ftcy5hZ2VudGQudjEuRmFjdG9yeUFwcCIkChVUZXN0RmFjdG9yeUFwcFJlcXVlc3QSCwoDYXBwGAEgASgJIn4KFlRlc3RGYWN0b3J5QXBwUmVzcG9uc2USKgoDYXBwGAEgASgLMhsubG9hbXMuYWdlbnRkLnYxLkZhY3RvcnlBcHBIABIuCgVlcnJvchgCIAEoCzIdLmxvYW1zLmFnZW50ZC52MS5GYWN0b3J5RXJyb3JIAEIICgZyZXN1bHQiQwoTUXVlcnlGYWN0b3J5UmVxdWVzdBILCgNhcHAYASABKAkSCgoCb3AYAiABKAkSEwoLcGFyYW1zX2pzb24YAyABKAkiZgoUUXVlcnlGYWN0b3J5UmVzcG9uc2USFAoKdmFsdWVfanNvbhgBIAEoCUgAEi4KBWVycm9yGAIgASgLMh0ubG9hbXMuYWdlbnRkLnYxLkZhY3RvcnlFcnJvckgAQggKBnJlc3VsdCKuAQoaQ29uZmlndXJlRmFjdG9yeUFwcFJlcXVlc3QSCwoDYXBwGAEgASgJEgsKA3VybBgCIAEoCRJHCgZmaWVsZHMYAyADKAsyNy5sb2Ftcy5hZ2VudGQudjEuQ29uZmlndXJlRmFjdG9yeUFwcFJlcXVlc3QuRmllbGRzRW50cnkaLQoLRmllbGRzRW50cnkSCwoDa2V5GAEgASgJEg0KBXZhbHVlGAIgASgJOgI4ASKDAQobQ29uZmlndXJlRmFjdG9yeUFwcFJlc3BvbnNlEioKA2FwcBgBIAEoCzIbLmxvYW1zLmFnZW50ZC52MS5GYWN0b3J5QXBwSAASLgoFZXJyb3IYAiABKAsyHS5sb2Ftcy5hZ2VudGQudjEuRmFjdG9yeUVycm9ySABCCAoGcmVzdWx0IiYKF1JlbW92ZUZhY3RvcnlBcHBSZXF1ZXN0EgsKA2FwcBgBIAEoCSIaChhSZW1vdmVGYWN0b3J5QXBwUmVzcG9uc2UqwgEKDUZhY3RvcnlIZWFsdGgSHgoaRkFDVE9SWV9IRUFMVEhfVU5TUEVDSUZJRUQQABIVChFGQUNUT1JZX0hFQUxUSF9PSxABEh4KGkZBQ1RPUllfSEVBTFRIX0FVVEhfRkFJTEVEEAISHgoaRkFDVE9SWV9IRUFMVEhfVU5SRUFDSEFCTEUQAxIfChtGQUNUT1JZX0hFQUxUSF9VTkNPTkZJR1VSRUQQBBIZChVGQUNUT1JZX0hFQUxUSF9MT0NLRUQQBTL9BAoORmFjdG9yeVNlcnZpY2USaQoPTGlzdEZhY3RvcnlBcHBzEicubG9hbXMuYWdlbnRkLnYxLkxpc3RGYWN0b3J5QXBwc1JlcXVlc3QaKC5sb2Ftcy5hZ2VudGQudjEuTGlzdEZhY3RvcnlBcHBzUmVzcG9uc2UiA5ACARJhCg5UZXN0RmFjdG9yeUFwcBImLmxvYW1zLmFnZW50ZC52MS5UZXN0RmFjdG9yeUFwcFJlcXVlc3QaJy5sb2Ftcy5hZ2VudGQudjEuVGVzdEZhY3RvcnlBcHBSZXNwb25zZRJgCgxRdWVyeUZhY3RvcnkSJC5sb2Ftcy5hZ2VudGQudjEuUXVlcnlGYWN0b3J5UmVxdWVzdBolLmxvYW1zLmFnZW50ZC52MS5RdWVyeUZhY3RvcnlSZXNwb25zZSIDkAIBEnAKE0NvbmZpZ3VyZUZhY3RvcnlBcHASKy5sb2Ftcy5hZ2VudGQudjEuQ29uZmlndXJlRmFjdG9yeUFwcFJlcXVlc3QaLC5sb2Ftcy5hZ2VudGQudjEuQ29uZmlndXJlRmFjdG9yeUFwcFJlc3BvbnNlEmcKEFJlbW92ZUZhY3RvcnlBcHASKC5sb2Ftcy5hZ2VudGQudjEuUmVtb3ZlRmFjdG9yeUFwcFJlcXVlc3QaKS5sb2Ftcy5hZ2VudGQudjEuUmVtb3ZlRmFjdG9yeUFwcFJlc3BvbnNlGmCKtRhcCg5hZ2VudGQuZmFjdG9yeRJIVGhlIHNvZnR3YXJlIGZhY3RvcnkncyBhcHBzOiB0aGVpciBzdGF0ZSBhbmQgdGhlIHJlYWQtb25seSBvcCBhbGxvd2xpc3QuGAFiBnByb3RvMw", [file_loams_options_v1_options]);
 
 /**
  * One field of an app's configure form.
@@ -283,6 +283,94 @@ export const QueryFactoryResponseSchema: GenMessage<QueryFactoryResponse> = /*@_
   messageDesc(file_loams_agentd_v1_factory, 8);
 
 /**
+ * @generated from message loams.agentd.v1.ConfigureFactoryAppRequest
+ */
+export type ConfigureFactoryAppRequest = Message<"loams.agentd.v1.ConfigureFactoryAppRequest"> & {
+  /**
+   * @generated from field: string app = 1;
+   */
+  app: string;
+
+  /**
+   * @generated from field: string url = 2;
+   */
+  url: string;
+
+  /**
+   * By credential field key.
+   *
+   * @generated from field: map<string, string> fields = 3;
+   */
+  fields: { [key: string]: string };
+};
+
+/**
+ * Describes the message loams.agentd.v1.ConfigureFactoryAppRequest.
+ * Use `create(ConfigureFactoryAppRequestSchema)` to create a new message.
+ */
+export const ConfigureFactoryAppRequestSchema: GenMessage<ConfigureFactoryAppRequest> = /*@__PURE__*/
+  messageDesc(file_loams_agentd_v1_factory, 9);
+
+/**
+ * @generated from message loams.agentd.v1.ConfigureFactoryAppResponse
+ */
+export type ConfigureFactoryAppResponse = Message<"loams.agentd.v1.ConfigureFactoryAppResponse"> & {
+  /**
+   * @generated from oneof loams.agentd.v1.ConfigureFactoryAppResponse.result
+   */
+  result: {
+    /**
+     * @generated from field: loams.agentd.v1.FactoryApp app = 1;
+     */
+    value: FactoryApp;
+    case: "app";
+  } | {
+    /**
+     * @generated from field: loams.agentd.v1.FactoryError error = 2;
+     */
+    value: FactoryError;
+    case: "error";
+  } | { case: undefined; value?: undefined };
+};
+
+/**
+ * Describes the message loams.agentd.v1.ConfigureFactoryAppResponse.
+ * Use `create(ConfigureFactoryAppResponseSchema)` to create a new message.
+ */
+export const ConfigureFactoryAppResponseSchema: GenMessage<ConfigureFactoryAppResponse> = /*@__PURE__*/
+  messageDesc(file_loams_agentd_v1_factory, 10);
+
+/**
+ * @generated from message loams.agentd.v1.RemoveFactoryAppRequest
+ */
+export type RemoveFactoryAppRequest = Message<"loams.agentd.v1.RemoveFactoryAppRequest"> & {
+  /**
+   * @generated from field: string app = 1;
+   */
+  app: string;
+};
+
+/**
+ * Describes the message loams.agentd.v1.RemoveFactoryAppRequest.
+ * Use `create(RemoveFactoryAppRequestSchema)` to create a new message.
+ */
+export const RemoveFactoryAppRequestSchema: GenMessage<RemoveFactoryAppRequest> = /*@__PURE__*/
+  messageDesc(file_loams_agentd_v1_factory, 11);
+
+/**
+ * @generated from message loams.agentd.v1.RemoveFactoryAppResponse
+ */
+export type RemoveFactoryAppResponse = Message<"loams.agentd.v1.RemoveFactoryAppResponse"> & {
+};
+
+/**
+ * Describes the message loams.agentd.v1.RemoveFactoryAppResponse.
+ * Use `create(RemoveFactoryAppResponseSchema)` to create a new message.
+ */
+export const RemoveFactoryAppResponseSchema: GenMessage<RemoveFactoryAppResponse> = /*@__PURE__*/
+  messageDesc(file_loams_agentd_v1_factory, 12);
+
+/**
  * @generated from enum loams.agentd.v1.FactoryHealth
  */
 export enum FactoryHealth {
@@ -367,6 +455,30 @@ export const FactoryService: GenService<{
     methodKind: "unary";
     input: typeof QueryFactoryRequestSchema;
     output: typeof QueryFactoryResponseSchema;
+  },
+  /**
+   * Store an app's URL and credentials, then check them (ndjson:
+   * `FactoryConfigure`). Write-only for secrets: no reply carries one. A secret
+   * left out keeps its stored value while the URL's origin is unchanged.
+   * Electron main's alone (F4).
+   *
+   * @generated from rpc loams.agentd.v1.FactoryService.ConfigureFactoryApp
+   */
+  configureFactoryApp: {
+    methodKind: "unary";
+    input: typeof ConfigureFactoryAppRequestSchema;
+    output: typeof ConfigureFactoryAppResponseSchema;
+  },
+  /**
+   * Forget an app and its credentials (ndjson: `FactoryRemove`). Electron
+   * main's alone (F4).
+   *
+   * @generated from rpc loams.agentd.v1.FactoryService.RemoveFactoryApp
+   */
+  removeFactoryApp: {
+    methodKind: "unary";
+    input: typeof RemoveFactoryAppRequestSchema;
+    output: typeof RemoveFactoryAppResponseSchema;
   },
 }> = /*@__PURE__*/
   serviceDesc(file_loams_agentd_v1_factory, 0);

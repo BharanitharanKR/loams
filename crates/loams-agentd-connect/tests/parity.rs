@@ -1940,4 +1940,40 @@ async fn factory_steps(s: &mut Suite) {
         ),
         |r| factory_query_reply(r.result)?
     );
+    // An unreachable OpenObserve: configured, then checked, then forgotten.
+    unary!(
+        s,
+        "/loams.agentd.v1.FactoryService/ConfigureFactoryApp",
+        FactoryConfigure,
+        |d| json!({ "app": "openobserve", "url": "http://127.0.0.1:9/web/", "fields": {} }),
+        factory.configure_factory_app(
+            json!({ "app": "openobserve", "url": "http://127.0.0.1:9/web/", "fields": {} })
+        ),
+        |r| factory_configure_reply(r.result)?
+    );
+    unary!(
+        s,
+        "/loams.agentd.v1.FactoryService/RemoveFactoryApp",
+        FactoryRemove,
+        |d| json!({ "app": "openobserve" }),
+        factory.remove_factory_app(json!({ "app": "openobserve" })),
+        |r| rs::Empty {}
+    );
+}
+
+fn factory_configure_reply(
+    r: Option<pb::__buffa::oneof::configure_factory_app_response::Result>,
+) -> Result<rs::factory::FactoryAppReply, MapError> {
+    use pb::__buffa::oneof::configure_factory_app_response::Result as R;
+    match r {
+        Some(R::App(a)) => Ok(rs::factory::FactoryAppReply {
+            app: Some(factory_app(*a)?),
+            error: None,
+        }),
+        Some(R::Error(e)) => Ok(rs::factory::FactoryAppReply {
+            app: None,
+            error: Some(factory_error(*e)),
+        }),
+        None => Err(MapError::empty_oneof("ConfigureFactoryAppResponse.result")),
+    }
 }

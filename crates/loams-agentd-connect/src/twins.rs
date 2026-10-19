@@ -248,6 +248,8 @@ methods! {
         ListFactoryApps => Method("FactoryList"),
         TestFactoryApp => Method("FactoryTest"),
         QueryFactory => Method("FactoryQuery"),
+        ConfigureFactoryApp => Method("FactoryConfigure"),
+        RemoveFactoryApp => Method("FactoryRemove"),
     }
 }
 

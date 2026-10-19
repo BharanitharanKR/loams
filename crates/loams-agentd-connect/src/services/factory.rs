@@ -1,6 +1,7 @@
-//! `FactoryService` (SF1 amendment F2; design §50 §13): the factory's reads.
-//! `FactoryConfigure` and `FactoryRemove` carry secrets and stay off the
-//! Connect surface (F4).
+//! `FactoryService` (SF1 amendment F2; design §50 §13): the factory's reads, and
+//! configure and remove, which are Electron main's alone (F4): the renderer's
+//! allowlist leaves them out (`renderer: false`) and the remote Studio role may not
+//! call them (`roles::STUDIO_EXCLUDED`).
 
 use connectrpc::{RequestContext, ServiceRequest, ServiceResult};
 use loams_agentd_proto as rs;
@@ -125,6 +126,45 @@ impl pb::FactoryService for Agentd {
                 },
                 ..Default::default()
             }
+        )
+    }
+
+    async fn configure_factory_app(
+        &self,
+        _ctx: RequestContext,
+        request: ServiceRequest<'_, pb::ConfigureFactoryAppRequest>,
+    ) -> ServiceResult<pb::ConfigureFactoryAppResponse> {
+        unary!(
+            self,
+            request,
+            FactoryConfigure,
+            |req| rf::FactoryConfigureParams {
+                app: req.app,
+                url: req.url,
+                fields: req.fields.into_iter().collect(),
+            },
+            |reply| pb::ConfigureFactoryAppResponse {
+                result: match (&reply.app, &reply.error) {
+                    (_, Some(e)) => Some(error(e).into()),
+                    (Some(a), None) => Some(app(a).into()),
+                    (None, None) => None,
+                },
+                ..Default::default()
+            }
+        )
+    }
+
+    async fn remove_factory_app(
+        &self,
+        _ctx: RequestContext,
+        request: ServiceRequest<'_, pb::RemoveFactoryAppRequest>,
+    ) -> ServiceResult<pb::RemoveFactoryAppResponse> {
+        unary!(
+            self,
+            request,
+            FactoryRemove,
+            |req| rf::FactoryAppParams { app: req.app },
+            |_done| pb::RemoveFactoryAppResponse::default()
         )
     }
 }
