@@ -226,7 +226,7 @@ machine whose browser you will use.
 
 Use the files of the release you run, so `compose.yaml` matches the images that
 `LOAMS_VERSION` pins. Download the compose bundle attached to the release; this is the
-supported path, and the bundle carries the first-run setup fix below:
+supported path, and the bundle carries the first-run fixes below:
 
 ```sh
 curl -fLO https://github.com/ostrium-labs/loams/releases/download/v0.1.0/loams-compose-0.1.0.tar.gz
@@ -235,11 +235,11 @@ cd loams-compose-0.1.0/release
 cp .env.example .env
 ```
 
-**From a git checkout instead.** The `v0.1.0` tag predates the first-run setup fix that the
-bundle and `main` have (the setup token's pass-through, see [First-run setup](#first-run-setup)):
-the tag's `compose.yaml` does not pass `LOAMS_SETUP_TOKEN` from `.env` to the engine. If you
-clone the tag, put the token in `secrets/engine.env` instead, and recreate the engine once the
-stack is up:
+**From a git checkout instead.** The `v0.1.0` tag predates two first-run fixes that the bundle
+and `main` have: the setup token's pass-through ([First-run setup](#first-run-setup)) and the
+Postgres bootstrap ([Postgres: first run](#postgres-first-run)). The tag's `compose.yaml` does
+not pass `LOAMS_SETUP_TOKEN` from `.env` to the engine. If you clone the tag, put the token in
+`secrets/engine.env` instead, and recreate the engine once the stack is up:
 
 ```sh
 git clone --branch v0.1.0 https://github.com/ostrium-labs/loams.git
@@ -250,10 +250,10 @@ echo "LOAMS_SETUP_TOKEN=$(openssl rand -hex 32)" >> secrets/engine.env
 docker compose up -d loams
 ```
 
-On the tag, `compute1` also needs a tenant and a timeline created by hand: follow
-[`deploy/loams-postgres-dev/README.md`](../../deploy/loams-postgres-dev/README.md#run), put
+On the tag, which has no `pg-bootstrap`, `compute1` needs a tenant and a timeline created by
+hand: follow [`deploy/loams-postgres-dev/README.md`](../../deploy/loams-postgres-dev/README.md#run), put
 `TENANT_ID` and `TIMELINE_ID` in `.env` and run `docker compose up -d compute1`. Or clone `main`,
-whose `deploy/release` has the setup fix and still pins `LOAMS_VERSION=0.1.0` until the next
+whose `deploy/release` has both fixes and still pins `LOAMS_VERSION=0.1.0` until the next
 release.
 
 Edit `.env`:
@@ -277,9 +277,9 @@ docker compose ps                                   # every service running (see
 docker compose exec tailscale tailscale status      # the stack is on your tailnet
 ```
 
-`docker compose ps` lists the long-running services. The one-shot services `migrate` and
-`create-bucket` run first and exit 0 by design (`docker compose ps -a` shows them as
-`Exited (0)`); a non-zero exit is a failure, and `docker compose logs <service>` says why.
+`docker compose ps` lists the long-running services. The one-shot services `migrate`,
+`create-bucket` and `pg-bootstrap` run first and exit 0 by design (`docker compose ps -a` shows
+them as `Exited (0)`); a non-zero exit is a failure, and `docker compose logs <service>` says why.
 
 The engine's URL is `https://<TS_HOSTNAME>.<tailnet>.ts.net`, by default
 `https://loams.<tailnet>.ts.net`.
@@ -332,6 +332,26 @@ A wrong token is refused with `permission_denied`. After setup has run, every fu
 `LOAMS_SETUP_TOKEN` where you set it and run `docker compose up -d loams` to drop it from the
 engine.
 With `LOAMS_AUTH_MODE=off` setup needs no token, and only loopback clients can reach it.
+
+### Postgres: first run
+
+The Postgres stack's compute (`compute1`) attaches to a tenant and a timeline on the
+pageserver. You do not create them: on the first `docker compose up -d` the one-shot
+`pg-bootstrap` service creates both (Postgres 17), keeps their ids in the `pg-bootstrap`
+volume, and exits 0; `compute1` starts after it. Every later `up`, including after a
+`docker compose down` without `-v`, reuses the same ids, so your data is where you left it.
+
+```sh
+docker compose logs pg-bootstrap          # pg-bootstrap: ready: TENANT_ID=... TIMELINE_ID=...
+PGPASSWORD=cloud_admin psql -h 127.0.0.1 -p 55433 -U cloud_admin postgres -c 'SELECT version()'
+```
+
+To bring your own tenant and timeline (for example ones Loams or an earlier stack created), set
+both `TENANT_ID` and `TIMELINE_ID` in `.env` (32 hex characters each) and run
+`docker compose up -d compute1`. The ids in `.env` win; `pg-bootstrap` only makes sure they
+exist on the pageserver, creating any that are missing, and leaves its stored ids alone.
+Setting only one of the two is refused. Empty both to go back to the stored ids.
+`docker compose down -v` deletes the tenants together with the stored ids.
 
 ### Without a tailnet
 
