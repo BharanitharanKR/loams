@@ -3,7 +3,6 @@ import { SlotProvider, SlotRegistry } from '@loams/slots';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Layout } from '../src/layout.js';
-import { runMenuCommand } from '../src/menu-commands.js';
 import { DRAWER, INSPECTOR, PanelController } from '../src/panel.js';
 import { HashRouter, type HashSource } from '../src/router.js';
 
@@ -122,15 +121,10 @@ describe('the desktop menu runs the shell (CF1 Task 14, D1084)', () => {
     forward.mockRestore();
   });
 
-  it('reports Reopen Closed Thread as not handled until there is a stack (W12)', () => {
-    const h = {
-      togglePalette: vi.fn(),
-      toggleSidebar: vi.fn(),
-      toggleInspector: vi.fn(),
-      toggleDrawer: vi.fn(),
-      openSettings: vi.fn(),
-    };
-    expect(runMenuCommand('thread.reopen', h)).toBe(false);
-    expect(runMenuCommand('thread.reopen', { ...h, reopenThread: () => true })).toBe(true);
+  it('reopens the thread left last (W12), through the keymap`s run', () => {
+    const { router } = setup('/studio/t/a');
+    act(() => router.navigate('/data'));
+    expect(menu('thread.reopen')).toBe(true);
+    expect(router.current().path).toBe('/studio/t/a');
   });
 });
