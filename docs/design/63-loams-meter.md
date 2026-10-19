@@ -1,6 +1,6 @@
 # 63 — Loams Meter: Open Usage Metering and Enforcement
 
-Status: **Proposed** · 2026-10-19. Source: the owner's draft notes of 2026-10-19 (below, §2), adapted to the Loams architecture, and the 2026-10-19 open-source decision (D1119, owner: "Remove the open core. Everything is in OSS."), which moves metering, entitlements, billing exporters and the control-plane pieces into this repository under this design. Decisions **D1120–D1138** and questions **Q960–Q969** are in the [decision log](13-decision-log.md), all **Proposed**. Plan stub: [ME1](../plans/2026-10-19-me1-loams-meter.md). **This document writes no code.**
+Status: **Approved** · 2026-10-19 (owner approved the design, all decisions and every default, 2026-10-19). Source: the owner's draft notes of 2026-10-19 (below, §2), adapted to the Loams architecture, and the 2026-10-19 open-source decision (D1119, owner: "Remove the open core. Everything is in OSS."), which moves metering, entitlements, billing exporters and the control-plane pieces into this repository under this design. Decisions **D1120–D1138** and questions **Q960–Q969** are in the [decision log](13-decision-log.md), all approved by the owner on 2026-10-19. Plan stub: [ME1](../plans/2026-10-19-me1-loams-meter.md). **This document writes no code.**
 
 It touches these earlier documents (§20 lists every amendment):
 - [§02](02-stream-engine.md) §7.4 (D270, the CloudEvents dedup ledger) and [§34](34-protocol-gateway-and-standards.md) §2–§3 (D364, the Loams CloudEvents profile; D365, the high-rate path);
@@ -30,25 +30,25 @@ Entitlements follow OpenMeter's model: **meter → feature → entitlement → g
 
 | # | Decision | Status |
 |---|---|---|
-| D1120 | **Loams Meter is the one metering and enforcement system, open, in Rust, in this repository** (§5): crates `loams-meter-core` (types and a sans-I/O balance engine), `loams-meter-gate` (the in-process gate and emitter products link) and `loams-meter` (the `meter` role of `loams`, behind feature `meter`), plus exporters behind features. No runtime dependency on OpenMeter, Lago, Kafka or a ClickHouse server. It replaces the private `loams-platform` metering (D548's record, its doc 06) | Proposed |
-| D1121 | **The usage event** (§6) is a CloudEvent in the Loams profile (D364) that OpenMeter's ingest accepts unchanged: `subject` required (the billing subject), `data` a JSON object (`application/json`, **amends D364's protobuf default** for `io.loams.dev.usage.*` types), `type` `io.loams.dev.usage.<product>.<name>.v<major>`, `id` derived from the work so a re-emission is a duplicate, `tenantid` set from the credential. One new extension, `loamslease` (the lease that admitted the work) | Proposed |
-| D1122 | **Storage and dedupe** (§7): every event lands in the system stream `_meter.events` (namespace `_system`, 32 partitions, keyed by `subject`). Loams' own producers use D365's batched plain produce; external producers use D270's ledger. Duplicates are removed three times: at the emitter (stable ids), in the counter owner (a recent-keys set) and in the House, where `_meter.events` is a `ReplacingMergeTree` lake table keyed `(subject, type, source, id)` read with `FINAL` | Proposed |
-| D1123 | **Aggregation in the House** (§8): a close job writes closed minute, hour and day windows into `_meter.windows` (`ReplacingMergeTree(close_run)`), from `FINAL` reads of raw events; late events up to 24 h re-close their windows; billing periods close two hours after their end. **Only the House's windows are billed**; counters never are | Proposed |
-| D1124 | **The entitlement model** (§9) is OpenMeter's: customers own subjects; a meter feeds a feature; an entitlement (metered, boolean or static) gives a subject a feature for a usage period; grants carry amount, priority, effective time, expiry and rollover; burn-down by priority, then nearest expiry, then oldest. Modes `hard_limit`, `soft_limit` and `overage_allowed`. Money is integer micros plus an ISO 4217 code (D374) | Proposed |
-| D1125 | **The enforcement path** (§10): products call `Gate::check` or `Gate::reserve`/`settle` at their admission points; a hit reads only local, sharded counters (≤ 5 µs p99, target); a miss fetches a lease synchronously within a 50 ms deadline, after which the policy table decides. Hook points: House admission, the gateway's API, LLM and MCP modules, Postgres connect and compute wake, jobs enqueue, function invoke, Git and stream ingest | Proposed |
-| D1126 | **Multi-node leasing** (§11): the counter owner of a subject is the holder of its `_meter.events` partition lease (fenced, §02 §7). It grants chunks of `clamp(1% of the allowance, min_chunk, remaining / (2 × holders))` with a 30 s TTL and a 10 s refresh; below a floor it switches to exact mode. After a failover the new owner runs Doorman's **learning mode** for one TTL. Overshoot is accepted and bounded (§11.4) | Proposed |
-| D1127 | **Reconciliation** (§12): every 5 minutes and at period close, each owner rebases its counters on the House's totals at the pipe's committed offsets and replays only the stream tail after them, so no event is counted twice or missed. Drift above 1% of an allowance raises an alert | Proposed |
-| D1128 | **Policy** (§13): no payment method → hard stop; overage only with a card, opt-in and under a spend cap; prepaid credits stop at zero; counters unavailable → free tenants fail closed, paid tenants fail open within their spend-cap headroom; thresholds at 80% and 100% | Proposed |
-| D1129 | **Threshold and lifecycle events go into the same stream** (§15): `io.loams.dev.meter.threshold.v1`, `…entitlement.reset.v1`, `…access.changed.v1`, with ids that make re-emission after a failover a duplicate; a notifier fans them out to webhooks, email and the console | Proposed |
-| D1130 | **Exporters are optional and one-way** (§16): Stripe (meter events of closed windows, `identifier` for idempotency), OpenMeter (raw events, unchanged), Lago (events by `transaction_id`, over HTTP only, AGPL never linked), a CloudEvents webhook, and the Iceberg tables themselves. Loams owns balances and access; a provider owns invoices and payment | Proposed |
-| D1131 | **APIs** (§17): Connect `loams.meter.v1` (`MeterService`, `IngestService`, `CustomerService`, `EntitlementService`, `PlanService`, internal `LeaseService`) with REST through the API conventions (AIP-158 pages, `idempotency_key`, `ErrorInfo.reason`), and an **OpenMeter-compatible REST subset** under `/api/v1/` so OpenMeter SDKs work. Hard stops answer `entitlement_exhausted` (HTTP 402) and keep 429 for rate limits | Proposed |
-| D1132 | **Console** (§18): Settings → Billing (D1080) gets Usage, Entitlements, Spend controls, Payment and Alerts pages, plus an 80%/100% banner; the operator view gets Meters, Plans, Customers and Meter health. **Answers Q546**: money may be shown | Proposed |
-| D1133 | **Integrity comes from authentication and from where usage is measured, not from secrecy** (§19): reserved `io.loams.dev.*` types only from service identities; `tenantid` and `subject` from the credential; CPU and bytes measured outside tenant code; billing only from the House; grants, plans and opt-ins written only by humans or the billing service, never by agent principals; every change audited. **Restates D541** for an open codebase | Proposed |
-| D1134 | **Entitlements are a second gate beside the limits record** (§20): D546's protective limits (rates, concurrency, daily volume) stay, with their counters approximate and engine-local; entitlements add billing-period allowances. CPQ4/D850's private House observer is superseded: `MeterSink` implements the open observers. The no-metering naming rules (JB1, CP1 Task 27, §52) are retired | Proposed |
-| D1135 | **Migration from `loams-platform`** (§21): inventory, then port what fits this design into the crates above, retire the rest, and make this repository the only home of metering; the platform's per-invocation host report becomes a `MeterSink` source, not a separate socket protocol | Proposed |
-| D1136 | **Plan ME1** (§23) in six milestones: ME1a events and emitters, ME1b House storage and windows, ME1c entitlements, counters and reconciliation, ME1d enforcement and policy, ME1e exporters, console and migration, ME1f user meters and provisioning | Proposed |
-| D1137 | **Meters, features and plans as code** (§22): YAML in the GitOps repository (D544) applied through `PlanService`; an OpenTofu provider later. Terraform is not a target, since its licence is BUSL 1.1; neither tool meters | Proposed |
-| D1138 | **User meters** (§9.6): the same engine, scoped to a user's namespace, lets Loams users meter and limit their own customers (OpenMeter's use case). After Loams' own billing works (ME1f) | Proposed |
+| D1120 | **Loams Meter is the one metering and enforcement system, open, in Rust, in this repository** (§5): crates `loams-meter-core` (types and a sans-I/O balance engine), `loams-meter-gate` (the in-process gate and emitter products link) and `loams-meter` (the `meter` role of `loams`, behind feature `meter`), plus exporters behind features. No runtime dependency on OpenMeter, Lago, Kafka or a ClickHouse server. The imported node agent becomes `loams-meter-agent` (§21). It replaces the private `loams-platform` metering (D548's record, its docs 01 and 06) | Approved (owner, 2026-10-19) |
+| D1121 | **The usage event** (§6) is a CloudEvent in the Loams profile (D364) that OpenMeter's ingest accepts unchanged: `subject` required (the billing subject), `data` a JSON object (`application/json`, **amends D364's protobuf default** for `io.loams.dev.usage.*` types), `type` `io.loams.dev.usage.<product>.<name>.v<major>`, `id` derived from the work so a re-emission is a duplicate, `tenantid` set from the credential. One new extension, `loamslease` (the lease that admitted the work) | Approved (owner, 2026-10-19) |
+| D1122 | **Storage and dedupe** (§7): every event lands in the system stream `_system/_meter` (32 partitions, keyed by `subject`). Loams' own producers use D365's batched plain produce; external producers use D270's ledger. Duplicates are removed three times: at the emitter (stable ids), in the counter owner (a recent-keys set) and in the House, where `_system/_meter` is a `ReplacingMergeTree` lake table keyed `(subject, type, source, id)` read with `FINAL` | Approved (owner, 2026-10-19) |
+| D1123 | **Aggregation in the House** (§8): a close job writes closed minute, hour and day windows into `_meter.windows` (`ReplacingMergeTree(close_run)`), from `FINAL` reads of raw events; late events up to 24 h re-close their windows; billing periods close two hours after their end. **Only the House's windows are billed**; counters never are | Approved (owner, 2026-10-19) |
+| D1124 | **The entitlement model** (§9) is OpenMeter's: customers own subjects; a meter feeds a feature; an entitlement (metered, boolean or static) gives a subject a feature for a usage period; grants carry amount, priority, effective time, expiry and rollover; burn-down by priority, then nearest expiry, then oldest. Modes `hard_limit`, `soft_limit` and `overage_allowed`. Money is integer micros plus an ISO 4217 code (D374) | Approved (owner, 2026-10-19) |
+| D1125 | **The enforcement path** (§10): products call `Gate::check` or `Gate::reserve`/`settle` at their admission points; a hit reads only local, sharded counters (≤ 5 µs p99, target); a miss fetches a lease synchronously within a 50 ms deadline, after which the policy table decides. Hook points: House admission, the gateway's API, LLM and MCP modules, Postgres connect and compute wake, jobs enqueue, function invoke, Git and stream ingest | Approved (owner, 2026-10-19) |
+| D1126 | **Multi-node leasing** (§11): the counter owner of a subject is the holder of its `_system/_meter` partition lease (fenced, §02 §7). It grants chunks of `clamp(1% of the allowance, min_chunk, remaining / (2 × holders))` with a 30 s TTL and a 10 s refresh; below a floor it switches to exact mode. After a failover the new owner runs Doorman's **learning mode** for one TTL. Overshoot is accepted and bounded (§11.4) | Approved (owner, 2026-10-19) |
+| D1127 | **Reconciliation** (§12): every 5 minutes and at period close, each owner rebases its counters on the House's totals at the pipe's committed offsets and replays only the stream tail after them, so no event is counted twice or missed. Drift above 1% of an allowance raises an alert | Approved (owner, 2026-10-19) |
+| D1128 | **Policy** (§13): no payment method → hard stop; overage only with a card, opt-in and under a spend cap; prepaid credits stop at zero; counters unavailable → free tenants fail closed, paid tenants fail open within their spend-cap headroom; thresholds at 80% and 100% | Approved (owner, 2026-10-19) |
+| D1129 | **Threshold and lifecycle events go into the same stream** (§15): `io.loams.dev.meter.threshold.v1`, `…entitlement.reset.v1`, `…access.changed.v1`, with ids that make re-emission after a failover a duplicate; a notifier fans them out to webhooks, email and the console | Approved (owner, 2026-10-19) |
+| D1130 | **Exporters are optional and one-way** (§16): Stripe (meter events of closed windows, `identifier` for idempotency), OpenMeter (raw events, unchanged), Lago (events by `transaction_id`, over HTTP only, AGPL never linked), a CloudEvents webhook, and the Iceberg tables themselves. Loams owns balances and access; a provider owns invoices and payment | Approved (owner, 2026-10-19) |
+| D1131 | **APIs** (§17): Connect `loams.meter.v1` (`MeterService`, `IngestService`, `CustomerService`, `EntitlementService`, `PlanService`, internal `LeaseService`) with REST through the API conventions (AIP-158 pages, `idempotency_key`, `ErrorInfo.reason`), and an **OpenMeter-compatible REST subset** under `/api/v1/` so OpenMeter SDKs work. Hard stops answer `entitlement_exhausted` (HTTP 402) and keep 429 for rate limits | Approved (owner, 2026-10-19) |
+| D1132 | **Console** (§18): Settings → Billing (D1080) gets Usage, Entitlements, Spend controls, Payment and Alerts pages, plus an 80%/100% banner; the operator view gets Meters, Plans, Customers and Meter health. **Answers Q546**: money may be shown | Approved (owner, 2026-10-19) |
+| D1133 | **Integrity comes from authentication and from where usage is measured, not from secrecy** (§19): reserved `io.loams.dev.*` types only from service identities; `tenantid` and `subject` from the credential; CPU and bytes measured outside tenant code; billing only from the House; grants, plans and opt-ins written only by humans or the billing service, never by agent principals; every change audited. **Restates D541** for an open codebase | Approved (owner, 2026-10-19) |
+| D1134 | **Entitlements are a second gate beside the limits record** (§20): D546's protective limits (rates, concurrency, daily volume) stay, with their counters approximate and engine-local; entitlements add billing-period allowances. CPQ4/D850's private House observer is superseded: `MeterSink` implements the open observers. The no-metering naming rules (JB1, CP1 Task 27, §52) are retired | Approved (owner, 2026-10-19) |
+| D1135 | **Migration from `loams-platform`** (§21), surveyed from its code: its one crate, the node metering agent (cgroup reader, delta tracker, resolver, spool, stream sink), is kept and renamed `loams-meter-agent` in the root workspace, with its events moved to §6's types and its sink to D270's record layout and the subject partitioner; its designed but unbuilt aggregator is superseded by the House and the counter owners; the host-report design (doc 06) is kept for the T1 source; `platform/` is removed once empty | Approved (owner, 2026-10-19) |
+| D1136 | **Plan ME1** (§23) in six milestones: ME1a events and emitters, ME1b House storage and windows, ME1c entitlements, counters and reconciliation, ME1d enforcement and policy, ME1e exporters, console and migration, ME1f user meters and provisioning | Approved (owner, 2026-10-19) |
+| D1137 | **Meters, features and plans as code** (§22): YAML in the GitOps repository (D544) applied through `PlanService`; an OpenTofu provider later. Terraform is not a target, since its licence is BUSL 1.1; neither tool meters | Approved (owner, 2026-10-19) |
+| D1138 | **User meters** (§9.6): the same engine, scoped to a user's namespace, lets Loams users meter and limit their own customers (OpenMeter's use case). After Loams' own billing works (ME1f) | Approved (owner, 2026-10-19) |
 
 ---
 
@@ -111,7 +111,8 @@ So Loams keeps OpenMeter's event format and entitlement semantics, so that OpenM
 | pg-control `ComputeLifecycleObserver` (`Started`, `Resized`, `Suspended`, `Failed`) | Built | `crates/loams-pg-control/src/observer.rs`, D703 |
 | `InvocationObserver` for runners | Designed, not built | §27 §3.7, D549 |
 | The limits record, limits API, directory and `EnforcementSample` | Planned | §41 §9, CP1 Tasks 4–7 |
-| Billing-grade metering, the per-invocation host report, `io.loams.dev.meter.usage.v1`, `GET /v1/orgs/{org}/usage` | In the private `loams-platform` | D548; its doc 06 (not read for this design, §21) |
+| The node metering agent (cgroup v2 reader, delta tracker, static resolver, spool, `_system/_meter` sink) | Built in the former private `loams-platform`, being imported under `platform/` (branch `import-platform`) | Platform doc 01 MB0, §21 |
+| The usage aggregator, the per-invocation host report, the Stripe export | Designed in `loams-platform` (docs 01, 06), never built | §21 |
 
 What D1119 changes: the integrity argument of D541 no longer needs the code to be private, so this design restates it (D1133), and the "counters are never usage" rule of D546 becomes "**counters are never billed**" (D1134).
 
@@ -128,6 +129,7 @@ What D1119 changes: the integrity argument of D541 no longer needs the code to b
  │ Gateway       ConnectionObs. │                 │ (CloudEvents, D270 ledger)
  │ pg-control    ComputeLifecyc.│                 ▼
  │ Runners       InvocationObs. │          ┌──────────────┐
+ │ Node agent    cgroups, spool │          │              │
  │ Jobs, Git, Live, streams     │          │ meter: ingest│
  │   └─ MeterSink ─┐            │          └──────┬───────┘
  │   Gate::check ◄─┼── leases ──┼──────┐          │
@@ -135,7 +137,7 @@ What D1119 changes: the integrity argument of D541 no longer needs the code to b
                    │ D365 batched produce          │
                    ▼                    │          ▼
         ┌───────────────────────────────────────────────────┐
-        │ stream _system/_meter.events (32 partitions,       │
+        │ stream _system/_meter (32 partitions,              │
         │ key = subject, WAL class express where available)  │
         └───────┬───────────────────────────────┬────────────┘
                 │ named consumer                │ House pipe (LoamsStream,
@@ -162,6 +164,7 @@ What D1119 changes: the integrity argument of D541 no longer needs the code to b
 | Component | Where | Does |
 |---|---|---|
 | `loams-meter-core` | `crates/loams-meter-core` | The types of §9; the balance engine (grants, burn-down, rollover, resets) and the lease allocator as sans-I/O machines; meter evaluation (JSONPath value and group-by extraction). No async, no I/O, no Arrow. Usable from the `fabric/` workspace by path |
+| `loams-meter-agent` | `crates/loams-meter-agent` (moved from `platform/crates/loams-meter`, §21) | The node agent: a DaemonSet (or a service on a single host) that reads every sandbox's and runtime's cgroup from outside it and writes spooled usage events (§7.2) |
 | `loams-meter-gate` | `crates/loams-meter-gate` | What products link: `Gate` (local counters, lease cache, `check`/`reserve`/`settle`), `MeterSink` (the D365 emitter) and adapters that implement `UsageObserver`, `ConnectionObserver`, `ComputeLifecycleObserver` and `InvocationObserver`. A `NoGate` default that allows everything and emits nothing, so a product without the meter behaves as today |
 | `meter` role | `crates/loams-meter`, a role of `loams` behind feature `meter` | Ingest API, counter owners (named consumer `meter-counters` with partition leases), `LeaseService`, entitlement and plan APIs, reconciler, close-job scheduler, notifier, exporters |
 | House tables | The House, system namespace, database `_meter` | Raw events, windows, period totals; the source of truth (§7, §8) |
@@ -183,7 +186,7 @@ A usage event is a CloudEvent 1.0 ([spec](https://github.com/cloudevents/spec/bl
 | Attribute | Required | Rule |
 |---|---|---|
 | `specversion` | yes | `1.0` |
-| `id` | yes | **Derived from the work**, not random, so a re-emission after a crash is a duplicate. Examples: `house.query` → `<query_id>/<lease_seq>`; `house.storage` → `<ns>/<db>/<table>/<utc_day>`; a Postgres compute tick → `<endpoint>/<compute_id>/<tick_n>`; an LLM call → the gateway's request id. External producers keep it stable across retries (D364) |
+| `id` | yes | **Derived from the work**, not random, so a re-emission after a crash is a duplicate. Examples: `house.query` → `<query_id>/<lease_seq>`; `house.storage` → `<ns>/<db>/<table>/<utc_day>`; a Postgres compute tick → `<endpoint>/<compute_id>/<tick_n>`; an LLM call → the gateway's request id; the node agent → `<node>/<source>/<seq>`, with `seq` assigned before the event enters its spool and kept on every retry (platform PD2). External producers keep it stable across retries (D364) |
 | `source` | yes | URI reference naming the producer instance: `loams://<cluster>/<role>/<node>` for Loams' producers; `loams-ns://<ns>/<client>` for tenant producers (§9.6). `source` + `id` is the dedup key; CloudEvents requires it to be unique per distinct event and lets consumers treat a repeat as a duplicate (spec §"id") |
 | `type` | yes | `io.loams.dev.usage.<product>.<name>.v<major>` for Loams' meters (§6.3). Meters select on `type`, as in OpenMeter |
 | `subject` | yes | **The billing subject**: `org_<id>` for Loams' own billing (the org is the billing unit, D65). For user meters, the user's customer key. Set from the credential for Loams' producers, never from tenant input |
@@ -244,6 +247,8 @@ No `idempotencykey` or `sequence` extension: `source` + `id` is the key (D364), 
 | `…usage.storage.logical.v1` | Worker role, hourly per namespace | `logical_bytes` (gauge, D103) | D103's counters |
 | `…usage.git.storage.v1`, `…usage.git.transfer.v1` | Loams Git | bytes (D393) | Git hooks |
 | `…usage.sandbox.session.v1` | Sandbox | `cpu_ms`, `wall_ms`, `memory_mb_ms` | `stats()` (D995) |
+| `…usage.node.cpu.v1`, `…usage.node.memory.v1`, `…usage.node.network.v1` | The node agent (`loams-meter-agent`, §21), one event per (tenant, resource, window) delta | `cpu_usec`; `byte_seconds`, `peak_bytes`; `ingress_bytes`, `egress_bytes`; plus `resource`, `function`, `tier`, `window_start`, `window_end` | cgroup v2 read from outside the sandbox (built, platform MB0) |
+| `…usage.function.fuel.v1` | wasmtime hosts, per invocation | `fuel`, `cpu_usec`, `estimated` | the host report (platform doc 06; not built, MB4) |
 
 A product that is not in this list is metered by adding its type and a `MeterSink` call; nothing else changes.
 
@@ -260,7 +265,7 @@ D364 chose protobuf data for Loams-defined types on the high-rate path. For usag
 
 ### 7.1 The stream
 
-All usage events, from every product and every external producer, land in **one system stream**: `_meter.events` in the `_system` namespace (the namespace that already holds the migration ledger, D928, and is not a tenant's).
+All usage events, from every product and every external producer, land in **one system stream**: `_meter` in the `_system` namespace (the namespace that already holds the migration ledger, D928, and is not a tenant's). The name is the one D180 gave the meter stream and the one the imported node agent already writes (§21).
 
 | Property | Value | Why |
 |---|---|---|
@@ -270,10 +275,11 @@ All usage events, from every product and every external producer, land in **one 
 | Retention | 14 days (at least twice the longest House pipe outage the operator tolerates) | The reconciler replays the tail after the House's committed offsets (§12) |
 | Encoding | `kafka` (D270's record layout) | The House pipe and the consume path rebuild CloudEvents from `ce_` headers |
 
-### 7.2 Two ingest paths
+### 7.2 Three ingest paths
 
-1. **Loams' own producers** (House, gateway, pg-control, runners, jobs, log and worker roles) use `MeterSink`, which is D365's high-rate path: a bounded queue per process (65,536 events or 64 MiB), flushed every 50 ms or at 1 MiB as one `Produce` of records in the CloudEvents record layout, oldest batch dropped when full and counted (`loams_events_dropped_total{reason="queue_full"}`). No ledger. The producer's response never waits.
-2. **External producers** (user meters, partner systems, a migrating OpenMeter client) use `POST /api/v1/events` or `IngestService.Ingest`, which go through D270's ledger (claim, append, complete) with the dedup window set to **24 hours** for this stream. Each tenant's ingest is rate limited (D546's model) because the ledger costs two metastore proposals per request (§02 §7.4).
+1. **Loams' own in-process producers** (House, gateway, pg-control, runners, jobs, log and worker roles) use `MeterSink` in its **best-effort** mode, which is D365's high-rate path: a bounded queue per process (65,536 events or 64 MiB), flushed every 50 ms or at 1 MiB as one `Produce` of records in the CloudEvents record layout, oldest batch dropped when full and counted (`loams_events_dropped_total{reason="queue_full"}`). No ledger. The producer's response never waits.
+2. **The node agent** (`loams-meter-agent`, imported from `loams-platform`, §21) uses `MeterSink` in its **spooled** mode: every event is appended and fsynced to a size-bounded on-disk spool before the agent advances its cgroup baselines, and a forwarder drains the spool into the stream. A full spool delays usage instead of losing it, because the counters it reads are cumulative (platform doc 01 PD4, PD8). This is the path for CPU and memory of sandboxes and runtimes, where a gap would be billed revenue lost.
+3. **External producers** (user meters, partner systems, a migrating OpenMeter client) use `POST /api/v1/events` or `IngestService.Ingest`, which go through D270's ledger (claim, append, complete) with the dedup window set to **24 hours** for this stream. Each tenant's ingest is rate limited (D546's model) because the ledger costs two metastore proposals per request (§02 §7.4).
 
 **Dropped events.** A full queue means the stream was unavailable for a while. Dropping favours the tenant (under-billing), never double billing. Enforcement does not depend on the events arriving, since the gate's local counters already decremented (§10). A sustained drop rate above zero pages the operator (§14).
 
@@ -297,7 +303,7 @@ A busy cluster with 10,000 active namespaces: House queries at 2,000/s, LLM call
 
 ```sql
 -- in the system namespace, database _meter
-CREATE TABLE _meter.events_q (…) ENGINE = LoamsStream('_meter.events', 'CloudEvents', 'house-meter');
+CREATE TABLE _meter.events_q (…) ENGINE = LoamsStream('_meter', 'CloudEvents', 'house-meter');
 
 CREATE TABLE _meter.events (
     subject     String,
@@ -527,7 +533,7 @@ Assigning a plan to a customer creates its entitlements and their recurring gran
 
 ### 9.6 User meters (D1138)
 
-The same engine, scoped to a user's namespace: a Loams user defines meters, features and plans for **their own** customers, sends events to `POST /api/v1/events` with a namespace credential, and checks `GET /api/v1/subjects/{subject}/entitlements/{feature}/value` or links `loams-meter-gate` into their service. Their events go to a stream in their namespace and their House database, never to `_meter.events`, and their usage of the meter itself is metered as ordinary stream ingest and House usage. ME1f.
+The same engine, scoped to a user's namespace: a Loams user defines meters, features and plans for **their own** customers, sends events to `POST /api/v1/events` with a namespace credential, and checks `GET /api/v1/subjects/{subject}/entitlements/{feature}/value` or links `loams-meter-gate` into their service. Their events go to a stream in their namespace and their House database, never to `_system/_meter`, and their usage of the meter itself is metered as ordinary stream ingest and House usage. ME1f.
 
 ---
 
@@ -582,7 +588,7 @@ Each product keeps its own error mapping (§17.4). A product never calls the Hou
 | Background lease refresh | off the request path; one RPC per (subject, feature, node) per ≤ 10 s while active | target |
 | **Cold miss** (no lease on this node): synchronous `AcquireLease` to the owner | ≤ 2 ms p50, ≤ 10 ms p99 within a region; **deadline 50 ms**, then §13's policy | target |
 | Emitter flush | every 50 ms or 1 MiB (D365) | decided |
-| Append to `_meter.events` | `express` p99 20–50 ms, `standard` 400–600 ms (§02 §2) | published targets |
+| Append to `_system/_meter` | `express` p99 20–50 ms, `standard` 400–600 ms (§02 §2) | published targets |
 | Stream → counter owner | ≤ 1 s p99 on `express`, ≤ 2 s on `standard` | estimate |
 | Threshold crossing → threshold event appended | ≤ 5 s p99 | target |
 | Minute window visible in `_meter.windows` | ≤ 3 min after the minute ends | target |
@@ -596,7 +602,7 @@ For comparison: Envoy's external rate-limit filter defaults to a 20 ms timeout a
 
 ### 11.1 Who owns a subject
 
-The `meter` role consumes `_meter.events` as the named consumer `meter-counters`, taking a **per-partition lease** in the metastore, which fences its offset commits (§02 §7). The holder of partition *p*'s lease is the **counter owner** for every subject that hashes to *p* (murmur2 of `subject`, as the stream's partitioner, so the gate computes the owner without asking). The lease's fencing epoch is the **owner epoch**; every lease grant carries it, and a gate drops grants from an older epoch.
+The `meter` role consumes `_system/_meter` as the named consumer `meter-counters`, taking a **per-partition lease** in the metastore, which fences its offset commits (§02 §7). The holder of partition *p*'s lease is the **counter owner** for every subject that hashes to *p* (murmur2 of `subject`, as the stream's partitioner, so the gate computes the owner without asking). The lease's fencing epoch is the **owner epoch**; every lease grant carries it, and a gate drops grants from an older epoch.
 
 ### 11.2 The protocol
 
@@ -682,7 +688,7 @@ Defaults are configuration in the `meter` role, overridable per plan. The paymen
 | Counter owner crashes | Partition lease expires | Leases on gates continue until TTL; cold misses wait, then policy | New owner rebuilds (§11.5); `loams_meter_owner_rebuild_seconds` |
 | Two owners believe they own *p* | Impossible to commit: offset commits and grants are fenced by the partition lease epoch | Gates ignore grants with an older epoch | — |
 | Network partition gate ↔ owner | Refresh fails | Gate spends its chunk until expiry, then policy | `loams_meter_gate_refresh_failures_total` |
-| `_meter.events` unavailable | `Produce` errors | `MeterSink` queues, drops oldest when full (under-bills), enforcement unaffected | Alert on any `loams_events_dropped_total{stream="_meter.events"}` |
+| `_system/_meter` unavailable | `Produce` errors | `MeterSink` queues, drops oldest when full (under-bills), enforcement unaffected | Alert on any `loams_events_dropped_total{stream="_meter"}` |
 | D270 ledger `CommitUnknown` on external ingest | §02 §7.4 | A retry after 2 min may append again | Layers 2 and 3 remove it |
 | House pipe lags | `loams_house_pipe_lag_records{pipe="_meter"}` | Longer replay at reconcile; windows late | Alert at 15 min lag; exports wait |
 | House down | Reconcile fails | Counters drift unchecked; exports wait | Alert after 1 h; enforcement unaffected |
@@ -699,7 +705,7 @@ Defaults are configuration in the `meter` role, overridable per plan. The paymen
 
 ## 15. Threshold and lifecycle events (D1129)
 
-The counter owner appends these to **the same stream**, `_meter.events`, so one consumer pattern serves usage and notifications and the House keeps a history:
+The counter owner appends these to **the same stream**, `_system/_meter`, so one consumer pattern serves usage and notifications and the House keeps a history:
 
 | Type | When | `id` (re-emission is a duplicate) |
 |---|---|---|
@@ -723,7 +729,7 @@ Every exporter is optional, off by default, and one-way: it reads Loams' tables 
 
 | Exporter | Sends | Idempotency | Notes |
 |---|---|---|---|
-| **Stripe** (first, Q965) | For each closed **hour** window of a billable feature: a meter event with `event_name` = the meter, `payload.stripe_customer_id`, `payload.value`, `timestamp` = window start | `identifier` = `loams:<meter>:<subject>:<window_start>:<close_run>`; Stripe keeps identifiers unique for at least 24 h ([meter event](https://docs.stripe.com/api/billing/meter-event/create)). A re-closed window sends a **Meter Event Adjustment** (cancel, within 24 h) or a correcting delta event after that ([configure](https://docs.stripe.com/billing/subscriptions/usage-based/meters/configure)) | Aggregating per hour keeps far below the v1 limit of 1,000 calls/s and the 10,000 dimension combinations per meter per hour ([limits](https://docs.stripe.com/billing/subscriptions/usage-based/recording-usage-api)); the v2 meter event stream (session tokens, up to 10,000 events/s, verify the path) is used only if a deployment exceeds that. Overage prices are Stripe prices; included allowances are Loams grants. Legacy usage records are gone since API `2025-03-31.basil` ([changelog](https://docs.stripe.com/changelog/basil/2025-03-31/deprecate-legacy-usage-based-billing)) and are not used |
+| **Stripe** (first, Q965) | For each closed **hour** of a billable feature, the **overage** of that hour, not the raw usage, as platform doc 01 §9.4 (PD7) specified: `overage(h) = max(0, cum(h) − included) − max(0, cum(h−1) − included)`, where `cum` is the period's usage through hour `h` from `_meter.windows` and `included` the balance the grants gave at the period start. One meter event per hour with `event_name` = the meter, `payload.stripe_customer_id`, `payload.value`, `timestamp` = the hour; an hour with no overage is sent only to overwrite an earlier non-zero revision with 0. Billing periods start on whole UTC hours (`billing_cycle_anchor` at the next whole hour, never reset on plan changes), so no hour straddles a period start; an off-hour `period_start` stops that customer's export and alerts | `identifier` = `loams:<meter>:<subject>:<hour>:<close_run>`; Stripe keeps identifiers unique for at least 24 h ([meter event](https://docs.stripe.com/api/billing/meter-event/create)). The Stripe meters are **hour pre-aggregated** (`event_time_window = hour`), where the latest event of an hour overwrites the earlier ones ([configure](https://docs.stripe.com/billing/subscriptions/usage-based/meters/configure)), so a re-closed hour is sent again under its new `close_run`; an export ledger in the `ControlStore` records what was sent per hour (platform PD7) | Aggregating per hour keeps far below the v1 limit of 1,000 calls/s and the 10,000 dimension combinations per meter per hour ([limits](https://docs.stripe.com/billing/subscriptions/usage-based/recording-usage-api)); the v2 meter event stream (session tokens, up to 10,000 events/s, verify the path) is used only if a deployment exceeds that. Overage prices are Stripe prices; included allowances are Loams grants. Legacy usage records are gone since API `2025-03-31.basil` ([changelog](https://docs.stripe.com/changelog/basil/2025-03-31/deprecate-legacy-usage-based-billing)) and are not used |
 | **OpenMeter** | Raw usage events, filtered by type, unchanged (minus `loamslease`), `POST /api/v1/events` with `application/cloudevents-batch+json` | OpenMeter dedupes by `id` + `source` ([docs](https://openmeter.io/docs/metering/events/usage-events)); its window is configuration, 32 days in the example config and off by default ([config.example.yaml](https://raw.githubusercontent.com/openmeterio/openmeter/main/config.example.yaml)), so the exporter also keeps its own cursor | For operators who prefer OpenMeter's billing and catalogue (or Kong Konnect) |
 | **Lago** | Events by window, `POST /api/v1/events/batch` with `transaction_id`, `external_subscription_id`, `code`, `timestamp`, `properties` ([events](https://getlago.com/docs/api-reference/events/usage)) | `transaction_id` = the Stripe identifier's form; Lago overwrites a duplicate on its ClickHouse pipeline | Over HTTP only: Lago is AGPL-3.0 and is never linked or shipped (D11) |
 | **CloudEvents webhook** | Closed windows or period totals as CloudEvents | `source` + `id` | For in-house billing systems |
@@ -804,15 +810,15 @@ Charts use the shared chart components; numbers in money are formatted from micr
 
 D541 held that figures that set what a tenant pays must not be open to manipulation by agents or tenants, and concluded the code must be private. The goal stands; the means change. Loams relies on these, all of which work with the source public (Kerckhoffs's principle):
 
-1. **Who may produce what.** `io.loams.dev.usage.*` and `io.loams.dev.meter.*` types are accepted only from Loams service identities (the cluster's mTLS identities, as CP1's agent and hub use). A tenant or agent credential that sends them gets `PERMISSION_DENIED`. Tenant ingest goes to the tenant's own stream (§9.6), never `_meter.events`.
+1. **Who may produce what.** `io.loams.dev.usage.*` and `io.loams.dev.meter.*` types are accepted only from Loams service identities (the cluster's mTLS identities, as CP1's agent and hub use). A tenant or agent credential that sends them gets `PERMISSION_DENIED`. Tenant ingest goes to the tenant's own stream (§9.6), never `_system/_meter`.
 2. **Who is billed.** `subject` and `tenantid` on Loams' events are set from the authenticated principal at the first Loams hop (D364's rule, extended to `subject`); a client-supplied value is replaced and counted.
-3. **Where usage is measured.** CPU, bytes and tokens are measured outside tenant code: the House front reads the worker's cgroup (R22.6), runners read cgroups (§27 §3.2), the gateway counts bytes and reads token counts from the provider's response, never from the client.
+3. **Where usage is measured.** CPU, bytes and tokens are measured outside tenant code: the House front reads the worker's cgroup (R22.6), the node agent reads every sandbox's cgroup (§21), the gateway counts bytes and reads token counts from the provider's response, never from the client. **Every billed meter has a source the tenant cannot reach** (platform PD63, PD67): where a shared host reports per-invocation splits (wasmtime, T0's workerd), the split is reconciled per window against the cgroup total, and the cgroup total wins. **Host reports are authenticated** (platform PD64, kept): when the host-report socket is built (ME1e), the node agent identifies each connecting host with `SO_PEERCRED`, gives it a random per-boot epoch and key, and accepts only reports carrying `HMAC-SHA-256(key, host_id ‖ epoch ‖ seq ‖ invocations)`; a replayed, foreign or out-of-order report is refused, and lost reports produce a `Gap` record instead of silence.
 4. **What is billed.** Only `_meter.windows` from deduplicated raw events. Gaming a counter gains at most a chunk of allowance before the next reconcile; it cannot lower a bill (D546's argument, kept).
-5. **Who may change entitlements.** OpenFGA relations on the deployment and org: `meter_admin` (meters, plans, grants, customers), `billing_admin` (spend controls, alerts, payment link), `billing_viewer` (read). **Agent principals cannot hold `meter_admin` or `billing_admin`** (test `agent_cannot_write_grants`, as CP1's `agent_cannot_write_limits`). `SetPaymentState` is callable only by the billing exporter's service identity.
+5. **Who may change entitlements.** OpenFGA relations on the deployment and org: `meter_admin` (meters, plans, grants, customers), `billing_admin` (spend controls, alerts, payment link), `billing_viewer` (read). **Agent principals cannot hold `meter_admin` or `billing_admin`** (test `agent_cannot_write_grants`, as CP1's `agent_cannot_write_limits`), and an agent principal's own spend is under a hard daily cap it cannot raise (platform PD71). `SetPaymentState` is callable only by the billing exporter's service identity.
 6. **Audit.** Every grant, plan assignment, spend-control change, manual adjustment and payment-state change is an audit event in `_audit` (D100) with the principal and reason.
 7. **Tamper evidence.** Raw events are append-only in the WAL and in Iceberg snapshots; each period's totals record the snapshot id and the close run they came from, so an invoice line can be recomputed from history.
 8. **Privacy.** Usage events carry identifiers and numbers, never query text, prompts or document content. Raw events are kept 13 months and windows 7 years by default (Q963; verify the operator's tax obligations). Erasing an org deletes its raw events and keeps anonymised window totals only where the law requires invoices to be kept.
-9. **Tenancy.** `_meter.events` and the `_meter` House database are in the `_system` namespace; tenants read their own usage only through `MeterService` and `EntitlementService`, filtered by their subjects. User meters (§9.6) live entirely in the user's namespace.
+9. **Tenancy.** The `_system/_meter` stream and the `_meter` House database are in the `_system` namespace; tenants read their own usage only through `MeterService` and `EntitlementService`, filtered by their subjects. User meters (§9.6) live entirely in the user's namespace.
 
 ---
 
@@ -826,7 +832,7 @@ D541 held that figures that set what a tenant pays must not be open to manipulat
 | D548, D550, D552 (private metering, private commercial APIs, the guard) | Superseded by D1119; this design is where metering lives |
 | D202, D551 (dependency runs one way) | **Kept as a build rule**: products depend on `loams-meter-gate`'s trait and its `NoGate`, never on the `meter` role; the role depends on products only through events |
 | D364 (CloudEvents profile) | **Amended** for `io.loams.dev.usage.*`: `subject` required, JSON data, the `loamslease` extension |
-| D365 (high-rate path) | Used as is; "the event table keyed on `(source, id)`" is `_meter.events` |
+| D365 (high-rate path) | Used as is; "the event table keyed on `(source, id)`" is the House table `_meter.events` |
 | D103 (logical bytes) | Its units become meters (`stream_ingest_bytes`, `logical_storage_bytes`); "namespace statistics" stays the API name for the D547 view |
 | D180 (CPU time plus requests) | Restored as meters `function_cpu_ms` and `function_invocations` |
 | CPQ4 / D850 (House per-query events through a private observer) | **Superseded**: `MeterSink` implements the open `UsageObserver` |
@@ -840,27 +846,52 @@ D541 held that figures that set what a tenant pays must not be open to manipulat
 
 ## 21. Migration from `loams-platform` (D1135)
 
-**Survey.** `~/Documents/loam-platform` is **not cloned** on the machine where this design was written, so its code was not read; this section relies on what this repository's designs say about it. It needs one survey task with read access (ME1e Task 0, Q966).
+**What was surveyed.** The owner approved cloning `ostrium-labs/loams-platform` on 2026-10-19 (Q966). Its `main` (`0592cbf`; every one of its 9 other branches is merged into it, 39 commits from 2026-09-29 to 2026-10-02) was read for this section, and the repository is being imported into this monorepo with its full history on the branch `import-platform`, under `platform/` as a Cargo workspace of its own (like `fabric/`), relicensed Apache-2.0 by its sole author. The import's audit found no secrets, credentials, customer or personal data, and no copyleft dependency in the meter crate. The import renamed `loam-meter` to `loams-meter` and its event type to `dev.loams.meter.v1`, without changing behaviour, and left refactors to this design.
 
-What the designs say `loams-platform` holds (§27 header, §41 §10, D548, D557):
-- doc 06: `loams.meter.v1` (`HostReport`), the `/run/loams/meter.sock` socket, buffering and acknowledgement rules, `SandboxFinished` / `SandboxReadAck`, a usage reporter crate `loams-meter`, the Lambda usage header and `REPORT` parser, the CloudEvents form `io.loams.dev.meter.usage.v1`, and `GET /v1/orgs/{org}/usage`;
-- doc 07 (PD69): the plan-to-limits mapping, which writes the limits record through the limits API;
-- billing through Stripe directly (the private site's product notes, superseded 2026-10-02).
+**What the code contains.** One crate, about 2,900 lines with tests: the **node metering agent** of platform doc 01's milestone MB0.
 
-The migration:
+| Module | What it does | Fate |
+|---|---|---|
+| `cgroup` (`CgroupReader`) | Walks configured cgroup v2 subtrees, samples target cgroups (pod cgroups, `tenant-*.slice`, `wasm-host.scope`) for `cpu.stat`, `memory.current`, `memory.peak`, `cgroup.events`; never descends into a target (no double count); a lenient scan skips a vanished or unreadable cgroup | **Kept** as is |
+| `delta` (`DeltaTracker`) | Cumulative counters into per-window deltas: a decrease is a reset, resources keyed by path and inode, first sight counts all of a new resource while warm, a cold start baselines at the current reading (an undercount, never a double bill), two-phase observe and commit, memory integrated as byte-seconds | **Kept**; these are the accuracy rules of §7.2's spooled path (platform PD8) |
+| `resolver` (`TenantResolver`, `StaticResolver`) | Maps a cgroup to org, namespace, function and tier by prefix rules from JSON | **Kept**; the Kubernetes pod-watch resolver and final reads (MB2) are ME1e work |
+| `event` (`MeterEvent`) | CloudEvents in JSON structured mode: type `dev.loams.meter.v1`, `subject` `<org>/<namespace>`, `id` `<node>/<source>/<seq>`, `data` with `org`, `namespace`, `meter` (`cpu_usec`, `memory_byte_seconds`, `memory_peak_bytes`, `wasm_fuel`, `requests`, `ingress_bytes`, `egress_bytes`, `durable_promises`, `durable_timers`), the delta `value`, the window and the resource; unattributed usage under the org `_platform` | **Changed** to §6: types `io.loams.dev.usage.node.{cpu,memory,network}.v1`, `subject` the billing subject and `tenantid` `<org>/<namespace>`, `dataschema`; the `id` scheme is kept. Requests and durable counts come from the gateway and the durable server, not the agent. `_platform` usage is kept, metered and never billed |
+| `spool` (`Spool`) | Segment files of JSON lines, fsync per append, an `ack` file replaced by rename, a torn last line truncated on open, size-bounded (`SpoolFull` keeps usage in the counters) | **Kept** as `MeterSink`'s spooled mode (§7.2) |
+| `agent` | The tick (scan, resolve, delta, spool, commit) with state saved by rename and spool replay after a crash, so nothing is emitted twice under a new id | **Kept** |
+| `sink`, `stream` (`Sink`, `MemorySink`, `StreamSink`, `forward`) | Forwards the spool to `_system/_meter` over the HTTP produce route; key = org, partition `xxh3(org) % partitions`, value = the structured-mode JSON, header `ce-id` | **Changed**: records in D270's binary-mode layout (`loams-cloudevents::record::to_record`), key = `subject` and the stream's default partitioner (murmur2), so the House pipe reads `_ce_*` columns and a subject's events reach its counter owner (§11.1) |
 
-| Platform piece | Fate |
+**What the platform designed but never built** (doc 01's track MB and doc 06): the `loams-usage` aggregator with hourly rollups in the `ControlStore`, dedupe keys in TiKV and `GET /v1/orgs/{org}/usage` (MB1); the Kubernetes resolver and inotify final reads (MB2); the Envoy access-log receiver (MB3); the wasmtime host socket with `loams.meter.v1.HostReport`, `SandboxFinished` and the per-invocation reporter (MB4, doc 06 PD61–PD64); the Stripe billing export with Checkout, the Customer Portal and webhooks (MB5, PD7, PD10); Resonate counts and per-sandbox egress (MB6).
+
+**How each platform decision lands here:**
+
+| Platform | Here |
 |---|---|
-| Per-invocation host report and its socket | Becomes a `MeterSink` source in the runner host (`InvocationObserver` → `io.loams.dev.usage.function.invocation.v1`); the socket protocol is not carried over unless the survey finds a reason (its final-read acknowledgement may be worth keeping for T2 pods, §27 Q-UH-3) |
-| `io.loams.dev.meter.usage.v1` | Replaced by the per-product `io.loams.dev.usage.*` types; a translator accepts the old type for one release if any producer still sends it |
-| `loams.meter.v1` package name | Taken by this design's Connect API; the platform's messages, if kept, move under `loams.meter.v1.host` |
-| The `loams-meter` crate name | Taken by this design's role crate; the platform's crate is retired (Q966) |
-| Plan-to-limits mapping | Becomes plan YAML (§9.5, §22) that writes both entitlements and protective limits |
-| `GET /v1/orgs/{org}/usage` | Replaced by `MeterService.QueryMeter` and the OpenMeter-compatible query |
-| Stripe integration | Ported into the Stripe exporter if it matches §16; otherwise rewritten |
-| Any usage data already recorded | Imported into `_meter.events` as external events with their original ids, so re-imports deduplicate |
+| PD1 node agent plus aggregator | The agent stays (renamed, below). The aggregator is **superseded** by the House windows (§8) and the counter owners (§11); it was never built |
+| PD2 CloudEvents meter events, OpenMeter-compatible | Kept and refined by D1121 |
+| PD3 sources per tier | Kept: cgroup for T0 and T2, the host report for T1 (ME1e), the gateway instead of Envoy ALS (§57 replaced Envoy, D1010–D1013), Resonate counts from the durable server |
+| PD4 spool then `_system/_meter` | Kept: §7.2's spooled path and the same stream |
+| PD5 hourly rollups in the `ControlStore` | **Superseded** by D1123 (House windows) |
+| PD6 OpenMeter compatible but not adopted; Lago rejected | Kept (§2, §16) |
+| PD7 Stripe hourly overage with an export ledger, PD10 Stripe directly at GA | Kept in the Stripe exporter (§16); the Clerk beta phase is gone (the site uses Auth.js with Authentik) |
+| PD8 accuracy rules | Kept in the agent; the 2 h lateness matches §8.4 |
+| PD61–PD64 host report, signed epoch | Kept as the design of the T1 source (ME1e), with the HMAC epoch in §19 |
+| PD66 Lambda by billed duration | Kept as the default for the Lambda runner |
+| PD67 a second source for every billed meter | Kept (§19) |
+| PD69–PD72 commercial layer writes limits; agent spend caps | The plan YAML writes entitlements and protective limits (§9.5); agent spend caps in §19 |
+| Doc 06 §4a and doc 07 §5: x402 agent payments through Cloudflare's Monetization Gateway (PD80–PD83) | **Out of scope** here; it stays a candidate in `docs/platform/`. A meter's HTTP 402 (§17.4) carries no x402 payment requirements |
 
-After the migration nothing in Loams depends on `loams-platform`, and the platform repository keeps only what is not Loams (or is archived).
+**The migration:**
+
+| Piece | Fate |
+|---|---|
+| `platform/crates/loams-meter` (the agent) | **Renamed `loams-meter-agent`** and moved into the root workspace (`crates/loams-meter-agent`, on the root's reqwest and base64 majors) in ME1a, so this design's role crate keeps the name `loams-meter` (Q966, answered 2026-10-19 by the owner: keep and rename to `loams-meter-agent`). Its event and sink changes above land in the same task |
+| `dev.loams.meter.v1` events already in any `_system/_meter` stream | Translated by the `meter` role's ingest for one release into the per-quantity types, keeping `source` and `id`, so re-reads deduplicate |
+| `loams.meter.v1` host-report messages (doc 06) | Built under `loams.meter.v1.host` when the T1 source is built; the package `loams.meter.v1` is this design's Connect API |
+| `io.loams.dev.meter.usage.v1` (doc 06 PD65) | Never built; not carried over |
+| `platform/` workspace | Empty once the agent moves; removed with the move |
+| Platform docs 01, 06, 07 | Kept in `docs/platform/design/` as history, each with a note that §63 supersedes their metering and billing parts |
+
+After the migration, metering lives in `crates/` and this design, and `platform/` holds no code.
 
 ---
 
@@ -876,11 +907,11 @@ An **OpenTofu provider** (`loams_meter`, `loams_feature`, `loams_plan`, `loams_c
 
 | Milestone | Delivers | Depends on |
 |---|---|---|
-| **ME1a** events and emitters | `loams-meter-core` types and event validation; `loams-meter-gate`'s `MeterSink` (D365) and `NoGate`; adapters for `UsageObserver`, `ConnectionObserver`, `ComputeLifecycleObserver`; `_meter.events` created by `migrate` (§54); JSON Schemas in `docs/api/meter/` | D365's emitter (built here if not yet built) |
+| **ME1a** events and emitters | `loams-meter-core` types and event validation; the imported agent moved and renamed `loams-meter-agent`, with §6's event types and D270's record layout; `loams-meter-gate`'s `MeterSink` (D365) and `NoGate`; adapters for `UsageObserver`, `ConnectionObserver`, `ComputeLifecycleObserver`; `_system/_meter` created by `migrate` (§54); JSON Schemas in `docs/api/meter/` | D365's emitter (built here if not yet built) |
 | **ME1b** storage and windows | House tables, pipe and MV; close job; period totals; `QueryMeter` and the OpenMeter query path | HS1b (lake tables, `ReplacingMergeTree`), HS1c (pipes) |
 | **ME1c** entitlements, counters, reconciliation | The balance engine with property tests; `CustomerService`, `EntitlementService`, `PlanService`; counter owners on partition leases; reconcile; threshold events and the notifier; the OpenMeter conformance test | ME1a, ME1b; MT1 for real credentials |
 | **ME1d** enforcement and policy | `LeaseService` and the lease allocator; `Gate::check/reserve/settle`; calls at House admission, pg-control, the gateway `pg` module, jobs, streams; policy table; error mapping per surface; detsim runs of failover and partition | ME1c; GW1 for the `pg` module; the gateway `http`, `llm`, `mcp` modules as they land |
-| **ME1e** exporters, console, migration | Stripe exporter and payment-state webhooks; OpenMeter, Lago, webhook exporters; `web/plugins/billing`; operator pages; the `loams-platform` survey and port; retire the naming rules | ME1c; CF1 shell |
+| **ME1e** exporters, console, migration | Stripe exporter and payment-state webhooks; OpenMeter, Lago, webhook exporters; `web/plugins/billing`; operator pages; the T1 host-report source and the agent's Kubernetes resolver (platform doc 06, MB2); retire the naming rules | ME1c; CF1 shell |
 | **ME1f** user meters and provisioning | Namespace-scoped meters for users; the OpenTofu provider | ME1e |
 
 Gates (target): `check` p99 ≤ 5 µs under 64 threads; cold miss p99 ≤ 10 ms in a three-node test cluster; overshoot ≤ 2% of the allowance with 10 nodes and an owner killed mid-period (detsim and a real cluster); zero double-counted events across 10,000 injected duplicates and pipe restarts; reconcile drift ≤ 0.1% in steady state.
@@ -905,6 +936,8 @@ Gates (target): `check` p99 ≤ 5 µs under 64 threads; cold miss p99 ≤ 10 ms 
 
 ## 25. Open questions (Q960–Q969)
 
+**All answered on 2026-10-19 by the owner: the default.**
+
 | # | Question | Default |
 |---|---|---|
 | Q960 | REST status for a hard stop: 402 Payment Required, or 429 like rate limits? | **402** with `ErrorInfo.reason`; 429 stays for rate limits, so clients can tell "out of allowance" from "slow down" |
@@ -913,7 +946,7 @@ Gates (target): `check` p99 ≤ 5 µs under 64 threads; cold miss p99 ≤ 10 ms 
 | Q963 | Lateness and retention: re-close windows for events up to 24 h late, also later ones before export, an adjustment in the next period after export, external events older than 35 days refused; raw events kept 13 months, windows and period totals 7 years? | **Yes** (verify the retention against the operator's jurisdiction) |
 | Q964 | Without the House (desktop, minimal compose): enforcement-only mode with counters checkpointed in the `ControlStore`? | **Yes**; no export in that mode |
 | Q965 | Which exporter first, and who owns credits (Loams grants or Stripe credit grants)? Auto top-up? | **Stripe first** (the owner's earlier choice for the beta: Stripe directly), then OpenMeter, then Lago. **Loams grants own credits**: enforcement needs them in real time, and Stripe credits apply only at invoice time. Auto top-up in ME1e, off by default |
-| Q966 | The migration survey needs read access to `loams-platform` (not cloned locally), and the crate name `loams-meter` collides with the platform's reporter crate | **The owner grants read access or runs the survey** (nothing is cloned without asking). **This design takes the crate name**; the platform crate is retired in the migration |
+| Q966 | The migration survey needs read access to `loams-platform`, and the crate name `loams-meter` collides with the platform's crate | **The owner grants read access or runs the survey** (nothing is cloned without asking). **This design takes the crate name**. **Answered 2026-10-19 by the owner: keep and rename to `loams-meter-agent`.** The clone was approved, §21 is written from the code, and the platform's crate (the node agent, not the reporter) is kept under that name instead of retired |
 | Q967 | Source of payment state: provider webhooks plus a daily poll; contract customers set by an operator? | **Yes** |
 | Q968 | At a hard stop, is running work killed? | **No**: new work is refused and statements and streams finish; Postgres computes are suspended at the next idle or after 15 minutes |
 | Q969 | JSON data for usage events, amending D364's protobuf default? | **Yes** (§6.4) |
@@ -925,6 +958,7 @@ User meters (§9.6) are decided by D1138 and scheduled as ME1f, so they need no 
 Loams (all on `dev` at `034c8cb4`, read 2026-10-19):
 - [§02](02-stream-engine.md) §3, §7, §7.4; [§32](32-loams-flow-fabric-house.md) §5; [§34](34-protocol-gateway-and-standards.md) §2–§3; [§41](41-multitenant-byoc-control-plane.md) §9–§12; [§49](49-loams-house-production.md) §5–§9, §15, §18; [§54](54-upgrades.md) D928; [§57](57-loams-gateway.md) §11–§12; [§59](59-console-foundation.md) D1080; [§24](24-cpu-time-runtime.md), [§26](26-jobs-api.md) §6.9, [§27](27-usage-hooks.md).
 - Plans: [HS1](../plans/2026-10-08-hs1-house-production.md) Task 22 and rulings R22.1–R22.8; [CP1](../plans/2026-10-10-cp1-control-plane-byoc.md); [JB1](../plans/2026-10-10-jb1-jobs-and-usage.md); [GW1](../plans/2026-10-16-gw1-loams-gateway.md).
+- `loams-platform` at `0592cbf` (cloned with the owner's approval 2026-10-19; imported on `import-platform`): `crates/loam-meter/src/{agent,cgroup,delta,event,resolver,sink,spool,stream}.rs`; docs `01-metering-and-billing.md` (PD1–PD10), `06-meter-record-and-usage-reporter.md` (PD61–PD68), `07-commercial-apis.md` (PD69–PD72, PD80–PD83); the import's pre-publication audit (2026-10-19).
 - Code: `fabric/crates/loams-house/src/{quota,usage}.rs`; `crates/loams-cloudevents/src/{lib,record,partition}.rs`; `crates/loams-gateway/src/observe.rs`; `crates/loams-pg-control/src/observer.rs`; `crates/loams-common/src/meta/store.rs`.
 - Decisions: D11, D65, D86, D98, D100, D103, D180, D202, D270, D331, D343, D364, D365, D374, D541, D546–D552, D555, D762–D769, D776, D850, D928, D1010–D1024, D1080, D1119 (the 2026-10-19 open-source decision).
 
