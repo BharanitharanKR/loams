@@ -18,7 +18,6 @@ export * as query from './gen/loams/collection/v1/query_pb.js';
 export * as devices from './gen/loams/devices/v1/devices_pb.js';
 export * as errors from './gen/loams/errors/v1/errors_pb.js';
 export * as graph from './gen/loams/graph/v1/graph_pb.js';
-export * as sql from './gen/loams/sql/v1/sql_pb.js';
 export * as house from './gen/loams/house/v1/house_pb.js';
 export * as instance from './gen/loams/instance/v1/instance_pb.js';
 export * as liveAdmin from './gen/loams/live/v1/admin_pb.js';
@@ -30,6 +29,7 @@ export * as operations from './gen/loams/operations/v1/operations_pb.js';
 // sends. It is generated because instance.proto's service options reference
 // it, and protoc-gen-es writes that import into the generated descriptor.
 export * as options from './gen/loams/options/v1/options_pb.js';
+export * as sql from './gen/loams/sql/v1/sql_pb.js';
 
 /** The app proto packages this module generates, as `GetInstance.api_versions` names them. */
 export const APP_API_PACKAGES = [

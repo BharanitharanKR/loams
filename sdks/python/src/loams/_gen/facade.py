@@ -468,6 +468,7 @@ PROTO_PACKAGES: Final[tuple[str, ...]] = (
     "loams.options.v1",
     "loams.postgres.v1",
     "loams.repos.v1",
+    "loams.sql.v1",
 )
 
 @dataclass(frozen=True, slots=True)

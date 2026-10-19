@@ -382,6 +382,7 @@ pub const PROTO_PACKAGES: &[&str] = &[
     "loams.options.v1",
     "loams.postgres.v1",
     "loams.repos.v1",
+    "loams.sql.v1",
 ];
 
 /// AIP-158 paging, named by `FacadeOptions.pagination`.
