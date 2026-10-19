@@ -80,7 +80,7 @@
       "upstreamPath": "build/splash.html",
       "commit": "bc732f5dc4c5465915d5b3f28d9b0b32703fc664",
       "upstreamSha256": "f34df54252f6aa5250e597d7153c2cc632b62a921b56b46ed986104c7d4cb199",
-      "localSha256": "bf73468247c12e190a89c685a763bd770607c00f862ba592c6bc965b4cb0b430",
+      "localSha256": "332ef705d40033894752cdd371920ab81a79d92527c3a3a8938e682ed4caecb4",
       "verdict": "adapt",
       "note": "CF1 Task 15 (D1084)"
     },
