@@ -428,7 +428,7 @@ public enum Consistent: Sendable, Equatable {
 
 /// Builds a `SearchRequest`. Each verb returns a new value.
 public struct Search: Sendable, Equatable {
-    /// The candidate count a retriever gets when the caller names none.
+    /// The page size `queryAll` uses when the search names no limit.
     public static let defaultK = 10
 
     public private(set) var collection: String
@@ -543,20 +543,13 @@ public struct Search: Sendable, Equatable {
 
     public func consistency(_ consistency: Consistent) -> Search { with { $0.fields["consistency"] = consistency.json } }
 
-    /// The request's fields. A retriever with no `k` gets `max(10, offset + limit)`:
-    /// the engine requires 1 ≤ k.
+    /// The request's fields. A retriever's `k` is sent only when the caller set it; left
+    /// unset, the engine fills in `max(10, offset + limit)`.
     public var json: [String: JSONValue] {
         var out = fields
         out["collection"] = .string(collection)
         if let namespace { out["namespace"] = .string(namespace) }
-        let offset: Int = { if case .int(let n)? = fields["offset"] { return n } else { return 0 } }()
-        let k = max(Search.defaultK, offset + (limitValue ?? Search.defaultK))
-        out["retrievers"] = .array(retrievers.map { retriever in
-            guard case .object(let arms) = retriever, let (arm, body) = arms.first,
-                  case .object(var inner) = body else { return retriever }
-            if inner["k"] == nil { inner["k"] = .int(k) }
-            return .object([arm: .object(inner)])
-        })
+        out["retrievers"] = .array(retrievers)
         if !sortKeys.isEmpty { out["sort"] = .array(sortKeys.map(\.json)) }
         if let limitValue { out["limit"] = .int(limitValue) }
         if !highlights.isEmpty { out["highlight"] = .object(["fields": .array(highlights)]) }

@@ -228,7 +228,6 @@ final class AppBuilderTests: XCTestCase {
     private let embedding = [0.1, 0.2, 0.3, 0.4]
     private let textRefund: JSONValue = .object(["text": .object([
         "query": .object(["match": .object(["field": .string("body"), "text": .string("refund")])]),
-        "k": .int(10),
     ])])
 
     func test_swift_builders_match_corpus() throws {
@@ -294,7 +293,7 @@ final class AppBuilderTests: XCTestCase {
         XCTAssertEqual(hybrid(.weighted([0.7, 0.3]))["fusion"],
                        .object(["weightedSum": .object(["weights": .array([.number(0.7), .number(0.3)])])]))
         XCTAssertEqual(hybrid(.dbsf)["retrievers"], .array([textRefund, .object(["vector": .object([
-            "field": .string("embedding"), "query": .array(embedding.map { .number($0) }), "k": .int(10),
+            "field": .string("embedding"), "query": .array(embedding.map { .number($0) }),
         ])])]))
 
         let after = Search.on("notes").text("refund", fields: ["body"]).sort(.score(), .pk())
