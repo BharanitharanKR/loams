@@ -374,6 +374,77 @@ void main() {
     expect(s.sent(1)['searchAfter'], [0.8, 2], reason: "the last hit's sortValues, as answered");
   });
 
+  test('dart_sql_and_streams_send_the_recorded_bodies', () async {
+    final s = Script();
+    final client = clientOf(s, namespace: 'app');
+    for (var i = 0; i < 7; i++) {
+      s.ok({
+        'columns': [
+          {'name': 'tags'},
+          {'name': 'c'}
+        ],
+        'rows': [
+          ['policy', 2]
+        ]
+      });
+    }
+    final answer = await client.sql.query(r'SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags', params: [1]);
+    expect(s.sent(0), {'namespace': 'app', 'sql': r'SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags', 'params': [1]});
+    expect(SqlModule.records(answer), [
+      {'tags': 'policy', 'c': 2}
+    ]);
+    await client.sql.query('SELECT title, n FROM notes ORDER BY n', maxRows: 2);
+    expect(s.sent(1), {'namespace': 'app', 'sql': 'SELECT title, n FROM notes ORDER BY n', 'maxRows': 2});
+    await client.streams.create('note-events');
+    expect(s.sent(2), {'namespace': 'app', 'name': 'note-events', 'partitions': 1});
+    await client.streams.produce('note-events', const [
+      ProduceRecord(key: '1', value: {'note': 1, 'op': 'created'}),
+      ProduceRecord(key: '5', value: {'note': 5, 'op': 'deleted'}),
+    ], producerId: 'app-producer-1', producerSeq: 1);
+    expect(s.sent(3), {
+      'namespace': 'app',
+      'stream': 'note-events',
+      'records': [
+        {'key': 'MQ==', 'value': 'eyJub3RlIjoxLCJvcCI6ImNyZWF0ZWQifQ=='},
+        {'key': 'NQ==', 'value': 'eyJub3RlIjo1LCJvcCI6ImRlbGV0ZWQifQ=='},
+      ],
+      'producerId': 'app-producer-1',
+      'producerSeq': '1',
+    });
+    await client.streams.fetch('note-events', maxRecords: 10);
+    expect(s.sent(4), {'namespace': 'app', 'stream': 'note-events', 'maxRecords': 10}, reason: 'a zero partition and offset are omitted');
+    await client.streams.fetch('note-events', offset: 2, maxRecords: 10);
+    expect(s.sent(5), {'namespace': 'app', 'stream': 'note-events', 'offset': '2', 'maxRecords': 10});
+    await client.streams.get('note-events');
+    expect(s.sent(6), {'namespace': 'app', 'stream': 'note-events'});
+  });
+
+  test('dart_streams_module_subscribe', () async {
+    final s = Script();
+    final client = clientOf(s, namespace: 'app');
+    s.ok({
+      'records': [
+        {'offset': '1', 'value': base64Encode(utf8.encode('a'))},
+        {'offset': '2', 'value': base64Encode(utf8.encode('b'))}
+      ]
+    });
+    s.ok({
+      'records': [
+        {'offset': '3', 'value': base64Encode(utf8.encode('c'))}
+      ]
+    });
+    final sub = client.streams.subscribe('events', fromOffset: 1);
+    final got = <String>[];
+    await for (final record in sub.records) {
+      got.add(record.text!);
+      if (got.length == 3) break;
+    }
+    expect(got, ['a', 'b', 'c']);
+    expect(sub.offset, 4);
+    expect(s.sent(0)['offset'], '1');
+    expect(s.sent(1)['offset'], '3', reason: 'the next fetch starts after the last record');
+  });
+
   test('dart_facade_matches_index', () {
     final client = LoamsClient('http://127.0.0.1:1');
     final modules = <String, Object>{
@@ -383,10 +454,12 @@ void main() {
       'search': client.search,
       'vector': client.vector,
       'graph': client.graph,
+      'sql': client.sql,
+      'streams': client.streams,
     };
     for (final name in appCalls.keys) {
       expect(modules.containsKey(name.split('.').first), isTrue, reason: name);
-      expect(appCalls[name]!.rpc, matches(RegExp(r'^loams\.(collection|graph)\.v1\.\w+Service/\w+$')));
+      expect(appCalls[name]!.rpc, matches(RegExp(r'^loams\.(collection|graph|sql|stream)\.v1\.\w+Service/\w+$')));
     }
     final index = File('${BuilderCorpus.dir}/facade-index.json');
     if (!index.existsSync()) {

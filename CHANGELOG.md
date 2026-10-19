@@ -60,6 +60,7 @@ All notable changes to this project are documented here. The format follows [Kee
 - **The Ruby SDK's `sql` and `streams` modules** (SDKP L10 part C): `sql.query` with `$n` parameters,
   `query_arrow` and `Sql.records`; `streams.create`, `get`, `list`, `produce` (an optional record key,
   producer deduplication), `fetch`, `produce_events`, `fetch_events` and `subscribe`.
+- Dart SDK: `sql` (`query` with `$n` parameters, `queryArrow`, `SqlModule.records`) and `streams` (`create`, `get`, `list`, `produce` with producer deduplication, `fetch`, `produceEvents`, `fetchEvents`, `subscribe`).
 - **The Dart SDK builds apps** (SDKP L12): `namespaces`, `collections`, `documents`, `search`, `vector`
   and `graph` modules over Connect JSON, `LoamsClient.call` for any facade call, the `Schema`, `Filter`
   and `Search` builders, `client.collection(name)` handles, `writeBatch`, `scrollAll` and `queryAll`

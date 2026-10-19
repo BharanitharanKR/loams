@@ -17,6 +17,7 @@ export 'src/collection_handle.dart';
 export 'src/builders/schema.dart';
 export 'src/builders/filter.dart';
 export 'src/builders/search.dart';
+export 'src/modules/data.dart';
 export 'src/modules/app.dart'
     show
         NamespacesModule,

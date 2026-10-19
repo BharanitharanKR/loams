@@ -9,6 +9,7 @@ import 'streams.dart';
 import 'token_source.dart';
 import 'transport.dart';
 import 'modules/app.dart';
+import 'modules/data.dart';
 import 'package:http/http.dart' as http;
 import 'dart:io' show Platform;
 
@@ -155,6 +156,9 @@ class LoamsClient implements AppContext, AppModules {
   /// Experimental: `loams.graph.v1` is unstable.
   late final GraphModule graph;
 
+  late final SqlModule sql;
+  late final StreamsModule streams;
+
   /// [apiKey] is sent as `Authorization: Bearer` (R1); [namespace] is the
   /// default namespace (R11); [timeout] a unary call's budget, null for none
   /// (R12); [sessionConsistency] turns the session store on (R4); [httpClient]
@@ -185,6 +189,8 @@ class LoamsClient implements AppContext, AppModules {
     search = SearchModule(this);
     vector = VectorModule(this);
     graph = GraphModule(this);
+    sql = SqlModule(this);
+    streams = StreamsModule(this);
   }
 
   /// A client from the environment (R1): `LOAMS_ENDPOINT`, `LOAMS_API_KEY` or

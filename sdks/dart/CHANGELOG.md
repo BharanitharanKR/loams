@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- `sql` (`query` with `$n` parameters, `queryArrow`, `SqlModule.records`) and
+  `streams` (`create`, `get`, `list`, `produce` with producer deduplication,
+  `fetch`, `produceEvents`, `fetchEvents`, `subscribe` as a `Stream`).
 - The app-building API: `namespaces`, `collections`, `documents` (`upsert`,
   `writeBatch`, `scrollAll`, …), `search` (text, vector, hybrid with
   RRF/DBSF/weighted, filters, highlights, `select`, `queryAll`), `vector` and
