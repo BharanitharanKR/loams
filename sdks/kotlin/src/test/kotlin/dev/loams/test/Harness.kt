@@ -163,6 +163,7 @@ object RunTests {
         PaginationTest.register()
         LiveAdminTest.register()
         CodecTest.register()
+        AppTest.register()
         Harness.test("kotlin_the_driver_derives_its_coverage_from_the_manifest") { theDriverDerivesItsCoverage() }
         Harness.test("kotlin_a_fixture_the_driver_cannot_reach_is_named") { anUnreachableFixtureIsNamed() }
         Harness.test("kotlin_the_report_is_written_from_what_the_driver_executed") { theReportIsWrittenFromWhatTheDriverExecuted() }
