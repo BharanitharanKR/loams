@@ -11,7 +11,9 @@ use crate::schema::JsonSchema;
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
+    /// The caller's turn.
     User,
+    /// The model's earlier turn.
     Assistant,
 }
 
@@ -19,7 +21,9 @@ pub enum Role {
 /// [`ChatRequest::system`], not a message.
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct ChatMessage {
+    /// Who said it.
     pub role: Role,
+    /// The text.
     pub content: String,
 }
 
@@ -34,6 +38,7 @@ impl std::fmt::Debug for ChatMessage {
 }
 
 impl ChatMessage {
+    /// A user message.
     #[must_use]
     pub fn user(content: impl Into<String>) -> Self {
         Self {
@@ -42,6 +47,7 @@ impl ChatMessage {
         }
     }
 
+    /// An assistant message.
     #[must_use]
     pub fn assistant(content: impl Into<String>) -> Self {
         Self {
@@ -54,9 +60,13 @@ impl ChatMessage {
 /// A structured-output call.
 #[derive(Clone, PartialEq)]
 pub struct ChatRequest {
+    /// The system prompt.
     pub system: String,
+    /// The conversation, oldest first.
     pub messages: Vec<ChatMessage>,
+    /// The output cap; reserved in full against the budget.
     pub max_output_tokens: u32,
+    /// Sampling temperature, where the provider is configured to send it.
     pub temperature: f32,
 }
 
@@ -90,8 +100,11 @@ impl ChatRequest {
 /// A validated structured answer.
 #[derive(Clone, PartialEq)]
 pub struct ChatOutput {
+    /// The answer, valid against the call's schema.
     pub json: serde_json::Value,
+    /// Input tokens the provider reported.
     pub input_tokens: u64,
+    /// Output tokens the provider reported.
     pub output_tokens: u64,
     /// The model the provider says served the call.
     pub model: String,
@@ -110,6 +123,7 @@ impl std::fmt::Debug for ChatOutput {
 /// Messages in, JSON valid against a schema out, with token counts.
 #[async_trait::async_trait]
 pub trait ChatModel: Send + Sync {
+    /// The model this is.
     fn id(&self) -> &ModelRef;
     /// Reserves against `budget` before sending, validates the answer
     /// against `schema`, and settles the tokens the provider reports.

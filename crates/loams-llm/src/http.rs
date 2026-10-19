@@ -44,6 +44,7 @@ impl Default for RetryPolicy {
 pub struct HttpOptions {
     /// The whole request's timeout (120 s).
     pub timeout: Duration,
+    /// Retries on 408, 429, 5xx and transport failures.
     pub retry: RetryPolicy,
 }
 
@@ -131,20 +132,44 @@ impl Http {
                         "llm call answered"
                     );
                     if resp.status().is_success() {
-                        return resp.json::<Value>().await.map_err(|_| {
-                            LlmError::InvalidOutput("provider answer is not JSON".to_string())
-                        });
-                    }
-                    let retryable = is_retryable(status);
-                    if !retryable || attempt >= self.retry.max_retries {
-                        return Err(LlmError::Provider { status, retryable });
-                    }
-                    match retry_after(resp.headers()) {
-                        Some(d) if d > self.retry.max_retry_after => {
+                        // A body that fails to arrive is a transport failure
+                        // and retried; a body that arrives but is not JSON is
+                        // invalid output.
+                        match resp.bytes().await {
+                            Ok(bytes) => {
+                                return serde_json::from_slice::<Value>(&bytes).map_err(|_| {
+                                    LlmError::InvalidOutput(
+                                        "provider answer is not JSON".to_string(),
+                                    )
+                                });
+                            }
+                            Err(e) => {
+                                let kind = transport_kind(&e);
+                                tracing::debug!(
+                                    provider,
+                                    model,
+                                    attempt,
+                                    kind,
+                                    "llm transport failure"
+                                );
+                                if attempt >= self.retry.max_retries {
+                                    return Err(LlmError::Transport(kind.to_string()));
+                                }
+                                self.backoff(attempt)
+                            }
+                        }
+                    } else {
+                        let retryable = is_retryable(status);
+                        if !retryable || attempt >= self.retry.max_retries {
                             return Err(LlmError::Provider { status, retryable });
                         }
-                        Some(d) => d,
-                        None => self.backoff(attempt),
+                        match retry_after(resp.headers()) {
+                            Some(d) if d > self.retry.max_retry_after => {
+                                return Err(LlmError::Provider { status, retryable });
+                            }
+                            Some(d) => d,
+                            None => self.backoff(attempt),
+                        }
                     }
                 }
             };

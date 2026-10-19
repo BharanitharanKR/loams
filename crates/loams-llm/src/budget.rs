@@ -42,13 +42,16 @@ impl Clock for SystemClock {
 pub struct ManualClock(AtomicI64);
 
 impl ManualClock {
+    /// A clock at `unix_secs`.
     #[must_use]
     pub fn new(unix_secs: i64) -> Self {
         Self(AtomicI64::new(unix_secs))
     }
+    /// Sets the time.
     pub fn set(&self, unix_secs: i64) {
         self.0.store(unix_secs, Ordering::SeqCst);
     }
+    /// Moves the time forward by `secs`.
     pub fn advance(&self, secs: i64) {
         self.0.fetch_add(secs, Ordering::SeqCst);
     }
@@ -103,11 +106,13 @@ impl fmt::Debug for DailyBudget {
 }
 
 impl DailyBudget {
+    /// A daily budget of `limit` tokens on the system clock.
     #[must_use]
     pub fn new(limit: u64) -> Self {
         Self::with_clock(limit, Arc::new(SystemClock))
     }
 
+    /// A daily budget of `limit` tokens on `clock`.
     #[must_use]
     pub fn with_clock(limit: u64, clock: Arc<dyn Clock>) -> Self {
         let day = clock.now_unix_secs().div_euclid(DAY_SECS);
@@ -144,6 +149,7 @@ impl DailyBudget {
         self.current().tally.used
     }
 
+    /// The daily cap in tokens.
     #[must_use]
     pub fn limit(&self) -> u64 {
         self.limit
@@ -158,6 +164,7 @@ pub struct RunBudget {
 }
 
 impl RunBudget {
+    /// A run budget of `limit` tokens.
     #[must_use]
     pub fn new(limit: u64) -> Self {
         Self {
@@ -172,6 +179,7 @@ impl RunBudget {
         lock(&self.state).used
     }
 
+    /// The run's cap in tokens.
     #[must_use]
     pub fn limit(&self) -> u64 {
         self.limit
@@ -193,18 +201,21 @@ impl Budget {
         Self::default()
     }
 
+    /// Adds the store's daily budget.
     #[must_use]
     pub fn with_daily(mut self, daily: Arc<DailyBudget>) -> Self {
         self.daily = Some(daily);
         self
     }
 
+    /// Adds a run budget.
     #[must_use]
     pub fn with_run(mut self, run: Arc<RunBudget>) -> Self {
         self.run = Some(run);
         self
     }
 
+    /// Adds a per-call cap: a call whose estimate is larger is refused.
     #[must_use]
     pub fn with_per_call(mut self, tokens: u64) -> Self {
         self.per_call = Some(tokens);
@@ -258,6 +269,7 @@ pub struct Reservation {
 }
 
 impl Reservation {
+    /// The tokens held.
     #[must_use]
     pub fn estimate(&self) -> u64 {
         self.estimate

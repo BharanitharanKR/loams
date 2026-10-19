@@ -27,7 +27,12 @@ pub enum LlmError {
     InvalidOutput(String),
     /// The provider answered with an error status. The body is discarded.
     #[error("provider answered {status}")]
-    Provider { status: u16, retryable: bool },
+    Provider {
+        /// The HTTP status.
+        status: u16,
+        /// Whether a later attempt may succeed (408, 429, 5xx).
+        retryable: bool,
+    },
     /// The request did not complete (connect, timeout, body).
     #[error("transport: {0}")]
     Transport(String),

@@ -36,9 +36,11 @@ pub enum ToolChoice {
 /// Options of the Anthropic provider.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct AnthropicOptions {
+    /// How the structured-output tool is chosen.
     pub tool_choice: ToolChoice,
     /// Send `temperature` (refused by the current model families).
     pub send_temperature: bool,
+    /// Transport options.
     pub http: HttpOptions,
 }
 

@@ -7,6 +7,7 @@ use crate::error::LlmError;
 /// documents' order; higher is more relevant).
 #[async_trait::async_trait]
 pub trait Reranker: Send + Sync {
+    /// One score per document, in the documents' order.
     async fn rerank(
         &self,
         query: &str,

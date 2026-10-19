@@ -68,16 +68,19 @@ impl JsonSchema {
         self
     }
 
+    /// The schema's name.
     #[must_use]
     pub fn name(&self) -> &str {
         &self.name
     }
 
+    /// The schema itself.
     #[must_use]
     pub fn schema(&self) -> &Value {
         &self.schema
     }
 
+    /// Whether strict adherence is requested.
     #[must_use]
     pub fn strict(&self) -> bool {
         self.strict

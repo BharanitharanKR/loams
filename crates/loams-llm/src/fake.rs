@@ -262,6 +262,7 @@ impl FakeEmbedder {
         })
     }
 
+    /// Loads a fixture file.
     pub fn from_fixture_file(path: impl AsRef<Path>) -> Result<Self, LlmError> {
         let f: EmbedFixture = read_fixture(path.as_ref())?;
         let mut e = Self::new(&f.model, f.dim, f.seed)?;
@@ -354,6 +355,7 @@ pub struct FakeReranker {
 }
 
 impl FakeReranker {
+    /// A reranker with no scripted scores.
     #[must_use]
     pub fn new(model: &str) -> Self {
         Self {
@@ -362,6 +364,7 @@ impl FakeReranker {
         }
     }
 
+    /// Loads a fixture file.
     pub fn from_fixture_file(path: impl AsRef<Path>) -> Result<Self, LlmError> {
         let f: RerankFixture = read_fixture(path.as_ref())?;
         let mut r = Self::new(&f.model);
@@ -373,6 +376,7 @@ impl FakeReranker {
         Ok(r)
     }
 
+    /// The model this is.
     #[must_use]
     pub fn id(&self) -> &ModelRef {
         &self.id

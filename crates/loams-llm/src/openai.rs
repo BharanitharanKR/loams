@@ -45,13 +45,16 @@ pub enum MaxTokensField {
 /// Options of an OpenAI-compatible provider.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct OpenAiOptions {
+    /// How structured output is requested.
     pub structured: StructuredMode,
+    /// Which field carries `max_output_tokens`.
     pub max_tokens_field: MaxTokensField,
     /// Send `temperature` (some reasoning models refuse it).
     pub send_temperature: bool,
     /// The embedding dimension, for an embedder. Every vector is checked
     /// against it.
     pub embedding_dim: Option<usize>,
+    /// Transport options.
     pub http: HttpOptions,
 }
 

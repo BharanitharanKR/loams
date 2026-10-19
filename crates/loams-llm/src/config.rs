@@ -26,13 +26,16 @@ pub enum ProviderKind {
 /// model name is configuration; the crate has no default model.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct ModelRef {
+    /// The wire protocol.
     pub provider: ProviderKind,
+    /// The provider's model name.
     pub model: String,
     /// For OpenAI-compatible servers, the API root including its version
     /// path (`https://api.openai.com/v1`, `http://127.0.0.1:11434/v1`). For
     /// Anthropic, the host root (`https://api.anthropic.com`); the crate
     /// adds `/v1/messages` (ruling R2.6).
     pub base_url: Url,
+    /// The key, if the provider needs one.
     pub key: Option<SecretRef>,
 }
 
@@ -170,6 +173,7 @@ impl Cidr {
         Ok(cidr)
     }
 
+    /// Whether `ip` is inside the block.
     #[must_use]
     pub fn contains(&self, ip: IpAddr) -> bool {
         match (self.addr, ip) {
@@ -208,7 +212,9 @@ const PRIVATE: [(IpAddr, u8); 8] = [
 /// A store's `local_only` setting and its private allow-list.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct LocalPolicy {
+    /// Refuse providers that are not loopback or allow-listed.
     pub local_only: bool,
+    /// Private address blocks allowed besides loopback.
     pub allow: Vec<Cidr>,
 }
 
@@ -272,16 +278,19 @@ impl SecretRef {
         Ok(Self(s.to_string()))
     }
 
+    /// The part before the first `/` (`env`).
     #[must_use]
     pub fn scheme(&self) -> &str {
         self.0.split_once('/').map_or("", |(s, _)| s)
     }
 
+    /// The part after the first `/`.
     #[must_use]
     pub fn name(&self) -> &str {
         self.0.split_once('/').map_or("", |(_, n)| n)
     }
 
+    /// The whole reference.
     #[must_use]
     pub fn as_str(&self) -> &str {
         &self.0
@@ -312,6 +321,7 @@ impl fmt::Display for SecretRef {
 pub struct Secret<T: Zeroize>(T);
 
 impl<T: Zeroize> Secret<T> {
+    /// Wraps a value.
     #[must_use]
     pub fn new(value: T) -> Self {
         Self(value)
@@ -384,6 +394,7 @@ impl Default for EnvSecretSource {
 }
 
 impl EnvSecretSource {
+    /// Resolves `env/<NAME>` from `<prefix><NAME>`.
     #[must_use]
     pub fn with_prefix(prefix: &str) -> Self {
         Self {
@@ -426,6 +437,7 @@ impl fmt::Debug for StaticSecrets {
 }
 
 impl StaticSecrets {
+    /// Adds a reference and its value.
     #[must_use]
     pub fn with(mut self, r: SecretRef, value: Secret<String>) -> Self {
         self.0.push((r, value));

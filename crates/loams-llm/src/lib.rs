@@ -14,6 +14,8 @@
 //! keys and provider error bodies never reach a log line, a span or an
 //! error message.
 
+#![warn(missing_docs)]
+
 pub mod anthropic;
 pub mod budget;
 pub mod chat;

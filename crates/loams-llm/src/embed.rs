@@ -7,7 +7,9 @@ use crate::error::LlmError;
 /// Texts in, vectors of a fixed dimension out.
 #[async_trait::async_trait]
 pub trait Embedder: Send + Sync {
+    /// The model this is.
     fn id(&self) -> &ModelRef;
+    /// The dimension of every vector.
     fn dim(&self) -> usize;
     /// One vector per text, in order. A vector of another dimension is
     /// [`LlmError::InvalidOutput`].
