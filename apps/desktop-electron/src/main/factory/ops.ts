@@ -291,7 +291,19 @@ export const OPS: Record<FactoryAppId, Record<string, Op>> = {
 				.object({
 					orgSlug: z.string().min(1).max(100),
 					limit,
-					sort: z.enum(["date", "new", "freq", "priority"]).optional(),
+					// GlitchTip's sort fields; "-" first sorts descending.
+					sort: z
+						.enum([
+							"last_seen",
+							"-last_seen",
+							"first_seen",
+							"-first_seen",
+							"count",
+							"-count",
+							"priority",
+							"-priority",
+						])
+						.optional(),
 				})
 				.strict(),
 			run: async (a, p: { orgSlug: string; limit?: number; sort?: string }) =>

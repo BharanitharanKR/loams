@@ -301,6 +301,20 @@ describe("ops for Studio", () => {
 		});
 	});
 
+	it("glitchtip_issue_sorts_are_the_ones_glitchtip_takes", () => {
+		// The adapter refuses anything but last_seen, first_seen, count and priority (or "-" first).
+		const op = OPS.glitchtip.issues;
+		if (!op) throw new Error("no issues op");
+		for (const sort of ["last_seen", "-first_seen", "count", "-priority"])
+			expect(op.params.safeParse({ orgSlug: "o", sort }).success, sort).toBe(
+				true,
+			);
+		for (const sort of ["date", "new", "freq"])
+			expect(op.params.safeParse({ orgSlug: "o", sort }).success, sort).toBe(
+				false,
+			);
+	});
+
 	it("openpanel_insights_default_to_a_window_that_includes_today", async () => {
 		// OpenPanel's own default window ends yesterday: a deploy's first hours read as zero.
 		const op = OPS.openpanel.insights;
