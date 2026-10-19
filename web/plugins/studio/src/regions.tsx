@@ -80,8 +80,9 @@ function Threads({ agentd, factory, router, keys, mode }: ThreadsProps) {
   const route = useRoute(router);
   // The threads show in both modes (W10); the Factory group is a Studio area, as its nav is.
   const studio = useStudioMode(mode);
-  // Q934: the thread list shows when an agentd is reachable; otherwise the sidebar has Pages only.
-  if (reach.state !== 'ready') return null;
+  // Q934: the thread list shows when an agentd is reachable. The Factory group does not
+  // need the daemon, so it shows either way (owner ruling, 2026-10-18).
+  if (reach.state !== 'ready') return factory && studio ? <FactoryGroup factory={factory} /> : null;
   return (
     <StudioSidebar agentd={agentd} route={route} navigate={(to) => router.navigate(to)} keys={keys}>
       {factory && studio && <FactoryGroup factory={factory} />}
