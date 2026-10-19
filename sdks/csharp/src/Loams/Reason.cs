@@ -330,6 +330,72 @@ public enum Reason
     /// <summary>The Live node is shutting down; resume on another node.</summary>
     NodeDraining = 102,
 
+    /// <summary>The named Loams Memory store does not exist.</summary>
+    MemoryStoreNotFound = 103,
+
+    /// <summary>The named memory space does not exist.</summary>
+    MemorySpaceNotFound = 104,
+
+    /// <summary>The store has as many spaces as it may.</summary>
+    MemorySpaceLimit = 105,
+
+    /// <summary>The object is managed by Loams Memory and refuses direct writes.</summary>
+    MemoryManagedObject = 106,
+
+    /// <summary>Another write changed the block first; re-read and merge.</summary>
+    MemoryBlockVersionMismatch = 107,
+
+    /// <summary>The block's value or limit is over its cap.</summary>
+    MemoryBlockTooLarge = 108,
+
+    /// <summary>The space's core memory would pass its cap.</summary>
+    MemoryCoreBudgetExceeded = 109,
+
+    /// <summary>The content of an add is over 1 MiB.</summary>
+    MemoryContentTooLarge = 110,
+
+    /// <summary>The content holds a secret and the store refuses secrets.</summary>
+    MemorySecretDetected = 111,
+
+    /// <summary>The content holds personal data and the store refuses it.</summary>
+    MemoryPiiRefused = 112,
+
+    /// <summary>The call needs a model the store has not configured.</summary>
+    MemoryModelNotConfigured = 113,
+
+    /// <summary>The store is local-only and the model host is not local.</summary>
+    MemoryModelNotLocal = 114,
+
+    /// <summary>The store's model token budget is spent.</summary>
+    MemoryTokenBudgetExhausted = 115,
+
+    /// <summary>Extracting facts from the episode failed; the episode is kept.</summary>
+    MemoryExtractionFailed = 116,
+
+    /// <summary>A read named more than 8 spaces.</summary>
+    MemoryTooManySpaces = 117,
+
+    /// <summary>A write would touch more than one space.</summary>
+    MemoryCrossSpaceWrite = 118,
+
+    /// <summary>The Loams Memory RPC is not served by this release yet.</summary>
+    MemoryNotYetAvailable = 119,
+
+    /// <summary>The repository has no code index.</summary>
+    CodeRepoNotIndexed = 120,
+
+    /// <summary>The repository's code index is still being built.</summary>
+    CodeIndexBuilding = 121,
+
+    /// <summary>The change has more files than a code query takes.</summary>
+    CodeChangeTooLarge = 122,
+
+    /// <summary>The file's language has no parser or resolver.</summary>
+    CodeLanguageUnsupported = 123,
+
+    /// <summary>The uploaded SCIP index does not parse or does not match.</summary>
+    CodeScipInvalid = 124,
+
     /// <summary>A malformed field or an unparseable value.</summary>
     InvalidArgument = 15,
 
@@ -452,6 +518,28 @@ public static class ReasonRegistry
         Reason.EnvUnsealed,
         Reason.EnvAccessDenied,
         Reason.EnvForeignReference,
+        Reason.MemoryStoreNotFound,
+        Reason.MemorySpaceNotFound,
+        Reason.MemorySpaceLimit,
+        Reason.MemoryManagedObject,
+        Reason.MemoryBlockVersionMismatch,
+        Reason.MemoryBlockTooLarge,
+        Reason.MemoryCoreBudgetExceeded,
+        Reason.MemoryContentTooLarge,
+        Reason.MemorySecretDetected,
+        Reason.MemoryPiiRefused,
+        Reason.MemoryModelNotConfigured,
+        Reason.MemoryModelNotLocal,
+        Reason.MemoryTokenBudgetExhausted,
+        Reason.MemoryExtractionFailed,
+        Reason.MemoryTooManySpaces,
+        Reason.MemoryCrossSpaceWrite,
+        Reason.MemoryNotYetAvailable,
+        Reason.CodeRepoNotIndexed,
+        Reason.CodeIndexBuilding,
+        Reason.CodeChangeTooLarge,
+        Reason.CodeLanguageUnsupported,
+        Reason.CodeScipInvalid,
         Reason.LiveBadCursor,
         Reason.LiveWorkerCrashed,
         Reason.LiveDeployConflict,
@@ -559,6 +647,28 @@ public static class ReasonRegistry
             [Reason.EnvUnsealed] = "env_unsealed",
             [Reason.EnvAccessDenied] = "env_access_denied",
             [Reason.EnvForeignReference] = "env_foreign_reference",
+            [Reason.MemoryStoreNotFound] = "memory_store_not_found",
+            [Reason.MemorySpaceNotFound] = "memory_space_not_found",
+            [Reason.MemorySpaceLimit] = "memory_space_limit",
+            [Reason.MemoryManagedObject] = "memory_managed_object",
+            [Reason.MemoryBlockVersionMismatch] = "memory_block_version_mismatch",
+            [Reason.MemoryBlockTooLarge] = "memory_block_too_large",
+            [Reason.MemoryCoreBudgetExceeded] = "memory_core_budget_exceeded",
+            [Reason.MemoryContentTooLarge] = "memory_content_too_large",
+            [Reason.MemorySecretDetected] = "memory_secret_detected",
+            [Reason.MemoryPiiRefused] = "memory_pii_refused",
+            [Reason.MemoryModelNotConfigured] = "memory_model_not_configured",
+            [Reason.MemoryModelNotLocal] = "memory_model_not_local",
+            [Reason.MemoryTokenBudgetExhausted] = "memory_token_budget_exhausted",
+            [Reason.MemoryExtractionFailed] = "memory_extraction_failed",
+            [Reason.MemoryTooManySpaces] = "memory_too_many_spaces",
+            [Reason.MemoryCrossSpaceWrite] = "memory_cross_space_write",
+            [Reason.MemoryNotYetAvailable] = "memory_not_yet_available",
+            [Reason.CodeRepoNotIndexed] = "code_repo_not_indexed",
+            [Reason.CodeIndexBuilding] = "code_index_building",
+            [Reason.CodeChangeTooLarge] = "code_change_too_large",
+            [Reason.CodeLanguageUnsupported] = "code_language_unsupported",
+            [Reason.CodeScipInvalid] = "code_scip_invalid",
             [Reason.LiveBadCursor] = "live_bad_cursor",
             [Reason.LiveWorkerCrashed] = "live_worker_crashed",
             [Reason.LiveDeployConflict] = "live_deploy_conflict",
@@ -691,6 +801,28 @@ public static class ReasonRegistry
             [Reason.EnvUnsealed] = Code.InvalidArgument,
             [Reason.EnvAccessDenied] = Code.PermissionDenied,
             [Reason.EnvForeignReference] = Code.PermissionDenied,
+            [Reason.MemoryStoreNotFound] = Code.NotFound,
+            [Reason.MemorySpaceNotFound] = Code.NotFound,
+            [Reason.MemorySpaceLimit] = Code.ResourceExhausted,
+            [Reason.MemoryManagedObject] = Code.FailedPrecondition,
+            [Reason.MemoryBlockVersionMismatch] = Code.Aborted,
+            [Reason.MemoryBlockTooLarge] = Code.InvalidArgument,
+            [Reason.MemoryCoreBudgetExceeded] = Code.ResourceExhausted,
+            [Reason.MemoryContentTooLarge] = Code.InvalidArgument,
+            [Reason.MemorySecretDetected] = Code.FailedPrecondition,
+            [Reason.MemoryPiiRefused] = Code.FailedPrecondition,
+            [Reason.MemoryModelNotConfigured] = Code.FailedPrecondition,
+            [Reason.MemoryModelNotLocal] = Code.FailedPrecondition,
+            [Reason.MemoryTokenBudgetExhausted] = Code.ResourceExhausted,
+            [Reason.MemoryExtractionFailed] = Code.FailedPrecondition,
+            [Reason.MemoryTooManySpaces] = Code.InvalidArgument,
+            [Reason.MemoryCrossSpaceWrite] = Code.InvalidArgument,
+            [Reason.MemoryNotYetAvailable] = Code.Unimplemented,
+            [Reason.CodeRepoNotIndexed] = Code.FailedPrecondition,
+            [Reason.CodeIndexBuilding] = Code.Unavailable,
+            [Reason.CodeChangeTooLarge] = Code.InvalidArgument,
+            [Reason.CodeLanguageUnsupported] = Code.FailedPrecondition,
+            [Reason.CodeScipInvalid] = Code.InvalidArgument,
             [Reason.LiveBadCursor] = Code.InvalidArgument,
             [Reason.LiveWorkerCrashed] = Code.Internal,
             [Reason.LiveDeployConflict] = Code.FailedPrecondition,

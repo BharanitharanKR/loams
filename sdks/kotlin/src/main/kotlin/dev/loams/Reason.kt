@@ -218,6 +218,72 @@ enum class Reason {
     /** `env_foreign_reference` (docs/api/reasons.md). */
     ENV_FOREIGN_REFERENCE,
 
+    /** `memory_store_not_found` (docs/api/reasons.md). */
+    MEMORY_STORE_NOT_FOUND,
+
+    /** `memory_space_not_found` (docs/api/reasons.md). */
+    MEMORY_SPACE_NOT_FOUND,
+
+    /** `memory_space_limit` (docs/api/reasons.md). */
+    MEMORY_SPACE_LIMIT,
+
+    /** `memory_managed_object` (docs/api/reasons.md). */
+    MEMORY_MANAGED_OBJECT,
+
+    /** `memory_block_version_mismatch` (docs/api/reasons.md). */
+    MEMORY_BLOCK_VERSION_MISMATCH,
+
+    /** `memory_block_too_large` (docs/api/reasons.md). */
+    MEMORY_BLOCK_TOO_LARGE,
+
+    /** `memory_core_budget_exceeded` (docs/api/reasons.md). */
+    MEMORY_CORE_BUDGET_EXCEEDED,
+
+    /** `memory_content_too_large` (docs/api/reasons.md). */
+    MEMORY_CONTENT_TOO_LARGE,
+
+    /** `memory_secret_detected` (docs/api/reasons.md). */
+    MEMORY_SECRET_DETECTED,
+
+    /** `memory_pii_refused` (docs/api/reasons.md). */
+    MEMORY_PII_REFUSED,
+
+    /** `memory_model_not_configured` (docs/api/reasons.md). */
+    MEMORY_MODEL_NOT_CONFIGURED,
+
+    /** `memory_model_not_local` (docs/api/reasons.md). */
+    MEMORY_MODEL_NOT_LOCAL,
+
+    /** `memory_token_budget_exhausted` (docs/api/reasons.md). */
+    MEMORY_TOKEN_BUDGET_EXHAUSTED,
+
+    /** `memory_extraction_failed` (docs/api/reasons.md). */
+    MEMORY_EXTRACTION_FAILED,
+
+    /** `memory_too_many_spaces` (docs/api/reasons.md). */
+    MEMORY_TOO_MANY_SPACES,
+
+    /** `memory_cross_space_write` (docs/api/reasons.md). */
+    MEMORY_CROSS_SPACE_WRITE,
+
+    /** `memory_not_yet_available` (docs/api/reasons.md). */
+    MEMORY_NOT_YET_AVAILABLE,
+
+    /** `code_repo_not_indexed` (docs/api/reasons.md). */
+    CODE_REPO_NOT_INDEXED,
+
+    /** `code_index_building` (docs/api/reasons.md). */
+    CODE_INDEX_BUILDING,
+
+    /** `code_change_too_large` (docs/api/reasons.md). */
+    CODE_CHANGE_TOO_LARGE,
+
+    /** `code_language_unsupported` (docs/api/reasons.md). */
+    CODE_LANGUAGE_UNSUPPORTED,
+
+    /** `code_scip_invalid` (docs/api/reasons.md). */
+    CODE_SCIP_INVALID,
+
     /** `live_bad_cursor` (docs/api/reasons.md). */
     LIVE_BAD_CURSOR,
 
@@ -436,6 +502,28 @@ object ReasonRegistry {
         Reason.ENV_UNSEALED,
         Reason.ENV_ACCESS_DENIED,
         Reason.ENV_FOREIGN_REFERENCE,
+        Reason.MEMORY_STORE_NOT_FOUND,
+        Reason.MEMORY_SPACE_NOT_FOUND,
+        Reason.MEMORY_SPACE_LIMIT,
+        Reason.MEMORY_MANAGED_OBJECT,
+        Reason.MEMORY_BLOCK_VERSION_MISMATCH,
+        Reason.MEMORY_BLOCK_TOO_LARGE,
+        Reason.MEMORY_CORE_BUDGET_EXCEEDED,
+        Reason.MEMORY_CONTENT_TOO_LARGE,
+        Reason.MEMORY_SECRET_DETECTED,
+        Reason.MEMORY_PII_REFUSED,
+        Reason.MEMORY_MODEL_NOT_CONFIGURED,
+        Reason.MEMORY_MODEL_NOT_LOCAL,
+        Reason.MEMORY_TOKEN_BUDGET_EXHAUSTED,
+        Reason.MEMORY_EXTRACTION_FAILED,
+        Reason.MEMORY_TOO_MANY_SPACES,
+        Reason.MEMORY_CROSS_SPACE_WRITE,
+        Reason.MEMORY_NOT_YET_AVAILABLE,
+        Reason.CODE_REPO_NOT_INDEXED,
+        Reason.CODE_INDEX_BUILDING,
+        Reason.CODE_CHANGE_TOO_LARGE,
+        Reason.CODE_LANGUAGE_UNSUPPORTED,
+        Reason.CODE_SCIP_INVALID,
         Reason.LIVE_BAD_CURSOR,
         Reason.LIVE_WORKER_CRASHED,
         Reason.LIVE_DEPLOY_CONFLICT,
@@ -541,6 +629,28 @@ object ReasonRegistry {
         Reason.ENV_UNSEALED to "env_unsealed",
         Reason.ENV_ACCESS_DENIED to "env_access_denied",
         Reason.ENV_FOREIGN_REFERENCE to "env_foreign_reference",
+        Reason.MEMORY_STORE_NOT_FOUND to "memory_store_not_found",
+        Reason.MEMORY_SPACE_NOT_FOUND to "memory_space_not_found",
+        Reason.MEMORY_SPACE_LIMIT to "memory_space_limit",
+        Reason.MEMORY_MANAGED_OBJECT to "memory_managed_object",
+        Reason.MEMORY_BLOCK_VERSION_MISMATCH to "memory_block_version_mismatch",
+        Reason.MEMORY_BLOCK_TOO_LARGE to "memory_block_too_large",
+        Reason.MEMORY_CORE_BUDGET_EXCEEDED to "memory_core_budget_exceeded",
+        Reason.MEMORY_CONTENT_TOO_LARGE to "memory_content_too_large",
+        Reason.MEMORY_SECRET_DETECTED to "memory_secret_detected",
+        Reason.MEMORY_PII_REFUSED to "memory_pii_refused",
+        Reason.MEMORY_MODEL_NOT_CONFIGURED to "memory_model_not_configured",
+        Reason.MEMORY_MODEL_NOT_LOCAL to "memory_model_not_local",
+        Reason.MEMORY_TOKEN_BUDGET_EXHAUSTED to "memory_token_budget_exhausted",
+        Reason.MEMORY_EXTRACTION_FAILED to "memory_extraction_failed",
+        Reason.MEMORY_TOO_MANY_SPACES to "memory_too_many_spaces",
+        Reason.MEMORY_CROSS_SPACE_WRITE to "memory_cross_space_write",
+        Reason.MEMORY_NOT_YET_AVAILABLE to "memory_not_yet_available",
+        Reason.CODE_REPO_NOT_INDEXED to "code_repo_not_indexed",
+        Reason.CODE_INDEX_BUILDING to "code_index_building",
+        Reason.CODE_CHANGE_TOO_LARGE to "code_change_too_large",
+        Reason.CODE_LANGUAGE_UNSUPPORTED to "code_language_unsupported",
+        Reason.CODE_SCIP_INVALID to "code_scip_invalid",
         Reason.LIVE_BAD_CURSOR to "live_bad_cursor",
         Reason.LIVE_WORKER_CRASHED to "live_worker_crashed",
         Reason.LIVE_DEPLOY_CONFLICT to "live_deploy_conflict",
@@ -653,6 +763,28 @@ object ReasonRegistry {
         Reason.ENV_UNSEALED to Code.INVALID_ARGUMENT,
         Reason.ENV_ACCESS_DENIED to Code.PERMISSION_DENIED,
         Reason.ENV_FOREIGN_REFERENCE to Code.PERMISSION_DENIED,
+        Reason.MEMORY_STORE_NOT_FOUND to Code.NOT_FOUND,
+        Reason.MEMORY_SPACE_NOT_FOUND to Code.NOT_FOUND,
+        Reason.MEMORY_SPACE_LIMIT to Code.RESOURCE_EXHAUSTED,
+        Reason.MEMORY_MANAGED_OBJECT to Code.FAILED_PRECONDITION,
+        Reason.MEMORY_BLOCK_VERSION_MISMATCH to Code.ABORTED,
+        Reason.MEMORY_BLOCK_TOO_LARGE to Code.INVALID_ARGUMENT,
+        Reason.MEMORY_CORE_BUDGET_EXCEEDED to Code.RESOURCE_EXHAUSTED,
+        Reason.MEMORY_CONTENT_TOO_LARGE to Code.INVALID_ARGUMENT,
+        Reason.MEMORY_SECRET_DETECTED to Code.FAILED_PRECONDITION,
+        Reason.MEMORY_PII_REFUSED to Code.FAILED_PRECONDITION,
+        Reason.MEMORY_MODEL_NOT_CONFIGURED to Code.FAILED_PRECONDITION,
+        Reason.MEMORY_MODEL_NOT_LOCAL to Code.FAILED_PRECONDITION,
+        Reason.MEMORY_TOKEN_BUDGET_EXHAUSTED to Code.RESOURCE_EXHAUSTED,
+        Reason.MEMORY_EXTRACTION_FAILED to Code.FAILED_PRECONDITION,
+        Reason.MEMORY_TOO_MANY_SPACES to Code.INVALID_ARGUMENT,
+        Reason.MEMORY_CROSS_SPACE_WRITE to Code.INVALID_ARGUMENT,
+        Reason.MEMORY_NOT_YET_AVAILABLE to Code.UNIMPLEMENTED,
+        Reason.CODE_REPO_NOT_INDEXED to Code.FAILED_PRECONDITION,
+        Reason.CODE_INDEX_BUILDING to Code.UNAVAILABLE,
+        Reason.CODE_CHANGE_TOO_LARGE to Code.INVALID_ARGUMENT,
+        Reason.CODE_LANGUAGE_UNSUPPORTED to Code.FAILED_PRECONDITION,
+        Reason.CODE_SCIP_INVALID to Code.INVALID_ARGUMENT,
         Reason.LIVE_BAD_CURSOR to Code.INVALID_ARGUMENT,
         Reason.LIVE_WORKER_CRASHED to Code.INTERNAL,
         Reason.LIVE_DEPLOY_CONFLICT to Code.FAILED_PRECONDITION,
