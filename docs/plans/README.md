@@ -243,11 +243,11 @@ Design reference: [59 Console and Desktop Redesign, Part 1: the Foundation](../d
 
 ## Track ME: Loams Meter, usage metering and enforcement
 
-Design reference: [63 Loams Meter](../design/63-loams-meter.md) (D1120–D1138, Q960–Q969). After the 2026-10-19 open-source decision (D1119), metering, entitlements, billing exporters and their control-plane parts are built here. (The code ME is used because MT2 is the Knative plan.)
+Design reference: [63 Loams Meter](../design/63-loams-meter.md) (D1120–D1138, Q960–Q969), approved by the owner with all defaults on 2026-10-19. After the 2026-10-19 open-source decision (D1119), metering, entitlements, billing exporters and their control-plane parts are built here. (The code ME is used because MT2 is the Knative plan.)
 
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|
-| [ME1: Loams Meter](2026-10-19-me1-loams-meter.md) (stub) | **ME1a** events, `MeterSink` and the observer adapters, `_meter.events`; **ME1b** House tables, the close job, windows and the query API; **ME1c** the balance engine, customers, entitlements and plans, counter owners, reconciliation, threshold events and the OpenMeter conformance test; **ME1d** `LeaseService`, the gate and its calls in each product, the policy and error mapping; **ME1e** the Stripe, OpenMeter, Lago and webhook exporters, `web/plugins/billing`, operator pages and the `loams-platform` migration; **ME1f** user meters and the OpenTofu provider | HS1b, HS1c (ME1b); MT1 (credentials); GW1 and the gateway's later modules (ME1d); CF1 (ME1e); owner answer to Q966 (ME1e) | Stub |
+| [ME1: Loams Meter](2026-10-19-me1-loams-meter.md) (stub) | **ME1a** the imported node agent moved to `loams-meter-agent`, events, `MeterSink` and the observer adapters, the `_system/_meter` stream; **ME1b** House tables, the close job, windows and the query API; **ME1c** the balance engine, customers, entitlements and plans, counter owners, reconciliation, threshold events and the OpenMeter conformance test; **ME1d** `LeaseService`, the gate and its calls in each product, the policy and error mapping; **ME1e** the Stripe, OpenMeter, Lago and webhook exporters, `web/plugins/billing`, operator pages and the `loams-platform` migration; **ME1f** user meters and the OpenTofu provider | HS1b, HS1c (ME1b); MT1 (credentials); GW1 and the gateway's later modules (ME1d); CF1 (ME1e); the `import-platform` and no-open-core (D1119) merges | Stub (design approved 2026-10-19) |
 
 ## Track RN: runners and the usage hooks
 

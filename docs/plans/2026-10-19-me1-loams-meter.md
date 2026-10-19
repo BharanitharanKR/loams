@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, test first. Where this plan gives exact names, paths, branches or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end of this file.
 >
-> **Status: Stub** (2026-10-19). Track ME, design [§63](../design/63-loams-meter.md) (D1120–D1138, Q960–Q969). Owner direction, 2026-10-19: metering and enforcement are different; enforcement is first-class; build a small Rust core, keep the event format compatible with OpenMeter and CloudEvents, and make OpenMeter, Lago and Stripe optional exporters. The 2026-10-19 open-source decision (D1119) moves metering into this repository. The plan code is ME because MT2 is the Knative plan. Each task gets its full steps when its milestone starts.
+> **Status: Stub** (2026-10-19). Track ME, design [§63](../design/63-loams-meter.md) (D1120–D1138, Q960–Q969), **approved by the owner with all defaults on 2026-10-19**. Owner direction, 2026-10-19: metering and enforcement are different; enforcement is first-class; build a small Rust core, keep the event format compatible with OpenMeter and CloudEvents, and make OpenMeter, Lago and Stripe optional exporters. The 2026-10-19 open-source decision (D1119) moves metering into this repository. The plan code is ME because MT2 is the Knative plan. Each task gets its full steps when its milestone starts.
 
 **Goal:**
 - every billable resource has an admission point that can refuse work when an entitlement is exhausted, without a network call on a lease hit;
@@ -10,7 +10,7 @@
 - a tenant with no payment method is hard-stopped at its limit; overage needs a card, an opt-in and a spend cap;
 - Stripe, OpenMeter and Lago receive usage when configured, and nothing depends on them.
 
-**Architecture** (§63 §5): `loams-meter-core` (types, balance engine, lease allocator; sans-I/O), `loams-meter-gate` (the gate, `MeterSink`, observer adapters, `NoGate`), the `meter` role of `loams` (feature `meter`), House tables in the system namespace's `_meter` database, exporters behind features, and the console plugin `web/plugins/billing`.
+**Architecture** (§63 §5): `loams-meter-agent` (the node agent imported from `loams-platform`, §63 §21), `loams-meter-core` (types, balance engine, lease allocator; sans-I/O), `loams-meter-gate` (the gate, `MeterSink`, observer adapters, `NoGate`), the `meter` role of `loams` (feature `meter`), House tables in the system namespace's `_meter` database, exporters behind features, and the console plugin `web/plugins/billing`.
 
 ## Global Constraints
 
@@ -21,7 +21,7 @@
 - **Money** is integer micros plus an ISO 4217 code (D374); amounts are fixed-point decimals, never floats.
 - **Agent principals can never hold `meter_admin` or `billing_admin`**, and only the billing exporter's service identity may call `SetPaymentState`.
 - **No card data** passes through Loams; payment methods are the provider's hosted pages.
-- **Nothing is cloned** without the owner's approval, including `loams-platform` (Q966).
+- **Nothing is cloned** without the owner's approval. `loams-platform` was cloned with approval on 2026-10-19 and is imported under `platform/` on `import-platform`; ME1 starts after that import and the no-open-core change (D1119) are on `dev`.
 
 ## Review Focus
 
@@ -48,10 +48,12 @@
 ## ME1a — Events and emitters
 
 - **Task 0: Reconcile.** Check §63 against `dev` (D1119 merged; HS1 Task 16's pipe column names; D365's emitter built or not; GW1's observer). Record rulings.
+- **Task 0b: Move the node agent.** `platform/crates/loams-meter` → `crates/loams-meter-agent` in the root workspace (reqwest 0.13, base64 0.23), crate and binary renamed; remove the emptied `platform/` workspace and its CI job. Behaviour unchanged; its tests move with it.
 - **Task 1: `loams-meter-core` types and event validation.** `Event`, `Meter`, `Feature`, `Entitlement`, `Grant`, `Balance`, `Money`; the Loams usage profile on top of `loams-cloudevents` (`subject` required, JSON data, reserved types, `loamslease`). Tests: `usage_event_requires_subject`, `openmeter_schema_accepts_usage_event`, `reserved_type_prefix_detected`.
-- **Task 2: `MeterSink`** (D365's batched plain produce if not built yet): bounded queue, 50 ms or 1 MiB flush, drop-oldest with `loams_events_dropped_total`. Tests: `sink_never_blocks`, `sink_drops_oldest_when_full`, `retry_keeps_ids`.
+- **Task 2: `MeterSink`**: best-effort mode (D365's batched plain produce if not built yet: bounded queue, 50 ms or 1 MiB flush, drop-oldest with `loams_events_dropped_total`) and spooled mode (the agent's `Spool`, baselines advance only after the append). Tests: `sink_never_blocks`, `sink_drops_oldest_when_full`, `retry_keeps_ids`, `spooled_full_keeps_usage_in_counters`.
+- **Task 2b: The agent's events and sink** move to §63 §6: types `io.loams.dev.usage.node.{cpu,memory,network}.v1`, `subject` and `tenantid`, D270's binary-mode record layout, key = `subject` with the stream's default partitioner. Tests: `agent_event_passes_usage_profile`, `agent_records_rebuild_as_cloudevents`, `agent_partition_matches_counter_owner`.
 - **Task 3: Observer adapters** for `UsageObserver` (House), `ConnectionObserver` (gateway), `ComputeLifecycleObserver` plus a 60 s ticker (pg-control); deterministic ids per §63 §6.1. Tests: `house_query_event_id_is_stable`, `compute_tick_ids_dedupe_after_restart`.
-- **Task 4: `_meter.events`** created by the `migrate` service (§54) in `_system`, 32 partitions, keyed by `subject`; JSON Schemas in `docs/api/meter/`. Test: `meter_stream_created_once`.
+- **Task 4: the `_system/_meter` stream** created by the `migrate` service (§54) in `_system`, 32 partitions, keyed by `subject`; JSON Schemas in `docs/api/meter/`. Test: `meter_stream_created_once`.
 
 ## ME1b — Storage and windows
 
@@ -65,7 +67,7 @@
 - **Task 9: Balance engine** (burn-down order, rollover, resets, prepaid stops at zero), property-tested against brute-force replay and OpenMeter's documented examples.
 - **Task 10: `CustomerService`, `EntitlementService`, `PlanService`** with OpenFGA relations `meter_admin`, `billing_admin`, `billing_viewer`; audit events. Test: `agent_cannot_write_grants`.
 - **Task 11: Plans as YAML** applied through `PlanService` from the GitOps reconciler (§63 §22). Test: `meter_semantics_immutable_once_used`.
-- **Task 12: Counter owners** on `_meter.events` partition leases; recent-keys dedup; offset buckets. Test: `owner_rebuild_from_house_and_tail`.
+- **Task 12: Counter owners** on `_system/_meter` partition leases; recent-keys dedup; offset buckets. Test: `owner_rebuild_from_house_and_tail`.
 - **Task 13: Reconciliation** every 5 minutes and at period close. Tests: `reconcile_splits_at_pipe_offset`, `drift_alert_above_one_percent`.
 - **Task 14: Threshold and lifecycle events and the notifier** (webhooks signed, email, console). Test: `threshold_event_reemission_is_duplicate`.
 - **Task 15: OpenMeter conformance test** against a pinned `api/openapi.yaml`.
@@ -88,8 +90,8 @@
 - **Task 26: Lago exporter** (HTTP only) and the CloudEvents webhook exporter.
 - **Task 27: `web/plugins/billing`**: Usage, Entitlements, Spend controls, Payment, Alerts; the 80%/100% banner. Uses `@loams/ui` and the CF1 shell.
 - **Task 28: Operator pages**: Meters, Plans, Customers, Meter health.
-- **Task 29: `loams-platform` survey** (needs Q966's answer) and the port list.
-- **Task 30: Port and retire**: the host report as a `MeterSink` source; translate `io.loams.dev.meter.usage.v1` for one release.
+- **Task 29: The T1 source**: the wasmtime host-report socket and reporter from platform doc 06 (PD61–PD64: `SO_PEERCRED`, per-boot epoch and HMAC, `Gap` records), reconciled per window against the cgroup total. Test: `host_report_split_never_exceeds_cgroup_total`.
+- **Task 30: Kubernetes resolver and final reads** for the agent (platform MB2: pod watch, inotify on `cgroup.events`), the DaemonSet chart; translate `dev.loams.meter.v1` events for one release. Test: `churn_1000_pods_within_1_percent`.
 - **Task 31: Retire the no-metering naming rules** in JB1, CP1 Task 27 and §52, and record D1134's amendments in those documents.
 
 ## ME1f — User meters and provisioning
