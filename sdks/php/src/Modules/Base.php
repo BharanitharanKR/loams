@@ -47,6 +47,15 @@ final class Calls
         'graph.query' => ['rpc' => 'loams.graph.v1.GraphService/Execute', 'retry' => 'keyed', 'namespace' => true, 'read' => true],
         'graph.query_batch' => ['rpc' => 'loams.graph.v1.GraphService/ExecuteBatch', 'retry' => 'keyed', 'namespace' => true, 'read' => false],
         'graph.explain' => ['rpc' => 'loams.graph.v1.GraphService/Explain', 'retry' => 'safe', 'namespace' => true, 'read' => true],
+        'sql.query' => ['rpc' => 'loams.sql.v1.SqlService/Query', 'retry' => 'safe', 'namespace' => true, 'read' => true],
+        'sql.query_arrow' => ['rpc' => 'loams.sql.v1.SqlService/QueryArrow', 'retry' => 'safe', 'namespace' => true, 'read' => true],
+        'streams.create' => ['rpc' => 'loams.stream.v1.StreamService/CreateStream', 'retry' => 'safe', 'namespace' => true, 'read' => false],
+        'streams.get' => ['rpc' => 'loams.stream.v1.StreamService/DescribeStream', 'retry' => 'safe', 'namespace' => true, 'read' => false],
+        'streams.list' => ['rpc' => 'loams.stream.v1.StreamService/ListStreams', 'retry' => 'safe', 'namespace' => true, 'read' => false],
+        'streams.produce' => ['rpc' => 'loams.stream.v1.StreamService/Produce', 'retry' => 'never', 'namespace' => true, 'read' => false],
+        'streams.fetch' => ['rpc' => 'loams.stream.v1.StreamService/Fetch', 'retry' => 'safe', 'namespace' => true, 'read' => false],
+        'streams.produce_events' => ['rpc' => 'loams.stream.v1.StreamService/ProduceCloudEvents', 'retry' => 'never', 'namespace' => true, 'read' => false],
+        'streams.fetch_events' => ['rpc' => 'loams.stream.v1.StreamService/FetchCloudEvents', 'retry' => 'safe', 'namespace' => true, 'read' => false],
     ];
 }
 
@@ -81,8 +90,12 @@ abstract class Base
     {
         $call = Calls::CALLS[$name];
         // The session is kept per proto package (`loams.collection.v1`, `loams.graph.v1`).
+        // SQL reads collections, so it reads (and adds to) the collection token.
         $service = (string) strstr($call['rpc'], '/', true);
         $scope = substr($service, 0, (int) strrpos($service, '.'));
+        if ($scope === 'loams.sql.v1') {
+            $scope = 'loams.collection.v1';
+        }
         if ($call['namespace']) {
             $request = $this->withNamespace($request, $call['rpc']);
         }

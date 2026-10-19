@@ -192,5 +192,17 @@ final class AppReplayTest extends TestCase
         $this->replay('app_graph');
     }
 
+    #[Test]
+    public function php_app_sql(): void
+    {
+        $this->replay('app_sql');
+    }
+
+    #[Test]
+    public function php_app_streams(): void
+    {
+        $this->replay('app_streams');
+    }
+
 
 }

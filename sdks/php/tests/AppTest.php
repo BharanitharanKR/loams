@@ -392,6 +392,53 @@ final class AppTest extends TestCase
     }
 
     #[Test]
+    public function php_sql_and_streams_send_the_recorded_bodies(): void
+    {
+        $client = $this->client(namespace: 'app');
+        for ($i = 0; $i < 7; $i++) {
+            $this->ok(['columns' => [['name' => 'tags'], ['name' => 'c']], 'rows' => [['policy', 2]]]);
+        }
+        $answer = $client->sql()->query('SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags', [1]);
+        $this->assertEquals(['namespace' => 'app', 'sql' => 'SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags', 'params' => [1]], $this->seen[0]['body']);
+        $this->assertSame([['tags' => 'policy', 'c' => 2]], \Loams\Modules\Sql::records($answer));
+        $client->sql()->query('SELECT title, n FROM notes ORDER BY n', maxRows: 2);
+        $this->assertEquals(['namespace' => 'app', 'sql' => 'SELECT title, n FROM notes ORDER BY n', 'maxRows' => 2], $this->seen[1]['body']);
+        $client->streams()->create('note-events');
+        $this->assertEquals(['namespace' => 'app', 'name' => 'note-events', 'partitions' => 1], $this->seen[2]['body']);
+        $client->streams()->produce('note-events', [['key' => '1', 'value' => ['note' => 1, 'op' => 'created']], ['key' => '5', 'value' => ['note' => 5, 'op' => 'deleted']]], producerId: 'app-producer-1', producerSeq: 1);
+        $this->assertEquals(['namespace' => 'app', 'stream' => 'note-events', 'records' => [
+            ['key' => 'MQ==', 'value' => 'eyJub3RlIjoxLCJvcCI6ImNyZWF0ZWQifQ=='],
+            ['key' => 'NQ==', 'value' => 'eyJub3RlIjo1LCJvcCI6ImRlbGV0ZWQifQ=='],
+        ], 'producerId' => 'app-producer-1', 'producerSeq' => '1'], $this->seen[3]['body']);
+        $client->streams()->fetch('note-events', maxRecords: 10);
+        $this->assertEquals(['namespace' => 'app', 'stream' => 'note-events', 'maxRecords' => 10], $this->seen[4]['body'], 'a zero partition and offset are omitted');
+        $client->streams()->fetch('note-events', offset: 2, maxRecords: 10);
+        $this->assertEquals(['namespace' => 'app', 'stream' => 'note-events', 'offset' => '2', 'maxRecords' => 10], $this->seen[5]['body']);
+        $client->streams()->get('note-events');
+        $this->assertEquals(['namespace' => 'app', 'stream' => 'note-events'], $this->seen[6]['body']);
+    }
+
+    #[Test]
+    public function php_streams_module_subscribe(): void
+    {
+        $client = $this->client(namespace: 'app');
+        $this->ok(['records' => [['offset' => '1', 'value' => base64_encode('a')], ['offset' => '2', 'value' => base64_encode('b')]]]);
+        $this->ok(['records' => [['offset' => '3', 'value' => base64_encode('c')]]]);
+        $sub = $client->streams()->subscribe('events', fromOffset: 1);
+        $got = [];
+        foreach ($sub as $record) {
+            $got[] = $record['value'];
+            if (count($got) === 3) {
+                $sub->cancel();
+            }
+        }
+        $this->assertSame(['a', 'b', 'c'], $got);
+        $this->assertSame(4, $sub->offset());
+        $this->assertSame('1', $this->seen[0]['body']['offset']);
+        $this->assertSame('3', $this->seen[1]['body']['offset'], 'the next fetch starts after the last record');
+    }
+
+    #[Test]
     public function php_facade_matches_index(): void
     {
         $client = $this->client();
@@ -399,7 +446,7 @@ final class AppTest extends TestCase
             [$module, $fn] = explode('.', $name);
             $camel = lcfirst(str_replace('_', '', ucwords($fn, '_')));
             $this->assertTrue(method_exists($client->{$module}(), $camel), "{$name}");
-            $this->assertMatchesRegularExpression('/^loams\.(collection|graph)\.v1\.\w+Service\/\w+$/', $call['rpc']);
+            $this->assertMatchesRegularExpression('/^loams\.(collection|graph|sql|stream)\.v1\.\w+Service\/\w+$/', $call['rpc']);
         }
         $path = __DIR__ . '/../../fixtures/facade-index.json';
         if (!is_file($path)) {

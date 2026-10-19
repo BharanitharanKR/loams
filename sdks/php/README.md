@@ -93,8 +93,17 @@ $hits = $notes->search(Search::on('notes')
   `options: ['timeout' => …]` per call, `null` for none); a spent budget throws
   `Loams\DeadlineExceededException` with reason `client_deadline_exceeded` and
   is never retried. Every call takes `options: ['idempotencyKey' => …]` too.
-- `Loams\Subscription` is the client half of `streams.subscribe`; the `sql`
-  and `streams` modules arrive with their Connect protos.
+- **SQL.** `sql()->query($sql, [$1, …], maxRows:, consistency:)` answers
+  `columns` and `rows`; `Loams\Modules\Sql::records($res)` gives rows as
+  arrays. `queryArrow` answers the Arrow IPC bytes. SQL reads see the session's
+  collection writes.
+- **Streams.** `streams()->create`, `get`, `list` / `listAll`, `produce($stream,
+  $records, partition:, producerId:, producerSeq:)` (a record is a string, an array
+  sent as JSON, or `['key' => …, 'value' => …, 'headers' => […]]`; a repeated
+  producer sequence is deduplicated), `fetch` (`Streams::records($res)` decodes
+  it), `produceEvents` / `fetchEvents` (CloudEvents as arrays), and
+  `subscribe($stream, partition:, fromOffset:)`, a `Subscription` to iterate,
+  `cancel()` and resume from `offset()`.
 - Durable execution has no module: use a Resonate SDK with
   `LOAMS_ENDPOINT/durable/` as its URL.
 
