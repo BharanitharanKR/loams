@@ -505,6 +505,25 @@
         "R8"
       ],
       "about": "A statement that is not a query: `invalid_argument`."
+    },
+    {
+      "reason": "not_found",
+      "fixture": "app_streams",
+      "step": 11,
+      "server": "loams dev",
+      "rpc": "Fetch",
+      "path": "/loams.stream.v1.StreamService/Fetch",
+      "contentType": "application/json",
+      "httpStatus": 404,
+      "connectCode": "not_found",
+      "carriesErrorInfo": true,
+      "required": false,
+      "pinnedBy": [
+        "R3",
+        "R8",
+        "R14"
+      ],
+      "about": "A stream that does not exist: `not_found`."
     }
   ],
   "unproducible": [

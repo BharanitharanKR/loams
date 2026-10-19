@@ -65,10 +65,12 @@ All notable changes to this project are documented here. The format follows [Kee
   contract gains R11 (default namespace), R12 (timeouts), R13 (`write_batch`)
   and R14 (`subscribe`), and R4 the token encoding and the session store.
 
-- The `sql` module in every generated SDK facade (SDKP Part C): `sql.query` and
-  `sql.query_arrow` from facade annotations on `loams.sql.v1`, the Python and
-  Go stubs for it, and the `app_sql` scenario recorded from `loams dev`
-  (`record-fixtures.mjs --source app --scenario app_sql`).
+- The `sql` and `streams` modules in every generated SDK facade (SDKP Part C):
+  `sql.query` and `sql.query_arrow` from facade annotations on `loams.sql.v1`,
+  `streams.create`, `get`, `list`, `produce`, `fetch`, `produce_events` and
+  `fetch_events` from `loams.stream.v1`, the Python and Go stubs for both, and
+  the `app_sql` and `app_streams` scenarios recorded from `loams dev`
+  (`record-fixtures.mjs --source app --scenario …`).
 
 ### Fixed
 

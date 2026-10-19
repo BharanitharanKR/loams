@@ -28,6 +28,8 @@ import (
 	livev1connect "loams.dev/go/gen/loams/live/v1/v1connect"
 	sqlv1 "loams.dev/go/gen/loams/sql/v1"
 	sqlv1connect "loams.dev/go/gen/loams/sql/v1/v1connect"
+	streamv1 "loams.dev/go/gen/loams/stream/v1"
+	streamv1connect "loams.dev/go/gen/loams/stream/v1/v1connect"
 )
 
 // PROTO_REV is the proto revision this SDK was generated from
@@ -661,6 +663,23 @@ var Modules = []ModuleBinding{
 		},
 	},
 	{
+		Name:     "streams",
+		Summary:  "Streams: create, list and describe a namespace's logs; produce and fetch records and CloudEvents.",
+		Service:  "loams.stream.v1.StreamService",
+		Package:  "loams.stream.v1",
+		Unstable: false,
+		Derived:  false,
+		Calls: []CallBinding{
+			{Module: "streams", Name: "Create", ProtoName: "create", Method: "CreateStream", RPC: "loams.stream.v1.StreamService/CreateStream", Service: "loams.stream.v1.StreamService", Package: "loams.stream.v1", Idempotency: IdempotencyNone, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "streams", Name: "Fetch", ProtoName: "fetch", Method: "Fetch", RPC: "loams.stream.v1.StreamService/Fetch", Service: "loams.stream.v1.StreamService", Package: "loams.stream.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "streams", Name: "FetchEvents", ProtoName: "fetch_events", Method: "FetchCloudEvents", RPC: "loams.stream.v1.StreamService/FetchCloudEvents", Service: "loams.stream.v1.StreamService", Package: "loams.stream.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "streams", Name: "Get", ProtoName: "get", Method: "DescribeStream", RPC: "loams.stream.v1.StreamService/DescribeStream", Service: "loams.stream.v1.StreamService", Package: "loams.stream.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "streams", Name: "List", ProtoName: "list", Method: "ListStreams", RPC: "loams.stream.v1.StreamService/ListStreams", Service: "loams.stream.v1.StreamService", Package: "loams.stream.v1", Idempotency: IdempotencyNoSideEffects, Retry: RetrySafe, Streaming: StreamingUnary, Pagination: &Pagination{Items: "streams", NextPageToken: "next_page_token"}},
+			{Module: "streams", Name: "Produce", ProtoName: "produce", Method: "Produce", RPC: "loams.stream.v1.StreamService/Produce", Service: "loams.stream.v1.StreamService", Package: "loams.stream.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+			{Module: "streams", Name: "ProduceEvents", ProtoName: "produce_events", Method: "ProduceCloudEvents", RPC: "loams.stream.v1.StreamService/ProduceCloudEvents", Service: "loams.stream.v1.StreamService", Package: "loams.stream.v1", Idempotency: IdempotencyNone, Retry: RetryManual, Streaming: StreamingUnary, Pagination: nil},
+		},
+	},
+	{
 		Name:     "tables",
 		Summary:  "",
 		Service:  "loams.live.v1.LiveService",
@@ -1058,6 +1077,33 @@ type SqlModule interface {
 	QueryArrow(ctx context.Context, req *connect.Request[sqlv1.QueryArrowRequest], opts *CallOptions) (*connect.Response[sqlv1.QueryArrowResponse], error)
 }
 
+// StreamsModule is loams.streams — Streams: create, list and describe a namespace's logs; produce and fetch records and CloudEvents.
+//
+// It wraps loams.stream.v1.StreamService.
+type StreamsModule interface {
+	// Module is the SDK module, as it appears on loams.streams.
+	Module() string
+	// Service is the service behind the module.
+	Service() string
+	// Unstable reports that the package's wire contract may still change.
+	Unstable() bool
+
+	// Create calls loams.stream.v1.StreamService/CreateStream, retried: safe.
+	Create(ctx context.Context, req *connect.Request[streamv1.CreateStreamRequest], opts *CallOptions) (*connect.Response[streamv1.CreateStreamResponse], error)
+	// Fetch calls loams.stream.v1.StreamService/Fetch, retried: safe.
+	Fetch(ctx context.Context, req *connect.Request[streamv1.FetchRequest], opts *CallOptions) (*connect.Response[streamv1.FetchResponse], error)
+	// FetchEvents calls loams.stream.v1.StreamService/FetchCloudEvents, retried: safe.
+	FetchEvents(ctx context.Context, req *connect.Request[streamv1.FetchCloudEventsRequest], opts *CallOptions) (*connect.Response[streamv1.FetchCloudEventsResponse], error)
+	// Get calls loams.stream.v1.StreamService/DescribeStream, retried: safe.
+	Get(ctx context.Context, req *connect.Request[streamv1.DescribeStreamRequest], opts *CallOptions) (*connect.Response[streamv1.DescribeStreamResponse], error)
+	// List calls loams.stream.v1.StreamService/ListStreams, retried: safe. AIP-158: page with Streams and follow NextPageToken through loams.Paginate.
+	List(ctx context.Context, req *connect.Request[streamv1.ListStreamsRequest], opts *CallOptions) (*connect.Response[streamv1.ListStreamsResponse], error)
+	// Produce calls loams.stream.v1.StreamService/Produce, retried: manual.
+	Produce(ctx context.Context, req *connect.Request[streamv1.ProduceRequest], opts *CallOptions) (*connect.Response[streamv1.ProduceResponse], error)
+	// ProduceEvents calls loams.stream.v1.StreamService/ProduceCloudEvents, retried: manual.
+	ProduceEvents(ctx context.Context, req *connect.Request[streamv1.ProduceCloudEventsRequest], opts *CallOptions) (*connect.Response[streamv1.ProduceCloudEventsResponse], error)
+}
+
 // TablesModule is a second facade name for the same RPCs, exposed as loams.tables.
 //
 // It wraps loams.live.v1.LiveService. Its wire contract may still change, so buf breaking skips it and an SDK marks it experimental (§44 §10.3).
@@ -1139,6 +1185,9 @@ func NewServiceClient(name string, httpClient connect.HTTPClient, baseURL string
 
 	case "loams.sql.v1.SqlService":
 		return sqlv1connect.NewSqlServiceClient(httpClient, baseURL, opts...)
+
+	case "loams.stream.v1.StreamService":
+		return streamv1connect.NewStreamServiceClient(httpClient, baseURL, opts...)
 
 	default:
 		return nil

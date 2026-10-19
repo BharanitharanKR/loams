@@ -11,16 +11,16 @@
     },
     "connect": {
       "httpStatuses": {
-        "200": 49,
+        "200": 60,
         "400": 9,
         "401": 2,
         "403": 1,
-        "404": 2,
+        "404": 3,
         "409": 1,
         "501": 9
       },
       "grpcStatuses": {},
-      "cases": 73
+      "cases": 85
     }
   },
   "rows": [
@@ -1706,6 +1706,270 @@
       "httpStatus": 400,
       "grpcStatus": null,
       "connectCode": "invalid_argument",
+      "reason": null
+    },
+    {
+      "fixture": "app_streams",
+      "step": 0,
+      "steps": 12,
+      "kind": "app",
+      "about": "Create `note-events`, one partition.",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R3",
+        "R8",
+        "R14"
+      ],
+      "path": "/loams.stream.v1.StreamService/CreateStream",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 200,
+      "grpcStatus": null,
+      "connectCode": null,
+      "reason": null
+    },
+    {
+      "fixture": "app_streams",
+      "step": 1,
+      "steps": 12,
+      "kind": "app",
+      "about": "Create it again: idempotent by name, the same stream with `created` unset.",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R3",
+        "R8",
+        "R14"
+      ],
+      "path": "/loams.stream.v1.StreamService/CreateStream",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 200,
+      "grpcStatus": null,
+      "connectCode": null,
+      "reason": null
+    },
+    {
+      "fixture": "app_streams",
+      "step": 2,
+      "steps": 12,
+      "kind": "app",
+      "about": "The namespace's streams (`list_all` pages through `next_page_token`).",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R3",
+        "R8",
+        "R14"
+      ],
+      "path": "/loams.stream.v1.StreamService/ListStreams",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 200,
+      "grpcStatus": null,
+      "connectCode": null,
+      "reason": null
+    },
+    {
+      "fixture": "app_streams",
+      "step": 3,
+      "steps": 12,
+      "kind": "app",
+      "about": "Two records, keyed by `producer_id` + `producer_seq` so a retry cannot append twice.",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R3",
+        "R8",
+        "R14"
+      ],
+      "path": "/loams.stream.v1.StreamService/Produce",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 200,
+      "grpcStatus": null,
+      "connectCode": null,
+      "reason": null
+    },
+    {
+      "fixture": "app_streams",
+      "step": 4,
+      "steps": 12,
+      "kind": "app",
+      "about": "The same batch again: answered as a `duplicate`, nothing appended.",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R3",
+        "R8",
+        "R14"
+      ],
+      "path": "/loams.stream.v1.StreamService/Produce",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 200,
+      "grpcStatus": null,
+      "connectCode": null,
+      "reason": null
+    },
+    {
+      "fixture": "app_streams",
+      "step": 5,
+      "steps": 12,
+      "kind": "app",
+      "about": "Fetch from offset 0: both records; `next_offset` is where `subscribe` reads next.",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R3",
+        "R8",
+        "R14"
+      ],
+      "path": "/loams.stream.v1.StreamService/Fetch",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 200,
+      "grpcStatus": null,
+      "connectCode": null,
+      "reason": null
+    },
+    {
+      "fixture": "app_streams",
+      "step": 6,
+      "steps": 12,
+      "kind": "app",
+      "about": "Fetch past the end: no records, the page `subscribe` backs off on.",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R3",
+        "R8",
+        "R14"
+      ],
+      "path": "/loams.stream.v1.StreamService/Fetch",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 200,
+      "grpcStatus": null,
+      "connectCode": null,
+      "reason": null
+    },
+    {
+      "fixture": "app_streams",
+      "step": 7,
+      "steps": 12,
+      "kind": "app",
+      "about": "Describe it: each partition's offsets.",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R3",
+        "R8",
+        "R14"
+      ],
+      "path": "/loams.stream.v1.StreamService/DescribeStream",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 200,
+      "grpcStatus": null,
+      "connectCode": null,
+      "reason": null
+    },
+    {
+      "fixture": "app_streams",
+      "step": 8,
+      "steps": 12,
+      "kind": "app",
+      "about": "Create `note-audit` for CloudEvents.",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R3",
+        "R8",
+        "R14"
+      ],
+      "path": "/loams.stream.v1.StreamService/CreateStream",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 200,
+      "grpcStatus": null,
+      "connectCode": null,
+      "reason": null
+    },
+    {
+      "fixture": "app_streams",
+      "step": 9,
+      "steps": 12,
+      "kind": "app",
+      "about": "Two CloudEvents as one JSON batch: each `appended`.",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R3",
+        "R8",
+        "R14"
+      ],
+      "path": "/loams.stream.v1.StreamService/ProduceCloudEvents",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 200,
+      "grpcStatus": null,
+      "connectCode": null,
+      "reason": null
+    },
+    {
+      "fixture": "app_streams",
+      "step": 10,
+      "steps": 12,
+      "kind": "app",
+      "about": "Fetch them back as a JSON batch.",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R3",
+        "R8",
+        "R14"
+      ],
+      "path": "/loams.stream.v1.StreamService/FetchCloudEvents",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 200,
+      "grpcStatus": null,
+      "connectCode": null,
+      "reason": null
+    },
+    {
+      "fixture": "app_streams",
+      "step": 11,
+      "steps": 12,
+      "kind": "app",
+      "about": "A stream that does not exist: `not_found`.",
+      "server": "loams dev",
+      "required": false,
+      "transport": "connect",
+      "pinnedBy": [
+        "R3",
+        "R8",
+        "R14"
+      ],
+      "path": "/loams.stream.v1.StreamService/Fetch",
+      "method": "POST",
+      "contentType": "application/json",
+      "httpStatus": 404,
+      "grpcStatus": null,
+      "connectCode": "not_found",
       "reason": null
     }
   ]

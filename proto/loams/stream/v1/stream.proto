@@ -52,26 +52,39 @@ service StreamService {
   // Creates a stream. Idempotent by name: the same name and partition count
   // again answers the existing stream with `created` unset; another
   // partition count under a taken name is `already_exists`.
-  rpc CreateStream(CreateStreamRequest) returns (CreateStreamResponse) {}
+  rpc CreateStream(CreateStreamRequest) returns (CreateStreamResponse) {
+    // Idempotent by name, so the SDK may retry it.
+    option (loams.options.v1.facade) = {name: "create" retry_safe: true};
+  }
   // One stream, with each partition's offsets.
   rpc DescribeStream(DescribeStreamRequest) returns (DescribeStreamResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {name: "get"};
   }
   // The namespace's streams, sorted by name, paged (AIP-158).
   rpc ListStreams(ListStreamsRequest) returns (ListStreamsResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {name: "list" pagination: "streams:next_page_token"};
   }
   // Appends records to one partition, in order.
-  rpc Produce(ProduceRequest) returns (ProduceResponse) {}
+  rpc Produce(ProduceRequest) returns (ProduceResponse) {
+    // Not retried by the SDK: without `producer_id` a retry could append the
+    // records twice (SDKP §2.5).
+    option (loams.options.v1.facade) = {name: "produce"};
+  }
   // Reads one partition's records from an offset.
   rpc Fetch(FetchRequest) returns (FetchResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {name: "fetch"};
   }
   // Appends CloudEvents, once per `source` + `id` within the dedup window.
-  rpc ProduceCloudEvents(ProduceCloudEventsRequest) returns (ProduceCloudEventsResponse) {}
+  rpc ProduceCloudEvents(ProduceCloudEventsRequest) returns (ProduceCloudEventsResponse) {
+    option (loams.options.v1.facade) = {name: "produce_events"};
+  }
   // Reads one partition's records as CloudEvents.
   rpc FetchCloudEvents(FetchCloudEventsRequest) returns (FetchCloudEventsResponse) {
     option idempotency_level = NO_SIDE_EFFECTS;
+    option (loams.options.v1.facade) = {name: "fetch_events"};
   }
 }
 

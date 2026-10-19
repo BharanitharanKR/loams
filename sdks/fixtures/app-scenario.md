@@ -108,8 +108,26 @@ explicitly, or the body will not match.
 
 `app_sql` and `app_streams` carry `part: "C"`: `check-languages --suite app`
 holds a language to one once its suite names `<lang>_app_sql` (or
-`<lang>_app_streams`) or its report ran it (SDKP-24). **`app_streams`** is
-recorded once `loams.stream.v1` is on the main port (P0c).
+`<lang>_app_streams`) or its report ran it (SDKP-24).
+
+**`app_streams`** (SDKP Part C; `bytes` fields are base64 in JSON)
+
+0. `streams.create("note-events", partitions = 1)`: `created`.
+1. The same again: the same stream, `created` unset (idempotent by name).
+2. `streams.list`: the namespace's streams (the collection's own change log
+   among them).
+3. `streams.produce` two records with `producer_id = "app-producer-1"`,
+   `producer_seq = 1`: offsets 0 and 1.
+4. The same batch again: `duplicate`, nothing appended.
+5. `streams.fetch` from offset 0: both records, `next_offset` 2 (`subscribe`
+   reads its pages this way).
+6. `streams.fetch` from offset 2: empty, the page `subscribe` backs off on.
+7. `streams.get("note-events")`: the partition's offsets.
+8. `streams.create("note-audit")`.
+9. `streams.produce_events`: two CloudEvents as one JSON batch, each
+   `EVENT_STATUS_APPENDED`.
+10. `streams.fetch_events` from offset 0: them back as a JSON batch.
+11. `streams.fetch` on a stream that does not exist: `not_found`.
 
 ## Re-recording
 
