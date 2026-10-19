@@ -71,7 +71,7 @@
       "upstreamPath": "src/main/update/update-manager.ts",
       "commit": "bc732f5dc4c5465915d5b3f28d9b0b32703fc664",
       "upstreamSha256": "61c0583d9bcb1603c9695760d844b0b32cae79a5482011d253b32226dc84dd81",
-      "localSha256": "3cc5df59be20de99ac094011bff13c7b515ac4f47a31a4bc3aa8939dbeb1511d",
+      "localSha256": "6e2d700ccfd38ac340f0b444791d1833d29c2e982b69df835b9d4e333107795d",
       "verdict": "adapt",
       "note": "adapted before CF1 (W19)"
     },
