@@ -30,10 +30,9 @@ permissions:
   contents: read
 
 # Runners (owner, 2026-10-11; Depot removed): GitHub-hosted ubuntu-24.04 by
-# default, free for this public repository. Only the heavy Rust jobs that
-# starve a 4 vCPU / 16 GB runner (fmt and clippy, Rust tests, feature tests,
-# Live, Graph, agentd, durable linearizability) run on Blacksmith 8 vCPU,
-# whose free minutes are counted per vCPU: keep light jobs off it.
+# default, free for this public repository. Blacksmith removed (owner,
+# 2026-10-19): every job runs on GitHub-hosted runners. The RUNNER_HEAVY and
+# RUNNER_MAIN repository variables can still override the labels.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   # A newer dev head supersedes an older one; main runs to completion.
@@ -56,7 +55,7 @@ jobs:
       pull-requests: read
     outputs:
       # 'false' on a draft pull request without the `ci:full` label: the heavy
-      # jobs (Blacksmith and macOS) wait until it is ready for review.
+      # jobs (heavy Rust and macOS) wait until it is ready for review.
       heavy: ${{ github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
       # 'true' on a pull request into main: the full tier.
       full: ${{ github.base_ref == 'main' }}
@@ -417,7 +416,7 @@ jobs:
     name: "Rust: fmt and clippy"
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.rust == 'true') }}
-    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v7
       - name: protoc
@@ -503,7 +502,7 @@ jobs:
     name: "Rust: tests"
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.rust == 'true') && needs.changes.outputs.heavy != 'false' }}
-    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'ubuntu-latest' }}
     # A hung test fails the job instead of holding the runner; nextest also
     # terminates a loams-agentd* test after 3 minutes (.config/nextest.toml).
     timeout-minutes: 120
@@ -536,7 +535,7 @@ jobs:
     # ~80 agentd-sessions tests unrun.
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.agentd == 'true') && needs.changes.outputs.heavy != 'false' }}
-    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'ubuntu-latest' }}
     # PTY, shell and harness-fixture tests; a hung one fails the job.
     timeout-minutes: 60
     steps:
@@ -580,7 +579,7 @@ jobs:
     name: "Rust: feature tests"
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.rust == 'true'))) && needs.changes.outputs.heavy != 'false' }}
-    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v7
       - name: protoc
@@ -955,7 +954,7 @@ jobs:
     name: "Live: embedded store"
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.live-embedded == 'true'))) && needs.changes.outputs.heavy != 'false' }}
-    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v7
       - name: protoc
@@ -1081,7 +1080,7 @@ jobs:
     name: "Durable: SQLite linearizability"
     needs: changes
     if: ${{ !cancelled() && (inputs.nightly != true && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.durable == 'true')))) && needs.changes.outputs.heavy != 'false' }}
-    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'ubuntu-latest' }}
     timeout-minutes: 120
     env:
       DURABLE_FORK_TARGET_DIR: ${{ github.workspace }}/target/durable-fork-build
@@ -1918,7 +1917,7 @@ jobs:
     name: "Graph: tests"
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.graph == 'true'))) && needs.changes.outputs.heavy != 'false' }}
-    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'ubuntu-latest' }}
     steps:
       - uses: actions/checkout@v7
       - name: protoc
@@ -2031,7 +2030,7 @@ jobs:
     name: "Agentd: RPC fuzzing"
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.agentd == 'true'))) }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'ubuntu-latest') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
     # Two targets x 60 s plus the build.
     timeout-minutes: 20
     steps:
@@ -2075,7 +2074,7 @@ jobs:
     name: "Agentd: Studio fuzzing"
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.agentd == 'true'))) }}
-    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'blacksmith-4vcpu-ubuntu-2404') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
+    runs-on: ${{ (github.base_ref == 'main' || github.ref == 'refs/heads/main') && (vars.RUNNER_MAIN || 'ubuntu-latest') || (vars.RUNNER_LIGHT || 'ubuntu-latest') }}
     # Four targets x 60 s plus the build (the sessions crate is large).
     timeout-minutes: 40
     steps:
@@ -2420,7 +2419,7 @@ jobs:
     name: "Upgrade: previous release → candidate"
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.full == 'true' || contains(github.event.pull_request.labels.*.name, 'ci:upgrade')) }}
-    runs-on: ${{ vars.RUNNER_HEAVY || 'blacksmith-8vcpu-ubuntu-2404' }}
+    runs-on: ${{ vars.RUNNER_HEAVY || 'ubuntu-latest' }}
     timeout-minutes: 150
     steps:
       - uses: actions/checkout@v7

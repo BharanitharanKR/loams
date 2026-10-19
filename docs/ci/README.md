@@ -2,8 +2,9 @@
 
 GitHub Actions on this repository. The repository is public, so GitHub-hosted runners (Linux,
 Windows, macOS) cost nothing; what is scarce is the organisation's concurrent-job limit (about 20
-jobs, about 5 of them macOS). Blacksmith runners (free tier, minutes counted per vCPU) are used
-only for the heavy Rust builds, through the `RUNNER_HEAVY` repository variable.
+jobs, about 5 of them macOS). CI uses GitHub-hosted runners only (owner, 2026-10-19; Blacksmith
+removed). The `RUNNER_HEAVY` and `RUNNER_MAIN` repository variables select the label for the heavy
+Rust jobs and the main-branch jobs, and default to `ubuntu-latest`.
 
 ## Tiers
 
