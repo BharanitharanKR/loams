@@ -48,6 +48,14 @@ All notable changes to this project are documented here. The format follows [Kee
   (`sdks/fixtures/tokens.json`, also run by `loams-collection`), and
   `check-languages.mjs --check <lang> --suite app`.
 
+- Seven registered reasons (SDKP P0e): `sql_param_count` and
+  `result_too_large` for `loams.sql.v1`, and the client-side
+  `namespace_required`, `invalid_consistency_token`,
+  `search_after_needs_tiebreak`, `client_deadline_exceeded` and
+  `batch_partially_applied`, in every SDK's reason list. The SDK runtime
+  contract gains R11 (default namespace), R12 (timeouts), R13 (`write_batch`)
+  and R14 (`subscribe`), and R4 the token encoding and the session store.
+
 ### Fixed
 
 - A search retriever without `k` was refused ("k must be between 1 and
