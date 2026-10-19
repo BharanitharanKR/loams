@@ -19,7 +19,6 @@ gRPC-Web (D600), and this SDK speaks the two HTTP-shaped ones:
 Download `loams-cpp-0.1.0.tar.gz` from the
 [GitHub release](https://github.com/ostrium-labs/loams/releases) and use it from
 CMake with `find_package(loams CONFIG)`. There are no vcpkg or Conan ports yet.
-<!-- verify after publish -->
 
 ## Requirements
 
