@@ -48,6 +48,7 @@
         "shell.inspector.tab",
         "shell.drawer.tab",
         "palette.command",
+        "shell.palette.source",
         "console.settings.section"
       ],
       "permissions": [],

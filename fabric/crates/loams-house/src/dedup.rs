@@ -20,7 +20,7 @@
 //! `replicated_deduplication_window_seconds = 3600`; the House keeps the
 //! Shared contracts' 1 000 and seven days (ruling R12.4).
 
-use loams_house_lake::spec::{Snapshot, TableMetadata};
+use loams_house_lake::spec::{Operation, Snapshot, TableMetadata};
 use sha2::{Digest, Sha256};
 
 use crate::errors::{ChError, HouseError};
@@ -80,6 +80,18 @@ fn ancestry(metadata: &TableMetadata) -> impl Iterator<Item = &Snapshot> + '_ {
     })
 }
 
+/// Whether `snapshot` is a `TRUNCATE`: a `delete` that leaves `main` with no
+/// data files ([`loams_house_lake::append::truncate`]). Keys older than it are
+/// not held.
+fn truncates(snapshot: &Snapshot) -> bool {
+    let summary = snapshot.summary();
+    summary.operation == Operation::Delete
+        && summary
+            .additional_properties
+            .get("total-data-files")
+            .is_some_and(|files| files == "0")
+}
+
 /// A snapshot's deduplication keys, in the order its commit wrote them.
 fn keys_of(snapshot: &Snapshot) -> Vec<&str> {
     let properties = &snapshot.summary().additional_properties;
@@ -95,11 +107,13 @@ fn keys_of(snapshot: &Snapshot) -> Vec<&str> {
 }
 
 /// The snapshot holding `key` among the last `window` keys on `main` no older
-/// than [`MAX_AGE_MS`] at `now_ms`, if any.
+/// than [`MAX_AGE_MS`] at `now_ms` and committed after the last `TRUNCATE`, if
+/// any.
 pub fn find(metadata: &TableMetadata, key: &str, window: usize, now_ms: i64) -> Option<i64> {
     let mut counted = 0;
     for snapshot in ancestry(metadata) {
-        if counted >= window || snapshot.timestamp_ms() < now_ms - MAX_AGE_MS {
+        if counted >= window || snapshot.timestamp_ms() < now_ms - MAX_AGE_MS || truncates(snapshot)
+        {
             return None;
         }
         // Newest last within a snapshot: count from its end.
@@ -207,6 +221,67 @@ mod tests {
         assert_eq!(find(&metadata, "c", 0, now), None);
         // Seven days on, nothing is held.
         assert_eq!(find(&metadata, "c", 10, now + MAX_AGE_MS), None);
+    }
+
+    /// `TRUNCATE` as the House commits it.
+    async fn truncate(metadata: TableMetadata, at_ms: i64) -> TableMetadata {
+        let built = loams_house_lake::append::truncate(&metadata, at_ms)
+            .await
+            .expect("truncate")
+            .expect("a snapshot to truncate");
+        let file = loams_house_lake::MetadataFile::first(metadata.location());
+        loams_house_lake::metadata::commit(&metadata, &file, &[], built.updates).expect("commit")
+    }
+
+    /// The local e2e stack's seed (2026-10-18): `TRUNCATE` then the same
+    /// `INSERT` answered success with nothing written, so a reload of a table
+    /// left it empty. Keys from before a `TRUNCATE` are not held.
+    #[tokio::test]
+    async fn truncate_ends_the_window() {
+        let mut metadata = table();
+        let now = metadata.last_updated_ms() + 1_000;
+        metadata = commit(metadata, 1, &["a"], now - 10);
+        assert_eq!(find(&metadata, "a", 10, now), Some(1));
+        metadata = truncate(metadata, now - 5).await;
+        assert_eq!(find(&metadata, "a", 10, now), None);
+        // Keys committed after the TRUNCATE are held as before.
+        metadata = commit(metadata, 3, &["a"], now - 4);
+        assert_eq!(find(&metadata, "a", 10, now), Some(3));
+        // A delete that leaves files (not a TRUNCATE) does not end the window.
+        let mut deleted = commit(table(), 4, &["b"], now - 3);
+        let parent = deleted.current_snapshot().map(|s| s.snapshot_id());
+        let snapshot = Snapshot::builder()
+            .with_snapshot_id(5)
+            .with_parent_snapshot_id(parent)
+            .with_sequence_number(deleted.next_sequence_number())
+            .with_timestamp_ms(now - 2)
+            .with_manifest_list("s3://local/m5.avro".to_string())
+            .with_summary(Summary {
+                operation: Operation::Delete,
+                additional_properties: [("total-data-files".to_string(), "1".to_string())]
+                    .into_iter()
+                    .collect(),
+            })
+            .with_schema_id(0)
+            .build();
+        let file = loams_house_lake::MetadataFile::first(deleted.location());
+        deleted = loams_house_lake::metadata::commit(
+            &deleted,
+            &file,
+            &[],
+            vec![
+                TableUpdate::AddSnapshot { snapshot },
+                TableUpdate::SetSnapshotRef {
+                    ref_name: "main".to_string(),
+                    reference: SnapshotReference::new(
+                        5,
+                        SnapshotRetention::branch(None, None, None),
+                    ),
+                },
+            ],
+        )
+        .expect("commit");
+        assert_eq!(find(&deleted, "b", 10, now), Some(4));
     }
 
     #[test]

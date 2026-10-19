@@ -294,8 +294,9 @@ describe('graph page', () => {
     ).toBeTruthy();
     const mark = within(screen.getByTestId('error-span')).getByText('RETURN');
     expect(mark.tagName).toBe('MARK');
-    const box = statementBox();
-    expect(box.getAttribute('aria-invalid')).toBe('true');
+    // The shared editor marks itself invalid after the render that shows the
+    // error; wait for it (it raced on a busy CI runner).
+    await waitFor(() => expect(statementBox().getAttribute('aria-invalid')).toBe('true'));
     // The editor underlines the span after the render that shows it, so wait for it
     // rather than reading it once (it raced on a busy CI runner).
     await waitFor(() => expect(document.querySelector('[data-error]')?.textContent).toBe('RETURN'));

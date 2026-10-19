@@ -75,7 +75,7 @@ export const timeline = (page: Page) => page.getByRole('log', { name: 'Thread ti
 /** The shell's inspector (design 59): the thread's panels are its tabs. */
 export const inspector = (page: Page) => page.getByRole('complementary', { name: 'Inspector' });
 
-/** Opens one of the thread's panels in the inspector (it starts closed). */
+/** Opens one of the thread's panels in the inspector (a thread opens it on Diff, T9-6; the person may have closed it). */
 export async function openInspectorTab(page: Page, tab: string): Promise<void> {
   const show = page.getByRole('button', { name: 'Show inspector' });
   if (await show.isVisible()) await show.click();
@@ -107,9 +107,11 @@ export async function commentOnDiff(page: Page, path: string, text: string): Pro
   const line = file.locator('[data-line]').filter({ hasText: 'mock edit' }).first();
   const plus = file.locator('[data-utility-button], [data-gutter-utility-slot] button').first();
   const draft = file.getByRole('textbox', { name: /^Comment on line/ });
-  // The viewer re-renders while the diff settles (the daemon's diff sync), which drops
-  // the hover that shows the "+": hover and click again until the draft opens. A draft
-  // only opens while comments are possible (the diff has a checkout and a checksum).
+  // The "+" shows only while the line is hovered, and the viewer is still drawing the
+  // file when the diff first arrives: hover and click again until the draft opens. A draft
+  // only opens while comments are possible (the diff has a checkout and a checksum). Once
+  // open it stays: the panel keeps it through the thread's updates (the daemon renames the
+  // thread's branch after the first turn, and re-sends unchanged diffs).
   await expect(async () => {
     if (await draft.isVisible()) return;
     await line.hover();

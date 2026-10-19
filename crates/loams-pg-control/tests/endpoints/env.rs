@@ -477,6 +477,7 @@ pub fn sources() -> SpecSources {
         default_pageserver: Some(1),
         wal_pools: BTreeMap::from([("default".to_string(), vec!["wal:5454".to_string()])]),
         endpoint_storage: None,
+        verifiers: None,
     }
 }
 

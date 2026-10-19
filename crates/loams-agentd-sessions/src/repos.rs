@@ -1721,8 +1721,10 @@ pub fn git_history_matches(query: &str, commit: &GitHistoryCommit) -> bool {
         return true;
     }
     let normalized = query.to_ascii_lowercase();
+    // A sha matches by prefix only: as a fuzzy subsequence, an 8-character prefix of
+    // one commit's sha often fits inside another's 40 hex characters.
     commit.sha.to_ascii_lowercase().starts_with(&normalized)
-        || fuzzy_score(query, &format!("{} {}", commit.sha, commit.subject)).is_some()
+        || fuzzy_score(query, &commit.subject).is_some()
 }
 
 /// Contract hidden commits to their nearest visible ancestors. Search results
@@ -2512,6 +2514,15 @@ tmpfs /run tmpfs rw 0 0
         assert!(score("cmp rs", "crates/ui/src/composer.rs").is_some());
         assert!(score("composer crates", "crates/ui/src/composer.rs").is_some());
         assert!(score("xyzq", "crates/ui/src/composer.rs").is_none());
+    }
+
+    #[test]
+    fn git_history_matches_a_sha_by_prefix_not_as_a_subsequence() {
+        let mut other = history_commit("0a1b2c3d4e5f60718293a4b5c6d7e8f901234567".into(), None);
+        other.subject = "unrelated middle commit".into();
+        // "abcdef01" is a subsequence of `other`'s sha but not its prefix.
+        assert!(!git_history_matches("abcdef01", &other));
+        assert!(git_history_matches("0a1b2c3d", &other));
     }
 
     #[test]

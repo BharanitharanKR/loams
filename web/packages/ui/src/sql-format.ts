@@ -120,7 +120,7 @@ export function formatSql(text: string, indent = '  '): string {
   let clause = '';
   const pad = () => indent.repeat(depth);
   const newline = (extra = 0) => {
-    if (line.trim()) lines.push(line.replace(/\s+$/, ''));
+    if (line.trim()) lines.push(line.trimEnd());
     line = pad() + indent.repeat(extra);
   };
   const emit = (s: string, space = true) => {
@@ -224,7 +224,7 @@ export function formatSql(text: string, indent = '  '): string {
     const prev = tokens[i - 1];
     emit(tok.text, !(prev?.text === '.' || prev?.text === '::'));
   }
-  if (line.trim()) lines.push(line.replace(/\s+$/, ''));
+  if (line.trim()) lines.push(line.trimEnd());
   while (lines.length && lines[lines.length - 1] === '') lines.pop();
   return lines.join('\n');
 }

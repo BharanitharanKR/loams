@@ -166,7 +166,8 @@ export function ControlPlane({
     <div className="flex flex-col gap-4">
       {client.mock && (
         <SampleDataNotice>
-          The server does not offer loams.postgres.v1 yet. Nothing here changes a database.
+          pg-control isn't reachable, so this is fixture data and nothing here changes a database.
+          Set LOAMS_PG_CONTROL_API_KEY_FILE (and start pg-control) to connect.
         </SampleDataNotice>
       )}
       <div className="flex flex-wrap items-end gap-3">
@@ -210,7 +211,7 @@ export function ControlPlane({
       )}
 
       {projects === undefined ? (
-        <p className="text-sm text-muted">Loading projects…</p>
+        <p className="text-body text-muted">Loading projects…</p>
       ) : !project ? (
         <Empty title="No projects in this namespace">
           A project is a Postgres database with its own branches. Create one to start.
@@ -218,11 +219,11 @@ export function ControlPlane({
       ) : (
         <>
           <section aria-labelledby="pg-project" className="flex flex-col gap-3">
-            <h2 id="pg-project" className="text-lg font-semibold">
+            <h2 id="pg-project" className="text-section font-semibold">
               {project.name} <Badge>Postgres {project.pgVersion}</Badge>{' '}
               {project.state !== 'ready' && <Badge>{project.state}</Badge>}
             </h2>
-            <p className="text-xs text-muted">
+            <p className="text-small text-muted">
               History retention {Math.round(project.historyRetentionSeconds / 86400)} days · region{' '}
               {project.region}
             </p>
@@ -265,7 +266,7 @@ export function ControlPlane({
       )}
 
       <section aria-labelledby="pg-operations" className="flex flex-col gap-2">
-        <h2 id="pg-operations" className="text-lg font-semibold">
+        <h2 id="pg-operations" className="text-section font-semibold">
           Operations
         </h2>
         <Operations operations={operations} names={names} />
@@ -419,7 +420,7 @@ function DeleteProjectDialog({
       }
     >
       <div className="flex flex-col gap-3">
-        <p className="text-sm">
+        <p className="text-body">
           Every branch, endpoint, role and database in the project is removed. This cannot be
           undone.
         </p>

@@ -234,6 +234,58 @@ async fn connect_unary_and_stream_work() {
     daemon.stop().await;
 }
 
+/// Studio's "New thread in <project>" (Sidebar, Mod+N) sends only the chat id,
+/// the project's path and a config: no spaceId, no deviceId. The daemon hosts
+/// it in the project at that path (a 500 "createChat needs a spaceId or a
+/// deviceId" before).
+#[tokio::test]
+async fn create_thread_with_only_a_cwd_lands_in_the_project() {
+    let daemon = Daemon::start().await;
+    let project = tempfile::tempdir().unwrap();
+    let path = project.path().to_string_lossy().into_owned();
+    let threads = pb::ThreadServiceClient::new(HttpClient::plaintext(), daemon.config());
+    let created = threads
+        .create_thread(pb::CreateThreadRequest {
+            chat_id: "chat-cwd-only".into(),
+            cwd: Some(path.clone()),
+            ..Default::default()
+        })
+        .await
+        .unwrap()
+        .into_owned();
+    assert!(created.ok);
+
+    let host = pb::StudioServiceClient::new(HttpClient::plaintext(), daemon.config())
+        .get_host(pb::GetHostRequest::default())
+        .await
+        .unwrap()
+        .into_owned();
+    let device_id = host.host.as_option().unwrap().device_id.clone();
+    let mut stream = threads
+        .watch_threads(pb::WatchThreadsRequest::default())
+        .await
+        .unwrap();
+    let mut seen = next!(stream);
+    for _ in 0..10 {
+        if !seen.chats.is_empty() {
+            break;
+        }
+        seen = next!(stream);
+    }
+    let chat = seen
+        .chats
+        .iter()
+        .find(|chat| chat.id == "chat-cwd-only")
+        .expect("the new thread");
+    assert_eq!(chat.device_id, device_id);
+    assert_eq!(chat.cwd.as_deref(), Some(path.as_str()));
+    assert!(
+        chat.space_id.is_some(),
+        "the thread belongs to a project: {chat:?}"
+    );
+    daemon.stop().await;
+}
+
 #[tokio::test]
 async fn bad_requests_answer_connect_errors() {
     // Every §53 §6.5 gap is served since SD1 Task 13, so no RPC answers

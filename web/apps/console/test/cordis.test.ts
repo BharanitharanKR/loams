@@ -44,19 +44,30 @@ const navLabels = (handle: { slots: ConsoleHandle['slots'] }) =>
     handle.slots.entries('console.nav'),
     undefined,
   ).map((p) => p.label);
+/**
+ * Waits until Studio's plugin is active. Design 59 (W10): every available mode's plugins load
+ * at boot, after the boot mode's, so Studio's pages ("Studio settings") join the list a moment
+ * after Console's; a list read before that raced the load (it passed on fast runners only).
+ */
+const studioLoaded = (handle: ConsoleHandle) =>
+  waitFor(() => expect(handle.plugins().find((p) => p.id === 'studio')?.status).toBe('active'), {
+    timeout: 10_000,
+  });
 /** The sidebar's pinned Pages. */
 const pinnedLabels = (root: HTMLElement) =>
-  [...root.querySelectorAll('.lc-pages a')].map((a) => a.textContent);
+  [...root.querySelectorAll('.lc-pages ul a')].map((a) => a.textContent);
 
 describe('the cordis console', () => {
   it('boots the oss catalog and renders the first-party pages', async () => {
     const { root, handle } = await start();
+    await studioLoaded(handle);
     await waitFor(() =>
       expect(navLabels(handle)).toEqual([
         'Status',
         'Namespaces',
         'Deployments',
         'Approvals',
+        'Studio settings',
         'Preferences',
       ]),
     );
@@ -90,13 +101,24 @@ describe('the cordis console', () => {
 
   it('disabling a plugin removes its page and nav entry without a reload', async () => {
     const { root, handle } = await start();
-    await waitFor(() => expect(navLabels(handle)).toContain('Approvals'));
+    // waitFor's 1 s default is too short on a cold macOS runner (as above).
+    const slow = { timeout: 10_000 };
+    await waitFor(() => expect(navLabels(handle)).toContain('Approvals'), slow);
+    await studioLoaded(handle);
     await handle.disable('approvals');
-    await waitFor(() =>
-      expect(navLabels(handle)).toEqual(['Status', 'Namespaces', 'Deployments', 'Preferences']),
+    await waitFor(
+      () =>
+        expect(navLabels(handle)).toEqual([
+          'Status',
+          'Namespaces',
+          'Deployments',
+          'Studio settings',
+          'Preferences',
+        ]),
+      slow,
     );
     expect(root.querySelector('.lc-chip')).toBeNull();
-  });
+  }, 20_000);
 
   it('runs the third-party sample in a sandboxed frame when the instance allows it', async () => {
     const { root, handle } = await start({ [THIRD_PARTY_FLAG]: true }, true, true);

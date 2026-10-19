@@ -30,7 +30,7 @@ const plugin: PluginModule = {
     // The router takes the first match; neither path overlaps the other.
     ctx.effect(() =>
       router.page(
-        { id: 'settings', path: '/settings', title: 'Settings', plugin: 'desktop-settings' },
+        { id: 'settings', path: '/settings', title: 'App settings', plugin: 'desktop-settings' },
         () => <SettingsPage />,
       ),
     );
@@ -39,7 +39,7 @@ const plugin: PluginModule = {
         {
           id: 'settings-section',
           path: '/settings/:section',
-          title: 'Settings',
+          title: 'App settings',
           plugin: 'desktop-settings',
         },
         ({ params }) => <SettingsPage section={params.section} />,

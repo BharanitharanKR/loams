@@ -25,9 +25,13 @@
     # engine's main port. Neither uses the desktop bridge, so the rows leave it out.
     - id: data-studio
       name: '@loams/plugin-data-studio'
-      inject: [router, slots, transport, platform, flags]
+      inject: [router, slots, transport, platform, flags, session]
     - id: streams
       name: '@loams/plugin-streams'
       inject: [router, slots, platform]
-    # Durable stays desktop-only: the engine's main port has no `/durable/` route (the
-    # Resonate server listens on its own port, which only the desktop's proxy reaches).
+    # Durable execution over the engine's main port: `POST /durable/` is the embedded
+    # Resonate server's protocol endpoint behind the engine's auth (B12). No desktop
+    # bridge here, so the row leaves `desktop` out of `inject`.
+    - id: durable
+      name: '@loams/plugin-durable'
+      inject: [router, slots, platform]

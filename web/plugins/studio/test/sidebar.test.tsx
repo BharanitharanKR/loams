@@ -109,9 +109,11 @@ describe('the sidebar', () => {
     await waitFor(() =>
       expect(login.getAttribute('aria-label')).toBe('Fix the login redirect, Working'),
     );
-    expect(screen.getByRole('link', { name: /^New landing page/ }).getAttribute('aria-label')).toBe(
-      'New landing page, Errored',
-    );
+    expect(
+      within(nav())
+        .getByRole('link', { name: /^New landing page/ })
+        .getAttribute('aria-label'),
+    ).toBe('New landing page, Errored');
 
     // A pending approval outranks running.
     act(() =>
@@ -129,7 +131,9 @@ describe('the sidebar', () => {
     );
     await waitFor(() =>
       expect(
-        screen.getByRole('link', { name: /^Speed up the build/ }).getAttribute('aria-label'),
+        within(nav())
+          .getByRole('link', { name: /^Speed up the build/ })
+          .getAttribute('aria-label'),
       ).toBe('Speed up the build, Completed'),
     );
 
@@ -141,7 +145,7 @@ describe('the sidebar', () => {
     await waitFor(() => expect(login.getAttribute('aria-label')).toBe('Fix the login redirect'));
 
     // Run-group members sit under their group's row, with its badge.
-    const group = screen.getByRole('link', { name: /Try three fixes/ });
+    const group = within(nav()).getByRole('link', { name: /Try three fixes/ });
     expect(group.getAttribute('href')).toBe('#/studio/g/g1');
     expect(screen.getAllByRole('img', { name: 'Run group: Try three fixes' })).toHaveLength(2);
   });
@@ -244,7 +248,7 @@ describe('the sidebar', () => {
     // It was open: the page moves to the project's next thread.
     await waitFor(() => expect(navigate).toHaveBeenCalledWith('/studio/t/t-login'));
     await waitFor(() =>
-      expect(screen.queryByRole('link', { name: /^Speed up the build/ })).toBeNull(),
+      expect(within(nav()).queryByRole('link', { name: /^Speed up the build/ })).toBeNull(),
     );
   });
 
@@ -288,10 +292,12 @@ describe('the sidebar', () => {
     // ↓ moves from the project row to its first thread; Enter opens it.
     loams.focus();
     fireEvent.keyDown(loams, { key: 'ArrowDown' });
-    const first = screen.getByRole('link', { name: /^Fix the login redirect/ });
+    const first = within(nav()).getByRole('link', { name: /^Fix the login redirect/ });
     expect(document.activeElement).toBe(first);
     fireEvent.keyDown(first, { key: 'ArrowDown' });
-    expect(document.activeElement).toBe(screen.getByRole('link', { name: /^Speed up the build/ }));
+    expect(document.activeElement).toBe(
+      within(nav()).getByRole('link', { name: /^Speed up the build/ }),
+    );
     fireEvent.keyDown(document.activeElement as Element, { key: 'ArrowUp' });
     expect(document.activeElement).toBe(first);
     fireEvent.keyDown(first, { key: 'Enter' });
@@ -329,13 +335,13 @@ describe('the sidebar', () => {
     await within(nav()).findByRole('link', { name: /^New landing page/ });
     await waitFor(() => expect(daemon.calls).toContain('MarkThreadSeen:t-site'));
 
-    const row = screen.getByRole('link', { name: /^Scratch notes/ });
+    const row = within(nav()).getByRole('link', { name: /^Scratch notes/ });
     fireEvent.keyDown(row, { key: 'F2' });
     const dialog = await screen.findByRole('dialog', { name: 'Rename thread' });
     fireEvent.change(within(dialog).getByLabelText('Title'), { target: { value: 'Notes' } });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Rename' }));
     await waitFor(() => expect(daemon.calls).toContain('RenameThread:t-lost:Notes'));
-    expect(await screen.findByRole('link', { name: /^Notes/ })).toBeTruthy();
+    expect(await within(nav()).findByRole('link', { name: /^Notes/ })).toBeTruthy();
 
     fireEvent.click(screen.getByRole('button', { name: 'More actions for Notes' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Fork thread' }));
@@ -347,7 +353,9 @@ describe('the sidebar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'More actions for Notes' }));
     fireEvent.click(await screen.findByRole('menuitem', { name: 'Archive thread' }));
     await waitFor(() => expect(daemon.calls).toContain('SetThreadArchived:t-lost:true'));
-    await waitFor(() => expect(screen.queryByRole('link', { name: /^Notes,|^Notes$/ })).toBeNull());
+    await waitFor(() =>
+      expect(within(nav()).queryByRole('link', { name: /^Notes,|^Notes$/ })).toBeNull(),
+    );
     expect(screen.queryByRole('button', { name: /Show archived/ })).toBeNull();
 
     // Archived threads are in Studio's settings (design 59, D1079), where Unarchive puts one back.
@@ -375,7 +383,9 @@ describe('the sidebar', () => {
     });
     await show(daemon);
     await waitFor(() =>
-      expect(screen.getByRole('link', { name: 'Fix the login redirect, Working' })).toBeTruthy(),
+      expect(
+        within(nav()).getByRole('link', { name: 'Fix the login redirect, Working' }),
+      ).toBeTruthy(),
     );
     fireEvent.click(
       screen.getByRole('button', { name: 'More actions for Fix the login redirect' }),

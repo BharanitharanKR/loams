@@ -40,6 +40,7 @@ import { FactoryHost } from "./factory/host";
 import { registerFactoryIpc } from "./factory/ipc.electron";
 import { Vault } from "./factory/vault";
 import { FactoryViews } from "./factory/views.electron";
+import { readPgControlTarget } from "./pgcontrol/target";
 import { registerPreviewIpc } from "./preview/ipc.electron";
 import { StudioPreviewView } from "./preview/view.electron";
 import {
@@ -355,6 +356,8 @@ const singleInstance = initSingleInstance({
 				),
 				// SD1 Task 5: the daemon's loams.agentd.v1 listener; main alone reads its token.
 				agentd: () => readAgentdTarget(agentdDir(app.getPath("userData"))),
+				// PG2 R9.1: loams.postgres.v1 on pg-control's own listener.
+				pgControl: () => readPgControlTarget(settingsFile()),
 			});
 			const open = (): BrowserWindow => {
 				const w = createWindow();

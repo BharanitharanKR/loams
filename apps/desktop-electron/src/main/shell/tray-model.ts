@@ -58,7 +58,18 @@ export function trayModel(
 			{ id: "open", label: "Open Loams Desktop", enabled: true },
 			...studioTrayItems(studio),
 			{ id: "engine", label: engineLabel, enabled: engineEnabled },
-			{ id: "approvals", label: `Pending approvals (${n})`, enabled: n > 0 },
+			// Only while the approvals plugin reports some (it needs `loams.approvals.v1`,
+			// which a Loams engine does not serve): else the item would open a missing
+			// page. The daemon's own approvals are the Studio thread rows above.
+			...(n > 0
+				? [
+						{
+							id: "approvals",
+							label: `Pending approvals (${n})`,
+							enabled: true,
+						},
+					]
+				: []),
 			{ id: "servers", label: `Servers › ${server.name}`, enabled: true },
 			{ id: "quit", label: "Quit", enabled: true },
 		],

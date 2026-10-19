@@ -59,6 +59,7 @@ use loams_pg_control::runtime::compose::{
 use loams_pg_control::runtime::remote::RemoteRuntime;
 use loams_pg_control::runtime::runner::{RunnerPolicy, RunnerServer};
 use loams_pg_control::runtime::{ComputeRuntime, images};
+use loams_pg_control::scram::RoleVerifiers;
 use loams_pg_control::secrets::{FileSecretStore, KeySource, Secret, SecretRef, SecretStore};
 use loams_pg_control::service::operations::OPERATION_RETENTION;
 use loams_pg_control::service::{Clock, PgService, ServiceConfig};
@@ -526,6 +527,7 @@ fn computes(
     keys: &Arc<ComputeKeys>,
     clock: &Clock,
     upcall_addr: SocketAddr,
+    verifiers: &Arc<RoleVerifiers>,
 ) -> Result<Computes, PgControlError> {
     if upcall_addr.ip().is_loopback() {
         tracing::warn!(
@@ -545,6 +547,7 @@ fn computes(
             default_pageserver: config.default_pageserver,
             wal_pools: config.wal_pools.clone(),
             endpoint_storage: endpoint_storage(config, keys),
+            verifiers: Some(verifiers.clone()),
         },
     ))
 }
@@ -623,12 +626,9 @@ impl PgControl {
             wal: WalClient::new(config.wal.clone(), None)?,
         };
         let clock = Clock::system();
-        let service = PgService::new(
-            store.clone(),
-            neon.clone(),
-            secrets.clone(),
-            ServiceConfig::default(),
-        );
+        // Roles' password verifiers (Task 24), one cache for the upcall
+        // listener's specs and the reconciler's pushes.
+        let verifiers = Arc::new(RoleVerifiers::new(secrets.clone()));
 
         let listener = tokio::net::TcpListener::bind(config.listen)
             .await
@@ -653,6 +653,7 @@ impl PgControl {
                 default_pageserver: config.default_pageserver,
                 wal_pools: config.wal_pools.clone(),
                 endpoint_storage: endpoint_storage(&config, &keys),
+                verifiers: Some(verifiers.clone()),
                 ..UpcallConfig::defaults(config.upcall_listen)
             },
         )
@@ -675,14 +676,22 @@ impl PgControl {
                     &keys,
                     &clock,
                     upcall_addr,
+                    &verifiers,
                 )?)
             }
             #[cfg(feature = "postgres-kubernetes")]
             (PgRuntime::Kubernetes { .. }, Some(settings)) => {
                 use loams_pg_control::autoscale::{Combined, CtlMetrics, Policy, Scaling};
                 let kube = kube_runtime(settings, secrets.as_ref()).await?;
-                let mut computes =
-                    computes(&config, settings, kube.clone(), &keys, &clock, upcall_addr)?;
+                let mut computes = computes(
+                    &config,
+                    settings,
+                    kube.clone(),
+                    &keys,
+                    &clock,
+                    upcall_addr,
+                    &verifiers,
+                )?;
                 // The autoscaler (Task 15): CPU from the metrics API, the file
                 // cache from compute_ctl. Compose cannot resize (R10.4).
                 computes.scaling = Some(Arc::new(Scaling::new(
@@ -713,6 +722,20 @@ impl PgControl {
             audit: config.audit.clone(),
             clock: clock.clone(),
         });
+        let holder = format!("pg-control-{}", ulid::Ulid::generate());
+        let mut reconciler = Reconciler::new(
+            store.clone(),
+            neon.clone(),
+            secrets.clone(),
+            ReconcilerConfig::new(holder),
+        );
+        if let Some(computes) = computes {
+            reconciler = reconciler.with_computes(computes);
+        }
+        // Role and database changes kick the project's pass, so a running
+        // compute takes the new spec now rather than at the next resync.
+        let service = PgService::new(store, neon, secrets, ServiceConfig::default())
+            .with_kicker(reconciler.kicker());
         let app = api_routes(service.clone(), gate, config.reflection);
         let stop = CancellationToken::new();
         let mut tasks = Vec::new();
@@ -730,11 +753,6 @@ impl PgControl {
         tasks.push(tokio::spawn(async move {
             upcall.serve(async move { token.cancelled().await }).await;
         }));
-        let holder = format!("pg-control-{}", ulid::Ulid::generate());
-        let mut reconciler = Reconciler::new(store, neon, secrets, ReconcilerConfig::new(holder));
-        if let Some(computes) = computes {
-            reconciler = reconciler.with_computes(computes);
-        }
         let reconciler = Arc::new(reconciler);
         let token = stop.clone();
         tasks.push(tokio::spawn(async move {

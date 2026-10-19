@@ -1,6 +1,9 @@
-// @loams/plugin-durable: Loams Desktop's durable execution page. It talks to
-// the local engine's Resonate server through `platform.fetch` on `/durable/`
-// (the desktop protocol proxy routes that prefix to the engine).
+// @loams/plugin-durable: the durable execution page. It talks to the engine's
+// Resonate server through `platform.fetch` on `/durable/`: in Loams Desktop the
+// protocol proxy routes that prefix to the local engine's durable listener; in a
+// browser it is the engine's main port, which serves the same API under
+// `/durable/` behind its authentication (B12). An engine without it answers 404,
+// which the page shows.
 
 import { type PluginModule, service } from '@loams/console-host';
 import type { Context } from '@loams/cordis';
@@ -78,16 +81,23 @@ const plugin: PluginModule = {
     const router = service(ctx, 'router');
     const slots = service(ctx, 'slots');
     const platform = service(ctx, 'platform');
-    const desktop = service(ctx, 'desktop');
+    // Only Loams Desktop has the `desktop` service (web.yml leaves it out of `inject`,
+    // and the guard refuses a service a row does not inject): no server menu to check.
+    const desktop: LoamsDesktopApi | undefined =
+      platform.kind === 'desktop' ? service(ctx, 'desktop') : undefined;
     const api = createDurableApi(envelope((...a) => platform.fetch(...a), platform.baseUrl));
     // The engine's runs, plus fixture-backed sample runs for what it does not serve yet.
     const graph = withSamples(promiseRunSource(api), mockRunSource());
     ctx.effect(() =>
-      router.page({ id: 'durable', path: '/durable', title: 'Durable', plugin: 'durable' }, () => (
-        <LocalOnly desktop={desktop}>
+      router.page({ id: 'durable', path: '/durable', title: 'Durable', plugin: 'durable' }, () =>
+        desktop ? (
+          <LocalOnly desktop={desktop}>
+            <DurablePage api={api} graph={graph} />
+          </LocalOnly>
+        ) : (
           <DurablePage api={api} graph={graph} />
-        </LocalOnly>
-      )),
+        ),
+      ),
     );
     ctx.effect(() =>
       slots.register(

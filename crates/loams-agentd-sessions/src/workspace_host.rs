@@ -460,7 +460,9 @@ impl WorkspaceHost {
     /// Create a chat, usually *in a project*: the project fixes the host device
     /// and base cwd (`cwd` override = an isolated-worktree path). With no
     /// `space_id` the chat is project-less: `device_id` picks the host and the
-    /// cwd defaults to `~` (expanded host-side when the run spawns).
+    /// cwd defaults to `~` (expanded host-side when the run spawns). With
+    /// neither, the chat runs on this device, in the project at `cwd` (found
+    /// or created, like a first `Send`'s claim) or project-less at `~`.
     pub fn create_chat(
         &self,
         chat_id: &str,
@@ -491,16 +493,25 @@ impl WorkspaceHost {
                 Some(space) => Some(space),
                 None => return Err(EngineError::Other(format!("no such space: {space_id}"))),
             },
-            None => None,
+            // Neither a project nor a device named: a thread in `cwd` belongs
+            // to the project at that path on this device, as a first `Send`
+            // claims it ([`claim_chat`](Self::claim_chat)). Studio's "New
+            // thread in <project>" sends only the project's path. A named
+            // device keeps the chat project-less (the projectless tests).
+            None => match cwd.as_deref().map(str::trim) {
+                Some(path) if device_id.is_none() && !matches!(path, "" | "~" | "~/") => {
+                    let space_id = self.space_for_path(path)?;
+                    self.read(|doc| doc.space(&space_id))?
+                }
+                _ => None,
+            },
         };
+        // With neither a project nor a device the thread runs here: since the
+        // edge sync left (D781) this daemon is the only host a client reaches.
         let host_device = match (&space, device_id) {
             (Some(space), _) => space.device_id.clone(),
             (None, Some(device_id)) => device_id.to_string(),
-            (None, None) => {
-                return Err(EngineError::Other(
-                    "createChat needs a spaceId or a deviceId".into(),
-                ));
-            }
+            (None, None) => self.inner.config.device_id.clone(),
         };
         self.mutate(|doc| {
             doc.upsert_chat(&Chat {
@@ -972,6 +983,67 @@ mod tests {
             host.watch_spaces().borrow()[0].name.as_deref(),
             Some("Renamed")
         );
+    }
+
+    /// Studio's "New thread in <project>" sends `CreateThread { chatId, cwd }`
+    /// with no spaceId or deviceId; that was a 500 ("createChat needs a
+    /// spaceId or a deviceId") although a first `Send` with the same cwd works.
+    #[tokio::test]
+    async fn create_chat_with_only_a_cwd_runs_here_in_that_project() {
+        use super::*;
+
+        let dir = tempfile::tempdir().unwrap();
+        let host = WorkspaceHost::open(
+            Arc::new(DocsStore::open(dir.path()).unwrap()),
+            WorkspaceHostConfig {
+                device_id: "test-device".into(),
+                device_name: "Test device".into(),
+                platform: "linux".into(),
+                org_id: "test-org".into(),
+                user_id: "test-user".into(),
+            },
+        )
+        .unwrap();
+        host.create_space("space", "test-device", "/project", None, true)
+            .unwrap();
+
+        host.create_chat("in-project", None, None, None, Some("/project".into()))
+            .unwrap();
+        let chat = host.chat("in-project").unwrap().unwrap();
+        assert_eq!(chat.device_id, "test-device");
+        assert_eq!(chat.space_id.as_deref(), Some("space"));
+        assert_eq!(chat.cwd.as_deref(), Some("/project"));
+
+        // A folder with no project yet gets one, as a first Send's claim does.
+        host.create_chat("new-folder", None, None, None, Some("/other".into()))
+            .unwrap();
+        let chat = host.chat("new-folder").unwrap().unwrap();
+        let space = host
+            .space(chat.space_id.as_deref().unwrap())
+            .unwrap()
+            .unwrap();
+        assert_eq!(space.path, "/other");
+        assert_eq!(space.device_id, "test-device");
+
+        // No cwd at all: project-less, at home, on this device.
+        host.create_chat("home", None, None, None, None).unwrap();
+        let chat = host.chat("home").unwrap().unwrap();
+        assert_eq!(chat.device_id, "test-device");
+        assert_eq!(chat.space_id, None);
+        assert_eq!(chat.cwd.as_deref(), Some("~"));
+
+        // A named device keeps the chat project-less, here or elsewhere.
+        host.create_chat(
+            "elsewhere",
+            None,
+            Some("other-device"),
+            None,
+            Some("/project".into()),
+        )
+        .unwrap();
+        let chat = host.chat("elsewhere").unwrap().unwrap();
+        assert_eq!(chat.device_id, "other-device");
+        assert_eq!(chat.space_id, None);
     }
 
     #[tokio::test]

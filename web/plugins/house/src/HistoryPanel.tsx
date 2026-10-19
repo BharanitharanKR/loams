@@ -1,9 +1,10 @@
 // Query history (§49 §18.3): `ListQueryHistory(scope = MINE)` with status and text
 // filters. History is the server's, shared across devices; the page keeps none of its
 // own. "Open" fetches the full text with `GetQuery` (the list's is cut at 4 KiB) and
-// loads it into the editor.
+// loads it into the editor. A House that keeps no query log answers `unimplemented`:
+// the panel then says history is not available there, which is not an error.
 
-import { Button, Input, Select } from '@loams/ui';
+import { Button, Input, isNotServed, Select } from '@loams/ui';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { type HistoryEntry, type HouseClient, type QueryStatus, toFailure } from './client.js';
 
@@ -26,6 +27,7 @@ export function HistoryPanel({
   const [items, setItems] = useState<HistoryEntry[]>([]);
   const [next, setNext] = useState('');
   const [error, setError] = useState<string>();
+  const [unavailable, setUnavailable] = useState(false);
   const [loading, setLoading] = useState(false);
   // Only the latest request may touch the list: a slow response for an older filter
   // (or a "More" page from one) is dropped rather than shown under the new filter.
@@ -48,7 +50,10 @@ export function HistoryPanel({
         setItems((prev) => (pageToken ? [...prev, ...page.items] : page.items));
         setNext(page.nextPageToken);
       } catch (e) {
-        if (mine === seq.current) setError(toFailure(e).message);
+        if (mine !== seq.current) return;
+        const f = toFailure(e);
+        if (isNotServed(f)) setUnavailable(true);
+        else setError(f.message);
       } finally {
         if (mine === seq.current) setLoading(false);
       }
@@ -70,11 +75,24 @@ export function HistoryPanel({
     }
   };
 
+  const title = (
+    <h3 id={`${id}-title`} className="m-0 text-body">
+      History
+    </h3>
+  );
+  if (unavailable)
+    return (
+      <section aria-labelledby={`${id}-title`} className="flex flex-col gap-2">
+        {title}
+        <p className="m-0 text-body text-muted" role="status">
+          Query history is not available on this server.
+        </p>
+      </section>
+    );
+
   return (
     <section aria-labelledby={`${id}-title`} className="flex flex-col gap-2">
-      <h3 id={`${id}-title`} className="m-0 text-sm">
-        History
-      </h3>
+      {title}
       <div className="flex flex-wrap items-center gap-2">
         <Input
           aria-label="Filter history by text"
@@ -97,12 +115,12 @@ export function HistoryPanel({
         </Select>
       </div>
       {error && (
-        <p className="m-0 text-sm text-danger" role="alert">
+        <p className="m-0 text-body text-danger" role="alert">
           {error}
         </p>
       )}
       {!loading && !error && items.length === 0 && (
-        <p className="m-0 text-sm text-muted">No queries match.</p>
+        <p className="m-0 text-body text-muted">No queries match.</p>
       )}
       <ul className="m-0 flex list-none flex-col gap-1 p-0" aria-label="Past queries">
         {items.map((h) => (
@@ -113,7 +131,7 @@ export function HistoryPanel({
             <code className="line-clamp-3 whitespace-pre-wrap break-words text-[12px]">
               {h.query}
             </code>
-            <div className="flex items-center gap-2 text-xs text-muted">
+            <div className="flex items-center gap-2 text-small text-muted">
               <span data-status={h.status}>
                 {h.status.charAt(0) + h.status.slice(1).toLowerCase()}
                 {h.errorCode ? ` (code ${h.errorCode})` : ''}
@@ -139,7 +157,7 @@ export function HistoryPanel({
         </Button>
       )}
       {loading && (
-        <p className="m-0 text-xs text-muted" role="status">
+        <p className="m-0 text-small text-muted" role="status">
           Loading history…
         </p>
       )}

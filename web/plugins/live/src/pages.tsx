@@ -13,7 +13,11 @@ import {
   Field,
   Input,
   Notice,
+  plainError,
   Select,
+  SelectionGroup,
+  SelectionIndicator,
+  SkeletonList,
   StatusTag,
   Table,
   Textarea,
@@ -26,7 +30,9 @@ const PAGE = 50;
 export const DEPLOY_TIP = 'Not yet available (R1 Task 13)';
 
 export function errorText(e: unknown): string {
-  return e instanceof ConnectError ? e.rawMessage : e instanceof Error ? e.message : String(e);
+  return plainError(
+    e instanceof ConnectError ? e.rawMessage : e instanceof Error ? e.message : String(e),
+  );
 }
 
 /**
@@ -45,15 +51,11 @@ const isNotRunning = (e: unknown) =>
 const isUnserved = (e: unknown) => e instanceof ConnectError && e.code === Code.Unimplemented;
 
 const Mono = ({ children }: { children: ReactNode }) => (
-  <span className={/* mono-ok: id */ 'font-mono text-xs'}>{children}</span>
+  <span className={/* mono-ok: id */ 'font-mono text-small'}>{children}</span>
 );
 
 function Loading({ what }: { what: string }) {
-  return (
-    <p className="text-muted" role="status">
-      Loading {what}...
-    </p>
-  );
+  return <SkeletonList label={`Loading ${what}`} rows={5} />;
 }
 
 function Err({ title, message }: { title: string; message: string }) {
@@ -590,7 +592,7 @@ export function MutateTab({ api, tables, sel, onGone }: TabProps) {
             <p className="m-0">
               Run <Mono>{pending.fn}</Mono> with these arguments. It commits at once.
             </p>
-            <pre className="font-mono text-xs m-0 overflow-auto">
+            <pre className="font-mono text-small m-0 overflow-auto">
               {JSON.stringify(pending.args, null, 2)}
             </pre>
             <p className="m-0 text-muted">
@@ -718,8 +720,8 @@ export function LivePage({
   }, [loaded.state, retryMs]);
 
   return (
-    <div className="flex flex-col gap-6 p-6 max-w-6xl">
-      <header className="flex items-start justify-between gap-4">
+    <div className="lc-page">
+      <header className="lc-page-head flex flex-wrap items-start justify-between gap-4">
         <div>
           <h1 className="m-0">Live</h1>
           <p className="text-muted m-0">
@@ -813,23 +815,24 @@ export function LivePage({
               ]}
             />
           </Card>
-          <div role="tablist" aria-label="Live views" className="flex gap-4 border-b border-rule">
-            {TABS.map((t) => (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={t.id === tab}
-                className={
-                  t.id === tab
-                    ? 'bg-transparent border-0 border-b-2 border-accent text-ink px-1 py-2 cursor-pointer font-medium'
-                    : 'bg-transparent border-0 border-b-2 border-transparent text-muted px-1 py-2 cursor-pointer'
-                }
-                onClick={() => setTab(t.id)}
-              >
-                {t.label}
-              </button>
-            ))}
+          <div role="tablist" aria-label="Live views" className="ds-tabs">
+            <SelectionGroup>
+              {TABS.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={t.id === tab}
+                  className="ds-tab"
+                  onClick={() => setTab(t.id)}
+                >
+                  {t.label}
+                  {t.id === tab && (
+                    <SelectionIndicator layoutId="live-tab" className="ds-tab-indicator" />
+                  )}
+                </button>
+              ))}
+            </SelectionGroup>
           </div>
           {tab === 'documents' && (
             <DocumentsTab api={api} tables={loaded.tables} sel={sel} onSel={setSel} onGone={gone} />
