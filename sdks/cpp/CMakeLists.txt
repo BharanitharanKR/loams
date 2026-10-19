@@ -182,7 +182,8 @@ target_link_libraries(app_test PRIVATE loams_test_support loams_warnings)
 foreach(clause IN ITEMS consistency_token_merge session_read_your_writes default_namespace timeout_deadline
                         write_batch_chunks streams_subscribe_resumes builders_match_corpus
                         collection_handle_delegates search_query_all_requires_tiebreak facade_matches_index
-                        app_collections app_search app_graph)
+                        sql_and_streams_send_the_recorded_bodies streams_module_subscribe
+                        app_collections app_search app_graph app_sql app_streams)
   add_test(NAME cpp_${clause} COMMAND app_test cpp_${clause})
   set_tests_properties(cpp_${clause} PROPERTIES
     ENVIRONMENT

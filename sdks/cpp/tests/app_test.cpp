@@ -686,6 +686,59 @@ void SearchQueryAllRequiresTiebreak() {
   LOAMS_CHECK_EQ(after.values(1).number_value(), 2.0, "the last hit's sort_values, as answered");
 }
 
+void SqlAndStreamsSendTheRecordedBodies() {
+  Harness h([](Options& o) { o.default_namespace = "app"; });
+  for (int i = 0; i < 2; ++i) h.Ok(R"({"columns":[{"name":"tags"},{"name":"c"}],"rows":[["policy",2]]})");
+  for (int i = 0; i < 5; ++i) h.Ok();
+  const auto answer = h.loams->Sql()->Query("SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags", {Json(1)});
+  const auto same = [&](std::size_t i, const char* want, const std::string& what) {
+    LOAMS_CHECK(MessageDifferencer::Equals(h.Sent(i), Parse(want)), what + ": sent " + h.transport->Requests()[i].body);
+  };
+  same(0, R"({"namespace":"app","sql":"SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags","params":[1]})", "sql.query");
+  const auto records = SqlModule::Records(answer);
+  LOAMS_REQUIRE(records.size() == 1, "one row");
+  LOAMS_CHECK_EQ(records[0].at("tags").string_value(), std::string("policy"), "records");
+  SqlOptions two;
+  two.max_rows = 2;
+  h.loams->Sql()->Query("SELECT title, n FROM notes ORDER BY n", {}, two);
+  same(1, R"({"namespace":"app","sql":"SELECT title, n FROM notes ORDER BY n","maxRows":2})", "max_rows");
+  h.loams->Streams()->Create("note-events");
+  same(2, R"({"namespace":"app","name":"note-events","partitions":1})", "streams.create");
+  ProduceOptions producer;
+  producer.producer_id = "app-producer-1";
+  producer.producer_seq = 1;
+  h.loams->Streams()->Produce("note-events", {{std::string("1"), std::string(R"({"note":1,"op":"created"})"), {}},
+                                              {std::string("5"), std::string(R"({"note":5,"op":"deleted"})"), {}}},
+                              producer);
+  same(3, R"({"namespace":"app","stream":"note-events","records":[{"key":"MQ==","value":"eyJub3RlIjoxLCJvcCI6ImNyZWF0ZWQifQ=="},{"key":"NQ==","value":"eyJub3RlIjo1LCJvcCI6ImRlbGV0ZWQifQ=="}],"producerId":"app-producer-1","producerSeq":"1"})", "streams.produce with keys");
+  FetchOptions ten;
+  ten.max_records = 10;
+  h.loams->Streams()->Fetch("note-events", ten);
+  same(4, R"({"namespace":"app","stream":"note-events","maxRecords":10})", "a zero partition and offset are omitted");
+  ten.offset = 2;
+  h.loams->Streams()->Fetch("note-events", ten);
+  same(5, R"({"namespace":"app","stream":"note-events","offset":"2","maxRecords":10})", "streams.fetch at an offset");
+  h.loams->Streams()->Get("note-events");
+  same(6, R"({"namespace":"app","stream":"note-events"})", "streams.get");
+}
+
+void StreamsModuleSubscribe() {
+  Harness h([](Options& o) { o.default_namespace = "app"; });
+  h.Ok(R"({"records":[{"offset":"1","value":"YQ=="},{"offset":"2","value":"Yg=="}]})");
+  h.Ok(R"({"records":[{"offset":"3","value":"Yw=="}]})");
+  FetchOptions from;
+  from.offset = 1;
+  auto sub = h.loams->Streams()->Subscribe("events", from);
+  std::vector<std::string> got;
+  while (auto record = sub.Next()) {
+    got.push_back(record->value());
+    if (got.size() == 3) sub.Cancel();
+  }
+  LOAMS_CHECK(got == std::vector<std::string>({"a", "b", "c"}), "the records in order");
+  LOAMS_CHECK_EQ(sub.Offset(), static_cast<std::uint64_t>(4), "the next offset is the last + 1");
+  LOAMS_CHECK_EQ(Str(At(h.Sent(1), "offset")), std::string("3"), "the next fetch starts after the last record");
+}
+
 void FacadeMatchesIndex() {
   // Every app binding is in the table, and against the facade index when it exists.
   const std::vector<std::string> rpcs = {
@@ -701,7 +754,8 @@ void FacadeMatchesIndex() {
     return;
   }
   const google::protobuf::Value index = Parse(ReadFile(path));
-  const std::vector<std::string> modules = {"namespaces", "collections", "documents", "search", "vector", "graph"};
+  const std::vector<std::string> modules = {"namespaces", "collections", "documents", "search",
+                                            "vector",     "graph",       "sql",       "streams"};
   for (const auto& call : At(index, "calls").list_value().values()) {
     const std::string module = Str(At(call, "module"));
     if (std::find(modules.begin(), modules.end(), module) == modules.end() || At(call, "stream").bool_value()) {
@@ -882,9 +936,13 @@ int main(int argc, char** argv) {
       {"cpp_collection_handle_delegates", CollectionHandleDelegates},
       {"cpp_search_query_all_requires_tiebreak", SearchQueryAllRequiresTiebreak},
       {"cpp_facade_matches_index", FacadeMatchesIndex},
+      {"cpp_sql_and_streams_send_the_recorded_bodies", SqlAndStreamsSendTheRecordedBodies},
+      {"cpp_streams_module_subscribe", StreamsModuleSubscribe},
       {"cpp_app_collections", [] { Replay("app_collections"); }},
       {"cpp_app_search", [] { Replay("app_search"); }},
       {"cpp_app_graph", [] { Replay("app_graph"); }},
+      {"cpp_app_sql", [] { Replay("app_sql"); }},
+      {"cpp_app_streams", [] { Replay("app_streams"); }},
   };
 
   std::vector<std::string> run;

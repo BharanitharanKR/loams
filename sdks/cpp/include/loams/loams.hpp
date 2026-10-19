@@ -20,6 +20,7 @@
 #include "loams/call.hpp"
 #include "loams/client.hpp"
 #include "loams/consistency.hpp"
+#include "loams/data.hpp"
 #include "loams/error.hpp"
 #include "loams/facade.hpp"
 #include "loams/http.hpp"
