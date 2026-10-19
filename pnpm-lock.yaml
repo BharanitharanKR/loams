@@ -2217,6 +2217,9 @@ importers:
       '@loams/cordis':
         specifier: workspace:*
         version: link:../../packages/cordis
+      '@loams/desktop':
+        specifier: workspace:*
+        version: link:../../../apps/desktop-electron
       '@loams/slots':
         specifier: workspace:*
         version: link:../../packages/slots
@@ -2224,9 +2227,6 @@ importers:
         specifier: workspace:*
         version: link:../../packages/ui
     devDependencies:
-      '@loams/desktop':
-        specifier: workspace:*
-        version: link:../../../apps/desktop-electron
       '@loams/platform-electron':
         specifier: workspace:*
         version: link:../../packages/platform-electron

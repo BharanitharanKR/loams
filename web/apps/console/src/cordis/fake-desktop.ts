@@ -27,12 +27,15 @@ import type {
   IpcResult,
   LiveStoreChoice,
   LoamsDesktopApi,
+  PgControlFieldErrors,
+  PgControlSettings,
   ServerEntry,
   SqlResult,
   StackId,
   StackState,
   UpdateState,
 } from '@loams/desktop/contracts';
+import { DEFAULT_PG_CONTROL_URL, parsePgControlUrl } from '@loams/desktop/pg-control';
 import { validateConfig } from '@loams/desktop/validate';
 import { createMockAgentdApi } from '@loams/plugin-desktop-agentd';
 import { installFakeAgentd } from './fake-agentd.js';
@@ -346,6 +349,73 @@ function previewInfo({ fields, ...a }: (typeof PREVIEW_FACTORY_APPS)[number]): F
   };
 }
 
+/** App settings > Postgres control plane: kept in memory; no file is read in a browser. */
+function fakePgControl(): NonNullable<LoamsDesktopApi['pgControl']> {
+  let saved: PgControlSettings = {
+    url: '',
+    apiKeyFile: '',
+    defaultUrl: DEFAULT_PG_CONTROL_URL,
+    effectiveUrl: DEFAULT_PG_CONTROL_URL,
+    envOverrides: [],
+    keySource: 'none',
+  };
+  const listeners = new Set<(s: PgControlSettings) => void>();
+  const check = (input: { url: string; apiKeyFile: string }) => {
+    const parsed = parsePgControlUrl(input.url);
+    const errors: PgControlFieldErrors = {};
+    if (!parsed.ok) errors.url = parsed.message;
+    const file = input.apiKeyFile.trim();
+    if (file && !file.startsWith('/') && !file.startsWith('~/'))
+      errors.apiKeyFile = 'Use an absolute path, like ~/.config/loams/pg-api-key.';
+    return { url: parsed.ok ? parsed.url : input.url, apiKeyFile: file, errors };
+  };
+  return {
+    settings: async () => saved,
+    save: async (input) => {
+      const c = check(input);
+      if (Object.keys(c.errors).length > 0)
+        return {
+          ok: false,
+          code: 'invalid_argument',
+          message: 'Some values need fixing.',
+          errors: c.errors,
+        };
+      saved = {
+        ...saved,
+        url: c.url,
+        apiKeyFile: c.apiKeyFile,
+        effectiveUrl: c.url || DEFAULT_PG_CONTROL_URL,
+        keySource: c.apiKeyFile ? 'settings-file' : 'none',
+      };
+      for (const l of listeners) l(saved);
+      return { ok: true, value: saved };
+    },
+    test: async (input) => {
+      const c = check(input);
+      const url = c.url || DEFAULT_PG_CONTROL_URL;
+      if (Object.keys(c.errors).length > 0)
+        return {
+          ok: false,
+          code: 'invalid',
+          message: 'Fix the highlighted values first.',
+          url,
+          errors: c.errors,
+        };
+      return {
+        ok: false,
+        code: 'unreachable',
+        message: `The browser preview cannot reach ${url}; the desktop app tests it from main.`,
+        url,
+      };
+    },
+    pickKeyFile: async () => null,
+    onChanged: (cb) => {
+      listeners.add(cb);
+      return () => void listeners.delete(cb);
+    },
+  };
+}
+
 export function createFakeDesktop(): LoamsDesktopApi {
   // Studio's daemon: a fake Connect agentd behind the desktop's agentd route (SD1 Task 17).
   installFakeAgentd();
@@ -425,6 +495,7 @@ export function createFakeDesktop(): LoamsDesktopApi {
         return { ok: true, value: undefined };
       },
     },
+    pgControl: fakePgControl(),
     factory: {
       list: async (): Promise<FactoryAppInfo[]> => PREVIEW_FACTORY_APPS.map(previewInfo),
       configure: async (app, url, fields) => {
