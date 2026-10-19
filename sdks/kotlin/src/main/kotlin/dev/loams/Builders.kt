@@ -455,21 +455,14 @@ class Search(val collection: String) {
     fun consistency(consistency: JsonValue) = apply { fields["consistency"] = consistency }
 
     /**
-     * The request's JSON. A retriever with no `k` gets `max(10, offset + limit)`: the engine
-     * requires 1 ≤ k.
+     * The request's JSON. A retriever's `k` is sent only when the caller set it; left unset, the
+     * engine fills in `max(10, offset + limit)`.
      */
     fun json(): JsonObject {
-        val offset = (fields["offset"] as? JsonNumber)?.raw?.toInt() ?: 0
-        val k = maxOf(DEFAULT_K, offset + (limitValue ?: DEFAULT_K))
         val out = LinkedHashMap<String, JsonValue>()
         out["collection"] = Values.str(collection)
         namespace?.let { out["namespace"] = Values.str(it) }
-        out["retrievers"] = JsonArray(retrievers.map { retriever ->
-            val (arm, body) = retriever.entries.entries.first()
-            val inner = LinkedHashMap((body as JsonObject).entries)
-            if (inner["k"] == null) inner["k"] = JsonNumber(k.toString())
-            Values.obj(arm to JsonObject(inner))
-        })
+        out["retrievers"] = JsonArray(retrievers.toList())
         out.putAll(fields)
         if (sortKeys.isNotEmpty()) out["sort"] = JsonArray(sortKeys.toList())
         limitValue?.let { out["limit"] = JsonNumber(it.toString()) }
@@ -481,7 +474,7 @@ class Search(val collection: String) {
     fun build(): DynamicMessage = Messages.of("loams.collection.v1.SearchRequest", json())
 
     companion object {
-        /** The candidate count a retriever gets when the caller names none. */
+        /** The page size `queryAll` uses when the search names no limit. */
         const val DEFAULT_K: Int = 10
 
         /** A search over one collection. */

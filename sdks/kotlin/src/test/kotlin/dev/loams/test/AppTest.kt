@@ -214,7 +214,7 @@ object AppTest {
     }
 
     private val embedding = floatArrayOf(0.5f, 0.25f, 0.125f, 1f)
-    private const val TEXT_REFUND = """{"text":{"query":{"match":{"field":"body","text":"refund"}},"k":10}}"""
+    private const val TEXT_REFUND = """{"text":{"query":{"match":{"field":"body","text":"refund"}}}}"""
 
     private fun same(type: String, built: JsonValue, expected: String, what: String) =
         eq(Messages.of(type, json(expected)), Messages.of(type, built), what)
@@ -249,7 +249,7 @@ object AppTest {
             "search_vector_ann_params")
         fun hybrid(fusion: JsonValue) = search("notes") { text("refund", "body"); vector("embedding", embedding); limit(3); fuse(fusion) }.json()
         fun hybridJson(fusion: String) = """{"collection":"notes","retrievers":[$TEXT_REFUND,
-            {"vector":{"field":"embedding","query":[0.5,0.25,0.125,1],"k":10}}],"fusion":$fusion,"limit":3}"""
+            {"vector":{"field":"embedding","query":[0.5,0.25,0.125,1]}}],"fusion":$fusion,"limit":3}"""
         same(s, hybrid(rrf(60)), hybridJson("""{"rrf":{"k":60}}"""), "search_hybrid_rrf")
         same(s, hybrid(dbsf()), hybridJson("""{"dbsf":{}}"""), "search_hybrid_dbsf")
         same(s, hybrid(weighted(0.7, 0.3)), hybridJson("""{"weightedSum":{"weights":[0.7,0.3]}}"""), "search_hybrid_weighted")
