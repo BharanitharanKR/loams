@@ -266,11 +266,11 @@ public class AppTest {
 
     private static final float[] EMBEDDING = {0.1f, 0.2f, 0.3f, 0.4f};
 
-    private static final String TEXT_REFUND = "{\"text\":{\"query\":{\"match\":{\"field\":\"body\",\"text\":\"refund\"}},\"k\":10}}";
+    private static final String TEXT_REFUND = "{\"text\":{\"query\":{\"match\":{\"field\":\"body\",\"text\":\"refund\"}}}}";
 
     private static String hybrid(String fusion) {
         return "{\"collection\":\"notes\",\"retrievers\":[" + TEXT_REFUND + ","
-                + "{\"vector\":{\"field\":\"embedding\",\"query\":[0.1,0.2,0.3,0.4],\"k\":10}}],\"fusion\":" + fusion
+                + "{\"vector\":{\"field\":\"embedding\",\"query\":[0.1,0.2,0.3,0.4]}}],\"fusion\":" + fusion
                 + ",\"limit\":3}";
     }
 

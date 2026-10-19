@@ -36,9 +36,6 @@ import java.util.Map;
  */
 public final class Search {
 
-    /** The candidate count a retriever gets when the caller names none. */
-    public static final int DEFAULT_K = 10;
-
     private final SearchRequest.Builder request = SearchRequest.newBuilder();
 
     private Search(String collection) {
@@ -238,36 +235,11 @@ public final class Search {
     }
 
     /**
-     * The request. A retriever whose {@code k} was left at 0 gets {@code max(10, offset + limit)}:
-     * the engine requires 1 ≤ k, and a retriever that fetches fewer candidates than the page shows
-     * would starve it.
+     * The request. A retriever's {@code k} is sent only when the caller set it; left unset, the
+     * engine fills in {@code max(10, offset + limit)}.
      */
     public SearchRequest build() {
-        SearchRequest.Builder out = request.clone();
-        int window = out.getOffset() + (out.hasLimit() ? out.getLimit() : DEFAULT_K);
-        int k = Math.max(DEFAULT_K, window);
-        for (int i = 0; i < out.getRetrieversCount(); i++) {
-            Retriever.Builder r = out.getRetrieversBuilder(i);
-            switch (r.getRetrieverCase()) {
-                case TEXT -> {
-                    if (r.getText().getK() == 0) {
-                        r.getTextBuilder().setK(k);
-                    }
-                }
-                case VECTOR -> {
-                    if (r.getVector().getK() == 0) {
-                        r.getVectorBuilder().setK(k);
-                    }
-                }
-                case SPARSE -> {
-                    if (r.getSparse().getK() == 0) {
-                        r.getSparseBuilder().setK(k);
-                    }
-                }
-                default -> {}
-            }
-        }
-        return out.build();
+        return request.build();
     }
 
     private static Value strings(List<String> values) {
