@@ -83,6 +83,28 @@ The rules, in the order they bite:
 | `env_unsealed` | invalid_argument | ApplyEdits, PushWorkspace, receive-pack: an `env/` file holds a plaintext value (§19.13.2) | `path` |
 | `env_access_denied` | permission_denied | `EnvService` Open, GetLiveSet, Seal: the credential has no grant for the environment (§19.13.7) | `environment` |
 | `env_foreign_reference` | permission_denied | ApplyEdits, PushWorkspace, receive-pack: a sealed `env/` reference names a secret of another repository or path (§19.13.4) | `path` |
+| `memory_store_not_found` | not_found | every `loams.memory.v1` RPC that names a store (by name or `ms_` id) the namespace does not have | `store` |
+| `memory_space_not_found` | not_found | every `loams.memory.v1` RPC that names a space by id, or by a (kind, external_id) key that does not exist when the call may not create it | `space` |
+| `memory_space_limit` | resource_exhausted | `CreateSpace`, and `Add` creating a space on first use, past the store's spaces limit (§52 §13.1) | `limit` |
+| `memory_managed_object` | failed_precondition | a direct write through any other API (Connect, Qdrant, Elasticsearch) to a `_mem.*` or `_code.*` collection or graph, which only Loams Memory writes (§52 §5.1, D891) | `object` |
+| `memory_block_version_mismatch` | aborted | `UpdateBlock` whose `if_version` is not the block's version: another write won; re-read, merge and retry (§52 §6.5) | `label`, `version` |
+| `memory_block_too_large` | invalid_argument | `UpdateBlock` with a value over the block's `limit`, or a `limit` over 16 384, or past the space's 128 blocks | `label`, `limit` |
+| `memory_core_budget_exceeded` | resource_exhausted | `UpdateBlock` that would take the space's blocks past its core-memory cap (default 8 000 characters, §52 §6.5) | `limit` |
+| `memory_content_too_large` | invalid_argument | `Add`, `AddBatch` item: content over 1 MiB (§52 §13.1) | `limit` |
+| `memory_secret_detected` | failed_precondition | `Add`, `AddBatch` item: the content holds a secret and the store's secret policy is `refuse` (§52 §7.1) | `rule` (never the secret) |
+| `memory_pii_refused` | failed_precondition | `Add`, `AddBatch` item: the content holds personal data and the store's PII policy is `refuse` | `kind` |
+| `memory_model_not_configured` | failed_precondition | a call that needs a model the store has none of: `Search` with `rerank: model` and no reranker, `Consolidate` steps that need a chat model, `RetryExtraction` with no chat model | `model` (chat, embedder or reranker) |
+| `memory_model_not_local` | failed_precondition | `CreateStore`, `UpdateStore`, and any model call of a `local_only` store, whose model host is neither loopback nor in `private_hosts` (§52 §10.2) | `host` |
+| `memory_token_budget_exhausted` | resource_exhausted | a model call refused before it is made because the store's daily, run or per-call token budget is spent (§52 §10.3); also an episode's `extraction.reason` | `budget`, `retry_after_ms` |
+| `memory_extraction_failed` | failed_precondition | `Add` with `wait_ms` whose extraction failed within the wait (the episode is written and searchable); also an episode's `extraction.reason` after invalid model output or a provider error (§52 §7.1.2) | `episode`, `cause` |
+| `memory_too_many_spaces` | invalid_argument | `Search`, `GetProfile`: more than 8 spaces (§52 §4.2) | `limit` |
+| `memory_cross_space_write` | invalid_argument | a write that would touch two spaces, or link entities of two spaces (I-ISO, §52 §5.3) | |
+| `memory_not_yet_available` | unimplemented | a `loams.memory.v1` RPC whose MM1 task has not landed, on a server built with the feature `memory` (MM1 plan "Shared contracts"; no longer raised from MM1 Task 56, but never removed) | `rpc` |
+| `code_repo_not_indexed` | failed_precondition | a `CodeMemoryService` query of a repository with no code index (§52 §8; MM1 Task 27) | `repo` |
+| `code_index_building` | unavailable | a `CodeMemoryService` query while the repository's first index is being built; retry later | `repo`, `retry_after_ms` |
+| `code_change_too_large` | invalid_argument | `ReviewContext`, `ImpactRadius`, `RiskScore`: a change over the file limit (default 500, at most 2 000; §52 §13.1) | `limit` |
+| `code_language_unsupported` | failed_precondition | a code query on a file whose language has no parser or resolver | `language` |
+| `code_scip_invalid` | invalid_argument | `UploadScipIndex`: the SCIP index does not parse, or names another repository or commit | `cause` |
 | `live_bad_cursor` | invalid_argument | `loams.live.v1` Query, Mutate and the session's queries: a function's `paginate` got a cursor that is malformed, altered, or from another app, table or index (LV1 Task 4) | |
 | `live_worker_crashed` | internal | `loams.live.v1` Query, Mutate and the session's queries: the isolated worker process running the function crashed or was killed; the call's transaction never committed, and a mutation is not retried (LV1 Task 5, design §45 §3.1). Live's own wire code is `ERROR_CODE_FUNCTION_ERROR`; on Connect it is `internal`, since the crash is the server's (LV1 Task 19) | |
 | `live_deploy_conflict` | failed_precondition | `loams.live.v1` Deploy (LiveAdminService's Deploy and ActivateDeployment from LV1 Task 10): the deploy's `expected_active` is not the app's active deployment, because another deploy activated in between; the message names both. The deployment's record is `failed` (LV1 Task 6, design §45 §3.3) | |
@@ -131,6 +153,8 @@ The rules, in the order they bite:
 | `internal` | internal | a bug; the message and `request_id` go to the log | |
 
 The `loams.postgres.v1` rows (`project_not_found` to `secret_already_issued`) are design §46 §4.1's, registered by PG2 Task 1 before `pg-control` raises them (PG2 Task 9); `reasons_registered` (`crates/loams-proto/tests/postgres.rs`) fails if one §46 §4.1 names is missing. A replayed create under a taken name with another key answers the generic `already_exists`, and a `RestartEndpoint` with `promote` while the branch's read-write endpoint runs the generic `failed_precondition` (PG2 Task 1 ruling R1.8).
+
+The `loams.memory.v1` rows (`memory_store_not_found` to `code_scip_invalid`) are Loams Memory's (design §52 §9.1, D884), registered by MM1 Task 1 before any RPC raises them, with the codes of MM1 ruling R1.4; `reasons_registered` and `reasons_have_their_connect_codes` (`crates/loams-proto/tests/memory.rs`) fail if one §52 §9.1 names is missing or its code changes. The `code_*` rows are `CodeMemoryService`'s (MM1 Task 27); `memory_not_yet_available` stays registered after MM1 Task 56, which stops raising it.
 
 The `loams.repos.v1` rows (`repo_not_found` to `env_foreign_reference`) are Loams Git's (design §36 §19.10, plan GT1's "Public API" contract), registered by GT1 Task 12 before any RPC raises them; `reasons_registered` (`crates/loams-proto/tests/repos.rs`) fails if one the proto or §19.10 names is missing. `quota_exceeded` is shared with `loams.postgres.v1`.
 

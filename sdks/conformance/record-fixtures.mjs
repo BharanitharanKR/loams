@@ -2084,6 +2084,182 @@ const UNPRODUCIBLE_REASONS = [
     standIn: null,
   },
   {
+    reason: 'memory_store_not_found',
+    code: 'not_found',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_space_not_found',
+    code: 'not_found',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_space_limit',
+    code: 'resource_exhausted',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_managed_object',
+    code: 'failed_precondition',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_block_version_mismatch',
+    code: 'aborted',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_block_too_large',
+    code: 'invalid_argument',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_core_budget_exceeded',
+    code: 'resource_exhausted',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_content_too_large',
+    code: 'invalid_argument',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_secret_detected',
+    code: 'failed_precondition',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_pii_refused',
+    code: 'failed_precondition',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_model_not_configured',
+    code: 'failed_precondition',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_model_not_local',
+    code: 'failed_precondition',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_token_budget_exhausted',
+    code: 'resource_exhausted',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_extraction_failed',
+    code: 'failed_precondition',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_too_many_spaces',
+    code: 'invalid_argument',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_cross_space_write',
+    code: 'invalid_argument',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'memory_not_yet_available',
+    code: 'unimplemented',
+    why:
+      "Loams Memory's loams.memory.v1 services are not served yet (MM1 Task " +
+      '11), so the recorder cannot raise it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'code_repo_not_indexed',
+    code: 'failed_precondition',
+    why:
+      "Loams Memory's CodeMemoryService does not exist yet; code.proto lands " +
+      'with MM1 Task 27, so nothing raises it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'code_index_building',
+    code: 'unavailable',
+    why:
+      "Loams Memory's CodeMemoryService does not exist yet; code.proto lands " +
+      'with MM1 Task 27, so nothing raises it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'code_change_too_large',
+    code: 'invalid_argument',
+    why:
+      "Loams Memory's CodeMemoryService does not exist yet; code.proto lands " +
+      'with MM1 Task 27, so nothing raises it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'code_language_unsupported',
+    code: 'failed_precondition',
+    why:
+      "Loams Memory's CodeMemoryService does not exist yet; code.proto lands " +
+      'with MM1 Task 27, so nothing raises it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
+    reason: 'code_scip_invalid',
+    code: 'invalid_argument',
+    why:
+      "Loams Memory's CodeMemoryService does not exist yet; code.proto lands " +
+      'with MM1 Task 27, so nothing raises it (MM1 Task 1).',
+    standIn: null,
+  },
+  {
     reason: 'live_bad_cursor',
     code: 'invalid_argument',
     why:

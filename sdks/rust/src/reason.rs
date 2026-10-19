@@ -137,6 +137,50 @@ pub enum Reason {
     EnvAccessDenied,
     /// A sealed `env/` reference names another repository's secret.
     EnvForeignReference,
+    /// The named Loams Memory store does not exist.
+    MemoryStoreNotFound,
+    /// The named memory space does not exist.
+    MemorySpaceNotFound,
+    /// The store has as many spaces as it may.
+    MemorySpaceLimit,
+    /// The object is managed by Loams Memory and refuses direct writes.
+    MemoryManagedObject,
+    /// Another write changed the block first; re-read and merge.
+    MemoryBlockVersionMismatch,
+    /// The block's value or limit is over its cap.
+    MemoryBlockTooLarge,
+    /// The space's core memory would pass its cap.
+    MemoryCoreBudgetExceeded,
+    /// The content of an add is over 1 MiB.
+    MemoryContentTooLarge,
+    /// The content holds a secret and the store refuses secrets.
+    MemorySecretDetected,
+    /// The content holds personal data and the store refuses it.
+    MemoryPiiRefused,
+    /// The call needs a model the store has not configured.
+    MemoryModelNotConfigured,
+    /// The store is local-only and the model host is not local.
+    MemoryModelNotLocal,
+    /// The store's model token budget is spent.
+    MemoryTokenBudgetExhausted,
+    /// Extracting facts from the episode failed; the episode is kept.
+    MemoryExtractionFailed,
+    /// A read named more than 8 spaces.
+    MemoryTooManySpaces,
+    /// A write would touch more than one space.
+    MemoryCrossSpaceWrite,
+    /// The Loams Memory RPC is not served by this release yet.
+    MemoryNotYetAvailable,
+    /// The repository has no code index.
+    CodeRepoNotIndexed,
+    /// The repository's code index is still being built.
+    CodeIndexBuilding,
+    /// The change has more files than a code query takes.
+    CodeChangeTooLarge,
+    /// The file's language has no parser or resolver.
+    CodeLanguageUnsupported,
+    /// The uploaded SCIP index does not parse or does not match.
+    CodeScipInvalid,
     /// A Live function's `paginate` got a malformed, altered or foreign cursor.
     LiveBadCursor,
     /// The isolated worker running a Live function crashed; the call never committed.
@@ -290,6 +334,28 @@ impl Reason {
         Reason::EnvUnsealed,
         Reason::EnvAccessDenied,
         Reason::EnvForeignReference,
+        Reason::MemoryStoreNotFound,
+        Reason::MemorySpaceNotFound,
+        Reason::MemorySpaceLimit,
+        Reason::MemoryManagedObject,
+        Reason::MemoryBlockVersionMismatch,
+        Reason::MemoryBlockTooLarge,
+        Reason::MemoryCoreBudgetExceeded,
+        Reason::MemoryContentTooLarge,
+        Reason::MemorySecretDetected,
+        Reason::MemoryPiiRefused,
+        Reason::MemoryModelNotConfigured,
+        Reason::MemoryModelNotLocal,
+        Reason::MemoryTokenBudgetExhausted,
+        Reason::MemoryExtractionFailed,
+        Reason::MemoryTooManySpaces,
+        Reason::MemoryCrossSpaceWrite,
+        Reason::MemoryNotYetAvailable,
+        Reason::CodeRepoNotIndexed,
+        Reason::CodeIndexBuilding,
+        Reason::CodeChangeTooLarge,
+        Reason::CodeLanguageUnsupported,
+        Reason::CodeScipInvalid,
         Reason::LiveBadCursor,
         Reason::LiveWorkerCrashed,
         Reason::LiveDeployConflict,
@@ -398,6 +464,28 @@ impl Reason {
             Reason::EnvUnsealed => "env_unsealed",
             Reason::EnvAccessDenied => "env_access_denied",
             Reason::EnvForeignReference => "env_foreign_reference",
+            Reason::MemoryStoreNotFound => "memory_store_not_found",
+            Reason::MemorySpaceNotFound => "memory_space_not_found",
+            Reason::MemorySpaceLimit => "memory_space_limit",
+            Reason::MemoryManagedObject => "memory_managed_object",
+            Reason::MemoryBlockVersionMismatch => "memory_block_version_mismatch",
+            Reason::MemoryBlockTooLarge => "memory_block_too_large",
+            Reason::MemoryCoreBudgetExceeded => "memory_core_budget_exceeded",
+            Reason::MemoryContentTooLarge => "memory_content_too_large",
+            Reason::MemorySecretDetected => "memory_secret_detected",
+            Reason::MemoryPiiRefused => "memory_pii_refused",
+            Reason::MemoryModelNotConfigured => "memory_model_not_configured",
+            Reason::MemoryModelNotLocal => "memory_model_not_local",
+            Reason::MemoryTokenBudgetExhausted => "memory_token_budget_exhausted",
+            Reason::MemoryExtractionFailed => "memory_extraction_failed",
+            Reason::MemoryTooManySpaces => "memory_too_many_spaces",
+            Reason::MemoryCrossSpaceWrite => "memory_cross_space_write",
+            Reason::MemoryNotYetAvailable => "memory_not_yet_available",
+            Reason::CodeRepoNotIndexed => "code_repo_not_indexed",
+            Reason::CodeIndexBuilding => "code_index_building",
+            Reason::CodeChangeTooLarge => "code_change_too_large",
+            Reason::CodeLanguageUnsupported => "code_language_unsupported",
+            Reason::CodeScipInvalid => "code_scip_invalid",
             Reason::LiveBadCursor => "live_bad_cursor",
             Reason::LiveWorkerCrashed => "live_worker_crashed",
             Reason::LiveDeployConflict => "live_deploy_conflict",
@@ -485,6 +573,14 @@ impl Reason {
             | Reason::ObjectMissing
             | Reason::SecretDetected
             | Reason::SetupRequired
+            | Reason::MemoryManagedObject
+            | Reason::MemorySecretDetected
+            | Reason::MemoryPiiRefused
+            | Reason::MemoryModelNotConfigured
+            | Reason::MemoryModelNotLocal
+            | Reason::MemoryExtractionFailed
+            | Reason::CodeRepoNotIndexed
+            | Reason::CodeLanguageUnsupported
             | Reason::FailedPrecondition => Code::FailedPrecondition,
             Reason::RequesterCannotApprove
             | Reason::DecisionProofInvalid
@@ -522,6 +618,12 @@ impl Reason {
             | Reason::LiveBadCursor
             | Reason::LiveSchemaViolation
             | Reason::EnvUnsealed
+            | Reason::MemoryBlockTooLarge
+            | Reason::MemoryContentTooLarge
+            | Reason::MemoryTooManySpaces
+            | Reason::MemoryCrossSpaceWrite
+            | Reason::CodeChangeTooLarge
+            | Reason::CodeScipInvalid
             | Reason::InvalidArgument => Code::InvalidArgument,
             Reason::PushTargetUnknown
             | Reason::HouseUnknownTable
@@ -531,10 +633,13 @@ impl Reason {
             | Reason::RepoNotFound
             | Reason::WorkspaceNotFound
             | Reason::SessionGone
+            | Reason::MemoryStoreNotFound
+            | Reason::MemorySpaceNotFound
             | Reason::NotFound => Code::NotFound,
             Reason::NotImplemented
             | Reason::FeatureNotInVariant
             | Reason::ObjectFormatUnsupported
+            | Reason::MemoryNotYetAvailable
             | Reason::HouseNotConfigured => Code::Unimplemented,
             Reason::EndpointExistsForBranch
             | Reason::RepoAlreadyExists
@@ -546,6 +651,9 @@ impl Reason {
             | Reason::QuotaExceeded
             | Reason::LiveFunctionOutOfMemory
             | Reason::LiveLimitExceeded
+            | Reason::MemorySpaceLimit
+            | Reason::MemoryCoreBudgetExceeded
+            | Reason::MemoryTokenBudgetExhausted
             | Reason::ResourceExhausted => Code::ResourceExhausted,
             Reason::ComputeStartFailed
             | Reason::StorageUnavailable
@@ -553,11 +661,15 @@ impl Reason {
             | Reason::AuthUnavailable
             | Reason::SessionRotate
             | Reason::NodeDraining
+            | Reason::CodeIndexBuilding
             | Reason::Unavailable => Code::Unavailable,
             Reason::HouseTimeout | Reason::LiveFunctionTimeout | Reason::DeadlineExceeded => {
                 Code::DeadlineExceeded
             }
-            Reason::RefStale | Reason::WorkspaceFenced | Reason::Aborted => Code::Aborted,
+            Reason::RefStale
+            | Reason::WorkspaceFenced
+            | Reason::MemoryBlockVersionMismatch
+            | Reason::Aborted => Code::Aborted,
             Reason::LiveWorkerCrashed | Reason::Internal => Code::Internal,
             Reason::HouseCancelled => Code::Canceled,
             Reason::HouseQueryFailed | Reason::LiveFunctionError => Code::Unknown,
@@ -604,7 +716,7 @@ mod tests {
 
     #[test]
     fn every_reason_round_trips_through_its_wire_form() {
-        assert!(Reason::ALL.len() >= 102, "the registry has 102 rows");
+        assert!(Reason::ALL.len() >= 124, "the registry has 124 rows");
         for reason in Reason::ALL {
             assert_eq!(Reason::parse(reason.as_str()), Some(*reason));
         }

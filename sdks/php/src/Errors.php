@@ -88,6 +88,28 @@ class SecretDetectedException extends LoamsException {}
 class EnvUnsealedException extends LoamsException {}
 class EnvAccessDeniedException extends LoamsException {}
 class EnvForeignReferenceException extends LoamsException {}
+class MemoryStoreNotFoundException extends LoamsException {}
+class MemorySpaceNotFoundException extends LoamsException {}
+class MemorySpaceLimitException extends LoamsException {}
+class MemoryManagedObjectException extends LoamsException {}
+class MemoryBlockVersionMismatchException extends LoamsException {}
+class MemoryBlockTooLargeException extends LoamsException {}
+class MemoryCoreBudgetExceededException extends LoamsException {}
+class MemoryContentTooLargeException extends LoamsException {}
+class MemorySecretDetectedException extends LoamsException {}
+class MemoryPiiRefusedException extends LoamsException {}
+class MemoryModelNotConfiguredException extends LoamsException {}
+class MemoryModelNotLocalException extends LoamsException {}
+class MemoryTokenBudgetExhaustedException extends LoamsException {}
+class MemoryExtractionFailedException extends LoamsException {}
+class MemoryTooManySpacesException extends LoamsException {}
+class MemoryCrossSpaceWriteException extends LoamsException {}
+class MemoryNotYetAvailableException extends LoamsException {}
+class CodeRepoNotIndexedException extends LoamsException {}
+class CodeIndexBuildingException extends LoamsException {}
+class CodeChangeTooLargeException extends LoamsException {}
+class CodeLanguageUnsupportedException extends LoamsException {}
+class CodeScipInvalidException extends LoamsException {}
 class LiveBadCursorException extends LoamsException {}
 class LiveWorkerCrashedException extends LoamsException {}
 class LiveDeployConflictException extends LoamsException {}
@@ -200,6 +222,28 @@ class ErrorParser
         'env_unsealed' => EnvUnsealedException::class,
         'env_access_denied' => EnvAccessDeniedException::class,
         'env_foreign_reference' => EnvForeignReferenceException::class,
+        'memory_store_not_found' => MemoryStoreNotFoundException::class,
+        'memory_space_not_found' => MemorySpaceNotFoundException::class,
+        'memory_space_limit' => MemorySpaceLimitException::class,
+        'memory_managed_object' => MemoryManagedObjectException::class,
+        'memory_block_version_mismatch' => MemoryBlockVersionMismatchException::class,
+        'memory_block_too_large' => MemoryBlockTooLargeException::class,
+        'memory_core_budget_exceeded' => MemoryCoreBudgetExceededException::class,
+        'memory_content_too_large' => MemoryContentTooLargeException::class,
+        'memory_secret_detected' => MemorySecretDetectedException::class,
+        'memory_pii_refused' => MemoryPiiRefusedException::class,
+        'memory_model_not_configured' => MemoryModelNotConfiguredException::class,
+        'memory_model_not_local' => MemoryModelNotLocalException::class,
+        'memory_token_budget_exhausted' => MemoryTokenBudgetExhaustedException::class,
+        'memory_extraction_failed' => MemoryExtractionFailedException::class,
+        'memory_too_many_spaces' => MemoryTooManySpacesException::class,
+        'memory_cross_space_write' => MemoryCrossSpaceWriteException::class,
+        'memory_not_yet_available' => MemoryNotYetAvailableException::class,
+        'code_repo_not_indexed' => CodeRepoNotIndexedException::class,
+        'code_index_building' => CodeIndexBuildingException::class,
+        'code_change_too_large' => CodeChangeTooLargeException::class,
+        'code_language_unsupported' => CodeLanguageUnsupportedException::class,
+        'code_scip_invalid' => CodeScipInvalidException::class,
         'live_bad_cursor' => LiveBadCursorException::class,
         'live_worker_crashed' => LiveWorkerCrashedException::class,
         'live_deploy_conflict' => LiveDeployConflictException::class,

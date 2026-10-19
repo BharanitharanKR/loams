@@ -239,6 +239,48 @@ Git Smart HTTP (§36 §6.1, D602, D603) is a **protocol** surface and stays HTTP
 
 Until Task 46 the listener serves only the authenticated catch-all routes listed under "Loams Git listener" above.
 
+## Planned: `loams.memory.v1` (MM1 Task 1; the RPCs are served from MM1 Task 11)
+
+Loams Memory (design §52 §9.1, D884). With the `loams` feature `memory` (MM1 Task 11), the main port serves `loams.memory.v1.MemoryAdminService` and `MemoryService` over Connect, gRPC and gRPC-Web, behind the engine's authentication; an RPC whose MM1 task has not landed answers `unimplemented` with `memory_not_yet_available`, and without the feature every RPC answers `feature_not_in_variant` (the package's `CATALOGUE` row and that stub land together in Task 11, MM1 ruling R1.8). It is a pure-RPC package: §52 names no REST surface and API2 (D602) removes application REST, so the rows below are the Connect paths, not console REST routes (MM1 ruling R1.5). They put the path first, which `route_map_covers_every_route` skips; `every_rpc_has_a_planned_route` (`crates/loams-proto/tests/memory.rs`) checks that every row names an RPC of the two services and every RPC has a row. The MVP subset (the plan's "Shared contracts", marked MVP) is served by the end of MM1a. `CodeMemoryService` joins this section with `code.proto` (MM1 Task 27).
+
+| Path | Method | Target RPC | Notes |
+|---|---|---|---|
+| `/loams.memory.v1.MemoryAdminService/CreateStore` | POST | `loams.memory.v1.MemoryAdminService/CreateStore` | MVP: MM1 Task 3 |
+| `/loams.memory.v1.MemoryAdminService/GetStore` | POST | `loams.memory.v1.MemoryAdminService/GetStore` | MVP: Task 3 |
+| `/loams.memory.v1.MemoryAdminService/ListStores` | POST | `loams.memory.v1.MemoryAdminService/ListStores` | MVP: Task 3 |
+| `/loams.memory.v1.MemoryAdminService/UpdateStore` | POST | `loams.memory.v1.MemoryAdminService/UpdateStore` | MVP: Task 3 |
+| `/loams.memory.v1.MemoryAdminService/DeleteStore` | POST | `loams.memory.v1.MemoryAdminService/DeleteStore` | returns an `Operation`; Task 23 (owner ruling, R1.7) |
+| `/loams.memory.v1.MemoryAdminService/CreateSpace` | POST | `loams.memory.v1.MemoryAdminService/CreateSpace` | MVP: Task 3 |
+| `/loams.memory.v1.MemoryAdminService/GetSpace` | POST | `loams.memory.v1.MemoryAdminService/GetSpace` | MVP: Task 3 |
+| `/loams.memory.v1.MemoryAdminService/ListSpaces` | POST | `loams.memory.v1.MemoryAdminService/ListSpaces` | MVP: Task 3 |
+| `/loams.memory.v1.MemoryAdminService/UpdateSpace` | POST | `loams.memory.v1.MemoryAdminService/UpdateSpace` | `name` and `ttl` with Task 3; an `isolation` move returns `memory.space.move`, Task 52 (owner ruling, R1.7) |
+| `/loams.memory.v1.MemoryAdminService/ExportSpace` | POST | `loams.memory.v1.MemoryAdminService/ExportSpace` | returns an `Operation`; Task 25 |
+| `/loams.memory.v1.MemoryAdminService/ImportSpace` | POST | `loams.memory.v1.MemoryAdminService/ImportSpace` | returns an `Operation`; Task 25 |
+| `/loams.memory.v1.MemoryAdminService/ConfigureMirror` | POST | `loams.memory.v1.MemoryAdminService/ConfigureMirror` | Task 26 (deferred past GA, Q785/Q786) |
+| `/loams.memory.v1.MemoryAdminService/GetErasure` | POST | `loams.memory.v1.MemoryAdminService/GetErasure` | MVP: Task 9 (logical forget); the purge's progress from Task 23 |
+| `/loams.memory.v1.MemoryService/Add` | POST | `loams.memory.v1.MemoryService/Add` | MVP: Task 5; `Idempotency-Key` carries `idempotency_key` |
+| `/loams.memory.v1.MemoryService/AddBatch` | POST | `loams.memory.v1.MemoryService/AddBatch` | MVP: Task 5 |
+| `/loams.memory.v1.MemoryService/Search` | POST | `loams.memory.v1.MemoryService/Search` | MVP: Task 8 (hybrid); expand from Task 15 |
+| `/loams.memory.v1.MemoryService/GetProfile` | POST | `loams.memory.v1.MemoryService/GetProfile` | MVP: Task 10 |
+| `/loams.memory.v1.MemoryService/GetFact` | POST | `loams.memory.v1.MemoryService/GetFact` | MVP: Task 9 |
+| `/loams.memory.v1.MemoryService/ListFacts` | POST | `loams.memory.v1.MemoryService/ListFacts` | MVP: Task 9 |
+| `/loams.memory.v1.MemoryService/UpdateFact` | POST | `loams.memory.v1.MemoryService/UpdateFact` | MVP: Task 9 |
+| `/loams.memory.v1.MemoryService/InvalidateFact` | POST | `loams.memory.v1.MemoryService/InvalidateFact` | MVP: Task 9 |
+| `/loams.memory.v1.MemoryService/PinFact` | POST | `loams.memory.v1.MemoryService/PinFact` | MVP: Task 9 |
+| `/loams.memory.v1.MemoryService/History` | POST | `loams.memory.v1.MemoryService/History` | MVP: Task 9 |
+| `/loams.memory.v1.MemoryService/GetEntity` | POST | `loams.memory.v1.MemoryService/GetEntity` | MVP: Task 9 |
+| `/loams.memory.v1.MemoryService/ListEntities` | POST | `loams.memory.v1.MemoryService/ListEntities` | MVP: Task 9 |
+| `/loams.memory.v1.MemoryService/ListEpisodes` | POST | `loams.memory.v1.MemoryService/ListEpisodes` | MVP: Task 9 |
+| `/loams.memory.v1.MemoryService/RetryExtraction` | POST | `loams.memory.v1.MemoryService/RetryExtraction` | MVP: Task 9 |
+| `/loams.memory.v1.MemoryService/Forget` | POST | `loams.memory.v1.MemoryService/Forget` | MVP: Task 9 (logical); physical purge Task 23 |
+| `/loams.memory.v1.MemoryService/GetBlock` | POST | `loams.memory.v1.MemoryService/GetBlock` | MVP: Task 10 |
+| `/loams.memory.v1.MemoryService/ListBlocks` | POST | `loams.memory.v1.MemoryService/ListBlocks` | MVP: Task 10 |
+| `/loams.memory.v1.MemoryService/UpdateBlock` | POST | `loams.memory.v1.MemoryService/UpdateBlock` | MVP: Task 10 |
+| `/loams.memory.v1.MemoryService/Consolidate` | POST | `loams.memory.v1.MemoryService/Consolidate` | returns an `Operation`; Task 18 |
+| `/loams.memory.v1.MemoryService/ListDreamRuns` | POST | `loams.memory.v1.MemoryService/ListDreamRuns` | Task 18 |
+| `/loams.memory.v1.MemoryService/RevertDreamRun` | POST | `loams.memory.v1.MemoryService/RevertDreamRun` | returns an `Operation`; Task 18 |
+| `/loams.memory.v1.MemoryService/WatchSpace` | POST | `loams.memory.v1.MemoryService/WatchSpace` | server stream; Task 24 |
+
 ## Out of scope: compatibility surfaces (D603)
 
 Not mapped and not changed: the Qdrant REST and gRPC gateway (`loams-qdrant`), the Elasticsearch gateway (`loams-es`), Flight SQL (`server.rs`, `--flight-sql-listen`), Postgres wire (`pg`), MySQL wire (`mysql_wire`), the Resonate HTTP protocol (`loams-durable`), and the tonic `loams.stream.v1` listener for Dapr adapters (`loams-stream-grpc`, `--stream-grpc-listen`), which Task 6 moves onto connect-rust without changing its wire contract.
