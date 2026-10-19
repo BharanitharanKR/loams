@@ -194,7 +194,18 @@ fn package_types(model: &Model, package: &str) -> Vec<(String, String)> {
             ]
         })
         .filter(|(full, _)| naming::package_of(full) == package)
-        .map(|(full, file)| (file, naming::leaf(full).to_owned()))
+        .map(|(full, file)| {
+            // A leaf another package's message also has is imported under
+            // its `naming::local_name` alias.
+            let local = naming::local_name(model, full);
+            let name = naming::leaf(full);
+            let import = if local == name {
+                local
+            } else {
+                format!("{name} as {local}")
+            };
+            (file, import)
+        })
         .filter(|(_, name)| !name.is_empty())
         .collect();
     names.sort_by(|left, right| left.1.cmp(&right.1));
@@ -433,8 +444,8 @@ fn methods_table(out: &mut String, model: &Model) -> Result<(), String> {
     );
     for module in &model.modules {
         for call in &module.calls {
-            let input = message_ref(&call.package, &call.input);
-            let output = message_ref(&call.package, &call.output);
+            let input = crate::naming::local_name(model, &call.input);
+            let output = crate::naming::local_name(model, &call.output);
             writeln!(
                 out,
                 "    \"{rpc}\": MethodInfo(\n\
@@ -456,15 +467,6 @@ fn methods_table(out: &mut String, model: &Model) -> Result<(), String> {
     }
     out.push_str("}\n");
     Ok(())
-}
-
-/// A generated message class as Python writes it: the bare name, because the
-/// header already imports every message the protocols name from the `_pb2`
-/// module protoc emitted for its proto file. Spelling out the module would mean
-/// deriving the proto file's stem here, and the package's version segment is
-/// not it — `loams.instance.v1` is emitted as `instance_pb2`, not `v1_pb2`.
-fn message_ref(_package: &str, message: &str) -> String {
-    message.rsplit('.').next().unwrap_or(message).to_string()
 }
 
 /// One module's two protocols: the async client and the sync one.

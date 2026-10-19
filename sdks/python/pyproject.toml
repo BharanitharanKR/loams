@@ -99,6 +99,7 @@ module = [
   "loams.notifications.*",
   "loams.operations.*",
   "loams.options.*",
+  "loams.sql.*",
 ]
 ignore_errors = true
 

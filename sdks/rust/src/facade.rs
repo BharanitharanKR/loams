@@ -709,6 +709,18 @@ pub static MODULES: &[ModuleBinding] = &[
         ],
     },
     ModuleBinding {
+        name: "sql",
+        summary: "SQL: one read-only statement over a namespace's collections, with parameters.",
+        service: "loams.sql.v1.SqlService",
+        package: "loams.sql.v1",
+        unstable: false,
+        derived: false,
+        calls: &[
+            CallBinding { module: "sql", name: "query", proto_name: "query", method: "Query", rpc: "loams.sql.v1.SqlService/Query", service: "loams.sql.v1.SqlService", package: "loams.sql.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "sql", name: "query_arrow", proto_name: "query_arrow", method: "QueryArrow", rpc: "loams.sql.v1.SqlService/QueryArrow", service: "loams.sql.v1.SqlService", package: "loams.sql.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+        ],
+    },
+    ModuleBinding {
         name: "tables",
         summary: "",
         service: "loams.live.v1.LiveService",
@@ -1522,6 +1534,33 @@ pub trait SearchModule {
         request: loams_proto::loams::collection::v1::SearchRequest,
         options: Option<&CallOptions>,
     ) -> impl std::future::Future<Output = Result<loams_proto::loams::collection::v1::SearchResponse, LoamsError>> + Send;
+}
+
+/// `SqlModule` is `loams.sql` — SQL: one read-only statement over a namespace's collections, with parameters.
+///
+/// Wraps `loams.sql.v1.SqlService`.
+#[rustfmt::skip]
+pub trait SqlModule {
+    /// The SDK module, as it appears on `loams.sql`.
+    const MODULE: &'static str = "sql";
+    /// The service behind the module.
+    const SERVICE: &'static str = "loams.sql.v1.SqlService";
+    /// Whether the package's wire contract may still change.
+    const UNSTABLE: bool = false;
+
+    /// `loams.sql.v1.SqlService/Query`, retried: safe.
+    fn query(
+        &self,
+        request: loams_proto::loams::sql::v1::QueryRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::sql::v1::QueryResponse, LoamsError>> + Send;
+
+    /// `loams.sql.v1.SqlService/QueryArrow`, retried: safe.
+    fn query_arrow(
+        &self,
+        request: loams_proto::loams::sql::v1::QueryArrowRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::sql::v1::QueryArrowResponse, LoamsError>> + Send;
 }
 
 /// `TablesModule` is a second facade name for the same RPCs, exposed as `loams.tables`.

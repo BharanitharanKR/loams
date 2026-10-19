@@ -410,6 +410,7 @@ mod tests {
         use loams_proto::loams::instance::v1::{
             INSTANCE_SERVICE_GET_INSTANCE_SPEC, INSTANCE_SERVICE_WHO_AM_I_SPEC,
         };
+        use loams_proto::loams::sql::v1::{SQL_SERVICE_QUERY_ARROW_SPEC, SQL_SERVICE_QUERY_SPEC};
 
         let generated = [
             // SDKP P0a: the app data planes. `QueryService/Search` backs two
@@ -445,6 +446,9 @@ mod tests {
             GRAPH_SERVICE_EXECUTE_BATCH_SPEC,
             GRAPH_SERVICE_EXECUTE_STREAM_SPEC,
             GRAPH_SERVICE_EXPLAIN_SPEC,
+            // SDKP Part C: `sql`.
+            SQL_SERVICE_QUERY_SPEC,
+            SQL_SERVICE_QUERY_ARROW_SPEC,
             // The console API (API2 Tasks 6 and 7).
             AUTH_SERVICE_LIST_PROVIDERS_SPEC,
             AUTH_SERVICE_COMPLETE_SETUP_SPEC,

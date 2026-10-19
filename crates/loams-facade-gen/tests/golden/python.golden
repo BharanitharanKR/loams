@@ -47,6 +47,8 @@ from loams.live.v1.live_pb2 import AuthenticateRequest, AuthenticateResponse, Mo
 from loams.live.v1.admin_pb2 import ActivateDeploymentRequest, ActivateDeploymentResponse, CreateAppRequest, CreateAppResponse, DeleteAppRequest, DeleteAppResponse, DeployRequest, DeployResponse, GetAppRequest, GetAppResponse, GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse, ListAppsRequest, ListAppsResponse, ListDeploymentsRequest, ListDeploymentsResponse, TailLogsRequest, TailLogsResponse, UpdateAppRequest, UpdateAppResponse
 from loams.live.v1.live_connect import LiveServiceClient, LiveServiceClientSync
 from loams.live.v1.admin_connect import LiveAdminServiceClient, LiveAdminServiceClientSync
+from loams.sql.v1.sql_pb2 import QueryArrowRequest, QueryArrowResponse, QueryRequest as SqlV1QueryRequest, QueryResponse as SqlV1QueryResponse
+from loams.sql.v1.sql_connect import SqlServiceClient, SqlServiceClientSync
 from loams.operations.v1.operations_pb2 import Operation
 
 PROTO_REV: Final[str] = "v1"
@@ -1823,6 +1825,42 @@ MODULES: Final[tuple[ModuleBinding, ...]] = (
         ),
     ),
     ModuleBinding(
+        name="sql",
+        summary="SQL: one read-only statement over a namespace's collections, with parameters.",
+        service="loams.sql.v1.SqlService",
+        package="loams.sql.v1",
+        unstable=False,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="sql",
+                name="query",
+                proto_name="query",
+                method="Query",
+                rpc="loams.sql.v1.SqlService/Query",
+                service="loams.sql.v1.SqlService",
+                package="loams.sql.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="sql",
+                name="query_arrow",
+                proto_name="query_arrow",
+                method="QueryArrow",
+                rpc="loams.sql.v1.SqlService/QueryArrow",
+                service="loams.sql.v1.SqlService",
+                package="loams.sql.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+        ),
+    ),
+    ModuleBinding(
         name="tables",
         summary="",
         service="loams.live.v1.LiveService",
@@ -2500,6 +2538,20 @@ METHODS: Final[dict[str, MethodInfo[Message, Message]]] = {
         service_name="loams.collection.v1.QueryService",
         input=SearchRequest,
         output=SearchResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.sql.v1.SqlService/Query": MethodInfo(
+        name="Query",
+        service_name="loams.sql.v1.SqlService",
+        input=SqlV1QueryRequest,
+        output=SqlV1QueryResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.sql.v1.SqlService/QueryArrow": MethodInfo(
+        name="QueryArrow",
+        service_name="loams.sql.v1.SqlService",
+        input=QueryArrowRequest,
+        output=QueryArrowResponse,
         idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
     ),
     "loams.live.v1.LiveService/Mutate": MethodInfo(
@@ -4568,6 +4620,68 @@ class SearchModuleSync(Protocol):
         *,
         options: CallOptions | None = None,
     ) -> loams.collection.v1.query_pb2.SearchResponse:
+        ...
+
+
+
+class SqlModule(Protocol):
+    """`loams.sql` — SQL: one read-only statement over a namespace's collections, with parameters.
+
+    Wraps `loams.sql.v1.SqlService`.
+    """
+
+    module: ClassVar[Literal["sql"]]
+    service: ClassVar[Literal["loams.sql.v1.SqlService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.sql.v1.SqlService/Query`, retried: safe.
+    """
+    async def query(
+        self,
+        request: loams.sql.v1.sql_pb2.QueryRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.sql.v1.sql_pb2.QueryResponse:
+        ...
+
+    """`loams.sql.v1.SqlService/QueryArrow`, retried: safe.
+    """
+    async def query_arrow(
+        self,
+        request: loams.sql.v1.sql_pb2.QueryArrowRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.sql.v1.sql_pb2.QueryArrowResponse:
+        ...
+
+
+
+class SqlModuleSync(Protocol):
+    """`loams.sql` — SQL: one read-only statement over a namespace's collections, with parameters.
+
+    Wraps `loams.sql.v1.SqlService`.
+    """
+
+    module: ClassVar[Literal["sql"]]
+    service: ClassVar[Literal["loams.sql.v1.SqlService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.sql.v1.SqlService/Query`, retried: safe.
+    """
+    def query(
+        self,
+        request: loams.sql.v1.sql_pb2.QueryRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.sql.v1.sql_pb2.QueryResponse:
+        ...
+
+    """`loams.sql.v1.SqlService/QueryArrow`, retried: safe.
+    """
+    def query_arrow(
+        self,
+        request: loams.sql.v1.sql_pb2.QueryArrowRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.sql.v1.sql_pb2.QueryArrowResponse:
         ...
 
 

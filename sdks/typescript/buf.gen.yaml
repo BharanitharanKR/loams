@@ -55,4 +55,5 @@ plugins:
       - package=loams.admin.v1=@loams/proto/admin
       - package=loams.collection.v1=@loams/proto/collection-v1
       - package=loams.graph.v1=@loams/proto/graph
+      - package=loams.sql.v1=@loams/proto/sql
 clean: true

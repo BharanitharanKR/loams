@@ -33,6 +33,7 @@ const PACKAGE_PARAMETERS: &[&str] = &[
     "loams.admin.v1=loams_proto::loams::admin::v1",
     "loams.collection.v1=loams_proto::loams::collection::v1",
     "loams.graph.v1=loams_proto::loams::graph::v1",
+    "loams.sql.v1=loams_proto::loams::sql::v1",
 ];
 
 /// The three types the generated traits name that the runtime defines. They are

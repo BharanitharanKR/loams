@@ -94,7 +94,7 @@ pub fn render(model: &Model, packages: &PackageMap, proto_rev: &str) -> Result<S
     }
 
     for module in &model.modules {
-        module_interface(&mut out, module)?;
+        module_interface(&mut out, model, module)?;
     }
     bindings(&mut out, model, packages)?;
     reasons(&mut out, model);
@@ -126,7 +126,7 @@ fn header(out: &mut String, proto_rev: &str) {
 
 /// The interface of one module: its summary, its service, and one method per
 /// facade call with the generated message types.
-fn module_interface(out: &mut String, module: &Module) -> Result<(), String> {
+fn module_interface(out: &mut String, model: &Model, module: &Module) -> Result<(), String> {
     let unstable = if module.unstable {
         " Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3)."
     } else {
@@ -183,7 +183,7 @@ fn module_interface(out: &mut String, module: &Module) -> Result<(), String> {
     )
     .ok();
     for call in &module.calls {
-        call_signature(out, call)?;
+        call_signature(out, model, call)?;
     }
     out.push_str("}\n\n");
     Ok(())
@@ -192,9 +192,11 @@ fn module_interface(out: &mut String, module: &Module) -> Result<(), String> {
 /// One call's TypeScript signature. A server stream returns an
 /// `AsyncIterable` of the element message, which is the language's native
 /// async iteration (design §44 §7.1).
-fn call_signature(out: &mut String, call: &Call) -> Result<(), String> {
-    let input = schema_name(&call.input)?;
-    let output = message_name(&call.output)?;
+fn call_signature(out: &mut String, model: &Model, call: &Call) -> Result<(), String> {
+    schema_name(&call.input)?;
+    message_name(&call.output)?;
+    let input = format!("{}Schema", crate::naming::local_name(model, &call.input));
+    let output = crate::naming::local_name(model, &call.output);
     let name = camel(&call.name);
     let paging = match &call.pagination {
         Some(paging) => format!(
@@ -392,13 +394,29 @@ fn type_names(model: &Model, packages: &PackageMap, specifier: &str) -> Vec<Stri
     for call in model.calls() {
         // Each type is imported from its own package's module, which is not
         // always the call's.
-        for (full, name) in [
-            (&call.input, schema_name(&call.input).unwrap_or_default()),
-            (&call.output, message_name(&call.output).unwrap_or_default()),
+        // A leaf another package's message also has is imported under its
+        // `naming::local_name` alias.
+        for (full, name, suffix) in [
+            (
+                &call.input,
+                schema_name(&call.input).unwrap_or_default(),
+                "Schema",
+            ),
+            (
+                &call.output,
+                message_name(&call.output).unwrap_or_default(),
+                "",
+            ),
         ] {
             if packages.get(&package_of(model, full)) != Some(specifier) {
                 continue;
             }
+            let local = format!("{}{suffix}", crate::naming::local_name(model, full));
+            let name = if !name.is_empty() && local != name {
+                format!("{name} as {local}")
+            } else {
+                name
+            };
             if !name.is_empty() && !names.contains(&name) {
                 names.push(name);
             }
