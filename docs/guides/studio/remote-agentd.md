@@ -1,30 +1,60 @@
 # A remote agentd for Studio in the browser
 
-Loams Studio in the browser console works against a `loams-agentd` you run on a machine you control: a dev box, a VM, a container or a workspace sandbox (design [§53](../../design/53-studio-ade.md) §6.3, D909). One remote agentd serves one person (D921). The browser reaches it over TLS with your own short-lived access token, and the daemon's own token never leaves the machine.
+Loams Studio in the browser console works against a `loams-agentd` you run on a machine you control: a dev box, a VM, a container or a workspace sandbox (design [§53](../../design/53-studio-ade.md) §6.3, D909). One remote agentd serves one person (D921). The browser reaches it over TLS on your tailnet with your own short-lived access token, and the daemon's own token never leaves the machine. **Never expose it on the public internet.**
 
-> **Status.** The remote listener, its checks, previews through it and the console's Content-Security-Policy setting ([below](#the-consoles-content-security-policy)) are on `dev` (SD1 Tasks 7, 26 and 30). Two things are **pending**:
+> **Status.** The remote listener, its checks, previews through it and the console's Content-Security-Policy setting ([below](#the-consoles-content-security-policy)) ship in 0.1.0 (SD1 Tasks 7, 26 and 30). The hosted console, `https://console.loams.dev`, reaches a 0.1.0 agentd through **Settings › Agentd hosts**: threads, runs, approvals and diffs work. What is **pending**:
 > - a sign-in that issues the agentd token, so for now you paste one (MT1);
-> - Studio in the browser without the `studio` instance feature (SD1 Task 32; see [Getting started](getting-started.md#in-a-browser)).
+> - **previews in the hosted console.** Its `frame-src` is `'self'`, so the browser refuses to frame any agentd host's preview ([Previews](#previews));
+> - a standalone package for the daemon ([#874](https://github.com/ostrium-labs/loams/issues/874)); for now you take the binary out of the image ([below](#get-the-binary)).
+
+## The short version
+
+For the hosted console, the host must be a `*.ts.net` name on **port 443**: its policy allows `connect-src https://*.ts.net`, and a CSP source with no port matches only the scheme's default port, so `https://devbox.<tailnet>.ts.net:8443` is blocked in the browser before it reaches the daemon.
+
+1. [Get the binary](#get-the-binary) and an empty `config.toml`.
+2. Get a certificate for the node with `tailscale cert`, and let the binary bind port 443 ([Port 443 on the tailnet](#port-443-on-the-tailnet)).
+3. Set up an [issuer](#an-issuer) and find your `sub`.
+4. Run `serve --remote` on the tailnet address, port 443, with `--allow-origin https://console.loams.dev`, or [run it as a service](#run-it-as-a-service).
+5. In the console, open Studio › **Settings** › **Agentd hosts**, add `https://devbox.<tailnet>.ts.net` and paste a token ([In Studio](#in-studio)).
+
+## Get the binary
+
+`loams-agentd` is not in the `loams` CLI packages (`.deb`, `.rpm`, pacman), and the release's `loams-agentd-<version>.spdx.json` asset is its SBOM, not the binary. Take it out of the published image, `ghcr.io/ostrium-labs/loams-agentd` (amd64 and arm64), where it is `/usr/local/bin/loams-agentd`:
+
+```sh
+podman create --name loams-agentd-copy ghcr.io/ostrium-labs/loams-agentd:0.1.0
+podman cp loams-agentd-copy:/usr/local/bin/loams-agentd ~/.local/bin/
+podman rm loams-agentd-copy
+loams-agentd version        # loams-agentd 0.1.0
+```
+
+(`docker create` and `docker cp` work the same way.) The binary is linked against glibc 2.39 and nothing else of note, so it runs on Debian 13, Ubuntu 24.04, Fedora 40 and newer.
+
+Loams Desktop also bundles it (Linux, and macOS and Windows since 0.1.0), in the app's `resources/bin/`, for example `/opt/Loams Desktop/resources/bin/loams-agentd` on Linux and `/Applications/Loams Desktop.app/Contents/Resources/bin/loams-agentd` on macOS. You can also build it from source: `cargo build --release -p loams-agentd`.
 
 ## What `serve --remote` opens
 
 ```sh
 loams-agentd serve --remote \
-  --listen 0.0.0.0:8443 \
-  --tls-cert /etc/loams-agentd-tls/cert.pem --tls-key /etc/loams-agentd-tls/key.pem \
-  --issuer https://auth.example.com/application/o/loams-agentd/ \
+  --listen 100.101.102.103:443 \
+  --tls-cert ~/.config/loams-agentd/tls/cert.pem --tls-key ~/.config/loams-agentd/tls/key.pem \
+  --issuer http://127.0.0.1:8080/realms/loams \
   --audience loams-agentd \
   --subject <your sub> \
-  --allow-origin https://console.example.com \
-  --config /var/lib/loams-agentd/config.toml
+  --allow-origin https://console.loams.dev \
+  --config ~/.config/loams-agentd/config.toml
 ```
 
-`serve` runs the daemon as `run` does (the ndjson listener, the loopback Connect listener and everything else) and adds the remote listener.
+Here `100.101.102.103` stands for the machine's tailnet address (`tailscale ip -4`) and the issuer is the [Keycloak recipe](#keycloak-tested) below. `serve` runs the daemon as `run` does (the ndjson listener, the loopback Connect listener and everything else) and adds the remote listener.
 
 **Flags and config:**
 - **Every flag is required**, except `--allow-origin`, which you repeat once per console origin. A missing flag exits 4 and names it (`loams-agentd: serve --remote needs --tls-cert`). So does a certificate, key, issuer or origin that can't be used. Nothing has a default that opens the daemon up.
-- **The same settings can live in `config.toml`.** Add a `[remote]` table with `enabled = true` and the keys `listen`, `tls_cert`, `tls_key`, `issuer`, `audience`, `subject` and `allow_origins`. Then plain `loams-agentd run` opens the listener too. Without `enabled = true` the listener stays off, and with it every key but `allow_origins` is required. On Windows, use `config.toml`: the service re-runs its worker without the flags.
-- **`--config` names the daemon's directory.** The daemon writes its lock, token, discovery file, store and logs beside `config.toml`, so that directory must be writable. `LOAMS_AGENTD_CONFIG` overrides `--config`.
+- **`--config` names the daemon's `config.toml`, a file.** It must exist, for `serve`, `run`, `status` and `service` alike, but it may be empty: every key has a default. A directory, or a missing file, exits 4 (`loams-agentd: cannot read config …: Is a directory (os error 21)`). The daemon writes its lock, token, discovery file, store and logs in the directory that holds `config.toml` and makes that directory owner-only, so it must be the daemon's own and writable. `LOAMS_AGENTD_CONFIG` overrides `--config`.
+- **The same settings can live in `config.toml`.** Add a `[remote]` table with `enabled = true` and the keys `listen`, `tls_cert`, `tls_key`, `issuer`, `audience`, `subject` and `allow_origins`. Then plain `loams-agentd run` opens the listener too ([example](#run-it-as-a-service)). Without `enabled = true` the listener stays off, and with it every key but `allow_origins` is required. On Windows, use `config.toml`: the service re-runs its worker without the flags.
+
+```sh
+mkdir -p ~/.config/loams-agentd && touch ~/.config/loams-agentd/config.toml
+```
 
 **What the listener serves:**
 - **Only `loams.agentd.v1`**, Connect over HTTP/1.1 and HTTP/2 (ALPN `h2` and `http/1.1`, TLS 1.2 and 1.3), plus the [preview paths](#previews). The ndjson wire, `Hello` and `Shutdown` stay on the loopback listener, which still refuses browsers (D788). `agentd.json` doesn't publish the remote port.
@@ -35,34 +65,127 @@ loams-agentd serve --remote \
   4. **Subject.** `sub` must equal `--subject`. A valid token for anyone else gets a 403 `forbidden_role`.
   5. **Role.** Your browser session runs in the role `studio`. It can call every Studio method except the harness installers and updaters (`InstallHarness`, `CancelInstall`, `ApplyHarnessUpdate`, `CancelHarnessUpdate`) and the agent account logins and switches (`StartAgentLogin` and its siblings, `ActivateAgentAccount`, `ForgetAgentAccount`), Q808. Do those on the machine itself.
 - **CORS answers only your origins.** It allows the Connect headers and `Authorization`, exposes `grpc-status`, `grpc-message` and `grpc-status-details-bin`, caches preflights for 7200 s, and never sends `Access-Control-Allow-Credentials`. The console sends a bearer token, never a cookie. An origin must be `https://host[:port]` (`http://` only on loopback), never `*`, `null` or a path.
+- **Harnesses** are the CLIs installed on the machine for the daemon's user (Claude Code, Codex, opencode…): `ListHarnesses` finds them on the login shell's `PATH`.
 
-A quick check from another shell (with a self-signed certificate, hence `-k`):
+A quick check from another machine on the tailnet:
 
 ```sh
 # A preflight from your console's origin: 204 and the CORS headers.
-curl -sk -D - -o /dev/null -X OPTIONS \
-  -H 'Origin: https://console.example.com' -H 'Access-Control-Request-Method: POST' \
-  https://devbox.example.com:8443/loams.agentd.v1.StudioService/GetHost
+curl -s -D - -o /dev/null -X OPTIONS \
+  -H 'Origin: https://console.loams.dev' -H 'Access-Control-Request-Method: POST' \
+  https://devbox.<tailnet>.ts.net/loams.agentd.v1.StudioService/GetHost
 # Another origin: 403, no CORS headers. No token: 401 unauthenticated.
-curl -sk -X POST -H 'Content-Type: application/json' -d '{}' \
-  https://devbox.example.com:8443/loams.agentd.v1.StudioService/GetHost
+curl -s -X POST -H 'Content-Type: application/json' -d '{}' \
+  https://devbox.<tailnet>.ts.net/loams.agentd.v1.StudioService/GetHost
 ```
 
-These answers were checked against a debug build on 2026-10-15, with a stand-in issuer; a valid-token call needs a real issuer and was not run.
+These answers, a valid-token call through Keycloak and the hosted console's whole handshake were checked against the 0.1.0 image's binary on 2026-10-19 and 20 ([#872](https://github.com/ostrium-labs/loams/issues/872)).
 
-## Reaching it: a tailnet, or a port
+## Port 443 on the tailnet
 
-The default (Q804) is one of these:
-- **A tailnet** (§43). Join the machine to your tailnet and listen on its tailnet address, or on `0.0.0.0` with the host firewall closed to everything but the tailnet. The tailnet's HTTPS certificates (for example from `tailscale cert`) work as `--tls-cert` and `--tls-key`.
-- **A direct TLS port.** Use a certificate from a public CA for the machine's name. Open only that port.
+The default (Q804) is **a tailnet** (§43). Listen on the machine's tailnet address, or on `0.0.0.0` with the host firewall closed to everything but the tailnet. Don't forward the port on a router or open it to the internet: an agent the daemon runs can do anything the daemon's user can. An outbound tunnel through the Loams gateway is an open question (Q804); SD1 doesn't build one.
 
-An outbound tunnel through the Loams gateway is an open question (Q804); SD1 doesn't build one.
-
-A self-signed certificate works, but the browser has to trust it first. Open the host's URL once and accept it, or install your own CA. When you register the host in Studio, note the certificate's SHA-256 fingerprint so you can compare it with what the browser shows:
+**The certificate.** Turn on MagicDNS and HTTPS certificates for the tailnet (in the Tailscale admin console), then get one for the node and give the files to the daemon's user:
 
 ```sh
-openssl x509 -in cert.pem -noout -fingerprint -sha256
+mkdir -p ~/.config/loams-agentd/tls && cd ~/.config/loams-agentd/tls
+sudo tailscale cert --cert-file cert.pem --key-file key.pem devbox.<tailnet>.ts.net
+sudo chown "$USER": cert.pem key.pem && chmod 600 key.pem
 ```
+
+The certificate is a Let's Encrypt one and lasts 90 days. The daemon reads it at start, so run `tailscale cert` again before it expires and restart the daemon.
+
+**Port 443.** A port below 1024 needs `CAP_NET_BIND_SERVICE`. Give it to the binary:
+
+```sh
+sudo setcap cap_net_bind_service=+ep ~/.local/bin/loams-agentd
+getcap ~/.local/bin/loams-agentd      # …/loams-agentd cap_net_bind_service=ep
+```
+
+Do it again whenever you replace the binary; a file system mounted `nosuid` ignores it. Instead of `setcap`, a system service can grant it: a system unit with `User=<you>` and `AmbientCapabilities=CAP_NET_BIND_SERVICE`. Without either, the daemon exits when it can't bind the remote listener.
+
+**Another console.** A console you deploy yourself can reach other ports and names, through `LOAMS_AGENTD_ORIGINS` ([below](#the-consoles-content-security-policy)), and a self-signed certificate works there once the browser trusts it (open the host's URL once and accept it, or install your own CA). Note its SHA-256 fingerprint when you register the host, to compare with what the browser shows: `openssl x509 -in cert.pem -noout -fingerprint -sha256`.
+
+## Run it as a service
+
+A systemd **user** unit keeps the daemon running, and linger makes it start at boot and survive logout. Put the remote settings in `config.toml` rather than on the command line:
+
+```toml
+# ~/.config/loams-agentd/config.toml
+[remote]
+enabled = true
+listen = "100.101.102.103:443"        # tailscale ip -4
+tls_cert = "/home/you/.config/loams-agentd/tls/cert.pem"
+tls_key = "/home/you/.config/loams-agentd/tls/key.pem"
+issuer = "http://127.0.0.1:8080/realms/loams"
+audience = "loams-agentd"
+subject = "<your sub>"
+allow_origins = ["https://console.loams.dev"]
+```
+
+```ini
+# ~/.config/systemd/user/loams-agentd-remote.service
+[Unit]
+Description=Loams agent daemon for Studio in the browser (tailnet only)
+
+[Service]
+Type=exec
+ExecStart=%h/.local/bin/loams-agentd run --service --config %h/.config/loams-agentd/config.toml
+Restart=on-failure
+RestartSec=5
+# 3: another daemon holds this directory; 4: the config is invalid. Neither heals on a restart.
+RestartPreventExitStatus=3 4
+KillMode=mixed
+
+[Install]
+WantedBy=default.target
+```
+
+```sh
+systemctl --user daemon-reload
+systemctl --user enable --now loams-agentd-remote.service
+loginctl enable-linger "$USER"        # or: loams-agentd service enable-linger
+journalctl --user -u loams-agentd-remote -f
+loams-agentd status --config ~/.config/loams-agentd/config.toml
+```
+
+The unit is named `loams-agentd-remote` so it doesn't collide with the one Loams Desktop installs. If tailscaled isn't up yet at boot, the bind fails and systemd retries.
+
+**`loams-agentd service`** (`install`, `uninstall`, `start`, `stop`, `status`, `enable-linger`, `disable-linger`) is how Loams Desktop installs its per-user service: on Linux it writes `~/.config/systemd/user/loams-agentd.service`, which runs `<daemon dir>/runtime/current/loams-agentd run --service --config <config>`, so `[remote]` in that `config.toml` applies to it too. It needs that runtime first: `loams-agentd install-runtime --from <dir> --to <daemon dir>/runtime` copies `loams-agentd` and `loams` from `<dir>` and checks them against the `SHA256SUMS` and `VERSION` beside them, which is the layout of Loams Desktop's `resources/bin/`. On a headless host without Desktop, the unit above is simpler. If you do use `service install`, run `setcap` on `runtime/current/loams-agentd`, and again after each `install-runtime`.
+
+## An issuer
+
+The daemon accepts tokens from one OIDC issuer, for one audience and one subject. The issuer must be `https://`, or `http://` on a loopback host (`127.0.0.1`, `::1`, `localhost`), which is the easy path for one person: run the issuer on the same machine as the daemon. The daemon reads `<issuer>/.well-known/openid-configuration`, and the `issuer` it names must be `--issuer` (a trailing `/` doesn't matter).
+
+### Keycloak (tested)
+
+This recipe ran end to end against the 0.1.0 daemon, with Keycloak on `127.0.0.1:8080` on the daemon's machine:
+
+- **A realm**, `loams`. The issuer is `http://127.0.0.1:8080/realms/loams`. Request tokens through the same host name: Keycloak puts the host you asked in `iss`, so a token fetched through `localhost` fails against an issuer on `127.0.0.1`.
+- **A client**, `loams-agentd`: confidential (client authentication on), **direct access grants** on, standard flow off.
+- **An audience mapper.** Keycloak doesn't put the client id in `aud` on its own. In the client's dedicated scope (`loams-agentd-dedicated`), add a mapper of type **Audience** (`oidc-audience-mapper`) with **Included Client Audience** `loams-agentd` and **Add to access token** on.
+- **A user** for you. Your subject is that user's `sub`, its **ID** in the admin console's user page. Pass it as `--subject`.
+- **A longer access token lifespan.** The console keeps the pasted token in the tab's memory and can't refresh it, so Keycloak's default of 5 minutes means pasting a new one every 5 minutes. Raise the realm's **Access Token Lifespan** (Realm settings › Tokens, `accessTokenLifespan`), for example to a working day. Keycloak doesn't issue an access token that outlives the SSO session, so raise **SSO Session Idle** and **SSO Session Max** with it if tokens still expire early.
+- Keep the realm's default RS256 signing key.
+
+Fetch a token on the machine (the password grant is what direct access grants turn on), then paste it into the console:
+
+```sh
+curl -s http://127.0.0.1:8080/realms/loams/protocol/openid-connect/token \
+  -d grant_type=password -d client_id=loams-agentd -d client_secret="$CLIENT_SECRET" \
+  -d username=you -d password="$PASSWORD" -d scope=openid | jq -r .access_token
+```
+
+### Authentik (not tested)
+
+- Create an OAuth2/OpenID provider and application for the agentd, for example with the slug `loams-agentd`. Its tokens must carry `aud: loams-agentd`; Authentik puts the provider's client id in `aud`, so name the client `loams-agentd`.
+- The issuer is then `https://auth.example.com/application/o/loams-agentd/`. The daemon reads `/.well-known/openid-configuration` under it, which names the JWKS at `/application/o/loams-agentd/jwks/`.
+- Your subject is the `sub` Authentik puts in your tokens. With the default subject mode, that is a hashed user id; read it from one of your tokens' claims.
+- Keep the signing key RS256 (Authentik's default) or EdDSA.
+
+**Not tested:** these Authentik steps follow Authentik's documented behaviour but were not tried against a live Authentik. Authentik as the console's identity provider is MT1 ([#221](https://github.com/ostrium-labs/loams/issues/221)).
+
+**How the console gets the token.** It will get an access token for the audience `loams-agentd` through its own sign-in (MT1): an RFC 8693 token exchange, or a second client. Until MT1 lands, **Settings › Agentd hosts** asks you to paste a token per host, under a "Development sign-in" warning. The token stays in that tab's memory and is gone when you reload.
 
 ## A container recipe
 
@@ -73,37 +196,28 @@ Run it with only your project directories mounted (§53 §8.2). Worktrees keep a
 ```sh
 # /home/loams (a volume) holds agentd/, the daemon's directory; the daemon needs a
 # config.toml there (it may be empty), mounted read-only on its own. The TLS files are
-# mounted read-only somewhere else.
+# mounted read-only somewhere else. Publish the port on the tailnet address only.
 podman run -d --name loams-agentd \
   -v loams-agentd-home:/home/loams \
   -v ./config.toml:/home/loams/agentd/config.toml:ro \
   -v ~/src:/home/loams/src \
   -v ./tls:/etc/loams-agentd-tls:ro \
-  -p 8443:8443 \
+  -p 100.101.102.103:443:8443 \
   <your image, FROM ghcr.io/ostrium-labs/loams-agentd, with your harness CLIs> \
   serve --remote --listen 0.0.0.0:8443 \
     --tls-cert /etc/loams-agentd-tls/cert.pem --tls-key /etc/loams-agentd-tls/key.pem \
     --issuer https://auth.example.com/application/o/loams-agentd/ \
     --audience loams-agentd --subject <your sub> \
-    --allow-origin https://console.example.com
+    --allow-origin https://console.loams.dev
 ```
+
+Inside the container the daemon listens on 8443; the host publishes it on 443. Rootless Podman can publish a port below 1024 only when `net.ipv4.ip_unprivileged_port_start` allows it. The issuer must be reachable from inside the container, so a loopback issuer on the host doesn't work here.
 
 **Unverified:** this recipe has not been run end to end against the published image. `deploy/release/compose.yaml`'s optional `agentd` service (`--profile agentd`) runs the same image with `run`, not `serve --remote`.
 
-## The Authentik application
-
-- Create an OAuth2/OpenID provider and application for the agentd, for example with the slug `loams-agentd`. Its tokens must carry `aud: loams-agentd`; Authentik puts the provider's client id in `aud`, so name the client `loams-agentd`.
-- The issuer is then `https://auth.example.com/application/o/loams-agentd/`. The daemon reads `/.well-known/openid-configuration` under it, which names the JWKS at `/application/o/loams-agentd/jwks/`.
-- Your subject is the `sub` Authentik puts in your tokens. With the default subject mode, that is a hashed user id; read it from one of your tokens' claims.
-- Keep the signing key RS256 (Authentik's default) or EdDSA.
-
-**Unverified:** these Authentik steps were not tried against a live Authentik. The daemon's tests use a stand-in issuer (discovery and a JWKS on loopback).
-
-**How the console gets the token.** It will get an access token for the audience `loams-agentd` through its own sign-in (MT1): an RFC 8693 token exchange, or a second client. Until MT1 lands, **Settings › Agentd hosts** asks you to paste a token per host, under a "Development sign-in" warning. The token stays in that tab's memory and is gone when you reload.
-
 ## In Studio
 
-1. Open Studio, then **Settings** (Mod+,). In the browser the page has an **Agentd hosts** card. Add the host's name and its `https://` URL (`http://` only for `localhost`), and optionally the certificate fingerprint as a note. The list is kept in this browser, under `loams.studio.hosts`; it doesn't follow you to another browser.
+1. Open Studio, then **Settings** (Mod+,). In the browser the page has an **Agentd hosts** card. Add the host's name and its `https://` URL (`http://` only for `localhost`), for example `https://devbox.<tailnet>.ts.net`, and optionally the certificate fingerprint as a note. The list is kept in this browser, under `loams.studio.hosts`; it doesn't follow you to another browser.
 2. Paste an access token for the host.
 3. Studio uses the first host you add; **Use** switches hosts. A link can name a host as `?host=<id>`, by its registered id only; a URL in `?host=` is ignored.
 
@@ -120,7 +234,8 @@ LOAMS_AGENTD_ORIGINS="https://devbox.example.com:8443 https://vm.example.com" \
 
 | Console | Reaches an agentd host when |
 |---|---|
-| The hosted console (`deploy/stage.mjs`, Cloudflare) | its origin is in `LOAMS_AGENTD_ORIGINS`; a `*.ts.net` name on port 443 is already in `connect-src`, but its previews need it listed |
+| The hosted console, `console.loams.dev` | the host is a `*.ts.net` name on port 443: its policy is `connect-src 'self' https://*.ts.net https://auth.loams.dev` and `frame-src 'self'`, so Connect calls work and previews don't |
+| A console you deploy (`deploy/stage.mjs`, Cloudflare) | its origin is in `LOAMS_AGENTD_ORIGINS`, which also lets its previews frame; a `*.ts.net` name on port 443 is in `connect-src` already |
 | Vercel (`vercel.json`) | its origin is in `vercel.json`'s `connect-src` and `frame-src` (Vercel headers are static; the stage step fails when `LOAMS_AGENTD_ORIGINS` names one they lack) |
 | The production build as the engine serves it | never: its policy is the build's `'self'` |
 | The dev server (`pnpm dev`) | always (no policy) |
@@ -128,6 +243,8 @@ LOAMS_AGENTD_ORIGINS="https://devbox.example.com:8443 https://vm.example.com" \
 The desktop is not affected: it reaches its local daemon through Electron main, and its preview is a native view.
 
 ## Previews
+
+**With the hosted console, previews don't render today.** Its `frame-src` is `'self'` and a deployment can only add the hosts it names in `LOAMS_AGENTD_ORIGINS`, so the browser refuses to frame your host's preview; the daemon side below works. Use a console you deploy with your host in `LOAMS_AGENTD_ORIGINS`, or forward the preview proxy's port (`ssh -N -L 7331:localhost:7331 <host>`) and open the preview's `http://<name>.<project>.localhost:7331` URL in a tab. See [Preview](preview.md).
 
 Dev-server previews work through the remote listener (Q806, SD1 Task 26). The daemon's own preview proxy listens on loopback only (`http://<name>.<project>.localhost:7331`), so the remote listener forwards `/preview/…` to it:
 
@@ -137,7 +254,7 @@ Dev-server previews work through the remote listener (Q806, SD1 Task 26). The da
 - **The prefix is stripped** (`/preview/<x>/src/main.tsx` reaches the dev server as `/src/main.tsx`, with `X-Forwarded-Prefix`), and a `Location` header is moved back under it. An app that uses root-relative URLs (`/assets/…`) needs its dev server's base path set to the prefix, as behind any path proxy. HMR WebSockets pass through.
 - **Cookies a dev server sets** land on the agentd's origin, where every preview of the same daemon can see them. That is acceptable for one person's daemon (D921), and a reason not to share one.
 
-If the daemon answers the ticket request with 404, 501 or 503 (an older daemon, or previews off), the Preview tab shows how to forward the preview proxy's port instead: `ssh -N -L 7331:localhost:7331 <host>`. See [Preview](preview.md).
+If the daemon answers the ticket request with 404, 501 or 503 (an older daemon, or previews off), the Preview tab shows how to forward the preview proxy's port instead.
 
 ## Approvals
 
