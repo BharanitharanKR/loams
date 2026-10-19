@@ -1637,9 +1637,10 @@ html[data-platform="darwin"] .lc-brand {
 html[data-platform="darwin"] .lc-brand :is(button, a, input, [role="button"], [role="combobox"]) {
   -webkit-app-region: no-drag;
 }
-/* Vibrancy behind the sidebar only (Q933: in light too); the top bar and work area stay solid. */
-html[data-platform="darwin"],
-html[data-platform="darwin"] body,
+/* Vibrancy behind the sidebar only (Q933: in light too); the top bar and work area stay solid.
+   A page without the shell (sign-in, the boot screen) keeps its solid background. */
+html[data-platform="darwin"]:has(.lc-shell),
+html[data-platform="darwin"]:has(.lc-shell) body,
 html[data-platform="darwin"] .lc-shell,
 html[data-platform="darwin"] .lc-side {
   background: transparent;
