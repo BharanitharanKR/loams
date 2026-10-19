@@ -45,9 +45,6 @@ license-files = [{ path = "LICENSE", hash = 0x0fb72a18 }]
 multiple-versions = "allow"
 wildcards = "deny"
 allow-wildcard-paths = true
-# cargo-deny package selectors are exact names, so prefix variants are not
-# matched here (https://embarkstudios.github.io/cargo-deny/checks/cfg.html).
-deny = [{ name = "loam-platform", reason = "The OSS engine cannot depend on the private platform (D551)" }]
 
 # Known findings with no entry below, because the advisory database cargo-deny
 # reads does not fail on them (GitHub's advisory database reports them, so they
