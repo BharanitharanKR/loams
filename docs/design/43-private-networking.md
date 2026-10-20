@@ -143,7 +143,7 @@ The shared file therefore uses only the common subset, and the lint (`policy_lin
 | BYOC agent to the control plane | Default: outbound mTLS over HTTPS (§41 D543) | Optional mode (D587) |
 | Tailnet coordination and DERP | **Cannot** for Headscale (D583): its host is DNS-only. Not applicable to hosted Tailscale | Is the tailnet's control plane |
 
-The rule of thumb: if a person with a browser needs it, it is public; if a machine or an operator needs it, it is on the tailnet.
+The rule of thumb: if a person with a browser needs it, it is public; if a machine or an operator needs it, it is on the tailnet. *Amended 2026-10-21 by D1311 ([§69](69-edge-reach.md) §9.1):* the engine is never public; machines off the tailnet, such as serverless functions, reach Loams only through `loams-gateway`'s edge listener, over a private link or a brokered tunnel (Cloudflare Tunnel in the user's own account) that authenticates every request first.
 
 ## 5. Identity (D584, D585)
 
@@ -393,4 +393,4 @@ All read 2026-10-02.
 - Run locally 2026-10-02: Headscale v0.29.4 with the shared policy and a `tailscale/tailscale` v1.102.5 userspace node (§3.1).
 - Loams: [§38](38-knative-authentik-gitops.md), §41 §5, §7, §11, [§37](37-desktop-and-mobile-apps.md) §7.2, [§30](30-loams-cli.md) §15, [MT1](../plans/2026-10-02-mt1-authentik-identity.md).
 
-> **See also (2026-10-20):** [§69](69-edge-reach.md) (Edge Reach, Proposed): serverless functions may join a tailnet as tagged, ephemeral nodes by workload identity federation (Lambda, Cloud Run, Fly.io), and reach only the gateway's edge listener; Funnel stays off and counts as public (D1314).
+> **See also (2026-10-21):** [§69](69-edge-reach.md) (Edge Reach, approved by the owner 2026-10-21): serverless functions may join a tailnet as tagged, ephemeral nodes by workload identity federation (Lambda, Cloud Run, Fly.io), and reach only the gateway's edge listener; Funnel stays off and counts as public (D1314).

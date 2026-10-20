@@ -1,15 +1,15 @@
 # 69 — Edge Reach: Serverless Runtimes to a Private Loams
 
-Status: **Approved direction** (owner, 2026-10-20) · details **Proposed** · 2026-10-20.
+Status: **Approved** · 2026-10-21. The owner approved the direction on 2026-10-20 and the design with every default on 2026-10-21.
 
 Source: on 2026-10-20 the owner approved designing an "edge reach" path. It lets serverless runtimes call a self-hosted Loams without exposing the engine on the public internet.
 
 Decisions **D1300–D1322** and open questions **Q1060–Q1075** are declared in the [decision log](13-decision-log.md):
-- D1300 records the owner's direction and is *Approved*.
-- Every other row is *Proposed* until the owner confirms it.
-- **D1312 is an owner decision.** It is the opt-in public edge profile, which amends the never-public rule. This document presents it with its risks; it is not decided.
+- Every decision is *Approved (owner, 2026-10-21)*, and every question is answered with its default.
+- **Part A of the never-public amendment (D1311) is approved:** callers off the tailnet reach Loams only through the gateway's edge listener, over a private link or a tunnel that authenticates every request first. The engine stays loopback, tailnet or gateway-only. The networking map, §43, §57 and §65 carry the amended wording.
+- **Part B (D1312), the opt-in public edge profile, is deferred** per Q1060's default, and its requirements (D1313) with it. It is revisited after ER2. Until then the edge listener is never public.
 
-Plan: [ER1](../plans/2026-10-20-er1-edge-reach.md) (a stub; ER0 is specified task by task).
+Plan: [ER1](../plans/2026-10-20-er1-edge-reach.md) (approved; ER0 is specified task by task).
 
 **Numbering.** §67 (PR #945) uses D1228–D1250 and Q1015–Q1029. Another design, on open-protocol compute, was being written at the same time and had no ids yet. To stay well clear of both, this document reserves **D1300–D1339** and **Q1060–Q1079** and takes the number 69, leaving 68 to that design.
 
@@ -69,36 +69,36 @@ Loams gets **one door for the edge**: the edge listener of `loams-gateway`. Seve
 - **Two credentials on every request:**
   - the path admits the caller: a Cloudflare service token, a VPC, a tailnet;
   - Loams still checks its own credential: an **environment-bound `lk_` key** now (ER0), and a **short-lived Loams token exchanged from the runtime's workload identity** from ER2.
-- **A public gateway profile is proposed as an opt-in amendment** (D1312): only the edge listener on the internet, with mTLS or short-lived tokens. None of the defaults above needs it. It is not built unless the owner approves it, and the recommended default is to defer it (Q1060).
+- **A public gateway profile was proposed and deferred** (D1312, owner 2026-10-21, per Q1060): only the edge listener on the internet, with mTLS or short-lived tokens. None of the defaults above needs it. It is revisited after ER2; until then the edge listener is never public.
 - **No Loams-hosted relay** (D1317). Cloudflare Tunnel does the job, and a relay would make Ostrium an operator of customers' data traffic.
 
 ### 1.3 Decisions
 
 | # | Decision | § | Status |
 |---|---|---|---|
-| D1300 | **Edge reach is designed** (owner, 2026-10-20): serverless runtimes reach a self-hosted Loams without the engine becoming public | 1.1 | Approved direction (owner, 2026-10-20) |
-| D1301 | **Reach classes define "public" precisely:** *loopback*, *tailnet*, *private link* (a cloud VPC, PrivateLink, a Workers VPC binding), *brokered* (a tunnel whose broker authenticates every request before it reaches the user's stack), and *public* (anyone on the internet can open a connection to a Loams process). Only *public* is public | 4.2 | Proposed |
-| D1302 | **One edge door:** off-tailnet traffic enters through the edge listener of `loams-gateway` only, never the engine's own ports. This holds on every edge path, including a serverless node that joined the tailnet | 6.1 | Proposed |
-| D1303 | **The edge listener** is the first slice of the `http` module. It speaks HTTP/1.1 and h2c, serves an allow-listed route set, has no admin routes, no console sessions and no Tailscale identity headers, cleans headers, and enforces body and time limits and per-credential rate limits. ER0 builds it on hyper behind a trait; the Pingora `http` module (D1013) takes it over later | 6.2 | Proposed |
-| D1304 | **The engine's edge upstream listener:** an engine listener whose only client is the gateway, on an internal network. It accepts only environment-bound credentials and refuses sessions, cookies, operator keys and org keys. It applies the allow-list again and marks each request `via=edge` for audit | 6.4 | Proposed |
-| D1305 | **The default path is Cloudflare Tunnel:** `cloudflared` runs in the user's stack and dials out, in the user's own Cloudflare account. For Workers, a Workers VPC binding is first, and an Access application with a service-token policy is the fallback | 6.5, 8 | Proposed |
-| D1306 | **Admission is per edge listener.** An `access` listener requires a valid `Cf-Access-Jwt-Assertion` for the configured team and application `aud`. A `network` listener admits what reached it: VPC Services, internal load balancers, tailnet nodes. A tunnel public hostname may target only an `access` listener, so a misconfigured Access application fails closed | 6.5 | Proposed |
-| D1307 | **Two credentials on every edge request:** admission by the path, and a Loams credential that the engine checks. ER0 accepts environment-bound `lk_` keys only | 7.1 | Proposed |
-| D1308 | **Workload-identity exchange** (ER2): the engine's token endpoint (`POST /oauth/token`, RFC 8693) exchanges a runtime's OIDC token for a Loams access token bound to one environment. A trust policy (issuer, audience, subject pattern) maps the caller to a service account and an environment. The token lives 15 minutes by default and 1 hour at most (§19 §5.3). The first issuers are Vercel, AWS outbound identity federation, Google, Fly.io, GitHub Actions and Kubernetes | 7.2 | Proposed |
-| D1309 | **What the SDKs need:** a `fetch` override (done for TypeScript in #947; it also carries a Workers VPC binding's `fetch`), extra headers for an Access service token, and token providers for workload identity (`vercelOidc`, `awsWebIdentity`, `gcpIdToken`, `flyOidc`, `githubActions`) behind one `exchange()` source | 7.3 | Proposed |
-| D1310 | **Postgres from the edge** goes only through the gateway's `pg` module, on a dedicated namespace port (D1016). Hyperdrive reaches it through a TCP VPC Service; other runtimes use a private link. Login roles are short-lived (D711) | 6.6 | Proposed |
-| D1311 | **The never-public rule, part A:** reword it for private-link and brokered paths to the gateway's edge listener (§9.1). The engine stays loopback, tailnet or gateway-only | 9.1 | Proposed |
-| D1312 | **The never-public rule, part B:** "the engine is never public; the gateway's edge listener may be, in an explicit opt-in edge profile" (§9.2) | 9.2 | **Proposed: owner decision**; recommended default: defer (Q1060) |
-| D1313 | **The public edge profile**, only if D1312 is approved: TLS 1.3, mTLS or short-lived tokens only (no static `lk_` keys), per-namespace scopes, rate limits, WAF-friendly, the same allow-list, no admin. The operator renders a public Service only for the edge port, and only on an explicit opt-in | 9.3 | Proposed; conditional on D1312 |
-| D1314 | **Tailscale-native paths** are documented recipes where a runtime can run `tailscaled` in userspace (Lambda, Cloud Run, Fly.io), with ephemeral tagged nodes and workload identity federation. They are never offered for Workers or Vercel. Funnel stays off (`AllowFunnel: false`) and counts as *public* | 5.2, 8 | Proposed |
-| D1315 | **Cloud private networking** is a supported *private link* path to the gateway's internal load balancer: Lambda in a VPC with PrivateLink or VPN, Cloud Run Direct VPC egress, Vercel PrivateLink and Secure Compute. D1195 is unchanged | 5.3, 8 | Proposed |
-| D1316 | **Operator and compose:** the operator's `spec.exposure.mode` gains `tunnel`, which renders a `cloudflared` Deployment and no Service, so D1195 holds. Compose gains an opt-in `edge` profile with `loams-gateway` and `cloudflared` on internal networks | 6.7 | Proposed |
-| D1317 | **No Loams-hosted relay** now; Cloudflare Tunnel instead. Revisit on the criteria of §10 | 10 | Proposed |
-| D1318 | **Edge audit and metrics:** every edge request is audited with `via=edge`, its path class and the broker's subject. Gateway metrics carry no tenant label (D1021) | 6.8 | Proposed |
-| D1319 | **Tests:** a refusal suite, a local `workerd` → gateway → engine test on every relevant PR, and a nightly test on real Cloudflare: a deployed Worker reaches `cloudflared` on the runner through Workers VPC and through Access | 11 | Proposed |
-| D1320 | **Phases ER0–ER3** (§12); plan [ER1](../plans/2026-10-20-er1-edge-reach.md) specifies ER0 task by task | 12 | Proposed |
-| D1321 | **Not built:** a Tailscale client inside Workers or Vercel, a hosted relay, IP allow-lists as the only control, and durable (Resonate), Live admin, Git and Flight SQL over the edge in ER0 | 2 | Proposed |
-| D1322 | **The allow-list is data.** It is generated from a method option `(loams.options.v1.edge) = true` and the REST route map into `api/edge-allowlist.txt`, which the gateway and the engine both embed. A CI check fails when the file is stale | 6.3 | Proposed |
+| D1300 | **Edge reach is designed** (owner, 2026-10-20): serverless runtimes reach a self-hosted Loams without the engine becoming public | 1.1 | Approved (owner, 2026-10-20 direction; 2026-10-21 design) |
+| D1301 | **Reach classes define "public" precisely:** *loopback*, *tailnet*, *private link* (a cloud VPC, PrivateLink, a Workers VPC binding), *brokered* (a tunnel whose broker authenticates every request before it reaches the user's stack), and *public* (anyone on the internet can open a connection to a Loams process). Only *public* is public | 4.2 | Approved (owner, 2026-10-21) |
+| D1302 | **One edge door:** off-tailnet traffic enters through the edge listener of `loams-gateway` only, never the engine's own ports. This holds on every edge path, including a serverless node that joined the tailnet | 6.1 | Approved (owner, 2026-10-21) |
+| D1303 | **The edge listener** is the first slice of the `http` module. It speaks HTTP/1.1 and h2c, serves an allow-listed route set, has no admin routes, no console sessions and no Tailscale identity headers, cleans headers, and enforces body and time limits and per-credential rate limits. ER0 builds it on hyper behind a trait; the Pingora `http` module (D1013) takes it over later | 6.2 | Approved (owner, 2026-10-21) |
+| D1304 | **The engine's edge upstream listener:** an engine listener whose only client is the gateway, on an internal network. It accepts only environment-bound credentials and refuses sessions, cookies, operator keys and org keys. It applies the allow-list again and marks each request `via=edge` for audit | 6.4 | Approved (owner, 2026-10-21) |
+| D1305 | **The default path is Cloudflare Tunnel:** `cloudflared` runs in the user's stack and dials out, in the user's own Cloudflare account. For Workers, a Workers VPC binding is first, and an Access application with a service-token policy is the fallback | 6.5, 8 | Approved (owner, 2026-10-21) |
+| D1306 | **Admission is per edge listener.** An `access` listener requires a valid `Cf-Access-Jwt-Assertion` for the configured team and application `aud`. A `network` listener admits what reached it: VPC Services, internal load balancers, tailnet nodes. A tunnel public hostname may target only an `access` listener, so a misconfigured Access application fails closed | 6.5 | Approved (owner, 2026-10-21) |
+| D1307 | **Two credentials on every edge request:** admission by the path, and a Loams credential that the engine checks. ER0 accepts environment-bound `lk_` keys only | 7.1 | Approved (owner, 2026-10-21) |
+| D1308 | **Workload-identity exchange** (ER2): the engine's token endpoint (`POST /oauth/token`, RFC 8693) exchanges a runtime's OIDC token for a Loams access token bound to one environment. A trust policy (issuer, audience, subject pattern) maps the caller to a service account and an environment. The token lives 15 minutes by default and 1 hour at most (§19 §5.3). The first issuers are Vercel, AWS outbound identity federation, Google, Fly.io, GitHub Actions and Kubernetes | 7.2 | Approved (owner, 2026-10-21) |
+| D1309 | **What the SDKs need:** a `fetch` override (done for TypeScript in #947; it also carries a Workers VPC binding's `fetch`), extra headers for an Access service token, and token providers for workload identity (`vercelOidc`, `awsWebIdentity`, `gcpIdToken`, `flyOidc`, `githubActions`) behind one `exchange()` source | 7.3 | Approved (owner, 2026-10-21) |
+| D1310 | **Postgres from the edge** goes only through the gateway's `pg` module, on a dedicated namespace port (D1016). Hyperdrive reaches it through a TCP VPC Service; other runtimes use a private link. Login roles are short-lived (D711) | 6.6 | Approved (owner, 2026-10-21) |
+| D1311 | **The never-public rule, part A:** reword it for private-link and brokered paths to the gateway's edge listener (§9.1). The engine stays loopback, tailnet or gateway-only | 9.1 | Approved (owner, 2026-10-21) |
+| D1312 | **The never-public rule, part B:** "the engine is never public; the gateway's edge listener may be, in an explicit opt-in edge profile" (§9.2) | 9.2 | **Deferred** (owner, 2026-10-21, per Q1060) |
+| D1313 | **The public edge profile**, only if D1312 is approved: TLS 1.3, mTLS or short-lived tokens only (no static `lk_` keys), per-namespace scopes, rate limits, WAF-friendly, the same allow-list, no admin. The operator renders a public Service only for the edge port, and only on an explicit opt-in | 9.3 | Deferred with D1312 (owner, 2026-10-21) |
+| D1314 | **Tailscale-native paths** are documented recipes where a runtime can run `tailscaled` in userspace (Lambda, Cloud Run, Fly.io), with ephemeral tagged nodes and workload identity federation. They are never offered for Workers or Vercel. Funnel stays off (`AllowFunnel: false`) and counts as *public* | 5.2, 8 | Approved (owner, 2026-10-21) |
+| D1315 | **Cloud private networking** is a supported *private link* path to the gateway's internal load balancer: Lambda in a VPC with PrivateLink or VPN, Cloud Run Direct VPC egress, Vercel PrivateLink and Secure Compute. D1195 is unchanged | 5.3, 8 | Approved (owner, 2026-10-21) |
+| D1316 | **Operator and compose:** the operator's `spec.exposure.mode` gains `tunnel`, which renders a `cloudflared` Deployment and no Service, so D1195 holds. Compose gains an opt-in `edge` profile with `loams-gateway` and `cloudflared` on internal networks | 6.7 | Approved (owner, 2026-10-21) |
+| D1317 | **No Loams-hosted relay** now; Cloudflare Tunnel instead. Revisit on the criteria of §10 | 10 | Approved (owner, 2026-10-21) |
+| D1318 | **Edge audit and metrics:** every edge request is audited with `via=edge`, its path class and the broker's subject. Gateway metrics carry no tenant label (D1021) | 6.8 | Approved (owner, 2026-10-21) |
+| D1319 | **Tests:** a refusal suite, a local `workerd` → gateway → engine test on every relevant PR, and a nightly test on real Cloudflare: a deployed Worker reaches `cloudflared` on the runner through Workers VPC and through Access | 11 | Approved (owner, 2026-10-21) |
+| D1320 | **Phases ER0–ER3** (§12); plan [ER1](../plans/2026-10-20-er1-edge-reach.md) specifies ER0 task by task | 12 | Approved (owner, 2026-10-21) |
+| D1321 | **Not built:** a Tailscale client inside Workers or Vercel, a hosted relay, IP allow-lists as the only control, and durable (Resonate), Live admin, Git and Flight SQL over the edge in ER0 | 2 | Approved (owner, 2026-10-21) |
+| D1322 | **The allow-list is data.** It is generated from a method option `(loams.options.v1.edge) = true` and the REST route map into `api/edge-allowlist.txt`, which the gateway and the engine both embed. A CI check fails when the file is stale | 6.3 | Approved (owner, 2026-10-21) |
 
 ### 1.4 Phases
 
@@ -107,7 +107,7 @@ Loams gets **one door for the edge**: the edge listener of `loams-gateway`. Seve
 | **ER0** | The gateway's edge listener; the engine's edge upstream listener; the compose `edge` profile with `cloudflared`; Access-JWT admission; environment-bound `lk_` keys only; the refusal suite; the local `workerd` test; an SDK helper; a guide per runtime | GW1a merged (#663, done) | 3–4 engineer-weeks |
 | **ER1** | The operator's `tunnel` exposure mode; the nightly real-Cloudflare test; Hyperdrive to the `pg` module; the Tailscale and cloud private-link recipes, tested by hand | ER0; OP1's gateway component | 2–3 engineer-weeks |
 | **ER2** | Workload-identity exchange: the token endpoint, trust policies, Loams access tokens on the edge, and SDK token providers (TypeScript, then Python and Go) | ER0; §19 §5.3's signing key and JWKS | 4–5 engineer-weeks |
-| **ER3** | The public edge profile, only if D1312 is approved: mTLS and token-only admission, an external security review, the operator's opt-in public Service | Owner approval of D1312; ER2 | 3 engineer-weeks plus the review |
+| **ER3** | Deferred with D1312 (owner, 2026-10-21); if it is approved after ER2, the public edge profile: mTLS and token-only admission, an external security review, the operator's opt-in public Service | Owner approval of D1312; ER2 | 3 engineer-weeks plus the review |
 
 ## 2. Scope
 
@@ -163,7 +163,7 @@ Loams gets **one door for the edge**: the edge listener of `loams-gateway`. Seve
 | **Tailnet** | Nodes the tailnet policy admits | Tailscale, Headscale | Everything the tailnet serves today (the console, operators); serverless nodes reach only the edge listener (D1302) |
 | **Private link** | Workloads inside a network the user controls or has bound | Lambda in a VPC, Cloud Run Direct VPC egress, a Workers VPC binding, Vercel PrivateLink or Secure Compute | The gateway's edge listener only (D1302) |
 | **Brokered** | Only requests a third-party broker has authenticated against the user's policy; the user's stack dials out | Cloudflare Tunnel behind an Access application | The gateway's edge listener only, which checks the broker's assertion (D1306) |
-| **Public** | Anyone on the internet | A public load balancer, Tailscale Funnel, a relay on a public VPS | Nothing today; the edge listener only if D1312 is approved |
+| **Public** | Anyone on the internet | A public load balancer, Tailscale Funnel, a relay on a public VPS | Nothing; the edge listener only if D1312, deferred on 2026-10-21, is approved later |
 
 The brokered class is close to the tailnet in what it admits: a third party (Tailscale's coordination server, or Cloudflare Access) decides who may connect, under the user's policy. Unauthenticated requests stop at the broker and never reach a Loams process. The difference is that Cloudflare terminates TLS (T10).
 
@@ -286,7 +286,7 @@ Only the edge listener is on the internet, and the engine stays private behind i
 - every user becomes responsible for an internet-facing service;
 - D1195's admission policy needs an exception.
 
-Every runtime in §8 can use the brokered path instead: any runtime that can send two headers can use Access. So the profile's value is convenience and independence from Cloudflare, not reach. It is presented as an owner decision in §9.
+Every runtime in §8 can use the brokered path instead: any runtime that can send two headers can use Access. So the profile's value is convenience and independence from Cloudflare, not reach. The owner deferred it on 2026-10-21 (§9.2).
 
 ### 5.5 A Loams-hosted relay
 
@@ -588,22 +588,22 @@ They are the languages used on Lambda, Cloud Run and Fly. The other SDKs need on
 
 ## 9. The never-public rule
 
-### 9.1 Part A: private and brokered paths (D1311, Proposed)
+### 9.1 Part A: private and brokered paths (D1311, approved by the owner 2026-10-21)
 
 **The rule today** (networking map):
 > **The engine is never on the public internet.** Self-hosted stacks are reached over the operator's tailnet. Public endpoints are only the ones Ostrium runs: `loams.dev`, `auth.loams.dev` and `console.loams.dev`.
 
-The second sentence is too narrow for this design: a Workers VPC or a Lambda VPC reaches the stack without the tailnet. Proposed text:
+The second sentence is too narrow for this design: a Workers VPC or a Lambda VPC reaches the stack without the tailnet. The amended text, approved on 2026-10-21 and applied to the networking map:
 > **The engine is never on the public internet.** Its listeners are reached on loopback, over the operator's tailnet, or by `loams-gateway` on an internal network. Callers off the tailnet, such as serverless functions, reach Loams only through the gateway's edge listener, over a private link or a brokered tunnel that authenticates every request before it reaches the stack (§69 §4.2). Public endpoints are only the ones Ostrium runs: `loams.dev`, `auth.loams.dev` and `console.loams.dev`.
 
 **Why this fits the approved direction:**
 - Nothing in it lets an unauthenticated party on the internet open a connection to a Loams process.
 - The owner's direction of 2026-10-20 asks for exactly this reach without public exposure.
-- It stays *Proposed* until the owner confirms the wording.
+- The owner approved the wording on 2026-10-21.
 
-### 9.2 Part B: an opt-in public edge profile (D1312, owner decision)
+### 9.2 Part B: an opt-in public edge profile (D1312, deferred by the owner 2026-10-21)
 
-Proposed text, if approved. It is appended to part A:
+**Deferred on 2026-10-21** per Q1060's default; revisited after ER2. The text that was proposed, kept for that review, would be appended to part A:
 > **The engine is never public; the gateway's edge listener may be, in an explicit opt-in edge profile** (§69 §9.3). The profile is off by default, admits only mTLS or short-lived tokens, and exposes nothing but the edge allow-list.
 
 The decision also answers Q992 ("May the gateway's Postgres data listener ever be public? … revisited only by an owner ruling"). The proposed answer is: **not the `pg` listener**, only the HTTP edge listener; Postgres stays private-link only.
@@ -627,12 +627,12 @@ The decision also answers Q992 ("May the gateway's Postgres data listener ever b
 | D1195's admission policy needs an exception | Certain | A weaker guard | The exception is narrow: one Service, one port, `loams.dev/edge-public: "acknowledged"`, only the gateway's pods; LOC tests that nothing else gets through |
 | Denial of service of a self-hosted engine | Medium | Loss of availability for tailnet users too | Gateway limits; concurrency caps towards the engine; a WAF or CDN in front recommended |
 
-**Recommendation (Q1060's default): defer part B.**
+**Recommendation (Q1060's default, adopted by the owner on 2026-10-21): defer part B.**
 - Part A serves every runtime in §8. The Access path works from any runtime that can send headers.
 - So part B adds convenience and independence from Cloudflare, not reach.
 - Revisit when a design partner or user cannot use Cloudflare and has no private link, or when ER2 has shipped, so the profile can be token-only from its first day.
 
-### 9.3 The public edge profile's requirements (D1313, only if D1312 is approved)
+### 9.3 The public edge profile's requirements (D1313, deferred with D1312)
 
 - **TLS 1.3 only** at the gateway, with certificates from the user's ACME or cert-manager. HSTS on, and no HTTP listener.
 - **Admission by one of these:** mTLS against a user-configured client CA (the Workers `mtls_certificates` binding, a function's client certificate); or a Loams access token from §7.2. **No static `lk_` keys and no Access assertions** on this listener.
@@ -747,9 +747,9 @@ Exit:
 
 | Decision | Effect |
 |---|---|
-| **Networking map rule** ("the engine is never on the public internet") | **Amended by D1311 (part A), Proposed:** the wording names private-link and brokered paths to the gateway's edge listener. The engine itself is unchanged. Part B (D1312) is the owner's decision |
+| **Networking map rule** ("the engine is never on the public internet") | **Amended by D1311 (part A), approved 2026-10-21:** the wording names private-link and brokered paths to the gateway's edge listener; the networking map, §43 §4, §57 and §65 §11.4 carry it. The engine itself is unchanged. Part B (D1312) was deferred |
 | **D581** (Cloudflare is the public front door for Ostrium's sites; the tailnet is the private network) | **Extended:** Cloudflare Tunnel also carries users' serverless traffic, in the **user's own** account, never Ostrium's |
-| **D1019, D1195** (gateway Service internal only; exposure `tailnet` or `internal`) | **Kept.** D1316 adds `tunnel`, which renders no Service. An `edge-public` mode exists only if D1312 is approved |
+| **D1019, D1195** (gateway Service internal only; exposure `tailnet` or `internal`) | **Kept.** D1316 adds `tunnel`, which renders no Service. There is no `edge-public` mode while D1312 is deferred |
 | **Q992** (may the gateway's Postgres listener ever be public?) | Unchanged: no. D1312 concerns only the HTTP edge listener |
 | **D1013, D1022** (the `http` module on Pingora) | **Amended in order only:** ER0's edge listener is a narrow hyper proxy behind a trait, and the `http` plan moves it onto Pingora. Q900 (Envoy at the HTTP edge) is unaffected |
 | **D1014–D1016** (Postgres splice, refusals, dedicated ports) | Used as they are; Hyperdrive uses a dedicated port (D1310) |
@@ -772,9 +772,11 @@ Exit:
 | Ephemeral tailnet nodes from Lambda exhaust minutes or tagged-resource quotas | Medium | Recipes recommend the tunnel for bursty Lambdas; tailnet nodes for long-lived Fly Machines |
 | Exchanged tokens outlive a revoked trust policy | Low | 15-minute TTL; the revocation set of §19 §5.4 |
 
-## 15. Open questions (Q1060–Q1075)
+## 15. Open questions (Q1060–Q1075), answered
 
-| # | Question | Default |
+The owner answered every question with its default on 2026-10-21.
+
+| # | Question | Default (answered 2026-10-21 by the owner) |
 |---|---|---|
 | Q1060 | Approve part B, the opt-in public edge profile (D1312)? | **Defer.** Approve part A now. Revisit part B when a user cannot use Cloudflare or a private link, and only after ER2, so the profile is token-only from its first day |
 | Q1061 | Workers default: Workers VPC (beta) or the Access hostname (GA)? | Workers VPC first in the guide, labelled beta; the Access hostname documented beside it; the nightly job tests both |

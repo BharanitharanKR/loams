@@ -1,8 +1,8 @@
-# ER1 — Edge Reach: Serverless Runtimes to a Private Loams (plan stub)
+# ER1 — Edge Reach: Serverless Runtimes to a Private Loams
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, test first. Where this plan gives exact names, paths, flags, ports or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end of this file.
 >
-> **Status: Stub** (2026-10-20). Track ER, design [§69](../design/69-edge-reach.md) (D1300–D1322, Q1060–Q1075). The owner approved the direction on 2026-10-20; the details are Proposed until confirmed. **D1312, the public edge profile, is the owner's decision and is not part of ER0.** This plan specifies **ER0** task by task. ER1 (operator and Postgres), ER2 (workload identity) and ER3 (the public profile, only if D1312 is approved) are listed at milestone level and get full specifications when their gates are met.
+> **Status: Approved** (2026-10-21). Track ER, design [§69](../design/69-edge-reach.md) (D1300–D1322, Q1060–Q1075). The owner approved the direction on 2026-10-20 and the design with every default on 2026-10-21. Part A of the never-public amendment (D1311) is approved and applied to the networking map. **D1312, the public edge profile, is deferred** (per Q1060) and is not part of this plan until it is revisited after ER2. This plan specifies **ER0** task by task. ER1 (operator and Postgres), ER2 (workload identity) and ER3 (deferred) are listed at milestone level and get full specifications when their gates are met.
 
 **Goal (ER0):** a Cloudflare Worker reaches a self-hosted compose stack through a Workers VPC binding, with an environment-bound `lk_` key, and nothing in the stack is published. So does any runtime with `fetch`, through an Access-protected tunnel hostname with a service token. In both cases:
 - the request enters through `loams-gateway`'s edge listener only;
@@ -285,7 +285,7 @@ Files under `docs/guides/edge/`:
 Also:
 - Each page lists exactly the commands and config the tests use. A docs-snippet check, `scripts/edge/check-doc-snippets`, diffs the fenced blocks tagged `edge-test` against `tests/edge/`.
 - The guides index (`docs/README.md`, where `docs/guides/connectors` and `docs/guides/studio` are linked) links the section.
-- **Only after the owner confirms D1311:** `docs/design/networking-map.md` gets part A's wording, and `docs/release/preview.md` gets a one-line pointer.
+- `docs/release/preview.md` gets a one-line pointer to the guides. The networking map already carries part A's approved wording (D1311, 2026-10-21).
 
 Tests: `edge_doc_snippets_match_tests`.
 
@@ -320,7 +320,7 @@ Gate: Tasks 1–11 merged; both runs recorded; §69 §11's PR tests green on `de
 - TypeScript `exchange()` and `@loams/client/identity` providers (`vercelOidc`, `awsWebIdentity`, `gcpIdToken`, `flyOidc`, `githubActions`), then Python and Go.
 - Nightly: a Vercel preview deployment and a GitHub Actions job exchange real tokens.
 
-## ER3 — The public edge profile (milestone level; only if D1312 is approved)
+## ER3 — The public edge profile (deferred with D1312, owner 2026-10-21; revisited after ER2)
 
 - TLS 1.3 and mTLS admission on a public listener.
 - Token-only credentials.
