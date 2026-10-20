@@ -1499,9 +1499,19 @@ jobs:
       - name: the Python SDK's tests
         working-directory: sdks/python
         run: uv run pytest -q
+      # SDKP: the app suite (the app scenario replayed through the public
+      # facade, sync and async, and every app test named). It reads the report
+      # the tests above just wrote; S1 folds it into the plain check.
+      - name: the app suite
+        run: node sdks/conformance/check-languages.mjs --check python --suite app
       - name: the SDK typechecks under --strict
         working-directory: sdks/python
         run: uv run mypy --strict src
+      # SDKP Part D: the notes app, the scenario as a program, needs no server
+      # to be checked against the API.
+      - name: the examples typecheck under --strict
+        working-directory: sdks/python
+        run: uv run mypy --strict examples
       # A generation difference must be a dependency bump, not whatever the
       # runner resolved, so the runtime pins stay exact.
       - name: the SDK's runtime dependencies are exact pins

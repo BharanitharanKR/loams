@@ -86,6 +86,38 @@ All notable changes to this project are documented here. The format follows [Kee
   `fetch_events` from `loams.stream.v1`, the Python and Go stubs for both, and
   the `app_sql` and `app_streams` scenarios recorded from `loams dev`
   (`record-fixtures.mjs --source app --scenario …`).
+- Python SDK (`loams`): the app-building layer of SDKP, in both `Loams` and
+  `AsyncLoams`. `Schema`, `Filter` and `Search` builders checked against the
+  builder corpus (`sdks/fixtures/builders/`); `loams.collection(name)` handles;
+  `ConsistencyToken` parse/merge/print checked against
+  `sdks/fixtures/tokens.json`, and a session store that merges every response
+  token (fields and the `loams-consistency-token` header) and sends
+  `consistency.at_least`; a default namespace (R11); a 30 s unary deadline
+  raising `client_deadline_exceeded` (R12); `documents.write_batch` (R13);
+  `streams.subscribe` (R14); `search.text`, `search.hybrid`,
+  `search.query_all`, `documents.upsert/delete/patch/scroll_all` and
+  `<call>_all` for paged calls; `Loams.from_env()`. The package now carries the
+  `loams.collection.v1` and `loams.graph.v1` messages and Connect stubs.
+
+- Python SDK: the app modules on `Loams` and `AsyncLoams` (`namespaces`,
+  `collections`, `documents`, `search`, `vector`, `graph`), typed with the
+  generated Protocols plus the conveniences; the app scenario replayed through
+  the public facade in `python_app_collections`, `python_app_search` and
+  `python_app_graph`; `examples/notes/main.py`.
+- Python SDK: `loams.sql` and `loams.streams` on both clients (SDKP L2 part C):
+  `sql.query`, `sql.query_arrow`, `sql.records(statement, [$1, …])` and
+  `loams.sql_records(answer)`; `streams.create`, `get`, `list`/`list_all`,
+  `produce`, `fetch`, `produce_events`, `fetch_events` and `subscribe`;
+  replayed by `python_app_sql` and `python_app_streams`.
+
+### Changed
+
+- Python SDK: `session_consistency=True` now works: the response header is read
+  through `connectrpc.client.ResponseMetadata`, and two different tokens merge
+  instead of being refused. The session keeps one token per proto package, and
+  only collection and SQL reads take it (SDKP-17). `timeout_ms` is now the
+  SDK's own deadline over all of a call's retries rather than the transport's
+  per-attempt one.
 
 ### Fixed
 
