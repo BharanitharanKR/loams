@@ -273,7 +273,7 @@ jobs:
             (cd "sdks/typescript/packages/$pkg/build/npm" && npm publish --dry-run --tag "$NPM_TAG" && npm pack --pack-destination "$RUNNER_TEMP/npm")
           done
           ls -l "$RUNNER_TEMP/npm"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sdk-npm
           path: ${{ runner.temp }}/npm/*.tgz
@@ -362,7 +362,7 @@ jobs:
           uv venv -q "$RUNNER_TEMP/smoke"
           uv pip install -q --python "$RUNNER_TEMP/smoke/bin/python" dist/*.whl
           "$RUNNER_TEMP/smoke/bin/python" -c 'import importlib.metadata as m, loams; assert loams.Loams; print("loams", m.version("loams"))'
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sdk-pypi
           path: sdks/python/dist/*
@@ -527,7 +527,7 @@ jobs:
           dotnet add package Loams --version "${{ needs.plan.outputs.semver }}"
           printf 'using Loams;\nvar o = new LoamsClientOptions { Endpoint = "http://127.0.0.1:8080" };\nConsole.WriteLine(o.Endpoint);\n' > Program.cs
           dotnet run
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sdk-nuget
           path: ${{ runner.temp }}/nuget/*
@@ -728,7 +728,7 @@ jobs:
           ctest --test-dir build --output-on-failure
       - name: the source archive, built, installed and found with find_package
         run: bash sdks/cpp/packaging/release.sh "${{ needs.plan.outputs.semver }}" "$RUNNER_TEMP/cpp"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sdk-cpp
           path: |
@@ -799,7 +799,7 @@ jobs:
           GEM_HOME="$home" GEM_PATH="$home" gem install --no-document "./loams-$GEM_VERSION.gem"
           (cd "$RUNNER_TEMP" && GEM_HOME="$home" GEM_PATH="$home" ruby -e 'require "loams"; puts "loams #{Loams::VERSION}"; Loams.client("http://127.0.0.1:4400")')
           mkdir -p "$RUNNER_TEMP/gem" && mv "loams-$GEM_VERSION.gem" "$RUNNER_TEMP/gem/"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sdk-gem
           path: ${{ runner.temp }}/gem/*.gem
@@ -1009,7 +1009,7 @@ jobs:
           gpg --batch --passphrase '' --quick-gen-key 'dry run <dry-run@loams.invalid>' ed25519 sign 1d
           bash scripts/sdk/maven-bundle.sh "$RUNNER_TEMP/maven/java" "$RUNNER_TEMP/java-bundle.zip"
           bash scripts/sdk/maven-bundle.sh "$RUNNER_TEMP/maven/kotlin" "$RUNNER_TEMP/kotlin-bundle.zip"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sdk-maven
           path: ${{ runner.temp }}/maven/

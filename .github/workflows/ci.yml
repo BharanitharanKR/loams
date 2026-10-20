@@ -953,7 +953,7 @@ jobs:
           cargo test -p loams-migrate --test adopt preview2_tikv_dump_is_recognised --locked
       - name: playground logs
         if: failure()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: tikv-playground-logs-${{ github.job }}
           path: |
@@ -1082,7 +1082,7 @@ jobs:
           echo "LOAMS_CHECKER_SEED_OFFSET=<seed> LOAMS_CHECKER_SEEDS=1 LOAMS_CHECKER_OPS=2000 cargo test -p loams-live --test txn_checker snapshot_isolated"
       - name: playground logs
         if: failure() && steps.paths.outputs.run == 'true'
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: tikv-playground-logs-${{ github.job }}
           path: |
@@ -1134,7 +1134,7 @@ jobs:
         run: scripts/durable/conformance.sh --store sqlite --clients 8 --ops 600
       - name: conformance output
         if: failure()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: durable-conformance-sqlite
           path: target/durable-conformance/
@@ -1194,7 +1194,7 @@ jobs:
           done
       - name: conformance output and TiDB logs
         if: failure()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: durable-tidb-logs
           path: |
@@ -1751,7 +1751,7 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-dotnet@v5
+      - uses: actions/setup-dotnet@v6
         with:
           global-json-file: sdks/csharp/global.json
       - name: the C# SDK's build
@@ -1807,7 +1807,7 @@ jobs:
       issues: write
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
@@ -1834,7 +1834,7 @@ jobs:
       KOTLIN_VERSION: '2.2.20'
     steps:
       - uses: actions/checkout@v7
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@v6
         with:
           distribution: temurin
           java-version: '21'
@@ -2088,7 +2088,7 @@ jobs:
           done
       - name: upload crashing inputs
         if: failure()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: sqlgate-fuzz-artifacts
           path: crates/loams-sqlgate/fuzz/artifacts
@@ -2129,7 +2129,7 @@ jobs:
           done
       - name: upload crashing inputs
         if: failure()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: agentd-fuzz-artifacts
           path: crates/loams-agentd-rpc/fuzz/artifacts
@@ -2175,7 +2175,7 @@ jobs:
           done
       - name: upload crashing inputs
         if: failure()
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: agentd-connect-fuzz-artifacts
           path: crates/loams-agentd-connect/fuzz/artifacts
@@ -2511,7 +2511,7 @@ jobs:
         run: scripts/release/upgrade-gate.sh "$RUNNER_TEMP/upgrade-gate"
       - if: ${{ always() }}
         name: the ledger, the snapshot, check's JSON, timings and logs
-        uses: actions/upload-artifact@v7.0.1
+        uses: actions/upload-artifact@v7.0.2
         with:
           name: upgrade-gate
           path: |

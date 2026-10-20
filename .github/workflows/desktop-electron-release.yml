@@ -234,14 +234,14 @@ jobs:
           mv ./*.AppImage ./*.deb ./*.pacman ../out-rest/
           for y in latest*.yml; do [ -e "$y" ] && mv "$y" ../out-rest/; done
           ls -l ../out-rpm ../out-rest
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-linux-${{ matrix.arch }}
           path: apps/desktop-electron/out-rest/*
           if-no-files-found: error
           retention-days: 14
           overwrite: true
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: rpm-${{ matrix.arch }}-in
           path: apps/desktop-electron/out-rpm/*
@@ -340,7 +340,7 @@ jobs:
             [ -s "$bin/$f" ] || { echo "::error::$bin/$f is missing"; exit 1; }
           done
           (cd "$bin" && sha256sum -c SHA256SUMS)
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: win-unpacked-in
           path: apps/desktop-electron/dist/win-unpacked/
@@ -434,14 +434,14 @@ jobs:
           mv ./*.exe ../out-exe/
           mv latest.yml ../out-meta/ 2>/dev/null || echo "::warning::no latest.yml (LOAMS_UPDATE_FEED unset?)"
           ls -l ../out-exe ../out-meta
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: win-installer-in
           path: apps/desktop-electron/out-exe/*
           if-no-files-found: error
           retention-days: 14
           overwrite: true
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-win-meta
           path: apps/desktop-electron/out-meta/*
@@ -644,7 +644,7 @@ jobs:
         run: |
           cd apps/desktop-electron/dist
           [ -e latest-mac.yml ] && mv latest-mac.yml latest-mac-x64.yml || true
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: desktop-macos-${{ matrix.arch }}
           path: |
