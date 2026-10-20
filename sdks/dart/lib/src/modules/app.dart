@@ -22,10 +22,12 @@ class AppCall {
 
   const AppCall(this.rpc, this.retry, {this.namespaced = true, this.read = false});
 
-  /// The proto package: the session's scope.
+  /// The session's scope: the proto package, except that SQL reads (and adds
+  /// to) the collection token, since it reads collections.
   String get scope {
     final service = rpc.substring(0, rpc.indexOf('/'));
-    return service.substring(0, service.lastIndexOf('.'));
+    final package = service.substring(0, service.lastIndexOf('.'));
+    return package == 'loams.sql.v1' ? 'loams.collection.v1' : package;
   }
 }
 
@@ -62,10 +64,19 @@ const appCalls = <String, AppCall>{
   'graph.query': AppCall('loams.graph.v1.GraphService/Execute', 'keyed', read: true),
   'graph.query_batch': AppCall('loams.graph.v1.GraphService/ExecuteBatch', 'keyed'),
   'graph.explain': AppCall('loams.graph.v1.GraphService/Explain', 'safe', read: true),
+  'sql.query': AppCall('loams.sql.v1.SqlService/Query', 'safe', read: true),
+  'sql.query_arrow': AppCall('loams.sql.v1.SqlService/QueryArrow', 'safe', read: true),
+  'streams.create': AppCall('loams.stream.v1.StreamService/CreateStream', 'safe'),
+  'streams.get': AppCall('loams.stream.v1.StreamService/DescribeStream', 'safe'),
+  'streams.list': AppCall('loams.stream.v1.StreamService/ListStreams', 'safe'),
+  'streams.produce': AppCall('loams.stream.v1.StreamService/Produce', 'never'),
+  'streams.fetch': AppCall('loams.stream.v1.StreamService/Fetch', 'safe'),
+  'streams.produce_events': AppCall('loams.stream.v1.StreamService/ProduceCloudEvents', 'never'),
+  'streams.fetch_events': AppCall('loams.stream.v1.StreamService/FetchCloudEvents', 'safe'),
 };
 
 /// The packages whose reads take the session's token (SDKP-17).
-const sessionScopes = {'loams.collection.v1', 'loams.sql.v1'};
+const sessionScopes = {'loams.collection.v1'};
 
 /// What every call takes besides its arguments.
 class CallOptions {

@@ -42,6 +42,8 @@ void main() {
   test('dart_app_collections', () => run('app_collections'));
   test('dart_app_search', () => run('app_search'));
   test('dart_app_graph', () => run('app_graph'));
+  test('dart_app_sql', () => run('app_sql'));
+  test('dart_app_streams', () => run('app_streams'));
 }
 
 Future<List<String>> replay(String endpoint, Map<String, dynamic> fixture) async {

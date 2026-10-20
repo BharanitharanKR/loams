@@ -80,8 +80,17 @@ final page = await notes.search(Search.on('notes')
   **Timeouts**: 30 s per unary call (`timeout:` on the client, `CallOptions(timeout:)`
   per call, `null` for none); a spent budget throws `DeadlineExceededException`
   with reason `client_deadline_exceeded` and is never retried.
-- `Subscription` (`records` is a `Stream`) is the client half of
-  `streams.subscribe`; the `sql` and `streams` modules arrive with their Connect protos.
+- **SQL.** `sql.query(sql, params: [...], maxRows:, consistency:)` answers
+  `columns` and `rows`; `SqlModule.records(res)` gives rows as maps.
+  `queryArrow` answers the Arrow IPC bytes. SQL reads see the session's
+  collection writes.
+- **Streams.** `streams.create`, `get`, `list` / `listAll`, `produce(stream,
+  records, partition:, producerId:, producerSeq:)` (a record is bytes, a string, a
+  JSON value or a `ProduceRecord`; a repeated producer sequence is deduplicated),
+  `fetch` (`StreamsModule.records(res)` decodes it into `StreamRecord`s),
+  `produceEvents` / `fetchEvents` (CloudEvents as maps), and `subscribe(stream,
+  partition:, fromOffset:)`, whose `records` is a `Stream` that resumes from
+  `offset`.
 - Durable execution has no module: use a Resonate SDK with `LOAMS_ENDPOINT/durable/`.
 
 ## Develop
