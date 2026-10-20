@@ -17,6 +17,10 @@ Rust jobs and the main-branch jobs, and default to `ubuntu-latest`.
 `nightly.yml` dispatches the full suites on `dev` every night (a `schedule:` only runs on the
 default branch, `main`). A red nightly means: fix `dev` before the next `dev` → `main` pull request.
 
+| Nightly workflow | What it checks |
+|---|---|
+| `mastra-gate.yml` (MA1 Task 27, Q1001) | Mastra's own Qdrant suites (with and without an API key) and the observed Elasticsearch suite from `ostrium-labs/loams-mastra` `main`, against `loams` built from `dev` (`LOAMS_VERSION=dev`, so entries fixed on dev must pass). A failure opens or updates the issue "Mastra gate fails on dev" (label `mastra-compat`). Not a required check. |
+
 A draft pull request skips the heavy jobs until it is marked ready; the `ci:full` label (then a
 push) runs them anyway. CodeRabbit does not review drafts.
 
