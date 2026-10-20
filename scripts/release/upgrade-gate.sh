@@ -34,10 +34,19 @@ echo "{}" > "$timings"
 
 train() {
   python3 - "$root/release/upgrade-path.toml" "$1" <<'PY'
-import re, sys
-text = open(sys.argv[1]).read()
-m = re.search(r'\[\[release\]\]\s*version\s*=\s*"([^"]+)"\s*from\s*=\s*"([^"]+)"', text)
-print(m.group(1) if sys.argv[2] == "candidate" else m.group(2))
+import re, sys, tomllib
+releases = tomllib.load(open(sys.argv[1], "rb"))["release"]
+newest = releases[0]
+src = newest["from"]
+if sys.argv[2] == "candidate":
+    print(newest["version"])
+elif re.fullmatch(r"\d+\.\d+", src):
+    # A patch release declares its line (`0.1`): the previous release is the
+    # newest earlier stable release of that line.
+    print(next(r["version"] for r in releases[1:]
+               if r["version"].startswith(src + ".") and "-" not in r["version"]))
+else:
+    print(src)
 PY
 }
 candidate="$(train candidate)"
