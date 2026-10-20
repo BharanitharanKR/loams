@@ -114,7 +114,7 @@ public sealed class StreamsModule
 
     /// <summary>
     /// Appends records to one partition. Each record is bytes, a string (UTF-8) or any
-    /// other value (as JSON). Without <paramref name="producerId"/> a produce is a plain
+    /// other value (as JSON), or a <see cref="ProducerRecord"/> to give it a key and headers. Without <paramref name="producerId"/> a produce is a plain
     /// append and is never retried; with it and <paramref name="producerSeq"/> a repeat
     /// answers the first append with <c>duplicate</c> set, so it is retried.
     /// </summary>
@@ -123,7 +123,7 @@ public sealed class StreamsModule
         CancellationToken cancellationToken = default)
     {
         var request = new ProduceRequest { Stream = stream, Partition = partition, Namespace = @namespace ?? string.Empty };
-        request.Records.AddRange(records.Select((r) => new Record { Value = ByteString.CopyFrom(Encode(r)) }));
+        request.Records.AddRange(records.Select(ToRecord));
         if (producerId is not null)
         {
             request.ProducerId = producerId;
@@ -140,14 +140,53 @@ public sealed class StreamsModule
         return Call<ProduceResponse>("Produce", request, settings, cancellationToken);
     }
 
-    /// <summary>A record's bytes: as given, a string's UTF-8, or a value's JSON.</summary>
+    /// <summary>One <c>loams.stream.v1.Record</c>: a <see cref="ProducerRecord"/> with its key and headers, or a bare value.</summary>
+    internal static Record ToRecord(object record)
+    {
+        if (record is not ProducerRecord keyed)
+        {
+            return new Record { Value = ByteString.CopyFrom(Encode(record)) };
+        }
+        var output = new Record { Value = ByteString.CopyFrom(Encode(keyed.Value)) };
+        if (keyed.Key is not null)
+        {
+            output.Key = ByteString.CopyFrom(Encode(keyed.Key));
+        }
+        foreach (var header in keyed.Headers ?? [])
+        {
+            output.Headers.Add(new Header { Key = header.Key, Value = ByteString.CopyFrom(Encode(header.Value)) });
+        }
+        return output;
+    }
+
+    /// <summary>
+    /// A record's bytes: as given, a string's UTF-8, or a value's JSON with object keys sorted, so the
+    /// same value is the same bytes however its dictionary was built.
+    /// </summary>
     public static byte[] Encode(object record) => record switch
     {
         byte[] bytes => bytes,
         ByteString bytes => bytes.ToByteArray(),
         string text => Encoding.UTF8.GetBytes(text),
-        _ => Encoding.UTF8.GetBytes(CompactJson.Format(Values.Of(record))),
+        _ => Encoding.UTF8.GetBytes(CompactJson.Format(Sorted(Values.Of(record)))),
     };
+
+    private static Value Sorted(Value value) => value.KindCase switch
+    {
+        Value.KindOneofCase.StructValue => Value.ForStruct(SortedStruct(value.StructValue)),
+        Value.KindOneofCase.ListValue => Value.ForList(value.ListValue.Values.Select(Sorted).ToArray()),
+        _ => value,
+    };
+
+    private static Struct SortedStruct(Struct value)
+    {
+        var sorted = new Struct();
+        foreach (var field in value.Fields.OrderBy((f) => f.Key, StringComparer.Ordinal))
+        {
+            sorted.Fields.Add(field.Key, Sorted(field.Value));
+        }
+        return sorted;
+    }
 
     /// <summary>
     /// Reads one partition from <paramref name="offset"/>. <paramref name="maxWaitMs"/>
@@ -208,7 +247,8 @@ public sealed class StreamsModule
             var page = await FetchAsync(stream, partition, offset, maxWaitMs: maxWaitMs, @namespace: @namespace,
                 options: options, cancellationToken: ct).ConfigureAwait(false);
             return page.Records
-                .Select((r) => new StreamRecord(partition, r.Offset, r.Value?.ToByteArray() ?? [], (ulong)Math.Max(0, r.TimestampMs)))
+                .Select((r) => new StreamRecord(partition, r.Offset, r.Value?.ToByteArray() ?? [], (ulong)Math.Max(0, r.TimestampMs),
+                    r.HasKey ? r.Key.ToByteArray() : null))
                 .ToList();
         }, fromOffset);
     }
@@ -218,3 +258,13 @@ public sealed class StreamsModule
         uint maxWaitMs = 1000, string? @namespace = null, CallOptions? options = null) =>
         Subscribe(stream, partition, fromOffset, maxWaitMs, @namespace, options);
 }
+
+/// <summary>
+/// A record to produce with a key and headers (SDKP-25). The key (partitioning, compaction), the
+/// value and each header value are bytes, a string (UTF-8) or any other value (as JSON), as
+/// <see cref="StreamsModule.Encode"/> encodes them; a null key produces an unkeyed record.
+/// </summary>
+/// <param name="Key">The record's key, or null for none.</param>
+/// <param name="Value">The record's value.</param>
+/// <param name="Headers">Its headers, in order.</param>
+public sealed record ProducerRecord(object? Key, object Value, IReadOnlyList<KeyValuePair<string, object>>? Headers = null);

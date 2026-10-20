@@ -125,9 +125,9 @@ foreach (var row in sql.Records())
 await loams.Streams.CreateAsync("events", partitions: 1);
 var produced = await loams.Streams.ProduceAsync("events", 0,
 [
-    new Dictionary<string, object?> { ["kind"] = "created", ["note"] = 1 },
-    new Dictionary<string, object?> { ["kind"] = "patched", ["note"] = 2 },
-    new Dictionary<string, object?> { ["kind"] = "deleted", ["note"] = 4 },
+    new ProducerRecord("1", new Dictionary<string, object?> { ["kind"] = "created", ["note"] = 1 }),
+    new ProducerRecord("2", new Dictionary<string, object?> { ["kind"] = "patched", ["note"] = 2 }),
+    new ProducerRecord("4", new Dictionary<string, object?> { ["kind"] = "deleted", ["note"] = 4 }),
 ], producerId: "notes-demo", producerSeq: 1);
 Console.WriteLine($"events at {produced.BaseOffset}..{produced.LastOffset}{(produced.Duplicate ? " (already produced)" : "")}");
 var subscription = loams.Streams.Subscribe("events", 0, fromOffset: produced.BaseOffset);

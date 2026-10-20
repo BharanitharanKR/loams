@@ -9,6 +9,7 @@
 import com.google.protobuf.DynamicMessage
 import dev.loams.AlreadyExistsException
 import dev.loams.ConsistencySession
+import dev.loams.ProducerRecord
 import dev.loams.Doc
 import dev.loams.DocumentId
 import dev.loams.Filter
@@ -101,7 +102,9 @@ fun main() {
     for (row in dev.loams.SqlModule.records(sql)) println("  sql row ${row["n"]}: ${row["title"]}")
     loams.streams.create("events", 1)
     val produced = loams.streams.produce("events", 0, listOf(
-        mapOf("kind" to "created", "note" to 1), mapOf("kind" to "patched", "note" to 2), mapOf("kind" to "deleted", "note" to 4),
+        ProducerRecord("1", mapOf("kind" to "created", "note" to 1)),
+        ProducerRecord("2", mapOf("kind" to "patched", "note" to 2)),
+        ProducerRecord("4", mapOf("kind" to "deleted", "note" to 4)),
     ), producerId = "notes-demo", producerSeq = 1)
     val base = produced.field("base_offset") as Long
     val last = produced.field("last_offset") as Long
