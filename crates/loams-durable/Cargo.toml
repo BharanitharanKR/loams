@@ -13,7 +13,14 @@ publish = false
 default = []
 # The TiDB backend through Resonate's MySQL plugin (loams's durable-mysql).
 mysql = ["dep:resonate-server-mysql", "dep:rustls", "dep:sqlx"]
-tikv = ["dep:loams-tikv", "dep:resonate-server-blob", "dep:uuid", "dep:resonate-core"]
+tikv = [
+    "dep:loams-tikv",
+    "dep:resonate-server-blob",
+    "dep:uuid",
+    "dep:resonate-core",
+    "dep:rusqlite",
+    "dep:sha2",
+]
 
 [dependencies]
 async-trait.workspace = true
@@ -31,6 +38,9 @@ loams-tikv = { workspace = true, optional = true }
 resonate-transport-http-poll.workspace = true
 resonate-transport-http-push.workspace = true
 rustls = { workspace = true, optional = true, features = ["ring", "std"] }
+# The 0.1.0 SQLite store, read once by the TiKV import (`tikv_import`).
+rusqlite = { workspace = true, optional = true }
+sha2 = { workspace = true, optional = true }
 serde.workspace = true
 serde_json.workspace = true
 sqlx = { workspace = true, optional = true, features = ["mysql", "runtime-tokio", "tls-rustls"] }

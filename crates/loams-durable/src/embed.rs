@@ -86,6 +86,14 @@ impl DurableServer {
             crate::mysql::check_schema(url, *tls).await?;
         }
         listen::probe(config.listen)?;
+        // 0.1.0 kept Durable in SQLite; a stack now on TiKV gets that state
+        // before anything serves from TiKV.
+        #[cfg(feature = "tikv")]
+        if let (DurableStore::Tikv { .. }, Some(sqlite)) = (&config.store, &config.import_sqlite)
+            && sqlite.exists()
+        {
+            crate::tikv_import::import_once(sqlite, &config.store).await?;
+        }
         let options = Options::default().default_server("server_sqlite");
         let built = resonate_base::build(&registry, &configuration, &options);
         // Taken whatever `build` said, so a failed build parks nothing.

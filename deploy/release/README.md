@@ -205,22 +205,23 @@ design §21 §3.3, D261), not in the SQLite file `durable/default.db` in the
 `loams-data` volume where 0.1.0 kept it. `loams dev`, and `loams standalone`
 without `--durable-store`, stay on SQLite.
 
-**Nothing copies the SQLite state into TiKV.** `loams durable migrate` brings a
-store's schema up to date; it does not move data between stores. After that
-upgrade the engine starts with an empty durable store: promises, tasks,
-schedules and suspended workflows in SQLite do not carry over. Drain first:
+**The SQLite state moves to TiKV on the first start.** When the data
+directory still has `durable/default.db` (a 0.1.0 stack), the engine copies its
+promises, tasks, callbacks, listeners and schedules into `loams_durable` before
+it serves, keeping their timestamps and task versions, and records what it
+copied, so later starts leave TiKV alone. The SQLite file is only read: it
+stays in `loams-data` and in the upgrade snapshot, so `loams upgrade rollback`
+goes back to it. If the file changes afterwards (the stack ran 0.1.0 again after
+a rollback), the next start copies it again and replaces what TiKV held.
 
-1. Let durable work finish: `promise.search` with `"state": "pending"` (a
-   `POST /durable/` envelope, or the console's Durable page) should list
-   nothing you still need.
-2. Note your schedules (`schedule.search`) and create them again afterwards.
-3. Upgrade as usual (`loams upgrade --to V`).
+`loams upgrade rollback --keep-writes` to 0.1.0 does the reverse: before 0.1.0
+starts, `loams durable export-sqlite` (run in the newer image, while TiKV is up
+and the engine is stopped) copies `loams_durable` back into the SQLite file, so
+0.1.0 starts on what the newer release wrote.
 
-The SQLite file stays in `loams-data`, unread, and in the upgrade snapshot, so
-`loams upgrade rollback` goes back to it. The engine creates the
-`loams_durable` keyspace on first start when PD has none (PD pre-allocates
-keyspaces only when a cluster is first bootstrapped); BR snapshots cover it
-with the rest of TiKV.
+The engine creates the `loams_durable` keyspace on first start when PD has none
+(PD pre-allocates keyspaces only when a cluster is first bootstrapped); BR
+snapshots cover it with the rest of TiKV.
 
 ## On your own VM (BYOC)
 

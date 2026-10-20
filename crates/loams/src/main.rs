@@ -797,6 +797,12 @@ impl Native {
         durable.push = self.durable_push;
         durable.debug = self.durable_debug;
         durable.overrides = self.durable_set.clone();
+        // A stack that kept Durable in this data directory's SQLite file
+        // (0.1.0's release stack) and now names a TiKV store: the engine
+        // copies that file's state across before it serves (#796).
+        if matches!(durable.store, DurableStore::Tikv { .. }) {
+            durable.import_sqlite = Some(config.data_dir.join("durable").join("default.db"));
+        }
         config.durable = Some(durable);
     }
 
@@ -1333,6 +1339,19 @@ enum DurableCommand {
         #[arg(long, value_parser = DurableStoreParser)]
         durable_store: DurableStoreArg,
     },
+    /// Copy a TiKV durable store back into the SQLite store 0.1.0 kept
+    /// (`<data-dir>/durable/default.db`), replacing its rows, so a release
+    /// that reads only SQLite starts on what the TiKV store holds.
+    /// `loams upgrade rollback --keep-writes` runs it from 0.1.1 to 0.1.0; it
+    /// needs the durable-tikv feature.
+    ExportSqlite {
+        /// The TiKV store: tikv://<pd>[,<pd>]/<keyspace>.
+        #[arg(long, value_parser = DurableStoreParser)]
+        durable_store: DurableStoreArg,
+        /// The SQLite file to write back to (created if missing).
+        #[arg(long)]
+        to: PathBuf,
+    },
 }
 
 /// Flight SQL's default address for `loams dev`.
@@ -1593,7 +1612,39 @@ async fn durable(command: &DurableCommand) -> ExitCode {
                 }
             }
         }
+        DurableCommand::ExportSqlite { durable_store, to } => {
+            export_sqlite(durable_store, to).await
+        }
     }
+}
+
+#[cfg(feature = "durable-tikv")]
+async fn export_sqlite(store: &DurableStoreArg, to: &std::path::Path) -> ExitCode {
+    let store = store.to_store();
+    if !matches!(store, loams_durable::DurableStore::Tikv { .. }) {
+        eprintln!("loams: --durable-store must be a tikv:// store");
+        return ExitCode::FAILURE;
+    }
+    match loams_durable::tikv_import::export_sqlite(&store, to).await {
+        Ok(report) => {
+            println!(
+                "{}",
+                serde_json::json!({ "from": store.to_string(), "to": to.display().to_string(),
+                                    "report": report })
+            );
+            ExitCode::SUCCESS
+        }
+        Err(err) => {
+            eprintln!("loams: {err}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+#[cfg(all(feature = "durable", not(feature = "durable-tikv")))]
+async fn export_sqlite(_store: &DurableStoreArg, _to: &std::path::Path) -> ExitCode {
+    eprintln!("loams: this build has no TiKV durable store (the durable-tikv feature is off)");
+    ExitCode::FAILURE
 }
 
 #[cfg(not(feature = "durable"))]

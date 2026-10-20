@@ -225,6 +225,63 @@ fn keep_writes_refused_with_point_of_no_return() {
     assert_eq!(world.env(), ENV);
 }
 
+/// Across 0.1.1, which moved Durable from SQLite to TiKV, `--keep-writes`
+/// copies Durable's TiKV store back into the SQLite file (with the image
+/// rolled back from, while TiKV runs and the engine does not) before the
+/// previous release starts on it.
+#[test]
+fn keep_writes_copies_durable_back_across_the_move_to_tikv() {
+    let (world, snapshot) = upgraded(ENV);
+    let mut config: serde_json::Value = serde_json::from_str(&config(false)).expect("the config");
+    config["services"]["loams"]["command"] =
+        json!(["serve", "--durable-store=tikv://pd:2379/loams_durable"]);
+    let mut script = Script::new();
+    script.insert("config".into(), ok(&config.to_string()));
+    let fake = after_upgrade(&snapshot, script, Some(ledger("reversible")));
+    let mut stack = world.stack();
+    let report = rollback::rollback(&fake, &mut stack, &options(true), &|_| true).expect("keep");
+    assert!(report.keep_writes);
+    let k = kinds(&fake);
+    in_order(&k, &["stop loams", "durable export", "engine ready"]);
+    let export = fake
+        .calls()
+        .into_iter()
+        .find(|c| kind(c) == "durable export")
+        .expect("the export ran");
+    let joined = export.join(" ");
+    assert!(
+        joined.contains("--durable-store=tikv://pd:2379/loams_durable"),
+        "{joined}"
+    );
+    assert!(
+        joined.contains("--to=/var/lib/loams/durable/default.db"),
+        "{joined}"
+    );
+    assert!(
+        joined.contains("loams:0.1.0"),
+        "the image rolled back from: {joined}"
+    );
+
+    // A previous release already on TiKV (a later step): nothing to copy.
+    let (world, snapshot) = upgraded(ENV);
+    let saved = world
+        .stack_dir()
+        .join(".loams-upgrade/snapshots")
+        .join(&snapshot)
+        .join("host/release/compose.yaml");
+    std::fs::write(
+        &saved,
+        "name: loams\nservices:\n  loams:\n    command: [--durable-store=tikv://pd:2379/loams_durable]\n",
+    )
+    .expect("a previous compose file on TiKV");
+    let mut script = Script::new();
+    script.insert("config".into(), ok(&config.to_string()));
+    let fake = after_upgrade(&snapshot, script, Some(ledger("reversible")));
+    let mut stack = world.stack();
+    rollback::rollback(&fake, &mut stack, &options(true), &|_| true).expect("keep");
+    assert!(!kinds(&fake).iter().any(|k| k == "durable export"));
+}
+
 #[test]
 fn keep_writes_refused_after_pin_change() {
     let (world, snapshot) = upgraded(&format!("{ENV}TIKV_TAG=v8.5.8\n"));

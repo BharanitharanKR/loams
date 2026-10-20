@@ -451,3 +451,79 @@ async fn schedules_persist_and_fire_after_a_restart() {
     assert_eq!(status(&deleted), 200, "{deleted}");
     second.stop().await;
 }
+
+/// 0.1.0's SQLite store moves to TiKV on the first TiKV start
+/// (`DurableConfig::import_sqlite`), once; `export_sqlite` copies TiKV back
+/// for a `rollback --keep-writes`.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_sqlite_store_moves_to_tikv_on_the_first_start_and_back() {
+    let Some(cluster) = cluster().await else {
+        return;
+    };
+    let dir = tempfile::tempdir().expect("a data directory");
+    let sqlite = dir.path().join("durable").join("default.db");
+    let old = DurableServer::start(
+        config(&DurableStore::Sqlite {
+            path: sqlite.clone(),
+        }),
+        "v010",
+    )
+    .await
+    .expect("the SQLite server");
+    let create = |id: &str| json!({ "id": id, "timeoutAt": i64::MAX / 2, "param": {}, "tags": {} });
+    call(&old, "promise.create", create("moved-pending")).await;
+    call(&old, "promise.create", create("moved-resolved")).await;
+    call(
+        &old,
+        "promise.settle",
+        json!({ "id": "moved-resolved", "state": "resolved", "value": { "data": "YQ==" } }),
+    )
+    .await;
+    old.stop().await;
+
+    let store = store(&cluster);
+    let mut moved = config(&store);
+    moved.import_sqlite = Some(sqlite.clone());
+    let server = DurableServer::start(moved.clone(), "v011")
+        .await
+        .expect("the TiKV server");
+    let state = |reply: Value| {
+        reply["data"]["promise"]["state"]
+            .as_str()
+            .map(str::to_string)
+    };
+    assert_eq!(
+        state(call(&server, "promise.get", json!({ "id": "moved-pending" })).await).as_deref(),
+        Some("pending")
+    );
+    assert_eq!(
+        state(call(&server, "promise.get", json!({ "id": "moved-resolved" })).await).as_deref(),
+        Some("resolved")
+    );
+    call(&server, "promise.create", create("written-on-tikv")).await;
+    server.stop().await;
+
+    // A restart over the same, unchanged file does not import it again.
+    let server = DurableServer::start(moved, "v011-again")
+        .await
+        .expect("the TiKV server again");
+    assert_eq!(
+        status_of(&server, "promise.get", json!({ "id": "written-on-tikv" })).await,
+        200
+    );
+    server.stop().await;
+
+    // Back to SQLite: the previous release sees what TiKV holds.
+    let report = loams_durable::tikv_import::export_sqlite(&store, &sqlite)
+        .await
+        .expect("the export");
+    assert_eq!(report.promises, 3);
+    let old = DurableServer::start(config(&DurableStore::Sqlite { path: sqlite }), "v010-back")
+        .await
+        .expect("the SQLite server again");
+    assert_eq!(
+        status_of(&old, "promise.get", json!({ "id": "written-on-tikv" })).await,
+        200
+    );
+    old.stop().await;
+}

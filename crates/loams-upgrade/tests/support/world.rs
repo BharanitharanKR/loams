@@ -126,6 +126,9 @@ pub fn kind(args: &[String]) -> String {
         }
         Some(&"run") => {
             let joined = a.join(" ");
+            if joined.contains("durable export-sqlite") {
+                return "durable export".to_string();
+            }
             if let Some(i) = a.iter().position(|x| *x == "migrate") {
                 let sub = a.get(i + 1).copied().unwrap_or_default();
                 if sub == "snapshots" {

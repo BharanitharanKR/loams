@@ -79,6 +79,33 @@ fn configure(
     }))
 }
 
+/// The blob backend's key layout in the durable root: the server and the
+/// SQLite import ([`crate::tikv_import`]) must agree on it.
+pub fn key_space() -> KeySpace {
+    KeySpace::new("", 4)
+}
+
+/// Opens the durable keyspace (creating it if PD has none) at `root`.
+pub async fn connect(pd: Vec<String>, keyspace: String, root: Vec<u8>) -> Result<Tikv, String> {
+    let mut config = loams_tikv::TikvConfig::new(pd, keyspace);
+    config.root = root;
+    // PD pre-allocates keyspaces only when a cluster is first
+    // bootstrapped, so a cluster that predates the durable keyspace (a
+    // stack moving its Resonate off SQLite) has none: create it, as Live
+    // does for its own. Idempotent.
+    loams_tikv::ensure_keyspace(&config.pd_http_url(), &config.keyspace)
+        .await
+        .map_err(|e| {
+            format!(
+                "cannot open the TiKV durable keyspace {}: {e}",
+                config.keyspace
+            )
+        })?;
+    Tikv::connect(config)
+        .await
+        .map_err(|e| format!("cannot open the TiKV durable store: {e}"))
+}
+
 struct TikvServer {
     config: Config,
     router: Arc<dyn ResonateRouter>,
@@ -91,30 +118,19 @@ struct TikvServer {
 #[async_trait]
 impl ResonateServer for TikvServer {
     async fn init(&self, debug: bool) -> Result<(), Unavailable> {
-        let mut config =
-            loams_tikv::TikvConfig::new(self.config.pd.clone(), self.config.keyspace.clone());
-        config.root = self.config.root.clone();
-        // PD pre-allocates keyspaces only when a cluster is first
-        // bootstrapped, so a cluster that predates the durable keyspace (a
-        // stack moving its Resonate off SQLite) has none: create it, as Live
-        // does for its own. Idempotent.
-        loams_tikv::ensure_keyspace(&config.pd_http_url(), &config.keyspace)
-            .await
-            .map_err(|e| {
-                Unavailable::new(format!(
-                    "cannot open the TiKV durable keyspace {}: {e}",
-                    config.keyspace
-                ))
-            })?;
-        let tikv = Tikv::connect(config)
-            .await
-            .map_err(|e| Unavailable::new(format!("cannot open the TiKV durable store: {e}")))?;
+        let tikv = connect(
+            self.config.pd.clone(),
+            self.config.keyspace.clone(),
+            self.config.root.clone(),
+        )
+        .await
+        .map_err(Unavailable::new)?;
         let store: Arc<dyn Store> = Arc::new(TikvStore::new(tikv.clone()));
         let server = Server::build(
             store,
             Arc::clone(&self.router),
             ServerCfg {
-                keys: KeySpace::new("", 4),
+                keys: key_space(),
                 applier: ApplierCfg {
                     kernel: KernelCfg {
                         retry_timeout: self.config.retry_timeout,

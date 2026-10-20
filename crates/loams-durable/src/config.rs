@@ -45,6 +45,11 @@ pub struct DurableConfig {
     /// `--durable-set key=value`, in Resonate's key space, applied in order
     /// after Loams's own keys. The value is TOML; a bare word is a string.
     pub overrides: Vec<(String, String)>,
+    /// A SQLite store to copy into a TiKV `store` before serving: the one
+    /// 0.1.0 kept in the data directory. Copied once per state of the file
+    /// (`tikv_import::import_once`); ignored when it does not exist or the
+    /// store is not TiKV.
+    pub import_sqlite: Option<PathBuf>,
 }
 
 impl DurableConfig {
@@ -63,6 +68,7 @@ impl DurableConfig {
             retry_timeout: DEFAULT_RETRY_TIMEOUT,
             shutdown_timeout: DEFAULT_SHUTDOWN_TIMEOUT,
             overrides: Vec::new(),
+            import_sqlite: None,
         }
     }
 }

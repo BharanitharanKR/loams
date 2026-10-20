@@ -133,6 +133,28 @@ pub fn migrate_store_args(stack: &StackDir, postgres: bool) -> Vec<String> {
 pub fn migrate_helper(stack: &StackDir, image: &str, subcommand: &[String]) -> HelperSpec {
     let mut args = vec!["migrate".to_string()];
     args.extend(subcommand.iter().cloned());
+    loams_helper(stack, image, args)
+}
+
+/// `loams durable export-sqlite` in a container of `image` (0.1.1 or later):
+/// copies the TiKV durable store `durable_store` back into the SQLite file
+/// in `loams-data` that a release before 0.1.1 reads.
+pub fn durable_export_helper(stack: &StackDir, image: &str, durable_store: &str) -> HelperSpec {
+    loams_helper(
+        stack,
+        image,
+        vec![
+            "durable".to_string(),
+            "export-sqlite".to_string(),
+            format!("--durable-store={durable_store}"),
+            "--to=/var/lib/loams/durable/default.db".to_string(),
+        ],
+    )
+}
+
+/// `loams <args…>` in a container of `image` over the stack's Loams-owned
+/// volumes, on its compose network.
+fn loams_helper(stack: &StackDir, image: &str, args: Vec<String>) -> HelperSpec {
     HelperSpec {
         image: image.to_string(),
         entrypoint: None,

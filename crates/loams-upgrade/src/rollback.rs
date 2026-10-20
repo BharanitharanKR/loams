@@ -362,7 +362,7 @@ pub fn rollback(
         at: crate::history::now(),
     };
     let result = if opts.keep_writes {
-        swap_images_back(runtime, stack, &id)
+        swap_images_back(runtime, stack, &id, &image)
     } else {
         restore(
             runtime,
@@ -395,11 +395,49 @@ pub fn rollback(
     }
 }
 
+/// The TiKV store the `loams` service of `config` keeps Durable in
+/// (`--durable-store=tikv://…`), if any.
+fn tikv_durable_store(config: &serde_json::Value) -> Option<String> {
+    config["services"]["loams"]["command"]
+        .as_array()?
+        .iter()
+        .filter_map(|arg| arg.as_str()?.strip_prefix("--durable-store="))
+        .find(|store| store.starts_with("tikv://"))
+        .map(str::to_string)
+}
+
+/// Whether the previous release (the snapshot's copy of the stack
+/// directory) keeps Durable in SQLite: its compose file names no TiKV
+/// durable store, as before 0.1.1.
+fn previous_keeps_durable_in_sqlite(stack_dir: &std::path::Path, id: &str) -> bool {
+    let compose = install::host_copy_dir(stack_dir, id).join("release/compose.yaml");
+    std::fs::read_to_string(compose).is_ok_and(|text| !text.contains("--durable-store=tikv://"))
+}
+
 /// `--keep-writes`: the previous release's bundle and `.env` come back and
-/// start on the data as it is.
-fn swap_images_back(runtime: &dyn Runtime, stack: &mut StackDir, id: &str) -> Result<()> {
+/// start on the data as it is. Across 0.1.1 (Durable moved from SQLite to
+/// TiKV), Durable's state is copied back into the SQLite file first, by
+/// `image` (the release rolled back from) while TiKV still runs, so the
+/// previous release starts on what the newer one wrote.
+fn swap_images_back(
+    runtime: &dyn Runtime,
+    stack: &mut StackDir,
+    id: &str,
+    image: &str,
+) -> Result<()> {
     let config = compose::config(runtime, &stack.dir)?;
     door::close(runtime, &stack.dir, &config)?;
+    if let Some(durable) = tikv_durable_store(&config)
+        && previous_keeps_durable_in_sqlite(&stack.dir, id)
+    {
+        // The engine stops first, so nothing writes to Durable meanwhile.
+        compose::stop(runtime, &stack.dir, &["loams".to_string()])?;
+        run(
+            runtime,
+            &helpers::durable_export_helper(stack, image, &durable),
+            "copying Durable's TiKV store back into SQLite",
+        )?;
+    }
     compose::stop(runtime, &stack.dir, &compose::services(&config))?;
     install::restore_host(&stack.dir, id)?;
     stack.env = read_env(&stack.dir.join(".env"));
