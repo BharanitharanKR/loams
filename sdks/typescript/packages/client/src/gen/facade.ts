@@ -29,6 +29,10 @@ import { InstanceService } from '@loams/proto/instance';
 import type { GetInstanceRequestSchema, GetInstanceResponse, WhoAmIRequestSchema, WhoAmIResponse } from '@loams/proto/instance';
 import { LiveAdminService, LiveService } from '@loams/live/live';
 import type { ActivateDeploymentRequestSchema, ActivateDeploymentResponse, AuthenticateRequestSchema, AuthenticateResponse, CreateAppRequestSchema, CreateAppResponse, DeleteAppRequestSchema, DeleteAppResponse, DeployRequestSchema, DeployResponse, GetAppRequestSchema, GetAppResponse, GetDeploymentRequestSchema, GetDeploymentResponse, GetIndexStatusRequestSchema, GetIndexStatusResponse, ListAppsRequestSchema, ListAppsResponse, ListDeploymentsRequestSchema, ListDeploymentsResponse, ModifyQuerySetRequestSchema, ModifyQuerySetResponse, MutateRequestSchema, MutateResponse, QueryRequestSchema, QueryResponse, TailLogsRequestSchema, TailLogsResponse, Transition, UpdateAppRequestSchema, UpdateAppResponse, WatchRequestSchema } from '@loams/live/live';
+import { SqlService } from '@loams/proto/sql';
+import type { QueryArrowRequestSchema, QueryArrowResponse, QueryRequestSchema as SqlV1QueryRequestSchema, QueryResponse as SqlV1QueryResponse } from '@loams/proto/sql';
+import { StreamService } from '@loams/proto/stream';
+import type { CreateStreamRequestSchema, CreateStreamResponse, DescribeStreamRequestSchema, DescribeStreamResponse, FetchCloudEventsRequestSchema, FetchCloudEventsResponse, FetchRequestSchema, FetchResponse, ListStreamsRequestSchema, ListStreamsResponse, ProduceCloudEventsRequestSchema, ProduceCloudEventsResponse, ProduceRequestSchema, ProduceResponse } from '@loams/proto/stream';
 import type { Operation } from '@loams/proto/operations';
 /**
  *  `loams.admin.agents` — Agents, their tokens and trust policies, and service accounts.
@@ -836,6 +840,97 @@ export interface SearchModule {
 }
 
 /**
+ *  `loams.sql` — SQL: one read-only statement over a namespace's collections, with parameters.
+ *
+ *  Wraps `loams.sql.v1.SqlService`.
+ */
+export interface SqlModule {
+  /** The SDK module, as it appears on `loams.sql`. */
+  readonly module: 'sql';
+  /** The service behind the module. */
+  readonly service: 'loams.sql.v1.SqlService';
+  /** Whether the package's wire contract may still change. */
+  readonly unstable: false;
+  /**
+   *  `loams.sql.v1.SqlService/Query`, retried: safe.
+   */
+  query(
+    request: MessageInitShape<typeof SqlV1QueryRequestSchema>,
+    options?: CallOptions,
+  ): Promise<SqlV1QueryResponse>;
+  /**
+   *  `loams.sql.v1.SqlService/QueryArrow`, retried: safe.
+   */
+  queryArrow(
+    request: MessageInitShape<typeof QueryArrowRequestSchema>,
+    options?: CallOptions,
+  ): Promise<QueryArrowResponse>;
+}
+
+/**
+ *  `loams.streams` — Streams: create, list and describe a namespace's logs; produce and fetch records and CloudEvents.
+ *
+ *  Wraps `loams.stream.v1.StreamService`.
+ */
+export interface StreamsModule {
+  /** The SDK module, as it appears on `loams.streams`. */
+  readonly module: 'streams';
+  /** The service behind the module. */
+  readonly service: 'loams.stream.v1.StreamService';
+  /** Whether the package's wire contract may still change. */
+  readonly unstable: false;
+  /**
+   *  `loams.stream.v1.StreamService/CreateStream`, retried: safe.
+   */
+  create(
+    request: MessageInitShape<typeof CreateStreamRequestSchema>,
+    options?: CallOptions,
+  ): Promise<CreateStreamResponse>;
+  /**
+   *  `loams.stream.v1.StreamService/Fetch`, retried: safe.
+   */
+  fetch(
+    request: MessageInitShape<typeof FetchRequestSchema>,
+    options?: CallOptions,
+  ): Promise<FetchResponse>;
+  /**
+   *  `loams.stream.v1.StreamService/FetchCloudEvents`, retried: safe.
+   */
+  fetchEvents(
+    request: MessageInitShape<typeof FetchCloudEventsRequestSchema>,
+    options?: CallOptions,
+  ): Promise<FetchCloudEventsResponse>;
+  /**
+   *  `loams.stream.v1.StreamService/DescribeStream`, retried: safe.
+   */
+  get(
+    request: MessageInitShape<typeof DescribeStreamRequestSchema>,
+    options?: CallOptions,
+  ): Promise<DescribeStreamResponse>;
+  /**
+   *  `loams.stream.v1.StreamService/ListStreams`, retried: safe. AIP-158: page with `streams` and follow `next_page_token` through `loams.paginate`.
+   */
+  list(
+    request: MessageInitShape<typeof ListStreamsRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ListStreamsResponse>;
+  /**
+   *  `loams.stream.v1.StreamService/Produce`, retried: manual.
+   */
+  produce(
+    request: MessageInitShape<typeof ProduceRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ProduceResponse>;
+  /**
+   *  `loams.stream.v1.StreamService/ProduceCloudEvents`, retried: manual.
+   */
+  produceEvents(
+    request: MessageInitShape<typeof ProduceCloudEventsRequestSchema>,
+    options?: CallOptions,
+  ): Promise<ProduceCloudEventsResponse>;
+}
+
+/**
  *  A second facade name for the same RPCs, exposed as `loams.tables`.
  *
  *  Wraps `loams.live.v1.LiveService`. Its wire contract may still change, so `buf breaking` skips it and an SDK marks it experimental (§44 §10.3).
@@ -1146,6 +1241,35 @@ export const MODULES: readonly ModuleBinding[] = [
     ],
   },
   {
+    name: 'sql',
+    summary: 'SQL: one read-only statement over a namespace\'s collections, with parameters.',
+    service: 'loams.sql.v1.SqlService',
+    package: 'loams.sql.v1',
+    unstable: false,
+    derived: false,
+    calls: [
+      { module: 'sql', name: 'query', protoName: 'query', method: 'Query', rpc: 'loams.sql.v1.SqlService/Query', service: 'loams.sql.v1.SqlService', package: 'loams.sql.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'sql', name: 'queryArrow', protoName: 'query_arrow', method: 'QueryArrow', rpc: 'loams.sql.v1.SqlService/QueryArrow', service: 'loams.sql.v1.SqlService', package: 'loams.sql.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: null },
+    ],
+  },
+  {
+    name: 'streams',
+    summary: 'Streams: create, list and describe a namespace\'s logs; produce and fetch records and CloudEvents.',
+    service: 'loams.stream.v1.StreamService',
+    package: 'loams.stream.v1',
+    unstable: false,
+    derived: false,
+    calls: [
+      { module: 'streams', name: 'create', protoName: 'create', method: 'CreateStream', rpc: 'loams.stream.v1.StreamService/CreateStream', service: 'loams.stream.v1.StreamService', package: 'loams.stream.v1', idempotency: 'none', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'streams', name: 'fetch', protoName: 'fetch', method: 'Fetch', rpc: 'loams.stream.v1.StreamService/Fetch', service: 'loams.stream.v1.StreamService', package: 'loams.stream.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'streams', name: 'fetchEvents', protoName: 'fetch_events', method: 'FetchCloudEvents', rpc: 'loams.stream.v1.StreamService/FetchCloudEvents', service: 'loams.stream.v1.StreamService', package: 'loams.stream.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'streams', name: 'get', protoName: 'get', method: 'DescribeStream', rpc: 'loams.stream.v1.StreamService/DescribeStream', service: 'loams.stream.v1.StreamService', package: 'loams.stream.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: null },
+      { module: 'streams', name: 'list', protoName: 'list', method: 'ListStreams', rpc: 'loams.stream.v1.StreamService/ListStreams', service: 'loams.stream.v1.StreamService', package: 'loams.stream.v1', idempotency: 'no_side_effects', retry: 'safe', streaming: 'unary', pagination: { items: 'streams', nextPageToken: 'nextPageToken' } },
+      { module: 'streams', name: 'produce', protoName: 'produce', method: 'Produce', rpc: 'loams.stream.v1.StreamService/Produce', service: 'loams.stream.v1.StreamService', package: 'loams.stream.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+      { module: 'streams', name: 'produceEvents', protoName: 'produce_events', method: 'ProduceCloudEvents', rpc: 'loams.stream.v1.StreamService/ProduceCloudEvents', service: 'loams.stream.v1.StreamService', package: 'loams.stream.v1', idempotency: 'none', retry: 'manual', streaming: 'unary', pagination: null },
+    ],
+  },
+  {
     name: 'tables',
     summary: '',
     service: 'loams.live.v1.LiveService',
@@ -1192,6 +1316,8 @@ export const SERVICE_DESCRIPTORS: Readonly<Record<string, DescService>> = {
   'loams.instance.v1.InstanceService': InstanceService,
   'loams.live.v1.LiveAdminService': LiveAdminService,
   'loams.live.v1.LiveService': LiveService,
+  'loams.sql.v1.SqlService': SqlService,
+  'loams.stream.v1.StreamService': StreamService,
 };
 
 /** The proto packages this SDK speaks, as `GetInstance.api_versions` names them. */

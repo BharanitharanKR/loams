@@ -94,7 +94,40 @@ explicitly, or the body will not match.
    graph feature.
 4. `graph.delete("notes_graph")`: the same refusal.
 
-**`app_sql`** and **`app_streams`** are recorded by SDKP P0b and P0c.
+**`app_sql`** (SDKP Part C; over the four notes)
+
+0. `sql.query`: `SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY
+   tags ORDER BY tags` with `params = [1]`: `columns` and `rows`, which the SDK
+   reads back as records (`policy` 2, `shipping` 1).
+1. `sql.query`: `SELECT title, n FROM notes ORDER BY n` with `max_rows = 2`:
+   two rows and `truncated`.
+2. `sql.query_arrow`: step 0 as one Arrow IPC stream (`arrow_ipc`).
+3. `sql.query` with a `$1` and no value: `invalid_argument`, reason
+   `sql_param_count`.
+4. `sql.query` with `DELETE FROM notes`: `invalid_argument` (read-only).
+
+`app_sql` and `app_streams` carry `part: "C"`: `check-languages --suite app`
+holds a language to one once its suite names `<lang>_app_sql` (or
+`<lang>_app_streams`) or its report ran it (SDKP-24).
+
+**`app_streams`** (SDKP Part C; `bytes` fields are base64 in JSON)
+
+0. `streams.create("note-events", partitions = 1)`: `created`.
+1. The same again: the same stream, `created` unset (idempotent by name).
+2. `streams.list`: the namespace's streams (the collection's own change log
+   among them).
+3. `streams.produce` two records with `producer_id = "app-producer-1"`,
+   `producer_seq = 1`: offsets 0 and 1.
+4. The same batch again: `duplicate`, nothing appended.
+5. `streams.fetch` from offset 0: both records, `next_offset` 2 (`subscribe`
+   reads its pages this way).
+6. `streams.fetch` from offset 2: empty, the page `subscribe` backs off on.
+7. `streams.get("note-events")`: the partition's offsets.
+8. `streams.create("note-audit")`.
+9. `streams.produce_events`: two CloudEvents as one JSON batch, each
+   `EVENT_STATUS_APPENDED`.
+10. `streams.fetch_events` from offset 0: them back as a JSON batch.
+11. `streams.fetch` on a stream that does not exist: `not_found`.
 
 ## Re-recording
 
@@ -102,6 +135,9 @@ explicitly, or the body will not match.
 loams dev --listen 127.0.0.1:8080 --no-live --no-flight-sql --no-qdrant --no-es &
 LOAMS_TEST_ENDPOINT=http://127.0.0.1:8080 node sdks/conformance/record-fixtures.mjs --source app
 ```
+
+`--scenario app_sql` writes only that recording; the earlier scenarios still run
+first, because each builds on the state the last left.
 
 The server must be fresh: step 1 creates the namespace. Scores are not volatile;
 a re-recording that changes one is a ranking change, and the builder corpus's

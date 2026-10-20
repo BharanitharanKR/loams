@@ -40,6 +40,8 @@ const PACKAGE_PARAMETERS: &[&str] = &[
     "loams.admin.v1=loams.admin.v1.org_pb2",
     "loams.collection.v1=loams.collection.v1.collection_pb2",
     "loams.graph.v1=loams.graph.v1.graph_pb2",
+    "loams.sql.v1=loams.sql.v1.sql_pb2",
+    "loams.stream.v1=loams.stream.v1.stream_pb2",
 ];
 
 /// SDK1 Task 3's `golden_python`.

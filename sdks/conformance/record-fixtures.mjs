@@ -53,6 +53,7 @@
 //   node sdks/conformance/record-fixtures.mjs                       # both servers
 //   node sdks/conformance/record-fixtures.mjs --source loams-dev
 //   node sdks/conformance/record-fixtures.mjs --source apps-mock --only error
+//   node sdks/conformance/record-fixtures.mjs --source app --scenario app_sql
 //   LOAMS_TEST_ENDPOINT=http://127.0.0.1:8080 node …/record-fixtures.mjs
 //
 // A body is stored base64 when it is not UTF-8 JSON, so a gRPC-Web frame or a
@@ -1457,6 +1458,7 @@ async function recordAppScenario(base, scenario) {
     transport: scenario.transport,
     required: scenario.required,
     pinnedBy: scenario.pinnedBy ?? [],
+    ...(scenario.part ? { part: scenario.part } : {}),
     reason: null,
     source: {
       server: 'loams dev',
@@ -2566,13 +2568,7 @@ const UNPRODUCIBLE_REASONS = [
   {
     reason: "result_too_large",
     code: "resource_exhausted",
-    why: 'Recorded by `app_sql` when `loams.sql.v1` lands (SDKP P0b).',
-    standIn: null,
-  },
-  {
-    reason: "sql_param_count",
-    code: "invalid_argument",
-    why: "Recorded by `app_sql` when `loams.sql.v1` lands (SDKP P0b).",
+    why: 'Needs a `QueryArrow` answer past `--sql-arrow-max-bytes` (16 MiB); `app_sql` stays small.',
     standIn: null,
   },
   {
@@ -2591,12 +2587,6 @@ const UNPRODUCIBLE_REASONS = [
     reason: "search_after_needs_tiebreak",
     code: "invalid_argument",
     why: "Raised by the SDKs before any network call (SDKP section 2.4); no server returns it.",
-    standIn: null,
-  },
-  {
-    reason: "result_too_large",
-    code: "resource_exhausted",
-    why: "Recorded by `app_sql` when `loams.sql.v1` lands (SDKP P0b).",
     standIn: null,
   },
   {
@@ -2757,7 +2747,15 @@ async function main() {
       throw new Error('LOAMS_TEST_ENDPOINT is not set; the app scenarios record against `loams dev`');
     }
     const outDir = join(fixturesDir, 'recorded', 'app');
+    // `--scenario app_sql,app_streams` writes only those. The others still run,
+    // in order, because each scenario builds on the state the last one left; their
+    // committed recordings are left as they are.
+    const picked = arg('scenario', null)?.split(',');
     for (const scenario of APP_SCENARIOS) {
+      if (picked && !picked.includes(scenario.name)) {
+        await recordAppScenario(base.replace(/\/$/, ''), scenario);
+        continue;
+      }
       fixtures.push(await writeFixture(outDir, await recordAppScenario(base.replace(/\/$/, ''), scenario)));
     }
   }
@@ -2849,6 +2847,7 @@ async function manifestProjection(fixtures) {
       transport: fixture.transport ?? 'connect',
       grpcOnly: (fixture.transport ?? 'connect') === 'grpc-only',
       pinnedBy: fixture.pinnedBy ?? [],
+      ...(fixture.part ? { part: fixture.part } : {}),
       reason: fixture.reason ?? null,
       steps: steps.length,
       volatile: fixture.volatile ?? VOLATILE_BY_FIXTURE[fixture.name] ?? [],

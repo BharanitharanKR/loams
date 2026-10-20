@@ -709,6 +709,35 @@ pub static MODULES: &[ModuleBinding] = &[
         ],
     },
     ModuleBinding {
+        name: "sql",
+        summary: "SQL: one read-only statement over a namespace's collections, with parameters.",
+        service: "loams.sql.v1.SqlService",
+        package: "loams.sql.v1",
+        unstable: false,
+        derived: false,
+        calls: &[
+            CallBinding { module: "sql", name: "query", proto_name: "query", method: "Query", rpc: "loams.sql.v1.SqlService/Query", service: "loams.sql.v1.SqlService", package: "loams.sql.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "sql", name: "query_arrow", proto_name: "query_arrow", method: "QueryArrow", rpc: "loams.sql.v1.SqlService/QueryArrow", service: "loams.sql.v1.SqlService", package: "loams.sql.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+        ],
+    },
+    ModuleBinding {
+        name: "streams",
+        summary: "Streams: create, list and describe a namespace's logs; produce and fetch records and CloudEvents.",
+        service: "loams.stream.v1.StreamService",
+        package: "loams.stream.v1",
+        unstable: false,
+        derived: false,
+        calls: &[
+            CallBinding { module: "streams", name: "create", proto_name: "create", method: "CreateStream", rpc: "loams.stream.v1.StreamService/CreateStream", service: "loams.stream.v1.StreamService", package: "loams.stream.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "streams", name: "fetch", proto_name: "fetch", method: "Fetch", rpc: "loams.stream.v1.StreamService/Fetch", service: "loams.stream.v1.StreamService", package: "loams.stream.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "streams", name: "fetch_events", proto_name: "fetch_events", method: "FetchCloudEvents", rpc: "loams.stream.v1.StreamService/FetchCloudEvents", service: "loams.stream.v1.StreamService", package: "loams.stream.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "streams", name: "get", proto_name: "get", method: "DescribeStream", rpc: "loams.stream.v1.StreamService/DescribeStream", service: "loams.stream.v1.StreamService", package: "loams.stream.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "streams", name: "list", proto_name: "list", method: "ListStreams", rpc: "loams.stream.v1.StreamService/ListStreams", service: "loams.stream.v1.StreamService", package: "loams.stream.v1", keyed: false, idempotency: Idempotency::NoSideEffects, retry: Retry::Safe, streaming: Streaming::Unary, pagination: Some(Pagination { items: "streams", next_page_token: "next_page_token" }) },
+            CallBinding { module: "streams", name: "produce", proto_name: "produce", method: "Produce", rpc: "loams.stream.v1.StreamService/Produce", service: "loams.stream.v1.StreamService", package: "loams.stream.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+            CallBinding { module: "streams", name: "produce_events", proto_name: "produce_events", method: "ProduceCloudEvents", rpc: "loams.stream.v1.StreamService/ProduceCloudEvents", service: "loams.stream.v1.StreamService", package: "loams.stream.v1", keyed: false, idempotency: Idempotency::None, retry: Retry::Manual, streaming: Streaming::Unary, pagination: None },
+        ],
+    },
+    ModuleBinding {
         name: "tables",
         summary: "",
         service: "loams.live.v1.LiveService",
@@ -1522,6 +1551,95 @@ pub trait SearchModule {
         request: loams_proto::loams::collection::v1::SearchRequest,
         options: Option<&CallOptions>,
     ) -> impl std::future::Future<Output = Result<loams_proto::loams::collection::v1::SearchResponse, LoamsError>> + Send;
+}
+
+/// `SqlModule` is `loams.sql` — SQL: one read-only statement over a namespace's collections, with parameters.
+///
+/// Wraps `loams.sql.v1.SqlService`.
+#[rustfmt::skip]
+pub trait SqlModule {
+    /// The SDK module, as it appears on `loams.sql`.
+    const MODULE: &'static str = "sql";
+    /// The service behind the module.
+    const SERVICE: &'static str = "loams.sql.v1.SqlService";
+    /// Whether the package's wire contract may still change.
+    const UNSTABLE: bool = false;
+
+    /// `loams.sql.v1.SqlService/Query`, retried: safe.
+    fn query(
+        &self,
+        request: loams_proto::loams::sql::v1::QueryRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::sql::v1::QueryResponse, LoamsError>> + Send;
+
+    /// `loams.sql.v1.SqlService/QueryArrow`, retried: safe.
+    fn query_arrow(
+        &self,
+        request: loams_proto::loams::sql::v1::QueryArrowRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::sql::v1::QueryArrowResponse, LoamsError>> + Send;
+}
+
+/// `StreamsModule` is `loams.streams` — Streams: create, list and describe a namespace's logs; produce and fetch records and CloudEvents.
+///
+/// Wraps `loams.stream.v1.StreamService`.
+#[rustfmt::skip]
+pub trait StreamsModule {
+    /// The SDK module, as it appears on `loams.streams`.
+    const MODULE: &'static str = "streams";
+    /// The service behind the module.
+    const SERVICE: &'static str = "loams.stream.v1.StreamService";
+    /// Whether the package's wire contract may still change.
+    const UNSTABLE: bool = false;
+
+    /// `loams.stream.v1.StreamService/CreateStream`, retried: safe.
+    fn create(
+        &self,
+        request: loams_proto::loams::stream::v1::CreateStreamRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::stream::v1::CreateStreamResponse, LoamsError>> + Send;
+
+    /// `loams.stream.v1.StreamService/Fetch`, retried: safe.
+    fn fetch(
+        &self,
+        request: loams_proto::loams::stream::v1::FetchRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::stream::v1::FetchResponse, LoamsError>> + Send;
+
+    /// `loams.stream.v1.StreamService/FetchCloudEvents`, retried: safe.
+    fn fetch_events(
+        &self,
+        request: loams_proto::loams::stream::v1::FetchCloudEventsRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::stream::v1::FetchCloudEventsResponse, LoamsError>> + Send;
+
+    /// `loams.stream.v1.StreamService/DescribeStream`, retried: safe.
+    fn get(
+        &self,
+        request: loams_proto::loams::stream::v1::DescribeStreamRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::stream::v1::DescribeStreamResponse, LoamsError>> + Send;
+
+    /// `loams.stream.v1.StreamService/ListStreams`, retried: safe. AIP-158: page with `streams` and follow `next_page_token` through `loams::paginate`.
+    fn list(
+        &self,
+        request: loams_proto::loams::stream::v1::ListStreamsRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::stream::v1::ListStreamsResponse, LoamsError>> + Send;
+
+    /// `loams.stream.v1.StreamService/Produce`, retried: manual.
+    fn produce(
+        &self,
+        request: loams_proto::loams::stream::v1::ProduceRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::stream::v1::ProduceResponse, LoamsError>> + Send;
+
+    /// `loams.stream.v1.StreamService/ProduceCloudEvents`, retried: manual.
+    fn produce_events(
+        &self,
+        request: loams_proto::loams::stream::v1::ProduceCloudEventsRequest,
+        options: Option<&CallOptions>,
+    ) -> impl std::future::Future<Output = Result<loams_proto::loams::stream::v1::ProduceCloudEventsResponse, LoamsError>> + Send;
 }
 
 /// `TablesModule` is a second facade name for the same RPCs, exposed as `loams.tables`.

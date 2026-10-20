@@ -43,6 +43,8 @@ const QUERY = '/loams.collection.v1.QueryService';
 const GRAPH_ADMIN = '/loams.graph.v1.GraphAdminService';
 const GRAPH = '/loams.graph.v1.GraphService';
 const INSTANCE = '/loams.instance.v1.InstanceService';
+const SQL = '/loams.sql.v1.SqlService';
+const STREAM = '/loams.stream.v1.StreamService';
 
 /** A builder corpus case's `expect`, by name. */
 function builderExpect(name) {
@@ -415,8 +417,218 @@ const APP_GRAPH = {
   ],
 };
 
+/**
+ * `app_sql`: SQL over the notes `app_collections` wrote (four of them, after
+ * its delete), with `$n` parameters (SDKP Part C). Part C: a language is held
+ * to it once its suite names `<lang>_app_sql` (see `required.mjs`).
+ */
+const APP_SQL = {
+  name: 'app_sql',
+  kind: 'app',
+  part: 'C',
+  transport: 'connect',
+  required: false,
+  pinnedBy: ['R8'],
+  about:
+    'The notes app, part four: SQL over the `notes` collection. A grouped count with a `$1` ' +
+    'parameter, its rows as records; a capped read that answers `truncated`; the same ' +
+    'statement as Arrow IPC; and the two refusals (`sql_param_count`, a statement that is not ' +
+    'a query).',
+  steps: [
+    {
+      about: 'Count the notes per tag past `n > $1`, ordered: `rows` in `columns` order.',
+      call: 'sql.query',
+      request: post(`${SQL}/Query`, {
+        namespace: APP_NAMESPACE,
+        sql: 'SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags',
+        params: [1],
+      }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'At most two rows of four: `truncated`.',
+      call: 'sql.query',
+      request: post(`${SQL}/Query`, {
+        namespace: APP_NAMESPACE,
+        sql: 'SELECT title, n FROM notes ORDER BY n',
+        maxRows: 2,
+      }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'The first statement as one Arrow IPC stream (`arrowIpc`, base64 in JSON).',
+      call: 'sql.query_arrow',
+      request: post(`${SQL}/QueryArrow`, {
+        namespace: APP_NAMESPACE,
+        sql: 'SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags',
+        params: [1],
+      }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'A `$1` with no value: `invalid_argument`, reason `sql_param_count`.',
+      call: 'sql.query',
+      request: post(`${SQL}/Query`, {
+        namespace: APP_NAMESPACE,
+        sql: 'SELECT title FROM notes WHERE n > $1',
+      }),
+      expect: { status: 400, reason: 'sql_param_count' },
+    },
+    {
+      about: 'A statement that is not a query: `invalid_argument`.',
+      call: 'sql.query',
+      request: post(`${SQL}/Query`, { namespace: APP_NAMESPACE, sql: 'DELETE FROM notes' }),
+      expect: { status: 400, reason: 'invalid_argument' },
+    },
+  ],
+};
+
+/** A UTF-8 string as the base64 a `bytes` field takes in proto3 JSON. */
+const b64 = (text) => Buffer.from(text, 'utf8').toString('base64');
+
+/** The two CloudEvents `app_streams` produces, as one JSON batch. */
+const EVENTS = "[{\"specversion\":\"1.0\",\"id\":\"evt-1\",\"source\":\"/notes\",\"type\":\"note.created\",\"datacontenttype\":\"application/json\",\"data\":{\"id\":1}},{\"specversion\":\"1.0\",\"id\":\"evt-2\",\"source\":\"/notes\",\"type\":\"note.deleted\",\"datacontenttype\":\"application/json\",\"data\":{\"id\":5}}]";
+
+/**
+ * `app_streams`: the namespace's logs (SDKP Part C). A stream is created
+ * (twice: idempotent by name), listed and described; records are produced with
+ * a producer key, the same batch again is answered as a duplicate, and fetched
+ * back from offset 0 and past the end; CloudEvents go to a second stream and
+ * come back as a JSON batch; a fetch from a stream that does not exist is
+ * `not_found`. `streams.subscribe` (R14) is a loop over `fetch`, so the two
+ * fetches are the pages it reads.
+ */
+// A request is recorded in the proto3 JSON an SDK sends: a field at its zero
+// value (`partition: 0`, `offset: "0"`) is left out, an `optional` one set to
+// zero (`ProduceCloudEvents.partition`) is kept.
+const APP_STREAMS = {
+  name: 'app_streams',
+  kind: 'app',
+  part: 'C',
+  transport: 'connect',
+  required: false,
+  pinnedBy: ['R3', 'R8', 'R14'],
+  about:
+    'The notes app, part five: streams. Create `note-events` (and again: the same stream), list and ' +
+    'describe it, produce two records keyed by a producer id and the same batch again (a ' +
+    'duplicate), fetch them from offset 0 and past the end, produce and fetch two CloudEvents ' +
+    'on `note-audit`, and fetch a stream that does not exist (`not_found`).',
+  steps: [
+    {
+      about: 'Create `note-events`, one partition.',
+      call: 'streams.create',
+      request: post(`${STREAM}/CreateStream`, { namespace: APP_NAMESPACE, name: 'note-events', partitions: 1 }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'Create it again: idempotent by name, the same stream with `created` unset.',
+      call: 'streams.create',
+      request: post(`${STREAM}/CreateStream`, { namespace: APP_NAMESPACE, name: 'note-events', partitions: 1 }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'The namespace\'s streams (`list_all` pages through `next_page_token`).',
+      call: 'streams.list',
+      request: post(`${STREAM}/ListStreams`, { namespace: APP_NAMESPACE }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'Two records, keyed by `producer_id` + `producer_seq` so a retry cannot append twice.',
+      call: 'streams.produce',
+      request: post(`${STREAM}/Produce`, {
+        namespace: APP_NAMESPACE,
+        stream: 'note-events',
+        records: [
+          { key: b64('1'), value: b64('{"note":1,"op":"created"}') },
+          { key: b64('5'), value: b64('{"note":5,"op":"deleted"}') },
+        ],
+        producerId: 'app-producer-1',
+        producerSeq: '1',
+      }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'The same batch again: answered as a `duplicate`, nothing appended.',
+      call: 'streams.produce',
+      request: post(`${STREAM}/Produce`, {
+        namespace: APP_NAMESPACE,
+        stream: 'note-events',
+        records: [
+          { key: b64('1'), value: b64('{"note":1,"op":"created"}') },
+          { key: b64('5'), value: b64('{"note":5,"op":"deleted"}') },
+        ],
+        producerId: 'app-producer-1',
+        producerSeq: '1',
+      }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'Fetch from offset 0: both records; `next_offset` is where `subscribe` reads next.',
+      call: 'streams.fetch',
+      request: post(`${STREAM}/Fetch`, {
+        namespace: APP_NAMESPACE,
+        stream: 'note-events',
+        maxRecords: 10,
+      }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'Fetch past the end: no records, the page `subscribe` backs off on.',
+      call: 'streams.fetch',
+      request: post(`${STREAM}/Fetch`, {
+        namespace: APP_NAMESPACE,
+        stream: 'note-events',
+        offset: '2',
+        maxRecords: 10,
+      }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'Describe it: each partition\'s offsets.',
+      call: 'streams.get',
+      request: post(`${STREAM}/DescribeStream`, { namespace: APP_NAMESPACE, stream: 'note-events' }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'Create `note-audit` for CloudEvents.',
+      call: 'streams.create',
+      request: post(`${STREAM}/CreateStream`, { namespace: APP_NAMESPACE, name: 'note-audit', partitions: 1 }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'Two CloudEvents as one JSON batch: each `appended`.',
+      call: 'streams.produce_events',
+      request: post(`${STREAM}/ProduceCloudEvents`, {
+        namespace: APP_NAMESPACE,
+        stream: 'note-audit',
+        partition: 0,
+        jsonBatch: b64(EVENTS),
+      }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'Fetch them back as a JSON batch.',
+      call: 'streams.fetch_events',
+      request: post(`${STREAM}/FetchCloudEvents`, {
+        namespace: APP_NAMESPACE,
+        stream: 'note-audit',
+      }),
+      expect: { status: 200 },
+    },
+    {
+      about: 'A stream that does not exist: `not_found`.',
+      call: 'streams.fetch',
+      request: post(`${STREAM}/Fetch`, {
+        namespace: APP_NAMESPACE,
+        stream: 'no-such-stream',
+      }),
+      expect: { status: 404, reason: 'not_found' },
+    },
+  ],
+};
+
 /** The app scenarios this module records, in order: each builds on the last. */
-export const APP_SCENARIOS = [APP_COLLECTIONS, APP_SEARCH, APP_GRAPH];
+export const APP_SCENARIOS = [APP_COLLECTIONS, APP_SEARCH, APP_GRAPH, APP_SQL, APP_STREAMS];
 
 /**
  * The response fields a re-recording may move: consistency tokens (offsets),
@@ -438,4 +650,7 @@ export const APP_VOLATILE = [
   'seqNo',
   'positions',
   'pin',
+  // `app_streams`: the record times and the stream id the server assigns.
+  'timestampMs',
+  'streamId',
 ];

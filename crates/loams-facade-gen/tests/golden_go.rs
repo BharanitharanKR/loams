@@ -36,6 +36,8 @@ const PACKAGE_PARAMETERS: &[&str] = &[
     "loams.admin.v1=loams.dev/go/gen/loams/admin/v1",
     "loams.collection.v1=loams.dev/go/gen/loams/collection/v1",
     "loams.graph.v1=loams.dev/go/gen/loams/graph/v1",
+    "loams.sql.v1=loams.dev/go/gen/loams/sql/v1",
+    "loams.stream.v1=loams.dev/go/gen/loams/stream/v1",
 ];
 
 /// SDK1 Task 3's `golden_go`.

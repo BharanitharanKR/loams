@@ -214,6 +214,7 @@ mod tests {
                 "loams.live.v1.LiveAdminService/GetIndexStatus",
                 "loams.live.v1.LiveAdminService/ListApps",
                 "loams.live.v1.LiveAdminService/ListDeployments",
+                "loams.stream.v1.StreamService/CreateStream",
             ],
             "a proto changed which calls set retry_safe: a behaviour change"
         );
@@ -315,6 +316,7 @@ mod tests {
                 "loams.graph.v1.GraphAdminService/ListGraphs",
                 "loams.live.v1.LiveAdminService/ListApps",
                 "loams.live.v1.LiveAdminService/ListDeployments",
+                "loams.stream.v1.StreamService/ListStreams",
             ]
         );
     }
@@ -410,6 +412,13 @@ mod tests {
         use loams_proto::loams::instance::v1::{
             INSTANCE_SERVICE_GET_INSTANCE_SPEC, INSTANCE_SERVICE_WHO_AM_I_SPEC,
         };
+        use loams_proto::loams::sql::v1::{SQL_SERVICE_QUERY_ARROW_SPEC, SQL_SERVICE_QUERY_SPEC};
+        use loams_proto::loams::stream::v1::{
+            STREAM_SERVICE_CREATE_STREAM_SPEC, STREAM_SERVICE_DESCRIBE_STREAM_SPEC,
+            STREAM_SERVICE_FETCH_CLOUD_EVENTS_SPEC, STREAM_SERVICE_FETCH_SPEC,
+            STREAM_SERVICE_LIST_STREAMS_SPEC, STREAM_SERVICE_PRODUCE_CLOUD_EVENTS_SPEC,
+            STREAM_SERVICE_PRODUCE_SPEC,
+        };
 
         let generated = [
             // SDKP P0a: the app data planes. `QueryService/Search` backs two
@@ -445,6 +454,17 @@ mod tests {
             GRAPH_SERVICE_EXECUTE_BATCH_SPEC,
             GRAPH_SERVICE_EXECUTE_STREAM_SPEC,
             GRAPH_SERVICE_EXPLAIN_SPEC,
+            // SDKP Part C: `sql`.
+            SQL_SERVICE_QUERY_SPEC,
+            SQL_SERVICE_QUERY_ARROW_SPEC,
+            // SDKP Part C: `streams`.
+            STREAM_SERVICE_CREATE_STREAM_SPEC,
+            STREAM_SERVICE_DESCRIBE_STREAM_SPEC,
+            STREAM_SERVICE_LIST_STREAMS_SPEC,
+            STREAM_SERVICE_PRODUCE_SPEC,
+            STREAM_SERVICE_FETCH_SPEC,
+            STREAM_SERVICE_PRODUCE_CLOUD_EVENTS_SPEC,
+            STREAM_SERVICE_FETCH_CLOUD_EVENTS_SPEC,
             // The console API (API2 Tasks 6 and 7).
             AUTH_SERVICE_LIST_PROVIDERS_SPEC,
             AUTH_SERVICE_COMPLETE_SETUP_SPEC,

@@ -909,10 +909,10 @@ mod tests {
         assert_eq!(loams.inner.runtime.max_retries, DEFAULT_MAX_RETRIES);
         assert_eq!(
             loams.bindings().len(),
-            16,
+            18,
             "admin.agents, admin.audit, admin.keys, admin.org, admin.projects, auth, \
              collections, documents, graph, instance, live, live.admin, namespaces, search, \
-             tables and vector"
+             sql, streams, tables and vector"
         );
     }
 

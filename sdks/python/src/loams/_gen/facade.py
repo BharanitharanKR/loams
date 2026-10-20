@@ -47,6 +47,10 @@ from loams.live.v1.live_pb2 import AuthenticateRequest, AuthenticateResponse, Mo
 from loams.live.v1.admin_pb2 import ActivateDeploymentRequest, ActivateDeploymentResponse, CreateAppRequest, CreateAppResponse, DeleteAppRequest, DeleteAppResponse, DeployRequest, DeployResponse, GetAppRequest, GetAppResponse, GetDeploymentRequest, GetDeploymentResponse, GetIndexStatusRequest, GetIndexStatusResponse, ListAppsRequest, ListAppsResponse, ListDeploymentsRequest, ListDeploymentsResponse, TailLogsRequest, TailLogsResponse, UpdateAppRequest, UpdateAppResponse
 from loams.live.v1.live_connect import LiveServiceClient, LiveServiceClientSync
 from loams.live.v1.admin_connect import LiveAdminServiceClient, LiveAdminServiceClientSync
+from loams.sql.v1.sql_pb2 import QueryArrowRequest, QueryArrowResponse, QueryRequest as SqlV1QueryRequest, QueryResponse as SqlV1QueryResponse
+from loams.sql.v1.sql_connect import SqlServiceClient, SqlServiceClientSync
+from loams.stream.v1.stream_pb2 import CreateStreamRequest, CreateStreamResponse, DescribeStreamRequest, DescribeStreamResponse, FetchCloudEventsRequest, FetchCloudEventsResponse, FetchRequest, FetchResponse, ListStreamsRequest, ListStreamsResponse, ProduceCloudEventsRequest, ProduceCloudEventsResponse, ProduceRequest, ProduceResponse
+from loams.stream.v1.stream_connect import StreamServiceClient, StreamServiceClientSync
 from loams.operations.v1.operations_pb2 import Operation
 
 PROTO_REV: Final[str] = "v1"
@@ -1823,6 +1827,143 @@ MODULES: Final[tuple[ModuleBinding, ...]] = (
         ),
     ),
     ModuleBinding(
+        name="sql",
+        summary="SQL: one read-only statement over a namespace's collections, with parameters.",
+        service="loams.sql.v1.SqlService",
+        package="loams.sql.v1",
+        unstable=False,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="sql",
+                name="query",
+                proto_name="query",
+                method="Query",
+                rpc="loams.sql.v1.SqlService/Query",
+                service="loams.sql.v1.SqlService",
+                package="loams.sql.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="sql",
+                name="query_arrow",
+                proto_name="query_arrow",
+                method="QueryArrow",
+                rpc="loams.sql.v1.SqlService/QueryArrow",
+                service="loams.sql.v1.SqlService",
+                package="loams.sql.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+        ),
+    ),
+    ModuleBinding(
+        name="streams",
+        summary="Streams: create, list and describe a namespace's logs; produce and fetch records and CloudEvents.",
+        service="loams.stream.v1.StreamService",
+        package="loams.stream.v1",
+        unstable=False,
+        derived=False,
+        calls=(
+            CallBinding(
+                module="streams",
+                name="create",
+                proto_name="create",
+                method="CreateStream",
+                rpc="loams.stream.v1.StreamService/CreateStream",
+                service="loams.stream.v1.StreamService",
+                package="loams.stream.v1",
+                idempotency="none",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="streams",
+                name="fetch",
+                proto_name="fetch",
+                method="Fetch",
+                rpc="loams.stream.v1.StreamService/Fetch",
+                service="loams.stream.v1.StreamService",
+                package="loams.stream.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="streams",
+                name="fetch_events",
+                proto_name="fetch_events",
+                method="FetchCloudEvents",
+                rpc="loams.stream.v1.StreamService/FetchCloudEvents",
+                service="loams.stream.v1.StreamService",
+                package="loams.stream.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="streams",
+                name="get",
+                proto_name="get",
+                method="DescribeStream",
+                rpc="loams.stream.v1.StreamService/DescribeStream",
+                service="loams.stream.v1.StreamService",
+                package="loams.stream.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="streams",
+                name="list",
+                proto_name="list",
+                method="ListStreams",
+                rpc="loams.stream.v1.StreamService/ListStreams",
+                service="loams.stream.v1.StreamService",
+                package="loams.stream.v1",
+                idempotency="no_side_effects",
+                retry="safe",
+                streaming="unary",
+                pagination=Pagination(items="streams", next_page_token="next_page_token"),
+            ),
+            CallBinding(
+                module="streams",
+                name="produce",
+                proto_name="produce",
+                method="Produce",
+                rpc="loams.stream.v1.StreamService/Produce",
+                service="loams.stream.v1.StreamService",
+                package="loams.stream.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+            CallBinding(
+                module="streams",
+                name="produce_events",
+                proto_name="produce_events",
+                method="ProduceCloudEvents",
+                rpc="loams.stream.v1.StreamService/ProduceCloudEvents",
+                service="loams.stream.v1.StreamService",
+                package="loams.stream.v1",
+                idempotency="none",
+                retry="manual",
+                streaming="unary",
+                pagination=None,
+            ),
+        ),
+    ),
+    ModuleBinding(
         name="tables",
         summary="",
         service="loams.live.v1.LiveService",
@@ -2501,6 +2642,69 @@ METHODS: Final[dict[str, MethodInfo[Message, Message]]] = {
         input=SearchRequest,
         output=SearchResponse,
         idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.sql.v1.SqlService/Query": MethodInfo(
+        name="Query",
+        service_name="loams.sql.v1.SqlService",
+        input=SqlV1QueryRequest,
+        output=SqlV1QueryResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.sql.v1.SqlService/QueryArrow": MethodInfo(
+        name="QueryArrow",
+        service_name="loams.sql.v1.SqlService",
+        input=QueryArrowRequest,
+        output=QueryArrowResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.stream.v1.StreamService/CreateStream": MethodInfo(
+        name="CreateStream",
+        service_name="loams.stream.v1.StreamService",
+        input=CreateStreamRequest,
+        output=CreateStreamResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.stream.v1.StreamService/Fetch": MethodInfo(
+        name="Fetch",
+        service_name="loams.stream.v1.StreamService",
+        input=FetchRequest,
+        output=FetchResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.stream.v1.StreamService/FetchCloudEvents": MethodInfo(
+        name="FetchCloudEvents",
+        service_name="loams.stream.v1.StreamService",
+        input=FetchCloudEventsRequest,
+        output=FetchCloudEventsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.stream.v1.StreamService/DescribeStream": MethodInfo(
+        name="DescribeStream",
+        service_name="loams.stream.v1.StreamService",
+        input=DescribeStreamRequest,
+        output=DescribeStreamResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.stream.v1.StreamService/ListStreams": MethodInfo(
+        name="ListStreams",
+        service_name="loams.stream.v1.StreamService",
+        input=ListStreamsRequest,
+        output=ListStreamsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["no_side_effects"],
+    ),
+    "loams.stream.v1.StreamService/Produce": MethodInfo(
+        name="Produce",
+        service_name="loams.stream.v1.StreamService",
+        input=ProduceRequest,
+        output=ProduceResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
+    ),
+    "loams.stream.v1.StreamService/ProduceCloudEvents": MethodInfo(
+        name="ProduceCloudEvents",
+        service_name="loams.stream.v1.StreamService",
+        input=ProduceCloudEventsRequest,
+        output=ProduceCloudEventsResponse,
+        idempotency_level=IDEMPOTENCY_LEVELS["none"],
     ),
     "loams.live.v1.LiveService/Mutate": MethodInfo(
         name="Mutate",
@@ -4568,6 +4772,230 @@ class SearchModuleSync(Protocol):
         *,
         options: CallOptions | None = None,
     ) -> loams.collection.v1.query_pb2.SearchResponse:
+        ...
+
+
+
+class SqlModule(Protocol):
+    """`loams.sql` — SQL: one read-only statement over a namespace's collections, with parameters.
+
+    Wraps `loams.sql.v1.SqlService`.
+    """
+
+    module: ClassVar[Literal["sql"]]
+    service: ClassVar[Literal["loams.sql.v1.SqlService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.sql.v1.SqlService/Query`, retried: safe.
+    """
+    async def query(
+        self,
+        request: loams.sql.v1.sql_pb2.QueryRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.sql.v1.sql_pb2.QueryResponse:
+        ...
+
+    """`loams.sql.v1.SqlService/QueryArrow`, retried: safe.
+    """
+    async def query_arrow(
+        self,
+        request: loams.sql.v1.sql_pb2.QueryArrowRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.sql.v1.sql_pb2.QueryArrowResponse:
+        ...
+
+
+
+class SqlModuleSync(Protocol):
+    """`loams.sql` — SQL: one read-only statement over a namespace's collections, with parameters.
+
+    Wraps `loams.sql.v1.SqlService`.
+    """
+
+    module: ClassVar[Literal["sql"]]
+    service: ClassVar[Literal["loams.sql.v1.SqlService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.sql.v1.SqlService/Query`, retried: safe.
+    """
+    def query(
+        self,
+        request: loams.sql.v1.sql_pb2.QueryRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.sql.v1.sql_pb2.QueryResponse:
+        ...
+
+    """`loams.sql.v1.SqlService/QueryArrow`, retried: safe.
+    """
+    def query_arrow(
+        self,
+        request: loams.sql.v1.sql_pb2.QueryArrowRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.sql.v1.sql_pb2.QueryArrowResponse:
+        ...
+
+
+
+class StreamsModule(Protocol):
+    """`loams.streams` — Streams: create, list and describe a namespace's logs; produce and fetch records and CloudEvents.
+
+    Wraps `loams.stream.v1.StreamService`.
+    """
+
+    module: ClassVar[Literal["streams"]]
+    service: ClassVar[Literal["loams.stream.v1.StreamService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.stream.v1.StreamService/CreateStream`, retried: safe.
+    """
+    async def create(
+        self,
+        request: loams.stream.v1.stream_pb2.CreateStreamRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.stream.v1.stream_pb2.CreateStreamResponse:
+        ...
+
+    """`loams.stream.v1.StreamService/Fetch`, retried: safe.
+    """
+    async def fetch(
+        self,
+        request: loams.stream.v1.stream_pb2.FetchRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.stream.v1.stream_pb2.FetchResponse:
+        ...
+
+    """`loams.stream.v1.StreamService/FetchCloudEvents`, retried: safe.
+    """
+    async def fetch_events(
+        self,
+        request: loams.stream.v1.stream_pb2.FetchCloudEventsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.stream.v1.stream_pb2.FetchCloudEventsResponse:
+        ...
+
+    """`loams.stream.v1.StreamService/DescribeStream`, retried: safe.
+    """
+    async def get(
+        self,
+        request: loams.stream.v1.stream_pb2.DescribeStreamRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.stream.v1.stream_pb2.DescribeStreamResponse:
+        ...
+
+    """`loams.stream.v1.StreamService/ListStreams`, retried: safe. AIP-158: page with `streams` and follow `next_page_token` through `loams.paginate`.
+    """
+    async def list(
+        self,
+        request: loams.stream.v1.stream_pb2.ListStreamsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.stream.v1.stream_pb2.ListStreamsResponse:
+        ...
+
+    """`loams.stream.v1.StreamService/Produce`, retried: manual.
+    """
+    async def produce(
+        self,
+        request: loams.stream.v1.stream_pb2.ProduceRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.stream.v1.stream_pb2.ProduceResponse:
+        ...
+
+    """`loams.stream.v1.StreamService/ProduceCloudEvents`, retried: manual.
+    """
+    async def produce_events(
+        self,
+        request: loams.stream.v1.stream_pb2.ProduceCloudEventsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.stream.v1.stream_pb2.ProduceCloudEventsResponse:
+        ...
+
+
+
+class StreamsModuleSync(Protocol):
+    """`loams.streams` — Streams: create, list and describe a namespace's logs; produce and fetch records and CloudEvents.
+
+    Wraps `loams.stream.v1.StreamService`.
+    """
+
+    module: ClassVar[Literal["streams"]]
+    service: ClassVar[Literal["loams.stream.v1.StreamService"]]
+    unstable: ClassVar[Literal[False]]
+    """`loams.stream.v1.StreamService/CreateStream`, retried: safe.
+    """
+    def create(
+        self,
+        request: loams.stream.v1.stream_pb2.CreateStreamRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.stream.v1.stream_pb2.CreateStreamResponse:
+        ...
+
+    """`loams.stream.v1.StreamService/Fetch`, retried: safe.
+    """
+    def fetch(
+        self,
+        request: loams.stream.v1.stream_pb2.FetchRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.stream.v1.stream_pb2.FetchResponse:
+        ...
+
+    """`loams.stream.v1.StreamService/FetchCloudEvents`, retried: safe.
+    """
+    def fetch_events(
+        self,
+        request: loams.stream.v1.stream_pb2.FetchCloudEventsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.stream.v1.stream_pb2.FetchCloudEventsResponse:
+        ...
+
+    """`loams.stream.v1.StreamService/DescribeStream`, retried: safe.
+    """
+    def get(
+        self,
+        request: loams.stream.v1.stream_pb2.DescribeStreamRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.stream.v1.stream_pb2.DescribeStreamResponse:
+        ...
+
+    """`loams.stream.v1.StreamService/ListStreams`, retried: safe. AIP-158: page with `streams` and follow `next_page_token` through `loams.paginate`.
+    """
+    def list(
+        self,
+        request: loams.stream.v1.stream_pb2.ListStreamsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.stream.v1.stream_pb2.ListStreamsResponse:
+        ...
+
+    """`loams.stream.v1.StreamService/Produce`, retried: manual.
+    """
+    def produce(
+        self,
+        request: loams.stream.v1.stream_pb2.ProduceRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.stream.v1.stream_pb2.ProduceResponse:
+        ...
+
+    """`loams.stream.v1.StreamService/ProduceCloudEvents`, retried: manual.
+    """
+    def produce_events(
+        self,
+        request: loams.stream.v1.stream_pb2.ProduceCloudEventsRequest,
+        *,
+        options: CallOptions | None = None,
+    ) -> loams.stream.v1.stream_pb2.ProduceCloudEventsResponse:
         ...
 
 

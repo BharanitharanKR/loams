@@ -336,6 +336,10 @@ fn every_mapped_package_is_generated_by_the_crate_it_names() {
             // GR1 Task 2: `loams-proto` compiles `operations.proto`, which
             // `loams.graph.v1` imports; the Rust map already names it.
             "loams.operations.v1".to_owned(),
+            // SDKP Part C: `sql` and `streams`, which `loams-proto` compiles
+            // since P0b and P0c.
+            "loams.sql.v1".to_owned(),
+            "loams.stream.v1".to_owned(),
         ],
         "the set of generated packages changed, so this check's coverage changed: \
          update this list and confirm each new package's map names its own crate"

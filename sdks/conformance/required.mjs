@@ -232,7 +232,17 @@ export async function checkAppSuite(language, report, names) {
   const { manifest } = await loadManifest();
   const problems = [];
   const ran = new Set(report.ran ?? []);
-  const appFixtures = manifest.fixtures.filter((fixture) => fixture.name.startsWith('app_'));
+  // A Part C fixture (`app_sql`, `app_streams`) holds a language once its suite
+  // names the test that replays it or its report ran it, so the languages that
+  // have not reached Part C keep passing until they do (SDKP ruling C-1); S1
+  // makes every app fixture required regardless.
+  const appFixtures = manifest.fixtures.filter(
+    (fixture) =>
+      fixture.name.startsWith('app_') &&
+      (fixture.part !== 'C' ||
+        ran.has(fixture.name) ||
+        names.has(testName(language, APP_FIXTURE_TESTS[fixture.name] ?? fixture.name))),
+  );
   const wanted = [...APP_TESTS];
   if (INDEX_CHECKED.has(language)) {
     wanted.push('facade_matches_index');
