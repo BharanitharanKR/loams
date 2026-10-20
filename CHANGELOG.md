@@ -5,6 +5,9 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- **The TypeScript SDK runs in Cloudflare Workers**: the default transport sends `redirect: "manual"` in workerd
+  (connect-web's `"error"` is rejected there), and `transportOptions.fetch` accepts a custom `fetch`. README
+  has a Cloudflare Workers section.
 - **The Kotlin SDK replays the app scenario** (SDKP P0d): `kotlin_app_collections`, `kotlin_app_search`,
   `kotlin_app_graph`, `kotlin_app_sql` and `kotlin_app_streams` replay `sdks/fixtures/recorded/app/`
   through the facade against the fixture server, and CI runs `check-languages --suite app` for Kotlin.
