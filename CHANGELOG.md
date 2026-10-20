@@ -4,7 +4,90 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-10-21
+
+Highlights:
+
+- **The UI upgrade.** The console, Studio and Loams Desktop move onto the design 59 foundation
+  (CF1): new tokens, component states and a motion system, polished data screens, a reworked
+  shell (sidebar, inspector and drawer regions, the palette, one keymap), Studio's home, threads
+  and approval cards, and on the desktop native menus, per-OS window chrome synced to the theme,
+  a splash, OS notifications and an update toast with "Skip this version".
+- **The app-building API in all 13 SDKs.** TypeScript, Python, Go, Rust, C#, C++, Swift, Java,
+  Kotlin, Ruby, PHP, Dart and Objective-C each have the `namespaces`, `collections`, `documents`,
+  `search`, `vector` and `graph` modules, the `Schema`, `Filter` and `Search` builders,
+  collection handles, `write_batch`, `scroll_all` and `query_all`, consistency tokens with a
+  read-your-writes session store, a default namespace and client deadlines, plus `sql` and
+  `streams`. Each SDK replays one recorded app scenario in CI.
+- **New APIs: `loams.sql.v1` and `loams.stream.v1`** on the engine's main port. Read-only SQL
+  with `$n` parameters, answered as typed rows or Arrow; streams with keyed records, idempotent
+  produce (`producer_id`, `producer_seq`) and long-poll fetch, over Connect, gRPC and gRPC-Web.
+- **Self-host first-run fixes.** `LOAMS_SETUP_TOKEN` reaches the engine from `.env` (and
+  `secrets/engine.env` still wins), and a one-shot `pg-bootstrap` service creates `compute1`'s
+  tenant and timeline, so a fresh stack comes up without manual steps from the bundle or the tag.
+- **Durable on TiKV.** The release stack keeps Loams Durable's state in TiKV (keyspace
+  `loams_durable`) instead of SQLite in `loams-data`. See Upgrading: the SQLite state does not
+  carry over.
+- **Mastra compatibility.** The Qdrant gateway serves `DELETE` of a payload index (REST and gRPC),
+  and CI runs `@qdrant/js-client-rest` 1.18 and 1.19 against it.
+- **agentd ordering fix.** A steer orphaned by a closing run keeps its place ahead of the queue, so
+  queued messages no longer run out of order or two in one turn.
+- **Dependency updates** across Cargo, npm and Go.
+
+### Upgrading
+
+From any earlier **0.1.x** release, in one step: `loams upgrade --to 0.1.1`.
+
+It takes a snapshot first, and `loams upgrade rollback` restores it.
+
+No migrations.
+
+Third-party bumps: none.
+Free space needed: 1.5× the snapshot estimate (`loams upgrade check` shows it).
+Expected downtime: about 5 minutes, excluding image pulls.
+
+`.env` gains `LOAMS_SETUP_TOKEN` and `LOAMS_TAILSCALE_ALLOWED_USERS` (both empty; existing values
+are kept).
+
+**Durable's state does not carry over.** The engine now keeps Loams Durable in TiKV (keyspace
+`loams_durable`, created on start if PD has none); nothing copies the 0.1.0 SQLite store
+(`durable/default.db` in `loams-data`) into it. Before upgrading, let pending promises and tasks
+settle and note your schedules, then recreate the schedules afterwards. The SQLite file stays in
+`loams-data` and in the upgrade snapshot, so `loams upgrade rollback` returns to it. See
+[Durable execution on TiKV](deploy/release/README.md#durable-execution-on-tikv).
+
+From 0.1.0-preview.2, upgrade to 0.1.0 first. See [docs/release/upgrades.md](docs/release/upgrades.md).
+
 ### Added
+
+- **The UI upgrade** (phases 1 and 2, extending CF1, design 59): tokens, component states and the
+  motion system (`motion`, `useMotionPreset`, `StaggerList`, `ListRow`, `Segmented`); data
+  screens polish; shell and navigation motion, keyboard and polish; Studio's home, threads and
+  approval cards and the desktop chrome on the same primitives (#801, #802, #803, #804).
+- **CF1 tasks 12–16** (design 59): one keymap for D1081 in which editable targets keep their
+  keys; per-OS window chrome synced to the page theme; native menus and the context menu; a splash
+  with Loams' loader; OS notifications and an update toast with "Skip this version" (#819–#822, #825).
+- **Durable on TiKV in the release stack** (#796): the `loams` service runs with
+  `--durable-store=tikv://pd:2379/loams_durable`, the image adds `durable-tikv`, and PD
+  pre-allocates the keyspace. The TiKV durable server creates its keyspace if PD has none, answers
+  `promise.search`, `task.search` and `schedule.search` (the console's Durable page uses them;
+  `--durable-set servers.server_tikv.search=false` turns them off), and its start log names its
+  store.
+- **The Qdrant gateway deletes payload indexes** (MA1 Task 23, D1210, #929):
+  `DELETE /collections/{c}/index/{field}` and gRPC `Points/DeleteFieldIndex` retire the index, which
+  leaves `payload_schema`; filters are unchanged, and `PUT` with the same type revives it. CI runs
+  `@qdrant/js-client-rest` 1.18 and 1.19 against the gateway (MA1 Task 25, #931).
+- **Loams House observability** (HS1 Task 23 part 2, #797): every design §49 §15 metric series, one
+  trace per statement, redacted operator logs and the query log.
+- **Loams Git `CommitWorkspace` and `PushWorkspace`** (GT1 Task 27, #734): commit a workspace
+  snapshot and push it without re-uploading objects, with per-ref checks and keyed idempotency.
+- **Software factory apps in Studio** (#773, #798): an end-to-end pass over the factory apps on the
+  desktop and the browser console, with their images pinned.
+- **`platform/`** (#860): the former private `loams-platform` repository, imported as a separate
+  Cargo workspace (`loams-meter`, the node metering agent), with the Authentik and tailnet deploy
+  files and the platform design docs, Apache-2.0 (D1119, design 63).
+- Release: the product release's `SHA256SUMS` is signed by `release-checksums.yml` (#827), and the
+  desktop's update manifests are dropped before `DESKTOP-SHA256SUMS` on a product release (#829).
 - **The Kotlin SDK replays the app scenario** (SDKP P0d): `kotlin_app_collections`, `kotlin_app_search`,
   `kotlin_app_graph`, `kotlin_app_sql` and `kotlin_app_streams` replay `sdks/fixtures/recorded/app/`
   through the facade against the fixture server, and CI runs `check-languages --suite app` for Kotlin.
@@ -96,6 +179,21 @@ All notable changes to this project are documented here. The format follows [Kee
   page says so when they are set.
 
 ### Changed
+
+- **Self-host first run** (#866, #880, #883): `LOAMS_SETUP_TOKEN` passes from `.env` to the engine
+  through `config/setup-token.env`, so `secrets/engine.env` still wins when both set it; the
+  bundle is the primary install path, and the release's bundle job checks first-run setup; a
+  one-shot `pg-bootstrap` service creates `compute1`'s tenant and timeline on the first `up`
+  (keeping their ids in the `pg-bootstrap` volume), and `compute1` starts after it.
+  `.env.example` documents `LOAMS_SETUP_TOKEN` and `LOAMS_TAILSCALE_ALLOWED_USERS`.
+- **A patch release upgrades from its line.** `release/upgrade-path.toml` lists 0.1.1 with
+  `from = "0.1"`; the upgrade gate and the SDK public-symbol check resolve a line to the newest
+  earlier release of it (here `v0.1.0`), and the generated Upgrading notes say "any earlier 0.1.x".
+- CI runs on GitHub-hosted runners only; Blacksmith is removed (#826).
+- Dependencies: the Cargo minor-and-patch group (14 updates, #864), the npm minor-and-patch group
+  (30 updates, #878), `uuid` 11.1.1 → 14.0.2 (#808), `react-resizable` 3.2.0 → 4.0.2 (#810),
+  `go-sql-driver/mysql` 1.9.3 → 1.10.1 in the sqlgate capture tool (#805); Dependabot ignores
+  `@types/node` majors while the repo targets Node 22 (#894).
 - **Desktop: Durable on a remote server**: the protocol proxy forwards `/durable/` to the active
   remote server's main port (`POST /durable/`, B12) with the session the other engine routes use,
   instead of answering 404. The Durable page and the Overview's Durable card work on remote servers;
@@ -171,8 +269,6 @@ All notable changes to this project are documented here. The format follows [Kee
   `produce`, `fetch`, `produce_events`, `fetch_events` and `subscribe`;
   replayed by `python_app_sql` and `python_app_streams`.
 
-### Changed
-
 - Python SDK: `session_consistency=True` now works: the response header is read
   through `connectrpc.client.ResponseMetadata`, and two different tokens merge
   instead of being refused. The session keeps one token per proto package, and
@@ -218,6 +314,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **agentd: queued messages ran out of order** (#926). When a run closed with a steer still in its
+  mailbox, agentd published `Idle` before re-dispatching it, so the queue drain started the next
+  row first and the orphan steered into it. The chat now stays `Working` until the re-dispatch
+  starts its own turn.
+- Release: nFPM gets the 16-digit long key id, not the fingerprint (#830), and
+  `sign-checksums.sh` resolves the public key path before changing directory (#832).
 - A search retriever without `k` was refused ("k must be between 1 and
   100000"); it now takes `max(10, offset + limit)` on REST and Connect.
 - `search_after` refused the primary-key sort value a Connect answer had just
