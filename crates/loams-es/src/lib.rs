@@ -65,6 +65,13 @@
 //!   (row T9-5).
 //! - A sort key other than `_doc` after `_score` is refused: score ties are
 //!   broken by `_id` only; a `_doc` sort value is the `_id` (row T9-9).
+//! - A scroll (#950) holds no server state: its `_scroll_id` encodes the
+//!   request and where the next page starts, so it is long (a few hundred
+//!   bytes), clearing it frees nothing, and later pages read at least the
+//!   first page's version rather than a fixed snapshot (a document written
+//!   meanwhile past the cursor may appear). A scroll covers one index, a
+//!   query or `knn` search but not a hybrid or `script_score` one, and
+//!   `slice` is refused.
 //! - `_update_by_query` recognises only `params` assignments and
 //!   `remove()` in its script; an assignment creates a missing or
 //!   non-object parent as an object where Painless fails, an object param
@@ -289,6 +296,19 @@ impl EsGateway {
             .route(
                 "/_search",
                 get(search::exec::search_all).post(search::exec::search_all),
+            )
+            // #950: the scroll API.
+            .route(
+                "/_search/scroll",
+                get(search::scroll::scroll)
+                    .post(search::scroll::scroll)
+                    .delete(search::scroll::clear),
+            )
+            .route(
+                "/_search/scroll/{scroll_id}",
+                get(search::scroll::scroll_id)
+                    .post(search::scroll::scroll_id)
+                    .delete(search::scroll::clear_id),
             )
             .route(
                 "/{index}/_search",
