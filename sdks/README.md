@@ -19,7 +19,7 @@ This directory contains Loams language implementations, code generation template
 | **Ruby** | [`ruby/`](ruby/) | `loams` (app modules: namespaces, collections, documents, search, vector, graph) |
 | **C++** | [`cpp/`](cpp/) | `loams` (app modules: namespaces, collections, documents, search, vector, graph) |
 | **Dart** | [`dart/`](dart/) | `loams` (app modules: namespaces, collections, documents, search, vector, graph) |
-| **Objective-C** | [`objc/`](objc/) | Implementation and runtime fixtures |
+| **Objective-C** | [`objc/`](objc/) | `LoamsObjC` (app modules: namespaces, collections, documents, search, vector, graph) |
 | **PHP** | [`php/`](php/) | `loams/loams` (app modules: namespaces, collections, documents, search, vector, graph) |
 
 ## App modules (SDKP)
