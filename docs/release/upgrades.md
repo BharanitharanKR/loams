@@ -10,8 +10,8 @@ first step that keeps it.
 From the stack's directory (the bundle's `release/`, the one with `compose.yaml` and `.env`):
 
 ```sh
-loams upgrade check --to 0.1.0  # what it will do, and what would stop it
-loams upgrade --to 0.1.0        # asks first; --yes to skip the question
+loams upgrade check --to 0.1.1  # what it will do, and what would stop it
+loams upgrade --to 0.1.1        # asks first; --yes to skip the question
 loams upgrade status            # the stack's release, the ledger, the last attempt
 ```
 
@@ -105,6 +105,7 @@ Reversible claim before a release ships.
 |---|---|---|---|
 | 0.1.0 | `0000-adopt-preview-2`: records preview.2's versions (preview.2 wrote no stack record) | meta | Reversible |
 | 0.1.0 | `0001-safekeeper-volume`: gives the safekeeper a volume, after a drain | host | Reversible |
+| 0.1.1 | None (from any earlier 0.1.x). Durable's SQLite state is not carried into TiKV: drain first ([Durable execution on TiKV](../../deploy/release/README.md#durable-execution-on-tikv)) | | |
 
 The release notes of every release that keeps data have an "Upgrading" section with its table, its third-party
 pins and its expected downtime (`scripts/release/upgrade-notes.sh`).

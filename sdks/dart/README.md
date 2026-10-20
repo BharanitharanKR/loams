@@ -8,14 +8,14 @@
 ## Install
 
 ```sh
-dart pub add loams:0.1.0
+dart pub add loams:0.1.1
 ```
 
 or in `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  loams: 0.1.0
+  loams: 0.1.1
 ```
 
 It works with Dart 3 and Flutter.
