@@ -66,7 +66,8 @@
 //!   broken by `_id` only; a `_doc` sort value is the `_id` (row T9-9).
 //! - `_update_by_query` recognises only `params` assignments and
 //!   `remove()` in its script; an assignment creates a missing or
-//!   non-object parent as an object where Painless fails, and a request
+//!   non-object parent as an object where Painless fails, an object param
+//!   may be assigned to a top-level key only (#903), and a request
 //!   without a script is refused (row T9a-6). Its `scroll_size` is checked
 //!   and not applied: the batches are the collection service's, and a
 //!   batch refused for backpressure past the deadline is 429 with what was
