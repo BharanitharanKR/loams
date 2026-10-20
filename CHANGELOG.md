@@ -144,6 +144,22 @@ All notable changes to this project are documented here. The format follows [Kee
   `Create`, `Get`, `List`/`ListAll`, `Produce`, `Fetch`, `ProduceEvents`,
   `FetchEvents` and `Subscribe`; replayed by `go_app_sql` and
   `go_app_streams`.
+- Rust SDK (`loams`): the app-building layer of SDKP part A. `Schema`, `Filter`
+  and `Search` builders checked against the shared builder corpus
+  (`sdks/fixtures/builders/`); `ConsistencyToken` checked against
+  `sdks/fixtures/tokens.json`, and a session that merges every response token;
+  a default namespace (`with_namespace`, R11); a 30 s unary deadline over the
+  whole call with `client_deadline_exceeded` (R12); `write_batch` and
+  `BatchError` (R13); `subscribe` as a `futures::Stream` (R14);
+  `CollectionHandle`, `scroll_all`, `query_all`; `Loams::from_env`. The app
+  modules `namespaces()`, `collections()`, `documents()`, `search()`,
+  `vector()` and `graph()`, `loams.collection(name)`, and the app scenario
+  replayed through them (`rust_app_*`); `examples/notes`.
+- Rust SDK: `loams.sql()` and `loams.streams()` (SDKP L4 part C): `query`,
+  `query_arrow`, `records(statement, params)` and `sql_records(&answer)`;
+  `create`, `get`, `list`/`list_all`, `produce`, `fetch`, `produce_events`,
+  `fetch_events`, and `Loams::subscribe` over `fetch` (now a local, not
+  `Send`, stream); replayed by `rust_app_sql` and `rust_app_streams`.
 
 ### Fixed
 
