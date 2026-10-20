@@ -30,6 +30,8 @@ Highlights:
   carry over.
 - **Mastra compatibility.** The Qdrant gateway serves `DELETE` of a payload index (REST and gRPC),
   and CI runs `@qdrant/js-client-rest` 1.18 and 1.19 against it.
+- **Durable in the CLI packages.** The `.deb`, `.rpm`, pacman, macOS and Windows packages are built
+  with the image's features, so `loams dev` from a package serves Durable on 127.0.0.1:8001 (#925).
 - **agentd ordering fix.** A steer orphaned by a closing run keeps its place ahead of the queue, so
   queued messages no longer run out of order or two in one turn.
 - **Dependency updates** across Cargo, npm and Go.
@@ -314,6 +316,12 @@ From 0.1.0-preview.2, upgrade to 0.1.0 first. See [docs/release/upgrades.md](doc
 
 ### Fixed
 
+- **The CLI packages had no Durable** (#925). The `.deb`, `.rpm`, pacman package, macOS tarballs
+  and Windows zip were built from the default features, so `loams dev` from a package served
+  nothing on 127.0.0.1:8001. They now build with the release image's features (`durable`,
+  `durable-tikv`, `tikv`, `live-tikv`, `graph`, `pgwire`, `mysql-wire`, `stream-grpc`), a check
+  keeps that list equal to the image's, and `scripts/release/smoke-durable.sh` checks that
+  Durable answers on 8001 in the Linux, Windows and macOS package jobs.
 - **agentd: queued messages ran out of order** (#926). When a run closed with a steer still in its
   mailbox, agentd published `Idle` before re-dispatching it, so the queue drain started the next
   row first and the orphan steered into it. The chat now stays `Working` until the re-dispatch
