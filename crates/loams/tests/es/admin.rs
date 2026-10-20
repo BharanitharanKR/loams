@@ -696,3 +696,291 @@ async fn create_with_aliases_adds_them() {
     assert_eq!(es.head("/j").await.status, StatusCode::NOT_FOUND);
     es.server.shutdown().await.expect("shutdown");
 }
+
+// ----- _cat/indices (MA1 Task 24) -----
+
+/// Indices `a1` (2 documents), `a2` (empty) and `b1` (1 document), and an
+/// alias `al` over `b1`.
+async fn cat_fixture(es: &Es) {
+    for index in ["a1", "a2", "b1"] {
+        Es::ok(es.put(&format!("/{index}"), None).await);
+    }
+    for (index, id) in [("a1", "1"), ("a1", "2"), ("b1", "1")] {
+        let a = es
+            .put(
+                &format!("/{index}/_doc/{id}?refresh=true"),
+                Some(json!({"n": 1})),
+            )
+            .await;
+        assert_eq!(a.status, StatusCode::CREATED, "{}", a.text);
+    }
+    Es::ok(es.put("/b1/_alias/al", None).await);
+}
+
+/// The `index` values of a JSON answer, in order.
+fn cat_index_names(body: &Value) -> Vec<&str> {
+    body.as_array()
+        .expect("an array")
+        .iter()
+        .map(|row| row["index"].as_str().expect("index"))
+        .collect()
+}
+
+#[tokio::test]
+async fn cat_indices_json_lists_indices() {
+    let es = Es::start().await;
+    // No index yet: an empty array.
+    assert_eq!(
+        Es::ok(es.get("/_cat/indices?format=json").await).body,
+        json!([])
+    );
+    cat_fixture(&es).await;
+    let a = Es::ok(es.get("/_cat/indices?format=json").await);
+    assert!(a.header("content-type").starts_with("application/json"));
+    assert_eq!(a.header("x-elastic-product"), "Elasticsearch");
+    assert_eq!(cat_index_names(&a.body), ["a1", "a2", "b1"]);
+    let a1 = &a.body[0];
+    let columns: Vec<&str> = a1
+        .as_object()
+        .expect("object")
+        .keys()
+        .map(String::as_str)
+        .collect();
+    assert_eq!(
+        columns,
+        [
+            "health",
+            "status",
+            "index",
+            "uuid",
+            "pri",
+            "rep",
+            "docs.count",
+            "docs.deleted",
+            "store.size",
+            "pri.store.size",
+            "dataset.size"
+        ]
+    );
+    // Every value is a string, as in ES.
+    for value in a1.as_object().expect("object").values() {
+        assert!(value.is_string(), "{value}");
+    }
+    assert_eq!(a1["health"], "green");
+    assert_eq!(a1["status"], "open");
+    assert_eq!(a1["pri"], "1");
+    assert_eq!(a1["rep"], "0");
+    assert_eq!(a1["docs.count"], "2");
+    assert_eq!(a1["docs.deleted"], "0");
+    assert_eq!(a.body[1]["docs.count"], "0");
+    assert_eq!(a.body[2]["docs.count"], "1");
+    let info = es
+        .server
+        .collections()
+        .get_collection(NS, "a1")
+        .await
+        .expect("a1");
+    assert_eq!(a1["uuid"], index_uuid(info.id));
+    // An Accept of JSON without `format` answers JSON too.
+    let a = es
+        .send(
+            reqwest::Method::GET,
+            "/_cat/indices",
+            None,
+            &[("accept", "application/json")],
+        )
+        .await;
+    assert_eq!(cat_index_names(&a.body), ["a1", "a2", "b1"]);
+    // `health=` filters (every index is green), unknown parameters are 400.
+    assert_eq!(
+        Es::ok(es.get("/_cat/indices?format=json&health=yellow").await).body,
+        json!([])
+    );
+    assert_eq!(
+        cat_index_names(&Es::ok(es.get("/_cat/indices?format=json&health=green").await).body),
+        ["a1", "a2", "b1"]
+    );
+    es.get("/_cat/indices?format=json&nope=1")
+        .await
+        .assert_error(
+            400,
+            "illegal_argument_exception",
+            Some("request [/_cat/indices] contains unrecognized parameter: [nope]"),
+        );
+    es.get("/_cat/indices?format=yaml")
+        .await
+        .assert_error(400, "illegal_argument_exception", None);
+    // `expand_wildcards` is accepted.
+    Es::ok(
+        es.get("/_cat/indices?format=json&expand_wildcards=all")
+            .await,
+    );
+}
+
+#[tokio::test]
+async fn cat_indices_text_with_header() {
+    let es = Es::start().await;
+    cat_fixture(&es).await;
+    let a = Es::ok(es.get("/_cat/indices?h=index,docs.count").await);
+    assert!(
+        a.header("content-type").starts_with("text/plain"),
+        "{:?}",
+        a.headers
+    );
+    assert_eq!(a.text, "a1 2\na2 0\nb1 1\n");
+    let a = Es::ok(es.get("/_cat/indices?v&h=health,index,docs.count").await);
+    assert_eq!(
+        a.text,
+        "health index docs.count\ngreen  a1             2\ngreen  a2             0\ngreen  b1             1\n"
+    );
+    // Without `h`, every column, in ES's order.
+    let a = Es::ok(es.get("/_cat/indices?v=true").await);
+    let header: Vec<&str> = a
+        .text
+        .lines()
+        .next()
+        .expect("header")
+        .split_whitespace()
+        .collect();
+    assert_eq!(
+        header,
+        [
+            "health",
+            "status",
+            "index",
+            "uuid",
+            "pri",
+            "rep",
+            "docs.count",
+            "docs.deleted",
+            "store.size",
+            "pri.store.size",
+            "dataset.size"
+        ]
+    );
+    assert_eq!(a.text.lines().count(), 4);
+}
+
+#[tokio::test]
+async fn cat_indices_h_and_s() {
+    let es = Es::start().await;
+    cat_fixture(&es).await;
+    // Aliases keep their spelling; patterns expand.
+    let a = Es::ok(es.get("/_cat/indices?format=json&h=i,dc&s=dc:desc").await);
+    assert_eq!(
+        a.body,
+        json!([
+            {"i": "a1", "dc": "2"},
+            {"i": "b1", "dc": "1"},
+            {"i": "a2", "dc": "0"},
+        ])
+    );
+    let a = Es::ok(
+        es.get("/_cat/indices?format=json&h=index,docs.*&s=index:desc")
+            .await,
+    );
+    assert_eq!(
+        a.body,
+        json!([
+            {"index": "b1", "docs.count": "1", "docs.deleted": "0"},
+            {"index": "a2", "docs.count": "0", "docs.deleted": "0"},
+            {"index": "a1", "docs.count": "2", "docs.deleted": "0"},
+        ])
+    );
+    // Numbers sort by value, several keys in order.
+    let a = Es::ok(
+        es.get("/_cat/indices?format=json&h=index&s=docs.count,index")
+            .await,
+    );
+    assert_eq!(cat_index_names(&a.body), ["a2", "b1", "a1"]);
+    es.get("/_cat/indices?format=json&s=nope")
+        .await
+        .assert_error(
+            400,
+            "illegal_argument_exception",
+            Some("Unable to sort by unknown sort key `nope`"),
+        );
+}
+
+#[tokio::test]
+async fn cat_indices_one_index_and_wildcard() {
+    let es = Es::start().await;
+    cat_fixture(&es).await;
+    let names = |path: String| {
+        let es = &es;
+        async move {
+            cat_index_names(&Es::ok(es.get(&path).await).body)
+                .iter()
+                .map(|s| s.to_string())
+                .collect::<Vec<_>>()
+        }
+    };
+    assert_eq!(names("/_cat/indices/a1?format=json".into()).await, ["a1"]);
+    assert_eq!(
+        names("/_cat/indices/*1?format=json".into()).await,
+        ["a1", "b1"]
+    );
+    // A pattern matches aliases too: `a*` reaches `b1` through `al`.
+    assert_eq!(
+        names("/_cat/indices/a*?format=json".into()).await,
+        ["a1", "a2", "b1"]
+    );
+    assert_eq!(
+        names("/_cat/indices/a2,b1?format=json".into()).await,
+        ["a2", "b1"]
+    );
+    // An alias lists its member; `_all` and `*` list everything.
+    assert_eq!(names("/_cat/indices/al?format=json".into()).await, ["b1"]);
+    assert_eq!(
+        names("/_cat/indices/_all?format=json".into()).await,
+        ["a1", "a2", "b1"]
+    );
+    assert_eq!(
+        names("/_cat/indices/*?format=json".into()).await,
+        ["a1", "a2", "b1"]
+    );
+    // A wildcard matching nothing is empty; a missing name is 404.
+    assert!(
+        names("/_cat/indices/zz*?format=json".into())
+            .await
+            .is_empty()
+    );
+    es.get("/_cat/indices/missing?format=json")
+        .await
+        .assert_error(404, "index_not_found_exception", None);
+}
+
+#[tokio::test]
+async fn cat_indices_bytes_units() {
+    let es = Es::start().await;
+    cat_fixture(&es).await;
+    let size = es
+        .server
+        .collections()
+        .get_collection(NS, "a1")
+        .await
+        .expect("a1")
+        .size_bytes;
+    let cell = |unit: &'static str| {
+        let es = &es;
+        async move {
+            let path =
+                format!("/_cat/indices/a1?format=json&h=store.size,pri.store.size&bytes={unit}");
+            let a = Es::ok(es.get(&path).await);
+            assert_eq!(a.body[0]["store.size"], a.body[0]["pri.store.size"]);
+            a.body[0]["store.size"].as_str().expect("size").to_string()
+        }
+    };
+    assert_eq!(cell("b").await, size.to_string());
+    assert_eq!(cell("kb").await, (size / 1024).to_string());
+    assert_eq!(cell("mb").await, (size >> 20).to_string());
+    assert_eq!(cell("gb").await, (size >> 30).to_string());
+    // Without `bytes`, ES's human form.
+    let a = Es::ok(es.get("/_cat/indices/a1?format=json&h=ss").await);
+    let human = a.body[0]["ss"].as_str().expect("ss");
+    assert_eq!(human, loams_es::cat::size_text(size, None));
+    assert!(human.ends_with('b'), "{human}");
+    es.get("/_cat/indices?format=json&bytes=zb")
+        .await
+        .assert_error(400, "illegal_argument_exception", None);
+}
