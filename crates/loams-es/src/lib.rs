@@ -21,6 +21,8 @@
 //! - `read`: `GET`/`HEAD` `_doc` and `_source`, and `_mget`, with
 //!   `_source` filtering ([`doc::SourceFilter`]).
 //! - [`dsl`]: the Query DSL → the search IR.
+//! - `search::aggs`: `aggs` checked against the mapping and run on the
+//!   engine's aggregations (#951).
 //! - [`search`]: search bodies and URL parameters → a [`search::SearchPlan`],
 //!   and `_search`, `_count` and `_msearch` with ES scores.
 //! - [`cat`]: `GET /_cat/indices[/{index}]` as JSON or the text table.
@@ -65,6 +67,15 @@
 //!   (row T9-5).
 //! - A sort key other than `_doc` after `_score` is refused: score ties are
 //!   broken by `_id` only; a `_doc` sort value is the `_id` (row T9-9).
+//! - Aggregations (#951) run on the engine's (Tantivy's) aggregations, over
+//!   one index and a query or `knn` search: `terms`, `composite`,
+//!   `top_hits`, `filter`, `range`, `histogram`, `date_histogram` and the
+//!   metrics `min`, `max`, `avg`, `sum`, `stats`, `extended_stats`,
+//!   `value_count`, `cardinality` and `percentiles`; other types are
+//!   refused. A sub-aggregation on an unmapped field is refused (ES answers
+//!   empty buckets); `top_hits` without a `sort` returns a bucket's
+//!   documents in index order, where ES orders them by score, and sorts by
+//!   fast fields only.
 //! - `_update_by_query` recognises only `params` assignments and
 //!   `remove()` in its script; an assignment creates a missing or
 //!   non-object parent as an object where Painless fails, an object param
