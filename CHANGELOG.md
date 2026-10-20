@@ -10,7 +10,8 @@ All notable changes to this project are documented here. The format follows [Kee
   through the facade against the fixture server, and CI runs `check-languages --suite app` for Kotlin.
   Fixed on the way: the Connect JSON writer sent every `bytes` field empty and failed on any map field,
   wrote a `float` as its widened double (`0.699999988079071` for `0.7`), and `Sort.score()` and
-  `Sort.pk()` now leave the order unset by default, as the builder corpus does.
+  `Sort.pk()` now leave the order unset by default and `Search.select` no longer sends an empty
+  `exclude`, as the builder corpus does.
 - **The C# SDK builds apps** (SDKP L5): `Namespaces`, `Collections`, `Documents`, `Search`, `Vector` and
   `Graph` modules over the generated `loams.collection.v1` and `loams.graph.v1` stubs, the `Schema`,
   `Filter` and `Search` builders, `client.Collection(name)` handles, `WriteBatchAsync`, `ScrollAllAsync`
