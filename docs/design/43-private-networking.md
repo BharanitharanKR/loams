@@ -392,3 +392,5 @@ All read 2026-10-02.
 - Images: registry manifest digests for `ghcr.io/juanfont/headscale:v0.29.4` and `docker.io/tailscale/tailscale:v1.102.5` (`sha256:c507f3a2a6ab1cabd8d809b98edeb41edbd5c3fb6ad9632ffd098b4c7d0b4065`).
 - Run locally 2026-10-02: Headscale v0.29.4 with the shared policy and a `tailscale/tailscale` v1.102.5 userspace node (§3.1).
 - Loams: [§38](38-knative-authentik-gitops.md), §41 §5, §7, §11, [§37](37-desktop-and-mobile-apps.md) §7.2, [§30](30-loams-cli.md) §15, [MT1](../plans/2026-10-02-mt1-authentik-identity.md).
+
+> **See also (2026-10-20):** [§69](69-edge-reach.md) (Edge Reach, Proposed): serverless functions may join a tailnet as tagged, ephemeral nodes by workload identity federation (Lambda, Cloud Run, Fly.io), and reach only the gateway's edge listener; Funnel stays off and counts as public (D1314).

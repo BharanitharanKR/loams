@@ -10,7 +10,10 @@ Rules that hold across every plane:
 
 - **The engine is never on the public internet.** Self-hosted stacks are reached over the operator's
   tailnet. Public endpoints are only the ones Ostrium runs: `loams.dev`, `auth.loams.dev` and
-  `console.loams.dev`.
+  `console.loams.dev`. *Proposed rewording (2026-10-20, [§69](69-edge-reach.md) §9, D1311):* callers
+  off the tailnet, such as serverless functions, reach Loams only through `loams-gateway`'s edge
+  listener over a private link or a brokered tunnel; whether that listener may ever be public is the
+  owner's decision (D1312).
 - **Open standards:** TLS, mTLS, OIDC, Connect, CloudEvents, and the Postgres and MySQL wire
   protocols.
 - **Billing-grade metering stays out of this repository** (open core, §41). Limits,
@@ -102,3 +105,5 @@ It is parked for these reasons:
   - an abuse process before the domain goes live.
 
 Revisit after v0.1.0-preview.3 and DT1. Decision and question ids are allocated when it gets a design.
+[§69](69-edge-reach.md) §10 (2026-10-20) records how a Loams-hosted relay would relate to it, and
+proposes not to build one (D1317).
