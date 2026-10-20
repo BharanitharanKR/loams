@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, test first. Where this plan gives exact names, paths, branches or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end of this file.
 >
-> **Status: Stub** (2026-10-20). Track OC, design [§68](../design/68-open-protocol-compute.md) (D1251–D1275, Q1030–Q1045, **Proposed**). This plan specifies **OC0** (conformance of unmodified products on Loams primitives, recipes, an opt-in Compose file and a compatibility matrix; no engine code) task by task. OC1 (the Airflow provider, the gateway routes, guides), OC2 (managed companions), OC3 (protocol endpoints) and OC4 (a native continuous-query engine) are listed at milestone level and get full task specifications when their gates are met (D1273). **OC0 starts after v0.1.1 ships (Q1030), once the owner approves §68.**
+> **Status: Stub** (2026-10-20). Track OC, design [§68](../design/68-open-protocol-compute.md) (D1251–D1275, Q1030–Q1045, **approved by the owner on 2026-10-21 with every default**). This plan specifies **OC0** (conformance of unmodified products on Loams primitives, recipes, an opt-in Compose file and a compatibility matrix; no engine code) task by task. OC1 (the Airflow provider, the gateway routes, guides), OC2 (managed companions), OC3 (protocol endpoints) and OC4 (a native continuous-query engine) are listed at milestone level and get full task specifications when their gates are met (D1273). **OC0 starts after v0.1.1 ships (Q1030).**
 
 **Goal (OC0):**
 - unmodified Airflow 3.3, the Temporal server, RisingWave, Sail and eight Postgres-backed job queues run against Loams Postgres, the bucket (RustFS) and Lakekeeper, each judged by **its own** test suite or documented smoke test plus the few HA and fault cases Loams' primitives must survive;
@@ -156,9 +156,8 @@ Tests: `matrix_from_fixture` (a fixture JUnit set renders the expected Markdown)
 
 ## Owner actions
 
-- Review §68 and its defaults (D1251–D1275, Q1030–Q1045); approve or amend.
-- Q1030: confirm OC0 starts after v0.1.1.
-- Q1031: confirm the provider's repository name before OC1 creates it.
+- §68 and its defaults (D1251–D1275, Q1030–Q1045) were approved on 2026-10-21; nothing further for the design.
+- Q1031 (default approved): the provider lives in `ostrium-labs/loams-airflow`; the repository is created when OC1 starts.
 
 ## Rulings made during execution
 
