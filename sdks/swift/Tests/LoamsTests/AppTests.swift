@@ -230,33 +230,8 @@ final class AppBuilderTests: XCTestCase {
         "query": .object(["match": .object(["field": .string("body"), "text": .string("refund")])]),
     ])])
 
-    private let unit = [1.0, 0.0, 0.0, 0.0]
-
     /// Each case's builder output, keyed by its file name in `sdks/fixtures/builders`.
-    private func corpusCases() -> [String: JSONValue] {
-        let hybrid = { (fusion: Fusion) -> JSONValue in
-            .object(Search.on("notes").text("refund", fields: ["body"]).vector("embedding", self.unit, k: 5)
-                .fuse(fusion).limit(3).json)
-        }
-        let page = Search.on("notes").text("refund", fields: ["body"]).filter(Filter.eq("tags", "policy"))
-            .highlight("body").select(include: ["title"]).limit(2).sort(.score(), .pk())
-        return [
-            "schema_notes": Schema().text("title").text("body").keyword("tags").i64("n").vector("embedding", dim: 4).json,
-            "filter_term": Filter.eq("tags", "policy").json,
-            "filter_bool_nested": (Filter.eq("tags", "policy") && (Filter.range("n", gte: 2) || !Filter.exists("archived"))).json,
-            "filter_range_open": Filter.range("n", gt: 1).json,
-            "filter_ids": Filter.ids([1, "k-str", .uuid("0190f5c4-6c1e-7b3a-9d2e-4f5a6b7c8d9e")]).json,
-            "search_text_filter_highlight_select": .object(page.json),
-            "search_after_page": .object(page.after([.number(0.3438858389854431), .int(3)]).json),
-            "search_vector_ann_params": .object(Search.on("notes")
-                .vector("embedding", unit, k: 3, params: ["nprobes": .int(8), "refineFactor": .int(2)]).limit(3).json),
-            "search_hybrid_rrf": hybrid(.rrf(k: 60)),
-            "search_hybrid_dbsf": hybrid(.dbsf),
-            "search_hybrid_weighted": hybrid(.weighted([0.7, 0.3])),
-            "search_expand": .object(Search.on("notes").text("refund", fields: ["body"])
-                .expand(graph: "notes_graph", fromField: "id", hops: 1).json),
-        ]
-    }
+    private func corpusCases() -> [String: JSONValue] { builderCorpusCases() }
 
     /// Numbers compare by value, as the corpus README asks: `1` and `1.0` are one value.
     private func normalized(_ value: JSONValue) -> JSONValue {

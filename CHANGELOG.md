@@ -17,6 +17,11 @@ All notable changes to this project are documented here. The format follows [Kee
   modules, the `Schema`, `Filter` and `Search` builders, collection handles, `writeBatch`, `scrollAll` and
   `queryAll`; consistency tokens that parse and merge, a session store that gives reads read-your-writes,
   a default namespace, client deadlines (`client_deadline_exceeded`), and the notes example app.
+- **The Swift SDK replays the app scenario** (SDKP P0d): `swift_app_collections`, `swift_app_search`,
+  `swift_app_graph`, `swift_app_sql` and `swift_app_streams` replay `sdks/fixtures/recorded/app` through
+  the facade against the fixture server, and the `SDK: Swift` job runs `check-languages --suite app`.
+  `Code.invalidArgument` now reads Connect's `invalid_argument` (a stream's end frame read it as
+  `unknown`), and the test fixture server no longer depends on the working directory.
 - **The Ruby SDK builds apps** (SDKP L10): `namespaces`, `collections`, `documents`, `search`,
   `vector` and `graph` modules over the descriptor set, `Client#call` for any facade call, the `Schema`,
   `Filter` and `Search` builders, `client.collection(name)` handles, `write_batch`, `scroll_all` and
