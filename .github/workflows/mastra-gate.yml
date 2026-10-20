@@ -72,7 +72,15 @@ jobs:
       - name: stop (Qdrant)
         if: always()
         working-directory: .loams-mastra
-        run: test/conformance/loams/stop.sh ${{ steps.qdrant.outcome != 'success' && '--logs' || '' }}
+        run: |
+          test/conformance/loams/stop.sh ${{ steps.qdrant.outcome != 'success' && '--logs' || '' }}
+          # stop.sh signals loams dev without waiting; the next cell reuses its
+          # data directory and ports, so wait until it has exited.
+          for _ in $(seq 1 60); do
+            curl -s -o /dev/null --max-time 2 "http://127.0.0.1:6333/" || exit 0
+            sleep 1
+          done
+          echo "loams dev did not exit within 60 s" >&2; exit 1
       # Elasticsearch is an observed cell (Q1009): reported, never failing.
       - name: start loams dev (Elasticsearch observed)
         working-directory: .loams-mastra
@@ -85,7 +93,15 @@ jobs:
       - name: stop (Elasticsearch observed)
         if: always()
         working-directory: .loams-mastra
-        run: test/conformance/loams/stop.sh ${{ steps.es.outcome != 'success' && '--logs' || '' }}
+        run: |
+          test/conformance/loams/stop.sh ${{ steps.es.outcome != 'success' && '--logs' || '' }}
+          # stop.sh signals loams dev without waiting; the next cell reuses its
+          # data directory and ports, so wait until it has exited.
+          for _ in $(seq 1 60); do
+            curl -s -o /dev/null --max-time 2 "http://127.0.0.1:6333/" || exit 0
+            sleep 1
+          done
+          echo "loams dev did not exit within 60 s" >&2; exit 1
       - name: start loams dev (Qdrant auth)
         working-directory: .loams-mastra
         run: test/conformance/loams/start-loams.sh --auth
@@ -99,7 +115,15 @@ jobs:
       - name: stop (Qdrant auth)
         if: always()
         working-directory: .loams-mastra
-        run: test/conformance/loams/stop.sh ${{ steps.qdrant-auth.outcome != 'success' && '--logs' || '' }}
+        run: |
+          test/conformance/loams/stop.sh ${{ steps.qdrant-auth.outcome != 'success' && '--logs' || '' }}
+          # stop.sh signals loams dev without waiting; the next cell reuses its
+          # data directory and ports, so wait until it has exited.
+          for _ in $(seq 1 60); do
+            curl -s -o /dev/null --max-time 2 "http://127.0.0.1:6333/" || exit 0
+            sleep 1
+          done
+          echo "loams dev did not exit within 60 s" >&2; exit 1
       - name: no_secret_in_artifacts
         if: always()
         working-directory: .loams-mastra
