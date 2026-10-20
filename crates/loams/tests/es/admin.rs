@@ -696,3 +696,146 @@ async fn create_with_aliases_adds_them() {
     assert_eq!(es.head("/j").await.status, StatusCode::NOT_FOUND);
     es.server.shutdown().await.expect("shutdown");
 }
+
+// ----- _settings (#948) -----
+
+#[tokio::test]
+async fn settings_get_and_put_round_trip() {
+    let es = Es::start().await;
+    Es::ok(
+        es.put(
+            "/s1",
+            Some(json!({"settings": {"number_of_shards": 2, "refresh_interval": "1s"}})),
+        )
+        .await,
+    );
+    Es::ok(es.put("/s2", None).await);
+    let a = Es::ok(es.get("/s1/_settings").await);
+    let index = &a.body["s1"]["settings"]["index"];
+    assert_eq!(index["refresh_interval"], "1s", "{}", a.text);
+    assert_eq!(index["number_of_shards"], "2");
+    assert_eq!(index["provided_name"], "s1");
+    assert!(index["uuid"].is_string() && index["creation_date"].is_string());
+    // The NVIDIA RAG Blueprint's bulk-load toggle.
+    let a = Es::ok(
+        es.put(
+            "/s1/_settings",
+            Some(json!({"index": {"refresh_interval": "-1"}})),
+        )
+        .await,
+    );
+    assert_eq!(a.body, json!({"acknowledged": true}));
+    let a = Es::ok(es.get("/s1/_settings").await);
+    assert_eq!(a.body["s1"]["settings"]["index"]["refresh_interval"], "-1");
+    // Flat and bare keys; `null` resets.
+    Es::ok(
+        es.put(
+            "/s1/_settings",
+            Some(json!({"index.number_of_replicas": 0, "max_result_window": 500})),
+        )
+        .await,
+    );
+    let a = Es::ok(es.get("/s1/_settings?flat_settings=true").await);
+    let flat = &a.body["s1"]["settings"];
+    assert_eq!(flat["index.number_of_replicas"], "0", "{}", a.text);
+    assert_eq!(flat["index.max_result_window"], "500");
+    Es::ok(
+        es.put(
+            "/s1/_settings",
+            Some(json!({"index": {"refresh_interval": null}})),
+        )
+        .await,
+    );
+    let a = Es::ok(es.get("/s1/_settings").await);
+    assert!(
+        a.body["s1"]["settings"]["index"]["refresh_interval"].is_null(),
+        "{}",
+        a.text
+    );
+    // `preserve_existing` keeps a setting already set.
+    Es::ok(
+        es.put(
+            "/s1/_settings?preserve_existing=true",
+            Some(json!({"index": {"max_result_window": 9, "refresh_interval": "5s"}})),
+        )
+        .await,
+    );
+    let a = Es::ok(es.get("/s1/_settings").await);
+    assert_eq!(
+        a.body["s1"]["settings"]["index"]["max_result_window"],
+        "500"
+    );
+    assert_eq!(a.body["s1"]["settings"]["index"]["refresh_interval"], "5s");
+    // Several indices and one setting by name.
+    let a = Es::ok(es.get("/_settings").await);
+    let mut names: Vec<&String> = a.body.as_object().expect("object").keys().collect();
+    names.sort();
+    assert_eq!(names, ["s1", "s2"]);
+    let a = Es::ok(es.get("/s*/_settings/index.refresh_interval").await);
+    assert_eq!(
+        a.body,
+        json!({"s1": {"settings": {"index": {"refresh_interval": "5s"}}}})
+    );
+    let a = Es::ok(es.get("/s1/_settings/index.number_*").await);
+    assert_eq!(
+        a.body["s1"]["settings"]["index"],
+        json!({"number_of_shards": "2", "number_of_replicas": "0"})
+    );
+    // `PUT /_settings` changes every index.
+    Es::ok(
+        es.put(
+            "/_settings",
+            Some(json!({"index": {"refresh_interval": "2s"}})),
+        )
+        .await,
+    );
+    let a = Es::ok(es.get("/s2/_settings").await);
+    assert_eq!(a.body["s2"]["settings"]["index"]["refresh_interval"], "2s");
+}
+
+#[tokio::test]
+async fn settings_put_refuses_static_and_unknown_settings() {
+    let es = Es::start().await;
+    Es::ok(es.put("/s1", None).await);
+    let uuid = {
+        let info = es
+            .server
+            .collections()
+            .get_collection(NS, "s1")
+            .await
+            .expect("s1");
+        index_uuid(info.id)
+    };
+    es.put(
+        "/s1/_settings",
+        Some(json!({"index": {"number_of_shards": 3}})),
+    )
+    .await
+    .assert_error(
+        400,
+        "illegal_argument_exception",
+        Some(&format!(
+            "Can't update non dynamic settings [[index.number_of_shards]] for open indices [[s1/{uuid}]]"
+        )),
+    );
+    es.put("/s1/_settings", Some(json!({"index": {"nope": 1}})))
+        .await
+        .assert_error(400, "illegal_argument_exception", None);
+    es.put("/s1/_settings", Some(json!({}))).await.assert_error(
+        400,
+        "action_request_validation_exception",
+        None,
+    );
+    es.put(
+        "/missing/_settings",
+        Some(json!({"index": {"refresh_interval": "1s"}})),
+    )
+    .await
+    .assert_error(404, "index_not_found_exception", None);
+    es.get("/missing/_settings")
+        .await
+        .assert_error(404, "index_not_found_exception", None);
+    // A refusal changes nothing.
+    let a = Es::ok(es.get("/s1/_settings").await);
+    assert!(a.body["s1"]["settings"]["index"]["nope"].is_null());
+}
