@@ -37,6 +37,11 @@ All notable changes to this project are documented here. The format follows [Kee
   `Filter` and `Search` builders, `client.collection(name)` handles, `write_batch`, `scroll_all` and
   `query_all`; consistency tokens that parse and merge, a session store that gives reads read-your-writes,
   a default namespace, `Loams.from_env`, client deadlines (`client_deadline_exceeded`), and the notes
+- **The PHP SDK builds apps** (SDKP L11): `namespaces()`, `collections()`, `documents()`, `search()`,
+  `vector()` and `graph()` modules over Connect JSON, `Client::call()` for any facade call, the `Schema`,
+  `Filter` and `Search` builders, `$client->collection($name)` handles, `writeBatch`, `scrollAll` and
+  `queryAll`; consistency tokens that parse and merge, a session store that gives reads read-your-writes,
+  a default namespace, `Client::fromEnv()`, client deadlines (`client_deadline_exceeded`), and the notes
   example app.
 - **`loams.sql.v1` on the main port** (SDKP P0b, API2 Task 1): `SqlService/Query` runs one read-only
   statement over a namespace's collections with `$1…$n` parameters (each cast to its placeholder's

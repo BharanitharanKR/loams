@@ -160,14 +160,28 @@ class PairingExpiredException extends LoamsException {}
 class PairingUsedException extends LoamsException {}
 class DeviceRevokedException extends LoamsException {}
 class PushTargetUnknownException extends LoamsException {}
-class InvalidArgumentException extends LoamsException {}
+class InvalidArgumentException extends LoamsException
+{
+    /** Refused on the client, before any network call. */
+    public static function client(string $message, ?string $reason = null): self
+    {
+        return new self($message, 'invalid_argument', $reason, null, 400);
+    }
+}
 class NotFoundException extends LoamsException {}
 class AlreadyExistsException extends LoamsException {}
 class PermissionDeniedException extends LoamsException {}
 class FailedPreconditionException extends LoamsException {}
 class ResourceExhaustedException extends LoamsException {}
 class UnavailableException extends LoamsException {}
-class DeadlineExceededException extends LoamsException {}
+class DeadlineExceededException extends LoamsException
+{
+    /** R12: the call's budget ran out on the client; never retried. */
+    public static function client(): self
+    {
+        return new self('the call ran out of time on the client', 'deadline_exceeded', 'client_deadline_exceeded', null, 504);
+    }
+}
 class AbortedException extends LoamsException {}
 class InternalException extends LoamsException {}
 
@@ -453,6 +467,23 @@ class ErrorParser
 
         if ($code === 'unauthenticated' || $httpStatus === 401) {
             return new UnauthenticatedException($message, $code, $reason, $unknownReason, $httpStatus, $rawDetails);
+        }
+
+        $byCode = [
+            'invalid_argument' => InvalidArgumentException::class,
+            'not_found' => NotFoundException::class,
+            'already_exists' => AlreadyExistsException::class,
+            'permission_denied' => PermissionDeniedException::class,
+            'failed_precondition' => FailedPreconditionException::class,
+            'resource_exhausted' => ResourceExhaustedException::class,
+            'unavailable' => UnavailableException::class,
+            'deadline_exceeded' => DeadlineExceededException::class,
+            'aborted' => AbortedException::class,
+            'internal' => InternalException::class,
+        ];
+        if (isset($byCode[$code])) {
+            $class = $byCode[$code];
+            return new $class($message, $code, $reason, $unknownReason, $httpStatus, $rawDetails);
         }
 
         return new LoamsException($message, $code, $reason, $unknownReason, $httpStatus, $rawDetails);
