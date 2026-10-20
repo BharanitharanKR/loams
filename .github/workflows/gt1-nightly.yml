@@ -46,7 +46,7 @@ jobs:
         env:
           LOAMS_GIT_BENCH_S3: ${{ env.LOAMS_TEST_S3_URL }}
         run: scripts/git/bench.sh
-      - uses: actions/upload-artifact@v7.0.1
+      - uses: actions/upload-artifact@v7.0.2
         if: always()
         with:
           name: git-wal-bench

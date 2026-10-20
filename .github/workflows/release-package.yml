@@ -373,7 +373,7 @@ jobs:
             echo "EOF"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: loams-linux-${{ needs.guard.outputs.tag }}
           path: ${{ runner.temp }}/packages
@@ -516,7 +516,7 @@ jobs:
           $names = (Get-ChildItem (Join-Path $env:RUNNER_TEMP 'windows') -File).Name -join "`n"
           "assets<<EOF`n$names`nEOF" >> $env:GITHUB_OUTPUT
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: loams-windows-${{ needs.guard.outputs.tag }}
           path: ${{ runner.temp }}/windows
@@ -623,7 +623,7 @@ jobs:
           echo "::warning::the macOS binary is ad-hoc signed only (no Developer ID, not notarized); a downloaded copy is quarantined until the user clears it"
           gh release upload "$TAG" "$RUNNER_TEMP"/macos/* --clobber --repo "$GITHUB_REPOSITORY"
 
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: loams-macos-${{ matrix.arch }}-${{ needs.guard.outputs.tag }}
           path: ${{ runner.temp }}/macos
