@@ -5,6 +5,13 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- **The Kotlin SDK replays the app scenario** (SDKP P0d): `kotlin_app_collections`, `kotlin_app_search`,
+  `kotlin_app_graph`, `kotlin_app_sql` and `kotlin_app_streams` replay `sdks/fixtures/recorded/app/`
+  through the facade against the fixture server, and CI runs `check-languages --suite app` for Kotlin.
+  Fixed on the way: the Connect JSON writer sent every `bytes` field empty and failed on any map field,
+  wrote a `float` as its widened double (`0.699999988079071` for `0.7`), and `Sort.score()` and
+  `Sort.pk()` now leave the order unset by default and `Search.select` no longer sends an empty
+  `exclude`, as the builder corpus does.
 - **The C# SDK replays the app scenario** (SDKP P0d): `csharp_app_collections`, `csharp_app_search`,
   `csharp_app_graph`, `csharp_app_sql` and `csharp_app_streams` replay `sdks/fixtures/recorded/app` through
   the public facade against the shared fixture server, the report's `ran` names them, and the `SDK: C#`

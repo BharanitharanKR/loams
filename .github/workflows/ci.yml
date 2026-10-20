@@ -1867,6 +1867,11 @@ jobs:
       - name: the Kotlin SDK's tests
         working-directory: sdks/kotlin
         run: ./build.sh test
+      # SDKP: the app suite. The tests above replayed the recorded app scenario
+      # and wrote sdks/fixtures/results/kotlin.json; this fails the job unless every
+      # app fixture was replayed and every SDKP test is named.
+      - name: the Kotlin SDK passes the app suite
+        run: node sdks/conformance/check-languages.mjs --check kotlin --suite app
       # API2 Task 19: a nightly failure opens or updates one issue per language.
       - name: open or update the nightly-failure issue
         if: ${{ failure() && inputs.nightly == true }}
