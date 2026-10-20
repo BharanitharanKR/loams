@@ -84,7 +84,8 @@ public sealed class ConformanceTests
         using var report = System.Text.Json.JsonDocument.Parse(File.ReadAllText(reportPath));
         var reportedRan = report.RootElement.GetProperty("ran").EnumerateArray()
             .Select((name) => name.GetString()!).ToArray();
-        Assert.Equal(ran.Order(StringComparer.Ordinal), reportedRan.Order(StringComparer.Ordinal));
+        // The report also names the app fixtures this process replayed (AppScenarioTests).
+        Assert.Equal(ConformanceReport.Ran(run).Order(StringComparer.Ordinal), reportedRan.Order(StringComparer.Ordinal));
         Assert.Empty(report.RootElement.GetProperty("skipped").EnumerateArray());
     }
 
