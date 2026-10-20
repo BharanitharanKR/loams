@@ -65,6 +65,11 @@
 //!   (row T9-5).
 //! - A sort key other than `_doc` after `_score` is refused: score ties are
 //!   broken by `_id` only; a `_doc` sort value is the `_id` (row T9-9).
+//! - `PUT /{index}/_settings` stores the dynamic settings
+//!   `refresh_interval`, `number_of_replicas`, `max_result_window` and
+//!   `default_pipeline` so `GET` returns them, and applies none of them:
+//!   every write is searchable at once and there are no replicas (#948).
+//!   Other dynamic settings are refused as unknown.
 //! - `_update_by_query` recognises only `params` assignments and
 //!   `remove()` in its script; an assignment creates a missing or
 //!   non-object parent as an object where Painless fails, an object param
@@ -230,6 +235,16 @@ impl EsGateway {
                     .delete(admin::delete_index),
             )
             .route("/_mapping", get(admin::get_mapping_all))
+            // #948: index settings.
+            .route(
+                "/_settings",
+                get(admin::get_settings_all).put(admin::put_settings_all),
+            )
+            .route(
+                "/{index}/_settings",
+                get(admin::get_settings).put(admin::put_settings),
+            )
+            .route("/{index}/_settings/{name}", get(admin::get_settings_named))
             .route(
                 "/{index}/_mapping",
                 get(admin::get_mapping)
