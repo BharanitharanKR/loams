@@ -1340,6 +1340,94 @@ async fn a_field_after_a_score_sort_is_refused() {
     es.server.shutdown().await.expect("shutdown");
 }
 
+// ----- sort on _seq_no (#949) -----
+
+/// The `_id`s of a search answer, in order.
+fn seq_ids(a: &Answer) -> Vec<String> {
+    a.body["hits"]["hits"]
+        .as_array()
+        .expect("hits")
+        .iter()
+        .map(|h| h["_id"].as_str().expect("_id").to_string())
+        .collect()
+}
+
+#[tokio::test]
+async fn sort_on_seq_no_orders_by_write() {
+    let es = Es::start().await;
+    Es::ok(
+        es.put(
+            "/meta",
+            // One partition: `_seq_no` orders writes within a partition only,
+            // as ES's does within a shard (ES's default is one shard).
+            Some(json!({"settings": {"number_of_shards": 1},
+                        "mappings": {"properties": {"collection_name": {"type": "keyword"}}}})),
+        )
+        .await,
+    );
+    // Written in the order a, b, c, then a again: a is now the newest.
+    for (id, c, v) in [
+        ("a", "c1", 1),
+        ("b", "c1", 2),
+        ("c", "c2", 3),
+        ("a", "c1", 4),
+    ] {
+        let a = es
+            .put(
+                &format!("/meta/_doc/{id}?refresh=true"),
+                Some(json!({"collection_name": c, "v": v})),
+            )
+            .await;
+        assert!(a.status.is_success(), "{}", a.text);
+    }
+    // The NVIDIA RAG Blueprint's "newest write" read.
+    let a = Es::ok(
+        es.post(
+            "/meta/_search",
+            json!({"query": {"term": {"collection_name": "c1"}},
+                   "sort": [{"_seq_no": {"order": "desc"}}], "size": 1}),
+        )
+        .await,
+    );
+    assert_eq!(seq_ids(&a), ["a"], "{}", a.text);
+    let hit = &a.body["hits"]["hits"][0];
+    assert_eq!(hit["_source"]["v"], 4);
+    assert!(hit["_score"].is_null());
+    assert!(hit["sort"][0].is_u64(), "{}", a.text);
+    assert!(hit.get("_seq_no").is_none());
+    assert_eq!(a.body["hits"]["total"]["value"], 2);
+    assert!(a.body["hits"]["max_score"].is_null());
+    // Ascending, every form of the key, paging.
+    for sort in [
+        json!("_seq_no"),
+        json!(["_seq_no"]),
+        json!({"_seq_no": "asc"}),
+    ] {
+        let a = Es::ok(es.post("/meta/_search", json!({"sort": sort})).await);
+        assert_eq!(seq_ids(&a), ["b", "c", "a"], "{sort}");
+    }
+    let a = Es::ok(
+        es.post(
+            "/meta/_search",
+            json!({"sort": [{"_seq_no": "desc"}], "from": 1, "size": 1, "seq_no_primary_term": true}),
+        )
+        .await,
+    );
+    assert_eq!(seq_ids(&a), ["c"]);
+    let hit = &a.body["hits"]["hits"][0];
+    assert_eq!(hit["_seq_no"], hit["sort"][0]);
+    // The URL form.
+    let a = Es::ok(es.get("/meta/_search?sort=_seq_no:desc&size=2").await);
+    assert_eq!(seq_ids(&a), ["a", "c"]);
+    // With another key it is refused.
+    es.post(
+        "/meta/_search",
+        json!({"sort": [{"_seq_no": "desc"}, {"collection_name": "asc"}]}),
+    )
+    .await
+    .assert_error(400, "illegal_argument_exception", None);
+}
+
 // ----- aggregations (#951) -----
 
 /// The NVIDIA RAG Blueprint's chunk index: `metadata.source.source_name`

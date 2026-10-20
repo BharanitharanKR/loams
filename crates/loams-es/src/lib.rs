@@ -67,6 +67,16 @@
 //!   (row T9-5).
 //! - A sort key other than `_doc` after `_score` is refused: score ties are
 //!   broken by `_id` only; a `_doc` sort value is the `_id` (row T9-9).
+//! - A sort on `_seq_no` must be the only sort key and orders at most
+//!   `max_result_window` (10,000) matches, in the gateway; `_seq_no` orders
+//!   writes within a partition, as ES's does within a shard, and an index
+//!   created without `number_of_shards` has 4 partitions where ES has one
+//!   shard, so only a one-partition index has a total write order (#949).
+//! - `PUT /{index}/_settings` stores the dynamic settings
+//!   `refresh_interval`, `number_of_replicas`, `max_result_window` and
+//!   `default_pipeline` so `GET` returns them, and applies none of them:
+//!   every write is searchable at once and there are no replicas (#948).
+//!   Other dynamic settings are refused as unknown.
 //! - Aggregations (#951) run on the engine's (Tantivy's) aggregations, over
 //!   one index and a query or `knn` search: `terms`, `composite`,
 //!   `top_hits`, `filter`, `range`, `histogram`, `date_histogram` and the
@@ -241,6 +251,16 @@ impl EsGateway {
                     .delete(admin::delete_index),
             )
             .route("/_mapping", get(admin::get_mapping_all))
+            // #948: index settings.
+            .route(
+                "/_settings",
+                get(admin::get_settings_all).put(admin::put_settings_all),
+            )
+            .route(
+                "/{index}/_settings",
+                get(admin::get_settings).put(admin::put_settings),
+            )
+            .route("/{index}/_settings/{name}", get(admin::get_settings_named))
             .route(
                 "/{index}/_mapping",
                 get(admin::get_mapping)
