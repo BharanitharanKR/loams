@@ -79,7 +79,10 @@ impl Db {
 
     async fn exec(&self, sql: &str) {
         let mut conn = MySqlConnection::connect(&self.url).await.expect("connect");
-        sqlx::raw_sql(AssertSqlSafe(sql)).execute(&mut conn).await.expect(sql);
+        sqlx::raw_sql(AssertSqlSafe(sql))
+            .execute(&mut conn)
+            .await
+            .expect(sql);
     }
 
     async fn drop(self) {
@@ -88,9 +91,9 @@ impl Db {
             "DROP DATABASE IF EXISTS `{}`",
             self.name
         )))
-            .execute(&mut conn)
-            .await
-            .expect("drop database");
+        .execute(&mut conn)
+        .await
+        .expect("drop database");
     }
 }
 
