@@ -954,13 +954,6 @@ async fn cat_indices_one_index_and_wildcard() {
 async fn cat_indices_bytes_units() {
     let es = Es::start().await;
     cat_fixture(&es).await;
-    let size = es
-        .server
-        .collections()
-        .get_collection(NS, "a1")
-        .await
-        .expect("a1")
-        .size_bytes;
     let cell = |unit: &'static str| {
         let es = &es;
         async move {
@@ -971,15 +964,56 @@ async fn cat_indices_bytes_units() {
             a.body[0]["store.size"].as_str().expect("size").to_string()
         }
     };
-    assert_eq!(cell("b").await, size.to_string());
-    assert_eq!(cell("kb").await, (size / 1024).to_string());
-    assert_eq!(cell("mb").await, (size >> 20).to_string());
-    assert_eq!(cell("gb").await, (size >> 30).to_string());
-    // Without `bytes`, ES's human form.
-    let a = Es::ok(es.get("/_cat/indices/a1?format=json&h=ss").await);
-    let human = a.body[0]["ss"].as_str().expect("ss");
-    assert_eq!(human, loams_es::cat::size_text(size, None));
-    assert!(human.ends_with('b'), "{human}");
+    // The size moves while the link and compaction settle, so each unit is
+    // compared with a byte count read just before and just after it.
+    for unit in ["kb", "mb", "gb", "human"] {
+        let mut checked = false;
+        for _ in 0..100 {
+            let before: u64 = cell("b").await.parse().expect("bytes");
+            let value = if unit == "human" {
+                let a = Es::ok(es.get("/_cat/indices/a1?format=json&h=ss").await);
+                a.body[0]["ss"].as_str().expect("ss").to_string()
+            } else {
+                cell(unit).await
+            };
+            let after: u64 = cell("b").await.parse().expect("bytes");
+            if before != after {
+                tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+                continue;
+            }
+            let expected = match unit {
+                "kb" => (before / 1024).to_string(),
+                "mb" => (before >> 20).to_string(),
+                "gb" => (before >> 30).to_string(),
+                _ => loams_es::cat::size_text(before, None),
+            };
+            assert_eq!(value, expected, "{unit}");
+            checked = true;
+            break;
+        }
+        assert!(checked, "the size of a1 never held still ({unit})");
+    }
+    // `bytes=b` is the collection's `size_bytes`.
+    let size_bytes = || async {
+        es.server
+            .collections()
+            .get_collection(NS, "a1")
+            .await
+            .expect("a1")
+            .size_bytes
+    };
+    let mut checked = false;
+    for _ in 0..100 {
+        let before = size_bytes().await;
+        let b = cell("b").await;
+        if size_bytes().await == before {
+            assert_eq!(b, before.to_string());
+            checked = true;
+            break;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(50)).await;
+    }
+    assert!(checked, "the size of a1 never held still (b)");
     es.get("/_cat/indices?format=json&bytes=zb")
         .await
         .assert_error(400, "illegal_argument_exception", None);
