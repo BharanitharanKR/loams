@@ -1393,6 +1393,11 @@ jobs:
       # short of the bar, 2 no report — all non-zero fail this step.
       - name: the suite meets the 100% required-fixture bar
         run: node sdks/conformance/check-languages.mjs --check typescript
+      # SDKP: the app suite (the app scenario replayed through the public
+      # facade, and every app test named), until S1 folds it into the line
+      # above by making the app fixtures required.
+      - name: the app suite
+        run: node sdks/conformance/check-languages.mjs --check typescript --suite app
       # The same suite against a real server. This is the job that can afford
       # it, and it is what catches a recorded corpus that has drifted from the
       # API (design §44 §10.4). A live `loams dev` does not serve the app
