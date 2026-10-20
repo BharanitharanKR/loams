@@ -141,6 +141,25 @@ scenario as a program, type-checked in CI. The session's token is used only for
 collection and SQL reads: a graph's token names one graph (SDKP-17). Durable
 workflows use the Resonate SDK pointed at `LOAMS_ENDPOINT/durable/` (SDKP-1).
 
+## Cloudflare Workers
+
+`@loams/client` runs in Cloudflare Workers (workerd) with no `nodejs_compat` flag and no `fetch` override. The
+default transport detects workerd (`navigator.userAgent === "Cloudflare-Workers"`) and sends
+`redirect: "manual"`, because connect-web's default `redirect: "error"` is rejected by Workers. Loams calls never
+redirect, so nothing changes for them. Other runtimes are untouched: in a browser `manual` would hide a redirect
+as an opaque response.
+
+```ts
+const loams = new Loams({ endpoint: env.LOAMS_URL, token: env.LOAMS_TOKEN });
+```
+
+To control `fetch` yourself (a proxy, a service binding, a test double), pass it through the transport options;
+it is used exactly as given, so set `redirect: "manual"` in it if you also run in workerd:
+
+```ts
+new Loams({ endpoint, transportOptions: { fetch: env.GATEWAY.fetch.bind(env.GATEWAY) } });
+```
+
 ## What is generated and what is hand-written
 
 Design §44 §7.3 draws the line, and this SDK follows it exactly.
