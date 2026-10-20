@@ -363,7 +363,7 @@ Design reference: [66 Loams × Mastra](../design/66-loams-mastra.md) (D1202–D1
 
 ## Track GP: GPU workloads with KAI Scheduler and the open Run:ai stack
 
-Design reference: [67 GPU Workloads on Kubernetes](../design/67-gpu-scheduling-runai.md) (D1228–D1250, Q1015–Q1029, **Proposed**). The owner approved the direction on 2026-10-20: integrate with NVIDIA's Run:ai stack, open-sourced under Apache-2.0 on 2026-10-13, at the Kubernetes layer only. GP0 (docs, an example chart, a Compose override) is fully specified; GP1–GP4 are listed at milestone level and get tasks when their gates are met.
+Design reference: [67 GPU Workloads on Kubernetes](../design/67-gpu-scheduling-runai.md) (D1228–D1250, Q1015–Q1029, approved by the owner 2026-10-20, all defaults). The owner approved the direction on 2026-10-20: integrate with NVIDIA's Run:ai stack, open-sourced under Apache-2.0 on 2026-10-13, at the Kubernetes layer only. GP0 (docs, an example chart, a Compose override) is fully specified; GP1–GP4 are listed at milestone level and get tasks when their gates are met.
 
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|

@@ -1,6 +1,6 @@
 # 67 — GPU Workloads on Kubernetes: Loams with KAI Scheduler and the Open Run:ai Stack
 
-Status: **Proposed** · 2026-10-20. The owner approved the direction on 2026-10-20: integrate with NVIDIA's open-sourced Run:ai stack. Every decision and question below is Proposed until the owner rules on it. Source: the research note `pitch/research/nvidia.md` (Ostrium Labs, 2026-10-20, not in this repository), §4 "Run:ai integration", and its recommendation, rechecked against the upstream repositories on 2026-10-20 (§2, §20). Decisions **D1228–D1250** and questions **Q1015–Q1029** are in the [decision log](13-decision-log.md). The numbers follow §66 (D1202–D1227, Q1000–Q1014). Plan stub: [GP1](../plans/2026-10-20-gp1-gpu-runai.md). **This document writes no code.**
+Status: **Approved** · 2026-10-20 (the owner approved the direction on 2026-10-20, integrate with NVIDIA's open-sourced Run:ai stack, and then every decision and question with its default the same day). Source: the research note `pitch/research/nvidia.md` (Ostrium Labs, 2026-10-20, not in this repository), §4 "Run:ai integration", and its recommendation, rechecked against the upstream repositories on 2026-10-20 (§2, §20). Decisions **D1228–D1250** and questions **Q1015–Q1029** are in the [decision log](13-decision-log.md). The numbers follow §66 (D1202–D1227, Q1000–Q1014). Plan stub: [GP1](../plans/2026-10-20-gp1-gpu-runai.md). **This document writes no code.**
 
 Builds on:
 - [§09](09-links-and-workers.md) §2: the optional `embed()` UDF, which calls an external OpenAI-compatible endpoint ("Loams does not host models").
@@ -472,7 +472,7 @@ Not part of the Run:ai integration, and decided separately (Q1024).
 | R9 | Upstream declines the Workload Map definition | Medium | Low | Keep it in Loams (Q1021) |
 | R10 | Quota drift between KAI queues and Meter entitlements | Medium | Medium | One-way sync, LOC-GPU-003, the gate decides for Loams work |
 
-## 16. Decisions (D1228–D1250, Proposed)
+## 16. Decisions (D1228–D1250, approved by the owner on 2026-10-20)
 
 | ID | Decision |
 |---|---|
@@ -502,7 +502,7 @@ Not part of the Run:ai integration, and decided separately (Q1024).
 
 ## 17. Open questions (Q1015–Q1029)
 
-| ID | Question | Recommended default |
+| ID | Question | Default (all answered by the owner on 2026-10-20: the default) |
 |---|---|---|
 | Q1015 | When does GP0 start? | After v0.1.1 ships; it is docs and an example, so it does not compete with the launch, and it is ready for the NVIDIA conversation before GTC DC (30 Nov – 3 Dec 2026) |
 | Q1016 | The example's default model server? | vLLM (Apache-2.0, NVIDIA and AMD), with Hugging Face TEI as the documented alternative and NIM as an optional example with its licence terms |

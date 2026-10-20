@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, test first. Where this plan gives exact names, paths, branches or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end of this file.
 >
-> **Status: Stub** (2026-10-20). Track GP, design [§67](../design/67-gpu-scheduling-runai.md) (D1228–D1250, Q1015–Q1029, all **Proposed**). The owner approved the direction on 2026-10-20 (integrate with NVIDIA's open-sourced Run:ai stack); the decisions and questions wait for the owner's ruling. This plan specifies **GP0** (docs, an example chart and a Compose override, no Loams code) task by task. GP1 (Jobs), GP2 (operator, queues, Meter, Workload Map), GP3 (agent jobs) and GP4 (cuVS, optional) are listed at milestone level and get full task specifications when their gates are met (D1247). **GP0 starts after v0.1.1 ships (Q1015).**
+> **Status: Stub** (2026-10-20). Track GP, design [§67](../design/67-gpu-scheduling-runai.md) (D1228–D1250, Q1015–Q1029, **approved by the owner on 2026-10-20 with every default**). The owner approved the direction (integrate with NVIDIA's open-sourced Run:ai stack) and then the design the same day. This plan specifies **GP0** (docs, an example chart and a Compose override, no Loams code) task by task. GP1 (Jobs), GP2 (operator, queues, Meter, Workload Map), GP3 (agent jobs) and GP4 (cuVS, optional) are listed at milestone level and get full task specifications when their gates are met (D1247). **GP0 starts after v0.1.1 ships (Q1015).**
 
 **Goal (GP0):**
 - a reader with a Kubernetes cluster that runs KAI Scheduler (alone or as part of Run:ai) installs `deploy/helm/loams-gpu-workers`, gets an embedding and a rerank model server on GPU shares in the right KAI queue, and points Loams at them, following `docs/guides/gpu/`;
@@ -178,9 +178,9 @@ Tests: the workflow runs green on its own PR; a deliberately broken golden file 
 
 ## Owner actions
 
-- Rule on §67's decisions D1228–D1250 and questions Q1015–Q1029 (all Proposed).
-- Q1018: approve a small GPU budget (or apply for credits) for the manual real-GPU run.
-- Q1026: decide whether Ostrium lists "Loams with KAI on your cluster" as a service.
+- §67 and its defaults (D1228–D1250, Q1015–Q1029) were approved on 2026-10-20; nothing further for the design.
+- Q1018 (default approved): approve the actual GPU budget (or apply for credits) for the manual real-GPU run.
+- Q1026 (default approved: after GP2's real-GPU run): decide when Ostrium lists "Loams with KAI on your cluster" as a service.
 
 ## Rulings made during execution
 
