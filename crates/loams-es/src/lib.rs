@@ -64,6 +64,11 @@
 //!   (row T9-5).
 //! - A sort key other than `_doc` after `_score` is refused: score ties are
 //!   broken by `_id` only; a `_doc` sort value is the `_id` (row T9-9).
+//! - A sort on `_seq_no` must be the only sort key and orders at most
+//!   `max_result_window` (10,000) matches, in the gateway; `_seq_no` orders
+//!   writes within a partition, as ES's does within a shard, and an index
+//!   created without `number_of_shards` has 4 partitions where ES has one
+//!   shard, so only a one-partition index has a total write order (#949).
 //! - `_update_by_query` recognises only `params` assignments and
 //!   `remove()` in its script; an assignment creates a missing or
 //!   non-object parent as an object where Painless fails, an object param
