@@ -171,6 +171,8 @@ class Client
     private Modules\Search $searchModule;
     private Modules\Vector $vectorModule;
     private Modules\Graph $graphModule;
+    private Modules\Sql $sqlModule;
+    private Modules\Streams $streamsModule;
 
     /**
      * @param ?string $apiKey sent as `Authorization: Bearer` (R1)
@@ -205,6 +207,8 @@ class Client
         $this->searchModule = new Modules\Search($this);
         $this->vectorModule = new Modules\Vector($this);
         $this->graphModule = new Modules\Graph($this);
+        $this->sqlModule = new Modules\Sql($this);
+        $this->streamsModule = new Modules\Streams($this);
     }
 
     /**
@@ -287,6 +291,16 @@ class Client
             return json_decode($res['body'], true) ?? [];
         }
         return (new Modules\Raw($this))->call($name, $request, $options);
+    }
+
+    public function sql(): Modules\Sql
+    {
+        return $this->sqlModule;
+    }
+
+    public function streams(): Modules\Streams
+    {
+        return $this->streamsModule;
     }
 
     /** A handle on one collection (SDKP §2.8). */
