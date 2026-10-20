@@ -13,8 +13,6 @@ name: Mastra gate
 
 on:
   workflow_dispatch:
-  push: # TEMPORARY: validation run before merge; removed in the next commit.
-    branches: [ma1-mastra-nightly]
 
 permissions:
   contents: read
