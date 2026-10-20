@@ -368,6 +368,13 @@ Design reference: [67 GPU Workloads on Kubernetes](../design/67-gpu-scheduling-r
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|
 | [GP1: GPU workloads with KAI and Run:ai](2026-10-20-gp1-gpu-runai.md) (stub; GP0 Tasks 0–10 fully specified; GP1–GP4 at milestone level) | **GP0** `docs/guides/gpu/` (Kubernetes with KAI or Run:ai, plain Kubernetes and HAMi, Compose), the example chart `deploy/helm/loams-gpu-workers` (vLLM embed and rerank servers; `default`, `kai` and `hami` placement for NVIDIA and AMD; optional KAI queues), `deploy/release/compose.gpu.yaml` and its AMD variant, and GPU-free CI (`gpu-examples.yml`: lint, golden renders, policy checks with failing fixtures, kubeconform with KAI's `Queue` schema, a docs-snippet check, a kind run with fake GPUs and KAI); **GP1** `loams-gpu` and GPU queues and `GpuBatch` in Jobs, GPU usage events; **GP2** `LoamsGpuPool`, namespace → KAI queue sync, `LOC-GPU-*`, the Workload Map definition upstream; **GP3** agent GPU jobs under the Jailer; **GP4** (optional) a Rust cuVS accelerator for Lance | GP0: v0.1.1 shipped (Q1015). GP1: JB1. GP2: OP1. GP3: JL1a. GP4: Q1024 | Stub (2026-10-20) |
+## Track OC: Open-protocol compute (Airflow, Temporal, streaming SQL, Spark, job queues)
+
+Design reference: [68 Open-Protocol Compute](../design/68-open-protocol-compute.md) (D1251–D1275, Q1030–Q1045, **Proposed** 2026-10-20). The owner asked on 2026-10-20 for a design covering Airflow, Temporal, RisingWave and a Rust Spark, on the thesis that open, existing protocols drive adoption. OC0 (conformance of unmodified products on Loams primitives, recipes, a Compose override, a compatibility matrix; no engine code) is fully specified; OC1–OC4 are listed at milestone level and get tasks when their gates are met.
+
+| Plan | Scope | Depends on | Status |
+|---|---|---|---|
+| [OC1: Open-protocol compute](2026-10-20-oc1-open-protocol-compute.md) (stub; OC0 Tasks 0–11 fully specified; OC1–OC4 at milestone level) | **OC0** `conformance/compute/` (harness, strict expected-failure lists, licence gate), `deploy/release/compose.compute.yaml` (profiles `airflow`, `temporal`, `risingwave`, `sail`, `lakekeeper`), suites for BullMQ's Postgres backend, pg-boss, Graphile Worker, Celery's `db+` backend, Procrastinate, River, Oban and Hatchet on Loams Postgres, Airflow 3.3 with HA schedulers, logs and XComs in the bucket and a Git DAG bundle, the Temporal persistence spike, RisingWave with Hummock in the bucket and its meta store on Loams Postgres, a Sail PySpark corpus against Lakekeeper, `docs/guides/compute/` recipes and a generated compatibility matrix, `.github/workflows/compute-compat.yml` (nightly) | v0.1.1 shipped (Q1030); §68 approved | Stub (2026-10-20) |
 
 ## Later milestones
 
