@@ -32,7 +32,7 @@ healthcheck.
 
 | Image | Contains |
 |---|---|
-| `loams` | the engine, features `live,live-tikv,durable,graph,tikv,pgwire,mysql-wire,stream-grpc` |
+| `loams` | the engine, features `live,live-tikv,durable,durable-tikv,graph,tikv,pgwire,mysql-wire,stream-grpc` |
 | `loams-fabric` | `loams-fabric house` and `loams-house-worker`, with the digest-pinned libchdb; workers sealed with `--sandbox pods` by default |
 | `loams-agentd` | the agent daemon (optional) |
 | `loams-pg-control` | `loams` with features `postgres,tikv` and the standalone `docker-compose` CLI: `pg-control` and `pg-runner` (`--profile postgres-control`; from 0.1.0) |
@@ -196,6 +196,31 @@ Snapshots go to the `upgrade-snapshots` volume, or to `LOAMS_UPGRADE_SNAPSHOT_DI
 on this host. Do not upgrade by editing `LOAMS_VERSION` and running `docker compose
 up`. The [upgrade guide](../../docs/release/upgrades.md) has the steps, rollback and
 every error code.
+
+### Durable execution on TiKV
+
+After 0.1.0 the engine keeps Loams Durable (the embedded Resonate server) in
+TiKV, keyspace `loams_durable` (`--durable-store=tikv://pd:2379/loams_durable`,
+design §21 §3.3, D261), not in the SQLite file `durable/default.db` in the
+`loams-data` volume where 0.1.0 kept it. `loams dev`, and `loams standalone`
+without `--durable-store`, stay on SQLite.
+
+**Nothing copies the SQLite state into TiKV.** `loams durable migrate` brings a
+store's schema up to date; it does not move data between stores. After that
+upgrade the engine starts with an empty durable store: promises, tasks,
+schedules and suspended workflows in SQLite do not carry over. Drain first:
+
+1. Let durable work finish: `promise.search` with `"state": "pending"` (a
+   `POST /durable/` envelope, or the console's Durable page) should list
+   nothing you still need.
+2. Note your schedules (`schedule.search`) and create them again afterwards.
+3. Upgrade as usual (`loams upgrade --to V`).
+
+The SQLite file stays in `loams-data`, unread, and in the upgrade snapshot, so
+`loams upgrade rollback` goes back to it. The engine creates the
+`loams_durable` keyspace on first start when PD has none (PD pre-allocates
+keyspaces only when a cluster is first bootstrapped); BR snapshots cover it
+with the rest of TiKV.
 
 ## On your own VM (BYOC)
 

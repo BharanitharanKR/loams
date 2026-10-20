@@ -182,6 +182,10 @@ services:
       - --graph-data-dir=/var/lib/loams/graph
       - --meta=tikv://pd:2379/loams_meta
       - --live-store=tikv://pd:2379/loams_live_dev
+      # Durable execution (Resonate) on TiKV, keyspace loams_durable (D261),
+      # not on SQLite in loams-data: the engine creates the keyspace if PD
+      # has none (a stack bootstrapped before it was pre-allocated).
+      - --durable-store=tikv://pd:2379/loams_durable
       # The House link (HS1 Task 20) comes from LOAMS_HOUSE_* below: set
       # LOAMS_HOUSE_ENDPOINT=https://house:8443 when you run `--profile house`.
     environment:

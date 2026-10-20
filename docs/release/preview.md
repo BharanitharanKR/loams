@@ -635,8 +635,9 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
   text in SQL, whatever the keys are (one collection may hold integer, string and UUID keys),
   so `ORDER BY _id` sorts integer keys as text (`1`, `10`, `100`); use
   `ORDER BY CAST(_id AS BIGINT)` for integer keys.
-- **Durable on TiKV** is in progress: Loams Durable keeps its state in SQLite on the `loams`
-  service's data.
+- **Durable on TiKV:** after 0.1.0 the stack's engine keeps Loams Durable's state in TiKV
+  (keyspace `loams_durable`), not in SQLite; the SQLite state does not carry over
+  ([drain first](../../deploy/release/README.md#durable-execution-on-tikv)).
 - **Not in this release:** the Loams Git repository service in the release images
   (`git-remote-loams` ships, experimental), first-party connectors (built and tested, but no image
   hosts their runtime yet), Loams Jobs, the Loams SQL gate; Headscale networks; the console on
