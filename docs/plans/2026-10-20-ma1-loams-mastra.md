@@ -794,4 +794,25 @@ Gate: MM1a's MVP gate (MM1 Task 13) passed and MM1 Task 44's TypeScript memory f
 
 ## Rulings made during execution
 
-(none yet)
+### MAR (Tasks 13–22)
+
+- **MA-R13.1, the Resonate calls** (verified at `@resonatehq/sdk` 0.11.5, protocol `2026-04-01`).
+  - The engine uses the SDK's async entry point, `@resonatehq/sdk/async` (`new Resonate({ url, group })`, `register`, `run`, `ctx.run`, `ctx.rpc`, `ctx.sleep`, `ctx.promise`). The generator API (`Resonate.remote`) does not fit Mastra's async engine.
+  - Durable ids are lineage positions (`<runId>:3.1`), not `<runId>/<operationId>`. An explicit id starts its own origin, and the Loams Durable server refuses to settle such a child ("Action must belong to the task's origin"); upstream v0.9.8 accepts it.
+  - Positions are deterministic because every concurrent step execution (parallel, conditional, foreach item) runs in its own child context. The Mastra operation id is a `mastra:op` tag and part of the memoised value; a replay that asks for a different operation fails with `NondeterminismError`.
+  - Each pass of a run is a `ctx.rpc`, a global promise at `<runId>:2k`. Loams refuses listeners on local-scope children ("Awaited promise is not awaitable"), and the caller must wait on the pass.
+- **MA-R13.2, driving Mastra's test utilities:** `createWorkflowTestSuite` with `init(resonate)`, as `workflows/inngest` does.
+  - Vendoring leaves out `workflows/_test-utils/src/domains/fga.ts`, which imports `@mastra/core/auth/ee`, and patches its two references; the patches are recorded in `UPSTREAM.json`.
+  - It also vendors Mastra's `packages/_vendored/ai_v4` and `ai_v5` for `@internal/ai-sdk-v4`/`v5`.
+- **MA-R13.3, test-utils groups:** all domains run.
+  - 259 of 290 tests pass on both backends.
+  - Expected failures, with issues: foreach resume by index or label (loams-mastra#29), resume through a workflow rebuilt without Mastra (#30), and `restart()` (#32).
+  - Skipped: suspend and resume through `streamLegacy`, which hangs (#31).
+- **MA-R13.4, suspend (Task 18):** Mastra's `suspend()` ends the pass, and a resume re-enters the graph from the snapshot, so a step cannot block on `ctx.promise`.
+  - After a suspended pass, the run's root awaits a latent `ctx.promise` at `<runId>:2k+1`, and `run.resume()` settles it.
+  - A second settle returns the existing record without an error, so each request carries a `resumeId` and the losing caller is refused (`double_resume_is_refused`).
+- **MA-R13.5, upstream server pin:** `ghcr.io/resonatehq/resonate:v0.9.8`, pinned by digest (2026-06-04).
+- **MA-R13.6, toolchain:** TypeScript 5.9.3, vitest 4.1.11 and tsdown 0.22.9. The package compiles with `moduleResolution: bundler` and extensionless imports, as Mastra's packages do.
+- **MA-R14.1, Loams Durable in CI:** the `resonate` job runs Loams Durable from the 0.1.0 release **image** (pinned by digest), not Task 5's `.deb`. The 0.1.0 `.deb` is built without the `durable` feature (#925). Move to `install-loams.sh` once a package with Durable ships.
+- **MA-R16.1:** the compat reporter's `ISSUE_URL` also accepts `ostrium-labs/loams-mastra` issues, since this task's expected failures are tracked there.
+- **MA-R20.1:** `examples/durable-workflow` moves to Task 21. `examples_pin_exact_versions` needs a published `@loams/mastra-resonate`, which `workspace:*` cannot stand in for.
