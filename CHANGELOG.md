@@ -221,6 +221,12 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ### Fixed
 
+- **The CLI packages had no Durable** (#925). The `.deb`, `.rpm`, pacman package, macOS tarballs
+  and Windows zip were built from the default features, so `loams dev` from a package served
+  nothing on 127.0.0.1:8001. They now build with the release image's features (`durable`,
+  `durable-tikv`, `tikv`, `live-tikv`, `graph`, `pgwire`, `mysql-wire`, `stream-grpc`), a check
+  keeps that list equal to the image's, and `scripts/release/smoke-durable.sh` checks that
+  Durable answers on 8001 in the Linux, Windows and macOS package jobs.
 - A search retriever without `k` was refused ("k must be between 1 and
   100000"); it now takes `max(10, offset + limit)` on REST and Connect.
 - `search_after` refused the primary-key sort value a Connect answer had just
