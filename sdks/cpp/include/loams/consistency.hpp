@@ -20,6 +20,7 @@
 #define LOAMS_CONSISTENCY_HPP
 
 #include <cstdint>
+#include <exception>
 #include <map>
 #include <mutex>
 #include <optional>
@@ -85,6 +86,21 @@ class ConsistencyToken {
   bool present_ = false;
   std::vector<Item> items_;
   std::string text_;
+};
+
+/// **Deprecated, never thrown.** The session store once refused to merge two
+/// different tokens and raised this; now that the `v1:` encoding is parsed (R4
+/// as amended), it merges them. Kept because SDKs are additive-only (design §54
+/// §13.2), so code that catches it still compiles.
+class ConsistencyConflict : public std::exception {
+ public:
+  explicit ConsistencyConflict(std::string held, std::string arriving)
+      : message_("loams: the session consistency store holds '" + held + "' and cannot merge the arriving '" +
+                 arriving + "'") {}
+  const char* what() const noexcept override { return message_.c_str(); }
+
+ private:
+  std::string message_;
 };
 
 /// The session store (R4): one merged token per scope (a proto package).
