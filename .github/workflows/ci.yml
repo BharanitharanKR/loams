@@ -708,6 +708,21 @@ jobs:
         run: |
           crates/loams-qdrant/tests/python/run.sh 1.19.1 modern | tee "$RUNNER_TEMP/modern.log"
           grep -q '^qdrant-client 1.19.1 modern: [0-9]* checks passed$' "$RUNNER_TEMP/modern.log"
+      # @qdrant/js-client-rest, the client @mastra/qdrant uses (MA1 Task 25).
+      - uses: pnpm/action-setup@v6
+        with:
+          version: 11.27.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: qdrant-js 1.18.0
+        run: |
+          crates/loams-qdrant/tests/js/run.sh 1.18.0 | tee "$RUNNER_TEMP/js-1.18.log"
+          grep -q '^qdrant-js 1.18.0: [0-9]* checks passed$' "$RUNNER_TEMP/js-1.18.log"
+      - name: qdrant-js 1.19.0
+        run: |
+          crates/loams-qdrant/tests/js/run.sh 1.19.0 | tee "$RUNNER_TEMP/js-1.19.log"
+          grep -q '^qdrant-js 1.19.0: [0-9]* checks passed$' "$RUNNER_TEMP/js-1.19.log"
       - name: loams log
         if: failure()
         run: tail -n 200 "$RUNNER_TEMP/loams.log" || true
