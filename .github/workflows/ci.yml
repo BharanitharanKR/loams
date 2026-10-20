@@ -1706,6 +1706,11 @@ jobs:
           cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -G Ninja
           cmake --build build -j 4
           ctest --test-dir build --output-on-failure
+      # SDKP: the app suite. ctest replayed the recorded app scenario (cpp_app_*)
+      # and wrote sdks/fixtures/results/cpp.json; this fails the job unless every
+      # app fixture was replayed and every SDKP test is named.
+      - name: the C++ SDK passes the app suite
+        run: node sdks/conformance/check-languages.mjs --check cpp --suite app
       # A proto edit that moved the SDK surface must not pass with stale stubs.
       # `scripts/sdk/drift.sh` has no C++ case yet -- it would ask the Rust
       # `protoc-gen-loams-facade` for a facade it cannot render (D644) -- so the

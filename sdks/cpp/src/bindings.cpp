@@ -106,6 +106,44 @@ std::vector<MethodBinding> Build() {
       /*server_streaming=*/true);
   add("loams.notifications.v1.NotificationService/MarkRead", RetryClass::kManual, "idempotency_key");
 
+  // The app-building API (SDKP §2.2–§2.5). The retry classes are SDKP's: the
+  // creates and schema changes are `retry_safe` (idempotent by name, or
+  // additive), so `kSafe`; `WriteDocuments` and the graph mutations carry an
+  // `idempotency_key`, so `kManual` and retried once keyed; `Scan` and the
+  // filter writes are never retried. A read-only `Execute` is retried as a read
+  // by the graph module itself.
+  add("loams.collection.v1.NamespaceService/CreateNamespace", RetryClass::kSafe, "");
+  add("loams.collection.v1.NamespaceService/ListNamespaces", RetryClass::kSafe, "", false, "namespaces",
+      "next_page_token");
+  add("loams.collection.v1.CollectionService/CreateCollection", RetryClass::kSafe, "");
+  add("loams.collection.v1.CollectionService/ListCollections", RetryClass::kSafe, "", false, "collections",
+      "next_page_token");
+  add("loams.collection.v1.CollectionService/GetCollection", RetryClass::kSafe, "");
+  add("loams.collection.v1.CollectionService/DropCollection", RetryClass::kSafe, "");
+  add("loams.collection.v1.CollectionService/AddFields", RetryClass::kSafe, "");
+  add("loams.collection.v1.CollectionService/ListVersions", RetryClass::kSafe, "", false, "versions",
+      "next_page_token");
+  add("loams.collection.v1.CollectionService/UpdateAliases", RetryClass::kSafe, "");
+  add("loams.collection.v1.CollectionService/Scan", RetryClass::kManual, "");
+  add("loams.collection.v1.CollectionService/SetHot", RetryClass::kSafe, "");
+  add("loams.collection.v1.CollectionService/WarmCollection", RetryClass::kSafe, "");
+  add("loams.collection.v1.DocumentService/WriteDocuments", RetryClass::kManual, "idempotency_key");
+  add("loams.collection.v1.DocumentService/GetDocuments", RetryClass::kSafe, "");
+  add("loams.collection.v1.DocumentService/ScrollDocuments", RetryClass::kSafe, "");
+  add("loams.collection.v1.DocumentService/CountDocuments", RetryClass::kSafe, "");
+  add("loams.collection.v1.DocumentService/DeleteByFilter", RetryClass::kManual, "");
+  add("loams.collection.v1.DocumentService/PatchByFilter", RetryClass::kManual, "");
+  add("loams.collection.v1.QueryService/Search", RetryClass::kSafe, "");
+  add("loams.graph.v1.GraphAdminService/CreateGraph", RetryClass::kManual, "idempotency_key");
+  add("loams.graph.v1.GraphAdminService/GetGraph", RetryClass::kSafe, "");
+  add("loams.graph.v1.GraphAdminService/ListGraphs", RetryClass::kSafe, "", false, "graphs", "next_page_token");
+  add("loams.graph.v1.GraphAdminService/UpdateGraph", RetryClass::kManual, "idempotency_key");
+  add("loams.graph.v1.GraphAdminService/DeleteGraph", RetryClass::kManual, "idempotency_key");
+  add("loams.graph.v1.GraphAdminService/GetSchema", RetryClass::kSafe, "");
+  add("loams.graph.v1.GraphService/Execute", RetryClass::kManual, "idempotency_key");
+  add("loams.graph.v1.GraphService/ExecuteBatch", RetryClass::kManual, "idempotency_key");
+  add("loams.graph.v1.GraphService/Explain", RetryClass::kSafe, "");
+
   return bindings;
 }
 
