@@ -87,8 +87,17 @@ hits.each { |h| puts Loams.to_h(h.source)["title"] }
   **Timeouts** default to 30 s per unary call (`timeout:` on the client or the call,
   `nil` for none); a spent budget raises `Loams::DeadlineExceededError` with reason
   `client_deadline_exceeded` and is never retried.
-- `Loams::Subscription` is the client half of `streams.subscribe`; the `sql` and
-  `streams` modules arrive with their Connect protos.
+- **SQL.** `sql.query(sql, params: [...], max_rows:, consistency:)` answers
+  `columns` and `rows`; `Loams::App::Sql.records(res)` gives rows as Hashes.
+  `query_arrow` answers the Arrow IPC bytes. SQL reads see the session's
+  collection writes.
+- **Streams.** `streams.create`, `get`, `list` / `list_all`, `produce(stream,
+  records, partition:, producer_id:, producer_seq:)` (a record is a String, a
+  JSON value, or `{key:, value:, headers:}` with an optional key; a repeated
+  producer sequence is deduplicated), `fetch` (`Loams::App::Streams.records(res)`
+  decodes it), `produce_events` / `fetch_events` (CloudEvents as Hashes), and
+  `subscribe(stream, partition:, from_offset:)`, a `Loams::Subscription` to
+  enumerate, `cancel` and resume from `offset`.
 - Durable execution has no module: use the Resonate SDK with
   `LOAMS_ENDPOINT/durable/` as its URL.
 
