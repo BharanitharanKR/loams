@@ -73,11 +73,12 @@ jobs:
         if: always()
         working-directory: .loams-mastra
         run: |
+          pid=$(cat "$RUNNER_TEMP/loams.pid" 2>/dev/null || true)
           test/conformance/loams/stop.sh ${{ steps.qdrant.outcome != 'success' && '--logs' || '' }}
           # stop.sh signals loams dev without waiting; the next cell reuses its
-          # data directory and ports, so wait until it has exited.
+          # data directory and ports, so wait until the process has exited.
           for _ in $(seq 1 60); do
-            curl -s -o /dev/null --max-time 2 "http://127.0.0.1:6333/" || exit 0
+            [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || exit 0
             sleep 1
           done
           echo "loams dev did not exit within 60 s" >&2; exit 1
@@ -94,11 +95,12 @@ jobs:
         if: always()
         working-directory: .loams-mastra
         run: |
+          pid=$(cat "$RUNNER_TEMP/loams.pid" 2>/dev/null || true)
           test/conformance/loams/stop.sh ${{ steps.es.outcome != 'success' && '--logs' || '' }}
           # stop.sh signals loams dev without waiting; the next cell reuses its
-          # data directory and ports, so wait until it has exited.
+          # data directory and ports, so wait until the process has exited.
           for _ in $(seq 1 60); do
-            curl -s -o /dev/null --max-time 2 "http://127.0.0.1:6333/" || exit 0
+            [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || exit 0
             sleep 1
           done
           echo "loams dev did not exit within 60 s" >&2; exit 1
@@ -116,11 +118,12 @@ jobs:
         if: always()
         working-directory: .loams-mastra
         run: |
+          pid=$(cat "$RUNNER_TEMP/loams.pid" 2>/dev/null || true)
           test/conformance/loams/stop.sh ${{ steps.qdrant-auth.outcome != 'success' && '--logs' || '' }}
           # stop.sh signals loams dev without waiting; the next cell reuses its
-          # data directory and ports, so wait until it has exited.
+          # data directory and ports, so wait until the process has exited.
           for _ in $(seq 1 60); do
-            curl -s -o /dev/null --max-time 2 "http://127.0.0.1:6333/" || exit 0
+            [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null || exit 0
             sleep 1
           done
           echo "loams dev did not exit within 60 s" >&2; exit 1
