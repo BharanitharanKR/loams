@@ -70,9 +70,17 @@ let page = try notes.search(LoamsSearch.on("notes")
   is a unary call's budget, retries included, sent as `connect-timeout-ms`;
   `LoamsCallOptions.timeout` overrides it, and a spent budget fails with
   `deadline_exceeded` / `client_deadline_exceeded` and is never retried.
-- `LoamsSubscription` is the client half of `streams.subscribe`: `next()` pulls,
-  `start(onRecord:)` calls a block per record and answers a `LoamsCancelToken`.
-  The `sql` and `streams` modules arrive with their Connect protos.
+- **SQL.** `sql.query(_:params:maxRows:consistency:)` answers `columns` and
+  `rows`; `LoamsSqlModule.records(_:)` gives rows as dictionaries. `queryArrow`
+  answers the Arrow IPC bytes. SQL reads see the session's collection writes.
+- **Streams.** `streams.create`, `get`, `list` / `listAll`,
+  `produce(_:records:partition:producerId:producerSeq:)` (a record is `Data`, a
+  string, a JSON value or `["key": …, "value": …, "headers": […]]`; a repeated
+  producer sequence is deduplicated), `fetch` (`LoamsStreamsModule.records(_:)`
+  decodes it into `LoamsStreamRecord`s), `produceEvents` / `fetchEvents`
+  (CloudEvents as dictionaries), and `subscribe(_:partition:fromOffset:)`, a
+  `LoamsSubscription`: `next()` pulls, `start(onRecord:)` calls a block per record
+  and answers a `LoamsCancelToken`, and `offset` is where to resume.
 - `LOAMS_TEST_ENDPOINT=http://127.0.0.1:8080 swift test --disable-swift-testing`
   also runs the app scenario against `loams dev`.
 

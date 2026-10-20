@@ -308,9 +308,54 @@ final class AppTests: XCTestCase {
         XCTAssertEqual((s.sent(1)["searchAfter"] as! [Any])[1] as? Int, 2, "the last hit's sortValues, as answered")
     }
 
+    func test_objc_sql_and_streams_send_the_recorded_bodies() throws {
+        let s = Script()
+        let c = client(s, namespace: "app")
+        for _ in 0..<7 { s.ok(["columns": [["name": "tags"], ["name": "c"]], "rows": [["policy", 2]]]) }
+        let answer = try c.sql.query("SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags", params: [1])
+        XCTAssertEqual(normalized(s.sent(0)), normalized(["namespace": "app", "sql": "SELECT tags, count(*) AS c FROM notes WHERE n > $1 GROUP BY tags ORDER BY tags", "params": [1]]))
+        XCTAssertEqual(normalized(LoamsSqlModule.records(answer)), normalized([["tags": "policy", "c": 2]]))
+        _ = try c.sql.query("SELECT title, n FROM notes ORDER BY n", maxRows: 2)
+        XCTAssertEqual(normalized(s.sent(1)), normalized(["namespace": "app", "sql": "SELECT title, n FROM notes ORDER BY n", "maxRows": 2]))
+        _ = try c.streams.create("note-events")
+        XCTAssertEqual(normalized(s.sent(2)), normalized(["namespace": "app", "name": "note-events", "partitions": 1]))
+        _ = try c.streams.produce("note-events", records: [["key": "1", "value": ["note": 1, "op": "created"]],
+                                                           ["key": "5", "value": ["note": 5, "op": "deleted"]]],
+                                  producerId: "app-producer-1", producerSeq: 1)
+        XCTAssertEqual(normalized(s.sent(3)), normalized(["namespace": "app", "stream": "note-events", "records": [
+            ["key": "MQ==", "value": "eyJub3RlIjoxLCJvcCI6ImNyZWF0ZWQifQ=="],
+            ["key": "NQ==", "value": "eyJub3RlIjo1LCJvcCI6ImRlbGV0ZWQifQ=="],
+        ], "producerId": "app-producer-1", "producerSeq": "1"]))
+        _ = try c.streams.fetch("note-events", maxRecords: 10)
+        XCTAssertEqual(normalized(s.sent(4)), normalized(["namespace": "app", "stream": "note-events", "maxRecords": 10]),
+                       "a zero partition and offset are omitted")
+        _ = try c.streams.fetch("note-events", offset: 2, maxRecords: 10)
+        XCTAssertEqual(normalized(s.sent(5)), normalized(["namespace": "app", "stream": "note-events", "offset": "2", "maxRecords": 10]))
+        _ = try c.streams.get("note-events")
+        XCTAssertEqual(normalized(s.sent(6)), normalized(["namespace": "app", "stream": "note-events"]))
+    }
+
+    func test_objc_streams_module_subscribe() throws {
+        let s = Script()
+        let c = client(s, namespace: "app")
+        s.ok(["records": [["offset": "1", "value": Data("a".utf8).base64EncodedString()],
+                          ["offset": "2", "value": Data("b".utf8).base64EncodedString()]]])
+        s.ok(["records": [["offset": "3", "value": Data("c".utf8).base64EncodedString()]]])
+        let sub = c.streams.subscribe("events", fromOffset: 1)
+        var got: [String] = []
+        while let record = sub.next() {
+            got.append(String(data: record["value"] as! Data, encoding: .utf8)!)
+            if got.count == 3 { sub.cancel() }
+        }
+        XCTAssertEqual(got, ["a", "b", "c"])
+        XCTAssertEqual(sub.offset, 4)
+        XCTAssertEqual(s.sent(0)["offset"] as? String, "1")
+        XCTAssertEqual(s.sent(1)["offset"] as? String, "3", "the next fetch starts after the last record")
+    }
+
     func test_objc_facade_matches_index() throws {
         for (name, call) in loamsAppCalls {
-            XCTAssertTrue(call.rpc.hasPrefix("loams.collection.v1.") || call.rpc.hasPrefix("loams.graph.v1."), name)
+            XCTAssertTrue(["loams.collection.v1.", "loams.graph.v1.", "loams.sql.v1.", "loams.stream.v1."].contains { call.rpc.hasPrefix($0) }, name)
         }
         let path = fixturesDir().appendingPathComponent("facade-index.json")
         guard let data = try? Data(contentsOf: path) else {
