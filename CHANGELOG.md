@@ -5,6 +5,12 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- **The Kotlin SDK replays the app scenario** (SDKP P0d): `kotlin_app_collections`, `kotlin_app_search`,
+  `kotlin_app_graph`, `kotlin_app_sql` and `kotlin_app_streams` replay `sdks/fixtures/recorded/app/`
+  through the facade against the fixture server, and CI runs `check-languages --suite app` for Kotlin.
+  Fixed on the way: the Connect JSON writer sent every `bytes` field empty and failed on any map field,
+  wrote a `float` as its widened double (`0.699999988079071` for `0.7`), and `Sort.score()` and
+  `Sort.pk()` now leave the order unset by default, as the builder corpus does.
 - **The C# SDK builds apps** (SDKP L5): `Namespaces`, `Collections`, `Documents`, `Search`, `Vector` and
   `Graph` modules over the generated `loams.collection.v1` and `loams.graph.v1` stubs, the `Schema`,
   `Filter` and `Search` builders, `client.Collection(name)` handles, `WriteBatchAsync`, `ScrollAllAsync`
