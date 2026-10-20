@@ -507,6 +507,8 @@ public let loamsProtoPackages: [String] = [
     "loams.notifications.v1",
     "loams.operations.v1",
     "loams.options.v1",
+    "loams.sql.v1",
+    "loams.stream.v1",
 ]
 
 /// The `type` a server puts in an error detail, so the runtime finds `ErrorInfo`

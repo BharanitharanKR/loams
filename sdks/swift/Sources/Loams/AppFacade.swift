@@ -69,6 +69,8 @@ let loamsAppModules: [ModuleBinding] = {
     let q = LoamsAppService.query
     let ga = LoamsAppService.graphAdmin
     let g = LoamsAppService.graph
+    let sql = "loams.sql.v1.SqlService"
+    let st = "loams.stream.v1.StreamService"
     return [
         appModule("namespaces", "Namespaces: the container every collection and stream lives in.", ns, [
             appCall("namespaces", "Create", "create", ns, "CreateNamespace", .none, .safe),
@@ -112,6 +114,20 @@ let loamsAppModules: [ModuleBinding] = {
             appCall("graph", "QueryBatch", "queryBatch", g, "ExecuteBatch", .none, .manual, keyed: true),
             appCall("graph", "QueryStream", "queryStream", g, "ExecuteStream", .none, .manual, streaming: .server),
             appCall("graph", "Explain", "explain", g, "Explain", .none, .safe),
+        ]),
+        // Part C: loams.sql.v1 and loams.stream.v1 (SDKP P0b and P0c).
+        appModule("sql", "SQL: one read-only statement over a namespace's collections, with parameters.", sql, [
+            appCall("sql", "Query", "query", sql, "Query", .noSideEffects, .safe),
+            appCall("sql", "QueryArrow", "queryArrow", sql, "QueryArrow", .noSideEffects, .safe),
+        ]),
+        appModule("streams", "Streams: create, list and describe a namespace's logs; produce and fetch.", st, [
+            appCall("streams", "Create", "create", st, "CreateStream", .none, .safe),
+            appCall("streams", "Get", "get", st, "DescribeStream", .noSideEffects, .safe),
+            appCall("streams", "List", "list", st, "ListStreams", .noSideEffects, .safe, page: "streams"),
+            appCall("streams", "Produce", "produce", st, "Produce", .none, .manual),
+            appCall("streams", "Fetch", "fetch", st, "Fetch", .noSideEffects, .safe),
+            appCall("streams", "ProduceEvents", "produceEvents", st, "ProduceCloudEvents", .none, .manual),
+            appCall("streams", "FetchEvents", "fetchEvents", st, "FetchCloudEvents", .noSideEffects, .safe),
         ]),
     ]
 }()

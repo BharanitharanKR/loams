@@ -19,12 +19,15 @@ public struct StreamRecord: Sendable, Equatable {
     public let offset: UInt64
     public let value: Data
     public let timestampMs: Int64
+    /// The record's key, when it was produced with one.
+    public let key: Data?
 
-    public init(partition: Int, offset: UInt64, value: Data, timestampMs: Int64 = 0) {
+    public init(partition: Int, offset: UInt64, value: Data, timestampMs: Int64 = 0, key: Data? = nil) {
         self.partition = partition
         self.offset = offset
         self.value = value
         self.timestampMs = timestampMs
+        self.key = key
     }
 
     /// The value as UTF-8 text.

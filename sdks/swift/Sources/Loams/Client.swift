@@ -181,6 +181,10 @@ public final class Loams: Sendable {
     public var search: SearchModule { SearchModule(invoker: invoker) }
     /// `loams.vector` (SDKP §2.4, Q613).
     public var vector: VectorModule { VectorModule(invoker: invoker) }
+    /// `loams.sql` (SDKP §2.5).
+    public var sql: SqlModule { SqlModule(invoker: invoker) }
+    /// `loams.streams` (SDKP §2.5).
+    public var streams: StreamsModule { StreamsModule(invoker: invoker) }
     /// `loams.graph` (SDKP §2.5). Experimental.
     public var graph: GraphModule { GraphModule(invoker: invoker) }
 
