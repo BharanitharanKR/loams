@@ -144,6 +144,20 @@ std::vector<MethodBinding> Build() {
   add("loams.graph.v1.GraphService/ExecuteBatch", RetryClass::kManual, "idempotency_key");
   add("loams.graph.v1.GraphService/Explain", RetryClass::kSafe, "");
 
+  // `loams.sql.v1` and `loams.stream.v1` (SDKP part C), with the facade
+  // index's retry classes: the reads are safe, and `Produce` and
+  // `ProduceCloudEvents` are never retried (a repeat is deduplicated only when
+  // the caller gave a producer sequence).
+  add("loams.sql.v1.SqlService/Query", RetryClass::kSafe, "");
+  add("loams.sql.v1.SqlService/QueryArrow", RetryClass::kSafe, "");
+  add("loams.stream.v1.StreamService/CreateStream", RetryClass::kSafe, "");
+  add("loams.stream.v1.StreamService/DescribeStream", RetryClass::kSafe, "");
+  add("loams.stream.v1.StreamService/ListStreams", RetryClass::kSafe, "", false, "streams", "next_page_token");
+  add("loams.stream.v1.StreamService/Produce", RetryClass::kManual, "");
+  add("loams.stream.v1.StreamService/Fetch", RetryClass::kSafe, "");
+  add("loams.stream.v1.StreamService/ProduceCloudEvents", RetryClass::kManual, "");
+  add("loams.stream.v1.StreamService/FetchCloudEvents", RetryClass::kSafe, "");
+
   return bindings;
 }
 

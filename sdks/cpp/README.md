@@ -163,8 +163,14 @@ auto hits = notes.Search(loams::Search()
   (30 s) is a unary call's budget, retries included, sent as `connect-timeout-ms`;
   `CallOptions::timeout` overrides it. A spent budget throws `DeadlineExceededError`
   with `UnknownReason() == "client_deadline_exceeded"` and is never retried.
-- `loams::Subscription` (`loams/subscribe.hpp`) is the client half of
-  `streams.subscribe`; the `sql` and `streams` modules arrive with their Connect protos.
+- **SQL** (`loams/data.hpp`): `Sql()->Query(sql, {Json(1), …}, {max_rows, consistency})`
+  answers `columns` and `rows`; `SqlModule::Records(res)` gives rows as maps. `QueryArrow`
+  answers the Arrow IPC bytes. SQL reads see the session's collection writes.
+- **Streams:** `Streams()->Create`, `Get`, `List` / `ListAll`, `Produce(stream, records,
+  {partition, producer_id, producer_seq})` (a `ProduceRecord` has an optional key, a value and
+  headers; a repeated producer sequence is deduplicated), `Fetch`, `ProduceEvents` /
+  `FetchEvents` (CloudEvents as a JSON array), and `Subscribe(stream, {partition, offset})`, a
+  `loams::Subscription` pull reader (`Next()`, `Cancel()`, `Offset()` to resume).
 - Durable execution has no module: use a Resonate SDK with `LOAMS_ENDPOINT/durable/`.
 - `ctest -R cpp_app_` runs the app scenario against `LOAMS_TEST_ENDPOINT`
   (skipped without one); the other `cpp_*` app tests need no server.

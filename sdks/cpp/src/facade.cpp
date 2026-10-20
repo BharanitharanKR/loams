@@ -231,7 +231,9 @@ Loams::Loams(std::shared_ptr<Client> client)
       devices_(client_.get()),
       operations_(client_.get()),
       notifications_(client_.get()),
-      app_(client_.get()) {}
+      app_(client_.get()),
+      sql_(client_.get()),
+      streams_(client_.get()) {}
 
 InstanceModule* Loams::Instance() { return &instance_; }
 LiveModule* Loams::Live() { return &live_; }

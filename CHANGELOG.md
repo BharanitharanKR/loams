@@ -72,6 +72,10 @@ All notable changes to this project are documented here. The format follows [Kee
   `writeBatch`, `scrollAll` and `queryAll`; consistency tokens that parse and merge, a session store that
   gives reads read-your-writes, a default namespace, `LoamsClientConfiguration.fromEnvironment`, client
   deadlines (`client_deadline_exceeded`), and `LoamsSubscription` with a cancel token.
+- **The C++ SDK's `Sql()` and `Streams()` modules** (SDKP L6 part C): `Query` with `$n` parameters,
+  `QueryArrow` and `SqlModule::Records`; `Create`, `Get`, `List`, `Produce` (an optional record key,
+  producer deduplication), `Fetch`, `ProduceEvents`, `FetchEvents` and `Subscribe`. The generated stubs
+  now include `loams.sql.v1` and `loams.stream.v1`.
 - **`loams.sql.v1` on the main port** (SDKP P0b, API2 Task 1): `SqlService/Query` runs one read-only
   statement over a namespace's collections with `$1…$n` parameters (each cast to its placeholder's
   inferred type) and answers typed columns and rows; `QueryArrow` answers the result as one Arrow IPC

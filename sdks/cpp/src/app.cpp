@@ -13,6 +13,9 @@
 
 #include "loams/consistency.hpp"
 #include "loams/facade.hpp"
+#include "loams/instance/v1/instance.pb.h"
+#include "loams/sql/v1/sql.pb.h"
+#include "loams/stream/v1/stream.pb.h"
 #include "loams/idempotency.hpp"
 
 namespace loams {
@@ -54,10 +57,12 @@ constexpr char kExplain[] = "loams.graph.v1.GraphService/Explain";
   ThrowMapped(Code::kInvalidArgument, rpc, Reason::kUnknown, "", {}, "", "loams: " + message, "");
 }
 
-/// The proto package an RPC belongs to: the session's scope.
+/// The session's scope: the proto package an RPC belongs to, except that SQL
+/// reads (and adds to) the collection token, since it reads collections.
 std::string ScopeOf(const std::string& rpc) {
   const std::string service = rpc.substr(0, rpc.find('/'));
-  return service.substr(0, service.rfind('.'));
+  const std::string package = service.substr(0, service.rfind('.'));
+  return package == "loams.sql.v1" ? "loams.collection.v1" : package;
 }
 
 /// R11 on any request: fills an empty `namespace` field.
@@ -81,7 +86,7 @@ void FillNamespace(Message* request, const std::string& ns, const std::string& r
 /// Only collection (and SQL) reads take the session's token (SDKP-17): a graph's
 /// tokens name one graph's stream.
 void ApplySession(SessionTokenStore* session, const std::string& scope, Message* request) {
-  if (session == nullptr || (scope != "loams.collection.v1" && scope != "loams.sql.v1")) {
+  if (session == nullptr || scope != "loams.collection.v1") {
     return;
   }
   const FieldDescriptor* field = request->GetDescriptor()->FindFieldByName("consistency");
@@ -903,6 +908,15 @@ const std::map<std::string, std::string>& FacadeCalls() {
       {"graph.query", kExecute},
       {"graph.query_batch", kExecuteBatch},
       {"graph.explain", kExplain},
+      {"sql.query", "loams.sql.v1.SqlService/Query"},
+      {"sql.query_arrow", "loams.sql.v1.SqlService/QueryArrow"},
+      {"streams.create", "loams.stream.v1.StreamService/CreateStream"},
+      {"streams.get", "loams.stream.v1.StreamService/DescribeStream"},
+      {"streams.list", "loams.stream.v1.StreamService/ListStreams"},
+      {"streams.produce", "loams.stream.v1.StreamService/Produce"},
+      {"streams.fetch", "loams.stream.v1.StreamService/Fetch"},
+      {"streams.produce_events", "loams.stream.v1.StreamService/ProduceCloudEvents"},
+      {"streams.fetch_events", "loams.stream.v1.StreamService/FetchCloudEvents"},
   };
   return calls;
 }
@@ -910,6 +924,16 @@ const std::map<std::string, std::string>& FacadeCalls() {
 }  // namespace
 
 std::string RawModule::Call(const std::string& name, const std::string& request_json, const CallOptions& options) {
+  // A generated file registers its descriptors when its object is linked, and a
+  // static library links only the objects something references: naming one
+  // message of each app package here is what puts them in the generated pool.
+  static const bool linked = [] {
+    return collection_v1::SearchRequest::descriptor() != nullptr && graph_v1::ExecuteRequest::descriptor() != nullptr &&
+           ::loams::sql::v1::QueryRequest::descriptor() != nullptr &&
+           ::loams::stream::v1::ProduceRequest::descriptor() != nullptr &&
+           ::loams::instance::v1::GetInstanceRequest::descriptor() != nullptr;
+  }();
+  (void)linked;
   const auto found = FacadeCalls().find(name);
   if (found == FacadeCalls().end()) {
     Invalid("", "no facade call " + name);
