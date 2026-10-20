@@ -74,7 +74,7 @@ public final class Client implements AutoCloseable {
         this.endpoint = endpoint;
         this.protocol = options.protocol();
         this.transport =
-                new ConnectTransport(endpoint, this.protocol, options.httpClient());
+                new ConnectTransport(endpoint, this.protocol, options.httpClient(), options.json());
         this.session = options.sessionConsistency() ? new ConsistencySession() : null;
         // An unset budget means the design's number, not none. Java's `Integer` null is what
         // makes that expressible; see Options.maxRetries().

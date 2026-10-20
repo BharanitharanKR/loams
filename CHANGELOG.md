@@ -11,6 +11,12 @@ All notable changes to this project are documented here. The format follows [Kee
   and `QueryAllAsync`; consistency tokens that parse and merge, a session store that gives reads
   read-your-writes, a default namespace, client deadlines (`client_deadline_exceeded`), and the
   `examples/Notes` app.
+- **The Java SDK replays the app scenario** (SDKP P0d): `java_app_collections`, `java_app_search`,
+  `java_app_graph`, `java_app_sql` and `java_app_streams` replay `sdks/fixtures/recorded/app` through the
+  facade, and CI's `SDK: Java` job runs `check-languages --suite app`. `Options.json(true)` sends unary
+  calls as proto3 JSON (a dependency-free codec, so the runtime still needs only `protobuf-java`), and
+  a Connect unary call in JSON is no longer enveloped. `sdks/java/gen` is regenerated, so
+  `CountDocumentsRequest.where` and the other typed-query fields reach Java.
 - **The Java SDK builds apps** (SDKP): namespaces, collections, documents, search, vector and graph
 - **The Kotlin SDK builds apps** (SDKP): namespaces, collections, documents, search, vector and graph
 - **The Swift SDK builds apps** (SDKP): namespaces, collections, documents, search, vector and graph

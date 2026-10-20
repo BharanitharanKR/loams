@@ -82,17 +82,18 @@ public final class SqlProto {
       "\005 \001(\rH\000R\007maxRows\210\001\001B\013\n\t_max_rows\"|\n\022Quer" +
       "yArrowResponse\022\033\n\tarrow_ipc\030\001 \001(\014R\010arrow" +
       "Ipc\022\034\n\ttruncated\030\002 \001(\010R\ttruncated\022+\n\021con" +
-      "sistency_token\030\003 \001(\tR\020consistencyToken2\203" +
-      "\002\n\nSqlService\022E\n\005Query\022\032.loams.sql.v1.Qu" +
+      "sistency_token\030\003 \001(\tR\020consistencyToken2\237" +
+      "\002\n\nSqlService\022P\n\005Query\022\032.loams.sql.v1.Qu" +
       "eryRequest\032\033.loams.sql.v1.QueryResponse\"" +
-      "\003\220\002\001\022T\n\nQueryArrow\022\037.loams.sql.v1.QueryA" +
-      "rrowRequest\032 .loams.sql.v1.QueryArrowRes" +
-      "ponse\"\003\220\002\001\032X\212\265\030T\n\003sql\022MSQL: one read-onl" +
-      "y statement over a namespace\'s collectio" +
-      "ns, with parameters.Bx\n\032dev.loams.gen.lo" +
-      "ams.sql.v1B\010SqlProtoP\001\242\002\003LSX\252\002\014Loams.Sql" +
-      ".V1\312\002\014Loams\\Sql\\V1\342\002\030Loams\\Sql\\V1\\GPBMet" +
-      "adata\352\002\016Loams::Sql::V1b\006proto3"
+      "\016\220\002\001\222\265\030\007\022\005query\022e\n\nQueryArrow\022\037.loams.sq" +
+      "l.v1.QueryArrowRequest\032 .loams.sql.v1.Qu" +
+      "eryArrowResponse\"\024\220\002\001\222\265\030\r\022\013query_arrow\032X" +
+      "\212\265\030T\n\003sql\022MSQL: one read-only statement " +
+      "over a namespace\'s collections, with par" +
+      "ameters.Bx\n\032dev.loams.gen.loams.sql.v1B\010" +
+      "SqlProtoP\001\242\002\003LSX\252\002\014Loams.Sql.V1\312\002\014Loams\\" +
+      "Sql\\V1\342\002\030Loams\\Sql\\V1\\GPBMetadata\352\002\016Loam" +
+      "s::Sql::V1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -137,6 +138,7 @@ public final class SqlProto {
     dev.loams.gen.loams.options.v1.OptionsProto.getDescriptor();
     com.google.protobuf.ExtensionRegistry registry =
         com.google.protobuf.ExtensionRegistry.newInstance();
+    registry.add(dev.loams.gen.loams.options.v1.OptionsProto.facade);
     registry.add(dev.loams.gen.loams.options.v1.OptionsProto.module);
     com.google.protobuf.Descriptors.FileDescriptor
         .internalUpdateFileDescriptor(descriptor, registry);
