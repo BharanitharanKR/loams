@@ -17,6 +17,12 @@ All notable changes to this project are documented here. The format follows [Kee
   modules, the `Schema`, `Filter` and `Search` builders, collection handles, `writeBatch`, `scrollAll` and
   `queryAll`; consistency tokens that parse and merge, a session store that gives reads read-your-writes,
   a default namespace, client deadlines (`client_deadline_exceeded`), and the notes example app.
+- **The Ruby SDK builds apps** (SDKP L10): `namespaces`, `collections`, `documents`, `search`,
+  `vector` and `graph` modules over the descriptor set, `Client#call` for any facade call, the `Schema`,
+  `Filter` and `Search` builders, `client.collection(name)` handles, `write_batch`, `scroll_all` and
+  `query_all`; consistency tokens that parse and merge, a session store that gives reads read-your-writes,
+  a default namespace, `Loams.from_env`, client deadlines (`client_deadline_exceeded`), and the notes
+  example app.
 - **`loams.sql.v1` on the main port** (SDKP P0b, API2 Task 1): `SqlService/Query` runs one read-only
   statement over a namespace's collections with `$1…$n` parameters (each cast to its placeholder's
   inferred type) and answers typed columns and rows; `QueryArrow` answers the result as one Arrow IPC
