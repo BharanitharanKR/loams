@@ -5,6 +5,7 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+<<<<<<< HEAD
 - **The Kotlin SDK replays the app scenario** (SDKP P0d): `kotlin_app_collections`, `kotlin_app_search`,
   `kotlin_app_graph`, `kotlin_app_sql` and `kotlin_app_streams` replay `sdks/fixtures/recorded/app/`
   through the facade against the fixture server, and CI runs `check-languages --suite app` for Kotlin.
@@ -12,23 +13,45 @@ All notable changes to this project are documented here. The format follows [Kee
   wrote a `float` as its widened double (`0.699999988079071` for `0.7`), and `Sort.score()` and
   `Sort.pk()` now leave the order unset by default and `Search.select` no longer sends an empty
   `exclude`, as the builder corpus does.
+=======
+- **The C# SDK replays the app scenario** (SDKP P0d): `csharp_app_collections`, `csharp_app_search`,
+  `csharp_app_graph`, `csharp_app_sql` and `csharp_app_streams` replay `sdks/fixtures/recorded/app` through
+  the public facade against the shared fixture server, the report's `ran` names them, and the `SDK: C#`
+  job runs `check-languages --check csharp --suite app`.
+>>>>>>> origin/dev
 - **The C# SDK builds apps** (SDKP L5): `Namespaces`, `Collections`, `Documents`, `Search`, `Vector` and
   `Graph` modules over the generated `loams.collection.v1` and `loams.graph.v1` stubs, the `Schema`,
   `Filter` and `Search` builders, `client.Collection(name)` handles, `WriteBatchAsync`, `ScrollAllAsync`
   and `QueryAllAsync`; consistency tokens that parse and merge, a session store that gives reads
   read-your-writes, a default namespace, client deadlines (`client_deadline_exceeded`), and the
   `examples/Notes` app.
+- **The Java SDK replays the app scenario** (SDKP P0d): `java_app_collections`, `java_app_search`,
+  `java_app_graph`, `java_app_sql` and `java_app_streams` replay `sdks/fixtures/recorded/app` through the
+  facade, and CI's `SDK: Java` job runs `check-languages --suite app`. `Options.json(true)` sends unary
+  calls as proto3 JSON (a dependency-free codec, so the runtime still needs only `protobuf-java`), and
+  a Connect unary call in JSON is no longer enveloped. `sdks/java/gen` is regenerated, so
+  `CountDocumentsRequest.where` and the other typed-query fields reach Java.
 - **The Java SDK builds apps** (SDKP): namespaces, collections, documents, search, vector and graph
 - **The Kotlin SDK builds apps** (SDKP): namespaces, collections, documents, search, vector and graph
 - **The Swift SDK builds apps** (SDKP): namespaces, collections, documents, search, vector and graph
   modules, the `Schema`, `Filter` and `Search` builders, collection handles, `writeBatch`, `scrollAll` and
   `queryAll`; consistency tokens that parse and merge, a session store that gives reads read-your-writes,
   a default namespace, client deadlines (`client_deadline_exceeded`), and the notes example app.
+- **The Swift SDK replays the app scenario** (SDKP P0d): `swift_app_collections`, `swift_app_search`,
+  `swift_app_graph`, `swift_app_sql` and `swift_app_streams` replay `sdks/fixtures/recorded/app` through
+  the facade against the fixture server, and the `SDK: Swift` job runs `check-languages --suite app`.
+  `Code.invalidArgument` now reads Connect's `invalid_argument` (a stream's end frame read it as
+  `unknown`), and the test fixture server no longer depends on the working directory.
 - **The Ruby SDK builds apps** (SDKP L10): `namespaces`, `collections`, `documents`, `search`,
   `vector` and `graph` modules over the descriptor set, `Client#call` for any facade call, the `Schema`,
   `Filter` and `Search` builders, `client.collection(name)` handles, `write_batch`, `scroll_all` and
   `query_all`; consistency tokens that parse and merge, a session store that gives reads read-your-writes,
   a default namespace, `Loams.from_env`, client deadlines (`client_deadline_exceeded`), and the notes
+- **The PHP SDK builds apps** (SDKP L11): `namespaces()`, `collections()`, `documents()`, `search()`,
+  `vector()` and `graph()` modules over Connect JSON, `Client::call()` for any facade call, the `Schema`,
+  `Filter` and `Search` builders, `$client->collection($name)` handles, `writeBatch`, `scrollAll` and
+  `queryAll`; consistency tokens that parse and merge, a session store that gives reads read-your-writes,
+  a default namespace, `Client::fromEnv()`, client deadlines (`client_deadline_exceeded`), and the notes
   example app.
 - **`loams.sql.v1` on the main port** (SDKP P0b, API2 Task 1): `SqlService/Query` runs one read-only
   statement over a namespace's collections with `$1…$n` parameters (each cast to its placeholder's

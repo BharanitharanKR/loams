@@ -12,6 +12,20 @@ import XCTest
 
 // MARK: - R2 — retry classes and backoff
 
+final class WireCodeTests: XCTestCase {
+    /// Every code's raw value is Connect's wire name, so `Code(rawValue:)` reads a
+    /// Connect error body. `invalidArgument` once had none: a unary 400 still
+    /// mapped through the HTTP status, but a stream's end frame read `unknown`.
+    func testCodesAreConnectWireNames() {
+        XCTAssertEqual(Code(rawValue: "invalid_argument"), .invalidArgument)
+        for code in Code.allCases {
+            XCTAssertEqual(code.wireName, code.wireName.lowercased(), "\(code)")
+        }
+        let end = Data(#"{"error":{"code":"invalid_argument","message":"bad"}}"#.utf8)
+        XCTAssertEqual((ConnectTransport.endStreamFailure(end) as? LoamsError)?.code, .invalidArgument)
+    }
+}
+
 final class RetryContractTests: XCTestCase {
     /// The numbers are M1.6 Ruling 5's and are the same in every SDK. If these
     /// change, every SDK's changes, and that is a decision, not a fix.

@@ -228,31 +228,34 @@ public final class StreamProto {
       "rmark*~\n\013EventStatus\022\034\n\030EVENT_STATUS_UNS" +
       "PECIFIED\020\000\022\031\n\025EVENT_STATUS_APPENDED\020\001\022\032\n" +
       "\026EVENT_STATUS_DUPLICATE\020\002\022\032\n\026EVENT_STATU" +
-      "S_IN_FLIGHT\020\0032\243\006\n\rStreamService\022]\n\014Creat" +
+      "S_IN_FLIGHT\020\0032\235\007\n\rStreamService\022k\n\014Creat" +
       "eStream\022$.loams.stream.v1.CreateStreamRe" +
       "quest\032%.loams.stream.v1.CreateStreamResp" +
-      "onse\"\000\022f\n\016DescribeStream\022&.loams.stream." +
-      "v1.DescribeStreamRequest\032\'.loams.stream." +
-      "v1.DescribeStreamResponse\"\003\220\002\001\022]\n\013ListSt" +
-      "reams\022#.loams.stream.v1.ListStreamsReque" +
-      "st\032$.loams.stream.v1.ListStreamsResponse" +
-      "\"\003\220\002\001\022N\n\007Produce\022\037.loams.stream.v1.Produ" +
-      "ceRequest\032 .loams.stream.v1.ProduceRespo" +
-      "nse\"\000\022K\n\005Fetch\022\035.loams.stream.v1.FetchRe" +
-      "quest\032\036.loams.stream.v1.FetchResponse\"\003\220" +
-      "\002\001\022o\n\022ProduceCloudEvents\022*.loams.stream." +
-      "v1.ProduceCloudEventsRequest\032+.loams.str" +
-      "eam.v1.ProduceCloudEventsResponse\"\000\022l\n\020F" +
-      "etchCloudEvents\022(.loams.stream.v1.FetchC" +
-      "loudEventsRequest\032).loams.stream.v1.Fetc" +
-      "hCloudEventsResponse\"\003\220\002\001\032p\212\265\030l\n\007streams" +
-      "\022aStreams: create, list and describe a n" +
-      "amespace\'s logs; produce and fetch recor" +
-      "ds and CloudEvents.B\212\001\n\035dev.loams.gen.lo" +
-      "ams.stream.v1B\013StreamProtoP\001\242\002\003LSX\252\002\017Loa" +
-      "ms.Stream.V1\312\002\017Loams\\Stream\\V1\342\002\033Loams\\S" +
-      "tream\\V1\\GPBMetadata\352\002\021Loams::Stream::V1" +
-      "b\006proto3"
+      "onse\"\016\222\265\030\n\022\006create\030\001\022o\n\016DescribeStream\022&" +
+      ".loams.stream.v1.DescribeStreamRequest\032\'" +
+      ".loams.stream.v1.DescribeStreamResponse\"" +
+      "\014\220\002\001\222\265\030\005\022\003get\022\200\001\n\013ListStreams\022#.loams.st" +
+      "ream.v1.ListStreamsRequest\032$.loams.strea" +
+      "m.v1.ListStreamsResponse\"&\220\002\001\222\265\030\037\022\004list\"" +
+      "\027streams:next_page_token\022[\n\007Produce\022\037.lo" +
+      "ams.stream.v1.ProduceRequest\032 .loams.str" +
+      "eam.v1.ProduceResponse\"\r\222\265\030\t\022\007produce\022V\n" +
+      "\005Fetch\022\035.loams.stream.v1.FetchRequest\032\036." +
+      "loams.stream.v1.FetchResponse\"\016\220\002\001\222\265\030\007\022\005" +
+      "fetch\022\203\001\n\022ProduceCloudEvents\022*.loams.str" +
+      "eam.v1.ProduceCloudEventsRequest\032+.loams" +
+      ".stream.v1.ProduceCloudEventsResponse\"\024\222" +
+      "\265\030\020\022\016produce_events\022~\n\020FetchCloudEvents\022" +
+      "(.loams.stream.v1.FetchCloudEventsReques" +
+      "t\032).loams.stream.v1.FetchCloudEventsResp" +
+      "onse\"\025\220\002\001\222\265\030\016\022\014fetch_events\032p\212\265\030l\n\007strea" +
+      "ms\022aStreams: create, list and describe a" +
+      " namespace\'s logs; produce and fetch rec" +
+      "ords and CloudEvents.B\212\001\n\035dev.loams.gen." +
+      "loams.stream.v1B\013StreamProtoP\001\242\002\003LSX\252\002\017L" +
+      "oams.Stream.V1\312\002\017Loams\\Stream\\V1\342\002\033Loams" +
+      "\\Stream\\V1\\GPBMetadata\352\002\021Loams::Stream::" +
+      "V1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -389,6 +392,7 @@ public final class StreamProto {
     dev.loams.gen.loams.options.v1.OptionsProto.getDescriptor();
     com.google.protobuf.ExtensionRegistry registry =
         com.google.protobuf.ExtensionRegistry.newInstance();
+    registry.add(dev.loams.gen.loams.options.v1.OptionsProto.facade);
     registry.add(dev.loams.gen.loams.options.v1.OptionsProto.module);
     com.google.protobuf.Descriptors.FileDescriptor
         .internalUpdateFileDescriptor(descriptor, registry);
