@@ -349,6 +349,23 @@ def test_indices_admin(es, names, is_loams):
         assert health["status"] in ("green", "yellow")
 
 
+def test_cat_indices_json(es, index):
+    """`@mastra/elasticsearch`'s `listIndexes()` reads `cat.indices(format="json")`
+    (MA1 Task 24)."""
+    es.indices.create(index=index)
+    es.index(index=index, id="1", document={"a": 1}, refresh=True)
+    es.index(index=index, id="2", document={"a": 2}, refresh=True)
+    rows = es.cat.indices(format="json")
+    mine = [r for r in rows if r["index"] == index]
+    assert len(mine) == 1, rows
+    assert mine[0]["docs.count"] == "2"
+    assert mine[0]["status"] == "open"
+    one = es.cat.indices(index=index, format="json", h="index,docs.count")
+    assert [dict(r) for r in one] == [{"index": index, "docs.count": "2"}]
+    text = es.cat.indices(index=index, v=True, h="index,docs.count")
+    assert str(text).split() == ["index", "docs.count", index, "2"]
+
+
 def test_alias_on_two_indices_like_the_langchain_caches(es, names):
     i1, i2, i3 = names("test_index1"), names("test_index2"), names("test_index3")
     alias = names("test_alias")

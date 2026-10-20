@@ -23,6 +23,7 @@
 //! - [`dsl`]: the Query DSL → the search IR.
 //! - [`search`]: search bodies and URL parameters → a [`search::SearchPlan`],
 //!   and `_search`, `_count` and `_msearch` with ES scores.
+//! - [`cat`]: `GET /_cat/indices[/{index}]` as JSON or the text table.
 //! - [`ubq`] serves `_update_by_query` over the native `patch_by_filter`,
 //!   and [`dbq`] serves `_delete_by_query` over `delete_by_filter` with the
 //!   loop both share (D87).
@@ -72,6 +73,12 @@
 //!   and not applied: the batches are the collection service's, and a
 //!   batch refused for backpressure past the deadline is 429 with what was
 //!   written kept (rows T9a-6, T9a-7).
+//! - `_cat/indices` reports `pri` 1 and `rep` 0 for every index, `health`
+//!   is always `green` and `status` `open`, `docs.deleted` is 0, and the
+//!   sizes (`store.size`, `pri.store.size`, `dataset.size`) are Loams's
+//!   `size_bytes`; `docs.count` counts the live documents at the request's
+//!   consistency (MA1 Task 24). Only the `json` and `text` formats are
+//!   served, and unknown `h` columns are left out.
 
 // `EsError` carries ES's extra fields and wrapped cause by value (Task 1
 // Produces); errors are the cold path, so its size is accepted.
@@ -95,6 +102,7 @@ use tokio_util::sync::CancellationToken;
 
 mod admin;
 pub mod bulk;
+pub mod cat;
 pub mod dbq;
 pub mod doc;
 pub mod dsl;
@@ -205,6 +213,9 @@ impl EsGateway {
             .route("/_license", get(info::license))
             .route("/_cluster/health", get(info::health))
             .route("/_cluster/health/{index}", get(info::health_index))
+            // MA1 Task 24: `_cat/indices`.
+            .route("/_cat/indices", get(cat::cat_indices_all))
+            .route("/_cat/indices/{index}", get(cat::cat_indices_named))
             .route("/_ml/trained_models/{id}/_infer", post(info::infer))
             .route(
                 "/_ml/trained_models/{id}/deployment/_infer",
