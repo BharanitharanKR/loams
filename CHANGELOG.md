@@ -118,6 +118,26 @@ All notable changes to this project are documented here. The format follows [Kee
   only collection and SQL reads take it (SDKP-17). `timeout_ms` is now the
   SDK's own deadline over all of a call's retries rather than the transport's
   per-attempt one.
+- Go SDK (`loams.dev/go`): the app-building layer of SDKP. `NewSchema`,
+  `Filter` and `NewSearch` builders (with `RRF`, `DBSF`, `Weighted`, `Sort`)
+  checked against the builder corpus (`sdks/fixtures/builders/`);
+  `client.Collection(name)` handles; `ConsistencyToken` parse/merge/print
+  checked against `sdks/fixtures/tokens.json`, and a session store that merges
+  every response token and sends `consistency.at_least`; `Options.Namespace`
+  and `FromEnv` (R11); a 30 s unary deadline raising `client_deadline_exceeded`
+  (R12); `WriteBatch` and `*BatchError` (R13); `Subscribe` (R14);
+  `DocumentCalls` (Upsert, Delete, Patch, WriteBatch, ScrollAll) and
+  `SearchCalls` (Text, Hybrid, QueryAll). The generated stubs now include
+  `loams.collection.v1` and `loams.graph.v1`.
+  The app modules `Namespaces()`, `Collections()`, `Documents()`, `Search()`,
+  `Vector()` and `Graph()` (the binding table checked against
+  `facade-index.json` by `go_facade_matches_index`), the app scenario replayed
+  through them (`go_app_*`), and `examples/notes`.
+- Go SDK: `client.Sql()` and `client.Streams()` (SDKP L3 part C): `Query`,
+  `QueryArrow`, `Records(ctx, statement, params)` and `SqlRecords(answer)`;
+  `Create`, `Get`, `List`/`ListAll`, `Produce`, `Fetch`, `ProduceEvents`,
+  `FetchEvents` and `Subscribe`; replayed by `go_app_sql` and
+  `go_app_streams`.
 
 ### Fixed
 

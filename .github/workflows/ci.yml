@@ -1610,6 +1610,11 @@ jobs:
       # gen/facade (Q604) is neither regenerated nor cleaned.
       - name: the Go SDK's generated code is not stale
         run: ./scripts/sdk/drift.sh go
+      # SDKP: the app suite. `go test` above replayed the app scenario through
+      # the facade and wrote sdks/fixtures/results/go.json; this checks it ran
+      # every app fixture and names every app test.
+      - name: the app suite
+        run: node sdks/conformance/check-languages.mjs --check go --suite app
 
   # SDK2 Task 11 (#295): the C++ SDK. protobuf 36.1.0 and libcurl 8.x are
   # preinstalled on the runner, and the pinned `buf.build/protocolbuffers/cpp`
