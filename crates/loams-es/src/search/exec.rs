@@ -553,6 +553,9 @@ pub async fn execute(
     if indices.is_empty() {
         return empty(ctx, body, params);
     }
+    if let Some(desc) = seq_no_sort(body, params)? {
+        return Box::pin(seq_no_sorted(gw, ctx, indices, body, params, desc)).await;
+    }
     let now = now_ms();
     let mut plans = Vec::with_capacity(indices.len());
     for view in indices {
@@ -700,6 +703,230 @@ pub(crate) async fn page_after(
         last,
         n,
     ))
+}
+
+// ----- sort on `_seq_no` (#949) -----
+
+/// The most matches a `_seq_no` sort orders (ES's default
+/// `index.max_result_window`).
+pub const SEQ_NO_SORT_LIMIT: usize = 10_000;
+
+/// `Some(descending)` when the request sorts on `_seq_no`, which must then be
+/// its only sort key.
+fn seq_no_sort(body: &Value, params: &SearchParams) -> Result<Option<bool>, EsError> {
+    let order = |v: &Value| -> Result<bool, EsError> {
+        let text = match v {
+            Value::String(s) => s.as_str(),
+            Value::Object(map) => match map.get("order") {
+                None => "asc",
+                Some(Value::String(s)) => s.as_str(),
+                Some(other) => {
+                    return Err(EsError::parsing(format!(
+                        "[sort] order must be a string, found [{}]",
+                        token_name(other)
+                    )));
+                }
+            },
+            Value::Null => "asc",
+            other => {
+                return Err(EsError::parsing(format!(
+                    "[sort] options of [_seq_no] must be a string or an object, found [{}]",
+                    token_name(other)
+                )));
+            }
+        };
+        match text {
+            "asc" => Ok(false),
+            "desc" => Ok(true),
+            other => Err(EsError::illegal_argument(format!(
+                "Unknown SortOrder [{other}]"
+            ))),
+        }
+    };
+    // (key, options) per sort entry.
+    let mut keys: Vec<(String, Value)> = Vec::new();
+    if let Some(list) = &params.sort {
+        for item in list {
+            let (key, dir) = item.split_once(':').unwrap_or((item.as_str(), "asc"));
+            keys.push((key.to_string(), json!(dir)));
+        }
+    } else {
+        let mut push = |v: &Value| match v {
+            Value::String(key) => keys.push((key.clone(), Value::Null)),
+            Value::Object(map) => {
+                for (key, options) in map {
+                    keys.push((key.clone(), options.clone()));
+                }
+            }
+            _ => {}
+        };
+        match body.get("sort") {
+            Some(Value::Array(items)) => items.iter().for_each(&mut push),
+            Some(other) => push(other),
+            None => {}
+        }
+    }
+    let Some((_, options)) = keys.iter().find(|(key, _)| key == "_seq_no") else {
+        return Ok(None);
+    };
+    if keys.len() > 1 {
+        return Err(EsError::unsupported("sort on _seq_no with other sort keys"));
+    }
+    for key in [
+        "search_after",
+        "knn",
+        "rank",
+        "retriever",
+        "collapse",
+        "pit",
+    ] {
+        if body.get(key).is_some_and(|v| !v.is_null()) {
+            return Err(EsError::unsupported(&format!(
+                "sort on _seq_no with [{key}]"
+            )));
+        }
+    }
+    order(options).map(Some)
+}
+
+/// A search sorted on `_seq_no`: the matches (at most
+/// [`SEQ_NO_SORT_LIMIT`]) are read in `_doc` order with their `_seq_no`,
+/// ordered by it in the gateway, then paged. `_seq_no` is the partition
+/// offset of a document's last write (Ruling 4), so it orders writes as
+/// ES's does within one shard.
+async fn seq_no_sorted(
+    gw: &EsGateway,
+    ctx: &RequestCtx,
+    indices: &[IndexView],
+    body: &Value,
+    params: &SearchParams,
+    desc: bool,
+) -> Result<SearchOutcome, EsError> {
+    let count_of = |key: &str, param: Option<usize>, default: usize| -> Result<usize, EsError> {
+        if let Some(n) = param {
+            return Ok(n);
+        }
+        match body.get(key) {
+            None | Some(Value::Null) => Ok(default),
+            Some(v) => v
+                .as_u64()
+                .map(|n| n as usize)
+                .ok_or_else(|| EsError::parsing(format!("[{key}] must be a non-negative integer"))),
+        }
+    };
+    let from = count_of("from", params.from, 0)?;
+    let size = count_of("size", params.size, 10)?;
+    let want_seq_no = body
+        .get("seq_no_primary_term")
+        .and_then(Value::as_bool)
+        .unwrap_or(false);
+    let track = track_total_hits(
+        params
+            .track_total_hits
+            .as_ref()
+            .or(body.get("track_total_hits")),
+    )?;
+    let mut inner_body = match body {
+        Value::Null => json!({}),
+        other => other.clone(),
+    };
+    if let Value::Object(map) = &mut inner_body {
+        for key in ["sort", "from", "size", "track_total_hits", "track_scores"] {
+            map.remove(key);
+        }
+        map.insert("seq_no_primary_term".to_string(), json!(true));
+        map.insert("track_total_hits".to_string(), json!(true));
+    }
+    // Within every index's `max_result_window`.
+    let limit = indices
+        .iter()
+        .map(|v| v.es.max_result_window)
+        .min()
+        .unwrap_or(SEQ_NO_SORT_LIMIT)
+        .min(SEQ_NO_SORT_LIMIT);
+    let inner_params = SearchParams {
+        from: Some(0),
+        size: Some(limit),
+        sort: None,
+        track_total_hits: None,
+        track_scores: None,
+        ..params.clone()
+    };
+    let inner = Box::pin(execute(gw, ctx, indices, &inner_body, &inner_params)).await?;
+    let mut out = inner.body;
+    let total_path = |v: &Value| -> u64 {
+        let t = &v["hits"]["total"];
+        t.as_u64().or_else(|| t["value"].as_u64()).unwrap_or(0)
+    };
+    let total = total_path(&out);
+    if total > limit as u64 {
+        return Err(EsError::unsupported(&format!(
+            "sort on _seq_no over more than {limit} matches"
+        )));
+    }
+    let hits = out["hits"]["hits"]
+        .as_array_mut()
+        .map(std::mem::take)
+        .unwrap_or_default();
+    let mut hits: Vec<(u64, Value)> = hits
+        .into_iter()
+        .map(|h| (h["_seq_no"].as_u64().unwrap_or(0), h))
+        .collect();
+    hits.sort_by(|(a, x), (b, y)| {
+        let by_seq = if desc { b.cmp(a) } else { a.cmp(b) };
+        by_seq
+            .then_with(|| x["_index"].as_str().cmp(&y["_index"].as_str()))
+            .then_with(|| x["_id"].as_str().cmp(&y["_id"].as_str()))
+    });
+    let page: Vec<Value> = hits
+        .into_iter()
+        .skip(from)
+        .take(size)
+        .map(|(seq_no, mut hit)| {
+            if let Value::Object(map) = &mut hit {
+                map.insert("_score".to_string(), Value::Null);
+                if !want_seq_no {
+                    map.remove("_seq_no");
+                    map.remove("_primary_term");
+                }
+                map.insert("sort".to_string(), json!([seq_no]));
+            }
+            hit
+        })
+        .collect();
+    if let Value::Object(hits_obj) = &mut out["hits"] {
+        hits_obj.insert("hits".to_string(), Value::Array(page));
+        hits_obj.insert("max_score".to_string(), Value::Null);
+        let rest_int = params.rest_total_hits_as_int;
+        match cap_total(
+            TotalHits {
+                value: total,
+                relation: TotalRelation::Eq,
+            },
+            track,
+        ) {
+            None => {
+                hits_obj.remove("total");
+            }
+            Some(t) if rest_int => {
+                hits_obj.insert("total".to_string(), json!(t.value));
+            }
+            Some(t) => {
+                let relation = match t.relation {
+                    TotalRelation::Eq => "eq",
+                    TotalRelation::Gte => "gte",
+                };
+                hits_obj.insert(
+                    "total".to_string(),
+                    json!({"value": t.value, "relation": relation}),
+                );
+            }
+        }
+    }
+    Ok(SearchOutcome {
+        body: out,
+        read_token: inner.read_token,
+    })
 }
 
 /// The answer over no index (an unmatched wildcard, or only missing names
