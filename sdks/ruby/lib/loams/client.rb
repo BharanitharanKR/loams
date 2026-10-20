@@ -22,6 +22,8 @@ module Loams
       "search" => App::SearchModule,
       "vector" => App::VectorModule,
       "graph" => App::Graph,
+      "sql" => App::Sql,
+      "streams" => App::Streams,
     }.freeze
 
     # A client from the environment (R1): `LOAMS_ENDPOINT`, then

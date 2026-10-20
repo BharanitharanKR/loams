@@ -43,6 +43,15 @@ All notable changes to this project are documented here. The format follows [Kee
   `queryAll`; consistency tokens that parse and merge, a session store that gives reads read-your-writes,
   a default namespace, `Client::fromEnv()`, client deadlines (`client_deadline_exceeded`), and the notes
   example app.
+- **The C++ SDK builds apps** (SDKP L6): `Namespaces()`, `Collections()`, `Documents()`, `Search()`,
+  `Vector()` and `Graph()` modules over the generated `loams.collection.v1` and `loams.graph.v1` stubs,
+  `Loams::Call` for any facade call, the `Schema`, `Filter` and `Search` builders, `Collection(name)`
+  handles, `WriteBatch`, `ScrollAll` and `QueryAll`; consistency tokens that parse and merge, a session
+  store that merges rather than refusing a second token, `Options::default_namespace`, `OptionsFromEnv()`,
+  and a 30 s per-call budget (`connect-timeout-ms`, `client_deadline_exceeded`, never retried).
+- **The Ruby SDK's `sql` and `streams` modules** (SDKP L10 part C): `sql.query` with `$n` parameters,
+  `query_arrow` and `Sql.records`; `streams.create`, `get`, `list`, `produce` (an optional record key,
+  producer deduplication), `fetch`, `produce_events`, `fetch_events` and `subscribe`.
 - **`loams.sql.v1` on the main port** (SDKP P0b, API2 Task 1): `SqlService/Query` runs one read-only
   statement over a namespace's collections with `$1…$n` parameters (each cast to its placeholder's
   inferred type) and answers typed columns and rows; `QueryArrow` answers the result as one Arrow IPC

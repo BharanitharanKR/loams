@@ -53,10 +53,19 @@ module Loams
       %w[graph query_batch] => "loams.graph.v1.GraphService/ExecuteBatch",
       %w[graph query_stream] => "loams.graph.v1.GraphService/ExecuteStream",
       %w[graph explain] => "loams.graph.v1.GraphService/Explain",
+      %w[sql query] => "loams.sql.v1.SqlService/Query",
+      %w[sql query_arrow] => "loams.sql.v1.SqlService/QueryArrow",
+      %w[streams create] => "loams.stream.v1.StreamService/CreateStream",
+      %w[streams get] => "loams.stream.v1.StreamService/DescribeStream",
+      %w[streams list] => "loams.stream.v1.StreamService/ListStreams",
+      %w[streams produce] => "loams.stream.v1.StreamService/Produce",
+      %w[streams fetch] => "loams.stream.v1.StreamService/Fetch",
+      %w[streams produce_events] => "loams.stream.v1.StreamService/ProduceCloudEvents",
+      %w[streams fetch_events] => "loams.stream.v1.StreamService/FetchCloudEvents",
     }.freeze
 
     # The packages whose reads take the session's token (SDKP-17).
-    SESSION_SCOPES = %w[loams.collection.v1 loams.sql.v1].freeze
+    SESSION_SCOPES = %w[loams.collection.v1].freeze
 
     # What every module shares: the call path from proto3 JSON to an answer.
     class Base
@@ -79,7 +88,8 @@ module Loams
 
         message = to_message(binding, request)
         fill_namespace(binding, message, path)
-        scope = binding.package_name
+        # SQL reads collections, so it reads (and adds to) the collection token.
+        scope = binding.package_name == "loams.sql.v1" ? "loams.collection.v1" : binding.package_name
         # SDKP-17: only collection (and SQL) reads take the session's token; a
         # graph's tokens name one graph's stream.
         @client.session&.apply(scope, message) if SESSION_SCOPES.include?(scope)
@@ -530,6 +540,146 @@ module Loams
         when :eventual then { "eventual" => {} }
         else { "atLeast" => level.to_s }
         end
+      end
+    end
+  end
+
+  module App
+    # `sql`: one read-only statement over a namespace's collections, with
+    # `$1…$n` parameters. SQL reads see the session's collection writes.
+    class Sql < Base
+      # The answer's `rows` are lists in `columns` order; see `.records`.
+      def query(sql, params: [], max_rows: nil, consistency: nil, namespace: nil, **opts)
+        rpc(CALLS[%w[sql query]], request(sql, params, max_rows, consistency, namespace), call_opts(opts))
+      end
+
+      # The same statement, answered as Arrow IPC bytes.
+      def query_arrow(sql, params: [], max_rows: nil, consistency: nil, namespace: nil, **opts)
+        rpc(CALLS[%w[sql query_arrow]], request(sql, params, max_rows, consistency, namespace), call_opts(opts)).arrow_ipc
+      end
+
+      # A `QueryResponse`'s rows as Hashes, column name to value.
+      def self.records(response)
+        names = response.columns.map(&:name)
+        response.rows.map { |row| names.zip(Values.to_ruby(row)).to_h }
+      end
+
+      private
+
+      def request(sql, params, max_rows, consistency, namespace)
+        ns(namespace).merge(Builders.compact({
+          "sql" => sql.to_s, "params" => params.empty? ? nil : params,
+          "maxRows" => max_rows, "consistency" => Search.consistency_json(consistency),
+        }))
+      end
+    end
+
+    # One fetched record, decoded: `offset`, `key` and `value` (binary
+    # Strings, or nil), `headers` and `timestamp_ms`.
+    StreamRecord = Struct.new(:offset, :key, :value, :headers, :timestamp_ms, keyword_init: true) do
+      def json
+        value && JSON.parse(value)
+      end
+    end
+
+    # `streams`: a namespace's logs. Records are bytes on the wire; the module
+    # takes Strings (bytes as they are) or other values (sent as JSON) and
+    # answers bytes.
+    class Streams < Base
+      def create(name, partitions: 1, max_age_ms: nil, max_bytes: nil, namespace: nil, **opts)
+        retention = Builders.compact({ "maxAgeMs" => max_age_ms&.to_s, "maxBytes" => max_bytes&.to_s })
+        rpc(CALLS[%w[streams create]], ns(namespace).merge(Builders.compact({
+          "name" => name.to_s, "partitions" => partitions.zero? ? nil : partitions,
+          "retention" => retention.empty? ? nil : retention,
+        })), call_opts(opts))
+      end
+
+      def get(stream, namespace: nil, **opts)
+        rpc(CALLS[%w[streams get]], ns(namespace).merge("stream" => stream.to_s), call_opts(opts))
+      end
+
+      def list(page_size: nil, page_token: nil, namespace: nil, **opts)
+        rpc(CALLS[%w[streams list]], ns(namespace).merge(Builders.compact({ "pageSize" => page_size, "pageToken" => page_token })), call_opts(opts))
+      end
+
+      def list_all(page_size: nil, namespace: nil, **opts)
+        paged(CALLS[%w[streams list]], ns(namespace).merge(Builders.compact({ "pageSize" => page_size })), "streams", call_opts(opts))
+      end
+
+      # Appends `records` to one partition. A record is a value, or
+      # `{key:, value:, headers: {name => value}}` with an optional key
+      # (SDKP-25). With `producer_id` and `producer_seq` a repeat is
+      # deduplicated (`duplicate`).
+      def produce(stream, records, partition: 0, producer_id: nil, producer_seq: nil, namespace: nil, **opts)
+        rpc(CALLS[%w[streams produce]], ns(namespace).merge(Builders.compact({
+          "stream" => stream.to_s, "partition" => partition.zero? ? nil : partition,
+          "records" => records.map { |r| Streams.record(r) },
+          "producerId" => producer_id, "producerSeq" => producer_seq&.to_s,
+        })), call_opts(opts))
+      end
+
+      # Records at and after `offset`; `.records` decodes the answer.
+      def fetch(stream, partition: 0, offset: 0, max_records: nil, max_bytes: nil, max_wait_ms: nil, namespace: nil, **opts)
+        rpc(CALLS[%w[streams fetch]], ns(namespace).merge(Builders.compact({
+          "stream" => stream.to_s, "partition" => partition.zero? ? nil : partition,
+          "offset" => offset.zero? ? nil : offset.to_s, "maxBytes" => max_bytes,
+          "maxRecords" => max_records, "maxWaitMs" => max_wait_ms,
+        })), call_opts(opts))
+      end
+
+      # CloudEvents (Hashes) appended as one JSON batch.
+      def produce_events(stream, events, partition: nil, namespace: nil, **opts)
+        rpc(CALLS[%w[streams produce_events]], ns(namespace).merge(Builders.compact({
+          "stream" => stream.to_s, "partition" => partition,
+          "jsonBatch" => [JSON.generate(events)].pack("m0"),
+        })), call_opts(opts))
+      end
+
+      # CloudEvents at and after `offset`, decoded from the answer's JSON batch.
+      def fetch_events(stream, partition: 0, offset: 0, max_bytes: nil, max_wait_ms: nil, namespace: nil, **opts)
+        answer = rpc(CALLS[%w[streams fetch_events]], ns(namespace).merge(Builders.compact({
+          "stream" => stream.to_s, "partition" => partition.zero? ? nil : partition,
+          "offset" => offset.zero? ? nil : offset.to_s, "maxBytes" => max_bytes, "maxWaitMs" => max_wait_ms,
+        })), call_opts(opts))
+        answer.json_batch.empty? ? [] : JSON.parse(answer.json_batch)
+      end
+
+      # R14: every record from `from_offset` on, as a loop over `fetch`:
+      # enumerate it, `cancel` it, resume from `offset`.
+      def subscribe(stream, partition: 0, from_offset: 0, max_records: nil, max_wait_ms: nil, namespace: nil, **opts)
+        Subscription.new(from_offset: from_offset) do |offset|
+          Streams.records(fetch(stream, partition: partition, offset: offset, max_records: max_records,
+            max_wait_ms: max_wait_ms, namespace: namespace, **opts))
+        end
+      end
+
+      # A `FetchResponse`'s records, decoded.
+      def self.records(response)
+        response.records.map do |r|
+          StreamRecord.new(
+            offset: r.offset, key: r.key, value: r.value,
+            headers: r.headers.to_h { |h| [h.key, h.value] }, timestamp_ms: r.timestamp_ms,
+          )
+        end
+      end
+
+      # One record as a `Record`'s JSON (bytes as base64).
+      def self.record(record)
+        if record.is_a?(Hash) && (record.key?(:value) || record.key?("value") || record.key?(:key) || record.key?("key"))
+          r = record.transform_keys(&:to_s)
+          headers = (r["headers"] || {}).map { |k, v| Builders.compact({ "key" => k.to_s, "value" => v.nil? ? nil : b64(v) }) }
+          Builders.compact({
+            "key" => r["key"].nil? ? nil : b64(r["key"]),
+            "value" => r["value"].nil? ? nil : b64(r["value"]),
+            "headers" => headers.empty? ? nil : headers,
+          })
+        else
+          { "value" => b64(record) }
+        end
+      end
+
+      def self.b64(value)
+        [value.is_a?(String) ? value : JSON.generate(value)].pack("m0")
       end
     end
   end
