@@ -18,6 +18,12 @@ in [Run](#run).
 
 Not a production layout: no storage controller, no Neon proxy, no TLS, default credentials,
 `fsync = off` in the compute spec, and the safekeeper keeps WAL in its container filesystem.
+
+The compute spec keeps Postgres's default `shared_buffers` (128 MB) and turns on a 256 MB local
+file cache, as Loams's own spec does (`crates/loams-pg-control/src/upcall/spec.rs`). Neon's
+docker-compose uses `shared_buffers = 1MB` with no file cache, which sends every catalog read to
+the pageserver; after DDL those reads wait for WAL ingest, sometimes for seconds, and clients with
+short pool timeouts failed (#904).
 Images are pinned by digest in [`deploy/pins/loams-postgres-images.toml`](../pins/loams-postgres-images.toml)
 (NF1 Task 2). `scripts/nf1/pins.py set` writes that file and generates every consumer from it:
 this stack's and `deploy/loams-pg-bench`'s `x-neon-image` and `x-compute-image`, the release
