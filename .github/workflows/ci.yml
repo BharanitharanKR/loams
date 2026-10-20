@@ -1769,6 +1769,8 @@ jobs:
       - name: the C# SDK's conformance suite
         working-directory: sdks/csharp
         run: dotnet test Loams.sln -c Release
+      - name: the C# SDK passes the app suite
+        run: node sdks/conformance/check-languages.mjs --check csharp --suite app
       # A proto edit that moved the SDK surface must not pass with stale stubs.
       # `scripts/sdk/drift.sh` has no C# case -- there is no `protoc-gen-loams-facade`
       # template for C#, since the facade is hand-written (D650) -- so the check is

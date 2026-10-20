@@ -5,6 +5,10 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- **The C# SDK replays the app scenario** (SDKP P0d): `csharp_app_collections`, `csharp_app_search`,
+  `csharp_app_graph`, `csharp_app_sql` and `csharp_app_streams` replay `sdks/fixtures/recorded/app` through
+  the public facade against the shared fixture server, the report's `ran` names them, and the `SDK: C#`
+  job runs `check-languages --check csharp --suite app`.
 - **The C# SDK builds apps** (SDKP L5): `Namespaces`, `Collections`, `Documents`, `Search`, `Vector` and
   `Graph` modules over the generated `loams.collection.v1` and `loams.graph.v1` stubs, the `Schema`,
   `Filter` and `Search` builders, `client.Collection(name)` handles, `WriteBatchAsync`, `ScrollAllAsync`
