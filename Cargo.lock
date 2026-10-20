@@ -9132,6 +9132,7 @@ dependencies = [
  "loams-common",
  "postcard",
  "proptest",
+ "rand 0.10.3",
  "rand 0.9.5",
  "regex",
  "rustc-hash 2.1.3",
