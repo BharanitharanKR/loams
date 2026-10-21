@@ -1,6 +1,6 @@
 # 39 — Loams Software Factory and Loams Bot: Embedded Collaboration Apps, A2A Agents and the Closed Loop
 
-> **Superseded in part 2026-10-21 by [§76](76-identity-and-authorization.md) D1600** (approved, owner: full cutover from Authentik to Zitadel, with no migration path, no compatibility period and no dual running, because there are no users). D-SF-4's SSO goes through Zitadel; apps without free OIDC lose Authentik's proxy outpost and keep their own sign-in.
+> **Amendment (approved 2026-10-21) by [§76](76-identity-and-authorization.md): superseded in part by D1600** (owner: full cutover from Authentik to Zitadel, with no migration path, no compatibility period and no dual running, because there are no users). D-SF-4's SSO goes through Zitadel; apps without free OIDC lose Authentik's proxy outpost and keep their own sign-in.
 
 > **Updated 2026-10-21 ([D1420](13-decision-log.md)): the agent half of this design is superseded.** The owner closed SF2–SF5 (#225–#228) on 2026-10-19 for a redesign. The factory loop, its agents and Loams Bot are now [§72](72-software-factory-loop.md) (Mastra agents, Studio worktrees, a Mastra workflow on Resonate, no internal A2A); the marketplace is [§73](73-agent-marketplace.md) (open source, any framework, Mastra first). Superseded here: §5 (A2A agents), §7's agent rows, §10 (`factory.run` in Rust), §13 (Loams Bot in the apps) and §14. Still current: the app embedding, licences and SSO of §3–§4 (SF1), and the safety rules of §8 and §11, carried into §72 §7.
 

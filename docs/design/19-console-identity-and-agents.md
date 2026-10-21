@@ -1,6 +1,6 @@
 # 19 — Console, Identity and Agents
 
-> **Superseded in part 2026-10-21 by [§76](76-identity-and-authorization.md) D1600** (approved, owner: full cutover from Authentik to Zitadel, with no migration path, no compatibility period and no dual running, because there are no users). Where §19 names Authentik as the IdP in front of Loams (the 2026-10-02 note, P7, §6), read Zitadel. **Proposed** in §76: the principal kinds of §5 map onto Zitadel human and machine users (D1605, D1607); people's Zitadel JWTs are verified directly while §5.2's federation, delegation and vending stay for agents and workloads (D1606, D1618); P7's built-in sign-in is built-in single-org mode (D1613).
+> **Amendment (approved 2026-10-21) by [§76](76-identity-and-authorization.md): superseded in part by D1600** (owner: full cutover from Authentik to Zitadel, with no migration path, no compatibility period and no dual running, because there are no users). Where §19 names Authentik as the IdP in front of Loams (the 2026-10-02 note, P7, §6), read Zitadel. **Also approved** in §76 (2026-10-21): the principal kinds of §5 map onto Zitadel human and machine users (D1605, D1607); people's Zitadel JWTs are verified directly while §5.2's federation, delegation and vending stay for agents and workloads (D1606, D1618); P7's built-in sign-in is built-in single-org mode (D1613).
 
 Status: **Proposed** · 2026-09-26. Decision numbers are assigned at merge; until then they are P1–P10. This document builds on §18 §6–§8 (D64–D66) and amends one line of D65 (the tenancy model, P2).
 

@@ -2,11 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, test first. Where this plan gives exact names, paths, flags or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end of this file.
 >
-> **Status: Proposed** (stub, 2026-10-21). Track IA, design [§76](../design/76-identity-and-authorization.md) (D1600–D1621, Q1200–Q1214).
+> **Status: Approved** (owner, 2026-10-21, all defaults; stub). Track IA, design [§76](../design/76-identity-and-authorization.md) (D1600–D1621, Q1200–Q1214).
 >
-> **What is approved:** only **D1600**, the owner's ruling of 2026-10-21 for a full cutover from Authentik to Zitadel, with no migration, no compatibility period and no dual running. So **IA1 Task 1 (the Authentik removal) is approved in substance**, and the rest of this plan waits for §76's approval.
+> **What is approved:** all of §76, on 2026-10-21: first D1600 (the full cutover from Authentik to Zitadel, with no migration, no compatibility period and no dual running), then every other decision and question with its default.
 >
-> **Coverage:** this plan specifies **IA0** (the owner's Phase 0, the spike) and **IA1 Task 1** task by task. IA1's other tasks and IA2–IA6 are outlined at milestone level and get full task specifications when §76 is approved and IA0 has reported.
+> **Coverage:** this plan specifies **IA0** (the owner's Phase 0, the spike) and **IA1 Task 1** task by task. IA1's other tasks and IA2–IA6 are outlined at milestone level and get full task specifications when IA0 has reported.
 >
 > **Supersedes** [MT1](2026-10-02-mt1-authentik-identity.md) (D1600).
 
@@ -277,7 +277,7 @@ A CI script `scripts/docs/check-no-authentik.sh` enforces this allowlist.
 
 Commit: one PR per numbered group where it keeps PRs small (for example, 1–4 deploy, 5 protos, 6 code, 7–9 docs). Each commit is titled `identity: remove Authentik (<group>) (IA1 Task 1, D1600)`.
 
-### IA1 outline (after §76 is approved)
+### IA1 outline
 
 - **Zitadel at `auth.loams.dev`** (D1615): the deploy runbook; backups; the admin console on the tailnet only (D596's rule); GitHub and Google IdPs; branding through settings (Q1211).
 - **The `identity` compose profile** (D1613): Zitadel, Zitadel Login and `zitadel-db`, off by default.

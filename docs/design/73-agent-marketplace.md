@@ -1,6 +1,6 @@
 # 73 — The Loams Agent Marketplace: Any Framework, Mastra First
 
-> **Proposed amendment 2026-10-21 by [§76](76-identity-and-authorization.md)** (identity and authorization: Zitadel and OpenFGA; Proposed, except D1600). An installed marketplace agent becomes one Zitadel machine user (`agent:<id>`) in the installing org with no grants until someone grants them; inside a sandbox it still holds only agentd's 15-minute Loams token (D1453), whose `sub` is that machine-user id (D1607, D1618).
+> **Amendment (approved 2026-10-21) by [§76](76-identity-and-authorization.md)** (identity and authorization: Zitadel and OpenFGA; owner, all defaults). An installed marketplace agent becomes one Zitadel machine user (`agent:<id>`) in the installing org with no grants until someone grants them; inside a sandbox it still holds only agentd's 15-minute Loams token (D1453), whose `sub` is that machine-user id (D1607, D1618).
 
 Status: **Approved** · 2026-10-21. The owner approved the design with every default on 2026-10-21 (and confirmed that "fx.sh" means Vercel Labs' fx, Q1142).
 

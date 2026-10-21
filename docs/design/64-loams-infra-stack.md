@@ -1,6 +1,6 @@
 # 64 — Loams Infra: the HashiCorp Stack, Loams-Native and in Rust
 
-> **Proposed amendment 2026-10-21 by [§76](76-identity-and-authorization.md)** (identity and authorization: Zitadel and OpenFGA; Proposed, except D1600). §2.3's "Loams keeps Authentik" becomes Zitadel (D1600, approved; still one IdP and no new one besides it), and §10.2's "two `Authorizer` traits, two principal vocabularies" is resolved by one trait in `loams-authz` over §19's three principal kinds (D1610, D1605).
+> **Amendment (approved 2026-10-21) by [§76](76-identity-and-authorization.md)** (identity and authorization: Zitadel and OpenFGA; owner, all defaults). §2.3's "Loams keeps Authentik" becomes Zitadel (D1600; still one IdP and no new one besides it), and §10.2's "two `Authorizer` traits, two principal vocabularies" is resolved by one trait in `loams-authz` over §19's three principal kinds (D1610, D1605).
 
 Status: **Approved** · 2026-10-19 (owner approved all decisions and questions, 2026-10-19). Source: the owner's request of 2026-10-19, **"I want all of the HashiCorp stack in Loams, in Rust."** Decisions **D1150–D1171** and questions **Q970–Q983** are in the [decision log](13-decision-log.md), all approved by the owner on 2026-10-19 with their recommended defaults. The numbers leave a gap: D1119 is the no-open-core ruling of the same day, and D1120–D1149 and Q960–Q969 are left for §63 (Loams Meter), which is being written in parallel. Plan stub: [IS1](../plans/2026-10-19-is1-infra-stack.md). **This document writes no code.**
 
