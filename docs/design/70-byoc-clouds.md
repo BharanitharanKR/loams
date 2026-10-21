@@ -2,6 +2,8 @@
 
 Status: **Approved** · 2026-10-21. The owner approved the design with every default on 2026-10-21, after approving the eight Cloudflare defaults of the Cloudflare research earlier the same day (D1366–D1371, the Cloudflare part of D1354, Q1086, Q1087) and making an AWS account with $200 of credits for six months available for BY0's tests and the nightly AWS matrix (§12.2).
 
+**Amended 2026-10-21 (D1580–D1582).** The owner removed the services offering (D1323), and three rulings followed for this design: **no cloud marketplace listings for now** (D1580, amends D1374 and Q1091's answer; BYOC installs only from Ostrium's own artefacts); **the support bundle stays a local file** the user may attach to a GitHub issue or share on Discord (D1581, amends D1376); and **the support grant becomes a maintainer debug session**: opt-in, time-boxed, revocable, community and best effort, with no contract or SLA (D1582, amends D1378). The text below is updated to match; the amended rows keep their original wording with a note.
+
 Source: on 2026-10-21 the owner decided to **"fully embrace BYOC"** and is working on BYOC for **Cloudflare, Vercel, AWS, GCP and Azure**. A second requirement the same day: **app BYOC must map onto each cloud's free tiers** (for example AWS Lambda and DynamoDB). This document designs **data-plane BYOC**: Loams itself (the engine and its stack) installed into a customer's own account on each cloud. **App BYOC**, the apps and agents that the Software Factory, Studio and the agents marketplace build and deploy into a customer's account on serverless free tiers, is designed in [§71](71-app-byoc-free-tiers.md). The two share §4's principles and one CLI (§9.3).
 
 Decisions **D1350–D1384** (D1385–D1389 kept free) and open questions **Q1080–Q1094** are declared in the [decision log](13-decision-log.md). §71 uses D1390–D1410 (D1411–D1419 kept free) and Q1095–Q1109.
@@ -41,7 +43,7 @@ Loams is self-hosted today in one way: the compose stack on a machine the user c
 - the bucket, the keys and the secrets are the cloud's own services in their account (S3 and KMS, not a folder and a file);
 - the machine has a cloud identity, so no static keys sit on disk;
 - private reach from their other workloads is the cloud's own private networking;
-- the install is a command, a module in their existing IaC, or a Marketplace launch;
+- the install is a command or a module in their existing IaC;
 - someone has tested it on that cloud.
 
 None of that is written down per cloud. Five clouds differ in what they can host: AWS, Google Cloud and Azure have VMs, container services and Kubernetes; Cloudflare has Containers with no persistent disk behind Durable Objects; Vercel has no place for a stateful engine at all.
@@ -55,11 +57,12 @@ None of that is written down per cloud. Five clouds differ in what they can host
 - **Never public, as amended** (D1359): no Loams port on the internet. Operators and the console use the tailnet; workloads in the same cloud use its private link to the gateway's edge listener; others use Cloudflare Tunnel (§69).
 - **Ostrium runs no data plane** (D1351, D1378): an install needs no connection to Ostrium. The BYOC agent and control plane of §41 are opt-in.
 - **Per cloud:**
-  - **AWS:** EC2 now; ECS Fargate only as a checkpointed node; EKS with the operator; S3, KMS, Secrets Manager; PrivateLink; a free AWS Marketplace listing plus services private offers.
-  - **Google Cloud:** Compute Engine now; Cloud Run only as a checkpointed node; GKE; GCS, Cloud KMS, Secret Manager; Private Service Connect; a free Marketplace listing.
-  - **Azure:** a VM now; Container Apps only as a checkpointed node; AKS; Blob Storage, Key Vault; Private Link; an Azure Container offer.
+  - **AWS:** EC2 now; ECS Fargate only as a checkpointed node; EKS with the operator; S3, KMS, Secrets Manager; PrivateLink.
+  - **Google Cloud:** Compute Engine now; Cloud Run only as a checkpointed node; GKE; GCS, Cloud KMS, Secret Manager; Private Service Connect.
+  - **Azure:** a VM now; Container Apps only as a checkpointed node; AKS; Blob Storage, Key Vault; Private Link.
   - **Cloudflare:** a "Deploy to Cloudflare" template now: a front Worker and the console, a Durable Object owning one Container with the light image, R2 as the bucket, metadata checkpointed to R2. Durable Objects take over the metastore and Durable in phase 1; Workers for Platforms carries the multi-tenant Factory and marketplace in phase 2. A Cloudflare-native single-node profile amends PD29 and PD34 for this target only (§7.4).
   - **Vercel:** **no data plane on Vercel.** BYOC on Vercel means the customer's Loams in one of the clouds above; the Factory's and Studio's apps and agents on the customer's Vercel team; a Vercel Marketplace connectable-account integration; and edge reach with Vercel OIDC (§8).
+- **Distribution** (§10, D1580): only Ostrium's own artefacts (GHCR images, the compose bundle, the Helm chart and operator, the OpenTofu modules); no cloud marketplace listings.
 - **Shared pieces** (§9): OpenTofu modules per cloud and tier, the operator on Kubernetes, a `loams byoc deploy --cloud <c>` flow, upgrades and backups into the customer's bucket, observability into the customer's monitoring, and a local support bundle.
 - **Conformance** (§12): a BYOC matrix per cloud and tier, run nightly on Ostrium's cloud test accounts with credits, with hard cost guards.
 
@@ -75,8 +78,8 @@ None of that is written down per cloud. Five clouds differ in what they can host
 | **Secrets** | Secrets Manager | Secret Manager | Key Vault secrets | Worker secrets, Secrets Store | Vercel sensitive env vars (for the app side) |
 | **Private reach** | PrivateLink to an internal NLB | Private Service Connect to an internal LB | Private Link service to an internal LB | Workers VPC, service bindings; Tunnel | Vercel PrivateLink to AWS; Tunnel + Access |
 | **Identity → Loams token (ER2)** | `GetWebIdentityToken` | Metadata ID token | Managed identity token | — (API keys in Worker secrets) | Vercel OIDC |
-| **Marketplace** | Helm (container) listing, free plus a paid-support plan; professional-services private offers | Free Kubernetes app and VM listings | Azure Container offer (Kubernetes app), free or BYOL | Deploy to Cloudflare button | Connectable-account integration |
-| **Install UX** | `install.sh` / cloud-init (BY0); Tofu module; Marketplace (BY2) | Same | Same | Deploy button, `wrangler deploy` | `vercel integration add`, env vars |
+| **Distribution** (D1580) | Ostrium's artefacts: GHCR images, compose bundle, Helm chart and operator, Tofu modules; no Marketplace listing | Same | Same | Deploy to Cloudflare button | Connectable-account integration |
+| **Install UX** | `install.sh` / cloud-init (BY0); Tofu module (BY1); Helm chart and operator (BY2) | Same | Same | Deploy button, `wrangler deploy` | `vercel integration add`, env vars |
 | **Small install, per month (estimate)** | about $73 | about $60 | about $82 | about $46–$180 | Vercel plan + the data plane's cloud |
 
 Costs are in §6 and §7 per cloud. "Small install" is one 2 vCPU, 8 GiB node with a 50 GB disk, 50 GB in the bucket and a handful of keys and secrets.
@@ -109,17 +112,20 @@ Costs are in §6 and §7 per cloud. "Small install" is one 2 vCPU, 8 GiB node wi
 | D1371 | **Loams Postgres stays out of Cloudflare BYOC:** Hyperdrive to an external Postgres, or a data plane in another cloud joined by Tunnel (PD36), until an experiment shows safekeepers durable on Containers | 7.4 | **Approved** (owner, 2026-10-21) |
 | D1372 | **On Cloudflare, the front Worker is the edge door:** it authenticates every request before the Durable Object (environment-bound `lk_` keys on the edge allow-list of D1322; the console and admin routes only behind a Cloudflare Access application); no Container port is reachable otherwise. That is a *brokered* path under D1301 and D1311 | 7.4 | Approved (owner, 2026-10-21) |
 | D1373 | **Vercel hosts no data plane.** BYOC on Vercel is: the customer's Loams on AWS, Google Cloud, Azure or Cloudflare; apps and agents on the customer's Vercel team (§71); a connectable-account Marketplace integration that writes `LOAMS_ENDPOINT` and credentials into a project; reach over Access or Vercel PrivateLink, and Vercel OIDC exchange from ER2 | 8 | Approved (owner, 2026-10-21) |
-| D1374 | **Marketplace listings deploy the same artefacts** into the customer's account and the product is free in every one of them; where a marketplace requires a paid version (AWS), the paid plan is the same artefacts with Ostrium's support; services are otherwise sold as private offers; no licence-manager or metering hooks in any image | 10 | Approved (owner, 2026-10-21) |
+| D1374 | **Marketplace listings deploy the same artefacts** into the customer's account and the product is free in every one of them; where a marketplace requires a paid version (AWS), the paid plan is the same artefacts with Ostrium's support; services are otherwise sold as private offers; no licence-manager or metering hooks in any image | 10 | Approved (owner, 2026-10-21); **amended by D1580** (owner, 2026-10-21: no marketplace listings, no support plan, no private offers) |
 | D1375 | **Observability stays in the customer's account:** OTLP and Prometheus to the stack's own collector or the cloud's monitoring (CloudWatch, Cloud Monitoring, Azure Monitor); nothing is sent to Ostrium by default | 9.6 | Approved (owner, 2026-10-21) |
-| D1376 | **`loams support bundle`:** versions, health, conditions, redacted configuration and recent logs into a local archive the customer reviews and sends; no data, no secrets; the same content as the BYOC agent's `Report` (D543) and the operator's `Diagnose` (D1192) | 9.7 | Approved (owner, 2026-10-21) |
+| D1376 | **`loams support bundle`:** versions, health, conditions, redacted configuration and recent logs into a local archive the customer reviews and sends; no data, no secrets; the same content as the BYOC agent's `Report` (D543) and the operator's `Diagnose` (D1192) | 9.7 | Approved (owner, 2026-10-21); **amended by D1581** (owner, 2026-10-21: a local file the user may share; no Ostrium support address) |
 | D1377 | **The BYOC agent and control plane (§41) are opt-in.** An install works with no connection to Ostrium; `console.loams.dev` reaches it over the customer's tailnet as today | 9.8 | Approved (owner, 2026-10-21) |
-| D1378 | **Ostrium hosts no customer data plane** on any cloud, including a "managed BYOC" in Ostrium's own account; support access is a time-boxed grant the customer opens (D587) | 4 | Approved (owner, 2026-10-21) |
+| D1378 | **Ostrium hosts no customer data plane** on any cloud, including a "managed BYOC" in Ostrium's own account; support access is a time-boxed grant the customer opens (D587) | 4 | Approved (owner, 2026-10-21); **amended by D1582** (owner, 2026-10-21: the grant is a maintainer debug session, community and best effort, no contract or SLA) |
 | D1379 | **The platform products run on the BYOC data plane:** Studio (remote agentd), the Software Factory package (D-SF-20) and marketplace packages install onto a BYOC install (compose profiles on a VM, the chart on Kubernetes). The apps and agents they build are app BYOC (§71) | 11 | Approved (owner, 2026-10-21) |
 | D1380 | **A BYOC conformance matrix** per cloud and tier, run nightly on Ostrium's test accounts, with hard cost guards: GitHub OIDC into a CI role (no long-lived keys), tags, a TTL reaper, budgets with alerts and a deny action, the smallest sizes, teardown in `always()`. AWS first, in the owner's credit account within about $30 a month; Google Cloud and Azure when their accounts exist (owner actions) | 12 | Approved (owner, 2026-10-21) |
 | D1381 | **Cost guards for customers:** `loams byoc deploy` prints a monthly estimate before it applies and creates a budget alert in the customer's account (opt-out) | 12.3 | Approved (owner, 2026-10-21) |
-| D1382 | **Phases BY0–BY3** (§13): BY0 in days (VMs on AWS, Google Cloud and Azure; Cloudflare phase 0; Vercel docs), BY1 (Tofu modules and container services), BY2 (Kubernetes and marketplaces), BY3 (Cloudflare-native mappings and multi-tenant) | 13 | Approved (owner, 2026-10-21) |
-| D1383 | **Not built:** an Ostrium-hosted data plane; cloud-specific engine forks; a Kubernetes distribution; CloudFormation, ARM or Deployment Manager twins of the Tofu modules, except a thin wrapper where a marketplace requires its own format; metering in marketplace images; Postgres on Cloudflare; a data plane on Vercel | 14 | Approved (owner, 2026-10-21) |
+| D1382 | **Phases BY0–BY3** (§13): BY0 in days (VMs on AWS, Google Cloud and Azure; Cloudflare phase 0; Vercel docs), BY1 (Tofu modules and container services), BY2 (Kubernetes and marketplaces), BY3 (Cloudflare-native mappings and multi-tenant) | 13 | Approved (owner, 2026-10-21); **amended by D1580** (owner, 2026-10-21: BY2 has no marketplace listings) |
+| D1383 | **Not built:** an Ostrium-hosted data plane; cloud-specific engine forks; a Kubernetes distribution; CloudFormation, ARM or Deployment Manager twins of the Tofu modules, except a thin wrapper where a marketplace requires its own format; metering in marketplace images; Postgres on Cloudflare; a data plane on Vercel | 14 | Approved (owner, 2026-10-21); **amended by D1580** (owner, 2026-10-21: no marketplace listings, so no marketplace wrappers; no metering in any image) |
 | D1384 | **The default VM is x86-64, 2 vCPU and 8 GiB with a 50 GB block disk**, with arm64 sizes offered once every pinned image is verified multi-arch | 6 | Approved (owner, 2026-10-21) |
+| D1580 | **No cloud marketplace listings for now** (amends D1374, D1382, D1383 and Q1091's answer): no listing, free or paid, on AWS Marketplace, Google Cloud Marketplace, Microsoft Marketplace or any other cloud marketplace; no support plan and no private offers. BYOC installs only from Ostrium's own artefacts: the GHCR release images, the compose bundle and `install.sh`, the Helm chart and operator, and the OpenTofu modules (published to the OpenTofu registry, and the Terraform registry if wanted). The "Deploy to Cloudflare" button and the Vercel connectable-account integration stay: both deploy from this repository and sell nothing. No licence manager, usage metering or phone-home in any image (kept from D1374). Marketplaces are revisited only if a paid product ever exists | 10 | Approved (owner, 2026-10-21) |
+| D1581 | **The support bundle stays a local file** (amends D1376): `loams support bundle` writes an archive on the user's machine and sends nothing. The user may attach it to a GitHub issue on `ostrium-labs/loams` or share it on the Loams Discord (https://discord.gg/eK6NanHQq) if they choose. There is no Ostrium support address | 9.7 | Approved (owner, 2026-10-21) |
+| D1582 | **Maintainer debug session** (amends D1378's support grant): when a user wants a maintainer to look at an install, they open a maintainer debug session, using the time-boxed tailnet grant of D587 (default 4 hours, at most 24, Q588). It is opt-in, time-boxed and revocable by the user at any time; it is community help on a best-effort basis, with no contract and no SLA | 4, 9.8 | Approved (owner, 2026-10-21) |
 
 ### 1.5 Phases
 
@@ -127,12 +133,12 @@ Costs are in §6 and §7 per cloud. "Small install" is one 2 vCPU, 8 GiB node wi
 |---|---|---|---|
 | **BY0** (days) | VM installs on AWS, Google Cloud and Azure with `install.sh` or cloud-init, the bucket on S3, GCS or Blob through the VM's identity, a customer KMS key on the bucket, secrets from the cloud's store, and a guide per cloud; Cloudflare phase 0 (the `deploy/cloudflare/` template and Deploy button); the Vercel guide and Mastra-on-Vercel example; a manual BYOC matrix run per cloud | 4–5 engineer-weeks across 3 or 4 parallel agents: about 1 week for the VMs and Vercel, about 2 weeks for Cloudflare | **Cloudflare for Startups** (once the Deploy button works); **AWS Activate Founders** and **AWS open-source credits**, **Google for Startups (Start)**, **Microsoft for Startups**; **Vercel for Startups** (the Vercel guide) |
 | **BY1** | OpenTofu modules for the VM and container tiers on AWS, Google Cloud and Azure; `loams byoc deploy`; the checkpointed node on Fargate, Cloud Run and Container Apps; `loams backup`; `loams support bundle`; the nightly matrix; the Vercel connectable-account integration | 8–10 engineer-weeks | Credits used for the nightly matrix; the Vercel Marketplace Provider programme |
-| **BY2** | The Kubernetes tier on EKS, GKE and AKS with OP1's operator; marketplace listings (AWS, Google Cloud, Azure); managed metastores when D58's backends ship | 8–12 engineer-weeks after OP1 | **AWS ISV Accelerate** path (needs a Marketplace listing); **Microsoft ISV Success / Frontier Accelerate** (needs a Marketplace offer); Google Cloud Marketplace partner enrolment |
+| **BY2** | The Kubernetes tier on EKS, GKE and AKS with OP1's operator; managed metastores when D58's backends ship (no marketplace listings, D1580) | 8–12 engineer-weeks after OP1 | None: the marketplace-gated programmes (AWS ISV Accelerate, Microsoft ISV Success, Google Cloud Marketplace enrolment) are not pursued while there are no listings (D1580) |
 | **BY3** | Cloudflare phases 1 and 2: the DO metastore, Durable on DOs, Jobs on Workflows and Queues, Git smart HTTP on Workers, Workers for Platforms for the multi-tenant Factory and marketplace | 4–8 weeks (phase 1) plus a quarter (phase 2) | A Cloudflare Tier 2 upgrade or partner conversation |
 
 ## 2. Scope
 
-**In scope:** installing the Loams data plane (engine, House, Postgres, Git, agentd and the gateway, on the light stack or the `tikv` profile) into a customer's own AWS account, Google Cloud project, Azure subscription or Cloudflare account; and what "BYOC on Vercel" means. Per cloud: compute, bucket, keys, secrets, networking and private reach, identity, marketplace listing, install UX and cost. The shared install, upgrade, backup, observability and support tooling. The test matrix.
+**In scope:** installing the Loams data plane (engine, House, Postgres, Git, agentd and the gateway, on the light stack or the `tikv` profile) into a customer's own AWS account, Google Cloud project, Azure subscription or Cloudflare account; and what "BYOC on Vercel" means. Per cloud: compute, bucket, keys, secrets, networking and private reach, identity, install UX and cost. Distribution is Ostrium's own artefacts only (D1580). The shared install, upgrade, backup, observability and support tooling. The test matrix.
 
 **Not in scope:**
 - **Apps and agents built with Loams** and deployed into a customer's account on serverless free tiers: [§71](71-app-byoc-free-tiers.md).
@@ -163,7 +169,7 @@ Costs are in §6 and §7 per cloud. "Small install" is one 2 vCPU, 8 GiB node wi
 ## 4. Principles (D1351, D1378)
 
 1. **The customer's account, data and keys.** Every resource an install creates is in the customer's account and billed there. The bucket is the source of truth (D1) and is theirs; its encryption key is theirs; its secrets are in their secret store. Deleting the account deletes Loams.
-2. **Ostrium runs no data plane.** No Ostrium process sits on a request path, holds a bucket credential or can decrypt a byte. Support is a time-boxed grant the customer opens (D587) or a bundle the customer sends (D1376). The BYOC agent is opt-in (D1377). There is no "managed BYOC" in Ostrium's account (D1378).
+2. **Ostrium runs no data plane.** No Ostrium process sits on a request path, holds a bucket credential or can decrypt a byte. Help comes from a maintainer debug session the customer opens, time-boxed and revocable (D587, D1582), or from a support bundle the customer chooses to share (D1376, D1581). The BYOC agent is opt-in (D1377). There is no "managed BYOC" in Ostrium's account (D1378).
 3. **One artefact set.** The same images by digest, the same compose bundle, the same operator and chart, the same Tofu modules for every cloud. A cloud gets a table of settings, never a fork (D1352, D1363).
 4. **The light stack by default, TiKV for scale.** The default install is one node on the embedded stores (PR #973's D1340–D1343), because that is what fits a free trial, a credit allowance and a proof of concept. The `tikv` profile, then the operator on Kubernetes, are the path to several nodes and HA. A customer chooses the store before the first start; an install does not switch stores in place (PR #973).
 5. **Never public, as amended by D1311.** The engine's listeners are on loopback, the tailnet, or an internal network behind `loams-gateway`. Callers off the tailnet use the gateway's edge listener over a private link or a brokered tunnel. No tier opens an inbound port from the internet (D1359).
@@ -230,8 +236,8 @@ The three hyperscalers get the same shape: a VM tier in BY0, a container tier in
 | **Networking** | For `small`: the VM in a public subnet with a security group that has **no inbound rules**, IMDSv2, and an auto-assigned public IPv4 for egress only. For `medium` or a customer's private subnet: no public IP, egress through a NAT gateway. Shell through SSM Session Manager | A public IPv4 address costs $0.005/h, about $3.65 a month (verify on the VPC pricing page); a NAT gateway about $33 a month before data (estimate, Q1082) |
 | **Private reach** | Same-account workloads: the gateway's edge listener behind an internal NLB. Other accounts and Vercel: a PrivateLink endpoint service on that NLB, allowed for named principals (§69 §5.3) | NLB $0.0225/h (about $16.43 a month) plus NLCU-hours; an interface endpoint $0.01/h per AZ plus $0.01/GB (price feeds, 2026-09-11 and 2026-10-16) |
 | **Identity → Loams token** | `sts:GetWebIdentityToken` after the account enables outbound identity federation (D1308, ER2) | A JWT with a custom `aud`, RS256 or ES384, 60 s to 1 h, at no extra cost ([AWS blog](https://aws.amazon.com/blogs/aws/simplify-access-to-external-services-using-aws-iam-outbound-identity-federation/), 2025-11-19) |
-| **Marketplace** | A container product with a Helm delivery option for EKS (BY2), free, **plus** a paid plan of the same artefacts with Ostrium's support (contract pricing), because AWS accepts free or BYOL container listings only beside a paid version; Ostrium's SLAs as professional-services private offers. An AMI with CloudFormation for the VM tier later | "Developer, community, and BYOL editions … supported if the seller provides an equivalent paid version on AWS Marketplace within 90 days"; images must be in the Marketplace's ECR ([container policies](https://docs.aws.amazon.com/marketplace/latest/userguide/container-product-policies.html), read 2026-10-21). Fees: 20% on public container listings, 3% on private offers under $1M, 0.5% on professional-services private offers ([listing fees](https://docs.aws.amazon.com/marketplace/latest/userguide/listing-fees.html), effective 2024-01-05; the professional-services cut is dated 2026-06-16 in the research). Quick Launch for Helm on EKS was discontinued on 2026-03-01 ([container products](https://docs.aws.amazon.com/marketplace/latest/userguide/container-based-products.html), read 2026-10-21) |
-| **Install UX** | BY0: `install.sh` over SSH, or `aws ec2 run-instances --user-data file://deploy/byoc/aws/cloud-init.yaml`; BY1: `loams byoc deploy --cloud aws` (the Tofu module); BY2: a Marketplace launch | — |
+| **Distribution** | **No AWS Marketplace listing** (D1580): the install uses the GHCR images, the Tofu module and, on EKS, the Helm chart and operator. A listing would need a paid version and there is none to offer (D1323) | Verified 2026-10-21: "Developer, community, and BYOL editions of commercial software are supported if the seller provides an equivalent paid version on AWS Marketplace within 90 days of providing the free edition"; images must be in the Marketplace's ECR ([container policies](https://docs.aws.amazon.com/marketplace/latest/userguide/container-product-policies.html), read 2026-10-21). Fees: 20% on public container listings, 3% on private offers under $1M, 0.5% on professional-services private offers ([listing fees](https://docs.aws.amazon.com/marketplace/latest/userguide/listing-fees.html), effective 2024-01-05; the professional-services cut is dated 2026-06-16 in the research). Quick Launch for Helm on EKS was discontinued on 2026-03-01 ([container products](https://docs.aws.amazon.com/marketplace/latest/userguide/container-based-products.html), read 2026-10-21) |
+| **Install UX** | BY0: `install.sh` over SSH, or `aws ec2 run-instances --user-data file://deploy/byoc/aws/cloud-init.yaml`; BY1: `loams byoc deploy --cloud aws` (the Tofu module); BY2: the Helm chart and operator on EKS | — |
 | **Cost, small install** | **About $73 a month** (estimate): `t3.large` $60.74, 50 GB gp3 $4.00, an 8 GB root volume $0.64, 50 GB in S3 $1.15, one KMS key $1.00, four secrets $1.60, a public IPv4 $3.65. About $61 on `t4g.large` | Prices above |
 
 ### 6.2 Google Cloud
@@ -247,8 +253,8 @@ The three hyperscalers get the same shape: a VM tier in BY0, a container tier in
 | **Networking** | For `small`: an external IP with a firewall that allows no ingress; for `medium`: no external IP and Cloud NAT. Shell through IAP TCP forwarding | External IPv4 in use is charged hourly (verify the rate) |
 | **Private reach** | An internal load balancer in front of the edge listener for same-VPC workloads and Cloud Run Direct VPC egress (§69 §5.3); a Private Service Connect service attachment for other projects | A PSC endpoint is $0.01/h plus $0.01/GiB processed ([VPC pricing](https://cloud.google.com/vpc/network-pricing), read 2026-10-21) |
 | **Identity → Loams token** | The metadata server's ID token with an audience (D1308, ER2) | `.../identity?audience=…&format=full` returns an RS256 JWT with `instance_id`, `project_id` and `zone`, valid up to an hour ([verifying instance identity](https://docs.cloud.google.com/compute/docs/instances/verifying-instance-identity), read 2026-10-21) |
-| **Marketplace** | A free Kubernetes app (BY2); a free VM product whose deployment package is the BY1 Tofu module, since Google recommends Terraform for VM deployments | Kubernetes apps and VM products may be Free, BYOL or usage-based ([Kubernetes pricing](https://docs.cloud.google.com/marketplace/docs/partners/kubernetes/select-pricing), [VM pricing](https://docs.cloud.google.com/marketplace/docs/partners/vm/select-pricing), 2026-10-13); VM packages are Terraform (recommended) or Deployment Manager ([VM package](https://docs.cloud.google.com/marketplace/docs/partners/vm/create-deployment-package), 2026-10-13). Fees 3% standard (unverified on a primary page) |
-| **Install UX** | BY0: `install.sh`, or `gcloud compute instances create --metadata-from-file user-data=deploy/byoc/gcp/cloud-init.yaml`; BY1: `loams byoc deploy --cloud gcp`; BY2: Marketplace | — |
+| **Distribution** | **No Google Cloud Marketplace listing** (D1580): the GHCR images, the Tofu module and, on GKE, the Helm chart and operator. For a later revisit: Google accepts free listings, and its VM packages can be the Tofu module | Kubernetes apps and VM products may be Free, BYOL or usage-based ([Kubernetes pricing](https://docs.cloud.google.com/marketplace/docs/partners/kubernetes/select-pricing), [VM pricing](https://docs.cloud.google.com/marketplace/docs/partners/vm/select-pricing), 2026-10-13); VM packages are Terraform (recommended) or Deployment Manager ([VM package](https://docs.cloud.google.com/marketplace/docs/partners/vm/create-deployment-package), 2026-10-13). Fees 3% standard (unverified on a primary page) |
+| **Install UX** | BY0: `install.sh`, or `gcloud compute instances create --metadata-from-file user-data=deploy/byoc/gcp/cloud-init.yaml`; BY1: `loams byoc deploy --cloud gcp`; BY2: the Helm chart and operator on GKE | — |
 | **Cost, small install** | **About $60 a month** (estimate): `e2-standard-2` $48.92, 50 GiB `pd-balanced` $5.00, a 10 GiB boot disk $1.00, 50 GiB in GCS $1.00, one key $0.06, secrets within the free versions, an external IPv4 about $3.65 (verify) | Prices above |
 
 ### 6.3 Azure
@@ -264,8 +270,8 @@ The three hyperscalers get the same shape: a VM tier in BY0, a container tier in
 | **Networking** | For `small`: a public IP with an NSG that allows no inbound; for `medium`: a NAT gateway. Shell through Azure Bastion or `az vm run-command` | — |
 | **Private reach** | An internal Standard Load Balancer in front of the edge listener; a Private Link service on it for other VNets and subscriptions | Private Endpoint $0.01/h, $0.01/GB in and out (price API, 2026-10-21) |
 | **Identity → Loams token** | A managed-identity access token whose `aud` is an application ID URI the install registers in the **customer's** tenant (`api://loams-<install>`), exchanged under a trust policy (a new ER2 issuer, Q1090) | IMDS puts the requested resource in `aud` ([VM token](https://learn.microsoft.com/en-us/entra/identity/managed-identities-azure-resources/how-to-use-vm-token), 2025-11-11), and the app must exist in the tenant (AADSTS50001 otherwise). IMDS's attested document (PKCS7, `vmId`, `subscriptionId`, a nonce) is the fallback ([IMDS](https://learn.microsoft.com/en-us/azure/virtual-machines/instance-metadata-service), 2025-07-29) |
-| **Marketplace** | An Azure Container offer (a Kubernetes app: the chart as a CNAB bundle in ACR) on AKS, with a free or BYOL plan (BY2); services as professional-services private offers. Not an Azure Application solution template (no AKS) and not a managed application (it gives the publisher's tenant access to the customer's resource group, which D1378 rules out) | Container offers are Kubernetes apps only, packaged as CNAB; plans can be Free or BYOL ([containers](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/marketplace-containers), 2025-07-31); 3% on transacted offers, 0% on BYOL ([transact](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/marketplace-commercial-transaction-capabilities-and-considerations), 2026-07-22); solution templates are not transactable and exclude AKS; managed applications give the publisher access to the managed resource group ([plan an Azure Application](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/plan-azure-application-offer), 2025-07-31) |
-| **Install UX** | BY0: `install.sh`, or `az vm create --custom-data deploy/byoc/azure/cloud-init.yaml --assign-identity`; BY1: `loams byoc deploy --cloud azure`; BY2: Marketplace | — |
+| **Distribution** | **No Microsoft Marketplace offer** (D1580): the GHCR images, the Tofu module and, on AKS, the Helm chart and operator. For a later revisit: a Container offer (the chart as a CNAB bundle in ACR) with a free plan, never a managed application (it gives the publisher's tenant access to the customer's resource group, which D1378 rules out) | Container offers are Kubernetes apps only, packaged as CNAB; plans can be Free or BYOL ([containers](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/marketplace-containers), 2025-07-31); 3% on transacted offers, 0% on BYOL ([transact](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/marketplace-commercial-transaction-capabilities-and-considerations), 2026-07-22); solution templates are not transactable and exclude AKS; managed applications give the publisher access to the managed resource group ([plan an Azure Application](https://learn.microsoft.com/en-us/partner-center/marketplace-offers/plan-azure-application-offer), 2025-07-31) |
+| **Install UX** | BY0: `install.sh`, or `az vm create --custom-data deploy/byoc/azure/cloud-init.yaml --assign-identity`; BY1: `loams byoc deploy --cloud azure`; BY2: the Helm chart and operator on AKS | — |
 | **Cost, small install** | **About $82 a month** (estimate): D2s_v5 $70.08, E6 data disk $4.80, an E4 OS disk $2.40, 50 GB of Blob $1.04, Key Vault operations under $0.10, a Standard public IPv4 about $3.65 (verify). About $72 on B2ms, about $68 on D2ps_v5 | Prices above |
 
 **OpenTofu providers:** the registry serves `hashicorp/aws` up to 6.69.1, `hashicorp/google` up to 8.7.0 and `hashicorp/azurerm` up to 5.10.0 ([registry API](https://registry.opentofu.org/v1/providers/hashicorp/aws/versions), read 2026-10-21).
@@ -424,7 +430,7 @@ loams byoc destroy [--name N] [--keep-bucket]   # the bucket is kept by default
 - Health and durability mode are in `/v1/info` and `loams byoc status`.
 - Nothing is sent to Ostrium. If the customer enrols the BYOC agent (D1377), its heartbeat carries versions and conditions only (D543).
 
-### 9.7 Support bundle (D1376)
+### 9.7 Support bundle (D1376, D1581)
 
 `loams support bundle [-o file]` (on the host, or `loams byoc bundle` from the operator's machine) writes a `tar.zst` with:
 - versions and image digests, `/v1/info`, `/health` and `/ready`;
@@ -433,26 +439,35 @@ loams byoc destroy [--name N] [--keep-bucket]   # the bucket is kept by default
 - `.env` with every value whose key matches the secret list replaced by `<redacted>`, and `secrets/` as names only;
 - the bucket probe's result and the bucket URL, never credentials.
 
-No documents, vectors, rows or keys are read. The customer reviews the archive (`--list` prints its manifest) and sends it to support@ostriumlabs.org themselves.
+No documents, vectors, rows or keys are read. The bundle is a local file and the command sends nothing (D1581). The user reviews the archive (`--list` prints its manifest) and, if they choose, attaches it to a GitHub issue on `ostrium-labs/loams` or shares it on the Loams Discord (https://discord.gg/eK6NanHQq). There is no Ostrium support address.
 
 ### 9.8 Connection to Ostrium (D1377)
 
-None by default. The hosted console at `console.loams.dev` reaches an install over the customer's tailnet, from the customer's browser, exactly as today. Enrolling the BYOC agent (`loams byoc enrol`, MT4) is a separate, opt-in step for customers who want Ostrium's rollout rings or support grants.
+None by default. The hosted console at `console.loams.dev` reaches an install over the customer's tailnet, from the customer's browser, exactly as today. Enrolling the BYOC agent (`loams byoc enrol`, MT4) is a separate, opt-in step for customers who want Ostrium's rollout rings or a maintainer debug session.
 
-## 10. Marketplaces (D1374)
+**Maintainer debug session (D1582).** When a user asks a maintainer to look at an install (on a GitHub issue or on Discord), the user can open a session: the time-boxed tailnet grant of D587 (default 4 hours, at most 24, Q588) to a maintainer's tailnet identity. It is opt-in (only the user opens it), time-boxed, and revocable by the user at any time. It is community help on a best-effort basis, with no contract and no SLA.
 
-| Marketplace | Listing | What it deploys | How Ostrium is paid | Phase |
-|---|---|---|---|---|
-| AWS Marketplace | Container product with Helm delivery for EKS: a free plan and, because AWS requires a paid version beside a free one within 90 days, a contract-priced plan that is the same artefacts with Ostrium's support; later an AMI with CloudFormation for the VM tier | The chart and operator from the Marketplace's ECR copy of the release images | The support plan (20% fee on a public listing, 3% as a private offer) and professional-services private offers (0.5%) | BY2 |
-| Google Cloud Marketplace | Kubernetes app, free; a free VM product whose deployment package is the BY1 Tofu module | The chart with the Application CRD the listing requires; the VM module | Private offers (verify support-only SKUs, Q1091) | BY2 |
-| Microsoft Marketplace | Azure Container offer (Kubernetes app), free or BYOL plan | The chart as a CNAB bundle in ACR, on AKS | Professional-services private offers | BY2 |
-| Cloudflare | "Deploy to Cloudflare" button on `deploy/cloudflare/` | The template in the customer's account | None | BY0 |
-| Vercel Marketplace | Connectable-account integration | Environment variables in the customer's projects | None | BY1 |
+## 10. Distribution: Ostrium's own artefacts, no marketplaces (D1580, amends D1374)
 
-Rules for every listing:
-- **The images are the release images.** A marketplace's copy (AWS's ECR) is the same digests.
-- **No licence manager, no usage metering, no phone-home** (D1374, the deploy-buttons convention). Loams is Apache-2.0; nothing in the product is gated. A paid plan differs from the free one only in the support it entitles.
-- **Listings follow BY2** because each needs a tested Kubernetes path; the VM tier's marketplace images are a later option once someone asks for them.
+This section first planned free listings on AWS Marketplace, Google Cloud Marketplace and Microsoft Marketplace, with an Ostrium support plan as the paid version AWS asks for and services sold as private offers (D1374, Q1091). The owner removed the services offering on 2026-10-21 (D1323), so there is nothing to sell, and the listings are dropped for now (D1580).
+
+BYOC installs only from artefacts Ostrium publishes itself:
+
+| Artefact | Tier | Published as | Phase |
+|---|---|---|---|
+| Release images, by digest | All | `ghcr.io/ostrium-labs/*` from `release-images.yml` | BY0 |
+| Compose bundle and `install.sh`, cloud-init files | VM | The GitHub release; `deploy/byoc/<cloud>/` | BY0 |
+| OpenTofu modules (D1362) | VM, container, Kubernetes | The OpenTofu registry as `ostrium-labs/loams-byoc/<cloud>` (the Terraform registry too, if wanted) | BY1 |
+| Helm chart and operator (D1363) | Kubernetes | The release, with the chart's per-cloud values | BY2 |
+| "Deploy to Cloudflare" button | Cloudflare | `deploy/cloudflare/` in this repository; it deploys the template into the customer's account | BY0 |
+| Vercel connectable-account integration (D1373) | Vercel | Writes environment variables into the customer's projects; it installs no data plane and sells nothing | BY1 |
+
+**Why no marketplace listing.** AWS accepts a free container listing only beside a paid one: "Developer, community, and BYOL editions of commercial software are supported if the seller provides an equivalent paid version on AWS Marketplace within 90 days of providing the free edition" ([container-based product requirements](https://docs.aws.amazon.com/marketplace/latest/userguide/container-product-policies.html), read 2026-10-21). AMI listings carry the same rule without the 90 days ("provided an equivalent paid version is also available in AWS Marketplace", [AMI-based product requirements](https://docs.aws.amazon.com/marketplace/latest/userguide/product-and-ami-policies.html), read 2026-10-21). With no support plan there is no paid version to offer. Google Cloud and Azure accept free listings (§6.2, §6.3), but each listing needs its own copy of the images in the marketplace's registry, its own review and its own upkeep, for a channel whose main use is buying through cloud spend; with nothing to buy, that work is not worth doing yet.
+
+Rules that stay:
+- **One artefact set.** The images the guides, modules and chart use are the release images by digest.
+- **No licence manager, no usage metering, no phone-home** in any image (kept from D1374; the deploy-buttons convention). Loams is Apache-2.0 and nothing in the product is gated.
+- **Revisit** marketplaces only if a paid product ever exists (D1580). §6's notes on each marketplace's rules are kept for that day.
 
 ## 11. The platform products on BYOC (D1379)
 
@@ -529,9 +544,9 @@ Each cell, per run:
 
 OpenTofu modules for the VM and container tiers on the three hyperscalers; `loams byoc deploy|status|upgrade|destroy`; the checkpointed node on Fargate, Cloud Run and Container Apps; Postgres's remote storage in the cloud bucket; `loams backup`; the full support bundle; the nightly matrix; the Vercel connectable-account integration; the `factory` compose profile. **8–10 engineer-weeks** (estimate). Gate: BY0; PR #973 merged.
 
-### 13.3 BY2: Kubernetes and marketplaces
+### 13.3 BY2: Kubernetes
 
-The chart's per-cloud values and the EKS, GKE and AKS modules; the matrix's Kubernetes row; LOC run on each managed Kubernetes; the three marketplace listings; managed metastores as D58's backends ship. **8–12 engineer-weeks after OP1** (estimate). Gate: OP1's Core level passing.
+The chart's per-cloud values and the EKS, GKE and AKS modules; the matrix's Kubernetes row; LOC run on each managed Kubernetes; managed metastores as D58's backends ship. **8–12 engineer-weeks after OP1** (estimate). Gate: OP1's Core level passing.
 
 ### 13.4 BY3: Cloudflare-native
 
@@ -543,21 +558,20 @@ The research's phases 1 and 2: `loams-meta-do`, Durable on DOs, Jobs on Workflow
 |---|---|---|---|
 | **Cloudflare for Startups** (Tier 3, $10k) | A product on Cloudflare: the Deploy button, R2 as truth, the Git-on-R2 demo (research §6) | BY0 Cloudflare phase 0 | When the demo is recorded (end of BY0's first week, estimate); ask for Containers coverage and limits, WfP and Artifacts contacts |
 | **AWS Activate Founders** and **AWS Cloud Credits for Open Source** | An OSS product that drives S3, EC2 and KMS use; the credits fund the matrix | BY0 AWS VM guide | At BY0 exit |
-| **AWS Marketplace, ISV Accelerate** | A listed product and co-sell activity | BY2 | After the listing |
 | **Google for Startups Cloud Program** (Start tier for an unfunded company) | A live product on Google Cloud | BY0 GCP VM guide | At BY0 exit |
 | **Microsoft for Startups** | A software product, not a consultancy (research `microsoft.md` §1) | BY0 Azure VM guide | At BY0 exit |
-| **Microsoft ISV Success / Frontier Accelerate** | A Marketplace offer | BY2 | After the Azure Container offer |
 | **Vercel for Startups** (up to $30k) and the Marketplace Provider programme | The integration path | BY0 Vercel guide (startups); BY1 connectable-account integration (provider programme) | BY0 exit; BY1 |
 
-The application wording (for-profit product company, the entity, the funding status) is the owner's (research §6 and §7.9).
+The application wording (for-profit product company, the entity, the funding status) is the owner's (research §6 and §7.9). Programmes that need a marketplace listing (AWS ISV Accelerate, Microsoft ISV Success and Frontier Accelerate, Google Cloud Marketplace enrolment) are not pursued while there are no listings (D1580).
 
 ## 14. What not to build (D1383)
 
 - **An Ostrium-hosted data plane**, a "managed BYOC" in Ostrium's account, or a relay (D1317, D1378).
 - **Cloud-specific forks or builds of the engine.** A cloud gets settings and modules.
 - **A Kubernetes distribution** or a node image of our own; the clouds' own Kubernetes and OSes are used.
-- **CloudFormation, ARM/Bicep or Deployment Manager twins** of the Tofu modules. Where a marketplace requires its own format (an Azure Application's ARM template, an AWS AMI listing's CloudFormation), a thin wrapper that calls the same images is written then.
-- **Licence managers or usage metering in marketplace images.**
+- **CloudFormation, ARM/Bicep or Deployment Manager twins** of the Tofu modules.
+- **Cloud marketplace listings** (AWS, Google Cloud, Azure or others), a support plan or private offers, until a paid product exists (D1580).
+- **Licence managers or usage metering in any image.**
 - **Postgres on Cloudflare** (D1371), **a data plane on Vercel** (D1373).
 - **Network file systems for the embedded stores** (D1353).
 - **A cost dashboard.** The customer's cloud has one; Loams tags resources and sets a budget (D1381).
@@ -592,7 +606,7 @@ The application wording (for-profit product company, the entity, the funding sta
 | Customers put the stores on EFS or Azure Files anyway | Medium | High | The engine refuses to open an embedded store on a network file system (a `statfs` check at start, BY0 Task 1) with a message naming D1353 |
 | Fargate, Cloud Run or Container Apps change their storage options | Low | Low | The tier is a table row; the matrix shows it |
 | GCS or Azure metadata credentials do not work through `object_store` as wired in the engine | Medium | Medium | BY0 Task 0 checks first; the fallback is a short-lived key from the secret store, documented as such |
-| A marketplace refuses a free listing with services sold separately | Medium | Low | The listing is a distribution channel, not the revenue; the guides and modules stand alone |
+| A customer can only buy software through a cloud marketplace (to draw down committed spend) | Medium | Low | Loams is free, so there is nothing to draw down; the customer installs from the GHCR images, chart and Tofu modules. Marketplaces are revisited only if a paid product exists (D1580) |
 | Matrix costs exceed credits | Medium | Medium | §12.2's guards; VM row nightly, the rest weekly |
 | Cloudflare Containers limits (4 vCPU, 12 GiB) cap a single node | High | Medium | Stated; ask Cloudflare for a raise (research §6); Data BYOC through Tunnel for scale |
 | PR #973's limit makes upgrades of embedded stacks manual on BY0 installs | Certain until fixed | Medium | The guide says so; PR #973 plans the fix before 0.1.2's gate |
@@ -615,7 +629,7 @@ The owner answered every question with its default on 2026-10-21 (Q1086 and Q108
 | Q1088 | Is a Cloudflare-only `JobStore` (D1370) compatible with Q97's "no Postgres or DynamoDB jobs backend"? | **Yes**: Q97 rejected general-purpose second backends; a backend for a target that cannot run TiKV is a different case. Owner to confirm |
 | Q1089 | One OpenTofu module repository or one per cloud? | **One** (`ostrium-labs/terraform-loams-byoc`) with submodules per cloud and tier, if the registry's address rules allow it (verify) |
 | Q1090 | Add Azure managed identity as an ER2 issuer? | **Yes**: the Entra issuer for managed-identity tokens, with `aud` = the install's application ID URI, matched on the object ID |
-| Q1091 | Which marketplace pricing shape? | Free listings; on AWS, a contract-priced support plan beside the free plan (AWS's paid-version rule); services as private offers where allowed (AWS and Microsoft professional services); otherwise services sold directly |
+| Q1091 | Which marketplace pricing shape? | Free listings; on AWS, a contract-priced support plan beside the free plan (AWS's paid-version rule); services as private offers where allowed (AWS and Microsoft professional services); otherwise services sold directly. **Amended by D1580** (owner, 2026-10-21): no marketplace listings, no support plan and no private offers; installs come from Ostrium's own artefacts |
 | Q1092 | Recommend Vercel Hobby in the guide? | No: Pro for any business use, since Hobby is non-commercial; Hobby only for personal trials |
 | Q1093 | Matrix cadence? | VM row nightly; container and Kubernetes rows weekly and on each release candidate; Cloudflare nightly once phase 0 ships |
 | Q1094 | Make `loams byoc deploy` require OpenTofu installed, or bundle it? | Require it (`tofu` 1.11 or later on `PATH`), with a clear error and install link; bundling a Go binary in the Rust CLI is not worth it |
