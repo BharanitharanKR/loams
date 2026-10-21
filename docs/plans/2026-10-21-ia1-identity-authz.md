@@ -308,4 +308,11 @@ Commit: one PR per numbered group where it keeps PRs small (for example, 1–4 d
 
 | # | Ruling | Task |
 |---|---|---|
-| — | (Task 0 fills this table) | — |
+| R0.1 | The report is `docs/plans/ia0-spike-report.md`, not `ia0-spike.md` (the owner's brief, 2026-10-21) | 6 |
+| R0.2 | Pins (14-day rule on 2026-10-21): Zitadel and Zitadel Login v4.19.4, OpenFGA v1.22.0, OpenFGA CLI v0.8.1 (v0.8.2 is 6 days old), Postgres 17.10-alpine (Zitadel's own compose pin), all by digest; the digests are in the report §4.1 | 0 |
+| R0.3 | The spike code is merged with the report, as `spikes/ia0-authz`, a standalone package outside the workspace (`[workspace]` of its own, built with `--manifest-path`), so it still adds nothing to `loams`'s build (the owner's brief: "open it, with the spike code, as a PR") | 3 |
+| R0.4 | The tree pins `jsonwebtoken` =10.4.0 and has no `openidconnect`; the spike uses 10.4.0 and its own 40-line discovery fetch instead of `jsonwebtoken` 11 and `openidconnect` 4 | 3 |
+| R0.5 | `bootstrap.sh` runs on the host (curl and jq) instead of as a compose `bootstrap` service, and Zitadel writes the IAM-owner and login-client PATs into the git-ignored `.secrets/` at `start-from-init` | 1 |
+| R0.6 | The model tests are `deploy/openfga/core.fga.yaml`, beside `fga.mod`: the CLI refuses a test file's `model_file` outside its own directory | 2 |
+| R0.7 | The spike service runs in the compose network (profile `spike`): under rootless Podman a container cannot reach the host's loopback, and Zitadel's webhook must reach it | 4 |
+| R0.8 | Answers to Task 0's (verify) items, and findings F1-F7 (Actions v2 is at-most-once; Zitadel org members are managers; SQLite serializes batches; JWTs outlive deactivation; caches stack; principal kind from the link table; the HTTP deny list): the report §5 and §6. F1 and F3 amend D1608 and §8.1 and wait for the owner before IA3 | 0-6 |
