@@ -14,6 +14,8 @@ use serde::{Deserialize, Serialize};
 
 use crate::features::KINDS;
 use crate::inventory::{Counts, Inventory};
+use crate::matrix::Classes;
+use crate::tiers::{self, Placement};
 
 /// The ranking file's schema id.
 pub const RANKING_SCHEMA: &str = "loams-house-mine/ranking/1";
@@ -124,7 +126,10 @@ pub fn merge(inventories: &[Inventory], min_apps: usize, gate: &[String]) -> Ran
     }
 }
 
-/// `profile.toml`: the features in the profile.
+/// `profile.toml`: the features the House supports, with the tier the
+/// mining proposes (Task 5): Tier 0 by §75 §7.1's rule, Tier 1 for features
+/// fewer applications use. Refused and disabled features are not in it; the
+/// matrix's rules classify them.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Profile {
     /// [`PROFILE_SCHEMA`].
@@ -135,7 +140,7 @@ pub struct Profile {
     pub gate: Vec<String>,
     /// The applications mined.
     pub apps: Vec<String>,
-    /// The features in the profile, ranked.
+    /// The features, ranked.
     pub feature: Vec<ProfileFeature>,
 }
 
@@ -144,33 +149,53 @@ pub struct Profile {
 pub struct ProfileFeature {
     /// `kind:name`.
     pub name: String,
+    /// The proposed tier: 0 (in the profile by §75 §7.1) or 1.
+    #[serde(default)]
+    pub tier: u8,
     /// The applications that use it.
     pub apps: Vec<String>,
     /// Statements that use it.
     pub frequency: u64,
-    /// Why it is in the profile.
+    /// Why it has its tier.
     pub reason: String,
 }
 
 impl Profile {
-    /// The profile of a ranking.
-    pub fn from_ranking(ranking: &Ranking) -> Self {
+    /// The profile of a ranking: Tier 0 and the Tier 1 proposals, each
+    /// placed by [`tiers::propose`] against `classes`.
+    pub fn from_ranking(ranking: &Ranking, classes: &Classes) -> Self {
+        let feature = ranking
+            .features
+            .iter()
+            .filter_map(|f| {
+                let tier = match tiers::propose(classes, &f.name, f.in_profile) {
+                    Placement::Tier0 => 0,
+                    Placement::Tier1 => 1,
+                    Placement::Refused | Placement::Disabled => return None,
+                };
+                Some(ProfileFeature {
+                    name: f.name.clone(),
+                    tier,
+                    apps: f.apps.clone(),
+                    frequency: f.frequency,
+                    reason: if tier == 0 {
+                        f.reason.clone()
+                    } else {
+                        format!(
+                            "Tier 1 proposal: {} application(s), below {}",
+                            f.apps.len(),
+                            ranking.min_apps
+                        )
+                    },
+                })
+            })
+            .collect();
         Self {
             schema: PROFILE_SCHEMA.to_owned(),
             min_apps: ranking.min_apps,
             gate: ranking.gate.clone(),
             apps: ranking.apps.iter().map(|a| a.app.clone()).collect(),
-            feature: ranking
-                .features
-                .iter()
-                .filter(|f| f.in_profile)
-                .map(|f| ProfileFeature {
-                    name: f.name.clone(),
-                    apps: f.apps.clone(),
-                    frequency: f.frequency,
-                    reason: f.reason.clone(),
-                })
-                .collect(),
+            feature,
         }
     }
 
@@ -180,8 +205,9 @@ impl Profile {
     }
 }
 
-/// The generated `docs/house/compat-profile.md`.
-pub fn render_markdown(ranking: &Ranking) -> String {
+/// The generated `docs/house/compat-profile.md`. `findings` is the
+/// hand-written findings section (`conformance/clickhouse/profile/findings.md`).
+pub fn render_markdown(ranking: &Ranking, classes: &Classes, findings: Option<&str>) -> String {
     let mut md = String::new();
     let _ = writeln!(
         md,
@@ -190,7 +216,7 @@ pub fn render_markdown(ranking: &Ranking) -> String {
     let _ = writeln!(md, "# The Loams House compatibility profile\n");
     let _ = writeln!(
         md,
-        "The ClickHouse features real applications use, mined from their query logs and migrations (design §75 §7.1, plan HE1 Task 2). A feature is in the profile when {} or more applications use it, or when a gate application ({}) does.\n",
+        "The ClickHouse features real applications use, mined from their query logs and migrations (design §75 §7.1, plan HE1 Tasks 2 and 5). A feature is in the profile (proposed Tier 0) when {} or more applications use it, or when a gate application ({}) does; a feature fewer applications use is proposed for Tier 1 unless §75 refuses or disables it. Variants of one application count once.\n",
         ranking.min_apps,
         ranking.gate.join(", ")
     );
@@ -205,23 +231,77 @@ pub fn render_markdown(ranking: &Ranking) -> String {
             md,
             "| {} | {} | {} | {} | {} | {} |",
             a.app,
-            if a.variants.is_empty() {
-                "".to_owned()
-            } else {
-                a.variants.join(", ")
-            },
+            a.variants.join(", "),
             s.total,
             s.parsed,
             s.explained,
             s.unparsed
         );
     }
+    let placed: Vec<(&Ranked, Placement)> = ranking
+        .features
+        .iter()
+        .map(|f| (f, tiers::propose(classes, &f.name, f.in_profile)))
+        .collect();
+    let count = |p: Placement| placed.iter().filter(|(_, q)| *q == p).count();
+    let _ = writeln!(md, "\n## Tier proposals\n");
+    let _ = writeln!(
+        md,
+        "| Proposal | Features |\n|---|---:|\n| Tier 0 | {} |\n| Tier 1 | {} |\n| Tier 2 (refused) | {} |\n| disabled | {} |",
+        count(Placement::Tier0),
+        count(Placement::Tier1),
+        count(Placement::Refused),
+        count(Placement::Disabled)
+    );
+    if let Some(findings) = findings {
+        let _ = writeln!(md, "\n{}", findings.trim_end());
+    }
+    let _ = writeln!(md, "\n## Where the mining and §75 disagree\n");
+    let _ = writeln!(
+        md,
+        "Listed for the owner, not resolved (plan HE1 Task 5). \"§75\" is the placement in design §75 §7.3–§7.5 and D1558, from `conformance/clickhouse/matrix/classes.toml` and the extractor's table of §75's syntax, types and formats.\n"
+    );
+    let _ = writeln!(
+        md,
+        "| Feature | Applications | Mining proposes | §75 says | §75's reason |\n|---|---|---|---|---|"
+    );
+    let mut any = false;
+    for (f, proposal) in &placed {
+        if let Some((s75, reason)) = tiers::section_75(classes, &f.name)
+            && s75 != *proposal
+        {
+            any = true;
+            let _ = writeln!(
+                md,
+                "| `{}` | {} ({}) | {} | {} | {} |",
+                f.name.replace('|', "\\|"),
+                f.apps.len(),
+                f.apps.join(", "),
+                proposal.label(),
+                s75.label(),
+                reason.replace('|', "\\|")
+            );
+        }
+    }
+    let mined: std::collections::BTreeSet<&str> =
+        ranking.features.iter().map(|f| f.name.as_str()).collect();
+    for (feature, s75) in tiers::SECTION_75 {
+        if *s75 == Placement::Tier0 && !mined.contains(feature) {
+            any = true;
+            let _ = writeln!(
+                md,
+                "| `{feature}` | 0 | not mined | Tier 0 | §75 §7.3 names it; no mined application used it |"
+            );
+        }
+    }
+    if !any {
+        let _ = writeln!(md, "| (none) | | | | |");
+    }
     for kind in KINDS {
         let prefix = format!("{kind}:");
-        let rows: Vec<&Ranked> = ranking
-            .features
+        let rows: Vec<&(&Ranked, Placement)> = placed
             .iter()
-            .filter(|f| f.name.starts_with(&prefix))
+            .filter(|(f, _)| f.name.starts_with(&prefix))
             .collect();
         if rows.is_empty() {
             continue;
@@ -229,9 +309,9 @@ pub fn render_markdown(ranking: &Ranking) -> String {
         let _ = writeln!(md, "\n## `{kind}`\n");
         let _ = writeln!(
             md,
-            "| Feature | Applications | Statements | In profile | Why |\n|---|---|---:|---|---|"
+            "| Feature | Applications | Statements | Proposed | Why |\n|---|---|---:|---|---|"
         );
-        for f in rows {
+        for (f, p) in rows {
             let _ = writeln!(
                 md,
                 "| `{}` | {} ({}) | {} | {} | {} |",
@@ -239,7 +319,7 @@ pub fn render_markdown(ranking: &Ranking) -> String {
                 f.apps.len(),
                 f.apps.join(", "),
                 f.frequency,
-                if f.in_profile { "yes" } else { "no" },
+                p.label(),
                 f.reason
             );
         }
@@ -321,9 +401,22 @@ mod tests {
                 "function:v4"
             ]
         );
-        let profile = Profile::from_ranking(&ranking);
-        assert!(profile.contains("function:g") && !profile.contains("function:c"));
-        let md = render_markdown(&ranking);
-        assert!(md.contains("| `a` | 3 (langfuse, signoz, umami) | 7 | yes | apps>=3 |"));
+        let classes = Classes::parse(
+            "[[rule]]\nclass = \"refused\"\nkind = \"function\"\nnames = [\"c\"]\nreason = \"Tier 2\"\n",
+        )
+        .unwrap();
+        let profile = Profile::from_ranking(&ranking, &classes);
+        // In the profile by the rule: Tier 0; below it: Tier 1, unless refused.
+        let tier = |n: &str| profile.feature.iter().find(|f| f.name == n).map(|f| f.tier);
+        assert_eq!(tier("function:a"), Some(0));
+        assert_eq!(tier("function:g"), Some(0));
+        assert_eq!(tier("function:c"), None);
+        let md = render_markdown(&ranking, &classes, Some("## Findings\n\nx"));
+        assert!(
+            md.contains("| `a` | 3 (langfuse, signoz, umami) | 7 | Tier 0 | apps>=3 |"),
+            "{md}"
+        );
+        assert!(md.contains("## Findings"));
+        assert!(md.contains("| `syntax:FINAL` | 0 | not mined | Tier 0 |"));
     }
 }
