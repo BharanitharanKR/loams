@@ -316,6 +316,25 @@ services:
   # default seccomp profile refuses them). The worker refuses to boot when its
   # sandbox cannot be put in force. chDB's access control (R-ACL.1) and the
   # statement checks (L1) are always on.
+  # One-shot, before the House: gives the house-link volume to the House's
+  # uid (10001). The fabric image has no /var/lib/loams-house-link, so Docker
+  # creates a fresh volume owned by root and the House could not write its
+  # certificate there (Podman hands it to the container's user itself). No
+  # network, every capability dropped but CHOWN.
+  house-init:
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-fabric:${LOAMS_VERSION:-0.1.0}
+    restart: "no"
+    user: "0:0"
+    network_mode: none
+    cap_drop: [ALL]
+    cap_add: [CHOWN]
+    security_opt: [no-new-privileges:true]
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - chmod 0750 /var/lib/loams-house-link && chown 10001:10001 /var/lib/loams-house-link
+    volumes:
+      - house-link:/var/lib/loams-house-link
+
   house:
     <<: *restart
     image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-fabric:${LOAMS_VERSION:-0.1.1}
@@ -348,6 +367,8 @@ services:
       retries: 30
     depends_on:
       migrate:
+        condition: service_completed_successfully
+      house-init:
         condition: service_completed_successfully
 
   # The House's tailnet node (`--profile house-tailnet`), in the House's

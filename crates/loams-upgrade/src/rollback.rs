@@ -130,15 +130,7 @@ pub fn restore(runtime: &dyn Runtime, stack: &mut StackDir, restore: &Restore) -
     )?;
     // The previous release, then its health, then the door.
     let config = compose::config(runtime, &stack.dir)?;
-    let services: Vec<String> = compose::long_running(&config)
-        .into_iter()
-        .filter(|s| !door::is_gate(&config, s))
-        .collect();
-    compose::up(runtime, &stack.dir, &services)?;
-    let bad: Vec<String> = compose::unhealthy(&compose::ps(runtime, &stack.dir)?)
-        .into_iter()
-        .filter(|s| !door::is_gate(&config, s))
-        .collect();
+    let bad = start_previous(runtime, &stack.dir, &config)?;
     if !bad.is_empty() {
         return Err(UpgradeError::new(
             "rollback_failed",
@@ -147,6 +139,38 @@ pub fn restore(runtime: &dyn Runtime, stack: &mut StackDir, restore: &Restore) -
     }
     crate::run::engine_ready(runtime, &stack.dir)?;
     door::open(runtime, &stack.dir, &config)
+}
+
+/// Starts the restored release's long-running services (the door aside) and
+/// returns those of them not healthy. Containers of services the restored
+/// release does not enable (the newer release added them, or moved them under
+/// a profile) are removed first: they are not the previous release's, and a
+/// stopped one would read as unhealthy.
+fn start_previous(
+    runtime: &dyn Runtime,
+    dir: &Path,
+    config: &serde_json::Value,
+) -> Result<Vec<String>> {
+    let enabled = compose::services(config);
+    let mut stale: Vec<String> = compose::ps(runtime, dir)?
+        .into_iter()
+        .map(|r| r.service)
+        .filter(|s| !s.is_empty() && !enabled.contains(s))
+        .collect();
+    stale.sort();
+    stale.dedup();
+    // Best effort: a service the compose file no longer defines at all is
+    // an orphan compose cannot name; it is left, and not counted below.
+    let _ = compose::remove(runtime, dir, &stale);
+    let services: Vec<String> = compose::long_running(config)
+        .into_iter()
+        .filter(|s| !door::is_gate(config, s))
+        .collect();
+    compose::up(runtime, dir, &services)?;
+    Ok(compose::unhealthy(&compose::ps(runtime, dir)?)
+        .into_iter()
+        .filter(|s| enabled.contains(s) && !door::is_gate(config, s))
+        .collect())
 }
 
 /// `rollback_failed` (exit 11): the failure, the rollback's failure, where
@@ -408,15 +432,7 @@ fn swap_images_back(runtime: &dyn Runtime, stack: &mut StackDir, id: &str) -> Re
     install::restore_host(&stack.dir, id)?;
     stack.env = read_env(&stack.dir.join(".env"));
     let config = compose::config(runtime, &stack.dir)?;
-    let services: Vec<String> = compose::long_running(&config)
-        .into_iter()
-        .filter(|s| !door::is_gate(&config, s))
-        .collect();
-    compose::up(runtime, &stack.dir, &services)?;
-    let bad: Vec<String> = compose::unhealthy(&compose::ps(runtime, &stack.dir)?)
-        .into_iter()
-        .filter(|s| !door::is_gate(&config, s))
-        .collect();
+    let bad = start_previous(runtime, &stack.dir, &config)?;
     if !bad.is_empty() {
         return Err(UpgradeError::new(
             "rollback_failed",

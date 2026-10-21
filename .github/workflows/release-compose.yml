@@ -50,9 +50,9 @@ jobs:
         working-directory: deploy/release
         run: |
           services() { docker compose --env-file .env.example config --services | sort | tr '\n' ' '; }
-          want="agentd compute1 house loams migrate pageserver pg-bootstrap safekeeper1 storage_broker tailscale "
+          want="agentd compute1 house house-init loams migrate pageserver pg-bootstrap safekeeper1 storage_broker tailscale "
           [ "$(services)" = "$want" ] || { echo "default services: $(services)"; echo "expected: $want"; exit 1; }
-          [ "$(COMPOSE_PROFILES=tikv,rustfs services)" = "agentd compute1 create-bucket house loams migrate pageserver pd pg-bootstrap rustfs safekeeper1 storage_broker tailscale tidb tikv " ] \
+          [ "$(COMPOSE_PROFILES=tikv,rustfs services)" = "agentd compute1 create-bucket house house-init loams migrate pageserver pd pg-bootstrap rustfs safekeeper1 storage_broker tailscale tidb tikv " ] \
             || { echo "tikv,rustfs services: $(COMPOSE_PROFILES=tikv,rustfs services)"; exit 1; }
           cfg="$(COMPOSE_PROFILES=tikv,rustfs docker compose --env-file .env.example config --format json)"
           for s in loams migrate pageserver safekeeper1; do
