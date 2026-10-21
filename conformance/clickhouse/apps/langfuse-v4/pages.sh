@@ -20,7 +20,12 @@ if [ ! -f "$PW/node_modules/playwright/package.json" ] ||
   printf '{"name": "he0-pages", "private": true}\n' >"$PW/package.json"
   (cd "$PW" && npm install --no-audit --no-fund --silent "playwright@$PLAYWRIGHT")
 fi
-(cd "$PW" && npx --no-install playwright install chromium >/dev/null)
+# On a CI runner the browser's system libraries come too (passwordless sudo).
+if [ "${CI:-}" = true ]; then
+  (cd "$PW" && npx --no-install playwright install --with-deps chromium >/dev/null)
+else
+  (cd "$PW" && npx --no-install playwright install chromium >/dev/null)
+fi
 
 cp "$HERE/pages.mjs" "$PW/pages.mjs"
 cd "$PW" && exec node pages.mjs
