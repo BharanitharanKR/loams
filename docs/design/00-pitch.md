@@ -106,7 +106,7 @@ Primary buyer: platform teams at companies running AI apps at scale who are payi
 
 - **License:** Apache-2.0 for the entire engine, all gateways and the operator. Big-company adoption requires it; AGPL/BSL/SSPL dependencies are excluded (§11).
 - **Governance:** start company-led, plan for a foundation (LF AI & Data — as Vortex did — or CNCF) once there are ≥3 corporate contributors.
-- **Business model (updated 2026-10-19, D1119):** no open core and no paid edition; everything, including metering, billing and the control plane, is Apache-2.0. Ostrium Labs sells services around the open project: infrastructure efficiency and cost reviews, SLAs, support plans, migration help and help operating Loams (support@ostriumlabs.org). **Do not** withhold any feature from OSS, reliability (quorum WAL) and performance (hot tiers) above all; that is exactly the AutoMQ/LanceDB gap Loams wins on.
+- **Business model (updated 2026-10-19, D1119):** no open core and no paid edition; everything, including metering, billing and the control plane, is Apache-2.0. Ostrium Labs is a research lab building open-source Loams (D1323, 2026-10-21; the earlier services offering is removed). **Do not** withhold any feature from OSS, reliability (quorum WAL) and performance (hot tiers) above all; that is exactly the AutoMQ/LanceDB gap Loams wins on.
 
 ## 9. Launch demo
 
