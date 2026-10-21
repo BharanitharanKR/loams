@@ -1,0 +1,20 @@
+[package]
+name = "loams-house-mine"
+description = "Mines real applications' ClickHouse SQL into a feature inventory and the House compatibility profile (HE0, design §75 §7)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+publish = false
+
+[[bin]]
+name = "loams-house-mine"
+path = "src/main.rs"
+
+[dependencies]
+anyhow.workspace = true
+clap.workspace = true
+
+[lints]
+workspace = true

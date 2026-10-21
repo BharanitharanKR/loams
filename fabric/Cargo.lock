@@ -5198,6 +5198,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "loams-house-mine"
+version = "0.0.1"
+dependencies = [
+ "anyhow",
+ "clap",
+]
+
+[[package]]
 name = "loams-house-proto"
 version = "0.0.1"
 dependencies = [
