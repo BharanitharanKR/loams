@@ -138,3 +138,16 @@ clickhouse_min = "26.8"
 driver = "hyperdx/driver.sh"
 suite = ""
 runtime_minutes = 10
+
+[[app]]
+# OpenLIT (Q1185's "one more" in place of PostHog, ruling R5.1): LLM
+# telemetry in ClickHouse, queries over HTTP from its Next.js server.
+name = "openlit"
+image = "ghcr.io/openlit/openlit:2.1.0@sha256:94552ccd09379b5e2fec3c51c4fec1b41d88d6b56b0a5ccc895c116673884fa8"
+licence = "Apache-2.0"
+clickhouse_protocol = "http"
+migrations_protocol = "native"
+clickhouse_min = "24.4"
+driver = "openlit/driver.sh"
+suite = ""
+runtime_minutes = 8
