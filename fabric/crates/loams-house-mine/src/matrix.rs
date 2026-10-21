@@ -176,7 +176,7 @@ impl Classes {
     }
 
     /// The rules that match a feature, with their class and reason.
-    fn matches(&self, kind: Kind, name: &str) -> Vec<(Class, &str)> {
+    pub fn matches(&self, kind: Kind, name: &str) -> Vec<(Class, &str)> {
         self.rules
             .iter()
             .filter(|r| r.kind == kind)
