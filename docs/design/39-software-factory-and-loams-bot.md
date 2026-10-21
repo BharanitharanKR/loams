@@ -1,5 +1,7 @@
 # 39 — Loams Software Factory and Loams Bot: Embedded Collaboration Apps, A2A Agents and the Closed Loop
 
+> **Updated 2026-10-21 ([D1420](13-decision-log.md)): the agent half of this design is superseded.** The owner closed SF2–SF5 (#225–#228) on 2026-10-19 for a redesign. The factory loop, its agents and Loams Bot are now [§72](72-software-factory-loop.md) (Mastra agents, Studio worktrees, a Mastra workflow on Resonate, no internal A2A); the marketplace is [§73](73-agent-marketplace.md) (open source, any framework, Mastra first). Superseded here: §5 (A2A agents), §7's agent rows, §10 (`factory.run` in Rust), §13 (Loams Bot in the apps) and §14. Still current: the app embedding, licences and SSO of §3–§4 (SF1), and the safety rules of §8 and §11, carried into §72 §7.
+
 > **Updated 2026-10-19 ([D1119](13-decision-log.md)): Loams has no open core.** Where this document places metering, billing, the hosted control plane, commercial APIs or other components in the private `loams-platform` repository, or calls something private for open-core reasons, read that as superseded: everything is Apache-2.0, and the metering, billing and control-plane code is moving into the open repo now (design §63, Loams Meter). Ostrium Labs offers services (infrastructure efficiency, SLAs, support), not a paid edition. The rest of the design is unchanged.
 
 Status: **Proposed** · 2026-10-02. The direction is the owner's, from 2026-10-02:

@@ -1,0 +1,177 @@
+# FT1 — The Software Factory Loop
+
+> **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, test first. Where this plan gives exact names, paths, tools or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end of this file.
+>
+> **Status: Proposed stub** (2026-10-21). Track FT, design [§72](../design/72-software-factory-loop.md) (D1420–D1443, Q1110–Q1121), with [§73](../design/73-agent-marketplace.md) for the agent host and packages it shares. Replaces the retired SF2–SF5 (D1420). This plan specifies **FT0, the minimum viable loop**, task by task. FT1 (the team loop), FT2 (guarded and remembered) and FT3 (reach) are listed at milestone level and get full specifications when their gates are met. Nothing here starts before the owner approves §72.
+
+**Goal (FT0):** one developer on Loams Desktop (or a dev box with remote agentd) types an intent to Loams Bot in Studio, approves a plan, watches a harness implement it in a Studio worktree, reviews it with the reviewer agent's comments, gets a pull request whose CI is green, merges, approves a deploy, and sees the change active on a Live app, with every step durable, recorded and stoppable.
+
+**Architecture** (§72 §4–§8):
+- **`agents/factory`** (new pnpm workspace member, `@loams/factory`, private, Apache-2.0): a Mastra app with the agents `loams-bot`, `planner`, `reviewer`, `forgejo`, `github`; the workflow `factory.run`; the `gate()` tool wrapper; the budget counter; a `bin/factory-acp.js` entry that serves `loams-bot` over ACP.
+- **`ostrium-labs/loams-mastra`**: `packages/acp` (`@loams/mastra-acp`), the ACP bridge for Mastra agents (§72 §4.4), shared with §73's agent host.
+- **`crates/loams-agentd-harness`**: the `loams-bot` ACP spec launches the factory host.
+- **`crates/loams-agentd-mcp`** and **`proto/loams/agentd/v1`**: the new tools of §72 §5.2.
+- **`crates/loams-agentd-factory`** (from PR #844): check status and check logs for Forgejo and GitHub.
+- **`web/plugins/factory`**: the Runs page (Studio mode).
+- **Live app `factory`** in the local stack: the `factory_runs` table; the stream `factory_events`.
+
+**Tech stack:**
+- Node ≥ 22.13; TypeScript and pnpm as the workspace pins them; `@mastra/core`, `@mastra/pg`, `@mastra/memory`, `@mastra/mcp` at the exact versions of `loams-mastra`'s `test/conformance/pins.json` (`@mastra/core` 1.78.0 as of 2026-10-21); `@loams/mastra-resonate` 0.1.0; `@agentclientprotocol/sdk` at a release at least 14 days old.
+- Rust 1.97 for the agentd changes, workspace dependencies only.
+- Docker Compose v2 for the e2e job; Forgejo's image from `deploy/factory/images.lock`.
+
+**Spec:** [§72](../design/72-software-factory-loop.md) (all of it); [§53](../design/53-studio-ade.md) §5–§6; [§66](../design/66-loams-mastra.md) §7; [§39](../design/39-software-factory-and-loams-bot.md) §8, §10–§12 for the carried-forward rules.
+
+## Global Constraints
+
+- **Worktrees and branches.** `~/Documents/Ostriumlabs/loams-wt/ft0-<task>`, one branch and one PR per task into `dev` (or into `loams-mastra`'s `main` for Task 2). CodeRabbit reviews; merge on green. `git commit -s`.
+- **Light Rust builds.** `cargo build -p loams-agentd-mcp` (or the one crate a task changes); never `--workspace` locally; never build in `/tmp`.
+- **No credential in the Mastra process.** App tokens stay in agentd's keyring; tools that need them run in agentd. Model keys come from agentd's vault as environment variables of the host process only.
+- **Three approvals always on**: plan, merge, deploy. No setting turns them off in FT0.
+- **No auto-merge, no auto-deploy, no push to a protected branch**, whatever the policy file says.
+- **Exact pins** for every `@mastra/*` and `@loams/*` package; install scripts blocked (`pnpm` `allowBuilds` false by default); every third-party release at least 3 days old (D1224).
+- **GitHub-hosted runners only.** No job needs a model key: tests use Mastra's `createMockModel` and agentd's Mock harness.
+
+## Review Focus
+
+1. **A destructive tool runs without a settled approval.** Expected: refused by agentd. Test: `merge_requires_settled_approval`.
+2. **A crash repeats a model call, a PR or a deploy.** Expected: never. Tests: `resume_after_kill_at_each_stage`, `open_change_request_is_idempotent`, `deploy_step_is_idempotent`.
+3. **An app credential reaches the factory host.** Expected: never. Test: `factory_host_env_has_no_app_tokens`.
+4. **Untrusted text (issue body, CI log, PR comment) is treated as an instruction.** Expected: it is passed as a quoted, tagged part. Test: `untrusted_parts_are_quoted`.
+5. **The kill switch leaves a thread running.** Expected: never. Test: `kill_interrupts_threads_and_cancels_workflow`.
+
+## FT0 — The minimum viable loop (Tasks 0–11)
+
+### Task 0 — Rulings and spikes
+
+Check and record:
+- `@loams/mastra-resonate` 0.1.0 is on npm with provenance (MA1 Task 21). If not, FT0 waits.
+- PR #844 is merged (`loams-agentd-factory`, `FactoryService`). If not, Tasks 6 and 7 wait.
+- Mastra at the pinned version: the supervisor `agents` property and approval propagation from a sub-agent; `requireApproval` and the `tool-call-approval` chunk; `agent.approveToolCall`; workflow `suspend()`/`resume()` through `ResonateExecutionEngine` (§72 §4.3, §6.1).
+- `@agentclientprotocol/sdk`: the agent side of `session/new`, `session/prompt`, `session/update` and `session/request_permission`; how agentd's ACP harness maps `request_permission` to `ApprovalRequested` today.
+- Node on the desktop and on a remote agentd (§73 Q1122).
+- Live: `LiveAdminService.Deploy` and `ActivateDeployment` from a non-console client with the local owner credentials; how a Live bundle is built from a repository.
+- Forgejo and GitHub: the commit-status and Actions APIs the check tools need; the token scopes.
+
+Files: this plan. Tests: none. Gate: rulings recorded.
+
+### Task 1 — The `agents/` workspace and `@loams/factory` skeleton
+
+Files:
+- `pnpm-workspace.yaml`: add `agents/*`.
+- `agents/factory/package.json` (`@loams/factory`, `private: true`, `type: module`, `engines.node >=22.13`), `tsconfig.json`, `src/mastra.ts` (a `Mastra` instance with `PostgresStore` on `LOAMS_PG_URL` and the Resonate engine on `LOAMS_DURABLE_URL`), `src/agents/loams-bot.ts` (an agent with no tools yet).
+- `scripts/ci/npm-licences.mjs` covers `agents/` (D914).
+- CI job `factory` in `.github/workflows/ci.yml`: install with frozen lockfile, typecheck, unit tests.
+
+Tests: `mastra_instance_builds`, `loams_bot_answers_with_mock_model`.
+
+Commit: `agents: the @loams/factory workspace and skeleton (FT0 Task 1)`.
+
+### Task 2 — `@loams/mastra-acp` (in `ostrium-labs/loams-mastra`)
+
+Files: `packages/acp/` with `serveAcp(agent, { stdin, stdout })`:
+- `session/new` → a Mastra thread id (resource = the agentd project);
+- `session/prompt` → `agent.stream` with that thread; text deltas → `agent_message_chunk`; tool calls → `tool_call` and `tool_call_update`;
+- a `tool-call-approval` chunk → `session/request_permission`; the outcome → `agent.approveToolCall` or decline;
+- `session/cancel` → abort the stream.
+
+Tests (`test/acp/`): `prompt_streams_text`, `tool_call_reports_status`, `approval_maps_to_request_permission`, `decline_stops_tool`, `cancel_aborts_stream`, against the SDK's client side in-process.
+
+Commit (in `loams-mastra`): `acp: serve a Mastra agent over ACP (FT0 Task 2)`. Publish `@loams/mastra-acp` 0.1.0 with trusted publishing.
+
+### Task 3 — Loams Bot as the factory host's ACP agent
+
+Files:
+- `agents/factory/bin/factory-acp.js`: starts the Mastra app and `serveAcp(loamsBot)`.
+- `crates/loams-agentd-harness/src/acp/loams_bot.rs`: the spec launches `node <factory>/bin/factory-acp.js` (path from agentd's data directory; `LOAMS_BOT_EXECUTABLE` still overrides) with `LOAMS_PG_URL`, `LOAMS_DURABLE_URL`, the model keys from agentd's vault, and nothing else from the environment.
+- `crates/loams-agentd-link/src/a2a/`: left in place for §73's A2A bridge; `bot-acp` no longer used by the `loams-bot` spec.
+
+Tests: `loams_bot_spec_launches_factory_host`, `factory_host_env_has_no_app_tokens`, `loams_bot_thread_round_trip` (Mock model, a Studio thread shows the reply).
+
+Commit: `agentd: Loams Bot runs the factory host over ACP (FT0 Task 3, D1426)`.
+
+### Task 4 — New agentd tools (§72 §5.2)
+
+Files: `crates/loams-agentd-mcp/src/tools.rs` and the matching `loams.agentd.v1` RPCs where missing:
+- `create_chat` gains `worktree: { branch: string, base?: string }`;
+- `get_thread_diff`, `post_review_comment`, `open_change_request` (idempotent by branch; Forgejo and GitHub), `request_approval` (kind, summary, payload hash; returns an id), `get_approval`;
+- `merge_change_request` (destructive): refused unless `approval_id` names a settled, approved approval whose payload hash equals the hash of `{repo, pr, head_sha}`.
+Each tool's risk is in its description and in a `risk` annotation.
+
+Tests: `create_chat_in_new_worktree`, `get_thread_diff_matches_checksum`, `open_change_request_is_idempotent`, `merge_requires_settled_approval`, `merge_refuses_hash_mismatch`, `request_approval_cannot_be_settled_by_agent`.
+
+Commit: `agentd: worktree chats, diff, review, change-request, approval and merge tools (FT0 Task 4)`.
+
+### Task 5 — Check status and logs
+
+Files: `crates/loams-agentd-factory`: `checks(repo, sha)` and `check_log_tail(repo, run, lines)` for Forgejo (commit statuses, Actions) and GitHub (check runs, Actions logs), scrubbed as #844 scrubs errors; tools `get_checks` and `get_check_log` in `loams-agentd-mcp`.
+
+Tests: `checks_forgejo_fixture`, `checks_github_fixture`, `check_log_is_scrubbed`, `check_log_tail_is_bounded`.
+
+Commit: `agentd: CI check status and log tails for Forgejo and GitHub (FT0 Task 5, D1433)`.
+
+### Task 6 — The planner, reviewer and code-host agents
+
+Files: `agents/factory/src/agents/{planner,reviewer,forgejo,github}.ts`; `src/tools/gate.ts` (`gate(tool, { risk })` reads `.loams/factory.toml` and the Place, sets `requireApproval` for `approve`, refuses `deny`); `src/mcp.ts` (an `MCPClient` to `loams-agentd mcp`); `src/agents/loams-bot.ts` registers the four under `agents`.
+- The planner writes `plan.md` with tasks and acceptance checks to the run branch through a read-only thread's output, never by editing files itself.
+- Untrusted text is wrapped as `<untrusted source="…">…</untrusted>` parts.
+
+Tests: `planner_produces_tasks_with_checks`, `reviewer_posts_anchored_comments`, `gate_requires_approval_for_destructive`, `gate_denies_unlisted_tool`, `untrusted_parts_are_quoted`.
+
+Commit: `factory: planner, reviewer and code-host agents with the tool gate (FT0 Task 6, D1431)`.
+
+### Task 7 — The `factory.run` workflow
+
+Files: `agents/factory/src/workflows/factory-run.ts` with steps `intent`, `plan`, `approvePlan` (suspend), `build` (a plain loop over tasks: create worktree chat, send, `wait_for_turn` with durable sleeps), `review`, `openPr`, `ci` (poll with durable sleeps 60 s → 5 min; up to 3 fix attempts), `approveMerge` (suspend), `merge`, `approveDeploy` (suspend), `deploy` (Task 8), `close`; the budget counter checked before every step; compensation for kill and abandon. No `foreach`, no `streamLegacy`.
+
+Tests (on Loams Durable from the local stack): `run_reaches_close_with_mock_everything`, `resume_after_kill_at_each_stage`, `second_resume_is_refused`, `ci_failure_feeds_log_back`, `attempts_exhausted_hands_to_person`, `budget_exceeded_pauses_run`.
+
+Commit: `factory: the durable factory.run workflow (FT0 Task 7, D1427)`.
+
+### Task 8 — The deploy step on Live
+
+Files: `agents/factory/src/deploy/live.ts`: build the bundle, `LiveAdminService.Deploy`, health check, `ActivateDeployment`, rollback to the previous deployment on failure; the deploy record fields of D1167 kept on the run until `loams.deploy.v1` exists.
+
+Tests: `deploy_activates_on_health`, `deploy_rolls_back_on_failed_health`, `deploy_step_is_idempotent`, `deploy_requires_settled_approval`.
+
+Commit: `factory: deploy to a Live app with rollback (FT0 Task 8, D1434)`.
+
+### Task 9 — The run record and the Runs page
+
+Files: a Live app `factory` (schema `factory_runs`, mutations used by the workflow), the stream `factory_events` (CloudEvents `io.loams.dev.factory.run.*.v1`); `web/plugins/factory/src/runs/` (Studio mode): a list and a detail with stage, links, approvals and spend.
+
+Tests: `run_record_updates_each_stage`, `events_are_idempotent`, a Playwright check in `studio-e2e` that a mocked run appears and updates.
+
+Commit: `factory: the run record and Studio's Runs page (FT0 Task 9, D1436)`.
+
+### Task 10 — The kill switch
+
+Files: `factory.kill(scope)` (run, agent, project) as a Loams Bot tool and `/kill` in the thread with a confirmation; cancels the workflow, calls `interrupt_chat` on the run's threads, closes an open PR on run kill, keeps branches.
+
+Tests: `kill_interrupts_threads_and_cancels_workflow`, `agent_kill_blocks_new_runs_using_it`, `kill_keeps_branches`.
+
+Commit: `factory: the kill switch (FT0 Task 10, D1432)`.
+
+### Task 11 — End-to-end gate and docs
+
+Files: `.github/workflows/factory-e2e.yml` (GitHub-hosted, Compose: the local light stack with Durable and Postgres, Forgejo from `images.lock`, agentd with the Mock harness, the factory host with `createMockModel`; the test sets commit statuses itself); `docs/guides/studio/factory-loop.md` with the status label **experimental**; the plans README row updated.
+
+Tests: `intent_to_live_deploy` (the §72 §10 exit test, end to end).
+
+Commit: `factory: the FT0 end-to-end gate and guide (FT0 Task 11)`.
+
+## FT1 — The team loop (milestone level)
+
+Plane, Zulip and GlitchTip agents through MCP (Plane's official server; others per §72 §5.1); signals in triage mode with §39's dedupe, cooldown and generation cap; parallel tasks and run groups (after `loams-mastra` #29); CI webhooks on servers; budgets on the Meter's gate (after ME1d); Mastra marketplace agents in roles in-process; a `factory` Compose profile for the apps from `images.lock`; the browser console. Estimate: 10 engineer-weeks.
+
+## FT2 — Guarded and remembered (milestone level)
+
+The Jailer as the policy decision point (JL1a, JL1c) and its rollback; the Place record (§60); Loams Memory (MM1a) and code memory in review; observe and close with gated reverts; app BYOC deploy targets (§71 AB0); the `factory` service in BYOC Compose and Helm; `LoamsExporter` traces (MA2). Estimate: 12 engineer-weeks.
+
+## FT3 — Reach (milestone level)
+
+Phones (runs, approvals, kill); an opt-in A2A edge for Loams Bot; non-Mastra marketplace agents in run roles through agentd (§72 §4.5); factory templates as marketplace listings (§73 MK1). Estimate: 6 engineer-weeks.
+
+## Rulings made during execution
+
+None yet.

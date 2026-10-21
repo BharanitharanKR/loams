@@ -306,15 +306,31 @@ Design reference: [38 Knative, Authentik and GitOps](../design/38-knative-authen
 
 ## Track SF: Loams Software Factory and Loams Bot
 
-Design: [§39](../design/39-software-factory-and-loams-bot.md), D-SF-1–D-SF-20. Phase 1 is Zulip, Plane and Forgejo; hosted factory and marketplace work remains private.
+Design: [§39](../design/39-software-factory-and-loams-bot.md), D-SF-1–D-SF-20. Phase 1 is Zulip, Plane and Forgejo. **SF2–SF5 were retired on 2026-10-19** (issues #225–#228; D1420): the agent loop is redesigned in [§72](../design/72-software-factory-loop.md) (track FT) and the marketplace, now open source, in [§73](../design/73-agent-marketplace.md) (track MK). SF1 continues.
 
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|
 | [SF1: collaboration app UIs as cordis plugins](2026-10-02-sf1-collab-ui-plugins.md) | The `embed` plugin and `embed.pane` slot; the edge (framing headers, forward-auth) and its CI harness; `loams.collab.v1`, `loams-collab`, the credential broker and OpenFGA filtering; Zulip, Plane and Forgejo plugins with native panels and cards; the desktop client crate, system-browser opener and optional sidebar browser; mobile deep links and native issue, PR and thread views (D-SF-2–D-SF-5) | AP0, AP1a, the native desktop shell (§37 amended, D480–D499); AP2/AP3 for Task 8 | Planned |
-| [SF2: the A2A host and the Zulip, Plane and Forgejo agents](2026-10-02-sf2-a2a-agents.md) | `loams-a2a` (A2A 1.0 over JSON-RPC and HTTP+JSON, tasks as operations, signed cards, audience-bound tokens, client, push receiver); the three agents with risk-tagged skills; `propose_patch`; injection and secret tests (D-SF-6–D-SF-12, D-SF-18) | SF1 Tasks 1, 3, 4; D1; the unified auth plan for non-loopback | Planned |
-| [SF3: Loams Bot chat for desktop and mobile](2026-10-02-sf3-loams-bot-chat.md) | `loams.bot.v1`; `loams-bot` with threads as durable executions and the harness host; `subagent-a2a`; questions and approvals without a decision path; Loams Bot as a `Harness` in the zeron-based desktop plus a cordis browser plugin; native SwiftUI and Compose chat; sealed push; Loams Bot as an optional A2A server (D-SF-6, D-SF-8, D-SF-9, D-SF-19) | SF2; AP0, AP1a, the native desktop shell, AP2, AP3 | Planned |
-| [SF4: the factory loop](2026-10-02-sf4-factory-loop.md) | `loams.factory.v1`; the `factory.run` workflow (intake to close); policy, budgets, loop limits and the kill switch; the run record; console and phone views; the single-organisation Helm package (D-SF-13–D-SF-16) | SF2, SF3 Task 4, D1 | Planned |
-| [SF5: observability UIs and agents](2026-10-02-sf5-observability-ui.md) | GlitchTip and OpenPanel adapters, plugins and agents; the collector with Langfuse and OpenObserve pipelines (content only to Langfuse); embed panes and readers; one trace across chat, A2A, agents and apps; the factory's real `Observer`; mobile error and analytics views (D-SF-11, D-SF-17) | SF1–SF4 | Planned |
+| [SF2: the A2A host and the Zulip, Plane and Forgejo agents](2026-10-02-sf2-a2a-agents.md) | `loams-a2a` (A2A 1.0 over JSON-RPC and HTTP+JSON, tasks as operations, signed cards, audience-bound tokens, client, push receiver); the three agents with risk-tagged skills; `propose_patch`; injection and secret tests (D-SF-6–D-SF-12, D-SF-18) | SF1 Tasks 1, 3, 4; D1; the unified auth plan for non-loopback | **Retired** 2026-10-19 (D1420); see track FT |
+| [SF3: Loams Bot chat for desktop and mobile](2026-10-02-sf3-loams-bot-chat.md) | `loams.bot.v1`; `loams-bot` with threads as durable executions and the harness host; `subagent-a2a`; questions and approvals without a decision path; Loams Bot as a `Harness` in the zeron-based desktop plus a cordis browser plugin; native SwiftUI and Compose chat; sealed push; Loams Bot as an optional A2A server (D-SF-6, D-SF-8, D-SF-9, D-SF-19) | SF2; AP0, AP1a, the native desktop shell, AP2, AP3 | **Retired** 2026-10-19 (D1420); see track FT |
+| [SF4: the factory loop](2026-10-02-sf4-factory-loop.md) | `loams.factory.v1`; the `factory.run` workflow (intake to close); policy, budgets, loop limits and the kill switch; the run record; console and phone views; the single-organisation Helm package (D-SF-13–D-SF-16) | SF2, SF3 Task 4, D1 | **Retired** 2026-10-19 (D1420); see track FT |
+| [SF5: observability UIs and agents](2026-10-02-sf5-observability-ui.md) | GlitchTip and OpenPanel adapters, plugins and agents; the collector with Langfuse and OpenObserve pipelines (content only to Langfuse); embed panes and readers; one trace across chat, A2A, agents and apps; the factory's real `Observer`; mobile error and analytics views (D-SF-11, D-SF-17) | SF1–SF4 | **Retired** 2026-10-19 (D1420); see track FT |
+
+## Track FT: the Software Factory loop
+
+Design reference: [72 The Software Factory Loop](../design/72-software-factory-loop.md) (D1420–D1443, Q1110–Q1121; proposed 2026-10-21, D1420 approved). Owner direction, 2026-10-21: write the factory loop on the Mastra integration. Replaces the retired SF2–SF5.
+
+| Plan | Scope | Depends on | Status |
+|---|---|---|---|
+| [FT1: the Software Factory loop](2026-10-21-ft1-factory-loop.md) (FT0 Tasks 0–11 fully specified; FT1–FT3 at milestone level) | **FT0** the minimum viable loop: the `agents/` workspace and `@loams/factory`; `@loams/mastra-acp`; Loams Bot as the factory host's ACP agent; agentd tools for worktree chats, diffs, review comments, change requests, approvals, merges and CI checks; planner, reviewer and code-host agents behind a tool gate; the durable `factory.run` workflow on `@loams/mastra-resonate`; deploy to a Live app with rollback; the run record and Runs page; the kill switch; an end-to-end gate (about 10 engineer-weeks). **FT1** team loop, **FT2** Jailer, Places, Loams Memory, app BYOC, **FT3** phones and any-framework roles | `@loams/mastra-resonate` 0.1.0 on npm; PR #844; SD1 | Proposed stub |
+
+## Track MK: the Loams Agent Marketplace
+
+Design reference: [73 The Loams Agent Marketplace: Any Framework, Mastra First](../design/73-agent-marketplace.md) (D1445–D1479, Q1122–Q1144; proposed 2026-10-21; open source, first kinds and the any-framework direction approved). Replaces the private marketplace of platform doc 05 and D-SF-20.
+
+| Plan | Scope | Depends on | Status |
+|---|---|---|---|
+| [MK1: the Loams Agent Marketplace](2026-10-21-mk1-agent-marketplace.md) (MK0 Tasks 0–11 fully specified; MK1–MK3 at milestone level) | **MK0** Mastra first, first-party only: listing schema v1 (framework-neutral); the `loams-listing` CLI; the signed static index in `ostrium-labs/loams-marketplace`; `MarketplaceService` in agentd with sources, verification and revocations; install plans and the agent environment contract; installers for `node` agents, harnesses and MCP servers; `@loams/agent-host`; the conformance runner (Core); console, Studio and CLI; first-party listings (about 9 engineer-weeks). **MK1** any framework and third-party, **MK2** more targets and kinds, **MK3** paid listings only if the owner decides | `@loams/mastra-resonate` 0.1.0; the owner creates `ostrium-labs/loams-marketplace`; FT0 Task 2 | Proposed stub |
 
 ## Track SO: Loams SystemOne
 
