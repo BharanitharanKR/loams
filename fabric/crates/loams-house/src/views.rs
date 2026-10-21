@@ -478,7 +478,7 @@ fn collapsing(
 }
 
 /// Whether a ClickHouse type is one a `SummingMergeTree` sums by default.
-fn is_numeric(ty: &str) -> bool {
+pub(crate) fn is_numeric(ty: &str) -> bool {
     let Ok(parsed) = ChType::parse(ty) else {
         return false;
     };
