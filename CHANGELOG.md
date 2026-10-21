@@ -194,7 +194,7 @@ SQLite store (`durable/default.db` in `loams-data`) is not copied anywhere.
   remote server's main port (`POST /durable/`, B12) with the session the other engine routes use,
   instead of answering 404. The Durable page and the Overview's Durable card work on remote servers;
   an engine without the API reads as "Not on this server".
-- Loams is fully open source; there is no open core (D1119). README, CONTRIBUTING, GOVERNANCE, ECOSYSTEM, the design docs and the decision log now say so; the metering, billing and control-plane code is moving into the open repo now (design §63). Ostrium Labs offers services (infrastructure efficiency, SLAs, support).
+- Loams is fully open source; there is no open core (D1119). README, CONTRIBUTING, GOVERNANCE, ECOSYSTEM, the design docs and the decision log now say so; the metering, billing and control-plane code is in this repository (`platform/`, design §63). Ostrium Labs is a research lab building open-source Loams (D1323); the services wording is gone.
 - The app modules in every generated SDK facade (SDKP P0a): `namespaces`,
   `collections`, `documents`, `search`, `vector` and `graph`, from facade
   annotations on `loams.collection.v1` and `loams.graph.v1`. The facade index
