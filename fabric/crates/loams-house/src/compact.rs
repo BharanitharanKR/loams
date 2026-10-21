@@ -414,7 +414,7 @@ impl Scheduler {
             let Some((namespace, database, name)) = Lake::names_of(&ident) else {
                 continue;
             };
-            let system = UserMap::dev("loams-compaction", "", namespace, false);
+            let system = UserMap::system("loams-compaction", namespace);
             let ctx = InsertContext {
                 lake: &self.lake,
                 pool: &self.pool,

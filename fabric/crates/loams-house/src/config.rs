@@ -263,7 +263,7 @@ pub fn check_tls_users(listen: SocketAddr, users: &[UserMap]) -> Result<(), Hous
     if listen.ip().is_loopback() {
         return Ok(());
     }
-    match users.iter().find(|u| u.verifies("")) {
+    match users.iter().find(|u| u.has_empty_password()) {
         Some(user) => Err(HouseError::from(ChError::bad_arguments(format!(
             "house TLS listen on {listen}: user {:?} has an empty password, and a listener \
              other hosts reach takes none",
@@ -272,6 +272,10 @@ pub fn check_tls_users(listen: SocketAddr, users: &[UserMap]) -> Result<(), Hous
         None => Ok(()),
     }
 }
+
+/// SHA-256 of the empty string: the digest of a user with no password.
+const EMPTY_PASSWORD_SHA256: &str =
+    "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
 
 /// A development user (FL2 Task 2): a name, the SHA-256 of its password, the
 /// namespace its queries run in, and whether it may only read. Task 20 replaces
@@ -315,6 +319,21 @@ impl UserMap {
             link: false,
             principal: None,
         }
+    }
+
+    /// An internal identity for the House's own work (compaction, pipes): every
+    /// scope in `namespace`, and no password, so it can never sign in
+    /// ([`Self::verifies`] compares against an empty digest, which no
+    /// password's SHA-256 equals).
+    pub fn system(user: &str, namespace: u64) -> Self {
+        let mut system = Self::dev(user, "unused", namespace, false);
+        system.password_sha256 = String::new();
+        system
+    }
+
+    /// Whether this user signs in with the empty password.
+    pub fn has_empty_password(&self) -> bool {
+        self.password_sha256.eq_ignore_ascii_case(EMPTY_PASSWORD_SHA256)
     }
 
     /// The engine's link user (HS1 Task 20): signs in with `key` and acts for

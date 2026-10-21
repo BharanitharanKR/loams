@@ -1247,7 +1247,7 @@ impl ViewWriter {
                 return Err(err);
             }
         };
-        let system = UserMap::dev("loams-pipe", "", namespace, false);
+        let system = UserMap::system("loams-pipe", namespace);
         let known = self.pool.known_settings();
         let ch = ChTable::from_lake(&view.target_database, &view.target, target);
         // ClickHouse matches a view's columns to its target's by name.
