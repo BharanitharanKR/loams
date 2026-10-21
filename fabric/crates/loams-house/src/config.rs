@@ -326,9 +326,16 @@ impl UserMap {
     /// ([`Self::verifies`] compares against an empty digest, which no
     /// password's SHA-256 equals).
     pub fn system(user: &str, namespace: u64) -> Self {
-        let mut system = Self::dev(user, "unused", namespace, false);
-        system.password_sha256 = String::new();
-        system
+        Self {
+            user: user.to_string(),
+            password_sha256: String::new(),
+            namespace,
+            readonly: false,
+            scopes: crate::identity::Scopes::ALL,
+            grants: None,
+            link: false,
+            principal: None,
+        }
     }
 
     /// Whether this user signs in with the empty password.

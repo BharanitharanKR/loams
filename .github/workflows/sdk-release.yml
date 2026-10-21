@@ -788,13 +788,19 @@ jobs:
         with:
           ref: ${{ needs.plan.outputs.ref }}
           persist-credentials: false
+      # A pull request installs the gems through the bundler cache; a tag or
+      # dispatch run, which builds the published gem, uses no cache at all.
       - uses: ruby/setup-ruby@651ff0d62c5c79bed6d53ec518387aae20e72c1a # v1.329.0
+        if: github.event_name == 'pull_request'
         with:
           ruby-version: '3.4'
-          bundler-cache: ${{ github.event_name == 'pull_request' }}
+          bundler-cache: true
           working-directory: sdks/ruby
-      # bundler-cache also runs `bundle install`; without the cache (a tag or
-      # dispatch run) the gems are installed here, from the lock file.
+      - uses: ruby/setup-ruby@651ff0d62c5c79bed6d53ec518387aae20e72c1a # v1.329.0
+        if: github.event_name != 'pull_request'
+        with:
+          ruby-version: '3.4'
+          working-directory: sdks/ruby
       - name: bundle install (no cache)
         if: github.event_name != 'pull_request'
         working-directory: sdks/ruby
