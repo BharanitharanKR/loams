@@ -4,7 +4,7 @@
 
 Status: **Approved direction** (owner, 2026-10-16) · details **Proposed** · 2026-10-16. Source: the owner's decision of 2026-10-16 (§1.1), which is binding. Decisions **D1010–D1024** and open questions **Q895–Q905** are declared in the [decision log](13-decision-log.md). Rows that restate the owner's decision are *Approved*. Rows that add detail to it are *Proposed* until the owner confirms them. Plan: [GW1](../plans/2026-10-16-gw1-loams-gateway.md).
 
-> **Proposed amendment ([§77](77-kv-gateways.md), D1646, 2026-10-21; not approved).** Two more modules, `resp` (Redis) and `cql` (Cassandra), behind cargo features of the same names. They terminate their protocols and run on `loams-kv` in process, like §74's `temporal` module, in their own Deployment `loams-gateway-kv`; their listeners are never public (D1648).
+> **Amendment (approved 2026-10-21; [§77](77-kv-gateways.md), D1646).** Two more modules, `resp` (Redis) and `cql` (Cassandra), behind cargo features of the same names. They terminate their protocols and run on `loams-kv` in process, like §74's `temporal` module, in their own Deployment `loams-gateway-kv`; their listeners are never public (D1648).
 
 This document builds on these earlier designs, and §13 says where it amends each one:
 - [§46](46-loams-postgres-production.md) §8 (PgDog as the front door, D708–D711) and the [PG2](../plans/2026-10-08-pg2-postgres-production.md) rulings R18–R21. The SNI listener of PG2 Task 22 is the first thing this gateway does.

@@ -434,11 +434,11 @@ Design reference: [76 Identity and Authorization](../design/76-identity-and-auth
 
 ## Track KV: KV gateways (Redis and Cassandra on `loams-kv`)
 
-Design reference: [77 KV Gateways](../design/77-kv-gateways.md) (D1640–D1665, Q1220–Q1239; **Proposed**, only D1641 approved by the owner 2026-10-21). From the owner's draft of 2026-10-21. Research input: [the KV gateways research report](kv-gw-research-report.md) (#996).
+Design reference: [77 KV Gateways](../design/77-kv-gateways.md) (D1640–D1665, Q1220–Q1239; **approved by the owner 2026-10-21, all defaults**; KV0 waits behind the House engine, HE1, by the owner's priority). From the owner's draft of 2026-10-21. Research input: [the KV gateways research report](kv-gw-research-report.md) (#996).
 
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|
-| [KV1: KV gateways](2026-10-21-kv1-kv-gateways.md) (stub; KV0 Tasks 0–11 fully specified; KV1–KV5 at milestone level) | **KV0** the `loams-kv` foundation: the playground's TiKV to v8.5.8, an untagged memcomparable `loams_tuple::key` with property tests, one-shot operations, a paged scanner, an in-memory embedded store, pessimistic mode (D851), tenant placements, op metrics without tenant labels, the `loams-gw-test` skeleton, NOTICE and header checks for ported code, the oracle feasibility runs (Valkey 9.1.2's suite, Tidis's Python tests, Titan on `mocktikv`), the KV0 report; **KV1** `loams-kv-hot` and the ported CDC consumer; **KV2** `loams-resp`; **KV3a/b** `loams-cql`; **KV4** hardening; **KV5** the hot-engine gate | §77 approval; #973 (D1340–D1343) for the light default | Proposed |
+| [KV1: KV gateways](2026-10-21-kv1-kv-gateways.md) (stub; KV0 Tasks 0–11 fully specified; KV1–KV5 at milestone level) | **KV0** the `loams-kv` foundation: the playground's TiKV to v8.5.8, an untagged memcomparable `loams_tuple::key` with property tests, one-shot operations, a paged scanner, an in-memory embedded store, pessimistic mode (D851), tenant placements, op metrics without tenant labels, the `loams-gw-test` skeleton, NOTICE and header checks for ported code, the oracle feasibility runs (Valkey 9.1.2's suite, Tidis's Python tests, Titan on `mocktikv`), the KV0 report; **KV1** `loams-kv-hot` and the ported CDC consumer; **KV2** `loams-resp`; **KV3a/b** `loams-cql`; **KV4** hardening; **KV5** the hot-engine gate | #973 (D1340–D1343) for the light default; starts after the House engine's priority work | Approved (not started) |
 
 ## Later milestones
 

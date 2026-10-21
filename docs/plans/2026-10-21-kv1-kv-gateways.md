@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, **test first**: write the named tests, run them and watch them fail, then implement until they pass. Where this plan gives exact names, paths, flags or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end of this file.
 >
-> **Status: Proposed** (stub, 2026-10-21). Track **KV**, design [§77](../design/77-kv-gateways.md) (D1640–D1665, Q1220–Q1239). Only **D1641** (the Tidis-first, `distributedio/titan`-second porting ruling) is approved by the owner; nothing else here may start until the owner rules on §77.
+> **Status: Approved** (owner, 2026-10-21, all defaults; stub). Track **KV**, design [§77](../design/77-kv-gateways.md) (D1640–D1665, Q1220–Q1239). **KV0 does not start yet:** the owner gave the House engine ([HE1](2026-10-21-he1-loams-house-engine.md)) priority on 2026-10-21.
 >
 > **Coverage:** this plan specifies **KV0** (the owner's Phase 0, the `loams-kv` foundation) task by task. KV1–KV5 are outlined at milestone level and get full task specifications when KV0 has reported.
 >
