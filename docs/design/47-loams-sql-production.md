@@ -1,6 +1,6 @@
 # 47 — Loams SQL in Production: Neon-like MySQL on TiDB Compute and the Loams TiKV
 
-> **Note from [§75](75-loams-house-engine.md) (2026-10-21, proposed).** §75 rejects TiFlash as the base for Loams House and names it only as an optional, separate HTAP companion for Loams SQL (D1541). Whether to start that project is Q1172 (default: not now). Nothing in this document changes.
+> **Note from [§75](75-loams-house-engine.md) (approved 2026-10-21).** §75 rejects TiFlash as the base for Loams House and names it only as an optional, separate HTAP companion for Loams SQL (D1541). Whether to start that project is Q1172 (default: not now). Nothing in this document changes.
 
 Status: **Proposed; owner answers recorded** · 2026-10-08. The owner answered Q658, Q661, Q662 and Q667 the same day (§22). The source questions are answered from read-only clones of the upstream repositories (§23). The implementation plan is [SQ1 (TiDB)](../plans/2026-10-08-sq1-loams-sql-tidb.md). Rewritten the same day for the owner's third directive, which replaces both earlier drafts (stock MySQL 8.4 with mywal and Vitess, then the PolarDB-X study):
 
