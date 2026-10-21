@@ -28,8 +28,12 @@ Highlights:
 - **Durable on TiKV.** The release stack keeps Loams Durable's state in TiKV (keyspace
   `loams_durable`) instead of SQLite in `loams-data`. See Upgrading: the SQLite state does not
   carry over.
-- **Mastra compatibility.** The Qdrant gateway serves `DELETE` of a payload index (REST and gRPC),
-  and CI runs `@qdrant/js-client-rest` 1.18 and 1.19 against it.
+- **Elasticsearch and Mastra compatibility.** The Elasticsearch API gains `GET /_cat/indices`,
+  `GET` and `PUT /{index}/_settings`, sort on `_seq_no` and the scroll API (as `helpers.scan` uses
+  it), and `_update_by_query` replaces a key when its param is an object. The Qdrant gateway serves
+  `DELETE` of a payload index (REST and gRPC), and CI runs `@qdrant/js-client-rest` 1.18 and 1.19
+  and a nightly Mastra gate against a dev build. With these, the NVIDIA RAG Blueprint harness
+  passes 38 of 38.
 - **Durable in the CLI packages.** The `.deb`, `.rpm`, pacman, macOS and Windows packages are built
   with the image's features, so `loams dev` from a package serves Durable on 127.0.0.1:8001 (#925).
 - **agentd ordering fix.** A steer orphaned by a closing run keeps its place ahead of the queue, so
@@ -38,30 +42,19 @@ Highlights:
 
 ### Upgrading
 
-From any earlier **0.1.x** release, in one step: `loams upgrade --to 0.1.1`.
-
-It takes a snapshot first, and `loams upgrade rollback` restores it.
-
-No migrations.
-
-Third-party bumps: none.
-Free space needed: 1.5× the snapshot estimate (`loams upgrade check` shows it).
-Expected downtime: about 5 minutes, excluding image pulls.
-
-`.env` gains `LOAMS_SETUP_TOKEN` and `LOAMS_TAILSCALE_ALLOWED_USERS` (both empty; existing values
-are kept).
-
-**Durable's state does not carry over.** The engine now keeps Loams Durable in TiKV (keyspace
-`loams_durable`, created on start if PD has none); nothing copies the 0.1.0 SQLite store
-(`durable/default.db` in `loams-data`) into it. Before upgrading, let pending promises and tasks
-settle and note your schedules, then recreate the schedules afterwards. The SQLite file stays in
-`loams-data` and in the upgrade snapshot, so `loams upgrade rollback` returns to it. See
-[Durable execution on TiKV](deploy/release/README.md#durable-execution-on-tikv).
-
-From 0.1.0-preview.2, upgrade to 0.1.0 first. See [docs/release/upgrades.md](docs/release/upgrades.md).
+**0.1.1 changes the default stack; reinstall.** Start from the 0.1.1 compose bundle with a fresh
+`.env`, rather than upgrading a 0.1.0 stack in place. Durable's state is not carried over: the 0.1.0
+SQLite store (`durable/default.db` in `loams-data`) is not copied anywhere.
 
 ### Added
 
+- **Elasticsearch API** (MA1, #937, #954, #958, #963, #938): `GET /_cat/indices` in the json and
+  text formats; `GET` and `PUT /{index}/_settings`; sort on `_seq_no`; the scroll API
+  (`scroll`, `_search/scroll`, clearing a scroll), as the Python client's `helpers.scan` uses it;
+  and `_update_by_query` assigning an object param by replacing the key.
+- **The Mastra gate** (MA1 Task 27, #956): a nightly run of Mastra's suites against a dev build,
+  which files an issue on failure. `loams-postgres-dev` computes run with 128 MB `shared_buffers`
+  and a 256 MB file cache (#946).
 - **The UI upgrade** (phases 1 and 2, extending CF1, design 59): tokens, component states and the
   motion system (`motion`, `useMotionPreset`, `StaggerList`, `ListRow`, `Segmented`); data
   screens polish; shell and navigation motion, keyboard and polish; Studio's home, threads and
