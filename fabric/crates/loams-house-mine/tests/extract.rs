@@ -33,6 +33,20 @@ fn functions_include_operators_under_their_clickhouse_names() {
     has("function:toYYYYMM", &["m:0001_traces.up.sql:2"]);
     has("function:windowFunnel", &["q:q05"]);
     has("function:like", &["q:q19"]);
+    let inv = inventory();
+    // Bound parameters and codecs are not functions.
+    for not_a_function in [
+        "function:_CAST",
+        "function:_cast",
+        "function:CODEC",
+        "function:codec",
+        "function:ZSTD",
+    ] {
+        assert!(
+            !inv.features.contains_key(not_a_function),
+            "{not_a_function}"
+        );
+    }
 }
 
 #[test]
@@ -78,7 +92,7 @@ fn types() {
     ] {
         has(&format!("type:{t}"), &["m:0001_traces.up.sql:2"]);
     }
-    has("type:UUID", &["m:0001_traces.up.sql:21"]);
+    has("type:UUID", &["m:0001_traces.up.sql:21", "q:q21"]);
     has(
         "type:AggregateFunction",
         &["m:clustered/0002_views.up.sql:1"],
@@ -145,6 +159,9 @@ fn syntax_forms() {
         ("MATERIALIZED VIEW TO", &["m:clustered/0002_views.up.sql:3"]),
         ("ALTER ADD COLUMN", &["m:clustered/0002_views.up.sql:5"]),
         ("ALTER MODIFY TTL", &["m:clustered/0002_views.up.sql:5"]),
+        ("query parameter", &["q:q21"]),
+        ("column CODEC", &["m:0001_traces.up.sql:23"]),
+        ("codec ZSTD", &["m:0001_traces.up.sql:23"]),
     ] {
         has(&format!("syntax:{form}"), ids);
     }

@@ -271,7 +271,17 @@ impl Visitor for Collector {
                     let n = last
                         .as_ident()
                         .map_or_else(|| last.to_string(), |i| i.value.clone());
-                    f.function(&n);
+                    if n == "_CAST" {
+                        // `query_log` holds a query's text after the server bound
+                        // its parameters: `{p:UUID}` is logged as
+                        // `_CAST('…', 'UUID')` (HE0 Task 5 ruling).
+                        f.add("syntax", "query parameter");
+                        if let Some(ty) = string_arg(&func.args, 1) {
+                            f.data_type(&ty);
+                        }
+                    } else {
+                        f.function(&n);
+                    }
                 }
                 if !matches!(func.parameters, FunctionArguments::None) {
                     f.add("syntax", "parametric function");
@@ -408,6 +418,21 @@ impl Collector {
             };
             self.syntax(form);
         }
+    }
+}
+
+/// The `index`th argument of a call, when it is a string literal.
+fn string_arg(args: &FunctionArguments, index: usize) -> Option<String> {
+    use sqlparser::ast::{FunctionArg, FunctionArgExpr, Value};
+    let FunctionArguments::List(list) = args else {
+        return None;
+    };
+    match list.args.get(index)? {
+        FunctionArg::Unnamed(FunctionArgExpr::Expr(Expr::Value(v))) => match &v.value {
+            Value::SingleQuotedString(s) => Some(s.clone()),
+            _ => None,
+        },
+        _ => None,
     }
 }
 

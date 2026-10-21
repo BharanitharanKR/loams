@@ -300,8 +300,13 @@ pub fn features(dump: &str) -> Features {
                 } else if parent == Some("Index") {
                     out.add("syntax", &format!("skip index {name}"));
                 } else if name == "_CAST" {
-                    // Made by the server when it substitutes a query
-                    // parameter; the parameter is read lexically.
+                    // A bound query parameter: `query_log` holds the text
+                    // after binding, `{p:UUID}` as `_CAST('…', 'UUID')`.
+                    out.add("syntax", "query parameter");
+                } else if name.eq_ignore_ascii_case("CODEC") {
+                    out.add("syntax", "column CODEC");
+                } else if grandparent.is_some_and(|g| first(g).eq_ignore_ascii_case("CODEC")) {
+                    out.add("syntax", &format!("codec {}", name.to_ascii_uppercase()));
                 } else {
                     out.function(&name);
                 }
@@ -309,7 +314,9 @@ pub fn features(dump: &str) -> Features {
             "Literal" => {
                 // `CAST(x AS T)` and `x::T` carry the type as a string literal.
                 if parent == Some("ExpressionList")
-                    && grandparent.is_some_and(|g| g.kind == "Function" && first(g) == "CAST")
+                    && grandparent.is_some_and(|g| {
+                        g.kind == "Function" && matches!(first(g).as_str(), "CAST" | "_CAST")
+                    })
                     && let Some(ty) = string_literal(node.name)
                 {
                     out.data_type(&ty);
