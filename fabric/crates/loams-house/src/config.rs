@@ -333,7 +333,8 @@ impl UserMap {
 
     /// Whether this user signs in with the empty password.
     pub fn has_empty_password(&self) -> bool {
-        self.password_sha256.eq_ignore_ascii_case(EMPTY_PASSWORD_SHA256)
+        self.password_sha256
+            .eq_ignore_ascii_case(EMPTY_PASSWORD_SHA256)
     }
 
     /// The engine's link user (HS1 Task 20): signs in with `key` and acts for
