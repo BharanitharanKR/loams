@@ -126,3 +126,10 @@ done
 code=$(curl -sS -o /dev/null -w '%{http_code}' -u "$AUTH" -X DELETE "$URL/api/public/traces/${ids[$((TRACES - 2))]}")
 echo "driver: DELETE trace: $code" >&2
 echo "driver: ${HE0_APP:-langfuse} ingested $TRACES traces and ran $ran reads"
+
+# The UI's own queries: every main page and a trace, session and user detail
+# page in a headless browser (HE0 Task 3, pages.sh). HE0_PAGES=off skips it
+# (no Node or browser on the machine).
+if [ "${HE0_PAGES:-on}" != off ]; then
+  HE0_LANGFUSE_URL=$URL HE0_DETAIL="${ids[0]},session-1,user-1" bash "$(dirname "${BASH_SOURCE[0]}")/pages.sh"
+fi
