@@ -717,12 +717,11 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
   your own Vercel or Cloudflare; self-service OIDC clients; one-click OAuth deploy.
 - **Browsers on Chromium** may ask for permission the first time a page on a public origin
   calls an address on your tailnet (Local Network Access). Allow it for the console's origin.
-- **Upgrades go one release at a time, with `loams upgrade`.** From preview.2 on, a stack keeps
-  its data: from 0.1.0, `loams upgrade check --to 0.1.1`, then `loams upgrade --to 0.1.1`; from
-  preview.2, first `loams upgrade --to 0.1.0` (see [upgrades](upgrades.md)). Do not upgrade by
-  editing `LOAMS_VERSION` and running `docker compose up`: 0.1.0 recreates the safekeeper,
-  which must be drained first. preview.1 → preview.2 kept no data: from preview.1, start a
-  fresh stack (`docker compose down -v`, then `up -d` with `LOAMS_VERSION=0.1.1`).
+- **0.1.1 changes the default stack: reinstall.** There are no 0.1.0 installs to carry
+  forward, so start a 0.1.1 stack from its bundle with a fresh `.env`. Upgrading a 0.1.0 stack in
+  place works only with `COMPOSE_PROFILES=tikv,rustfs`, which keeps 0.1.0's stores, and
+  `loams upgrade rollback --keep-writes` back to 0.1.0 is refused (D1343): roll back from the
+  snapshot instead. Do not upgrade by editing `LOAMS_VERSION` and running `docker compose up`.
 - **Podman: recreating the engine after an `.env` change** fails with "has dependent containers"
   while the `tailscale` sidecar shares its network namespace. Run `docker compose rm -sf tailscale
   && docker compose up -d loams tailscale` (see [upgrades](upgrades.md#recreating-a-service-by-hand));

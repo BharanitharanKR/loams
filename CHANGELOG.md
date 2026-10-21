@@ -50,11 +50,13 @@ Highlights:
 
 ### Upgrading
 
-**0.1.1 changes the default stack; reinstall.** Start from the 0.1.1 compose bundle with a fresh
-`.env`, rather than upgrading a 0.1.0 stack in place: the light default keeps its data on the
+**0.1.1 changes the default stack; reinstall.** There are no 0.1.0 installs to carry forward, so
+start from the 0.1.1 compose bundle with a fresh `.env`, rather than upgrading a 0.1.0 stack in place: the light default keeps its data on the
 embedded stores and local folders, not in 0.1.0's TiKV and RustFS. To keep a 0.1.0 stack's data,
 add `COMPOSE_PROFILES=tikv,rustfs` to its `.env` before `loams upgrade --to 0.1.1`; it then keeps
 0.1.0's shape, Durable on SQLite included (docs/release/upgrades.md).
+`loams upgrade rollback --keep-writes` back to 0.1.0 is refused (`KEEP_WRITES_UNSERVED`, D1343):
+0.1.0's startup gate cannot serve data a later release has written, so roll back from the snapshot.
 
 ### Added
 

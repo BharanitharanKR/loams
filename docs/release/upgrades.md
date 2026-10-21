@@ -5,6 +5,12 @@ From v0.1.0 on, a Loams compose stack is upgraded in place and keeps its data (d
 `loams upgrade rollback` puts the stack back. preview.1 → preview.2 kept no data. preview.2 → 0.1.0 is the
 first step that keeps it.
 
+**0.1.1 changes the default stack (D1340): reinstall.** There are no 0.1.0 installs to carry
+forward, so start 0.1.1 from its bundle with a fresh `.env`. The steps below upgrade a 0.1.0 stack that
+keeps its stores (`COMPOSE_PROFILES=tikv,rustfs` in `.env` first); `rollback --keep-writes` back to 0.1.0
+is refused (D1343), so a rollback from 0.1.1 restores the snapshot. A stack on the light default's
+embedded stores is upgraded by hand until 0.1.2.
+
 ## Quick start
 
 From the stack's directory (the bundle's `release/`, the one with `compose.yaml` and `.env`):
