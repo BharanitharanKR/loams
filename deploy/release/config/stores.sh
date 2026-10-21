@@ -64,17 +64,21 @@ if [ ! -f "$marker" ] && { [ "$role" = standalone ] || [ "${2:-}" = run ]; }; th
   printf '%s\n' "$store" > "$marker"
 fi
 
-# The embedded metastore has one writer. While the engine runs it holds the
-# metastore's lock, and it passed the startup gate on these migrations when it
-# started, so a second `docker compose up` has nothing to migrate: skip, and
+# A running engine holds Durable's SQLite store (durable/durable.lock) and,
+# on the embedded store, the metastore (meta/meta.redb), and it passed the
+# startup gate on these migrations when it started. So `migrate run` while
+# it runs (a second `docker compose up`, or compose starting a dependant
+# such as the House) has nothing to do and could not open them: skip, and
 # let the dependants start. An engine of a newer release that compose then
-# recreates still refuses data with pending migrations (the startup gate);
+# recreates still refuses data with a pending migration (the startup gate);
 # `loams upgrade` stops the engine before it migrates.
-meta_db="$data/meta/meta.redb"
-if [ "$store" = embedded ] && [ "$role" = migrate ] && [ "${2:-}" = run ] \
-  && [ -f "$meta_db" ] && ! flock -n "$meta_db" true; then
-  echo "loams migrate: the running engine holds the embedded metastore; nothing to migrate now (stop the engine to migrate)" >&2
-  exit 0
+held() { [ -f "$1" ] && ! flock -n "$1" true; }
+if [ "$role" = migrate ] && [ "${2:-}" = run ]; then
+  if held "$data/durable/durable.lock" \
+    || { [ "$store" = embedded ] && held "$data/meta/meta.redb"; }; then
+    echo "loams migrate: the running engine holds its stores; nothing to migrate now (stop the engine to migrate)" >&2
+    exit 0
+  fi
 fi
 
 exec /usr/local/bin/loams "$@"
