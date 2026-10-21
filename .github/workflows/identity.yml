@@ -11,6 +11,7 @@ on:
       - "conformance/identity/**"
       - "deploy/openfga/**"
       - "spikes/ia0-authz/**"
+      - "crates/loams-authz/**"
       - ".github/workflows/identity.yml"
 
 concurrency:
@@ -58,3 +59,33 @@ jobs:
           cargo test --release --locked --manifest-path spikes/ia0-authz/Cargo.toml
       - name: smoke (up, bootstrap, allow/deny scenario, Actions v2, cross-org scan, down)
         run: IA0_SPIKE_BIN="$PWD/spikes/ia0-authz/target/release/ia0-authz" conformance/identity/smoke.sh
+
+  loams-authz:
+    name: "Identity: loams-authz against OpenFGA"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          shared-key: loams-authz
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
+      - name: start OpenFGA (profile authz) and write model v1
+        working-directory: conformance/identity
+        run: |
+          set -euo pipefail
+          printf 'ZITADEL_MASTERKEY=x\nZITADEL_DB_PASSWORD=x\nZITADEL_ADMIN_PASSWORD=x\nLOGIN_SESSION_COOKIE_SECRET=x\n' > .env
+          docker compose --profile authz up -d --wait
+          store=$(curl -fsS -X POST http://127.0.0.1:18081/stores -d '{"name":"loams-authz-ci"}' | jq -re .id)
+          model=$(./fga.sh model write --store-id "$store" --file /model/fga.mod | jq -re .authorization_model_id)
+          {
+            echo "LOAMS_AUTHZ_OPENFGA_GRPC=http://127.0.0.1:18082"
+            echo "LOAMS_AUTHZ_OPENFGA_STORE=$store"
+            echo "LOAMS_AUTHZ_OPENFGA_MODEL=$model"
+          } >> "$GITHUB_ENV"
+      - name: test (unit and OpenFGA integration)
+        run: cargo test -p loams-authz --locked
+      - name: clippy
+        run: cargo clippy -p loams-authz --all-targets --locked -- -D warnings

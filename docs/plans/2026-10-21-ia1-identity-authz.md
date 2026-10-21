@@ -289,6 +289,63 @@ Commit: one PR per numbered group where it keeps PRs small (for example, 1–4 d
 - **The engine's `oidc` mode:** matches members by `(iss, sub)` instead of email (D1605), and reads the org from `urn:zitadel:iam:user:resourceowner:id`.
 - **Exit:** login, MFA, passkey and org switch work.
 
+## IA2 and IA4 — the agent path first (Tasks specified after IA0)
+
+IA0 reported **go** ([report](ia0-spike-report.md)). The owner put agent authentication first (2026-10-21: "current agent auth is too complex and friction"), so these tasks run in this order: IA2 Tasks 1–3, then IA4 Tasks 1–3, then the rest of IA2. One branch and one PR per task, each green before merge. F1 and F3 of the report change IA3 only and wait for the owner.
+
+### IA2 Task 1 — `crates/loams-authz`: the trait and four implementations
+
+**What to write** (D1610, §9.1):
+
+- `Subject { kind: SubjectKind (User | ServiceAccount | Agent), id, org: Option<String>, act: Vec<Subject>, session: Option<String> }`, with `Subject::fga_user()` → `user:<id>`, `agent:<id>` or `service_account:<id>`.
+- `ObjectRef { ty, id }` (parsed from and shown as `type:id`), `Consistency` (`MinimizeLatency`, `HigherConsistency`), `CheckRequest { subject, relation, object, context, contextual_tuples, consistency }` and `Decision { allowed, model_id, cached }`.
+- `#[async_trait] trait Authorizer { check, batch_check, list_objects }`; `batch_check` has a default that runs the checks concurrently.
+- `OpenFgaAuthorizer` (`openfga-client` =0.6.1, gRPC): one client per consistency; `batch_check` in chunks of 50 (`max-checks-per-batch-check`); `list_objects`; idempotent `write` and `delete` for the outbox and sync callers.
+- `CachedAuthorizer<A>`: allow decisions only, TTL clamped to ≤ 5 s (D66), keyed by `(model_id, user, relation, object)`; bypassed for `HigherConsistency` and for requests with context or contextual tuples; `invalidate` and `invalidate_all` for IA3's `ReadChanges` feed. It uses `moka` (in the tree): `loams-cache` is a byte-range cache over immutable objects, not a decision cache.
+- `AllowAllAuthorizer`, built only by `AllowAllAuthorizer::loopback_only(&[SocketAddr])`, which refuses any non-loopback listener (as `LOAMS_AUTH_MODE=off` does).
+- `RecordingAuthorizer<A>`: records every request and decision (tests and the decision log).
+
+**Tests:** `cached_allows_only`, `cache_ttl_is_clamped`, `higher_consistency_bypasses_cache`, `context_bypasses_cache`, `allow_all_refuses_non_loopback`, `recording_records_denials`, `subject_fga_user`, `object_ref_round_trip`; and, when `LOAMS_AUTHZ_OPENFGA_GRPC` is set, `openfga_deny_by_default`, `openfga_allow_after_grant`, `openfga_batch_check_over_50`, `openfga_list_objects` against model v1 (CI: the Identity workflow starts the `authz` profile).
+
+Commit: `authz: the loams-authz crate, its trait and implementations (IA2 Task 1, D1610)`.
+
+### IA2 Task 2 — deny-by-default middleware
+
+**What to write** (D1611, §9.2): `loams_authz::http`:
+
+- `Need { relation, object, consistency }`, where `relation` must start with `can_` (D1603) and `consistency` is `HigherConsistency` for destructive, admin and credential-issuing routes.
+- A route table: a function from `(method, path)` to `Declared::Check(Need) | Declared::Authenticated | Declared::Public`; anything it does not declare answers **403** with `no authorization is declared for this route`.
+- An Axum/tower layer that reads the `Subject` the authentication layer put in the request's extensions (401 without one), checks the route's `Need`, and answers 403 on deny and 503 when the authorizer fails (never an allow).
+- Every decision, allow and deny, is a `tracing` event on target `loams_authz::decision` with subject, `act`, relation, object, decision, model id and request id (D1616's decision log; denials rate-limited per subject later in IA5).
+
+**Tests:** `undeclared_route_is_403`, `missing_subject_is_401`, `deny_is_403`, `allow_passes_through`, `authorizer_error_is_503`, `destructive_route_uses_higher_consistency`, `need_rejects_non_can_relation`, `decision_log_records_denials`.
+
+Commit: `authz: the deny-by-default middleware (IA2 Task 2, D1611)`.
+
+### IA2 Task 3 — `BuiltinAuthorizer` and `builtin_matches_openfga`
+
+**What to write** (D1613, §12.1): `BuiltinAuthorizer` evaluates model v1 (`deploy/openfga/core.fga` and `graph.fga`) in process over a `TupleStore` (in memory now; the principal store in IA2 Task 4), including the `agent_session` condition and type restrictions on write.
+
+**Tests:** `builtin_matches_openfga` runs every check and list in `deploy/openfga/core.fga.yaml` against `BuiltinAuthorizer` (always) and against OpenFGA (when `LOAMS_AUTHZ_OPENFGA_GRPC` is set), and both must match the file's assertions. `builtin_refuses_agent_billing_admin`.
+
+Commit: `authz: BuiltinAuthorizer, with the differential test against OpenFGA (IA2 Task 3, D1613)`.
+
+### IA4 Task 1 — agents as Zitadel machine users
+
+**Clean room.** `loams-identity` is written by an agent that has not read Zitadel's source, from Zitadel's public documentation and its Apache-2.0 protos only (the owner's rule; the IA0 report's provenance note). The IA0 report, the spike and its worktree are not inputs.
+
+**What to write** (D1607, §10): `crates/loams-identity`, a client for Zitadel's public HTTP APIs (no Zitadel code): create a machine user with JWT access tokens, add and remove a private-key JWT key, deactivate and reactivate, and the principal link `(issuer, sub) → (kind, status)`. An agent is created with its `owner` and `project` tuples and no grant; a grant is one tuple on an environment, plain or `agent with agent_session`. Revocation deletes the agent's tuples and deactivates the machine user, and the link's status is checked per request (report F5).
+
+**Tests:** against the IA0 stack when `LOAMS_IDENTITY_ZITADEL_URL` is set: `create_agent_has_no_grant`, `grant_reaches_only_that_environment`, `revoke_denies_within_seconds`, `deactivated_agent_gets_no_token`.
+
+### IA4 Task 2 — the agent's token source
+
+**What to write:** a `MachineKey` token source in the Rust SDK (`sdks/rust/src/token.rs`): read Zitadel's JSON key file (`LOAMS_AGENT_KEY_FILE`), sign a 5-minute RFC 7523 assertion, trade it for an access token with the project audience scope, refresh before `exp`. Then the TypeScript, Python and Go SDKs.
+
+### IA4 Task 3 — agentd vends 15-minute tokens (D1618)
+
+Outlined; specified after IA4 Task 1 lands.
+
 ## IA2–IA6 outline
 
 - **IA2, the authorization core:**
