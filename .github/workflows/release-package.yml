@@ -217,7 +217,7 @@ jobs:
     name: "Linux: packages (deb, rpm, pkg.tar.zst)"
     needs: [guard, preflight]
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     outputs:
       assets: ${{ steps.collect.outputs.assets }}
       summary: ${{ steps.collect.outputs.summary }}
@@ -233,6 +233,9 @@ jobs:
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        # Dry runs only: a run that publishes builds without a cache another
+        # run could have written (cache poisoning).
+        if: inputs.dry_run == true
 
       # The packaging scripts' own tests. They build real .deb, .rpm and
       # .pkg.tar.zst files from fixtures, so a packaging definition that nFPM
@@ -402,7 +405,7 @@ jobs:
     needs: [guard]
     runs-on: windows-latest
     # A cold Windows build of the workspace takes about an hour.
-    timeout-minutes: 150
+    timeout-minutes: 240
     outputs:
       assets: ${{ steps.collect.outputs.assets }}
     steps:
@@ -465,6 +468,9 @@ jobs:
             'AWS_LC_SYS_PREBUILT_NASM=1' | Out-File -Append -Encoding utf8 $env:GITHUB_ENV
           }
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        # Dry runs only: a run that publishes builds without a cache another
+        # run could have written (cache poisoning).
+        if: inputs.dry_run == true
 
       - name: the web console (non-fatal)
         id: console
@@ -552,7 +558,7 @@ jobs:
     name: "macOS: tarball (${{ matrix.arch }})"
     needs: [guard]
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 150
+    timeout-minutes: 240
     strategy:
       fail-fast: false
       matrix:
@@ -567,6 +573,9 @@ jobs:
       - name: protoc
         run: brew install protobuf
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        # Dry runs only: a run that publishes builds without a cache another
+        # run could have written (cache poisoning).
+        if: inputs.dry_run == true
         with:
           key: release-macos-${{ matrix.arch }}
 
