@@ -253,15 +253,22 @@ async fn create_each_tier1_engine() {
     )
     .await;
     // Out of §49 §6.3's surface.
-    refused(
+    // HE1 R9.12: a delete TTL, skip indexes, projections, constraints and SAMPLE
+    // BY are accepted (lake_tables_take_langfuse_ddl has the rest); a TTL that
+    // moves or rolls up rows is 48.
+    ok(
         addr,
-        "CREATE TABLE bad (a UInt8) ENGINE = MergeTree ORDER BY a TTL a + 1",
-        "48",
+        "CREATE TABLE ttl1 (a UInt8, d Date) ENGINE = MergeTree ORDER BY a TTL d + INTERVAL 1 DAY",
+    )
+    .await;
+    ok(
+        addr,
+        "CREATE TABLE idx1 (a UInt8, INDEX i a TYPE minmax) ENGINE = MergeTree ORDER BY a",
     )
     .await;
     refused(
         addr,
-        "CREATE TABLE bad (a UInt8, INDEX i a TYPE minmax) ENGINE = MergeTree ORDER BY a",
+        "CREATE TABLE bad (a UInt8, d Date) ENGINE = MergeTree ORDER BY a TTL d TO DISK 'x'",
         "48",
     )
     .await;
@@ -461,14 +468,33 @@ async fn partition_by_supported_transforms() {
 async fn partition_by_other_is_36() {
     let house = lakehouse("partitions36", DAY).await;
     let addr = house.addr();
-    for by in [
+    // HE1 R9.12: an element no Iceberg transform matches leaves the files
+    // unpartitioned by it; the table keeps the expression as written.
+    for (i, by) in [
         "n % 2",
         "toMonday(d)",
         "intDiv(n, 10)",
-        "toStartOfHour(d)",
-        "toYYYYMM(region)",
-        "arr",
-    ] {
+        "(toYYYYMM(d), n % 4)",
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        ok(
+            addr,
+            &format!(
+                "CREATE TABLE p{i} (ts DateTime, d Date, n UInt32) ENGINE = MergeTree \
+                 PARTITION BY {by} ORDER BY n"
+            ),
+        )
+        .await;
+        let t = table(&house, "default", &format!("p{i}")).await;
+        let fields = t.metadata.default_partition_spec().fields().len();
+        assert_eq!(fields, usize::from(by.starts_with('(')), "{by}");
+        let shown = ok(addr, &format!("SHOW CREATE TABLE p{i} FORMAT TSVRaw")).await;
+        assert!(shown.contains(&format!("PARTITION BY {by}")), "{shown}");
+    }
+    // A transform of the wrong type is still 36.
+    for by in ["toStartOfHour(d)", "toYYYYMM(region)", "arr"] {
         let text = refused(
             addr,
             &format!(
@@ -549,7 +575,7 @@ async fn alter_add_column() {
     ok(addr, "ALTER TABLE t ADD COLUMN IF NOT EXISTS c UInt8").await;
     refused(addr, "ALTER TABLE t ADD COLUMN c UInt8", "15").await;
     refused(addr, "ALTER TABLE t ADD COLUMN x UInt8 AFTER nope", "47").await;
-    refused(addr, "ALTER TABLE t DROP COLUMN b", "48").await;
+    refused(addr, "ALTER TABLE t FREEZE", "48").await;
     refused(addr, "ALTER TABLE nope ADD COLUMN x UInt8", "60").await;
     let described = ok(addr, "DESCRIBE t FORMAT TSVRaw").await;
     let names: Vec<&str> = described

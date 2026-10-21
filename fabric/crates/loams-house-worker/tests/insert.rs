@@ -1218,3 +1218,174 @@ async fn api_insert_answers_written_rows_and_snapshot() {
     assert!(failed, "read_only refuses the write");
     assert_eq!(ok(addr, "SELECT count() FROM t").await, "5\n");
 }
+
+/// HE1 R9.12: the DDL Langfuse v4's migrations send, on lake tables: skip
+/// indexes, projections and constraints in the column list, `SAMPLE BY`, a
+/// delete `TTL`, `ALIAS` and `MATERIALIZED` columns with lambdas, the query
+/// settings ClickHouse takes in `CREATE`'s SETTINGS, and the `ALTER`s that
+/// follow, each served as ClickHouse answers.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn lake_tables_take_langfuse_ddl() {
+    let house = lakehouse("langfuse-ddl").await;
+    let addr = house.addr();
+    ok(
+        addr,
+        "CREATE TABLE ev (\
+            project_id String, trace_id String, start_time DateTime64(6), \
+            cost_details Map(LowCardinality(String), Decimal(18, 12)), \
+            calculated_input_cost Decimal(18, 12) MATERIALIZED arraySum(mapValues(mapFilter(x -> positionCaseInsensitive(x.1, 'input') > 0, cost_details))), \
+            total_cost Decimal(18, 12) ALIAS cost_details['total'], \
+            input String CODEC(ZSTD(3)), \
+            input_length UInt64 MATERIALIZED lengthUTF8(input), \
+            metadata_names Array(String), metadata_values Array(String), \
+            event_ts DateTime64(6), is_deleted UInt8, \
+            INDEX idx_trace_id trace_id TYPE bloom_filter(0.01) GRANULARITY 1, \
+            INDEX idx_fts lower(input) TYPE text(tokenizer = splitByNonAlpha), \
+            PROJECTION by_trace (SELECT trace_id, start_time ORDER BY trace_id), \
+            CONSTRAINT has_project CHECK notEmpty(project_id)\
+         ) ENGINE = ReplacingMergeTree(event_ts, is_deleted) \
+         PARTITION BY toYYYYMM(start_time) \
+         PRIMARY KEY (project_id, toStartOfMinute(start_time), xxHash32(trace_id)) \
+         ORDER BY (project_id, toStartOfMinute(start_time), xxHash32(trace_id), start_time) \
+         SAMPLE BY xxHash32(trace_id) \
+         TTL toDateTime(start_time) + INTERVAL 30 DAY \
+         SETTINGS index_granularity_bytes = '64Mi', enable_full_text_index = 1",
+    )
+    .await;
+    let shown = ok(addr, "SHOW CREATE TABLE ev FORMAT TSVRaw").await;
+    for part in [
+        "INDEX idx_trace_id",
+        "PROJECTION by_trace",
+        "CONSTRAINT has_project",
+        "SAMPLE BY",
+        "TTL",
+    ] {
+        assert!(shown.contains(part), "{part}: {shown}");
+    }
+    // A query setting is the statement's, not the table's.
+    let created = metadata(&house, "default", "ev").await;
+    let settings = created
+        .properties()
+        .get("loams.ch.settings")
+        .cloned()
+        .unwrap_or_default();
+    assert!(
+        settings.contains("index_granularity_bytes")
+            && !settings.contains("enable_full_text_index"),
+        "{settings}"
+    );
+
+    // Rows: one fresh, one past the TTL.
+    ok(
+        addr,
+        "INSERT INTO ev (project_id, trace_id, start_time, cost_details, input, metadata_names, metadata_values, event_ts, is_deleted) \
+         SELECT 'p', 't1', now64(6), map('input', 1.5, 'output', 2, 'total', 3.5), 'hello', ['evaluator_id'], ['e1'], now64(6), 0 \
+         UNION ALL SELECT 'p', 't2', now64(6) - INTERVAL 40 DAY, map('total', 1), 'old', [], [], now64(6), 0",
+    )
+    .await;
+    assert_eq!(
+        ok(addr, "SELECT trace_id, total_cost, calculated_input_cost, input_length FROM ev ORDER BY trace_id FORMAT TSV").await,
+        "t1\t3.5\t1.5\t5\n",
+        "the expired row is not read"
+    );
+    assert_eq!(ok(addr, "SELECT count() FROM ev FINAL").await, "1\n");
+    refused(
+        addr,
+        "INSERT INTO ev (project_id, trace_id, start_time, event_ts, is_deleted) SELECT '', 't3', now64(6), now64(6), 0",
+        "469",
+    )
+    .await;
+
+    // The ALTERs Langfuse sends, with its trailing settings.
+    ok(addr, "ALTER TABLE ev ADD INDEX IF NOT EXISTS idx_trace_id trace_id TYPE bloom_filter GRANULARITY 1 SETTINGS mutations_sync = 2").await;
+    ok(
+        addr,
+        "ALTER TABLE ev MATERIALIZE INDEX IF EXISTS idx_trace_id SETTINGS mutations_sync = 2",
+    )
+    .await;
+    ok(addr, "ALTER TABLE ev DROP INDEX IF EXISTS idx_fts").await;
+    ok(addr, "ALTER TABLE ev DROP INDEX IF EXISTS idx_fts").await;
+    refused(addr, "ALTER TABLE ev MATERIALIZE INDEX idx_fts", "36").await;
+    ok(addr, "ALTER TABLE ev MODIFY SETTING enable_block_number_column = 1, enable_block_offset_column = 1").await;
+    ok(
+        addr,
+        "ALTER TABLE ev ADD COLUMN IF NOT EXISTS evaluator_id String DEFAULT arrayElement(metadata_values, indexOf(metadata_names, 'evaluator_id')) AFTER metadata_values SETTINGS enable_full_text_index = 1",
+    )
+    .await;
+    assert_eq!(
+        ok(addr, "SELECT evaluator_id FROM ev FORMAT TSV").await,
+        "e1\n",
+        "older rows read the default"
+    );
+    ok(
+        addr,
+        "ALTER TABLE ev ADD COLUMN session_id String DEFAULT '' SETTINGS alter_sync = 2",
+    )
+    .await;
+    ok(
+        addr,
+        "ALTER TABLE ev MODIFY COLUMN session_id Nullable(String) SETTINGS mutations_sync = 2",
+    )
+    .await;
+    let after = metadata(&house, "default", "ev").await;
+    let field = after
+        .current_schema()
+        .as_struct()
+        .fields()
+        .iter()
+        .find(|f| f.name == "session_id")
+        .cloned()
+        .expect("a field");
+    assert!(!field.required, "Nullable makes the field optional");
+    refused(addr, "ALTER TABLE ev MODIFY COLUMN input UInt64", "48").await;
+    refused(addr, "ALTER TABLE ev MODIFY COLUMN session_id String", "48").await;
+    refused(addr, "ALTER TABLE ev DROP COLUMN project_id", "524").await;
+    refused(addr, "ALTER TABLE ev RENAME COLUMN start_time TO st", "524").await;
+    ok(addr, "ALTER TABLE ev RENAME COLUMN session_id TO sid").await;
+    ok(addr, "ALTER TABLE ev DROP COLUMN sid").await;
+    refused(addr, "ALTER TABLE ev DROP COLUMN sid", "10").await;
+    ok(
+        addr,
+        "ALTER TABLE ev MODIFY TTL toDateTime(start_time) + INTERVAL 90 DAY",
+    )
+    .await;
+    assert_eq!(
+        ok(addr, "SELECT count() FROM ev").await,
+        "2\n",
+        "a longer TTL reads the row again"
+    );
+    ok(addr, "ALTER TABLE ev REMOVE TTL").await;
+    refused(addr, "ALTER TABLE ev REMOVE TTL", "36").await;
+    // Mutations are the mutation path's (until it lands, 48).
+    refused(addr, "ALTER TABLE ev DELETE WHERE trace_id = 't1'", "48").await;
+    refused(
+        addr,
+        "ALTER TABLE ev DELETE WHERE 1, ADD INDEX i trace_id TYPE minmax",
+        "48",
+    )
+    .await;
+
+    // A materialized view's query.
+    ok(addr, "CREATE TABLE core (project_id String, trace_id String, input String) ENGINE = MergeTree ORDER BY project_id").await;
+    ok(
+        addr,
+        "CREATE MATERIALIZED VIEW core_mv TO core AS SELECT project_id, trace_id, input FROM ev",
+    )
+    .await;
+    ok(
+        addr,
+        "ALTER TABLE core_mv MODIFY QUERY SELECT project_id, trace_id, leftUTF8(input, 2) AS input FROM ev SETTINGS enable_full_text_index = 1",
+    )
+    .await;
+    ok(addr, "INSERT INTO ev (project_id, trace_id, start_time, input, event_ts, is_deleted) SELECT 'p', 't4', now64(6), 'abcdef', now64(6), 0").await;
+    assert_eq!(
+        ok(addr, "SELECT trace_id, input FROM core FORMAT TSV").await,
+        "t4\tab\n"
+    );
+    refused(
+        addr,
+        "ALTER TABLE core_mv MODIFY QUERY SELECT project_id, trace_id, input FROM core",
+        "48",
+    )
+    .await;
+}

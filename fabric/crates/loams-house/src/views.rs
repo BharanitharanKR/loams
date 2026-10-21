@@ -142,9 +142,10 @@ pub fn view_ddl(pin: &ReadPin, source: &str, mode: Mode<'_>) -> Result<String, H
             _ => format!("SELECT {}\nFROM {source}", casts(pin)?.join(", ")),
         }
     };
+    let body = computed(pin, body)?;
     if pin.snapshot_id.is_some() {
         // It reads the bucket: R-ACL.1's form, columns named.
-        let columns: Vec<String> = columns(pin)
+        let columns: Vec<String> = view_columns(pin)
             .iter()
             .map(|c| Ok(format!("{} {}", quote_name(&c.name), column_type(pin, c)?)))
             .collect::<Result<_, HouseError>>()?;
@@ -250,12 +251,17 @@ pub fn safe_type(text: &str) -> bool {
 /// deny list before a worker runs it (HS1 Task 11): another writer of a shared
 /// REST catalog could set those properties.
 pub fn carries_expressions(pin: &ReadPin, mode: Mode<'_>) -> bool {
-    if pin.table.class == TableClass::External || pin.snapshot_id.is_none() {
+    if pin.table.class == TableClass::External {
         return false;
+    }
+    let computes = !aliases(pin).is_empty() || !pin.table.ttl.trim().is_empty();
+    if pin.snapshot_id.is_none() {
+        return computes;
     }
     let merge = matches!(mode, Mode::Final(_))
         && LakeEngine::parse(&pin.table.engine).is_ok_and(|e| e.merges());
     merge
+        || computes
         || columns(pin).iter().any(|c| {
             !c.default_expression.is_empty()
                 && pin.fields.iter().any(|f| f.name == c.name && !f.required)
@@ -271,6 +277,92 @@ pub fn view_body(ddl: &str) -> &str {
 /// never opens, standing in for a view's `icebergS3` source while its body is
 /// checked.
 pub const CHECKED_SOURCE: &str = "null('loams_checked UInt8')";
+
+/// The `ALIAS` columns of a lake table (HE1 R9.12), which a view computes.
+fn aliases(pin: &ReadPin) -> Vec<&ddl::ChColumn> {
+    if pin.table.class == TableClass::External {
+        return Vec::new();
+    }
+    pin.table.columns.iter().filter(|c| !c.stored()).collect()
+}
+
+/// The table `TTL`'s delete rules (HE1 R9.12).
+fn ttl_rules(pin: &ReadPin) -> Result<Vec<ddl::TtlRule>, HouseError> {
+    if pin.table.class == TableClass::External || pin.table.ttl.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    ddl::parse_ttl(&pin.table.ttl).map_err(|err| catalog_refusal(pin, &err.to_string()))
+}
+
+/// The columns a view has, in the table's order: the stored columns the pin
+/// reads, and the `ALIAS` columns.
+fn view_columns(pin: &ReadPin) -> Vec<&ddl::ChColumn> {
+    let stored = columns(pin);
+    pin.table
+        .columns
+        .iter()
+        .filter(|c| {
+            stored.iter().any(|s| s.name == c.name)
+                || (!c.stored() && pin.table.class != TableClass::External)
+        })
+        .collect()
+}
+
+/// The view's body with what a lake table computes at read time (HE1 R9.12):
+/// its `ALIAS` columns, and its `TTL`, whose expired rows a read never sees
+/// (ClickHouse deletes them at its next merge; until then they are read, so the
+/// House answers as ClickHouse does after that merge). Each expression is
+/// catalog text, printed again from its tree (R11.11).
+fn computed(pin: &ReadPin, body: String) -> Result<String, HouseError> {
+    let aliases = aliases(pin);
+    let rules = ttl_rules(pin)?;
+    if aliases.is_empty() && rules.is_empty() {
+        return Ok(body);
+    }
+    let reprint = |text: &str| expr::reprint(text).map_err(|why| catalog_refusal(pin, &why));
+    let stored: Vec<String> = if pin.snapshot_id.is_none() {
+        pin.table
+            .columns
+            .iter()
+            .filter(|c| c.stored())
+            .map(|c| c.name.clone())
+            .collect()
+    } else {
+        columns(pin).iter().map(|c| c.name.clone()).collect()
+    };
+    let mut select = Vec::new();
+    for column in &pin.table.columns {
+        if column.stored() {
+            if stored.contains(&column.name) {
+                select.push(quote_name(&column.name));
+            }
+        } else {
+            select.push(format!(
+                "CAST({}, {}) AS {}",
+                reprint(&column.default_expression)?,
+                quote_string(&column.ch_type),
+                quote_name(&column.name)
+            ));
+        }
+    }
+    let mut filters = Vec::new();
+    for rule in rules {
+        let expired = format!("lessOrEquals({}, now())", reprint(&rule.expression)?);
+        filters.push(match &rule.condition {
+            Some(condition) => format!("not(and({expired}, {}))", reprint(condition)?),
+            None => format!("not({expired})"),
+        });
+    }
+    let filter = if filters.is_empty() {
+        String::new()
+    } else {
+        format!("\nWHERE {}", filters.join(" AND "))
+    };
+    Ok(format!(
+        "SELECT {}\nFROM (\n{body}\n){filter}",
+        select.join(", ")
+    ))
+}
 
 /// The columns a pin reads: the table's stored columns that the pinned
 /// snapshot's schema has (a time-travelled read sees the schema of its time).
@@ -588,6 +680,7 @@ mod tests {
                 settings: Vec::new(),
                 comment: String::new(),
                 ddl: String::new(),
+                ..ChTable::default()
             },
             location: "s3://local/ns/1/house/db/t-1".to_string(),
             metadata_file: "s3://local/ns/1/house/db/t-1/metadata/00002-x.metadata.json"

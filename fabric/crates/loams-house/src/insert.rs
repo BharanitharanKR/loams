@@ -441,6 +441,15 @@ pub fn staging_ddl(ch: &ChTable) -> Result<String, HouseError> {
             ch.database, ch.name
         ))));
     }
+    // HE1 R9.12: a table's `CHECK` constraints hold on its staging table, so
+    // chDB checks every row (`469 VIOLATED_CONSTRAINT`, as ClickHouse).
+    for constraint in ch.constraints.iter().filter(|c| c.kind == "CHECK") {
+        let expression = expr::reprint(&constraint.expression).map_err(|why| refusal(ch, &why))?;
+        columns.push(format!(
+            "CONSTRAINT {} CHECK {expression}",
+            quote_name(&constraint.name)
+        ));
+    }
     Ok(format!(
         "CREATE TEMPORARY TABLE {STAGING} ({}) ENGINE = Memory",
         columns.join(", ")
