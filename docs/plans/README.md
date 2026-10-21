@@ -368,6 +368,13 @@ Design reference: [67 GPU Workloads on Kubernetes](../design/67-gpu-scheduling-r
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|
 | [GP1: GPU workloads with KAI and Run:ai](2026-10-20-gp1-gpu-runai.md) (stub; GP0 Tasks 0–10 fully specified; GP1–GP4 at milestone level) | **GP0** `docs/guides/gpu/` (Kubernetes with KAI or Run:ai, plain Kubernetes and HAMi, Compose), the example chart `deploy/helm/loams-gpu-workers` (vLLM embed and rerank servers; `default`, `kai` and `hami` placement for NVIDIA and AMD; optional KAI queues), `deploy/release/compose.gpu.yaml` and its AMD variant, and GPU-free CI (`gpu-examples.yml`: lint, golden renders, policy checks with failing fixtures, kubeconform with KAI's `Queue` schema, a docs-snippet check, a kind run with fake GPUs and KAI); **GP1** `loams-gpu` and GPU queues and `GpuBatch` in Jobs, GPU usage events; **GP2** `LoamsGpuPool`, namespace → KAI queue sync, `LOC-GPU-*`, the Workload Map definition upstream; **GP3** agent GPU jobs under the Jailer; **GP4** (optional) a Rust cuVS accelerator for Lance | GP0: v0.1.1 shipped (Q1015). GP1: JB1. GP2: OP1. GP3: JL1a. GP4: Q1024 | Stub (2026-10-20) |
+## Track ER: edge reach for serverless runtimes
+
+Design reference: [69 Edge Reach](../design/69-edge-reach.md) (D1300–D1322, Q1060–Q1075, approved by the owner 2026-10-21 with all defaults; D1312 deferred). Serverless runtimes reach a self-hosted Loams through one door, the gateway's edge listener, over Cloudflare Tunnel (Workers VPC or Access), a cloud private link or a tailnet node, without the engine becoming public. ER0 is fully specified; ER1–ER3 are listed at milestone level.
+
+| Plan | Scope | Depends on | Status |
+|---|---|---|---|
+| [ER1: Edge reach](2026-10-20-er1-edge-reach.md) ( ER0 Tasks 0–12 fully specified; ER1–ER3 at milestone level) | **ER0** the generated edge allow-list (`(loams.options.v1.edge)`, `api/edge-allowlist.txt`), the engine's edge upstream listener (environment-bound credentials only), the gateway's `edge` module on hyper (`access` and `network` admission, header hygiene, limits, link key, metrics), the compose `edge` profile with `cloudflared`, the refusal suite, a fuzz target, the `workerd` end-to-end test, `accessServiceToken()` in `@loams/client`, guides under `docs/guides/edge/`; **ER1** operator `tunnel` mode, nightly real-Cloudflare job, Hyperdrive; **ER2** workload-identity exchange and SDK providers; **ER3** the public profile, deferred with D1312 | GW1a (done); ER1: OP1; ER2: §19 §5.3 signing key | Approved (2026-10-21) |
 
 ## Track OC: Open-protocol compute (Airflow, Temporal, streaming SQL, Spark, job queues)
 
