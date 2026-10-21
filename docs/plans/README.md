@@ -318,19 +318,19 @@ Design: [§39](../design/39-software-factory-and-loams-bot.md), D-SF-1–D-SF-20
 
 ## Track FT: the Software Factory loop
 
-Design reference: [72 The Software Factory Loop](../design/72-software-factory-loop.md) (D1420–D1443, Q1110–Q1121; proposed 2026-10-21, D1420 approved). Owner direction, 2026-10-21: write the factory loop on the Mastra integration. Replaces the retired SF2–SF5.
+Design reference: [72 The Software Factory Loop](../design/72-software-factory-loop.md) (D1420–D1443, Q1110–Q1121; approved by the owner 2026-10-21 with all defaults). Owner direction, 2026-10-21: write the factory loop on the Mastra integration. Replaces the retired SF2–SF5.
 
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|
-| [FT1: the Software Factory loop](2026-10-21-ft1-factory-loop.md) (FT0 Tasks 0–11 fully specified; FT1–FT3 at milestone level) | **FT0** the minimum viable loop: the `agents/` workspace and `@loams/factory`; `@loams/mastra-acp`; Loams Bot as the factory host's ACP agent; agentd tools for worktree chats, diffs, review comments, change requests, approvals, merges and CI checks; planner, reviewer and code-host agents behind a tool gate; the durable `factory.run` workflow on `@loams/mastra-resonate`; deploy to a Live app with rollback; the run record and Runs page; the kill switch; an end-to-end gate (about 10 engineer-weeks). **FT1** team loop, **FT2** Jailer, Places, Loams Memory, app BYOC, **FT3** phones and any-framework roles | `@loams/mastra-resonate` 0.1.0 on npm; PR #844; SD1 | Proposed stub |
+| [FT1: the Software Factory loop](2026-10-21-ft1-factory-loop.md) (FT0 Tasks 0–11 fully specified; FT1–FT3 at milestone level) | **FT0** the minimum viable loop: the `agents/` workspace and `@loams/factory`; `@loams/mastra-acp`; Loams Bot as the factory host's ACP agent; agentd tools for worktree chats, diffs, review comments, change requests, approvals, merges and CI checks; planner, reviewer and code-host agents behind a tool gate; the durable `factory.run` workflow on `@loams/mastra-resonate`; deploy to a Live app with rollback; the run record and Runs page; the kill switch; an end-to-end gate (about 10 engineer-weeks). **FT1** team loop, **FT2** Jailer, Places, Loams Memory, app BYOC, **FT3** phones and any-framework roles | `@loams/mastra-resonate` 0.1.0 on npm; PR #844; SD1 | Approved stub (owner, 2026-10-21) |
 
 ## Track MK: the Loams Agent Marketplace
 
-Design reference: [73 The Loams Agent Marketplace: Any Framework, Mastra First](../design/73-agent-marketplace.md) (D1445–D1479, Q1122–Q1144; proposed 2026-10-21; open source, first kinds and the any-framework direction approved). Replaces the private marketplace of platform doc 05 and D-SF-20.
+Design reference: [73 The Loams Agent Marketplace: Any Framework, Mastra First](../design/73-agent-marketplace.md) (D1445–D1479, Q1122–Q1144; approved by the owner 2026-10-21 with all defaults). Replaces the private marketplace of platform doc 05 and D-SF-20.
 
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|
-| [MK1: the Loams Agent Marketplace](2026-10-21-mk1-agent-marketplace.md) (MK0 Tasks 0–11 fully specified; MK1–MK3 at milestone level) | **MK0** Mastra first, first-party only: listing schema v1 (framework-neutral); the `loams-listing` CLI; the signed static index in `ostrium-labs/loams-marketplace`; `MarketplaceService` in agentd with sources, verification and revocations; install plans and the agent environment contract; installers for `node` agents, harnesses and MCP servers; `@loams/agent-host`; the conformance runner (Core); console, Studio and CLI; first-party listings (about 9 engineer-weeks). **MK1** any framework and third-party, **MK2** more targets and kinds, **MK3** paid listings only if the owner decides | `@loams/mastra-resonate` 0.1.0; the owner creates `ostrium-labs/loams-marketplace`; FT0 Task 2 | Proposed stub |
+| [MK1: the Loams Agent Marketplace](2026-10-21-mk1-agent-marketplace.md) (MK0 Tasks 0–11 fully specified; MK1–MK3 at milestone level) | **MK0** Mastra first, first-party only: listing schema v1 (framework-neutral); the `loams-listing` CLI; the signed static index in `ostrium-labs/loams-marketplace`; `MarketplaceService` in agentd with sources, verification and revocations; install plans and the agent environment contract; installers for `node` agents, harnesses and MCP servers; `@loams/agent-host`; the conformance runner (Core); console, Studio and CLI; first-party listings (about 9 engineer-weeks). **MK1** any framework and third-party, **MK2** more targets and kinds, **MK3** paid listings only if the owner decides | `@loams/mastra-resonate` 0.1.0; the owner creates `ostrium-labs/loams-marketplace`; FT0 Task 2 | Approved stub (owner, 2026-10-21) |
 
 ## Track SO: Loams SystemOne
 

@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, test first. Where this plan gives exact names, paths, tools or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end of this file.
 >
-> **Status: Proposed stub** (2026-10-21). Track FT, design [§72](../design/72-software-factory-loop.md) (D1420–D1443, Q1110–Q1121), with [§73](../design/73-agent-marketplace.md) for the agent host and packages it shares. Replaces the retired SF2–SF5 (D1420). This plan specifies **FT0, the minimum viable loop**, task by task. FT1 (the team loop), FT2 (guarded and remembered) and FT3 (reach) are listed at milestone level and get full specifications when their gates are met. Nothing here starts before the owner approves §72.
+> **Status: Approved stub** (owner, 2026-10-21, all defaults). Track FT, design [§72](../design/72-software-factory-loop.md) (D1420–D1443, Q1110–Q1121), with [§73](../design/73-agent-marketplace.md) for the agent host and packages it shares. Replaces the retired SF2–SF5 (D1420). This plan specifies **FT0, the minimum viable loop**, task by task. FT1 (the team loop), FT2 (guarded and remembered) and FT3 (reach) are listed at milestone level and get full specifications when their gates are met.
 
 **Goal (FT0):** one developer on Loams Desktop (or a dev box with remote agentd) types an intent to Loams Bot in Studio, approves a plan, watches a harness implement it in a Studio worktree, reviews it with the reviewer agent's comments, gets a pull request whose CI is green, merges, approves a deploy, and sees the change active on a Live app, with every step durable, recorded and stoppable.
 

@@ -1,6 +1,6 @@
 # 73 — The Loams Agent Marketplace: Any Framework, Mastra First
 
-Status: **Proposed** · 2026-10-21. The direction is the owner's; everything below it is a proposal until the owner rules, except where a decision says **Approved**.
+Status: **Approved** · 2026-10-21. The owner approved the design with every default on 2026-10-21 (and confirmed that "fx.sh" means Vercel Labs' fx, Q1142).
 
 > "write the factory loop design and the agent marketplace will be based on our mastra integration, user can create agents publish to our marketplace etc, mastra uses loams postgres, live, engine, make mastra as our agent integration layer etc" (owner, 2026-10-21)
 
@@ -77,7 +77,7 @@ The paths below use Loams' existing compatibility surfaces (Postgres wire, the Q
 | **Microsoft Agent Framework** | MIT; .NET and Python stable, Go in preview; 1.0 GA 2026-04-03 **(verify)**; successor to Semantic Kernel and AutoGen; MCP and A2A native ([repo](https://github.com/microsoft/agent-framework)) | A2A surface; Loams' C# and Python SDKs; Postgres through its own providers **(verify)** |
 | **Vercel eve** | TypeScript, Apache-2.0, an agent as a directory of files (model, instructions, tools, skills) with durable execution, sandboxing and approvals; launched 2026-06-17, public preview **(verify)** ([repo](https://github.com/vercel/eve), [The New Stack](https://thenewstack.io/vercel-launches-eve-an-open-source-framework-that-treats-agents-as-directories/)) | `node` runtime; its serving surface and durable backend are a MK1 Task 0 spike **(verify)**; an ACP or A2A wrapper if it serves neither |
 | **Vercel Workflow DevKit** | TypeScript, Apache-2.0, `"use workflow"` / `"use step"` durable functions ([repo](https://github.com/vercel/workflow), [docs](https://workflow-sdk.dev)); `DurableAgent` is deprecated in favour of the AI SDK's `WorkflowAgent` ([docs](https://workflow-sdk.dev/docs/api-reference/workflow-ai/durable-agent)) | A durability library rather than an agent framework: agents built on it run in the `node` runtime; whether its storage backend can be pointed at Loams Postgres is a spike **(verify)** |
-| **fx** (fx.sh) | The best match is **fx by Vercel Labs**: a small coding-agent harness in Zig, Apache-2.0, one binary with a shell CLI, a JSON mode, an **ACP server** and a WASM SDK; v0.0.14, experimental ([fx.sh](https://fx.sh)). It is a harness, not a general framework; Q1142 confirms with the owner | A **harness listing** (ACP, `binary` runtime) in MK1 |
+| **fx** (fx.sh) | The best match is **fx by Vercel Labs**: a small coding-agent harness in Zig, Apache-2.0, one binary with a shell CLI, a JSON mode, an **ACP server** and a WASM SDK; v0.0.14, experimental ([fx.sh](https://fx.sh)). It is a harness, not a general framework; the owner confirmed on 2026-10-21 that this is the fx meant (Q1142) | A **harness listing** (ACP, `binary` runtime) in MK1 |
 | **Docker Agent** (formerly cagent) | YAML-defined agents, loadable from OCI references ([docs](https://docs.docker.com/ai/docker-agent/)) | `oci` runtime (MK2); its MCP mode as a surface |
 
 **Durable execution outside Mastra.** Loams Durable speaks the Resonate HTTP protocol so unmodified Resonate SDKs work (D1). Resonate has SDKs for TypeScript, Python, Rust, Go and Java, all pre-1.0 ([resonatehq](https://github.com/resonatehq)). The TypeScript SDK is proven against Loams Durable by `loams-mastra`'s engine tests; the Python SDK is the next cell (Q1143), because Loams' newer server already differs from upstream v0.9.8 in ways the TypeScript work found (explicit ids, local-scope listeners). Frameworks with their own durability (LangGraph checkpoints, Pydantic AI on DBOS, ADK sessions) need only Loams Postgres.
@@ -347,13 +347,13 @@ None combines listings in any framework that **install into the user's own envir
 
 ---
 
-## 15. Decisions (all Proposed unless marked)
+## 15. Decisions (approved by the owner, 2026-10-21)
 
 | # | Decision | § |
 |---|---|---|
-| D1445 | **Mastra is Loams' first-class agent integration and reference implementation**: Loams Postgres, the engine, Live, Streams, Durable (Resonate), House and Loams Memory through `@mastra/pg` and `@mastra/qdrant` today and `@loams/mastra` after MA2. **Direction approved (owner, 2026-10-21); the map is Proposed** | 2.2 |
+| D1445 | **Mastra is Loams' first-class agent integration and reference implementation**: Loams Postgres, the engine, Live, Streams, Durable (Resonate), House and Loams Memory through `@mastra/pg` and `@mastra/qdrant` today and `@loams/mastra` after MA2. **Approved (owner, 2026-10-21)** | 2.2 |
 | D1446 | **The marketplace is open source** (Apache-2.0), superseding D-SF-20 and platform doc 05's private marketplace. **Approved (owner, 2026-10-21)** | 1, 14 |
-| D1447 | **The marketplace and runtime are framework- and language-agnostic**; Mastra is first, not exclusive. **Direction approved (owner, 2026-10-21); details Proposed** | 2.1 |
+| D1447 | **The marketplace and runtime are framework- and language-agnostic**; Mastra is first, not exclusive. **Approved (owner, 2026-10-21)** | 2.1 |
 | D1448 | **Listing kinds**: `agent` (any framework), `harness`, `mcp-server` first; templates, workflows, console plugins, connectors and factory apps later. **First kinds approved (owner, 2026-10-21)** | 3 |
 | D1449 | **Integration levels** Loams-native, Loams-compatible and Runs on Loams, shown with framework and language as badges and filters | 2.4 |
 | D1450 | **`@loams/mastra/live`**: run state mirrored into Live and a typed Live client; `LoamsPubSub` stays on Streams; amends D1214 | 2.2 |
@@ -387,7 +387,7 @@ None combines listings in any framework that **install into the user's own envir
 | D1478 | **Not built**: payments, artifact hosting, hosted agent execution by Ostrium, engagement-ranked storefronts, framework-specific runtimes, a Loams agent framework, a Mastra deployer of ours, telemetry | 2.1, 5 |
 | D1479 | **Supersessions** as §14; the name stays "Loams Marketplace" unless the owner rules otherwise (Q1138) | 14 |
 
-## 16. Open questions
+## 16. Open questions (answered by the owner on 2026-10-21: every default)
 
 | ID | Question | Default |
 |---|---|---|
@@ -411,7 +411,7 @@ None combines listings in any framework that **install into the user's own envir
 | Q1139 | What install verification requires from the official index | The index signature and per-artifact provenance; a private source may waive provenance for its own namespace only |
 | Q1140 | Which surface non-Mastra agents should prefer | ACP for interactive agents used in Studio; A2A for agents that serve other agents or run as services |
 | Q1141 | Adopt Open Responses as an agent surface? | Optional (`responses`), never required; used as the model proxy's shape |
-| Q1142 | Does the owner's "fx.sh" mean fx by Vercel Labs (a Zig coding-agent harness with ACP)? | Assume yes and treat it as a harness listing; confirm with the owner |
+| Q1142 | Does the owner's "fx.sh" mean fx by Vercel Labs (a Zig coding-agent harness with ACP)? | Yes: a harness listing (confirmed by the owner, 2026-10-21) |
 | Q1143 | Test Resonate's Python (and Go, Java) SDKs against Loams Durable? | Yes, Python first, as an observed conformance cell in MK1 |
 | Q1144 | Where the model proxy lives; WASM agents | A small proxy in agentd sharing provider code with §57's `llm` module and `loams-llm`; WASM deferred until a framework ships WASM agents |
 

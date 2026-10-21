@@ -1,6 +1,6 @@
 # 72 — The Software Factory Loop: Mastra Agents, Studio Worktrees and Durable Runs
 
-Status: **Proposed** · 2026-10-21. The direction is the owner's; everything below it is a proposal until the owner rules, except where a decision says **Approved**.
+Status: **Approved** · 2026-10-21. The owner approved the design with every default on 2026-10-21 (and confirmed that "fx.sh" means Vercel Labs' fx, Q1142).
 
 > "write the factory loop design and the agent marketplace will be based on our mastra integration, user can create agents publish to our marketplace etc, mastra uses loams postgres, live, engine, make mastra as our agent integration layer etc" (owner, 2026-10-21)
 
@@ -13,7 +13,7 @@ This document redesigns the factory's **agent loop**. Its companion is [§73](73
 - [§60](60-places-and-harness-composition.md) Places (D1087–D1093), [§61](61-loams-jailer.md) the Jailer (D1094–D1105), [§63](63-loams-meter.md) the Meter (D1120–D1138), [§52](52-loams-memory.md) Loams Memory (D870–D891).
 - [§64](64-loams-infra-stack.md) §9.3, deploys (D1167); [§45](45-loams-live-production.md) Live deploys; §71 (app BYOC, open PR #979, D1390–D1410).
 
-Decisions **D1420–D1443** and questions **Q1110–Q1121** are declared in the [decision log](13-decision-log.md). One number after D1443 is kept free. §73 holds D1445–D1479 and Q1122–Q1144. Plan stub: [FT1](../plans/2026-10-21-ft1-factory-loop.md), track FT. **No code is written by this document.**
+Decisions **D1420–D1443** and questions **Q1110–Q1121** are declared in the [decision log](13-decision-log.md). One number after D1443 is kept free. §73 holds D1445–D1479 and Q1122–Q1144. Plan stub: [FT1](../plans/2026-10-21-ft1-factory-loop.md), track FT. **No code is written by this document.** Approved by the owner with every default on 2026-10-21.
 
 Markers: **(verify)** means the plan's Task 0 checks it first; **(estimate)** means computed, not measured. Status labels follow the messaging framework: **Shipped** (in v0.1.0), **Built, unreleased** (merged on `dev` or in an open PR, which is named), **Designed** (a design or plan, no code), **New** (introduced here).
 
@@ -306,7 +306,7 @@ factory.ai (the Droids company, "Factory") published "Factory 2.0: From coding a
 
 Rejected: **Foundry** (Palantir Foundry; Azure AI Foundry, renamed Microsoft Foundry in 2026), **Forge** (Atlassian Forge, which also has a marketplace), **Loop** (Microsoft Loop).
 
-**Recommended default: keep "Loams Software Factory"** for 0.1.x, describe it by what it does ("intent to deploy, with your own agents, on ground you own") rather than by the phrase, and decide at the trademark check; if the owner prefers a rename, **Loams Shipyard** is the strongest alternative after a class 9/42 search.
+**Owner's ruling (2026-10-21, Q1110): keep "Loams Software Factory".** The recommendation was: **keep "Loams Software Factory"** for 0.1.x, describe it by what it does ("intent to deploy, with your own agents, on ground you own") rather than by the phrase, and decide at the trademark check; if the owner prefers a rename, **Loams Shipyard** is the strongest alternative after a class 9/42 search.
 
 ---
 
@@ -341,13 +341,13 @@ Rejected: **Foundry** (Palantir Foundry; Azure AI Foundry, renamed Microsoft Fou
 
 ---
 
-## 14. Decisions (all Proposed unless marked)
+## 14. Decisions (approved by the owner, 2026-10-21)
 
 | # | Decision | § |
 |---|---|---|
 | D1420 | **SF2–SF5 are retired** (the owner closed #225–#228 on 2026-10-19; recorded 2026-10-21). SF1 continues. §39's agent half is superseded by this document; its embedding half stands. **Approved (owner, 2026-10-21)** | 13 |
 | D1421 | **The factory loop** is intent → plan → build → review → CI → deploy (observe and close in FT2), one durable run per intent, with plan, merge and deploy approvals on by default | 3 |
-| D1422 | **Factory agents are Mastra agents by default** on `@loams/mastra` (Loams Postgres storage, engine vectors, Resonate workflows, House traces), the owner's direction that Mastra is Loams' agent integration layer. **Direction approved (owner, 2026-10-21); details Proposed** | 4.1 |
+| D1422 | **Factory agents are Mastra agents by default** on `@loams/mastra` (Loams Postgres storage, engine vectors, Resonate workflows, House traces), the owner's direction that Mastra is Loams' agent integration layer. **Approved (owner, 2026-10-21)** | 4.1 |
 | D1423 | **Agents think, harnesses code.** The build stage opens Studio threads in worktrees through agentd; no Mastra agent edits a repository | 3, 4 |
 | D1424 | **Tools reach factory apps through MCP and connectors**: the apps' own open MCP servers unmodified, agentd's factory connections as MCP tools (credentials stay in agentd), connectors for data; the gateway's `mcp` module brokers in FT2 | 5 |
 | D1425 | **No A2A inside Loams.** Loams Bot delegates through Mastra's supervisor `agents`; A2A only at the edge, behind an operator flag | 4.3 |
@@ -372,7 +372,7 @@ Rejected: **Foundry** (Palantir Foundry; Azure AI Foundry, renamed Microsoft Fou
 
 The number after D1443 is kept free.
 
-## 15. Open questions
+## 15. Open questions (answered by the owner on 2026-10-21: every default)
 
 | ID | Question | Default |
 |---|---|---|
