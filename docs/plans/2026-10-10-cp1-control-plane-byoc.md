@@ -437,6 +437,8 @@ Steps: write `pg_control_suite_unchanged` as the CI diff check first → move �
 
 ### Task 3: `loams-tenancy`, the contract every product plugs into
 
+> **Amendment (approved 2026-10-21) by [§76](../design/76-identity-and-authorization.md)** (D1603, D1604, D1610). `core.fga`'s types follow §76 §6: `platform` (root: `operator`, `limits_writer`, `meter_admin`), `org`, `team`, `project`, `environment` (object id = the namespace id; replaces `namespace`), the application `deployment` and `database`; `cluster` and `rollout` stay. The `Authorizer` is the single trait in `loams-authz` (`check`, `batch_check`, `list_objects`) with `OpenFgaAuthorizer`, `CachedAuthorizer`, `BuiltinAuthorizer`, `AllowAllAuthorizer` and `RecordingAuthorizer`, not this task's `DevAuthorizer`/`RbacAuthorizer`. Lakekeeper keeps its own OpenFGA store. Principal kinds are §19's `user`, `service_account` and `agent`, mapped onto Zitadel ([IA1](2026-10-21-ia1-identity-authz.md) IA2 builds this).
+
 **Files:** create `crates/loams-tenancy/` (as in the file structure), and `deploy/openfga/{core.fga,postgres.fga,sqldb.fga,graph.fga,house.fga,live.fga,fga.mod}`. Tests are inline, plus `tests/{authz.rs,limits.rs,static_dir.rs}`.
 
 **Interfaces:**
