@@ -122,7 +122,16 @@ pub enum Mode<'a> {
     /// `FINAL`: the merge view of a Replacing or Summing table, with the live
     /// files of the pinned snapshot (for their sequence numbers).
     Final(&'a [LiveFile]),
+    /// The stored rows as written, with each row's place in the table's write
+    /// order (`__loams_seq`, its file's sequence number, and `__loams_row`, its
+    /// number in its file): what a mutation rewrites (HE1 R9.5), so that rows of
+    /// one key keep their order. No `ALIAS` column and no `TTL` filter: the
+    /// rewrite keeps what is stored, and reads still compute both.
+    Sequenced(&'a [LiveFile]),
 }
+
+/// The columns a [`Mode::Sequenced`] view adds.
+pub const SEQUENCE_COLUMNS: [&str; 2] = [SEQ, ROW];
 
 /// The view DDL for a pin.
 pub fn view_ddl(pin: &ReadPin, source: &str, mode: Mode<'_>) -> Result<String, HouseError> {
@@ -148,6 +157,10 @@ pub fn view_ddl(pin: &ReadPin, source: &str, mode: Mode<'_>) -> Result<String, H
     } else {
         let engine = LakeEngine::parse(&pin.table.engine).ok();
         match (mode, engine) {
+            (Mode::Sequenced(files), _) => format!(
+                "SELECT {}\nFROM {source}",
+                sequenced(pin, files)?.join(", ")
+            ),
             (Mode::Final(files), Some(engine @ LakeEngine::Replacing { .. })) => {
                 replacing(pin, source, &engine, files)?
             }
@@ -161,13 +174,24 @@ pub fn view_ddl(pin: &ReadPin, source: &str, mode: Mode<'_>) -> Result<String, H
             _ => format!("SELECT {}\nFROM {source}", casts(pin)?.join(", ")),
         }
     };
-    let body = computed(pin, body)?;
+    let sequence = matches!(mode, Mode::Sequenced(_))
+        && pin.snapshot_id.is_some()
+        && pin.table.class != TableClass::External;
+    let body = if sequence { body } else { computed(pin, body)? };
     if pin.snapshot_id.is_some() {
         // It reads the bucket: R-ACL.1's form, columns named.
-        let columns: Vec<String> = view_columns(pin)
+        let listed = if sequence {
+            columns(pin)
+        } else {
+            view_columns(pin)
+        };
+        let mut columns: Vec<String> = listed
             .iter()
             .map(|c| Ok(format!("{} {}", quote_name(&c.name), column_type(pin, c)?)))
             .collect::<Result<_, HouseError>>()?;
+        if sequence {
+            columns.extend(SEQUENCE_COLUMNS.iter().map(|c| format!("{c} Int64")));
+        }
         if columns.is_empty() {
             return Err(HouseError::from(ChError::bad_arguments(format!(
                 "Table {}.{} has no columns at this snapshot",

@@ -173,10 +173,38 @@ async fn compact_counted(
     lease.account_as(compaction_of(database, name));
     let written = crate::insert::write_files(&pinned_ctx, lease, &target).await?;
 
-    // The `replace`, on the snapshot that was read.
-    let committer = lake.committer();
+    *rewritten = (files.len() as u64, files.iter().map(|f| f.size_bytes).sum());
+    commit_replace(
+        ctx,
+        database,
+        name,
+        &table,
+        snapshot.manifest_list(),
+        &files,
+        written,
+        ("loams.compaction", "1"),
+    )
+    .await
+}
+
+/// Commits a rewrite of `table` (a compaction, or a mutation, HE1 R9.5): a
+/// `replace` snapshot that removes every file in `files` and adds `written`'s,
+/// on the snapshot whose manifest list is `manifest_list`. Another commit since
+/// that snapshot makes it [`Compacted::Abandoned`].
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn commit_replace(
+    ctx: &InsertContext<'_>,
+    database: &str,
+    name: &str,
+    table: &crate::catalog::LakeTable,
+    manifest_list: &str,
+    files: &[loams_house_lake::files::LiveFile],
+    written: loams_house_lake::write::Written,
+    property: (&str, &str),
+) -> Result<Compacted, HouseError> {
+    let committer = ctx.lake.committer();
     let io = committer.io();
-    let list = io.read(snapshot.manifest_list()).await?;
+    let list = io.read(manifest_list).await?;
     let unreadable = |err: loams_house_lake::LakeError| {
         HouseError::from(ChError::network_error(format!(
             "the manifests of {database}.{name}: {err}"
@@ -191,13 +219,12 @@ async fn compact_counted(
         manifests.push((manifest, bytes));
     }
     let removed: HashSet<String> = files.iter().map(|f| f.location.clone()).collect();
-    *rewritten = (files.len() as u64, files.iter().map(|f| f.size_bytes).sum());
     let built = loams_house_lake::rewrite::replace(
         &table.metadata,
         manifests,
         &removed,
         written.data_files,
-        vec![("loams.compaction".to_string(), "1".to_string())],
+        vec![(property.0.to_string(), property.1.to_string())],
         now_ms(),
     )
     .await

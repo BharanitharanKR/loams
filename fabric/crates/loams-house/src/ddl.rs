@@ -52,8 +52,10 @@ use crate::types::{self, ChType, FieldIds, Needs};
 /// `clickhouse local` 26.7), and a Task 29 surface entry each.
 pub const CATALOG_CODES: &[(i32, &str)] = &[
     (15, "DUPLICATE_COLUMN"),
+    (16, "NO_SUCH_COLUMN_IN_TABLE"),
     (47, "UNKNOWN_IDENTIFIER"),
     (82, "DATABASE_ALREADY_EXISTS"),
+    (420, "CANNOT_UPDATE_COLUMN"),
     (620, "QUERY_NOT_ALLOWED"),
 ];
 

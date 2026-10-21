@@ -39,6 +39,10 @@ use crate::views::{self, Mode};
 /// Setting: the snapshot to read, `<id>` for every table the statement reads,
 /// or `[db.]t=<id>, …` per table.
 pub const SNAPSHOT_ID: &str = "loams_snapshot_id";
+/// The front's own setting (never a request's: it is on no list, so a request
+/// naming it is `115`) that reads every lake table a statement names in
+/// [`Mode::Sequenced`]: a mutation's rewrite (HE1 R9.5).
+pub const SEQUENCED: &str = "loams_internal_sequenced";
 /// Setting: read every table as it was at this time (UTC `YYYY-MM-DD
 /// hh:mm:ss[.fff]`, RFC 3339, or Unix milliseconds).
 pub const AS_OF: &str = "loams_as_of";
@@ -550,6 +554,7 @@ pub async fn plan(
     let mut batch_views: Vec<String> = Vec::new();
     // Views over the lake views, outermost first (made last, innermost first).
     let mut plan_views: Vec<String> = Vec::new();
+    let sequenced = setting_on(settings, SEQUENCED);
     if let Some(lake) = ctx.lake {
         let as_of = as_of(settings)?;
         let final_all = refs.final_setting || setting_on(settings, "final");
@@ -684,6 +689,9 @@ pub async fn plan(
         for (database, name, table, fin) in wanted {
             let pin = pin(&database, &name, ctx.database, &table, &as_of)?;
             let files = match (fin, pin.snapshot_id, LakeEngine::parse(&pin.table.engine)) {
+                (_, Some(id), _) if sequenced && pin.table.class != TableClass::External => {
+                    live_files(lake, &table.metadata, id).await?
+                }
                 (
                     true,
                     Some(id),
@@ -694,7 +702,7 @@ pub async fn plan(
                 _ => Vec::new(),
             };
             databases.insert(database);
-            tables.push((pin, fin, files));
+            tables.push((pin, fin && !sequenced, files));
         }
     }
     let endpoint = lease.ready().and_then(|ready| ready.s3_endpoint.clone());
@@ -716,6 +724,8 @@ pub async fn plan(
         let source = views::source(&pin, endpoint, root)?;
         let mode = if fin {
             Mode::Final(&files)
+        } else if sequenced {
+            Mode::Sequenced(&files)
         } else {
             Mode::Plain
         };

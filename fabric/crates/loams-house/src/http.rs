@@ -1676,7 +1676,8 @@ async fn run(
             Ok(
                 outcome @ (gate::CatalogOutcome::Insert(_)
                 | gate::CatalogOutcome::CreateAs(_)
-                | gate::CatalogOutcome::Optimize(_)),
+                | gate::CatalogOutcome::Optimize(_)
+                | gate::CatalogOutcome::Mutate(_)),
             ) => {
                 let mut all: Vec<(String, String)> = session
                     .as_ref()
@@ -1687,6 +1688,7 @@ async fn run(
                     gate::CatalogOutcome::Insert(target) => LakeJob::Insert(target),
                     gate::CatalogOutcome::CreateAs(plan) => LakeJob::CreateAs(plan),
                     gate::CatalogOutcome::Optimize(plan) => LakeJob::Optimize(plan),
+                    gate::CatalogOutcome::Mutate(plan) => LakeJob::Mutate(plan),
                     _ => unreachable!("matched above"),
                 };
                 let write = LakeWrite {
@@ -2148,6 +2150,7 @@ enum LakeJob {
     Insert(Box<crate::insert::Target>),
     CreateAs(Box<crate::insert::CreateAs>),
     Optimize(Box<crate::compact::OptimizePlan>),
+    Mutate(Box<crate::mutate::MutationPlan>),
 }
 
 /// A write to a lake table and what it runs with (HS1 Task 12).
@@ -2248,6 +2251,13 @@ async fn lake_insert(
                 .pool
                 .release(lease, crate::admission::Outcome::Completed);
             crate::compact::optimize(&ctx, &plan).await
+        }
+        LakeJob::Mutate(plan) => {
+            // A mutation takes its own workers.
+            shared
+                .pool
+                .release(lease, crate::admission::Outcome::Completed);
+            crate::mutate::run(&ctx, &plan).await
         }
     };
     // The source's materialized views run before the answer (HS1 Task 17).

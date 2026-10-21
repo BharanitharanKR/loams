@@ -80,6 +80,7 @@ const SESSION_TIMEOUT_MS: u64 = 600_000;
 /// The settings an `INSERT` into a lake table takes for itself; none reaches
 /// chDB.
 const CONSUMED: &[&str] = &[
+    crate::read::SEQUENCED,
     "insert_deduplicate",
     "insert_deduplication_token",
     "async_insert",
