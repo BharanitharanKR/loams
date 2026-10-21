@@ -1,0 +1,9 @@
+SELECT toDate(ts) AS d, duration / 1000 AS secs, secs * 2 AS double_secs FROM events WHERE d >= today() - 7 AND secs > 1
+
+-- rewritten:
+SELECT "toDate"(ts) AS d, duration / 1000 AS secs, (duration / 1000) * 2 AS double_secs FROM events WHERE ("toDate"(ts)) >= today() - 7 AND (duration / 1000) > 1
+
+-- optimized logical plan:
+Projection: toDate(events.ts) AS d, __common_expr_1 AS secs, __common_expr_1 * Decimal128(Some(2),20,0) AS double_secs
+  Projection: CAST(events.duration AS Decimal128(20, 0)) / Decimal128(Some(1000),20,0) AS __common_expr_1, events.ts
+    TableScan: events projection=[ts, duration], full_filters=[toDate(events.ts) >= today() - IntervalMonthDayNano("IntervalMonthDayNano { months: 0, days: 0, nanoseconds: 604800000000000 }"), CAST(events.duration AS Decimal128(20, 0)) / Decimal128(Some(1000),20,0) > Decimal128(Some(10000),24,4)]

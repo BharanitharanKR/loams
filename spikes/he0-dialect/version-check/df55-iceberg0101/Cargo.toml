@@ -1,0 +1,10 @@
+# Version check only (cargo tree, never built): DataFusion 55.2 beside iceberg 0.10.1.
+[workspace]
+[package]
+name = "df55-iceberg0101"
+version = "0.0.0"
+edition = "2024"
+publish = false
+[dependencies]
+datafusion-common = "=55.2.0"
+iceberg = { version = "=0.10.1", default-features = false }

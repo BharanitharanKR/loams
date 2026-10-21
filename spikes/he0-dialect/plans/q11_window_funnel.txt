@@ -1,0 +1,12 @@
+SELECT level, count() AS users FROM (SELECT profile_id, windowFunnel(86400)(toDateTime(ts), name = 'view', name = 'cart', name = 'buy') AS level FROM events WHERE project_id = 'p1' GROUP BY profile_id) GROUP BY level ORDER BY level
+
+-- rewritten:
+SELECT level, count() AS users FROM (SELECT profile_id, "windowFunnel"(86400, "toDateTime"(ts), name = 'view', name = 'cart', name = 'buy') AS level FROM events WHERE project_id = 'p1' GROUP BY profile_id) GROUP BY level ORDER BY level
+
+-- optimized logical plan:
+Sort: level ASC NULLS LAST
+  Projection: level, count(Int64(1)) AS count() AS users
+    Aggregate: groupBy=[[level]], aggr=[[count(Int64(1))]]
+      Projection: windowFunnel(Int64(86400),toDateTime(events.ts),events.name = Utf8("view"),events.name = Utf8("cart"),events.name = Utf8("buy")) AS level
+        Aggregate: groupBy=[[events.profile_id]], aggr=[[windowFunnel(Int64(86400), toDateTime(events.ts), events.name = Utf8("view"), events.name = Utf8("cart"), events.name = Utf8("buy"))]]
+          TableScan: events projection=[name, profile_id, ts], full_filters=[events.project_id = Utf8("p1")]

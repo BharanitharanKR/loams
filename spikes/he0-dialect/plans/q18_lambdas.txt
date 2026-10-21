@@ -1,0 +1,8 @@
+SELECT id, arrayFilter(x -> x != '', tags) AS non_empty, arrayMap(x -> upper(x), tags) AS up, has(tags, 'prod') AS is_prod FROM traces WHERE project_id = 'p1'
+
+-- rewritten:
+SELECT id, array_filter(tags, x -> x <> '') AS non_empty, array_transform(tags, x -> upper(x)) AS up, has(tags, 'prod') AS is_prod FROM traces WHERE project_id = 'p1'
+
+-- optimized logical plan:
+Projection: traces.id, array_filter(traces.tags, (x) -> x != Utf8("")) AS non_empty, array_transform(traces.tags, (x) -> upper(x)) AS up, has(traces.tags, Utf8("prod")) AS is_prod
+  TableScan: traces projection=[id, tags], full_filters=[traces.project_id = Utf8("p1")]

@@ -1,0 +1,11 @@
+SELECT id, k FROM traces LEFT ARRAY JOIN mapKeys(metadata) AS k WHERE project_id = 'p1'
+
+-- rewritten:
+SELECT id, k FROM (SELECT *, unnest("mapKeys"(metadata)) AS k FROM traces) AS traces WHERE project_id = 'p1'
+
+-- optimized logical plan:
+SubqueryAlias: traces
+  Projection: traces.id, __unnest_placeholder(mapKeys(traces.metadata),depth=1) AS UNNEST(mapKeys(traces.metadata)) AS k
+    Unnest: lists[__unnest_placeholder(mapKeys(traces.metadata))|depth=1] structs[]
+      Projection: traces.id, mapKeys(traces.metadata) AS __unnest_placeholder(mapKeys(traces.metadata))
+        TableScan: traces projection=[id, metadata], full_filters=[traces.project_id = Utf8("p1")]

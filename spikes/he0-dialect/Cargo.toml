@@ -1,0 +1,40 @@
+# HE0 Task 10: the ClickHouse dialect on DataFusion (spike, never merged).
+# A workspace of its own so DataFusion never enters fabric/ or the engine
+# workspace's lockfile. Branch he0-t10-dialect-spike, for reference only.
+[workspace]
+
+[package]
+name = "he0-dialect-spike"
+version = "0.0.0"
+edition = "2024"
+rust-version = "1.97"
+license = "Apache-2.0"
+publish = false
+
+[dependencies]
+# The version pick under test: DataFusion 54.1.0 (arrow 58), which is the
+# newest DataFusion on the same Arrow major as iceberg 0.10.1.
+datafusion-common = "=54.1.0"
+datafusion-expr = "=54.1.0"
+datafusion-sql = "=54.1.0"
+datafusion-functions = "=54.1.0"
+datafusion-functions-aggregate = "=54.1.0"
+datafusion-functions-window = "=54.1.0"
+datafusion-functions-nested = "=54.1.0"
+datafusion-optimizer = "=54.1.0"
+# DataFusion 54.1's planner takes sqlparser 0.62's AST. `visitor` for the
+# rewrite pass.
+sqlparser = { version = "=0.62.0", features = ["visitor"] }
+# The optimizer config's start-time type.
+chrono = { version = "0.4", default-features = false }
+# The House's pin (HS1 R0.7), for the parse-rate comparison.
+sqlparser063 = { package = "sqlparser", version = "=0.63.0" }
+# Only for `cargo tree -e normal --features iceberg-check -i arrow-array`:
+# proves one Arrow major. Never built by default.
+iceberg = { version = "=0.10.1", default-features = false, optional = true }
+
+[features]
+iceberg-check = ["dep:iceberg"]
+
+[profile.dev]
+debug = false

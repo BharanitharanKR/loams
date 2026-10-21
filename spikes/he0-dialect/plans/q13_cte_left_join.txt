@@ -1,0 +1,17 @@
+WITH obs AS (SELECT trace_id, count() AS n, max(end_time) AS last_end FROM observations WHERE project_id = 'p1' GROUP BY trace_id) SELECT t.id, t.name, o.n, o.last_end FROM traces AS t LEFT JOIN obs AS o ON o.trace_id = t.id WHERE t.project_id = 'p1' ORDER BY t.timestamp DESC LIMIT 100
+
+-- rewritten:
+WITH obs AS (SELECT trace_id, count() AS n, max(end_time) AS last_end FROM observations WHERE project_id = 'p1' GROUP BY trace_id) SELECT t.id, t.name, o.n, o.last_end FROM traces AS t LEFT JOIN obs AS o ON o.trace_id = t.id WHERE t.project_id = 'p1' ORDER BY t.timestamp DESC LIMIT 100
+
+-- optimized logical plan:
+Projection: t.id, t.name, o.n, o.last_end
+  Sort: t.timestamp DESC NULLS FIRST, fetch=100
+    Projection: t.id, t.name, o.n, o.last_end, t.timestamp
+      Left Join: t.id = o.trace_id
+        SubqueryAlias: t
+          TableScan: traces projection=[id, timestamp, name], full_filters=[traces.project_id = Utf8("p1")]
+        SubqueryAlias: o
+          SubqueryAlias: obs
+            Projection: observations.trace_id, count(Int64(1)) AS count() AS n, max(observations.end_time) AS last_end
+              Aggregate: groupBy=[[observations.trace_id]], aggr=[[count(Int64(1)), max(observations.end_time)]]
+                TableScan: observations projection=[trace_id, end_time], full_filters=[observations.project_id = Utf8("p1")]

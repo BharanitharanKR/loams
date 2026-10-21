@@ -1,0 +1,10 @@
+SELECT country, count() AS c, avg(duration) AS d FROM events GROUP BY country WITH TOTALS ORDER BY c DESC
+
+-- rewritten:
+SELECT country, count() AS c, avg(duration) AS d FROM events GROUP BY GROUPING SETS ((country), ()) ORDER BY c DESC
+
+-- optimized logical plan:
+Sort: c DESC NULLS FIRST
+  Projection: events.country, count(Int64(1)) AS count() AS c, avg(events.duration) AS d
+    Aggregate: groupBy=[[GROUPING SETS ((events.country), ())]], aggr=[[count(Int64(1)), avg(CAST(events.duration AS Float64))]]
+      TableScan: events projection=[duration, country]

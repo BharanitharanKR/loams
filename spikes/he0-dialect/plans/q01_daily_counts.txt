@@ -1,0 +1,10 @@
+SELECT toStartOfDay(ts) AS day, count() AS events, uniq(profile_id) AS users FROM events WHERE project_id = 'p1' AND ts >= now() - INTERVAL 7 DAY GROUP BY day ORDER BY day
+
+-- rewritten:
+SELECT "toStartOfDay"(ts) AS day, count() AS events, uniq(profile_id) AS users FROM events WHERE project_id = 'p1' AND ts >= now() - INTERVAL 7 DAY GROUP BY day ORDER BY day
+
+-- optimized logical plan:
+Sort: day ASC NULLS LAST
+  Projection: toStartOfDay(events.ts) AS day, count(Int64(1)) AS count() AS events, uniq(events.profile_id) AS users
+    Aggregate: groupBy=[[toStartOfDay(events.ts)]], aggr=[[count(Int64(1)), uniq(events.profile_id)]]
+      TableScan: events projection=[profile_id, ts], full_filters=[events.project_id = Utf8("p1"), CAST(events.ts AS Timestamp(s, "UTC")) >= CAST(now() - IntervalMonthDayNano("IntervalMonthDayNano { months: 0, days: 7, nanoseconds: 0 }") AS Timestamp(s, "UTC"))]

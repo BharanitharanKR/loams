@@ -1,0 +1,8 @@
+SELECT id, name, ts FROM events PREWHERE project_id = 'p1' WHERE name = 'click' ORDER BY ts DESC LIMIT 20
+
+-- rewritten:
+SELECT id, name, ts FROM events WHERE (project_id = 'p1') AND (name = 'click') ORDER BY ts DESC LIMIT 20
+
+-- optimized logical plan:
+Sort: events.ts DESC NULLS FIRST, fetch=20
+  TableScan: events projection=[id, name, ts], full_filters=[events.project_id = Utf8("p1"), events.name = Utf8("click")]

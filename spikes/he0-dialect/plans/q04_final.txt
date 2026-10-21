@@ -1,0 +1,14 @@
+SELECT id, name, timestamp FROM traces FINAL WHERE project_id = 'p1' ORDER BY timestamp DESC LIMIT 50
+
+-- rewritten:
+SELECT id, name, timestamp FROM traces FINAL WHERE project_id = 'p1' ORDER BY timestamp DESC LIMIT 50
+
+-- optimized logical plan:
+Sort: traces.timestamp DESC NULLS FIRST, fetch=50
+  Projection: traces.id, traces.name, traces.timestamp
+    SubqueryAlias: traces
+      Projection: traces.id, traces.timestamp, traces.name
+        Filter: traces.project_id = Utf8("p1")
+          Projection: traces.id, traces.project_id, traces.timestamp, traces.name
+            ReplacingFinal: key=[project_id, id], version=event_ts, is_deleted=is_deleted
+              TableScan: traces projection=[id, project_id, timestamp, name, user_id, tags, metadata, event_ts, is_deleted]

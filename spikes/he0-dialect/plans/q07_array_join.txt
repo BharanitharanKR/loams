@@ -1,0 +1,14 @@
+SELECT tag, count() AS c FROM traces ARRAY JOIN tags AS tag WHERE project_id = 'p1' GROUP BY tag ORDER BY c DESC
+
+-- rewritten:
+SELECT tag, count() AS c FROM (SELECT *, unnest(tags) AS tag FROM traces) AS traces WHERE project_id = 'p1' GROUP BY tag ORDER BY c DESC
+
+-- optimized logical plan:
+Sort: c DESC NULLS FIRST
+  Projection: traces.tag, count(Int64(1)) AS count() AS c
+    Aggregate: groupBy=[[traces.tag]], aggr=[[count(Int64(1))]]
+      SubqueryAlias: traces
+        Projection: __unnest_placeholder(traces.tags,depth=1) AS UNNEST(traces.tags) AS tag
+          Unnest: lists[__unnest_placeholder(traces.tags)|depth=1] structs[]
+            Projection: traces.tags AS __unnest_placeholder(traces.tags)
+              TableScan: traces projection=[tags], full_filters=[traces.project_id = Utf8("p1")]

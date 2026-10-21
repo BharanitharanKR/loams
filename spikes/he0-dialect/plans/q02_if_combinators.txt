@@ -1,0 +1,9 @@
+SELECT name, countIf(duration > 1000) AS slow, sumIf(v, path LIKE '/api/%') AS api_v, uniqIf(profile_id, country = 'DE') AS de_users FROM events GROUP BY name
+
+-- rewritten:
+SELECT name, count(*) FILTER (WHERE duration > 1000) AS slow, sum(v) FILTER (WHERE path LIKE '/api/%') AS api_v, uniq(profile_id) FILTER (WHERE country = 'DE') AS de_users FROM events GROUP BY name
+
+-- optimized logical plan:
+Projection: events.name, count(Int64(1)) FILTER (WHERE events.duration > Int64(1000)) AS count(*) FILTER (WHERE events.duration > Int64(1000)) AS slow, sum(events.v) FILTER (WHERE events.path LIKE Utf8("/api/%")) AS api_v, uniq(events.profile_id) FILTER (WHERE events.country = Utf8("DE")) AS de_users
+  Aggregate: groupBy=[[events.name]], aggr=[[count(Int64(1)) FILTER (WHERE events.duration > UInt64(1000)) AS count(Int64(1)) FILTER (WHERE events.duration > Int64(1000)), sum(events.v) FILTER (WHERE events.path LIKE Utf8("/api/%")), uniq(events.profile_id) FILTER (WHERE events.country = Dictionary(Int32, Utf8("DE"))) AS uniq(events.profile_id) FILTER (WHERE events.country = Utf8("DE"))]]
+    TableScan: events projection=[name, profile_id, v, duration, country, path]

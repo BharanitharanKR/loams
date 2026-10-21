@@ -1,0 +1,10 @@
+SELECT arrayJoin(tags) AS tag, id FROM traces WHERE project_id = 'p1'
+
+-- rewritten:
+SELECT "unnest"(tags) AS tag, id FROM traces WHERE project_id = 'p1'
+
+-- optimized logical plan:
+Projection: __unnest_placeholder(traces.tags,depth=1) AS UNNEST(traces.tags) AS tag, traces.id
+  Unnest: lists[__unnest_placeholder(traces.tags)|depth=1] structs[]
+    Projection: traces.tags AS __unnest_placeholder(traces.tags), traces.id
+      TableScan: traces projection=[id, tags], full_filters=[traces.project_id = Utf8("p1")]

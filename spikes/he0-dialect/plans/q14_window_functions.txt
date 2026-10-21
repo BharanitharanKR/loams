@@ -1,0 +1,9 @@
+SELECT session_id, ts, row_number() OVER (PARTITION BY session_id ORDER BY ts) AS rn, lagInFrame(ts) OVER (PARTITION BY session_id ORDER BY ts ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS prev FROM events WHERE project_id = 'p1'
+
+-- rewritten:
+SELECT session_id, ts, row_number() OVER (PARTITION BY session_id ORDER BY ts) AS rn, "lagInFrame"(ts) OVER (PARTITION BY session_id ORDER BY ts ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) AS prev FROM events WHERE project_id = 'p1'
+
+-- optimized logical plan:
+Projection: events.session_id, events.ts, row_number() PARTITION BY [events.session_id] ORDER BY [events.ts ASC NULLS LAST] RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW AS rn, lagInFrame(events.ts) PARTITION BY [events.session_id] ORDER BY [events.ts ASC NULLS LAST] ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING AS prev
+  WindowAggr: windowExpr=[[row_number() PARTITION BY [events.session_id] ORDER BY [events.ts ASC NULLS LAST] RANGE BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW, lagInFrame(events.ts) PARTITION BY [events.session_id] ORDER BY [events.ts ASC NULLS LAST] ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING]]
+    TableScan: events projection=[session_id, ts], full_filters=[events.project_id = Utf8("p1")]

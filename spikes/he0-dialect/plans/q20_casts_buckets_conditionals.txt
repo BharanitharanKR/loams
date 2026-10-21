@@ -1,0 +1,11 @@
+SELECT toStartOfInterval(start_time, INTERVAL 15 minute) AS bucket, multiIf(dateDiff('millisecond', start_time, end_time) < 100, 'fast', dateDiff('millisecond', start_time, end_time) < 1000, 'ok', 'slow') AS speed, CAST(type AS LowCardinality(String)) AS t, CAST(count() AS UInt64) AS n FROM observations WHERE project_id = 'p1' AND end_time IS NOT NULL GROUP BY bucket, speed, t ORDER BY bucket
+
+-- rewritten:
+SELECT "toStartOfInterval"(start_time, INTERVAL 15 MINUTE) AS bucket, "multiIf"("dateDiff"('millisecond', start_time, end_time) < 100, 'fast', "dateDiff"('millisecond', start_time, end_time) < 1000, 'ok', 'slow') AS speed, CAST(type AS LowCardinality(STRING)) AS t, CAST(count() AS UInt64) AS n FROM observations WHERE project_id = 'p1' AND end_time IS NOT NULL GROUP BY bucket, speed, t ORDER BY bucket
+
+-- optimized logical plan:
+Sort: bucket ASC NULLS LAST
+  Projection: toStartOfInterval(observations.start_time,IntervalMonthDayNano("IntervalMonthDayNano { months: 0, days: 0, nanoseconds: 900000000000 }")) AS bucket, multiIf(dateDiff(Utf8("millisecond"),observations.start_time,observations.end_time) < Int64(100),Utf8("fast"),dateDiff(Utf8("millisecond"),observations.start_time,observations.end_time) < Int64(1000),Utf8("ok"),Utf8("slow")) AS speed, observations.type AS t, CAST(count(Int64(1)) AS count() AS UInt64) AS n
+    Aggregate: groupBy=[[toStartOfInterval(observations.start_time, IntervalMonthDayNano("IntervalMonthDayNano { months: 0, days: 0, nanoseconds: 900000000000 }")), multiIf(__common_expr_1 AS dateDiff(Utf8("millisecond"),observations.start_time,observations.end_time) < Int64(100), Utf8("fast"), __common_expr_1 AS dateDiff(Utf8("millisecond"),observations.start_time,observations.end_time) < Int64(1000), Utf8("ok"), Utf8("slow")), CAST(observations.type AS Dictionary(Int32, Utf8))]], aggr=[[count(Int64(1))]]
+      Projection: dateDiff(Utf8("millisecond"), observations.start_time, observations.end_time) AS __common_expr_1, observations.type, observations.start_time
+        TableScan: observations projection=[type, start_time, end_time], full_filters=[observations.project_id = Utf8("p1"), observations.end_time IS NOT NULL]

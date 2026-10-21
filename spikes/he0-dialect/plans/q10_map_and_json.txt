@@ -1,0 +1,10 @@
+SELECT metadata['environment'] AS env, count() AS c FROM traces WHERE metadata['release'] != '' GROUP BY env
+
+-- rewritten:
+SELECT metadata['environment'] AS env, count() AS c FROM traces WHERE metadata['release'] <> '' GROUP BY env
+
+-- optimized logical plan:
+Projection: __datafusion_extracted_1 AS env, count(Int64(1)) AS c
+  Aggregate: groupBy=[[__datafusion_extracted_1]], aggr=[[count(Int64(1))]]
+    Projection: get_field(traces.metadata, Utf8("environment")) AS __datafusion_extracted_1
+      TableScan: traces projection=[metadata], full_filters=[get_field(traces.metadata, Utf8("release")) != Utf8("")]

@@ -1,0 +1,10 @@
+SELECT name, count() AS c FROM events WHERE project_id = {projectId: String} AND ts >= {from: DateTime64(3)} GROUP BY name ORDER BY c DESC LIMIT {limit: UInt32} SETTINGS max_threads = 4 FORMAT JSONEachRow
+
+-- rewritten:
+SELECT name, count() AS c FROM events WHERE project_id = 'p' AND ts >= CAST('2024-01-01 00:00:00' AS DateTime64(3)) GROUP BY name ORDER BY c DESC LIMIT 10 SETTINGS max_threads = 4 FORMAT JSONEachRow
+
+-- optimized logical plan:
+Sort: c DESC NULLS FIRST, fetch=10
+  Projection: events.name, count(Int64(1)) AS count() AS c
+    Aggregate: groupBy=[[events.name]], aggr=[[count(Int64(1))]]
+      TableScan: events projection=[name], full_filters=[events.project_id = Utf8("p"), events.ts >= TimestampMillisecond(1704067200000, Some("UTC"))]

@@ -1,0 +1,10 @@
+SELECT id, argMax(name, event_ts) AS latest_name, argMax(is_deleted, event_ts) AS deleted FROM traces WHERE project_id = 'p1' GROUP BY id HAVING deleted = 0
+
+-- rewritten:
+SELECT id, "argMax"(name, event_ts) AS latest_name, "argMax"(is_deleted, event_ts) AS deleted FROM traces WHERE project_id = 'p1' GROUP BY id HAVING deleted = 0
+
+-- optimized logical plan:
+Projection: traces.id, argMax(traces.name,traces.event_ts) AS latest_name, argMax(traces.is_deleted,traces.event_ts) AS deleted
+  Filter: argMax(traces.is_deleted,traces.event_ts) = UInt8(0)
+    Aggregate: groupBy=[[traces.id]], aggr=[[argMax(traces.name, traces.event_ts), argMax(traces.is_deleted, traces.event_ts)]]
+      TableScan: traces projection=[id, name, event_ts, is_deleted], full_filters=[traces.project_id = Utf8("p1")]

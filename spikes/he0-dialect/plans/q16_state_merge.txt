@@ -1,0 +1,10 @@
+SELECT day, uniqMerge(users) AS users, sum(events) AS events FROM daily WHERE project_id = 'p1' GROUP BY day ORDER BY day
+
+-- rewritten:
+SELECT day, "uniqMerge"(users) AS users, sum(events) AS events FROM daily WHERE project_id = 'p1' GROUP BY day ORDER BY day
+
+-- optimized logical plan:
+Sort: daily.day ASC NULLS LAST
+  Projection: daily.day, uniqMerge(daily.users) AS users, sum(daily.events) AS events
+    Aggregate: groupBy=[[daily.day]], aggr=[[uniqMerge(daily.users), sum(daily.events)]]
+      TableScan: daily projection=[day, users, events], full_filters=[daily.project_id = Utf8("p1")]
