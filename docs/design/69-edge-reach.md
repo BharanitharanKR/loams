@@ -654,7 +654,7 @@ A relay run by Ostrium would work like Tunnel: the user's stack dials out to it,
 | Who sees plaintext | Cloudflare | Ostrium, unless it is an SNI-blind relay (networking map §6) with TLS keys only on the user's side |
 | Identity at the edge | Access policies, service tokens, mTLS (paid plans) | Built by Ostrium |
 | Workers integration | Native: Workers VPC, Hyperdrive | None: Workers would fetch a public hostname |
-| Availability | Cloudflare's network | An SLA Ostrium must staff |
+| Availability | Cloudflare's network | An availability promise Ostrium would have to staff (it offers no SLA, D1323) |
 | Abuse handling | Cloudflare's | Ostrium needs an abuse process before the domain goes live |
 | Fit with the preview model ("we host only the console and auth") | Keeps it | Breaks it |
 | Open source | `cloudflared` is Apache-2.0; the edge is Cloudflare's | Could be Apache-2.0 (frp and rathole are Apache-2.0 Rust and Go prior art; zrok and OpenZiti are Apache-2.0 overlays), but the service still needs operating |
@@ -674,7 +674,7 @@ Prior art, read 2026-10-20 ([ngrok Traffic Policy](https://ngrok.com/docs/traffi
 
 **Revisit when one of these holds:**
 1. Three or more design partners or users cannot use Cloudflare and have no private link.
-2. Ostrium offers a managed-reach service with an SLA as part of its services business. The relay would then be operated as a service, with the abuse and availability work priced in.
+2. ~~Ostrium offers a managed-reach service with an SLA as part of its services business. The relay would then be operated as a service, with the abuse and availability work priced in.~~ Superseded by D1323: the services offering is removed, so this trigger no longer applies.
 3. The SNI-blind tunnel of networking map §6 is built anyway for agent preview URLs. Edge reach could then reuse it, with TLS keys on the user's side only.
 
 ## 11. Tests (D1319)

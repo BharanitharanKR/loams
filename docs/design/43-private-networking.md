@@ -197,7 +197,7 @@ How the shared design is kept safe:
 | Cluster Git pulls | Direct from Git (§41 §6) | Unchanged: from Git over the internet (the tailnet is not a Git mirror) |
 | Operator support access | None by default | A **time-boxed grant** `group:ops` -> `tag:byoc-<tenant>:6443` that the **customer** enables (Q588); it expires and is removed by the control plane |
 | Air-gapped (Q550) | Customer-run Git mirror | Unchanged; the tailnet is not used |
-| Observe-only | Allowed | Allowed: no support grant is created |
+| Observe-only | Allowed | Allowed: no maintainer debug session is opened (D1582) |
 
 The agent's certificate (24-hour, per cluster) remains its identity; the tailnet adds a network path, not an authentication factor. A stolen tenant node key can reach `tag:control:443` and nothing else, where the agent still requires its client certificate.
 
