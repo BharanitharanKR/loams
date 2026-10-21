@@ -404,3 +404,5 @@ The protocol gateway's commercial adapters (OpenRTB, partner APIs, §34) stay in
 
 
 > **See also (2026-10-17):** [§60](60-places-and-harness-composition.md) D1091 proposes cascades for the LLM module: typed triage with a confidence, threshold escalation, a verifier, and deterministic routes.
+
+> **See also (2026-10-21):** [§69](69-edge-reach.md) (Edge Reach, approved by the owner 2026-10-21) makes the `http` module's first slice an **edge listener** for serverless runtimes: allow-listed routes, no admin, `access` or `network` admission, on hyper behind an `EdgeProxy` trait until this module moves to Pingora (D1303, D1306). Under the amended rule (D1311), callers off the tailnet reach Loams only through that listener, over a private link or a brokered tunnel; the engine stays loopback, tailnet or gateway-only. The listener is never public: the opt-in public profile (D1312) was deferred, and the `pg` listener stays private (Q992).

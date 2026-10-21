@@ -445,3 +445,17 @@ def test_errors_map_to_client_classes(es, index):
     with pytest.raises(NotFoundError) as e:
         es.search(index="missing_index_for_sure")
     assert e.value.error == "index_not_found_exception"
+
+
+def test_helpers_scan_uses_the_scroll_api(es, index):
+    """`elasticsearch.helpers.scan` (#950): scroll, then clear."""
+    helpers.bulk(es, ({"_index": index, "_id": f"d{i}", "n": i} for i in range(25)), refresh=True)
+    got = list(helpers.scan(es, index=index, query={"query": {"match_all": {}}}, size=10))
+    assert sorted(h["_id"] for h in got) == sorted(f"d{i}" for i in range(25))
+    ordered = list(
+        helpers.scan(
+            es, index=index, query={"query": {"range": {"n": {"gte": 20}}}, "sort": [{"n": "desc"}]},
+            size=2, preserve_order=True,
+        )
+    )
+    assert [h["_source"]["n"] for h in ordered] == [24, 23, 22, 21, 20]

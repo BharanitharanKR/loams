@@ -8,9 +8,13 @@ control, data and internal planes turned out to be designed here already. Its fi
 
 Rules that hold across every plane:
 
-- **The engine is never on the public internet.** Self-hosted stacks are reached over the operator's
-  tailnet. Public endpoints are only the ones Ostrium runs: `loams.dev`, `auth.loams.dev` and
-  `console.loams.dev`.
+- **The engine is never on the public internet.** Its listeners are reached on loopback, over the
+  operator's tailnet, or by `loams-gateway` on an internal network. Callers off the tailnet, such as
+  serverless functions, reach Loams only through the gateway's edge listener, over a private link or
+  a brokered tunnel that authenticates every request before it reaches the stack ([§69](69-edge-reach.md)
+  §4.2). Public endpoints are only the ones Ostrium runs: `loams.dev`, `auth.loams.dev` and
+  `console.loams.dev`. *Amended 2026-10-21 by D1311 (approved by the owner); a public edge profile
+  (D1312) was deferred.*
 - **Open standards:** TLS, mTLS, OIDC, Connect, CloudEvents, and the Postgres and MySQL wire
   protocols.
 - **Billing-grade metering stays out of this repository** (open core, §41). Limits,
@@ -102,3 +106,5 @@ It is parked for these reasons:
   - an abuse process before the domain goes live.
 
 Revisit after v0.1.0-preview.3 and DT1. Decision and question ids are allocated when it gets a design.
+[§69](69-edge-reach.md) §10 (2026-10-20) records how a Loams-hosted relay would relate to it, and
+proposes not to build one (D1317).
