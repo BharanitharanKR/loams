@@ -63,7 +63,7 @@ Argo CD runs in the cluster it deploys to (hub-and-spoke is optional, §8.3); a 
 ### 2.2 Non-goals
 
 - **Metering, billing, invoices, credits, plans and entitlements.** `loams-platform` (D548, D550).
-- **Commercial APIs**: the hosted Loams Cloud's paid APIs, the marketplace install and billing APIs, partner and commercial integrations (§12).
+- **Commercial APIs**: the hosted Loams Cloud's paid APIs, the marketplace install and billing APIs, partner and commercial integrations (§12). *(Updated 2026-10-21: the marketplace is open source and is designed in [§73](73-agent-marketplace.md) (D1446): a signed static index and installs through `loams-agentd`, with no install or billing APIs here.)*
 - **A replacement for Argo CD or Flux.** Clever Cloud publishes no GitOps engine (§38 §6.1); Argo CD stays (D186).
 - **Authentik multi-tenancy.** It is Enterprise and alpha (§38 §4.2). A deployment has one Authentik tenant; Loams orgs are Loams’ concept, mapped from Authentik groups (§38 D449).
 - **Hosted-fleet operations** (predictive pre-warming, capacity management, hosted Neon/WeSQL fleet automation, abuse handling for the paid cloud): private.
@@ -330,7 +330,7 @@ The platform may not need the observer at all: cgroups are authoritative for T0 
 
 | # | Risk | Likelihood | Impact | Mitigation |
 |---|---|---|---|---|
-| 1 | Open code is forked and hosted by a third party as a competing cloud | Medium | Medium | Apache-2.0 is the owner's choice for adoption; the moat is the hosted service, the marketplace and the private billing stack (Q544) |
+| 1 | Open code is forked and hosted by a third party as a competing cloud | Medium | Medium | Apache-2.0 is the owner's choice for adoption; the moat is the hosted service, the marketplace and the private billing stack (Q544). *Updated 2026-10-21: there is no private billing stack (D1119) and the marketplace is open source ([§73](73-agent-marketplace.md), D1446)* |
 | 2 | Argo CD's progressive sync stays alpha | Medium | Low | Fallback: one ApplicationSet per ring (§8.2) |
 | 3 | The observer trait becomes a de facto meter in the open code | Low | High | A CI guard on names; review rule in CONTRIBUTING; the trait carries no wire format, buffer or persistence |
 | 4 | Git as the write path adds latency to onboarding | Medium | Low | Directory-only namespaces for the common case (D544); sync is seconds on a healthy cluster |

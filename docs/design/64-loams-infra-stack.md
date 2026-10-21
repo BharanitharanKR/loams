@@ -280,7 +280,7 @@ These four have the weakest case for new code. Each section says what Loams alre
 
 ### 9.3 Waypoint → the deploy stage of the Software Factory (IS3; D1167)
 
-- **Already there:** SF4's factory loop with a deploy stage behind an approval, D842's promotion on merge into environment branches, the runners, and §45's versioned function deploys with rollback.
+- **Already there:** the factory loop's deploy stage behind an approval (SF4's when this was written; SF4 is retired and the stage is now [§72](72-software-factory-loop.md) stage 6, D1434), D842's promotion on merge into environment branches, the runners, and §45's versioned function deploys with rollback.
 - **Smallest useful addition:** a deploy record (`loams.deploy.v1`: app, environment, build artifact digest, runner, config and secret revisions, state) and `loams deploy` / `loams rollback`, run as a durable workflow that builds, releases, deploys, health-checks and promotes. A deploy pins the config and secret revisions it used, so a rollback restores code and configuration together.
 - **Never:** Waypoint's plugin system or a separate "platform" abstraction.
 
@@ -437,7 +437,7 @@ Said plainly, so later plans do not drift:
 | D1164 | **Plan runs** (IS3): `tofu plan` and `apply` as sandboxed jobs on Loams Git events, credentials from ephemeral resources and trust policies only, apply after a person's approval and the plan rules |
 | D1165 | **Loams Run** (IS4) is a small placement scheduler over the `Runner` trait and `loams-sandbox`, built only after its demand gate (Q980); never a Kubernetes-scale scheduler |
 | D1166 | **`loams image`** (IS4) converts OCI images into signed rootfs and microVM images in the bucket; no golden VM images, no template language |
-| D1167 | **Deploys** (IS3) are the Software Factory's deploy stage: `loams.deploy.v1` records pinning artifact, config and secret revisions; `loams deploy` and `loams rollback` as durable workflows |
+| D1167 | **Deploys** (IS3) are the Software Factory's deploy stage ([§72](72-software-factory-loop.md) stage 6 since SF4's retirement, D1420): `loams.deploy.v1` records pinning artifact, config and secret revisions; `loams deploy` and `loams rollback` as durable workflows |
 | D1168 | **Dev environments** (IS4): Studio and cloud workspaces read `devcontainer.json`; no Vagrantfile or box registry |
 | D1169 | **Licence rules** of §11: no BSL code; MPL only as unmodified vendored protocol files and interop; no ports; clean-room for contributors exposed to BSL source; product names avoid HashiCorp marks |
 | D1170 | **Hosted operation is a service, not an edition:** Ostrium may operate state, secrets and config for customers under SLAs, on the same Apache-2.0 code (D1119) |

@@ -191,7 +191,7 @@ docs/design/41-multitenant-byoc-control-plane.md  docs/design/13-decision-log.md
 | Item | Where |
 |---|---|
 | Metering, billing, plans, entitlements, the plan-to-limits mapping, invoices, credits | `loams-platform` (docs 01, 06, 07) |
-| The hosted cloud's commercial APIs and the marketplace install and billing APIs | `loams-platform` (docs 05, 07); the install saga calls Task 4's Git writer (Q552) |
+| The hosted cloud's commercial APIs and the marketplace install and billing APIs | `loams-platform` (docs 05, 07); the install saga calls Task 4's Git writer (Q552). *Updated 2026-10-21: the marketplace is open source and designed in [§73](../design/73-agent-marketplace.md) (D1446): installs go through `loams-agentd`'s `MarketplaceService` (plan [MK1](2026-10-21-mk1-agent-marketplace.md)), not a control-plane install saga, and there are no billing APIs* |
 | Hosted-fleet operations: pre-warming, capacity, hosted Neon/WeSQL automation, abuse handling | `loams-platform` (D554) |
 | `loams-meta-remote` (BYOC-managed-meta) | the M2.x plan (D64, Q551) |
 | A real CKE apply, a real BYOC customer | manual, after the owner's account decisions |
