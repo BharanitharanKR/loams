@@ -80,7 +80,7 @@ The owner asked for the best default on every question that does not need money,
 | Q542 | Service credentials | **mTLS plus an attenuated Biscuit** | mTLS proves the workload; the Biscuit scopes what it may do and can be narrowed per call |
 | Q556 | Commit signing | **SSH signing, verified by Argo CD `signatureKeys`** | No GPG keyring to run; SSH keys are already how the bot pushes |
 | Q559 | Ring mechanism | **One `ApplicationSet` per ring.** `RollingSync` may replace it later only by a new ruling | Works on every Argo CD version; `RollingSync` is still progressive-sync alpha territory |
-| Q588 | Support grants | **Customer enables, default TTL 4 h (max 24 h), no session recording in v1** | The customer holds the switch; recording needs a paid tailnet feature and a retention policy |
+| Q588 | Support grants (amended by D1582: a maintainer debug session, opt-in, community and best effort, no contract or SLA) | **Customer enables, default TTL 4 h (max 24 h), no session recording in v1** | The customer holds the switch; recording needs a paid tailnet feature and a retention policy |
 | Q590 | Agent paths in tailnet mode | **Both, tailnet preferred, public name as fallback** | A tailnet outage must not cut the agent off |
 | Q591 | Headscale API keys | **Accept 90-day keys, reachable only on the tailnet or loopback, rotated at 60 days** | Headscale has no scoped keys; reachability and rotation bound the risk |
 | Q592 | `loams-net` location | **In this repository** | It is open code the hub and the CLI both call |
@@ -850,7 +850,7 @@ Commit `feat(byoc): air-gapped bundles`.
 - `HeadscaleClient`: `/api/v1`, a bearer API key from `SecretFile`, reachable only on the tailnet or loopback, with a 90-day key rotated at 60 days and an alert at 75 (Q591 ruling). In `file` mode `apply_policy` commits through `GitRemote` to the policy repository; in `database` mode it calls the API's policy write (Q589).
 - `PolicyChecker`: `TailscaleApiChecker` (validate), and `HeadscaleCliChecker`, which runs NET1 Task 1's `check.sh` (seeded scratch database) as a subprocess with argument arrays.
 - `policy::render_tenant_section(base, tenants, support_grants, now) -> String`, between NET1's markers:
-  - per tenant, its tag, a grant to `tag:control` tcp 443, and unexpired support grants;
+  - per tenant, its tag, a grant to `tag:control` tcp 443, and unexpired maintainer debug sessions (D1582);
   - `deny` tests for every ordered tenant pair, and for each operator tag;
   - deterministic output.
 - The provider is chosen by `tailnet.provider` (`tailscale` by default) and `tailnet.login_server` (D582).
@@ -878,7 +878,7 @@ Commit `feat(net): NetProvider, both clients, checker and the tenant renderer`.
 - Capacity: past `tailnet.max_tagged_nodes` (default 45, under the Personal plan's 50; Q593) enrolment in tailnet mode is refused with `tailnet_capacity`.
 - The chart's values follow §43 §6.4: `net.mode`, `net.provider`, `net.loginServer` and `net.authKeySecret`. There is a userspace `tailscaled` sidecar, with no `NET_ADMIN`. `--login-server` is set only when `loginServer` is set, and `--advertise-tags` only when it is not (§43 §6.5).
 - The agent prefers the hub's tailnet name and falls back to the public name (Q590 ruling: both).
-- Support grant (Q588 ruling): the customer sets `net.supportGrant.enabled` and a TTL (default 4 hours, at most 24; longer is refused by the values schema) in their values. No session recording in v1. The agent reports the request. The hub renders the grant with its expiry, and a reconciler removes it at expiry.
+- Maintainer debug session (Q588 ruling, amended by D1582; formerly called a support grant). It is opt-in, time-boxed, revocable, community and best effort, with no contract or SLA. The customer sets `net.supportGrant.enabled` and a TTL (default 4 hours, at most 24; longer is refused by the values schema) in their values. No session recording in v1. The agent reports the request. The hub renders the grant with its expiry, and a reconciler removes it at expiry.
 - Offboarding the last cluster of an org revokes the tag's nodes and removes the section. Revoking a cluster deletes its node.
 
 Tests:
@@ -1081,7 +1081,7 @@ Commit `docs(control): CP1 exit gate, runbooks and status`.
 - [ ] **Onboarding** through Git only, with every product's footprint, `active` only when every product is ready: Tasks 13–15, 17.
 - [ ] **Offboarding** blocked until every product's erasure receipt: Task 16.
 - [ ] **BYOC:** enrolment, the agent, observe-only and air-gapped modes, revocation within one heartbeat: Tasks 18–20.
-- [ ] **Private networking:** both providers behind `NetProvider`; tenant isolation tested; join keys single-use; support grants expire; inventory audited: Tasks 21–23.
+- [ ] **Private networking:** both providers behind `NetProvider`; tenant isolation tested; join keys single-use; maintainer debug sessions expire; inventory audited: Tasks 21–23.
 - [ ] **Releases and rings:** product pins, `compatibleWith`, `noDowngrade`, product gates, pause and rollback: Tasks 24, 25.
 - [ ] **Limits and enforcement state:** every product section enforced; agents cannot write; nothing billing-grade: Tasks 6, 8–12, 27.
 - [ ] **Operations:** operator view, CLI, charts from empty through Argo CD and Flux, dashboards and alerts: Tasks 26, 28.

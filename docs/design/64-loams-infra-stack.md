@@ -45,7 +45,7 @@ Build **Loams Infra** as a few small Rust services inside the `loams` binary, sh
 | **Boundary** (BSL; Community Edition archived 2026-10) | Just-in-time, audited access to databases and hosts for people and agents | **Loams Access**: grants with expiry, approvals and brokered credentials | The tailnet (D580s), `loams-gateway` `pg` (§57), D711, phone approvals (§37), Places (D1087), Jailer verdicts | `loams.access.v1`, an SSH certificate authority | IS3 |
 | **Waypoint** (archived 2024) | Build, deploy, promote and roll back an app | **Deploy stage of the Software Factory**: `loams deploy` as a durable workflow | SF4's factory loop, D842 promotion on merge, runners, §45's versioned deploys with rollback | A deploy record and the CLI | IS3 |
 | **Vagrant** (BSL) | Reproducible dev environments | **Studio workspaces with `devcontainer.json`** | Studio worktrees (D903), microVM workspaces (D1006), `loams dev` stacks (D285) | A devcontainer reader | IS4 |
-| **HCP** | Someone else runs it | **Ostrium services**: the same open code, operated under an SLA | BYOC agent (D543), the hosted console and auth | Nothing closed | Any phase |
+| **HCP** | Someone else runs it | ~~**Ostrium services**: the same open code, operated under an SLA~~ (superseded by D1323: Ostrium offers no services and no SLA; the open code is run by the user or a third party) | BYOC agent (D543), the hosted console and auth | Nothing closed | Any phase |
 | Sentinel (proprietary) | Policy on plans and changes | **No new language.** OpenFGA, the PDP's typed rules, OPA/conftest optional | §61 PDP, OpenFGA | Plan checks as PDP rules | IS3 |
 
 ## 2. The landscape in October 2026

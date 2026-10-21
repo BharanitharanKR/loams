@@ -515,7 +515,7 @@ Not part of the Run:ai integration, and decided separately (Q1024).
 | Q1023 | Untrusted GPU code under gVisor `nvproxy` or microVM passthrough? | Not in this design; dedicated tainted nodes now; a §56 research spike after SB1d |
 | Q1024 | Approve the cuVS track? | Yes, as optional work after GP1, one engineer, upstream-first in `lance-cuvs`, no Lance fork |
 | Q1025 | Build a Run:ai REST or MCP adapter? | No, until a customer that runs the full Run:ai control plane asks |
-| Q1026 | Offer "Loams with KAI on your cluster, with an SLA" as an Ostrium service? | After GP2 passes a real-GPU run; the owner decides the offer |
+| Q1026 | ~~Offer "Loams with KAI on your cluster, with an SLA" as an Ostrium service?~~ Superseded by D1323: Ostrium has no services offering. Loams with KAI stays free and open | Not offered as a service |
 | Q1027 | Should the operator install KAI? | No; KAI is a prerequisite, detected and reported by a condition |
 | Q1028 | A House GPU analytics track? | No; revisit if chDB or ClickHouse gains a GPU engine, or users ask for cuDF-Polars over `scan_loams()` |
 | Q1029 | GPUs in Loams Run (IS4) on VMs? | Whole GPUs only, through the `compose`-style device reservation; KAI's queue vocabulary borrowed, not its code |
