@@ -63,6 +63,14 @@ services:
     environment:
       <<: *langfuse-env
       LANGFUSE_S3_MEDIA_UPLOAD_INTERNAL_ENDPOINT: http://s3:9000
+    # Next.js listens on the container's hostname, not loopback; healthy only
+    # after the Postgres and ClickHouse migrations, so `up --wait` covers them.
+    healthcheck: &langfuse-health
+      test: ["CMD-SHELL", "wget -q --spider http://$$(hostname):3000/api/public/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 120
+      start_period: 30s
     ports: ["127.0.0.1:${HE0_LANGFUSE_PORT:-3100}:3000"]
 
   langfuse-worker:
@@ -70,6 +78,9 @@ services:
     labels: { io.loams.licence: "MIT" }
     depends_on: *langfuse-deps
     environment: *langfuse-env
+    healthcheck:
+      <<: *langfuse-health
+      test: ["CMD-SHELL", "wget -q --spider http://$$(hostname):3030/api/health"]
 
   clickhouse:
     image: ${HE0_CLICKHOUSE_IMAGE:-docker.io/clickhouse/clickhouse-server:26.9.2.8@sha256:7b9a0b6e9ab7ef79db5c4f8a9808f880258704eb7b4af9309f9029c16e727a80}

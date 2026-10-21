@@ -3,8 +3,9 @@
 #
 #   scripts/house/apps.sh <app> up      start it (compose up --wait)
 #   scripts/house/apps.sh <app> drive   run its driver against the running stack
-#   scripts/house/apps.sh <app> dump    write query_log.tsv, part_log.tsv and
-#                                       its migration files under $HE0_OUT/<app>/
+#   scripts/house/apps.sh <app> dump    write query_log.tsv, async_insert_log.tsv,
+#                                       part_log.tsv and its migration files
+#                                       under $HE0_OUT/<app>/
 #   scripts/house/apps.sh <app> down    stop it and remove its volumes
 #
 # <app> is a `name` in conformance/clickhouse/apps/manifest.toml. The run
@@ -109,6 +110,17 @@ WHERE type != 'QueryStart' AND is_initial_query AND log_comment != 'he0-harness'
 ORDER BY event_time_microseconds, query_id
 FORMAT TSVWithNames"
 
+# Async inserts (async_insert = 1, wait_for_async_insert = 0) reach query_log
+# only as the server's own flush, not as initial queries (HE1 R4.5), so the
+# statements an application sent that way come from asynchronous_insert_log,
+# in the same TSVWithNames shape (query_id, query).
+ASYNC_INSERT_LOG_SQL="SELECT
+    query_id, status, event_time_microseconds, database, table, format,
+    bytes, rows, flush_query_id, exception, query
+FROM system.asynchronous_insert_log
+ORDER BY event_time_microseconds, query_id
+FORMAT TSVWithNames"
+
 PART_LOG_SQL="SELECT event_type, merge_reason, database, table, partition_id, rows, count() AS n
 FROM system.part_log
 WHERE database NOT IN ('system', 'INFORMATION_SCHEMA', 'information_schema')
@@ -129,14 +141,29 @@ case "$VERB" in
     mkdir -p "$OUT"
     ch "SYSTEM FLUSH LOGS"
     ch "$QUERY_LOG_SQL" >"$OUT/query_log.tsv"
+    ch "$ASYNC_INSERT_LOG_SQL" >"$OUT/async_insert_log.tsv"
     ch "$PART_LOG_SQL" >"$OUT/part_log.tsv"
     ch "SELECT version()" >"$OUT/clickhouse_version.txt"
     MIGRATIONS=$(field migrations)
     if [ -n "$MIGRATIONS" ]; then
-      SERVICE=$(compose config --services | grep -vE '^(clickhouse|op-ch|op-proxy|op-db|op-kv|postgres|redis|s3|s3-bucket)$' | head -n1)
-      rm -rf "$OUT/migrations"
-      compose cp "$SERVICE:$MIGRATIONS" "$OUT/migrations" ||
+      # The service that runs the manifest's `image` holds the migrations.
+      SERVICE=$(compose config --format json | python3 -I -c '
+import json, sys
+image = sys.argv[1]
+for name, s in sorted(json.load(sys.stdin)["services"].items()):
+    if s.get("image") == image:
+        print(name)
+        break' "$(field image)")
+      # Copy the directory's contents into a fresh directory, then swap it in:
+      # `cp svc:/dir dest` nests or skips when dest exists (a second dump).
+      rm -rf "$OUT/migrations" "$OUT/.migrations.tmp"
+      mkdir -p "$OUT/.migrations.tmp"
+      if compose cp "$SERVICE:${MIGRATIONS%/}/." "$OUT/.migrations.tmp"; then
+        mv "$OUT/.migrations.tmp" "$OUT/migrations"
+      else
+        rm -rf "$OUT/.migrations.tmp"
         echo "apps.sh: warning: no migrations at $SERVICE:$MIGRATIONS" >&2
+      fi
     fi
     echo "apps.sh: $APP dumped $(($(wc -l <"$OUT/query_log.tsv") - 1)) statements to $OUT"
     ;;
