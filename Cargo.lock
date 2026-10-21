@@ -8282,6 +8282,7 @@ name = "loams-authz"
 version = "0.1.1"
 dependencies = [
  "async-trait",
+ "axum 0.8.9",
  "futures",
  "moka",
  "openfga-client",
@@ -8289,6 +8290,7 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.21",
  "tokio",
+ "tower 0.5.3",
  "tracing",
 ]
 

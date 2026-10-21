@@ -11,10 +11,12 @@
 //! | [`AllowAllAuthorizer`] | developer mode, refused unless every listener is on loopback |
 //! | [`RecordingAuthorizer`] | records every request and decision (tests, decision log) |
 //!
-//! `BuiltinAuthorizer` (single-org mode, D1613) follows in IA2 Task 3.
+//! [`http`] enforces it on HTTP routes, deny by default (D1611). `BuiltinAuthorizer`
+//! (single-org mode, D1613) follows in IA2 Task 3.
 
 mod allow_all;
 mod cached;
+pub mod http;
 mod openfga;
 mod recording;
 
