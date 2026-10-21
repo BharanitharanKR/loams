@@ -2,6 +2,8 @@
 
 Status: **Approved** · 2026-10-21 (written 2026-10-20; the owner approved every decision and question with its default on 2026-10-21). Source: the owner's request of 2026-10-20, **"write the design for airflow, temporal, risingwave, rust spark like spice (which is mature and active) etc"**, with the owner's thesis that **open, existing protocols and APIs drive adoption**. Decisions **D1251–D1275** and questions **Q1030–Q1045** are in the [decision log](13-decision-log.md), all approved by the owner on 2026-10-21 with their defaults. The numbers follow §67 (D1228–D1250, Q1015–Q1029, PR #945, not yet merged). Plan stub: [OC1](../plans/2026-10-20-oc1-open-protocol-compute.md). **This document writes no code.**
 
+> **Amendment (approved 2026-10-21; [§77](77-kv-gateways.md), D1640).** D1255 and D1272 change: a RESP gateway for key-value workloads is built, as a product on `loams-kv`, not as a Celery or BullMQ broker. D1255's Celery and BullMQ rulings, D1271 (no Redis 8 code or binaries) and Q1039's answer stand.
+
 > **Amended by [§74](74-durable-execution-compat.md) (owner direction, approved 2026-10-21).** Loams adds a Temporal-protocol frontend in `loams-gateway` backed by Resonate and Loams Postgres (amends D1259, D1272, D1275); the upstream Temporal server on Loams Postgres runs from DX0 as the oracle and compat mode; the Airflow provider's first executor is `LoamsResonateExecutor` on Resonate, not `LoamsJobsExecutor` (amends D1257); DBOS is added. "Never on Loams SQL", real Airflow only, and `ostrium-labs/loams-airflow` stand. §74 §17 lists every change.
 
 Builds on:
