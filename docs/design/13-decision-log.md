@@ -1093,6 +1093,7 @@ Living document. Newest decisions at the bottom of each table.
 | D1199 | 2026-10-19 | **The LOC adapter:** the `OperatorAdapter` trait in Rust and the same methods as JSON-RPC over stdio, so operators in any language can run LOC; requirements needing an unsupported method are `not-applicable`, never waived for a claimed class ([§65](65-loams-operator.md) §12.6) | Operator-agnostic by design | Approved (owner, 2026-10-19) |
 | D1200 | 2026-10-19 | **LOC reports and badges:** `loc-report.json` with JUnit and Markdown renderings, optional cosign attestation, an SVG badge naming suite and operator versions, a public registry by pull request; developed under `conformance/operator/` and mirrored to its own repository (D619's pattern); Loams runs Core per PR, HA nightly, Day-2 weekly and at release ([§65](65-loams-operator.md) §12.8–§12.10) | Verifiable claims, as k8s-conformance does for clusters | Approved (owner, 2026-10-19) |
 | D1201 | 2026-10-19 | **Phases OP0–OP4** of §65 §14 (51–68 engineer-weeks, estimate); plan [OP1](../plans/2026-10-19-op1-loams-operator.md) (stub) covers OP0 and OP1; later phases get plans when their gates are met ([§65](65-loams-operator.md) §14) | Built slowly, as the owner asked | Approved (owner, 2026-10-19) |
+| D1323 | 2026-10-21 | **Public positioning:** Ostrium Labs is a research lab building open-source Loams; the services offering is removed from loams.dev and GitHub (amends D1119's services wording) | D1119 | Approved (owner, 2026-10-21) |
 
 ## Open questions
 
