@@ -418,11 +418,11 @@ Design reference: [74 Durable Execution Compatibility](../design/74-durable-exec
 
 ## Track HE: the Loams House engine (Rust, ClickHouse-compatible, Iceberg v3)
 
-Design reference: [75 The Loams House Engine](../design/75-loams-house-engine.md) (D1540–D1569, Q1170–Q1187, **Proposed**, pending the owner's approval). It continues track HS ([HS1](2026-10-08-hs1-house-production.md)), whose engine-independent tasks stay in HS1.
+Design reference: [75 The Loams House Engine](../design/75-loams-house-engine.md) (D1540–D1569, Q1170–Q1187, approved by the owner 2026-10-21, all defaults; Q1170 as ruled). It continues track HS ([HS1](2026-10-08-hs1-house-production.md)), whose engine-independent tasks stay in HS1.
 
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|
-| [HE1: the Loams House engine](2026-10-21-he1-loams-house-engine.md) (stub; HE0 Tasks 0–12 fully specified; HE1–HE5 at milestone level) | **HE0** (no engine code): the ClickHouse apps manifest and compose harness, `loams-house-mine` (extract, merge, scrub, report, matrix, oracle), mining runs for Langfuse v3 and v4, OpenPanel and five or more further applications, the first generated compatibility profile, the oracle runner against `clickhouse-server` 26.9 and 24.3 and the chDB House, the stateless replay manifest, the function and engine matrix, Langfuse and OpenPanel on today's House, a DataFusion dialect spike and an iceberg-rust v3 spike (reports only), the HE0 exit report; **HE1** the read-only Rust engine; **HE2** the fresh tier, deletion vectors, the release gate; **HE3** distributed serverless; **HE4** Tier 1; **HE5** on demand | §75 approved; v0.1.1 shipped (Q1186) | Stub (design Proposed 2026-10-21) |
+| [HE1: the Loams House engine](2026-10-21-he1-loams-house-engine.md) (stub; HE0 Tasks 0–12 fully specified; HE1–HE5 at milestone level) | **HE0** (no engine code): the ClickHouse apps manifest and compose harness, `loams-house-mine` (extract, merge, scrub, report, matrix, oracle), mining runs for Langfuse v3 and v4, OpenPanel and five or more further applications, the first generated compatibility profile, the oracle runner against `clickhouse-server` 26.9 and 24.3 and the chDB House, the stateless replay manifest, the function and engine matrix, Langfuse and OpenPanel on today's House, a DataFusion dialect spike and an iceberg-rust v3 spike (reports only), the HE0 exit report; **HE1** the read-only Rust engine; **HE2** the fresh tier, deletion vectors, the release gate; **HE3** distributed serverless; **HE4** Tier 1; **HE5** on demand | §75 approved; v0.1.1 shipped (Q1186) | Approved (owner, 2026-10-21); stub |
 
 ## Later milestones
 
