@@ -1,0 +1,9 @@
+## dvw.dv
+  wrote 5 deletion vectors in 1 Puffin files: 300 existing + 158 new positions (overlaps counted once in the files)
+committed dvw.dv: 5 deletion vectors added, 4 replaced
+## dvw.dv_part
+  wrote 12 deletion vectors in 4 Puffin files: 943 existing + 500 new positions (overlaps counted once in the files)
+committed dvw.dv_part: 12 deletion vectors added, 8 replaced
+## dvw.upgraded
+  wrote 8 deletion vectors in 1 Puffin files: 210 existing + 160 new positions (overlaps counted once in the files)
+committed dvw.upgraded: 8 deletion vectors added, 8 replaced

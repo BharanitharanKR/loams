@@ -1,0 +1,20 @@
+[package]
+name = "he0-dv-writer-probe"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+description = "HE0 G2 (unmerged): write deletion vectors with iceberg-rust's DeletionVectorWriter for Spark-written v3 tables"
+
+# Standalone: not a member of the repository's workspaces.
+[workspace]
+
+# ostrium-labs/iceberg-rust branch dv/writer (fork PR #2), pinned by commit. The recorded
+# results/ were produced from a local checkout of this same commit (path dependencies).
+[dependencies]
+iceberg = { git = "https://github.com/ostrium-labs/iceberg-rust", rev = "cace1a1b6a7426a3a655a6eb4b9fd3d2622a4f99" }
+iceberg-catalog-rest = { git = "https://github.com/ostrium-labs/iceberg-rust", rev = "cace1a1b6a7426a3a655a6eb4b9fd3d2622a4f99" }
+iceberg-storage-opendal = { git = "https://github.com/ostrium-labs/iceberg-rust", rev = "cace1a1b6a7426a3a655a6eb4b9fd3d2622a4f99", features = ["opendal-s3"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+futures = "0.3"
+arrow-array = "59.2"
