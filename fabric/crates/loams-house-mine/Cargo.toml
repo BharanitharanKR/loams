@@ -21,11 +21,12 @@ serde_json.workspace = true
 sqlparser = { workspace = true, features = ["visitor"] }
 toml.workspace = true
 # `EXPLAIN AST` against the pinned clickhouse-server, for statements
-# sqlparser refuses.
+# sqlparser refuses; and chDB's system tables for the matrix (HE0 Task 8).
 ureq.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true
+tempfile.workspace = true
 
 [lints]
 workspace = true

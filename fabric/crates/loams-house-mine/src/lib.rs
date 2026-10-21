@@ -16,6 +16,7 @@ pub mod explain;
 pub mod features;
 pub mod inventory;
 pub mod lexical;
+pub mod matrix;
 pub mod profile;
 pub mod querylog;
 pub mod scrub;
