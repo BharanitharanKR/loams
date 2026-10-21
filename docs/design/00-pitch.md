@@ -5,6 +5,8 @@
 
 Status: **Approved** · 2026-09-22 · revised 2026-09-25 (architecture review; positioning D50, surfaces D42–D45)
 
+> **Proposed amendment ([§77](77-kv-gateways.md), D1640, 2026-10-21; not approved).** RESP (Redis) and CQL (Cassandra) would join the protocols Loams speaks (D42), as `loams-gateway` modules on the `loams-kv` store, with tight scopes and published out-of-scope lists. Until the owner rules, D42's list stands.
+
 ---
 
 ## 1. The problem

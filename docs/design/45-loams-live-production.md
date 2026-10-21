@@ -2,6 +2,8 @@
 
 Status: **Proposed** · 2026-10-08. The owner's goal for this document is "Loams Live production ready". It defines what that means for Loams Live ([§20](20-reactive-database-on-tikv.md)), in concrete, testable terms, and records the design choices that close the gap. Decisions are **D680–D699** and open questions **Q625–Q639**. Both are in the [decision log](13-decision-log.md), and every one of them is **Proposed** until the owner confirms it. The implementation plan is [LV1](../plans/2026-10-08-lv1-live-production.md). **No code is written by this document.**
 
+> **Note ([§77](77-kv-gateways.md), D1642, 2026-10-21; proposed).** §8's store seam `loams-kv` would gain one-shot operations, a paged scanner, an in-memory embedded store, pessimistic mode (D851), tenancy and op metrics for the Redis and Cassandra gateways. Existing behaviour does not change.
+
 This document amends §20 for production. Where the two disagree, this document wins for the topics it covers (§19 below lists each amendment). §20 stays the reference for the data model, the key layout, the journal, reactivity and the TiKV facts.
 
 Markers: **(estimate)** means computed or guessed, not measured. **(target)** means a performance number that LV1 measures and then gates on (§15). **(verify)** means not checked against a primary source; the task that depends on it checks it.
