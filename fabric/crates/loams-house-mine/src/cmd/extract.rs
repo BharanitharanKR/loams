@@ -94,7 +94,8 @@ pub fn run(args: &Args) -> anyhow::Result<()> {
     Ok(())
 }
 
-/// Every statement of every `*.sql` file under `dir`, with the id
+/// Every statement of every `*.sql` file under `dir` except down migrations
+/// (`*.down.sql`, which undo the schema rather than build it), with the id
 /// `m:<path relative to dir>:<line>`, in path order.
 ///
 /// # Errors
@@ -129,7 +130,9 @@ fn collect_sql(dir: &Path, out: &mut Vec<PathBuf>) -> anyhow::Result<()> {
         let path = entry?.path();
         if path.is_dir() {
             collect_sql(&path, out)?;
-        } else if path.extension().is_some_and(|e| e == "sql") {
+        } else if path.extension().is_some_and(|e| e == "sql")
+            && !path.to_string_lossy().ends_with(".down.sql")
+        {
             out.push(path);
         }
     }

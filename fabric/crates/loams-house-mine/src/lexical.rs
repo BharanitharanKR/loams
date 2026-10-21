@@ -27,6 +27,34 @@ pub fn features(text: &str) -> Features {
     out
 }
 
+/// The name `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name>` defines.
+pub fn defined_function(text: &str) -> Option<String> {
+    let spanned = tokens::tokenize(text).ok()?;
+    let toks: Vec<&Token> = spanned
+        .iter()
+        .map(|t| &t.token)
+        .filter(|t| !matches!(t, Token::Whitespace(_)))
+        .collect();
+    if !word_is(&toks, 0, "CREATE") {
+        return None;
+    }
+    let mut i = 1;
+    while word_is(&toks, i, "OR") || word_is(&toks, i, "REPLACE") {
+        i += 1;
+    }
+    if !word_is(&toks, i, "FUNCTION") {
+        return None;
+    }
+    i += 1;
+    if word_is(&toks, i, "IF") {
+        i += if word_is(&toks, i + 1, "NOT") { 3 } else { 2 };
+    }
+    match toks.get(i) {
+        Some(Token::Word(w)) => Some(w.value.clone()),
+        _ => None,
+    }
+}
+
 /// `text` with each query parameter `{name:Type}` replaced by the identifier
 /// `__param_name`, so sqlparser does not read the type as an expression (it
 /// takes `{a:DateTime64(3)}` for a dictionary holding a call). The
@@ -179,7 +207,15 @@ fn alter_commands(toks: &[&Token], at: usize, out: &mut Features) {
         match toks[i] {
             Token::LParen => depth += 1,
             Token::RParen => depth = depth.saturating_sub(1),
-            Token::Comma if depth == 0 => {
+            // A comma starts a new command only before a command verb: in
+            // `UPDATE a = 1, b = 2` and `MODIFY SETTING a = 1, b = 2` it
+            // separates assignments.
+            Token::Comma
+                if depth == 0
+                    && words_at(toks, i + 1, 1)
+                        .first()
+                        .is_some_and(|w| ALTER_VERBS.contains(&w.as_str())) =>
+            {
                 command_start = true;
                 i += 1;
                 continue;
@@ -212,6 +248,30 @@ fn alter_commands(toks: &[&Token], at: usize, out: &mut Features) {
         i += 1;
     }
 }
+
+/// The verbs an `ALTER TABLE` command starts with.
+const ALTER_VERBS: [&str; 20] = [
+    "ADD",
+    "APPLY",
+    "ATTACH",
+    "CLEAR",
+    "COMMENT",
+    "DELETE",
+    "DETACH",
+    "DROP",
+    "FETCH",
+    "FREEZE",
+    "MATERIALIZE",
+    "MODIFY",
+    "MOVE",
+    "REMOVE",
+    "RENAME",
+    "REPLACE",
+    "RESET",
+    "UNFREEZE",
+    "UPDATE",
+    "UNLOCK",
+];
 
 fn word_is(toks: &[&Token], i: usize, w: &str) -> bool {
     toks.get(i).and_then(|t| word(t)).is_some_and(|x| x == w)
@@ -293,6 +353,38 @@ mod tests {
             [
                 "syntax:ALTER ADD COLUMN",
                 "syntax:ALTER MODIFY TTL",
+                "syntax:ALTER TABLE"
+            ]
+        );
+    }
+
+    #[test]
+    fn defined_functions() {
+        assert_eq!(
+            defined_function("CREATE OR REPLACE FUNCTION f_x AS (a) -> a + 1").as_deref(),
+            Some("f_x")
+        );
+        assert_eq!(
+            defined_function("CREATE FUNCTION IF NOT EXISTS g AS (a) -> a").as_deref(),
+            Some("g")
+        );
+        assert_eq!(
+            defined_function("CREATE TABLE t (a UInt8) ENGINE = Memory"),
+            None
+        );
+    }
+
+    #[test]
+    fn commas_inside_a_command_do_not_start_one() {
+        assert_eq!(
+            syntax("ALTER TABLE t UPDATE a = 1, b_visits = 2 WHERE c > 0"),
+            ["syntax:ALTER TABLE", "syntax:ALTER UPDATE"]
+        );
+        assert_eq!(
+            syntax("ALTER TABLE t MODIFY SETTING a = 1, b = 2, DROP COLUMN c"),
+            [
+                "syntax:ALTER DROP COLUMN",
+                "syntax:ALTER MODIFY SETTING",
                 "syntax:ALTER TABLE"
             ]
         );

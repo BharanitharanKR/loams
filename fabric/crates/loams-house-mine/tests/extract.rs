@@ -4,7 +4,7 @@
 mod common;
 
 use loams_house_mine::explain::HttpExplainer;
-use loams_house_mine::inventory::{self, Path, read_statement};
+use loams_house_mine::inventory::{self, Path, mine_statement};
 use loams_house_mine::{ast, explain};
 
 use common::{inventory, sources, sources_of};
@@ -33,6 +33,20 @@ fn functions_include_operators_under_their_clickhouse_names() {
     has("function:toYYYYMM", &["m:0001_traces.up.sql:2"]);
     has("function:windowFunnel", &["q:q05"]);
     has("function:like", &["q:q19"]);
+    let inv = inventory();
+    // Bound parameters and codecs are not functions.
+    for not_a_function in [
+        "function:_CAST",
+        "function:_cast",
+        "function:CODEC",
+        "function:codec",
+        "function:ZSTD",
+    ] {
+        assert!(
+            !inv.features.contains_key(not_a_function),
+            "{not_a_function}"
+        );
+    }
 }
 
 #[test]
@@ -48,6 +62,33 @@ fn combinators_and_their_base_functions() {
 #[test]
 fn table_functions() {
     has("table_function:numbers", &["q:q10"]);
+    // `ARRAY JOIN f(x) AS a, g(y) AS b` holds functions, not table functions.
+    has("function:mapKeys", &["q:q24", "m:0001_traces.up.sql:25"]);
+    has("function:mapValues", &["q:q24"]);
+    let inv = inventory();
+    let table_functions: Vec<_> = inv
+        .features
+        .keys()
+        .filter(|f| f.starts_with("table_function:"))
+        .collect();
+    assert_eq!(table_functions, ["table_function:numbers"]);
+    // An index's expression is not its type.
+    assert!(!inv.features.contains_key("syntax:skip index mapKeys"));
+    has(
+        "syntax:skip index bloom_filter",
+        &["m:0001_traces.up.sql:25"],
+    );
+}
+
+#[test]
+fn down_migrations_are_not_read() {
+    let inv = inventory();
+    assert!(
+        inv.samples.keys().all(|id| !id.contains(".down.sql")),
+        "{:?}",
+        inv.samples.keys()
+    );
+    assert!(!inv.features.contains_key("syntax:DROP TABLE"));
 }
 
 #[test]
@@ -78,7 +119,7 @@ fn types() {
     ] {
         has(&format!("type:{t}"), &["m:0001_traces.up.sql:2"]);
     }
-    has("type:UUID", &["m:0001_traces.up.sql:21"]);
+    has("type:UUID", &["m:0001_traces.up.sql:21", "q:q21"]);
     has(
         "type:AggregateFunction",
         &["m:clustered/0002_views.up.sql:1"],
@@ -145,6 +186,12 @@ fn syntax_forms() {
         ("MATERIALIZED VIEW TO", &["m:clustered/0002_views.up.sql:3"]),
         ("ALTER ADD COLUMN", &["m:clustered/0002_views.up.sql:5"]),
         ("ALTER MODIFY TTL", &["m:clustered/0002_views.up.sql:5"]),
+        ("query parameter", &["q:q21"]),
+        ("CREATE FUNCTION", &["m:clustered/0002_views.up.sql:7"]),
+        ("user-defined function call", &["q:q22"]),
+        ("ALTER UPDATE", &["q:q23"]),
+        ("column CODEC", &["m:0001_traces.up.sql:23"]),
+        ("codec ZSTD", &["m:0001_traces.up.sql:23"]),
     ] {
         has(&format!("syntax:{form}"), ids);
     }
@@ -159,6 +206,7 @@ fn inventory_counts_trace_to_sources() {
     let inv = inventory();
     inventory::check(&inv).expect("the inventory keeps its invariants");
     let all = sources();
+    let udfs = inventory::defined_functions(&all);
     let mut recorded = common::recorded();
     for (feature, uses) in &inv.features {
         let mut executions = 0;
@@ -167,10 +215,8 @@ fn inventory_counts_trace_to_sources() {
                 .iter()
                 .find(|s| &s.id == id)
                 .unwrap_or_else(|| panic!("{feature}: source {id} is not a fixture statement"));
-            let (mut features, _) = read_statement(&source.text, Some(&mut recorded));
-            for s in &source.settings {
-                features.add("setting", s);
-            }
+            let (features, _) =
+                mine_statement(source, Some(&mut recorded), &udfs, &Default::default());
             assert!(
                 features.contains(feature),
                 "{feature} is not in {id}: {}",
