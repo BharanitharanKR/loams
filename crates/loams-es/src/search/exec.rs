@@ -660,6 +660,51 @@ pub async fn execute(
     })
 }
 
+/// One page of a scroll (#950) on `view`: `body` compiled as a `Single`
+/// search, continued after `after` (the engine's own `search_after` over
+/// the effective sort, which ends with the primary key). Answers the
+/// page, the last hit's sort values and the number of hits.
+pub(crate) async fn page_after(
+    gw: &EsGateway,
+    ctx: &RequestCtx,
+    view: &IndexView,
+    body: &Value,
+    params: &SearchParams,
+    after: Option<Vec<SortValue>>,
+) -> Result<(SearchOutcome, Option<Vec<SortValue>>, usize), EsError> {
+    let node = gw.config().node_name.as_str();
+    let plan = super::compile(view, body, params, now_ms()).map_err(|e| renode(e, node))?;
+    let SearchPlan::Single {
+        mut request,
+        render,
+    } = plan
+    else {
+        return Err(EsError::unsupported(
+            "scroll over a hybrid or script_score search",
+        ));
+    };
+    request.search_after = after;
+    let part = run_single(gw, ctx, view, request, &render).await?;
+    let last = part.hits.last().map(|(hit, _)| hit.sort_values.clone());
+    let n = part.hits.len();
+    let token = part.token.clone();
+    let page = part
+        .hits
+        .into_iter()
+        .map(|(hit, es)| (part.index.clone(), hit, es))
+        .collect();
+    let views: HashMap<&str, &IndexView> = HashMap::from([(view.name.as_str(), view)]);
+    let body = render_page(gw, ctx, &views, page, part.total, 1, &render).await?;
+    Ok((
+        SearchOutcome {
+            body,
+            read_token: Some(token),
+        },
+        last,
+        n,
+    ))
+}
+
 // ----- sort on `_seq_no` (#949) -----
 
 /// The most matches a `_seq_no` sort orders (ES's default
@@ -1116,8 +1161,11 @@ async fn search_request(
     body: &[u8],
 ) -> Result<SearchOutcome, EsError> {
     let params = Params::parse(uri.query(), uri.path(), SEARCH_PARAMS)?;
-    let search = parse_params(&params)?;
     let body = json_body(body)?.unwrap_or(Value::Null);
+    if params.str("scroll").is_some() {
+        return super::scroll::open(gw, ctx, uri, index, &params, body).await;
+    }
+    let search = parse_params(&params)?;
     let indices = views(gw, ctx, &expr_of(index), resolve_options(&params, &search)).await?;
     execute(gw, ctx, &indices, &body, &search).await
 }
