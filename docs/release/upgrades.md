@@ -119,6 +119,16 @@ pins and its expected downtime (`scripts/release/upgrade-notes.sh`).
   safekeeper before its WAL is drained. Use `loams upgrade`.
 - **No downgrades of third-party components.** A target whose PD, TiKV or TiDB pin is older than the stack's
   is refused (`component_downgrade`). No Postgres major changes through `loams upgrade`.
+- **An upgrade keeps a stack on its stores** (D1340). A stack from 0.1.0 or earlier runs PD, TiKV and RustFS
+  always; the light default that follows it does not. Before upgrading such a stack, add
+  `COMPOSE_PROFILES=tikv,rustfs` to its `.env`, so the new compose file keeps them (without it the engine
+  starts on an empty embedded catalog beside the TiKV data, which stays unread). `loams upgrade` follows the
+  profiles: TiKV's snapshot (BR or a cold copy) and its ordered start only with `tikv`.
+- **A stack on the embedded stores** (no `tikv` profile) is not upgraded by `loams upgrade` yet: `loams migrate`
+  cannot open the embedded metastore while the engine runs, and `check` refuses it (`stack_unrecognised`).
+  Upgrade it by hand: back up the volumes, `docker compose stop`, set `LOAMS_VERSION` in `.env`, then
+  `docker compose up -d`; `migrate` runs before the engine, and the engine refuses data with a migration still
+  pending.
 - **The engine refuses data it cannot read.** It exits 78 (`format_unreadable`, `migration_incomplete`,
   `stack_unrecognised`) rather than start. `loams migrate status` shows why.
 - **Recreating a service by hand.** A sidecar with `network_mode: service:X` (the `tailscale` sidecar is in

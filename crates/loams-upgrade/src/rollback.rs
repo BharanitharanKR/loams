@@ -107,8 +107,12 @@ pub fn restore(runtime: &dyn Runtime, stack: &mut StackDir, restore: &Restore) -
             )?;
             Some(version.clone())
         }
+        // No TiKV copy: a stack on the embedded stores (its metastore is in
+        // the data directory `migrate restore` puts back).
         None => {
-            compose::up(runtime, &stack.dir, &pd_tikv)?;
+            if stack.tikv() {
+                compose::up(runtime, &stack.dir, &pd_tikv)?;
+            }
             None
         }
     };

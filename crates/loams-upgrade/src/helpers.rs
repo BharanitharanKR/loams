@@ -105,7 +105,8 @@ fn engine_env(stack: &StackDir) -> Option<String> {
 }
 
 /// The stores' flags of `loams migrate`, as the compose `migrate` service
-/// has them.
+/// has them (`config/stores.sh`): the metastore and Live on TiKV when the
+/// stack runs it, else none (the embedded metastore in the data directory).
 pub fn migrate_store_args(stack: &StackDir, postgres: bool) -> Vec<String> {
     let bucket = stack
         .env
@@ -113,14 +114,17 @@ pub fn migrate_store_args(stack: &StackDir, postgres: bool) -> Vec<String> {
         .filter(|b| !b.is_empty())
         .cloned()
         .unwrap_or_else(|| "file:///var/lib/loams/bucket".to_string());
-    let mut args = vec![
-        "--meta=tikv://pd:2379/loams_meta".to_string(),
-        "--live-store=tikv://pd:2379/loams_live_dev".to_string(),
+    let mut args = Vec::new();
+    if stack.tikv() {
+        args.push("--meta=tikv://pd:2379/loams_meta".to_string());
+        args.push("--live-store=tikv://pd:2379/loams_live_dev".to_string());
+    }
+    args.extend([
         format!("--bucket={bucket}"),
         "--data-dir=/var/lib/loams".to_string(),
         "--house-dir=/var/lib/loams-house".to_string(),
         "--pg-control-dir=/var/lib/loams-pg-control".to_string(),
-    ];
+    ]);
     if postgres {
         args.push("--pageserver=http://pageserver:9898".to_string());
         args.push("--safekeeper=http://safekeeper1:7676".to_string());

@@ -80,6 +80,15 @@ gh release download "v$previous" -R "${GITHUB_REPOSITORY:-ostrium-labs/loams}" -
 tar -xzf "$dl/loams-compose-$previous.tar.gz" -C "$work"
 stack="$work/loams-compose-$previous/release"
 cp "$stack/.env.example" "$stack/.env"
+# A previous release from before the light default (0.1.0 and earlier) has no
+# `tikv` or `rustfs` profile: PD, TiKV and RustFS always run and hold its data.
+# An upgrade never moves a stack's stores (D1340, D1343), and the candidate's
+# default is the embedded store and local folders, so the gate names both
+# profiles in .env, as such a stack must before it upgrades. A previous
+# release with the profiles runs with its own .env.example as it is.
+if ! grep -q '^COMPOSE_PROFILES=' "$stack/.env"; then
+  echo "COMPOSE_PROFILES=tikv,rustfs" >> "$stack/.env"
+fi
 cp "$root/deploy/release/ci/compose.upgrade.yaml" "$stack/compose.override.yaml"
 compose() { "$engine" compose --project-directory "$stack" "$@"; }
 
@@ -124,7 +133,8 @@ timed upgrade "$up" --dir "$stack" --to "$candidate" --bundle "$bundle" --yes > 
 timed fixtures_check fixtures check --state /state/state.json
 fixtures write-new --state /state/state.json
 fixtures check --state /state/state.json --expect-new-writes present
-compose run --rm --no-deps migrate migrate status --meta=tikv://pd:2379/loams_meta \
+# The candidate's `migrate` adds the store flags the profiles select.
+compose run --rm --no-deps migrate migrate status \
   --bucket=file:///var/lib/loams/bucket --data-dir=/var/lib/loams --output json > "$work/ledger.json" || true
 
 # 2. Rollback from the snapshot.
