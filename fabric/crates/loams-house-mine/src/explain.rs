@@ -308,7 +308,10 @@ pub fn features(dump: &str) -> Features {
                 } else if parent == Some("Index") && index == 1 {
                     // `INDEX i <expr> TYPE <type>`: the second child is the
                     // index type; the first is an ordinary expression.
-                    out.add("syntax", &format!("skip index {name}"));
+                    out.add(
+                        "syntax",
+                        &format!("skip index {}", name.to_ascii_lowercase()),
+                    );
                 } else if name == "_CAST" {
                     // A bound query parameter: `query_log` holds the text
                     // after binding, `{p:UUID}` as `_CAST('…', 'UUID')`.
