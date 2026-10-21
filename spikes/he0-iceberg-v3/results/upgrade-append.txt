@@ -1,0 +1,8 @@
+  upgrade: V2 -> commit returned V3, load returned V3, next-row-id=0
+  wrote s3://spike/spark/01a15f33-1ff4-7471-b563-da8c6a5cab6c/data/he0-main-100-00000.parquet rows=5 first_row_id=None
+  committed: next-row-id 0 -> 25, snapshot first-row-id=Some(0) added-rows=Some(25)
+  lineage rows=25 null _row_id=0 _row_id<>id=5
+rust_upgrade	old	20	20	0	19	1	1
+rust_upgrade	r	5	5	20	24	2	2
+rust_upgrade_manifests	4	0
+rust_upgrade_manifests	1	0
