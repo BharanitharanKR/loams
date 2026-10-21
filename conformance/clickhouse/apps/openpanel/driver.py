@@ -269,13 +269,15 @@ class Driver:
         qs = urllib.parse.urlencode({"input": json.dumps({"json": {
             "projectId": client["projectId"], "chartType": "metric", "interval": "day", "range": "30d",
             "series": [{"type": "event", "id": "A", "name": "*", "segment": "event", "filters": []}],
-            "breakdowns": [], "metric": "sum", "previous": False}})})
+            "breakdowns": [], "metric": "sum", "previous": False,
+            # A fresh display name per poll: chart reads are cached by input.
+            "name": f"he0-count-{time.time_ns()}"}})})
         status, raw = self.request("GET", f"{API}/trpc/chart.chart?{qs}")
         if status != 200:
             return 0
         try:
             return int(json.loads(raw)["result"]["data"]["json"]["series"][0]["metrics"]["sum"])
-        except (KeyError, TypeError, ValueError):
+        except (KeyError, IndexError, TypeError, ValueError):
             return 0
 
     # -- reads ----------------------------------------------------------------
