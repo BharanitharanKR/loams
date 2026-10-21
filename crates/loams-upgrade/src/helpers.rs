@@ -193,7 +193,10 @@ pub fn br_helper(stack: &StackDir, image: &str, restore: bool, id: &str) -> Help
             read_only: false,
         }],
         env_file: None,
-        user: None,
+        // The snapshots' owner: `prepare_helper` makes `<snapshots>` and
+        // `<id>` 0700 for uid 10001, which root with every capability dropped
+        // cannot enter. TiKV (root, in its own container) writes the SSTs.
+        user: Some(format!("{LOAMS_UID}:{LOAMS_UID}")),
         cap_add: Vec::new(),
     }
 }
