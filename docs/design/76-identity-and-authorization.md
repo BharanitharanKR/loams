@@ -32,6 +32,8 @@ Source: the owner's draft "Loam Identity & Authorization Plan: Zitadel + OpenFGA
   - D100: the `_audit` stream.
   - D450: the single binary keeps built-in sign-in, now named "built-in single-org mode".
 
+**IA0 (2026-10-21)** settled the (verify) items below except Clerk and WorkOS federation, and proposed seven refinements, F1–F7, in [the IA0 report](../plans/ia0-spike-report.md) §6. Two would amend this document and wait for the owner: F1 (D1608: `identity-sync` reads Zitadel's event API with a cursor as its primary feed, webhooks only wake it) and F3 (§8.1: Loams membership comes from Zitadel user grants on the Loams project, because Zitadel's org members are its org managers). The decisions below are unchanged until then.
+
 Markers, as in §64–§75:
 
 - **(verify)**: not checked against a primary source. The plan task that depends on it checks it first.
@@ -256,7 +258,7 @@ The draft's design notes stand:
 | **`platform`**, a new root type (one object per install): `operator`, `limits_writer`, `meter_admin`, each `[user]` only (`limits_writer` also takes `service_account`) | D66 maps Lakekeeper's `server` to `platform`; CP1 Task 3 planned these relations on a type it called `deployment`. That name is taken here by the draft's application deployments, so the root is `platform`. `org` gets `define platform: [platform]` |
 | **`org.billing`** becomes **`billing_admin`** (`[user] or owner`), and `billing_viewer` (`[user, team#member] or billing_admin`) is added | D1133 already names these relations for Loams Meter. Neither admits `agent` or `service_account`, so "agents cannot hold `billing_admin` or `meter_admin`" is a property of the model's types, tested by `agent_cannot_write_grants` |
 | **`database`** gains `define can_connect: viewer from environment` | D711: Postgres sign-in checks `connect`. A database's owner-only DDL stays `can_admin` |
-| **Product modules hang off `environment`.** `graph.fga`'s `define namespace: [namespace]` becomes `define environment: [environment]`, and its `reader`, `writer` and `admin` take `viewer`, `editor` and `deployer from environment`. Postgres, SQL, House and Live modules follow CP1 Task 3's file list | Extend the model, don't duplicate it. The modules join through `fga.mod` (schema 1.2 modular models) **(verify the modular-model status at OpenFGA v1.22)** |
+| **Product modules hang off `environment`.** `graph.fga`'s `define namespace: [namespace]` becomes `define environment: [environment]`, and its `reader`, `writer` and `admin` take `viewer`, `editor` and `deployer from environment`. Postgres, SQL, House and Live modules follow CP1 Task 3's file list | Extend the model, don't duplicate it. The modules join through `fga.mod` (schema 1.2 modular models) (checked in IA0, 2026-10-21: the CLI v0.8.1 validates, tests and writes `fga.mod` to OpenFGA v1.22.0) |
 | **An agent-session condition** (IA4), below | Q1204: a grant made for one agent session expires with it |
 
 The condition, in OpenFGA's DSL with a CEL expression:
@@ -296,7 +298,7 @@ The draft's plan stands: one store with `org` at the root of every object path. 
 
 **Inputs.** The draft says to pick one primary and keep the other for repair:
 
-1. **Zitadel Actions v2 event executions** (primary, near real time). An execution's condition can be one event, a group of events or all events. Its target is a `Webhook`, a `Call` or an `Async` endpoint. Each call carries a `ZITADEL-Signature` header, an HMAC over the body and a timestamp with a per-target signing key (checked 2026-10-21). The docs do not promise ordering or redelivery **(verify in IA0)**, which is why the bridge tolerates both and the reconciler exists.
+1. **Zitadel Actions v2 event executions** (primary, near real time). An execution's condition can be one event, a group of events or all events. Its target is a `Webhook`, a `Call` or an `Async` endpoint. Each call carries a `ZITADEL-Signature` header, an HMAC over the body and a timestamp with a per-target signing key (checked 2026-10-21). The docs do not promise ordering or redelivery. **IA0 measured it (2026-10-21): delivery is in order with the default single worker, but at most once: a failed call is never retried, the documented `Executions.MaxTtl` drops jobs after 5 minutes, and a burst drains at about 12 events per second.** So the webhook cannot be the only feed; the IA0 report's F1 proposes the event API with a cursor as the primary feed, pending the owner.
 2. **The management API listing** (repair and reconciliation).
 
 **Event → tuple mapping:**
@@ -464,7 +466,7 @@ Ostrium runs `loams.dev`, `console.loams.dev` and `auth.loams.dev` and nothing e
 - There is no Clerk, no WorkOS and no Zitadel Cloud (Q1201).
 - The site (`ostrium-labs/loams-site`, Auth.js) changes its provider to Zitadel in that repository.
 
-An install that trusts `auth.loams.dev` sets `LOAMS_OIDC_ISSUER=https://auth.loams.dev` and the Zitadel project id as audience **(verify the audience value in IA0)**. It still decides membership and authorization itself, so Ostrium never sees the install's tuples.
+An install that trusts `auth.loams.dev` sets `LOAMS_OIDC_ISSUER=https://auth.loams.dev` and the Zitadel project id as audience (checked in IA0, 2026-10-21: people's access tokens carry the client and project ids, an agent's carries the project id when it asks for scope `urn:zitadel:iam:org:project:id:<project id>:aud`). It still decides membership and authorization itself, so Ostrium never sees the install's tuples.
 
 ### 12.4 BYOC (D1614)
 
@@ -514,7 +516,7 @@ An install that trusts `auth.loams.dev` sets `LOAMS_OIDC_ISSUER=https://auth.loa
 | Component | Licence (checked 2026-10-21) | How Loams uses it |
 |---|---|---|
 | Zitadel server (`zitadel/zitadel`) | **AGPL-3.0-only** since v3.0.0 (released 2025-05-02; Zitadel's v3 announcement covered the licence change and dropping CockroachDB). `LICENSING.md` gives `proto/` and `apps/docs/` Apache-2.0, and `apps/login/`, `packages/zitadel-client/` and `packages/zitadel-proto/` MIT. A commercial licence is offered. Latest v4.19.5 (2026-10-15) | **Unmodified official images, as a separate service**, reached only over OIDC and its APIs. No Zitadel code is copied, linked or vendored, and fixes go upstream (Zitadel accepts contributions under Apache-2.0). The same rule as PgDog (D318). §22 already noted that Zitadel is "allowed as a separate, unmodified service" |
-| Zitadel SDKs | `zitadel-go` and `zitadel-node` are Apache-2.0. The community Rust crate `zitadel` (`smartive/zitadel-rust`) shows no SPDX licence on GitHub **(verify)**, so it is not used | Loams uses `openidconnect` 4 and `jsonwebtoken` 11 (already in the tree) and Zitadel's Apache-2.0 protos if it needs the management API |
+| Zitadel SDKs | `zitadel-go` and `zitadel-node` are Apache-2.0. The community Rust crate `zitadel` (`smartive/zitadel-rust`) is `MIT OR Apache-2.0` (checked in IA0: its `Cargo.toml` and two licence files; GitHub shows NOASSERTION because there are two), but it is not needed | Loams uses `openidconnect` 4 and `jsonwebtoken` 11 (already in the tree) and Zitadel's Apache-2.0 protos if it needs the management API |
 | Zitadel Helm chart | Apache-2.0 | Referenced, not vendored |
 | OpenFGA server, CLI, chart, API protos | Apache-2.0 (CNCF). Server v1.22.0 (2026-10-06) | Unmodified service |
 | `openfga-client` (Rust) | Apache-2.0, 0.6.1 | Linked (D66) |
@@ -547,7 +549,7 @@ An install that trusts `auth.loams.dev` sets `LOAMS_OIDC_ISSUER=https://auth.loa
 | Latency from the extra hop | OpenFGA co-located, `BatchCheck`, the decision cache; built-in mode has no hop |
 | *Added:* the built-in and OpenFGA authorizers disagree | The differential test (§12.1) runs on every PR that touches either authorizer or the model |
 | *Added:* Actions v2 delivers out of order or drops events | Sequence-aware apply, the outbox, the nightly reconciliation; IA0 checks Zitadel's delivery guarantees |
-| *Added:* Zitadel's footprint (API, login, Postgres) on small installs | Off by default (D1613); the footprint is measured in IA0 **(estimate pending)** |
+| *Added:* Zitadel's footprint (API, login, Postgres) on small installs | Off by default (D1613); IA0 measured the `identity` profile idle at about 243 MB of memory and 0.7 GB of images, and `authz` at 30 MB |
 | *Added:* the cutover leaves a dangling reference | IA1 Task 1's `git grep` gate; the cross-repo site PR |
 
 ## 17. Contradictions with earlier decisions, and how they are resolved

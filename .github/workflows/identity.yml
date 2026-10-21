@@ -1,0 +1,60 @@
+# IA0 (docs/plans/2026-10-21-ia1-identity-authz.md, design §76): the OpenFGA model tests and the
+# Zitadel + OpenFGA compose smoke. Not part of CI required while identity is a spike (D1621).
+name: Identity
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "17 3 * * *"
+  pull_request:
+    paths:
+      - "conformance/identity/**"
+      - "deploy/openfga/**"
+      - "spikes/ia0-authz/**"
+      - ".github/workflows/identity.yml"
+
+concurrency:
+  group: identity-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  openfga-model:
+    name: "Identity: OpenFGA model v1 tests"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: fga model validate and test (openfga/cli v0.8.1, pinned by digest)
+        working-directory: conformance/identity
+        run: |
+          ./fga.sh model validate --file /model/fga.mod | tee /dev/stderr | jq -e '.is_valid'
+          ./fga.sh model test --tests /model/core.fga.yaml
+      - name: no_cross_org_tuples self-test
+        run: python3 -I conformance/identity/cross_org_scan.py --self-test
+
+  identity-smoke:
+    name: "Identity: Zitadel + OpenFGA compose smoke"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: spikes/ia0-authz
+          shared-key: ia0-authz
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
+      - name: build the spike service
+        run: cargo build --release --locked --manifest-path spikes/ia0-authz/Cargo.toml
+      - name: clippy and offline tests
+        run: |
+          cargo clippy --release --locked --manifest-path spikes/ia0-authz/Cargo.toml --all-targets -- -D warnings
+          cargo test --release --locked --manifest-path spikes/ia0-authz/Cargo.toml
+      - name: smoke (up, bootstrap, allow/deny scenario, Actions v2, cross-org scan, down)
+        run: IA0_SPIKE_BIN="$PWD/spikes/ia0-authz/target/release/ia0-authz" conformance/identity/smoke.sh
