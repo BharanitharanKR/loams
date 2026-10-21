@@ -187,3 +187,20 @@ Added 2026-09-27 (R1 plan rows F1–F5), on the owner's direction "for both tikv
 - `PessimisticRetry` stays the runner's job (row F5).
 
 **Moving the pin.** To pick up upstream, merge upstream master into `loams` (or rebase the topic branches and re-merge them), rerun the client-rust suites and the loams-tikv, loams-meta-tikv and loams-live suites on the playground, and move the `rev` in `Cargo.toml` by a PR. Once a fix merges upstream, its topic branch is dropped from `loams` at the next move.
+
+**Pin move of 2026-10-21 (`41b3588`).** The nightly TiKV crash gate failed with `no acknowledged op after the restart hit a key live before it` and `transaction conflicts outlasted the retries`. Both came from the pinned client's handling of the locks a killed `loams dev` leaves behind.
+
+*Locks that stayed until GC.* A writer killed mid-transaction holds pessimistic locks. TiKV v8.5 keeps them in memory (`pessimistic-txn.in-memory`, on by default). After their 20 s TTL, the next writer's `CheckTxnStatus` on the primary (with `resolving_pessimistic_lock`) unlocked only the primary (`PessimisticRollBack`, no rollback record). The region-wide `ResolveLock` the client sent next scans persisted locks only (`scan_locks_from_storage`), so the in-memory secondaries stayed. Every later encounter found no primary: `CheckTxnStatus` answered `TxnNotFound`. The client never recognised that answer, because it matched `ExtractedErrors` while `retry_multi_region` reports key errors as `MultipleKeyErrors`. So it never retried with `rollback_if_not_exist`, and the error went back to the caller as the runner's `not applied: 1 errors: transaction not found`. The restarted server's WAL commits and lease writes stalled on those locks for minutes, past every test deadline. Upstream fixed both on 2026-10-17..19:
+- #561 rolls a pessimistic lock back on its own with `PessimisticRollback`, as client-go's `resolvePessimisticLock` does. It also recovers expired async-commit locks, which supersedes `fix/resolve-async-commit-locks` (`f037ebb`).
+- #557 splits `ExtractedErrors` into `MultipleKeyErrors` and `MultipleRegionErrors`, so `TxnNotFound` is matched again.
+
+*Reads that waited out the TTL.* A writer killed between its prewrite and its commit leaves prewrite locks that live for the pessimistic TTL (20 s). Every read of those keys waited for the TTL, but a metastore read gives up after 4 attempts, each with the client's lock backoff, well before then. A new topic branch, `fix/read-past-pushed-locks` (`3a7a0eb`), does what client-go does:
+- Every 2PC prewrite carries `min_commit_ts`, and every pessimistic lock carries `for_update_ts + 1`.
+- A reader's `CheckTxnStatus`, with the read's timestamp as `caller_start_ts`, pushes the primary's `min_commit_ts` above the read.
+- The read then goes past that transaction's locks through `Context.resolved_locks` (`resolve_lock_for_read` for gets, batch gets and scans).
+- A pushed writer commits at a newer timestamp, through the existing `CommitTsExpired` retry.
+- Writes still wait.
+
+`loam` is now upstream `1b883bf` plus `fix/tso-stream-reconnect`, `feat/public-proto`, `fix/async-commit-max-commit-ts` and `fail 0.5` (cherry-picked), then `fix/read-past-pushed-locks` (merged). A merge with the `ours` strategy keeps the old line reachable, so `loam` moves forward without a force push. Loams adapts one match in `classify.rs` (`MultipleRegionErrors`).
+
+`crates/loams-tikv/tests/locks.rs` reproduces both: a writer dies holding pessimistic locks or prewrite locks. On `8126c49` the two pessimistic cases fail with `Err(Deadline)`. On `41b3588` all four cases pass, and the reads after a crash take milliseconds instead of the TTL.

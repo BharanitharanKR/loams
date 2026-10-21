@@ -252,16 +252,20 @@ tantivy-fst = "0.5"
 tempfile = "3"
 thiserror = "2"
 # Loams's fork of tikv/client-rust, pinned by rev: branch `loam` of
-# ostrium-labs/client-rust, upstream ab4be1c plus the TSO stream reconnect, the
-# public generated protos, async-commit lock resolution on the read path,
-# async commit's max_commit_ts and fail 0.5 (off rand 0.7, 8126c49a)
-# (docs/plans/r1-dependency-spike.md, "The
+# ostrium-labs/client-rust, upstream 1b883bf (2026-10-19) plus the TSO stream
+# reconnect, the public generated protos, async commit's max_commit_ts, fail
+# 0.5 (off rand 0.7) and reads that go past the locks of a writer they pushed
+# above their timestamp (fix/read-past-pushed-locks). Upstream 1b883bf
+# resolves a crashed pessimistic writer's locks one by one (#561) and sees
+# CheckTxnStatus's TxnNotFound again (#557); before it, those locks stayed
+# until GC, and reads waited out a crashed writer's 20 s TTL (the nightly
+# crash gate, 2026-10-21) (docs/plans/r1-dependency-spike.md, "The
 # client-rust fork"). Not crates.io 0.4.0: it fails cargo-deny's advisories
 # through tonic 0.10 and reports lost async-commit and 1PC acknowledgements as
 # plain errors (R1 plan row R4). Default features pull in openssl, procfs and
 # protobuf 2 through prometheus. The pin moves only by a PR that reruns the
 # loams-tikv, loams-meta-tikv and loams-live suites.
-tikv-client = { git = "https://github.com/ostrium-labs/client-rust", rev = "8126c49a15c0af7f1e7427f3b9020ae8d2c280cf", default-features = false }
+tikv-client = { git = "https://github.com/ostrium-labs/client-rust", rev = "41b3588f9b63d505dd61e15bf3d26abfd53689a2", default-features = false }
 time = { version = "0.3", features = ["std", "formatting", "parsing", "macros"] }
 time-fmt = "0.3.8"
 toml = "0.8"
