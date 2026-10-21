@@ -110,7 +110,9 @@ All on loopback, under opt-in compose profiles, in `conformance/identity/`:
 - `smoke.sh` and `.github/workflows/identity.yml` (jobs `openfga-model` and `identity-smoke`, outside `CI required`).
 - `cross_org_scan.py`: `no_cross_org_tuples` over a store or a fixture, with a self-test.
 
-Zitadel runs as its official image, unmodified; no Zitadel code is copied or linked (D1602). Its behaviour was read in its source to explain measurements, not reused.
+Zitadel runs as its official image, unmodified; no Zitadel code is copied or linked (D1602).
+
+**Provenance note.** While explaining the Actions v2 measurements, the IA0 agent read a few files of Zitadel's AGPL source on GitHub (the execution queue worker and target caller, the webhook signing helper, `cmd/defaults.yaml`). Nothing from them is in this PR. This report states only what was measured, what Zitadel's documented configuration says, and what its public docs say. Under the owner's clean-room rule for `loams-identity`, this report, the spike and its worktree are not inputs for that work.
 
 ## 4. Results
 
@@ -182,10 +184,10 @@ A `Webhook` target (`interruptOnError: false`) with event executions for org mem
 
 After each run the final state matched Zitadel's member listing (drift 0), except when deliveries were refused.
 
-What Zitadel v4.19.4 does (measured, and read in its source to explain it):
+What Zitadel v4.19.4 did in these runs, with its documented configuration:
 
 - Event executions are jobs on an internal queue with **one worker** by default (`Executions.Workers: 1`). Delivery was in sequence order in every run, but a burst queues: about 12 events per second drained, so the 200th event arrived 16 s after its API call.
-- **No retry.** A failed call is logged ("error calling target") and the job ends, whatever `interruptOnError` says (with it set, the job is cancelled; without it, the job completes). Jobs older than `Executions.MaxTtl` (5 min) are dropped.
+- **No retry.** A failed call is logged ("error calling target") and never delivered again (with `interruptOnError: false`, the setting an event execution should use). The documented `Executions.MaxTtl` (5 min) cancels jobs older than that.
 - The payload carries `aggregateID`, `aggregateType`, `resourceOwner`, `sequence` (per aggregate), `event_type`, `created_at`, `userID` and `event_payload` (for members and grants, `userId`; grants also `projectId` and `roleKeys`).
 - The signature is `ZITADEL-Signature: t=<unix>,v1=<hex HMAC-SHA256(key, "<t>." + body)>`; the spike accepts five minutes of skew and rejects a wrong key, a tampered body and a stale timestamp.
 - Zitadel's event API (`POST /admin/v1/events/_search`, filtered by type, ascending) answered in 32 ms with every event, in order, including the three the webhook lost.
