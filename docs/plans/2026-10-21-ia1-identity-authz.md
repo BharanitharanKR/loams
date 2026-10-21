@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, test first. Where this plan gives exact names, paths, flags or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end of this file.
 >
-> **Status: Approved** (owner, 2026-10-21, all defaults; stub). Track IA, design [§76](../design/76-identity-and-authorization.md) (D1600–D1621, Q1200–Q1214).
+> **Status: Approved** (owner, 2026-10-21, all defaults; stub). Track IA, design [§76](../design/76-identity-and-authorization.md) (D1600–D1628, Q1200–Q1214).
 >
 > **What is approved:** all of §76, on 2026-10-21: first D1600 (the full cutover from Authentik to Zitadel, with no migration, no compatibility period and no dual running), then every other decision and question with its default.
 >
@@ -298,9 +298,23 @@ Commit: one PR per numbered group where it keeps PRs small (for example, 1–4 d
   - the `authz` profile; the Helm values for OpenFGA;
   - Lakekeeper on its own store (D1604);
   - `graph.fga`, `loams-graph` and `loams-pg-control` moved onto `loams-authz`.
+  - The principal's kind from the link table `(issuer, sub) → principal`; a subject with no link is checked as `user:<sub>` (D1628). Test: `unlinked_subject_is_a_user`.
+  - The middleware refuses a disabled principal on every request, whatever its token's signature says (D1624). Test: `disabled_principal_refused_with_valid_jwt`.
+  - One decision cache: `CachedAuthorizer`, allows only, TTL ≤ 5 s, with OpenFGA's check-query and iterator caches off in the `authz` profile and the Helm values (D1625). Test: `cache_ttl_at_most_5s`.
+  - The `authz` profile keeps SQLite for a single user; the Helm values and multi-user installs use Postgres, and on SQLite lists use `ListObjects` (D1626).
   - Exit: every control-plane and engine route sits behind a `can_*` check.
-- **IA3, the sync bridge:** `identity-sync` (D1608), the resource-tuple outbox with `pending` → `active` (D1609), the nightly reconciler and its drift metric. Exit: a member removal shows within seconds, and drift is 0.
-- **IA4, agents** (D1607, D1618): agents as machine users; the `agent` and `service_account` types in use; `agent_session` grants; agentd and supervisor vending with machine-user `sub`; revocation tests. Exit: an agent touches only granted environments, and revocation is tested.
+- **IA3, the sync bridge:** `identity-sync` (D1608, amended by D1622 and D1623), the resource-tuple outbox with `pending` → `active` (D1609), the nightly reconciler and its drift metric.
+  - **Primary feed: Zitadel's event list** (`ListEvents`, §76 §8.1's event types, ascending) from a position stored in the metastore: the last creation date plus the `(aggregate, sequence)` pairs at it (D1622). It reads every few seconds and at once on a webhook. Tests: `resumes_from_stored_position`, `reread_dedupes_by_aggregate_sequence`, `lost_webhook_still_applied`.
+  - **Actions v2 webhooks are a wake-up only:** the endpoint verifies `ZITADEL-Signature` and triggers a read; it never applies the body. Test: `webhook_body_not_applied`.
+  - **Membership from user grants** on the Loams project: `user.grant.added|changed|removed|cascade.removed` with role keys `member`, `admin`, `owner` map to `org:O#member|admin|owner`; `org.member.*` (Zitadel's managers) map to nothing (D1623). Tests: `grant_roles_map_to_org_relations`, `org_manager_is_not_a_member`.
+  - `user.deactivated|locked|removed` mark the principal disabled before deleting its tuples (D1624); `user.machine.added` writes the principal link (D1628).
+  - Zitadel's `HTTPClient.DenyList` narrowed in compose and Helm to allow only the sync endpoint's network, keeping `0.0.0.0/8` and `169.254.169.254/32` blocked (D1627).
+  - The reconciler diffs user grants (not org members) against OpenFGA.
+  - Exit: a member removal shows within seconds, also when its webhook is lost, and drift is 0.
+- **IA4, agents** (D1607, D1618, amended by D1624 and D1628): agents as machine users; the `agent` and `service_account` types in use; `agent_session` grants; agentd and supervisor vending with machine-user `sub`; revocation tests.
+  - Creating an agent creates the machine user and its key, writes the principal link with kind `agent` (D1628) and the `owner` and `project` tuples, in one action.
+  - Revocation from Loams deletes the tuples, deactivates the machine user and marks the principal disabled in one call, so the agent's issued tokens are refused at once (D1624). A deactivation made in Zitadel's console reaches the same state through IA3. Tests: `revoked_agent_old_token_refused`, `revoked_agent_new_token_refused`; target ≤ 2 s (IA0 measured about 1 s).
+  - Exit: an agent touches only granted environments, and revocation is tested.
 - **IA5, audit and hardening** (D1616): the three feeds in `_audit` and the Iceberg table family; the cross-org tuple scan in CI; a load test; cache and consistency tuning. Exit: Q1214's p99 target and no cross-org tuples.
 - **IA6, optional:** a Rust-native `Authorizer` backend and/or a Rust IdP behind the same traits, only if OpenFGA or Zitadel becomes a bottleneck or a licence issue.
 
@@ -315,4 +329,5 @@ Commit: one PR per numbered group where it keeps PRs small (for example, 1–4 d
 | R0.5 | `bootstrap.sh` runs on the host (curl and jq) instead of as a compose `bootstrap` service, and Zitadel writes the IAM-owner and login-client PATs into the git-ignored `.secrets/` at `start-from-init` | 1 |
 | R0.6 | The model tests are `deploy/openfga/core.fga.yaml`, beside `fga.mod`: the CLI refuses a test file's `model_file` outside its own directory | 2 |
 | R0.7 | The spike service runs in the compose network (profile `spike`): under rootless Podman a container cannot reach the host's loopback, and Zitadel's webhook must reach it | 4 |
-| R0.8 | Answers to Task 0's (verify) items, and findings F1-F7 (Actions v2 is at-most-once; Zitadel org members are managers; SQLite serializes batches; JWTs outlive deactivation; caches stack; principal kind from the link table; the HTTP deny list): the report §5 and §6. F1 and F3 amend D1608 and §8.1 and wait for the owner before IA3 | 0-6 |
+| R0.8 | Answers to Task 0's (verify) items, and findings F1-F7 (Actions v2 is at-most-once; Zitadel org members are managers; SQLite serializes batches; JWTs outlive deactivation; caches stack; principal kind from the link table; the HTTP deny list): the report §5 and §6. F1 and F3 amend D1608 and §8.1 | 0-6 |
+| R0.9 | The owner approved all seven findings on 2026-10-21 ("approve all"): D1622 (F1, the event list as primary feed), D1623 (F3, membership from user grants), D1624 (F5, the disabled-principal check), D1625 (F6, one cache ≤ 5 s), D1626 (F4, SQLite for one user only), D1627 (F2, the deny list), D1628 (F7, the kind from the link table). IA2, IA3 and IA4 above carry them | IA2–IA4 |

@@ -32,7 +32,15 @@ Source: the owner's draft "Loam Identity & Authorization Plan: Zitadel + OpenFGA
   - D100: the `_audit` stream.
   - D450: the single binary keeps built-in sign-in, now named "built-in single-org mode".
 
-**IA0 (2026-10-21)** settled the (verify) items below except Clerk and WorkOS federation, and proposed seven refinements, F1–F7, in [the IA0 report](../plans/ia0-spike-report.md) §6. Two would amend this document and wait for the owner: F1 (D1608: `identity-sync` reads Zitadel's event API with a cursor as its primary feed, webhooks only wake it) and F3 (§8.1: Loams membership comes from Zitadel user grants on the Loams project, because Zitadel's org members are its org managers). The decisions below are unchanged until then.
+**IA0 (2026-10-21)** settled the (verify) items below except Clerk and WorkOS federation, and found seven refinements, F1–F7, in [the IA0 report](../plans/ia0-spike-report.md) §6. **The owner approved all seven on 2026-10-21 ("approve all"). They are D1622–D1628**, which amend D1605, D1607, D1608, D1611, D1613 and D1617 and the sections they touch:
+
+- F1 is D1622: `identity-sync` reads Zitadel's event list from a stored position; webhooks only wake it.
+- F3 is D1623: membership comes from user grants on the Loams project, not Zitadel org members.
+- F5 is D1624: a check on every request that the principal is not disabled.
+- F6 is D1625: one decision cache of 5 s or less.
+- F4 is D1626: OpenFGA on SQLite only for single-user installs.
+- F2 is D1627: Zitadel's outbound deny list is narrowed only for the sync webhook.
+- F7 is D1628: the principal kind comes from Loams' link table.
 
 Markers, as in §64–§75:
 
@@ -40,7 +48,7 @@ Markers, as in §64–§75:
 - **(estimate)**: judged or computed, not measured.
 - **(checked 2026-10-21)**: read in a primary source on that date. §19 gives the source.
 
-**Numbering.** This document reserves **D1600–D1639** and **Q1200–Q1219**. D1600–D1621 and Q1200–Q1214 are used. D1583–D1599 are left free for work in flight. D1570–D1579 and Q1188–Q1189 are held by §75.
+**Numbering.** This document reserves **D1600–D1639** and **Q1200–Q1219**. D1600–D1628 and Q1200–Q1214 are used. D1583–D1599 are left free for work in flight. D1570–D1579 and Q1188–Q1189 are held by §75.
 
 Plan stub: [IA1](../plans/2026-10-21-ia1-identity-authz.md) (track IA). Phase IA0 is specified task by task; IA1–IA6 are outlined.
 
@@ -57,23 +65,30 @@ Plan stub: [IA1](../plans/2026-10-21-ia1-identity-authz.md) (track IA). Phase IA
 | D1602 | **Licences** (§14): Zitadel is AGPL-3.0-only from v3, with `proto/` under Apache-2.0 and the login app and client packages under MIT (checked 2026-10-21). It runs **unmodified, as a separate service**, never linked, copied or vendored, and fixes go upstream only. This is the same rule as PgDog (D318) and §22's note on Zitadel. OpenFGA is Apache-2.0 (CNCF). Counsel reviews the boundary (Q1212) | Approved (owner, 2026-10-21) |
 | D1603 | **One Loams OpenFGA model, extended, not duplicated.** The draft's model (§6.1) becomes `deploy/openfga/core.fga`, replacing CP1 Task 3's planned type list. It adds `service_account` and `platform` and the meter relations (§6.2). Product modules (`graph.fga` today) hang off `environment`. Code checks only `can_*` relations | Approved (owner, 2026-10-21) |
 | D1604 | **Lakekeeper keeps its own OpenFGA store** on the same OpenFGA server. Its model already defines `project`, `namespace`, `user` and `role` types (checked 2026-10-21), which collide with Loams' types. Amends D67's "one shared store" and answers Q21 | Approved (owner, 2026-10-21) |
-| D1605 | **Principal mapping** (§5): a human user is `user:<id>`, a machine user is `agent:<id>` or `service_account:<id>` (two types, never `user:svc-…`), a Zitadel org is `org:<id>` 1:1 with the Loams org, and a team is `team:<id>`, owned by Loams. **Never an email** as an id | Approved (owner, 2026-10-21) |
+| D1605 | **Principal mapping** (§5): a human user is `user:<id>`, a machine user is `agent:<id>` or `service_account:<id>` (two types, never `user:svc-…`), a Zitadel org is `org:<id>` 1:1 with the Loams org, and a team is `team:<id>`, owned by Loams. **Never an email** as an id | Approved (owner, 2026-10-21); amended by D1628 (the principal kind comes from the link table), approved 2026-10-21 |
 | D1606 | **Tokens.** Listeners verify **Zitadel JWTs** for people directly (JWKS, cached), as the engine's `oidc` mode already does for any issuer. Loams' token endpoint stays for **agents and workloads** (federation D1308, user delegation, vending, §19 §5.2) and for environment-bound tokens at the edge (D1304). Amends D449: the people's exchange is no longer required | Approved (owner, 2026-10-21) |
-| D1607 | **Agents are Zitadel machine users with explicit grants** (draft §9). Each agent has an `owner` user and gets project or environment grants directly; it never inherits from its owner. The model never lets `agent` hold `operator`, `billing_admin` or `meter_admin` (D553, D1133). Session limits come from token claims plus an OpenFGA condition (Q1204). Revocation deletes the agent's tuples (fast) and disables the machine user (authoritative) | Approved (owner, 2026-10-21) |
-| D1608 | **`identity-sync`** (draft §7): a Rust bridge from Zitadel to OpenFGA. Actions v2 event executions are the primary feed and Zitadel's management API is used for repair. Writes are idempotent, with an outbox and retry, applied by `(aggregate, sequence)`. A nightly reconciliation emits a drift metric, and drift > 0 alerts | Approved (owner, 2026-10-21) |
+| D1607 | **Agents are Zitadel machine users with explicit grants** (draft §9). Each agent has an `owner` user and gets project or environment grants directly; it never inherits from its owner. The model never lets `agent` hold `operator`, `billing_admin` or `meter_admin` (D553, D1133). Session limits come from token claims plus an OpenFGA condition (Q1204). Revocation deletes the agent's tuples (fast) and disables the machine user (authoritative) | Approved (owner, 2026-10-21); amended by D1624 (a disabled agent is refused on every request), approved 2026-10-21 |
+| D1608 | **`identity-sync`** (draft §7): a Rust bridge from Zitadel to OpenFGA. Actions v2 event executions are the primary feed and Zitadel's management API is used for repair. Writes are idempotent, with an outbox and retry, applied by `(aggregate, sequence)`. A nightly reconciliation emits a drift metric, and drift > 0 alerts | Approved (owner, 2026-10-21); amended by D1622 (the event list is the primary feed) and D1623 (membership from user grants), approved 2026-10-21 |
 | D1609 | **Resource tuples through the transactional outbox** (D66): the resource row and the outbox row commit together. A worker writes the parent-link tuple. A resource is `pending` until its tuple is written, then `active`, so nothing is visible before it is protected | Approved (owner, 2026-10-21) |
 | D1610 | **One `Authorizer` trait** in a new crate `loams-authz`: `check`, `batch_check` and `list_objects` (D66's `filter_visible`). Implementations: `OpenFgaAuthorizer`, `CachedAuthorizer`, `BuiltinAuthorizer`, `AllowAllAuthorizer` (loopback only) and `RecordingAuthorizer`. It replaces `crates/loams/src/auth/authorizer.rs`'s role-only trait and the per-product `authz.rs` checks, and resolves §64's "two `Authorizer` traits" | Approved (owner, 2026-10-21) |
-| D1611 | **Enforcement** (draft §8): Axum middleware verifies the JWT and resolves the principal. Each route declares its `can_*` relation and object, and anything undeclared is **denied**. Lists use `ListObjects` when small and an org filter plus `BatchCheck` when large. A short-TTL decision cache (≤ 5 s, D66) is keyed with the model id and invalidated from `ReadChanges`. `HIGHER_CONSISTENCY` is used, and the cache bypassed, for destructive, admin and credential-issuing calls | Approved (owner, 2026-10-21) |
+| D1611 | **Enforcement** (draft §8): Axum middleware verifies the JWT and resolves the principal. Each route declares its `can_*` relation and object, and anything undeclared is **denied**. Lists use `ListObjects` when small and an org filter plus `BatchCheck` when large. A short-TTL decision cache (≤ 5 s, D66) is keyed with the model id and invalidated from `ReadChanges`. `HIGHER_CONSISTENCY` is used, and the cache bypassed, for destructive, admin and credential-issuing calls | Approved (owner, 2026-10-21); amended by D1624 (disabled-principal check) and D1625 (one cache, ≤ 5 s), approved 2026-10-21 |
 | D1612 | **Tenancy in OpenFGA** (draft §6): one store per install. A multi-org control plane (§41, CP1) uses one store with `org` at the root of every object path, and an automated test proves no tuple links two orgs. A store per tenant is used only for an org that asks for hard isolation (Q1202) | Approved (owner, 2026-10-21) |
-| D1613 | **The light default turns nothing on.** A single-user local install runs built-in single-org mode (the principal store, sessions, `BuiltinAuthorizer` evaluating model v1's semantics in process). Profile `identity` adds Zitadel. Profile `authz` adds OpenFGA (SQLite in compose, Postgres in Kubernetes). A differential test keeps the built-in and OpenFGA answers equal | Approved (owner, 2026-10-21) |
+| D1613 | **The light default turns nothing on.** A single-user local install runs built-in single-org mode (the principal store, sessions, `BuiltinAuthorizer` evaluating model v1's semantics in process). Profile `identity` adds Zitadel. Profile `authz` adds OpenFGA (SQLite in compose, Postgres in Kubernetes). A differential test keeps the built-in and OpenFGA answers equal | Approved (owner, 2026-10-21); amended by D1626 (SQLite only for single-user installs), approved 2026-10-21 |
 | D1614 | **BYOC on Cloudflare runs neither service in phase 0** (no Postgres there, D1371). People authenticate through Cloudflare Access with the customer's identity provider (D1372), authorization is `BuiltinAuthorizer` over Durable Object SQLite, and the data plane uses `lk_` keys. On AWS, Google Cloud and Azure, the compose profiles and Helm values apply | Approved (owner, 2026-10-21) |
 | D1615 | **What Ostrium hosts:** Zitadel at `auth.loams.dev` for `console.loams.dev` and for installs that choose it as their issuer. There is no Clerk, no WorkOS and no Zitadel Cloud. Social logins are Zitadel identity providers. Ostrium runs no OpenFGA for customer data: each install authorizes its own data plane | Approved (owner, 2026-10-21) |
 | D1616 | **Audit** (draft §10): Zitadel events, OpenFGA `ReadChanges` and Loams' decision log (allows and **denials**) go into the `_audit` stream (D100). Where the House or Lakekeeper runs, they also land as one Iceberg table family | Approved (owner, 2026-10-21) |
-| D1617 | **Deployment** (draft §11): each service has its own Postgres database. Zitadel's admin console and management APIs are never public. Only its OIDC and login endpoints are public, on the auth hostname. OpenFGA is internal only. The model lives in Git and CI applies it. Versions are pinned, and model upgrades are tested against a snapshot of real tuples | Approved (owner, 2026-10-21) |
+| D1617 | **Deployment** (draft §11): each service has its own Postgres database. Zitadel's admin console and management APIs are never public. Only its OIDC and login endpoints are public, on the auth hostname. OpenFGA is internal only. The model lives in Git and CI applies it. Versions are pinned, and model upgrades are tested against a snapshot of real tuples | Approved (owner, 2026-10-21); amended by D1627 (the outbound deny list), approved 2026-10-21 |
 | D1618 | **Agents in sandboxes keep Loams tokens.** A sandboxed agent never holds a Zitadel key. agentd (D1453) and the supervisor vend 15-minute Loams tokens whose `sub` is the agent's Zitadel machine-user id, and Biscuit stays inside the runtime (D188) | Approved (owner, 2026-10-21) |
 | D1619 | **Proto changes are additive.** `SignInKind` gains IdP-neutral values and its Authentik values are deprecated. `OidcProviderKind` gains `ZITADEL`, and its `AUTHENTIK` value stays because it names a customer's upstream IdP. No `buf breaking` exception is needed (Q1209) | Approved (owner, 2026-10-21) |
 | D1620 | **Track IA**, phases IA0–IA6 (draft §13): the spike, console login, the authorization core, the sync bridge, agents, audit and hardening, and an optional Rust-native backend. The Authentik removal is IA1 Task 1, not a migration | Approved (owner, 2026-10-21) |
 | D1621 | **Honest labels:** identity and authorization are "designed" until IA2 exits, "preview" after it, and never described as shipped before their gates. Docs say which authorizer an install runs | Approved (owner, 2026-10-21) |
+| D1622 | **`identity-sync` reads Zitadel's event list from a stored position** (IA0 F1). Its primary feed is Zitadel's event listing API (`ListEvents`, filtered by the event types of §8.1, ascending), read from a position stored in the metastore: the last creation date read plus the `(aggregate, sequence)` pairs at that date, so a re-read dedupes. Actions v2 webhooks are **only a wake-up** that makes it read at once; it also reads every few seconds without one. The nightly reconciliation stays as the backstop. Amends D1608, whose primary feed was the webhooks: IA0 measured them at most once (a failed delivery is never retried, and the documented `Executions.MaxTtl` drops jobs after 5 minutes) and about 12 events per second in a burst | Approved (owner, 2026-10-21) |
+| D1623 | **Loams membership comes from user grants on the Loams project** (IA0 F3). A Zitadel user grant (an "authorization") on the Loams project inside org O, with the coarse role keys `member`, `admin` or `owner`, maps to `org:O#member`, `#admin` or `#owner`: `user.grant.added` and `user.grant.changed` write, and `user.grant.removed` and `user.grant.cascade.removed` delete. **Zitadel org members are not mapped**: they are Zitadel's own managers (`ORG_OWNER`, `ORG_USER_MANAGER` and so on), and mapping them would make every Loams member a Zitadel administrator. Amends §8.1's table and D1608 | Approved (owner, 2026-10-21) |
+| D1624 | **A disabled principal is refused on every request** (IA0 F5). A Zitadel JWT stays valid until `exp` after its user or machine user is deactivated, so the auth layer checks the principal store's status for every verified JWT and Loams token, not only at issuance. Revocation flips the status synchronously when Loams revokes, and from `identity-sync` when the change is made in Zitadel. IA0 measured about 1 s from deactivation to denial. Amends D1607 and D1611 | Approved (owner, 2026-10-21) |
+| D1625 | **One decision cache, of 5 s or less** (IA0 F6). Loams' `CachedAuthorizer` (allows only, TTL ≤ 5 s) is the only cache, and OpenFGA runs with its check-query and iterator caches off; the two stacked would give up to 15 s of stale allows. An install that prefers OpenFGA's cache sets `--check-query-cache-ttl` to 5 s or less and turns `CachedAuthorizer` off, never both. `HIGHER_CONSISTENCY` calls bypass both, as D1611 says. Amends D1611 | Approved (owner, 2026-10-21) |
+| D1626 | **OpenFGA on SQLite only for single-user installs** (IA0 F4). The `authz` profile uses SQLite for one user. A multi-user install, and any install that lists with `BatchCheck`, runs OpenFGA on Postgres (its own database, D1617). IA0 measured a 50-check `BatchCheck` at about 160 ms on SQLite and 9 ms on Postgres. On SQLite, lists use `ListObjects`. Amends D1613 | Approved (owner, 2026-10-21) |
+| D1627 | **Zitadel's outbound deny list is narrowed only for the sync webhook** (IA0 F2). Zitadel's HTTP client refuses loopback, link-local and every private range by default, which blocks a webhook to `identity-sync` on the same network. Compose and the Helm values allow only the sync endpoint's network and keep the unspecified range `0.0.0.0/8` and the metadata address `169.254.169.254/32` blocked. Amends D1617 | Approved (owner, 2026-10-21) |
+| D1628 | **The principal kind comes from Loams' link table** (IA0 F7). A Zitadel JWT does not say whether its subject is a person or a machine, so the kind (`user`, `agent`, `service_account`) comes from the principal store's link `(issuer, sub) → principal`. Loams writes the link when it creates an agent or service account, and `identity-sync` writes it on `user.machine.added`. A subject with no link is checked as `user:<sub>`, which holds none of an agent's grants, so a missing link fails closed. Amends D1605 | Approved (owner, 2026-10-21) |
 
 ## 2. Where Loams is today
 
@@ -172,7 +187,7 @@ Key properties, from the draft, with Loams' additions:
 - agent tokens are capped at 15 minutes by default and 1 hour at most;
 - suspension revokes everything.
 
-What changes is who keeps the identity record. Zitadel becomes the source of truth for *who exists*, and Loams' principal store keeps a link `(issuer, sub) → principal` and the Loams-only fields (agent policy, TTL cap, trust policies).
+What changes is who keeps the identity record. Zitadel becomes the source of truth for *who exists*, and Loams' principal store keeps a link `(issuer, sub) → principal` and the Loams-only fields (agent policy, TTL cap, trust policies). **The link is the source of the principal's kind** (D1628, approved 2026-10-21): a JWT does not say whether its subject is a person or a machine, and a subject with no link is checked as `user:<sub>`, which fails closed.
 
 **Built-in single-org mode.** Without Zitadel, the principal store issues ids in the same opaque format and the org is created at first-run setup (§19 §6). Turning on the `identity` profile later re-links people by verified email once, at first sign-in, and from then on by `sub`. With no users today, this matters only for future installs.
 
@@ -296,33 +311,36 @@ The draft's plan stands: one store with `org` at the root of every object path. 
 
 **Purpose:** keep OpenFGA's tuples consistent with Zitadel's identity state.
 
-**Inputs.** The draft says to pick one primary and keep the other for repair:
+**Inputs** (amended by D1622, approved 2026-10-21). The draft said to pick one primary and keep the other for repair. IA0 showed that the webhooks cannot be the primary, so:
 
-1. **Zitadel Actions v2 event executions** (primary, near real time). An execution's condition can be one event, a group of events or all events. Its target is a `Webhook`, a `Call` or an `Async` endpoint. Each call carries a `ZITADEL-Signature` header, an HMAC over the body and a timestamp with a per-target signing key (checked 2026-10-21). The docs do not promise ordering or redelivery. **IA0 measured it (2026-10-21): delivery is in order with the default single worker, but at most once: a failed call is never retried, the documented `Executions.MaxTtl` drops jobs after 5 minutes, and a burst drains at about 12 events per second.** So the webhook cannot be the only feed; the IA0 report's F1 proposes the event API with a cursor as the primary feed, pending the owner.
-2. **The management API listing** (repair and reconciliation).
+1. **Zitadel's event list** (primary). `identity-sync` reads `ListEvents` for §8.1's event types in ascending order from a position stored in the metastore (the last creation date read, plus the `(aggregate, sequence)` pairs at that date so a re-read dedupes). It reads every few seconds, and at once when a webhook wakes it. IA0 read every event in order in 32 ms, including the three the webhooks lost.
+2. **Zitadel Actions v2 event executions** (a wake-up only). An execution's condition can be one event, a group of events or all events. Its target is a `Webhook`, a `Call` or an `Async` endpoint. Each call carries a `ZITADEL-Signature` header, an HMAC over the body and a timestamp with a per-target signing key (checked 2026-10-21). The docs do not promise ordering or redelivery. **IA0 measured it (2026-10-21): delivery is in order with the default single worker, but at most once: a failed call is never retried, the documented `Executions.MaxTtl` drops jobs after 5 minutes, and a burst drains at about 12 events per second.** So a webhook only tells `identity-sync` to read now; its body is not applied. The endpoint still verifies `ZITADEL-Signature`. Zitadel's outbound deny list allows only that endpoint's network (D1627).
+3. **The management API listing** (repair and reconciliation).
 
-**Event → tuple mapping:**
+**Event → tuple mapping** (amended by D1623, approved 2026-10-21: Zitadel's org members are its own managers, so Loams membership comes from user grants on the Loams project):
 
 | Zitadel event | Tuple action |
 |---|---|
-| Org member added | Write `org:O#member@user:U` (and `owner` or `admin` from the coarse Zitadel org role, if any) |
-| Org member removed | Delete the same tuples |
-| User deactivated or removed | Delete all tuples for `user:U` (read by user, delete in batches of at most 100, OpenFGA's default `max-tuples-per-write`, checked 2026-10-21) |
-| Machine user deactivated (an agent) | Delete all tuples for `agent:A`; Loams' token endpoint refuses new tokens for it at once (§10) |
+| User grant added or changed (`user.grant.added`, `user.grant.changed`) on the Loams project in org O, role keys `member`, `admin` or `owner` | Write `org:O#member@user:U`, `#admin` or `#owner` to match the role keys, and delete the roles the grant no longer has |
+| User grant removed (`user.grant.removed`, `user.grant.cascade.removed`) | Delete the same tuples |
+| Org member added or removed (`org.member.*`) | **Nothing.** These are Zitadel's managers; their rights stay in Zitadel |
+| Machine user added (`user.machine.added`) | Write the principal link with kind `agent` or `service_account` (D1628) |
+| User deactivated or removed | Mark the principal disabled (D1624), then delete all tuples for `user:U` (read by user, delete in batches of at most 100, OpenFGA's default `max-tuples-per-write`, checked 2026-10-21) |
+| Machine user deactivated (an agent) | Mark the principal disabled, so every request with its token is refused (D1624), then delete all tuples for `agent:A`; Loams' token endpoint refuses new tokens for it at once (§10) |
 | Org removed | Delete the `org:O` subtree **through Loams' control plane** (which knows the resources), not blindly |
 
 **Rules (draft):**
 
 - Writes are **idempotent**: a duplicate write and a missing delete both count as success.
-- The sync side has an **outbox and retry**. Webhook ordering is not guaranteed, so events are applied by `(aggregate, sequence)` where available, and out-of-order arrivals are tolerated.
-- A **nightly reconciliation** lists Zitadel's org members, `Read`s the tuples from OpenFGA, diffs them, repairs the drift and emits a drift metric. Drift > 0 is an alert.
+- The sync side has an **outbox and retry**. Events are applied by `(aggregate, sequence)` (sequences are per aggregate: the user grant, the user), and an event older than the last one applied for the same key is skipped.
+- A **nightly reconciliation** lists the user grants on the Loams project in each org, `Read`s the tuples from OpenFGA, diffs them, repairs the drift and emits a drift metric. Drift > 0 is an alert.
 - **Deprovisioning is the dangerous direction.** The target is that a removal shows in OpenFGA within seconds, with reconciliation as the backstop.
 
 **Where it runs** (Q1213):
 
 - A single install runs it as a task of the `loams` binary's control-plane role (the draft's "sidecar"), with its state in the metastore.
 - In Kubernetes it is a separate Deployment.
-- It verifies `ZITADEL-Signature` before reading a body.
+- It verifies `ZITADEL-Signature` on a wake-up call before acting on it.
 
 ### 8.2 Resource tuples (control plane)
 
@@ -373,7 +391,7 @@ So there is one trait, and §64's "two `Authorizer` traits, two principal vocabu
 The auth layer (`crates/loams/src/auth/layer.rs`, extended) runs four steps:
 
 1. It **verifies the JWT** against the issuer's JWKS, cached. Zitadel's ID tokens, and its access tokens when the application is set to JWT access tokens, carry the client and project ids in `aud`, and the org in `urn:zitadel:iam:user:resourceowner:id` (checked 2026-10-21). Sessions, `lk_` keys and Loams tokens resolve as they do today.
-2. It **extracts `sub` and the org** into a `Subject`.
+2. It **extracts `sub` and the org** into a `Subject`, takes the kind from the principal link (D1628), and **refuses a disabled principal** even when its token's signature is valid (D1624).
 3. It finds **the route's declared `can_*` relation and object**, either from a per-RPC table generated from proto options or from an annotation on REST routes.
 4. It calls **`Check`**. **Deny by default:** a route with no declaration answers `PERMISSION_DENIED`, and a CI test fails if any served RPC lacks one.
 
@@ -381,13 +399,13 @@ The auth layer (`crates/loams/src/auth/layer.rs`, extended) runs four steps:
 
 **List endpoints:**
 
-- Use `ListObjects` where result sets are small. OpenFGA's defaults stop it at 1000 results or 3 s (`listObjects-max-results`, `listObjects-deadline`, checked 2026-10-21 at v1.22.0).
+- Use `ListObjects` where result sets are small, and on OpenFGA's SQLite datastore (D1626). OpenFGA's defaults stop it at 1000 results or 3 s (`listObjects-max-results`, `listObjects-deadline`, checked 2026-10-21 at v1.22.0).
 - For large listings, filter in the database by org and then `BatchCheck`. A `BatchCheck` takes up to 50 checks per request by default (`max-checks-per-batch-check`), each with a `correlation_id` of up to 36 alphanumeric or hyphen characters. OpenFGA advises parallel `Check` calls below about 10.
 - Alternatively, keep a materialised access index.
 
 **Caching and consistency:**
 
-- Allow decisions get a TTL of a few seconds.
+- Allow decisions get a TTL of 5 s or less, in **one** cache (D1625, approved 2026-10-21): Loams' `CachedAuthorizer`, with OpenFGA's check-query and iterator caches off. An install may use OpenFGA's cache instead (`--check-query-cache-ttl` ≤ 5 s, `CachedAuthorizer` off), never both.
 - Destructive and admin calls and credential issuance bypass the cache and ask with `HIGHER_CONSISTENCY`. So does the principal's first read after its own write (D66).
 
 ### 9.4 Which surfaces enforce
@@ -409,7 +427,7 @@ The auth layer (`crates/loams/src/auth/layer.rs`, extended) runs four steps:
 - **Agents in sandboxes never hold a Zitadel key** (D1618). agentd's rotating token file (D1453, `LOAMS_TOKEN_FILE`, 15 minutes) and the supervisor's vending (§19 §5.2 flow 3) issue **Loams tokens** whose `sub` is the agent's machine-user id. Biscuit stays inside the runtime (D188). The Jailer PDP (§61, D1163) still decides what a sandboxed command may do. OpenFGA decides what the agent may reach.
 - **MCP clients acting for a user** (Claude Code, Codex) use §19 §5.2 flow 2, user delegation with `act`. The token's subject is the user, its actor is the agent, and it never exceeds either one's rights.
 - **Every agent action carries `(agent_id, owner_id, session_id)`** in the audit record.
-- **Revocation** deletes the agent's tuples in OpenFGA (fast) and disables the machine user in Zitadel (authoritative). Loams' token endpoint stops vending for a disabled agent at once, through the principal store's change feed (§19 §5.4).
+- **Revocation** deletes the agent's tuples in OpenFGA (fast) and disables the machine user in Zitadel (authoritative). Loams' token endpoint stops vending for a disabled agent at once, through the principal store's change feed (§19 §5.4). **The auth layer also refuses the disabled agent's tokens that are already issued** (D1624, approved 2026-10-21): Zitadel's JWTs stay valid until `exp`, so the principal store's status is checked on every request. IA0 measured about 1 s from deactivation in Zitadel to denial.
 - **Marketplace agents** (§73) are listings. When installed, each install's agent becomes one machine user in the installing org, with no grants until someone grants them.
 
 ## 11. Audit (D1616; draft §10)
@@ -441,7 +459,7 @@ Two compose profiles turn the services on:
 | Profile | Adds | Storage |
 |---|---|---|
 | `identity` | Zitadel (API) and Zitadel Login, the Next.js login app shipped as its own component (checked 2026-10-21), plus `identity-sync` in the `loams` process | `zitadel-db`, its own Postgres 14–18 container (Zitadel supports PostgreSQL 14 to 18, checked 2026-10-21) |
-| `authz` | OpenFGA | SQLite in a volume. OpenFGA v1.22 supports `memory`, `postgres`, `mysql` and `sqlite` datastores (checked 2026-10-21) |
+| `authz` | OpenFGA | SQLite in a volume, **for a single-user install only** (D1626, approved 2026-10-21); a multi-user install, or one that lists with `BatchCheck`, uses Postgres. OpenFGA v1.22 supports `memory`, `postgres`, `mysql` and `sqlite` datastores (checked 2026-10-21) |
 
 **Why not OpenFGA on by default with SQLite?** It is one more container and one more hop on every request for a single user who owns everything. Q1208 records this.
 
@@ -484,6 +502,8 @@ An install that trusts `auth.loams.dev` sets `LOAMS_OIDC_ISSUER=https://auth.loa
 - Backups and point-in-time recovery cover both Postgres databases. The OpenFGA model is also stored in Git and applied by CI.
 - **Pin versions.** Images are pinned by digest at a release at least 14 days old. On 2026-10-21 that means Zitadel v4.19.4 (2026-10-01), not v4.19.5 (2026-10-15), and OpenFGA v1.22.0 (2026-10-06).
 - Test OpenFGA model upgrades against a snapshot of real tuples.
+- **Zitadel's outbound deny list** (`HTTPClient.DenyList`) is narrowed only enough for the `identity-sync` webhook's network; `0.0.0.0/8` and `169.254.169.254/32` stay blocked (D1627, approved 2026-10-21).
+- OpenFGA runs with its check caches off when `CachedAuthorizer` is on (D1625).
 
 ## 13. The Authentik cutover (D1600, approved)
 
