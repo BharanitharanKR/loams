@@ -1202,6 +1202,7 @@ Living document. Newest decisions at the bottom of each table.
 | D1320 | 2026-10-20 | **Phases ER0–ER3**; plan [ER1](../plans/2026-10-20-er1-edge-reach.md) (stub) specifies ER0 task by task ([§69](69-edge-reach.md) §12) | ER0 needs only GW1a | Approved (owner, 2026-10-21) |
 | D1321 | 2026-10-20 | **Not built:** a Tailscale client inside Workers or Vercel, a hosted relay, IP allow-lists as the only control, and durable, Live admin, Git and Flight SQL over the edge in ER0 ([§69](69-edge-reach.md) §2) | Scope | Approved (owner, 2026-10-21) |
 | D1322 | 2026-10-20 | **The allow-list is data:** method option `(loams.options.v1.edge) = true` (field 50003) plus the REST, Qdrant and Elasticsearch route tables, generated into `api/edge-allowlist.txt`, embedded by the gateway and the engine, checked fresh in CI; new methods are off the edge by default ([§69](69-edge-reach.md) §6.3) | One source for both enforcement points | Approved (owner, 2026-10-21) |
+| D1323 | 2026-10-21 | **Public positioning:** Ostrium Labs is a research lab building open-source Loams; the services offering is removed from loams.dev and GitHub (amends D1119's services wording) | D1119 | Approved (owner, 2026-10-21) |
 
 ## Open questions
 
