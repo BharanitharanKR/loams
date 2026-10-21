@@ -170,6 +170,8 @@ landlock = "0.4.7"
 # (`gix-commitgraph` reads an `Mmap`; GT1 Task 20). Already linked by `gix-pack`.
 memmap2 = "0.9.11"
 moka = { version = "0.12", features = ["future"] }
+# The OpenFGA gRPC client (Apache-2.0), loams-authz only (design 76, D1610).
+openfga-client = { version = "=0.6.1", default-features = false }
 object_store = { version = "0.14", features = ["aws", "gcp", "azure", "fs"] }
 once_cell = "1"
 openraft = { version = "=0.10.0-alpha.34", default-features = false, features = ["serde", "tokio-rt"] }
@@ -296,6 +298,7 @@ uuid = { version = "1", features = ["v4"] }
 xxhash-rust = { version = "0.8", features = ["xxh3"] }
 zeroize = "=1.9.1"
 zstd = "0.14"
+loams-authz = { path = "crates/loams-authz", version = "0.1.1" }
 loams-cache = { path = "crates/loams-cache", version = "0.1.1" }
 loams-collection = { path = "crates/loams-collection", version = "0.1.1" }
 loams-cloudevents = { path = "crates/loams-cloudevents", version = "0.1.1" }
