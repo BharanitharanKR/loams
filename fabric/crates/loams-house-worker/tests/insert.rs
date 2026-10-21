@@ -1389,3 +1389,113 @@ async fn lake_tables_take_langfuse_ddl() {
     )
     .await;
 }
+
+/// HE1 R9.13: plain views (Langfuse's `analytics_*`) and `Distributed` tables.
+/// A view is a catalog entry the read path expands over the read views of what
+/// it names, nesting included; a `Distributed` table reads and writes its local
+/// table; a view takes no rows.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn catalog_views_and_distributed_tables() {
+    let house = lakehouse("catalog-views").await;
+    let addr = house.addr();
+    ok(addr, "CREATE TABLE s (p String, id String, v Float64, ver UInt64, is_deleted UInt8) ENGINE = ReplacingMergeTree(ver, is_deleted) ORDER BY (p, id)").await;
+    ok(
+        addr,
+        "INSERT INTO s VALUES ('a', '1', 1, 1, 0), ('a', '1', 5, 2, 0), ('b', '2', 2, 1, 0)",
+    )
+    .await;
+    ok(
+        addr,
+        "CREATE VIEW agg AS SELECT p, uniq(id) AS n, max(v) AS top FROM s GROUP BY p",
+    )
+    .await;
+    assert_eq!(
+        ok(addr, "SELECT * FROM agg ORDER BY p FORMAT TSV").await,
+        "a\t1\t5\nb\t1\t2\n"
+    );
+    // A view over a view, and FINAL inside a view.
+    ok(
+        addr,
+        "CREATE VIEW latest AS SELECT p, sum(v) AS total FROM s FINAL GROUP BY p",
+    )
+    .await;
+    ok(
+        addr,
+        "CREATE VIEW nested AS SELECT p, top FROM agg WHERE p = 'a'",
+    )
+    .await;
+    assert_eq!(ok(addr, "SELECT * FROM nested FORMAT TSV").await, "a\t5\n");
+    assert_eq!(
+        ok(addr, "SELECT total FROM latest WHERE p = 'a' FORMAT TSV").await,
+        "5\n"
+    );
+    assert_eq!(
+        ok(addr, "DESCRIBE agg FORMAT TSVRaw").await.lines().count(),
+        3
+    );
+    assert!(
+        ok(addr, "SHOW CREATE TABLE agg FORMAT TSVRaw")
+            .await
+            .starts_with("CREATE VIEW agg AS SELECT")
+    );
+    assert_eq!(
+        ok(
+            addr,
+            "SELECT engine FROM system.tables WHERE name = 'agg' FORMAT TSV"
+        )
+        .await,
+        "View\n"
+    );
+    refused(addr, "CREATE VIEW agg AS SELECT 1", "57").await;
+    ok(addr, "CREATE VIEW IF NOT EXISTS agg AS SELECT 1").await;
+    ok(
+        addr,
+        "CREATE OR REPLACE VIEW agg AS SELECT p, count() AS n FROM s GROUP BY p",
+    )
+    .await;
+    // One INSERT's two versions of ('a', '1') are merged as ClickHouse merges an
+    // inserted block (`optimize_on_insert`, R9.4): the 26.9.2.8 oracle answers 1.
+    assert_eq!(
+        ok(addr, "SELECT n FROM agg WHERE p = 'a' FORMAT TSV").await,
+        "1\n"
+    );
+    refused(addr, "INSERT INTO agg VALUES ('x', 1)", "48").await;
+    refused(addr, "ALTER TABLE agg ADD COLUMN z UInt8", "48").await;
+    // A view's text is held to the deny list when it is read.
+    refused(
+        addr,
+        "CREATE VIEW bad AS SELECT * FROM file('/etc/passwd')",
+        "344",
+    )
+    .await;
+
+    // Distributed: topology syntax accepted, the local table read and written.
+    ok(addr, "CREATE TABLE s_dist ON CLUSTER default AS s ENGINE = Distributed(default, currentDatabase(), s, rand())").await;
+    ok(addr, "INSERT INTO s_dist VALUES ('c', '3', 7, 1, 0)").await;
+    // Three stored rows: the first INSERT's two versions merged (R9.4), and one.
+    assert_eq!(ok(addr, "SELECT count() FROM s FORMAT TSV").await, "3\n");
+    assert_eq!(
+        ok(addr, "SELECT count() FROM s_dist FINAL FORMAT TSV").await,
+        "3\n"
+    );
+    assert_eq!(
+        ok(
+            addr,
+            "SELECT engine FROM system.tables WHERE name = 's_dist' FORMAT TSV"
+        )
+        .await,
+        "Distributed\n"
+    );
+    refused(
+        addr,
+        "CREATE TABLE d2 AS s ENGINE = Distributed(default, default, nope)",
+        "60",
+    )
+    .await;
+
+    ok(addr, "DROP VIEW nested").await;
+    ok(addr, "DROP TABLE latest").await;
+    refused(addr, "DROP VIEW nested", "60").await;
+    ok(addr, "DROP VIEW IF EXISTS nested").await;
+    ok(addr, "DROP TABLE s_dist").await;
+}

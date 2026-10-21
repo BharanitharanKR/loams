@@ -88,6 +88,7 @@ pub fn required(stmt: &Stmt) -> &'static [crate::identity::Scope] {
         | Stmt::Drop(_)
         | Stmt::Truncate { .. }
         | Stmt::Alter { .. }
+        | Stmt::CreateView { .. }
         | Stmt::Rename { .. }
         | Stmt::Undrop { .. } => &[Ddl],
     }
@@ -228,6 +229,7 @@ pub fn catalog_kind(stmt: &Stmt) -> Option<Kind> {
         Stmt::Undrop { .. } => Kind::Undrop,
         Stmt::Rename { .. } => Kind::Rename,
         Stmt::Alter { .. } => Kind::Alter,
+        Stmt::CreateView { .. } => Kind::CreateView,
         Stmt::Describe { .. } => Kind::Describe,
         Stmt::Show { .. } => Kind::Show,
         Stmt::Exists { .. } => Kind::Exists,

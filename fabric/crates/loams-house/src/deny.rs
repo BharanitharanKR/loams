@@ -196,7 +196,6 @@ pub const DENIED_ENGINES: &[&str] = &[
     "Kafka",
     "RabbitMQ",
     "NATS",
-    "Distributed",
     "Dictionary",
     "Iceberg",
     "IcebergS3",
@@ -247,6 +246,9 @@ pub const DENIED_ENGINES: &[&str] = &[
 /// family) is the front's, mapped onto Iceberg (HS1 Task 10); views are the
 /// front's own (HS1 Tasks 11 and 17); the rest keep their data in the session.
 pub const ALLOWED_ENGINES: &[&str] = &[
+    // HE1 R9.13: topology syntax, accepted (a Distributed table reads and writes
+    // its local table; §75 §7.3).
+    "Distributed",
     "Memory",
     "Null",
     "View",

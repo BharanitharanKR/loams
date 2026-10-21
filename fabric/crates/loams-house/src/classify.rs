@@ -66,6 +66,8 @@ pub enum Stmt {
     CreatePipe { name: String, engine: String },
     /// `CREATE MATERIALIZED VIEW` (HS1 Task 17).
     CreateMaterializedView { name: String },
+    /// `CREATE [OR REPLACE] VIEW` (HE1 R9.13): a catalog view.
+    CreateView { name: String },
     /// `DROP …`.
     Drop(DropStmt),
     /// `TRUNCATE TABLE`.
@@ -190,6 +192,7 @@ impl Stmt {
             Self::CreateTemporaryTable { .. } => "CreateTemporaryTable",
             Self::CreatePipe { .. } => "CreatePipe",
             Self::CreateMaterializedView { .. } => "CreateMaterializedView",
+            Self::CreateView { .. } => "CreateView",
             Self::Drop(_) => "Drop",
             Self::Truncate { .. } => "Truncate",
             Self::Alter { .. } => "Alter",
@@ -749,6 +752,19 @@ pub fn classify(sql: &str) -> Result<Classified, HouseError> {
         }
         // sqlparser reads no `ENGINE` or `POPULATE` in a materialized view; the
         // House's own reader does (HS1 Task 16).
+        // HE1 R9.13: a plain view is the catalog's, read by the House's reader.
+        "CREATE"
+            if second == "VIEW"
+                || (second == "OR"
+                    && toks
+                        .iter()
+                        .filter(|(_, t)| t.word)
+                        .nth(3)
+                        .is_some_and(|(w, _)| w == "VIEW")) =>
+        {
+            let view = crate::ddl::parse_create_view(&text)?;
+            return known(Stmt::CreateView { name: view.name }, None);
+        }
         "CREATE" if second == "MATERIALIZED" => {
             let view = crate::ddl::parse_create_mv(&text)?;
             return known(Stmt::CreateMaterializedView { name: view.name }, None);
@@ -849,8 +865,8 @@ pub fn classify(sql: &str) -> Result<Classified, HouseError> {
         Statement::CreateView(view) if view.materialized => Stmt::CreateMaterializedView {
             name: name(&view.name),
         },
-        Statement::CreateView(_) => Stmt::Unsupported {
-            kind: "CREATE VIEW".to_string(),
+        Statement::CreateView(_) => Stmt::CreateView {
+            name: crate::ddl::parse_create_view(&text)?.name,
         },
         Statement::Drop {
             object_type,

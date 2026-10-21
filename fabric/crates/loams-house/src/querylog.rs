@@ -196,7 +196,8 @@ pub fn clickhouse_kind(kind: &str) -> &'static str {
         | "CreateTableAs"
         | "CreateTemporaryTable"
         | "CreatePipe"
-        | "CreateMaterializedView" => "Create",
+        | "CreateMaterializedView"
+        | "CreateView" => "Create",
         "Drop" | "Truncate" => "Drop",
         "Alter" => "Alter",
         "Rename" => "Rename",
