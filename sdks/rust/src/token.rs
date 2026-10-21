@@ -306,7 +306,7 @@ pub trait FormPoster: Send + Sync + std::fmt::Debug {
     async fn post_form(&self, url: &str, form: &str) -> Result<String, String>;
 }
 
-/// The RFC 8693 token exchange a person signed in through Authentik needs
+/// The RFC 8693 token exchange a person signed in at the IdP needs
 /// (design §44 §7.4, D608; §19 §5.2).
 ///
 /// The instance's `/oauth/token` protocol endpoint takes the identity token

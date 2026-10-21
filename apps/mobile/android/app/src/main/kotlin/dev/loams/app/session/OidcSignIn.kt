@@ -30,15 +30,15 @@ import net.openid.appauth.connectivity.ConnectionBuilder
 import net.openid.appauth.connectivity.DefaultConnectionBuilder
 
 /**
- * Browser sign-in at the instance's Authentik (design §37 §7.2.2 path 2): OIDC authorization code
+ * Browser sign-in at the instance's OIDC issuer (design §37 §7.2.2 path 2): OIDC authorization code
  * with PKCE S256 in Custom Tabs through AppAuth, then an RFC 8693 exchange at the Loams gateway.
- * Against the mock, "Authentik" is the mock's fake one, which redirects straight back.
+ * Against the mock, the issuer is the mock's fake one, which redirects straight back.
  */
-class AuthentikSignIn(context: Context) {
+class OidcSignIn(context: Context) {
     /** What the second half needs after the browser returns. */
     data class Pending(val issuer: String, val instanceId: String, val jkt: String, val request: AuthorizationRequest)
 
-    // Debug builds may reach the mock's fake Authentik over http on loopback only.
+    // Debug builds may reach the mock's fake OIDC issuer over http on loopback only.
     private val connections: ConnectionBuilder = if (BuildConfig.ALLOW_INSECURE_LOOPBACK) LoopbackConnectionBuilder else DefaultConnectionBuilder.INSTANCE
     private val service = AuthorizationService(
         context,
@@ -48,7 +48,7 @@ class AuthentikSignIn(context: Context) {
             .build(),
     )
 
-    /** Looks up the instance's Authentik and builds the browser intent. */
+    /** Looks up the instance's OIDC issuer and builds the browser intent. */
     suspend fun start(issuer: String): Pair<Pending, Intent> {
         val base = issuer.trim().trimEnd('/')
         val uri = URI(base)
@@ -72,7 +72,7 @@ class AuthentikSignIn(context: Context) {
         return Pending(base, info.instanceId, jkt, request) to service.getAuthorizationRequestIntent(request)
     }
 
-    /** Finishes the code exchange at Authentik and returns its access token. */
+    /** Finishes the code exchange at the identity provider and returns its access token. */
     suspend fun complete(result: Intent): String {
         val response = AuthorizationResponse.fromIntent(result)
             ?: throw AuthorizationException.fromIntent(result) ?: IllegalStateException("sign-in was cancelled")
