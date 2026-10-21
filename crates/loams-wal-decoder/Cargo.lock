@@ -3505,7 +3505,7 @@ dependencies = [
 [[package]]
 name = "tikv-client"
 version = "0.4.0"
-source = "git+https://github.com/ostrium-labs/client-rust?rev=8126c49a15c0af7f1e7427f3b9020ae8d2c280cf#8126c49a15c0af7f1e7427f3b9020ae8d2c280cf"
+source = "git+https://github.com/ostrium-labs/client-rust?rev=41b3588f9b63d505dd61e15bf3d26abfd53689a2#41b3588f9b63d505dd61e15bf3d26abfd53689a2"
 dependencies = [
  "async-recursion",
  "async-trait",
