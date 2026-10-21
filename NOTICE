@@ -192,11 +192,3 @@ marked in their headers are derived from T3 Code at the commit recorded in
 each package's provenance.json; the MIT licence text is in each package's
 LICENSE.t3code and must accompany distributions of those files.
 
-authentik (https://github.com/goauthentik/authentik), MIT License for the
-parts outside its enterprise directories, Copyright Jens Langhammer and the
-authentik contributors. The recovery flow in
-deploy/authentik/blueprints/loams-02-flows.yaml (imported with the former
-loams-platform repository on 2026-10-19) is based on authentik's
-recovery-with-MFA example blueprint. The deploy files run authentik's
-open-source edition from its published images; no authentik source is
-vendored.

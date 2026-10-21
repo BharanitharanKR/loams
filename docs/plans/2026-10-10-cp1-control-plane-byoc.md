@@ -51,7 +51,7 @@ The exit is "Exit criteria for production" at the end of this plan, with the tas
 - [§41](../design/41-multitenant-byoc-control-plane.md) (all), D540–D559, Q540–Q559 in the [decision log](../design/13-decision-log.md).
 - [§43](../design/43-private-networking.md) §5 (tags and join keys), §6 (BYOC over a tailnet), §8.1–§8.3 (policy, keys, audit), §11 (tooling).
 - [§18](../design/18-metastore-backends-and-router.md) §5.2 (the directory), §6 (orgs, `ControlStore`, quotas), §8 (BYOC modes, D64), §9 (erasure, D68, D69).
-- [§38](../design/38-knative-authentik-gitops.md) §3.3 (per-namespace tenancy, D443), §4 (Authentik), §6 (waves).
+- [§38](../design/38-knative-authentik-gitops.md) §3.3 (per-namespace tenancy, D443), §4 (identity, superseded by [§76](../design/76-identity-and-authorization.md) D1600: Zitadel), §6 (waves).
 - The product designs, for their tenancy hooks:
   - [§46](../design/46-loams-postgres-production.md) §6, §14, §15 (D703, D707, D717);
   - [§47](../design/47-loams-sql-production.md) §16, §20 (D734, D736, D738);
@@ -373,13 +373,13 @@ pub trait AuditSink: Send + Sync + 'static { fn emit(&self, e: AuditEvent); } //
 
 Steps:
 1. Answer each of the following and record the answer, with file paths, as a ruling:
-   - What is merged of MT1 (OpenFGA model, Authentik verifier), MT2 (`loams-operator`), MT3 (waves, Argo CD version, `deploy/helm/loams-stack`) and RN1 Task 3 (`InvocationObserver`)? Each absent item keeps this plan's fallback (Task 3's `RbacAuthorizer`, CP-R10, Task 28's standalone charts).
+   - What is merged of MT1 (OpenFGA model, IdP verifier; now IA1, Zitadel), MT2 (`loams-operator`), MT3 (waves, Argo CD version, `deploy/helm/loams-stack`) and RN1 Task 3 (`InvocationObserver`)? Each absent item keeps this plan's fallback (Task 3's `RbacAuthorizer`, CP-R10, Task 28's standalone charts).
    - `pg-control`'s store as of `dev`: is `crates/loams-pg-control/src/store` still generic over `Record`, and which PG2 branches touch it? Confirm PG2 Task 7 has merged and agree the Task 2 window with PG2's coordinator (CPQ2: extract, no copy).
    - The namespace identity of each product as built: `pg-control` keys (`x/<ns>/`, `Q/n/<ns>/`), `loams-sqldb` (`m/<ns u64 BE>`), `loams-graph` (the metastore namespace), `loams-house` (`Bind`'s namespace id), Live (`loams_live_system` `apps/<id>`). List every place a bare name is used as a key.
    - The free key prefixes in `loams-meta-tikv/src/keys.rs` and `loams-pg-control/src/model.rs`; confirm `cp/` and `e/cp/` are free.
    - Argo CD at the pinned version: `ApplicationSet` progressive sync (`RollingSync`) status (Q559, **(verify)**); commit signature verification (GPG, SSH, gitsign) and `signatureKeys` (Q556).
    - `gix` push against Forgejo versus a `git` subprocess: measure a commit and push of 1,000 files on the build machine. Pick one for `GitRemote`.
-   - Forgejo's API for opening pull requests, branch protection and OIDC with Authentik.
+   - Forgejo's API for opening pull requests, branch protection and OIDC with Zitadel (§76 D1600).
    - OpenFGA modular models (`fga.mod`), and the minimum OpenFGA version (**(verify)**).
    - A maintained YAML serializer (`serde_yaml` is archived), at least 14 days old, or the canonical emitter alone.
    - `ed25519-dalek`, `rcgen` and `biscuit-auth` (Q542) releases at least 14 days old, and `cargo deny`.
@@ -1114,7 +1114,7 @@ Commit `docs(control): CP1 exit gate, runbooks and status`.
 
 - **Types.** `ControlStore`, `Directory`, `LimitsSource`, `Authorizer`, `TenancyParticipant`, `ErasureReceipt`, `NetProvider` and the naming grammar are defined once, in the shared contracts.
 - **Review Focus.** Items 1–10 each name owning tests (Tasks 2, 5–12, 13, 15, 16, 18, 19, 21, 22, 24, 25, 27).
-- **Not in this plan:** NET1 Tasks 0, 1, 3, 4 and 7 (the policy as code, roster sync, templates, guide, Headscale e2e); MT1's OpenFGA server and Authentik wiring; MT2's Knative tenancy; `loams-meta-remote` (BYOC-managed-meta, Q551); anything in `loams-platform`.
+- **Not in this plan:** NET1 Tasks 0, 1, 3, 4 and 7 (the policy as code, roster sync, templates, guide, Headscale e2e); MT1's OpenFGA server and IdP wiring (now IA1: Zitadel and OpenFGA); MT2's Knative tenancy; `loams-meta-remote` (BYOC-managed-meta, Q551); anything in `loams-platform`.
 
 ## Open questions
 

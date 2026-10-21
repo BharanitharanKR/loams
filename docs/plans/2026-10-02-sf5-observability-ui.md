@@ -15,7 +15,7 @@
 - **`web/plugins/{glitchtip,openpanel,langfuse,openobserve}`**: each `first-party`, with panels (GlitchTip, OpenPanel), embed panes (all four), and cards.
 - **`crates/loams-collab`**: GlitchTip and OpenPanel adapters (`GlitchTipApi`, `OpenPanelApi`) and the read-only `LangfuseReader` and `OpenObserveReader`, all behind the broker (SF1).
 - **`crates/loams-agent-glitchtip`**, **`crates/loams-agent-analytics`**: A2A agents like SF2's.
-- **`deploy/factory/otel/`**: the collector config (two pipelines plus Loams’ own OTLP exporter), the Langfuse and OpenObserve profiles (images pinned, S3 on RustFS, Postgres, ClickHouse and Redis for Langfuse), and the Authentik outpost config for forward-auth apps.
+- **`deploy/factory/otel/`**: the collector config (two pipelines plus Loams’ own OTLP exporter), the Langfuse and OpenObserve profiles (images pinned, S3 on RustFS, Postgres, ClickHouse and Redis for Langfuse), and the forward-auth proxy config for forward-auth apps (an OIDC proxy in front of the IdP, Zitadel since §76 D1600).
 - **`crates/loams-factory`** gains the real `Observer` implementation (SF4 Task 7).
 - **Desktop (the zeron fork; path per §37's amendment):** `loams-ui-collab` gains GlitchTip error panels and OpenPanel tiles (GPUI), and the trace and log buttons open Langfuse and OpenObserve through SF1's `AppOpener` (system browser, or the sidebar browser where it ships); no embedding of either app is attempted natively.
 - **`loams-mobile`**: error list and detail, analytics tiles, the run view's trace timeline.
@@ -34,7 +34,7 @@ Same as SF1 and SF2, plus:
 - **Unmodified apps** (D-SF-17). **Langfuse's `ee/` features are never switched on**; CI greps the Langfuse environment for enterprise licence keys. **OpenObserve runs the open-source edition only.**
 - **Model content goes to Langfuse only.** The OpenObserve and Loams pipelines delete `gen_ai.prompt`, `gen_ai.completion` and `gen_ai.*.content`; a test proves it with a content canary.
 - **No per-person identity is claimed for OpenPanel or OpenObserve** (forward-auth, one service user). The UI says so on the pane's toolbar tooltip.
-- **Both credential-bearing hops use TLS** (HTTPS or the cluster's mTLS): the collector to Langfuse and OpenObserve, and the Authentik outpost to OpenPanel and OpenObserve. A test fails on an `http://` endpoint outside loopback.
+- **Both credential-bearing hops use TLS** (HTTPS or the cluster's mTLS): the collector to Langfuse and OpenObserve, and the forward-auth proxy to OpenPanel and OpenObserve. A test fails on an `http://` endpoint outside loopback.
 - **Readers are read-only** and use their own, minimally scoped credentials from the broker; they cannot ingest or delete.
 - **Collector config is declarative and tested** with `otelcol validate` and golden pipelines; no hand-edited file in a chart.
 - **The build machine.** One cargo build at a time; the Langfuse profile (ClickHouse, Redis, Postgres, S3) and OpenObserve run one at a time in tests; stop and report if `/home` has under 8 GB free.
@@ -45,7 +45,7 @@ Same as SF1 and SF2, plus:
 | # | Ruling | Why | Cost if wrong |
 |---|---|---|---|
 | 1 | **Langfuse is an optional profile**, off in `loams dev`; the console run view works from Loams’ own OTLP store and the factory's events without it | Langfuse 4 needs ClickHouse, Redis, Postgres and S3 | Without Langfuse there is no LLM trace viewer; the run view still shows step summaries |
-| 2 | **OpenObserve is an optional profile**, behind forward-auth | AGPL, no SSO or RBAC in the open edition | Users reach all signals or none; per-person audit is Authentik's |
+| 2 | **OpenObserve is an optional profile**, behind forward-auth | AGPL, no SSO or RBAC in the open edition | Users reach all signals or none; per-person audit is the IdP's |
 | 3 | **Traces open in Langfuse by trace id through its UI path; sessions by `contextId`** | One stable link per run and per chat thread | Langfuse's UI paths may change; `embed_url` templates are in the app registry, not code |
 | 4 | **OTLP to Langfuse over HTTP with its project key pair as basic auth; to OpenObserve over HTTP with basic auth** | Both document it | gRPC is not used; HTTP is enough at this volume |
 | 5 | **The collector is the only exporter.** Services never export to Langfuse or OpenObserve directly | One place to filter content and rotate credentials | A collector outage drops spans after the batch queue; the queue is persistent (file storage) |
@@ -67,7 +67,7 @@ crates/loams-agent-glitchtip/src/*   crates/loams-agent-analytics/src/*
 crates/loams-factory/src/observer.rs
 deploy/factory/otel/{collector.yaml,collector.golden/*.yaml,README.md}
 deploy/factory/profiles/{langfuse.compose.yml,openobserve.compose.yml,openpanel.compose.yml,glitchtip.compose.yml}  deploy/factory/chart/templates/{langfuse,openobserve,openpanel,glitchtip}.yaml
-deploy/factory/edge/{authentik-outpost.yaml,routes.phase2.*}   deploy/factory/images.lock   LICENSES.md
+deploy/factory/edge/{forward-auth.yaml,routes.phase2.*}   deploy/factory/images.lock   LICENSES.md
 web/plugins/{glitchtip,openpanel,langfuse,openobserve}/{package.json,src/*,test/*}
 ios/Sources/{Errors,Analytics}/*   android/app/src/main/java/.../{errors,analytics}/*
 docs/design/39-…  docs/plans/README.md  CHANGELOG.md
@@ -83,7 +83,7 @@ docs/design/39-…  docs/plans/README.md  CHANGELOG.md
 - **GlitchTip:** the `/api/0` endpoints for organisations, projects, issues, events and releases; token model; alert webhook payload (project, issue id, level, count, release, URL); OIDC settings; the framing headers.
 - **OpenPanel:** the read API (project, client id and secret, events, funnels, metrics endpoints), rate limits, whether alert or webhook features exist; the framing headers; the share-dashboard feature; the exact forward-auth need.
 - **OTel collector:** which components are needed (`otlp` receiver, `filter`, `transform`, `batch`, `otlphttp`, `file_storage`), the `ocb` build, size, and the `gen_ai.*` attribute names in the semantic conventions as of the pinned `aisix` and OpenTelemetry versions (**verify**; they have changed between releases).
-- **Authentik outpost:** the proxy provider settings for forward-auth in single-application mode, and how to pass a trusted header or inject basic auth.
+- **Forward-auth proxy:** the proxy settings for forward-auth in single-application mode, and how to pass a trusted header or inject basic auth.
 - The licence line and source URL of each image for `LICENSES.md`.
 
 **Commit:** `docs: reconcile SF5 and pin the phase-2 apps`.
@@ -102,11 +102,11 @@ docs/design/39-…  docs/plans/README.md  CHANGELOG.md
 
 ### Task 2: OpenPanel adapter, plugin and the `analytics` agent; the forward-auth edge
 
-**Files:** `crates/loams-collab/src/apps/openpanel.rs`, `crates/loams-agent-analytics/**`, `web/plugins/openpanel/**`, `deploy/factory/edge/{authentik-outpost.yaml,routes.phase2.*}`.
+**Files:** `crates/loams-collab/src/apps/openpanel.rs`, `crates/loams-agent-analytics/**`, `web/plugins/openpanel/**`, `deploy/factory/edge/{forward-auth.yaml,routes.phase2.*}`.
 
-**Produces:** `OpenPanelApi` (`events`, `metrics`, `funnel`); `MetricSeries` messages; `@loams/plugin-openpanel` (tiles on the console overview and in a page: events, active users, a configured funnel; `embed.pane#openpanel` behind forward-auth; `bot.card#analytics.metric`); the **`analytics` agent**: `metrics.query`, `funnel.get` (read) and `anomaly.check` (read; compares a series to a baseline: the median and the median absolute deviation of the same weekday-hour over the previous 4 weeks (estimate), flagging above `3 × MAD`; thresholds are policy). A scheduled durable function (every 10 min, per watched metric in the policy) calls `anomaly.check` and publishes a `Signal` to the factory (SF4 Task 3). The Authentik outpost routes `analytics.` and `obs.`: authenticate against Authentik, require group `factory-viewers`, inject basic auth for the app's service user.
+**Produces:** `OpenPanelApi` (`events`, `metrics`, `funnel`); `MetricSeries` messages; `@loams/plugin-openpanel` (tiles on the console overview and in a page: events, active users, a configured funnel; `embed.pane#openpanel` behind forward-auth; `bot.card#analytics.metric`); the **`analytics` agent**: `metrics.query`, `funnel.get` (read) and `anomaly.check` (read; compares a series to a baseline: the median and the median absolute deviation of the same weekday-hour over the previous 4 weeks (estimate), flagging above `3 × MAD`; thresholds are policy). A scheduled durable function (every 10 min, per watched metric in the policy) calls `anomaly.check` and publishes a `Signal` to the factory (SF4 Task 3). The forward-auth proxy routes `analytics.` and `obs.`: authenticate against the IdP, require group `factory-viewers`, inject basic auth for the app's service user.
 
-**Tests:** `metrics_from_fixtures`; `anomaly_flags_3_mad`; `anomaly_ignores_seasonal_pattern` (a recorded weekly cycle); `scheduler_publishes_signal_once_per_window`; `forward_auth_denies_without_group` (harness: Authentik container, a user outside the group gets 403); `forward_auth_injects_service_credentials_server_side` (the browser never sees them); `framing_allowed_only_for_console_origin`; `plugin_states_no_per_user_identity` (the tooltip text); `agent_has_no_write_skills` (the card).
+**Tests:** `metrics_from_fixtures`; `anomaly_flags_3_mad`; `anomaly_ignores_seasonal_pattern` (a recorded weekly cycle); `scheduler_publishes_signal_once_per_window`; `forward_auth_denies_without_group` (harness: an IdP container, a user outside the group gets 403); `forward_auth_injects_service_credentials_server_side` (the browser never sees them); `framing_allowed_only_for_console_origin`; `plugin_states_no_per_user_identity` (the tooltip text); `agent_has_no_write_skills` (the card).
 
 **Desktop:** GPUI metric tiles and the metric card; tests: `tiles_render_from_series`, `tiles_state_no_per_user_identity`, `open_in_openpanel_uses_opener`.
 

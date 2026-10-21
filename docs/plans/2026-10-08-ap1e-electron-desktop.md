@@ -484,7 +484,7 @@ Commit `feat(plugins): software factory home and panels`.
 **Files:** `apps/desktop-electron/src/main/factory/views.electron.ts`, `src/main/factory/view-policy.ts`, `test/view-policy.test.ts`
 
 **Interfaces:**
-- `viewNavigation(appOrigin: string, to: string): 'allow' | 'external' | 'deny'`: allow the same origin; also allow the IdP origin when the app config lists `ssoOrigin` (an optional config field, used for an Authentik URL); `external` for any other http(s); `deny` for anything else.
+- `viewNavigation(appOrigin: string, to: string): 'allow' | 'external' | 'deny'`: allow the same origin; also allow the IdP origin when the app config lists `ssoOrigin` (an optional config field, used for the IdP's URL, such as Zitadel's); `external` for any other http(s); `deny` for anything else.
 - `openApp(app)`:
   - opens one `BrowserWindow` per app (reused if open; title "<Label> — Loams Desktop");
   - `webPreferences: { partition: 'persist:factory-'+app, sandbox: true, contextIsolation: true, nodeIntegration: false, preload: undefined }`;

@@ -19,7 +19,7 @@ Rules that hold across every plane:
   protocols.
 - **Billing-grade metering stays out of this repository** (open core, §41). Limits,
   caps and backpressure belong here; usage billing does not.
-- **Identity** is Authentik behind `auth.loams.dev`, an issuer of the operator's own choosing, or the
+- **Identity** is Zitadel behind `auth.loams.dev` (§76 D1600), an issuer of the operator's own choosing, or the
   tailnet's own identity (see §1).
 
 ## 1. Access: people and operators

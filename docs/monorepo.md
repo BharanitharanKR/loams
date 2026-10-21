@@ -74,7 +74,7 @@ Vite+ 1.0.0/Vitest 5.0.1 stay scoped to plugins, while the console retains ordin
 
 The shipping executable and internal packages are Loams Desktop-branded. Product presentation, application identity, service/data names, installer paths, and bot executable discovery are coordinated. Unused inherited mobile/client/text components and upstream release/deployment automation were omitted. Original repository files were not changed.
 
-Self-updating and upstream feed installation are disabled. Optional remote WorkOS/edge protocols remain internal feature dependencies, with an invalid default endpoint; they are **not** automatically replaced by Loams Connect/Authentik. No upstream cloud deployment is activated. Browser, terminals, sessions, dictation, and provider adapters remain because they are wired into functioning desktop features, not merely branding.
+Self-updating and upstream feed installation are disabled. Optional remote WorkOS/edge protocols remain internal feature dependencies, with an invalid default endpoint; they are **not** automatically replaced by Loams Connect or Loams' identity provider (Zitadel, design 76). No upstream cloud deployment is activated. Browser, terminals, sessions, dictation, and provider adapters remain because they are wired into functioning desktop features, not merely branding.
 
 Pinned GPUI git dependency URLs, required copyright attribution, synthetic protocol fixtures, and documented persisted-format compatibility tokens may still mention the upstream project. Removing those indiscriminately would break functionality or attribution. See [desktop policy](../apps/desktop/native/LOAMS.md) and [validation](../apps/desktop/VALIDATION.md).
 
