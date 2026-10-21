@@ -320,18 +320,21 @@ services:
   # uid (10001). The fabric image has no /var/lib/loams-house-link, so Docker
   # creates a fresh volume owned by root and the House could not write its
   # certificate there (Podman hands it to the container's user itself). No
-  # network, every capability dropped but CHOWN.
+  # network, every capability dropped but CHOWN and FOWNER.
   house-init:
     image: ${HOUSE_IMAGE:-${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-fabric:${LOAMS_VERSION:-0.1.1}}
     restart: "no"
     user: "0:0"
     network_mode: none
+    # CHOWN for the owner, FOWNER for the mode whoever owns it now.
     cap_drop: [ALL]
-    cap_add: [CHOWN]
+    cap_add: [CHOWN, FOWNER]
     security_opt: [no-new-privileges:true]
     entrypoint: ["/bin/sh", "-c"]
     command:
-      - chmod 0750 /var/lib/loams-house-link && chown 10001:10001 /var/lib/loams-house-link
+      - >
+        set -eu; dir=/var/lib/loams-house-link; ls -ldn "$$dir";
+        chown 10001:10001 "$$dir"; chmod 0750 "$$dir"; ls -ldn "$$dir"
     volumes:
       - house-link:/var/lib/loams-house-link
 

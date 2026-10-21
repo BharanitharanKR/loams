@@ -110,6 +110,12 @@ cleanup() {
   for s in $(compose config --services 2>/dev/null); do
     compose logs --no-color "$s" > "$work/log-$s.txt" 2>&1 || true
   done
+  # And every container of the project, including those of services the
+  # restored release does not define (the candidate's new ones).
+  for c in $("$engine" ps -a --filter "label=com.docker.compose.project=${COMPOSE_PROJECT_NAME:-loams}" \
+               --format '{{.Names}}' 2>/dev/null); do
+    "$engine" logs "$c" > "$work/container-$c.txt" 2>&1 || true
+  done
   compose down -v --remove-orphans > /dev/null 2>&1 || true
 }
 trap cleanup EXIT
