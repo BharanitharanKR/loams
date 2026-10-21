@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, test first. Where this plan gives exact names, paths, flags or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end of this file.
 >
-> **Status: Approved** (2026-10-21; a stub: BY0 is specified, later phases at milestone level). Tracks BY and AB, designs [§70](../design/70-byoc-clouds.md) (D1350–D1384, Q1080–Q1094) and [§71](../design/71-app-byoc-free-tiers.md) (D1390–D1410, Q1095–Q1109). The owner set the direction on 2026-10-21 ("fully embrace BYOC"; app BYOC on free tiers) and approved the eight Cloudflare defaults the same day (D1366–D1371, the Cloudflare part of D1354, Q1086, Q1087). The owner approved both designs with every default on 2026-10-21. This plan specifies **BY0** task by task. BY1–BY3 and AB0–AB2 are listed at milestone level and get full specifications when their gates are met.
+> **Status: Approved** (2026-10-21; a stub: BY0 is specified, later phases at milestone level). Tracks BY and AB, designs [§70](../design/70-byoc-clouds.md) (D1350–D1384, Q1080–Q1094) and [§71](../design/71-app-byoc-free-tiers.md) (D1390–D1410, Q1095–Q1109). The owner set the direction on 2026-10-21 ("fully embrace BYOC"; app BYOC on free tiers) and approved the eight Cloudflare defaults the same day (D1366–D1371, the Cloudflare part of D1354, Q1086, Q1087). The owner approved both designs with every default on 2026-10-21. **Amended 2026-10-21 (D1580–D1582):** no cloud marketplace listings (BY2 ships the chart and operator from Ostrium's own artefacts only); the support bundle stays a local file with no Ostrium support address; support access is a maintainer debug session, community and best effort. This plan specifies **BY0** task by task. BY1–BY3 and AB0–AB2 are listed at milestone level and get full specifications when their gates are met.
 
 **Goal (BY0):** a customer installs Loams into their own AWS account, Google Cloud project or Azure subscription on one VM, following one guide, with the bucket, its customer-managed key and the install's secrets in that account and **no static cloud keys on the host**; a customer deploys the single-node Cloudflare profile into their own Cloudflare account with one button; a Vercel user knows exactly what runs on Vercel and what runs elsewhere. Nothing is reachable from the internet, and the AWS row is tested nightly in the owner's credit account within about $30 a month.
 
@@ -207,12 +207,12 @@ Tests: `docs-snippets` check (the existing docs lint, if any; otherwise `tests/b
 
 Commit: `docs/guides/byoc: AWS, Google Cloud and Azure VM guides (BY0 Task 7)`.
 
-### Task 8 — `loams support bundle` (D1376)
+### Task 8 — `loams support bundle` (D1376, D1581)
 
 Files:
 - `crates/loams-support/` (new, `publish = false`): `pub fn bundle(stack: &StackDir, out: &Path, opts: &BundleOptions) -> Result<Manifest>` using `loams_upgrade`'s `StackDir` and compose helpers. Contents per §70 §9.7: `versions.json`, `info.json` (`/v1/info`), `health.json`, `compose-ps.json`, `logs/<service>.log` (last 2,000 lines, through the audit redactor), `env.redacted` (values of keys matching `*KEY*`, `*SECRET*`, `*TOKEN*`, `*PASSWORD*`, `TS_AUTHKEY`, `LOAMS_SETUP_TOKEN` replaced by `<redacted>`), `secrets.names` (file names only), `probe.json` if a bucket is configured, `manifest.json` (every file and its SHA-256).
 - `crates/loams/src/main.rs`: `loams support bundle [--stack-dir D] [-o FILE] [--list]`; `--list` prints the manifest without writing.
-- `docs/guides/byoc/index.md`: "Sending a support bundle" (review it, then email support@ostriumlabs.org).
+- `docs/guides/byoc/index.md`: "Sharing a support bundle": the bundle is a local file and the command sends nothing; review it with `--list`, then, if you choose, attach it to a GitHub issue on `ostrium-labs/loams` or share it on the Loams Discord (https://discord.gg/eK6NanHQq). No Ostrium support address (D1581).
 
 Tests (`crates/loams-support/tests/`):
 - `bundle_redacts_planted_secrets`: a fixture stack directory with planted values in `.env`, `secrets/` and a log line; the bundle contains none of them (byte search over every file).
@@ -347,9 +347,9 @@ Gate: BY0; PR #973 merged. **8–10 engineer-weeks** (estimate).
 - The Vercel connectable-account integration (D1373).
 - The Google Cloud and Azure nightly rows, once their accounts exist.
 
-## BY2 — Kubernetes and marketplaces (milestone level)
+## BY2 — Kubernetes (milestone level)
 
-Gate: OP1's Core level. **8–12 engineer-weeks after OP1** (estimate). The chart's `values-{eks,gke,aks}.yaml`; `{aws-eks,gcp-gke,azure-aks}` modules; the matrix's Kubernetes row with LOC; the AWS container listing (free and support plans), the Google Cloud Kubernetes app and VM product, the Azure Container offer; managed metastores as D58's backends ship (D1355).
+Gate: OP1's Core level. **8–12 engineer-weeks after OP1** (estimate). The chart's `values-{eks,gke,aks}.yaml`; `{aws-eks,gcp-gke,azure-aks}` modules; the matrix's Kubernetes row with LOC; the Helm chart and operator published with the release; managed metastores as D58's backends ship (D1355). No cloud marketplace listings (D1580).
 
 ## BY3 — Cloudflare-native (milestone level)
 
