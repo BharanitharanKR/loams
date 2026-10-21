@@ -124,3 +124,17 @@ clickhouse_min = "25.12"
 driver = "signoz/driver.sh"
 suite = ""
 runtime_minutes = 15
+
+[[app]]
+# HyperDX (ClickStack): ClickHouse is its only telemetry store; queries over
+# HTTP, the collector's schema and inserts over the native protocol.
+name = "hyperdx"
+image = "docker.io/hyperdx/hyperdx:2.40.0@sha256:2fcba6813f5c935f6a3e04123ffe62ab3baf0c1cd53f279b1ec9e300343ddf60"
+images = ["docker.io/clickhouse/clickstack-otel-collector:2.40.0@sha256:0e7dc29f8f6074afd106b96d53e5b98f1150e8882d926a20c03c6f680bd929ec"]
+licence = "MIT"
+clickhouse_protocol = "http"
+migrations_protocol = "native"
+clickhouse_min = "26.8"
+driver = "hyperdx/driver.sh"
+suite = ""
+runtime_minutes = 10
