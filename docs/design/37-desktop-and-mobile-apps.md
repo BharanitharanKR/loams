@@ -1,5 +1,7 @@
 # 37 — Loams Desktop and Mobile Apps: a cordis Console, a Tauri Shell, Native Phones
 
+> **Superseded in part 2026-10-21 by [§76](76-identity-and-authorization.md) D1600** (approved, owner: full cutover from Authentik to Zitadel, with no migration path, no compatibility period and no dual running, because there are no users). Desktop and phone sign-in (D431, D486) use the same OIDC flows (code + PKCE, system browser, loopback redirect) against Zitadel; `SIGN_IN_KIND_AUTHENTIK*` are deprecated in favour of IdP-neutral values (D1619, proposed).
+
 > **Updated 2026-10-19 ([D1119](13-decision-log.md)): Loams has no open core.** Where this document places metering, billing, the hosted control plane, commercial APIs or other components in the private `loams-platform` repository, or calls something private for open-core reasons, read that as superseded: everything is Apache-2.0, and the metering, billing and control-plane code is moving into the open repo now (design §63, Loams Meter). Ostrium Labs offers services (infrastructure efficiency, SLAs, support), not a paid edition. The rest of the design is unchanged.
 
 Status: **Approved** (owner defaults, 2026-10-02: "do suggested for all") · 2026-10-01, revised 2026-10-02 (the Authentik and D220 rulings). The direction is the owner's, given on 2026-10-01 in two messages:

@@ -1,0 +1,311 @@
+# IA1 — Identity and Authorization: Zitadel and OpenFGA — Implementation Plan
+
+> **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, test first. Where this plan gives exact names, paths, flags or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end of this file.
+>
+> **Status: Proposed** (stub, 2026-10-21). Track IA, design [§76](../design/76-identity-and-authorization.md) (D1600–D1621, Q1200–Q1214).
+>
+> **What is approved:** only **D1600**, the owner's ruling of 2026-10-21 for a full cutover from Authentik to Zitadel, with no migration, no compatibility period and no dual running. So **IA1 Task 1 (the Authentik removal) is approved in substance**, and the rest of this plan waits for §76's approval.
+>
+> **Coverage:** this plan specifies **IA0** (the owner's Phase 0, the spike) and **IA1 Task 1** task by task. IA1's other tasks and IA2–IA6 are outlined at milestone level and get full task specifications when §76 is approved and IA0 has reported.
+>
+> **Supersedes** [MT1](2026-10-02-mt1-authentik-identity.md) (D1600).
+
+**Goal (IA0):** prove, on one laptop, that a person signed in at Zitadel can be allowed or denied by OpenFGA through a small Rust service, and check every fact §76 marks **(verify)** before IA1 builds on it.
+
+Exit, from §76 §15:
+
+- end-to-end allow and deny work;
+- a spike report (`docs/plans/ia0-spike.md`) with the measured footprint, the pins and the answers to §76's (verify) items.
+
+**Architecture** (§76 §4, §12.1):
+
+- **`conformance/identity/compose.yaml`**: the IA0 stack on loopback:
+  - Zitadel (API) and Zitadel Login, pinned by digest;
+  - `zitadel-db` (Postgres 17);
+  - OpenFGA with the SQLite datastore;
+  - a bootstrap job that creates one org, one human user, one machine user (an agent) and one OIDC application.
+- **`deploy/openfga/core.fga`, `deploy/openfga/fga.mod`, `deploy/openfga/tests/*.fga.yaml`**: model v1 (§76 §6) and its model tests, run with the OpenFGA CLI (`fga model test`).
+- **A spike service** (branch `ia0-spike`, **not merged**): an Axum app with one protected route per `can_*` relation. It verifies Zitadel JWTs with `openidconnect` 4 and `jsonwebtoken` 11 and calls OpenFGA with `openfga-client` 0.6.1. Only its report is merged.
+
+**Tech stack:**
+
+- **Rust:** 1.97, edition 2024, workspace lints. `axum`, `openidconnect` 4, `jsonwebtoken` 11, `openfga-client` 0.6.1 (Apache-2.0), `tokio`, `reqwest`, `serde`.
+- **Docker Compose v2.** Images are pinned by digest at a release at least 14 days old. On 2026-10-21 that is Zitadel v4.19.4 (2026-10-01) and OpenFGA v1.22.0 (2026-10-06); Task 0 re-checks.
+- **OpenFGA CLI** (`openfga/cli`, Apache-2.0) for `fga model test` and `fga model write`.
+
+**Spec:**
+
+- [§76](../design/76-identity-and-authorization.md), all of it.
+- [§19](../design/19-console-identity-and-agents.md) §4–§6: principals, tokens and sign-in.
+- [§18](../design/18-metastore-backends-and-router.md) §7: D66 and D67.
+- `deploy/openfga/graph.fga`.
+- `crates/loams/src/auth/`: what is built.
+
+## Global Constraints
+
+- **Worktrees and branches.** Work in `~/Documents/Ostriumlabs/loams-wt/ia0-<task>`, with one branch and one PR per task into `dev`. CodeRabbit reviews; merge on green. Commit with `git commit -s`.
+- **Light Rust builds.** Build only the crate in hand (`cargo build -p <crate>`), never `--workspace` locally. Build output goes to the shared target set in `~/Documents/.cargo/config.toml`. Never set `CARGO_TARGET_DIR`, and never build in `/tmp`. Stop compose stacks while building.
+- **Licences (§76 §14):**
+  - Zitadel is AGPL-3.0-only: **run its official images unmodified**. Never copy, vendor or link Zitadel code, and never commit a patched image. A Zitadel bug goes upstream as an issue or PR.
+  - The Zitadel and OpenFGA charts are Apache-2.0 and are referenced, not vendored.
+  - Every new crate passes `cargo deny`.
+- **No dependency enters `loams`'s default build in IA0.** The spike service stays on its branch.
+- **Secrets.** Bootstrap passwords, keys and client secrets are generated at `up` time into a git-ignored `.env`. None is committed.
+- **GitHub-hosted runners only.** The compose smoke runs nightly and on PRs that touch `conformance/identity/` or `deploy/openfga/`.
+
+## Review Focus
+
+1. **A check allows something the model does not grant.** Expected: never. Tests:
+   - `deny_by_default_without_tuple`;
+   - `agent_does_not_inherit_owner` (an agent whose owner is a project admin, with no grant of its own, is denied);
+   - `agent_cannot_write_grants` (`billing_admin`, `meter_admin` and `operator` refuse an `agent` or `service_account` subject at model-write time).
+2. **A tuple links two orgs.** Expected: never. Test: `no_cross_org_tuples` (a scan over a seeded store).
+3. **A Zitadel token from the wrong audience or issuer is accepted.** Expected: rejected. Tests: `rejects_wrong_aud` and `rejects_wrong_iss` in the spike.
+4. **A secret lands in Git.** Expected: never. Test: a CI check that `conformance/identity/.env` is ignored, plus a `gitleaks` pass on the PR.
+
+## IA0 — The spike (Tasks 0–6)
+
+### Task 0 — Rulings
+
+Check each item and record the answers in "Rulings made during execution":
+
+- **Pins.**
+  - The Zitadel server image and the Zitadel Login image at the newest release at least 14 days old, with their digests.
+  - The OpenFGA image and digest.
+  - The Postgres image used by Zitadel's own compose example.
+- **§76's (verify) items:**
+  1. Actions v2 delivery: ordering, retries and redelivery for event executions, and the event names for org member added or removed, user deactivated or removed, and machine user deactivated.
+  2. The `aud` value an engine should require for Zitadel access tokens (project id or client id), and how to make access tokens JWTs.
+  3. OpenFGA modular models (`fga.mod`, schema 1.2) at v1.22: their status and CLI support.
+  4. The licence of `smartive/zitadel-rust` (read its `LICENSE` file).
+  5. Lakekeeper's setting for its OpenFGA store name (for D1604).
+  6. Clerk and WorkOS as generic OIDC IdPs in Zitadel. Read the docs only; Q1201's default does not need it.
+- **What is built:** whether `auth::authorizer`, `graph_auth.rs`, `loams-graph/src/authz.rs` and `loams-pg-control/src/authz.rs` changed since 2026-10-21, and whether CP1 Task 3 has started (`crates/loams-tenancy`, `deploy/openfga/core.fga`).
+
+Files: this plan. Tests: none. Gate: the rulings are recorded.
+
+### Task 1 — The IA0 compose stack
+
+**What to write:**
+
+- `conformance/identity/compose.yaml`, with services:
+  - `zitadel` (API, `start-from-init`, masterkey from `.env`);
+  - `zitadel-login`;
+  - `zitadel-db`;
+  - `openfga` (`--datastore-engine sqlite`, a named volume, `migrate` first);
+  - `bootstrap`.
+- `conformance/identity/bootstrap.sh`, which uses Zitadel's API with the first instance's machine-user key. It creates:
+  - org `acme`;
+  - human user `alice`;
+  - machine user `agent-1`, with a private-key JWT key written to `.secrets/`;
+  - an OIDC application `loams-console` (code + PKCE, JWT access tokens);
+  - and writes `.env.ia0` with the issuer, the client id and the project id.
+- `conformance/identity/README.md`.
+
+Everything listens on `127.0.0.1` only.
+
+**Footprint:** measure idle memory and CPU of each container after 5 minutes (`docker stats --no-stream`) and record them for the report.
+
+**Tests:** `conformance/identity/smoke.sh` (bring up, wait for health, run the bootstrap, assert that `/.well-known/openid-configuration` and OpenFGA's `/healthz` answer, bring down) in a CI job `identity-smoke`.
+
+Commit: `conformance: the IA0 Zitadel and OpenFGA compose stack (IA0 Task 1)`.
+
+### Task 2 — Model v1 and its tests
+
+**What to write:**
+
+- `deploy/openfga/core.fga`: the draft's model with §76 §6.2's changes (`service_account`, `platform`, `team.org`, `billing_admin` and `billing_viewer`, `meter_admin`, `database.can_connect`, and the `agent_session` condition).
+- `deploy/openfga/fga.mod`, listing `core.fga` and `graph.fga`.
+- `graph.fga` moves from `namespace` to `environment` (Q1207's default). Its `reader`, `writer` and `admin` take `viewer`, `editor` and `deployer from environment`. Its header comment drops "Until MT1's OpenFGA authorizer lands" in favour of §76.
+- `deploy/openfga/tests/core.fga.yaml`, with OpenFGA CLI model tests:
+  - a seeded org, project, environment, deployment and database;
+  - checks for every `can_*` relation and each role;
+  - `agent_does_not_inherit_owner`;
+  - `deny_by_default_without_tuple`;
+  - `agent_session` allowed before and denied after `expires`.
+- A second file with two orgs, for `no_cross_org_tuples` (a script over `fga tuple read` output).
+
+**Tests:** a CI job `openfga-model` runs `fga model validate` and `fga model test`. A script test asserts that writing `billing_admin@agent:x` fails with a type-restriction error (`agent_cannot_write_grants`).
+
+Commit: `openfga: model v1 (core.fga) with tests; graph.fga hangs off environment (IA0 Task 2)`.
+
+### Task 3 — JWT → Check, end to end (spike, not merged)
+
+On branch `ia0-spike`, write `spikes/ia0-authz/`, a standalone Cargo package outside the workspace, built with `--manifest-path`. It is an Axum service with:
+
+- **JWT verification:** JWKS from the issuer's discovery document, cached for 5 minutes. It checks `iss`, `aud` (Task 0's value), `exp` with 60 s of skew, and the algorithm (RS256).
+- **A `Subject`** from `sub` and `urn:zitadel:iam:user:resourceowner:id`.
+- **Routes:**
+  - `GET /deployments/:id` → `can_view`;
+  - `POST /deployments/:id/restart` → `can_operate`;
+  - `DELETE /deployments/:id` → `can_destroy`, with `HIGHER_CONSISTENCY`;
+  - `GET /deployments` → `ListObjects`.
+- **Deny by default:** an unknown route answers 403.
+
+**Run:**
+
+1. Alice, with no tuple, is denied.
+2. Alice is granted `viewer` on the project and is allowed `can_view` but denied `can_destroy`.
+3. `agent-1` (private-key JWT → token) is denied until granted `editor` on the environment.
+4. Deleting the grant takes effect on the next `HIGHER_CONSISTENCY` check.
+
+**Tests:** `rejects_wrong_aud`, `rejects_wrong_iss`, `allow_after_grant`, `deny_after_revoke` (integration tests against Task 1's stack).
+
+Not merged. Task 6's report links the branch and quotes the results.
+
+### Task 4 — Actions v2 into a tuple (spike, not merged)
+
+On the same branch, add a `POST /zitadel/events` endpoint that verifies `ZITADEL-Signature` (the HMAC over the body and timestamp, with the target's signing key) and maps "org member added" and "org member removed" to OpenFGA writes and deletes.
+
+Register a `Webhook` target and an event execution for those events. Then measure, over 100 add/remove pairs:
+
+- the time from the Zitadel call to the tuple being present;
+- out-of-order arrivals;
+- missed events, compared against a management-API listing afterwards. This is the reconciler's diff in miniature.
+
+**Tests:** `rejects_bad_signature`, `idempotent_duplicate_add`, `missing_delete_is_success`.
+
+Not merged. Task 6 reports the numbers.
+
+### Task 5 — Latency baseline
+
+With Task 3's service, measure `Check` latency against OpenFGA on loopback:
+
+- p50, p95 and p99 over 10 000 checks;
+- for `MINIMIZE_LATENCY` and `HIGHER_CONSISTENCY`;
+- single `Check` against a 50-item `BatchCheck`.
+
+Use `oha` or a small Rust driver. The numbers seed Q1214's target.
+
+Files: the report only.
+
+### Task 6 — The IA0 report
+
+Write `docs/plans/ia0-spike.md`:
+
+- the pins and digests;
+- the footprint table;
+- the answers to Task 0's (verify) items;
+- the allow and deny results;
+- the Actions v2 delivery numbers;
+- the latency table;
+- a recommendation for each open question §76 lists for IA1–IA2 (Q1205–Q1211, Q1214);
+- anything in §76 that the spike contradicts.
+
+Update §76's (verify) markers that the report settles. Update this plan's "Rulings made during execution".
+
+Gate: the owner reads the report before IA2 starts.
+
+Commit: `docs: the IA0 identity and authorization spike report (IA0 Task 6)`.
+
+## IA1 — Console login and the Authentik cutover
+
+### Task 1 — Remove Authentik (D1600, approved; a removal, not a migration)
+
+**No user, group, session or blueprint is exported or migrated.** Nothing reads Authentik's database, and no compatibility switch is added. This task can run before IA0 finishes, because its only dependency on Zitadel is the replacement bundle at `deploy/release/auth/`, which reuses Task 1 of IA0's compose stack.
+
+**Remove, or replace with the Zitadel equivalent** (the inventory is §76 §13; re-run `git grep -il authentik` first and add anything new to this list):
+
+1. **The hosted auth bundle.** Delete Authentik's compose, Caddyfile, blueprints (`loams-console.yaml`, `loams-confidential-client.yaml`), `setup.sh`, README and `.env.example` from `deploy/release/auth/`. In their place, add a Zitadel bundle in the same directory:
+   - `compose.yaml` with Zitadel, Zitadel Login, Postgres and Caddy;
+   - `setup.sh`, which creates the `loams-console`, `loams-desktop`, `loams-mobile` and `headscale` applications and the GitHub and Google IdPs through Zitadel's API;
+   - `README.md`, keeping the "why" section rewritten for D1600;
+   - `.env.example`.
+2. **The Authentik deploy kit.** Delete `deploy/authentik/` entirely:
+   - `README.md`;
+   - `blueprints/loams-01-groups.yaml` through `loams-05-headscale.yaml`;
+   - `branding/`;
+   - `compose/` (`docker-compose.yml`, `docker-compose.cli-tunnel.yml`, `.env.example`, `backup/backup.sh`, `backup/restore.sh`);
+   - `helm/` (`values.yaml`, `postgres-cnpg.yaml`, `cloudflared.yaml`, `backup-cronjob.yaml`, `namespace.yaml`, `secrets.example.yaml`);
+   - `kustomization.yaml`.
+3. **The tailnet.**
+   - Delete `deploy/tailnet/authentik-tailnet/`.
+   - Delete `deploy/tailnet/tailscale/k8s/tailscale-authentik.yaml` and its entry in `deploy/tailnet/tailscale/kustomization.yaml`.
+   - Point Headscale's OIDC (`deploy/tailnet/headscale/config/config.yaml`, `compose/.env.example`, `compose/docker-compose.yml`, `k8s/secrets.example.yaml`) at Zitadel.
+   - Rename `tag:authentik` to `tag:zitadel` in `deploy/tailnet/policy/policy.hujson` and `deploy/tailnet/tailscale/k8s/secrets.example.yaml`, and run the policy tests.
+   - Update `deploy/tailnet/README.md`.
+4. **Release config.** Rewrite `deploy/release/.env.example`'s `oidc` comments for Zitadel. The audience is Task 0's value.
+5. **Protos and generated code** (D1619, Q1209):
+   - In `proto/loams/instance/v1/instance.proto`, add `SIGN_IN_KIND_OIDC = 5` and `SIGN_IN_KIND_OIDC_DEVICE_CODE = 6`, mark `SIGN_IN_KIND_AUTHENTIK` and `SIGN_IN_KIND_AUTHENTIK_DEVICE_CODE` `[deprecated = true]`, and rewrite the comments without Authentik.
+   - In `proto/loams/auth/v1/auth.proto`, add `OIDC_PROVIDER_KIND_ZITADEL = 8`.
+   - Update `api/console/openapi.json`.
+   - Copy the change into `apps/mobile/proto/loams/instance/v1/instance.proto` and `crates/loams-agentd-link/proto/loams/instance/v1/instance.proto`.
+   - Regenerate every generated tree (`web/packages/proto`, `sdks/*/gen` and descriptors, `sdks/python/src/loams/*_pb2*`, `sdks/csharp/src/Loams/Gen`, `apps/mobile/*` generated code, `crates/loams-agentd-link/src/gen`, `apps/mobile/mock/gen`) and the recorded fixture `sdks/fixtures/recorded/apps-mock/mock_status_get_instance.json`.
+   - `buf breaking` must pass with no exception.
+6. **Code:**
+   - `plugins/core/host/src/auth/*`: `AuthentikOidcClient` becomes `OidcClient`'s default implementation, with IdP-neutral comments, and `tests/auth.spec.ts` and `tests/fake-idp.ts` follow. `plugins/core/store/src/service.ts` follows too.
+   - `crates/loams-apps-mock` (`oauth.rs`, `seed.rs`, `store.rs`, `services/mod.rs`, `main.rs`, `Cargo.toml`, `tests/mock.rs`): it serves `SIGN_IN_KIND_OIDC`.
+   - `crates/loams-agentd-link/src/auth/{mod.rs,oidc.rs}` and `src/lib.rs`, `crates/loams-agentd-connect/src/oidc.rs`, `crates/loams-agentd-proto/src/brand.rs`, and `crates/loams-sidebar-browser/src/{lib.rs,navigate.rs,session.rs}` with its README.
+   - `crates/loams/src/auth/oidc.rs`: comments only.
+   - `crates/loams-live/tests/identity.rs`.
+   - Android: `AuthentikSignIn.kt` becomes `OidcSignIn.kt`, and `SessionManager.kt`, `WelcomeScreen.kt`, `WelcomeViewModel.kt`, `Pkce.kt`, `PairingPayload.kt` and `TokenEndpoint.kt` follow.
+   - iOS: `WebAuth.swift`, `AppModel.swift`, `WelcomeView.swift`, `TokenEndpoint.swift`.
+   - The Go mobile mock (`internal/server/*.go`).
+   - `web/plugins/org/src/settings.tsx`: add a Zitadel button and drop Authentik from the SAML hint.
+   - SDK token-source docs: `sdks/go/token_source.go`, `sdks/rust/src/token.rs`, `sdks/python/src/loams/runtime/token_source.py`, `sdks/swift/Sources/Loams/TokenSource.swift`, `sdks/typescript/packages/client/src/runtime/token-source.ts`.
+7. **Docs:**
+   - Replace `docs/platform/deploy/authentik.md` with `zitadel.md`.
+   - Update `docs/platform/deploy/headscale.md`, `tailnet.md`, `docs/platform/README.md`, `docs/platform/design/04-hosted-loams-cloud-on-cloudflare.md`, `05-hosted-software-factory-and-marketplace.md` and `docs/platform/design/README.md`.
+   - Update `docs/guides/studio/remote-agentd.md`, `docs/monorepo.md`, `docs/open-issues-analysis.md`, `plugins/docs/auth-setup.md`, `plugins/docs/README.md`, `plugins/README.md`, `plugins/SECURITY.md`, `platform/README.md`, `apps/mobile/README.md`, `apps/mobile/docs/*.md`, `apps/mobile/mock/README.md` and `README.md`.
+8. **Plans.**
+   - Mark MT1 superseded by IA1.
+   - Point at IA1 from MT3's Authentik waves and `Application` (MT3 Task 1), NET1's Authentik roster sync, and the Authentik mentions in CP1, MT4, SF1–SF5, SD1, JB1, GT1, CL1, API2, DD1, SQ1, PG2, LV1, HS1, AP1e and SO2.
+9. **Notices.** Remove the Authentik entry from `NOTICE` (it attributed the deleted recovery-flow blueprint). Add a `CHANGELOG.md` entry; past entries stay as they are.
+10. **Other repositories and operations** (owner or a separate PR):
+    - `ostrium-labs/loams-site` changes its Auth.js provider to Zitadel.
+    - After Zitadel answers at `auth.loams.dev`, the owner deletes the Authentik containers, their Postgres volume and backups, and the Cloudflare Tunnel route for Authentik's admin paths.
+    - **No period with both running.**
+
+**Gate:** `git grep -il authentik` matches only:
+
+- `docs/design/13-decision-log.md`;
+- the designs that record history: §19, §22, §37, §38, §39, §41, §43, §63, §64, §74, §76;
+- superseded plans;
+- `CHANGELOG.md`;
+- the deprecated proto values and their generated code.
+
+A CI script `scripts/docs/check-no-authentik.sh` enforces this allowlist.
+
+**Tests:**
+
+- The console's auth tests against the fake IdP, renamed.
+- `loams-apps-mock`'s tests with `SIGN_IN_KIND_OIDC`.
+- The mobile unit tests.
+- `buf lint` and `buf breaking`.
+- The tailnet policy tests.
+- `scripts/docs/check-no-authentik.sh`.
+
+Commit: one PR per numbered group where it keeps PRs small (for example, 1–4 deploy, 5 protos, 6 code, 7–9 docs). Each commit is titled `identity: remove Authentik (<group>) (IA1 Task 1, D1600)`.
+
+### IA1 outline (after §76 is approved)
+
+- **Zitadel at `auth.loams.dev`** (D1615): the deploy runbook; backups; the admin console on the tailnet only (D596's rule); GitHub and Google IdPs; branding through settings (Q1211).
+- **The `identity` compose profile** (D1613): Zitadel, Zitadel Login and `zitadel-db`, off by default.
+- **Sign-in at Zitadel:**
+  - console: code + PKCE;
+  - `loams login`: device code;
+  - desktop: loopback redirect;
+  - phone: system browser.
+- **The engine's `oidc` mode:** matches members by `(iss, sub)` instead of email (D1605), and reads the org from `urn:zitadel:iam:user:resourceowner:id`.
+- **Exit:** login, MFA, passkey and org switch work.
+
+## IA2–IA6 outline
+
+- **IA2, the authorization core:**
+  - `crates/loams-authz` with the trait and the `OpenFga`, `Cached`, `Builtin`, `AllowAll` and `Recording` implementations (D1610);
+  - per-RPC `can_*` declarations and deny by default (D1611);
+  - `BuiltinAuthorizer` replacing `OrgRoleAuthorizer`, with the differential test `builtin_matches_openfga`;
+  - the `authz` profile; the Helm values for OpenFGA;
+  - Lakekeeper on its own store (D1604);
+  - `graph.fga`, `loams-graph` and `loams-pg-control` moved onto `loams-authz`.
+  - Exit: every control-plane and engine route sits behind a `can_*` check.
+- **IA3, the sync bridge:** `identity-sync` (D1608), the resource-tuple outbox with `pending` → `active` (D1609), the nightly reconciler and its drift metric. Exit: a member removal shows within seconds, and drift is 0.
+- **IA4, agents** (D1607, D1618): agents as machine users; the `agent` and `service_account` types in use; `agent_session` grants; agentd and supervisor vending with machine-user `sub`; revocation tests. Exit: an agent touches only granted environments, and revocation is tested.
+- **IA5, audit and hardening** (D1616): the three feeds in `_audit` and the Iceberg table family; the cross-org tuple scan in CI; a load test; cache and consistency tuning. Exit: Q1214's p99 target and no cross-org tuples.
+- **IA6, optional:** a Rust-native `Authorizer` backend and/or a Rust IdP behind the same traits, only if OpenFGA or Zitadel becomes a bottleneck or a licence issue.
+
+## Rulings made during execution
+
+| # | Ruling | Task |
+|---|---|---|
+| — | (Task 0 fills this table) | — |
