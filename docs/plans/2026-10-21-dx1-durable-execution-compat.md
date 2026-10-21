@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, test first. Where this plan gives exact names, paths, branches or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end of this file.
 >
-> **Status: Stub** (2026-10-21). Track DX, design [§74](../design/74-durable-execution-compat.md) (D1500–D1539, Q1150–Q1165, **Proposed**; it amends §68's Temporal and Airflow decisions on the owner's direction of 2026-10-21). This plan fully specifies **DX0**, the baselines. They are the upstream Temporal server on Loams Postgres (compat mode), DBOS conformance, a corpus of real Temporal histories, and Airflow 3.3 with the Edge executor on Loams Postgres. DX0 writes no engine code. DX1–DX5 and the fork tasks FW0–FW10 are listed at milestone level. They get full specifications once the owner approves §74 and DX0 exits (D1534).
+> **Status: Stub** (2026-10-21). Track DX, design [§74](../design/74-durable-execution-compat.md) (D1500–D1539, Q1150–Q1165, **approved by the owner on 2026-10-21 with every default**, Q1165 open; it amends §68's Temporal and Airflow decisions). This plan fully specifies **DX0**, the baselines. They are the upstream Temporal server on Loams Postgres (compat mode), DBOS conformance, a corpus of real Temporal histories, and Airflow 3.3 with the Edge executor on Loams Postgres. DX0 writes no engine code. DX1–DX5 and the fork tasks FW0–FW10 are listed at milestone level. They get full specifications when DX0 exits (D1534).
 
 **Goal (DX0):**
 - the stock Temporal server runs on Loams Postgres 16 through the endpoint mode Task 2 picks, passes Temporal's SQL persistence tests and a soak, and is available as the compose profile `temporal` (compat mode, D1509). Postgres 17 runs as a leg whose failures are expected failures;
@@ -213,7 +213,7 @@ These tasks run in the fork, not in this repository. Each is one branch on the f
 | FW10: benchmarks and tracing | DX3 | DX3's load comparison |
 | FW4: batch request (only if DX3 measures the need) | DX3 | The relay uses it |
 
-## DX1–DX5 (milestone level; full tasks after §74's approval and DX0's exit)
+## DX1–DX5 (milestone level; full tasks after DX0's exit)
 
 | Milestone | Content (§74) | Gate |
 |---|---|---|
@@ -226,7 +226,7 @@ These tasks run in the fork, not in this repository. Each is one branch on the f
 
 ## Owner actions
 
-- Approve §74 (D1500–D1539, Q1150–Q1165), or rule on its amendments to §68 (§74 §17).
+- §74 and its defaults (D1500–D1539, Q1150–Q1164), including the amendments to §68, were approved on 2026-10-21; nothing further for the design.
 - Q1165: the design-partner terms with ResonateHQ. The fork-work list (§74 §7.4) is the engineering input.
 
 ## Rulings made during execution

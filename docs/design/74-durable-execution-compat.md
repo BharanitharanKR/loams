@@ -1,10 +1,10 @@
 # 74 — Durable Execution Compatibility: Temporal Protocol, DBOS and Apache Airflow on Resonate and Loams Postgres
 
-Status: **Proposed** · 2026-10-21. Source: the owner's draft of 2026-10-21, "Loam Durable Execution: Temporal Protocol Compat + DBOS + Apache Airflow" (rev 2), with the owner's notes: **"very important for onboarding ResonateHQ as our design partner"**, **"do all TiKV and this work in our fork"**, and **"large companies like Stripe use their internal Temporal, so Temporal compat is large for ResonateHQ cloud; same for Airflow"**. Decisions **D1500–D1539** and questions **Q1150–Q1165** are in the [decision log](13-decision-log.md). The numbers are chosen to stay clear of open work: #973 (D1340–D1343), #979 (D1350–D1410, Q1080–Q1109) and the Software Factory and Agent Marketplace designs being written now (D1420–D1479, Q1110–Q1139). Plan stub: [DX1](../plans/2026-10-21-dx1-durable-execution-compat.md), track **DX**. **This document writes no code.**
+Status: **Approved** · 2026-10-21 (written and approved the same day; the owner approved every decision and question with its default, including the amendments to §68, except Q1165, which stays the owner's). Source: the owner's draft of 2026-10-21, "Loam Durable Execution: Temporal Protocol Compat + DBOS + Apache Airflow" (rev 2), with the owner's notes: **"very important for onboarding ResonateHQ as our design partner"**, **"do all TiKV and this work in our fork"**, and **"large companies like Stripe use their internal Temporal, so Temporal compat is large for ResonateHQ cloud; same for Airflow"**. Decisions **D1500–D1539** and questions **Q1150–Q1165** are in the [decision log](13-decision-log.md). The numbers are chosen to stay clear of open work: #973 (D1340–D1343), #979 (D1350–D1410, Q1080–Q1109) and the Software Factory and Agent Marketplace designs being written now (D1420–D1479, Q1110–Q1139). Plan stub: [DX1](../plans/2026-10-21-dx1-durable-execution-compat.md), track **DX**. **This document writes no code.**
 
 **It amends [§68](68-open-protocol-compute.md)** (approved 2026-10-21). §68 ruled out a Temporal-compatible frontend and gated hosted Temporal and managed Airflow on demand. The owner now wants a Temporal-protocol frontend backed by Resonate, DBOS on Loams Postgres, and Airflow with a Resonate-backed executor. §17 names each §68 decision this changes. Every amendment is marked **owner direction, 2026-10-21**. §68's findings still hold, and this document reuses them: Temporal's SQL plugins take shared read locks that TiDB parses but ignores, and `airflow-provider-loams` lives in `ostrium-labs/loams-airflow` (Q1031, approved).
 
-Status of the rows. The owner's draft states a recommendation for several decisions. Those rows are marked **owner draft, Proposed**. Everything else is **Proposed**, and that includes how the draft is reconciled with the repository. Nothing here is Approved until the owner rules.
+Status of the rows. The owner approved every decision (D1500–D1539) and every question's default (Q1150–Q1164) on 2026-10-21, including the amendments to §68 in §17. Q1165, the design-partner terms with ResonateHQ, stays open for the owner.
 
 Builds on:
 - [§21](21-durable-execution.md) and [§14](14-durable-execution.md): Loams Durable. The Resonate server is embedded in `loams` (D138–D147). Its native TiKV store is D261 (PR #796). The light 0.1.1 compose (PR #973) keeps Durable on SQLite by default and makes TiKV opt-in.
@@ -374,7 +374,7 @@ The fork list is what Loams offers ResonateHQ:
 - the operational pieces a hosted Resonate needs: retention, indexed search, multi-instance scale, benchmarks (FW5, FW6, FW9, FW10);
 - a typed Rust client (FW3).
 
-All of it is Apache-2.0 and upstreamable, and checked by Resonate's own Lean and TLA+ spec. The **Temporal-protocol crates** stay in Loams, but they are built so that Resonate Cloud could run them against its own servers (§5.7, Q1153). That is the "Temporal compat for ResonateHQ cloud" the owner names. The commercial terms of the partnership are the owner's (Q1165).
+All of it is Apache-2.0 and upstreamable, and checked by Resonate's own Lean and TLA+ spec. The **Temporal-protocol crates** stay in Loams, but they are built so that Resonate Cloud could run them against its own servers (§5.7, Q1153). That is the "Temporal compat for ResonateHQ cloud" the owner names. The commercial terms of the partnership are the owner's and still open (Q1165).
 
 ## 8. DBOS on Loams Postgres
 
@@ -660,54 +660,54 @@ Other amendments:
 | **D147, Q40** (retention) | Answered in direction by FW5: retention with tombstones in the fork, upstreamable |
 | **§21 §11.2** (upstream PRs "0a–5") | Tracked as FW0 (0a, 0c, 1), FW3 (4) and FW5 (5) |
 
-## 18. Decisions (D1500–D1539)
+## 18. Decisions (D1500–D1539, approved by the owner on 2026-10-21)
 
 | ID | Decision | Status |
 |---|---|---|
-| D1500 | **Durable execution compatibility:** beside native Resonate, Loams adds a Temporal-protocol frontend in `loams-gateway` backed by Resonate and Loams Postgres, DBOS on Loams Postgres, and Airflow 3.3 with a Resonate-backed executor; amends D1259, D1272, D1275 and D1257 (§17) | Owner direction, 2026-10-21; Proposed |
-| D1501 | **Temporal history is the source of truth**, owned by the gateway; Resonate supplies timers, timeouts, leases, retries and wake-ups, and is rebuildable from history | Owner draft, Proposed |
-| D1502 | **History and mutable state in Loams Postgres** (`loams_temporal`, one per region), one transaction per change with a compare-and-set and a transactional outbox; session or direct endpoint; never on Loams SQL; never in Resonate's store | Owner draft, Proposed |
-| D1503 | **Deterministic promise IDs** with §5.4's grammar (`wft`, `act`, `tmr`, `to`, `start`, `af`), Loams namespace IDs, percent-encoding, a hash fallback for length, and `loams:*` tags | Owner draft, Proposed (grammar Proposed) |
-| D1504 | **Crate layout:** `crates/loams-temporal-{proto,history,statemachine,store,matching,resonate,frontend,testkit}`, pure state machines with injected I/O, served by `loams-gateway`'s `temporal` module behind feature `temporal`, as its own Deployment | Owner draft, Proposed (placement Proposed) |
-| D1505 | **Matching:** in-memory fast path on partition owners, with Resonate as the durable backstop and the sole authority for claims; partition leases in Postgres | Owner draft, Proposed |
-| D1506 | **Method set by phase** (§5.8); `GetSystemInfo` advertises only built capabilities, checked in CI; `UNIMPLEMENTED` elsewhere | Owner draft, Proposed |
-| D1507 | **Identity:** Temporal SDKs authenticate with Loams `lk_` keys or Authentik-issued OIDC tokens as bearer tokens (optional mTLS); `durable:temporal:*` actions per Temporal namespace; no Keycloak | Proposed |
-| D1508 | **Limits:** payloads opaque; Temporal's default size and count limits (verified in DX1 Task 0), lowerable per namespace | Proposed |
-| D1509 | **Compat mode:** the upstream Temporal server on Loams Postgres (16; 17 as a leg) from DX0, as the reference oracle and as the fallback until the gateway passes DX2 per SDK; managed hosting keeps Q1033's gate | Owner draft, Proposed |
-| D1510 | **Verification:** §13's layers and invariants (corpus differential, SDK replayers, porcupine, TLA+ in `spec/tla/temporal/`, deterministic simulation, performance against Temporal) | Owner draft, Proposed |
-| D1511 | **SDK order:** Go and TypeScript first, then Java and Python, then .NET, Ruby and Rust; each pinned at a release at least 14 days old | Owner draft, Proposed |
-| D1512 | **Wording:** "Loams speaks the Temporal API" or "works with the Temporal SDKs", with the matrix linked, for the gateway only; no "Temporal Cloud", no logo, no implied endorsement; product name Loams Durable (Temporal API); amends D1275 | Proposed |
-| D1513 | **Fork rule:** all Resonate server, store, protocol, client and spec work, TiKV included, is done in `ostrium-labs/resonate` as upstreamable branches; the monorepo keeps the embedding, gateway crates, conformance and the worker agent; the provider stays in `ostrium-labs/loams-airflow` | Owner direction, 2026-10-21; Proposed (split Proposed) |
-| D1514 | **Fork branch model:** `main` mirrors upstream; one `feat/` or `fix/` branch per upstream PR; integration branches `loams/<upstream-version>` with `CARRIES.md`; pin bumps in their own PR; fork CI on GitHub-hosted runners | Proposed |
-| D1515 | **The TiKV store moves to the fork** (FW1) as a `resonate-server-blob` store and `resonate-server-tikv` plugin, keeping the 0.1.0 on-disk format; `loams-durable/src/tikv.rs` is deleted after the pin bump; amends D261's location | Owner direction, 2026-10-21; Proposed |
-| D1516 | **`resonate-client`** (FW3), a typed Rust protocol client in the fork, is the only way Loams' gateway and worker agent call Resonate | Proposed |
-| D1517 | **The fork-work list FW0–FW10** (§7.4), each with its acceptance criteria, checked by Resonate's Lean trace checker, porcupine and store contract tests | Proposed |
-| D1518 | **Resonate store for the gateway:** the native TiKV store in clusters and Loams cloud, SQLite in single-node compose; TiDB through the MySQL plugin stays legacy (D261); DX3 measures throughput before any claim | Owner draft, Proposed |
-| D1519 | **DBOS:** no protocol work; Loams Postgres passes each SDK's suite plus crash recovery; DBOS uses the session or direct endpoint; PgDog stays unmodified (corrects the draft's "pgdog fork"); never routed through Resonate | Owner draft, Proposed |
-| D1520 | **One database per DBOS app**, unsharded on one primary, holding the system schema and the app tables its transactional steps touch | Owner draft, Proposed |
-| D1521 | **DBOS and scale-to-zero:** always-on class by default; polling (`use_listen_notify = false`) where the SDK supports it and the user accepts wake-up delay | Owner draft, Proposed |
-| D1522 | **DBOS in the console:** a preset, read-only views of system tables, docs and templates; no dependency on or imitation of Conductor (proprietary) | Proposed |
-| D1523 | **Airflow 3.3.x only**, real Airflow (D1256 reconfirmed), one deployment per environment first, one database per deployment, a version matrix in CI | Owner draft, Proposed |
-| D1524 | **The Edge executor (`edge3`) is the baseline** (DX0) and the fallback; the Resonate executor follows in DX1A | Owner draft, Proposed |
-| D1525 | **`LoamsResonateExecutor`** (§9.3): workloads as Resonate promises `af:…` with tasks and leases; tasks report their own state, the executor only infrastructure outcomes; adoption by tag after restart; short-lived JWT and mTLS; replaces `LoamsJobsExecutor` as the first executor (amends D1257) | Owner draft, Proposed (details Proposed) |
-| D1526 | **`loams-worker`**, a generic Rust Resonate task runner in the monorepo: claims from a group, runs the command in `loams-sandbox`, heartbeats, reports outcomes and CPU time | Owner draft, Proposed (placement Proposed) |
-| D1527 | **Provider additions** to D1257: `LoamsResonateExecutor`, `LoamsPostgresHook`, Temporal hook, operator and trigger, Resonate promise operator, sensor and trigger, remote logging, an AIP-103 state store (verify), OTel, an Authentik and Loams auth manager | Owner draft, Proposed |
-| D1528 | **Rust tasks through AIP-108** only after upstream leaves experimental, prototyped in `ostrium-labs/loams-airflow` | Owner draft, Proposed |
-| D1529 | **Engines stay separate** with their own databases and Resonate stores, never a shared schema; one shared control plane (tenancy, identity, audit, metering, metrics, console) | Owner draft, Proposed |
-| D1530 | **Which-engine guidance** (§10) in the docs and the console's create flow | Owner draft, Proposed |
-| D1531 | **Metering:** `io.loams.dev.usage.durable.temporal.v1` for Temporal-style actions and history bytes; compat mode under `…companion.runtime.v1`; Airflow tasks under `…jobs.run.v1`; DBOS as ordinary Postgres | Proposed |
-| D1532 | **Metrics and analytics:** no tenant labels on metrics (D1021); run and task summaries exported as Iceberg tables in Lakekeeper and read in the House | Proposed |
-| D1533 | **Lifecycle CloudEvents** (opt-in) on Loams streams: `io.loams.dev.durable.temporal.workflow.{started,closed}.v1`, `io.loams.dev.durable.airflow.task.finished.v1` | Owner draft, Proposed |
-| D1534 | **Phases DX0–DX5** (§14) with the fork tasks alongside; plan [DX1](../plans/2026-10-21-dx1-durable-execution-compat.md) (stub) fully specifies DX0, which shares OC0's harness and Tasks 6 and 7 | Owner draft, Proposed |
-| D1535 | **Not built:** §16's list; amends D1272 by removing "a Temporal-compatible frontend" | Proposed |
-| D1536 | **Licence and provenance:** `temporalio/api` protos vendored at a pinned tag with the MIT text and a NOTICE entry; Temporal server code read, never copied; all new code Apache-2.0 | Proposed |
-| D1537 | **Amendments to §68** as tabled in §17, each marked owner direction 2026-10-21 | Owner direction, 2026-10-21; Proposed |
-| D1538 | **CI:** GitHub-hosted runners only; pure tests and the corpus differential per PR (path-filtered); SDK replayers, end to end, simulation, Airflow and DBOS suites nightly | Proposed |
-| D1539 | **Design-partner framing:** the fork work is offered to resonatehq; the `loams-temporal-*` crates have no Loams-internal dependencies beyond the gateway's traits, so a standalone `loams-temporal` binary can serve any Resonate server | Proposed |
+| D1500 | **Durable execution compatibility:** beside native Resonate, Loams adds a Temporal-protocol frontend in `loams-gateway` backed by Resonate and Loams Postgres, DBOS on Loams Postgres, and Airflow 3.3 with a Resonate-backed executor; amends D1259, D1272, D1275 and D1257 (§17) | Approved (owner, 2026-10-21) |
+| D1501 | **Temporal history is the source of truth**, owned by the gateway; Resonate supplies timers, timeouts, leases, retries and wake-ups, and is rebuildable from history | Approved (owner, 2026-10-21) |
+| D1502 | **History and mutable state in Loams Postgres** (`loams_temporal`, one per region), one transaction per change with a compare-and-set and a transactional outbox; session or direct endpoint; never on Loams SQL; never in Resonate's store | Approved (owner, 2026-10-21) |
+| D1503 | **Deterministic promise IDs** with §5.4's grammar (`wft`, `act`, `tmr`, `to`, `start`, `af`), Loams namespace IDs, percent-encoding, a hash fallback for length, and `loams:*` tags | Approved (owner, 2026-10-21) |
+| D1504 | **Crate layout:** `crates/loams-temporal-{proto,history,statemachine,store,matching,resonate,frontend,testkit}`, pure state machines with injected I/O, served by `loams-gateway`'s `temporal` module behind feature `temporal`, as its own Deployment | Approved (owner, 2026-10-21) |
+| D1505 | **Matching:** in-memory fast path on partition owners, with Resonate as the durable backstop and the sole authority for claims; partition leases in Postgres | Approved (owner, 2026-10-21) |
+| D1506 | **Method set by phase** (§5.8); `GetSystemInfo` advertises only built capabilities, checked in CI; `UNIMPLEMENTED` elsewhere | Approved (owner, 2026-10-21) |
+| D1507 | **Identity:** Temporal SDKs authenticate with Loams `lk_` keys or Authentik-issued OIDC tokens as bearer tokens (optional mTLS); `durable:temporal:*` actions per Temporal namespace; no Keycloak | Approved (owner, 2026-10-21) |
+| D1508 | **Limits:** payloads opaque; Temporal's default size and count limits (verified in DX1 Task 0), lowerable per namespace | Approved (owner, 2026-10-21) |
+| D1509 | **Compat mode:** the upstream Temporal server on Loams Postgres (16; 17 as a leg) from DX0, as the reference oracle and as the fallback until the gateway passes DX2 per SDK; managed hosting keeps Q1033's gate | Approved (owner, 2026-10-21) |
+| D1510 | **Verification:** §13's layers and invariants (corpus differential, SDK replayers, porcupine, TLA+ in `spec/tla/temporal/`, deterministic simulation, performance against Temporal) | Approved (owner, 2026-10-21) |
+| D1511 | **SDK order:** Go and TypeScript first, then Java and Python, then .NET, Ruby and Rust; each pinned at a release at least 14 days old | Approved (owner, 2026-10-21) |
+| D1512 | **Wording:** "Loams speaks the Temporal API" or "works with the Temporal SDKs", with the matrix linked, for the gateway only; no "Temporal Cloud", no logo, no implied endorsement; product name Loams Durable (Temporal API); amends D1275 | Approved (owner, 2026-10-21) |
+| D1513 | **Fork rule:** all Resonate server, store, protocol, client and spec work, TiKV included, is done in `ostrium-labs/resonate` as upstreamable branches; the monorepo keeps the embedding, gateway crates, conformance and the worker agent; the provider stays in `ostrium-labs/loams-airflow` | Approved (owner, 2026-10-21) |
+| D1514 | **Fork branch model:** `main` mirrors upstream; one `feat/` or `fix/` branch per upstream PR; integration branches `loams/<upstream-version>` with `CARRIES.md`; pin bumps in their own PR; fork CI on GitHub-hosted runners | Approved (owner, 2026-10-21) |
+| D1515 | **The TiKV store moves to the fork** (FW1) as a `resonate-server-blob` store and `resonate-server-tikv` plugin, keeping the 0.1.0 on-disk format; `loams-durable/src/tikv.rs` is deleted after the pin bump; amends D261's location | Approved (owner, 2026-10-21) |
+| D1516 | **`resonate-client`** (FW3), a typed Rust protocol client in the fork, is the only way Loams' gateway and worker agent call Resonate | Approved (owner, 2026-10-21) |
+| D1517 | **The fork-work list FW0–FW10** (§7.4), each with its acceptance criteria, checked by Resonate's Lean trace checker, porcupine and store contract tests | Approved (owner, 2026-10-21) |
+| D1518 | **Resonate store for the gateway:** the native TiKV store in clusters and Loams cloud, SQLite in single-node compose; TiDB through the MySQL plugin stays legacy (D261); DX3 measures throughput before any claim | Approved (owner, 2026-10-21) |
+| D1519 | **DBOS:** no protocol work; Loams Postgres passes each SDK's suite plus crash recovery; DBOS uses the session or direct endpoint; PgDog stays unmodified (corrects the draft's "pgdog fork"); never routed through Resonate | Approved (owner, 2026-10-21) |
+| D1520 | **One database per DBOS app**, unsharded on one primary, holding the system schema and the app tables its transactional steps touch | Approved (owner, 2026-10-21) |
+| D1521 | **DBOS and scale-to-zero:** always-on class by default; polling (`use_listen_notify = false`) where the SDK supports it and the user accepts wake-up delay | Approved (owner, 2026-10-21) |
+| D1522 | **DBOS in the console:** a preset, read-only views of system tables, docs and templates; no dependency on or imitation of Conductor (proprietary) | Approved (owner, 2026-10-21) |
+| D1523 | **Airflow 3.3.x only**, real Airflow (D1256 reconfirmed), one deployment per environment first, one database per deployment, a version matrix in CI | Approved (owner, 2026-10-21) |
+| D1524 | **The Edge executor (`edge3`) is the baseline** (DX0) and the fallback; the Resonate executor follows in DX1A | Approved (owner, 2026-10-21) |
+| D1525 | **`LoamsResonateExecutor`** (§9.3): workloads as Resonate promises `af:…` with tasks and leases; tasks report their own state, the executor only infrastructure outcomes; adoption by tag after restart; short-lived JWT and mTLS; replaces `LoamsJobsExecutor` as the first executor (amends D1257) | Approved (owner, 2026-10-21) |
+| D1526 | **`loams-worker`**, a generic Rust Resonate task runner in the monorepo: claims from a group, runs the command in `loams-sandbox`, heartbeats, reports outcomes and CPU time | Approved (owner, 2026-10-21) |
+| D1527 | **Provider additions** to D1257: `LoamsResonateExecutor`, `LoamsPostgresHook`, Temporal hook, operator and trigger, Resonate promise operator, sensor and trigger, remote logging, an AIP-103 state store (verify), OTel, an Authentik and Loams auth manager | Approved (owner, 2026-10-21) |
+| D1528 | **Rust tasks through AIP-108** only after upstream leaves experimental, prototyped in `ostrium-labs/loams-airflow` | Approved (owner, 2026-10-21) |
+| D1529 | **Engines stay separate** with their own databases and Resonate stores, never a shared schema; one shared control plane (tenancy, identity, audit, metering, metrics, console) | Approved (owner, 2026-10-21) |
+| D1530 | **Which-engine guidance** (§10) in the docs and the console's create flow | Approved (owner, 2026-10-21) |
+| D1531 | **Metering:** `io.loams.dev.usage.durable.temporal.v1` for Temporal-style actions and history bytes; compat mode under `…companion.runtime.v1`; Airflow tasks under `…jobs.run.v1`; DBOS as ordinary Postgres | Approved (owner, 2026-10-21) |
+| D1532 | **Metrics and analytics:** no tenant labels on metrics (D1021); run and task summaries exported as Iceberg tables in Lakekeeper and read in the House | Approved (owner, 2026-10-21) |
+| D1533 | **Lifecycle CloudEvents** (opt-in) on Loams streams: `io.loams.dev.durable.temporal.workflow.{started,closed}.v1`, `io.loams.dev.durable.airflow.task.finished.v1` | Approved (owner, 2026-10-21) |
+| D1534 | **Phases DX0–DX5** (§14) with the fork tasks alongside; plan [DX1](../plans/2026-10-21-dx1-durable-execution-compat.md) (stub) fully specifies DX0, which shares OC0's harness and Tasks 6 and 7 | Approved (owner, 2026-10-21) |
+| D1535 | **Not built:** §16's list; amends D1272 by removing "a Temporal-compatible frontend" | Approved (owner, 2026-10-21) |
+| D1536 | **Licence and provenance:** `temporalio/api` protos vendored at a pinned tag with the MIT text and a NOTICE entry; Temporal server code read, never copied; all new code Apache-2.0 | Approved (owner, 2026-10-21) |
+| D1537 | **Amendments to §68** as tabled in §17, each marked owner direction 2026-10-21 | Approved (owner, 2026-10-21) |
+| D1538 | **CI:** GitHub-hosted runners only; pure tests and the corpus differential per PR (path-filtered); SDK replayers, end to end, simulation, Airflow and DBOS suites nightly | Approved (owner, 2026-10-21) |
+| D1539 | **Design-partner framing:** the fork work is offered to resonatehq; the `loams-temporal-*` crates have no Loams-internal dependencies beyond the gateway's traits, so a standalone `loams-temporal` binary can serve any Resonate server | Approved (owner, 2026-10-21) |
 
 ## 19. Open questions (Q1150–Q1165), each with a default
 
-| ID | Question | Default |
+| ID | Question | Default (Q1150–Q1164 answered by the owner on 2026-10-21: the default; Q1165 open) |
 |---|---|---|
 | Q1150 | How do Temporal namespaces map to Loams namespaces? | Many Temporal namespaces per Loams namespace; the credential gives the Loams namespace, the request the Temporal one; promise IDs use both IDs |
 | Q1151 | Does the frontend run as a `loams-gateway` module or a separate binary? | A module (`temporal`, feature `temporal`) in the `loams-gateway` binary, deployed as its own Deployment; a standalone `loams-temporal` build target from the same crates |

@@ -410,7 +410,7 @@ Design reference: [68 Open-Protocol Compute](../design/68-open-protocol-compute.
 
 ## Track DX: Durable execution compatibility (Temporal protocol, DBOS, Airflow on Resonate)
 
-Design reference: [74 Durable Execution Compatibility](../design/74-durable-execution-compat.md) (D1500–D1539, Q1150–Q1165, Proposed 2026-10-21). From the owner's draft of 2026-10-21, for onboarding ResonateHQ as a design partner; it amends §68's Temporal and Airflow decisions. Resonate-side work (FW0–FW10) runs in the fork `ostrium-labs/resonate` as upstreamable branches; this track holds the Loams side.
+Design reference: [74 Durable Execution Compatibility](../design/74-durable-execution-compat.md) (D1500–D1539, Q1150–Q1165, approved by the owner 2026-10-21, all defaults; Q1165 open). From the owner's draft of 2026-10-21, for onboarding ResonateHQ as a design partner; it amends §68's Temporal and Airflow decisions. Resonate-side work (FW0–FW10) runs in the fork `ostrium-labs/resonate` as upstreamable branches; this track holds the Loams side.
 
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|
