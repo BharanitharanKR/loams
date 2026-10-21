@@ -10,6 +10,7 @@
 //!   totals).
 //! - [`render`]: ES scores and the answer's shape.
 
+pub(crate) mod aggs;
 pub mod body;
 pub mod compile;
 pub mod exec;
