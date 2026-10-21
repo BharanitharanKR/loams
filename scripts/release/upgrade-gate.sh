@@ -59,6 +59,12 @@ print(" ".join(sorted({m["class"] for m in rel.get("migration", [])})) or "rever
 PY
 )"
 echo "upgrade-gate: $previous -> $candidate (migration classes: $classes)"
+# The House and agentd run on the previous release's published images: the
+# gate builds only the candidate's `loams` image, and the candidate's fabric
+# and agentd images are published with the release. (Releases before 0.1.1
+# run neither by default, and read neither variable.)
+export HOUSE_IMAGE="ghcr.io/ostrium-labs/loams-fabric:$previous"
+export AGENTD_IMAGE="ghcr.io/ostrium-labs/loams-agentd:$previous"
 
 timed() {
   local name="$1"; shift

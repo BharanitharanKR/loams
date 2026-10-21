@@ -86,6 +86,9 @@ pub fn restore(runtime: &dyn Runtime, stack: &mut StackDir, restore: &Restore) -
         }
         Some((_, version)) => {
             // BR restores into a fresh cluster at the snapshot's version.
+            // PD's and TiKV's stopped containers still hold their volumes:
+            // they go first, and `up` creates them again.
+            compose::remove(runtime, &stack.dir, &pd_tikv)?;
             let out = runtime.engine(&[
                 "volume".to_string(),
                 "rm".to_string(),
