@@ -201,6 +201,8 @@ struct Part {
     hits: Vec<(Hit, f32)>,
     total: Option<TotalHits>,
     token: ConsistencyToken,
+    /// The engine's aggregations (#951), for a `Single` search with `aggs`.
+    aggregations: Option<Value>,
 }
 
 /// Runs `request` on `view` at `consistency`.
@@ -250,6 +252,7 @@ async fn run_single(
         hits: scored(response.hits, render, threshold_set),
         total: response.total,
         token: response.read_token,
+        aggregations: response.aggregations,
     })
 }
 
@@ -385,6 +388,7 @@ async fn run_hybrid(
         hits,
         total,
         token,
+        aggregations: None,
     })
 }
 
@@ -431,6 +435,7 @@ async fn run_script(
         hits: scored(response.hits, render, threshold_set),
         total,
         token,
+        aggregations: None,
     })
 }
 
@@ -552,6 +557,10 @@ pub async fn execute(
     let node = gw.config().node_name.as_str();
     if indices.is_empty() {
         return empty(ctx, body, params);
+    }
+    let (rest, aggs) = super::aggs::split(body)?;
+    if let Some(aggs) = aggs {
+        return search_with_aggs(gw, ctx, indices, &rest, params, &aggs).await;
     }
     if let Some(desc) = seq_no_sort(body, params)? {
         return Box::pin(seq_no_sorted(gw, ctx, indices, body, params, desc)).await;
@@ -926,6 +935,58 @@ async fn seq_no_sorted(
     Ok(SearchOutcome {
         body: out,
         read_token: inner.read_token,
+    })
+}
+
+/// A search with aggregations (#951): one index, a `Single` plan; the
+/// engine runs the aggregations over every match of the query.
+async fn search_with_aggs(
+    gw: &EsGateway,
+    ctx: &RequestCtx,
+    indices: &[IndexView],
+    body: &Value,
+    params: &SearchParams,
+    aggs: &Map<String, Value>,
+) -> Result<SearchOutcome, EsError> {
+    let node = gw.config().node_name.as_str();
+    let [view] = indices else {
+        return Err(EsError::unsupported("aggregations over several indices"));
+    };
+    let plan = super::compile(view, body, params, now_ms()).map_err(|e| renode(e, node))?;
+    let SearchPlan::Single {
+        mut request,
+        render,
+    } = plan
+    else {
+        return Err(EsError::unsupported(
+            "aggregations with a hybrid or script_score search",
+        ));
+    };
+    let agg_plan = super::aggs::plan(view, aggs).map_err(|e| renode(e, node))?;
+    if !agg_plan.engine.is_empty() {
+        request.aggregations = Some(Value::Object(agg_plan.engine.clone()));
+    }
+    let part = run_single(gw, ctx, view, request, &render).await?;
+    let token = part.token.clone();
+    let aggregations = super::aggs::render(
+        aggs,
+        part.aggregations.clone(),
+        agg_plan.synthesized,
+        &view.name,
+    );
+    let page = part
+        .hits
+        .into_iter()
+        .map(|(hit, es)| (part.index.clone(), hit, es))
+        .collect();
+    let views: HashMap<&str, &IndexView> = HashMap::from([(view.name.as_str(), view)]);
+    let mut body = render_page(gw, ctx, &views, page, part.total, 1, &render).await?;
+    if let Value::Object(map) = &mut body {
+        map.insert("aggregations".to_string(), aggregations);
+    }
+    Ok(SearchOutcome {
+        body,
+        read_token: Some(token),
     })
 }
 
