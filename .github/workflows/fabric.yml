@@ -115,6 +115,12 @@ jobs:
               - "proto/loams/options/**"
               - "proto/loams/errors/**"
               - "docs/api/reasons.md"
+              # `loams-house-mine`'s checks (HE0): the function and engine
+              # matrix (`the_committed_matrix_is_up_to_date`) reads chDB's
+              # dumps, the classes and the mined profile, and writes
+              # docs/house/compat-matrix.md.
+              - "conformance/clickhouse/**"
+              - "docs/house/**"
             # The generated appendix and the two scripts that check the Camel
             # and Kestra columns against their catalogs (design §33 CN-R1).
             drift:

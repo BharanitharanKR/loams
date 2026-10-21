@@ -22,6 +22,8 @@ pub enum Command {
     Scrub(cmd::scrub::Args),
     /// Write `profile.toml` and the compatibility report.
     Report(cmd::report::Args),
+    /// Write the function and engine matrix from chDB's system tables.
+    Matrix(Box<cmd::matrix::Args>),
 }
 
 impl Command {
@@ -36,6 +38,7 @@ impl Command {
             Self::Merge(args) => cmd::merge::run(&args),
             Self::Scrub(args) => cmd::scrub::run(&args),
             Self::Report(args) => cmd::report::run(&args),
+            Self::Matrix(args) => cmd::matrix::run(&args),
         }
     }
 }

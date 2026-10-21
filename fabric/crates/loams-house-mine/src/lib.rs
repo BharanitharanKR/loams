@@ -20,3 +20,4 @@ pub mod profile;
 pub mod querylog;
 pub mod scrub;
 pub mod tokens;
+pub mod matrix;
