@@ -104,3 +104,15 @@ runtime_minutes = 15
 # The third gate application (D1571, owner 2026-10-22; HE1 R9.60): the MIT
 # build only, never the default `signoz/signoz` image, which links ee/.
 gate = true
+
+[[app]]
+# ClickHouse is Umami's optional store (Postgres always runs); its schema is
+# applied from db/clickhouse/schema.sql at the release commit (compose.yaml).
+name = "umami"
+image = "ghcr.io/umami-software/umami:3.4.0@sha256:85909afc45bdcda1917394594a087421fdbb05610fded0fa9f6fb861abb2f367"
+licence = "MIT"
+clickhouse_protocol = "http"
+clickhouse_min = "25.8"
+driver = "umami/driver.sh"
+suite = ""
+runtime_minutes = 8
