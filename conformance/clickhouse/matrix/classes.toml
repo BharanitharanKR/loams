@@ -33,6 +33,12 @@ names = ["AggregatingMergeTree", "SummingMergeTree", "MaterializedView", "Replic
 reason = "Tier 1 (§75 §7.4); the Replicated forms as topology syntax"
 
 [[rule]]
+class = "profile"
+kind = "engine"
+names = ["VersionedCollapsingMergeTree", "ReplicatedVersionedCollapsingMergeTree"]
+reason = "gate applications on the chDB House (D1570, amending §75 §7.5); the Replicated form as topology syntax"
+
+[[rule]]
 class = "refused"
 kind = "engine"
 names = ["Kafka", "RabbitMQ", "MySQL", "PostgreSQL", "MaterializedMySQL", "NATS"]
@@ -41,7 +47,7 @@ reason = "Tier 2: queue and database engines; Loams streams, Postgres and connec
 [[rule]]
 class = "refused"
 kind = "engine"
-names = ["Log", "TinyLog", "StripeLog", "Memory", "Buffer", "Set", "Join", "GraphiteMergeTree", "VersionedCollapsingMergeTree", "ReplicatedGraphiteMergeTree", "ReplicatedVersionedCollapsingMergeTree"]
+names = ["Log", "TinyLog", "StripeLog", "Memory", "Buffer", "Set", "Join", "GraphiteMergeTree", "ReplicatedGraphiteMergeTree"]
 reason = "Tier 2: legacy engines (§75 §7.5)"
 
 [[rule]]
