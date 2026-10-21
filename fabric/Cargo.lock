@@ -5206,6 +5206,7 @@ dependencies = [
  "proptest",
  "serde",
  "serde_json",
+ "serde_norway",
  "sqlparser 0.63.0",
  "tempfile",
  "toml",

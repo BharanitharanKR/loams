@@ -84,6 +84,7 @@ jobs:
       families: ${{ steps.families.outputs.list }}
       alerts: ${{ steps.filter.outputs.alerts }}
       kube: ${{ steps.filter.outputs.kube }}
+      house-apps: ${{ steps.filter.outputs.house-apps }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name == 'push'
@@ -121,6 +122,12 @@ jobs:
               # docs/house/compat-matrix.md.
               - "conformance/clickhouse/**"
               - "docs/house/**"
+            # The mined ClickHouse applications' harness (HE1 Task 1): the
+            # Langfuse smoke brings the stack up, drives it, dumps and stops.
+            house-apps:
+              - ".github/workflows/fabric.yml"
+              - "conformance/clickhouse/apps/**"
+              - "scripts/house/apps.sh"
             # The generated appendix and the two scripts that check the Camel
             # and Kestra columns against their catalogs (design §33 CN-R1).
             drift:
@@ -269,6 +276,34 @@ jobs:
       # runtime.profile (the same rules as loams-flow's `profile` module).
       - name: connector profiles
         run: python3 scripts/connectors/profiles.py --check
+
+  # HE1 owns this job (plan 2026-10-21-he1-loams-house-engine, Task 1): the
+  # mined-applications harness brings Langfuse v4 up against the pinned
+  # clickhouse-server, drives it, dumps query_log and brings it down. Every
+  # image is pinned by digest (loams-house-mine's tests/manifest.rs). The
+  # dumps hold synthetic query text only and are not uploaded.
+  house-apps-smoke:
+    name: "House apps: Langfuse smoke"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.house-apps == 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: up
+        run: scripts/house/apps.sh langfuse-v4 up
+      - name: drive
+        run: scripts/house/apps.sh langfuse-v4 drive
+      - name: dump
+        run: |
+          scripts/house/apps.sh langfuse-v4 dump
+          test "$(wc -l < conformance/clickhouse/apps/.out/langfuse-v4/query_log.tsv)" -gt 1
+      - name: logs on failure
+        if: failure()
+        run: docker compose -f conformance/clickhouse/apps/langfuse-v4/compose.yaml logs --tail 200
+      - name: down
+        if: always()
+        run: scripts/house/apps.sh langfuse-v4 down
 
   # CN2 owns this job (plan 2026-10-10-cn2-connectors, Task 4): the connector
   # SDK alone, the crate every native connector family builds on. It needs no
@@ -999,6 +1034,7 @@ jobs:
       - connectors-ci-only
       - connectors-alerts
       - connectors-kind
+      - house-apps-smoke
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
