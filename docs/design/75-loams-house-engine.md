@@ -1,6 +1,6 @@
 # 75 — The Loams House Engine: Rust, ClickHouse-Compatible, Iceberg v3, Serverless
 
-Status: **Approved** · 2026-10-21 (written and approved the same day; the owner approved every decision and question with its default, including the amendments in §17, except Q1170, answered as: target the latest ClickHouse 26.x stable release, pinned as the oracle, with supported ClickHouse versions listed per gate application). Source: the owner's draft of 2026-10-21, "Loam House — Plan" (draft v1), which the owner pasted with the instruction "add this". This document carries that draft into the repository's design format, renames "Loam" to "Loams", uses the product names the repository has, reconciles the draft with what is designed and built, and checks the draft's **verify** items where a primary source settles them. Decisions **D1540–D1569** and questions **Q1170–Q1187** are in the [decision log](13-decision-log.md) with status **Approved** (D1570–D1579 and Q1188–Q1189 are reserved for this document). Plan stub: [HE1](../plans/2026-10-21-he1-loams-house-engine.md). **No code is written by this document, and nothing in it is built.**
+Status: **Approved** · 2026-10-21 (written and approved the same day; the owner approved every decision and question with its default, including the amendments in §17, except Q1170, answered as: target the latest ClickHouse 26.x stable release, pinned as the oracle, with supported ClickHouse versions listed per gate application). Source: the owner's draft of 2026-10-21, "Loam House — Plan" (draft v1), which the owner pasted with the instruction "add this". This document carries that draft into the repository's design format, renames "Loam" to "Loams", uses the product names the repository has, reconciles the draft with what is designed and built, and checks the draft's **verify** items where a primary source settles them. Decisions **D1540–D1569** and questions **Q1170–Q1187** are in the [decision log](13-decision-log.md) with status **Approved** (D1570 is used, amending §7.4, §7.5 and §16.1; D1571–D1579 and Q1188–Q1189 are reserved for this document). Plan stub: [HE1](../plans/2026-10-21-he1-loams-house-engine.md). **No code is written by this document, and nothing in it is built.**
 
 **What it changes.** Loams House today is chDB (ClickHouse as a library) in sealed worker processes behind a Rust front, over Iceberg v2 tables in the bucket ([§32](32-loams-flow-fabric-house.md), [§49](49-loams-house-production.md), HS1). This document proposes to keep that product surface and replace the engine under it: a Rust engine on Apache Arrow and Apache DataFusion that speaks the ClickHouse dialect for the subset real applications use, stores every table as **Iceberg v3**, and runs serverless with a foyer cache. chDB stays as the Phase 0 engine (what ships now) and as the permanent test oracle. §17 lists every earlier decision this supersedes or amends; the main ones are:
 
@@ -55,6 +55,7 @@ Markers, as in §49 and §64–§74:
 | D1567 | **Packaging after Phase 2**: the House image no longer carries libchdb (554 MB unpacked), Windows and the desktop can run the House natively, and the light default stack gets lighter. Amends D779 | Approved (owner, 2026-10-21) |
 | D1568 | **Honest labels**: the House stays **Experimental** on chDB until Phase 2's exit; the Rust engine is described as designed, then as preview, never as shipped before its gate | Approved (owner, 2026-10-21) |
 | D1569 | **Vendor numbers are claims until reproduced**: ClickHouse Cloud, ObsessionDB and Tinybird figures are quoted only as their claims; Loams' own targets are estimates until measured | Approved (owner, 2026-10-21) |
+| D1570 | **Gate-app engines on the chDB House now**: `VersionedCollapsingMergeTree` (read-time collapsing by sign and version, `FINAL` included) and readable `AggregatingMergeTree`, including materialized views with inner tables, move from Tier 2 and Tier 1 into the launch tier for the gate applications on today's chDB House, because OpenPanel needs them (its `sessions` table and six inner-table views, plan HE1 R4.3). The Rust engine gets them in its own later phase (HE4) | Approved (owner, 2026-10-21) |
 
 ## 2. Goals and non-goals
 
@@ -255,6 +256,9 @@ Mining and the oracle harness start in Phase 0 and never stop: each new applicat
 ### 7.4 Tier 1: next (D1545)
 
 - `AggregatingMergeTree`, `SummingMergeTree`, incremental materialized views.
+
+> **Amended by D1570 (owner, 2026-10-21).** Readable `AggregatingMergeTree`, including materialized views with inner tables (`CREATE MATERIALIZED VIEW … ENGINE = AggregatingMergeTree … AS SELECT`), is in the launch tier for the gate applications on the chDB House now, because OpenPanel reads six such views; the Rust engine gets it in HE4 as this row says.
+
 - Retention and sequence functions (`retention`, `sequenceMatch`); `windowFunnel` is already Tier 0 (§7.3).
 - `JSON` and Variant types, Parquet and Iceberg table functions (on the namespace's own prefix only, D1558), lightweight updates.
 - Skip indexes (bloom, minmax), full-text and vector indexes, built once and shared with Loams' Tantivy and vector engines (§12.2).
@@ -265,6 +269,9 @@ These answer `48 NOT_IMPLEMENTED` with a message that names the feature and the 
 
 - The `Kafka`, `RabbitMQ`, `MySQL` and `PostgreSQL` table engines and `MaterializedMySQL`. Loams Event Fabric, Loams streams, Loams Postgres and the connectors (§33) cover these.
 - Legacy engines: `Log`, `TinyLog`, `StripeLog`, `Memory`, `Buffer`, `Set`, `Join`, `GraphiteMergeTree`, `VersionedCollapsingMergeTree`.
+
+> **Amended by D1570 (owner, 2026-10-21).** `VersionedCollapsingMergeTree` leaves Tier 2: OpenPanel, a gate application, keeps its `sessions` table in it, so the chDB House supports it now (read-time collapsing by sign and version, `FINAL` included) and the Rust engine in HE4.
+
 - Deprecated and experimental features: the old `Object('json')`, `WINDOW VIEW`, `LIVE VIEW`, the `Ordinary` database engine, the old `MergeTree` syntax.
 - Geo, ML and exotic functions; dictionaries (until an application needs them); the native protocol (D1548).
 
@@ -445,7 +452,7 @@ Suites 1–3 and 6 run per PR; 4 and 7 nightly. All of it runs on GitHub-hosted 
 | **HE1** | The DataFusion engine with the ClickHouse dialect; read-only on Iceberg v2 and v3; the HTTP interface | The Tier 0 query set passes; at least 50 % of the filtered stateless tests pass |
 | **HE2** | Ingest, compaction, deletion-vector writes, `ReplacingMergeTree`, mutations; the HTTP ingest API and endpoint pipes | Langfuse and OpenPanel pass fully; the Iceberg interop matrix is green. The Rust engine becomes the House's default (D1542) |
 | **HE3** | The distributed serverless executor; cold-start work; aggregation and join optimisations | Scale to zero and burst scale-out demonstrated; the ClickBench target met (internal) |
-| **HE4** | Tier 1: `AggregatingMergeTree`, `SummingMergeTree`, materialized views, funnel functions, Variant, skip, full-text and vector indexes | The Tier 1 suite passes; the product layer in beta |
+| **HE4** | Tier 1: `AggregatingMergeTree`, `SummingMergeTree`, materialized views, funnel functions, Variant, skip, full-text and vector indexes; `VersionedCollapsingMergeTree` (D1570). On the chDB House, `VersionedCollapsingMergeTree` and readable `AggregatingMergeTree` with inner-table views are built before HE1 for the gate applications (D1570); HE4 brings them to the Rust engine | The Tier 1 suite passes; the product layer in beta |
 | **HE5** | Tier 2 items on demand and, optionally, the native protocol | Driven by user requests |
 
 Mining and the oracle harness start in HE0 and never stop.
