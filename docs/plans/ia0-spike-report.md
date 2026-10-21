@@ -2,7 +2,7 @@
 
 Status: **Done** · 2026-10-21. Track IA, design [§76](../design/76-identity-and-authorization.md), plan [IA1](2026-10-21-ia1-identity-authz.md) (IA0 Tasks 0–6). The plan named this file `ia0-spike.md`; the owner's brief named it `ia0-spike-report.md`, which wins (plan ruling R0.1).
 
-**Recommendation: go.** Zitadel v4.19.4 and OpenFGA v1.22.0 do what §76 needs, end to end, on one laptop. Nothing blocks IA2 or IA4. The spike found two things §76 should change before IA3 builds `identity-sync` (F1, F3) and five smaller ones; none changes the architecture, the `Authorizer` trait, the model or the agent flow (§7).
+**Recommendation: go.** Zitadel v4.19.4 and OpenFGA v1.22.0 do what §76 needs, end to end, on one laptop. Nothing blocks IA2 or IA4. The spike found two things §76 should change before IA3 builds `identity-sync` (F1, F3) and five smaller ones; none changes the architecture, the `Authorizer` trait, the model or the agent flow (§7). **The owner approved all seven on 2026-10-21; they are D1622–D1628** (§7).
 
 **Why now.** The owner, 2026-10-21: "current agent auth is too complex and friction". So §1 maps how agents authenticate today and counts the steps, and §2 counts them again on the new flow.
 
@@ -272,21 +272,22 @@ Smaller notes:
 
 Yes, small ones; none is a blocker and none changes the architecture, the trait, the model or the agent flow.
 
-| Finding | Where | Change | Blocks |
-|---|---|---|---|
-| F1 | D1608, §8.1 | The event API with a cursor is the primary feed; webhooks wake it | IA3 (owner sign-off first) |
-| F3 | §8.1 table, §5 | Membership from user grants on the Loams project; org managers stay in Zitadel | IA3 |
-| F4 | D1613, §12.1 | SQLite for one user; Postgres for shared installs and batch lists | — |
-| F5 | §10, §9.2 | The auth layer checks principal status per request | IA2, IA4 (built in) |
-| F6 | D1611, §9.3 | One cache layer, ≤ 5 s | IA2 |
-| F7 | §5, §9.2 | The link table is the source of the principal kind | IA2 |
-| (verify) markers | §6.2, §8.1, §12.3, §14, §16 | Settled by §5 of this report | — |
+| Finding | Where | Change | Decision | Phase |
+|---|---|---|---|---|
+| F1 | D1608, §8.1 | The event list from a stored position is the primary feed; webhooks wake it | D1622 | IA3 |
+| F2 | D1617, §12.5 | Zitadel's outbound deny list narrowed only for the sync webhook | D1627 | IA3 |
+| F3 | §8.1 table, §5 | Membership from user grants on the Loams project; org managers stay in Zitadel | D1623 | IA3 |
+| F4 | D1613, §12.1 | SQLite for one user; Postgres for shared installs and batch lists | D1626 | IA2 |
+| F5 | §10, §9.2 | The auth layer checks principal status per request | D1624 | IA2, IA4 |
+| F6 | D1611, §9.3 | One cache layer, ≤ 5 s | D1625 | IA2 |
+| F7 | §5, §9.2 | The link table is the source of the principal kind | D1628 | IA2 |
+| (verify) markers | §6.2, §8.1, §12.3, §14, §16 | Settled by §5 of this report | — | — |
 
-This PR updates §76's (verify) markers and notes F1–F7 there as proposed amendments; the decisions themselves change only when the owner approves them.
+**Approved by the owner on 2026-10-21 ("approve all").** F1 is D1622, F3 D1623, F5 D1624, F6 D1625, F4 D1626, F2 D1627 and F7 D1628, recorded in §76 and the decision log, with IA2, IA3 and IA4 updated in plan IA1.
 
 ## 8. Go / no-go
 
-**Go.** End-to-end allow and deny work for a person and an agent; the agent reaches only its granted environment, never its owner's; revocation takes effect in about a second; `Check` is well inside Q1214; the footprint is modest and off by default. Next, agent path first: IA2's `loams-authz` crate and the deny-by-default middleware, then IA4's machine-user flow. F1 and F3 wait for the owner before IA3.
+**Go.** End-to-end allow and deny work for a person and an agent; the agent reaches only its granted environment, never its owner's; revocation takes effect in about a second; `Check` is well inside Q1214; the footprint is modest and off by default. Next, agent path first: IA2's `loams-authz` crate and the deny-by-default middleware, then IA4's machine-user flow. F1 and F3 are approved as D1622 and D1623 and shape IA3.
 
 ## Appendix: reproducing
 
