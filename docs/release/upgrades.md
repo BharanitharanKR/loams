@@ -105,7 +105,11 @@ Reversible claim before a release ships.
 |---|---|---|---|
 | 0.1.0 | `0000-adopt-preview-2`: records preview.2's versions (preview.2 wrote no stack record) | meta | Reversible |
 | 0.1.0 | `0001-safekeeper-volume`: gives the safekeeper a volume, after a drain | host | Reversible |
-| 0.1.1 | None (from any earlier 0.1.x). Durable's SQLite state is not carried into TiKV: drain first ([Durable execution on TiKV](../../deploy/release/README.md#durable-execution-on-tikv)) | | |
+| 0.1.1 | None (from any earlier 0.1.x). A 0.1.0 stack keeps its stores with `COMPOSE_PROFILES=tikv,rustfs`, Durable on SQLite included | | |
+
+`loams upgrade rollback --keep-writes` back to 0.1.0 is refused: 0.1.0's startup gate does not serve data a later
+release stamped (fixed after 0.1.0, design §54 §17 T14-2), so it would not start. Roll back from the snapshot
+instead (the default). From 0.1.1 on, `--keep-writes` works whenever every migration of the step is reversible.
 
 The release notes of every release that keeps data have an "Upgrading" section with its table, its third-party
 pins and its expected downtime (`scripts/release/upgrade-notes.sh`).

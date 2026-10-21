@@ -279,15 +279,30 @@ fn attempt_of(stack_dir: &Path, snapshot: Option<&str>) -> Result<Vec<crate::his
         .collect())
 }
 
-/// Why `--keep-writes` cannot be used, if it cannot: a point-of-no-return
+/// Releases whose startup gate cannot serve data a later release stamped:
+/// 0.1.0's gate counts its own migrations as pending under a stack record of
+/// a release its train does not list (fixed after it, design §54 §17
+/// T14-2), so it refuses to start on the writes `--keep-writes` keeps.
+/// Earlier releases have no startup gate and later ones have the fix.
+pub const KEEP_WRITES_UNSERVED: &[&str] = &["0.1.0"];
+
+/// Why `--keep-writes` cannot be used, if it cannot: the previous release
+/// (`from`) cannot start on a later release's data, a point-of-no-return
 /// migration was applied for `to` (the ledger, read by `to`'s image), or a
 /// third-party pin changed.
 fn keep_writes_refusal(
     runtime: &dyn Runtime,
     stack: &StackDir,
     id: &str,
+    from: &str,
     to: &str,
 ) -> Result<Option<String>> {
+    if KEEP_WRITES_UNSERVED.contains(&from) {
+        return Ok(Some(format!(
+            "{from}'s startup gate refuses data that {to} stamped (it predates design §54 §17 \
+             T14-2), so {from} would not start on the kept writes"
+        )));
+    }
     let status = crate::status::status(runtime, stack, to)?;
     let Some(ledger) = status
         .migrate
@@ -360,7 +375,7 @@ pub fn rollback(
         )
     };
     if opts.keep_writes
-        && let Some(why) = keep_writes_refusal(runtime, stack, &id, &first.to)?
+        && let Some(why) = keep_writes_refusal(runtime, stack, &id, &first.from, &first.to)?
     {
         return Err(UpgradeError::new(
             "rollback_needs_snapshot",

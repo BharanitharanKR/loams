@@ -154,7 +154,21 @@ timed rollback "$up" rollback --dir "$stack" --yes > "$work/rollback-1.json" 2> 
 fixtures check --state /state/state.json --expect-new-writes absent
 
 # 3. Reversibility, and --keep-writes.
-if [ "$classes" = "reversible" ]; then
+# 0.1.0's startup gate counts its own migrations as pending on data stamped by
+# a release its train does not list, so it refuses to start under
+# --keep-writes (fixed from 0.1.1: UpgradePath::introduced_at_or_before). The
+# reversibility check runs from every later previous release.
+keep_writes_broken=0
+case "$previous" in 0.1.0) keep_writes_broken=1 ;; esac
+if [ "$classes" = "reversible" ] && [ "$keep_writes_broken" = 1 ]; then
+  echo "upgrade-gate: $previous cannot start on newer data (its startup gate): no --keep-writes run"
+el# 0.1.0's startup gate cannot serve data a later release stamped (it predates
+# design §54 §17 T14-2), so `--keep-writes` back to it is refused
+# (KEEP_WRITES_UNSERVED in crates/loams-upgrade/src/rollback.rs); every later
+# previous release gets the reversibility check.
+if [ "$classes" = "reversible" ] && [ "$previous" = "0.1.0" ]; then
+  echo "upgrade-gate: no --keep-writes run: 0.1.0 cannot start on data a later release stamped"
+elif [ "$classes" = "reversible" ]; then
   "$up" --dir "$stack" --to "$candidate" --bundle "$bundle" --yes > "$work/upgrade-2.json" 2> "$work/upgrade-2.log"
   fixtures write-new --state /state/state.json
   timed rollback_keep_writes "$up" rollback --dir "$stack" --keep-writes --yes > "$work/rollback-2.json" 2> "$work/rollback-2.log"
