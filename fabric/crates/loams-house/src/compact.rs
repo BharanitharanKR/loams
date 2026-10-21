@@ -124,7 +124,7 @@ async fn compact_counted(
         .collect();
     let ch = ChTable::from_lake(database, name, &table);
     let engine = LakeEngine::parse(&ch.engine).unwrap_or(LakeEngine::MergeTree);
-    let merges = !matches!(engine, LakeEngine::MergeTree) || deduplicate;
+    let merges = engine.merges() || deduplicate;
     if files.is_empty() || (files.len() == 1 && !merges) {
         return Ok(Compacted::Nothing);
     }
@@ -302,10 +302,7 @@ pub async fn needs_compaction(
         return Ok(true);
     }
     let ch = ChTable::from_lake(database, name, &table);
-    let merging = matches!(
-        LakeEngine::parse(&ch.engine),
-        Ok(LakeEngine::Replacing { .. } | LakeEngine::Summing { .. })
-    );
+    let merging = LakeEngine::parse(&ch.engine).is_ok_and(|e| e.merges());
     if !merging || files.len() < 2 {
         return Ok(false);
     }
