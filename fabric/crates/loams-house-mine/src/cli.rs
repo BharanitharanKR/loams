@@ -24,6 +24,8 @@ pub enum Command {
     Report(cmd::report::Args),
     /// Write the function and engine matrix from chDB's system tables.
     Matrix(Box<cmd::matrix::Args>),
+    /// Run the oracle's corpus on its targets and write the triage.
+    Oracle(Box<cmd::oracle::Args>),
 }
 
 impl Command {
@@ -39,6 +41,7 @@ impl Command {
             Self::Scrub(args) => cmd::scrub::run(&args),
             Self::Report(args) => cmd::report::run(&args),
             Self::Matrix(args) => cmd::matrix::run(&args),
+            Self::Oracle(args) => cmd::oracle::run(&args),
         }
     }
 }
