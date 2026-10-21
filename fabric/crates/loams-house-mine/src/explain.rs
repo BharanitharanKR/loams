@@ -305,7 +305,9 @@ pub fn features(dump: &str) -> Features {
                     engine_seen.push(node.depth - 1);
                 } else if parent == Some("TableExpression") {
                     out.add("table_function", &name);
-                } else if parent == Some("Index") {
+                } else if parent == Some("Index") && index == 1 {
+                    // `INDEX i <expr> TYPE <type>`: the second child is the
+                    // index type; the first is an ordinary expression.
                     out.add("syntax", &format!("skip index {name}"));
                 } else if name == "_CAST" {
                     // A bound query parameter: `query_log` holds the text

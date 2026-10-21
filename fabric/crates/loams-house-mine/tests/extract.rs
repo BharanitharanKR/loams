@@ -62,6 +62,33 @@ fn combinators_and_their_base_functions() {
 #[test]
 fn table_functions() {
     has("table_function:numbers", &["q:q10"]);
+    // `ARRAY JOIN f(x) AS a, g(y) AS b` holds functions, not table functions.
+    has("function:mapKeys", &["q:q24", "m:0001_traces.up.sql:25"]);
+    has("function:mapValues", &["q:q24"]);
+    let inv = inventory();
+    let table_functions: Vec<_> = inv
+        .features
+        .keys()
+        .filter(|f| f.starts_with("table_function:"))
+        .collect();
+    assert_eq!(table_functions, ["table_function:numbers"]);
+    // An index's expression is not its type.
+    assert!(!inv.features.contains_key("syntax:skip index mapKeys"));
+    has(
+        "syntax:skip index bloom_filter",
+        &["m:0001_traces.up.sql:25"],
+    );
+}
+
+#[test]
+fn down_migrations_are_not_read() {
+    let inv = inventory();
+    assert!(
+        inv.samples.keys().all(|id| !id.contains(".down.sql")),
+        "{:?}",
+        inv.samples.keys()
+    );
+    assert!(!inv.features.contains_key("syntax:DROP TABLE"));
 }
 
 #[test]

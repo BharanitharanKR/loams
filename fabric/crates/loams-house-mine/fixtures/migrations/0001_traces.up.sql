@@ -21,3 +21,5 @@ SETTINGS index_granularity = 8192;
 CREATE TABLE IF NOT EXISTS events (id UUID, created_at DateTime, name LowCardinality(String)) ENGINE = MergeTree ORDER BY created_at;
 
 CREATE TABLE IF NOT EXISTS blobs (id String, body String CODEC(ZSTD(3))) ENGINE = MergeTree PARTITION BY id ORDER BY id;
+
+ALTER TABLE traces ADD INDEX IF NOT EXISTS idx_meta_keys mapKeys(metadata) TYPE bloom_filter(0.01) GRANULARITY 1;

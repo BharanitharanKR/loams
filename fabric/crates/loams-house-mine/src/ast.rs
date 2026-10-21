@@ -32,6 +32,11 @@ pub fn features(text: &str) -> Option<Features> {
 #[derive(Default)]
 struct Collector {
     features: Features,
+    /// The table factors that are `ARRAY JOIN` expressions, by address.
+    /// sqlparser 0.63 reads `ARRAY JOIN f(a) AS x, g(b) AS y` as an array
+    /// join of `f(a)` followed by comma joins of `g(b)`, so both look like
+    /// table functions (HE0 Task 2 ruling R2.11).
+    array_join_factors: std::collections::HashSet<usize>,
 }
 
 impl Collector {
@@ -195,8 +200,23 @@ impl Visitor for Collector {
                 self.group_by_modifiers(modifiers);
             }
         }
+        let mut after_array_join = false;
         for table in &select.from {
+            if after_array_join {
+                self.array_join_factors
+                    .insert(std::ptr::from_ref(&table.relation) as usize);
+            }
             for join in &table.joins {
+                if matches!(
+                    join.join_operator,
+                    JoinOperator::ArrayJoin
+                        | JoinOperator::LeftArrayJoin
+                        | JoinOperator::InnerArrayJoin
+                ) {
+                    after_array_join = true;
+                    self.array_join_factors
+                        .insert(std::ptr::from_ref(&join.relation) as usize);
+                }
                 let form = match &join.join_operator {
                     JoinOperator::ArrayJoin => "ARRAY JOIN",
                     JoinOperator::LeftArrayJoin => "LEFT ARRAY JOIN",
@@ -222,6 +242,29 @@ impl Visitor for Collector {
     }
 
     fn pre_visit_table_factor(&mut self, factor: &TableFactor) -> ControlFlow<()> {
+        if self
+            .array_join_factors
+            .contains(&(std::ptr::from_ref(factor) as usize))
+        {
+            // An `ARRAY JOIN` expression: a call is a function, not a table
+            // function.
+            let name = match factor {
+                TableFactor::Table {
+                    name,
+                    args: Some(_),
+                    ..
+                }
+                | TableFactor::Function { name, .. } => name.0.last().map(|l| {
+                    l.as_ident()
+                        .map_or_else(|| l.to_string(), |i| i.value.clone())
+                }),
+                _ => None,
+            };
+            if let Some(n) = name {
+                self.features.function(&n);
+            }
+            return ControlFlow::Continue(());
+        }
         match factor {
             TableFactor::Table {
                 name,
