@@ -1,6 +1,6 @@
 # HS1 — Loams House to Production: Serverless ClickHouse-Compatible Analytics on the Bucket — Implementation Plan
 
-> **Proposed amendment by [§75](../design/75-loams-house-engine.md) and plan [HE1](2026-10-21-he1-loams-house-engine.md) (2026-10-21, pending the owner's approval).** If §75 is approved, HS1 continues for its engine-independent tasks, and Task 14 (Fluss tables), Tasks 30–31 (the native protocol) and Task 34's chDB performance gates pause (Q1179); `chsurface-2.0` (Task 29) is replaced by the mined profile `chsurface-3` (D1547). Until then this plan stands as written.
+> **Amendment (approved 2026-10-21) by [§75](../design/75-loams-house-engine.md) and plan [HE1](2026-10-21-he1-loams-house-engine.md).** HS1 continues for its engine-independent tasks, and Task 14 (Fluss tables), Tasks 30–31 (the native protocol) and Task 34's chDB performance gates pause (Q1179); `chsurface-2.0` (Task 29) is replaced by the mined profile `chsurface-3` (D1547).
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task, test first. Each task lists the interfaces it must produce and the tests that must exist and pass before it is done. Where this plan gives exact values (names, ports, codes, settings, paths), use them verbatim. Where it gives a contract and named tests, write the code to that contract, and record any deviation in "Rulings made during execution" at the end of this file. The code is not pre-written in this plan.
 >
