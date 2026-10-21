@@ -8,7 +8,7 @@
 
 Loams is an open-source, AI-native data platform in Rust. It keeps your data in *your* object-storage bucket (S3, GCS, Azure Blob, RustFS or a local directory) in open formats: Lance and Tantivy today, Iceberg next. Compute is stateless and holds only caches.
 
-> **0.1.0 — first release.** You run the stack yourself with Docker Compose, locally or on your own VMs, over your own Tailscale tailnet, and use the hosted console at [console.loams.dev](https://console.loams.dev). 0.x: APIs and on-disk formats may change between minor versions; upgrades are supported with `loams upgrade`.
+> **0.1.1 — a patch release of 0.1, the first release.** You run the stack yourself with Docker Compose, locally or on your own VMs, over your own Tailscale tailnet, and use the hosted console at [console.loams.dev](https://console.loams.dev). 0.x: APIs and on-disk formats may change between minor versions; upgrades are supported with `loams upgrade`.
 
 [Run Loams](docs/release/preview.md) · [Documentation](docs/README.md) · [Website](https://loams.dev) · [API reference](https://loams.dev/api-docs) · [Contributing](CONTRIBUTING.md)
 
@@ -28,7 +28,7 @@ Read the [pitch](docs/design/00-pitch.md) and the [architecture](docs/design/01-
   <img src="docs/assets/architecture.svg" alt="Loams architecture: clients reach the retrieval engine, Live, Durable and Postgres; a stateless gateway and router tier (planned) and the runtime and jobs (planned) are shown dashed; TiKV holds metadata and transactions; object storage holds all data in open formats." width="100%">
 </p>
 
-## What ships in 0.1.0
+## What ships in 0.1.1
 
 | | |
 |---|---|
@@ -41,7 +41,7 @@ Read the [pitch](docs/design/00-pitch.md) and the [architecture](docs/design/01-
 | **Console, desktop, CLI** | Hosted web console; Loams Desktop and the `loams` CLI for Linux, macOS and Windows |
 | **Loams Studio** | Experimental. An agentic development environment in the console's Studio mode: coding agents (Claude Code, Codex, opencode and others) in threads with a git worktree each, diff review, git actions, terminals, previews and parallel runs, all through the `loams-agentd` daemon. On by default in Loams Desktop; in the browser it runs against a remote `loams-agentd` and is behind a feature flag ([guides](docs/guides/studio/index.md)) |
 | **Loams Git** | Experimental. `git-remote-loams`, git's remote helper, ships with the `loams` CLI packages: `git clone`, `fetch` and `push` reach a Loams Git repository on a bucket, with no server in between |
-| **SDKs** | TypeScript, Python, Go, Rust, C#, C++ and Swift (more languages coming). Published to npm, PyPI, crates.io, NuGet and the Go proxy as `0.1.0`; Swift from the release tag, C++ as a release tarball. Experimental: Java and Kotlin on Maven Central, Ruby on RubyGems |
+| **SDKs** | TypeScript, Python, Go, Rust, C#, C++ and Swift, each with the app-building API (collections, search, vector, graph, SQL and streams). Published to npm, PyPI, crates.io, NuGet and the Go proxy as `0.1.1`; Swift from the release tag, C++ as a release tarball. Experimental: Java and Kotlin on Maven Central, Ruby on RubyGems |
 
 **Coming next:** Loams Git on the server (repositories in the release images), first-party connectors, Iceberg analytics, Kafka wire, functions and jobs. The full status table is in [Running Loams](docs/release/preview.md); the plan is in the [roadmap](docs/design/12-roadmap-testing-risks.md).
 

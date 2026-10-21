@@ -1,7 +1,8 @@
-# Running Loams 0.1.0: run the whole stack yourself
+# Running Loams 0.1.1: run the whole stack yourself
 
-Status: **0.1.0**, the first release (after v0.1.0-preview.1 on 2026-10-12 and
-v0.1.0-preview.2 on 2026-10-15). What changed since preview.2 is in
+Status: **0.1.1**, a patch release of the 0.1 line (0.1.0, the first release, shipped on
+2026-10-19, after v0.1.0-preview.1 on 2026-10-12 and v0.1.0-preview.2 on 2026-10-15). What
+changed is in [What is new in 0.1.1](#what-is-new-in-011),
 [What is new in 0.1.0](#what-is-new-in-010) and the [changelog](../../CHANGELOG.md).
 Everything listed as **Available** or **Experimental** in the
 [feature status table](#feature-status) ships in this release.
@@ -12,7 +13,7 @@ supported: `loams upgrade` moves a stack from one release to the next and keeps 
 more, or be reworked, before they settle. Parts of the security model are not hardened yet (see
 [Security model](#security-model)).
 
-0.1.0 ships one path: **your own Tailscale tailnet plus our hosted console at
+0.1.1 ships one path: **your own Tailscale tailnet plus our hosted console at
 `https://console.loams.dev`**. You run the Loams stack; we host the console and, for the
 optional `oidc` mode, the auth service.
 
@@ -29,6 +30,30 @@ through the Tailscale client on your own device.
 **Coming soon, not in this release:** the console on your own Vercel or Cloudflare project,
 self-service OIDC clients (`auth.loams.dev/register`), Headscale networks, one-click OAuth
 deploy, and the House wired to the engine (and so to the console's House page).
+
+## What is new in 0.1.1
+
+- **The UI upgrade.** The console, Studio and Loams Desktop share the design 59 foundation:
+  new tokens, component states and motion, a reworked shell (sidebar, inspector, drawer,
+  palette, one keymap), and on the desktop native menus, per-OS window chrome, a splash, OS
+  notifications and an update toast.
+- **The app-building API in every SDK.** All 13 SDKs (TypeScript, Python, Go, Rust, C#, C++,
+  Swift, Java, Kotlin, Ruby, PHP, Dart, Objective-C) have namespaces, collections, documents,
+  search, vector and graph modules, the `Schema`, `Filter` and `Search` builders, consistency
+  tokens with a session store, a default namespace and client deadlines, plus `sql` and
+  `streams`, each checked against one recorded app scenario.
+- **`loams.sql.v1` and `loams.stream.v1`** on the engine's main port: read-only SQL with `$n`
+  parameters (rows or Arrow), and streams with keyed records, idempotent produce and long-poll
+  fetch.
+- **Self-host first-run fixes.** The setup token reaches the engine from `.env`, and the
+  one-shot `pg-bootstrap` creates `compute1`'s tenant and timeline, so a fresh stack comes up
+  without manual steps, from the bundle or from the tag.
+- **Durable on TiKV.** The release stack keeps Loams Durable's state in TiKV (keyspace
+  `loams_durable`). SQLite state from 0.1.0 does not carry over: drain first (see
+  [Known limitations](#known-limitations)).
+- **Mastra compatibility:** the Qdrant gateway serves `DELETE` of a payload index.
+- **Fixes:** agentd keeps an orphaned steer ahead of the queue, so queued messages no longer run
+  out of order.
 
 ## What is new in 0.1.0
 
@@ -78,20 +103,20 @@ Desktop. The patched TiDB image is amd64-only and runs emulated on Apple silicon
 ## SDKs
 
 The seven supported SDKs are released from this tag by one workflow (`sdk-release.yml`).
-Each registry below serves 0.1.0 (checked 2026-10-19).
+Each registry below serves 0.1.1 once the release workflows have run.
 
 | SDK | Install | Version |
 |---|---|---|
-| TypeScript | `npm i @loams/client` (and `@loams/live`) | `0.1.0` |
-| Python | `pip install loams` | `0.1.0` |
-| Rust | `cargo add loams` | `0.1.0` |
-| C# | `dotnet add package Loams` | `0.1.0` |
-| Go | `go get loams.dev/go@v0.1.0` (Go 1.25+) | `0.1.0` |
-| Swift | SwiftPM: `https://github.com/ostrium-labs/loams`, from `0.1.0` | `0.1.0` |
-| C++ | `loams-cpp-0.1.0.tar.gz` from the GitHub release (CMake `find_package(loams)`) | `0.1.0` |
+| TypeScript | `npm i @loams/client` (and `@loams/live`) | `0.1.1` |
+| Python | `pip install loams` | `0.1.1` |
+| Rust | `cargo add loams` | `0.1.1` |
+| C# | `dotnet add package Loams` | `0.1.1` |
+| Go | `go get loams.dev/go@v0.1.1` (Go 1.25+) | `0.1.1` |
+| Swift | SwiftPM: `https://github.com/ostrium-labs/loams`, from `0.1.1` | `0.1.1` |
+| C++ | `loams-cpp-0.1.1.tar.gz` from the GitHub release (CMake `find_package(loams)`) | `0.1.1` |
 
 Java and Kotlin (`dev.loams:loams`, `dev.loams:loams-kotlin` on Maven Central) and Ruby
-(`gem install loams`) are published as `0.1.0` too, as experimental SDKs. PHP, Dart and
+(`gem install loams`) are published as `0.1.1` too, as experimental SDKs. PHP, Dart and
 Objective-C stay in the repository (coming soon).
 
 ## Architecture
@@ -152,7 +177,7 @@ flowchart LR
 
 ## Feature status
 
-**Available** means it ships in the 0.1.0 images and packages and is built and tested in CI; as with all of 0.x, APIs and formats may change between minor versions, with `loams upgrade` to move between them. **Experimental** ships too, but may change more before it settles. **In progress** and **Planned** do not ship in 0.1.0.
+**Available** means it ships in the 0.1.1 images and packages and is built and tested in CI; as with all of 0.x, APIs and formats may change between minor versions, with `loams upgrade` to move between them. **Experimental** ships too, but may change more before it settles. **In progress** and **Planned** do not ship in 0.1.0.
 
 | Feature | What you get | Status |
 |---|---|---|
@@ -185,7 +210,7 @@ flowchart LR
 | Iceberg analytics | Iceberg tables through a REST catalog, readable by DuckDB, Spark, Trino and ClickHouse | Planned |
 | Kafka wire and OTLP | Kafka clients and OpenTelemetry logs ingest into streams | Planned |
 | Authorization and tenancy | Roles, per-namespace authorization, tenant quotas and a namespace router | Planned |
-| Native SDKs | TypeScript, Python, Go, Rust, C#, Swift and C++ clients with generated API bindings and shared runtime conformance fixtures, published as `0.1.0` (see [SDKs](#sdks)) | Available. Java, Kotlin, Ruby, PHP, Dart and Objective-C are in progress |
+| Native SDKs | TypeScript, Python, Go, Rust, C#, Swift and C++ clients with generated API bindings and shared runtime conformance fixtures, published as `0.1.1` (see [SDKs](#sdks)) | Available. Java, Kotlin, Ruby, PHP, Dart and Objective-C are in progress |
 | MCP and analytics helpers | Agent tools and convenience integrations such as `to_arrow()` and `to_polars()` | Planned |
 | Loams Functions | A CPU-time serverless runtime on workerd, wasmtime and gVisor, with a Rust Dapr-style API | Planned |
 | Loams Jobs | Celery, BullMQ v6, PySpark (through Sail) and Flink SQL (through RisingWave) jobs run durably on Loams | Planned |
@@ -210,7 +235,7 @@ its settings in `deploy/release/.env.example`.
 | `headscale` (profile `headscale`) | Headscale | Coming soon, unsupported in this release (see [the tailnet](#the-tailnet)) |
 
 `ghcr.io/ostrium-labs/loams-agentd` (the agent daemon) is published too, and is optional.
-Images are tagged `0.1.0`, `0.1` and `:latest`. The compose file pins `0.1.0` through
+Images are tagged `0.1.1`, `0.1` and `:latest`. The compose file pins `0.1.1` through
 `LOAMS_VERSION`. The patched TiDB image
 `ghcr.io/ostrium-labs/tidb:v8.5.8-loams.1` is public and amd64 only.
 
@@ -229,32 +254,25 @@ Use the files of the release you run, so `compose.yaml` matches the images that
 supported path, and the bundle carries the first-run fixes below:
 
 ```sh
-curl -fLO https://github.com/ostrium-labs/loams/releases/download/v0.1.0/loams-compose-0.1.0.tar.gz
-tar -xzf loams-compose-0.1.0.tar.gz
-cd loams-compose-0.1.0/release
+curl -fLO https://github.com/ostrium-labs/loams/releases/download/v0.1.1/loams-compose-0.1.1.tar.gz
+tar -xzf loams-compose-0.1.1.tar.gz
+cd loams-compose-0.1.1/release
 cp .env.example .env
 ```
 
-**From a git checkout instead.** The `v0.1.0` tag predates two first-run fixes that the bundle
-and `main` have: the setup token's pass-through ([First-run setup](#first-run-setup)) and the
-Postgres bootstrap ([Postgres: first run](#postgres-first-run)). The tag's `compose.yaml` does
-not pass `LOAMS_SETUP_TOKEN` from `.env` to the engine. If you clone the tag, put the token in
-`secrets/engine.env` instead, and recreate the engine once the stack is up:
+**From a git checkout instead.** Clone the tag; from 0.1.1 its `deploy/release` has the same
+first-run fixes as the bundle (the setup token's pass-through, [First-run setup](#first-run-setup),
+and the Postgres bootstrap, [Postgres: first run](#postgres-first-run)):
 
 ```sh
-git clone --branch v0.1.0 https://github.com/ostrium-labs/loams.git
+git clone --branch v0.1.1 https://github.com/ostrium-labs/loams.git
 cd loams/deploy/release
 cp .env.example .env
-echo "LOAMS_SETUP_TOKEN=$(openssl rand -hex 32)" >> secrets/engine.env
-# after `docker compose up -d` below, if the engine was already running:
-docker compose up -d loams
 ```
 
-On the tag, which has no `pg-bootstrap`, `compute1` needs a tenant and a timeline created by
-hand: follow [`deploy/loams-postgres-dev/README.md`](../../deploy/loams-postgres-dev/README.md#run), put
-`TENANT_ID` and `TIMELINE_ID` in `.env` and run `docker compose up -d compute1`. Or clone `main`,
-whose `deploy/release` has both fixes and still pins `LOAMS_VERSION=0.1.0` until the next
-release.
+The `v0.1.0` tag predates both: on it, put the token in `secrets/engine.env`, and create
+`compute1`'s tenant and timeline by hand (see
+[`deploy/loams-postgres-dev/README.md`](../../deploy/loams-postgres-dev/README.md#run)).
 
 Edit `.env`:
 
@@ -361,7 +379,7 @@ refuses every request that does not come from loopback, so this mode cannot be r
 the tailnet. Do not use it on a shared machine.
 
 The local `console` service (`--profile console`) serves `LOAMS_CONSOLE_DIR`, by default
-`./console/dist`. In a git clone, and in the 0.1.0 compose bundle, that directory holds only a
+`./console/dist`. In a git clone, and in the compose bundle, that directory holds only a
 placeholder `index.html` that says "Put the built console here". Build the console from the
 same checkout and point `LOAMS_CONSOLE_DIR` at it:
 
@@ -469,7 +487,7 @@ deploy/release/byoc/install.sh -i ~/.ssh/id_ed25519 you@your-vm
 ```
 
 By default it starts `loams`, `tailscale` and `tidb`; `--all` starts every service,
-the Postgres stack included, and `--version` picks the image tag (default `0.1.0`).
+the Postgres stack included, and `--version` picks the image tag (default `0.1.1`).
 Add the House with `--services "loams tailscale tidb house house-tailscale"`.
 `byoc/uninstall.sh` removes it. To do it by hand instead, copy `deploy/release` to the VM,
 `cp .env.example .env`, set `TS_AUTHKEY` and `LOAMS_SETUP_TOKEN`, and run `docker compose up -d`.
@@ -486,11 +504,11 @@ local quick start. Nothing on the VM listens on its public address.
 **Headscale: coming soon, unsupported in this release.** The `headscale` profile and
 `TS_LOGIN_SERVER` exist in the compose file, but Headscale issues no `*.ts.net` HTTPS
 certificates, so the hosted console (HTTPS) cannot call the engine through it: the browser
-blocks it as mixed content. Use Tailscale for 0.1.0.
+blocks it as mixed content. Use Tailscale for 0.1.1.
 
 ## The console on your own Vercel or Cloudflare: coming soon
 
-Hosting the console on your own Vercel or Cloudflare project is not part of 0.1.0.
+Hosting the console on your own Vercel or Cloudflare project is not part of 0.1.1.
 Use `https://console.loams.dev`. Likewise not in this release: self-service OIDC clients at
 `auth.loams.dev/register` and one-click OAuth deploy.
 
@@ -507,13 +525,13 @@ curl -u "default:$PASSWORD" https://loams-house.<tailnet>.ts.net/ --data-binary 
 ```
 
 Any ClickHouse HTTP client works the same way (port 443, TLS, user `default`). What it serves
-in 0.1.0: queries over the allowed table functions (`numbers`, `values`,
+in 0.1.1: queries over the allowed table functions (`numbers`, `values`,
 `generateRandom` and the like), lake-table DDL, reads, writes (`INSERT`, `INSERT … SELECT`,
 `CREATE TABLE … AS SELECT`, `TRUNCATE`) and compaction (`OPTIMIZE TABLE`), and the allowed
 `system` tables. To reach it from the engine (and so from `loams.house.v1` and the console's
 House page), set `LOAMS_HOUSE_ENDPOINT=https://house:8443` and `HOUSE_PRINCIPALS` (see
 [`deploy/release/README.md`](../../deploy/release/README.md#house)).
-The House's security layers in 0.1.0:
+The House's security layers in 0.1.1:
 
 - **chDB's access control first** (HS1 ruling R-ACL.1): the users workers run as have no
   `SOURCES` grants and a constrained settings profile, so table functions and engines that
@@ -535,7 +553,7 @@ The House's security layers in 0.1.0:
 
 ## Security model
 
-**What protects the engine in 0.1.0:**
+**What protects the engine in 0.1.1:**
 
 - **Tailnet only.** The engine has no public address. Only the `tailscale` sidecar (and the
   House's `house-tailscale`, with `--profile house`) is reachable from outside the compose
@@ -593,7 +611,7 @@ credential.
   engine's network namespace, and Resonate stays inside the compose network, unless you
   publish them. The Postgres and MySQL wire listeners authenticate nobody (any user name and
   password is accepted) and serve the `default` namespace. The House's ClickHouse HTTP
-  interface is served only through its own sidecar, with the House's own user and password. Do not publish them in 0.1.0: the auth modes above are specified for the main
+  interface is served only through its own sidecar, with the House's own user and password. Do not publish them in 0.1.1: the auth modes above are specified for the main
   port, and the other listeners are not all reviewed against them.
 - **Traffic inside the compose network is plain text**, between `loams`, TiDB, TiKV, PD and
   the Postgres stack. The tailnet encrypts the hop from your device to the stack.
@@ -635,7 +653,7 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
   text in SQL, whatever the keys are (one collection may hold integer, string and UUID keys),
   so `ORDER BY _id` sorts integer keys as text (`1`, `10`, `100`); use
   `ORDER BY CAST(_id AS BIGINT)` for integer keys.
-- **Durable on TiKV:** after 0.1.0 the stack's engine keeps Loams Durable's state in TiKV
+- **Durable on TiKV:** from 0.1.1 the stack's engine keeps Loams Durable's state in TiKV
   (keyspace `loams_durable`), not in SQLite; the SQLite state does not carry over
   ([drain first](../../deploy/release/README.md#durable-execution-on-tikv)).
 - **Not in this release:** the Loams Git repository service in the release images
@@ -645,11 +663,11 @@ Report anything you find through [SECURITY.md](../../SECURITY.md), not in a publ
 - **Browsers on Chromium** may ask for permission the first time a page on a public origin
   calls an address on your tailnet (Local Network Access). Allow it for the console's origin.
 - **Upgrades go one release at a time, with `loams upgrade`.** From preview.2 on, a stack keeps
-  its data: `loams upgrade check --to 0.1.0`, then `loams upgrade --to 0.1.0` (see
-  [upgrades](upgrades.md)). Do not upgrade by editing `LOAMS_VERSION` and running `docker
-  compose up`: 0.1.0 recreates the safekeeper, which must be drained first. preview.1 →
-  preview.2 kept no data: from preview.1, start a fresh stack (`docker compose down -v`, then
-  `up -d` with `LOAMS_VERSION=0.1.0`).
+  its data: from 0.1.0, `loams upgrade check --to 0.1.1`, then `loams upgrade --to 0.1.1`; from
+  preview.2, first `loams upgrade --to 0.1.0` (see [upgrades](upgrades.md)). Do not upgrade by
+  editing `LOAMS_VERSION` and running `docker compose up`: 0.1.0 recreates the safekeeper,
+  which must be drained first. preview.1 → preview.2 kept no data: from preview.1, start a
+  fresh stack (`docker compose down -v`, then `up -d` with `LOAMS_VERSION=0.1.1`).
 - **Podman: recreating the engine after an `.env` change** fails with "has dependent containers"
   while the `tailscale` sidecar shares its network namespace. Run `docker compose rm -sf tailscale
   && docker compose up -d loams tailscale` (see [upgrades](upgrades.md#recreating-a-service-by-hand));

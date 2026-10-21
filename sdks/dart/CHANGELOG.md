@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.1
 
 - `sql` (`query` with `$n` parameters, `queryArrow`, `SqlModule.records`) and
   `streams` (`create`, `get`, `list`, `produce` with producer deduplication,

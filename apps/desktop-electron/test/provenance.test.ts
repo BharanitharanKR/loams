@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { readdirSync, readFileSync, statSync } from "node:fs";
-import { join, relative, resolve } from "node:path";
+import { join, relative, resolve, sep } from "node:path";
 import { describe, expect, it } from "vitest";
 
 const app = resolve(__dirname, "..");
@@ -38,7 +38,8 @@ describe("dsh-desktop provenance (§10)", () => {
 		for (const p of [...files(join(app, "src")), ...files(join(app, "scripts")), ...files(join(app, "build")), join(app, "electron.vite.config.ts")]) {
 			const m = HEADER.exec(readFileSync(p, "utf8"));
 			if (!m) continue;
-			const rel = relative(app, p);
+			// provenance.json keys use '/', whatever the platform's separator.
+			const rel = relative(app, p).split(sep).join("/");
 			headed.push(rel);
 			expect(rows.get(rel)?.upstreamPath, rel).toBe(m[1] ?? m[2]);
 		}

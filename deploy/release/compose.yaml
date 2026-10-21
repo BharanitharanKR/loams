@@ -120,7 +120,7 @@ services:
   # snapshot first. No listener, no published port, no tailnet door, no
   # container socket.
   migrate:
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.0}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.1}
     command:
       - migrate
       - run
@@ -163,7 +163,7 @@ services:
 
   loams:
     <<: *restart
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.0}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams:${LOAMS_VERSION:-0.1.1}
     command:
       - standalone
       - --bucket=${LOAMS_BUCKET:-file:///var/lib/loams/bucket}
@@ -281,7 +281,7 @@ services:
   house:
     <<: *restart
     profiles: [house]
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-fabric:${LOAMS_VERSION:-0.1.0}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-fabric:${LOAMS_VERSION:-0.1.1}
     command:
       - house
       - --single-node
@@ -342,7 +342,7 @@ services:
       TS_USERSPACE: "true"
       TS_AUTH_ONCE: "true"
       # https (Tailscale: MagicDNS + HTTPS certificates), or http for Headscale
-      # (coming soon, unsupported in 0.1.0); see tailscale/serve-*.json.
+      # (coming soon, unsupported in 0.1.1); see tailscale/serve-*.json.
       TS_SERVE_CONFIG: /config/serve-${TS_SERVE_MODE:-https}.json
       TS_EXTRA_ARGS: --login-server=${TS_LOGIN_SERVER:-https://controlplane.tailscale.com} ${TS_EXTRA_ARGS:-}
     volumes:
@@ -352,7 +352,7 @@ services:
       loams:
         condition: service_started
 
-  # COMING SOON, unsupported in 0.1.0: Headscale issues no ts.net
+  # COMING SOON, unsupported in 0.1.1: Headscale issues no ts.net
   # HTTPS certificates, so the hosted console cannot reach an engine on it.
   # A self-hosted tailnet control server (`--profile headscale`). Clients,
   # including the browser's device, must reach HEADSCALE_SERVER_URL, so on a VM
@@ -399,7 +399,7 @@ services:
   pg-control:
     <<: *restart
     profiles: [postgres-control]
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-pg-control:${LOAMS_VERSION:-0.1.0}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-pg-control:${LOAMS_VERSION:-0.1.1}
     command:
       - pg-control
       - --store=local
@@ -487,7 +487,7 @@ services:
   pg-runner:
     <<: *restart
     profiles: [postgres-control]
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-pg-control:${LOAMS_VERSION:-0.1.0}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-pg-control:${LOAMS_VERSION:-0.1.1}
     command:
       - pg-runner
       - --listen=0.0.0.0:7691
@@ -525,7 +525,7 @@ services:
   agentd:
     <<: *restart
     profiles: [agentd]
-    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-agentd:${LOAMS_VERSION:-0.1.0}
+    image: ${LOAMS_REGISTRY:-ghcr.io/ostrium-labs}/loams-agentd:${LOAMS_VERSION:-0.1.1}
     # The daemon writes its token, lock and store beside its config.toml, in
     # a directory it makes owner-only (0700): that is /home/loams/agentd, in
     # the data volume. Only config.toml comes from ./agentd, read-only, and

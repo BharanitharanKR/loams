@@ -1,6 +1,6 @@
 # Loams: run it yourself
 
-Everything in Loams 0.1.0 runs on your machine or on VMs you own. Ostrium hosts
+Everything in Loams 0.1.1 runs on your machine or on VMs you own. Ostrium hosts
 two things only: the console (a React app) and the auth service. You can serve
 the console yourself instead, from your own Vercel or Cloudflare project, or
 from this stack (`--profile console`).
@@ -40,7 +40,7 @@ healthcheck.
 ```sh
 deploy/release/build.sh loams                        # both platforms, local manifest list
 deploy/release/build.sh --platforms linux/amd64 loams
-deploy/release/build.sh --version 0.1.0 --push   # CI on a tag
+deploy/release/build.sh --version 0.1.1 --push   # CI on a tag
 ```
 
 ## On this machine
@@ -54,7 +54,7 @@ docker compose logs tailscale            # the node name, or a login URL
 ```
 
 Set the console's `LOAMS_ENGINE_URL` to `https://loams.<tailnet>.ts.net`.
-Profiles add `headscale` (coming soon, unsupported in 0.1.0), `console` (the console from `LOAMS_CONSOLE_DIR`, with
+Profiles add `headscale` (coming soon, unsupported in 0.1.1), `console` (the console from `LOAMS_CONSOLE_DIR`, with
 `/config.json` built from `LOAMS_ENGINE_URL`, `LOAMS_AUTH_ISSUER` and
 `LOAMS_AUTH_CLIENT_ID`), `agentd` and `house` (below). Stop with `docker compose --profile '*'
 down`; add `--volumes` to delete the data.
@@ -158,9 +158,9 @@ creates the org and its owner) needs `LOAMS_SETUP_TOKEN` in `.env` or in
 For `--profile console`, build the console (`cd web && pnpm build`) and set
 `LOAMS_CONSOLE_DIR` to `web/apps/console/dist`.
 
-### Headscale (coming soon, unsupported in 0.1.0)
+### Headscale (coming soon, unsupported in 0.1.1)
 
-0.1.0 supports one setup: your own Tailscale tailnet and the hosted
+0.1.1 supports one setup: your own Tailscale tailnet and the hosted
 console. Headscale issues no `ts.net` HTTPS certificates, so the hosted console
 (served over HTTPS) cannot reach an engine on a Headscale tailnet. The profile
 stays in the bundle for a later release; the steps below are unsupported.
@@ -187,8 +187,8 @@ From 0.1.0-preview.2, `loams upgrade` upgrades this stack in place, one release 
 time, with a snapshot first:
 
 ```sh
-loams upgrade check --to 0.1.0  # what it will do and what would stop it
-loams upgrade --to 0.1.0        # snapshot, migrate, restart, verify
+loams upgrade check --to 0.1.1  # what it will do and what would stop it
+loams upgrade --to 0.1.1        # snapshot, migrate, restart, verify
 loams upgrade rollback          # back to the snapshot
 ```
 
@@ -199,7 +199,7 @@ every error code.
 
 ### Durable execution on TiKV
 
-After 0.1.0 the engine keeps Loams Durable (the embedded Resonate server) in
+From 0.1.1 the engine keeps Loams Durable (the embedded Resonate server) in
 TiKV, keyspace `loams_durable` (`--durable-store=tikv://pd:2379/loams_durable`,
 design §21 §3.3, D261), not in the SQLite file `durable/default.db` in the
 `loams-data` volume where 0.1.0 kept it. `loams dev`, and `loams standalone`
@@ -235,16 +235,16 @@ directory and `deploy/loams-postgres-dev` to `~/loams`, writes `.env` with mode
 needs SSH and outbound internet only.
 
 ```sh
-deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.0 --check  # loams upgrade check
-deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.0          # loams upgrade, on the VM
-deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.0 --rollback
+deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.1 --check  # loams upgrade check
+deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.1          # loams upgrade, on the VM
+deploy/release/byoc/upgrade.sh ubuntu@203.0.113.10 --to 0.1.1 --rollback
 ```
 
 `upgrade.sh` fetches the target release's `loams` CLI on the VM (its Linux
 package, checked against the release's `SHA256SUMS`) and runs `loams upgrade` in
 `~/loams/release`, streaming its output; its exit code is the CLI's.
 
-## Known gaps in 0.1.0
+## Known gaps in 0.1.1
 
 - Without `LOAMS_HOUSE_ENDPOINT` the engine does not reach the House, so
   `loams.house.v1` answers `house_not_configured`; use the House's own tailnet
@@ -266,7 +266,7 @@ package, checked against the release's `SHA256SUMS`) and runs `loams upgrade` in
   `TIMELINE_ID` in `.env` to bring your own; see
   [`../loams-postgres-dev/README.md`](../loams-postgres-dev/README.md). The
   `v0.1.0` tag predates `pg-bootstrap`: a checkout of the tag needs those two ids
-  by hand (the 0.1.0 compose bundle and `main` do not).
+  by hand (the 0.1.0 compose bundle, `v0.1.1` and later do not).
 - `pg-control` (`--profile postgres-control`) keeps its records in a local file
   (one node) and reaches the Postgres stack, its computes and `pg-runner` in
   plain text on the compose networks; no PgDog fronts the computes yet (PG2c),
