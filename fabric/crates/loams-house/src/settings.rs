@@ -84,6 +84,28 @@ pub const FRONT_SETTINGS: &[&str] = &[
     "materialized_views_ignore_errors",
 ];
 
+/// ClickHouse settings the gate applications send (HE1 Task 9, R9.11) that ask
+/// for what the House always does, so the front accepts any value and chDB never
+/// sees them:
+///
+/// * `mutations_sync`, `alter_sync`, `lightweight_deletes_sync`: a House `ALTER`
+///   and a mutation are committed before the answer, which is every level's
+///   promise (there are no replicas to wait for: the bucket is the replica).
+/// * `allow_experimental_lightweight_update`: lightweight `UPDATE` is the House's
+///   copy-on-write mutation, not an experiment.
+/// * `parallel_view_processing`: materialized views run in commit order.
+/// * `enable_full_text_index`: a text index is recorded, never built.
+/// * `flatten_nested`: the front reads a column list with its own setting (R10.3).
+pub const SATISFIED_SETTINGS: &[&str] = &[
+    "mutations_sync",
+    "alter_sync",
+    "lightweight_deletes_sync",
+    "allow_experimental_lightweight_update",
+    "parallel_view_processing",
+    "enable_full_text_index",
+    "flatten_nested",
+];
+
 /// Whether `name` is one of Loams's settings.
 pub fn is_loams(name: &str) -> bool {
     LOAMS_SETTINGS.contains(&name)
@@ -92,7 +114,7 @@ pub fn is_loams(name: &str) -> bool {
 /// Whether `name` is the front's alone: Loams's settings and
 /// [`FRONT_SETTINGS`]. chDB never sees them.
 pub fn is_front_only(name: &str) -> bool {
-    is_loams(name) || FRONT_SETTINGS.contains(&name)
+    is_loams(name) || FRONT_SETTINGS.contains(&name) || SATISFIED_SETTINGS.contains(&name)
 }
 
 /// Whether `name` may be set at all.
@@ -158,6 +180,14 @@ pub fn check(
             }
             if n > cap {
                 return Err(over(name, cap));
+            }
+        }
+        name if loams_house_ipc::policy::OFF_ONLY_SETTINGS.contains(&name) => {
+            if !matches!(value.to_ascii_lowercase().as_str(), "0" | "false") {
+                return Err(readonly(format!(
+                    "Setting {name} can only be 0 on the House: a read view is made again \
+                     for every snapshot, so a cached result could be stale"
+                )));
             }
         }
         "max_execution_time" => {
@@ -356,6 +386,71 @@ mod tests {
         )
         .expect("prefix");
         check("loams_snapshot_id", "42", &limits, &known).expect("Loams's own");
+    }
+
+    /// HE1 R9.11: every setting Langfuse v3 and v4 and OpenPanel 2.3.0 send, with
+    /// the values their `system.query_log` shows on the oracle, is accepted; the
+    /// ones the House always satisfies never reach chDB; the query cache is only
+    /// ever off.
+    #[test]
+    fn gate_application_settings_are_accepted() {
+        let limits = SessionLimits::default();
+        let known = known();
+        let sent = [
+            // Langfuse (`@clickhouse/client`).
+            ("max_execution_time", "35"),
+            ("timeout_before_checking_execution_speed", "0"),
+            ("log_comment", "{\"surface\":\"worker\"}"),
+            ("asterisk_include_materialized_columns", "1"),
+            ("asterisk_include_alias_columns", "1"),
+            ("input_format_json_throw_on_bad_escape_sequence", "0"),
+            ("use_query_cache", "0"),
+            ("use_query_cache", "false"),
+            ("date_time_output_format", "iso"),
+            ("enable_producing_buckets_out_of_order_in_aggregation", "0"),
+            ("http_headers_progress_interval_ms", "110000"),
+            ("send_progress_in_http_headers", "1"),
+            ("max_bytes_before_external_group_by", "1000000000"),
+            ("use_text_index_dictionary_cache", "1"),
+            ("use_text_index_postings_cache", "1"),
+            ("query_plan_optimize_lazy_materialization", "0"),
+            ("max_threads", "1"),
+            ("mutations_sync", "2"),
+            ("alter_sync", "2"),
+            ("enable_full_text_index", "1"),
+            // OpenPanel 2.3.0.
+            ("session_timezone", "UTC"),
+            ("distributed_product_mode", "allow"),
+            ("query_plan_convert_any_join_to_semi_or_anti_join", "0"),
+            ("max_insert_block_size", "10000000"),
+            ("input_format_parallel_parsing", "1"),
+            ("flatten_nested", "0"),
+            ("date_time_input_format", "best_effort"),
+            ("async_insert", "1"),
+            ("wait_for_async_insert", "1"),
+            ("parallel_view_processing", "1"),
+            ("lightweight_deletes_sync", "2"),
+            ("allow_experimental_lightweight_update", "1"),
+            ("join_use_nulls", "1"),
+        ];
+        for (name, value) in sent {
+            check(name, value, &limits, &known).unwrap_or_else(|e| panic!("{name}={value}: {e}"));
+        }
+        for name in SATISFIED_SETTINGS {
+            assert!(is_front_only(name), "{name} is the front's");
+            assert!(
+                !loams_house_ipc::policy::on_the_lists(name),
+                "{name} is not chDB's"
+            );
+        }
+        assert!(
+            !is_front_only("use_query_cache"),
+            "chDB sees it, capped at 0"
+        );
+        for on in ["1", "true", "True"] {
+            let err = check("use_query_cache", on, &limits, &known).expect_err("only off");
+            assert_eq!(err.code(), 164, "{err}");
+        }
     }
 
     /// Fix round 1, I3: values are read the way ClickHouse reads a setting's
