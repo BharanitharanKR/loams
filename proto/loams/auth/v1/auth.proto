@@ -84,6 +84,7 @@ enum OidcProviderKind {
   OIDC_PROVIDER_KIND_AUTHENTIK = 5;
   OIDC_PROVIDER_KIND_DEX = 6;
   OIDC_PROVIDER_KIND_GENERIC = 7;
+  OIDC_PROVIDER_KIND_ZITADEL = 8;
 }
 
 // An OIDC provider people can sign in with.
