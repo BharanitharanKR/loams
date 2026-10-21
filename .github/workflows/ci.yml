@@ -2457,13 +2457,14 @@ jobs:
       - if: ${{ !cancelled() }} # report every check, not only the first failure
         name: Unique decision and question declarations
         run: scripts/docs/check-decision-ids.sh
-      # IA1 Task 1 (design §76 §13, D1600): Authentik is removed; only the
-      # historical records in scripts/docs/no-authentik-allowlist.txt name it.
+      # IA1 Task 1 (design §76 §13, D1600): the former IdP is removed; only
+      # the historical records in scripts/docs/no-authentik-allowlist.txt
+      # name it.
       - if: ${{ !cancelled() }} # report every check, not only the first failure
-        name: No-Authentik checker self-test
+        name: Former-IdP checker self-test
         run: scripts/docs/check-no-authentik.sh --self-test
       - if: ${{ !cancelled() }} # report every check, not only the first failure
-        name: Authentik is named only in historical records
+        name: The former IdP is named only in historical records
         run: scripts/docs/check-no-authentik.sh
       # Design §54 §11 (UP1 Task 11): the release train lists every compiled
       # migration once and chains to `fresh`, its pins match the pin files,

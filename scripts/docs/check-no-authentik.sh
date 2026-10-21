@@ -10,7 +10,8 @@
 # allow-list (scripts/docs/no-authentik-allowlist.txt), or else every match in
 # it must be one of the two historical documents' file names, which other
 # documents link (design §38's and plan MT1's; renaming them would break every
-# link to them, on GitHub and on loams.dev). A pattern is a path relative to the
+# link to them, on GitHub and on loams.dev), or this gate's own name
+# (`no-authentik`, so CI can run it by path). A pattern is a path relative to the
 # root, where `*` also matches `/`. A pattern that matches no file fails the
 # check too, so the list cannot keep entries for files that no longer need them.
 set -euo pipefail
@@ -38,8 +39,9 @@ fi
 scan_root="${1:-$root}"
 allowlist="${2:-$root/scripts/docs/no-authentik-allowlist.txt}"
 
-# The historical documents' file names, which stay because links use them.
-linked_names='38-knative-authentik-gitops|2026-10-02-mt1-authentik-identity'
+# The historical documents' file names, which stay because links use them,
+# and this gate's own name, which CI and docs use to run it.
+linked_names='38-knative-authentik-gitops|2026-10-02-mt1-authentik-identity|no-authentik'
 
 list_files() {
   if git -C "$scan_root" rev-parse --is-inside-work-tree >/dev/null 2>&1 &&
