@@ -29,8 +29,8 @@ Highlights:
   `loams_durable`) instead of SQLite in `loams-data`. See Upgrading: the SQLite state does not
   carry over.
 - **Elasticsearch and Mastra compatibility.** The Elasticsearch API gains `GET /_cat/indices`,
-  `GET` and `PUT /{index}/_settings`, sort on `_seq_no` and the scroll API (as `helpers.scan` uses
-  it), and `_update_by_query` replaces a key when its param is an object. The Qdrant gateway serves
+  `GET` and `PUT /{index}/_settings`, sort on `_seq_no`, the scroll API (as `helpers.scan` uses
+  it) and aggregations on the engine (composite and `top_hits` included), and `_update_by_query` replaces a key when its param is an object. The Qdrant gateway serves
   `DELETE` of a payload index (REST and gRPC), and CI runs `@qdrant/js-client-rest` 1.18 and 1.19
   and a nightly Mastra gate against a dev build. With these, the NVIDIA RAG Blueprint harness
   passes 38 of 38.
@@ -48,10 +48,11 @@ SQLite store (`durable/default.db` in `loams-data`) is not copied anywhere.
 
 ### Added
 
-- **Elasticsearch API** (MA1, #937, #954, #958, #963, #938): `GET /_cat/indices` in the json and
+- **Elasticsearch API** (MA1, #937, #954, #958, #963, #938, #964): `GET /_cat/indices` in the json and
   text formats; `GET` and `PUT /{index}/_settings`; sort on `_seq_no`; the scroll API
   (`scroll`, `_search/scroll`, clearing a scroll), as the Python client's `helpers.scan` uses it;
-  and `_update_by_query` assigning an object param by replacing the key.
+  `_update_by_query` assigning an object param by replacing the key; and aggregations computed on
+  the engine, `composite` and `top_hits` included (#964).
 - **The Mastra gate** (MA1 Task 27, #956): a nightly run of Mastra's suites against a dev build,
   which files an issue on failure. `loams-postgres-dev` computes run with 128 MB `shared_buffers`
   and a 256 MB file cache (#946).
