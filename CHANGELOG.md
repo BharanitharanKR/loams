@@ -25,9 +25,17 @@ Highlights:
 - **Self-host first-run fixes.** `LOAMS_SETUP_TOKEN` reaches the engine from `.env` (and
   `secrets/engine.env` still wins), and a one-shot `pg-bootstrap` service creates `compute1`'s
   tenant and timeline, so a fresh stack comes up without manual steps from the bundle or the tag.
-- **Durable on TiKV.** The release stack keeps Loams Durable's state in TiKV (keyspace
-  `loams_durable`) instead of SQLite in `loams-data`. See Upgrading: the SQLite state does not
-  carry over.
+- **A light default self-host stack** (D1340): `docker compose up -d` in `deploy/release` now starts the
+  engine on its embedded stores (metastore on openraft + redb, Live on redb, Durable on SQLite) with a
+  local-folder bucket, Loams House linked to the engine, Loams Git (the engine image gains the `git`
+  feature), Loams Postgres with its remote storage in local folders, and agentd: about 8 GB of images and
+  1 GB of RAM at idle, down from about 10 GB and 2.6 GB. PD, TiKV and TiDB (Loams SQL) are the `tikv`
+  profile and RustFS the `rustfs` profile, set in `.env` as `COMPOSE_PROFILES`; the House's own tailnet
+  node is `house-tailnet` (was part of `house`). The engine records the store its data was started on and
+  refuses the other. `byoc/install.sh` gains `--tikv`, `--rustfs`, `--profiles` and `--no-postgres`
+  (`--all` is now both store profiles). Upgrading a 0.1.0 stack: add `COMPOSE_PROFILES=tikv,rustfs` to its
+  `.env` first. `loams upgrade` follows the profiles and refuses a stack on the embedded stores for now;
+  see docs/release/upgrades.md.
 - **Elasticsearch and Mastra compatibility.** The Elasticsearch API gains `GET /_cat/indices`,
   `GET` and `PUT /{index}/_settings`, sort on `_seq_no`, the scroll API (as `helpers.scan` uses
   it) and aggregations on the engine (composite and `top_hits` included), and `_update_by_query` replaces a key when its param is an object. The Qdrant gateway serves
@@ -43,8 +51,10 @@ Highlights:
 ### Upgrading
 
 **0.1.1 changes the default stack; reinstall.** Start from the 0.1.1 compose bundle with a fresh
-`.env`, rather than upgrading a 0.1.0 stack in place. Durable's state is not carried over: the 0.1.0
-SQLite store (`durable/default.db` in `loams-data`) is not copied anywhere.
+`.env`, rather than upgrading a 0.1.0 stack in place: the light default keeps its data on the
+embedded stores and local folders, not in 0.1.0's TiKV and RustFS. To keep a 0.1.0 stack's data,
+add `COMPOSE_PROFILES=tikv,rustfs` to its `.env` before `loams upgrade --to 0.1.1`; it then keeps
+0.1.0's shape, Durable on SQLite included (docs/release/upgrades.md).
 
 ### Added
 
@@ -63,9 +73,9 @@ SQLite store (`durable/default.db` in `loams-data`) is not copied anywhere.
 - **CF1 tasks 12–16** (design 59): one keymap for D1081 in which editable targets keep their
   keys; per-OS window chrome synced to the page theme; native menus and the context menu; a splash
   with Loams' loader; OS notifications and an update toast with "Skip this version" (#819–#822, #825).
-- **Durable on TiKV in the release stack** (#796): the `loams` service runs with
-  `--durable-store=tikv://pd:2379/loams_durable`, the image adds `durable-tikv`, and PD
-  pre-allocates the keyspace. The TiKV durable server creates its keyspace if PD has none, answers
+- **Durable on TiKV** (#796): the image adds `durable-tikv`, and PD pre-allocates the keyspace;
+  with the `tikv` profile, `LOAMS_DURABLE_STORE=tikv://pd:2379/loams_durable` puts the stack's
+  Durable there (D1342; SQLite stays the default). The TiKV durable server creates its keyspace if PD has none, answers
   `promise.search`, `task.search` and `schedule.search` (the console's Durable page uses them;
   `--durable-set servers.server_tikv.search=false` turns them off), and its start log names its
   store.

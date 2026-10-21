@@ -17,9 +17,18 @@
 #                           headscale`) at this public URL, mint the auth key
 #                           there, and serve the engine over http
 #   --version V             image tag [default: 0.1.1]
-#   --all                   start every service, the Postgres stack included
-#   --services "A B"        start these services (and what they depend on)
-#                           [default: loams tailscale tidb]
+#   --tikv                  add the `tikv` profile: PD, TiKV and TiDB (Loams
+#                           SQL; the metastore and Live on TiKV). Several GB
+#                           more of disk and RAM
+#   --rustfs                add the `rustfs` profile: Loams Postgres's storage
+#                           in an S3 bucket (RustFS) instead of local folders
+#   --all                   both: --tikv --rustfs
+#   --profiles "A,B"        add these profiles too (house-tailnet, postgres-control, ...)
+#   --no-postgres           leave the Loams Postgres stack out (postgres-off.yaml)
+#   --services "A B"        start only these services (and what they depend on)
+#                           [default: every service of the stack's profiles]
+#   (Profiles and --no-postgres go into a new .env: pick them on the first
+#   install, since a stack's data stays on the stores it started on.)
 #   --reconfigure           rewrite an existing .env on the host
 #   -y, --yes               do not ask; take keys from flags or the environment
 #
@@ -37,8 +46,9 @@ authkey="${TS_AUTHKEY:-}"
 login_server="${TS_LOGIN_SERVER-}"
 headscale=""
 version="0.1.1"
-all=0
-services="loams tailscale tidb"
+profiles=""
+postgres=1
+services=""
 reconfigure=0
 assume_yes=0
 target=""
@@ -55,11 +65,15 @@ while (($#)); do
     --login-server) login_server="${2-}"; shift 2 ;;
     --headscale) headscale="${2:?}"; shift 2 ;;
     --version) version="${2:?}"; shift 2 ;;
-    --all) all=1; shift ;;
+    --tikv) profiles="$profiles,tikv"; shift ;;
+    --rustfs) profiles="$profiles,rustfs"; shift ;;
+    --all) profiles="$profiles,tikv,rustfs"; shift ;;
+    --profiles) profiles="$profiles,${2:?}"; shift 2 ;;
+    --no-postgres) postgres=0; shift ;;
     --services) services="${2:?}"; shift 2 ;;
     --reconfigure) reconfigure=1; shift ;;
     -y|--yes) assume_yes=1; shift ;;
-    -h|--help) sed -n '2,26p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;;
     -*) die "unknown option: $1" ;;
     *) [[ -z "$target" ]] || die "one target only"; target="$1"; shift ;;
   esac
@@ -69,6 +83,8 @@ done
 [[ "$dir" =~ ^[A-Za-z0-9._/-]+$ ]] || die "--dir may hold only letters, digits and ._/-"
 [[ "$dir" != *..* && "$dir" != "." && "$dir" != "./" && "${dir%/}" != "" ]] || die "--dir $dir is not an install directory"
 [[ "$services" =~ ^[a-z0-9_\ -]*$ ]] || die "--services takes service names"
+profiles="${profiles#,}"
+[[ "$profiles" =~ ^[a-z0-9,-]*$ ]] || die "--profiles takes profile names, comma-separated"
 [[ "$version" =~ ^[A-Za-z0-9._-]+$ ]] || die "--version is not an image tag"
 [[ -f "$release/compose.yaml" && -f "$deploy/loams-postgres-dev/compose.yaml" ]] \
   || die "run from a Loams checkout: $release/compose.yaml or the Postgres stack is missing"
@@ -118,6 +134,9 @@ tar -C "$deploy" -czf - \
 
 if ssh_cmd "test -f $(printf '%q' "$dir")/release/.env" && ((!reconfigure)); then
   say "keeping the existing .env (pass --reconfigure to rewrite it)"
+  if [[ -n "$profiles" ]] || ((!postgres)); then
+    say "warning: --tikv, --rustfs, --all, --profiles and --no-postgres only go into a new .env; the existing one's COMPOSE_PROFILES stays"
+  fi
 else
   [[ -n "$headscale" ]] && login_server="$headscale"
   if [[ -n "$login_server" ]]; then
@@ -150,7 +169,8 @@ else
     setkv HEADSCALE_SERVER_URL "$headscale"
     setkv HEADSCALE_BIND "0.0.0.0"
   fi
-  if ((!all)); then
+  setkv COMPOSE_PROFILES "$profiles"
+  if ((!postgres)); then
     setkv LOAMS_POSTGRES_COMPOSE "./postgres-off.yaml"
   fi
   say "writing $dir/release/.env"
@@ -158,7 +178,6 @@ else
 fi
 ssh_cmd "umask 077 && touch $(printf '%q' "$dir")/release/secrets/api-keys"
 
-((all)) && services=""
 say "starting the stack"
 # shellcheck disable=SC2016 # expanded on the host
 remote '

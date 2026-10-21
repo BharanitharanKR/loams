@@ -21,8 +21,9 @@ free_factor = 1.5
 # Expected downtime of the upgrade, excluding image pulls (Q833's target).
 downtime_seconds = 300
 
-# No migrations. Durable's state moves from SQLite to TiKV (keyspace
-# `loams_durable`, #796) and is not copied: see the CHANGELOG's Upgrading.
+# No migrations. The default stack is the light one (D1340); a 0.1.0 stack
+# keeps its stores with COMPOSE_PROFILES=tikv,rustfs, Durable on SQLite
+# included (D1342): see the CHANGELOG's Upgrading.
 
 [release.components]
 pd             = "v8.5.8"
