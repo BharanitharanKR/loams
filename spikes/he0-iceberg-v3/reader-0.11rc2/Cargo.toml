@@ -1,0 +1,23 @@
+[package]
+name = "he0-v3-reader-rc2"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+description = "HE0 Task 11 spike: read Spark-written Iceberg v3 tables with iceberg-rust 0.11.0-rc.2 @ 040476d (unmerged)"
+
+# Standalone: not a member of the repository's workspaces.
+[workspace]
+
+# apache/iceberg-rust v0.11.0-rc.2 (commit 8590485, 2026-09-14), the 0.11.x release branch cut on
+# 2026-09-03: arrow 58.4 and DataFusion 54.
+[dependencies]
+iceberg = { git = "https://github.com/apache/iceberg-rust", rev = "859048563bc71a3167d0545cb66756d26c64e4ca" }
+iceberg-catalog-rest = { git = "https://github.com/apache/iceberg-rust", rev = "859048563bc71a3167d0545cb66756d26c64e4ca" }
+iceberg-storage-opendal = { git = "https://github.com/apache/iceberg-rust", rev = "859048563bc71a3167d0545cb66756d26c64e4ca", features = ["opendal-s3"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+futures = "0.3"
+arrow-array = "58.4"
+arrow-schema = "58.4"
+arrow-cast = { version = "58.4", features = ["prettyprint"] }
+parquet = { version = "58.4", default-features = false }

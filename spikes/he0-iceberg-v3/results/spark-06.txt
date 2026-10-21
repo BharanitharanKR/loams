@@ -1,0 +1,53 @@
+Using Spark's default log4j profile: org/apache/spark/log4j2-defaults.properties
+Setting default log level to "WARN".
+To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
+Spark master: local[4], Application Id: local-1792597425135
+ns_1
+Time taken: 1.634 seconds, Fetched 1 row(s)
+ns_1.base
+Time taken: 0.029 seconds, Fetched 1 row(s)
+events
+latest
+compacted
+mutated
+ctas
+Time taken: 0.061 seconds, Fetched 5 row(s)
+ts                  	timestamp           	                    
+day                 	date                	                    
+user_id             	decimal(20,0)       	                    
+name                	string              	                    
+value               	double              	                    
+amount              	decimal(18,4)       	                    
+tags                	array<string>       	                    
+attrs               	map<string,string>  	                    
+maybe               	string              	                    
+flag                	boolean             	                    
+uid                 	string              	                    
+small               	int                 	                    
+big                 	bigint              	                    
+u8                  	int                 	                    
+u32                 	bigint              	                    
+f32                 	float               	                    
+dt                  	timestamp           	                    
+                    	                    	                    
+# Partitioning      	                    	                    
+Part 0              	months(ts)          	                    
+Time taken: 0.132 seconds, Fetched 20 row(s)
+events	20500	1459788	5500	2026-08-01 00:00:00	2026-11-06 05:13:00	199990000	9990000	199990599970000
+Time taken: 2.226 seconds, Fetched 1 row(s)
+events_types	2026-08-01 00:00:00	2026-08-01	0	click	0.0	0.0000	["a","0"]	{"k":"0"}	NULL	true	3a8037ae-8bc8-4156-a2bd-4b3842f687af	0	0	0	0	0.0	2026-08-01 00:00:00
+events_types	2026-08-01 11:19:00	2026-08-01	0	view	32.333333333333336	13.8571	["a","2"]	{"k":"97"}	m	false	b2776a82-16a3-448c-bc71-15571039649d	97	97000291	97	97	12.125	2026-08-01 00:01:37
+Time taken: 0.479 seconds, Fetched 2 row(s)
+events_pruned	7951
+Time taken: 0.229 seconds, Fetched 1 row(s)
+latest	95	4850	0
+Time taken: 0.229 seconds, Fetched 1 row(s)
+mutated	100
+Time taken: 0.118 seconds, Fetched 1 row(s)
+events_files	5	20500
+Time taken: 0.262 seconds, Fetched 1 row(s)
+events_partitions	{"ts_month":679}	6378
+events_partitions	{"ts_month":680}	6171
+events_partitions	{"ts_month":681}	6877
+events_partitions	{"ts_month":682}	1074
+Time taken: 0.486 seconds, Fetched 4 row(s)

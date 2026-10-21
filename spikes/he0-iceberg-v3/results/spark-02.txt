@@ -1,0 +1,50 @@
+Using Spark's default log4j profile: org/apache/spark/log4j2-defaults.properties
+Setting default log level to "WARN".
+To adjust logging level use sc.setLogLevel(newLevel). For SparkR, use setLogLevel(newLevel).
+Spark master: local[4], Application Id: local-1792597173694
+dv	800	400400	100
+Time taken: 6.554 seconds, Fetched 1 row(s)
+dv_part	2571	3855858	514
+Time taken: 0.308 seconds, Fetched 1 row(s)
+lineage	100	4950	10
+Time taken: 0.271 seconds, Fetched 1 row(s)
+variant	5	15
+Time taken: 0.238 seconds, Fetched 1 row(s)
+posdel_v2	900	450000	100
+Time taken: 0.252 seconds, Fetched 1 row(s)
+upgraded	890	494890
+Time taken: 0.178 seconds, Fetched 1 row(s)
+lineage_cols	0	a	0	1
+lineage_cols	3	c	3	3
+lineage_cols	13	c	13	3
+lineage_cols	49	a	49	1
+lineage_cols	50	b	50	2
+lineage_cols	53	c	53	3
+lineage_cols	99	b	99	2
+Time taken: 0.568 seconds, Fetched 7 row(s)
+variant_rows	1	{"a":1,"b":"x"}
+variant_rows	2	[1,2,3]
+variant_rows	3	"just a string"
+variant_rows	4	{"nested":{"k":[true,null,2.5]}}
+variant_rows	5	NULL
+Time taken: 0.237 seconds, Fetched 5 row(s)
+dv_delete_files	1	PUFFIN	75	true	4	135
+dv_delete_files	1	PUFFIN	75	true	139	135
+dv_delete_files	1	PUFFIN	75	true	274	135
+dv_delete_files	1	PUFFIN	75	true	409	135
+Time taken: 0.116 seconds, Fetched 4 row(s)
+dv_part_delete_files	PUFFIN	8
+Time taken: 0.293 seconds, Fetched 1 row(s)
+posdel_v2_delete_files	PARQUET	4
+Time taken: 0.139 seconds, Fetched 1 row(s)
+upgraded_delete_files	PUFFIN	8
+Time taken: 0.233 seconds, Fetched 1 row(s)
+dv_snapshots	4927329159829497768	append
+dv_snapshots	7803222466628151808	delete
+dv_snapshots	7223204012417643248	delete
+dv_snapshots	2981768816088578087	overwrite
+Time taken: 0.235 seconds, Fetched 4 row(s)
+format-version	3
+Time taken: 0.109 seconds, Fetched 1 row(s)
+format-version	3
+Time taken: 0.013 seconds, Fetched 1 row(s)

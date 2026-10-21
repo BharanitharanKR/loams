@@ -1,0 +1,13 @@
+## create
+  asked V3: create returned V2, load returned V2
+  asked V3: create returned V2, load returned V2
+## append
+  FAILED: TableNotFound => Tried to load a table that does not exist
+  FAILED: TableNotFound => Tried to load a table that does not exist
+## upgrade
+  upgrade: V2 -> commit returned V3, load returned V3, next-row-id=0
+## append
+  wrote s3://spike/spark/01a15f21-13e0-7e13-9785-3f7e8a316c2c/data/he0-rel-100-00000.parquet rows=10 first_row_id=None
+  committed: next-row-id 10 -> 20, snapshot first-row-id=Some(10) added-rows=Some(10)
+  wrote s3://spike/spark/01a15f21-13e0-7e13-9785-3f7e8a316c2c/data/he0-main-200-00000.parquet rows=10 first_row_id=None
+  committed: next-row-id 20 -> 30, snapshot first-row-id=Some(20) added-rows=Some(10)

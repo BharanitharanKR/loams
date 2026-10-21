@@ -1,0 +1,16 @@
+SELECT version();
+SHOW SCHEMAS FROM house;
+SHOW TABLES FROM house."ns_1.base";
+SELECT 'events', count(*), sum(user_id), count_if(maybe IS NULL), min(ts), max(ts), sum(u32), sum(small), sum(big) FROM house."ns_1.base".events;
+DESCRIBE house."ns_1.base".events;
+SELECT 'events_pruned', count(*) FROM house."ns_1.base".events WHERE ts >= TIMESTAMP '2026-10-01 00:00:00 UTC';
+SELECT 'latest', count(*), sum(id), sum(is_deleted) FROM house."ns_1.base".latest;
+SELECT 'mutated', count(*) FROM house."ns_1.base".mutated;
+SELECT 'compacted_v3', count(*), sum(id) FROM house."ns_1.base".compacted;
+SELECT 'dv', count(*), sum(id), count_if(v = 'u') FROM spark.v3.dv;
+SELECT 'dv_part', count(*), sum(id), count_if(v = 'm') FROM spark.v3.dv_part;
+SELECT 'lineage', count(*), sum(id), count_if(v = 'c') FROM spark.v3.lineage;
+SELECT 'posdel_v2', count(*), sum(id), count_if(v = 'u') FROM spark.v3.posdel_v2;
+SELECT 'upgraded', count(*), sum(id) FROM spark.v3.upgraded;
+SELECT 'variant', id, json_format(CAST(payload AS JSON)) FROM spark.v3.variant ORDER BY id;
+SELECT 'lineage_cols', id, v, "$row_id", "$last_updated_sequence_number" FROM spark.v3.lineage WHERE id IN (0, 49, 99) ORDER BY id;

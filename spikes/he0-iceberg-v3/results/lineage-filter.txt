@@ -1,0 +1,18 @@
+## main v3.lineage 40
+  lineage rows=60 null _row_id=0 _row_id<>id=0
+  fingerprint sum_rid=4170 sum_rid_x_id=307810 sum_seq=117
+## main v3.dv 500
+  lineage rows=400 null _row_id=0 _row_id<>id=0
+  fingerprint sum_rid=300200 sum_rid_x_id=233632200 sum_seq=550
+## main v3.dv_part 1000
+  lineage rows=1714 null _row_id=0 _row_id<>id=1709
+  fingerprint sum_rid=3106464 sum_rid_x_id=6837533572 sum_seq=3428
+## main v3.upgraded 500
+  lineage rows=490 null _row_id=0 _row_id<>id=490
+  fingerprint sum_rid=344690 sum_rid_x_id=268441140 sum_seq=670
+## main v3.dv_part
+  lineage rows=2571 null _row_id=0 _row_id<>id=2566
+  fingerprint sum_rid=3855750 sum_rid_x_id=7230336108 sum_seq=4798
+## main v3.upgraded
+  lineage rows=890 null _row_id=0 _row_id<>id=890
+  fingerprint sum_rid=484890 sum_rid_x_id=311893340 sum_seq=1070

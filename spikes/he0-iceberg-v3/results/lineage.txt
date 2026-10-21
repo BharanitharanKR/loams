@@ -1,0 +1,30 @@
+## rel v3.lineage
+  FAILED: Unexpected => Failed to load Parquet metadata, source: Parquet error: Invalid Parquet file. Corrupt footer
+## rel v3.lineage_cow
+  FAILED: Unexpected => field not found
+## main v3.lineage
+  arrow id: Int64
+  arrow v: Utf8
+  arrow _row_id: Int64
+  arrow _last_updated_sequence_number: RunEndEncoded(Field { name: "run_ends", data_type: Int32 }, Field { name: "values", data_type: Int64, nullable: true })
+  lineage id=0 v=a _row_id=Some(0) _last_updated_sequence_number=Some(1)
+  lineage id=3 v=c _row_id=Some(3) _last_updated_sequence_number=Some(3)
+  lineage id=13 v=c _row_id=Some(13) _last_updated_sequence_number=Some(3)
+  lineage id=49 v=a _row_id=Some(49) _last_updated_sequence_number=Some(1)
+  lineage id=50 v=b _row_id=Some(50) _last_updated_sequence_number=Some(2)
+  lineage id=53 v=c _row_id=Some(53) _last_updated_sequence_number=Some(3)
+  lineage id=99 v=b _row_id=Some(99) _last_updated_sequence_number=Some(2)
+  lineage rows=100 null _row_id=0
+## main v3.lineage_cow
+  arrow id: Int64
+  arrow v: Utf8
+  arrow _row_id: Int64
+  arrow _last_updated_sequence_number: RunEndEncoded(Field { name: "run_ends", data_type: Int32 }, Field { name: "values", data_type: Int64, nullable: true })
+  lineage id=0 v=a _row_id=Some(0) _last_updated_sequence_number=Some(1)
+  lineage id=3 v=c _row_id=Some(3) _last_updated_sequence_number=Some(3)
+  lineage id=13 v=c _row_id=Some(13) _last_updated_sequence_number=Some(3)
+  lineage id=49 v=a _row_id=Some(49) _last_updated_sequence_number=Some(1)
+  lineage id=50 v=b _row_id=Some(50) _last_updated_sequence_number=Some(2)
+  lineage id=53 v=c _row_id=Some(53) _last_updated_sequence_number=Some(3)
+  lineage id=99 v=b _row_id=Some(99) _last_updated_sequence_number=Some(2)
+  lineage rows=100 null _row_id=0

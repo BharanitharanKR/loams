@@ -1,0 +1,23 @@
+[package]
+name = "he0-v3-reader-main"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+description = "HE0 Task 11 spike: read Spark-written Iceberg v3 tables with iceberg-rust main @ 000e791 (unmerged)"
+
+# Standalone: not a member of the repository's workspaces.
+[workspace]
+
+# apache/iceberg-rust main, pinned by commit (2026-10-21, "build: disable unused
+# zstd legacy feature (#3495)").
+[dependencies]
+iceberg = { git = "https://github.com/apache/iceberg-rust", rev = "000e791d5229d9d136cda2b41fa0d7563fa58e1e" }
+iceberg-catalog-rest = { git = "https://github.com/apache/iceberg-rust", rev = "000e791d5229d9d136cda2b41fa0d7563fa58e1e" }
+iceberg-storage-opendal = { git = "https://github.com/apache/iceberg-rust", rev = "000e791d5229d9d136cda2b41fa0d7563fa58e1e", features = ["opendal-s3"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+futures = "0.3"
+arrow-array = "59.2"
+arrow-schema = "59.2"
+arrow-cast = { version = "59.2", features = ["prettyprint"] }
+parquet = { version = "59.2", default-features = false }

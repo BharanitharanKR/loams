@@ -1,0 +1,35 @@
+duckdb v1.5.6
+iceberg extension 890b78a9c
+schemas [('h', 'ns_1'), ('s', 'probe'), ('s', 'v3')]
+tables [('s', 'probe', 'create_v3_main'), ('s', 'probe', 'create_v3_main2'), ('s', 'probe', 'create_v3_rel'), ('s', 'probe', 'create_v3_rel2'), ('s', 'probe', 'raw_default'), ('s', 'probe', 'raw_v3'), ('s', 'v3', 'defaults'), ('s', 'v3', 'dv'), ('s', 'v3', 'dv_part'), ('s', 'v3', 'lineage'), ('s', 'v3', 'lineage_cow'), ('s', 'v3', 'posdel_v2'), ('s', 'v3', 'rust_append'), ('s', 'v3', 'upgraded'), ('s', 'v3', 'variant')]
+events via h."ns_1.base".events (20500, Decimal('1459788'), 5500, datetime.datetime(2026, 8, 1, 5, 30, tzinfo=<DstTzInfo 'Asia/Kolkata' IST+5:30:00 STD>), datetime.datetime(2026, 11, 6, 10, 43, tzinfo=<DstTzInfo 'Asia/Kolkata' IST+5:30:00 STD>), 199990000, 9990000, 199990599970000)
+events via h.ns_1.base.events FAILED: Parser Error: NameListToString NOT IMPLEMENTED
+events types [('ts', 'TIMESTAMP WITH TIME ZONE'), ('day', 'DATE'), ('user_id', 'DECIMAL(20,0)'), ('name', 'VARCHAR'), ('value', 'DOUBLE'), ('amount', 'DECIMAL(18,4)'), ('tags', 'VARCHAR[]'), ('attrs', 'MAP(VARCHAR, VARCHAR)'), ('maybe', 'VARCHAR'), ('flag', 'BOOLEAN'), ('uid', 'UUID'), ('small', 'INTEGER'), ('big', 'BIGINT'), ('u8', 'INTEGER'), ('u32', 'BIGINT'), ('f32', 'FLOAT'), ('dt', 'TIMESTAMP WITH TIME ZONE')]
+events rows [(datetime.datetime(2026, 8, 1, 5, 30, tzinfo=<DstTzInfo 'Asia/Kolkata' IST+5:30:00 STD>), datetime.date(2026, 8, 1), Decimal('0'), 'click', 0.0, Decimal('0.0000'), ['a', '0'], {'k': '0'}, None, True, UUID('3a8037ae-8bc8-4156-a2bd-4b3842f687af'), 0, 0, 0, 0, 0.0, datetime.datetime(2026, 8, 1, 5, 30, tzinfo=<DstTzInfo 'Asia/Kolkata' IST+5:30:00 STD>)), (datetime.datetime(2026, 8, 1, 16, 49, tzinfo=<DstTzInfo 'Asia/Kolkata' IST+5:30:00 STD>), datetime.date(2026, 8, 1), Decimal('0'), 'view', 32.333333333333336, Decimal('13.8571'), ['a', '2'], {'k': '97'}, 'm', False, UUID('b2776a82-16a3-448c-bc71-15571039649d'), 97, 97000291, 97, 97, 12.125, datetime.datetime(2026, 8, 1, 5, 31, 37, 
+events pruned (7951,)
+latest (95, Decimal('4850'), 0)
+mutated (100,)
+compacted (upgraded to v3) (200, Decimal('19900'))
+v3.dv (800, 400400, 100)
+v3.dv_part (2571, 3855858, 514)
+v3.lineage (100, 4950, 10)
+v3.lineage cols [(0, 'a', 0, 1), (3, 'c', 3, 3), (13, 'c', 13, 3), (49, 'a', 37, 1), (50, 'b', 50, 2), (53, 'c', 53, 3), (99, 'b', 74, 2)]
+v3.lineage_cow cols [(0, 'a', 0, 1), (3, 'c', 3, 3), (13, 'c', 13, 3), (49, 'a', 49, 1), (50, 'b', 50, 2), (53, 'c', 53, 3), (99, 'b', 99, 2)]
+v3.lineage row ids distinct (100, 100, 0, 99)
+v3.variant [(1, "{'a': 1, 'b': x}"), (2, '[1, 2, 3]'), (3, 'just a string'), (4, "{'nested': {'k': [true, NULL, 2.5]}}"), (5, None)]
+v3.posdel_v2 (900, 450000, 100)
+v3.upgraded (890, 494890)
+v3.rust_append lineage [('r', 20, 10, 29), ('s', 10, 0, 9)]
+v3.lineage _row_id <> id (0, 0)
+v3.dv _row_id <> id (0, 800)
+v3.lineage filtered id=49 (49, 12)
+v3.lineage filtered id>=40 (9,)
+v3.dv filtered id>=500 (350, 400)
+v3.lineage_cow filtered id>=40 (0,)
+v3.posdel_v2 has no lineage (900,)
+fp lineage>=40 (60, 3837, 292936, 117)
+fp dv>=500 (400, 125200, 102207200, 550)
+fp dv_part>=1000 (1714, 3106464, 6837533572, 3428)
+fp upgraded>=500 (490, 144690, 118341140, 670)
+fp dv_part all (2571, 3855750, 7230336108, 4798)
+fp upgraded all (890, 484890, 311893340, 1070)

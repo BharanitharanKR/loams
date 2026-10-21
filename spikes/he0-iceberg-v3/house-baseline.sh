@@ -1,0 +1,30 @@
+#!/usr/bin/env bash
+# Today's House (loams-fabric 0.1.0, lake tables, Iceberg v2) writes the
+# interop baseline tables through its own front, as an application would.
+set -uo pipefail
+cd "$(dirname "$0")"
+q() { echo ">>> $1"; ./ch.sh "$1"; echo; }
+q "CREATE TABLE base.events (ts DateTime64(3), day Date, user_id UInt64, name LowCardinality(String), value Float64, amount Decimal(18,4), tags Array(String), attrs Map(String,String), maybe Nullable(String), flag Bool, uid UUID, small Int16, big Int64, u8 UInt8, u32 UInt32, f32 Float32, dt DateTime) ENGINE = MergeTree PARTITION BY toYYYYMM(ts) ORDER BY (user_id, ts)"
+q "INSERT INTO base.events SELECT toDateTime64('2026-08-01 00:00:00', 3) + toIntervalMinute(number * 7), toDate('2026-08-01') + intDiv(number, 300), number % 97, ['click','view','buy'][number % 3 + 1], number / 3, toDecimal64(number, 4) / 7, ['a', toString(number % 5)], map('k', toString(number)), if(number % 4 = 0, NULL, 'm'), number % 2 = 0, generateUUIDv4(), toInt16(number % 1000), toInt64(number) * 1000003, toUInt8(number % 256), toUInt32(number), toFloat32(number) / 8, toDateTime('2026-08-01 00:00:00') + number FROM numbers(20000)"
+q "INSERT INTO base.events SELECT toDateTime64('2026-10-01 00:00:00', 3) + toIntervalSecond(number), toDate('2026-10-01'), 1000 + number % 3, 'late', 0, 0, [], map(), NULL, false, generateUUIDv4(), 0, 0, 0, 0, 0, toDateTime('2026-10-01 00:00:00') FROM numbers(500)"
+q "SELECT count(), sum(user_id), countIf(maybe IS NULL), min(ts), max(ts) FROM base.events"
+q "CREATE TABLE base.latest (id UInt64, version UInt64, payload String, is_deleted UInt8) ENGINE = ReplacingMergeTree(version, is_deleted) ORDER BY id"
+q "INSERT INTO base.latest SELECT number, 1, concat('v1-', toString(number)), 0 FROM numbers(100)"
+q "INSERT INTO base.latest SELECT number, 2, concat('v2-', toString(number)), if(number % 10 = 0, 1, 0) FROM numbers(50)"
+q "SELECT count() FROM base.latest"
+q "SELECT count() FROM base.latest FINAL"
+q "CREATE TABLE base.compacted (id UInt64, s String) ENGINE = MergeTree ORDER BY id"
+q "INSERT INTO base.compacted SELECT number, toString(number) FROM numbers(100)"
+q "INSERT INTO base.compacted SELECT number, toString(number) FROM numbers(100, 100)"
+q "OPTIMIZE TABLE base.compacted FINAL"
+q "SELECT count(), sum(id) FROM base.compacted"
+q "CREATE TABLE base.mutated (id UInt64, s String) ENGINE = MergeTree ORDER BY id"
+q "INSERT INTO base.mutated SELECT number, toString(number) FROM numbers(100)"
+q "ALTER TABLE base.mutated DELETE WHERE id % 10 = 0"
+q "ALTER TABLE base.mutated UPDATE s = 'x' WHERE id % 10 = 1"
+q "DELETE FROM base.mutated WHERE id % 10 = 2"
+q "SELECT count() FROM base.mutated"
+q "CREATE TABLE base.ttl (ts DateTime, id UInt64) ENGINE = MergeTree ORDER BY id TTL ts + INTERVAL 1 DAY"
+q "CREATE TABLE base.ctas ENGINE = MergeTree ORDER BY id AS SELECT number AS id, toString(number) AS s FROM numbers(10)"
+q "SELECT count() FROM base.ctas"
+q "SHOW TABLES FROM base"

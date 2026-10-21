@@ -1,0 +1,56 @@
+iceberg-rust 0.10.1 (crates.io)
+== read v3.dv
+  metadata: format-version=V3 next-row-id=1100 snapshots=4 current first-row-id=Some(1000) added-rows=Some(100)
+  field 1 id long required=false
+  field 2 v string required=false
+  plan: 5 file tasks, 20 delete files attached
+  FAILED: Unexpected => Failed to load Parquet metadata, source: Parquet error: Invalid Parquet file. Corrupt footer
+== read v3.dv_part
+  metadata: format-version=V3 next-row-id=3514 snapshots=4 current first-row-id=Some(3000) added-rows=Some(514)
+  field 1 id long required=false
+  field 2 p int required=false
+  field 3 v string required=false
+  plan: 12 file tasks, 24 delete files attached
+  FAILED: Unexpected => Failed to load Parquet metadata, source: Parquet error: Invalid Parquet file. Corrupt footer
+== read v3.lineage
+  metadata: format-version=V3 next-row-id=110 snapshots=3 current first-row-id=Some(100) added-rows=Some(10)
+  field 1 id long required=false
+  field 2 v string required=false
+  plan: 9 file tasks, 72 delete files attached
+  FAILED: Unexpected => Failed to load Parquet metadata, source: Parquet error: Invalid Parquet file. Corrupt footer
+== read v3.variant
+  FAILED: Unexpected, context: { json: {"metadata-location":"s3://spike/spark/01a15f1d-f317-7992-8f76-df4541d61f6b/metadata/00001-01a15f1d-f3e9-7872-9f86-8337d890a731.gz.metadata.json","metadata":{"format-version":3,"table-uuid":"01a15f1d-f317-7992-8f76-df4541d61f6b","location":"s3://spike/spark/01a15f1d-f317-7992-8f76-df4541d61f6b","last-sequence-number":1,"last-updated-ms":1792597160932,"last-column-id":2,"schemas":[{"schema-id":0,"type":"struct","fields":[{"id":1,"name":"id","required":false,"type":"long"},{"id":2,"name":"payload","required":false,"type":"variant"}]}],"current-schema-id":0,"partition-specs":[{"spec-id":0,"fields":[]}],"default-spec-id":0,"last-partition-id":999,"properties":{"owner":"spark"},"current-snapshot-id":2502360526997415709,"snapshot-log":[{"snapshot-id":2502360526997415709,"timestamp-ms":1792597160932}],"metadata-log":[{"metadata-file":"s3://spike/spark/01a15f1d-f317-7992-8f76-df4541d61f6b/metadata/00000-01a15f1d-f317-7992-8f76-df5b4a3c81a5.gz.metadata.json","timestamp-ms":1792597160727}],"sort-orders":[{"order-id":0,"fields":[]}],"default-sort-order-id":0,"refs":{"main":{"snapshot-id":2502360526997415709,"type":"branch"}},"next-row-id":5,"snapshots":[{"snapshot-id":2502360526997415709,"sequence-number":1,"timestamp-ms":1792597160932,"manifest-list":"s3://spike/spark/01a15f1d-f317-7992-8f76-df4541d61f6b/metadata/snap-2502360526997415709-1-b3188168-4b74-44ae-a516-3bdf0a7a8292.avro","summary":{"operation":"append","added-data-files":"4","iceberg-version":"Apache Iceberg 1.12.0 (commit 212aa894e919ff9fdf89160da4aadcbe6858ac01)","total-data-files":"4","app-name":"SparkSQL::10.168.99.67","total-position-deletes":"0","engine-version":"4.0.4","added-files-size":"4029","total-records":"5","spark.app.id":"local-1792597148986","total-equality-deletes":"0","added-records":"5","total-files-size":"4029","total-delete-files":"0","engine-name":"spark","changed-partition-count":"1","manifests-kept":"0","app-id":"local-1792597148986","manifests-created":"1","manifests-replaced":"0"},"schema-id":0,"first-row-id":0,"added-rows":5}]},"config":{"s3.path-style-access":"true","client.region":"us-east-1","s3.endpoint":"http://127.0.0.1:19000/","region":"us-east-1","s3.region":"us-east-1"}} } => Failed to parse response from rest catalog server, source: data did not match any variant of untagged enum TableMetadataEnum at line 1 column 2040
+== read v3.posdel_v2
+  metadata: format-version=V2 next-row-id=0 snapshots=3 current first-row-id=None added-rows=None
+  field 1 id long required=false
+  field 2 v string required=false
+  plan: 5 file tasks, 20 delete files attached
+  scan: rows=900 sum(id)=450000 marks=[("u", 100)]
+  arrow id: Int64 (nulls 0)
+  arrow v: Utf8 (nulls 0)
++----+----+
+| id | v  |
++----+----+
+| 1  | v1 |
+| 3  | v3 |
+| 4  | v4 |
++----+----+
+== read v3.upgraded
+  metadata: format-version=V3 next-row-id=1100 snapshots=4 current first-row-id=Some(1100) added-rows=Some(0)
+  field 1 id long required=false
+  field 2 v string required=false
+  plan: 8 file tasks, 64 delete files attached
+  FAILED: Unexpected => Failed to load Parquet metadata, source: Parquet error: Invalid Parquet file. Corrupt footer
+== read v3.defaults
+  metadata: format-version=V3 next-row-id=10 snapshots=1 current first-row-id=Some(0) added-rows=Some(10)
+  field 1 id long required=false
+  plan: 4 file tasks, 0 delete files attached
+  scan: rows=10 sum(id)=45 marks=[]
+  arrow id: Int64 (nulls 0)
++----+
+| id |
++----+
+| 2  |
+| 3  |
+| 4  |
++----+

@@ -1,0 +1,35 @@
+iceberg-rust 0.11.0-rc.2 @ 859048563bc7 (git)
+== read v3.dv
+  metadata: format-version=V3 next-row-id=1100 snapshots=4 current first-row-id=Some(1000) added-rows=Some(100)
+  plan: 5 file tasks, 4 delete files attached
+  scan: rows=800 sum(id)=400400 marks=[("u", 100)]
+== read v3.dv_part
+  metadata: format-version=V3 next-row-id=3514 snapshots=4 current first-row-id=Some(3000) added-rows=Some(514)
+  plan: 12 file tasks, 8 delete files attached
+  scan: rows=2571 sum(id)=3855858 marks=[("m", 514)]
+== read v3.lineage
+  metadata: format-version=V3 next-row-id=110 snapshots=3 current first-row-id=Some(100) added-rows=Some(10)
+  plan: 9 file tasks, 8 delete files attached
+  scan: rows=100 sum(id)=4950 marks=[("a", 45), ("b", 45), ("c", 10)]
+== read v3.variant
+  metadata: format-version=V3 next-row-id=5 snapshots=1 current first-row-id=Some(0) added-rows=Some(5)
+  plan: 4 file tasks, 0 delete files attached
+  FAILED: FeatureUnsupported => Reading variant columns is not supported yet
+== read v3.posdel_v2
+  metadata: format-version=V2 next-row-id=0 snapshots=3 current first-row-id=None added-rows=None
+  plan: 5 file tasks, 4 delete files attached
+  scan: rows=900 sum(id)=450000 marks=[("u", 100)]
+== read v3.upgraded
+  metadata: format-version=V3 next-row-id=1100 snapshots=4 current first-row-id=Some(1100) added-rows=Some(0)
+  plan: 8 file tasks, 8 delete files attached
+  scan: rows=890 sum(id)=494890 marks=[]
+## lineage v3.lineage 40
+  fingerprint sum_rid=4170 sum_rid_x_id=307810 sum_seq=117
+## lineage v3.dv 500
+  fingerprint sum_rid=300200 sum_rid_x_id=233632200 sum_seq=550
+## lineage v3.dv_part 1000
+  fingerprint sum_rid=3106464 sum_rid_x_id=6837533572 sum_seq=3428
+## lineage v3.upgraded 500
+  fingerprint sum_rid=344690 sum_rid_x_id=268441140 sum_seq=670
+  cols id: rows=5 sum(id)=15 marks=[]
+  asked V3: create returned V2, load returned V2

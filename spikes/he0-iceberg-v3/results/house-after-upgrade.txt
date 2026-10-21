@@ -1,0 +1,9 @@
+>>> SELECT count(), sum(id) FROM base.compacted
+200	19900
+>>> INSERT INTO base.compacted VALUES (1000, 'after-upgrade')
+Code: 36. DB::Exception: The rows cannot be written to the lake table: invalid table metadata: writes to a format v3 table (a column with nanoseconds) are not supported yet: Iceberg v3 needs row lineage. (BAD_ARGUMENTS) (version 26.9.2.1)
+>>> SELECT count() FROM base.ctas
+10
+>>> OPTIMIZE TABLE base.ctas FINAL
+>>> SHOW CREATE TABLE base.compacted
+CREATE TABLE base.compacted (id UInt64, s String) ENGINE = MergeTree ORDER BY id

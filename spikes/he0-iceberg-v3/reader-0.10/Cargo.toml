@@ -1,0 +1,21 @@
+[package]
+name = "he0-v3-reader-rel"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+description = "HE0 Task 11 spike: read Spark-written Iceberg v3 tables with iceberg-rust 0.10.1 (unmerged)"
+
+# Standalone: not a member of the repository's workspaces.
+[workspace]
+
+[dependencies]
+iceberg = "=0.10.1"
+iceberg-catalog-rest = "=0.10.1"
+iceberg-storage-opendal = { version = "=0.10.1", features = ["opendal-s3"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+futures = "0.3"
+arrow-array = "58"
+arrow-schema = "58"
+arrow-cast = { version = "58", features = ["prettyprint"] }
+parquet = { version = "58", default-features = false }

@@ -1,0 +1,96 @@
+iceberg-rust main @ 000e791d5229 (git)
+== read v3.dv
+  metadata: format-version=V3 next-row-id=1100 snapshots=4 current first-row-id=Some(1000) added-rows=Some(100)
+  field 1 id long required=false
+  field 2 v string required=false
+  plan: 5 file tasks, 4 delete files attached
+  scan: rows=800 sum(id)=400400 marks=[("u", 100)]
+  arrow id: Int64 (nulls 0)
+  arrow v: Utf8 (nulls 0)
++-----+------+
+| id  | v    |
++-----+------+
+| 253 | v253 |
+| 254 | v254 |
+| 255 | v255 |
++-----+------+
+== read v3.dv_part
+  metadata: format-version=V3 next-row-id=3514 snapshots=4 current first-row-id=Some(3000) added-rows=Some(514)
+  field 1 id long required=false
+  field 2 p int required=false
+  field 3 v string required=false
+  plan: 12 file tasks, 8 delete files attached
+  scan: rows=2571 sum(id)=3855858 marks=[("m", 514)]
+  arrow id: Int64 (nulls 0)
+  arrow p: Int32 (nulls 0)
+  arrow v: Utf8 (nulls 0)
++------+---+-------+
+| id   | p | v     |
++------+---+-------+
+| 2004 | 0 | w2004 |
+| 2008 | 0 | w2008 |
+| 2012 | 0 | w2012 |
++------+---+-------+
+== read v3.lineage
+  metadata: format-version=V3 next-row-id=110 snapshots=3 current first-row-id=Some(100) added-rows=Some(10)
+  field 1 id long required=false
+  field 2 v string required=false
+  plan: 9 file tasks, 8 delete files attached
+  scan: rows=100 sum(id)=4950 marks=[("a", 45), ("b", 45), ("c", 10)]
+  arrow id: Int64 (nulls 0)
+  arrow v: Utf8 (nulls 0)
++----+---+
+| id | v |
++----+---+
+| 25 | a |
+| 26 | a |
+| 27 | a |
++----+---+
+== read v3.variant
+  metadata: format-version=V3 next-row-id=5 snapshots=1 current first-row-id=Some(0) added-rows=Some(5)
+  field 1 id long required=false
+  field 2 payload variant required=false
+  plan: 4 file tasks, 0 delete files attached
+  FAILED: FeatureUnsupported => Reading variant columns is not supported yet
+== read v3.posdel_v2
+  metadata: format-version=V2 next-row-id=0 snapshots=3 current first-row-id=None added-rows=None
+  field 1 id long required=false
+  field 2 v string required=false
+  plan: 5 file tasks, 4 delete files attached
+  scan: rows=900 sum(id)=450000 marks=[("u", 100)]
+  arrow id: Int64 (nulls 0)
+  arrow v: Utf8 (nulls 0)
++----+---+
+| id | v |
++----+---+
+| 2  | u |
+| 12 | u |
+| 22 | u |
++----+---+
+== read v3.upgraded
+  metadata: format-version=V3 next-row-id=1100 snapshots=4 current first-row-id=Some(1100) added-rows=Some(0)
+  field 1 id long required=false
+  field 2 v string required=false
+  plan: 8 file tasks, 8 delete files attached
+  scan: rows=890 sum(id)=494890 marks=[]
+  arrow id: Int64 (nulls 0)
+  arrow v: Utf8 (nulls 0)
++------+-------+
+| id   | v     |
++------+-------+
+| 1075 | v1075 |
+| 1076 | v1076 |
+| 1077 | v1077 |
++------+-------+
+== read v3.defaults
+  metadata: format-version=V3 next-row-id=10 snapshots=1 current first-row-id=Some(0) added-rows=Some(10)
+  field 1 id long required=false
+  plan: 4 file tasks, 0 delete files attached
+  scan: rows=10 sum(id)=45 marks=[]
+  arrow id: Int64 (nulls 0)
++----+
+| id |
++----+
+| 0  |
+| 1  |
++----+

@@ -1,0 +1,63 @@
+>>> CREATE TABLE base.events (ts DateTime64(3), day Date, user_id UInt64, name LowCardinality(String), value Float64, amount Decimal(18,4), tags Array(String), attrs Map(String,String), maybe Nullable(String), flag Bool, uid UUID, small Int16, big Int64, u8 UInt8, u32 UInt32, f32 Float32, dt DateTime) ENGINE = MergeTree PARTITION BY toYYYYMM(ts) ORDER BY (user_id, ts)
+
+>>> INSERT INTO base.events SELECT toDateTime64('2026-08-01 00:00:00', 3) + toIntervalMinute(number * 7), toDate('2026-08-01') + intDiv(number, 300), number % 97, ['click','view','buy'][number % 3 + 1], number / 3, toDecimal64(number, 4) / 7, ['a', toString(number % 5)], map('k', toString(number)), if(number % 4 = 0, NULL, 'm'), number % 2 = 0, generateUUIDv4(), toInt16(number % 1000), toInt64(number) * 1000003, toUInt8(number % 256), toUInt32(number), toFloat32(number) / 8, toDateTime('2026-08-01 00:00:00') + number FROM numbers(20000)
+
+>>> INSERT INTO base.events SELECT toDateTime64('2026-10-01 00:00:00', 3) + toIntervalSecond(number), toDate('2026-10-01'), 1000 + number % 3, 'late', 0, 0, [], map(), NULL, false, generateUUIDv4(), 0, 0, 0, 0, 0, toDateTime('2026-10-01 00:00:00') FROM numbers(500)
+
+>>> SELECT count(), sum(user_id), countIf(maybe IS NULL), min(ts), max(ts) FROM base.events
+20500	1459788	5500	2026-08-01 00:00:00.000	2026-11-06 05:13:00.000
+
+>>> CREATE TABLE base.latest (id UInt64, version UInt64, payload String, is_deleted UInt8) ENGINE = ReplacingMergeTree(version, is_deleted) ORDER BY id
+
+>>> INSERT INTO base.latest SELECT number, 1, concat('v1-', toString(number)), 0 FROM numbers(100)
+
+>>> INSERT INTO base.latest SELECT number, 2, concat('v2-', toString(number)), if(number % 10 = 0, 1, 0) FROM numbers(50)
+
+>>> SELECT count() FROM base.latest
+150
+
+>>> SELECT count() FROM base.latest FINAL
+95
+
+>>> CREATE TABLE base.compacted (id UInt64, s String) ENGINE = MergeTree ORDER BY id
+
+>>> INSERT INTO base.compacted SELECT number, toString(number) FROM numbers(100)
+
+>>> INSERT INTO base.compacted SELECT number, toString(number) FROM numbers(100, 100)
+
+>>> OPTIMIZE TABLE base.compacted FINAL
+
+>>> SELECT count(), sum(id) FROM base.compacted
+200	19900
+
+>>> CREATE TABLE base.mutated (id UInt64, s String) ENGINE = MergeTree ORDER BY id
+
+>>> INSERT INTO base.mutated SELECT number, toString(number) FROM numbers(100)
+
+>>> ALTER TABLE base.mutated DELETE WHERE id % 10 = 0
+Code: 62. DB::Exception: sql parser error: Expected: ADD, RENAME, PARTITION, SWAP, DROP, REPLICA IDENTITY, SET, or SET TBLPROPERTIES after ALTER TABLE, found: DELETE at Line: 1, Column: 26: this statement form is outside the House's ClickHouse surface. (SYNTAX_ERROR) (version 26.9.2.1)
+
+>>> ALTER TABLE base.mutated UPDATE s = 'x' WHERE id % 10 = 1
+Code: 62. DB::Exception: sql parser error: Expected: ADD, RENAME, PARTITION, SWAP, DROP, REPLICA IDENTITY, SET, or SET TBLPROPERTIES after ALTER TABLE, found: UPDATE at Line: 1, Column: 26: this statement form is outside the House's ClickHouse surface. (SYNTAX_ERROR) (version 26.9.2.1)
+
+>>> DELETE FROM base.mutated WHERE id % 10 = 2
+Code: 48. DB::Exception: DELETE FROM is not on the House's ClickHouse surface. (NOT_IMPLEMENTED) (version 26.9.2.1)
+
+>>> SELECT count() FROM base.mutated
+100
+
+>>> CREATE TABLE base.ttl (ts DateTime, id UInt64) ENGINE = MergeTree ORDER BY id TTL ts + INTERVAL 1 DAY
+Code: 48. DB::Exception: TTL is not supported on lake tables (§49 §6.3). (NOT_IMPLEMENTED) (version 26.9.2.1)
+
+>>> CREATE TABLE base.ctas ENGINE = MergeTree ORDER BY id AS SELECT number AS id, toString(number) AS s FROM numbers(10)
+
+>>> SELECT count() FROM base.ctas
+10
+
+>>> SHOW TABLES FROM base
+compacted
+ctas
+events
+latest
+mutated
+
