@@ -26,9 +26,9 @@ Loams has no open core (D1119, 2026-10-19). The engine, the Multitenant BYOC
 Control Plane with GitOps, observability, quota enforcement, and the metering,
 billing and hosted control-plane code are all Apache-2.0: the former private
 `loams-platform` repository was merged into this one on 2026-10-19
-([`docs/platform`](docs/platform/README.md)). Ostrium Labs' business is services
-(infrastructure efficiency, SLAs, support; support@ostriumlabs.org), not withheld
-code, so a contribution is never turned away because it belongs to a paid edition.
+([`docs/platform`](docs/platform/README.md)). Ostrium Labs is a research lab
+building open-source Loams, so a contribution is never turned away because it
+belongs to a paid edition.
 
 **Integrity** still applies to anything a charge depends on: "could a tenant or an
 agent profit from forging this value?" If so, it must be produced outside the
