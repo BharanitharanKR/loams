@@ -385,17 +385,24 @@ export function streamCalls(streams: { fetch: UnaryCall }) {
  * their conveniences when the facade generated them. A name the facade
  * already uses is never overwritten.
  */
+const UNSAFE_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
 export function attachAppCalls(
   modules: Record<string, unknown>,
   bindings: readonly ModuleBinding[],
 ): void {
   const add = (module: string, calls: Record<string, unknown>) => {
+    // Module names come from the generated bindings, but an own-property
+    // check keeps a name such as `__proto__` from reaching Object.prototype.
+    if (!Object.hasOwn(modules, module) || UNSAFE_KEYS.has(module)) {
+      return;
+    }
     const target = modules[module] as Record<string, unknown> | undefined;
     if (target === undefined) {
       return;
     }
     for (const [name, fn] of Object.entries(calls)) {
-      if (!(name in target)) {
+      if (!UNSAFE_KEYS.has(name) && !(name in target)) {
         target[name] = fn;
       }
     }
