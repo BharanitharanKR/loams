@@ -793,6 +793,12 @@ jobs:
           ruby-version: '3.4'
           bundler-cache: ${{ github.event_name == 'pull_request' }}
           working-directory: sdks/ruby
+      # bundler-cache also runs `bundle install`; without the cache (a tag or
+      # dispatch run) the gems are installed here, from the lock file.
+      - name: bundle install (no cache)
+        if: github.event_name != 'pull_request'
+        working-directory: sdks/ruby
+        run: bundle install --jobs 4
       - name: the conformance suite
         working-directory: sdks/ruby
         run: bundle exec rake test
