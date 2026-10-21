@@ -161,6 +161,47 @@ pub fn read_statement(text: &str, explainer: Option<&mut dyn Explainer>) -> (Fea
     (Features::default(), Path::Unparsed)
 }
 
+/// The names the sources define with `CREATE FUNCTION`.
+pub fn defined_functions(sources: &[Source]) -> BTreeSet<String> {
+    sources
+        .iter()
+        .filter_map(|s| lexical::defined_function(&s.text))
+        .collect()
+}
+
+/// Whether a setting is never recorded.
+fn ignored_setting(name: &str, options: &Options) -> bool {
+    HARNESS_SETTINGS.contains(&name) || options.ignore_settings.contains(name)
+}
+
+/// The features one source contributes: its statement's, its client
+/// settings, less the harness's settings, with calls to the application's
+/// own functions (`udfs`) recorded as `syntax:user-defined function call`.
+pub fn mine_statement(
+    source: &Source,
+    explainer: Option<&mut dyn Explainer>,
+    udfs: &BTreeSet<String>,
+    options: &Options,
+) -> (Features, Path) {
+    let (mut features, path) = read_statement(&source.text, explainer);
+    for s in &source.settings {
+        features.add("setting", s);
+    }
+    features.0.retain(|f| {
+        f.strip_prefix("setting:")
+            .is_none_or(|name| !ignored_setting(name, options))
+    });
+    let before = features.0.len();
+    features.0.retain(|f| {
+        f.strip_prefix("function:")
+            .is_none_or(|name| !udfs.contains(name))
+    });
+    if features.0.len() != before {
+        features.add("syntax", "user-defined function call");
+    }
+    (features, path)
+}
+
 /// Mines `sources` into an inventory.
 pub fn build(
     app: &str,
@@ -176,8 +217,10 @@ pub fn build(
         path: Path,
         executions: u64,
     }
-    let ignored =
-        |name: &str| HARNESS_SETTINGS.contains(&name) || options.ignore_settings.contains(name);
+    let ignored = |name: &str| ignored_setting(name, options);
+    // The application's own SQL functions (`CREATE FUNCTION`): calls to them
+    // are not ClickHouse functions (HE0 Task 5 ruling).
+    let udfs = defined_functions(sources);
     let mut groups: Vec<Group> = Vec::new();
     let mut by_key: HashMap<(String, Vec<String>), usize> = HashMap::new();
     for source in sources {
@@ -205,13 +248,7 @@ pub fn build(
             Some(e) => Some(&mut **e),
             None => None,
         };
-        let (mut features, path) = read_statement(&source.text, reborrow);
-        for s in &settings {
-            features.add("setting", s);
-        }
-        features
-            .0
-            .retain(|f| f.strip_prefix("setting:").is_none_or(|name| !ignored(name)));
+        let (features, path) = mine_statement(source, reborrow, &udfs, options);
         by_key.insert(key, groups.len());
         groups.push(Group {
             id: source.id.clone(),

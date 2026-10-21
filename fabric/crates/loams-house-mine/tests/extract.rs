@@ -4,7 +4,7 @@
 mod common;
 
 use loams_house_mine::explain::HttpExplainer;
-use loams_house_mine::inventory::{self, Path, read_statement};
+use loams_house_mine::inventory::{self, Path, mine_statement};
 use loams_house_mine::{ast, explain};
 
 use common::{inventory, sources, sources_of};
@@ -160,6 +160,9 @@ fn syntax_forms() {
         ("ALTER ADD COLUMN", &["m:clustered/0002_views.up.sql:5"]),
         ("ALTER MODIFY TTL", &["m:clustered/0002_views.up.sql:5"]),
         ("query parameter", &["q:q21"]),
+        ("CREATE FUNCTION", &["m:clustered/0002_views.up.sql:7"]),
+        ("user-defined function call", &["q:q22"]),
+        ("ALTER UPDATE", &["q:q23"]),
         ("column CODEC", &["m:0001_traces.up.sql:23"]),
         ("codec ZSTD", &["m:0001_traces.up.sql:23"]),
     ] {
@@ -176,6 +179,7 @@ fn inventory_counts_trace_to_sources() {
     let inv = inventory();
     inventory::check(&inv).expect("the inventory keeps its invariants");
     let all = sources();
+    let udfs = inventory::defined_functions(&all);
     let mut recorded = common::recorded();
     for (feature, uses) in &inv.features {
         let mut executions = 0;
@@ -184,10 +188,8 @@ fn inventory_counts_trace_to_sources() {
                 .iter()
                 .find(|s| &s.id == id)
                 .unwrap_or_else(|| panic!("{feature}: source {id} is not a fixture statement"));
-            let (mut features, _) = read_statement(&source.text, Some(&mut recorded));
-            for s in &source.settings {
-                features.add("setting", s);
-            }
+            let (features, _) =
+                mine_statement(source, Some(&mut recorded), &udfs, &Default::default());
             assert!(
                 features.contains(feature),
                 "{feature} is not in {id}: {}",

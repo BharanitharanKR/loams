@@ -278,11 +278,19 @@ pub fn features(dump: &str) -> Features {
     let mut out = Features::default();
     // Each node's ancestors, nearest last.
     let mut stack: Vec<&Node<'_>> = Vec::new();
+    // How many children each stack entry has had so far.
+    let mut seen: Vec<usize> = Vec::new();
     // Storage definitions whose engine has been seen, by depth.
     let mut engine_seen: Vec<usize> = Vec::new();
     for node in &nodes {
         while stack.last().is_some_and(|n| n.depth >= node.depth) {
             stack.pop();
+            seen.pop();
+        }
+        // This node's position among its parent's children.
+        let index = seen.last().copied().unwrap_or(0);
+        if let Some(n) = seen.last_mut() {
+            *n += 1;
         }
         engine_seen.retain(|d| *d < node.depth);
         let parent = stack.last().map(|n| n.kind);
@@ -312,8 +320,12 @@ pub fn features(dump: &str) -> Features {
                 }
             }
             "Literal" => {
-                // `CAST(x AS T)` and `x::T` carry the type as a string literal.
-                if parent == Some("ExpressionList")
+                // `CAST(x AS T)`, `x::T` and a bound parameter `_CAST(v, 'T')`
+                // carry the type as their second argument, a string literal.
+                // Only that one: the first is the value, which must never
+                // become a feature name (Review Focus 2).
+                if index == 1
+                    && parent == Some("ExpressionList")
                     && grandparent.is_some_and(|g| {
                         g.kind == "Function" && matches!(first(g).as_str(), "CAST" | "_CAST")
                     })
@@ -337,6 +349,7 @@ pub fn features(dump: &str) -> Features {
             _ => {}
         }
         stack.push(node);
+        seen.push(0);
     }
     out
 }

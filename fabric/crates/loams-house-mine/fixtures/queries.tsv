@@ -20,3 +20,5 @@ q18	QueryFinish	1	SELECT uniqMerge(users), sumIf(cost, cost > 0) FROM daily_agg	
 q19	QueryFinish	1	SELECT 'zqsecret1' LIKE '%x%', toDate('2024-01-01') -- zqsecret2\nFROM t	{}
 q20	QueryFinish	0	SELECT 1 FROM shard_local	{}
 q21	QueryFinish	1	SELECT count() FROM events WHERE id = _CAST(\'0a8a4b95-58e4-53fa-9599-b4b85fd162a6\', \'UUID\') AND ts >= _CAST(\'2026-10-01 00:00:00\', \'DateTime64\')	{}
+q22	QueryFinish	1	SELECT he0_channel(referrer), lower(name) FROM events	{}
+q23	QueryFinish	1	ALTER TABLE traces UPDATE total = time_on_page, total_visits = visits WHERE ts > _CAST(\'zqsecret3\', \'DateTime\') AND flag = _CAST(\'true\', \'Bool\')	{}
