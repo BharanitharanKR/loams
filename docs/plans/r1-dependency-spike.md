@@ -206,7 +206,7 @@ Added 2026-09-27 (R1 plan rows F1–F5), on the owner's direction "for both tikv
 `crates/loams-tikv/tests/locks.rs` reproduces both: a writer dies holding pessimistic locks or prewrite locks. On `8126c49` the two pessimistic cases fail with `Err(Deadline)`. On `41b3588` all four cases pass, and the reads after a crash take milliseconds instead of the TTL.
 ## (j) The iceberg-rust fork
 
-Added 2026-10-22 (HE1 plan rulings R11.7 and R11.8), on the owner's direction of 2026-10-21: "fork and do all prs in our fork and open issue and link it, separate repo means separate actions".
+Added 2026-10-22 (HE1 rulings R11.7 and R11.8 in [`he1-rulings/t11.md`](he1-rulings/t11.md)), on the owner's direction of 2026-10-21: "fork and do all prs in our fork and open issue and link it, separate repo means separate actions".
 
 **Where it lives.** The fork is `https://github.com/ostrium-labs/iceberg-rust`, of apache/iceberg-rust, and the local clone is `~/Documents/Ostriumlabs/iceberg-rust` (remote `upstream`). The branch `loams/dv-writer` starts at upstream `main` `000e791` (2026-10-21).
 
