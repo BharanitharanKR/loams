@@ -15,6 +15,17 @@ path = "src/main.rs"
 [dependencies]
 anyhow.workspace = true
 clap.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+# The House's pin (HS1 R0.7); `visitor` walks the AST for functions.
+sqlparser = { workspace = true, features = ["visitor"] }
+toml.workspace = true
+# `EXPLAIN AST` against the pinned clickhouse-server, for statements
+# sqlparser refuses.
+ureq.workspace = true
+
+[dev-dependencies]
+proptest.workspace = true
 
 [lints]
 workspace = true

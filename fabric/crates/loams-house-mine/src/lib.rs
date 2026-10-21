@@ -9,5 +9,14 @@
 //! One module per subcommand under [`cmd`], so each subcommand is built and
 //! reviewed on its own.
 
+pub mod ast;
 pub mod cli;
 pub mod cmd;
+pub mod explain;
+pub mod features;
+pub mod inventory;
+pub mod lexical;
+pub mod profile;
+pub mod querylog;
+pub mod scrub;
+pub mod tokens;
