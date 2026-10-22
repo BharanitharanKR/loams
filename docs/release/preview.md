@@ -428,18 +428,23 @@ refuses every request that does not come from loopback, so this mode cannot be r
 the tailnet. Do not use it on a shared machine.
 
 The local `console` service (`--profile console`) serves `LOAMS_CONSOLE_DIR`, by default
-`./console/dist`. In a git clone, and in the compose bundle, that directory holds only a
-placeholder `index.html` that says "Put the built console here". Build the console from the
-same checkout and point `LOAMS_CONSOLE_DIR` at it:
+`./console/dist`. In the compose bundle that directory holds the console built from the
+release's own commit, so there is nothing to build. In a git clone, and in older bundles, it
+holds only a placeholder `index.html` that says "Put the built console here". To serve a
+console you build yourself, build it from the same checkout for the root path and point
+`LOAMS_CONSOLE_DIR` at it:
 
 ```sh
 # from the repository root
 corepack enable
 pnpm install --frozen-lockfile
-(cd web && pnpm build)          # writes web/apps/console/dist
+(cd web && LOAMS_UI_BASE=/ pnpm build)   # writes web/apps/console/dist
 # then in deploy/release/.env
 LOAMS_CONSOLE_DIR=../../web/apps/console/dist
 ```
+
+`LOAMS_UI_BASE=/` matters: without it the build is the engine's, for `/ui/`, and behind this
+service its pages do not find their scripts or `/config.json`.
 
 A console served from your own origin also needs that origin in `LOAMS_CORS_ORIGINS`.
 
