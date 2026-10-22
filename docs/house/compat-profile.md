@@ -2,330 +2,547 @@
 
 # The Loams House compatibility profile
 
-The ClickHouse features real applications use, mined from their query logs and migrations (design §75 §7.1, plan HE1 Task 2). A feature is in the profile when 3 or more applications use it, or when a gate application (langfuse, openpanel) does.
+The ClickHouse features real applications use, mined from their query logs and migrations (design §75 §7.1, plan HE1 Tasks 2 and 5). A feature is in the profile (proposed Tier 0) when 3 or more applications use it, or when a gate application (langfuse, openpanel) does; a feature fewer applications use is proposed for Tier 1 unless §75 refuses or disables it. Variants of one application count once.
 
 ## Applications
 
 | Application | Variants | Statements | sqlparser | EXPLAIN AST | Unparsed |
 |---|---|---:|---:|---:|---:|
+| hyperdx | 2.40.0 | 79 | 40 | 39 | 0 |
 | langfuse | v3, v4 | 2340 | 1588 | 752 | 0 |
+| openlit | 2.1.0 | 163 | 130 | 33 | 0 |
 | openpanel | 2.3.0 | 178 | 106 | 72 | 0 |
+| plausible | 3.2.1 | 843 | 448 | 395 | 0 |
+| signoz | 0.145.0 | 1635 | 1155 | 480 | 0 |
+| umami | 3.4.0 | 606 | 595 | 11 | 0 |
+
+## Tier proposals
+
+| Proposal | Features |
+|---|---:|
+| Tier 0 | 286 |
+| Tier 1 | 146 |
+| Tier 2 (refused) | 4 |
+| disabled | 1 |
+
+## Findings across applications
+
+Hand-written from the mining runs (plan HE1 Task 5, rulings in `docs/plans/he1-rulings/t5.md`); the tables below are generated.
+
+- **ClickHouse 26.7+ rejects three applications' schemas.** Umami's `website_event_stats_hourly`, SigNoz's metadata tables and OpenPanel's aggregate tables are AggregatingMergeTree tables with dimension columns outside the sorting key, which 26.7 and later refuse unless `allow_dimensions_outside_sorting_key = 1`. Every stack sets it on the oracle (R5.3). The House has to accept these schemas, or document the setting, to run them.
+- **The native protocol is real demand.** SigNoz sends every query over it; HyperDX's and OpenLIT's collectors create their tables and insert over it; Langfuse migrates over it (R0.5). Only the HTTP interface is in Tier 0 (D1548).
+- **Topology syntax comes in force.** SigNoz writes its whole schema with `ON CLUSTER`, `Replicated*MergeTree` and `Distributed` tables, and reads with `clusterAllReplicas` (a disabled table function, D1558). §75 §7.3 accepts and ignores the first three.
+- **Applications define their own SQL functions.** Plausible creates 27 `CREATE FUNCTION` lambdas for its channel classification; their calls are not ClickHouse functions (R2.9) but need `CREATE FUNCTION` support.
+- **Query parameters arrive bound.** Applications that send `{name:Type}` parameters reach `query_log` as `_CAST('value', 'Type')` (R2.8); the profile counts them as `syntax:query parameter`.
+- **Coverage gaps.** PostHog is not mined (R5.1); HyperDX's browser-built dashboard queries are not driven (R5.5); SigNoz's histogram quantiles need an executable function that is not installed (R5.4).
+
+## Where the mining and §75 disagree
+
+Listed for the owner, not resolved (plan HE1 Task 5). "§75" is the placement in design §75 §7.3–§7.5 and D1558, from `conformance/clickhouse/matrix/classes.toml` and the extractor's table of §75's syntax, types and formats.
+
+| Feature | Applications | Mining proposes | §75 says | §75's reason |
+|---|---|---|---|---|
+| `syntax:skip index bloom_filter` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | Tier 0 | Tier 1 | §75 §7.3–§7.5 |
+| `syntax:CREATE MATERIALIZED VIEW` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | Tier 0 | Tier 1 | §75 §7.3–§7.5 |
+| `syntax:skip index minmax` | 6 (hyperdx, langfuse, openlit, openpanel, plausible, signoz) | Tier 0 | Tier 1 | §75 §7.3–§7.5 |
+| `syntax:MATERIALIZED VIEW TO` | 5 (hyperdx, langfuse, openlit, signoz, umami) | Tier 0 | Tier 1 | §75 §7.3–§7.5 |
+| `engine:AggregatingMergeTree` | 3 (langfuse, openpanel, umami) | Tier 0 | Tier 1 | Tier 1 (§75 §7.4); the Replicated forms as topology syntax |
+| `syntax:skip index ngrambf_v1` | 2 (langfuse, signoz) | Tier 0 | Tier 1 | §75 §7.3–§7.5 |
+| `function:argMin` | 2 (openlit, umami) | Tier 1 | Tier 0 | Tier 0 (§75 §7.3; windowFunnel for OpenPanel) |
+| `engine:ReplicatedAggregatingMergeTree` | 2 (langfuse, signoz) | Tier 0 | Tier 1 | Tier 1 (§75 §7.4); the Replicated forms as topology syntax |
+| `syntax:skip index text` | 2 (hyperdx, langfuse) | Tier 0 | Tier 1 | §75 §7.3–§7.5 |
+| `engine:Distributed` | 1 (signoz) | Tier 1 | Tier 0 | Tier 0 topology syntax, accepted and ignored (§75 §7.3) |
+| `engine:ReplicatedMergeTree` | 1 (signoz) | Tier 1 | Tier 0 | Tier 0 topology syntax, accepted and ignored (§75 §7.3) |
+| `function:quantiles` | 1 (signoz) | Tier 1 | Tier 0 | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |
+| `syntax:ALTER UPDATE` | 1 (plausible) | Tier 1 | Tier 0 | §75 §7.3–§7.5 |
+| `function:quantilesState` | 1 (signoz) | Tier 1 | Tier 0 | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |
+| `type:Int16` | 1 (signoz) | Tier 1 | Tier 0 | §75 §7.3–§7.5 |
+| `syntax:DELETE` | 1 (langfuse) | Tier 0 | Tier 1 | §75 §7.3–§7.5 |
+| `function:uniqExactIf` | 1 (openlit) | Tier 1 | Tier 0 | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |
+| `combinator:Merge` | 1 (umami) | Tier 1 | Tier 0 | §75 §7.3–§7.5 |
+| `function:quantilesDD` | 1 (signoz) | Tier 1 | Tier 0 | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |
+| `function:uniqArray` | 1 (umami) | Tier 1 | Tier 0 | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |
+| `syntax:ALTER DELETE` | 0 | not mined | Tier 0 | §75 §7.3 names it; no mined application used it |
+| `syntax:WITH TOTALS` | 0 | not mined | Tier 0 | §75 §7.3 names it; no mined application used it |
+| `format:CSV` | 0 | not mined | Tier 0 | §75 §7.3 names it; no mined application used it |
+| `format:TSV` | 0 | not mined | Tier 0 | §75 §7.3 names it; no mined application used it |
+| `format:TabSeparated` | 0 | not mined | Tier 0 | §75 §7.3 names it; no mined application used it |
+| `format:Parquet` | 0 | not mined | Tier 0 | §75 §7.3 names it; no mined application used it |
+| `type:Enum16` | 0 | not mined | Tier 0 | §75 §7.3 names it; no mined application used it |
 
 ## `function`
 
-| Feature | Applications | Statements | In profile | Why |
+| Feature | Applications | Statements | Proposed | Why |
 |---|---|---:|---|---|
-| `equals` | 2 (langfuse, openpanel) | 1457 | yes | gate:langfuse |
-| `and` | 2 (langfuse, openpanel) | 1424 | yes | gate:langfuse |
-| `greaterOrEquals` | 2 (langfuse, openpanel) | 947 | yes | gate:langfuse |
-| `count` | 2 (langfuse, openpanel) | 259 | yes | gate:langfuse |
-| `toDate` | 2 (langfuse, openpanel) | 234 | yes | gate:langfuse |
-| `lessOrEquals` | 2 (langfuse, openpanel) | 222 | yes | gate:langfuse |
-| `tuple` | 2 (langfuse, openpanel) | 215 | yes | gate:langfuse |
-| `in` | 2 (langfuse, openpanel) | 200 | yes | gate:langfuse |
-| `isNotNull` | 2 (langfuse, openpanel) | 194 | yes | gate:langfuse |
-| `notEquals` | 2 (langfuse, openpanel) | 125 | yes | gate:langfuse |
-| `max` | 2 (langfuse, openpanel) | 102 | yes | gate:langfuse |
-| `greater` | 2 (langfuse, openpanel) | 101 | yes | gate:langfuse |
-| `now` | 2 (langfuse, openpanel) | 98 | yes | gate:langfuse |
-| `groupUniqArray` | 2 (langfuse, openpanel) | 93 | yes | gate:langfuse |
-| `if` | 2 (langfuse, openpanel) | 91 | yes | gate:langfuse |
-| `lambda` | 2 (langfuse, openpanel) | 80 | yes | gate:langfuse |
-| `min` | 2 (langfuse, openpanel) | 78 | yes | gate:langfuse |
-| `sum` | 2 (langfuse, openpanel) | 72 | yes | gate:langfuse |
-| `arrayElement` | 2 (langfuse, openpanel) | 67 | yes | gate:langfuse |
-| `length` | 2 (langfuse, openpanel) | 67 | yes | gate:langfuse |
-| `minus` | 2 (langfuse, openpanel) | 66 | yes | gate:langfuse |
-| `uniq` | 2 (langfuse, openpanel) | 66 | yes | gate:langfuse |
-| `or` | 2 (langfuse, openpanel) | 62 | yes | gate:langfuse |
-| `toIntervalDay` | 2 (langfuse, openpanel) | 61 | yes | gate:langfuse |
-| `toYYYYMM` | 2 (langfuse, openpanel) | 61 | yes | gate:langfuse |
-| `toDateTime` | 2 (langfuse, openpanel) | 58 | yes | gate:langfuse |
-| `dateDiff` | 2 (langfuse, openpanel) | 57 | yes | gate:langfuse |
-| `any` | 2 (langfuse, openpanel) | 54 | yes | gate:langfuse |
-| `toIntervalHour` | 2 (langfuse, openpanel) | 52 | yes | gate:langfuse |
-| `nullIf` | 2 (langfuse, openpanel) | 48 | yes | gate:langfuse |
-| `notIn` | 2 (langfuse, openpanel) | 44 | yes | gate:langfuse |
-| `argMax` | 2 (langfuse, openpanel) | 42 | yes | gate:langfuse |
-| `mapKeys` | 2 (langfuse, openpanel) | 39 | yes | gate:langfuse |
-| `mapValues` | 2 (langfuse, openpanel) | 39 | yes | gate:langfuse |
-| `groupArray` | 2 (langfuse, openpanel) | 38 | yes | gate:langfuse |
-| `tupleElement` | 2 (langfuse, openpanel) | 37 | yes | gate:langfuse |
-| `concat` | 2 (langfuse, openpanel) | 36 | yes | gate:langfuse |
-| `toStartOfHour` | 2 (langfuse, openpanel) | 36 | yes | gate:langfuse |
-| `countIf` | 2 (langfuse, openpanel) | 33 | yes | gate:langfuse |
-| `arrayMap` | 2 (langfuse, openpanel) | 32 | yes | gate:langfuse |
-| `toStartOfMinute` | 2 (langfuse, openpanel) | 32 | yes | gate:langfuse |
-| `arrayJoin` | 2 (langfuse, openpanel) | 31 | yes | gate:langfuse |
-| `groupUniqArrayIf` | 2 (langfuse, openpanel) | 31 | yes | gate:langfuse |
-| `multiply` | 2 (langfuse, openpanel) | 31 | yes | gate:langfuse |
-| `plus` | 2 (langfuse, openpanel) | 30 | yes | gate:langfuse |
-| `avg` | 2 (langfuse, openpanel) | 27 | yes | gate:langfuse |
-| `multiIf` | 2 (langfuse, openpanel) | 26 | yes | gate:langfuse |
-| `toUInt64` | 2 (langfuse, openpanel) | 25 | yes | gate:langfuse |
-| `round` | 2 (langfuse, openpanel) | 23 | yes | gate:langfuse |
-| `toDateTime64` | 2 (langfuse, openpanel) | 22 | yes | gate:langfuse |
-| `toIntervalMinute` | 2 (langfuse, openpanel) | 17 | yes | gate:langfuse |
-| `arrayFilter` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
-| `countDistinct` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
-| `divide` | 2 (langfuse, openpanel) | 13 | yes | gate:langfuse |
-| `arrayEnumerate` | 2 (langfuse, openpanel) | 10 | yes | gate:langfuse |
-| `arrayFirstIndex` | 2 (langfuse, openpanel) | 10 | yes | gate:langfuse |
-| `less` | 2 (langfuse, openpanel) | 9 | yes | gate:langfuse |
-| `toBool` | 2 (langfuse, openpanel) | 8 | yes | gate:langfuse |
-| `uniqIf` | 2 (langfuse, openpanel) | 6 | yes | gate:langfuse |
-| `arraySlice` | 2 (langfuse, openpanel) | 5 | yes | gate:langfuse |
-| `uniqExact` | 2 (langfuse, openpanel) | 4 | yes | gate:langfuse |
-| `array` | 1 (langfuse) | 173 | yes | gate:langfuse |
-| `isNull` | 1 (langfuse) | 69 | yes | gate:langfuse |
-| `sumMap` | 1 (langfuse) | 66 | yes | gate:langfuse |
-| `coalesce` | 1 (langfuse) | 54 | yes | gate:langfuse |
-| `notEmpty` | 1 (langfuse) | 44 | yes | gate:langfuse |
-| `arrayExists` | 1 (langfuse) | 31 | yes | gate:langfuse |
-| `toStartOfDay` | 1 (openpanel) | 28 | yes | gate:openpanel |
-| `arrayReverse` | 1 (langfuse) | 27 | yes | gate:langfuse |
-| `arraySum` | 1 (langfuse) | 27 | yes | gate:langfuse |
-| `mapFromArrays` | 1 (langfuse) | 27 | yes | gate:langfuse |
-| `anyLast` | 1 (langfuse) | 26 | yes | gate:langfuse |
-| `lower` | 1 (langfuse) | 26 | yes | gate:langfuse |
-| `greatest` | 1 (langfuse) | 25 | yes | gate:langfuse |
-| `ifNull` | 1 (langfuse) | 25 | yes | gate:langfuse |
-| `subtractHours` | 1 (langfuse) | 24 | yes | gate:langfuse |
-| `groupUniqArrayArray` | 1 (langfuse) | 21 | yes | gate:langfuse |
-| `mapFilter` | 1 (langfuse) | 21 | yes | gate:langfuse |
-| `positionCaseInsensitive` | 1 (langfuse) | 21 | yes | gate:langfuse |
-| `has` | 1 (langfuse) | 20 | yes | gate:langfuse |
-| `map` | 1 (langfuse) | 20 | yes | gate:langfuse |
-| `leftUTF8` | 1 (langfuse) | 19 | yes | gate:langfuse |
-| `argMaxIf` | 1 (langfuse) | 18 | yes | gate:langfuse |
-| `argMaxState` | 1 (langfuse) | 18 | yes | gate:langfuse |
-| `indexOf` | 1 (langfuse) | 18 | yes | gate:langfuse |
-| `maxMap` | 1 (langfuse) | 18 | yes | gate:langfuse |
-| `CAST` | 1 (langfuse) | 17 | yes | gate:langfuse |
-| `toString` | 1 (langfuse) | 16 | yes | gate:langfuse |
-| `groupArrayIf` | 1 (langfuse) | 15 | yes | gate:langfuse |
-| `arrayConcat` | 1 (langfuse) | 14 | yes | gate:langfuse |
-| `negate` | 1 (langfuse) | 14 | yes | gate:langfuse |
-| `toInt64` | 1 (langfuse) | 14 | yes | gate:langfuse |
-| `approx_top_kIf` | 1 (langfuse) | 12 | yes | gate:langfuse |
-| `least` | 1 (langfuse) | 12 | yes | gate:langfuse |
-| `lengthUTF8` | 1 (langfuse) | 12 | yes | gate:langfuse |
-| `lowerUTF8` | 1 (langfuse) | 12 | yes | gate:langfuse |
-| `xxHash32` | 1 (langfuse) | 12 | yes | gate:langfuse |
-| `quantile` | 1 (langfuse) | 11 | yes | gate:langfuse |
-| `toStartOfInterval` | 1 (langfuse) | 10 | yes | gate:langfuse |
-| `generateUUIDv4` | 1 (openpanel) | 8 | yes | gate:openpanel |
-| `not` | 1 (langfuse) | 7 | yes | gate:langfuse |
-| `arrayStringConcat` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `empty` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `toNullable` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `arrayDistinct` | 1 (langfuse) | 4 | yes | gate:langfuse |
-| `arrayEnumerateUniq` | 1 (openpanel) | 4 | yes | gate:openpanel |
-| `countState` | 1 (openpanel) | 4 | yes | gate:openpanel |
-| `groupUniqArrayArrayIf` | 1 (langfuse) | 4 | yes | gate:langfuse |
-| `maxState` | 1 (openpanel) | 4 | yes | gate:openpanel |
-| `minState` | 1 (openpanel) | 4 | yes | gate:openpanel |
-| `toYYYYMMDD` | 1 (openpanel) | 4 | yes | gate:openpanel |
-| `version` | 1 (langfuse) | 4 | yes | gate:langfuse |
-| `windowFunnel` | 1 (openpanel) | 4 | yes | gate:openpanel |
-| `approx_top_kArray` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `currentDatabase` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `row_number` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `toUnixTimestamp64Milli` | 1 (openpanel) | 3 | yes | gate:openpanel |
-| `COUNTDistinct` | 1 (langfuse) | 2 | yes | gate:langfuse |
-| `avgIf` | 1 (openpanel) | 2 | yes | gate:openpanel |
-| `hasAll` | 1 (langfuse) | 2 | yes | gate:langfuse |
-| `isNaN` | 1 (openpanel) | 2 | yes | gate:openpanel |
-| `like` | 1 (langfuse) | 2 | yes | gate:langfuse |
-| `minIf` | 1 (langfuse) | 2 | yes | gate:langfuse |
-| `range` | 1 (openpanel) | 2 | yes | gate:openpanel |
-| `sumState` | 1 (openpanel) | 2 | yes | gate:openpanel |
-| `toIntervalSecond` | 1 (langfuse) | 2 | yes | gate:langfuse |
-| `uniqState` | 1 (openpanel) | 2 | yes | gate:openpanel |
-| `untuple` | 1 (openpanel) | 2 | yes | gate:openpanel |
-| `arraySort` | 1 (langfuse) | 1 | yes | gate:langfuse |
-| `arrayZip` | 1 (langfuse) | 1 | yes | gate:langfuse |
-| `exists` | 1 (langfuse) | 1 | yes | gate:langfuse |
-| `maxIf` | 1 (langfuse) | 1 | yes | gate:langfuse |
-| `quantilesExactInclusive` | 1 (openpanel) | 1 | yes | gate:openpanel |
-| `startsWith` | 1 (langfuse) | 1 | yes | gate:langfuse |
-| `sumMapIf` | 1 (langfuse) | 1 | yes | gate:langfuse |
-| `toIntervalMonth` | 1 (openpanel) | 1 | yes | gate:openpanel |
+| `equals` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 2613 | Tier 0 | apps>=3 |
+| `and` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 2123 | Tier 0 | apps>=3 |
+| `greaterOrEquals` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 1541 | Tier 0 | apps>=3 |
+| `lessOrEquals` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 794 | Tier 0 | apps>=3 |
+| `notEquals` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 690 | Tier 0 | apps>=3 |
+| `count` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 504 | Tier 0 | apps>=3 |
+| `in` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 478 | Tier 0 | apps>=3 |
+| `if` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 431 | Tier 0 | apps>=3 |
+| `greater` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 391 | Tier 0 | apps>=3 |
+| `tuple` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 380 | Tier 0 | apps>=3 |
+| `multiply` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 369 | Tier 0 | apps>=3 |
+| `any` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 368 | Tier 0 | apps>=3 |
+| `divide` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 339 | Tier 0 | apps>=3 |
+| `sum` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 335 | Tier 0 | apps>=3 |
+| `toDate` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 327 | Tier 0 | apps>=3 |
+| `max` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 200 | Tier 0 | apps>=3 |
+| `or` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 189 | Tier 0 | apps>=3 |
+| `min` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 137 | Tier 0 | apps>=3 |
+| `plus` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 131 | Tier 0 | apps>=3 |
+| `arrayElement` | 6 (hyperdx, langfuse, openlit, openpanel, plausible, signoz) | 210 | Tier 0 | apps>=3 |
+| `toDateTime` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 160 | Tier 0 | apps>=3 |
+| `minus` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 116 | Tier 0 | apps>=3 |
+| `argMax` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 73 | Tier 0 | apps>=3 |
+| `multiIf` | 6 (hyperdx, langfuse, openpanel, plausible, signoz, umami) | 65 | Tier 0 | apps>=3 |
+| `uniq` | 5 (langfuse, openpanel, plausible, signoz, umami) | 416 | Tier 0 | apps>=3 |
+| `lambda` | 5 (hyperdx, langfuse, openpanel, plausible, umami) | 129 | Tier 0 | apps>=3 |
+| `notIn` | 5 (langfuse, openlit, openpanel, signoz, umami) | 110 | Tier 0 | apps>=3 |
+| `countIf` | 5 (hyperdx, langfuse, openpanel, plausible, signoz) | 105 | Tier 0 | apps>=3 |
+| `toIntervalDay` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 85 | Tier 0 | apps>=3 |
+| `CAST` | 5 (hyperdx, langfuse, openlit, plausible, signoz) | 82 | Tier 0 | apps>=3 |
+| `toYYYYMM` | 5 (langfuse, openpanel, plausible, signoz, umami) | 75 | Tier 0 | apps>=3 |
+| `mapKeys` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 70 | Tier 0 | apps>=3 |
+| `mapValues` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 66 | Tier 0 | apps>=3 |
+| `lower` | 5 (hyperdx, langfuse, plausible, signoz, umami) | 60 | Tier 0 | apps>=3 |
+| `toIntervalMinute` | 5 (hyperdx, langfuse, openpanel, signoz, umami) | 55 | Tier 0 | apps>=3 |
+| `avg` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 50 | Tier 0 | apps>=3 |
+| `toStartOfHour` | 5 (langfuse, openpanel, plausible, signoz, umami) | 50 | Tier 0 | apps>=3 |
+| `arrayJoin` | 5 (langfuse, openlit, openpanel, plausible, umami) | 45 | Tier 0 | apps>=3 |
+| `toString` | 5 (hyperdx, langfuse, openlit, signoz, umami) | 42 | Tier 0 | apps>=3 |
+| `round` | 4 (hyperdx, langfuse, openpanel, plausible) | 320 | Tier 0 | apps>=3 |
+| `toUInt64` | 4 (langfuse, openpanel, plausible, signoz) | 318 | Tier 0 | apps>=3 |
+| `array` | 4 (langfuse, plausible, signoz, umami) | 218 | Tier 0 | apps>=3 |
+| `isNotNull` | 4 (hyperdx, langfuse, openpanel, signoz) | 200 | Tier 0 | apps>=3 |
+| `now` | 4 (langfuse, openlit, openpanel, signoz) | 155 | Tier 0 | apps>=3 |
+| `greatest` | 4 (hyperdx, langfuse, openlit, plausible) | 148 | Tier 0 | apps>=3 |
+| `length` | 4 (hyperdx, langfuse, openpanel, umami) | 80 | Tier 0 | apps>=3 |
+| `toIntervalHour` | 4 (langfuse, openlit, openpanel, signoz) | 71 | Tier 0 | apps>=3 |
+| `nullIf` | 4 (langfuse, openlit, openpanel, umami) | 66 | Tier 0 | apps>=3 |
+| `concat` | 4 (langfuse, openlit, openpanel, umami) | 50 | Tier 0 | apps>=3 |
+| `ifNull` | 4 (hyperdx, langfuse, openlit, umami) | 47 | Tier 0 | apps>=3 |
+| `less` | 4 (hyperdx, langfuse, openpanel, signoz) | 42 | Tier 0 | apps>=3 |
+| `toStartOfMinute` | 4 (langfuse, openpanel, plausible, signoz) | 42 | Tier 0 | apps>=3 |
+| `tupleElement` | 4 (hyperdx, langfuse, openpanel, plausible) | 39 | Tier 0 | apps>=3 |
+| `countDistinct` | 4 (langfuse, openpanel, signoz, umami) | 26 | Tier 0 | apps>=3 |
+| `quantile` | 4 (hyperdx, langfuse, signoz, umami) | 26 | Tier 0 | apps>=3 |
+| `uniqExact` | 4 (langfuse, openlit, openpanel, umami) | 18 | Tier 0 | apps>=3 |
+| `empty` | 3 (langfuse, openlit, plausible) | 206 | Tier 0 | apps>=3 |
+| `not` | 3 (langfuse, openlit, plausible) | 167 | Tier 0 | apps>=3 |
+| `coalesce` | 3 (langfuse, openlit, umami) | 73 | Tier 0 | apps>=3 |
+| `dateDiff` | 3 (langfuse, openpanel, umami) | 58 | Tier 0 | apps>=3 |
+| `cityHash64` | 3 (hyperdx, signoz, umami) | 56 | Tier 0 | apps>=3 |
+| `map` | 3 (langfuse, openlit, signoz) | 52 | Tier 0 | apps>=3 |
+| `arrayMap` | 3 (langfuse, openpanel, plausible) | 50 | Tier 0 | apps>=3 |
+| `groupArray` | 3 (langfuse, openpanel, umami) | 44 | Tier 0 | apps>=3 |
+| `toStartOfInterval` | 3 (hyperdx, langfuse, signoz) | 43 | Tier 0 | apps>=3 |
+| `version` | 3 (hyperdx, langfuse, plausible) | 35 | Tier 0 | apps>=3 |
+| `arrayFilter` | 3 (langfuse, openpanel, umami) | 15 | Tier 0 | apps>=3 |
+| `arrayFirstIndex` | 3 (hyperdx, langfuse, openpanel) | 11 | Tier 0 | apps>=3 |
+| `uniqIf` | 3 (langfuse, openpanel, plausible) | 10 | Tier 0 | apps>=3 |
+| `row_number` | 3 (langfuse, signoz, umami) | 7 | Tier 0 | apps>=3 |
+| `match` | 3 (openlit, plausible, signoz) | 6 | Tier 0 | apps>=3 |
+| `sumIf` | 2 (plausible, umami) | 117 | Tier 1 | below threshold |
+| `notEmpty` | 2 (langfuse, openlit) | 96 | Tier 0 | gate:langfuse |
+| `groupUniqArray` | 2 (langfuse, openpanel) | 93 | Tier 0 | gate:langfuse |
+| `parseDateTimeBestEffort` | 2 (openlit, umami) | 92 | Tier 1 | below threshold |
+| `toIntervalSecond` | 2 (langfuse, signoz) | 54 | Tier 0 | gate:langfuse |
+| `indexOf` | 2 (langfuse, plausible) | 44 | Tier 0 | gate:langfuse |
+| `anyLast` | 2 (langfuse, signoz) | 33 | Tier 0 | gate:langfuse |
+| `arrayExists` | 2 (hyperdx, langfuse) | 32 | Tier 0 | gate:langfuse |
+| `startsWith` | 2 (langfuse, openlit) | 32 | Tier 0 | gate:langfuse |
+| `groupUniqArrayIf` | 2 (langfuse, openpanel) | 31 | Tier 0 | gate:langfuse |
+| `formatDateTime` | 2 (openlit, umami) | 30 | Tier 1 | below threshold |
+| `toStartOfDay` | 2 (openpanel, umami) | 30 | Tier 0 | gate:openpanel |
+| `date_trunc` | 2 (openlit, umami) | 26 | Tier 1 | below threshold |
+| `has` | 2 (langfuse, plausible) | 26 | Tier 0 | gate:langfuse |
+| `generateUUIDv4` | 2 (openlit, openpanel) | 25 | Tier 0 | gate:openpanel |
+| `positionCaseInsensitive` | 2 (langfuse, umami) | 25 | Tier 0 | gate:langfuse |
+| `toDateTime64` | 2 (langfuse, openpanel) | 22 | Tier 0 | gate:langfuse |
+| `argMaxState` | 2 (langfuse, umami) | 19 | Tier 0 | gate:langfuse |
+| `toUInt8` | 2 (plausible, umami) | 19 | Tier 1 | below threshold |
+| `like` | 2 (langfuse, signoz) | 18 | Tier 0 | gate:langfuse |
+| `argMin` | 2 (openlit, umami) | 16 | Tier 1 | below threshold |
+| `toInt64` | 2 (hyperdx, langfuse) | 15 | Tier 0 | gate:langfuse |
+| `toUnixTimestamp64Nano` | 2 (hyperdx, openlit) | 15 | Tier 1 | below threshold |
+| `lowerUTF8` | 2 (langfuse, openlit) | 14 | Tier 0 | gate:langfuse |
+| `multiSearchAny` | 2 (plausible, umami) | 12 | Tier 1 | below threshold |
+| `arrayEnumerate` | 2 (langfuse, openpanel) | 10 | Tier 0 | gate:langfuse |
+| `toBool` | 2 (langfuse, openpanel) | 8 | Tier 0 | gate:langfuse |
+| `ilike` | 2 (hyperdx, plausible) | 7 | Tier 1 | below threshold |
+| `now64` | 2 (signoz, umami) | 7 | Tier 1 | below threshold |
+| `toNullable` | 2 (hyperdx, langfuse) | 7 | Tier 0 | gate:langfuse |
+| `isNaN` | 2 (openpanel, signoz) | 6 | Tier 0 | gate:openpanel |
+| `minIf` | 2 (langfuse, umami) | 6 | Tier 0 | gate:langfuse |
+| `arraySlice` | 2 (langfuse, openpanel) | 5 | Tier 0 | gate:langfuse |
+| `currentDatabase` | 2 (langfuse, plausible) | 5 | Tier 0 | gate:langfuse |
+| `maxIf` | 2 (langfuse, umami) | 5 | Tier 0 | gate:langfuse |
+| `maxState` | 2 (openpanel, umami) | 5 | Tier 0 | gate:openpanel |
+| `position` | 2 (plausible, umami) | 5 | Tier 1 | below threshold |
+| `toInt32` | 2 (plausible, umami) | 5 | Tier 1 | below threshold |
+| `COUNTDistinct` | 2 (hyperdx, langfuse) | 4 | Tier 0 | gate:langfuse |
+| `lagInFrame` | 2 (hyperdx, signoz) | 4 | Tier 1 | below threshold |
+| `arrayZip` | 2 (hyperdx, langfuse) | 2 | Tier 0 | gate:langfuse |
+| `toIntervalMonth` | 2 (openpanel, signoz) | 2 | Tier 0 | gate:openpanel |
+| `toUInt32` | 1 (plausible) | 115 | Tier 1 | below threshold |
+| `ifNotFinite` | 1 (plausible) | 98 | Tier 1 | below threshold |
+| `isNull` | 1 (langfuse) | 69 | Tier 0 | gate:langfuse |
+| `sumMap` | 1 (langfuse) | 66 | Tier 0 | gate:langfuse |
+| `mapContains` | 1 (signoz) | 50 | Tier 1 | below threshold |
+| `toFloat64OrZero` | 1 (openlit) | 40 | Tier 1 | below threshold |
+| `fromUnixTimestamp64Milli` | 1 (hyperdx) | 32 | Tier 1 | below threshold |
+| `arrayReverse` | 1 (langfuse) | 27 | Tier 0 | gate:langfuse |
+| `arraySum` | 1 (langfuse) | 27 | Tier 0 | gate:langfuse |
+| `mapFromArrays` | 1 (langfuse) | 27 | Tier 0 | gate:langfuse |
+| `toTimeZone` | 1 (plausible) | 27 | Tier 1 | below threshold |
+| `subtractHours` | 1 (langfuse) | 24 | Tier 0 | gate:langfuse |
+| `intDiv` | 1 (signoz) | 23 | Tier 1 | below threshold |
+| `groupUniqArrayArray` | 1 (langfuse) | 21 | Tier 0 | gate:langfuse |
+| `mapFilter` | 1 (langfuse) | 21 | Tier 0 | gate:langfuse |
+| `leftUTF8` | 1 (langfuse) | 19 | Tier 0 | gate:langfuse |
+| `argMaxIf` | 1 (langfuse) | 18 | Tier 0 | gate:langfuse |
+| `arrayAll` | 1 (plausible) | 18 | Tier 1 | below threshold |
+| `arrayIntersect` | 1 (plausible) | 18 | Tier 1 | below threshold |
+| `maxMap` | 1 (langfuse) | 18 | Tier 0 | gate:langfuse |
+| `multiMatchAllIndices` | 1 (plausible) | 18 | Tier 1 | below threshold |
+| `floor` | 1 (signoz) | 17 | Tier 1 | below threshold |
+| `rand` | 1 (signoz) | 17 | Tier 1 | below threshold |
+| `groupArrayIf` | 1 (langfuse) | 15 | Tier 0 | gate:langfuse |
+| `arrayConcat` | 1 (langfuse) | 14 | Tier 0 | gate:langfuse |
+| `dictGet` | 1 (plausible) | 14 | Tier 2 (refused) | below threshold |
+| `negate` | 1 (langfuse) | 14 | Tier 0 | gate:langfuse |
+| `toUnixTimestamp` | 1 (signoz) | 14 | Tier 1 | below threshold |
+| `replaceRegexpAll` | 1 (openlit) | 13 | Tier 1 | below threshold |
+| `trim` | 1 (openlit) | 13 | Tier 1 | below threshold |
+| `approx_top_kIf` | 1 (langfuse) | 12 | Tier 0 | gate:langfuse |
+| `least` | 1 (langfuse) | 12 | Tier 0 | gate:langfuse |
+| `lengthUTF8` | 1 (langfuse) | 12 | Tier 0 | gate:langfuse |
+| `toStartOfFiveMinutes` | 1 (hyperdx) | 12 | Tier 1 | below threshold |
+| `xxHash32` | 1 (langfuse) | 12 | Tier 0 | gate:langfuse |
+| `toFloat64` | 1 (signoz) | 11 | Tier 1 | below threshold |
+| `toFloat64OrDefault` | 1 (hyperdx) | 11 | Tier 1 | below threshold |
+| `toTimezone` | 1 (umami) | 10 | Tier 1 | below threshold |
+| `globalIn` | 1 (signoz) | 9 | Tier 1 | below threshold |
+| `quantiles` | 1 (signoz) | 9 | Tier 1 | below threshold |
+| `simpleJSONExtractString` | 1 (signoz) | 9 | Tier 1 | below threshold |
+| `bitAnd` | 1 (signoz) | 7 | Tier 1 | below threshold |
+| `quantilesState` | 1 (signoz) | 7 | Tier 1 | below threshold |
+| `upper` | 1 (umami) | 7 | Tier 1 | below threshold |
+| `arrayStringConcat` | 1 (langfuse) | 6 | Tier 0 | gate:langfuse |
+| `timeDiff` | 1 (plausible) | 6 | Tier 1 | below threshold |
+| `timeSlots` | 1 (plausible) | 6 | Tier 1 | below threshold |
+| `toInt64OrZero` | 1 (openlit) | 6 | Tier 1 | below threshold |
+| `transform` | 1 (plausible) | 6 | Tier 1 | below threshold |
+| `JSONAllPaths` | 1 (signoz) | 4 | Tier 1 | below threshold |
+| `arrayDistinct` | 1 (langfuse) | 4 | Tier 0 | gate:langfuse |
+| `arrayEnumerateUniq` | 1 (openpanel) | 4 | Tier 0 | gate:openpanel |
+| `countState` | 1 (openpanel) | 4 | Tier 0 | gate:openpanel |
+| `groupUniqArrayArrayIf` | 1 (langfuse) | 4 | Tier 0 | gate:langfuse |
+| `minState` | 1 (openpanel) | 4 | Tier 0 | gate:openpanel |
+| `toYYYYMMDD` | 1 (openpanel) | 4 | Tier 0 | gate:openpanel |
+| `uniqExactIf` | 1 (openlit) | 4 | Tier 1 | below threshold |
+| `windowFunnel` | 1 (openpanel) | 4 | Tier 0 | gate:openpanel |
+| `approx_top_kArray` | 1 (langfuse) | 3 | Tier 0 | gate:langfuse |
+| `groupArrayArray` | 1 (umami) | 3 | Tier 1 | below threshold |
+| `notLike` | 1 (signoz) | 3 | Tier 1 | below threshold |
+| `replace` | 1 (umami) | 3 | Tier 1 | below threshold |
+| `toInt32OrZero` | 1 (openlit) | 3 | Tier 1 | below threshold |
+| `toStartOfMonth` | 1 (plausible) | 3 | Tier 1 | below threshold |
+| `toUnixTimestamp64Milli` | 1 (openpanel) | 3 | Tier 0 | gate:openpanel |
+| `JSONExtractString` | 1 (signoz) | 2 | Tier 1 | below threshold |
+| `anyIf` | 1 (openlit) | 2 | Tier 1 | below threshold |
+| `arrayFirst` | 1 (umami) | 2 | Tier 1 | below threshold |
+| `array_agg` | 1 (openlit) | 2 | Tier 1 | below threshold |
+| `ascii` | 1 (plausible) | 2 | Tier 1 | below threshold |
+| `avgIf` | 1 (openpanel) | 2 | Tier 0 | gate:openpanel |
+| `fromUnixTimestamp64Nano` | 1 (signoz) | 2 | Tier 1 | below threshold |
+| `groupArrayState` | 1 (umami) | 2 | Tier 1 | below threshold |
+| `hasAll` | 1 (langfuse) | 2 | Tier 0 | gate:langfuse |
+| `last_value` | 1 (hyperdx) | 2 | Tier 1 | below threshold |
+| `left` | 1 (umami) | 2 | Tier 1 | below threshold |
+| `quantilesDD` | 1 (signoz) | 2 | Tier 1 | below threshold |
+| `range` | 1 (openpanel) | 2 | Tier 0 | gate:openpanel |
+| `replaceAll` | 1 (umami) | 2 | Tier 1 | below threshold |
+| `replaceRegexpOne` | 1 (openlit) | 2 | Tier 1 | below threshold |
+| `sumOrNull` | 1 (openlit) | 2 | Tier 1 | below threshold |
+| `sumState` | 1 (openpanel) | 2 | Tier 0 | gate:openpanel |
+| `toDayOfMonth` | 1 (signoz) | 2 | Tier 1 | below threshold |
+| `toIntervalYear` | 1 (signoz) | 2 | Tier 1 | below threshold |
+| `uniqArray` | 1 (umami) | 2 | Tier 1 | below threshold |
+| `uniqState` | 1 (openpanel) | 2 | Tier 0 | gate:openpanel |
+| `untuple` | 1 (openpanel) | 2 | Tier 0 | gate:openpanel |
+| `argMaxMerge` | 1 (umami) | 1 | Tier 1 | below threshold |
+| `argMinMerge` | 1 (umami) | 1 | Tier 1 | below threshold |
+| `argMinState` | 1 (umami) | 1 | Tier 1 | below threshold |
+| `arrayCumSum` | 1 (hyperdx) | 1 | Tier 1 | below threshold |
+| `arraySort` | 1 (langfuse) | 1 | Tier 0 | gate:langfuse |
+| `arrayWithConstant` | 1 (hyperdx) | 1 | Tier 1 | below threshold |
+| `arrayZipUnaligned` | 1 (hyperdx) | 1 | Tier 1 | below threshold |
+| `dictHas` | 1 (plausible) | 1 | Tier 2 (refused) | below threshold |
+| `endsWith` | 1 (plausible) | 1 | Tier 1 | below threshold |
+| `exists` | 1 (langfuse) | 1 | Tier 0 | gate:langfuse |
+| `extract` | 1 (plausible) | 1 | Tier 1 | below threshold |
+| `hasAllTokens` | 1 (hyperdx) | 1 | Tier 1 | below threshold |
+| `hasToken` | 1 (hyperdx) | 1 | Tier 1 | below threshold |
+| `notILike` | 1 (hyperdx) | 1 | Tier 1 | below threshold |
+| `quantilesExactInclusive` | 1 (openpanel) | 1 | Tier 0 | gate:openpanel |
+| `sumForEach` | 1 (hyperdx) | 1 | Tier 1 | below threshold |
+| `sumMapIf` | 1 (langfuse) | 1 | Tier 0 | gate:langfuse |
+| `toDecimal64` | 1 (umami) | 1 | Tier 1 | below threshold |
 
 ## `combinator`
 
-| Feature | Applications | Statements | In profile | Why |
+| Feature | Applications | Statements | Proposed | Why |
 |---|---|---:|---|---|
-| `If` | 2 (langfuse, openpanel) | 46 | yes | gate:langfuse |
-| `State` | 2 (langfuse, openpanel) | 24 | yes | gate:langfuse |
-| `Distinct` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
-| `Array` | 1 (langfuse) | 25 | yes | gate:langfuse |
+| `If` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 220 | Tier 0 | apps>=3 |
+| `State` | 4 (langfuse, openpanel, signoz, umami) | 34 | Tier 0 | apps>=3 |
+| `Distinct` | 4 (langfuse, openpanel, signoz, umami) | 26 | Tier 0 | apps>=3 |
+| `Array` | 2 (langfuse, umami) | 30 | Tier 0 | gate:langfuse |
+| `Merge` | 1 (umami) | 2 | Tier 1 | below threshold |
+| `OrNull` | 1 (openlit) | 2 | Tier 1 | below threshold |
+| `ForEach` | 1 (hyperdx) | 1 | Tier 1 | below threshold |
+
+## `table_function`
+
+| Feature | Applications | Statements | Proposed | Why |
+|---|---|---:|---|---|
+| `clusterAllReplicas` | 1 (signoz) | 6 | disabled | below threshold |
 
 ## `engine`
 
-| Feature | Applications | Statements | In profile | Why |
+| Feature | Applications | Statements | Proposed | Why |
 |---|---|---:|---|---|
-| `ReplacingMergeTree` | 2 (langfuse, openpanel) | 54 | yes | gate:langfuse |
-| `AggregatingMergeTree` | 2 (langfuse, openpanel) | 34 | yes | gate:langfuse |
-| `MergeTree` | 2 (langfuse, openpanel) | 22 | yes | gate:langfuse |
-| `ReplicatedReplacingMergeTree` | 1 (langfuse) | 16 | yes | gate:langfuse |
-| `Null` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `VersionedCollapsingMergeTree` | 1 (openpanel) | 4 | yes | gate:openpanel |
-| `ReplicatedAggregatingMergeTree` | 1 (langfuse) | 2 | yes | gate:langfuse |
+| `MergeTree` | 6 (hyperdx, langfuse, openlit, openpanel, plausible, umami) | 78 | Tier 0 | apps>=3 |
+| `ReplacingMergeTree` | 4 (langfuse, openlit, openpanel, umami) | 71 | Tier 0 | apps>=3 |
+| `AggregatingMergeTree` | 3 (langfuse, openpanel, umami) | 37 | Tier 0 | apps>=3 |
+| `ReplicatedReplacingMergeTree` | 2 (langfuse, signoz) | 49 | Tier 0 | gate:langfuse |
+| `ReplicatedAggregatingMergeTree` | 2 (langfuse, signoz) | 11 | Tier 0 | gate:langfuse |
+| `VersionedCollapsingMergeTree` | 2 (openpanel, plausible) | 5 | Tier 0 | gate:openpanel |
+| `Distributed` | 1 (signoz) | 59 | Tier 1 | below threshold |
+| `TinyLog` | 1 (plausible) | 34 | Tier 2 (refused) | below threshold |
+| `ReplicatedMergeTree` | 1 (signoz) | 16 | Tier 1 | below threshold |
+| `Null` | 1 (langfuse) | 6 | Tier 0 | gate:langfuse |
+| `CollapsingMergeTree` | 1 (plausible) | 2 | Tier 1 | below threshold |
+| `ReplicatedSummingMergeTree` | 1 (signoz) | 1 | Tier 1 | below threshold |
+| `SummingMergeTree` | 1 (plausible) | 1 | Tier 1 | below threshold |
 
 ## `type`
 
-| Feature | Applications | Statements | In profile | Why |
+| Feature | Applications | Statements | Proposed | Why |
 |---|---|---:|---|---|
-| `DateTime64` | 2 (langfuse, openpanel) | 1161 | yes | gate:langfuse |
-| `String` | 2 (langfuse, openpanel) | 469 | yes | gate:langfuse |
-| `Array` | 2 (langfuse, openpanel) | 276 | yes | gate:langfuse |
-| `Nullable` | 2 (langfuse, openpanel) | 116 | yes | gate:langfuse |
-| `LowCardinality` | 2 (langfuse, openpanel) | 109 | yes | gate:langfuse |
-| `Map` | 2 (langfuse, openpanel) | 88 | yes | gate:langfuse |
-| `UInt64` | 2 (langfuse, openpanel) | 78 | yes | gate:langfuse |
-| `Int32` | 2 (langfuse, openpanel) | 73 | yes | gate:langfuse |
-| `Bool` | 2 (langfuse, openpanel) | 52 | yes | gate:langfuse |
-| `UInt8` | 2 (langfuse, openpanel) | 49 | yes | gate:langfuse |
-| `Float32` | 2 (langfuse, openpanel) | 22 | yes | gate:langfuse |
-| `UInt32` | 2 (langfuse, openpanel) | 19 | yes | gate:langfuse |
-| `UInt16` | 2 (langfuse, openpanel) | 17 | yes | gate:langfuse |
-| `Float64` | 2 (langfuse, openpanel) | 13 | yes | gate:langfuse |
-| `Decimal` | 1 (langfuse) | 27 | yes | gate:langfuse |
-| `SimpleAggregateFunction` | 1 (langfuse) | 24 | yes | gate:langfuse |
-| `DateTime` | 1 (openpanel) | 20 | yes | gate:openpanel |
-| `Decimal64` | 1 (langfuse) | 19 | yes | gate:langfuse |
-| `AggregateFunction` | 1 (langfuse) | 18 | yes | gate:langfuse |
-| `FixedString` | 1 (openpanel) | 10 | yes | gate:openpanel |
-| `Date` | 1 (openpanel) | 8 | yes | gate:openpanel |
-| `UUID` | 1 (openpanel) | 8 | yes | gate:openpanel |
-| `Enum8` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `Tuple` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `Int8` | 1 (openpanel) | 4 | yes | gate:openpanel |
-| `Boolean` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `Int64` | 1 (langfuse) | 2 | yes | gate:langfuse |
+| `String` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 786 | Tier 0 | apps>=3 |
+| `Array` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 358 | Tier 0 | apps>=3 |
+| `LowCardinality` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 294 | Tier 0 | apps>=3 |
+| `UInt64` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 217 | Tier 0 | apps>=3 |
+| `UInt32` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 90 | Tier 0 | apps>=3 |
+| `UInt8` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 59 | Tier 0 | apps>=3 |
+| `DateTime64` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 1339 | Tier 0 | apps>=3 |
+| `DateTime` | 6 (hyperdx, openlit, openpanel, plausible, signoz, umami) | 436 | Tier 0 | apps>=3 |
+| `Nullable` | 6 (langfuse, openlit, openpanel, plausible, signoz, umami) | 130 | Tier 0 | apps>=3 |
+| `Int32` | 6 (hyperdx, langfuse, openlit, openpanel, plausible, umami) | 93 | Tier 0 | apps>=3 |
+| `Bool` | 5 (langfuse, openlit, openpanel, plausible, signoz) | 280 | Tier 0 | apps>=3 |
+| `Map` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 163 | Tier 0 | apps>=3 |
+| `Float64` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 117 | Tier 0 | apps>=3 |
+| `UInt16` | 5 (langfuse, openlit, openpanel, plausible, signoz) | 24 | Tier 0 | apps>=3 |
+| `Int64` | 4 (hyperdx, langfuse, plausible, signoz) | 459 | Tier 0 | apps>=3 |
+| `UUID` | 3 (openlit, openpanel, umami) | 163 | Tier 0 | apps>=3 |
+| `SimpleAggregateFunction` | 3 (langfuse, signoz, umami) | 49 | Tier 0 | apps>=3 |
+| `AggregateFunction` | 3 (langfuse, signoz, umami) | 28 | Tier 0 | apps>=3 |
+| `FixedString` | 3 (openpanel, plausible, signoz) | 25 | Tier 0 | apps>=3 |
+| `Float32` | 3 (langfuse, openlit, openpanel) | 23 | Tier 0 | apps>=3 |
+| `Enum8` | 3 (langfuse, openlit, signoz) | 19 | Tier 0 | apps>=3 |
+| `Int8` | 3 (openpanel, plausible, signoz) | 13 | Tier 0 | apps>=3 |
+| `Boolean` | 3 (hyperdx, langfuse, openlit) | 6 | Tier 0 | apps>=3 |
+| `Decimal` | 2 (langfuse, umami) | 31 | Tier 0 | gate:langfuse |
+| `Date` | 2 (openpanel, plausible) | 18 | Tier 0 | gate:openpanel |
+| `Nested` | 2 (hyperdx, openlit) | 13 | Tier 1 | below threshold |
+| `Tuple` | 2 (langfuse, plausible) | 7 | Tier 0 | gate:langfuse |
+| `INTEGER` | 1 (openlit) | 22 | Tier 1 | below threshold |
+| `Decimal64` | 1 (langfuse) | 19 | Tier 0 | gate:langfuse |
+| `Nothing` | 1 (plausible) | 18 | Tier 1 | below threshold |
+| `FLOAT` | 1 (openlit) | 17 | Tier 1 | below threshold |
+| `JSON` | 1 (signoz) | 14 | Tier 1 | below threshold |
+| `Int16` | 1 (signoz) | 7 | Tier 1 | below threshold |
 
 ## `format`
 
-| Feature | Applications | Statements | In profile | Why |
+| Feature | Applications | Statements | Proposed | Why |
 |---|---|---:|---|---|
-| `JSONEachRow` | 2 (langfuse, openpanel) | 1405 | yes | gate:langfuse |
-| `Native` | 1 (langfuse) | 176 | yes | gate:langfuse |
-| `JSON` | 1 (openpanel) | 87 | yes | gate:openpanel |
+| `JSONEachRow` | 4 (langfuse, openlit, openpanel, umami) | 2042 | Tier 0 | apps>=3 |
+| `Native` | 4 (hyperdx, langfuse, openlit, signoz) | 268 | Tier 0 | apps>=3 |
+| `JSON` | 3 (hyperdx, openlit, openpanel) | 194 | Tier 0 | apps>=3 |
+| `Values` | 1 (signoz) | 114 | Tier 1 | below threshold |
+| `RowBinaryWithNamesAndTypes` | 1 (plausible) | 110 | Tier 1 | below threshold |
 
 ## `setting`
 
-| Feature | Applications | Statements | In profile | Why |
+| Feature | Applications | Statements | Proposed | Why |
 |---|---|---:|---|---|
-| `max_execution_time` | 2 (langfuse, openpanel) | 1398 | yes | gate:langfuse |
-| `database` | 2 (langfuse, openpanel) | 691 | yes | gate:langfuse |
-| `input_format_parallel_parsing` | 2 (langfuse, openpanel) | 204 | yes | gate:langfuse |
-| `http_headers_progress_interval_ms` | 2 (langfuse, openpanel) | 66 | yes | gate:langfuse |
-| `send_progress_in_http_headers` | 2 (langfuse, openpanel) | 66 | yes | gate:langfuse |
-| `enable_block_number_column` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
-| `enable_block_offset_column` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
-| `log_comment` | 1 (langfuse) | 1392 | yes | gate:langfuse |
-| `timeout_before_checking_execution_speed` | 1 (langfuse) | 1392 | yes | gate:langfuse |
-| `input_format_json_throw_on_bad_escape_sequence` | 1 (langfuse) | 959 | yes | gate:langfuse |
-| `use_query_cache` | 1 (langfuse) | 710 | yes | gate:langfuse |
-| `query_plan_optimize_lazy_materialization` | 1 (langfuse) | 653 | yes | gate:langfuse |
-| `asterisk_include_alias_columns` | 1 (langfuse) | 625 | yes | gate:langfuse |
-| `asterisk_include_materialized_columns` | 1 (langfuse) | 625 | yes | gate:langfuse |
-| `enable_producing_buckets_out_of_order_in_aggregation` | 1 (langfuse) | 554 | yes | gate:langfuse |
-| `distributed_product_mode` | 1 (openpanel) | 93 | yes | gate:openpanel |
-| `query_plan_convert_any_join_to_semi_or_anti_join` | 1 (openpanel) | 93 | yes | gate:openpanel |
-| `alter_sync` | 1 (langfuse) | 89 | yes | gate:langfuse |
-| `use_text_index_dictionary_cache` | 1 (langfuse) | 88 | yes | gate:langfuse |
-| `use_text_index_postings_cache` | 1 (langfuse) | 88 | yes | gate:langfuse |
-| `enable_full_text_index` | 1 (langfuse) | 81 | yes | gate:langfuse |
-| `mutations_sync` | 1 (langfuse) | 72 | yes | gate:langfuse |
-| `session_timezone` | 1 (openpanel) | 57 | yes | gate:openpanel |
-| `date_time_output_format` | 1 (langfuse) | 39 | yes | gate:langfuse |
-| `max_bytes_before_external_group_by` | 1 (langfuse) | 39 | yes | gate:langfuse |
-| `index_granularity` | 1 (openpanel) | 24 | yes | gate:openpanel |
-| `flatten_nested` | 1 (openpanel) | 6 | yes | gate:openpanel |
-| `max_insert_block_size` | 1 (openpanel) | 6 | yes | gate:openpanel |
-| `prewarm_mark_cache` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `prewarm_primary_key_cache` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `deduplicate_merge_projection_mode` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `index_granularity_bytes` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `lightweight_mutation_projection_mode` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `merge_max_block_size_bytes` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `ttl_only_drop_parts` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `max_threads` | 1 (langfuse) | 2 | yes | gate:langfuse |
+| `database` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 2379 | Tier 0 | apps>=3 |
+| `input_format_parallel_parsing` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 645 | Tier 0 | apps>=3 |
+| `index_granularity` | 6 (hyperdx, openlit, openpanel, plausible, signoz, umami) | 109 | Tier 0 | apps>=3 |
+| `max_execution_time` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 1656 | Tier 0 | apps>=3 |
+| `enable_producing_buckets_out_of_order_in_aggregation` | 4 (hyperdx, langfuse, openlit, signoz) | 2229 | Tier 0 | apps>=3 |
+| `ttl_only_drop_parts` | 4 (hyperdx, langfuse, openlit, signoz) | 69 | Tier 0 | apps>=3 |
+| `log_comment` | 3 (langfuse, plausible, signoz) | 1802 | Tier 0 | apps>=3 |
+| `date_time_output_format` | 3 (hyperdx, langfuse, umami) | 215 | Tier 0 | apps>=3 |
+| `readonly` | 2 (openlit, plausible) | 395 | Tier 1 | below threshold |
+| `alter_sync` | 2 (langfuse, plausible) | 92 | Tier 0 | gate:langfuse |
+| `http_headers_progress_interval_ms` | 2 (langfuse, openpanel) | 66 | Tier 0 | gate:langfuse |
+| `send_progress_in_http_headers` | 2 (langfuse, openpanel) | 66 | Tier 0 | gate:langfuse |
+| `enable_block_number_column` | 2 (langfuse, openpanel) | 14 | Tier 0 | gate:langfuse |
+| `enable_block_offset_column` | 2 (langfuse, openpanel) | 14 | Tier 0 | gate:langfuse |
+| `max_threads` | 2 (langfuse, signoz) | 5 | Tier 0 | gate:langfuse |
+| `timeout_before_checking_execution_speed` | 1 (langfuse) | 1392 | Tier 0 | gate:langfuse |
+| `input_format_json_throw_on_bad_escape_sequence` | 1 (langfuse) | 959 | Tier 0 | gate:langfuse |
+| `input_format_binary_read_json_as_string` | 1 (plausible) | 811 | Tier 1 | below threshold |
+| `output_format_binary_write_json_as_string` | 1 (plausible) | 811 | Tier 1 | below threshold |
+| `output_format` | 1 (plausible) | 729 | Tier 1 | below threshold |
+| `use_query_cache` | 1 (langfuse) | 710 | Tier 0 | gate:langfuse |
+| `query_plan_optimize_lazy_materialization` | 1 (langfuse) | 653 | Tier 0 | gate:langfuse |
+| `asterisk_include_alias_columns` | 1 (langfuse) | 625 | Tier 0 | gate:langfuse |
+| `asterisk_include_materialized_columns` | 1 (langfuse) | 625 | Tier 0 | gate:langfuse |
+| `materialized_views_ignore_errors` | 1 (plausible) | 501 | Tier 1 | below threshold |
+| `join_algorithm` | 1 (plausible) | 339 | Tier 1 | below threshold |
+| `final` | 1 (signoz) | 116 | Tier 1 | below threshold |
+| `output_format_native_write_json_as_string` | 1 (signoz) | 114 | Tier 1 | below threshold |
+| `distributed_product_mode` | 1 (openpanel) | 93 | Tier 0 | gate:openpanel |
+| `query_plan_convert_any_join_to_semi_or_anti_join` | 1 (openpanel) | 93 | Tier 0 | gate:openpanel |
+| `use_text_index_dictionary_cache` | 1 (langfuse) | 88 | Tier 0 | gate:langfuse |
+| `use_text_index_postings_cache` | 1 (langfuse) | 88 | Tier 0 | gate:langfuse |
+| `enable_full_text_index` | 1 (langfuse) | 81 | Tier 0 | gate:langfuse |
+| `mutations_sync` | 1 (langfuse) | 72 | Tier 0 | gate:langfuse |
+| `session_timezone` | 1 (openpanel) | 57 | Tier 0 | gate:openpanel |
+| `max_result_rows` | 1 (openlit) | 56 | Tier 1 | below threshold |
+| `max_rows_to_read` | 1 (openlit) | 56 | Tier 1 | below threshold |
+| `allow_calculating_subcolumns_sizes_for_merge_tree_reading` | 1 (hyperdx) | 48 | Tier 1 | below threshold |
+| `cancel_http_readonly_queries_on_client_close` | 1 (hyperdx) | 48 | Tier 1 | below threshold |
+| `output_format_json_quote_64bit_integers` | 1 (hyperdx) | 48 | Tier 1 | below threshold |
+| `query_plan_max_limit_for_lazy_materialization` | 1 (hyperdx) | 48 | Tier 1 | below threshold |
+| `query_plan_max_limit_for_top_k_optimization` | 1 (hyperdx) | 48 | Tier 1 | below threshold |
+| `type_json_skip_duplicated_paths` | 1 (signoz) | 43 | Tier 1 | below threshold |
+| `max_bytes_before_external_group_by` | 1 (langfuse) | 39 | Tier 0 | gate:langfuse |
+| `input_format_try_infer_dates` | 1 (signoz) | 21 | Tier 1 | below threshold |
+| `input_format_try_infer_datetimes` | 1 (signoz) | 21 | Tier 1 | below threshold |
+| `flatten_nested` | 1 (openpanel) | 6 | Tier 0 | gate:openpanel |
+| `max_insert_block_size` | 1 (openpanel) | 6 | Tier 0 | gate:openpanel |
+| `prewarm_mark_cache` | 1 (langfuse) | 6 | Tier 0 | gate:langfuse |
+| `prewarm_primary_key_cache` | 1 (langfuse) | 6 | Tier 0 | gate:langfuse |
+| `allow_ddl` | 1 (signoz) | 5 | Tier 1 | below threshold |
+| `database_replicated_allow_replicated_engine_arguments` | 1 (signoz) | 5 | Tier 1 | below threshold |
+| `min_age_to_force_merge_on_partition_only` | 1 (signoz) | 5 | Tier 1 | below threshold |
+| `min_age_to_force_merge_seconds` | 1 (signoz) | 5 | Tier 1 | below threshold |
+| `allow_nullable_key` | 1 (signoz) | 3 | Tier 1 | below threshold |
+| `deduplicate_merge_projection_mode` | 1 (langfuse) | 3 | Tier 0 | gate:langfuse |
+| `index_granularity_bytes` | 1 (langfuse) | 3 | Tier 0 | gate:langfuse |
+| `lightweight_mutation_projection_mode` | 1 (langfuse) | 3 | Tier 0 | gate:langfuse |
+| `materialize_ttl_after_modify` | 1 (signoz) | 3 | Tier 1 | below threshold |
+| `merge_max_block_size_bytes` | 1 (langfuse) | 3 | Tier 0 | gate:langfuse |
+| `wait_for_async_insert` | 1 (plausible) | 3 | Tier 1 | below threshold |
+| `insert_quorum` | 1 (plausible) | 2 | Tier 1 | below threshold |
+| `short_circuit_function_evaluation` | 1 (hyperdx) | 2 | Tier 1 | below threshold |
+| `replicated_deduplication_window` | 1 (plausible) | 1 | Tier 1 | below threshold |
 
 ## `syntax`
 
-| Feature | Applications | Statements | In profile | Why |
+| Feature | Applications | Statements | Proposed | Why |
 |---|---|---:|---|---|
-| `SELECT` | 2 (langfuse, openpanel) | 1440 | yes | gate:langfuse |
-| `ORDER BY` | 2 (langfuse, openpanel) | 1335 | yes | gate:langfuse |
-| `LIMIT` | 2 (langfuse, openpanel) | 1268 | yes | gate:langfuse |
-| `INSERT` | 2 (langfuse, openpanel) | 408 | yes | gate:langfuse |
-| `ALTER TABLE` | 2 (langfuse, openpanel) | 370 | yes | gate:langfuse |
-| `GROUP BY` | 2 (langfuse, openpanel) | 345 | yes | gate:langfuse |
-| `INSERT FORMAT` | 2 (langfuse, openpanel) | 232 | yes | gate:langfuse |
-| `ON CLUSTER` | 2 (langfuse, openpanel) | 196 | yes | gate:langfuse |
-| `ALTER ADD COLUMN` | 2 (langfuse, openpanel) | 164 | yes | gate:langfuse |
-| `table ORDER BY` | 2 (langfuse, openpanel) | 132 | yes | gate:langfuse |
-| `skip index bloom_filter` | 2 (langfuse, openpanel) | 127 | yes | gate:langfuse |
-| `CREATE TABLE` | 2 (langfuse, openpanel) | 126 | yes | gate:langfuse |
-| `ALTER ADD INDEX` | 2 (langfuse, openpanel) | 100 | yes | gate:langfuse |
-| `codec ZSTD` | 2 (langfuse, openpanel) | 98 | yes | gate:langfuse |
-| `column CODEC` | 2 (langfuse, openpanel) | 98 | yes | gate:langfuse |
-| `WITH` | 2 (langfuse, openpanel) | 85 | yes | gate:langfuse |
-| `column DEFAULT` | 2 (langfuse, openpanel) | 82 | yes | gate:langfuse |
-| `FINAL` | 2 (langfuse, openpanel) | 72 | yes | gate:langfuse |
-| `PARTITION BY` | 2 (langfuse, openpanel) | 68 | yes | gate:langfuse |
-| `scalar subquery` | 2 (langfuse, openpanel) | 53 | yes | gate:langfuse |
-| `CREATE MATERIALIZED VIEW` | 2 (langfuse, openpanel) | 51 | yes | gate:langfuse |
-| `parametric function` | 2 (langfuse, openpanel) | 50 | yes | gate:langfuse |
-| `DISTINCT` | 2 (langfuse, openpanel) | 45 | yes | gate:langfuse |
-| `table SETTINGS` | 2 (langfuse, openpanel) | 42 | yes | gate:langfuse |
-| `WITH FILL` | 2 (langfuse, openpanel) | 40 | yes | gate:langfuse |
-| `subquery in FROM` | 2 (langfuse, openpanel) | 35 | yes | gate:langfuse |
-| `skip index minmax` | 2 (langfuse, openpanel) | 25 | yes | gate:langfuse |
-| `LEFT JOIN` | 2 (langfuse, openpanel) | 22 | yes | gate:langfuse |
-| `TTL` | 2 (langfuse, openpanel) | 19 | yes | gate:langfuse |
-| `HAVING` | 2 (langfuse, openpanel) | 18 | yes | gate:langfuse |
-| `column ALIAS` | 2 (langfuse, openpanel) | 11 | yes | gate:langfuse |
-| `INNER JOIN` | 2 (langfuse, openpanel) | 8 | yes | gate:langfuse |
-| `ARRAY JOIN` | 2 (langfuse, openpanel) | 6 | yes | gate:langfuse |
-| `CREATE DATABASE` | 2 (langfuse, openpanel) | 5 | yes | gate:langfuse |
-| `query parameter` | 1 (langfuse) | 1113 | yes | gate:langfuse |
-| `LIMIT BY` | 1 (langfuse) | 874 | yes | gate:langfuse |
-| `INSERT VALUES` | 1 (langfuse) | 176 | yes | gate:langfuse |
-| `ALTER MATERIALIZE INDEX` | 1 (langfuse) | 69 | yes | gate:langfuse |
-| `DROP VIEW` | 1 (langfuse) | 42 | yes | gate:langfuse |
-| `MATERIALIZED VIEW TO` | 1 (langfuse) | 39 | yes | gate:langfuse |
-| `DROP TABLE` | 1 (langfuse) | 33 | yes | gate:langfuse |
-| `table PRIMARY KEY` | 1 (langfuse) | 33 | yes | gate:langfuse |
-| `CREATE VIEW` | 1 (langfuse) | 24 | yes | gate:langfuse |
-| `BETWEEN` | 1 (openpanel) | 23 | yes | gate:openpanel |
-| `codec LZ4` | 1 (openpanel) | 20 | yes | gate:openpanel |
-| `skip index ngrambf_v1` | 1 (langfuse) | 18 | yes | gate:langfuse |
-| `SAMPLE` | 1 (langfuse) | 16 | yes | gate:langfuse |
-| `codec DELTA` | 1 (openpanel) | 16 | yes | gate:openpanel |
-| `codec GORILLA` | 1 (openpanel) | 16 | yes | gate:openpanel |
-| `ALTER DROP INDEX` | 1 (langfuse) | 15 | yes | gate:langfuse |
-| `RENAME` | 1 (openpanel) | 12 | yes | gate:openpanel |
-| `codec DOUBLEDELTA` | 1 (openpanel) | 12 | yes | gate:openpanel |
-| `UNION ALL` | 1 (langfuse) | 10 | yes | gate:langfuse |
-| `column MATERIALIZED` | 1 (langfuse) | 9 | yes | gate:langfuse |
-| `IN subquery` | 1 (langfuse) | 8 | yes | gate:langfuse |
-| `aggregate DISTINCT` | 1 (openpanel) | 7 | yes | gate:openpanel |
-| `ALTER MODIFY COLUMN` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `ALTER MODIFY QUERY` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `ALTER MODIFY SETTING` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `SAMPLE BY` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `skip index text` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `DELETE` | 1 (langfuse) | 5 | yes | gate:langfuse |
-| `ALTER MODIFY TTL` | 1 (openpanel) | 4 | yes | gate:openpanel |
-| `WITH ROLLUP` | 1 (openpanel) | 4 | yes | gate:openpanel |
-| `skip index set` | 1 (openpanel) | 4 | yes | gate:openpanel |
-| `ANY JOIN` | 1 (openpanel) | 3 | yes | gate:openpanel |
-| `PROJECTION` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `window function` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `FULL JOIN` | 1 (langfuse) | 2 | yes | gate:langfuse |
-| `SHOW TABLES` | 1 (langfuse) | 2 | yes | gate:langfuse |
-| `EXCEPT` | 1 (langfuse) | 1 | yes | gate:langfuse |
+| `SELECT` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 3159 | Tier 0 | apps>=3 |
+| `ORDER BY` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 1848 | Tier 0 | apps>=3 |
+| `LIMIT` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 1687 | Tier 0 | apps>=3 |
+| `INSERT` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 1301 | Tier 0 | apps>=3 |
+| `INSERT FORMAT` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 1004 | Tier 0 | apps>=3 |
+| `GROUP BY` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 887 | Tier 0 | apps>=3 |
+| `column CODEC` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 406 | Tier 0 | apps>=3 |
+| `codec ZSTD` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 403 | Tier 0 | apps>=3 |
+| `CREATE TABLE` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 358 | Tier 0 | apps>=3 |
+| `table ORDER BY` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 271 | Tier 0 | apps>=3 |
+| `subquery in FROM` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 163 | Tier 0 | apps>=3 |
+| `PARTITION BY` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 148 | Tier 0 | apps>=3 |
+| `table SETTINGS` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 132 | Tier 0 | apps>=3 |
+| `skip index bloom_filter` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 164 | Tier 0 | apps>=3 |
+| `DISTINCT` | 6 (langfuse, openlit, openpanel, plausible, signoz, umami) | 95 | Tier 0 | apps>=3 |
+| `CREATE MATERIALIZED VIEW` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 89 | Tier 0 | apps>=3 |
+| `INNER JOIN` | 6 (langfuse, openlit, openpanel, plausible, signoz, umami) | 78 | Tier 0 | apps>=3 |
+| `skip index minmax` | 6 (hyperdx, langfuse, openlit, openpanel, plausible, signoz) | 39 | Tier 0 | apps>=3 |
+| `CREATE DATABASE` | 6 (langfuse, openlit, openpanel, plausible, signoz, umami) | 18 | Tier 0 | apps>=3 |
+| `ALTER TABLE` | 5 (langfuse, openpanel, plausible, signoz, umami) | 678 | Tier 0 | apps>=3 |
+| `column DEFAULT` | 5 (langfuse, openlit, openpanel, signoz, umami) | 183 | Tier 0 | apps>=3 |
+| `codec DELTA` | 5 (hyperdx, openlit, openpanel, plausible, signoz) | 121 | Tier 0 | apps>=3 |
+| `WITH` | 5 (hyperdx, langfuse, openpanel, signoz, umami) | 113 | Tier 0 | apps>=3 |
+| `TTL` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 99 | Tier 0 | apps>=3 |
+| `MATERIALIZED VIEW TO` | 5 (hyperdx, langfuse, openlit, signoz, umami) | 77 | Tier 0 | apps>=3 |
+| `scalar subquery` | 5 (hyperdx, langfuse, openpanel, signoz, umami) | 69 | Tier 0 | apps>=3 |
+| `table PRIMARY KEY` | 5 (langfuse, openlit, plausible, signoz, umami) | 49 | Tier 0 | apps>=3 |
+| `HAVING` | 5 (langfuse, openlit, openpanel, signoz, umami) | 39 | Tier 0 | apps>=3 |
+| `window function` | 5 (hyperdx, langfuse, plausible, signoz, umami) | 10 | Tier 0 | apps>=3 |
+| `query parameter` | 4 (hyperdx, langfuse, plausible, umami) | 1582 | Tier 0 | apps>=3 |
+| `ALTER ADD COLUMN` | 4 (langfuse, openpanel, plausible, signoz) | 365 | Tier 0 | apps>=3 |
+| `ALTER ADD INDEX` | 4 (langfuse, openpanel, plausible, signoz) | 112 | Tier 0 | apps>=3 |
+| `FINAL` | 4 (langfuse, openpanel, signoz, umami) | 83 | Tier 0 | apps>=3 |
+| `LEFT JOIN` | 4 (langfuse, openpanel, plausible, umami) | 79 | Tier 0 | apps>=3 |
+| `parametric function` | 4 (langfuse, openpanel, signoz, umami) | 57 | Tier 0 | apps>=3 |
+| `ALTER MODIFY SETTING` | 4 (langfuse, plausible, signoz, umami) | 22 | Tier 0 | apps>=3 |
+| `ON CLUSTER` | 3 (langfuse, openpanel, signoz) | 509 | Tier 0 | apps>=3 |
+| `codec DOUBLEDELTA` | 3 (openpanel, plausible, signoz) | 56 | Tier 0 | apps>=3 |
+| `codec LZ4` | 3 (openpanel, plausible, signoz) | 51 | Tier 0 | apps>=3 |
+| `DROP TABLE` | 3 (langfuse, plausible, signoz) | 47 | Tier 0 | apps>=3 |
+| `ALTER MODIFY COLUMN` | 3 (langfuse, plausible, signoz) | 32 | Tier 0 | apps>=3 |
+| `ARRAY JOIN` | 3 (langfuse, openpanel, plausible) | 32 | Tier 0 | apps>=3 |
+| `UNION ALL` | 3 (langfuse, signoz, umami) | 21 | Tier 0 | apps>=3 |
+| `IN subquery` | 3 (langfuse, openlit, umami) | 13 | Tier 0 | apps>=3 |
+| `column ALIAS` | 3 (langfuse, openpanel, signoz) | 13 | Tier 0 | apps>=3 |
+| `SAMPLE BY` | 3 (langfuse, plausible, umami) | 12 | Tier 0 | apps>=3 |
+| `skip index set` | 3 (openlit, openpanel, signoz) | 11 | Tier 0 | apps>=3 |
+| `INSERT VALUES` | 2 (langfuse, signoz) | 290 | Tier 0 | gate:langfuse |
+| `ALTER MATERIALIZE INDEX` | 2 (langfuse, plausible) | 70 | Tier 0 | gate:langfuse |
+| `codec GORILLA` | 2 (openpanel, signoz) | 41 | Tier 0 | gate:openpanel |
+| `WITH FILL` | 2 (langfuse, openpanel) | 40 | Tier 0 | gate:langfuse |
+| `skip index ngrambf_v1` | 2 (langfuse, signoz) | 28 | Tier 0 | gate:langfuse |
+| `ALTER MODIFY QUERY` | 2 (langfuse, signoz) | 21 | Tier 0 | gate:langfuse |
+| `ALTER DROP INDEX` | 2 (langfuse, signoz) | 19 | Tier 0 | gate:langfuse |
+| `skip index tokenbf_v1` | 2 (openlit, signoz) | 13 | Tier 1 | below threshold |
+| `column MATERIALIZED` | 2 (hyperdx, langfuse) | 11 | Tier 0 | gate:langfuse |
+| `aggregate DISTINCT` | 2 (openpanel, signoz) | 9 | Tier 0 | gate:openpanel |
+| `DESCRIBE` | 2 (hyperdx, openlit) | 8 | Tier 1 | below threshold |
+| `skip index text` | 2 (hyperdx, langfuse) | 8 | Tier 0 | gate:langfuse |
+| `ALTER MODIFY TTL` | 2 (openpanel, signoz) | 7 | Tier 0 | gate:openpanel |
+| `INSERT SELECT` | 2 (plausible, signoz) | 7 | Tier 1 | below threshold |
+| `ALTER ADD PROJECTION` | 2 (plausible, umami) | 4 | Tier 1 | below threshold |
+| `ALTER MATERIALIZE PROJECTION` | 2 (plausible, umami) | 4 | Tier 1 | below threshold |
+| `PROJECTION` | 2 (langfuse, signoz) | 4 | Tier 0 | gate:langfuse |
+| `LIMIT BY` | 1 (langfuse) | 874 | Tier 0 | gate:langfuse |
+| `DROP VIEW` | 1 (langfuse) | 42 | Tier 0 | gate:langfuse |
+| `CREATE FUNCTION` | 1 (plausible) | 27 | Tier 1 | below threshold |
+| `CREATE VIEW` | 1 (langfuse) | 24 | Tier 0 | gate:langfuse |
+| `BETWEEN` | 1 (openpanel) | 23 | Tier 0 | gate:openpanel |
+| `SHOW CREATE` | 1 (signoz) | 23 | Tier 1 | below threshold |
+| `codec T64` | 1 (signoz) | 17 | Tier 1 | below threshold |
+| `SAMPLE` | 1 (langfuse) | 16 | Tier 0 | gate:langfuse |
+| `RENAME` | 1 (openpanel) | 12 | Tier 0 | gate:openpanel |
+| `user-defined function call` | 1 (plausible) | 12 | Tier 1 | below threshold |
+| `ALTER UPDATE` | 1 (plausible) | 9 | Tier 1 | below threshold |
+| `ALTER DROP COLUMN` | 1 (plausible) | 8 | Tier 1 | below threshold |
+| `OFFSET` | 1 (openlit) | 8 | Tier 1 | below threshold |
+| `PREWHERE` | 1 (signoz) | 6 | Tier 1 | below threshold |
+| `DELETE` | 1 (langfuse) | 5 | Tier 0 | gate:langfuse |
+| `cast operator ::` | 1 (signoz) | 5 | Tier 1 | below threshold |
+| `codec DEFAULT` | 1 (signoz) | 5 | Tier 1 | below threshold |
+| `CROSS JOIN` | 1 (openlit) | 4 | Tier 1 | below threshold |
+| `WITH ROLLUP` | 1 (openpanel) | 4 | Tier 0 | gate:openpanel |
+| `ALTER MODIFY` | 1 (plausible) | 3 | Tier 1 | below threshold |
+| `ANY JOIN` | 1 (openpanel) | 3 | Tier 0 | gate:openpanel |
+| `CREATE DICTIONARY` | 1 (plausible) | 3 | Tier 2 (refused) | below threshold |
+| `TRUNCATE` | 1 (plausible) | 3 | Tier 1 | below threshold |
+| `ALTER MATERIALIZE COLUMN` | 1 (signoz) | 2 | Tier 1 | below threshold |
+| `FULL JOIN` | 1 (langfuse) | 2 | Tier 0 | gate:langfuse |
+| `GLOBAL IN` | 1 (signoz) | 2 | Tier 1 | below threshold |
+| `INTERSECT` | 1 (signoz) | 2 | Tier 1 | below threshold |
+| `SHOW TABLES` | 1 (langfuse) | 2 | Tier 0 | gate:langfuse |
+| `WINDOW` | 1 (signoz) | 2 | Tier 1 | below threshold |
+| `ALTER MODIFY ORDER` | 1 (plausible) | 1 | Tier 1 | below threshold |
+| `EXCEPT` | 1 (langfuse) | 1 | Tier 0 | gate:langfuse |
+| `EXCHANGE` | 1 (plausible) | 1 | Tier 1 | below threshold |
