@@ -137,7 +137,7 @@ Gate: Tasks 1–11 merged; the report written; §75's open questions that HE0 an
 
 ## Queued gate applications, after SigNoz (Tasks 13–15)
 
-> **Queued by the owner 2026-10-22** ([R13.1](he1-rulings/t13.md), [R14.1](he1-rulings/t14.md), [R15.1](he1-rulings/t15.md)). These are stubs. **None of them starts** until SigNoz's gate (Task 9, D1571) is done or the owner says so. They are not part of the HE0 exit (Task 12) unless the owner adds them. Evidence for every licence, protocol and stack fact below is in [`docs/research/clickhouse-apps.md`](../research/clickhouse-apps.md) (checked 2026-10-22). When a task starts, its application becomes a gate application under §75 §7.1's rule, and a decision from the reserved D1572–D1579 records that.
+> **Queued by the owner 2026-10-22** ([R13.1](he1-rulings/t13.md), [R14.1](he1-rulings/t14.md), [R15.1](he1-rulings/t15.md)). These are stubs. **None of them starts** until SigNoz's gate (Task 9; the owner's decision of 2026-10-22, PR #1025) is done or the owner says so. They are not part of the HE0 exit (Task 12) unless the owner adds them. Evidence for every licence, protocol and stack fact below is in [`docs/research/clickhouse-apps.md`](../research/clickhouse-apps.md) (checked 2026-10-22). When a task starts, its application becomes a gate application under §75 §7.1's rule, and a decision from the reserved D1572–D1579 records that.
 
 Each task follows Task 9's pattern: a manifest entry and compose stack (Task 1), a driver, a mining run (Tasks 2–5) against the 26.9.2.8 oracle, a replay of the oracle traffic against the House (R9.3), then fixes or rulings per gap, and a nightly `<app>_on_house_smoke` job. Supporting images follow R0.4 (Valkey for Redis, RustFS for MinIO).
 
@@ -149,7 +149,7 @@ Each task follows Task 9's pattern: a manifest entry and compose stack (Task 1),
 
 **Application.** `openmeterio/openmeter`, Apache-2.0, no `ee/` split; owned by Kong since 2025-09. Releases are weekly `v1.0.0-beta.N` tags (`v1.0.0-beta.236`, 2026-10-09); pin one at least 14 days old, image `ghcr.io/openmeterio/openmeter` by digest (one image, six commands).
 
-**Protocol: native only.** OpenMeter opens ClickHouse with `clickhouse-go` v2 and no protocol option (`app/config/aggregation.go`, default address `127.0.0.1:9000`), for inserts, migrations and queries. So this gate **needs the native listener built for SigNoz** (D1571); it is the second native-only gate and reuses that work. Whether an `http://` address is accepted is unknown (verify; the config builds `clickhouse.Options` without `Protocol`).
+**Protocol: native only.** OpenMeter opens ClickHouse with `clickhouse-go` v2 and no protocol option (`app/config/aggregation.go`, default address `127.0.0.1:9000`), for inserts, migrations and queries. So this gate **needs the native listener built for SigNoz** (PR #1025); it is the second native-only gate and reuses that work. Whether an `http://` address is accepted is unknown (verify; the config builds `clickhouse.Options` without `Protocol`).
 
 **How OpenMeter's use maps onto §63.**
 
@@ -165,7 +165,7 @@ Each task follows Task 9's pattern: a manifest entry and compose stack (Task 1),
 
 **Harness needs.** Kafka (their compose uses `confluentinc/cp-kafka:8.0.3`; use an Apache Kafka image if OpenMeter accepts it, verify), Postgres, Valkey for the Redis dedupe driver, the native port on the House, oracle ClickHouse 26.9.2.8 (OpenMeter pins 25.12.3).
 
-**Expected House gaps** (from the source, to be measured): the native protocol (D1548, D1571); the `minmax` skip index in `CREATE TABLE` (skip indexes are stripped in R9.3's discovery runs); `PREWHERE` on the Rust engine (R10.5; chDB is fine); `tumbleStart`/`tumbleEnd`, `JSON_VALUE`, `toDecimal128OrNull` and `ifNotFinite` in the Tier 0 profile (chDB has them); `async_insert` settings when enabled (R4.5); deletes or mutations, if OpenMeter issues any (not seen; verify).
+**Expected House gaps** (from the source, to be measured): the native protocol (D1548; SigNoz's listener, PR #1025); the `minmax` skip index in `CREATE TABLE` (skip indexes are stripped in R9.3's discovery runs); `PREWHERE` on the Rust engine (R10.5; chDB is fine); `tumbleStart`/`tumbleEnd`, `JSON_VALUE`, `toDecimal128OrNull` and `ifNotFinite` in the Tier 0 profile (chDB has them); `async_insert` settings when enabled (R4.5); deletes or mutations, if OpenMeter issues any (not seen; verify).
 
 Tests: `openmeter_on_house_smoke` (nightly). Commit: `conformance: OpenMeter on the House (HE0 Task 13)`.
 
@@ -211,7 +211,7 @@ Tests: `helicone_on_house_smoke` (or `laminar_…`/`opik_…`, nightly). Commit:
 - `system.tables.engine` shows lake engines as the House names them; `engine_full` and `comment` may be default values (`system.rs` fills what it knows).
 - The `JSON` type, `JSONAllPaths` and `distinctJSONPathsAndTypes` on lake tables (verify the House's JSON support).
 - `SHOW CREATE TABLE` for lake tables (Metabase parses it for skip indexes); the House's answer must parse.
-- Native protocol for Grafana's default mode (D1571's listener).
+- Native protocol for Grafana's default mode (the listener built for SigNoz, PR #1025).
 
 Tests: `bi_grafana_on_house_smoke` (both protocols) and `bi_metabase_on_house_smoke` (nightly). Commit: `conformance: Grafana and Metabase against the House (HE0 Task 15)`.
 
