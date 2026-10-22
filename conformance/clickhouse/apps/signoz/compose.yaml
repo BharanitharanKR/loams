@@ -81,6 +81,8 @@ services:
     labels: { io.loams.licence: "Apache-2.0" }
     environment:
       CLICKHOUSE_SKIP_USER_SETUP: "1"
+    # HTTP on loopback, for scripts/house/replay.py to read the oracle.
+    ports: ["127.0.0.1:${HE0_SIGNOZ_CH_PORT:-28146}:8123"]
     volumes:
       - ../clickhouse/he0-logs.xml:/etc/clickhouse-server/config.d/he0-logs.xml:ro
       - ../clickhouse/he0-users.xml:/etc/clickhouse-server/users.d/he0-users.xml:ro

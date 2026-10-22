@@ -22,7 +22,8 @@
 #   suite                its own end-to-end command, if any ("" when none runs
 #                        without its source; ruling R0.7)
 #   runtime_minutes      wall time of up + drive + dump on a GitHub runner
-#   gate                 a gate application of §75 §7.1 (Langfuse, OpenPanel)
+#   gate                 a gate application of §75 §7.1 (Langfuse, OpenPanel,
+#                        SigNoz: D1571)
 
 schema = 1
 
@@ -100,3 +101,6 @@ clickhouse_min = "25.12"
 driver = "signoz/driver.sh"
 suite = ""
 runtime_minutes = 15
+# The third gate application (D1571, owner 2026-10-22; HE1 R9.60): the MIT
+# build only, never the default `signoz/signoz` image, which links ee/.
+gate = true
