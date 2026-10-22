@@ -1,0 +1,8 @@
+## rdw.dv
+  committed v3 deletion vectors snapshot 2346812414285038877 (Delete): 5 delete files added, 4 replaced; 300 existing + 158 new positions
+## rdw.dv_part
+  committed v3 deletion vectors snapshot 9133892462430881918 (Delete): 12 delete files added, 8 replaced; 943 existing + 500 new positions
+## rdw.upgraded
+  committed v3 deletion vectors snapshot 5659815562510191689 (Delete): 8 delete files added, 8 replaced; 210 existing + 160 new positions
+## rdw.pos_v2
+  committed v2 position deletes snapshot 3445999817803767518 (Delete): 1 delete files added, 0 replaced; 200 existing + 158 new positions

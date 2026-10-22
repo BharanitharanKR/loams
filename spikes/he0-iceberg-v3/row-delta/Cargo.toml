@@ -1,0 +1,21 @@
+[package]
+name = "he0-row-delta-probe"
+version = "0.0.0"
+edition = "2024"
+publish = false
+license = "Apache-2.0"
+description = "HE0 G3 (unmerged): commit deletion vectors and position deletes with iceberg-rust RowDelta"
+
+# Standalone: not a member of the repository's workspaces.
+[workspace]
+
+# ostrium-labs/iceberg-rust branch rd/integration (fork PR #6), pinned by commit. The recorded
+# results/ came from a local checkout of the same code (path dependencies).
+[dependencies]
+iceberg = { git = "https://github.com/ostrium-labs/iceberg-rust", rev = "01243900c2caf4d8e0588d530dba71809f8ecbea" }
+iceberg-catalog-rest = { git = "https://github.com/ostrium-labs/iceberg-rust", rev = "01243900c2caf4d8e0588d530dba71809f8ecbea" }
+iceberg-storage-opendal = { git = "https://github.com/ostrium-labs/iceberg-rust", rev = "01243900c2caf4d8e0588d530dba71809f8ecbea", features = ["opendal-s3"] }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+futures = "0.3"
+arrow-array = "59.2"
+parquet = { version = "59.2", default-features = false }
