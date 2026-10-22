@@ -128,7 +128,15 @@ The client conformance suites live in [`crates/loams-qdrant/tests/python`](crate
 1. **Fork and branch** from `dev`. Open your PR against `dev`; `main` is the release branch. Name the branch after the change, for example `log-retention-doc`.
 2. **Keep it small.** A PR should do one thing. Split refactors from behavior changes, and stack PRs when a change is large.
 3. **Fill in the template.** Say what changed, why, and how you tested it.
-4. **Review.** [Greptile](https://www.greptile.com) reviews every PR into `dev` or `main` automatically (configured in [`.greptile/`](.greptile/config.json)), and a maintainer reviews after it. Each PR gets one AI reviewer, never two: CodeRabbit's automatic review is off in this repository (`.coderabbit.yaml`), and runs only if someone comments `@coderabbitai review`. Comment `@greptileai` to re-run Greptile after new pushes. Address or answer each comment; it is fine to disagree with a bot comment and say why. Small follow-ups can go in a follow-up PR if the reviewer agrees.
+4. **Review.** A maintainer reviews every PR. [Greptile](https://www.greptile.com) is an opt-in AI reviewer: it reviews a PR into `dev` or `main` only when the PR carries the `review:greptile` label (configured in [`.greptile/`](.greptile/config.json)). Add the label for:
+   - security or auth changes;
+   - storage formats and data migrations;
+   - release-path, packaging or CI-permission changes;
+   - new crates or public APIs;
+   - design docs being approved;
+   - anything a maintainer asks for.
+
+   Routine fixes, docs, dependency bumps and generated files go without AI review. The label triggers one review when it is added; comment `@greptileai` to re-run it after new pushes. Each PR gets one AI reviewer, never two: CodeRabbit's automatic review is off in this repository (`.coderabbit.yaml`), and runs only if someone comments `@coderabbitai review`. Address or answer each comment; it is fine to disagree with a bot comment and say why. Small follow-ups can go in a follow-up PR if the reviewer agrees.
 5. **CI must be green** before merge. If a failure looks unrelated to your change, say so in the PR.
 6. **Merge.** Committers and maintainers merge into `dev` with a merge commit once the review is done and CI is green. Maintainers merge `dev` into `main` for releases. The contributor roles are described in [GOVERNANCE.md](GOVERNANCE.md), and the current maintainers are listed in [MAINTAINERS.md](MAINTAINERS.md).
 

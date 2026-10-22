@@ -6,6 +6,7 @@
   "triggerOnDrafts": false,
   "includeBranches": ["dev", "main"],
   "excludeAuthors": ["dependabot[bot]", "nx-cloud[bot]", "github-actions[bot]", "release-please[bot]", "renovate[bot]"],
+  "labels": ["review:greptile"],
   "disabledLabels": ["skip-greptile"],
   "ignoreKeywords": "release: v",
   "ignorePatterns": "Cargo.lock\npnpm-lock.yaml\n**/gen/**\n**/generated/**\n**/Generated/**\n**/*_pb2.py\n**/*_pb2.pyi\n**/*_pb2_grpc.py\n**/*_connect.py\n**/*_pb.ts\n**/*_pb.js\n**/*_pb.d.ts\n**/*_connect.ts\n**/*.pb.go\n**/*.pb.swift\n**/*.connect.swift\n**/*.pb.h\n**/*.pb.cc\nweb/apps/console/src/api/schema.d.ts\ndocs/house/compat-*.md\nconformance/clickhouse/profile/**\nconformance/clickhouse/matrix/chdb/**\nconformance/clickhouse/inventory/**\ncrates/loams-quickwit/src/**\n**/vendor/**\n**/0_stateless/**\n**/*.reference\n**/*.snap\n**/__snapshots__/**\n**/snapshots/**\n**/fixtures/**\n**/fixture/**\n**/testdata/**\n**/dist/**\n**/target/**\n**/node_modules/**",
