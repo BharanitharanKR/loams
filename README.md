@@ -1,14 +1,18 @@
-![Loams — Your data. Your bucket.](docs/assets/loams-banner.svg)
+![Loams: Don't rent a cloud. Loam it.](docs/assets/loams-banner.svg)
 
 # Loams
 
 [![Discord](https://img.shields.io/badge/Discord-join-5865F2?logo=discord&logoColor=white)](https://discord.gg/eK6NanHQq)
 
-**Build software with agents, on ground you own.**
+**Don't rent a cloud. Loam it.**
 
-Loams is open-source tooling for building software with AI agents: **Loams Studio** runs your coding agents side by side, **Loams Software Factory** keeps your development toolchain beside them, and the **Loams Marketplace** (coming soon) is where agents, apps and harnesses will come from. All three sit on the Loams data platform, written in Rust, which keeps your data in *your* object-storage bucket (S3, GCS, Azure Blob, RustFS or a local directory) in open formats.
+Build software with agents, on ground you own. Free and open source. Runs on ground you own.
 
-> **0.1.1 — a patch release of 0.1, the first release.** You run the stack yourself with Docker Compose, locally or on your own VMs, over your own Tailscale tailnet, and use the hosted console at [console.loams.dev](https://console.loams.dev). Loams Desktop opens in Studio. 0.x: APIs and on-disk formats may change between minor versions; upgrades are supported with `loams upgrade`.
+"Loams" is the product, like soil. "Loam" is the verb: you loam a backend, and a deployment is a plot. Compute runs in your account, and data sits in your bucket (S3, GCS, Azure, RustFS or a local folder) in open formats. The soil names below sit next to the technical names; the docs and the APIs keep using the technical ones.
+
+Loams is open-source tooling for building software with AI agents: **Loams Studio (The Field)** runs your coding agents side by side, each in its own plot, **Loams Software Factory (The Greenhouse)** keeps your development toolchain beside them, and the **Loams Marketplace (The Seed Exchange, coming soon)** is where agents, apps and harnesses will come from. All three sit on the Loams data platform, written in Rust, which keeps your data in *your* object-storage bucket (S3, GCS, Azure Blob, RustFS or a local directory) in open formats.
+
+> **0.1.1 — a patch release of 0.1, the first release.** You run the stack yourself with Docker Compose, locally or on your own VMs, over your own Tailscale tailnet. Loams Desktop opens in Studio. 0.x: APIs and on-disk formats may change between minor versions; upgrades are supported with `loams upgrade`.
 
 [Products](https://loams.dev/products) · [Download Loams Desktop](https://github.com/ostrium-labs/loams/releases/latest) · [Run Loams](docs/release/preview.md) · [Documentation](docs/README.md) · [Website](https://loams.dev) · [API reference](https://loams.dev/api-docs) · [Contributing](CONTRIBUTING.md)
 
@@ -16,9 +20,9 @@ Loams is open-source tooling for building software with AI agents: **Loams Studi
 
 | Product | What it does | Status |
 |---|---|---|
-| **[Loams Studio](https://loams.dev/products/studio)** | An agentic development environment. Runs the coding-agent CLIs you already use (Claude Code, Codex, opencode, Pi and ACP agents) in threads, each in its own git worktree, with diff review and comments, per-turn checkpoints, supervised approvals, terminals, previews, git actions, and run groups that send one prompt to several agents so you can compare and merge the best result. Everything goes through `loams-agentd`, the per-user agent daemon. | **Experimental, since 0.1.0.** Loams Desktop for Linux, macOS and Windows, with the daemon bundled; or the browser console against a remote `loams-agentd` over TLS and OIDC. New threads are supervised by default. [Guides](docs/guides/studio/index.md) |
-| **[Loams Software Factory](https://loams.dev/products/software-factory)** | Your development toolchain next to your agents: Forgejo, Zulip, Plane (through ItsAPlan), GlitchTip, OpenPanel, Matomo, Langfuse and SigNoz (Preview: SigNoz on Loams House), which you run, shown as read-only panels and their own full UIs under Studio. A Plane issue or a GlitchTip error becomes a Studio thread; a thread's branch becomes a Forgejo pull request. | **Experimental, since 0.1.0, desktop only.** The factory in the browser console is in review ([#844](https://github.com/ostrium-labs/loams/pull/844)). The agent loop that takes an issue to a reviewed change ([§39](docs/design/39-software-factory-and-loams-bot.md)) is being redesigned: its first plans, SF2 to SF5, were retired on 2026-10-19. [Guide](docs/guides/studio/factory.md) |
-| **[Loams Marketplace](https://loams.dev/products/marketplace)** | Agents, harnesses, console plugins and factory apps you install into your own Loams, with their permissions and licences shown before anything is created. It builds on the console plugin host and the `loams-agentd` harness catalogue, which ship today. | **Coming soon.** No listings and no install flow yet; a draft [publishing guide](docs/marketplace/publishing.md) exists. |
+| **[Loams Studio](https://loams.dev/products/studio)**<br>*The Field* | An agentic development environment. Runs the coding-agent CLIs you already use (Claude Code, Codex, opencode, Pi and ACP agents) in threads, each agent in its own plot (a git worktree), with diff review and comments, per-turn checkpoints, supervised approvals, terminals, previews, git actions, and run groups that send one prompt to several agents so you can compare and merge the best result. Everything goes through `loams-agentd`, the per-user agent daemon. | **Experimental, since 0.1.0.** Loams Desktop for Linux, macOS and Windows, with the daemon bundled; or the browser console against a remote `loams-agentd` over TLS and OIDC. New threads are supervised by default. [Guides](docs/guides/studio/index.md) |
+| **[Loams Software Factory](https://loams.dev/products/software-factory)**<br>*The Greenhouse* | Your development toolchain next to your agents: Forgejo, Zulip, Plane (through ItsAPlan), GlitchTip, OpenPanel, Matomo, Langfuse and SigNoz (Preview: SigNoz on Loams House), which you run, shown as read-only panels and their own full UIs under Studio. A Plane issue or a GlitchTip error becomes a Studio thread; a thread's branch becomes a Forgejo pull request. | **Experimental, since 0.1.0, desktop only.** The factory in the browser console is in review ([#844](https://github.com/ostrium-labs/loams/pull/844)). The agent loop that takes an issue to a reviewed change ([§39](docs/design/39-software-factory-and-loams-bot.md)) is being redesigned: its first plans, SF2 to SF5, were retired on 2026-10-19. [Guide](docs/guides/studio/factory.md) |
+| **[Loams Marketplace](https://loams.dev/products/marketplace)**<br>*The Seed Exchange* | Agents, harnesses, console plugins and factory apps you install into your own Loams, with their permissions and licences shown before anything is created. It builds on the console plugin host and the `loams-agentd` harness catalogue, which ship today. | **Coming soon.** No listings and no install flow yet; a draft [publishing guide](docs/marketplace/publishing.md) exists. |
 
 ## The data platform
 
@@ -46,7 +50,7 @@ Read the [pitch](docs/design/00-pitch.md) and the [architecture](docs/design/01-
 | **Loams House** | Experimental. ClickHouse-compatible analytics with engine-level access control (opt-in profile) |
 | **Loams SQL / Postgres** | MySQL on a patched TiDB; Postgres on our Neon fork, storage on the bucket |
 | **Loams Durable** | Durable promises and tasks for agent runs (an embedded Resonate server) |
-| **Console, desktop, CLI** | Hosted web console; Loams Desktop and the `loams` CLI for Linux, macOS and Windows |
+| **Console, desktop, CLI** | Web console you run yourself; Loams Desktop and the `loams` CLI for Linux, macOS and Windows |
 | **Loams Studio and Software Factory** | Experimental. See [Products](#products) above |
 | **Loams Git** | Experimental. `git-remote-loams`, git's remote helper, ships with the `loams` CLI packages: `git clone`, `fetch` and `push` reach a Loams Git repository on a bucket, with no server in between |
 | **SDKs** | TypeScript, Python, Go, Rust, C#, C++ and Swift, each with the app-building API (collections, search, vector, graph, SQL and streams). Published to npm, PyPI, crates.io, NuGet and the Go proxy as `0.1.1`; Swift from the release tag, C++ as a release tarball. Experimental: Java and Kotlin on Maven Central, Ruby on RubyGems |
@@ -64,7 +68,7 @@ cp .env.example .env        # set TS_AUTHKEY
 docker compose up -d
 ```
 
-Then open [console.loams.dev](https://console.loams.dev) on a device on the same tailnet and enter `https://loams.<your-tailnet>.ts.net`. Details, BYOC over SSH and auth modes: [Running Loams](docs/release/preview.md).
+Then reach your plot at `https://loams.<your-tailnet>.ts.net` from a device on the same tailnet. Details, BYOG (bring your own ground, formerly BYOC) over SSH and auth modes: [Running Loams](docs/release/preview.md).
 
 Or build just the engine and run it on one machine:
 
@@ -95,4 +99,4 @@ Questions and chat are welcome on [Discord](https://discord.gg/eK6NanHQq); bugs 
 
 ## License
 
-[Apache License 2.0](LICENSE). Loams builds on DataFusion, Lance, Tantivy, Quickwit, qdrant-edge, SlateDB, openraft, TiKV, TiDB, Neon, Grafeo, chDB and Resonate; attributions are in [NOTICE](NOTICE). Loams is fully open source: there is no open core and no paid edition. The metering, billing and control-plane code is moving into the open repo now (D1119). Loams is built by [Ostrium Labs](https://ostriumlabs.org), a research lab building open-source Loams.
+[Apache License 2.0](LICENSE). Loams builds on DataFusion, Lance, Tantivy, Quickwit, qdrant-edge, SlateDB, openraft, TiKV, TiDB, Neon, Grafeo, chDB and Resonate; attributions are in [NOTICE](NOTICE). Loams is free and open source: there is no open core, no paid edition and no hosted Loams. The metering, billing and control-plane code is moving into the open repo now (D1119). Loams is built by [Ostrium Labs](https://ostriumlabs.org), a research lab building open-source Loams.
