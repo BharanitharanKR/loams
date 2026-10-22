@@ -116,6 +116,9 @@ pub fn source(pin: &ReadPin, endpoint: &str, root: &LakeRoot) -> Result<String, 
 pub enum Mode<'a> {
     /// The rows as stored.
     Plain,
+    /// The rows one commit added, for the source's materialized views (HS1
+    /// Task 17): as [`Mode::Plain`], and a `Null` table's too (HE1 R9.14).
+    Batch,
     /// `FINAL`: the merge view of a Replacing or Summing table, with the live
     /// files of the pinned snapshot (for their sequence numbers).
     Final(&'a [LiveFile]),
@@ -133,9 +136,12 @@ pub fn view_ddl(pin: &ReadPin, source: &str, mode: Mode<'_>) -> Result<String, H
         .filter(|_| pin.travel)
         .map(|id| format!("\nSETTINGS iceberg_snapshot_id = {id}"))
         .unwrap_or_default();
-    let body = if pin.snapshot_id.is_none() {
+    let null_engine =
+        mode != Mode::Batch && matches!(LakeEngine::parse(&pin.table.engine), Ok(LakeEngine::Null));
+    let body = if pin.snapshot_id.is_none() || null_engine {
         // No snapshot (a new table, or a time before its first): no rows, with
-        // the table's columns.
+        // the table's columns. A `Null` table reads none ever (HE1 R9.14): its
+        // rows are kept only for its materialized views.
         empty(pin)?
     } else if pin.table.class == TableClass::External {
         format!("SELECT * FROM {source}")
@@ -151,6 +157,7 @@ pub fn view_ddl(pin: &ReadPin, source: &str, mode: Mode<'_>) -> Result<String, H
             (Mode::Final(files), Some(engine @ LakeEngine::VersionedCollapsing { .. })) => {
                 collapsing(pin, source, &engine, files)?
             }
+            (Mode::Final(_), Some(LakeEngine::Aggregating)) => aggregating(pin, source)?,
             _ => format!("SELECT {}\nFROM {source}", casts(pin)?.join(", ")),
         }
     };
@@ -645,6 +652,90 @@ fn summing(pin: &ReadPin, source: &str, engine: &LakeEngine) -> Result<String, H
     };
     Ok(format!(
         "SELECT {}\nFROM (\nSELECT {}\nFROM {source}\n)\nGROUP BY {group_by}{having}",
+        select.join(", "),
+        casts(pin)?.join(", ")
+    ))
+}
+
+/// An aggregate function as a column's type names it (`uniq`, `quantiles(0.5)`):
+/// its name and its parameters, if both are plain (a name; numbers, strings and
+/// commas). Catalog text, so anything else is refused.
+pub(crate) fn aggregate_function(text: &str) -> Option<(String, String)> {
+    let text = text.trim();
+    let (name, params) = match text.split_once('(') {
+        Some((name, rest)) => (name.trim(), format!("({rest}")),
+        None => (text, String::new()),
+    };
+    let plain_name = !name.is_empty()
+        && name
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    let plain_params = params
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || " ._-+,()'".contains(c))
+        && !params.contains("--");
+    (plain_name && plain_params).then(|| (name.to_string(), params))
+}
+
+/// The function of an `AggregateFunction(f, …)` type's text.
+pub(crate) fn state_function(ty: &str) -> Option<(String, String)> {
+    let inner = ty.trim().strip_prefix("AggregateFunction(")?;
+    let mut depth = 0;
+    let end = inner.char_indices().find_map(|(i, c)| match c {
+        '(' => {
+            depth += 1;
+            None
+        }
+        ')' if depth == 0 => Some(i),
+        ')' => {
+            depth -= 1;
+            None
+        }
+        ',' if depth == 0 => Some(i),
+        _ => None,
+    })?;
+    aggregate_function(&inner[..end])
+}
+
+/// Aggregating `FINAL` (HE1 R9.14): rows grouped by the sorting key; a state
+/// column merged with its function's `-MergeState` (still a state, as
+/// ClickHouse's merge leaves it), a `SimpleAggregateFunction(f, T)` column with
+/// `f`, any value of the others.
+fn aggregating(pin: &ReadPin, source: &str) -> Result<String, HouseError> {
+    let key = key(pin)?;
+    let key_columns: Vec<&str> = key.iter().filter_map(|(_, c)| c.as_deref()).collect();
+    let mut select = Vec::new();
+    for column in columns(pin) {
+        let name = quote_name(&column.name);
+        if key_columns.contains(&column.name.as_str()) {
+            select.push(name);
+            continue;
+        }
+        let refused = || catalog_refusal(pin, &format!("the type of column {}", column.name));
+        select.push(match ChType::parse(&column.ch_type)? {
+            ChType::AggregateState => {
+                let (function, params) = state_function(&column.ch_type).ok_or_else(refused)?;
+                format!("{function}MergeState{params}({name}) AS {name}")
+            }
+            ChType::SimpleAggregate(function, _) => {
+                let (function, params) = aggregate_function(&function).ok_or_else(refused)?;
+                format!("{function}{params}({name}) AS {name}")
+            }
+            _ => format!("any({name}) AS {name}"),
+        });
+    }
+    let group_by = if key.is_empty() {
+        "tuple()".to_string()
+    } else {
+        key.iter()
+            .map(|(text, _)| text.clone())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    Ok(format!(
+        "SELECT {}\nFROM (\nSELECT {}\nFROM {source}\n)\nGROUP BY {group_by}",
         select.join(", "),
         casts(pin)?.join(", ")
     ))

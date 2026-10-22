@@ -124,6 +124,9 @@ async fn compact_counted(
         .collect();
     let ch = ChTable::from_lake(database, name, &table);
     let engine = LakeEngine::parse(&ch.engine).unwrap_or(LakeEngine::MergeTree);
+    if engine == LakeEngine::Null {
+        return Ok(Compacted::Nothing);
+    }
     let merges = engine.merges() || deduplicate;
     if files.is_empty() || (files.len() == 1 && !merges) {
         return Ok(Compacted::Nothing);

@@ -68,6 +68,12 @@ pub enum ChType {
     DateTime64(u32, Option<String>),
     /// `Enum8(…)` or `Enum16(…)`, as written.
     Enum(String),
+    /// `SimpleAggregateFunction(f, T)`: a `T` that an `AggregatingMergeTree`
+    /// merges with `f` (HE1 R9.14); `f` as written.
+    SimpleAggregate(String, Box<ChType>),
+    /// `AggregateFunction(f, T…)`: a partial aggregation state (HE1 R9.14),
+    /// stored as its serialized bytes.
+    AggregateState,
     /// Anything else with arguments, by name.
     Other(String),
 }
@@ -291,6 +297,36 @@ impl Parser<'_> {
                 self.skip_args()?;
                 ChType::Enum(name)
             }
+            "SimpleAggregateFunction" => {
+                // The function (maybe parametric: `quantiles(0.5)`) runs to the
+                // first top-level comma.
+                let mut function = String::new();
+                let mut depth = 0;
+                loop {
+                    match self.next() {
+                        Some(Tok::Symbol(',')) if depth == 0 => break,
+                        Some(Tok::Symbol('(')) => {
+                            depth += 1;
+                            function.push('(');
+                        }
+                        Some(Tok::Symbol(')')) => {
+                            depth -= 1;
+                            function.push(')');
+                        }
+                        Some(Tok::Word(w)) | Some(Tok::Number(w)) => function.push_str(&w),
+                        Some(Tok::Quoted(q)) => function.push_str(&format!("'{q}'")),
+                        Some(Tok::Symbol(c)) => function.push(c),
+                        None => return Err("unbalanced parentheses".to_string()),
+                    }
+                }
+                let inner = self.ty()?;
+                self.expect(')')?;
+                ChType::SimpleAggregate(function, Box::new(inner))
+            }
+            "AggregateFunction" => {
+                self.skip_args()?;
+                ChType::AggregateState
+            }
             _ => {
                 self.skip_args()?;
                 let _ = open;
@@ -329,7 +365,7 @@ impl ChType {
     pub fn is_nullable(&self) -> bool {
         match self {
             Self::Nullable(_) => true,
-            Self::LowCardinality(inner) => inner.is_nullable(),
+            Self::LowCardinality(inner) | Self::SimpleAggregate(_, inner) => inner.is_nullable(),
             _ => false,
         }
     }
@@ -507,6 +543,12 @@ pub fn to_iceberg(
             }
             Type::Struct(StructType::new(fields))
         }
+        // HE1 R9.14: an `AggregatingMergeTree`'s columns. A simple one stores its
+        // value; a state stores ClickHouse's serialization of it (what
+        // `CAST(state AS String)` gives and `CAST(bytes AS AggregateFunction(…))`
+        // reads back).
+        ChType::SimpleAggregate(_, inner) => to_iceberg(inner, text, ids, needs)?,
+        ChType::AggregateState => primitive(PrimitiveType::Binary),
         ChType::Other(name) => {
             return Err(unsupported(
                 text,
@@ -685,14 +727,45 @@ mod tests {
         );
     }
 
+    /// HE1 R9.14: an `AggregatingMergeTree`'s columns.
+    #[test]
+    fn aggregate_columns_are_stored() {
+        let mut needs = Needs::V2;
+        let field = |text: &str, needs: &mut Needs| {
+            to_iceberg_field("c", text, &mut FieldIds::after(0), false, needs).expect(text)
+        };
+        let state = field(
+            "AggregateFunction(argMax, Nullable(Bool), DateTime64(3))",
+            &mut needs,
+        );
+        assert_eq!(*state.field_type, Type::Primitive(PrimitiveType::Binary));
+        assert!(state.required);
+        let simple = field(
+            "SimpleAggregateFunction(maxMap, Map(String, String))",
+            &mut needs,
+        );
+        assert!(matches!(*simple.field_type, Type::Map(_)));
+        let simple = field(
+            "SimpleAggregateFunction(anyLast, Nullable(String))",
+            &mut needs,
+        );
+        assert_eq!(*simple.field_type, Type::Primitive(PrimitiveType::String));
+        assert!(!simple.required, "Nullable inside stays optional");
+        assert_eq!(
+            ChType::parse("SimpleAggregateFunction(quantiles(0.5, 0.9), Float64)").expect("parses"),
+            ChType::SimpleAggregate(
+                "quantiles(0.5,0.9)".into(),
+                Box::new(ChType::Simple("Float64".into()))
+            )
+        );
+    }
+
     #[test]
     fn unsupported_types_are_48() {
         for text in [
             "JSON",
             "Dynamic",
             "Variant(UInt8, String)",
-            "AggregateFunction(sum, UInt64)",
-            "SimpleAggregateFunction(sum, UInt64)",
             "Nested(a UInt8)",
             "Int128",
             "UInt256",

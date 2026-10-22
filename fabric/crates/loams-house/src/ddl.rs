@@ -1037,6 +1037,14 @@ pub struct CreateMaterializedView {
     pub select: String,
     /// The table the `SELECT` reads first: the view's source.
     pub source: Option<QualifiedName>,
+    /// Every `FROM <name>` in order, subqueries included (the source is the
+    /// first that is a table: `trim(… FROM s)` names none).
+    pub candidates: Vec<QualifiedName>,
+    /// An inner table's column list, as written (with its parentheses).
+    pub inner_columns: Option<String>,
+    /// An inner table's clauses (`ENGINE = …`, `PARTITION BY`, `ORDER BY`, …),
+    /// as written (HE1 R9.14).
+    pub inner_clauses: String,
 }
 
 /// Reads a `CREATE MATERIALIZED VIEW`.
@@ -1068,13 +1076,33 @@ pub fn parse_create_mv(text: &str) -> Result<CreateMaterializedView, HouseError>
             break;
         } else if let Some(t) = c.peek() {
             out.inner_table = true;
-            if c.is_symbol(&t, b'(') {
+            if c.is_symbol(&t, b'(') && out.inner_clauses.is_empty() && out.inner_columns.is_none()
+            {
                 let close = c
                     .closing(c.at)
                     .ok_or_else(|| syntax("Unbalanced parentheses in the column list"))?;
+                out.inner_columns = Some(text[t.start..c.toks[close].end].to_string());
                 c.at = close + 1;
             } else {
-                c.at += 1;
+                // The inner table's clauses run to `POPULATE`, `TO` or `AS` at
+                // this depth.
+                let start = t.start;
+                let depth = t.depth;
+                while let Some(next) = c.peek() {
+                    if next.depth == depth
+                        && ["AS", "POPULATE", "TO", "EMPTY"]
+                            .iter()
+                            .any(|w| c.is_word_at(c.at, w))
+                    {
+                        break;
+                    }
+                    c.at += 1;
+                }
+                let end = c.toks.get(c.at).map_or(text.len(), |t| t.start);
+                if !out.inner_clauses.is_empty() {
+                    out.inner_clauses.push(' ');
+                }
+                out.inner_clauses.push_str(text[start..end].trim());
             }
         } else {
             return Err(syntax("Expected AS SELECT in CREATE MATERIALIZED VIEW"));
@@ -1085,22 +1113,29 @@ pub fn parse_create_mv(text: &str) -> Result<CreateMaterializedView, HouseError>
     if out.select.is_empty() {
         return Err(syntax("Expected a SELECT after AS"));
     }
-    // The source: the first table after a FROM at the SELECT's own depth.
-    let depth = c.peek().map_or(0, |t| t.depth);
+    // The source: the first table the SELECT reads, as ClickHouse picks a
+    // view's trigger table: the first `FROM <table>`, inside a subquery too
+    // (HE1 R9.14; OpenPanel's `event_property_values_mv`). A table function
+    // (`FROM numbers(…)`) or a subquery is no table.
     while let Some(t) = c.peek() {
-        if t.depth == depth && t.word && c.raw(&t).eq_ignore_ascii_case("FROM") {
+        if t.word && c.raw(&t).eq_ignore_ascii_case("FROM") {
             c.at += 1;
-            match c.peek() {
-                Some(next)
-                    if next.word
-                        || c.raw(&next).starts_with('`')
-                        || c.raw(&next).starts_with('"') =>
-                {
-                    out.source = Some(c.qualified()?);
+            if let Some(next) = c.peek()
+                && (next.word || c.raw(&next).starts_with('`') || c.raw(&next).starts_with('"'))
+            {
+                let at = c.at;
+                let name = c.qualified()?;
+                let called = c.peek().is_some_and(|t| c.is_symbol(&t, b'('));
+                if !called {
+                    if out.source.is_none() {
+                        out.source = Some(name.clone());
+                    }
+                    out.candidates.push(name);
+                } else {
+                    c.at = at + 1;
                 }
-                _ => {}
             }
-            break;
+            continue;
         }
         c.at += 1;
     }
@@ -1726,6 +1761,11 @@ pub enum LakeEngine {
         /// The version column.
         version: String,
     },
+    /// `AggregatingMergeTree` (HE1 R9.14): state columns merged by their
+    /// functions at `FINAL` and in compaction.
+    Aggregating,
+    /// `Null` (HE1 R9.14): rows are discarded; reads are empty.
+    Null,
 }
 
 impl LakeEngine {
@@ -1733,6 +1773,8 @@ impl LakeEngine {
     pub fn render(&self) -> String {
         match self {
             Self::MergeTree => "MergeTree".to_string(),
+            Self::Aggregating => "AggregatingMergeTree".to_string(),
+            Self::Null => "Null".to_string(),
             Self::Replacing { ver, is_deleted } => {
                 let args: Vec<String> = ver
                     .iter()
@@ -1767,7 +1809,7 @@ impl LakeEngine {
     /// Whether `FINAL` reads a merge view of this engine rather than the rows
     /// as stored (and compaction merges as that view does).
     pub fn merges(&self) -> bool {
-        !matches!(self, Self::MergeTree)
+        !matches!(self, Self::MergeTree | Self::Null)
     }
 
     /// The engine a table's `loams.ch.engine` property names (HS1 Task 11's
@@ -1797,6 +1839,8 @@ impl LakeEngine {
         };
         match base {
             "MergeTree" if args.is_empty() => Ok(Self::MergeTree),
+            "AggregatingMergeTree" if args.is_empty() => Ok(Self::Aggregating),
+            "Null" if args.is_empty() && base == name => Ok(Self::Null),
             "MergeTree" => Err(HouseError::from(ChError::bad_arguments(
                 "MergeTree takes no arguments: the old syntax MergeTree(date, key, granularity) \
                  is not supported; use ORDER BY and PARTITION BY",
@@ -1834,8 +1878,8 @@ impl LakeEngine {
             )),
             _ => Err(HouseError::from(ChError::not_implemented(format!(
                 "Engine {name} is not a lake table engine: lake tables are MergeTree, \
-                 ReplacingMergeTree, SummingMergeTree or VersionedCollapsingMergeTree \
-                 (§49 §6.2, D1570)"
+                 ReplacingMergeTree, SummingMergeTree, VersionedCollapsingMergeTree, \
+                 AggregatingMergeTree or Null (§49 §6.2, D1570, HE1 R9.14)"
             )))),
         }
     }
@@ -2248,7 +2292,7 @@ pub fn plan_table(
             || matches!(t, ChType::Decimal(..))
     };
     match &engine {
-        LakeEngine::MergeTree => {}
+        LakeEngine::MergeTree | LakeEngine::Aggregating | LakeEngine::Null => {}
         LakeEngine::Replacing { ver, is_deleted } => {
             if let Some(ver) = ver {
                 check_column(ver, &integer, "ReplacingMergeTree's version column")?;
@@ -2626,12 +2670,11 @@ pub async fn execute(
                     for (db, name) in &stmt.names {
                         let database = db_of(db);
                         // A materialized view is dropped as a table too, as in
-                        // ClickHouse (HS1 Task 16).
-                        if lake.load(namespace, &database, name).await?.is_none()
-                            && crate::pipes::drop_materialized_view(
-                                lake, namespace, &database, name,
-                            )
+                        // ClickHouse (HS1 Task 16); an inner-table view with its
+                        // table (HE1 R9.14).
+                        if crate::pipes::drop_materialized_view(lake, namespace, &database, name)
                             .await?
+                            && lake.load(namespace, &database, name).await?.is_none()
                         {
                             continue;
                         }
@@ -3083,6 +3126,31 @@ mod tests {
         let err = LakeEngine::from_clause("CollapsingMergeTree", &args(&["sign"]))
             .expect_err("not a lake engine");
         assert!(err.to_string().contains("not a lake table engine"), "{err}");
+    }
+
+    /// HE1 R9.14: a view's trigger is the first table its SELECT reads, inside
+    /// a FROM subquery too; a table function is no table.
+    #[test]
+    fn view_sources_are_the_first_table_read() {
+        let mv = parse_create_mv(
+            "CREATE MATERIALIZED VIEW v ENGINE = AggregatingMergeTree ORDER BY a AS SELECT a, trim(BOTH ' ' FROM b) AS b \
+             FROM (SELECT a, b FROM db.events) GROUP BY a, b",
+        )
+        .expect("parses");
+        assert!(mv.inner_table && mv.to.is_none());
+        assert_eq!(mv.inner_clauses, "ENGINE = AggregatingMergeTree ORDER BY a");
+        // A token reading: the catalog picks the first name that is a table.
+        assert_eq!(
+            mv.candidates,
+            vec![
+                (None, "b".to_string()),
+                (Some("db".to_string()), "events".to_string())
+            ]
+        );
+        let mv =
+            parse_create_mv("CREATE MATERIALIZED VIEW v TO t AS SELECT number FROM numbers(3)")
+                .expect("parses");
+        assert!(mv.candidates.is_empty(), "a table function is no table");
     }
 
     #[test]
