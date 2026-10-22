@@ -29,7 +29,7 @@
 
 ## Global Constraints
 
-- **Owner actions first.** The owner creates the TiDB Cloud organization for LC0, **with no card** (Q1277), and gives the agent an API key pair with the least role that works. Agents never sign up for or create accounts on TiDB Cloud, Cloudflare or HCP. The Cloudflare account is Ostrium's existing one, and the owner grants a scoped API token.
+- **Owner actions first.** **The owner already has a TiDB Cloud Starter account** (2026-10-23). It must have **no card** on it (Q1277); if it has one, the owner creates a separate no-card organization for LC0. The owner hands over the credentials listed in "Owner steps and credentials" below. No LC0 task starts until they are in place. Agents never sign up for or create accounts on TiDB Cloud, Cloudflare or HCP. The Cloudflare account is Ostrium's existing one, and the owner grants a scoped API token.
 - **Cost:** every LC0 spike stays inside free allowances.
   - Starter: the 5 free instances.
   - Filesystem: no card, so the no-card caps apply (1 file system per region, 2,000 files, 2 GB).
@@ -197,12 +197,13 @@ Commit: `docs(lc0): the LC0 report`.
 > - WorkOS AuthKit for the hosted try-out (D1750);
 > - the sign-in policy: Google, GitHub, or a work-email code (D1751).
 >
-> All three are approved. The design is [§78 §25](../design/78-loams-cloud-on-tidb-x.md#25-invite-only-access-workos-authkit-and-the-sign-in-policy-d1736d1757-owner-amendments-of-2026-10-23). D1737–D1749, D1752–D1757 and Q1278–Q1296 are **Proposed**.
+> **Status: Approved** (owner, 2026-10-23, all defaults): D1736–D1751 and Q1278–Q1296. The design is [§78 §25](../design/78-loams-cloud-on-tidb-x.md#25-invite-only-access-workos-authkit-and-the-sign-in-policy-d1736d1757-owner-amendments-of-2026-10-23). D1752–D1757 stay **Proposed** until the owner confirms them; the owner's message named D1736–D1751. **No LC2a code starts until the owner hands over the credentials listed under "Owner steps and credentials" below.**
 >
 > **Prerequisites:**
-> - the owner approves §25's API plan;
+> - §25's API plan: approved (owner, 2026-10-23);
 > - LC0 Task 3 (the Worker spike) reports a go;
-> - the owner creates the WorkOS production environment and the Resend account. Agents never sign up for anything.
+> - **the owner already has a WorkOS free-tier account** (2026-10-23). Staging credentials go to an agent, as listed below; production keys are never handed to agents;
+> - **the Resend account is still to create**, by the owner. Agents never sign up for anything.
 >
 > **Before the waitlist page goes live:** counsel's privacy policy (Q1276) must be published, and `mail.loams.dev` must be verified in Resend.
 >
@@ -495,6 +496,35 @@ Commit: `loams-cloud: end-to-end, abuse and free-tier tests (LC2a Task 11)`.
 Label the PR `review:greptile`.
 
 Commit: `docs(security): Loams Cloud invite-only threat model and go-live checklist (LC2a Task 12)`.
+
+## Owner steps and credentials (recorded 2026-10-23)
+
+**What the owner has already, 2026-10-23:**
+- **a TiDB Cloud Starter account;**
+- **a WorkOS free-tier account.**
+
+**Still to create:** the Resend account, needed for LC2a Task 2.
+
+**No LC0 or LC2a code starts until the credentials below exist.**
+
+**Where credentials go:**
+- **files in the owner's home directory,** like `~/gh.txt`;
+- **mode `0600`;**
+- **never pasted into chat,** never committed, never logged.
+
+Agents read them with `set -a; . ~/<file>; set +a` in the one command that needs them, and never print them.
+
+| File | Contents | Scope, least privilege | Needed by |
+|---|---|---|---|
+| `~/tidbcloud-lc0.env` | `TIDB_CLOUD_PUBLIC_KEY`, `TIDB_CLOUD_PRIVATE_KEY`, `TI_REGION_CODE=aws-us-east-1` | An organization-level API key on the **no-card** organization used for LC0. The `ti` CLI's Filesystem commands require **Organization Owner** (Filesystem quick start), so use a dedicated organization or project that holds nothing else if possible. Revoke it after LC0 | LC0 Tasks 1–3, 5 |
+| `~/workos-staging.env` | `WORKOS_API_KEY` (the **staging** environment's secret key), `WORKOS_CLIENT_ID` (staging) | **Staging only.** Production keys are never given to an agent; the owner applies production settings from LC2a Task 6's checklist | LC2a Tasks 4–8, 11 (and LC0 Task 5 if run on WorkOS) |
+| `~/cloudflare-lc0.env` | `CLOUDFLARE_ACCOUNT_ID`, `CLOUDFLARE_API_TOKEN` | A token limited to **Workers Scripts: Edit** on Ostrium's account (Durable Objects and Cron Triggers deploy with the script), for a `loams-cloud-lc0` Worker on a `workers.dev` route only | LC0 Task 3 |
+
+**Later, not needed now:**
+- `~/resend.env`, holding `RESEND_API_KEY`: a sending-access key restricted to `mail.loams.dev`, created by the owner after creating the Resend account. Needed for LC2a Task 2.
+- `~/workos-staging.env`, adding `WORKOS_WEBHOOK_SECRET` and `WORKOS_ACTIONS_SECRET`. WorkOS shows them when the staging endpoints are registered in LC2a Tasks 6 and 8.
+- `~/turnstile-staging.env`, holding the Turnstile site key and secret for a test widget. Needed for LC2a Task 3.
+- A GitHub App token for the GitHub-age check, scoped to read public user data only. Needed for LC2a Task 7.
 
 ## LC1–LC5 outline
 
