@@ -130,7 +130,7 @@ source, not from a running container (no container runtime on the build machine)
 ```ts
 // web/packages/slots/src/embed.ts
 export interface EmbedPaneProps { app: AppId; path?: string; environment: EnvironmentRef }
-export type AppId = "zulip" | "plane" | "forgejo" | "glitchtip" | "openpanel" | "langfuse" | "openobserve";
+export type AppId = "zulip" | "plane" | "forgejo" | "glitchtip" | "openpanel" | "langfuse" | "signoz";
 // slots: embed.pane (keyed by AppId), app.panel (keyed `<app>` or `<app>.<panel>`), bot.message.renderer, bot.card, factory.stage.detail
 ```
 

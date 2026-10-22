@@ -809,7 +809,7 @@ pub fn result_text(v: &ToolOutput, max: usize) -> String;  // 20 000 default, tr
 
 **Produces:** `FactoryApps` with the D660 op table (op, parameter schema, the HTTP request it makes), `health` (`unconfigured`, `ok`, `auth_failed`, `unreachable`), `test`, a 15 s timeout, `classify_error`, scrubbed errors; RPC `FactoryList`, `FactoryConfigure`, `FactoryTest`, `FactoryRemove`, `FactoryQuery`; the `factory_query` tool (read) listing the ops per app in its description as `builtin-tools.ts` does.
 
-**Tests:** `factory_requests_match_ts_adapters` (each op's method, path, query and header names equal the recorded TypeScript request); `unknown_op_rejected`; `params_validated_per_op`; `health_states`; `credentials_never_in_replies_or_errors`; `openobserve_has_no_ops`.
+**Tests:** `factory_requests_match_ts_adapters` (each op's method, path, query and header names equal the recorded TypeScript request); `unknown_op_rejected`; `params_validated_per_op`; `health_states`; `credentials_never_in_replies_or_errors`; `signoz_has_no_ops`.
 
 **Steps:** record the TypeScript adapters' requests with the fixture test; write the Rust parity and op tests; port the op table app by app; wire the RPC and the tool; run `cargo test -p loams-agentd-factory`; commit.
 

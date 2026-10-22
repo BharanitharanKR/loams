@@ -25,7 +25,7 @@ Markers:
 1. **One shell, two modes.** The cordis console host runs in the browser and in Electron. Its parts are `web/apps/console` `cordis.html`, `web/packages/console-host`, `@loams/slots`, `@loams/ui` and `web/plugins/*`; `apps/desktop-electron` loads `cordis.html`. The host gets a mode switcher with two modes:
    - **Console** is the cloud console: orgs, projects, environments, data, compute, connectors, access and audit.
    - **Studio** is the ADE: agent threads, a worktree per agent, diff review, parallel agents compared side by side with the best result merged (Orca's idea), approvals and terminals.
-2. **The software factory apps belong to Studio.** Zulip, Plane, Forgejo, OpenPanel, GlitchTip, Langfuse and OpenObserve move there. Plugin manifests declare which modes a plugin appears in.
+2. **The software factory apps belong to Studio.** Zulip, Plane, Forgejo, OpenPanel, GlitchTip, Langfuse and SigNoz move there. Plugin manifests declare which modes a plugin appears in.
 3. **Vendor, don't embed.** Over the long term, we vendor UI components and other useful code from T3 Code (MIT) into this repository and rebuild them natively on our stack, backed by `loams-agentd`. We do not embed T3 Code's app or its server.
 4. **The UI stack rulings apply:**
    - Tailwind 4 with `@loams/ui` tokens only.
@@ -129,7 +129,7 @@ The header, the mode switcher, the approval badge and the dock toggle `[◧]` ar
 | agentd | 90 ndjson methods (77 unary, 13 streams; 88 `renderer: true`, all but `Hello` and `Shutdown`) in `crates/loams-agentd-proto/src/rpc.rs:267-401` (SD1 T0-3). Covered: chats, spaces, repos, worktrees, diffs, git status, terminals, files, previews, harness and model catalogues, queue and steering. Missing: git writes, real approvals, checkpoints, review comments, run groups, notifications, per-session cost. No protobuf; no Connect; no browser access (any `Origin` gets a 403) | §6 |
 | agentd client | `@loams/agentd-client`: ts-rs types, the method table, typed request builders and the transcript reducer. No transport yet (DD1 Task 10) | Studio adds the Connect transport (§6.2) |
 | DD1 progress | Rulings recorded through Task 9. Tasks 10–38 are not done, including the approval loop (24) and the DSH chat UI (28–32) | §17 reconciles SD1 with DD1e |
-| Factory | One plugin, `@loams/plugin-factory`, desktop edition only. It holds a hub, a configure form, embedded `WebContentsView` apps (D678) and native panels for Zulip, Plane, Forgejo, GlitchTip, OpenPanel, Langfuse and Matomo; OpenObserve has the full UI only. SF1's browser `embed` plugin and per-app plugins are not built | The owner's "already exist as cordis plugins" holds for the desktop; the web needs SF1 (D922) |
+| Factory | One plugin, `@loams/plugin-factory`, desktop edition only. It holds a hub, a configure form, embedded `WebContentsView` apps (D678) and native panels for Zulip, Plane, Forgejo, GlitchTip, OpenPanel, Langfuse and Matomo; SigNoz has the full UI only. SF1's browser `embed` plugin and per-app plugins are not built | The owner's "already exist as cordis plugins" holds for the desktop; the web needs SF1 (D922) |
 | Licence gates | `cargo deny` for Rust. **No npm licence check** in CI | D914 |
 | T3 Code (the source) | React 19 SPA, 608 tsx files (484 non-test, 173 457 lines). Server state is Effect atoms (`@effect/atom-react`) over Effect RPC on one WebSocket; client UI state is zustand 5; TanStack Router; Tailwind 4; Base UI primitives in `components/ui` (shadcn `base-mira`); Tiptap 3 composer; `@pierre/diffs` 1.5.2 **with a local patch** (find-in-diff) and `@pierre/trees` 1.0.0-beta.6; `@legendapp/list` (patched) for virtualisation; a libghostty-vt wasm terminal. Checkpoints are hidden commits under `refs/t3/checkpoints/<thread>/turn/<n>`, written through a temporary index. **No parallel-run compare UI exists** | Every container component needs a new data layer; leaf components, the Tiptap modules, pure logic and keybindings port well (inventory). The compare view is ours to build |
 | Naming | A desktop page called **Data Studio** exists (`@loams/plugin-data-studio`, D653) | Q812 |
@@ -324,7 +324,7 @@ The daemon keeps the group record, so a group keeps running and stays resolvable
 | GlitchTip | Issues | "Fix this error" starts a thread with the stack trace and the release |
 | OpenPanel | Dashboards | Read-only panel |
 | Langfuse | Traces | A thread links to its traces when the harness exports OTel (§39 §9) |
-| OpenObserve | Logs, metrics, traces | Full UI only, as today |
+| SigNoz | Logs, metrics, traces | Full UI only, as today |
 | Matomo | (present in the factory plugin today; not in the owner's list) | Kept where it is, in Studio (Q813) |
 
 - **Desktop.** The existing plugin keeps its pages (hub, configure, embedded app, panels) under `/studio/factory/…`. The old `/factory/…` paths redirect. Its overview card stays on Console's overview (the plugin is in both modes for that card only, through `meta.mode`).
