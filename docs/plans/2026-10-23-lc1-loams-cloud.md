@@ -4,7 +4,7 @@
 >
 > **Status: Approved** (owner, 2026-10-23, all defaults; stub). Track **LC**, design [§78](../design/78-loams-cloud-on-tidb-x.md) (D1700–D1735, Q1260–Q1277). **LC0 starts once the owner has created the no-card TiDB Cloud org (Q1277).** The public opening of LC2 waits on counsel (Q1276); D1701, which amends D1323, is approved.
 >
-> **Coverage:** this plan specifies **LC0**, the spikes, task by task, and **LC2a**, invite-only access (the owner's amendment of 2026-10-23; the first phase users see), task by task. LC0 writes no product code. LC1, the rest of LC2 and LC3–LC5 are outlined at milestone level; each gets full task specifications after the LC0 report.
+> **Coverage:** this plan specifies **LC0**, the spikes, task by task, and **LC2a**, invite-only access on WorkOS AuthKit (the owner's amendments of 2026-10-23; the first phase users see), task by task. LC0 writes no product code. LC1, the rest of LC2 and LC3–LC5 are outlined at milestone level; each gets full task specifications after the LC0 report.
 >
 > **Inputs:**
 > - the research report [`docs/research/tidb-x-and-hcp.md`](../research/tidb-x-and-hcp.md) (2026-10-23);
@@ -190,251 +190,311 @@ Label the PR `review:greptile`.
 
 Commit: `docs(lc0): the LC0 report`.
 
-## LC2a — Invite-only access: the waitlist and email invites (Tasks 0–11)
+## LC2a — Invite-only access on WorkOS AuthKit (Tasks 0–12)
 
-> **The first LC phase that users see.** It specifies the owner's invite-only rule of 2026-10-23 (D1736, approved) and its design in [§78 §25](../design/78-loams-cloud-on-tidb-x.md#25-invite-only-access-the-waitlist-and-email-invites-d1736d1749-owner-amendment-of-2026-10-23). D1737–D1749 and Q1278–Q1289 are **Proposed**.
+> **The first LC phase that users see.** It covers the owner's rulings of 2026-10-23:
+> - invite-only (D1736);
+> - WorkOS AuthKit for the hosted try-out (D1750);
+> - the sign-in policy: Google, GitHub, or a work-email code (D1751).
 >
-> **Prerequisites before any task starts:**
+> All three are approved. The design is [§78 §25](../design/78-loams-cloud-on-tidb-x.md#25-invite-only-access-workos-authkit-and-the-sign-in-policy-d1736d1757-owner-amendments-of-2026-10-23). D1737–D1749, D1752–D1757 and Q1278–Q1296 are **Proposed**.
+>
+> **Prerequisites:**
 > - the owner approves §25's API plan;
-> - LC0 Tasks 3 and 5 report a go;
-> - IA2 has landed, along with the Zitadel bundle at `auth.loams.dev`.
+> - LC0 Task 3 (the Worker spike) reports a go;
+> - the owner creates the WorkOS production environment and the Resend account. Agents never sign up for anything.
 >
-> **Before the waitlist page goes live:** counsel's privacy policy (Q1276) and the sending domain's DNS (Q1278) must be in place.
+> **Before the waitlist page goes live:** counsel's privacy policy (Q1276) must be published, and `mail.loams.dev` must be verified in Resend.
 >
 > **This plan writes no code.** It specifies the tasks for the agents who will.
 
-**Goal:** someone can join the waitlist, confirm the address, receive an invite, redeem it with GitHub or Google, and land in a Loams Cloud account. Only an Ostrium admin can invite, and every step is audited.
+**Goal:**
+- A person can join the waitlist and confirm the address.
+- WorkOS emails them an invitation.
+- They redeem it with Google, GitHub or a work-email code, and land in a Loams Cloud account.
+- No other sign-in method, and no uninvited person, can create a try-out account, even when a method is enabled in the dashboard by mistake.
+- Only an allow-listed Ostrium admin with a fresh TOTP step-up can invite.
+- Every step is audited.
+- The running cost is $0.
 
 **Exit:**
-- the end-to-end test `invite_only_happy_path` passes against Miniflare and the `conformance/identity/` compose (Zitadel v4.19.4);
+- `invite_only_happy_path` passes against Miniflare and the WorkOS **staging** environment;
 - every Review Focus test passes;
-- the LC2a section of the LC threat model is written.
+- the sign-in policy suite passes;
+- the LC2a section of the threat model is written;
+- the go-live checklist is ticked by the owner.
 
 **Architecture:**
-- **The Worker:** `deploy/loams-cloud/` is the Worker of D1727, with routes under `/cloud/v1/`. It has a `send_email` binding, a Turnstile secret, rate-limit bindings, two HMAC/AES keys, the Zitadel service account's key, and the Redeem client's secret.
-- **The schema:** `deploy/loams-cloud/schema/0001_waitlist.sql`, applied to the control DB.
-- **The CLI:** `crates/loams` gains `loams cloud admin …`.
-- **Pages** (in loams-site, a separate PR there): `loams.dev/cloud`, `/cloud/confirm`, `/cloud/leave`, `/cloud/invite`, `/cloud/invite/error`, `/cloud/welcome`.
+- `deploy/loams-cloud/`: the Worker of D1727 on **Workers Free**, with:
+  - Durable Objects (SQLite-backed), Cron Triggers and the Turnstile secret;
+  - the WorkOS API key, client id, actions secret and webhook secret;
+  - the Resend API key;
+  - the HMAC and AES keys.
+- `deploy/loams-cloud/schema/0001_waitlist.sql`: the tables.
+- `deploy/loams-cloud/policy/`: the pinned domain lists and `email-domains.toml`.
+- `crates/loams`: the `loams cloud admin …` commands.
+- loams-site: the pages, in a separate PR there.
 
 **Global constraints, in addition to LC0's:**
-- **No real mail in tests.** Use Email Service's local simulation, where Wrangler supports it (check in Task 0), plus a recorded fake.
-- **Real sends** go only to addresses the owner controls, until the owner opens the waitlist.
-- **No plaintext address** in logs, audit rows, metrics, errors or test snapshots. A test greps for that.
-- **Greptile:** every LC2a PR carries `review:greptile` (security, auth, personal data).
+- **No real sends in tests.** Use WorkOS **staging**, which sends from `workos.dev` (V), and Resend's test mode, or a recorded fake. Real sends go only to addresses the owner controls, until the owner opens the waitlist.
+- **No plaintext address** in logs, audit rows, metrics, errors or snapshots. A test greps for that.
+- **$0:** no task may add a paid plan. A task that finds it needs one stops and reports.
+- **Greptile:** every LC2a PR carries `review:greptile`.
 
 **Review focus:**
-1. **Enumeration.** Every waitlist response is identical across new, pending, confirmed, suppressed and refused addresses: the same status code, body and timing within noise. Test: `waitlist_responses_do_not_enumerate`.
-2. **Gate.** A Zitadel user without the `tryout` role gets no Loams Cloud session and no API access. Test: `no_role_no_session`.
-3. **Single use.** An invite redeems at most once, even under concurrent callbacks. Test: `invite_redeems_once_under_race`.
-4. **Admin only.** Every `/admin/*` call without `cloud_admin`, without MFA or with stale authentication is refused, and an agent principal can never hold the role. Tests: `admin_requires_role_and_mfa`, `agents_cannot_be_cloud_admin`.
-5. **Deletion.** After "remove me" or `DELETE /me`, no readable address remains in any table. Test: `deletion_leaves_only_hmac`.
-6. **Tokens.** Token values never appear in logs, including `GET /invites/{token}`'s path. Test: `tokens_are_redacted_from_logs`.
+1. **Enumeration.** Waitlist responses are identical across address states. Test: `waitlist_responses_do_not_enumerate`.
+2. **The gate.** No WorkOS user becomes a Loams Cloud account without an invitation accepted by that user. Tests: `uninvited_signup_is_refused`, `account_requires_accepted_invitation`.
+3. **The sign-in policy.** The policy suite below.
+4. **Admin only.** Every `/admin/*` call fails without the org role, the allow-list or a fresh TOTP step-up. Tests: `admin_requires_role_allowlist_and_step_up`, `agents_cannot_be_cloud_admin`.
+5. **Deletion.** After "remove me" or `DELETE /me`, no readable address remains with us, and the WorkOS user is gone. Test: `deletion_leaves_only_hmac_and_deletes_workos_user`.
+6. **Signatures.** Actions, webhooks and our action responses are verified and signed, with a timestamp tolerance. Tests: `action_rejects_bad_signature`, `webhook_rejects_bad_signature_and_replay`.
+
+**The sign-in policy suite** (D1751, D1752, D1753), in `deploy/loams-cloud/test/signin_policy.test.ts`:
+
+| Test | Asserts |
+|---|---|
+| `google_any_account_allowed` | A Google sign-in with a `gmail.com` or Workspace address is allowed |
+| `github_allowed_when_30_days_old` | A GitHub sign-in is allowed when the account is at least 30 days old |
+| `github_too_new_refused_without_spending_invite` | Under 30 days: `IDP_ACCOUNT_TOO_NEW`; the waitlist invite stays open, and a fresh WorkOS invitation is sent |
+| `magic_auth_work_domain_allowed` | A work-email code is allowed for a domain on no list, with an MX record |
+| `magic_auth_free_mail_refused` | One case per named family (`gmail.com`, `googlemail.com`, `outlook.com`, `hotmail.com`, `live.com`, `yahoo.co.uk`, `icloud.com`, `me.com`, `proton.me`, `protonmail.com`, `aol.com`, `gmx.de`, `mail.ru`, `yandex.ru`, `qq.com`, `163.com`) is refused at the registration action, the authentication action and the callback |
+| `magic_auth_disposable_refused` | A domain on the disposable list is refused |
+| `override_allow_beats_list` | A domain in `email-domains.toml`'s `allow` is accepted even if a list includes it |
+| `override_block_beats_absence` | A domain in `block` is refused even if no list includes it |
+| `password_refused_everywhere` | A simulated `authentication_method: "Password"` is denied by the action, refused at the callback, and suspended by reconciliation |
+| `passkey_refused_everywhere` | The same for `Passkey` |
+| `sso_refused_everywhere` | The same for `SSO` |
+| `other_social_refused` | Microsoft or Apple OAuth is refused |
+| `reconciliation_catches_dashboard_mistake` | With the actions endpoint down (fail-open forced in a test double), a `authentication.password_succeeded` event suspends the account and revokes its sessions within one reader cycle |
+| `waitlist_accepts_free_mail_but_not_disposable` | The waitlist rule (D1753) |
+| `waitlist_copy_explains_rule` | A snapshot test of the form copy in §25.4 (in loams-site) |
 
 ### Task 0 — Rulings, pins and the (verify) items
 
-Check each item on the pinned versions and record the answer in "Rulings made during execution". Where a finding changes §25, stop and report it to the owner rather than working around it.
+Check each item and record the answer in "Rulings made during execution". Where a finding changes §25, stop and report it to the owner.
 
-- **Zitadel v4.19.4:**
-  1. that `projectRoleCheck` blocks a login with no role, for a user just created by an external IdP;
-  2. the login-policy settings that let GitHub and Google create users on first sign-in in one org, and the `urn:zitadel:iam:org:id:{id}` scope that places them there;
-  3. that `CreateAuthorization` works on v4.19.4 (the forum reported an error on v4.2.0), and the least-privilege role for the service account;
-  4. which `ListIDPLinks` field carries GitHub's numeric user id;
-  5. whether access tokens carry `amr` and `auth_time` (else the ID-token path of §25.8);
-  6. the HTTP email provider's payload schema and signature header;
-  7. Actions v2 target signing for the wake-up;
-  8. Zitadel's guidance on an org per individual (Q1284).
-- **Cloudflare:**
-  1. Email Service's status and whether it onboards a subdomain (`mail.loams.dev`);
-  2. the `send_email` binding's shape from the generated Workers types (`wrangler types`);
-  3. local simulation;
-  4. the new-account daily quota (`GET …/email/sending/limits`);
-  5. the rate-limiting binding's status and limits;
-  6. Turnstile Siteverify's single-use rule.
-- **Disposable-domain list:** choose one, record its licence (it must be compatible with D11) and pin a revision.
+- **WorkOS**, in the staging environment the owner creates:
+  1. which authentication methods can be switched off on the free tier (password, passkeys, other social providers);
+  2. the setting that disables sign-up while invitations still work;
+  3. whether the action context names the authentication method or provider;
+  4. the `authentication_method` values for Google and GitHub OAuth;
+  5. whether GitHub identities' `idp_id` is GitHub's numeric user id;
+  6. whether resending an invitation changes its token or expiry;
+  7. whether the MFA API is included free;
+  8. whether AuthKit branding is free;
+  9. the current data location;
+  10. the terms on commercial use of the free tier (for counsel, Q1276).
+- **Resend:** commercial use on Free; its region and subprocessors; domain verification for `mail.loams.dev`; how it reports bounces and complaints to the Worker.
+- **Cloudflare (Workers Free):**
+  1. Durable Objects' free limits, and whether the WebSocket 20:1 ratio applies to the free daily limit;
+  2. the Cron Trigger count on Free;
+  3. the rate-limiting binding on Free;
+  4. Turnstile Siteverify's single-use rule.
+- **Domain lists:** pin `Kikobeats/free-email-domains` (MIT) and `disposable-email-domains` (CC0-1.0) by revision, and check the licences of `free-email-domains`' sources.
 
 Files: this plan. Commit: `plans(lc1): LC2a Task 0 rulings and pins`.
 
 ### Task 1 — The control-DB schema
 
-`deploy/loams-cloud/schema/0001_waitlist.sql` holds the tables of §25.3:
-- `waitlist`, `waitlist_tokens`, `waitlist_suppressed`, `invites`, `redemption_sessions` and `audit`;
-- unique `email_hmac` on `waitlist`, and unique `token_hash` on `waitlist_tokens` and `invites`;
-- an index on `invites(state, expires_at)` for the expiry sweep.
+`deploy/loams-cloud/schema/0001_waitlist.sql` holds §25.3's tables:
+- `waitlist`, `waitlist_tokens`, `waitlist_suppressed`, `invites` (with `workos_invitation_id`), `accounts` (with unique `workos_user_id`), `workos_events_cursor` and `audit`;
+- inside TiDB X's limited features: no `time_to_live` attribute and no partitioning.
 
-The schema must stay inside TiDB X's limited features (§78 §14.1), so it uses no `time_to_live` attribute (the expiry sweep is a Cron Trigger) and no partitioning.
-
-**Tests**, against a local MySQL-compatible TiDB in CI, plus one run on the owner's free Starter instance:
+**Tests:**
 - `schema_applies_cleanly`;
 - `email_hmac_is_unique`;
-- `no_plaintext_email_column_outside_email_enc`, a schema lint.
+- `workos_user_id_is_unique`;
+- `no_plaintext_email_column_outside_enc`.
 
-Commit: `loams-cloud: the waitlist and invite schema (LC2a Task 1)`.
+Commit: `loams-cloud: the waitlist, invite and account schema (LC2a Task 1)`.
 
-### Task 2 — Email: sender, templates and the Zitadel bridge
+### Task 2 — Email: Resend for the Worker, and as WorkOS's provider
 
-- **The `send_email` binding:** restricted to the sender address of Q1278, using Email Service's send-binding restrictions.
-- **Four templates,** each with a text part and an HTML part: `confirm`, `already_listed`, `invite` and `removal`.
-  - Every template has a footer removal link (`wlr_` token) and a `List-Unsubscribe` header pointing at it.
-  - No tracking pixels and no link rewriting.
-  - Plain links on `loams.dev` only.
-- **The pacer:** sends at about 1 a second through a Durable Object queue, with the daily cap of Q1288.
-- **Results:** permanent bounces from the send result go into `waitlist_suppressed` and revoke any open invite.
-- **`POST /internal/zitadel/notify`:** verifies the HTTP provider's signature as Task 0 found it, then sends through the same binding.
-- **Owner actions:** DNS onboarding of the sending domain, and the DMARC record (`p=quarantine` with `rua`).
+- **The Worker's templates:** `confirm`, `already_listed` and `removal`, each with a text and an HTML part, a footer removal link, a `List-Unsubscribe` header, and no tracking.
+- **Sending:** through Resend's API over `fetch`. A pacer in a Durable Object enforces the shared daily budget (D1738: 100 a day across both senders, at most 60 of them invitations).
+- **WorkOS's emails:** the owner configures Resend as WorkOS's custom email provider. This task writes the step-by-step guide in `deploy/loams-cloud/README.md` and a check, `email_provider_is_resend`, that reads the WorkOS environment's provider through the API if one exists, or else is a manual checklist item.
 
 **Tests:**
 - `templates_render_text_and_html`;
 - `every_email_has_removal_link`;
-- `pacer_respects_daily_cap`;
-- `hard_bounce_suppresses_and_revokes`;
-- `zitadel_notify_rejects_bad_signature`.
+- `pacer_shares_daily_budget_with_invitations`;
+- `resend_bounce_suppresses`.
 
-Commit: `loams-cloud: transactional email through Email Service (LC2a Task 2)`.
+Commit: `loams-cloud: waitlist email through Resend (LC2a Task 2)`.
 
 ### Task 3 — The public waitlist endpoints
 
-These are `POST /waitlist`, `POST /waitlist/confirm` and `DELETE /waitlist`, exactly as in §25.10.
-- Turnstile Siteverify is called server-side.
-- The rate limits are §25.7's.
-- Addresses are normalised and run through the disposable and no-MX check.
-- The responses are enumeration-safe.
-- `email_hmac` and `email_enc` are written with the Worker's keys.
-- Tokens are hashed with SHA-256.
-- Log redaction applies to every token-bearing path.
+These are `POST /waitlist`, `POST /waitlist/confirm` and `DELETE /waitlist` as in §25.10, with:
+- Turnstile;
+- rate limits;
+- the disposable and no-MX check (free-mail allowed, D1753);
+- enumeration-safe responses;
+- HMAC and AES storage;
+- log redaction.
 
 **Tests:**
-- `waitlist_responses_do_not_enumerate`, which compares status, body and the median of 50 timings for each address state;
+- `waitlist_responses_do_not_enumerate`;
 - `confirm_is_single_use`;
 - `turnstile_token_reused_is_refused`;
-- `disposable_domain_is_silently_dropped`;
+- `waitlist_accepts_free_mail_but_not_disposable`;
 - `rate_limits_apply_per_prefix_and_address`;
 - `tokens_are_redacted_from_logs`.
 
 Commit: `loams-cloud: the waitlist API with double opt-in (LC2a Task 3)`.
 
-### Task 4 — Admin authorisation and the admin API
+### Task 4 — Admin authorisation
 
-- **The endpoints:** `GET /admin/waitlist`, `DELETE /admin/waitlist/{id}` and `GET /admin/audit`.
 - **The checks:**
-  - the Zitadel access token is verified;
-  - `loams-authz` checks `platform:loams-cloud#cloud_admin`, with a model addition in `deploy/openfga/core.fga` that excludes `agent` and `service_account` principals, and `BuiltinAuthorizer` parity;
-  - MFA and authentication within 15 minutes are required (§25.8).
-- **The CLI:** `loams cloud admin waitlist list|delete` and `loams cloud admin audit`. It gets its token through the OIDC device flow at `auth.loams.dev`.
+  - an AuthKit access token verified against the JWKS;
+  - `org_id` equal to the Ostrium WorkOS org, and `role` equal to `cloud_admin`;
+  - the user in `deploy/loams-cloud/config/admins.toml`, the allow-list, which changes only by a reviewed PR;
+  - a TOTP step-up: `POST /admin/mfa/enroll` and `POST /admin/mfa/verify` on WorkOS's MFA API, with `step_up_until` stored against the session's `sid`, for 15 minutes.
+- **The authorizer:** `loams-authz` checks `platform:loams-cloud#cloud_admin`, with a model addition that excludes agents and service accounts, and `BuiltinAuthorizer` parity.
+- **The CLI:** `loams cloud admin` logs in with WorkOS CLI Auth (the device flow) and runs `mfa enroll|verify`.
+- **The endpoints:** `GET /admin/waitlist`, `DELETE /admin/waitlist/{id}` and `GET /admin/audit`.
 
 **Tests:**
-- `admin_requires_role_and_mfa`;
-- `agents_cannot_be_cloud_admin`, in the model test and in `builtin_matches_openfga`;
+- `admin_requires_role_allowlist_and_step_up`;
+- `step_up_expires_after_15_minutes`;
+- `agents_cannot_be_cloud_admin`;
 - `admin_list_pages_and_filters`.
 
-Commit: `loams-cloud: cloud_admin and the admin waitlist API (LC2a Task 4)`.
+Commit: `loams-cloud: cloud_admin with allow-list and TOTP step-up (LC2a Task 4)`.
 
-### Task 5 — Invites
+### Task 5 — Invitations through WorkOS
 
-- **The endpoints:** `POST /admin/invites` (batches of up to 50, with an `Idempotency-Key`), `GET /admin/invites`, and `POST /admin/invites/{id}/revoke` and `/resend` (at most 3 resends, with `--extend`).
-- **The sweep:** an hourly Cron Trigger marks expired invites.
-- **The CLI:** `loams cloud admin invite …`.
+- **The endpoints:** `POST /admin/invites` queues up to 50, with an `Idempotency-Key`. The queue calls WorkOS `POST /user_management/invitations` with `email` and `expires_in_days: 14` and no organisation, and stores `workos_invitation_id`. It respects the daily budget.
+- `GET /admin/invites`.
+- `POST /admin/invites/{id}/revoke` maps to WorkOS revoke.
+- `POST /admin/invites/{id}/resend` maps to WorkOS resend, at most 3 times; `extend` revokes and sends a new invitation.
 
-**Tests:**
+**Tests**, against WorkOS staging and a recorded fake:
 - `batch_skips_unconfirmed_and_suppressed`;
-- `resend_invalidates_previous_token`;
-- `revoke_makes_link_unusable`;
-- `expiry_sweep_marks_expired`;
-- `idempotent_batch_creates_once`.
+- `invite_calls_workos_once_per_entry`;
+- `resend_limit_enforced`;
+- `revoke_mirrors_workos_state`;
+- `daily_budget_blocks_batch`.
 
-Commit: `loams-cloud: admin invites, resend, revoke and expiry (LC2a Task 5)`.
+Commit: `loams-cloud: WorkOS invitations, resend and revoke (LC2a Task 5)`.
 
-### Task 6 — Zitadel configuration as code
+### Task 6 — WorkOS configuration and the actions
 
-In `deploy/loams-cloud/zitadel/`:
-- **The Loams Cloud project:** roles `tryout` and `cloud_admin`, `projectRoleCheck` on, and the app's OIDC client.
-- **The Loams Cloud Redeem project:** no role check, and one confidential client with PKCE.
-- **The `loams-cloud` org** for try-out users (Q1284), with GitHub and Google as IdPs and registration through them only.
-- **A service account** holding only `user.grant.write` on the Loams Cloud project.
-- **The HTTP email provider** pointing at `/internal/zitadel/notify`.
-- **An Actions v2 target** for `/internal/zitadel/wake`.
-
-All of it is applied by a script against the Admin and Management APIs, idempotent, run first against the `conformance/identity/` compose.
+- **The checklist**, `deploy/loams-cloud/workos/CHECKLIST.md`, for the owner to apply in the dashboard:
+  - production: Google OAuth, GitHub OAuth and Magic Auth **on**; everything else **off**; sign-up **disabled**;
+  - AuthKit's MFA **off**;
+  - the redirect URI `https://api.loams.dev/cloud/v1/auth/callback`;
+  - the actions endpoints, with **fail closed** for both;
+  - the webhook endpoint;
+  - the custom email provider set to Resend;
+  - branding with the display name "Loams Cloud";
+  - the "Ostrium" organisation with the `cloud_admin` role.
+- **A read-only checker,** `loams cloud admin check-workos`, compares what the API exposes against the checklist and fails on any difference.
+- **The actions:** `POST /internal/workos/actions/registration` and `/authentication`. They verify `WorkOS-Signature` with a tolerance, apply §25.4's rules and return a signed verdict.
 
 **Tests:**
-- `zitadel_config_applies_idempotently`;
-- `no_role_no_session`, run end to end on the compose.
+- `action_rejects_bad_signature`;
+- `registration_action_requires_pending_invite`;
+- `authentication_action_refuses_suspended_account`;
+- the method and domain cases of the policy suite, at the action layer.
 
-Commit: `loams-cloud: Zitadel projects, clients and providers as code (LC2a Task 6)`.
+Commit: `loams-cloud: WorkOS actions and the configuration checklist (LC2a Task 6)`.
 
-### Task 7 — Redemption
+### Task 7 — Sign-in, callback and redemption
 
-- **The endpoints:** `GET /invites/{token}`, `POST /invites/{token}/redeem` and `GET /redeem/callback`, exactly as §25.5 and §25.10 give them.
-- **The callback:**
-  - verifies the ID token;
-  - runs the account checks: existing account, GitHub age through a GitHub App token, the D1730 ceiling;
-  - spends the invite and creates the account records in one transaction;
-  - calls `CreateAuthorization`, with compensation if it fails;
-  - creates the Durable Object by first contact;
-  - writes the audit events;
-  - redirects into the app's normal sign-in.
+- **The endpoints:** `GET /auth/login` (AuthKit with `provider=authkit`, PKCE and a state cookie), `GET /auth/callback`, `POST /auth/logout` and `GET /me`.
+- **What the callback does** (§25.5):
+  - it exchanges the code;
+  - it re-checks the policy;
+  - it requires the invitation `accepted` with `accepted_user_id` equal to the user;
+  - it checks the GitHub age through the identities API and a GitHub App token;
+  - it creates the account and sets `external_id`;
+  - it creates the Durable Object;
+  - on refusal, it deletes the new WorkOS user.
 
 **Tests:**
 - `invite_only_happy_path`;
-- `invite_redeems_once_under_race`;
+- `uninvited_signup_is_refused`;
+- `account_requires_accepted_invitation`;
 - `different_email_redeems_and_records_both`;
-- `existing_account_does_not_spend_invite`;
-- `young_github_account_is_refused_without_spending`;
-- `grant_failure_rolls_back`;
-- `status_check_reveals_nothing`.
+- `existing_account_does_not_create_second`;
+- `github_too_new_refused_without_spending_invite`;
+- `refusal_deletes_new_workos_user`.
 
-Commit: `loams-cloud: invite redemption through Zitadel (LC2a Task 7)`.
+Commit: `loams-cloud: AuthKit sign-in and invitation redemption (LC2a Task 7)`.
 
-### Task 8 — Lifecycle and the Zitadel event feed
+### Task 8 — The WorkOS events reader and reconciliation
 
-- **`DELETE /me`:** deletion within 7 days, D1731's rule.
-- **The feed:** an event-list reader with a stored position, by D1622's method, for `user.removed`, `user.deactivated`, `user.reactivated` and `user.grant.removed`. It is woken by `/internal/zitadel/wake` and also polls every few seconds.
-- **Retention jobs** for §25.6's table.
+- **The reader:** a Cron Trigger every minute reads `GET /events` from `workos_events_cursor`, with the event types of §25.5.
+- **The webhook:** `POST /internal/workos/webhook` verifies the signature, checks the timestamp tolerance and the source IPs, and only wakes the reader.
+- **Reconciliation** (§25.4, layer 4): it suspends accounts and revokes sessions on any disallowed success, and on any user we did not create from an invite.
 
 **Tests:**
-- `deletion_leaves_only_hmac`;
-- `zitadel_user_removed_suspends_account`;
-- `wake_is_only_a_hint` (a lost webhook still converges by polling);
-- `retention_jobs_delete_on_schedule`.
+- `reconciliation_catches_dashboard_mistake`;
+- `reader_resumes_from_cursor`;
+- `webhook_rejects_bad_signature_and_replay`;
+- `wake_is_only_a_hint`;
+- `user_deleted_in_workos_suspends_account`.
 
-Commit: `loams-cloud: account lifecycle and the Zitadel event feed (LC2a Task 8)`.
+Commit: `loams-cloud: WorkOS events reader and reconciliation (LC2a Task 8)`.
 
-### Task 9 — The pages (in loams-site)
+### Task 9 — Lifecycle, deletion and retention
 
-A separate PR in `ostrium-labs/loams-site`, reviewed there by CodeRabbit.
-- **The pages:**
-  - the waitlist form, with Turnstile, the two optional fields and §25.6's notice linking the privacy policy;
-  - confirm, leave, invite (it reads the fragment and calls the API), error and welcome.
+- **`DELETE /me`:** export, then delete our records and the WorkOS user (`DELETE /user_management/users/{id}`), within 7 days (D1731).
+- **Retention jobs** for §25.6's table.
+- **The hourly invite sweep.**
+
+**Tests:**
+- `deletion_leaves_only_hmac_and_deletes_workos_user`;
+- `retention_jobs_delete_on_schedule`;
+- `expired_invitations_are_mirrored`.
+
+Commit: `loams-cloud: account lifecycle, deletion and retention (LC2a Task 9)`.
+
+### Task 10 — The pages (in loams-site)
+
+A separate PR in `ostrium-labs/loams-site`, reviewed by CodeRabbit.
+- **The pages:** the waitlist form (Turnstile, the two optional fields, §25.6's notice naming the processors, and §25.4's copy on which addresses can sign in how), confirm, leave, error and welcome.
+- **The sign-in button** starts at `GET /auth/login`.
 - **No analytics** on `/cloud/*`.
-- **The `(console)` group** becomes `cloud`, as §8 says.
-- **Accessibility:** WCAG 2.2 AA on every form.
+- **Accessibility:** WCAG 2.2 AA.
 
-Tests: the site's own checks, plus a Playwright flow against a mocked API.
+Tests: the site's checks, `waitlist_copy_explains_rule`, and a Playwright flow against a mocked API.
 
-Commit, in loams-site: `cloud: the waitlist and invite pages (LC2a Task 9)`.
+Commit, in loams-site: `cloud: the waitlist and sign-in pages (LC2a Task 10)`.
 
-### Task 10 — End to end, and the abuse drill
+### Task 11 — End to end, the abuse drill, and the free-tier budget
 
-- **The run:** Miniflare with the Worker, plus the `conformance/identity/` compose, plus a fake GitHub IdP. It drives the happy path and every refusal path.
-- **The drill:** 1,000 scripted sign-ups from 10 IP prefixes, checking that limits, caps and enumeration-safety hold.
+- **End to end:** Miniflare plus WorkOS staging, through the happy path and every refusal.
+- **The abuse drill:** 1,000 scripted sign-ups from 10 prefixes.
+- **The free-tier budget:** a measured week of synthetic use at 50 users and 100 devices, recording:
+  - Worker and Durable Object requests per day;
+  - CPU per route;
+  - emails per day;
+  - Starter RUs.
 
-Tests: `invite_only_happy_path` (end to end) and `abuse_drill_stays_within_caps`.
+  Each is set against its free limit, to set Q1292's trigger.
 
-Commit: `loams-cloud: end-to-end and abuse tests for invite-only access (LC2a Task 10)`.
+**Tests:**
+- `invite_only_happy_path` (end to end);
+- `abuse_drill_stays_within_caps`;
+- `free_tier_budget_report` (it writes `docs/plans/lc2a-free-tier-report.md`).
 
-### Task 11 — Threat model and the go-live checklist
+Commit: `loams-cloud: end-to-end, abuse and free-tier tests (LC2a Task 11)`.
+
+### Task 12 — Threat model and the go-live checklist
 
 - **The threat model:** `docs/security/loams-cloud-threat-model.md`, LC2a section.
-  - The threats: enumeration, token theft and guessing, invite forwarding, Turnstile bypass, admin takeover, Zitadel misconfiguration (role check off), the email provider's signature, data-subject requests, and bounce storms.
+  - The threats: enumeration, waitlist flooding, invitation forwarding, a sign-in method switched on by mistake, an actions outage (fail-closed), webhook forgery and replay, admin takeover (role, allow-list and step-up), WorkOS or Resend account compromise, data-subject requests, and free-tier exhaustion used as denial of service.
 - **The go-live checklist,** which the owner ticks:
   - counsel's policy is published;
-  - DNS and DMARC are in place;
-  - Zitadel's config has been applied to `auth.loams.dev`;
-  - the first admin has been granted `cloud_admin`, with MFA;
+  - `mail.loams.dev` is verified, and DMARC is set;
+  - the WorkOS checklist passes `check-workos`;
+  - the first admin is allow-listed and enrolled in TOTP;
   - the daily caps are set.
 
 Label the PR `review:greptile`.
 
-Commit: `docs(security): Loams Cloud invite-only threat model and go-live checklist (LC2a Task 11)`.
+Commit: `docs(security): Loams Cloud invite-only threat model and go-live checklist (LC2a Task 12)`.
 
 ## LC1–LC5 outline
 
