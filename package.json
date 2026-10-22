@@ -16,7 +16,8 @@
     "build:android": "nx run mobile-android:build",
     "build:ios": "nx run mobile-ios:build",
     "check:monorepo": "python3 tools/monorepo/check.py",
-    "affected": "nx affected --targets=build,test,typecheck --parallel=2"
+    "affected": "nx affected --targets=build,test,typecheck --exclude=tag:cargo-crate --parallel=2",
+    "affected:rust": "nx affected --targets=fmt,clippy,test --exclude='*,!tag:cargo-crate' --parallel=2"
   },
   "devDependencies": {
     "@biomejs/biome": "2.5.15",
