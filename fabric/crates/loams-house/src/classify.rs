@@ -74,6 +74,9 @@ pub enum Stmt {
     Truncate { name: String },
     /// `ALTER TABLE …`, read by the House's own reader (HE1 R9.12): the table
     /// and each operation's leading words.
+    /// A mutation of a lake table (HE1 R9.5): `ALTER TABLE … DELETE|UPDATE|CLEAR
+    /// COLUMN|DROP PARTITION`, `DELETE FROM`, `UPDATE … SET`.
+    Mutation { table: String },
     Alter {
         table: String,
         operations: Vec<String>,
@@ -195,6 +198,7 @@ impl Stmt {
             Self::CreateView { .. } => "CreateView",
             Self::Drop(_) => "Drop",
             Self::Truncate { .. } => "Truncate",
+            Self::Mutation { .. } => "Mutation",
             Self::Alter { .. } => "Alter",
             Self::Rename { .. } => "Rename",
             Self::Undrop { .. } => "Undrop",
@@ -791,6 +795,10 @@ pub fn classify(sql: &str) -> Result<Classified, HouseError> {
         // HE1 R9.12: every `ALTER TABLE` is the House's own reader's; sqlparser
         // 0.63 refuses most of ClickHouse's forms.
         "ALTER" if second == "TABLE" => return known(alter_stmt(&text)?, None),
+        // Lightweight `DELETE FROM` and `UPDATE … SET` (HE1 R9.5): mutations, read
+        // as the `ALTER` they mean.
+        "DELETE" if second == "FROM" => return known(mutation_stmt(&text)?, None),
+        "UPDATE" => return known(mutation_stmt(&text)?, None),
         "GRANT" | "REVOKE" | "DETACH" | "CHECK" => {
             return known(
                 Stmt::Unsupported {
@@ -950,8 +958,22 @@ fn lake_ddl(text: &str, first: &str, second: &str) -> Result<Option<Stmt>, House
     Ok(None)
 }
 
+/// A lightweight `DELETE FROM` or `UPDATE … SET`.
+fn mutation_stmt(text: &str) -> Result<Stmt, HouseError> {
+    match crate::mutate::MutationPlan::parse(text, "")? {
+        Some(plan) => Ok(Stmt::Mutation { table: plan.name }),
+        None => Err(HouseError::from(ChError::syntax_error(format!(
+            "Not a mutation: {}",
+            text.chars().take(60).collect::<String>()
+        )))),
+    }
+}
+
 /// `ALTER TABLE`, as [`crate::alter::parse_alter`] reads it.
 fn alter_stmt(text: &str) -> Result<Stmt, HouseError> {
+    if let Some(plan) = crate::mutate::MutationPlan::parse(text, "")? {
+        return Ok(Stmt::Mutation { table: plan.name });
+    }
     let alter = crate::alter::parse_alter(text)?;
     let operations = alter
         .ops

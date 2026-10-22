@@ -1356,8 +1356,8 @@ async fn lake_tables_take_langfuse_ddl() {
     );
     ok(addr, "ALTER TABLE ev REMOVE TTL").await;
     refused(addr, "ALTER TABLE ev REMOVE TTL", "36").await;
-    // Mutations are the mutation path's (until it lands, 48).
-    refused(addr, "ALTER TABLE ev DELETE WHERE trace_id = 't1'", "48").await;
+    // Mutations are the mutation path's (HE1 R9.5, tests/mutate.rs).
+    ok(addr, "ALTER TABLE ev DELETE WHERE trace_id = 't1'").await;
     refused(
         addr,
         "ALTER TABLE ev DELETE WHERE 1, ADD INDEX i trace_id TYPE minmax",

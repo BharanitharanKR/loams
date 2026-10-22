@@ -768,9 +768,10 @@ pub async fn execute(
     edit.commit(lake, &table).await
 }
 
-/// The mutation path (HE1 Task 9): `ALTER TABLE … DELETE`, `UPDATE`, `CLEAR
-/// COLUMN`, `DROP PARTITION` and `DROP PART` on a lake table. Until it lands each
-/// is `48`, named.
+/// Mutations (`ALTER TABLE … DELETE`, `UPDATE`, `CLEAR COLUMN`, `DROP
+/// PARTITION`, `DROP PART`) are classified as `Stmt::Mutation` and served by
+/// [`crate::mutate`] with the worker pool (HE1 R9.5); one that reaches the DDL
+/// path anyway (a caller that did not classify it) is `48`, named.
 async fn mutation(
     _lake: &Lake,
     _namespace: u64,
@@ -787,8 +788,8 @@ async fn mutation(
         _ => "DROP PART",
     };
     Err(not_implemented(format!(
-        "ALTER TABLE {database}.{name} {form}: mutations of lake tables are not served yet \
-         (HE1 Task 9)"
+        "ALTER TABLE {database}.{name} {form}: a mutation is served on the ClickHouse HTTP \
+         interface and loams.house.v1's statements (HE1 R9.5), not here"
     )))
 }
 
