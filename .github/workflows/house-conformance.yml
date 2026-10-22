@@ -1,0 +1,70 @@
+# The House's ClickHouse conformance, nightly (plan HE1 Tasks 6 and 7,
+# design §75 §15). Dispatched by nightly.yml on dev; runs on demand too.
+#
+#   oracle     the oracle's corpora on clickhouse-server 26.9 (the baseline),
+#              24.3 and the chDB House; fails on an untriaged mismatch (R6.6:
+#              until now no CI job ran the targets).
+#   stateless  ClickHouse's stateless tests the mined profile keeps, on the
+#              baseline and the House; uploads the pass rates per category.
+#
+# Longer than 30 minutes with the House build, so nightly, not per PR
+# (Global Constraints). GitHub-hosted runners only.
+name: House conformance
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: house-conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  conformance:
+    name: "House: oracle and stateless tests"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 150
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          workspaces: fabric -> target
+      # The House's sealed workers enter user and network namespaces (HS1 R6.8).
+      - name: allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: build the House and the mining tool
+        working-directory: fabric
+        run: cargo build --locked -p loams-fabric -p loams-house-worker -p loams-house-mine
+      - name: start the reference servers
+        run: scripts/house/oracle.sh up
+      - name: start the House
+        env:
+          LOAMS_FABRIC: ${{ github.workspace }}/fabric/target/debug/loams-fabric
+        run: scripts/house/oracle.sh house "$RUNNER_TEMP/house"
+      - name: oracle
+        run: scripts/house/oracle.sh run --check
+      - name: stateless tests
+        run: |
+          set -euo pipefail
+          key_file="$RUNNER_TEMP/house/house.key"
+          LOAMS_ORACLE_HOUSE_KEY="$(tr -d '[:space:]' <"$key_file")"
+          export LOAMS_ORACLE_HOUSE_KEY LOAMS_ORACLE_PASSWORD=oracle
+          fabric/target/debug/loams-house-mine stateless run --only clickhouse-server@26.9 --only house-chdb \
+            --out "$RUNNER_TEMP/stateless-results.toml"
+          cat "$RUNNER_TEMP/stateless-results.toml"
+      - name: results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2, Apache-2.0
+        with:
+          name: house-conformance
+          path: |
+            ${{ runner.temp }}/stateless-results.toml
+            conformance/clickhouse/oracle/triage.toml
+          if-no-files-found: ignore
+      - name: stop
+        if: always()
+        run: scripts/house/oracle.sh down

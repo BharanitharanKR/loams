@@ -6,3 +6,4 @@ pub mod merge;
 pub mod oracle;
 pub mod report;
 pub mod scrub;
+pub mod stateless;

@@ -26,6 +26,8 @@ pub enum Command {
     Matrix(Box<cmd::matrix::Args>),
     /// Run the oracle's corpus on its targets and write the triage.
     Oracle(Box<cmd::oracle::Args>),
+    /// Filter ClickHouse's stateless tests by the profile, and run them.
+    Stateless(Box<cmd::stateless::Args>),
 }
 
 impl Command {
@@ -42,6 +44,7 @@ impl Command {
             Self::Report(args) => cmd::report::run(&args),
             Self::Matrix(args) => cmd::matrix::run(&args),
             Self::Oracle(args) => cmd::oracle::run(&args),
+            Self::Stateless(args) => cmd::stateless::run(&args),
         }
     }
 }
