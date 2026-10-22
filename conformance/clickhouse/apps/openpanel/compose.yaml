@@ -70,6 +70,7 @@ services:
     volumes:
       - ../clickhouse/he0-logs.xml:/etc/clickhouse-server/config.d/he0-logs.xml:ro
       - ../clickhouse/he0-users.xml:/etc/clickhouse-server/users.d/he0-users.xml:ro
+      - ./he0-merge-tree.xml:/etc/clickhouse-server/config.d/he0-merge-tree.xml:ro
       - op-ch-data:/var/lib/clickhouse
     ulimits:
       nofile: { soft: 262144, hard: 262144 }
