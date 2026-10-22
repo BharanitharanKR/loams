@@ -124,6 +124,8 @@ jobs:
               - "api/**"
               - "clippy.toml"
               - "rustfmt.toml"
+              # nextest's profile and per-test retries (Rust: tests).
+              - ".config/nextest.toml"
             # The crates in loams's default build (no tikv, no durable):
             # the crash gate, the cluster tests and the client suites.
             # A new crate the binary depends on must be added here.
