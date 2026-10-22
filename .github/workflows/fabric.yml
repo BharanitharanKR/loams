@@ -73,8 +73,9 @@ jobs:
       pull-requests: read
     outputs:
       heavy: ${{ github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
-      # 'true' on a pull request into main: the full tier.
-      full: ${{ github.base_ref == 'main' }}
+      # 'true' on a pull request into main or a release branch, or one
+      # labelled `ci:full` (then a push): the full tier.
+      full: ${{ github.base_ref == 'main' || startsWith(github.base_ref, 'release/') || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
       fabric: ${{ steps.filter.outputs.fabric }}
       drift: ${{ steps.filter.outputs.drift }}
       connect-routes: ${{ steps.filter.outputs.connect-routes }}

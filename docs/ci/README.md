@@ -11,7 +11,7 @@ Rust jobs and the main-branch jobs, and default to `ubuntu-latest`.
 | Event | What runs |
 |---|---|
 | Pull request into `dev`, push to `dev` | **Fast tier**, by changed path: DCO, repository checks, Rust fmt/clippy and tests, cargo-deny, console, protos, the seven supported SDKs, unit jobs |
-| Pull request into `main` (the release gate) | **Full tier**, by changed path: the fast tier plus the engine, TiKV, Live, durable, Graph, fuzzing, specs, Windows check, connector stacks, mobile, Postgres e2e, Git, desktop on all five platforms |
+| Pull request into `main` (the release gate) or a `release/*` branch, or one labelled `ci:full` (then a push) | **Full tier**, by changed path: the fast tier plus the engine, TiKV, Live, durable, Graph, fuzzing, specs, Windows check, connector stacks, mobile, Postgres e2e (not on the label), Git (not on the label), desktop on all five platforms |
 | Push to `main`, manual dispatch, nightly | Everything, regardless of paths |
 
 `nightly.yml` dispatches the full suites on `dev` every night (a `schedule:` only runs on the
@@ -22,7 +22,16 @@ default branch, `main`). A red nightly means: fix `dev` before the next `dev` â†
 | `mastra-gate.yml` (MA1 Task 27, Q1001) | Mastra's own Qdrant suites (with and without an API key) and the observed Elasticsearch suite from `ostrium-labs/loams-mastra` `main`, against `loams` built from `dev` (`LOAMS_VERSION=dev`, so entries fixed on dev must pass). A failure opens or updates the issue "Mastra gate fails on dev" (label `mastra-compat`). Not a required check. |
 
 A draft pull request skips the heavy jobs until it is marked ready; the `ci:full` label (then a
-push) runs them anyway. CodeRabbit does not review drafts.
+push) runs them anyway, and runs the full tier. CodeRabbit does not review drafts.
+
+On a pull request into `dev`:
+- **Desktop** builds Linux x64 only, and only when the desktop app, the stacks it packages
+  (`deploy/loams-postgres-dev`, `deploy/wesql`, `deploy/tikv`), `plugins/`, the release scripts or
+  the lockfile change. A web-only change doesn't run it.
+- **macOS and Windows desktop builds** run on the full tier only.
+- **Release SDKs** runs the dry-run packaging only for the SDKs whose manifests the pull request
+  touches. The Rust job also runs for `crates/loams-proto` and `crates/loams-live-proto`. The
+  workflow file and `scripts/sdk/sdk-version.py` select every SDK, and a tag push builds them all.
 
 ## Required checks
 

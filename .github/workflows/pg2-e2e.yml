@@ -44,9 +44,10 @@ on:
         description: "The ostrium-labs/loams-postgres commit the candidate was built from"
         type: string
         default: ""
-  # Full tier: pull requests into main (the release gate); the nightly dispatches it on dev.
+  # Full tier: pull requests into main (the release gate) and into a release branch; the
+  # nightly dispatches it on dev.
   pull_request:
-    branches: [main]
+    branches: [main, 'release/**']
     types: [opened, synchronize, reopened, ready_for_review]
     paths:
       # loams-postgres and what it builds on

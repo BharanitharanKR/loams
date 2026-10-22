@@ -5,7 +5,8 @@ name: CI
 #   changed among DCO, repository checks, fmt and clippy, the Rust tests, the
 #   console, cargo-deny, the protos and the seven supported SDKs. A draft skips
 #   the heavy ones of those (label `ci:full`, then a push, runs them).
-# - full tier, a pull request into main (the dev -> main release gate): also
+# - full tier, a pull request into main (the dev -> main release gate) or a
+#   release branch, or one labelled `ci:full` (then a push): also
 #   the engine, TiKV, Live, durable, Graph, fuzzing, specs, browser, Dapr and
 #   the wave 2 and 3 SDKs, by path.
 # - push to main, a manual dispatch and the nightly on dev (nightly.yml):
@@ -57,8 +58,9 @@ jobs:
       # 'false' on a draft pull request without the `ci:full` label: the heavy
       # jobs (heavy Rust and macOS) wait until it is ready for review.
       heavy: ${{ github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
-      # 'true' on a pull request into main: the full tier.
-      full: ${{ github.base_ref == 'main' }}
+      # 'true' on a pull request into main or a release branch, or one
+      # labelled `ci:full` (then a push): the full tier.
+      full: ${{ github.base_ref == 'main' || startsWith(github.base_ref, 'release/') || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
       rust: ${{ steps.filter.outputs.rust }}
       engine: ${{ steps.filter.outputs.engine }}
       es: ${{ steps.filter.outputs.es }}
@@ -639,7 +641,7 @@ jobs:
   crash-gate:
     name: "Engine: crash gate"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (github.base_ref == 'main' && needs.changes.outputs.engine == 'true')) }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && needs.changes.outputs.engine == 'true')) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -656,7 +658,7 @@ jobs:
   cluster:
     name: "Engine: cluster tests"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (github.base_ref == 'main' && needs.changes.outputs.engine == 'true')) }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && needs.changes.outputs.engine == 'true')) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -910,7 +912,7 @@ jobs:
   tikv:
     name: "TiKV: suites"
     needs: changes
-    if: ${{ !cancelled() && inputs.nightly != true && (needs.changes.result == 'skipped' || ((github.base_ref == 'main' || contains(github.event.pull_request.labels.*.name, 'ci:tikv')) && needs.changes.outputs.tikv == 'true')) }}
+    if: ${{ !cancelled() && inputs.nightly != true && (needs.changes.result == 'skipped' || ((needs.changes.outputs.full == 'true' || contains(github.event.pull_request.labels.*.name, 'ci:tikv')) && needs.changes.outputs.tikv == 'true')) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
