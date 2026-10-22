@@ -424,7 +424,10 @@ mod tests {
         let path = file.path().display().to_string();
         let denied = std::io::Error::from(std::io::ErrorKind::PermissionDenied);
         let err = read_error(file.path(), &denied);
-        assert!(err.starts_with(&format!("LOAMS_API_KEYS_FILE {path}: ")), "{err}");
+        assert!(
+            err.starts_with(&format!("LOAMS_API_KEYS_FILE {path}: ")),
+            "{err}"
+        );
         assert!(err.contains("0640"), "{err}");
         assert!(err.contains("deploy/release/README.md"), "{err}");
         #[cfg(target_os = "linux")]
