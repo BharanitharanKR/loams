@@ -545,7 +545,9 @@ async fn unsupported_type_is_48() {
         "UInt256",
         "Decimal(50, 2)",
         "Nested(a UInt8, b String)",
-        "JSON",
+        // `JSON` is stored as its text (HE1 R9.63); inside a container it is not.
+        "Array(JSON)",
+        "Dynamic",
         "IntervalDay",
     ] {
         refused(
