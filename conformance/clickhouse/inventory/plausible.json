@@ -5779,7 +5779,7 @@
   },
   "samples": {
     "q:0005ed3b-442d-45c4-b53a-0953590bb5fa": {
-      "query": "CREATE TABLE IF NOT EXISTS sessions_v2 \n(\n    `session_id` UInt64,\n    `sign` Int8,\n    `site_id` UInt64,\n    `user_id` UInt64,\n    `hostname` String,\n    `timestamp` DateTime CODEC(DoubleDelta, LZ4),\n    `start` DateTime CODEC(DoubleDelta, LZ4),\n    `is_bounce` UInt8,\n    `entry_page` String,\n    `exit_page` String,\n    `pageviews` Int32,\n    `events` Int32,\n    `duration` UInt32,\n    `referrer` String,\n    `referrer_source` String,\n    `country_code` LowCardinality(FixedString({p1:Int64})),\n    `screen_size` LowCardinality(String),\n    `operating_system` LowCardinality(String),\n    `browser` LowCardinality(String),\n    `utm_medium` String,\n    `utm_source` String,\n    `utm_campaign` String,\n    `browser_version` LowCardinality(String),\n    `operating_system_version` LowCardinality(String),\n    `subdivision1_code` LowCardinality(String),\n    `subdivision2_code` LowCardinality(String),\n    `city_geoname_id` UInt32,\n    `utm_content` String,\n    `utm_term` String,\n    `transferred_from` String,\n    `entry_meta.key` Array(String),\n    `entry_meta.value` Array(String)\n)\n\nENGINE = CollapsingMergeTree(sign)\n\nPARTITION BY toYYYYMM(start)\nPRIMARY KEY (site_id, toDate(start), user_id, session_id)\nORDER BY (site_id, toDate(start), user_id, session_id)\nSAMPLE BY user_id",
+      "query": "CREATE TABLE IF NOT EXISTS sessions_v2 \n(\n    `session_id` UInt64,\n    `sign` Int8,\n    `site_id` UInt64,\n    `user_id` UInt64,\n    `hostname` String,\n    `timestamp` DateTime CODEC(DoubleDelta, LZ4),\n    `start` DateTime CODEC(DoubleDelta, LZ4),\n    `is_bounce` UInt8,\n    `entry_page` String,\n    `exit_page` String,\n    `pageviews` Int32,\n    `events` Int32,\n    `duration` UInt32,\n    `referrer` String,\n    `referrer_source` String,\n    `country_code` LowCardinality(FixedString(2)),\n    `screen_size` LowCardinality(String),\n    `operating_system` LowCardinality(String),\n    `browser` LowCardinality(String),\n    `utm_medium` String,\n    `utm_source` String,\n    `utm_campaign` String,\n    `browser_version` LowCardinality(String),\n    `operating_system_version` LowCardinality(String),\n    `subdivision1_code` LowCardinality(String),\n    `subdivision2_code` LowCardinality(String),\n    `city_geoname_id` UInt32,\n    `utm_content` String,\n    `utm_term` String,\n    `transferred_from` String,\n    `entry_meta.key` Array(String),\n    `entry_meta.value` Array(String)\n)\n\nENGINE = CollapsingMergeTree(sign)\n\nPARTITION BY toYYYYMM(start)\nPRIMARY KEY (site_id, toDate(start), user_id, session_id)\nORDER BY (site_id, toDate(start), user_id, session_id)\nSAMPLE BY user_id",
       "path": "explained",
       "executions": 1
     },
@@ -5794,7 +5794,7 @@
       "executions": 10
     },
     "q:0948e404-cbc5-4a5a-89a0-6d476f1a6ca6": {
-      "query": "CREATE TABLE IF NOT EXISTS \"events\" (\"name\" String,\"domain\" String,\"user_id\" UInt64,\"session_id\" UInt64,\"hostname\" String,\"pathname\" String,\"referrer\" String,\"referrer_source\" String,\"country_code\" LowCardinality(FixedString({p1:Int64})),\"screen_size\" LowCardinality(String),\"operating_system\" LowCardinality(String),\"browser\" LowCardinality(String),\"timestamp\" DateTime) ENGINE=MergeTree PARTITION BY toYYYYMM(timestamp)\nORDER BY (domain, toDate(timestamp), user_id)",
+      "query": "CREATE TABLE IF NOT EXISTS \"events\" (\"name\" String,\"domain\" String,\"user_id\" UInt64,\"session_id\" UInt64,\"hostname\" String,\"pathname\" String,\"referrer\" String,\"referrer_source\" String,\"country_code\" LowCardinality(FixedString(2)),\"screen_size\" LowCardinality(String),\"operating_system\" LowCardinality(String),\"browser\" LowCardinality(String),\"timestamp\" DateTime) ENGINE=MergeTree PARTITION BY toYYYYMM(timestamp)\nORDER BY (domain, toDate(timestamp), user_id)",
       "path": "explained",
       "executions": 1
     },
@@ -5999,7 +5999,7 @@
       "executions": 1
     },
     "q:261cbf0d-1320-4be8-8ff7-1f14e611f671": {
-      "query": "ALTER TABLE \"events_v2\" ADD COLUMN \"revenue_source_currency\" FixedString({p1:Int64})",
+      "query": "ALTER TABLE \"events_v2\" ADD COLUMN \"revenue_source_currency\" FixedString(3)",
       "path": "parsed",
       "executions": 1
     },
@@ -6129,7 +6129,7 @@
       "executions": 1
     },
     "q:385fbbe0-61e2-44b6-b322-90afa29548e4": {
-      "query": "ALTER TABLE events_v2\n\nADD COLUMN country LowCardinality(FixedString({p1:Int64})) ALIAS country_code",
+      "query": "ALTER TABLE events_v2\n\nADD COLUMN country LowCardinality(FixedString(2)) ALIAS country_code",
       "path": "parsed",
       "executions": 1
     },
@@ -6259,7 +6259,7 @@
       "executions": 1
     },
     "q:48ba8b1d-654e-4788-b770-9907d30f0198": {
-      "query": "ALTER TABLE \"events_v2\" ADD COLUMN \"revenue_reporting_currency\" FixedString({p1:Int64})",
+      "query": "ALTER TABLE \"events_v2\" ADD COLUMN \"revenue_reporting_currency\" FixedString(3)",
       "path": "parsed",
       "executions": 1
     },
@@ -6914,7 +6914,7 @@
       "executions": 11
     },
     "q:ae9f3f49-b938-4ea1-9e47-fb8d3e939ab3": {
-      "query": "ALTER TABLE \"events_v2\" ADD COLUMN \"revenue_reporting_amount\" Nullable(Decimal64({p1:Int64}))",
+      "query": "ALTER TABLE \"events_v2\" ADD COLUMN \"revenue_reporting_amount\" Nullable(Decimal64(3))",
       "path": "parsed",
       "executions": 1
     },
@@ -6949,7 +6949,7 @@
       "executions": 1
     },
     "q:afede426-0ce6-494e-84d3-98847fe405bb": {
-      "query": "CREATE TABLE IF NOT EXISTS \"sessions\" (\"session_id\" UInt64,\"sign\" Int8,\"domain\" String,\"user_id\" UInt64,\"hostname\" String,\"is_bounce\" UInt8,\"entry_page\" String,\"exit_page\" String,\"pageviews\" Int32,\"events\" Int32,\"duration\" UInt32,\"referrer\" String,\"referrer_source\" String,\"country_code\" LowCardinality(FixedString({p1:Int64})),\"screen_size\" LowCardinality(String),\"operating_system\" LowCardinality(String),\"browser\" LowCardinality(String),\"start\" DateTime,\"timestamp\" DateTime) ENGINE=CollapsingMergeTree(sign) PARTITION BY toYYYYMM(start)\nORDER BY (domain, toDate(start), user_id, session_id)",
+      "query": "CREATE TABLE IF NOT EXISTS \"sessions\" (\"session_id\" UInt64,\"sign\" Int8,\"domain\" String,\"user_id\" UInt64,\"hostname\" String,\"is_bounce\" UInt8,\"entry_page\" String,\"exit_page\" String,\"pageviews\" Int32,\"events\" Int32,\"duration\" UInt32,\"referrer\" String,\"referrer_source\" String,\"country_code\" LowCardinality(FixedString(2)),\"screen_size\" LowCardinality(String),\"operating_system\" LowCardinality(String),\"browser\" LowCardinality(String),\"start\" DateTime,\"timestamp\" DateTime) ENGINE=CollapsingMergeTree(sign) PARTITION BY toYYYYMM(start)\nORDER BY (domain, toDate(start), user_id, session_id)",
       "path": "explained",
       "executions": 1
     },
@@ -7004,7 +7004,7 @@
       "executions": 1
     },
     "q:b6be84c4-f247-45e1-9bb1-26fe95b4fbb3": {
-      "query": "ALTER TABLE sessions_v2\n\nADD COLUMN country LowCardinality(FixedString({p1:Int64})) ALIAS country_code",
+      "query": "ALTER TABLE sessions_v2\n\nADD COLUMN country LowCardinality(FixedString(2)) ALIAS country_code",
       "path": "parsed",
       "executions": 1
     },
@@ -7054,7 +7054,7 @@
       "executions": 1
     },
     "q:be6aa727-e7c8-488d-a5d4-296c674851ca": {
-      "query": "CREATE TABLE IF NOT EXISTS events_v2 \n(\n    `timestamp` DateTime CODEC(Delta({p1:Int64}), LZ4),\n    `name` LowCardinality(String),\n    `site_id` UInt64,\n    `user_id` UInt64,\n    `session_id` UInt64,\n    `hostname` String,\n    `pathname` String CODEC(ZSTD({p2:Int64})),\n    `referrer` String,\n    `referrer_source` String,\n    `country_code` FixedString({p3:Int64}),\n    `screen_size` LowCardinality(String),\n    `operating_system` LowCardinality(String),\n    `browser` LowCardinality(String),\n    `utm_medium` String,\n    `utm_source` String,\n    `utm_campaign` String,\n    `meta.key` Array(String),\n    `meta.value` Array(String),\n    `browser_version` LowCardinality(String),\n    `operating_system_version` LowCardinality(String),\n    `subdivision1_code` LowCardinality(String),\n    `subdivision2_code` LowCardinality(String),\n    `city_geoname_id` UInt32,\n    `utm_content` String,\n    `utm_term` String,\n    `transferred_from` String\n)\n\nENGINE = MergeTree()\n\nPARTITION BY toYYYYMM(timestamp)\nPRIMARY KEY (site_id, toDate(timestamp), name, user_id)\nORDER BY (site_id, toDate(timestamp), name, user_id, timestamp)\nSAMPLE BY user_id",
+      "query": "CREATE TABLE IF NOT EXISTS events_v2 \n(\n    `timestamp` DateTime CODEC(Delta({p1:Int64}), LZ4),\n    `name` LowCardinality(String),\n    `site_id` UInt64,\n    `user_id` UInt64,\n    `session_id` UInt64,\n    `hostname` String,\n    `pathname` String CODEC(ZSTD({p2:Int64})),\n    `referrer` String,\n    `referrer_source` String,\n    `country_code` FixedString(2),\n    `screen_size` LowCardinality(String),\n    `operating_system` LowCardinality(String),\n    `browser` LowCardinality(String),\n    `utm_medium` String,\n    `utm_source` String,\n    `utm_campaign` String,\n    `meta.key` Array(String),\n    `meta.value` Array(String),\n    `browser_version` LowCardinality(String),\n    `operating_system_version` LowCardinality(String),\n    `subdivision1_code` LowCardinality(String),\n    `subdivision2_code` LowCardinality(String),\n    `city_geoname_id` UInt32,\n    `utm_content` String,\n    `utm_term` String,\n    `transferred_from` String\n)\n\nENGINE = MergeTree()\n\nPARTITION BY toYYYYMM(timestamp)\nPRIMARY KEY (site_id, toDate(timestamp), name, user_id)\nORDER BY (site_id, toDate(timestamp), name, user_id, timestamp)\nSAMPLE BY user_id",
       "path": "explained",
       "executions": 1
     },
@@ -7124,7 +7124,7 @@
       "executions": 1
     },
     "q:c4ddde95-b9c4-4e36-bbd3-6445a5c1654f": {
-      "query": "ALTER TABLE \"events_v2\" ADD COLUMN \"revenue_source_amount\" Nullable(Decimal64({p1:Int64}))",
+      "query": "ALTER TABLE \"events_v2\" ADD COLUMN \"revenue_source_amount\" Nullable(Decimal64(3))",
       "path": "parsed",
       "executions": 1
     },
