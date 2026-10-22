@@ -57,6 +57,12 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/dev') }}
 
 env:
+  # CI builds are never debugged: no debug info in dev and test builds (smaller
+  # caches, faster links; a panic still names its file and line) and no
+  # incremental artifacts. rust-cache sets CARGO_INCREMENTAL=0 too; this covers
+  # the jobs without it.
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
   CARGO_TERM_COLOR: always
 
 jobs:
@@ -247,7 +253,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
       - name: rustfmt
         working-directory: fabric
@@ -340,7 +346,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
           key: openpanel-on-house
       - name: build the House
@@ -377,7 +383,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
           key: sdk-unit
       - name: rustfmt
@@ -405,7 +411,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
           key: conformance-kit
       - name: rustfmt
@@ -462,7 +468,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.plan.outputs.run == 'true'
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
           key: connectors-${{ matrix.family }}
       - name: build the family crate's tests
@@ -553,7 +559,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.plan.outputs.run == 'true'
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
           key: connectors-${{ matrix.family }}
       - name: build the family crate's tests
@@ -710,7 +716,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.plan.outputs.run == 'true'
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
           key: connectors-${{ matrix.family }}
       - name: up
@@ -772,7 +778,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
           key: connectors-alerts
       - name: metrics and activity tests
@@ -820,6 +826,7 @@ jobs:
         with:
           workspaces: fabric -> target
           key: connectors-kind
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: chart golden, KubeRuntime golden and lease tests
         working-directory: fabric
         run: cargo test -p loams-flow --test kube --locked
@@ -869,6 +876,7 @@ jobs:
         with:
           workspaces: fabric -> target
           key: connectors-bench
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: build the bench tool (release)
         working-directory: fabric
         run: cargo build --release --locked -p loams-flow-conformance --bin loams-connectors-bench

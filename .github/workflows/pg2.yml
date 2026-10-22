@@ -117,6 +117,12 @@ permissions:
   contents: read
 
 env:
+  # CI builds are never debugged: no debug info in dev and test builds (smaller
+  # caches, faster links; a panic still names its file and line) and no
+  # incremental artifacts. rust-cache sets CARGO_INCREMENTAL=0 too; this covers
+  # the jobs without it.
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
   # The headers' source: images.storage in deploy/pins/loams-postgres-images.toml, written
   # by scripts/nf1/pins.py (NF1 Task 2). Since NF1 Task 14 a Loams Postgres release; the
   # golden fixtures' safekeeper came from Neon 77e22e4b (16.9, 17.5, R31.6). Since
@@ -160,6 +166,8 @@ jobs:
       - name: protoc
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: the descriptor, reasons and route-map tests
         run: cargo test -p loams-proto --test postgres --locked
 

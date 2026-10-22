@@ -490,6 +490,9 @@ jobs:
         # Pull requests only: no cache in a run that builds what is published.
         if: github.event_name == 'pull_request'
         with:
+          # Restore only: a pull request's cache is visible to that pull request
+          # alone, and each one (about 870 MB) evicted dev's caches.
+          save-if: false
           workspaces: |
             . -> target
             sdks/rust -> target
@@ -541,6 +544,9 @@ jobs:
         # Pull requests only: no cache in a run that builds what is published.
         if: github.event_name == 'pull_request'
         with:
+          # Restore only: a pull request's cache is visible to that pull request
+          # alone, and each one (about 870 MB) evicted dev's caches.
+          save-if: false
           workspaces: |
             . -> target
             sdks/rust -> target

@@ -93,3 +93,21 @@ A `docs/`-only pull request runs DCO, the repository checks (`Repo: checks`, whi
 decision-ID checks) and the three required gates, each of which passes with its other jobs
 skipped. `docs/house/**` (the generated compatibility profile and matrix) and the docs that tests
 read (`docs/api/reasons.md`, `docs/api/route-map.md`, `docs/sdk/**`) still select their jobs.
+
+## Caches
+
+The repository has 10 GB of Actions cache, and GitHub evicts the least recently used entries
+beyond that. A pull request's cache is visible to that pull request alone. A cache saved on
+`dev` is visible to every pull request into `dev`.
+- **Rust (`Swatinem/rust-cache`):** saves on `dev` only: its pushes, and the nightly's dispatch.
+  Pull requests restore from it.
+  - Before 2026-10-23, desktop, `sdk-release`'s dry run and a few Connectors and Postgres jobs saved
+    on every pull request, about 0.4–1.6 GB each. With 15 agents pushing, those filled the 10 GB and
+    evicted `dev`'s caches, so most pull requests built cold (`Rust: tests` took 47 min at the
+    median, `Rust: fmt and clippy` 33 min).
+- **Desktop:** saves Linux x64 on `dev`, and every platform on a release-gate pull request (into
+  `main` or `release/*`). A release-gate pull request cannot read `dev`'s caches, and is pushed
+  many times.
+- **Debug info:** CI builds dev and test profiles with `CARGO_PROFILE_DEV_DEBUG=0` and
+  `CARGO_INCREMENTAL=0`. That gives smaller caches and faster links, and a panic still names its
+  file and line.
