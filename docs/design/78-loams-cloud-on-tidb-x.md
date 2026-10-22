@@ -1,5 +1,7 @@
 # 78 — Loams Cloud on TiDB X: Dev on Your Own Devices, Prod in Your Own Cloud
 
+> **Owner amendment (2026-10-23): Loams Cloud is invite-only** (D1736, approved). People join a waitlist on `loams.dev/cloud` with double opt-in, an admin invites batches, and an emailed single-use link leads to sign-up at `auth.loams.dev`. The flow, the email sender, the waitlist store and the API are in [§25](#25-invite-only-access-the-waitlist-and-email-invites-d1736d1749-owner-amendment-of-2026-10-23) (D1737–D1749 and Q1278–Q1289 Proposed, for the owner's review).
+
 Status: **Approved** · 2026-10-23. The owner approved the design with all defaults on 2026-10-23: every decision (D1700–D1735), including D1701's amendment of D1323 and the wording updates to D1351, D1378 and D1615, and every question (Q1260–Q1277) at its recommended default. The owner's next actions are a no-card TiDB Cloud org for LC0 (Q1277) and counsel review before the public try-out (Q1276).
 
 Source: the owner's directions of 2026-10-23.
@@ -12,7 +14,7 @@ Source: the owner's directions of 2026-10-23.
 
 The owner's notes on TiDB X were treated as unverified. The research report checks each claim against primary sources: [`docs/research/tidb-x-and-hcp.md`](../research/tidb-x-and-hcp.md) ("the report" below). §4 lists the corrections.
 
-**Numbering.** Decisions **D1700–D1735** and questions **Q1260–Q1277** are declared in the [decision log](13-decision-log.md), approved by the owner on 2026-10-23. This document reserves **D1700–D1749** and **Q1260–Q1289**.
+**Numbering.** Decisions **D1700–D1735** and questions **Q1260–Q1277** are declared in the [decision log](13-decision-log.md), approved by the owner on 2026-10-23. The invite-only amendment (§25) adds **D1736–D1749** (D1736 approved, the rest Proposed) and **Q1278–Q1289** (Proposed), which fills the reservation. This document reserves **D1700–D1749** and **Q1260–Q1289**.
 - The highest numbers in use on `dev` (`7e83717d9`) sit in §77's blocks D1640–D1679 and Q1220–Q1244.
 - Open PRs use D1119 (#1082), D1552 and D1570 (#1055), D1603–D1616 (#1009) and one number in §77's free block D1666–D1679 (#1057), all below this block.
 - Design number 78 is the next free one; no open PR takes it.
@@ -126,7 +128,8 @@ Three earlier rulings stand in the way as worded, so this document proposes amen
 - **Phases:**
   - **LC0:** spikes and reports, no product code.
   - **LC1:** TiDB X BYOG and multi-device dev.
-  - **LC2:** the hosted try-out, invite-only first.
+  - **LC2a:** invite-only access (waitlist, email invites; D1736, §25), the first phase users see.
+  - **LC2:** the hosted try-out, invite-only throughout (D1736).
   - **LC3:** Cloudflare.
   - **LC4:** Vercel.
   - **LC5:** AWS, Google Cloud and Azure as production targets, with `loams promote`.
@@ -137,7 +140,7 @@ Three earlier rulings stand in the way as worded, so this document proposes amen
 |---|---|---|---|---|
 | **LC0** | Spikes: Starter tenant cells, Filesystem handoff and cost, the HTTP driver from a Worker, Zero's terms, device enrolment on IA0's stack, a company-device check; the LC0 report | Nothing new | IA0, SD1 | 2–3 engineer-weeks |
 | **LC1** | The target model; the `tidbx` target (the user's own TiDB Cloud org): SQL backend, workspaces on Filesystem, handoff between the user's own devices over their tailnet; `loams target`, `loams env` | Nothing new | §53, §47, LC0 | 5–7 engineer-weeks |
-| **LC2** | The hosted try-out: `loams.dev/cloud` sign-up and account pages, the control plane Worker, device enrolment, presence and leases, cells on Ostrium's TiDB org, quotas through the Meter, abuse controls; invite-only, then open | **Yes** (D1701) | IA2/IA4, ME1, LC1 | 6–8 engineer-weeks |
+| **LC2** | The hosted try-out: `loams.dev/cloud` sign-up and account pages, the control plane Worker, device enrolment, presence and leases, cells on Ostrium's TiDB org, quotas through the Meter, abuse controls; invite-only throughout (D1736), with LC2a's waitlist and email invites (§25) as its first, user-facing slice | **Yes** (D1701) | IA2/IA4, ME1, LC1 | 6–8 engineer-weeks |
 | **LC3** | The Cloudflare target: the user's own Cloudflare account as ground for edge, apps and a checkpointed node; Tunnel for device-to-device | Nothing new | BY0 Cloudflare (§70 §7), AB0 (§71), ER0 | Mostly §70's and §71's own estimates; 2 weeks for the target glue |
 | **LC4** | The Vercel target: apps and agents on the user's or company's Vercel team | Nothing new | AB1 (§71 §7.5), §70 §8 | 1–2 weeks of glue |
 | **LC5** | AWS, then Google Cloud, then Azure as production targets; `loams promote` dev → prod; the company org mapping | Nothing new | BY0/BY1 (§70), AB0/AB1 (§71) | 4–6 weeks of glue on top of BY1 |
@@ -298,7 +301,7 @@ The same picture with BYOG state (LC1) replaces Ostrium's TiDB org with the user
 
 The owner is removing `console.loams.dev` (memory `loams-branding`). What remains is cleaner.
 
-- **Sign-up and account pages:** `loams.dev/cloud/*` on the existing loams-site Worker.
+- **Sign-up and account pages:** `loams.dev/cloud/*` on the existing loams-site Worker. **Sign-up is invite-only** (D1736): the public page is a waitlist, and accounts are created only by redeeming an emailed invite (§25).
   - That Worker already serves `(auth)/sign-in`, `(auth)/sign-up` and a `(console)/console` preview with keys, usage, billing and settings pages, behind `run_worker_first` (loams-site `wrangler.jsonc`).
   - The `(console)` group becomes `cloud`, with pages for devices, projects and environments, quotas, data export and account deletion. "Billing" is removed.
   - Sign-in moves to Zitadel at `auth.loams.dev` as §76 already plans for the site.
@@ -760,7 +763,7 @@ App-port allowances are in §71 §7, read 2026-10-21, and are not repeated. Thes
   - GitHub or Google through Zitadel only; no password accounts in the try-out (Q1266).
   - Cloudflare Turnstile on the sign-up page.
   - One personal org per identity.
-  - An invite code for the first 200 users.
+  - ~~An invite code for the first 200 users.~~ Replaced by the waitlist and email invites (D1736, D1749, §25).
   - A GitHub account at least 30 days old (Q1266).
 - **Nothing public:** users get no public endpoints on Loams Cloud. It serves no content, hosts no sites and runs no code, so phishing, hosting and mining abuse have no surface.
 - **Storage abuse:** caught by the quotas (§15.3) and the cells' hard limits. Large files are refused by the per-file-system size limit (500 MiB, V).
@@ -949,3 +952,320 @@ All vendor facts are in the [research report](../research/tidb-x-and-hcp.md) wit
 - the decision log rows cited above;
 - loams-site's `wrangler.jsonc` and `app/(auth)`, `app/(console)` (read at `0f8577b`, 2026-10-23);
 - memory notes `loams-preview-release-model`, `loams-fully-oss`, `loams-product-focus`, `loams-branding`, `loams-edge-reach`, `loams-identity-zitadel`, `loams-light-compose` and `company-formation`.
+
+## 25. Invite-only access: the waitlist and email invites (D1736–D1749; owner amendment of 2026-10-23)
+
+> The owner, 2026-10-23: "Make it invite only and collect email, then we send invite link to the mail, plan for that apis using new zitadel."
+
+**Status:** D1736 (invite-only) is **Approved (owner, 2026-10-23)**. D1737–D1749 and Q1278–Q1289 are **Proposed**, with recommended defaults. The owner reviews the API plan before LC2a builds it ([LC1](../plans/2026-10-23-lc1-loams-cloud.md) "LC2a").
+
+It amends:
+- §8: sign-up becomes a waitlist;
+- §15.4 and D1720: email invites replace "an invite code for the first 200" (D1749);
+- Q1266's answer: the invite-code clause only; the sign-in providers and the GitHub-age rule stay.
+
+Facts about Zitadel are checked against its current docs (§25.10) and design 76's pins: Zitadel **v4.19.4**, Login v2 at the same version, OpenFGA v1.22.0. Facts about Cloudflare Email Service are from Cloudflare's docs, read 2026-10-23. Anything not settled is marked (verify), and LC2a Task 0 checks it on the pinned version first.
+
+### 25.1 The rule and the flow (D1736, D1737)
+
+**Loams Cloud is invite-only** (D1736). Nobody gets a Loams Cloud account without a valid, unexpired, single-use invite.
+
+1. **Join the waitlist** on `loams.dev/cloud`.
+   - The visitor gives their email address and passes Cloudflare Turnstile. Two fields are optional: "what will you build" and "where did you hear about Loams".
+   - A short privacy notice sits beside the form (§25.6).
+   - The API answers the same way whatever the address (§25.7) and emails a **confirm link** (double opt-in).
+   - The entry counts only once confirmed.
+2. **An admin selects invitees.** The admin API or `loams cloud admin` lists confirmed entries and invites a batch. Only an Ostrium admin may do this (§25.8).
+3. **The invite email** carries a single-use link that expires in 14 days. The control plane stores only a hash of the token.
+4. **Redemption:**
+   - The link opens `loams.dev/cloud/invite`. The person signs in with GitHub or Google at `auth.loams.dev` (Zitadel).
+   - The control plane checks the invite, then creates the Loams Cloud account. That is the user's records, the Zitadel role grant that lets them in, and their per-user Durable Object (D1727).
+   - The invite is then spent (§25.5).
+5. **Lifecycle:**
+   - An admin may resend or revoke an invite, and expiry is automatic.
+   - Anyone may remove themselves from the waitlist.
+   - Deletion on request.
+   - An audit event for every step (§25.9).
+
+### 25.2 Who sends the email (D1738)
+
+**Recommendation: Cloudflare Email Service, from the Loams Cloud Worker, for every Loams Cloud email.** Zitadel's own emails are routed to the same sender through Zitadel's **HTTP email provider**: email verification, if any, and admin notices.
+
+| Option | Facts | Verdict |
+|---|---|---|
+| **Cloudflare Email Service (Email Sending)** from the Worker | **Beta**, and needs Workers Paid. D1727 already puts the control plane on Workers Paid. **3,000 emails a month included**, then $0.35 per 1,000 (V, [pricing](https://developers.cloudflare.com/email-service/platform/pricing/)). Domain onboarding sets up **SPF and DKIM**, retries soft bounces, suppresses hard bounces and complaints, and processes ISP feedback loops; DMARC is ours to add ([deliverability](https://developers.cloudflare.com/email-service/concepts/deliverability/)). Arbitrary recipients are allowed once a domain is onboarded. New accounts start with "a conservative daily quota" that grows with reputation. 50 recipients and 5 MiB per message (V, [limits](https://developers.cloudflare.com/email-service/platform/limits/)). **Transactional email only** | **Recommended.** It runs in the same Worker as the waitlist, needs no API key (a `send_email` binding), and `loams.dev` is already on Cloudflare |
+| Zitadel's native invite (`CreateInviteCode`) | `POST /v2/users/{user_id}/invite_code` creates a code for an **existing** user, to initialise their first authentication method (password, passkey or IdP). A new code invalidates the previous one. `ResendInviteCode` resends it; `VerifyInviteCode` marks the email verified (V, [create](https://zitadel.com/docs/apis/resources/user_service_v2/user-service-create-invite-code), [verify](https://zitadel.com/docs/apis/resources/user_service_v2/user-service-verify-invite-code)). The code's expiry and its URL-template fields aren't on the docs pages (verify) | **Not used for Loams Cloud invites.** It needs a Zitadel user created for every invitee *before* they accept. Waitlisted strangers would become Zitadel users, binding the invite to an email that the GitHub or Google sign-in may not share. It also splits the invite logic between two systems |
+| Zitadel's SMTP or HTTP email provider | Zitadel delivers its own notifications through an SMTP provider or an **HTTP provider**: a POST with JSON to an endpoint we choose, signed with a `signingKey` it returns. Only one provider is active per channel (V, [notification providers](https://zitadel.com/guides/manage/customize/notification-providers), [AddEmailProviderHTTP](https://zitadel.com/docs/apis/resources/admin/admin-service-add-email-provider-http)). The signature header and payload schema aren't on those pages (verify) | **Used as the bridge:** Zitadel's HTTP provider points at `POST /internal/zitadel/notify` on the Worker, so Zitadel's mail goes out through the same sender and domain |
+| Both senders (the Worker for waitlist mail, Zitadel SMTP for invites) | Two sending paths, two sets of DNS records and reputations, and two template systems | Rejected |
+
+**The domain** (Q1278): send from **`cloud@mail.loams.dev`**, with the display name "Loams Cloud", if Email Service onboards a subdomain (verify). That keeps the try-out's reputation apart from `loams.dev`'s apex. Otherwise send from `cloud@loams.dev`.
+- **DMARC:** add `p=quarantine` with aggregate reports (`rua`) to an Ostrium mailbox, then move to `p=reject` after 30 clean days.
+- **`ostriumlabs.org`** stays for people's mail and is not used for automated sends.
+
+**Volume:** confirmations, invites and the rare resend fit the included 3,000 a month at LC2's scale. D1730's ceiling covers the rest: at $0.35 per 1,000, even 20,000 emails cost $6 (estimate). The Worker caps sends at 500 a day (Q1288) to protect a young sender reputation.
+
+### 25.3 Where the waitlist lives (D1739)
+
+**In the control DB** (D1717: the control plane's own Starter instance), in tables of their own. **Not in a Durable Object.**
+- **Why not a Durable Object:** the per-user DO exists only once an account does, and a waitlist entry has no user yet. The admin view is a query across all entries (filter by status, date and source). That is SQL's job, not a DO's.
+- **Why not a separate store** (D1, or a DO keyed by email hash): it would be a second system holding personal data, with its own export, deletion and backup story.
+
+**The tables** (`deploy/loams-cloud/schema/`, LC2a Task 1):
+
+| Table | Columns (main) | Notes |
+|---|---|---|
+| `waitlist` | `id` (`wl_` + 128-bit random), `email_hmac` (unique), `email_enc`, `status` (`pending`, `confirmed`, `invited`), `build` (≤ 500 chars, optional), `source` (enum `search`, `github`, `social`, `friend`, `event`, `other`, plus ≤ 100 chars free text, optional), `created_at`, `confirmed_at`, `ip_prefix_hmac` | One row per address |
+| `waitlist_tokens` | `token_hash`, `waitlist_id`, `kind` (`confirm`, `remove`), `expires_at`, `used_at` | Confirm and removal links |
+| `waitlist_suppressed` | `email_hmac`, `reason` (`removed`, `deleted`, `complaint`, `hard_bounce`), `created_at` | No address, only its HMAC, so a removed address is never mailed again and can't be re-added by someone else |
+| `invites` | `id` (`inv_` + 128-bit random), `waitlist_id`, `email_hmac`, `token_hash`, `state` (`queued`, `sent`, `redeemed`, `revoked`, `expired`), `expires_at`, `sent_count`, `created_by`, `redeemed_by_sub` | One live token per invite |
+| `redemption_sessions` | `id`, `invite_id`, `pkce_verifier_enc`, `nonce`, `expires_at` (15 min) | Between "continue" and the OIDC callback |
+| `audit` | `id`, `time`, `type`, `actor`, `subject_hmac`, `object_id`, `detail` (no plaintext email) | §25.9 |
+
+**How addresses are stored:**
+- Each address is normalised: trimmed, the domain lower-cased, and the local part lower-cased for well-known providers that ignore case (Q1286 covers the plus-address rule).
+- `email_hmac` is HMAC-SHA-256 over the normalised address under a key in Worker secrets. It is used for lookups, uniqueness and suppression without decrypting anything.
+- `email_enc` is the address under AES-256-GCM with a second Worker secret. It is decrypted only to send mail and for the admin list.
+- **Deletion deletes the row.** Only the HMAC survives, in `waitlist_suppressed`, which is what "never email me again" requires. A database dump without the Worker's keys holds no readable addresses.
+
+### 25.4 Tokens (D1740)
+
+| Token | Format | Lifetime | Use |
+|---|---|---|---|
+| Confirm | `wlc_` + 256 bits, base64url | 48 hours (Q1281) | Single-use. A second confirm email invalidates the first |
+| Remove | `wlr_` + 256 bits | 90 days, reissued in every waitlist email footer | Single-use |
+| Invite | `inv_` + 256 bits | **14 days** (Q1281) | Single-use. A resend mints a new token and invalidates the old one |
+| Redemption session | `rs_` + 128 bits, in the OIDC `state`, signed | 15 minutes | Binds the OIDC round trip to one invite |
+
+**How tokens are handled:**
+- Only `SHA-256(token)` is stored, and comparisons are constant-time.
+- Tokens travel in the **URL fragment** of email links (`https://loams.dev/cloud/invite#inv_…`), so they never reach server logs or `Referer` headers. The page sends them to the API in the request body.
+- **`GET /invites/{token}` is the exception** the API list asks for. The Worker redacts the path segment from its logs and observability before writing them, and LC2a Task 3's tests check that.
+
+### 25.5 Redemption: how an invite becomes an account (D1741, D1742, D1743)
+
+The trouble is getting Zitadel to let only invited people into Loams Cloud while anyone can sign in at `auth.loams.dev` with GitHub or Google.
+
+**The gate is Zitadel's own project setting.** The **Loams Cloud** project in Zitadel has **"Check Role Assignment on Authentication"** (`projectRoleCheck`) turned on: "users are only allowed to log in if they have at least one role assigned for this project" (V, [projects](https://zitadel.com/docs/guides/manage/console/projects)). So an uninvited person who signs in with GitHub gets no Loams Cloud session from Zitadel at all. The control plane also checks the role on every request, as a second layer.
+
+**Redemption uses a second, role-free project.** A role check means a brand-new user can't complete a login to the Loams Cloud app before they hold the role. So redemption runs through a separate Zitadel project, **Loams Cloud Redeem**:
+- it has no role check;
+- it has one confidential OIDC client, the Worker, using PKCE;
+- its only purpose is to prove who is redeeming.
+
+**The steps:**
+
+1. `GET /invites/{token}` shows `valid` or `unusable` (§25.7).
+2. `POST /invites/{token}/redeem` checks the invite and creates a redemption session. It returns an authorisation URL for the Redeem client. The URL carries:
+   - `state=rs_…`;
+   - a nonce;
+   - PKCE;
+   - the IdP hint scope `urn:zitadel:iam:org:idp:id:{idp_id}` for the button the person pressed (V, [scopes](https://zitadel.com/docs/apis/openidoauth/scopes));
+   - the org scope `urn:zitadel:iam:org:id:{cloud_org}`, so new users are created in the Loams Cloud users' org (V that the scope enforces org membership; Q1284).
+3. Zitadel's login (Login v2) signs the person in with GitHub or Google. It creates the Zitadel user on first sign-in if the org's login policy allows registration with external IdPs (verify the exact settings on v4.19.4 in LC2a Task 0).
+4. `GET /redeem/callback`: the Worker exchanges the code, then verifies the ID token (issuer, `aud` = the Redeem client, nonce, `exp`). Then, in one control-DB transaction:
+   - it checks the session and invite are still valid;
+   - it runs the account checks: no existing Loams Cloud account for this `sub`, the GitHub-age rule (D1749), and the quota ceiling (D1730);
+   - it marks the invite `redeemed` with `redeemed_by_sub`;
+   - it creates the account records (personal org, quotas) and writes the audit events.
+5. Still in the callback, the Worker calls Zitadel's **`CreateAuthorization`** (the v2 Authorization service). It needs `user.grant.write`, and gives the user the role `tryout` on the Loams Cloud project (V, [CreateAuthorization](https://zitadel.com/docs/reference/api/authorization/zitadel.authorization.v2.AuthorizationService.CreateAuthorization)). A forum report of an error on v4.2.0 makes this a (verify) on v4.19.4. Membership via user grants is D1623 (IA0 F3).
+   - The service account that calls it holds only that permission on that project.
+   - If the call fails, the transaction is compensated: the invite returns to `sent` and the account records are removed.
+6. It creates the user's Durable Object, by first contact (D1727), and redirects to the Loams Cloud app's normal sign-in. The person already has a Zitadel session, so it completes at once, now with a role.
+
+**Keeping in step with Zitadel afterwards** (D1743):
+- **The feed:** the control plane follows Zitadel's **event list** for `user.removed`, `user.deactivated`, `user.reactivated` and `user.grant.removed`, by D1622's method: `ListEvents` from a stored position, with Actions v2 webhooks only as a wake-up at `POST /internal/zitadel/wake`.
+- **Actions v2 can't be the redemption gate:** its webhooks are delivered at most once (IA0 F1).
+- **What the feed does:**
+  - a deleted or deactivated Zitadel user suspends the Loams Cloud account;
+  - a removed grant does the same;
+  - a deleted account in Loams removes the grant and then the Zitadel user (§25.9).
+
+**When the sign-in email differs from the invite email** (D1742, Q1280):
+
+| Case | Recommended default |
+|---|---|
+| The IdP's verified email equals the invite email | Redeem |
+| The IdP's email differs, or the IdP gives none (a GitHub account with a private email) | **Redeem.** The invite link reached the invited inbox, which is the proof that matters. Record the invite email as the account's contact address unless the person picks the IdP's, and record both in the audit log |
+| The `sub` already has a Loams Cloud account | Don't spend the invite. Show "you already have an account", and the invite stays usable for its own address |
+| A second redemption of the same invite | `unusable`. Single-use, even within the 15-minute session |
+
+The strict alternative (refuse unless the IdP email matches) is Q1280's option. It would turn away GitHub users with private emails, which is common, for no security gain over link possession.
+
+### 25.6 Privacy at the point of collection (D1744)
+
+**The form shows, in about four lines:**
+- what we store: the address, and the optional answers if given;
+- why: to send a confirmation and, later, an invite;
+- how to leave: a link in every email, or `loams.dev/cloud/leave`;
+- how long we keep it (below);
+- a link to the privacy policy counsel writes (Q1276).
+
+**Data minimisation:**
+- **Collect only the address.** The two optional fields are clearly optional.
+- **No name, no company, no marketing consent box,** because the list is not a newsletter. Email Service is transactional only, and so are these emails.
+- **No analytics on these routes.** Clarity stays off `/cloud/*`, as it is off console routes (memory `loams-site-direction`).
+- **A prefix, not the IP:** an IP is used only for rate limits. The stored value is an HMAC of the IP's /24 or /48 prefix, kept 7 days.
+
+**Retention** (Q1283):
+
+| Data | Kept for |
+|---|---|
+| Unconfirmed entries | 7 days |
+| Confirmed, never invited | 12 months, then a "still interested?" email, and deleted 30 days after it unless confirmed again |
+| Invited and redeemed | Until redemption, when the waitlist row is deleted (the account holds the contact address) |
+| Invited but expired | 30 days, then back to `confirmed` if the admin chooses, else deleted |
+| Suppression HMACs | 24 months |
+| Audit events | 12 months, with no plaintext address |
+
+### 25.7 Abuse and enumeration (D1745)
+
+- **Turnstile** is required on `POST /waitlist` and on the email form of `DELETE /waitlist`. The Worker checks the token server-side with Siteverify, and accepts each token only once.
+- **Rate limits** use Workers' rate-limiting binding (verify its GA status and limits in LC2a Task 0), with Durable Object counters as the fallback:
+
+  | Limit | Value |
+  |---|---|
+  | Per IP prefix, on `POST /waitlist` | 5 per 10 minutes, 20 per day |
+  | Per address | 3 confirmation emails per 24 hours |
+  | Global sends | 500 emails a day (Q1288) |
+  | Admin API | 60 calls a minute per admin |
+  | Token endpoints | 30 per minute per IP prefix |
+
+- **Disposable addresses** (Q1286): refused when the domain is on a maintained open list of disposable domains, pinned in the repository with its licence checked (verify), or when the domain has no MX record. The check uses DNS over HTTPS. The response is the same as for any other address. Nothing is sent, and a `waitlist.rejected` audit event records the reason.
+- **Enumeration-safe responses:**
+  - `POST /waitlist` always returns `202 {"status":"check_your_email"}`.
+    - New address: a confirm email is sent.
+    - Pending address: the confirm email is resent, within the per-address limit.
+    - Confirmed address: at most one "you're already on the list" email a day is sent to that address (Q1287).
+    - Suppressed or refused address: nothing is sent.
+  - The requester learns nothing. Only the inbox owner does.
+  - `DELETE /waitlist` with an address always returns `202`, sending a removal link only if the address is listed.
+  - `GET /invites/{token}` returns `valid` or `unusable` and never the address.
+- **Interaction with D1720 and Q1266:**
+  - Invite-only replaces "an invite code for the first 200": the waitlist batches *are* how the first 200 arrive (D1749).
+  - **The GitHub-age rule stays** and runs at redemption. When the IdP is GitHub, the Worker reads the GitHub user's `created_at` with a GitHub App token. It gets the numeric user id from the Zitadel IdP link (`ListIDPLinks`; verify which field carries the provider's user id).
+  - If the GitHub account is under 30 days old, the result is `IDP_ACCOUNT_TOO_NEW`. The invite is **not** spent, so the person may use Google instead.
+  - Google accounts have no age signal and are accepted with an invite.
+
+### 25.8 Admin authorisation (D1746)
+
+- **Who can act:** an Ostrium admin is a Zitadel user holding the role **`cloud_admin`** on the Loams Cloud project.
+- **What the control plane checks:** on every admin call it verifies the Zitadel access token (issuer, audience = the Loams Cloud project), then asks the authorizer. That is `platform:loams-cloud#cloud_admin` in OpenFGA, or `BuiltinAuthorizer` with the same relation (design 76 D1610, D1612).
+  - Like `meter_admin` (D1603), `cloud_admin` can never be held by an `agent` or `service_account` principal.
+  - Admin calls require MFA (an `amr` value of `mfa`, `otp`, `hwk` or `swk`) and an authentication within the last 15 minutes (`auth_time`) (Q1285).
+  - The exact claims Zitadel puts in access tokens on v4.19.4 need verifying in LC2a Task 0. If `amr` is only in the ID token, admin calls go through an ID-token-bound session instead.
+- **The CLI:**
+
+  ```
+  loams cloud admin waitlist list [--status confirmed] [--since 2026-11-01] [--source github] [--limit 50]
+  loams cloud admin invite <waitlist-id>... | --from-list ids.txt   # at most 50 per batch
+  loams cloud admin invite revoke <invite-id>
+  loams cloud admin invite resend <invite-id> [--extend]
+  loams cloud admin waitlist delete <waitlist-id>
+  loams cloud admin audit [--subject <waitlist-id|invite-id>]
+  ```
+
+  Every admin action writes an audit event with the admin's `sub`.
+
+### 25.9 Lifecycle and audit (D1747, D1748)
+
+| Event | What happens |
+|---|---|
+| Resend | A new invite token; the old token is unusable at once; the same expiry, unless `--extend` adds 14 days from now; at most 3 resends |
+| Revoke | `revoked`; the link shows `unusable`; the waitlist row returns to `confirmed` |
+| Expiry | A Cron Trigger (hourly) marks overdue invites `expired`; §25.6's retention applies |
+| Remove me | From any waitlist email's footer link, or the email form: the row is deleted and the HMAC suppressed |
+| Deletion on request (waitlist) | The same as "remove me", or by an admin with `waitlist delete` |
+| Deletion on request (account) | `DELETE /me`, then within 7 days (D1731): the tenant data, the Zitadel grant, and the Zitadel user if it has no other project grants. Audited |
+| Bounce or complaint | Email Service suppresses the address at its end (V); the Worker also adds the HMAC to `waitlist_suppressed` and revokes any open invite |
+
+**Audit events** are CloudEvents (D270), stored in the control DB's `audit` table and counted by the Meter's control-plane counters (D1721).
+- **The types:**
+  - `dev.loams.cloud.waitlist.joined`, `.confirmed`, `.rejected`, `.removed` and `.deleted`;
+  - `dev.loams.cloud.invite.created`, `.sent`, `.resent`, `.revoked`, `.expired`, `.redeemed` and `.redeem_refused` (with the reason);
+  - `dev.loams.cloud.account.created`, `.suspended` and `.deleted`;
+  - `dev.loams.cloud.email.bounced`.
+- **Subjects** are ids and `email_hmac`, never a plaintext address.
+
+### 25.10 The API (D1741; under `api.loams.dev/cloud/v1`, Q1262)
+
+**Conventions:**
+- JSON over HTTPS.
+- Errors are `{"error":{"code":"…","message":"…","request_id":"…"}}`.
+- Every response carries `request_id`.
+- Public endpoints send `Cache-Control: no-store` and `Referrer-Policy: no-referrer`.
+- Request bodies are at most 8 KiB.
+
+**Auth:**
+- *Public* means Turnstile where shown, plus rate limits.
+- *Token* means the token in the path or body.
+- *Admin* means a Zitadel access token with `cloud_admin` and MFA (§25.8).
+- *User* means a Zitadel access token with the `tryout` role.
+- *Zitadel* means the HTTP provider's or Actions v2's signature.
+
+| Method and path | Auth | Request | Response | Errors |
+|---|---|---|---|---|
+| `POST /waitlist` | Public, Turnstile | `{email, turnstile_token, build?, source?, source_other?}` | `202 {status:"check_your_email"}` always | `400 INVALID_REQUEST` (malformed JSON or a field too long; never for "address not accepted"), `403 TURNSTILE_FAILED`, `429 RATE_LIMITED` (with `Retry-After`) |
+| `POST /waitlist/confirm` | Token | `{token}` | `200 {status:"confirmed"}` | `410 TOKEN_UNUSABLE` (expired, used or unknown, one code for all), `429` |
+| `DELETE /waitlist` | Token, or public with Turnstile | `{token}` or `{email, turnstile_token}` | `204` with a token; `202 {status:"check_your_email"}` with an address | `403 TURNSTILE_FAILED`, `410 TOKEN_UNUSABLE`, `429` |
+| `GET /invites/{token}` | Token | — | `200 {state:"valid", expires_at, providers:["github","google"]}` or `200 {state:"unusable"}` | `429` (never 404, and never the address) |
+| `POST /invites/{token}/redeem` | Token | `{provider:"github"\|"google"}` | `200 {authorize_url}` or `200 {state:"unusable"}` | `429`, `503 TRYOUT_FULL` (the D1730 ceiling) |
+| `GET /redeem/callback` | OIDC (code, state) | Query `code`, `state` | `302` to `loams.dev/cloud/welcome`, or to `loams.dev/cloud/invite/error?code=…` | Codes for the error page: `INVITE_UNUSABLE`, `SESSION_EXPIRED`, `ALREADY_HAS_ACCOUNT`, `IDP_ACCOUNT_TOO_NEW`, `TRYOUT_FULL`, `SIGN_IN_FAILED` |
+| `GET /admin/waitlist` | Admin | Query `status`, `since`, `source`, `cursor`, `limit` (≤ 200) | `200 {items:[{id, email, status, created_at, confirmed_at, build, source, invite:{id, state, expires_at}?}], next_cursor}` | `401 UNAUTHENTICATED`, `403 PERMISSION_DENIED`, `403 MFA_REQUIRED`, `429` |
+| `DELETE /admin/waitlist/{id}` | Admin | — | `204` | `401`, `403`, `404 NOT_FOUND` |
+| `POST /admin/invites` | Admin | `{waitlist_ids:[…] (1–50), expires_in_days? (1–30, default 14)}`, plus an `Idempotency-Key` header | `202 {invites:[{id, waitlist_id, state:"queued"}], skipped:[{waitlist_id, reason:"not_confirmed"\|"already_invited"\|"suppressed"}]}` | `400`, `401`, `403`, `409 DAILY_SEND_CAP` |
+| `GET /admin/invites` | Admin | Query `state`, `cursor`, `limit` | `200 {items:[{id, waitlist_id, state, expires_at, sent_count, created_by, redeemed_at?}], next_cursor}` | `401`, `403` |
+| `POST /admin/invites/{id}/revoke` | Admin | — | `200 {id, state:"revoked"}` | `401`, `403`, `404`, `409 INVITE_NOT_REVOCABLE` (already redeemed) |
+| `POST /admin/invites/{id}/resend` | Admin | `{extend?: boolean}` | `200 {id, state:"sent", expires_at, sent_count}` | `401`, `403`, `404`, `409 INVITE_NOT_RESENDABLE`, `409 RESEND_LIMIT`, `409 DAILY_SEND_CAP` |
+| `GET /admin/audit` | Admin | Query `subject`, `type`, `since`, `cursor` | `200 {items:[…CloudEvents], next_cursor}` | `401`, `403` |
+| `DELETE /me` | User | — | `202 {status:"deletion_scheduled", by}` | `401` |
+| `POST /internal/zitadel/notify` | Zitadel (the HTTP provider's signing key) | Zitadel's notification JSON | `200` once sent through Email Service | `401 BAD_SIGNATURE`, `502 SEND_FAILED` |
+| `POST /internal/zitadel/wake` | Zitadel (the Actions v2 target's signing key) | The event | `200`, which wakes the event-list reader (D1622) | `401 BAD_SIGNATURE` |
+
+**The checked Zitadel facts this design relies on**, read 2026-10-23 on zitadel.com's current docs, and to re-check on v4.19.4 in LC2a Task 0:
+
+| Fact | Status |
+|---|---|
+| `projectRoleCheck` ("Check Role Assignment on Authentication") blocks login without a role | V |
+| The `urn:zitadel:iam:org:idp:id:{idp_id}` IdP hint and the `urn:zitadel:iam:org:id:{id}` org scope | V |
+| `CreateAuthorization` (v2, `user.grant.write`) | V; the forum's v4.2.0 error is (verify) |
+| `CreateInviteCode`, `ResendInviteCode` and `VerifyInviteCode`, which need an existing user | V; expiry and URL template (verify) |
+| The HTTP email provider (`AddEmailProviderHTTP`), with a signing key and one active provider per channel | V; header and payload (verify) |
+| Actions v2's four condition types (request, response, function, event) | V ([Actions v2](https://zitadel.com/docs/concepts/features/actions_v2)); its at-most-once webhooks are IA0 F1 |
+
+**Provenance:** this section was written from Zitadel's public docs and from design 76 and IA0's report. No Zitadel source was read. loams-identity's clean-room agents may read this section, but not IA0's report it cites.
+
+### 25.11 Decisions (D1736–D1749)
+
+| # | Decision | § | Status |
+|---|---|---|---|
+| D1736 | **Loams Cloud is invite-only:** no account without a valid, unexpired, single-use invite sent to a confirmed waitlist address | 25.1 | **Approved (owner, 2026-10-23)** |
+| D1737 | **The flow:** waitlist with Turnstile and double opt-in → admin batch invites → invite email → redemption at `auth.loams.dev` → account | 25.1 | Proposed |
+| D1738 | **One email sender:** Cloudflare Email Service from the Loams Cloud Worker; Zitadel's HTTP email provider points at the Worker; from `cloud@mail.loams.dev` (or `cloud@loams.dev`); DMARC quarantine, then reject; Zitadel's native invite codes not used | 25.2 | Proposed |
+| D1739 | **The waitlist lives in the control DB** (Starter), not a Durable Object; addresses stored as an HMAC for lookup and AES-GCM ciphertext for sending; deletion deletes the row and keeps only a suppression HMAC | 25.3 | Proposed |
+| D1740 | **Tokens:** 256-bit, prefixed, stored as SHA-256, single-use; confirm 48 h, remove 90 days, invite 14 days, redemption session 15 minutes; carried in URL fragments; the `GET /invites/{token}` path is redacted from logs | 25.4 | Proposed |
+| D1741 | **The API surface** in §25.10 under `api.loams.dev/cloud/v1` | 25.10 | Proposed |
+| D1742 | **Different sign-in email:** redeem anyway (link possession proves the inbox); record both; an existing account doesn't spend the invite | 25.5 | Proposed |
+| D1743 | **Redemption through a role-free Redeem project,** then `CreateAuthorization` grants `tryout` on the Loams Cloud project, whose `projectRoleCheck` is the gate; the control plane follows Zitadel's event list (D1622) for user and grant changes; Actions v2 webhooks only wake it | 25.5 | Proposed |
+| D1744 | **Privacy at collection:** address only, plus two optional fields; a four-line notice linking counsel's policy; no analytics on `/cloud/*`; §25.6's retention | 25.6 | Proposed |
+| D1745 | **Abuse and enumeration:** Turnstile, per-prefix, per-address and global rate limits, disposable and no-MX domains silently refused, identical responses whatever the address's state | 25.7 | Proposed |
+| D1746 | **Admin authorisation:** `cloud_admin` on the Loams Cloud project, checked through `loams-authz` as `platform:loams-cloud#cloud_admin`, never held by agents or service accounts, MFA and 15-minute recent authentication; the `loams cloud admin` CLI | 25.8 | Proposed |
+| D1747 | **Lifecycle:** resend (new token, at most 3), revoke, hourly expiry, remove me, deletion on request, bounce and complaint suppression | 25.9 | Proposed |
+| D1748 | **Audit events** as CloudEvents under `dev.loams.cloud.*`, with no plaintext addresses | 25.9 | Proposed |
+| D1749 | **Email invites replace "an invite code for the first 200"** (amends D1720 and that clause of Q1266's answer); the GitHub-age rule runs at redemption and doesn't spend the invite | 25.7 | Proposed |
+
+### 25.12 Open questions (Q1278–Q1289), with recommended defaults
+
+| # | Question | Recommended default |
+|---|---|---|
+| Q1278 | The sending domain? | **`cloud@mail.loams.dev`** if Email Service onboards subdomains, else `cloud@loams.dev`; never `ostriumlabs.org` for automated mail |
+| Q1279 | Route Zitadel's own emails through the Worker (HTTP provider)? | **Yes** |
+| Q1280 | A sign-in email that differs from the invite email? | **Redeem, record both** (D1742); strict matching as the alternative |
+| Q1281 | Token lifetimes? | **Invite 14 days, confirm 48 hours, remove 90 days, at most 3 resends** |
+| Q1282 | The optional waitlist fields? | **"What will you build" (≤ 500 chars) and source (enum plus ≤ 100 chars)**, both optional |
+| Q1283 | Retention? | **§25.6's table** (unconfirmed 7 days, confirmed 12 months with a re-confirm, suppression HMACs 24 months, audit 12 months) |
+| Q1284 | Which Zitadel org holds try-out users? | **One `loams-cloud` Zitadel org for all try-out users,** with each personal org a Loams Cloud record inside the control plane. This amends D1725's "Loams org = Zitadel org" for personal orgs only; company orgs keep a Zitadel org each (D1605). A Zitadel org per individual would mean thousands of orgs, and a user can't move between them (verify Zitadel's guidance in LC2a Task 0) |
+| Q1285 | MFA for admins? | **Yes:** passkey or TOTP, recent authentication within 15 minutes |
+| Q1286 | Disposable and plus addresses? | **Refuse known disposable domains and no-MX domains silently; keep plus addresses as given** (they are legitimate), with the per-address limit applied to the normalised base address |
+| Q1287 | Tell an already-confirmed address that it's on the list? | **Yes, at most once a day, to the inbox only** |
+| Q1288 | Batch size and pacing? | **At most 50 per batch, about 1 email a second, 500 a day** |
+| Q1289 | Show a queue position or an estimated wait? | **No**: the email says "we'll write when there's a place" |
