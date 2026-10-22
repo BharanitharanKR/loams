@@ -56,4 +56,27 @@ they carry an `Area: what` prefix (`Rust: tests (1/2)`, `SDK: Swift`, `Mobile: i
 
 Give it a path filter in its workflow's `changes` job, decide its tier (fast only if it is quick
 and catches what a pull request into `dev` must not break), add it to the workflow's `required`
-gate, and give the workflow a `concurrency` group that cancels superseded runs.
+gate, and give the workflow a `concurrency` group that cancels superseded runs (see below).
+
+## Concurrency and triggers
+
+Every workflow has a `concurrency` group keyed on the event and on the pull request number (or the
+ref), so a push to `dev` never cancels the nightly's dispatch on `dev`:
+
+| Run | Superseded by a newer one |
+|---|---|
+| A pull request | Cancelled |
+| A push to `dev` (CI, Connectors, Web and mobile) | Cancelled |
+| A push to `dev` that saves a cache (Postgres, Gateway, Platform) | Runs to completion |
+| A push to `main`, a tag, a release or publish workflow, a dispatch, the nightly, a schedule | Runs to completion |
+
+A pull request branch never runs a workflow on `push`: the `push` triggers name `dev`, `main` or
+tags only, so one commit runs each workflow once. On `dev`, `push` runs only the three required
+workflows (the merge result), and the path-filtered workflows that save a cache for pull requests.
+Postgres pins runs on pull requests (not for a `docs/` only change) and in the nightly; Release
+compose runs on pull requests and on `main`. Studio e2e does not restart when a label is added.
+
+A `docs/`-only pull request runs DCO, the repository checks (`Repo: checks`, which include the
+decision-ID checks) and the three required gates, each of which passes with its other jobs
+skipped. `docs/house/**` (the generated compatibility profile and matrix) and the docs that tests
+read (`docs/api/reasons.md`, `docs/api/route-map.md`, `docs/sdk/**`) still select their jobs.

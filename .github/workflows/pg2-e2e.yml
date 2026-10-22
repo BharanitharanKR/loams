@@ -77,8 +77,10 @@ permissions:
 concurrency:
   # A candidate run (workflow_call) is its own group, so it never cancels or
   # waits on the branch's own runs.
-  group: pg2-e2e-${{ inputs.candidate-pins && format('candidate-{0}', github.run_id) || github.ref }}
-  cancel-in-progress: true
+  # A newer push to a pull request supersedes the older run; a dispatch (the
+  # nightly) runs to completion.
+  group: pg2-e2e-${{ inputs.candidate-pins && format('candidate-{0}', github.run_id) || format('{0}-{1}', github.event_name, github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   # The server headers' source: images.storage in deploy/pins/loams-postgres-images.toml,

@@ -97,9 +97,11 @@ permissions:
   contents: read
 
 concurrency:
-  group: sdk-release-${{ github.event.inputs.tag || github.ref }}
-  # A publish must never be cancelled half way through.
-  cancel-in-progress: false
+  group: sdk-release-${{ github.event_name }}-${{ github.event.inputs.tag || github.ref }}
+  # A publish (a tag push or a dispatch) must never be cancelled half way
+  # through. A pull request's dry run publishes nothing, so a newer push to it
+  # supersedes the older run.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CARGO_TERM_COLOR: always

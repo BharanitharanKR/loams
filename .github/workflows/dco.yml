@@ -9,7 +9,8 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
+  # Pull requests only: a newer push supersedes the older run.
+  cancel-in-progress: true
 
 jobs:
   dco:
