@@ -8025,6 +8025,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "jsonwebtoken",
+ "loams-agentd-doc",
  "loams-agentd-proto",
  "loams-agentd-rpc",
  "loams-agentd-sessions",
