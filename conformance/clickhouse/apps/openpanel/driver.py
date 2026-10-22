@@ -166,7 +166,11 @@ class Driver:
                 {"openpanel-client-id": client["clientId"], "openpanel-client-secret": client["secret"],
                  "user-agent": ua, "x-client-ip": ip, "origin": "https://shop.example.invalid"},
             )
-            if status != 500 or self.tracked:
+            # An increment on a profile the buffers have not stored yet is
+            # 404 ("Profile not found") until they flush.
+            retry = (status == 500 and not self.tracked) or (
+                status == 404 and body.get("type") == "increment")
+            if not retry:
                 break
             time.sleep(2)
         self.tracked = self.tracked or status in (200, 202)
