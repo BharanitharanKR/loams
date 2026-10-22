@@ -1,12 +1,20 @@
 version: 2
+# CI volume (docs/ci/optimisation-2026-10.md): every Dependabot pull request
+# runs the Rust and web tiers, and every automatic rebase runs them again.
+# - Version updates come once a month (security updates are not scheduled:
+#   they still open as soon as an advisory lands).
+# - Each ecosystem's bumps come grouped: minor and patch in one pull request,
+#   majors in another (after the lockstep groups, which match first).
+# - No automatic rebases: comment `@dependabot rebase` on the pull request
+#   when it is ready to merge.
 updates:
   - package-ecosystem: cargo
     directory: /
     # Every update goes to dev; main moves only at a release merge.
     target-branch: dev
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
+    rebase-strategy: disabled
     open-pull-requests-limit: 5
     labels: ["area/ci", "status/needs-triage"]
     commit-message:
@@ -23,6 +31,9 @@ updates:
           - "datafusion*"
           - "lance*"
           - "parquet"
+        update-types: ["major"]
+      # Every other major bump in one pull request a month, not one each.
+      cargo-major:
         update-types: ["major"]
     ignore:
       # Git-pinned forks: bumped by hand with the fork (see Cargo.toml and NOTICE).
@@ -52,8 +63,8 @@ updates:
     directory: /
     target-branch: dev
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
+    rebase-strategy: disabled
     open-pull-requests-limit: 5
     labels: ["area/ci", "status/needs-triage"]
     commit-message:
@@ -68,8 +79,8 @@ updates:
     directory: /
     target-branch: dev
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
+    rebase-strategy: disabled
     # The 14-day rule (pnpm-workspace.yaml): only releases at least 14 days old.
     cooldown:
       default-days: 14
@@ -80,6 +91,9 @@ updates:
     groups:
       npm-minor-and-patch:
         update-types: ["minor", "patch"]
+      # Every other major bump in one pull request a month, not one each.
+      npm-major:
+        update-types: ["major"]
     ignore:
       # @types/node tracks the Node version the repo targets (Node 22 in CI and
       # `engines`). Skip majors above 22; revisit when the Node target moves.
@@ -91,8 +105,8 @@ updates:
     directory: /scripts/sqlgate/capture/node
     target-branch: dev
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
+    rebase-strategy: disabled
     cooldown:
       default-days: 14
     open-pull-requests-limit: 2
@@ -107,8 +121,8 @@ updates:
     directory: /scripts/sqlgate/capture/go
     target-branch: dev
     schedule:
-      interval: weekly
-      day: monday
+      interval: monthly
+    rebase-strategy: disabled
     cooldown:
       default-days: 14
     open-pull-requests-limit: 2
