@@ -29,8 +29,10 @@
 //! * `Ping`, `Cancel` (between and during results) and `SET`/`USE`, which the
 //!   connection remembers as clickhouse-server's session does.
 //!
-//! Compression, external tables, `Totals`/`Extremes` packets and
-//! `TableColumns` are not served (R9.42).
+//! A query that asks for compression gets its `Data` blocks both ways in
+//! ClickHouse's compressed frames (LZ4 written; LZ4, ZSTD or none read; R9.48).
+//! External tables, `Totals`/`Extremes` packets and `TableColumns` are not
+//! served (R9.42).
 
 mod head;
 
@@ -125,6 +127,7 @@ where
         database: "default".to_string(),
         settings: Vec::new(),
         session: None,
+        compressed: false,
     };
     let _ = conn.serve().await;
     let _ = conn.writer.shutdown().await;
@@ -231,6 +234,8 @@ struct Connection<S> {
     settings: Vec<(String, String)>,
     /// The House session, from the connection's first temporary table on.
     session: Option<String>,
+    /// Whether the running query's `Data` blocks are compressed (R9.48).
+    compressed: bool,
 }
 
 /// What came of one statement.
@@ -360,27 +365,24 @@ where
         }
     }
 
-    /// One `Query` packet and everything that answers it.
+    /// One `Query` packet and everything that answers it; its `Data` blocks,
+    /// both ways, are compressed when it asks (R9.48).
     async fn query(&mut self, query: packet::Query) -> Result<(), Ended> {
-        if query.compression {
-            // The client compresses everything after this, so nothing more can be
-            // read (R9.42).
-            let err = HouseError::from(ChError::not_implemented(
-                "compression over the native protocol is not supported by the House yet; \
-                 connect with compression off (clickhouse-client --compression 0, \
-                 clickhouse-go Compression: None, clickhouse-driver compression=False)",
-            ));
-            self.exception(&err).await?;
-            return Err(Ended::Broken);
-        }
+        self.compressed = query.compression;
+        let answered = self.answer_query(query).await;
+        self.compressed = false;
+        answered
+    }
+
+    async fn answer_query(&mut self, query: packet::Query) -> Result<(), Ended> {
         // External tables, then the empty block that ends them.
         let mut external = false;
         loop {
-            let revision = self.revision;
+            let (revision, compressed) = (self.revision, self.compressed);
             match self
                 .reader
                 .next(self.shared.config.receive_timeout, |buf| {
-                    packet::decode_packet(buf, revision)
+                    packet::decode_packet_with(buf, revision, compressed)
                 })
                 .await
             {
@@ -543,7 +545,13 @@ where
             match self.header_of(sql, &query_id, params).await {
                 Ok(header) => {
                     let mut out = Vec::new();
-                    packet::encode_data(&mut out, packet::server::DATA, &header, self.revision);
+                    packet::encode_data_with(
+                        &mut out,
+                        packet::server::DATA,
+                        &header,
+                        self.revision,
+                        self.compressed,
+                    );
                     self.send(&out).await?;
                     sent.header = true;
                 }
@@ -563,11 +571,12 @@ where
                 },
             );
             packet::encode_progress(&mut out, &progress, self.revision);
-            packet::encode_data(
+            packet::encode_data_with(
                 &mut out,
                 packet::server::DATA,
                 &Block::empty(),
                 self.revision,
+                self.compressed,
             );
             self.send(&out).await?;
             return self.end_of_stream(&packet::Progress::default()).await;
@@ -588,7 +597,13 @@ where
             Err(err) => return self.exception(&err).await,
         };
         let mut out = Vec::new();
-        packet::encode_data(&mut out, packet::server::DATA, &header, self.revision);
+        packet::encode_data_with(
+            &mut out,
+            packet::server::DATA,
+            &header,
+            self.revision,
+            self.compressed,
+        );
         self.send(&out).await?;
 
         // The blocks stream into the statement as they arrive; the statement
@@ -601,12 +616,15 @@ where
         let shared = Arc::clone(&self.shared);
         let parts = self.parts("Native");
         let run_params = self.statement_params(&sql, &query_id, params);
+        let compressed = self.compressed;
         let reader = &mut self.reader;
         let feed = async move {
             let mut tx = Some(tx);
             loop {
                 let next = reader
-                    .next(receive_timeout, |buf| packet::decode_packet(buf, revision))
+                    .next(receive_timeout, |buf| {
+                        packet::decode_packet_with(buf, revision, compressed)
+                    })
                     .await;
                 match next {
                     Ok(Some(ClientPacket::Data { block, .. })) if block.is_empty() => {
@@ -815,11 +833,12 @@ where
         };
         let mut out = Vec::new();
         if !sent.header {
-            packet::encode_data(
+            packet::encode_data_with(
                 &mut out,
                 packet::server::DATA,
                 &block.to_header(),
                 self.revision,
+                self.compressed,
             );
             sent.header = true;
         }
@@ -827,7 +846,13 @@ where
             sent.rows += block.rows;
             sent.blocks += 1;
             sent.bytes += block.data_bytes();
-            packet::encode_data(&mut out, packet::server::DATA, &block, self.revision);
+            packet::encode_data_with(
+                &mut out,
+                packet::server::DATA,
+                &block,
+                self.revision,
+                self.compressed,
+            );
         }
         self.send(&out).await
     }
@@ -846,10 +871,12 @@ where
     /// Waits for the client's `Cancel` while a result streams; any other packet
     /// breaks the protocol, and the client leaving ends the connection.
     async fn cancelled(&mut self) -> Result<(), Ended> {
-        let revision = self.revision;
+        let (revision, compressed) = (self.revision, self.compressed);
         match self
             .reader
-            .next(IDLE_TIMEOUT, |buf| packet::decode_packet(buf, revision))
+            .next(IDLE_TIMEOUT, |buf| {
+                packet::decode_packet_with(buf, revision, compressed)
+            })
             .await
         {
             Ok(Some(ClientPacket::Cancel)) => Ok(()),

@@ -341,3 +341,37 @@ func TestStdInsideTransaction(t *testing.T) {
 		t.Fatalf("read back: %d %d %v", version, dirty, err)
 	}
 }
+
+func TestCompressedBlocks(t *testing.T) {
+	for _, method := range []clickhouse.CompressionMethod{clickhouse.CompressionLZ4, clickhouse.CompressionZSTD} {
+		opts := options(t)
+		opts.Compression = &clickhouse.Compression{Method: method}
+		conn, err := clickhouse.Open(opts)
+		if err != nil {
+			t.Fatalf("%v: open: %v", method, err)
+		}
+		ctx := context.Background()
+		name := table("lz")
+		if err := conn.Exec(ctx, "CREATE TABLE "+name+" (id UInt64, s String) ENGINE = MergeTree ORDER BY id"); err != nil {
+			t.Fatalf("%v: create: %v", method, err)
+		}
+		batch, err := conn.PrepareBatch(ctx, "INSERT INTO "+name)
+		if err != nil {
+			t.Fatalf("%v: prepare: %v", method, err)
+		}
+		for i := 0; i < 5000; i++ {
+			if err := batch.Append(uint64(i), fmt.Sprintf("value-%d", i%17)); err != nil {
+				t.Fatalf("%v: append: %v", method, err)
+			}
+		}
+		if err := batch.Send(); err != nil {
+			t.Fatalf("%v: send: %v", method, err)
+		}
+		var count, sum uint64
+		if err := conn.QueryRow(ctx, "SELECT count(), sum(id) FROM "+name).Scan(&count, &sum); err != nil || count != 5000 || sum != 4999*5000/2 {
+			t.Fatalf("%v: read back: %d %d %v", method, count, sum, err)
+		}
+		_ = conn.Exec(ctx, "DROP TABLE IF EXISTS "+name)
+		_ = conn.Close()
+	}
+}
