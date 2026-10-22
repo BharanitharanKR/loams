@@ -54,7 +54,10 @@ concurrency:
 env:
   CI: 'true'
   NX_DAEMON: 'false'
+  # Shipped artefacts never come from a task cache (docs/guides/nx-cloud.md): no Nx Cloud,
+  # and no cached Nx results, local or remote.
   NX_NO_CLOUD: 'true'
+  NX_SKIP_NX_CACHE: 'true'
   CARGO_TERM_COLOR: always
   # Build-time constants of the updater (src/main/update/pubkey.ts). Public values, hence variables.
   LOAMS_UPDATE_PUBKEY: ${{ vars.LOAMS_UPDATE_PUBKEY }}
