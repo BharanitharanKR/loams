@@ -192,3 +192,77 @@ async fn mutations_keep_versions_and_their_order() {
         "1\t1\tx\n2\t1\tB\n"
     );
 }
+
+/// OpenPanel's `profile_event_property_summary_mv` (HE1 R9.5): ClickHouse 26.7
+/// and later refuse it unless `allow_dimensions_outside_sorting_key = 1`
+/// (`property_value` is outside its sorting key); the House does not enforce
+/// that rule and accepts it either way (a deliberate difference). Its rows are
+/// a lake table under the view's name, so `ALTER TABLE <view> DELETE`, which
+/// OpenPanel sends when a project is deleted, mutates them.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn openpanel_summary_view_is_accepted_and_mutated() {
+    let house = lakehouse("openpanel-view").await;
+    let addr = house.handle.local_addr();
+    ok(
+        addr,
+        "CREATE TABLE events (project_id String, profile_id String, device_id String, \
+         name LowCardinality(String), properties Map(String, String), \
+         created_at DateTime64(3)) ENGINE = MergeTree ORDER BY (project_id, created_at)",
+    )
+    .await;
+    let view = "CREATE MATERIALIZED VIEW IF NOT EXISTS {name}
+ENGINE = AggregatingMergeTree()
+PARTITION BY toYYYYMM(event_date)
+ORDER BY (project_id, profile_id, name, property_key, event_date){settings}
+AS SELECT
+          project_id,
+          profile_id,
+          name,
+          property_key,
+          property_value,
+          toStartOfDay(created_at) AS event_date,
+          countState() AS event_count,
+          minState(created_at) AS first_event_time,
+          maxState(created_at) AS last_event_time
+        FROM events
+        ARRAY JOIN mapKeys(properties) AS property_key, mapValues(properties) AS property_value
+        WHERE profile_id != device_id
+          AND property_key != ''
+          AND property_value != ''
+        GROUP BY project_id, profile_id, name, property_key, property_value, event_date";
+    ok(
+        addr,
+        &view
+            .replace("{name}", "profile_event_property_summary_mv")
+            .replace("{settings}", ""),
+    )
+    .await;
+    ok(
+        addr,
+        &view.replace("{name}", "summary_with_setting").replace(
+            "{settings}",
+            "\nSETTINGS allow_dimensions_outside_sorting_key = 1",
+        ),
+    )
+    .await;
+    ok(
+        addr,
+        "INSERT INTO events VALUES \
+         ('p1', 'u1', 'd1', 'screen_view', {'plan':'pro','os':'linux'}, '2026-10-21 10:00:00.000'), \
+         ('p1', 'u1', 'd1', 'screen_view', {'plan':'pro'}, '2026-10-21 11:00:00.000'), \
+         ('p2', 'u2', 'd2', 'sign_up', {'plan':'free'}, '2026-10-21 12:00:00.000')",
+    )
+    .await;
+    let read = "SELECT project_id, property_key, property_value, countMerge(event_count) \
+        FROM profile_event_property_summary_mv GROUP BY ALL ORDER BY ALL";
+    assert_eq!(
+        ok(addr, read).await,
+        "p1\tos\tlinux\t1\np1\tplan\tpro\t2\np2\tplan\tfree\t1\n"
+    );
+    ok(
+        addr,
+        "ALTER TABLE profile_event_property_summary_mv DELETE WHERE project_id = 'p1'",
+    )
+    .await;
+    assert_eq!(ok(addr, read).await, "p2\tplan\tfree\t1\n");
+}
