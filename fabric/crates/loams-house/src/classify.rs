@@ -925,6 +925,24 @@ pub fn classify(sql: &str) -> Result<Classified, HouseError> {
 /// A lake table's `CREATE TABLE` or `ALTER TABLE … ADD COLUMN` that sqlparser
 /// could not parse, read with the DDL reader instead (HS1 Task 10).
 fn lake_ddl(text: &str, first: &str, second: &str) -> Result<Option<Stmt>, HouseError> {
+    // `DROP … ON CLUSTER c` (SigNoz; HE1 R9.16): sqlparser reads no cluster.
+    if first == "DROP" && second != "TEMPORARY" {
+        let Ok(drop) = crate::ddl::parse_drop(text) else {
+            return Ok(None);
+        };
+        return Ok(Some(Stmt::Drop(DropStmt {
+            kind: drop.kind,
+            names: drop
+                .names
+                .into_iter()
+                .map(|(db, name)| match db {
+                    Some(db) => format!("{db}.{name}"),
+                    None => name,
+                })
+                .collect(),
+            temporary: false,
+        })));
+    }
     if first == "CREATE" && (second == "TABLE" || second == "OR") {
         let Ok(create) = crate::ddl::parse_create_table(text) else {
             return Ok(None);

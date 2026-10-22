@@ -1385,7 +1385,8 @@ async fn lake_tables_take_langfuse_ddl() {
     refused(
         addr,
         "ALTER TABLE core_mv MODIFY QUERY SELECT project_id, trace_id, input FROM core",
-        "48",
+        // R9.16: a new source is taken, but not the view's own target.
+        "36",
     )
     .await;
 }
@@ -1653,4 +1654,76 @@ async fn sample_reads_every_row_of_a_lake_table() {
         .await,
         "1\n"
     );
+}
+
+/// HE1 R9.16: the DDL SigNoz's migrations send beside Langfuse's: `ON CLUSTER`
+/// everywhere, Distributed tables altered with their local ones, views `TO` a
+/// table with its column list, `MODIFY QUERY` onto another source, a key
+/// `Enum8` extended, `MATERIALIZE COLUMN`, partitions Iceberg cannot take, and
+/// `final` as a request setting.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn signoz_ddl_on_lake_tables() {
+    let house = lakehouse("signoz-ddl").await;
+    let addr = house.addr();
+    ok(addr, "CREATE TABLE keys ON CLUSTER cluster (name String, tagType Enum8('tag' = 1, 'resource' = 2), seen Int64, ver UInt64) ENGINE = ReplacingMergeTree(ver) PARTITION BY toDate(seen) ORDER BY (name, tagType)").await;
+    ok(addr, "CREATE TABLE dist_keys ON CLUSTER cluster AS keys ENGINE = Distributed(cluster, default, keys, rand())").await;
+    ok(addr, "ALTER TABLE keys ON CLUSTER cluster MODIFY COLUMN IF EXISTS tagType Enum8('tag' = 1, 'resource' = 2, 'scope' = 3)").await;
+    ok(addr, "ALTER TABLE dist_keys ON CLUSTER cluster MODIFY COLUMN IF EXISTS tagType Enum8('tag' = 1, 'resource' = 2, 'scope' = 3)").await;
+    refused(
+        addr,
+        "ALTER TABLE keys MODIFY COLUMN tagType Enum8('tag' = 1)",
+        "524",
+    )
+    .await;
+    ok(addr, "ALTER TABLE keys ON CLUSTER cluster ADD COLUMN IF NOT EXISTS flags UInt32 DEFAULT 0 CODEC(ZSTD(1))").await;
+    ok(addr, "ALTER TABLE dist_keys ON CLUSTER cluster ADD COLUMN IF NOT EXISTS flags UInt32 DEFAULT 0 CODEC(ZSTD(1))").await;
+    ok(
+        addr,
+        "ALTER TABLE keys ON CLUSTER cluster MATERIALIZE COLUMN flags",
+    )
+    .await;
+    ok(addr, "ALTER TABLE keys ON CLUSTER cluster MODIFY TTL toDateTime(seen) + INTERVAL 15 DAY SETTINGS materialize_ttl_after_modify = 0").await;
+    ok(addr, "INSERT INTO keys (name, tagType, seen, ver) SELECT 'a', 'scope', toUnixTimestamp(now()), 1").await;
+    ok(addr, "INSERT INTO keys (name, tagType, seen, ver) SELECT 'a', 'scope', toUnixTimestamp(now()), 2").await;
+    // `final` on the request reads the merge view.
+    let response = insert(
+        addr,
+        "SELECT count(), max(ver) FROM dist_keys FORMAT TSV",
+        b"",
+        &[("final", "1")],
+    )
+    .await;
+    assert_eq!(response.status, 200, "{}", response.text());
+    assert_eq!(response.text(), "1\t2\n");
+    assert_eq!(ok(addr, "SELECT count() FROM keys FORMAT TSV").await, "2\n");
+    // A view TO a table, with its column list; MODIFY QUERY onto another source.
+    ok(
+        addr,
+        "CREATE TABLE names (name String) ENGINE = MergeTree ORDER BY name",
+    )
+    .await;
+    ok(
+        addr,
+        "CREATE TABLE keys_v2 (name String, tagType String) ENGINE = MergeTree ORDER BY name",
+    )
+    .await;
+    ok(addr, "CREATE MATERIALIZED VIEW names_mv ON CLUSTER cluster TO names (name String CODEC(ZSTD(1))) AS SELECT name FROM keys").await;
+    ok(addr, "ALTER TABLE names_mv ON CLUSTER cluster MODIFY QUERY SELECT upper(name) AS name FROM keys_v2").await;
+    ok(
+        addr,
+        "INSERT INTO keys (name, tagType, seen, ver) SELECT 'old', 'tag', toUnixTimestamp(now()), 1",
+    )
+    .await;
+    ok(addr, "INSERT INTO keys_v2 VALUES ('new', 'tag')").await;
+    assert_eq!(
+        ok(addr, "SELECT name FROM names ORDER BY name FORMAT TSV").await,
+        "NEW\n"
+    );
+    ok(
+        addr,
+        "DROP TABLE IF EXISTS names_mv ON CLUSTER cluster SYNC",
+    )
+    .await;
+    ok(addr, "DROP TABLE IF EXISTS dist_keys ON CLUSTER cluster").await;
+    assert_eq!(ok(addr, "EXISTS TABLE dist_keys FORMAT TSV").await, "0\n");
 }

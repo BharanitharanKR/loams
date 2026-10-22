@@ -2257,8 +2257,11 @@ pub fn plan_table(
                     || matches!(base, ChType::Simple(s) if s == "Date" || s == "Date32")
             }
         };
+        // A transform of a type Iceberg cannot partition by leaves the files
+        // unpartitioned by it, as an unmapped expression does (HE1 R9.16:
+        // SigNoz's `toDate(<Int64 seconds>)`, `toDate(<SimpleAggregateFunction>)`).
         if !ok {
-            return Err(refused(format!("{column} is {ch_text}")));
+            continue;
         }
         let name = match suffix {
             Some(suffix) => format!("{column}_{suffix}"),
