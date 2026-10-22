@@ -85,6 +85,7 @@ jobs:
       alerts: ${{ steps.filter.outputs.alerts }}
       kube: ${{ steps.filter.outputs.kube }}
       house-apps: ${{ steps.filter.outputs.house-apps }}
+      house-on-house: ${{ steps.filter.outputs.house-on-house }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: github.event_name == 'push'
@@ -128,6 +129,16 @@ jobs:
               - ".github/workflows/fabric.yml"
               - "conformance/clickhouse/apps/**"
               - "scripts/house/apps.sh"
+            # A mined application on the chDB House (HE1 Task 9): the harness,
+            # the replay and the House's own crates.
+            house-on-house:
+              - ".github/workflows/fabric.yml"
+              - "conformance/clickhouse/apps/**"
+              - "scripts/house/**"
+              - "fabric/Cargo.lock"
+              - "fabric/crates/loams-house*/**"
+              - "fabric/crates/loams-fabric/**"
+              - "fabric/crates/loams-chdb-sys/**"
             # The generated appendix and the two scripts that check the Camel
             # and Kestra columns against their catalogs (design §33 CN-R1).
             drift:
@@ -304,6 +315,45 @@ jobs:
       - name: down
         if: always()
         run: scripts/house/apps.sh langfuse-v4 down
+
+  # HE1 owns this job (plan 2026-10-21-he1-loams-house-engine, Task 9,
+  # ruling R9.6): `openpanel_on_house_smoke`. OpenPanel on the pinned
+  # clickhouse-server, then its traffic replayed against a House built from
+  # this tree (every DDL statement, the oracle's rows, every distinct SELECT
+  # compared), then OpenPanel itself on that House (migrations, ingest through
+  # its Redis buffers, every page's reads). It runs on the nightly dispatch and
+  # on pull requests that touch the House or the harness. It is not in
+  # `Connectors required` until OpenPanel passes on the House (the inner-table
+  # materialized views, HE1 Task 9). Synthetic traffic only; nothing uploaded.
+  openpanel-on-house:
+    name: "House apps: OpenPanel on the House"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.house-on-house == 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+      - name: protoc
+        run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
+      - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
+        with:
+          save-if: ${{ github.event_name != 'pull_request' }}
+          workspaces: fabric -> target
+          key: openpanel-on-house
+      - name: build the House
+        working-directory: fabric
+        run: cargo build --locked -p loams-fabric -p loams-house-worker
+      # The House's sealed workers enter their own user and network namespace
+      # (HS1 R6.8), as in the fabric tests.
+      - name: allow unprivileged user namespaces
+        run: sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+      - name: openpanel_on_house_smoke
+        env:
+          HE0_HOUSE_BIN: fabric/target/debug
+        run: scripts/house/app-on-house.sh openpanel
+      - name: the House's log on failure
+        if: failure()
+        run: tail -n 200 conformance/clickhouse/apps/.out/openpanel-on-house/house.log || true
 
   # CN2 owns this job (plan 2026-10-10-cn2-connectors, Task 4): the connector
   # SDK alone, the crate every native connector family builds on. It needs no
