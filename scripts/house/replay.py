@@ -15,10 +15,10 @@ HE0 Task 9 (plan HE1, ruling R9.3). After `scripts/house/apps.sh <app> up` and
   select  runs every distinct finished SELECT on both and compares the
           answers (FORMAT JSON: column names and types, then rows; rows as a
           multiset when the statement has no ORDER BY; the same rows in
-          another order under an ORDER BY are listed as `order-ties`, and a
-          read without FINAL of a table that merges in the background, whose
-          answer depends on how far merges have got on either server, as
-          `merge-dependent`).
+          another order under an ORDER BY are listed as `order-ties`; a read
+          of a merging table without FINAL that differs is run again with
+          `final = 1` on both and listed as `merge-timing` when that agrees,
+          a mismatch otherwise).
 
 Each statement keeps the settings the application sent. A setting the House
 refuses (115, 164) is recorded and dropped, and the statement runs again, so
@@ -188,14 +188,6 @@ def main() -> int:
         report["data"].append({"table": table, "rows": copied, "parts": len(parts), "status": status,
                                "error": None if status == 200 else text[:600]})
 
-    # Tables whose rows merge in the background: a read of one without FINAL
-    # answers by how far merges have got, on ClickHouse as on the House.
-    merging = set(oracle.must(
-        "SELECT name FROM system.tables WHERE database = {db:String} AND engine IN "
-        "('ReplacingMergeTree', 'SummingMergeTree', 'AggregatingMergeTree', 'CollapsingMergeTree', "
-        "'VersionedCollapsingMergeTree') FORMAT TSV",
-        {"param_db": args.database, "log_comment": "he0-harness"}).split())
-
     merging_tables = oracle.must(
         "SELECT name FROM system.tables WHERE database = {db:String} AND match(engine, "
         "'(Replacing|Summing|Collapsing|Aggregating)MergeTree|MaterializedView') FORMAT TSV",
@@ -239,11 +231,6 @@ def main() -> int:
             # Aggregating) without FINAL see whatever each server's background
             # merges have done so far; with `final = 1` on both they must agree.
             entry["verdict"] = "merge-timing"
-        elif not re.search(r"\bFINAL\b", sql, re.I) and any(
-                re.search(rf"\b{re.escape(t)}\b", sql) for t in merging):
-            # Listed, not failed: neither engine promises when it merges.
-            entry.update(verdict="merge-dependent", oracle=answer(to, ordered),
-                         house=answer(th, ordered))
         else:
             entry.update(verdict="mismatch", oracle=answer(to, ordered), house=answer(th, ordered))
         report["select"].append(entry)
