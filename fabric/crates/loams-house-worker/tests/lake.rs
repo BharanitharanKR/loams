@@ -522,7 +522,11 @@ async fn partition_by_other_is_36() {
         )
         .await;
         let t = table(&house, "default", &format!("w{i}")).await;
-        assert_eq!(t.metadata.default_partition_spec().fields().len(), 0, "{by}");
+        assert_eq!(
+            t.metadata.default_partition_spec().fields().len(),
+            0,
+            "{by}"
+        );
     }
     refused(
         addr,
