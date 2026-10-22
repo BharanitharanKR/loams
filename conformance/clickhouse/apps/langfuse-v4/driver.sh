@@ -84,8 +84,20 @@ mapfile -t ids < <(python3 -I -c 'import json,sys; [print(i) for i in json.loads
 
 # The worker writes in batches; wait until the last trace's observations read
 # back (v4's events_only mode serves only the v2 read API).
+# v3 reads OTLP/JSON span ids as protobuf JSON bytes (base64), so the hex ids
+# sent above are not the ids it stores; v3 reads back and opens the traces of
+# its legacy batch instead (he0-legacy-<i>), which it stores as sent.
+if [ "${HE0_APP:-langfuse-v4}" = langfuse-v3 ]; then
+  for i in "${!ids[@]}"; do ids[i]="he0-legacy-$i"; done
+fi
 last=${ids[$((TRACES - 1))]}
-seen() { api "$URL/api/public/v2/observations?limit=1&traceId=$last" 2>/dev/null | grep -q '"traceId"'; }
+# v4 serves observations v2 (events_only); v3 has neither that endpoint nor
+# observations for a legacy trace, so it reads the trace itself.
+if [ "${HE0_APP:-langfuse-v4}" = langfuse-v3 ]; then
+  seen() { api "$URL/api/public/traces/$last" 2>/dev/null | grep -q '"id"'; }
+else
+  seen() { api "$URL/api/public/v2/observations?limit=1&traceId=$last" 2>/dev/null | grep -q '"traceId"'; }
+fi
 for _ in $(seq 1 90); do
   seen && break
   sleep 2
@@ -126,3 +138,10 @@ done
 code=$(curl -sS -o /dev/null -w '%{http_code}' -u "$AUTH" -X DELETE "$URL/api/public/traces/${ids[$((TRACES - 2))]}")
 echo "driver: DELETE trace: $code" >&2
 echo "driver: ${HE0_APP:-langfuse} ingested $TRACES traces and ran $ran reads"
+
+# The UI's own queries: every main page and a trace, session and user detail
+# page in a headless browser (HE0 Task 3, pages.sh). HE0_PAGES=off skips it
+# (no Node or browser on the machine).
+if [ "${HE0_PAGES:-on}" != off ]; then
+  HE0_LANGFUSE_URL=$URL HE0_DETAIL="${ids[0]},session-1,user-1" bash "$(dirname "${BASH_SOURCE[0]}")/pages.sh"
+fi

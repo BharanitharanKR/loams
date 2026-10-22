@@ -2,19 +2,823 @@
 schema = "loams-house-mine/profile/1"
 min_apps = 3
 gate = ["langfuse", "openpanel"]
-apps = ["openpanel"]
+apps = ["langfuse", "openpanel"]
 
 [[feature]]
-name = "setting:database"
-apps = ["openpanel"]
-frequency = 137
-reason = "gate:openpanel"
+name = "function:equals"
+apps = ["langfuse", "openpanel"]
+frequency = 1457
+reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:SELECT"
-apps = ["openpanel"]
-frequency = 95
-reason = "gate:openpanel"
+apps = ["langfuse", "openpanel"]
+frequency = 1440
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:and"
+apps = ["langfuse", "openpanel"]
+frequency = 1424
+reason = "gate:langfuse"
+
+[[feature]]
+name = "format:JSONEachRow"
+apps = ["langfuse", "openpanel"]
+frequency = 1405
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:max_execution_time"
+apps = ["langfuse", "openpanel"]
+frequency = 1398
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:ORDER BY"
+apps = ["langfuse", "openpanel"]
+frequency = 1335
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:LIMIT"
+apps = ["langfuse", "openpanel"]
+frequency = 1268
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:DateTime64"
+apps = ["langfuse", "openpanel"]
+frequency = 1161
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:greaterOrEquals"
+apps = ["langfuse", "openpanel"]
+frequency = 947
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:database"
+apps = ["langfuse", "openpanel"]
+frequency = 691
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:String"
+apps = ["langfuse", "openpanel"]
+frequency = 469
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:INSERT"
+apps = ["langfuse", "openpanel"]
+frequency = 408
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:ALTER TABLE"
+apps = ["langfuse", "openpanel"]
+frequency = 370
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:GROUP BY"
+apps = ["langfuse", "openpanel"]
+frequency = 345
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:Array"
+apps = ["langfuse", "openpanel"]
+frequency = 276
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:count"
+apps = ["langfuse", "openpanel"]
+frequency = 259
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:toDate"
+apps = ["langfuse", "openpanel"]
+frequency = 234
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:INSERT FORMAT"
+apps = ["langfuse", "openpanel"]
+frequency = 232
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:lessOrEquals"
+apps = ["langfuse", "openpanel"]
+frequency = 222
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:tuple"
+apps = ["langfuse", "openpanel"]
+frequency = 215
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:input_format_parallel_parsing"
+apps = ["langfuse", "openpanel"]
+frequency = 204
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:in"
+apps = ["langfuse", "openpanel"]
+frequency = 200
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:ON CLUSTER"
+apps = ["langfuse", "openpanel"]
+frequency = 196
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:isNotNull"
+apps = ["langfuse", "openpanel"]
+frequency = 194
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:ALTER ADD COLUMN"
+apps = ["langfuse", "openpanel"]
+frequency = 164
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:table ORDER BY"
+apps = ["langfuse", "openpanel"]
+frequency = 132
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:skip index bloom_filter"
+apps = ["langfuse", "openpanel"]
+frequency = 127
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:CREATE TABLE"
+apps = ["langfuse", "openpanel"]
+frequency = 126
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:notEquals"
+apps = ["langfuse", "openpanel"]
+frequency = 125
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:Nullable"
+apps = ["langfuse", "openpanel"]
+frequency = 116
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:LowCardinality"
+apps = ["langfuse", "openpanel"]
+frequency = 109
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:max"
+apps = ["langfuse", "openpanel"]
+frequency = 102
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:greater"
+apps = ["langfuse", "openpanel"]
+frequency = 101
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:ALTER ADD INDEX"
+apps = ["langfuse", "openpanel"]
+frequency = 100
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:now"
+apps = ["langfuse", "openpanel"]
+frequency = 98
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:codec ZSTD"
+apps = ["langfuse", "openpanel"]
+frequency = 98
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:column CODEC"
+apps = ["langfuse", "openpanel"]
+frequency = 98
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:groupUniqArray"
+apps = ["langfuse", "openpanel"]
+frequency = 93
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:if"
+apps = ["langfuse", "openpanel"]
+frequency = 91
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:Map"
+apps = ["langfuse", "openpanel"]
+frequency = 88
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:WITH"
+apps = ["langfuse", "openpanel"]
+frequency = 85
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:column DEFAULT"
+apps = ["langfuse", "openpanel"]
+frequency = 82
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:lambda"
+apps = ["langfuse", "openpanel"]
+frequency = 80
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:min"
+apps = ["langfuse", "openpanel"]
+frequency = 78
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:UInt64"
+apps = ["langfuse", "openpanel"]
+frequency = 78
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:Int32"
+apps = ["langfuse", "openpanel"]
+frequency = 73
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:sum"
+apps = ["langfuse", "openpanel"]
+frequency = 72
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:FINAL"
+apps = ["langfuse", "openpanel"]
+frequency = 72
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:PARTITION BY"
+apps = ["langfuse", "openpanel"]
+frequency = 68
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:arrayElement"
+apps = ["langfuse", "openpanel"]
+frequency = 67
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:length"
+apps = ["langfuse", "openpanel"]
+frequency = 67
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:minus"
+apps = ["langfuse", "openpanel"]
+frequency = 66
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:uniq"
+apps = ["langfuse", "openpanel"]
+frequency = 66
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:http_headers_progress_interval_ms"
+apps = ["langfuse", "openpanel"]
+frequency = 66
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:send_progress_in_http_headers"
+apps = ["langfuse", "openpanel"]
+frequency = 66
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:or"
+apps = ["langfuse", "openpanel"]
+frequency = 62
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:toIntervalDay"
+apps = ["langfuse", "openpanel"]
+frequency = 61
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:toYYYYMM"
+apps = ["langfuse", "openpanel"]
+frequency = 61
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:toDateTime"
+apps = ["langfuse", "openpanel"]
+frequency = 58
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:dateDiff"
+apps = ["langfuse", "openpanel"]
+frequency = 57
+reason = "gate:langfuse"
+
+[[feature]]
+name = "engine:ReplacingMergeTree"
+apps = ["langfuse", "openpanel"]
+frequency = 54
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:any"
+apps = ["langfuse", "openpanel"]
+frequency = 54
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:scalar subquery"
+apps = ["langfuse", "openpanel"]
+frequency = 53
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:toIntervalHour"
+apps = ["langfuse", "openpanel"]
+frequency = 52
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:Bool"
+apps = ["langfuse", "openpanel"]
+frequency = 52
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:CREATE MATERIALIZED VIEW"
+apps = ["langfuse", "openpanel"]
+frequency = 51
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:parametric function"
+apps = ["langfuse", "openpanel"]
+frequency = 50
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:UInt8"
+apps = ["langfuse", "openpanel"]
+frequency = 49
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:nullIf"
+apps = ["langfuse", "openpanel"]
+frequency = 48
+reason = "gate:langfuse"
+
+[[feature]]
+name = "combinator:If"
+apps = ["langfuse", "openpanel"]
+frequency = 46
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:DISTINCT"
+apps = ["langfuse", "openpanel"]
+frequency = 45
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:notIn"
+apps = ["langfuse", "openpanel"]
+frequency = 44
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:argMax"
+apps = ["langfuse", "openpanel"]
+frequency = 42
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:table SETTINGS"
+apps = ["langfuse", "openpanel"]
+frequency = 42
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:WITH FILL"
+apps = ["langfuse", "openpanel"]
+frequency = 40
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:mapKeys"
+apps = ["langfuse", "openpanel"]
+frequency = 39
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:mapValues"
+apps = ["langfuse", "openpanel"]
+frequency = 39
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:groupArray"
+apps = ["langfuse", "openpanel"]
+frequency = 38
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:tupleElement"
+apps = ["langfuse", "openpanel"]
+frequency = 37
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:concat"
+apps = ["langfuse", "openpanel"]
+frequency = 36
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:toStartOfHour"
+apps = ["langfuse", "openpanel"]
+frequency = 36
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:subquery in FROM"
+apps = ["langfuse", "openpanel"]
+frequency = 35
+reason = "gate:langfuse"
+
+[[feature]]
+name = "engine:AggregatingMergeTree"
+apps = ["langfuse", "openpanel"]
+frequency = 34
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:countIf"
+apps = ["langfuse", "openpanel"]
+frequency = 33
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:arrayMap"
+apps = ["langfuse", "openpanel"]
+frequency = 32
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:toStartOfMinute"
+apps = ["langfuse", "openpanel"]
+frequency = 32
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:arrayJoin"
+apps = ["langfuse", "openpanel"]
+frequency = 31
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:groupUniqArrayIf"
+apps = ["langfuse", "openpanel"]
+frequency = 31
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:multiply"
+apps = ["langfuse", "openpanel"]
+frequency = 31
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:plus"
+apps = ["langfuse", "openpanel"]
+frequency = 30
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:avg"
+apps = ["langfuse", "openpanel"]
+frequency = 27
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:multiIf"
+apps = ["langfuse", "openpanel"]
+frequency = 26
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:toUInt64"
+apps = ["langfuse", "openpanel"]
+frequency = 25
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:skip index minmax"
+apps = ["langfuse", "openpanel"]
+frequency = 25
+reason = "gate:langfuse"
+
+[[feature]]
+name = "combinator:State"
+apps = ["langfuse", "openpanel"]
+frequency = 24
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:round"
+apps = ["langfuse", "openpanel"]
+frequency = 23
+reason = "gate:langfuse"
+
+[[feature]]
+name = "engine:MergeTree"
+apps = ["langfuse", "openpanel"]
+frequency = 22
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:toDateTime64"
+apps = ["langfuse", "openpanel"]
+frequency = 22
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:LEFT JOIN"
+apps = ["langfuse", "openpanel"]
+frequency = 22
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:Float32"
+apps = ["langfuse", "openpanel"]
+frequency = 22
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:TTL"
+apps = ["langfuse", "openpanel"]
+frequency = 19
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:UInt32"
+apps = ["langfuse", "openpanel"]
+frequency = 19
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:HAVING"
+apps = ["langfuse", "openpanel"]
+frequency = 18
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:toIntervalMinute"
+apps = ["langfuse", "openpanel"]
+frequency = 17
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:UInt16"
+apps = ["langfuse", "openpanel"]
+frequency = 17
+reason = "gate:langfuse"
+
+[[feature]]
+name = "combinator:Distinct"
+apps = ["langfuse", "openpanel"]
+frequency = 14
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:arrayFilter"
+apps = ["langfuse", "openpanel"]
+frequency = 14
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:countDistinct"
+apps = ["langfuse", "openpanel"]
+frequency = 14
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:enable_block_number_column"
+apps = ["langfuse", "openpanel"]
+frequency = 14
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:enable_block_offset_column"
+apps = ["langfuse", "openpanel"]
+frequency = 14
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:divide"
+apps = ["langfuse", "openpanel"]
+frequency = 13
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:Float64"
+apps = ["langfuse", "openpanel"]
+frequency = 13
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:column ALIAS"
+apps = ["langfuse", "openpanel"]
+frequency = 11
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:arrayEnumerate"
+apps = ["langfuse", "openpanel"]
+frequency = 10
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:arrayFirstIndex"
+apps = ["langfuse", "openpanel"]
+frequency = 10
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:less"
+apps = ["langfuse", "openpanel"]
+frequency = 9
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:toBool"
+apps = ["langfuse", "openpanel"]
+frequency = 8
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:INNER JOIN"
+apps = ["langfuse", "openpanel"]
+frequency = 8
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:uniqIf"
+apps = ["langfuse", "openpanel"]
+frequency = 6
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:ARRAY JOIN"
+apps = ["langfuse", "openpanel"]
+frequency = 6
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:arraySlice"
+apps = ["langfuse", "openpanel"]
+frequency = 5
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:CREATE DATABASE"
+apps = ["langfuse", "openpanel"]
+frequency = 5
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:uniqExact"
+apps = ["langfuse", "openpanel"]
+frequency = 4
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:log_comment"
+apps = ["langfuse"]
+frequency = 1392
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:timeout_before_checking_execution_speed"
+apps = ["langfuse"]
+frequency = 1392
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:query parameter"
+apps = ["langfuse"]
+frequency = 1113
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:input_format_json_throw_on_bad_escape_sequence"
+apps = ["langfuse"]
+frequency = 959
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:LIMIT BY"
+apps = ["langfuse"]
+frequency = 874
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:use_query_cache"
+apps = ["langfuse"]
+frequency = 710
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:query_plan_optimize_lazy_materialization"
+apps = ["langfuse"]
+frequency = 653
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:asterisk_include_alias_columns"
+apps = ["langfuse"]
+frequency = 625
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:asterisk_include_materialized_columns"
+apps = ["langfuse"]
+frequency = 625
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:enable_producing_buckets_out_of_order_in_aggregation"
+apps = ["langfuse"]
+frequency = 554
+reason = "gate:langfuse"
+
+[[feature]]
+name = "format:Native"
+apps = ["langfuse"]
+frequency = 176
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:INSERT VALUES"
+apps = ["langfuse"]
+frequency = 176
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:array"
+apps = ["langfuse"]
+frequency = 173
+reason = "gate:langfuse"
 
 [[feature]]
 name = "setting:distributed_product_mode"
@@ -29,40 +833,58 @@ frequency = 93
 reason = "gate:openpanel"
 
 [[feature]]
+name = "setting:alter_sync"
+apps = ["langfuse"]
+frequency = 89
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:use_text_index_dictionary_cache"
+apps = ["langfuse"]
+frequency = 88
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:use_text_index_postings_cache"
+apps = ["langfuse"]
+frequency = 88
+reason = "gate:langfuse"
+
+[[feature]]
 name = "format:JSON"
 apps = ["openpanel"]
 frequency = 87
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:equals"
-apps = ["openpanel"]
-frequency = 83
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:and"
-apps = ["openpanel"]
+name = "setting:enable_full_text_index"
+apps = ["langfuse"]
 frequency = 81
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:GROUP BY"
-apps = ["openpanel"]
-frequency = 78
-reason = "gate:openpanel"
+name = "setting:mutations_sync"
+apps = ["langfuse"]
+frequency = 72
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:ORDER BY"
-apps = ["openpanel"]
-frequency = 68
-reason = "gate:openpanel"
+name = "function:isNull"
+apps = ["langfuse"]
+frequency = 69
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:greaterOrEquals"
-apps = ["openpanel"]
-frequency = 64
-reason = "gate:openpanel"
+name = "syntax:ALTER MATERIALIZE INDEX"
+apps = ["langfuse"]
+frequency = 69
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:sumMap"
+apps = ["langfuse"]
+frequency = 66
+reason = "gate:langfuse"
 
 [[feature]]
 name = "setting:session_timezone"
@@ -71,94 +893,58 @@ frequency = 57
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:count"
-apps = ["openpanel"]
+name = "function:coalesce"
+apps = ["langfuse"]
 frequency = 54
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:lessOrEquals"
-apps = ["openpanel"]
-frequency = 50
-reason = "gate:openpanel"
+name = "function:notEmpty"
+apps = ["langfuse"]
+frequency = 44
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:toDateTime"
-apps = ["openpanel"]
-frequency = 50
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:tuple"
-apps = ["openpanel"]
-frequency = 50
-reason = "gate:openpanel"
-
-[[feature]]
-name = "setting:http_headers_progress_interval_ms"
-apps = ["openpanel"]
-frequency = 50
-reason = "gate:openpanel"
-
-[[feature]]
-name = "setting:send_progress_in_http_headers"
-apps = ["openpanel"]
-frequency = 50
-reason = "gate:openpanel"
-
-[[feature]]
-name = "syntax:table ORDER BY"
-apps = ["openpanel"]
-frequency = 46
-reason = "gate:openpanel"
-
-[[feature]]
-name = "type:String"
-apps = ["openpanel"]
+name = "syntax:DROP VIEW"
+apps = ["langfuse"]
 frequency = 42
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:CREATE TABLE"
-apps = ["openpanel"]
-frequency = 34
-reason = "gate:openpanel"
+name = "setting:date_time_output_format"
+apps = ["langfuse"]
+frequency = 39
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:LIMIT"
-apps = ["openpanel"]
+name = "setting:max_bytes_before_external_group_by"
+apps = ["langfuse"]
+frequency = 39
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:MATERIALIZED VIEW TO"
+apps = ["langfuse"]
+frequency = 39
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:DROP TABLE"
+apps = ["langfuse"]
 frequency = 33
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:PARTITION BY"
-apps = ["openpanel"]
-frequency = 32
-reason = "gate:openpanel"
+name = "syntax:table PRIMARY KEY"
+apps = ["langfuse"]
+frequency = 33
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:codec ZSTD"
-apps = ["openpanel"]
-frequency = 32
-reason = "gate:openpanel"
-
-[[feature]]
-name = "syntax:column CODEC"
-apps = ["openpanel"]
-frequency = 32
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:toIntervalDay"
-apps = ["openpanel"]
+name = "function:arrayExists"
+apps = ["langfuse"]
 frequency = 31
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:uniq"
-apps = ["openpanel"]
-frequency = 29
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
 name = "function:toStartOfDay"
@@ -167,28 +953,64 @@ frequency = 28
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:toYYYYMM"
-apps = ["openpanel"]
-frequency = 28
-reason = "gate:openpanel"
-
-[[feature]]
-name = "syntax:WITH"
-apps = ["openpanel"]
-frequency = 28
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:notEquals"
-apps = ["openpanel"]
+name = "function:arrayReverse"
+apps = ["langfuse"]
 frequency = 27
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:greater"
-apps = ["openpanel"]
+name = "function:arraySum"
+apps = ["langfuse"]
+frequency = 27
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:mapFromArrays"
+apps = ["langfuse"]
+frequency = 27
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:Decimal"
+apps = ["langfuse"]
+frequency = 27
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:anyLast"
+apps = ["langfuse"]
+frequency = 26
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:lower"
+apps = ["langfuse"]
+frequency = 26
+reason = "gate:langfuse"
+
+[[feature]]
+name = "combinator:Array"
+apps = ["langfuse"]
+frequency = 25
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:greatest"
+apps = ["langfuse"]
+frequency = 25
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:ifNull"
+apps = ["langfuse"]
+frequency = 25
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:subtractHours"
+apps = ["langfuse"]
 frequency = 24
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
 name = "setting:index_granularity"
@@ -197,10 +1019,16 @@ frequency = 24
 reason = "gate:openpanel"
 
 [[feature]]
-name = "syntax:table SETTINGS"
-apps = ["openpanel"]
+name = "syntax:CREATE VIEW"
+apps = ["langfuse"]
 frequency = 24
-reason = "gate:openpanel"
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:SimpleAggregateFunction"
+apps = ["langfuse"]
+frequency = 24
+reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:BETWEEN"
@@ -209,34 +1037,34 @@ frequency = 23
 reason = "gate:openpanel"
 
 [[feature]]
-name = "syntax:scalar subquery"
-apps = ["openpanel"]
-frequency = 23
-reason = "gate:openpanel"
+name = "function:groupUniqArrayArray"
+apps = ["langfuse"]
+frequency = 21
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:WITH FILL"
-apps = ["openpanel"]
-frequency = 22
-reason = "gate:openpanel"
+name = "function:mapFilter"
+apps = ["langfuse"]
+frequency = 21
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:column DEFAULT"
-apps = ["openpanel"]
-frequency = 22
-reason = "gate:openpanel"
+name = "function:positionCaseInsensitive"
+apps = ["langfuse"]
+frequency = 21
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:now"
-apps = ["openpanel"]
+name = "function:has"
+apps = ["langfuse"]
 frequency = 20
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:sum"
-apps = ["openpanel"]
+name = "function:map"
+apps = ["langfuse"]
 frequency = 20
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:codec LZ4"
@@ -251,46 +1079,76 @@ frequency = 20
 reason = "gate:openpanel"
 
 [[feature]]
-name = "type:UInt64"
-apps = ["openpanel"]
-frequency = 20
-reason = "gate:openpanel"
-
-[[feature]]
-name = "syntax:FINAL"
-apps = ["openpanel"]
+name = "function:leftUTF8"
+apps = ["langfuse"]
 frequency = 19
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "type:DateTime64"
-apps = ["openpanel"]
+name = "type:Decimal64"
+apps = ["langfuse"]
 frequency = 19
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:minus"
-apps = ["openpanel"]
+name = "function:argMaxIf"
+apps = ["langfuse"]
+frequency = 18
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:argMaxState"
+apps = ["langfuse"]
+frequency = 18
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:indexOf"
+apps = ["langfuse"]
+frequency = 18
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:maxMap"
+apps = ["langfuse"]
+frequency = 18
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:skip index ngrambf_v1"
+apps = ["langfuse"]
+frequency = 18
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:AggregateFunction"
+apps = ["langfuse"]
+frequency = 18
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:CAST"
+apps = ["langfuse"]
 frequency = 17
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:HAVING"
-apps = ["openpanel"]
-frequency = 17
-reason = "gate:openpanel"
-
-[[feature]]
-name = "engine:ReplacingMergeTree"
-apps = ["openpanel"]
+name = "engine:ReplicatedReplacingMergeTree"
+apps = ["langfuse"]
 frequency = 16
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:ALTER TABLE"
-apps = ["openpanel"]
+name = "function:toString"
+apps = ["langfuse"]
 frequency = 16
-reason = "gate:openpanel"
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:SAMPLE"
+apps = ["langfuse"]
+frequency = 16
+reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:codec DELTA"
@@ -305,64 +1163,64 @@ frequency = 16
 reason = "gate:openpanel"
 
 [[feature]]
-name = "type:Float32"
-apps = ["openpanel"]
-frequency = 16
-reason = "gate:openpanel"
-
-[[feature]]
-name = "type:Map"
-apps = ["openpanel"]
-frequency = 16
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:multiply"
-apps = ["openpanel"]
+name = "function:groupArrayIf"
+apps = ["langfuse"]
 frequency = 15
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:toDate"
-apps = ["openpanel"]
+name = "syntax:ALTER DROP INDEX"
+apps = ["langfuse"]
 frequency = 15
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "engine:MergeTree"
-apps = ["openpanel"]
+name = "function:arrayConcat"
+apps = ["langfuse"]
 frequency = 14
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "format:JSONEachRow"
-apps = ["openpanel"]
+name = "function:negate"
+apps = ["langfuse"]
 frequency = 14
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "engine:AggregatingMergeTree"
-apps = ["openpanel"]
-frequency = 12
-reason = "gate:openpanel"
+name = "function:toInt64"
+apps = ["langfuse"]
+frequency = 14
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:in"
-apps = ["openpanel"]
+name = "function:approx_top_kIf"
+apps = ["langfuse"]
 frequency = 12
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:min"
-apps = ["openpanel"]
+name = "function:least"
+apps = ["langfuse"]
 frequency = 12
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:CREATE MATERIALIZED VIEW"
-apps = ["openpanel"]
+name = "function:lengthUTF8"
+apps = ["langfuse"]
 frequency = 12
-reason = "gate:openpanel"
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:lowerUTF8"
+apps = ["langfuse"]
+frequency = 12
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:xxHash32"
+apps = ["langfuse"]
+frequency = 12
+reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:RENAME"
@@ -377,46 +1235,22 @@ frequency = 12
 reason = "gate:openpanel"
 
 [[feature]]
-name = "type:Array"
-apps = ["openpanel"]
-frequency = 12
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:max"
-apps = ["openpanel"]
+name = "function:quantile"
+apps = ["langfuse"]
 frequency = 11
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:nullIf"
-apps = ["openpanel"]
-frequency = 11
-reason = "gate:openpanel"
-
-[[feature]]
-name = "syntax:ALTER ADD COLUMN"
-apps = ["openpanel"]
-frequency = 11
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:arrayElement"
-apps = ["openpanel"]
+name = "function:toStartOfInterval"
+apps = ["langfuse"]
 frequency = 10
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:skip index bloom_filter"
-apps = ["openpanel"]
+name = "syntax:UNION ALL"
+apps = ["langfuse"]
 frequency = 10
-reason = "gate:openpanel"
-
-[[feature]]
-name = "type:Bool"
-apps = ["openpanel"]
-frequency = 10
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
 name = "type:FixedString"
@@ -425,28 +1259,10 @@ frequency = 10
 reason = "gate:openpanel"
 
 [[feature]]
-name = "type:LowCardinality"
-apps = ["openpanel"]
-frequency = 10
-reason = "gate:openpanel"
-
-[[feature]]
-name = "type:Nullable"
-apps = ["openpanel"]
-frequency = 10
-reason = "gate:openpanel"
-
-[[feature]]
-name = "type:UInt32"
-apps = ["openpanel"]
-frequency = 10
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:isNotNull"
-apps = ["openpanel"]
+name = "syntax:column MATERIALIZED"
+apps = ["langfuse"]
 frequency = 9
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
 name = "function:generateUUIDv4"
@@ -455,10 +1271,10 @@ frequency = 8
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:plus"
-apps = ["openpanel"]
+name = "syntax:IN subquery"
+apps = ["langfuse"]
 frequency = 8
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
 name = "type:Date"
@@ -473,22 +1289,10 @@ frequency = 8
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:divide"
-apps = ["openpanel"]
+name = "function:not"
+apps = ["langfuse"]
 frequency = 7
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:round"
-apps = ["openpanel"]
-frequency = 7
-reason = "gate:openpanel"
-
-[[feature]]
-name = "syntax:LEFT JOIN"
-apps = ["openpanel"]
-frequency = 7
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:aggregate DISTINCT"
@@ -497,49 +1301,31 @@ frequency = 7
 reason = "gate:openpanel"
 
 [[feature]]
-name = "syntax:subquery in FROM"
-apps = ["openpanel"]
-frequency = 7
-reason = "gate:openpanel"
+name = "engine:Null"
+apps = ["langfuse"]
+frequency = 6
+reason = "gate:langfuse"
 
 [[feature]]
-name = "combinator:State"
-apps = ["openpanel"]
+name = "function:arrayStringConcat"
+apps = ["langfuse"]
 frequency = 6
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:avg"
-apps = ["openpanel"]
+name = "function:empty"
+apps = ["langfuse"]
 frequency = 6
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:if"
-apps = ["openpanel"]
+name = "function:toNullable"
+apps = ["langfuse"]
 frequency = 6
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:length"
-apps = ["openpanel"]
-frequency = 6
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:toIntervalMinute"
-apps = ["openpanel"]
-frequency = 6
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
 name = "setting:flatten_nested"
-apps = ["openpanel"]
-frequency = 6
-reason = "gate:openpanel"
-
-[[feature]]
-name = "setting:max_execution_time"
 apps = ["openpanel"]
 frequency = 6
 reason = "gate:openpanel"
@@ -551,64 +1337,64 @@ frequency = 6
 reason = "gate:openpanel"
 
 [[feature]]
-name = "syntax:DISTINCT"
-apps = ["openpanel"]
+name = "setting:prewarm_mark_cache"
+apps = ["langfuse"]
 frequency = 6
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:INSERT"
-apps = ["openpanel"]
+name = "setting:prewarm_primary_key_cache"
+apps = ["langfuse"]
 frequency = 6
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:INSERT FORMAT"
-apps = ["openpanel"]
+name = "syntax:ALTER MODIFY COLUMN"
+apps = ["langfuse"]
 frequency = 6
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "combinator:Distinct"
-apps = ["openpanel"]
-frequency = 5
-reason = "gate:openpanel"
+name = "syntax:ALTER MODIFY QUERY"
+apps = ["langfuse"]
+frequency = 6
+reason = "gate:langfuse"
 
 [[feature]]
-name = "combinator:If"
-apps = ["openpanel"]
-frequency = 5
-reason = "gate:openpanel"
+name = "syntax:ALTER MODIFY SETTING"
+apps = ["langfuse"]
+frequency = 6
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:argMax"
-apps = ["openpanel"]
-frequency = 5
-reason = "gate:openpanel"
+name = "syntax:SAMPLE BY"
+apps = ["langfuse"]
+frequency = 6
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:arrayJoin"
-apps = ["openpanel"]
-frequency = 5
-reason = "gate:openpanel"
+name = "syntax:skip index text"
+apps = ["langfuse"]
+frequency = 6
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:countDistinct"
-apps = ["openpanel"]
-frequency = 5
-reason = "gate:openpanel"
+name = "type:Enum8"
+apps = ["langfuse"]
+frequency = 6
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:notIn"
-apps = ["openpanel"]
-frequency = 5
-reason = "gate:openpanel"
+name = "type:Tuple"
+apps = ["langfuse"]
+frequency = 6
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:parametric function"
-apps = ["openpanel"]
+name = "syntax:DELETE"
+apps = ["langfuse"]
 frequency = 5
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
 name = "engine:VersionedCollapsingMergeTree"
@@ -617,37 +1403,13 @@ frequency = 4
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:any"
-apps = ["openpanel"]
+name = "function:arrayDistinct"
+apps = ["langfuse"]
 frequency = 4
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:arrayEnumerate"
-apps = ["openpanel"]
-frequency = 4
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
 name = "function:arrayEnumerateUniq"
-apps = ["openpanel"]
-frequency = 4
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:arrayFilter"
-apps = ["openpanel"]
-frequency = 4
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:arrayFirstIndex"
-apps = ["openpanel"]
-frequency = 4
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:arraySlice"
 apps = ["openpanel"]
 frequency = 4
 reason = "gate:openpanel"
@@ -659,22 +1421,10 @@ frequency = 4
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:groupArray"
-apps = ["openpanel"]
+name = "function:groupUniqArrayArrayIf"
+apps = ["langfuse"]
 frequency = 4
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:lambda"
-apps = ["openpanel"]
-frequency = 4
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:mapKeys"
-apps = ["openpanel"]
-frequency = 4
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
 name = "function:maxState"
@@ -689,22 +1439,16 @@ frequency = 4
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:or"
-apps = ["openpanel"]
-frequency = 4
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:toDateTime64"
-apps = ["openpanel"]
-frequency = 4
-reason = "gate:openpanel"
-
-[[feature]]
 name = "function:toYYYYMMDD"
 apps = ["openpanel"]
 frequency = 4
 reason = "gate:openpanel"
+
+[[feature]]
+name = "function:version"
+apps = ["langfuse"]
+frequency = 4
+reason = "gate:langfuse"
 
 [[feature]]
 name = "function:windowFunnel"
@@ -714,12 +1458,6 @@ reason = "gate:openpanel"
 
 [[feature]]
 name = "syntax:ALTER MODIFY TTL"
-apps = ["openpanel"]
-frequency = 4
-reason = "gate:openpanel"
-
-[[feature]]
-name = "syntax:TTL"
 apps = ["openpanel"]
 frequency = 4
 reason = "gate:openpanel"
@@ -737,34 +1475,28 @@ frequency = 4
 reason = "gate:openpanel"
 
 [[feature]]
-name = "type:Float64"
-apps = ["openpanel"]
-frequency = 4
-reason = "gate:openpanel"
-
-[[feature]]
-name = "type:Int32"
-apps = ["openpanel"]
-frequency = 4
-reason = "gate:openpanel"
-
-[[feature]]
 name = "type:Int8"
 apps = ["openpanel"]
 frequency = 4
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:dateDiff"
-apps = ["openpanel"]
+name = "function:approx_top_kArray"
+apps = ["langfuse"]
 frequency = 3
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:toUInt64"
-apps = ["openpanel"]
+name = "function:currentDatabase"
+apps = ["langfuse"]
 frequency = 3
-reason = "gate:openpanel"
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:row_number"
+apps = ["langfuse"]
+frequency = 3
+reason = "gate:langfuse"
 
 [[feature]]
 name = "function:toUnixTimestamp64Milli"
@@ -773,10 +1505,34 @@ frequency = 3
 reason = "gate:openpanel"
 
 [[feature]]
-name = "setting:input_format_parallel_parsing"
-apps = ["openpanel"]
+name = "setting:deduplicate_merge_projection_mode"
+apps = ["langfuse"]
 frequency = 3
-reason = "gate:openpanel"
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:index_granularity_bytes"
+apps = ["langfuse"]
+frequency = 3
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:lightweight_mutation_projection_mode"
+apps = ["langfuse"]
+frequency = 3
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:merge_max_block_size_bytes"
+apps = ["langfuse"]
+frequency = 3
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:ttl_only_drop_parts"
+apps = ["langfuse"]
+frequency = 3
+reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:ANY JOIN"
@@ -785,16 +1541,34 @@ frequency = 3
 reason = "gate:openpanel"
 
 [[feature]]
-name = "syntax:CREATE DATABASE"
-apps = ["openpanel"]
+name = "syntax:PROJECTION"
+apps = ["langfuse"]
 frequency = 3
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:arrayMap"
-apps = ["openpanel"]
+name = "syntax:window function"
+apps = ["langfuse"]
+frequency = 3
+reason = "gate:langfuse"
+
+[[feature]]
+name = "type:Boolean"
+apps = ["langfuse"]
+frequency = 3
+reason = "gate:langfuse"
+
+[[feature]]
+name = "engine:ReplicatedAggregatingMergeTree"
+apps = ["langfuse"]
 frequency = 2
-reason = "gate:openpanel"
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:COUNTDistinct"
+apps = ["langfuse"]
+frequency = 2
+reason = "gate:langfuse"
 
 [[feature]]
 name = "function:avgIf"
@@ -803,22 +1577,10 @@ frequency = 2
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:concat"
-apps = ["openpanel"]
+name = "function:hasAll"
+apps = ["langfuse"]
 frequency = 2
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:groupUniqArray"
-apps = ["openpanel"]
-frequency = 2
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:groupUniqArrayIf"
-apps = ["openpanel"]
-frequency = 2
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
 name = "function:isNaN"
@@ -827,10 +1589,16 @@ frequency = 2
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:mapValues"
-apps = ["openpanel"]
+name = "function:like"
+apps = ["langfuse"]
 frequency = 2
-reason = "gate:openpanel"
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:minIf"
+apps = ["langfuse"]
+frequency = 2
+reason = "gate:langfuse"
 
 [[feature]]
 name = "function:range"
@@ -845,28 +1613,10 @@ frequency = 2
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:toBool"
-apps = ["openpanel"]
+name = "function:toIntervalSecond"
+apps = ["langfuse"]
 frequency = 2
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:toStartOfMinute"
-apps = ["openpanel"]
-frequency = 2
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:tupleElement"
-apps = ["openpanel"]
-frequency = 2
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:uniqIf"
-apps = ["openpanel"]
-frequency = 2
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
 name = "function:uniqState"
@@ -881,70 +1631,52 @@ frequency = 2
 reason = "gate:openpanel"
 
 [[feature]]
-name = "setting:enable_block_number_column"
-apps = ["openpanel"]
+name = "setting:max_threads"
+apps = ["langfuse"]
 frequency = 2
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "setting:enable_block_offset_column"
-apps = ["openpanel"]
+name = "syntax:FULL JOIN"
+apps = ["langfuse"]
 frequency = 2
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:ARRAY JOIN"
-apps = ["openpanel"]
+name = "syntax:SHOW TABLES"
+apps = ["langfuse"]
 frequency = 2
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:INNER JOIN"
-apps = ["openpanel"]
+name = "type:Int64"
+apps = ["langfuse"]
 frequency = 2
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:ON CLUSTER"
-apps = ["openpanel"]
-frequency = 2
-reason = "gate:openpanel"
-
-[[feature]]
-name = "syntax:column ALIAS"
-apps = ["openpanel"]
-frequency = 2
-reason = "gate:openpanel"
-
-[[feature]]
-name = "type:UInt16"
-apps = ["openpanel"]
-frequency = 2
-reason = "gate:openpanel"
-
-[[feature]]
-name = "type:UInt8"
-apps = ["openpanel"]
-frequency = 2
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:countIf"
-apps = ["openpanel"]
+name = "function:arraySort"
+apps = ["langfuse"]
 frequency = 1
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:less"
-apps = ["openpanel"]
+name = "function:arrayZip"
+apps = ["langfuse"]
 frequency = 1
-reason = "gate:openpanel"
+reason = "gate:langfuse"
 
 [[feature]]
-name = "function:multiIf"
-apps = ["openpanel"]
+name = "function:exists"
+apps = ["langfuse"]
 frequency = 1
-reason = "gate:openpanel"
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:maxIf"
+apps = ["langfuse"]
+frequency = 1
+reason = "gate:langfuse"
 
 [[feature]]
 name = "function:quantilesExactInclusive"
@@ -953,10 +1685,16 @@ frequency = 1
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:toIntervalHour"
-apps = ["openpanel"]
+name = "function:startsWith"
+apps = ["langfuse"]
 frequency = 1
-reason = "gate:openpanel"
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:sumMapIf"
+apps = ["langfuse"]
+frequency = 1
+reason = "gate:langfuse"
 
 [[feature]]
 name = "function:toIntervalMonth"
@@ -965,25 +1703,7 @@ frequency = 1
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:toStartOfHour"
-apps = ["openpanel"]
+name = "syntax:EXCEPT"
+apps = ["langfuse"]
 frequency = 1
-reason = "gate:openpanel"
-
-[[feature]]
-name = "function:uniqExact"
-apps = ["openpanel"]
-frequency = 1
-reason = "gate:openpanel"
-
-[[feature]]
-name = "syntax:ALTER ADD INDEX"
-apps = ["openpanel"]
-frequency = 1
-reason = "gate:openpanel"
-
-[[feature]]
-name = "syntax:skip index minmax"
-apps = ["openpanel"]
-frequency = 1
-reason = "gate:openpanel"
+reason = "gate:langfuse"

@@ -38,7 +38,11 @@ licence = "Apache-2.0"
 name = "langfuse-v4"
 image = "docker.io/langfuse/langfuse:4.54.0@sha256:ea9f763af1181b444c081353cd2f8174323c84b2447ed7295857d04ae1153f2c"
 images = ["docker.io/langfuse/langfuse-worker:4.54.0@sha256:fe7ea9e288c6586783989920ced1704172624f45da495a68d8ae07ba466641f2"]
-licence = "MIT"
+# MIT for the core; the image also carries ee/, web/src/ee/ and worker/src/ee/
+# under the Langfuse Enterprise licence (ClickHouse, Inc.), inactive without a
+# LANGFUSE_EE_LICENSE_KEY, which the harness never sets (checked at the tag
+# through the GitHub API, 2026-10-22).
+licence = "MIT AND LicenseRef-Langfuse-EE"
 clickhouse_protocol = "http"
 migrations_protocol = "native"
 migrations = "/app/packages/shared/clickhouse/migrations"
@@ -52,7 +56,11 @@ gate = true
 name = "langfuse-v3"
 image = "docker.io/langfuse/langfuse:3.225.11@sha256:a343f64e035eb01aeea358703a0428945d909d01e19452509a5a830862dda878"
 images = ["docker.io/langfuse/langfuse-worker:3.225.11@sha256:8a28c946bb5401eef488153fa294db5a79bd99dd5c90db8e4d39559374c9ebd3"]
-licence = "MIT"
+# MIT for the core; the image also carries ee/, web/src/ee/ and worker/src/ee/
+# under the Langfuse Enterprise licence (ClickHouse, Inc.), inactive without a
+# LANGFUSE_EE_LICENSE_KEY, which the harness never sets (checked at the tag
+# through the GitHub API, 2026-10-22).
+licence = "MIT AND LicenseRef-Langfuse-EE"
 clickhouse_protocol = "http"
 migrations_protocol = "native"
 migrations = "/app/packages/shared/clickhouse/migrations"
