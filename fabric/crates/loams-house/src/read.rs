@@ -531,6 +531,8 @@ pub async fn plan(
         sql,
         ..ReadPlan::default()
     };
+    // HE1 R9.15: a lake table is read whole; `SAMPLE` would fail on its view.
+    let sampled = crate::sample::rewrite(&plan.sql);
     let mut databases: BTreeSet<String> = BTreeSet::new();
     if ctx.database != "default" && !engine_database(ctx.database) {
         databases.insert(ctx.database.to_string());
@@ -726,6 +728,11 @@ pub async fn plan(
         plan.pins.push(pin);
     }
     plan.views.extend(plan_views.into_iter().rev());
+    if let Some(sql) = sampled
+        && !plan.pins.is_empty()
+    {
+        plan.sql = sql;
+    }
     // `system.query_log` reads the namespace's `_house.query_log` (HS1 Task
     // 23) through a view of its own; no client statement names it.
     if system_tables.contains("query_log")

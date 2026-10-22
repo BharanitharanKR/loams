@@ -1615,3 +1615,42 @@ async fn aggregating_merge_tree_matches_the_oracle() {
     );
     refused(addr, "CREATE MATERIALIZED VIEW p ENGINE = AggregatingMergeTree ORDER BY a POPULATE AS SELECT 1 AS a", "48").await;
 }
+
+/// HE1 R9.15: `SAMPLE` on a lake table reads every row and `_sample_factor` is
+/// 1, so Langfuse's sampled filter options answer exactly.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn sample_reads_every_row_of_a_lake_table() {
+    let house = lakehouse("sample").await;
+    let addr = house.addr();
+    ok(addr, "CREATE TABLE ev (p String, t String, u String) ENGINE = MergeTree ORDER BY (p, xxHash32(t)) SAMPLE BY xxHash32(t)").await;
+    ok(
+        addr,
+        "INSERT INTO ev VALUES ('p', 'a', 'u1'), ('p', 'b', 'u1'), ('p', 'c', 'u2')",
+    )
+    .await;
+    assert_eq!(
+        ok(
+            addr,
+            "SELECT e.u AS value, toUInt64(round(count() * any(e._sample_factor))) AS count \
+             FROM ev e SAMPLE 1000000 WHERE e.p = 'p' GROUP BY value ORDER BY value FORMAT TSV",
+        )
+        .await,
+        "u1\t2\nu2\t1\n"
+    );
+    assert_eq!(
+        ok(
+            addr,
+            "SELECT count() FROM ev SAMPLE 1/10 OFFSET 1/2 FORMAT TSV"
+        )
+        .await,
+        "3\n"
+    );
+    assert_eq!(
+        ok(
+            addr,
+            "SELECT _sample_factor FROM ev SAMPLE 0.5 LIMIT 1 FORMAT TSV"
+        )
+        .await,
+        "1\n"
+    );
+}
