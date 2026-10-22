@@ -8,13 +8,17 @@ HE0 Task 9 (plan HE1, ruling R9.3). After `scripts/house/apps.sh <app> up` and
   ddl     runs every finished statement that is not a SELECT or an INSERT
           (CREATE, ALTER, RENAME, DROP, ...), in the order the application
           sent them;
-  data    copies each base table's rows from the oracle, oldest part first
-          and in part order, one INSERT per table, so ties that ClickHouse
-          breaks by insert order break the same way on the House;
+  data    copies each base table's rows from the oracle, one INSERT per
+          part, oldest block first and in part order, so ties that ClickHouse
+          breaks by insert order break the same way on the House and rows
+          ClickHouse has not merged stay unmerged;
   select  runs every distinct finished SELECT on both and compares the
           answers (FORMAT JSON: column names and types, then rows; rows as a
           multiset when the statement has no ORDER BY; the same rows in
-          another order under an ORDER BY are listed as `order-ties`).
+          another order under an ORDER BY are listed as `order-ties`, and a
+          read without FINAL of a table that merges in the background, whose
+          answer depends on how far merges have got on either server, as
+          `merge-dependent`).
 
 Each statement keeps the settings the application sent. A setting the House
 refuses (115, 164) is recorded and dropped, and the statement runs again, so
@@ -165,13 +169,32 @@ def main() -> int:
         "('MaterializedView', 'View') AND NOT startsWith(name, '.inner') AND total_rows > 0 "
         "ORDER BY name FORMAT TSV", {"param_db": args.database, "log_comment": "he0-harness"}).split()
     for table in tables:
-        rows = oracle.must(
-            f"SELECT * FROM `{table}` ORDER BY _partition_id, "
-            f"toUInt64OrZero(splitByChar('_', _part)[2]), _part_offset FORMAT JSONEachRow",
-            {"log_comment": "he0-harness"}).encode()
-        status, text, headers = house.post(f"INSERT INTO `{table}` FORMAT JSONEachRow", {}, rows)
-        report["data"].append({"table": table, "rows": rows.count(b"\n"), "status": status,
+        # One INSERT per oracle part, oldest block first, rows in part order:
+        # the House writes each as ClickHouse wrote that part (merged within
+        # it, R9.4), so unmerged versions stay unmerged, as on the oracle.
+        parts = oracle.must(
+            "SELECT name FROM system.parts WHERE database = {db:String} AND table = {t:String} "
+            "AND active ORDER BY min_block_number, partition_id FORMAT TSV",
+            {"param_db": args.database, "param_t": table, "log_comment": "he0-harness"}).split()
+        copied, status, text = 0, 200, ""
+        for part in parts:
+            rows = oracle.must(
+                f"SELECT * FROM `{table}` WHERE _part = {{part:String}} ORDER BY _part_offset "
+                f"FORMAT JSONEachRow", {"param_part": part, "log_comment": "he0-harness"}).encode()
+            copied += rows.count(b"\n")
+            status, text, _ = house.post(f"INSERT INTO `{table}` FORMAT JSONEachRow", {}, rows)
+            if status != 200:
+                break
+        report["data"].append({"table": table, "rows": copied, "parts": len(parts), "status": status,
                                "error": None if status == 200 else text[:600]})
+
+    # Tables whose rows merge in the background: a read of one without FINAL
+    # answers by how far merges have got, on ClickHouse as on the House.
+    merging = set(oracle.must(
+        "SELECT name FROM system.tables WHERE database = {db:String} AND engine IN "
+        "('ReplacingMergeTree', 'SummingMergeTree', 'AggregatingMergeTree', 'CollapsingMergeTree', "
+        "'VersionedCollapsingMergeTree') FORMAT TSV",
+        {"param_db": args.database, "log_comment": "he0-harness"}).split())
 
     seen = set()
     for row in statements:
@@ -199,6 +222,11 @@ def main() -> int:
             # The same rows in another order: an ORDER BY with ties (listed,
             # not failed; a wrong order on distinct keys still shows here).
             entry["verdict"] = "order-ties"
+        elif not re.search(r"\bFINAL\b", sql, re.I) and any(
+                re.search(rf"\b{re.escape(t)}\b", sql) for t in merging):
+            # Listed, not failed: neither engine promises when it merges.
+            entry.update(verdict="merge-dependent", oracle=answer(to, ordered),
+                         house=answer(th, ordered))
         else:
             entry.update(verdict="mismatch", oracle=answer(to, ordered), house=answer(th, ordered))
         report["select"].append(entry)
