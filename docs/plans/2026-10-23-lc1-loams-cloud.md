@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task. Where this plan gives exact names, paths, flags or tests, use them verbatim, and record any deviation in "Rulings made during execution" at the end.
 >
-> **Status: Proposed** (stub, 2026-10-23). Track **LC**, design [§78](../design/78-loams-cloud-on-tidb-x.md) (D1700–D1735, Q1260–Q1277). **Nothing in this plan starts until the owner approves §78.** LC2 also waits on the D1323 amendment (D1701, Q1260) and on counsel (Q1276).
+> **Status: Approved** (owner, 2026-10-23, all defaults; stub). Track **LC**, design [§78](../design/78-loams-cloud-on-tidb-x.md) (D1700–D1735, Q1260–Q1277). **LC0 starts once the owner has created the no-card TiDB Cloud org (Q1277).** The public opening of LC2 waits on counsel (Q1276); D1701, which amends D1323, is approved.
 >
 > **Coverage:** this plan specifies **LC0**, the spikes, task by task. LC0 writes no product code. LC1–LC5 are outlined at milestone level; each gets full task specifications after the LC0 report.
 >

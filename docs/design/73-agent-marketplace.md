@@ -1,6 +1,6 @@
 # 73 — The Loams Agent Marketplace: Any Framework, Mastra First
 
-> **Proposed amendment (2026-10-23, pending the owner) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). D1461's rationale ("Ostrium hosts only the console and auth") reads "plus the Loams Cloud try-out (D1701)"; the index decision itself is unchanged.
+> **Amendment (approved 2026-10-23) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). D1461's rationale ("Ostrium hosts only the console and auth") reads "plus the Loams Cloud try-out (D1701)"; the index decision itself is unchanged.
 
 > **Amendment (approved 2026-10-21) by [§76](76-identity-and-authorization.md)** (identity and authorization: Zitadel and OpenFGA; owner, all defaults). An installed marketplace agent becomes one Zitadel machine user (`agent:<id>`) in the installing org with no grants until someone grants them; inside a sandbox it still holds only agentd's 15-minute Loams token (D1453), whose `sub` is that machine-user id (D1607, D1618).
 

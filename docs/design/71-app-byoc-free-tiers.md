@@ -1,6 +1,6 @@
 # 71 — App BYOC: Apps and Agents on Each Cloud's Free Tier
 
-> **Proposed amendment (2026-10-23, pending the owner) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). Target manifests (`deploy/targets/<id>.toml`, D1707, D1735) reference this document's free-tier table for app ports instead of copying it, and `loams app deploy --target` reads the same target ids as `loams byoc deploy` and `loams promote` (D1706, D1724).
+> **Amendment (approved 2026-10-23) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). Target manifests (`deploy/targets/<id>.toml`, D1707, D1735) reference this document's free-tier table for app ports instead of copying it, and `loams app deploy --target` reads the same target ids as `loams byoc deploy` and `loams promote` (D1706, D1724).
 
 Status: **Approved** · 2026-10-21. The requirement is the owner's; the owner approved the design with every default on 2026-10-21.
 

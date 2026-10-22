@@ -442,11 +442,11 @@ Design reference: [77 KV Gateways](../design/77-kv-gateways.md) (D1640–D1665, 
 
 ## Track LC: Loams Cloud on TiDB X
 
-Design reference: [78 Loams Cloud on TiDB X](../design/78-loams-cloud-on-tidb-x.md) (D1700–D1735, Q1260–Q1277; **Proposed** 2026-10-23, awaiting the owner). Research input: [TiDB X, TiDB Cloud, the HashiCorp free tier and compute](../research/tidb-x-and-hcp.md) (2026-10-23).
+Design reference: [78 Loams Cloud on TiDB X](../design/78-loams-cloud-on-tidb-x.md) (D1700–D1735, Q1260–Q1277; **approved by the owner 2026-10-23, all defaults**; LC0 waits on the owner's no-card TiDB Cloud org, Q1277). Research input: [TiDB X, TiDB Cloud, the HashiCorp free tier and compute](../research/tidb-x-and-hcp.md) (2026-10-23).
 
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|
-| [LC1: Loams Cloud on TiDB X](2026-10-23-lc1-loams-cloud.md) (stub; LC0 Tasks 0–7 fully specified; LC1–LC5 at milestone level) | **LC0** spikes, no product code: Starter tenant cells, Filesystem workspaces and handoff (cost per session, token scoping, drain), the control plane on a Worker with the HTTP driver, TiDB Cloud Zero's terms, device enrolment on IA0's Zitadel stack, a company-device check, the LC0 report; **LC1** the target manifests and the `tidbx` target (BYOG): the `tidbcloud` SQL backend, workspaces on Filesystem, handoff between a user's own devices; **LC2** the hosted try-out (`loams.dev/cloud`, the control plane Worker, cells, quotas, abuse controls); **LC3** Cloudflare; **LC4** Vercel; **LC5** AWS, Google Cloud and Azure with `loams promote` | §78 approved; the owner's TiDB Cloud org (Q1277); IA2/IA4; SD1; ME1; BY1; ER1 | Proposed |
+| [LC1: Loams Cloud on TiDB X](2026-10-23-lc1-loams-cloud.md) (stub; LC0 Tasks 0–7 fully specified; LC1–LC5 at milestone level) | **LC0** spikes, no product code: Starter tenant cells, Filesystem workspaces and handoff (cost per session, token scoping, drain), the control plane on a Worker with the HTTP driver, TiDB Cloud Zero's terms, device enrolment on IA0's Zitadel stack, a company-device check, the LC0 report; **LC1** the target manifests and the `tidbx` target (BYOG): the `tidbcloud` SQL backend, workspaces on Filesystem, handoff between a user's own devices; **LC2** the hosted try-out (`loams.dev/cloud`, the control plane Worker, cells, quotas, abuse controls); **LC3** Cloudflare; **LC4** Vercel; **LC5** AWS, Google Cloud and Azure with `loams promote` | The owner's TiDB Cloud org (Q1277); counsel for public LC2 (Q1276); IA2/IA4; SD1; ME1; BY1; ER1 | Approved (stub) |
 
 ## Later milestones
 

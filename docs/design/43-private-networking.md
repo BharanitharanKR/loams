@@ -1,6 +1,6 @@
 # 43 — Private Networking: a Pluggable Tailnet (Tailscale BYOK or Headscale)
 
-> **Proposed amendment (2026-10-23, pending the owner) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). A device may join the user's own tailnet through `tsnet` inside `loams-agentd`, a userspace node that needs no root and leaves a corporate tailnet untouched (D1722, D1723). A hosted Headscale stays out (Q1269); D583 is why.
+> **Amendment (approved 2026-10-23) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). A device may join the user's own tailnet through `tsnet` inside `loams-agentd`, a userspace node that needs no root and leaves a corporate tailnet untouched (D1722, D1723). A hosted Headscale stays out (Q1269); D583 is why.
 
 > **Amendment (approved 2026-10-21) by [§76](76-identity-and-authorization.md): superseded in part by D1600** (owner: full cutover from Authentik to Zitadel, with no migration path, no compatibility period and no dual running, because there are no users). Headscale signs in through Zitadel OIDC (D584), Zitadel's admin console is tailnet-only on the hosted service (D596's rule, carried over), and `tag:authentik` becomes `tag:zitadel` (IA1 Task 1).
 

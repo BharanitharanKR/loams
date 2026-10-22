@@ -1,6 +1,6 @@
 # 78 — Loams Cloud on TiDB X: Dev on Your Own Devices, Prod in Your Own Cloud
 
-Status: **Proposed** · 2026-10-23. Nothing here is approved, and no deploy code is written until the owner approves it.
+Status: **Approved** · 2026-10-23. The owner approved the design with all defaults on 2026-10-23: every decision (D1700–D1735), including D1701's amendment of D1323 and the wording updates to D1351, D1378 and D1615, and every question (Q1260–Q1277) at its recommended default. The owner's next actions are a no-card TiDB Cloud org for LC0 (Q1277) and counsel review before the public try-out (Q1276).
 
 Source: the owner's directions of 2026-10-23.
 - "TiDbX, we will deploy loams cloud/platform on this, so in deploy add everything to deploy the studio and software factory on it, use only services provided by them etc."
@@ -12,7 +12,7 @@ Source: the owner's directions of 2026-10-23.
 
 The owner's notes on TiDB X were treated as unverified. The research report checks each claim against primary sources: [`docs/research/tidb-x-and-hcp.md`](../research/tidb-x-and-hcp.md) ("the report" below). §4 lists the corrections.
 
-**Numbering.** Decisions **D1700–D1735** and questions **Q1260–Q1277** are declared in the [decision log](13-decision-log.md) as *Proposed*. This document reserves **D1700–D1749** and **Q1260–Q1289**.
+**Numbering.** Decisions **D1700–D1735** and questions **Q1260–Q1277** are declared in the [decision log](13-decision-log.md), approved by the owner on 2026-10-23. This document reserves **D1700–D1749** and **Q1260–Q1289**.
 - The highest numbers in use on `dev` (`7e83717d9`) sit in §77's blocks D1640–D1679 and Q1220–Q1244.
 - Open PRs use D1119 (#1082), D1552 and D1570 (#1055), D1603–D1616 (#1009) and one number in §77's free block D1666–D1679 (#1057), all below this block.
 - Design number 78 is the next free one; no open PR takes it.
@@ -45,7 +45,7 @@ Soil names follow the 2026-10-23 branding (memory `loams-branding`). They appear
 - *BYOG* is bring your own ground.
 - *the Field* is Studio.
 - *the Greenhouse* is the Software Factory.
-- *the Commons* is Loams Cloud, proposed in Q1261.
+- *the Commons* is Loams Cloud (Q1261, approved).
 
 ---
 
@@ -159,7 +159,7 @@ Three earlier rulings stand in the way as worded, so this document proposes amen
 - Running Live, the metastore or Durable on TiDB Cloud (D1712).
 - Replacing House with Lake (D1711).
 - Replacing Loams Postgres with the PG preview (D1710).
-- Any deploy code before the owner approves this design.
+- Any LC2 deploy code before counsel's review (Q1276) for the public try-out; LC0 writes spikes only.
 
 ## 4. What TiDB X actually offers (summary of the report)
 
@@ -845,7 +845,7 @@ The owner's plan said "for loams cloud i have hashicorp free tier". The findings
 - Automatic migration of runs between devices.
 - Syncing secrets or model keys through Loams Cloud.
 
-## 20. Amendments to earlier designs (all proposed, pending approval)
+## 20. Amendments to earlier designs (approved by the owner, 2026-10-23)
 
 | Design | Amendment |
 |---|---|
@@ -878,7 +878,7 @@ The owner's plan said "for loams cloud i have hashicorp free tier". The findings
 | The HTTP driver is beta (V) | Single-statement writes and idempotency keys; a TCP fallback from a container if needed |
 | The cost ceiling makes the try-out "full" | Honest message, BYOG offered, the ceiling raised only by the owner |
 
-## 22. Decisions (D1700–D1735, all Proposed)
+## 22. Decisions (D1700–D1735, approved by the owner, 2026-10-23)
 
 | # | Decision | § |
 |---|---|---|
@@ -919,9 +919,9 @@ The owner's plan said "for loams cloud i have hashicorp free tier". The findings
 | D1734 | **Conformance:** a `tidbx` target suite (SQL backend, workspace handoff, token scoping, cell isolation) nightly on a free Starter org and a no-card Filesystem, non-blocking until LC2 | 23 |
 | D1735 | **Target manifests are dated data** with sources, read by the nightly free-tier check (extends D1401 to data-plane slots) | 13.1 |
 
-## 23. Open questions (Q1260–Q1277), with recommended defaults
+## 23. Open questions (Q1260–Q1277), answered by the owner on 2026-10-23: every default
 
-| # | Question | Recommended default |
+| # | Question | Default (approved) |
 |---|---|---|
 | Q1260 | Approve the D1323 amendment (D1701): a free, hosted try-out? | **Yes**, invite-only first (LC2), public after counsel (Q1276) |
 | Q1261 | Name and soil name? | **"Loams Cloud"**, with **"the Commons"** as the soil name. Alternatives: "Loams Commons" as the product name; "the Exchange" (clashes with the Seed Exchange) |

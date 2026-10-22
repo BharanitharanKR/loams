@@ -1,6 +1,6 @@
 # 69 — Edge Reach: Serverless Runtimes to a Private Loams
 
-> **Proposed amendment (2026-10-23, pending the owner) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). D1317 (no hosted relay) stands; its rationale's hosting list gains the Loams Cloud control plane (D1701). Devices enrolled in Loams Cloud only dial out; device-to-device traffic uses the user's tailnet, `tsnet` or their own Tunnel (D1722).
+> **Amendment (approved 2026-10-23) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). D1317 (no hosted relay) stands; its rationale's hosting list gains the Loams Cloud control plane (D1701). Devices enrolled in Loams Cloud only dial out; device-to-device traffic uses the user's tailnet, `tsnet` or their own Tunnel (D1722).
 
 Status: **Approved** · 2026-10-21. The owner approved the direction on 2026-10-20 and the design with every default on 2026-10-21.
 

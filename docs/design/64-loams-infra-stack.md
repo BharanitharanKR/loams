@@ -1,6 +1,6 @@
 # 64 — Loams Infra: the HashiCorp Stack, Loams-Native and in Rust
 
-> **Proposed amendment (2026-10-23, pending the owner) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). HCP is reconciled (§78 §16, D1729): nothing in Loams depends on HCP; Ostrium's own Loams Cloud infrastructure uses OpenTofu with state in R2; HCP Terraform Free is at most an optional state-only backend; HCP Boundary and Vault are not used. §1's "HCP" row stays superseded by D1323.
+> **Amendment (approved 2026-10-23) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). HCP is reconciled (§78 §16, D1729): nothing in Loams depends on HCP; Ostrium's own Loams Cloud infrastructure uses OpenTofu with state in R2; HCP Terraform Free is at most an optional state-only backend; HCP Boundary and Vault are not used. §1's "HCP" row stays superseded by D1323.
 
 > **Amendment (approved 2026-10-21) by [§76](76-identity-and-authorization.md)** (identity and authorization: Zitadel and OpenFGA; owner, all defaults). §2.3's "Loams keeps Authentik" becomes Zitadel (D1600; still one IdP and no new one besides it), and §10.2's "two `Authorizer` traits, two principal vocabularies" is resolved by one trait in `loams-authz` over §19's three principal kinds (D1610, D1605).
 

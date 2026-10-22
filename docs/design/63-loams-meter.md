@@ -1,6 +1,6 @@
 # 63 — Loams Meter: Open Usage Metering and Enforcement
 
-> **Proposed amendment (2026-10-23, pending the owner) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). The Meter enforces Loams Cloud's free try-out plan as code with a hard stop; counters come from the control plane and TiDB, and devices' own reports are used only for warnings (D1721).
+> **Amendment (approved 2026-10-23) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). The Meter enforces Loams Cloud's free try-out plan as code with a hard stop; counters come from the control plane and TiDB, and devices' own reports are used only for warnings (D1721).
 
 > **Amendment (approved 2026-10-21) by [§76](76-identity-and-authorization.md)** (identity and authorization: Zitadel and OpenFGA; owner, all defaults). This document's §19 relations (D1133) map onto the core model: `billing_admin` and `billing_viewer` on `org` (replacing the owner draft's `billing`) and `meter_admin` on the new `platform` root, none assignable to `agent` or `service_account` (D1603). The site signs in through Zitadel, not Authentik (D1600).
 

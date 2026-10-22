@@ -1,6 +1,6 @@
 # 41 — Loams Multitenant BYOC Control Plane with GitOps
 
-> **Proposed amendment (2026-10-23, pending the owner) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). The control plane gains a hosted, free try-out instance, Loams Cloud (D1701), and a **device** kind: a user's machines enrol with D543's outbound-only pattern, a closed command set and 15-minute tokens (D1714). The code stays open and self-hostable, so a company can run it for its employees (D1726). For BYOC the control plane stays opt-in (D1377).
+> **Amendment (approved 2026-10-23) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). The control plane gains a hosted, free try-out instance, Loams Cloud (D1701), and a **device** kind: a user's machines enrol with D543's outbound-only pattern, a closed command set and 15-minute tokens (D1714). The code stays open and self-hostable, so a company can run it for its employees (D1726). For BYOC the control plane stays opt-in (D1377).
 
 > **Amendment (approved 2026-10-21) by [§76](76-identity-and-authorization.md)** (identity and authorization: Zitadel and OpenFGA; owner, all defaults). Authentik is replaced by Zitadel (D1600). Loams orgs map 1:1 to Zitadel orgs instead of Authentik groups (§2.2, §5; D1605); a multi-org control plane uses one OpenFGA store with `org` at the root of every object path and a cross-org tuple test (D1612); §4's authorization goes through the single `Authorizer` trait (D1610).
 
