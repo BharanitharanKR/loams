@@ -111,6 +111,8 @@ Commit: `house: the generated function and engine matrix (HE0 Task 8)`.
 
 ### Task 9 — Langfuse and OpenPanel on today's House
 
+> **Amended by D1571 (owner, 2026-10-22; [R9.60](he1-rulings/t9.md)).** SigNoz (its MIT build, `signoz/signoz-community`) is the third gate application and runs fully on the House; its gate job is `signoz_on_house_smoke`.
+
 Point each application at the chDB House (lake tables, Iceberg v2) instead of `clickhouse-server` and run its suite and driver. For each failure: a fix in the House if HS1 has the piece and it is small; else a ruling that names the gap and the HE phase that closes it (for example mutations, D1552, HE2). Exit for this task: both applications start, ingest and render their main pages on the House, and the remaining gaps are listed.
 
 Tests: `langfuse_on_house_smoke` and `openpanel_on_house_smoke` in a nightly job.
