@@ -9,7 +9,7 @@ The ClickHouse features real applications use, mined from their query logs and m
 | Application | Variants | Statements | sqlparser | EXPLAIN AST | Unparsed |
 |---|---|---:|---:|---:|---:|
 | langfuse | v3, v4 | 2340 | 1588 | 752 | 0 |
-| openpanel | 2.3.0 | 178 | 106 | 72 | 0 |
+| openpanel | 2.3.0 | 181 | 108 | 73 | 0 |
 | signoz | 0.145.0 | 1635 | 1155 | 480 | 0 |
 
 ## `function`
@@ -243,23 +243,23 @@ The ClickHouse features real applications use, mined from their query logs and m
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
-| `JSONEachRow` | 2 (langfuse, openpanel) | 1405 | yes | gate:langfuse |
+| `JSONEachRow` | 2 (langfuse, openpanel) | 1407 | yes | gate:langfuse |
 | `Native` | 2 (langfuse, signoz) | 248 | yes | gate:langfuse |
 | `Values` | 1 (signoz) | 114 | yes | gate:signoz |
-| `JSON` | 1 (openpanel) | 87 | yes | gate:openpanel |
+| `JSON` | 1 (openpanel) | 88 | yes | gate:openpanel |
 
 ## `setting`
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
-| `max_execution_time` | 3 (langfuse, openpanel, signoz) | 1580 | yes | apps>=3 |
-| `database` | 3 (langfuse, openpanel, signoz) | 771 | yes | apps>=3 |
-| `input_format_parallel_parsing` | 3 (langfuse, openpanel, signoz) | 352 | yes | apps>=3 |
+| `max_execution_time` | 3 (langfuse, openpanel, signoz) | 1582 | yes | apps>=3 |
+| `database` | 3 (langfuse, openpanel, signoz) | 774 | yes | apps>=3 |
+| `input_format_parallel_parsing` | 3 (langfuse, openpanel, signoz) | 357 | yes | apps>=3 |
 | `enable_producing_buckets_out_of_order_in_aggregation` | 2 (langfuse, signoz) | 2184 | yes | gate:langfuse |
 | `log_comment` | 2 (langfuse, signoz) | 1511 | yes | gate:langfuse |
 | `index_granularity` | 2 (openpanel, signoz) | 69 | yes | gate:openpanel |
-| `http_headers_progress_interval_ms` | 2 (langfuse, openpanel) | 66 | yes | gate:langfuse |
-| `send_progress_in_http_headers` | 2 (langfuse, openpanel) | 66 | yes | gate:langfuse |
+| `http_headers_progress_interval_ms` | 2 (langfuse, openpanel) | 68 | yes | gate:langfuse |
+| `send_progress_in_http_headers` | 2 (langfuse, openpanel) | 68 | yes | gate:langfuse |
 | `ttl_only_drop_parts` | 2 (langfuse, signoz) | 44 | yes | gate:langfuse |
 | `enable_block_number_column` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
 | `enable_block_offset_column` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
@@ -272,27 +272,30 @@ The ClickHouse features real applications use, mined from their query logs and m
 | `asterisk_include_materialized_columns` | 1 (langfuse) | 625 | yes | gate:langfuse |
 | `final` | 1 (signoz) | 116 | yes | gate:signoz |
 | `output_format_native_write_json_as_string` | 1 (signoz) | 114 | yes | gate:signoz |
-| `distributed_product_mode` | 1 (openpanel) | 93 | yes | gate:openpanel |
-| `query_plan_convert_any_join_to_semi_or_anti_join` | 1 (openpanel) | 93 | yes | gate:openpanel |
+| `distributed_product_mode` | 1 (openpanel) | 96 | yes | gate:openpanel |
+| `query_plan_convert_any_join_to_semi_or_anti_join` | 1 (openpanel) | 96 | yes | gate:openpanel |
+| `date_time_input_format` | 1 (openpanel) | 92 | yes | gate:openpanel |
 | `alter_sync` | 1 (langfuse) | 89 | yes | gate:langfuse |
 | `use_text_index_dictionary_cache` | 1 (langfuse) | 88 | yes | gate:langfuse |
 | `use_text_index_postings_cache` | 1 (langfuse) | 88 | yes | gate:langfuse |
 | `enable_full_text_index` | 1 (langfuse) | 81 | yes | gate:langfuse |
 | `mutations_sync` | 1 (langfuse) | 72 | yes | gate:langfuse |
 | `session_timezone` | 1 (openpanel) | 57 | yes | gate:openpanel |
+| `enable_http_compression` | 1 (openpanel) | 44 | yes | gate:openpanel |
 | `type_json_skip_duplicated_paths` | 1 (signoz) | 43 | yes | gate:signoz |
 | `date_time_output_format` | 1 (langfuse) | 39 | yes | gate:langfuse |
 | `max_bytes_before_external_group_by` | 1 (langfuse) | 39 | yes | gate:langfuse |
 | `input_format_try_infer_dates` | 1 (signoz) | 21 | yes | gate:signoz |
 | `input_format_try_infer_datetimes` | 1 (signoz) | 21 | yes | gate:signoz |
+| `max_insert_block_size` | 1 (openpanel) | 8 | yes | gate:openpanel |
 | `flatten_nested` | 1 (openpanel) | 6 | yes | gate:openpanel |
-| `max_insert_block_size` | 1 (openpanel) | 6 | yes | gate:openpanel |
 | `prewarm_mark_cache` | 1 (langfuse) | 6 | yes | gate:langfuse |
 | `prewarm_primary_key_cache` | 1 (langfuse) | 6 | yes | gate:langfuse |
 | `allow_ddl` | 1 (signoz) | 5 | yes | gate:signoz |
 | `database_replicated_allow_replicated_engine_arguments` | 1 (signoz) | 5 | yes | gate:signoz |
 | `min_age_to_force_merge_on_partition_only` | 1 (signoz) | 5 | yes | gate:signoz |
 | `min_age_to_force_merge_seconds` | 1 (signoz) | 5 | yes | gate:signoz |
+| `max_http_get_redirects` | 1 (openpanel) | 4 | yes | gate:openpanel |
 | `allow_nullable_key` | 1 (signoz) | 3 | yes | gate:signoz |
 | `deduplicate_merge_projection_mode` | 1 (langfuse) | 3 | yes | gate:langfuse |
 | `index_granularity_bytes` | 1 (langfuse) | 3 | yes | gate:langfuse |
@@ -304,14 +307,14 @@ The ClickHouse features real applications use, mined from their query logs and m
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
-| `SELECT` | 3 (langfuse, openpanel, signoz) | 2390 | yes | apps>=3 |
+| `SELECT` | 3 (langfuse, openpanel, signoz) | 2391 | yes | apps>=3 |
 | `ORDER BY` | 3 (langfuse, openpanel, signoz) | 1398 | yes | apps>=3 |
 | `LIMIT` | 3 (langfuse, openpanel, signoz) | 1307 | yes | apps>=3 |
-| `INSERT` | 3 (langfuse, openpanel, signoz) | 713 | yes | apps>=3 |
+| `INSERT` | 3 (langfuse, openpanel, signoz) | 715 | yes | apps>=3 |
 | `ALTER TABLE` | 3 (langfuse, openpanel, signoz) | 515 | yes | apps>=3 |
 | `ON CLUSTER` | 3 (langfuse, openpanel, signoz) | 509 | yes | apps>=3 |
 | `GROUP BY` | 3 (langfuse, openpanel, signoz) | 428 | yes | apps>=3 |
-| `INSERT FORMAT` | 3 (langfuse, openpanel, signoz) | 418 | yes | apps>=3 |
+| `INSERT FORMAT` | 3 (langfuse, openpanel, signoz) | 420 | yes | apps>=3 |
 | `codec ZSTD` | 3 (langfuse, openpanel, signoz) | 352 | yes | apps>=3 |
 | `column CODEC` | 3 (langfuse, openpanel, signoz) | 352 | yes | apps>=3 |
 | `ALTER ADD COLUMN` | 3 (langfuse, openpanel, signoz) | 267 | yes | apps>=3 |
