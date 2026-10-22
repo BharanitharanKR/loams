@@ -1654,3 +1654,85 @@ async fn sample_reads_every_row_of_a_lake_table() {
         "1\n"
     );
 }
+
+/// D1572, HE1 R9.61: `DateTime64` with more than 6 digits is a
+/// `long` of nanoseconds in a format v2 table, and reads, filters, orders,
+/// converts and merges as ClickHouse does. The answers were measured on the
+/// 26.9.2.8 oracle (2026-10-22), before and after `OPTIMIZE … FINAL`; they
+/// include a time before the epoch, ClickHouse's `toDate` of it (1970-01-01),
+/// zones on the column, a column added by `ALTER` with a nanosecond default,
+/// `ReplacingMergeTree` versions one nanosecond apart, and
+/// `SimpleAggregateFunction(min|max, DateTime64(9))`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn nanosecond_times_match_the_oracle() {
+    let house = lakehouse("nanos-oracle").await;
+    let addr = house.addr();
+    for statement in [
+        "CREATE TABLE ns (k UInt32, ts DateTime64(9), utc DateTime64(9, 'UTC'), kol Nullable(DateTime64(9, 'Asia/Kolkata')), ver DateTime64(9)) ENGINE = ReplacingMergeTree(ver) PARTITION BY toDate(ts) ORDER BY (k, ts)",
+        "INSERT INTO ns VALUES (1, '2026-10-22 03:05:45.123456789', '2026-10-22 03:05:45.123456789', '2026-10-22 08:35:45.000000001', '2026-10-22 00:00:00.000000001'), (2, '1969-12-31 23:59:59.999999999', '1969-12-31 23:59:59.999999999', NULL, '2026-10-22 00:00:00.000000001'), (3, '2026-10-21 23:59:59.999999999', '2026-10-22 00:00:00.000000000', '2026-10-22 05:30:00.000000000', '2026-10-22 00:00:00.000000001')",
+        "INSERT INTO ns VALUES (1, '2026-10-22 03:05:45.123456789', '2026-10-22 03:05:45.123456790', '2026-10-22 08:35:45.000000002', '2026-10-22 00:00:00.000000002')",
+        "ALTER TABLE ns ADD COLUMN later DateTime64(9, 'UTC') DEFAULT toDateTime64('2026-01-01 00:00:00.000000005', 9, 'UTC')",
+        "INSERT INTO ns (k, ts, utc, kol, ver, later) VALUES (4, '2026-10-22 03:05:45.123456788', '2026-10-22 03:05:45.123456788', NULL, '2026-10-22 00:00:00.000000001', '2026-10-23 01:02:03.000000009')",
+        "CREATE TABLE sa (id String, start SimpleAggregateFunction(min, DateTime64(9)), end SimpleAggregateFunction(max, DateTime64(9))) ENGINE = AggregatingMergeTree ORDER BY id",
+        "INSERT INTO sa VALUES ('t', '2026-10-22 03:05:45.000000003', '2026-10-22 03:05:45.000000007')",
+        "INSERT INTO sa VALUES ('t', '2026-10-22 03:05:45.000000001', '2026-10-22 03:05:45.000000009')",
+    ] {
+        ok(addr, statement).await;
+    }
+    for name in ["ns", "sa"] {
+        let table = metadata(&house, "default", name).await;
+        assert_eq!(
+            table.format_version(),
+            loams_house_lake::spec::FormatVersion::V2,
+            "{name}"
+        );
+        for field in table.current_schema().as_struct().fields() {
+            if field.name != "k" && field.name != "id" {
+                assert_eq!(
+                    *field.field_type,
+                    loams_house_lake::spec::Type::Primitive(
+                        loams_house_lake::spec::PrimitiveType::Long
+                    ),
+                    "{name}.{}",
+                    field.name
+                );
+            }
+        }
+    }
+    let check = |when: &'static str, expected: &'static [(&'static str, &'static str)]| async move {
+        for (read, want) in expected {
+            let got = ok(addr, &format!("{read} FORMAT TSV"))
+                .await
+                .replace('\n', "|");
+            assert_eq!(&got, want, "{when}: {read}");
+        }
+    };
+    check(
+        "as written",
+        &[
+            ("SELECT k, ts, utc, kol, ver, later FROM ns FINAL ORDER BY k, ts", "1\t2026-10-22 03:05:45.123456789\t2026-10-22 03:05:45.123456790\t2026-10-22 08:35:45.000000002\t2026-10-22 00:00:00.000000002\t2026-01-01 00:00:00.000000005|2\t1969-12-31 23:59:59.999999999\t1969-12-31 23:59:59.999999999\t\\N\t2026-10-22 00:00:00.000000001\t2026-01-01 00:00:00.000000005|3\t2026-10-21 23:59:59.999999999\t2026-10-22 00:00:00.000000000\t2026-10-22 05:30:00.000000000\t2026-10-22 00:00:00.000000001\t2026-01-01 00:00:00.000000005|4\t2026-10-22 03:05:45.123456788\t2026-10-22 03:05:45.123456788\t\\N\t2026-10-22 00:00:00.000000001\t2026-10-23 01:02:03.000000009|"),
+            ("SELECT k, ts, ver FROM ns ORDER BY k, ver", "1\t2026-10-22 03:05:45.123456789\t2026-10-22 00:00:00.000000001|1\t2026-10-22 03:05:45.123456789\t2026-10-22 00:00:00.000000002|2\t1969-12-31 23:59:59.999999999\t2026-10-22 00:00:00.000000001|3\t2026-10-21 23:59:59.999999999\t2026-10-22 00:00:00.000000001|4\t2026-10-22 03:05:45.123456788\t2026-10-22 00:00:00.000000001|"),
+            ("SELECT count() FROM ns WHERE ts > '2026-10-22 03:05:45.123456788'", "2|"),
+            ("SELECT k FROM ns FINAL WHERE utc = toDateTime64('2026-10-22 03:05:45.123456790', 9, 'UTC') ORDER BY k", "1|"),
+            ("SELECT k, toUnixTimestamp64Nano(ts), toDate(ts), toStartOfHour(utc), toString(kol), toDate(kol) FROM ns FINAL ORDER BY k", "1\t1792638345123456789\t2026-10-22\t2026-10-22 03:00:00\t2026-10-22 08:35:45.000000002\t2026-10-22|2\t-1\t1970-01-01\t1970-01-01 00:00:00\t\\N\t\\N|3\t1792627199999999999\t2026-10-21\t2026-10-22 00:00:00\t2026-10-22 05:30:00.000000000\t2026-10-22|4\t1792638345123456788\t2026-10-22\t2026-10-22 03:00:00\t\\N\t\\N|"),
+            ("SELECT k FROM ns FINAL ORDER BY ts DESC, k", "1|4|3|2|"),
+            ("SELECT toTypeName(ts), toTypeName(utc), toTypeName(kol), toTypeName(later) FROM ns LIMIT 1", "DateTime64(9)\tDateTime64(9, \\'UTC\\')\tNullable(DateTime64(9, \\'Asia/Kolkata\\'))\tDateTime64(9, \\'UTC\\')|"),
+            ("SELECT k, ts + INTERVAL 1 NANOSECOND, dateDiff('nanosecond', ts, utc) FROM ns FINAL ORDER BY k", "1\t2026-10-22 03:05:45.123456790\t1|2\t1970-01-01 00:00:00.000000000\t0|3\t2026-10-22 00:00:00.000000000\t1|4\t2026-10-22 03:05:45.123456789\t0|"),
+            ("SELECT k FROM ns FINAL WHERE kol BETWEEN '2026-10-22 05:30:00' AND '2026-10-22 08:35:45.000000002' ORDER BY k", "1|3|"),
+            ("SELECT toDate(ts) AS d, count() FROM ns FINAL GROUP BY d ORDER BY d", "1970-01-01\t1|2026-10-21\t1|2026-10-22\t2|"),
+            ("SELECT id, start, end FROM sa FINAL", "t\t2026-10-22 03:05:45.000000001\t2026-10-22 03:05:45.000000009|"),
+            ("SELECT min(start), max(end) FROM sa", "2026-10-22 03:05:45.000000001\t2026-10-22 03:05:45.000000009|"),
+        ],
+    )
+    .await;
+    ok(addr, "OPTIMIZE TABLE ns FINAL").await;
+    ok(addr, "OPTIMIZE TABLE sa FINAL").await;
+    check(
+        "after OPTIMIZE",
+        &[
+            ("SELECT k, ts, ver FROM ns ORDER BY k, ver", "1\t2026-10-22 03:05:45.123456789\t2026-10-22 00:00:00.000000002|2\t1969-12-31 23:59:59.999999999\t2026-10-22 00:00:00.000000001|3\t2026-10-21 23:59:59.999999999\t2026-10-22 00:00:00.000000001|4\t2026-10-22 03:05:45.123456788\t2026-10-22 00:00:00.000000001|"),
+            ("SELECT count() FROM ns WHERE ts > '2026-10-22 03:05:45.123456788'", "1|"),
+        ],
+    )
+    .await;
+}

@@ -15,7 +15,7 @@
 //! | `FixedString(N)` | `fixed[N]` | yes |
 //! | `Date`, `Date32` | `date` | `Date` |
 //! | `DateTime[(tz)]`, `DateTime64(P ≤ 6[, tz])` | `timestamptz` | yes |
-//! | `DateTime64(7..9[, tz])` | `timestamptz_ns` (format v3) | yes |
+//! | `DateTime64(7..9[, tz])` | `long`, nanoseconds since the epoch (a column's own type; inside an `Array`, `Map` or `Tuple`, `timestamptz_ns`, format v3) | yes |
 //! | `UUID` | `uuid` | — |
 //! | `IPv4`, `IPv6`, `Enum8(…)`, `Enum16(…)` | `string` | yes |
 //! | `LowCardinality(T)` | `T` | yes |
@@ -377,6 +377,22 @@ impl ChType {
             other => other,
         }
     }
+
+    /// For a column whose values are `DateTime64` with more than 6 digits (its
+    /// own type, under `Nullable` or `SimpleAggregateFunction`), the time zone
+    /// it was declared with: such a column is stored as nanoseconds in an
+    /// Iceberg `long` (D1572, HE1 R9.61). `None` for any other type.
+    pub fn nanos_zone(&self) -> Option<Option<&str>> {
+        match self {
+            Self::Nullable(inner)
+            | Self::LowCardinality(inner)
+            | Self::SimpleAggregate(_, inner) => inner.nanos_zone(),
+            Self::DateTime64(precision, zone) if (7..=9).contains(precision) => {
+                Some(zone.as_deref())
+            }
+            _ => None,
+        }
+    }
 }
 
 /// Field ids for a schema being built: Iceberg assigns fresh ids at create, so
@@ -428,7 +444,16 @@ pub fn to_iceberg_field(
 ) -> Result<NestedFieldRef, HouseError> {
     let ch = ChType::parse(ch_text)?;
     let id = ids.fresh();
-    let ty = to_iceberg(&ch, ch_text, ids, needs)?;
+    // D1572, HE1 R9.61: a column of nanosecond times is a `long` of
+    // nanoseconds since the epoch while the House writes format v2 (D1551);
+    // `loams.ch.types` keeps its type, and the read views and the write path
+    // convert ([`ChType::nanos_zone`]). `timestamptz_ns` once v3 is written
+    // (HE2, D1553).
+    let ty = if ch.nanos_zone().is_some() {
+        primitive(PrimitiveType::Long)
+    } else {
+        to_iceberg(&ch, ch_text, ids, needs)?
+    };
     let required = !ch.is_nullable() && !force_optional;
     Ok(if required {
         NestedField::required(id, name, ty).into()
@@ -713,8 +738,29 @@ mod tests {
         let (ty, required, _) = iceberg("Nullable(String)");
         assert!(!required);
         assert_eq!(from_iceberg(&ty, required), "Nullable(String)");
-        let (ty, _, needs) = iceberg("DateTime64(9, 'UTC')");
-        assert_eq!(ty, Type::Primitive(PrimitiveType::TimestamptzNs));
+        // D1572, HE1 R9.61: a column of nanosecond times is a long
+        // of nanoseconds in a v2 table; inside a container, v3's type.
+        for text in [
+            "DateTime64(9, 'UTC')",
+            "DateTime64(7)",
+            "Nullable(DateTime64(9))",
+            "SimpleAggregateFunction(max, DateTime64(9))",
+        ] {
+            let (ty, _, needs) = iceberg(text);
+            assert_eq!(ty, Type::Primitive(PrimitiveType::Long), "{text}");
+            assert_eq!(needs, Needs::V2, "{text}");
+        }
+        assert_eq!(
+            ChType::parse("Nullable(DateTime64(9, 'UTC'))")
+                .expect("parses")
+                .nanos_zone(),
+            Some(Some("UTC"))
+        );
+        assert_eq!(
+            ChType::parse("DateTime64(6)").expect("parses").nanos_zone(),
+            None
+        );
+        let (_, _, needs) = iceberg("Array(DateTime64(9, 'UTC'))");
         assert_eq!(needs, Needs::V3);
         let (ty, required, _) = iceberg("Array(Nullable(Int64))");
         assert_eq!(from_iceberg(&ty, required), "Array(Nullable(Int64))");

@@ -399,20 +399,25 @@ fn casts(pin: &ReadPin) -> Result<Vec<String>, HouseError> {
         .into_iter()
         .map(|column| {
             let ty = ChType::parse(&column.ch_type)?;
-            let required = pin
-                .fields
-                .iter()
-                .find(|f| f.name == column.name)
-                .is_some_and(|f| f.required);
+            let field = pin.fields.iter().find(|f| f.name == column.name);
+            let required = field.is_some_and(|f| f.required);
             let name = quote_name(&column.name);
+            // D1572, HE1 R9.61: nanosecond times stored as a `long`
+            // of nanoseconds since the epoch read back as the time, in the
+            // column's zone (or, with none, as declared).
+            let stored_nanos = field.is_some_and(|f| f.long);
             // A conversion to `DateTime` keeps its source's time zone, and
             // Iceberg's `timestamptz` reads as UTC: a column declared without a
             // zone drops it first, so it reads as declared.
-            let read = match ty.base() {
-                ChType::DateTime64(precision, None) if *precision > 6 => {
+            let read = match (ty.nanos_zone(), ty.base()) {
+                (Some(Some(zone)), _) if stored_nanos => {
+                    format!("fromUnixTimestamp64Nano({name}, {})", quote_string(zone))
+                }
+                (Some(None), _) if stored_nanos => format!("fromUnixTimestamp64Nano({name})"),
+                (_, ChType::DateTime64(precision, None)) if *precision > 6 => {
                     format!("fromUnixTimestamp64Nano(toUnixTimestamp64Nano({name}))")
                 }
-                ChType::DateTime(None) | ChType::DateTime64(_, None) => {
+                (_, ChType::DateTime(None) | ChType::DateTime64(_, None)) => {
                     format!("fromUnixTimestamp64Micro(toUnixTimestamp64Micro({name}))")
                 }
                 _ => name.clone(),
@@ -768,6 +773,7 @@ mod tests {
             .map(|c| PinnedField {
                 name: c.name.clone(),
                 required: !c.ch_type.starts_with("Nullable"),
+                long: ChType::parse(&c.ch_type).is_ok_and(|t| t.nanos_zone().is_some()),
             })
             .collect();
         ReadPin {
@@ -889,6 +895,37 @@ mod tests {
              SELECT k, sumWithOverflow(n) AS n, any(label) AS label"
         ));
         assert!(ddl.contains("GROUP BY `k`\nHAVING NOT (n = 0)"));
+    }
+
+    /// D1572, HE1 R9.61: nanosecond times are stored as a long of
+    /// nanoseconds and read back in the column's zone, or as declared.
+    #[test]
+    fn nanosecond_times_read_back_from_longs() {
+        let pin = pin(
+            "MergeTree",
+            "ts",
+            vec![
+                column("ts", "DateTime64(9)"),
+                column("utc", "DateTime64(9, 'UTC')"),
+                column("maybe", "Nullable(DateTime64(9, 'Asia/Kolkata'))"),
+                column("micro", "DateTime64(6)"),
+            ],
+        );
+        let casts = casts(&pin).expect("casts");
+        assert_eq!(
+            casts,
+            vec![
+                "CAST(fromUnixTimestamp64Nano(ts), 'DateTime64(9)') AS ts".to_string(),
+                "CAST(fromUnixTimestamp64Nano(utc, 'UTC'), 'DateTime64(9, \\'UTC\\')') AS utc"
+                    .to_string(),
+                "CAST(fromUnixTimestamp64Nano(maybe, 'Asia/Kolkata'), \
+                 'Nullable(DateTime64(9, \\'Asia/Kolkata\\'))') AS maybe"
+                    .to_string(),
+                "CAST(fromUnixTimestamp64Micro(toUnixTimestamp64Micro(micro)), 'DateTime64(6)') \
+                 AS micro"
+                    .to_string(),
+            ]
+        );
     }
 
     #[test]

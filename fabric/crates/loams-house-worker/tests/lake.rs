@@ -406,16 +406,29 @@ async fn type_mapping_roundtrip() {
             .any(|(n, t)| n == "ut" && t == "Tuple(UInt8, String)"),
         "{described}"
     );
-    // Nanoseconds need Iceberg v3.
+    // Nanoseconds are a long of nanoseconds in a v2 table until the House
+    // writes v3 (D1572; HE1 R9.61); inside a container, v3's type.
     ok(
         addr,
         "CREATE TABLE ns9 (t DateTime64(9, 'UTC')) ENGINE = MergeTree ORDER BY t",
     )
     .await;
     let ns9 = table(&house, "default", "ns9").await;
-    assert_eq!(field_type(&ns9, "t").0, p(PrimitiveType::TimestamptzNs));
+    assert_eq!(field_type(&ns9, "t").0, p(PrimitiveType::Long));
     assert_eq!(
         ns9.metadata.format_version(),
+        loams_house_lake::spec::FormatVersion::V2
+    );
+    ok(
+        addr,
+        "CREATE TABLE ns9a (t Array(DateTime64(9, 'UTC'))) ENGINE = MergeTree ORDER BY tuple()",
+    )
+    .await;
+    assert_eq!(
+        table(&house, "default", "ns9a")
+            .await
+            .metadata
+            .format_version(),
         loams_house_lake::spec::FormatVersion::V3
     );
 }
@@ -881,9 +894,10 @@ async fn ddl_over_lakekeeper() {
         ))
         .await
         .expect("in Lakekeeper");
+    // A nanosecond time is a long in a v2 table (D1572).
     assert_eq!(
         loaded.metadata.format_version(),
-        loams_house_lake::spec::FormatVersion::V3
+        loams_house_lake::spec::FormatVersion::V2
     );
     assert!(
         loaded

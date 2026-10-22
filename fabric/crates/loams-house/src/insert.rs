@@ -47,6 +47,7 @@ use std::time::{Duration, Instant};
 use async_trait::async_trait;
 use bytes::Bytes;
 use loams_house_ipc::{Execute, InputSpec, Limits, Output, Progress, SessionRef};
+use loams_house_lake::spec::{PrimitiveType, Type};
 use loams_house_lake::write::DataWriter;
 use sha2::{Digest, Sha256};
 use tokio::sync::oneshot;
@@ -504,17 +505,17 @@ pub fn output_sql(target: &Target) -> Result<String, HouseError> {
     let schema = target.table.metadata.current_schema();
     let mut columns = Vec::new();
     for field in schema.as_struct().fields() {
-        if !ch
+        let Some(column) = ch
             .columns
             .iter()
-            .any(|c| c.stored() && c.name == field.name)
-        {
+            .find(|c| c.stored() && c.name == field.name)
+        else {
             return Err(HouseError::from(ChError::bad_arguments(format!(
                 "Table {}.{}: the Iceberg field {} has no ClickHouse column, so the House \
                  cannot write the table",
                 ch.database, ch.name, field.name
             ))));
-        }
+        };
         let Some(storage) =
             views::printable_type(&types::from_iceberg(&field.field_type, field.required))
         else {
@@ -527,8 +528,18 @@ pub fn output_sql(target: &Target) -> Result<String, HouseError> {
             ));
         };
         let name = quote_name(&field.name);
+        // D1572, HE1 R9.61: nanosecond times are written as
+        // nanoseconds since the epoch (a `CAST` to an integer would give
+        // seconds).
+        let nanos = matches!(*field.field_type, Type::Primitive(PrimitiveType::Long))
+            && types::ChType::parse(&column.ch_type).is_ok_and(|t| t.nanos_zone().is_some());
+        let value = if nanos {
+            format!("toUnixTimestamp64Nano({name})")
+        } else {
+            name.clone()
+        };
         columns.push(format!(
-            "CAST({name}, {}) AS {name}",
+            "CAST({value}, {}) AS {name}",
             quote_string(&storage)
         ));
     }
