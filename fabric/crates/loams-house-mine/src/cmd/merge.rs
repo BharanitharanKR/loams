@@ -18,7 +18,7 @@ pub struct Args {
     pub min_apps: usize,
     /// A gate application, whose features are in the profile regardless;
     /// repeatable.
-    #[arg(long = "gate", default_values_t = ["langfuse".to_owned(), "openpanel".to_owned()])]
+    #[arg(long = "gate", default_values_t = ["langfuse".to_owned(), "openpanel".to_owned(), "signoz".to_owned()])]
     pub gate: Vec<String>,
     /// Where to write the ranking.
     #[arg(long)]

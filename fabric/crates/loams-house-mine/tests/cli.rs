@@ -35,5 +35,5 @@ fn every_subcommand_parses() {
         panic!("merge parses");
     };
     assert_eq!(merge.min_apps, 3);
-    assert_eq!(merge.gate, ["langfuse", "openpanel"]);
+    assert_eq!(merge.gate, ["langfuse", "openpanel", "signoz"]);
 }

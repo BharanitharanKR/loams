@@ -3,8 +3,8 @@
 //!
 //! Features are ranked by the number of applications that use them, then by
 //! how many statements do. A feature is in the profile if `min_apps` (3) or
-//! more applications use it, or if a gate application (Langfuse, OpenPanel)
-//! does. Variants of one application (Langfuse v3 and v4) count as one
+//! more applications use it, or if a gate application (Langfuse, OpenPanel,
+//! SigNoz: D1571) does. Variants of one application (Langfuse v3 and v4) count as one
 //! application.
 
 use std::collections::{BTreeMap, BTreeSet};
