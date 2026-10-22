@@ -325,6 +325,9 @@ fn unescape(text: &str) -> String {
     out
 }
 
+/// How deep views may nest (HE1 R9.13), as materialized views chain (HS1 Task 17).
+pub const MAX_VIEW_DEPTH: usize = 8;
+
 /// The databases the House never serves from its catalog.
 fn engine_database(database: &str) -> bool {
     matches!(
@@ -534,6 +537,8 @@ pub async fn plan(
     }
     let mut tables = Vec::new();
     let mut batch_views: Vec<String> = Vec::new();
+    // Views over the lake views, outermost first (made last, innermost first).
+    let mut plan_views: Vec<String> = Vec::new();
     if let Some(lake) = ctx.lake {
         let as_of = as_of(settings)?;
         let final_all = refs.final_setting || setting_on(settings, "final");
@@ -545,9 +550,19 @@ pub async fn plan(
             Some(found) => found.3 |= fin,
             None => wanted.push((database, name, table, fin)),
         };
-        for printed in &refs.tables {
+        // HE1 R9.13: a view reads what its SELECT names, which is resolved in
+        // the view's database, to a depth of [`MAX_VIEW_DEPTH`].
+        let mut queue: Vec<(String, String, usize)> = refs
+            .tables
+            .iter()
+            .map(|t| (ctx.database.to_string(), t.clone(), 0))
+            .collect();
+        let mut expanded: Vec<(String, String)> = Vec::new();
+        let mut finals = refs.finals.clone();
+        while let Some((current, printed, depth)) = queue.pop() {
+            let printed = &printed;
             if let Some((database, name, table)) =
-                resolve(lake, ctx.namespace, ctx.database, printed).await?
+                resolve(lake, ctx.namespace, &current, printed).await?
             {
                 // A table outside the user's grants is not read (HS1 Task 20),
                 // nor is the House's own `_house` by name (HS1 Task 23: the
@@ -577,7 +592,52 @@ pub async fn plan(
                 if crate::ddl::class_of(&table.metadata) == TableClass::Pipe {
                     return Err(crate::pipes::direct_read(&database, &name));
                 }
-                let fin = final_all || refs.finals.iter().any(|f| f == printed);
+                if crate::ddl::class_of(&table.metadata) == TableClass::View {
+                    if expanded.iter().any(|(d, n)| *d == database && *n == name) {
+                        continue;
+                    }
+                    if depth >= MAX_VIEW_DEPTH {
+                        return Err(bad(format!(
+                            "View {database}.{name} nests views more than {MAX_VIEW_DEPTH} deep"
+                        )));
+                    }
+                    let select = table
+                        .metadata
+                        .properties()
+                        .get(crate::ddl::PROP_VIEW_SELECT)
+                        .cloned()
+                        .unwrap_or_default();
+                    // The view's text is the catalog's: held to the deny list as a
+                    // user's read is, before any worker makes it.
+                    let analysis = lease
+                        .analyze(&select, &[])
+                        .await
+                        .map_err(crate::deny::as_setting_refusal)?;
+                    crate::gate::admit(
+                        &analysis,
+                        &select,
+                        crate::classify::Expect::Read,
+                        true,
+                        None,
+                    )?;
+                    let inner = references(&analysis);
+                    finals.extend(inner.finals.iter().cloned());
+                    // `FROM d FINAL` of a Distributed table reads its local
+                    // table with FINAL, as ClickHouse's shards do.
+                    if finals.iter().any(|f| f == printed)
+                        && crate::ddl::distributed_target(&table).is_some()
+                    {
+                        finals.extend(inner.tables.iter().cloned());
+                    }
+                    for t in inner.tables {
+                        queue.push((database.clone(), t, depth + 1));
+                    }
+                    databases.insert(database.clone());
+                    plan_views.push(views::user_view_ddl(&database, &name, &select));
+                    expanded.push((database, name));
+                    continue;
+                }
+                let fin = final_all || finals.iter().any(|f| f == printed);
                 add(database, name, table, fin);
             }
         }
@@ -665,6 +725,7 @@ pub async fn plan(
         plan.views.push(views::view_ddl(&pin, &source, mode)?);
         plan.pins.push(pin);
     }
+    plan.views.extend(plan_views.into_iter().rev());
     // `system.query_log` reads the namespace's `_house.query_log` (HS1 Task
     // 23) through a view of its own; no client statement names it.
     if system_tables.contains("query_log")

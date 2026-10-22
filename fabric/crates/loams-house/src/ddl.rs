@@ -94,6 +94,11 @@ pub const PROP_CONSTRAINTS: &str = "loams.ch.constraints";
 pub const PROP_SAMPLE_BY: &str = "loams.ch.sample_by";
 /// Property: the table `TTL` clause, as written (R9.12: reads hide expired rows).
 pub const PROP_TTL: &str = "loams.ch.ttl";
+/// Property: a view's `SELECT`, as written (R9.13).
+pub const PROP_VIEW_SELECT: &str = "loams.view.select";
+/// Property: a `Distributed` table's local table, `[db, table]` as JSON (R9.13):
+/// it reads and writes that table, since the bucket is every replica.
+pub const PROP_VIEW_DISTRIBUTED: &str = "loams.view.distributed";
 /// Property: Iceberg's own table comment.
 pub const PROP_COMMENT: &str = "comment";
 
@@ -110,6 +115,9 @@ pub enum TableClass {
     /// A pipe (HS1 Task 16): a stream's records, read only by its
     /// materialized views.
     Pipe,
+    /// A plain view, or a `Distributed` table read as one (HE1 R9.13): a
+    /// `SELECT` the read path expands; it holds no files.
+    View,
 }
 
 /// The class a table's metadata says it has.
@@ -121,6 +129,7 @@ pub fn class_of(metadata: &TableMetadata) -> TableClass {
     match properties.get(PROP_CLASS).map(String::as_str) {
         Some("realtime") => TableClass::Realtime,
         Some("pipe") => TableClass::Pipe,
+        Some("view") => TableClass::View,
         _ => TableClass::Lake,
     }
 }
@@ -511,6 +520,8 @@ pub struct CreateTable {
     pub as_at: Option<(usize, usize)>,
     /// `EMPTY AS`: the table only, no rows.
     pub empty_as: bool,
+    /// `AS [db.]t ENGINE = …`: the table whose columns it takes.
+    pub as_table: Option<QualifiedName>,
 }
 
 /// A data-skipping index (`INDEX name expr TYPE t [GRANULARITY n]`), recorded
@@ -902,6 +913,15 @@ pub fn parse_create_table(text: &str) -> Result<CreateTable, HouseError> {
                     out.as_select = true;
                 } else {
                     out.as_other = true;
+                    // `AS [db.]t [ENGINE = …]` (HE1 R9.13: a Distributed table's
+                    // usual form).
+                    let mut b = Cursor::new(body);
+                    if let Ok(name) = b.qualified()
+                        && b.eat("ENGINE")
+                    {
+                        out.as_table = Some(name);
+                        out.engine = Some(engine_clause(b.rest())?);
+                    }
                 }
             }
             _ => {}
@@ -1083,6 +1103,63 @@ pub fn parse_create_mv(text: &str) -> Result<CreateMaterializedView, HouseError>
             break;
         }
         c.at += 1;
+    }
+    Ok(out)
+}
+
+/// `CREATE [OR REPLACE] VIEW`, as written (HE1 R9.13).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct CreateView {
+    /// `OR REPLACE`.
+    pub or_replace: bool,
+    /// `IF NOT EXISTS`.
+    pub if_not_exists: bool,
+    /// The view's database, when named.
+    pub database: Option<String>,
+    /// The view.
+    pub name: String,
+    /// A column list (names the `SELECT`'s columns; refused for now).
+    pub columns: bool,
+    /// The `SELECT` after `AS`.
+    pub select: String,
+}
+
+/// Reads `CREATE [OR REPLACE] VIEW [IF NOT EXISTS] [db.]v [ON CLUSTER c] [SQL
+/// SECURITY …] AS SELECT …`.
+pub fn parse_create_view(text: &str) -> Result<CreateView, HouseError> {
+    let text = text.trim().trim_end_matches(';').trim_end();
+    let mut c = Cursor::new(text);
+    let mut out = CreateView::default();
+    c.expect("CREATE")?;
+    out.or_replace = c.eat_all(&["OR", "REPLACE"]);
+    c.expect("VIEW")?;
+    out.if_not_exists = c.eat_all(&["IF", "NOT", "EXISTS"]);
+    let (database, name) = c.qualified()?;
+    out.database = database;
+    out.name = name;
+    c.skip_on_cluster()?;
+    loop {
+        if let Some(t) = c.peek()
+            && c.is_symbol(&t, b'(')
+        {
+            out.columns = true;
+            c.at = c
+                .closing(c.at)
+                .ok_or_else(|| syntax("Unbalanced parentheses in the column list"))?
+                + 1;
+        } else if c.eat_all(&["SQL", "SECURITY"]) || c.eat("DEFINER") {
+            while !c.done() && !c.is_word_at(c.at, "AS") {
+                c.at += 1;
+            }
+        } else if c.eat("AS") {
+            break;
+        } else {
+            return Err(syntax("Expected AS SELECT in CREATE VIEW"));
+        }
+    }
+    out.select = c.rest().trim().to_string();
+    if out.select.is_empty() {
+        return Err(syntax("Expected a SELECT after AS"));
     }
     Ok(out)
 }
@@ -2356,6 +2433,9 @@ pub fn touched(kind: Kind, text: &str, current: &str) -> Vec<Object> {
         Kind::Alter => crate::alter::parse_alter(text)
             .map(|alter| vec![table(alter.table)])
             .unwrap_or_default(),
+        Kind::CreateView => parse_create_view(text)
+            .map(|view| vec![table((view.database, view.name))])
+            .unwrap_or_default(),
         Kind::Describe => parse_describe(text).map(table).into_iter().collect(),
         Kind::Show => parse_show_create(text).map(qualify).into_iter().collect(),
         Kind::Exists => parse_exists(text).map(qualify).into_iter().collect(),
@@ -2386,6 +2466,8 @@ pub enum Kind {
     Rename,
     /// `ALTER TABLE` (HE1 R9.12).
     Alter,
+    /// `CREATE VIEW` (HE1 R9.13).
+    CreateView,
     /// `DESCRIBE`.
     Describe,
     /// `SHOW …`.
@@ -2508,6 +2590,12 @@ pub async fn execute(
                 crate::pipes::create_pipe(lake, namespace, &database, &stmt, text, oracle).await?;
                 return Ok(Answer::Done);
             }
+            if let Some((engine, args)) = &stmt.engine
+                && engine == "Distributed"
+            {
+                create_distributed(lake, namespace, &database, &stmt, args, text).await?;
+                return Ok(Answer::Done);
+            }
             oracle.check(text).await?;
             let described = if stmt.columns.is_empty() {
                 Vec::new()
@@ -2555,10 +2643,19 @@ pub async fn execute(
                 "VIEW" => {
                     for (db, name) in &stmt.names {
                         let database = db_of(db);
-                        if !crate::pipes::drop_materialized_view(lake, namespace, &database, name)
+                        if crate::pipes::drop_materialized_view(lake, namespace, &database, name)
                             .await?
-                            && !stmt.if_exists
                         {
+                            continue;
+                        }
+                        // A plain view is a catalog entry (HE1 R9.13).
+                        if let Some(table) = lake.load(namespace, &database, name).await?
+                            && class_of(&table.metadata) == TableClass::View
+                        {
+                            lake.drop_table(namespace, &database, name, false).await?;
+                            continue;
+                        }
+                        if !stmt.if_exists {
                             return Err(HouseError::from(ChError::unknown_table(format!(
                                 "Table {database}.{name} does not exist"
                             ))));
@@ -2597,6 +2694,10 @@ pub async fn execute(
                     .rename_table(namespace, (&from_db, &from), (&to_db, &to))
                     .await?;
                 // SHOW CREATE names the table: write it out again under the new name.
+                // A view keeps its text (HE1 R9.13).
+                if class_of(&renamed.metadata) == TableClass::View {
+                    continue;
+                }
                 let mut table = ChTable::from_lake(&to_db, &to, &renamed);
                 table.ddl = table.render();
                 lake.catalog()
@@ -2615,12 +2716,23 @@ pub async fn execute(
             crate::alter::execute(lake, namespace, current, text, oracle).await?;
             Ok(Answer::Done)
         }
+        Kind::CreateView => {
+            let view = parse_create_view(text)?;
+            oracle.check(text).await?;
+            create_view(lake, namespace, &db_of(&view.database), &view, text).await?;
+            Ok(Answer::Done)
+        }
         Kind::Describe => {
             let Some((db, name)) = parse_describe(text) else {
                 return Ok(Answer::PassThrough);
             };
             let database = db_of(&db);
             match catalog_table(lake, namespace, &database, &name).await? {
+                // A plain view's columns are its SELECT's: chDB describes the
+                // view the read path makes (HE1 R9.13).
+                Some(table) if table.class == TableClass::View && table.columns.is_empty() => {
+                    Ok(Answer::PassThrough)
+                }
                 Some(table) => Ok(Answer::Rows(describe_query(&table))),
                 None => Ok(Answer::PassThrough),
             }
@@ -2682,6 +2794,184 @@ pub async fn execute(
         // `insert::target` (HS1 Task 12) before it gets here.
         Kind::Insert => Ok(Answer::PassThrough),
     }
+}
+
+/// A view's catalog entry (HE1 R9.13): an Iceberg table with no files whose
+/// properties hold the `SELECT` (or a `Distributed` table's local table), so a
+/// view is listed, renamed, dropped and kept for `UNDROP` as a table is.
+fn view_creation(
+    name: &str,
+    location: String,
+    properties: HashMap<String, String>,
+) -> Result<TableCreation, HouseError> {
+    let schema = Schema::builder()
+        .with_schema_id(0)
+        .with_fields(vec![
+            NestedField::optional(
+                1,
+                "__loams_view",
+                loams_house_lake::spec::Type::Primitive(
+                    loams_house_lake::spec::PrimitiveType::String,
+                ),
+            )
+            .into(),
+        ])
+        .build()
+        .map_err(|err| HouseError::from(ChError::bad_arguments(err.to_string())))?;
+    Ok(TableCreation::builder()
+        .name(name.to_string())
+        .location(location)
+        .schema(schema)
+        .properties(properties)
+        .build())
+}
+
+/// `CREATE [OR REPLACE] VIEW` (HE1 R9.13).
+async fn create_view(
+    lake: &Lake,
+    namespace: u64,
+    database: &str,
+    view: &CreateView,
+    text: &str,
+) -> Result<(), HouseError> {
+    check_new_name("table", &view.name)?;
+    if view.columns {
+        return Err(HouseError::from(ChError::not_implemented(
+            "CREATE VIEW with a column list is not on the House's surface yet: name the columns in the SELECT",
+        )));
+    }
+    lake.require_database(namespace, database).await?;
+    let first = crate::request::first_keyword(&view.select);
+    if !matches!(first.as_str(), "SELECT" | "WITH") && !view.select.starts_with('(') {
+        return Err(syntax("A view's body is a SELECT"));
+    }
+    let properties = HashMap::from([
+        (
+            PROP_DDL.to_string(),
+            text.trim().trim_end_matches(';').to_string(),
+        ),
+        (PROP_ENGINE.to_string(), "View".to_string()),
+        (PROP_CLASS.to_string(), "view".to_string()),
+        (PROP_VIEW_SELECT.to_string(), view.select.clone()),
+    ]);
+    if let Some(existing) = lake.load(namespace, database, &view.name).await? {
+        if view.if_not_exists {
+            return Ok(());
+        }
+        if view.or_replace && class_of(&existing.metadata) == TableClass::View {
+            lake.catalog()
+                .commit(
+                    &existing.ident,
+                    Vec::new(),
+                    vec![loams_house_lake::TableUpdate::SetProperties {
+                        updates: properties,
+                    }],
+                )
+                .await?;
+            return Ok(());
+        }
+        return Err(HouseError::from(ChError::table_already_exists(format!(
+            "Table {database}.{} already exists",
+            view.name
+        ))));
+    }
+    let location = lake.root().table_location(namespace, database, &view.name);
+    lake.create_table(
+        namespace,
+        database,
+        view_creation(&view.name, location, properties)?,
+        view.if_not_exists,
+    )
+    .await?;
+    Ok(())
+}
+
+/// `CREATE TABLE … ENGINE = Distributed(cluster, db, table[, sharding_key[,
+/// policy]])` (HE1 R9.13, §75 §7.3: topology syntax accepted and ignored): the
+/// bucket is every replica, so the table reads and writes its local table.
+async fn create_distributed(
+    lake: &Lake,
+    namespace: u64,
+    database: &str,
+    stmt: &CreateTable,
+    args: &[String],
+    text: &str,
+) -> Result<(), HouseError> {
+    check_new_name("table", &stmt.name)?;
+    let [_cluster, local_db, local, ..] = args else {
+        return Err(HouseError::from(ChError::bad_arguments(
+            "Distributed takes (cluster, database, table[, sharding_key[, policy]])",
+        )));
+    };
+    let name_of = |arg: &str| -> String {
+        let arg = arg.trim();
+        if arg.starts_with('\'') || arg.starts_with('`') || arg.starts_with('"') {
+            unquote(arg)
+        } else if arg.eq_ignore_ascii_case("currentDatabase()") {
+            database.to_string()
+        } else {
+            arg.to_string()
+        }
+    };
+    let (local_db, local) = (name_of(local_db), name_of(local));
+    let target = lake
+        .lake_table(
+            namespace,
+            &local_db,
+            &local,
+            "CREATE TABLE … ENGINE = Distributed over",
+        )
+        .await?;
+    if class_of(&target.metadata) != TableClass::Lake {
+        return Err(HouseError::from(ChError::not_implemented(
+            "A Distributed table on the House reads a lake table",
+        )));
+    }
+    let shown = ChTable::from_lake(&local_db, &local, &target);
+    lake.require_database(namespace, database).await?;
+    if stmt.if_not_exists && lake.load(namespace, database, &stmt.name).await?.is_some() {
+        return Ok(());
+    }
+    let properties = HashMap::from([
+        (
+            PROP_DDL.to_string(),
+            text.trim().trim_end_matches(';').to_string(),
+        ),
+        (
+            PROP_ENGINE.to_string(),
+            format!("Distributed({})", args.join(", ")),
+        ),
+        (PROP_CLASS.to_string(), "view".to_string()),
+        (PROP_TYPES.to_string(), json(&shown.columns)?),
+        (
+            PROP_VIEW_SELECT.to_string(),
+            format!(
+                "SELECT * FROM {}.{}",
+                quote_name(&local_db),
+                quote_name(&local)
+            ),
+        ),
+        (
+            PROP_VIEW_DISTRIBUTED.to_string(),
+            json(&[&local_db, &local])?,
+        ),
+    ]);
+    let location = lake.root().table_location(namespace, database, &stmt.name);
+    lake.create_table(
+        namespace,
+        database,
+        view_creation(&stmt.name, location, properties)?,
+        stmt.if_not_exists,
+    )
+    .await?;
+    Ok(())
+}
+
+/// A `Distributed` table's local table (HE1 R9.13).
+pub fn distributed_target(table: &LakeTable) -> Option<(String, String)> {
+    let text = table.metadata.properties().get(PROP_VIEW_DISTRIBUTED)?;
+    let [db, name]: [String; 2] = serde_json::from_str(text).ok()?;
+    Some((db, name))
 }
 
 /// The catalog's table, or `None` when the database or table is not the

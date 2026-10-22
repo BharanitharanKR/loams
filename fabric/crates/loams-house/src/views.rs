@@ -66,6 +66,18 @@ pub fn drop_ddl(database: &str, name: &str) -> String {
     )
 }
 
+/// A catalog view (HE1 R9.13) in the worker, over the read views of what it
+/// names: `CREATE OR REPLACE VIEW d.v AS\n<select>`, the control connection's
+/// one shape for a view without a column list. It runs with the invoker's
+/// rights, so it reads only what the statement could.
+pub fn user_view_ddl(database: &str, name: &str, select: &str) -> String {
+    format!(
+        "CREATE OR REPLACE VIEW {}.{} AS\n{select}",
+        quote_name(database),
+        quote_name(name)
+    )
+}
+
 /// The table function that reads a pin through the worker's endpoint.
 pub fn source(pin: &ReadPin, endpoint: &str, root: &LakeRoot) -> Result<String, HouseError> {
     let unreadable = |why: &str| {

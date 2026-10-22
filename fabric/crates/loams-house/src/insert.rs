@@ -159,6 +159,29 @@ pub async fn target(
     if !crate::identity::granted(user, &database, &name) {
         return Err(crate::identity::not_granted(user, &database, &name));
     }
+    // HE1 R9.13: a `Distributed` table writes its local table; a view takes no
+    // rows, as in ClickHouse.
+    let (database, name, table) = if ddl::class_of(&table.metadata) == TableClass::View {
+        let Some((local_db, local)) = ddl::distributed_target(&table) else {
+            return Err(HouseError::from(ChError::not_implemented(format!(
+                "INSERT INTO {database}.{name}: it is a view, which holds no rows"
+            ))));
+        };
+        if !crate::identity::granted(user, &local_db, &local) {
+            return Err(crate::identity::not_granted(user, &local_db, &local));
+        }
+        let table = lake
+            .lake_table(
+                namespace,
+                &local_db,
+                &local,
+                "INSERT INTO a Distributed table over",
+            )
+            .await?;
+        (local_db, local, table)
+    } else {
+        (database, name, table)
+    };
     if ddl::class_of(&table.metadata) == TableClass::Pipe {
         return Err(HouseError::from(ChError::not_implemented(format!(
             "INSERT INTO {database}.{name}: the table is a pipe, which reads its stream; \
