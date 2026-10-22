@@ -255,11 +255,11 @@ jobs:
           python3 scripts/release/build-artifacts.py --self-test
           python3 scripts/release/make-repo.py --self-test
 
-      # The console is a separate pnpm workspace. Its build is deliberately
-      # non-fatal: the server binary does not serve it, and a TypeScript error in
-      # the console must not stop the .deb, the .rpm and the pacman package from
-      # being produced. The packaging script then ships the packages without the
-      # console and says so on stderr.
+      # The console is a separate pnpm workspace. The engine serves it at /ui/
+      # from /usr/share/loams/console. Its build is deliberately non-fatal: a
+      # TypeScript error in the console must not stop the .deb, the .rpm and
+      # the pacman package from being produced. The packaging script then
+      # ships the packages without the console and says so on stderr.
       - name: the web console (non-fatal)
         id: console
         continue-on-error: true

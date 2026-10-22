@@ -29,8 +29,10 @@
 # headers on its tailscale listener (LOAMS_TAILSCALE_LISTEN, 127.0.0.1:7781),
 # whose only client is the sidecar's `tailscale serve` proxy. The sidecar joins
 # the user's Tailscale tailnet (Headscale is coming soon) and
-# serves https://loams.<tailnet>/ from that listener; that tailnet URL is
-# LOAMS_ENGINE_URL for the console. Every other service (pd, tikv, tidb,
+# serves https://loams.<tailnet>/ from that listener. The engine serves the
+# console there too, at https://loams.<tailnet>/ui/ (the image carries the
+# console built from the same commit), so the console is same-origin with
+# its API and reachable only on the tailnet. Every other service (pd, tikv, tidb,
 # agentd, the Postgres stack) is on the compose network and cannot reach the
 # engine's loopback listeners. The House is on a network of its own, with its
 # own sidecar in its namespace (`house-tailscale`, https://loams-house.<tailnet>/).
@@ -232,10 +234,11 @@ services:
       # `tailscale serve` proxy adds, on LOAMS_TAILSCALE_LISTEN only: a loopback
       # port of its own that is the serve target and nothing else.
       LOAMS_AUTH_MODE: ${LOAMS_AUTH_MODE:-tailscale}
-      # Browser origins allowed to call the engine (comma-separated). The hosted
-      # console by default; add your own console's origin if you self-host one.
-      # Empty would allow any origin.
-      LOAMS_CORS_ORIGINS: ${LOAMS_CORS_ORIGINS:-https://console.loams.dev}
+      # Extra browser origins allowed to call the engine (comma-separated exact
+      # origins). None by default: the console the engine serves at /ui/ is
+      # same-origin, and Loams Desktop sends the engine's own origin. Add one
+      # only for a console you serve from another origin (`--profile console`).
+      LOAMS_CORS_ORIGINS: ${LOAMS_CORS_ORIGINS:-}
       LOAMS_TAILSCALE_LISTEN: ${LOAMS_TAILSCALE_LISTEN:-127.0.0.1:7781}
       LOAMS_OIDC_ISSUER: ${LOAMS_OIDC_ISSUER:-https://auth.loams.dev}
       LOAMS_OIDC_AUDIENCE: ${LOAMS_OIDC_AUDIENCE:-loams-console}
@@ -441,10 +444,12 @@ services:
       - ./headscale/config.yaml:/etc/headscale/config.yaml:ro
       - headscale-data:/var/lib/headscale
 
-  # The console served from this machine (`--profile console`) instead of the
-  # hosted one, Vercel or Cloudflare. LOAMS_CONSOLE_DIR is a built console
-  # (web/apps/console's `pnpm build` output); /config.json carries its runtime
-  # configuration.
+  # A console on an origin of its own (`--profile console`; optional). The
+  # engine already serves the console at https://loams.<tailnet>/ui/; use this
+  # only for a console you build yourself and serve from this machine.
+  # LOAMS_CONSOLE_DIR is a built console (web/apps/console's `pnpm build`
+  # output); /config.json carries its runtime configuration. Its origin must
+  # be in LOAMS_CORS_ORIGINS.
   console:
     <<: *restart
     profiles: [console]

@@ -1,16 +1,20 @@
 # Loams: run it yourself
 
-Everything in Loams 0.1.1 runs on your machine or on VMs you own. Ostrium hosts
-two things only: the console (a React app) and the auth service. You can serve
-the console yourself instead, from your own Vercel or Cloudflare project, or
-from this stack (`--profile console`).
+Everything in Loams runs on your machine or on VMs you own, the console
+included: from 0.1.2 the engine serves the console that ships in its image at
+`https://loams.<tailnet>.ts.net/ui/`, next to its API, so the console is
+same-origin with your engine and reachable only on your tailnet. Loams Desktop
+carries the same console and connects to the same URL. Ostrium hosts only the
+optional auth service (`oidc` mode). The hosted console at console.loams.dev is
+retired (design 78); to try Loams without running anything, see
+[loams.dev/cloud](https://loams.dev/cloud).
 
 ```
- browser ── console (hosted, or yours) ── auth.loams.dev (OIDC, PKCE)
+ browser or Loams Desktop ── auth.loams.dev (oidc mode only; OIDC, PKCE)
     │
     └─ your device's Tailscale client ══ tailnet ══ tailscale sidecar ─┐
                                     (loams netns: engine + sidecar only)│
-                         loams engine, tailscale listener :7781 ◄───────┘
+          loams engine: API + console at /ui/, tailscale listener :7781 ◄┘
     ─────────────── compose network ───────────────
       house · agentd · Postgres stack (pageserver, safekeeper, compute1)
       with profiles: pd · tikv · tidb (`tikv`) · rustfs (`rustfs`)
@@ -79,7 +83,7 @@ engine, `migrate` and `loams upgrade` all see the same set:
 | `rustfs` | RustFS, an S3 bucket (`neon`) for Loams Postgres's pageserver, safekeeper and endpoint storage instead of local folders |
 | `house-tailnet` | the House's own tailnet node (below) |
 | `postgres-control` | Loams Postgres's control plane (below) |
-| `console` | the console from `LOAMS_CONSOLE_DIR`, with `/config.json` built from `LOAMS_ENGINE_URL`, `LOAMS_AUTH_ISSUER` and `LOAMS_AUTH_CLIENT_ID` |
+| `console` | optional: a console on an origin of its own (the engine already serves one at `/ui/`), from `LOAMS_CONSOLE_DIR`, with `/config.json` built from `LOAMS_ENGINE_URL`, `LOAMS_AUTH_ISSUER` and `LOAMS_AUTH_CLIENT_ID`; its origin must be in `LOAMS_CORS_ORIGINS` |
 | `headscale` | coming soon, unsupported in 0.1.1 |
 
 Choose `tikv` and `rustfs` before the first start: a stack's data stays on the
@@ -88,7 +92,9 @@ and refuses to start on the other one (it would see an empty catalog beside
 the data), and the Postgres timelines stay in the remote storage they were
 created in. Moving a stack between them is a dump and restore, not a setting.
 
-Set the console's `LOAMS_ENGINE_URL` to `https://loams.<tailnet>.ts.net`.
+Open the console at `https://loams.<tailnet>.ts.net/ui/` from a device on the
+tailnet, or add that URL as a server in Loams Desktop. With `--profile console`,
+set that console's `LOAMS_ENGINE_URL` to `https://loams.<tailnet>.ts.net`.
 Stop with `docker compose --profile '*' down`; add `--volumes` to delete the
 data.
 
@@ -216,9 +222,10 @@ docker compose up -d loams tailscale
 ```
 
 Headscale issues no HTTPS certificates, so the engine is served over plain
-HTTP on the tailnet (`TS_SERVE_MODE=http`, inside WireGuard). A console served
-over HTTPS cannot call it (mixed content); serve the console over HTTP from the
-tailnet or this machine.
+HTTP on the tailnet (`TS_SERVE_MODE=http`, inside WireGuard). The console the
+engine serves at `http://loams.<tailnet>/ui/` is same-origin with it, so it
+works there; a console served over HTTPS from another origin cannot call it
+(mixed content).
 
 ## Upgrading
 

@@ -164,7 +164,8 @@ def build_stage(stage: Path, binary: Path, console: Path | None, git_remote: Pat
         )
         (console_dest / "README.txt").write_text(
             "The web console was not included in this package build.\n"
-            "The console is published at https://console.loams.dev.\n",
+            "Build it (cd web && pnpm build) and pass the engine\n"
+            "--console-dir web/apps/console/dist to serve it at /ui/.\n",
             encoding="utf-8",
         )
     else:
