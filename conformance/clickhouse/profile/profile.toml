@@ -7,49 +7,55 @@ apps = ["langfuse", "openpanel"]
 [[feature]]
 name = "function:equals"
 apps = ["langfuse", "openpanel"]
-frequency = 1038
+frequency = 1457
 reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:SELECT"
 apps = ["langfuse", "openpanel"]
-frequency = 1023
+frequency = 1440
 reason = "gate:langfuse"
 
 [[feature]]
 name = "function:and"
 apps = ["langfuse", "openpanel"]
-frequency = 1005
+frequency = 1424
 reason = "gate:langfuse"
 
 [[feature]]
 name = "format:JSONEachRow"
 apps = ["langfuse", "openpanel"]
-frequency = 968
+frequency = 1405
 reason = "gate:langfuse"
 
 [[feature]]
 name = "setting:max_execution_time"
 apps = ["langfuse", "openpanel"]
-frequency = 959
+frequency = 1398
 reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:ORDER BY"
 apps = ["langfuse", "openpanel"]
-frequency = 925
+frequency = 1335
 reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:LIMIT"
 apps = ["langfuse", "openpanel"]
-frequency = 856
+frequency = 1268
 reason = "gate:langfuse"
 
 [[feature]]
 name = "type:DateTime64"
 apps = ["langfuse", "openpanel"]
-frequency = 818
+frequency = 1161
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:greaterOrEquals"
+apps = ["langfuse", "openpanel"]
+frequency = 947
 reason = "gate:langfuse"
 
 [[feature]]
@@ -59,21 +65,15 @@ frequency = 691
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:greaterOrEquals"
-apps = ["langfuse", "openpanel"]
-frequency = 670
-reason = "gate:langfuse"
-
-[[feature]]
 name = "type:String"
 apps = ["langfuse", "openpanel"]
-frequency = 448
+frequency = 469
 reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:INSERT"
 apps = ["langfuse", "openpanel"]
-frequency = 388
+frequency = 408
 reason = "gate:langfuse"
 
 [[feature]]
@@ -85,37 +85,55 @@ reason = "gate:langfuse"
 [[feature]]
 name = "syntax:GROUP BY"
 apps = ["langfuse", "openpanel"]
-frequency = 332
+frequency = 345
 reason = "gate:langfuse"
 
 [[feature]]
 name = "type:Array"
 apps = ["langfuse", "openpanel"]
-frequency = 255
+frequency = 276
 reason = "gate:langfuse"
 
 [[feature]]
 name = "function:count"
 apps = ["langfuse", "openpanel"]
-frequency = 239
+frequency = 259
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:lessOrEquals"
+name = "function:toDate"
 apps = ["langfuse", "openpanel"]
-frequency = 213
+frequency = 234
 reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:INSERT FORMAT"
 apps = ["langfuse", "openpanel"]
-frequency = 212
+frequency = 232
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:lessOrEquals"
+apps = ["langfuse", "openpanel"]
+frequency = 222
 reason = "gate:langfuse"
 
 [[feature]]
 name = "function:tuple"
 apps = ["langfuse", "openpanel"]
-frequency = 203
+frequency = 215
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:input_format_parallel_parsing"
+apps = ["langfuse", "openpanel"]
+frequency = 204
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:in"
+apps = ["langfuse", "openpanel"]
+frequency = 200
 reason = "gate:langfuse"
 
 [[feature]]
@@ -125,33 +143,15 @@ frequency = 196
 reason = "gate:langfuse"
 
 [[feature]]
-name = "setting:input_format_parallel_parsing"
-apps = ["langfuse", "openpanel"]
-frequency = 194
-reason = "gate:langfuse"
-
-[[feature]]
 name = "function:isNotNull"
 apps = ["langfuse", "openpanel"]
-frequency = 190
-reason = "gate:langfuse"
-
-[[feature]]
-name = "function:in"
-apps = ["langfuse", "openpanel"]
-frequency = 177
+frequency = 194
 reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:ALTER ADD COLUMN"
 apps = ["langfuse", "openpanel"]
 frequency = 164
-reason = "gate:langfuse"
-
-[[feature]]
-name = "function:toDate"
-apps = ["langfuse", "openpanel"]
-frequency = 160
 reason = "gate:langfuse"
 
 [[feature]]
@@ -167,15 +167,15 @@ frequency = 127
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:notEquals"
+name = "syntax:CREATE TABLE"
 apps = ["langfuse", "openpanel"]
 frequency = 126
 reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:CREATE TABLE"
+name = "function:notEquals"
 apps = ["langfuse", "openpanel"]
-frequency = 126
+frequency = 125
 reason = "gate:langfuse"
 
 [[feature]]
@@ -191,15 +191,21 @@ frequency = 109
 reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:ALTER ADD INDEX"
+name = "function:max"
 apps = ["langfuse", "openpanel"]
-frequency = 100
+frequency = 102
 reason = "gate:langfuse"
 
 [[feature]]
 name = "function:greater"
 apps = ["langfuse", "openpanel"]
-frequency = 99
+frequency = 101
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:ALTER ADD INDEX"
+apps = ["langfuse", "openpanel"]
+frequency = 100
 reason = "gate:langfuse"
 
 [[feature]]
@@ -221,9 +227,9 @@ frequency = 98
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:max"
+name = "function:groupUniqArray"
 apps = ["langfuse", "openpanel"]
-frequency = 95
+frequency = 93
 reason = "gate:langfuse"
 
 [[feature]]
@@ -239,9 +245,9 @@ frequency = 88
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:groupUniqArray"
+name = "syntax:WITH"
 apps = ["langfuse", "openpanel"]
-frequency = 87
+frequency = 85
 reason = "gate:langfuse"
 
 [[feature]]
@@ -251,27 +257,39 @@ frequency = 82
 reason = "gate:langfuse"
 
 [[feature]]
+name = "function:lambda"
+apps = ["langfuse", "openpanel"]
+frequency = 80
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:min"
+apps = ["langfuse", "openpanel"]
+frequency = 78
+reason = "gate:langfuse"
+
+[[feature]]
 name = "type:UInt64"
 apps = ["langfuse", "openpanel"]
 frequency = 78
 reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:WITH"
+name = "type:Int32"
 apps = ["langfuse", "openpanel"]
-frequency = 76
+frequency = 73
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:lambda"
+name = "function:sum"
 apps = ["langfuse", "openpanel"]
 frequency = 72
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:min"
+name = "syntax:FINAL"
 apps = ["langfuse", "openpanel"]
-frequency = 71
+frequency = 72
 reason = "gate:langfuse"
 
 [[feature]]
@@ -287,33 +305,45 @@ frequency = 67
 reason = "gate:langfuse"
 
 [[feature]]
+name = "function:length"
+apps = ["langfuse", "openpanel"]
+frequency = 67
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:minus"
+apps = ["langfuse", "openpanel"]
+frequency = 66
+reason = "gate:langfuse"
+
+[[feature]]
 name = "function:uniq"
 apps = ["langfuse", "openpanel"]
 frequency = 66
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:length"
+name = "setting:http_headers_progress_interval_ms"
 apps = ["langfuse", "openpanel"]
-frequency = 65
+frequency = 66
 reason = "gate:langfuse"
 
 [[feature]]
-name = "type:Int32"
+name = "setting:send_progress_in_http_headers"
 apps = ["langfuse", "openpanel"]
-frequency = 65
+frequency = 66
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:sum"
-apps = ["langfuse", "openpanel"]
-frequency = 63
-reason = "gate:langfuse"
-
-[[feature]]
-name = "syntax:FINAL"
+name = "function:or"
 apps = ["langfuse", "openpanel"]
 frequency = 62
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:toIntervalDay"
+apps = ["langfuse", "openpanel"]
+frequency = 61
 reason = "gate:langfuse"
 
 [[feature]]
@@ -323,33 +353,15 @@ frequency = 61
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:or"
-apps = ["langfuse", "openpanel"]
-frequency = 60
-reason = "gate:langfuse"
-
-[[feature]]
-name = "setting:http_headers_progress_interval_ms"
-apps = ["langfuse", "openpanel"]
-frequency = 60
-reason = "gate:langfuse"
-
-[[feature]]
-name = "setting:send_progress_in_http_headers"
-apps = ["langfuse", "openpanel"]
-frequency = 60
-reason = "gate:langfuse"
-
-[[feature]]
 name = "function:toDateTime"
 apps = ["langfuse", "openpanel"]
 frequency = 58
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:toIntervalDay"
+name = "function:dateDiff"
 apps = ["langfuse", "openpanel"]
-frequency = 55
+frequency = 57
 reason = "gate:langfuse"
 
 [[feature]]
@@ -365,6 +377,18 @@ frequency = 54
 reason = "gate:langfuse"
 
 [[feature]]
+name = "syntax:scalar subquery"
+apps = ["langfuse", "openpanel"]
+frequency = 53
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:toIntervalHour"
+apps = ["langfuse", "openpanel"]
+frequency = 52
+reason = "gate:langfuse"
+
+[[feature]]
 name = "type:Bool"
 apps = ["langfuse", "openpanel"]
 frequency = 52
@@ -377,21 +401,9 @@ frequency = 51
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:dateDiff"
-apps = ["langfuse", "openpanel"]
-frequency = 50
-reason = "gate:langfuse"
-
-[[feature]]
-name = "function:minus"
-apps = ["langfuse", "openpanel"]
-frequency = 50
-reason = "gate:langfuse"
-
-[[feature]]
 name = "syntax:parametric function"
 apps = ["langfuse", "openpanel"]
-frequency = 49
+frequency = 50
 reason = "gate:langfuse"
 
 [[feature]]
@@ -407,19 +419,25 @@ frequency = 48
 reason = "gate:langfuse"
 
 [[feature]]
+name = "combinator:If"
+apps = ["langfuse", "openpanel"]
+frequency = 46
+reason = "gate:langfuse"
+
+[[feature]]
 name = "syntax:DISTINCT"
 apps = ["langfuse", "openpanel"]
-frequency = 43
+frequency = 45
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:notIn"
+apps = ["langfuse", "openpanel"]
+frequency = 44
 reason = "gate:langfuse"
 
 [[feature]]
 name = "function:argMax"
-apps = ["langfuse", "openpanel"]
-frequency = 42
-reason = "gate:langfuse"
-
-[[feature]]
-name = "syntax:scalar subquery"
 apps = ["langfuse", "openpanel"]
 frequency = 42
 reason = "gate:langfuse"
@@ -431,19 +449,13 @@ frequency = 42
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:notIn"
-apps = ["langfuse", "openpanel"]
-frequency = 40
-reason = "gate:langfuse"
-
-[[feature]]
 name = "syntax:WITH FILL"
 apps = ["langfuse", "openpanel"]
 frequency = 40
 reason = "gate:langfuse"
 
 [[feature]]
-name = "combinator:If"
+name = "function:mapKeys"
 apps = ["langfuse", "openpanel"]
 frequency = 39
 reason = "gate:langfuse"
@@ -455,9 +467,9 @@ frequency = 39
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:mapKeys"
+name = "function:groupArray"
 apps = ["langfuse", "openpanel"]
-frequency = 37
+frequency = 38
 reason = "gate:langfuse"
 
 [[feature]]
@@ -467,7 +479,7 @@ frequency = 37
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:toIntervalHour"
+name = "function:concat"
 apps = ["langfuse", "openpanel"]
 frequency = 36
 reason = "gate:langfuse"
@@ -491,13 +503,13 @@ frequency = 34
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:arrayMap"
+name = "function:countIf"
 apps = ["langfuse", "openpanel"]
-frequency = 32
+frequency = 33
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:groupArray"
+name = "function:arrayMap"
 apps = ["langfuse", "openpanel"]
 frequency = 32
 reason = "gate:langfuse"
@@ -509,39 +521,39 @@ frequency = 32
 reason = "gate:langfuse"
 
 [[feature]]
+name = "function:arrayJoin"
+apps = ["langfuse", "openpanel"]
+frequency = 31
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:groupUniqArrayIf"
+apps = ["langfuse", "openpanel"]
+frequency = 31
+reason = "gate:langfuse"
+
+[[feature]]
 name = "function:multiply"
 apps = ["langfuse", "openpanel"]
 frequency = 31
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:arrayJoin"
-apps = ["langfuse", "openpanel"]
-frequency = 29
-reason = "gate:langfuse"
-
-[[feature]]
-name = "function:concat"
-apps = ["langfuse", "openpanel"]
-frequency = 29
-reason = "gate:langfuse"
-
-[[feature]]
 name = "function:plus"
 apps = ["langfuse", "openpanel"]
-frequency = 28
+frequency = 30
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:groupUniqArrayIf"
+name = "function:avg"
+apps = ["langfuse", "openpanel"]
+frequency = 27
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:multiIf"
 apps = ["langfuse", "openpanel"]
 frequency = 26
-reason = "gate:langfuse"
-
-[[feature]]
-name = "function:countIf"
-apps = ["langfuse", "openpanel"]
-frequency = 25
 reason = "gate:langfuse"
 
 [[feature]]
@@ -575,13 +587,13 @@ frequency = 22
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:avg"
+name = "function:toDateTime64"
 apps = ["langfuse", "openpanel"]
 frequency = 22
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:toDateTime64"
+name = "syntax:LEFT JOIN"
 apps = ["langfuse", "openpanel"]
 frequency = 22
 reason = "gate:langfuse"
@@ -605,12 +617,6 @@ frequency = 19
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:multiIf"
-apps = ["langfuse", "openpanel"]
-frequency = 18
-reason = "gate:langfuse"
-
-[[feature]]
 name = "syntax:HAVING"
 apps = ["langfuse", "openpanel"]
 frequency = 18
@@ -629,13 +635,19 @@ frequency = 17
 reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:LEFT JOIN"
+name = "combinator:Distinct"
 apps = ["langfuse", "openpanel"]
-frequency = 16
+frequency = 14
 reason = "gate:langfuse"
 
 [[feature]]
 name = "function:arrayFilter"
+apps = ["langfuse", "openpanel"]
+frequency = 14
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:countDistinct"
 apps = ["langfuse", "openpanel"]
 frequency = 14
 reason = "gate:langfuse"
@@ -653,21 +665,15 @@ frequency = 14
 reason = "gate:langfuse"
 
 [[feature]]
-name = "type:Float64"
+name = "function:divide"
 apps = ["langfuse", "openpanel"]
 frequency = 13
 reason = "gate:langfuse"
 
 [[feature]]
-name = "combinator:Distinct"
+name = "type:Float64"
 apps = ["langfuse", "openpanel"]
-frequency = 12
-reason = "gate:langfuse"
-
-[[feature]]
-name = "function:countDistinct"
-apps = ["langfuse", "openpanel"]
-frequency = 12
+frequency = 13
 reason = "gate:langfuse"
 
 [[feature]]
@@ -686,12 +692,6 @@ reason = "gate:langfuse"
 name = "function:arrayFirstIndex"
 apps = ["langfuse", "openpanel"]
 frequency = 10
-reason = "gate:langfuse"
-
-[[feature]]
-name = "function:divide"
-apps = ["langfuse", "openpanel"]
-frequency = 9
 reason = "gate:langfuse"
 
 [[feature]]
@@ -739,67 +739,67 @@ reason = "gate:langfuse"
 [[feature]]
 name = "function:uniqExact"
 apps = ["langfuse", "openpanel"]
-frequency = 2
+frequency = 4
 reason = "gate:langfuse"
 
 [[feature]]
 name = "setting:log_comment"
 apps = ["langfuse"]
-frequency = 953
+frequency = 1392
 reason = "gate:langfuse"
 
 [[feature]]
 name = "setting:timeout_before_checking_execution_speed"
 apps = ["langfuse"]
-frequency = 953
+frequency = 1392
 reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:query parameter"
 apps = ["langfuse"]
-frequency = 755
+frequency = 1113
 reason = "gate:langfuse"
 
 [[feature]]
 name = "setting:input_format_json_throw_on_bad_escape_sequence"
 apps = ["langfuse"]
-frequency = 629
+frequency = 959
+reason = "gate:langfuse"
+
+[[feature]]
+name = "syntax:LIMIT BY"
+apps = ["langfuse"]
+frequency = 874
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:use_query_cache"
+apps = ["langfuse"]
+frequency = 710
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:query_plan_optimize_lazy_materialization"
+apps = ["langfuse"]
+frequency = 653
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:asterisk_include_alias_columns"
+apps = ["langfuse"]
+frequency = 625
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:asterisk_include_materialized_columns"
+apps = ["langfuse"]
+frequency = 625
 reason = "gate:langfuse"
 
 [[feature]]
 name = "setting:enable_producing_buckets_out_of_order_in_aggregation"
 apps = ["langfuse"]
 frequency = 554
-reason = "gate:langfuse"
-
-[[feature]]
-name = "syntax:LIMIT BY"
-apps = ["langfuse"]
-frequency = 545
-reason = "gate:langfuse"
-
-[[feature]]
-name = "setting:asterisk_include_alias_columns"
-apps = ["langfuse"]
-frequency = 514
-reason = "gate:langfuse"
-
-[[feature]]
-name = "setting:asterisk_include_materialized_columns"
-apps = ["langfuse"]
-frequency = 514
-reason = "gate:langfuse"
-
-[[feature]]
-name = "setting:use_query_cache"
-apps = ["langfuse"]
-frequency = 405
-reason = "gate:langfuse"
-
-[[feature]]
-name = "setting:query_plan_optimize_lazy_materialization"
-apps = ["langfuse"]
-frequency = 323
 reason = "gate:langfuse"
 
 [[feature]]
@@ -817,7 +817,7 @@ reason = "gate:langfuse"
 [[feature]]
 name = "function:array"
 apps = ["langfuse"]
-frequency = 159
+frequency = 173
 reason = "gate:langfuse"
 
 [[feature]]
@@ -869,21 +869,21 @@ frequency = 72
 reason = "gate:langfuse"
 
 [[feature]]
+name = "function:isNull"
+apps = ["langfuse"]
+frequency = 69
+reason = "gate:langfuse"
+
+[[feature]]
 name = "syntax:ALTER MATERIALIZE INDEX"
 apps = ["langfuse"]
 frequency = 69
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:isNull"
-apps = ["langfuse"]
-frequency = 66
-reason = "gate:langfuse"
-
-[[feature]]
 name = "function:sumMap"
 apps = ["langfuse"]
-frequency = 60
+frequency = 66
 reason = "gate:langfuse"
 
 [[feature]]
@@ -895,19 +895,19 @@ reason = "gate:openpanel"
 [[feature]]
 name = "function:coalesce"
 apps = ["langfuse"]
-frequency = 51
+frequency = 54
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:notEmpty"
+apps = ["langfuse"]
+frequency = 44
 reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:DROP VIEW"
 apps = ["langfuse"]
 frequency = 42
-reason = "gate:langfuse"
-
-[[feature]]
-name = "function:notEmpty"
-apps = ["langfuse"]
-frequency = 39
 reason = "gate:langfuse"
 
 [[feature]]
@@ -941,15 +941,9 @@ frequency = 33
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:anyLast"
+name = "function:arrayExists"
 apps = ["langfuse"]
-frequency = 29
-reason = "gate:langfuse"
-
-[[feature]]
-name = "combinator:Array"
-apps = ["langfuse"]
-frequency = 28
+frequency = 31
 reason = "gate:langfuse"
 
 [[feature]]
@@ -983,21 +977,33 @@ frequency = 27
 reason = "gate:langfuse"
 
 [[feature]]
+name = "function:anyLast"
+apps = ["langfuse"]
+frequency = 26
+reason = "gate:langfuse"
+
+[[feature]]
 name = "function:lower"
 apps = ["langfuse"]
 frequency = 26
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:ifNull"
+name = "combinator:Array"
 apps = ["langfuse"]
 frequency = 25
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:groupUniqArrayArray"
+name = "function:greatest"
 apps = ["langfuse"]
-frequency = 24
+frequency = 25
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:ifNull"
+apps = ["langfuse"]
+frequency = 25
 reason = "gate:langfuse"
 
 [[feature]]
@@ -1025,16 +1031,16 @@ frequency = 24
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:arrayExists"
-apps = ["langfuse"]
-frequency = 23
-reason = "gate:langfuse"
-
-[[feature]]
 name = "syntax:BETWEEN"
 apps = ["openpanel"]
 frequency = 23
 reason = "gate:openpanel"
+
+[[feature]]
+name = "function:groupUniqArrayArray"
+apps = ["langfuse"]
+frequency = 21
+reason = "gate:langfuse"
 
 [[feature]]
 name = "function:mapFilter"
@@ -1046,6 +1052,12 @@ reason = "gate:langfuse"
 name = "function:positionCaseInsensitive"
 apps = ["langfuse"]
 frequency = 21
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:has"
+apps = ["langfuse"]
+frequency = 20
 reason = "gate:langfuse"
 
 [[feature]]
@@ -1065,12 +1077,6 @@ name = "type:DateTime"
 apps = ["openpanel"]
 frequency = 20
 reason = "gate:openpanel"
-
-[[feature]]
-name = "function:has"
-apps = ["langfuse"]
-frequency = 19
-reason = "gate:langfuse"
 
 [[feature]]
 name = "function:leftUTF8"
@@ -1121,19 +1127,13 @@ frequency = 18
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:greatest"
+name = "function:CAST"
 apps = ["langfuse"]
 frequency = 17
 reason = "gate:langfuse"
 
 [[feature]]
 name = "engine:ReplicatedReplacingMergeTree"
-apps = ["langfuse"]
-frequency = 16
-reason = "gate:langfuse"
-
-[[feature]]
-name = "function:CAST"
 apps = ["langfuse"]
 frequency = 16
 reason = "gate:langfuse"
@@ -1161,6 +1161,12 @@ name = "syntax:codec GORILLA"
 apps = ["openpanel"]
 frequency = 16
 reason = "gate:openpanel"
+
+[[feature]]
+name = "function:groupArrayIf"
+apps = ["langfuse"]
+frequency = 15
+reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:ALTER DROP INDEX"
@@ -1193,7 +1199,19 @@ frequency = 12
 reason = "gate:langfuse"
 
 [[feature]]
+name = "function:least"
+apps = ["langfuse"]
+frequency = 12
+reason = "gate:langfuse"
+
+[[feature]]
 name = "function:lengthUTF8"
+apps = ["langfuse"]
+frequency = 12
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:lowerUTF8"
 apps = ["langfuse"]
 frequency = 12
 reason = "gate:langfuse"
@@ -1229,22 +1247,16 @@ frequency = 10
 reason = "gate:langfuse"
 
 [[feature]]
+name = "syntax:UNION ALL"
+apps = ["langfuse"]
+frequency = 10
+reason = "gate:langfuse"
+
+[[feature]]
 name = "type:FixedString"
 apps = ["openpanel"]
 frequency = 10
 reason = "gate:openpanel"
-
-[[feature]]
-name = "syntax:IN subquery"
-apps = ["langfuse"]
-frequency = 9
-reason = "gate:langfuse"
-
-[[feature]]
-name = "syntax:UNION ALL"
-apps = ["langfuse"]
-frequency = 9
-reason = "gate:langfuse"
 
 [[feature]]
 name = "syntax:column MATERIALIZED"
@@ -1259,7 +1271,7 @@ frequency = 8
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:groupArrayIf"
+name = "syntax:IN subquery"
 apps = ["langfuse"]
 frequency = 8
 reason = "gate:langfuse"
@@ -1275,12 +1287,6 @@ name = "type:UUID"
 apps = ["openpanel"]
 frequency = 8
 reason = "gate:openpanel"
-
-[[feature]]
-name = "function:lowerUTF8"
-apps = ["langfuse"]
-frequency = 7
-reason = "gate:langfuse"
 
 [[feature]]
 name = "function:not"
@@ -1385,16 +1391,16 @@ frequency = 6
 reason = "gate:langfuse"
 
 [[feature]]
+name = "syntax:DELETE"
+apps = ["langfuse"]
+frequency = 5
+reason = "gate:langfuse"
+
+[[feature]]
 name = "engine:VersionedCollapsingMergeTree"
 apps = ["openpanel"]
 frequency = 4
 reason = "gate:openpanel"
-
-[[feature]]
-name = "function:COUNTDistinct"
-apps = ["langfuse"]
-frequency = 4
-reason = "gate:langfuse"
 
 [[feature]]
 name = "function:arrayDistinct"
@@ -1416,12 +1422,6 @@ reason = "gate:openpanel"
 
 [[feature]]
 name = "function:groupUniqArrayArrayIf"
-apps = ["langfuse"]
-frequency = 4
-reason = "gate:langfuse"
-
-[[feature]]
-name = "function:least"
 apps = ["langfuse"]
 frequency = 4
 reason = "gate:langfuse"
@@ -1493,12 +1493,6 @@ frequency = 3
 reason = "gate:langfuse"
 
 [[feature]]
-name = "function:minIf"
-apps = ["langfuse"]
-frequency = 3
-reason = "gate:langfuse"
-
-[[feature]]
 name = "function:row_number"
 apps = ["langfuse"]
 frequency = 3
@@ -1547,12 +1541,6 @@ frequency = 3
 reason = "gate:openpanel"
 
 [[feature]]
-name = "syntax:DELETE"
-apps = ["langfuse"]
-frequency = 3
-reason = "gate:langfuse"
-
-[[feature]]
 name = "syntax:PROJECTION"
 apps = ["langfuse"]
 frequency = 3
@@ -1577,10 +1565,22 @@ frequency = 2
 reason = "gate:langfuse"
 
 [[feature]]
+name = "function:COUNTDistinct"
+apps = ["langfuse"]
+frequency = 2
+reason = "gate:langfuse"
+
+[[feature]]
 name = "function:avgIf"
 apps = ["openpanel"]
 frequency = 2
 reason = "gate:openpanel"
+
+[[feature]]
+name = "function:hasAll"
+apps = ["langfuse"]
+frequency = 2
+reason = "gate:langfuse"
 
 [[feature]]
 name = "function:isNaN"
@@ -1590,6 +1590,12 @@ reason = "gate:openpanel"
 
 [[feature]]
 name = "function:like"
+apps = ["langfuse"]
+frequency = 2
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:minIf"
 apps = ["langfuse"]
 frequency = 2
 reason = "gate:langfuse"
@@ -1631,7 +1637,7 @@ frequency = 2
 reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:EXCEPT"
+name = "syntax:FULL JOIN"
 apps = ["langfuse"]
 frequency = 2
 reason = "gate:langfuse"
@@ -1697,7 +1703,7 @@ frequency = 1
 reason = "gate:openpanel"
 
 [[feature]]
-name = "syntax:FULL JOIN"
+name = "syntax:EXCEPT"
 apps = ["langfuse"]
 frequency = 1
 reason = "gate:langfuse"

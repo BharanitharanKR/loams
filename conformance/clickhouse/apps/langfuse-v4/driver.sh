@@ -91,7 +91,13 @@ if [ "${HE0_APP:-langfuse-v4}" = langfuse-v3 ]; then
   for i in "${!ids[@]}"; do ids[i]="he0-legacy-$i"; done
 fi
 last=${ids[$((TRACES - 1))]}
-seen() { api "$URL/api/public/v2/observations?limit=1&traceId=$last" 2>/dev/null | grep -q '"traceId"'; }
+# v4 serves observations v2 (events_only); v3 has neither that endpoint nor
+# observations for a legacy trace, so it reads the trace itself.
+if [ "${HE0_APP:-langfuse-v4}" = langfuse-v3 ]; then
+  seen() { api "$URL/api/public/traces/$last" 2>/dev/null | grep -q '"id"'; }
+else
+  seen() { api "$URL/api/public/v2/observations?limit=1&traceId=$last" 2>/dev/null | grep -q '"traceId"'; }
+fi
 for _ in $(seq 1 90); do
   seen && break
   sleep 2

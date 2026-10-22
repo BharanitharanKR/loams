@@ -8,122 +8,121 @@ The ClickHouse features real applications use, mined from their query logs and m
 
 | Application | Variants | Statements | sqlparser | EXPLAIN AST | Unparsed |
 |---|---|---:|---:|---:|---:|
-| langfuse | v3, v4 | 1901 | 1160 | 741 | 0 |
+| langfuse | v3, v4 | 2340 | 1588 | 752 | 0 |
 | openpanel | 2.3.0 | 178 | 106 | 72 | 0 |
 
 ## `function`
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
-| `equals` | 2 (langfuse, openpanel) | 1038 | yes | gate:langfuse |
-| `and` | 2 (langfuse, openpanel) | 1005 | yes | gate:langfuse |
-| `greaterOrEquals` | 2 (langfuse, openpanel) | 670 | yes | gate:langfuse |
-| `count` | 2 (langfuse, openpanel) | 239 | yes | gate:langfuse |
-| `lessOrEquals` | 2 (langfuse, openpanel) | 213 | yes | gate:langfuse |
-| `tuple` | 2 (langfuse, openpanel) | 203 | yes | gate:langfuse |
-| `isNotNull` | 2 (langfuse, openpanel) | 190 | yes | gate:langfuse |
-| `in` | 2 (langfuse, openpanel) | 177 | yes | gate:langfuse |
-| `toDate` | 2 (langfuse, openpanel) | 160 | yes | gate:langfuse |
-| `notEquals` | 2 (langfuse, openpanel) | 126 | yes | gate:langfuse |
-| `greater` | 2 (langfuse, openpanel) | 99 | yes | gate:langfuse |
+| `equals` | 2 (langfuse, openpanel) | 1457 | yes | gate:langfuse |
+| `and` | 2 (langfuse, openpanel) | 1424 | yes | gate:langfuse |
+| `greaterOrEquals` | 2 (langfuse, openpanel) | 947 | yes | gate:langfuse |
+| `count` | 2 (langfuse, openpanel) | 259 | yes | gate:langfuse |
+| `toDate` | 2 (langfuse, openpanel) | 234 | yes | gate:langfuse |
+| `lessOrEquals` | 2 (langfuse, openpanel) | 222 | yes | gate:langfuse |
+| `tuple` | 2 (langfuse, openpanel) | 215 | yes | gate:langfuse |
+| `in` | 2 (langfuse, openpanel) | 200 | yes | gate:langfuse |
+| `isNotNull` | 2 (langfuse, openpanel) | 194 | yes | gate:langfuse |
+| `notEquals` | 2 (langfuse, openpanel) | 125 | yes | gate:langfuse |
+| `max` | 2 (langfuse, openpanel) | 102 | yes | gate:langfuse |
+| `greater` | 2 (langfuse, openpanel) | 101 | yes | gate:langfuse |
 | `now` | 2 (langfuse, openpanel) | 98 | yes | gate:langfuse |
-| `max` | 2 (langfuse, openpanel) | 95 | yes | gate:langfuse |
+| `groupUniqArray` | 2 (langfuse, openpanel) | 93 | yes | gate:langfuse |
 | `if` | 2 (langfuse, openpanel) | 91 | yes | gate:langfuse |
-| `groupUniqArray` | 2 (langfuse, openpanel) | 87 | yes | gate:langfuse |
-| `lambda` | 2 (langfuse, openpanel) | 72 | yes | gate:langfuse |
-| `min` | 2 (langfuse, openpanel) | 71 | yes | gate:langfuse |
+| `lambda` | 2 (langfuse, openpanel) | 80 | yes | gate:langfuse |
+| `min` | 2 (langfuse, openpanel) | 78 | yes | gate:langfuse |
+| `sum` | 2 (langfuse, openpanel) | 72 | yes | gate:langfuse |
 | `arrayElement` | 2 (langfuse, openpanel) | 67 | yes | gate:langfuse |
+| `length` | 2 (langfuse, openpanel) | 67 | yes | gate:langfuse |
+| `minus` | 2 (langfuse, openpanel) | 66 | yes | gate:langfuse |
 | `uniq` | 2 (langfuse, openpanel) | 66 | yes | gate:langfuse |
-| `length` | 2 (langfuse, openpanel) | 65 | yes | gate:langfuse |
-| `sum` | 2 (langfuse, openpanel) | 63 | yes | gate:langfuse |
+| `or` | 2 (langfuse, openpanel) | 62 | yes | gate:langfuse |
+| `toIntervalDay` | 2 (langfuse, openpanel) | 61 | yes | gate:langfuse |
 | `toYYYYMM` | 2 (langfuse, openpanel) | 61 | yes | gate:langfuse |
-| `or` | 2 (langfuse, openpanel) | 60 | yes | gate:langfuse |
 | `toDateTime` | 2 (langfuse, openpanel) | 58 | yes | gate:langfuse |
-| `toIntervalDay` | 2 (langfuse, openpanel) | 55 | yes | gate:langfuse |
+| `dateDiff` | 2 (langfuse, openpanel) | 57 | yes | gate:langfuse |
 | `any` | 2 (langfuse, openpanel) | 54 | yes | gate:langfuse |
-| `dateDiff` | 2 (langfuse, openpanel) | 50 | yes | gate:langfuse |
-| `minus` | 2 (langfuse, openpanel) | 50 | yes | gate:langfuse |
+| `toIntervalHour` | 2 (langfuse, openpanel) | 52 | yes | gate:langfuse |
 | `nullIf` | 2 (langfuse, openpanel) | 48 | yes | gate:langfuse |
+| `notIn` | 2 (langfuse, openpanel) | 44 | yes | gate:langfuse |
 | `argMax` | 2 (langfuse, openpanel) | 42 | yes | gate:langfuse |
-| `notIn` | 2 (langfuse, openpanel) | 40 | yes | gate:langfuse |
+| `mapKeys` | 2 (langfuse, openpanel) | 39 | yes | gate:langfuse |
 | `mapValues` | 2 (langfuse, openpanel) | 39 | yes | gate:langfuse |
-| `mapKeys` | 2 (langfuse, openpanel) | 37 | yes | gate:langfuse |
+| `groupArray` | 2 (langfuse, openpanel) | 38 | yes | gate:langfuse |
 | `tupleElement` | 2 (langfuse, openpanel) | 37 | yes | gate:langfuse |
-| `toIntervalHour` | 2 (langfuse, openpanel) | 36 | yes | gate:langfuse |
+| `concat` | 2 (langfuse, openpanel) | 36 | yes | gate:langfuse |
 | `toStartOfHour` | 2 (langfuse, openpanel) | 36 | yes | gate:langfuse |
+| `countIf` | 2 (langfuse, openpanel) | 33 | yes | gate:langfuse |
 | `arrayMap` | 2 (langfuse, openpanel) | 32 | yes | gate:langfuse |
-| `groupArray` | 2 (langfuse, openpanel) | 32 | yes | gate:langfuse |
 | `toStartOfMinute` | 2 (langfuse, openpanel) | 32 | yes | gate:langfuse |
+| `arrayJoin` | 2 (langfuse, openpanel) | 31 | yes | gate:langfuse |
+| `groupUniqArrayIf` | 2 (langfuse, openpanel) | 31 | yes | gate:langfuse |
 | `multiply` | 2 (langfuse, openpanel) | 31 | yes | gate:langfuse |
-| `arrayJoin` | 2 (langfuse, openpanel) | 29 | yes | gate:langfuse |
-| `concat` | 2 (langfuse, openpanel) | 29 | yes | gate:langfuse |
-| `plus` | 2 (langfuse, openpanel) | 28 | yes | gate:langfuse |
-| `groupUniqArrayIf` | 2 (langfuse, openpanel) | 26 | yes | gate:langfuse |
-| `countIf` | 2 (langfuse, openpanel) | 25 | yes | gate:langfuse |
+| `plus` | 2 (langfuse, openpanel) | 30 | yes | gate:langfuse |
+| `avg` | 2 (langfuse, openpanel) | 27 | yes | gate:langfuse |
+| `multiIf` | 2 (langfuse, openpanel) | 26 | yes | gate:langfuse |
 | `toUInt64` | 2 (langfuse, openpanel) | 25 | yes | gate:langfuse |
 | `round` | 2 (langfuse, openpanel) | 23 | yes | gate:langfuse |
-| `avg` | 2 (langfuse, openpanel) | 22 | yes | gate:langfuse |
 | `toDateTime64` | 2 (langfuse, openpanel) | 22 | yes | gate:langfuse |
-| `multiIf` | 2 (langfuse, openpanel) | 18 | yes | gate:langfuse |
 | `toIntervalMinute` | 2 (langfuse, openpanel) | 17 | yes | gate:langfuse |
 | `arrayFilter` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
-| `countDistinct` | 2 (langfuse, openpanel) | 12 | yes | gate:langfuse |
+| `countDistinct` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
+| `divide` | 2 (langfuse, openpanel) | 13 | yes | gate:langfuse |
 | `arrayEnumerate` | 2 (langfuse, openpanel) | 10 | yes | gate:langfuse |
 | `arrayFirstIndex` | 2 (langfuse, openpanel) | 10 | yes | gate:langfuse |
-| `divide` | 2 (langfuse, openpanel) | 9 | yes | gate:langfuse |
 | `less` | 2 (langfuse, openpanel) | 9 | yes | gate:langfuse |
 | `toBool` | 2 (langfuse, openpanel) | 8 | yes | gate:langfuse |
 | `uniqIf` | 2 (langfuse, openpanel) | 6 | yes | gate:langfuse |
 | `arraySlice` | 2 (langfuse, openpanel) | 5 | yes | gate:langfuse |
-| `uniqExact` | 2 (langfuse, openpanel) | 2 | yes | gate:langfuse |
-| `array` | 1 (langfuse) | 159 | yes | gate:langfuse |
-| `isNull` | 1 (langfuse) | 66 | yes | gate:langfuse |
-| `sumMap` | 1 (langfuse) | 60 | yes | gate:langfuse |
-| `coalesce` | 1 (langfuse) | 51 | yes | gate:langfuse |
-| `notEmpty` | 1 (langfuse) | 39 | yes | gate:langfuse |
-| `anyLast` | 1 (langfuse) | 29 | yes | gate:langfuse |
+| `uniqExact` | 2 (langfuse, openpanel) | 4 | yes | gate:langfuse |
+| `array` | 1 (langfuse) | 173 | yes | gate:langfuse |
+| `isNull` | 1 (langfuse) | 69 | yes | gate:langfuse |
+| `sumMap` | 1 (langfuse) | 66 | yes | gate:langfuse |
+| `coalesce` | 1 (langfuse) | 54 | yes | gate:langfuse |
+| `notEmpty` | 1 (langfuse) | 44 | yes | gate:langfuse |
+| `arrayExists` | 1 (langfuse) | 31 | yes | gate:langfuse |
 | `toStartOfDay` | 1 (openpanel) | 28 | yes | gate:openpanel |
 | `arrayReverse` | 1 (langfuse) | 27 | yes | gate:langfuse |
 | `arraySum` | 1 (langfuse) | 27 | yes | gate:langfuse |
 | `mapFromArrays` | 1 (langfuse) | 27 | yes | gate:langfuse |
+| `anyLast` | 1 (langfuse) | 26 | yes | gate:langfuse |
 | `lower` | 1 (langfuse) | 26 | yes | gate:langfuse |
+| `greatest` | 1 (langfuse) | 25 | yes | gate:langfuse |
 | `ifNull` | 1 (langfuse) | 25 | yes | gate:langfuse |
-| `groupUniqArrayArray` | 1 (langfuse) | 24 | yes | gate:langfuse |
 | `subtractHours` | 1 (langfuse) | 24 | yes | gate:langfuse |
-| `arrayExists` | 1 (langfuse) | 23 | yes | gate:langfuse |
+| `groupUniqArrayArray` | 1 (langfuse) | 21 | yes | gate:langfuse |
 | `mapFilter` | 1 (langfuse) | 21 | yes | gate:langfuse |
 | `positionCaseInsensitive` | 1 (langfuse) | 21 | yes | gate:langfuse |
+| `has` | 1 (langfuse) | 20 | yes | gate:langfuse |
 | `map` | 1 (langfuse) | 20 | yes | gate:langfuse |
-| `has` | 1 (langfuse) | 19 | yes | gate:langfuse |
 | `leftUTF8` | 1 (langfuse) | 19 | yes | gate:langfuse |
 | `argMaxIf` | 1 (langfuse) | 18 | yes | gate:langfuse |
 | `argMaxState` | 1 (langfuse) | 18 | yes | gate:langfuse |
 | `indexOf` | 1 (langfuse) | 18 | yes | gate:langfuse |
 | `maxMap` | 1 (langfuse) | 18 | yes | gate:langfuse |
-| `greatest` | 1 (langfuse) | 17 | yes | gate:langfuse |
-| `CAST` | 1 (langfuse) | 16 | yes | gate:langfuse |
+| `CAST` | 1 (langfuse) | 17 | yes | gate:langfuse |
 | `toString` | 1 (langfuse) | 16 | yes | gate:langfuse |
+| `groupArrayIf` | 1 (langfuse) | 15 | yes | gate:langfuse |
 | `arrayConcat` | 1 (langfuse) | 14 | yes | gate:langfuse |
 | `negate` | 1 (langfuse) | 14 | yes | gate:langfuse |
 | `toInt64` | 1 (langfuse) | 14 | yes | gate:langfuse |
 | `approx_top_kIf` | 1 (langfuse) | 12 | yes | gate:langfuse |
+| `least` | 1 (langfuse) | 12 | yes | gate:langfuse |
 | `lengthUTF8` | 1 (langfuse) | 12 | yes | gate:langfuse |
+| `lowerUTF8` | 1 (langfuse) | 12 | yes | gate:langfuse |
 | `xxHash32` | 1 (langfuse) | 12 | yes | gate:langfuse |
 | `quantile` | 1 (langfuse) | 11 | yes | gate:langfuse |
 | `toStartOfInterval` | 1 (langfuse) | 10 | yes | gate:langfuse |
 | `generateUUIDv4` | 1 (openpanel) | 8 | yes | gate:openpanel |
-| `groupArrayIf` | 1 (langfuse) | 8 | yes | gate:langfuse |
-| `lowerUTF8` | 1 (langfuse) | 7 | yes | gate:langfuse |
 | `not` | 1 (langfuse) | 7 | yes | gate:langfuse |
 | `arrayStringConcat` | 1 (langfuse) | 6 | yes | gate:langfuse |
 | `empty` | 1 (langfuse) | 6 | yes | gate:langfuse |
 | `toNullable` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `COUNTDistinct` | 1 (langfuse) | 4 | yes | gate:langfuse |
 | `arrayDistinct` | 1 (langfuse) | 4 | yes | gate:langfuse |
 | `arrayEnumerateUniq` | 1 (openpanel) | 4 | yes | gate:openpanel |
 | `countState` | 1 (openpanel) | 4 | yes | gate:openpanel |
 | `groupUniqArrayArrayIf` | 1 (langfuse) | 4 | yes | gate:langfuse |
-| `least` | 1 (langfuse) | 4 | yes | gate:langfuse |
 | `maxState` | 1 (openpanel) | 4 | yes | gate:openpanel |
 | `minState` | 1 (openpanel) | 4 | yes | gate:openpanel |
 | `toYYYYMMDD` | 1 (openpanel) | 4 | yes | gate:openpanel |
@@ -131,12 +130,14 @@ The ClickHouse features real applications use, mined from their query logs and m
 | `windowFunnel` | 1 (openpanel) | 4 | yes | gate:openpanel |
 | `approx_top_kArray` | 1 (langfuse) | 3 | yes | gate:langfuse |
 | `currentDatabase` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `minIf` | 1 (langfuse) | 3 | yes | gate:langfuse |
 | `row_number` | 1 (langfuse) | 3 | yes | gate:langfuse |
 | `toUnixTimestamp64Milli` | 1 (openpanel) | 3 | yes | gate:openpanel |
+| `COUNTDistinct` | 1 (langfuse) | 2 | yes | gate:langfuse |
 | `avgIf` | 1 (openpanel) | 2 | yes | gate:openpanel |
+| `hasAll` | 1 (langfuse) | 2 | yes | gate:langfuse |
 | `isNaN` | 1 (openpanel) | 2 | yes | gate:openpanel |
 | `like` | 1 (langfuse) | 2 | yes | gate:langfuse |
+| `minIf` | 1 (langfuse) | 2 | yes | gate:langfuse |
 | `range` | 1 (openpanel) | 2 | yes | gate:openpanel |
 | `sumState` | 1 (openpanel) | 2 | yes | gate:openpanel |
 | `toIntervalSecond` | 1 (langfuse) | 2 | yes | gate:langfuse |
@@ -155,10 +156,10 @@ The ClickHouse features real applications use, mined from their query logs and m
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
-| `If` | 2 (langfuse, openpanel) | 39 | yes | gate:langfuse |
+| `If` | 2 (langfuse, openpanel) | 46 | yes | gate:langfuse |
 | `State` | 2 (langfuse, openpanel) | 24 | yes | gate:langfuse |
-| `Distinct` | 2 (langfuse, openpanel) | 12 | yes | gate:langfuse |
-| `Array` | 1 (langfuse) | 28 | yes | gate:langfuse |
+| `Distinct` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
+| `Array` | 1 (langfuse) | 25 | yes | gate:langfuse |
 
 ## `engine`
 
@@ -176,14 +177,14 @@ The ClickHouse features real applications use, mined from their query logs and m
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
-| `DateTime64` | 2 (langfuse, openpanel) | 818 | yes | gate:langfuse |
-| `String` | 2 (langfuse, openpanel) | 448 | yes | gate:langfuse |
-| `Array` | 2 (langfuse, openpanel) | 255 | yes | gate:langfuse |
+| `DateTime64` | 2 (langfuse, openpanel) | 1161 | yes | gate:langfuse |
+| `String` | 2 (langfuse, openpanel) | 469 | yes | gate:langfuse |
+| `Array` | 2 (langfuse, openpanel) | 276 | yes | gate:langfuse |
 | `Nullable` | 2 (langfuse, openpanel) | 116 | yes | gate:langfuse |
 | `LowCardinality` | 2 (langfuse, openpanel) | 109 | yes | gate:langfuse |
 | `Map` | 2 (langfuse, openpanel) | 88 | yes | gate:langfuse |
 | `UInt64` | 2 (langfuse, openpanel) | 78 | yes | gate:langfuse |
-| `Int32` | 2 (langfuse, openpanel) | 65 | yes | gate:langfuse |
+| `Int32` | 2 (langfuse, openpanel) | 73 | yes | gate:langfuse |
 | `Bool` | 2 (langfuse, openpanel) | 52 | yes | gate:langfuse |
 | `UInt8` | 2 (langfuse, openpanel) | 49 | yes | gate:langfuse |
 | `Float32` | 2 (langfuse, openpanel) | 22 | yes | gate:langfuse |
@@ -208,7 +209,7 @@ The ClickHouse features real applications use, mined from their query logs and m
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
-| `JSONEachRow` | 2 (langfuse, openpanel) | 968 | yes | gate:langfuse |
+| `JSONEachRow` | 2 (langfuse, openpanel) | 1405 | yes | gate:langfuse |
 | `Native` | 1 (langfuse) | 176 | yes | gate:langfuse |
 | `JSON` | 1 (openpanel) | 87 | yes | gate:openpanel |
 
@@ -216,21 +217,21 @@ The ClickHouse features real applications use, mined from their query logs and m
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
-| `max_execution_time` | 2 (langfuse, openpanel) | 959 | yes | gate:langfuse |
+| `max_execution_time` | 2 (langfuse, openpanel) | 1398 | yes | gate:langfuse |
 | `database` | 2 (langfuse, openpanel) | 691 | yes | gate:langfuse |
-| `input_format_parallel_parsing` | 2 (langfuse, openpanel) | 194 | yes | gate:langfuse |
-| `http_headers_progress_interval_ms` | 2 (langfuse, openpanel) | 60 | yes | gate:langfuse |
-| `send_progress_in_http_headers` | 2 (langfuse, openpanel) | 60 | yes | gate:langfuse |
+| `input_format_parallel_parsing` | 2 (langfuse, openpanel) | 204 | yes | gate:langfuse |
+| `http_headers_progress_interval_ms` | 2 (langfuse, openpanel) | 66 | yes | gate:langfuse |
+| `send_progress_in_http_headers` | 2 (langfuse, openpanel) | 66 | yes | gate:langfuse |
 | `enable_block_number_column` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
 | `enable_block_offset_column` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
-| `log_comment` | 1 (langfuse) | 953 | yes | gate:langfuse |
-| `timeout_before_checking_execution_speed` | 1 (langfuse) | 953 | yes | gate:langfuse |
-| `input_format_json_throw_on_bad_escape_sequence` | 1 (langfuse) | 629 | yes | gate:langfuse |
+| `log_comment` | 1 (langfuse) | 1392 | yes | gate:langfuse |
+| `timeout_before_checking_execution_speed` | 1 (langfuse) | 1392 | yes | gate:langfuse |
+| `input_format_json_throw_on_bad_escape_sequence` | 1 (langfuse) | 959 | yes | gate:langfuse |
+| `use_query_cache` | 1 (langfuse) | 710 | yes | gate:langfuse |
+| `query_plan_optimize_lazy_materialization` | 1 (langfuse) | 653 | yes | gate:langfuse |
+| `asterisk_include_alias_columns` | 1 (langfuse) | 625 | yes | gate:langfuse |
+| `asterisk_include_materialized_columns` | 1 (langfuse) | 625 | yes | gate:langfuse |
 | `enable_producing_buckets_out_of_order_in_aggregation` | 1 (langfuse) | 554 | yes | gate:langfuse |
-| `asterisk_include_alias_columns` | 1 (langfuse) | 514 | yes | gate:langfuse |
-| `asterisk_include_materialized_columns` | 1 (langfuse) | 514 | yes | gate:langfuse |
-| `use_query_cache` | 1 (langfuse) | 405 | yes | gate:langfuse |
-| `query_plan_optimize_lazy_materialization` | 1 (langfuse) | 323 | yes | gate:langfuse |
 | `distributed_product_mode` | 1 (openpanel) | 93 | yes | gate:openpanel |
 | `query_plan_convert_any_join_to_semi_or_anti_join` | 1 (openpanel) | 93 | yes | gate:openpanel |
 | `alter_sync` | 1 (langfuse) | 89 | yes | gate:langfuse |
@@ -257,13 +258,13 @@ The ClickHouse features real applications use, mined from their query logs and m
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
-| `SELECT` | 2 (langfuse, openpanel) | 1023 | yes | gate:langfuse |
-| `ORDER BY` | 2 (langfuse, openpanel) | 925 | yes | gate:langfuse |
-| `LIMIT` | 2 (langfuse, openpanel) | 856 | yes | gate:langfuse |
-| `INSERT` | 2 (langfuse, openpanel) | 388 | yes | gate:langfuse |
+| `SELECT` | 2 (langfuse, openpanel) | 1440 | yes | gate:langfuse |
+| `ORDER BY` | 2 (langfuse, openpanel) | 1335 | yes | gate:langfuse |
+| `LIMIT` | 2 (langfuse, openpanel) | 1268 | yes | gate:langfuse |
+| `INSERT` | 2 (langfuse, openpanel) | 408 | yes | gate:langfuse |
 | `ALTER TABLE` | 2 (langfuse, openpanel) | 370 | yes | gate:langfuse |
-| `GROUP BY` | 2 (langfuse, openpanel) | 332 | yes | gate:langfuse |
-| `INSERT FORMAT` | 2 (langfuse, openpanel) | 212 | yes | gate:langfuse |
+| `GROUP BY` | 2 (langfuse, openpanel) | 345 | yes | gate:langfuse |
+| `INSERT FORMAT` | 2 (langfuse, openpanel) | 232 | yes | gate:langfuse |
 | `ON CLUSTER` | 2 (langfuse, openpanel) | 196 | yes | gate:langfuse |
 | `ALTER ADD COLUMN` | 2 (langfuse, openpanel) | 164 | yes | gate:langfuse |
 | `table ORDER BY` | 2 (langfuse, openpanel) | 132 | yes | gate:langfuse |
@@ -272,27 +273,27 @@ The ClickHouse features real applications use, mined from their query logs and m
 | `ALTER ADD INDEX` | 2 (langfuse, openpanel) | 100 | yes | gate:langfuse |
 | `codec ZSTD` | 2 (langfuse, openpanel) | 98 | yes | gate:langfuse |
 | `column CODEC` | 2 (langfuse, openpanel) | 98 | yes | gate:langfuse |
+| `WITH` | 2 (langfuse, openpanel) | 85 | yes | gate:langfuse |
 | `column DEFAULT` | 2 (langfuse, openpanel) | 82 | yes | gate:langfuse |
-| `WITH` | 2 (langfuse, openpanel) | 76 | yes | gate:langfuse |
+| `FINAL` | 2 (langfuse, openpanel) | 72 | yes | gate:langfuse |
 | `PARTITION BY` | 2 (langfuse, openpanel) | 68 | yes | gate:langfuse |
-| `FINAL` | 2 (langfuse, openpanel) | 62 | yes | gate:langfuse |
+| `scalar subquery` | 2 (langfuse, openpanel) | 53 | yes | gate:langfuse |
 | `CREATE MATERIALIZED VIEW` | 2 (langfuse, openpanel) | 51 | yes | gate:langfuse |
-| `parametric function` | 2 (langfuse, openpanel) | 49 | yes | gate:langfuse |
-| `DISTINCT` | 2 (langfuse, openpanel) | 43 | yes | gate:langfuse |
-| `scalar subquery` | 2 (langfuse, openpanel) | 42 | yes | gate:langfuse |
+| `parametric function` | 2 (langfuse, openpanel) | 50 | yes | gate:langfuse |
+| `DISTINCT` | 2 (langfuse, openpanel) | 45 | yes | gate:langfuse |
 | `table SETTINGS` | 2 (langfuse, openpanel) | 42 | yes | gate:langfuse |
 | `WITH FILL` | 2 (langfuse, openpanel) | 40 | yes | gate:langfuse |
 | `subquery in FROM` | 2 (langfuse, openpanel) | 35 | yes | gate:langfuse |
 | `skip index minmax` | 2 (langfuse, openpanel) | 25 | yes | gate:langfuse |
+| `LEFT JOIN` | 2 (langfuse, openpanel) | 22 | yes | gate:langfuse |
 | `TTL` | 2 (langfuse, openpanel) | 19 | yes | gate:langfuse |
 | `HAVING` | 2 (langfuse, openpanel) | 18 | yes | gate:langfuse |
-| `LEFT JOIN` | 2 (langfuse, openpanel) | 16 | yes | gate:langfuse |
 | `column ALIAS` | 2 (langfuse, openpanel) | 11 | yes | gate:langfuse |
 | `INNER JOIN` | 2 (langfuse, openpanel) | 8 | yes | gate:langfuse |
 | `ARRAY JOIN` | 2 (langfuse, openpanel) | 6 | yes | gate:langfuse |
 | `CREATE DATABASE` | 2 (langfuse, openpanel) | 5 | yes | gate:langfuse |
-| `query parameter` | 1 (langfuse) | 755 | yes | gate:langfuse |
-| `LIMIT BY` | 1 (langfuse) | 545 | yes | gate:langfuse |
+| `query parameter` | 1 (langfuse) | 1113 | yes | gate:langfuse |
+| `LIMIT BY` | 1 (langfuse) | 874 | yes | gate:langfuse |
 | `INSERT VALUES` | 1 (langfuse) | 176 | yes | gate:langfuse |
 | `ALTER MATERIALIZE INDEX` | 1 (langfuse) | 69 | yes | gate:langfuse |
 | `DROP VIEW` | 1 (langfuse) | 42 | yes | gate:langfuse |
@@ -309,22 +310,22 @@ The ClickHouse features real applications use, mined from their query logs and m
 | `ALTER DROP INDEX` | 1 (langfuse) | 15 | yes | gate:langfuse |
 | `RENAME` | 1 (openpanel) | 12 | yes | gate:openpanel |
 | `codec DOUBLEDELTA` | 1 (openpanel) | 12 | yes | gate:openpanel |
-| `IN subquery` | 1 (langfuse) | 9 | yes | gate:langfuse |
-| `UNION ALL` | 1 (langfuse) | 9 | yes | gate:langfuse |
+| `UNION ALL` | 1 (langfuse) | 10 | yes | gate:langfuse |
 | `column MATERIALIZED` | 1 (langfuse) | 9 | yes | gate:langfuse |
+| `IN subquery` | 1 (langfuse) | 8 | yes | gate:langfuse |
 | `aggregate DISTINCT` | 1 (openpanel) | 7 | yes | gate:openpanel |
 | `ALTER MODIFY COLUMN` | 1 (langfuse) | 6 | yes | gate:langfuse |
 | `ALTER MODIFY QUERY` | 1 (langfuse) | 6 | yes | gate:langfuse |
 | `ALTER MODIFY SETTING` | 1 (langfuse) | 6 | yes | gate:langfuse |
 | `SAMPLE BY` | 1 (langfuse) | 6 | yes | gate:langfuse |
 | `skip index text` | 1 (langfuse) | 6 | yes | gate:langfuse |
+| `DELETE` | 1 (langfuse) | 5 | yes | gate:langfuse |
 | `ALTER MODIFY TTL` | 1 (openpanel) | 4 | yes | gate:openpanel |
 | `WITH ROLLUP` | 1 (openpanel) | 4 | yes | gate:openpanel |
 | `skip index set` | 1 (openpanel) | 4 | yes | gate:openpanel |
 | `ANY JOIN` | 1 (openpanel) | 3 | yes | gate:openpanel |
-| `DELETE` | 1 (langfuse) | 3 | yes | gate:langfuse |
 | `PROJECTION` | 1 (langfuse) | 3 | yes | gate:langfuse |
 | `window function` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `EXCEPT` | 1 (langfuse) | 2 | yes | gate:langfuse |
+| `FULL JOIN` | 1 (langfuse) | 2 | yes | gate:langfuse |
 | `SHOW TABLES` | 1 (langfuse) | 2 | yes | gate:langfuse |
-| `FULL JOIN` | 1 (langfuse) | 1 | yes | gate:langfuse |
+| `EXCEPT` | 1 (langfuse) | 1 | yes | gate:langfuse |
