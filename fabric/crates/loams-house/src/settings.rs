@@ -45,7 +45,8 @@ pub const LOAMS_SETTINGS: &[&str] = &[
 pub struct SessionLimits {
     /// `max_memory_usage`, at most 4 GiB (0, unlimited, is over it).
     pub max_memory_usage: u64,
-    /// `max_execution_time`, at most 300 s (0, unlimited, is over it).
+    /// `max_execution_time`, at most 900 s by default (D1571; 0, unlimited, is
+    /// over it).
     pub max_execution_time_s: f64,
     /// `max_threads`, at most the node's cores (0 means "auto", which is allowed).
     pub max_threads: u64,
@@ -451,7 +452,7 @@ mod tests {
             164
         );
         assert_eq!(
-            check("max_execution_time", "300.5", &limits, &known)
+            check("max_execution_time", "900.5", &limits, &known)
                 .expect_err("over")
                 .code(),
             164
@@ -576,6 +577,33 @@ mod tests {
         }
     }
 
+    /// D1571 (owner, 2026-10-22): the cap is 900 s by default, so Langfuse's
+    /// background jobs (`max_execution_time = 605`) run, and anything over it
+    /// is still refused, never clamped (FL2 Ruling 10).
+    #[test]
+    fn langfuse_job_time_is_under_the_default_cap() {
+        let limits = SessionLimits::default();
+        let known = known();
+        check("max_execution_time", "605", &limits, &known).expect("Langfuse's jobs");
+        check("max_execution_time", "900", &limits, &known).expect("at the cap");
+        let over = check("max_execution_time", "901", &limits, &known).expect_err("over");
+        assert_eq!(over.code(), 164);
+        assert!(
+            over.message().contains("shouldn't be greater than 900"),
+            "{over}"
+        );
+        let tighter = SessionLimits {
+            max_execution_time_s: 60.0,
+            ..SessionLimits::default()
+        };
+        assert_eq!(
+            check("max_execution_time", "605", &tighter, &known)
+                .expect_err("a House's own cap")
+                .code(),
+            164
+        );
+    }
+
     /// Fix round 1, I3: values are read the way ClickHouse reads a setting's
     /// string, and what converts to 0 (unlimited), past a cap, or cannot be read
     /// is refused — not passed on unchecked.
@@ -639,7 +667,7 @@ mod tests {
             assert_eq!(code("max_memory_usage", value), expected, "{value:?}");
         }
         for (value, expected) in [
-            ("300", None),
+            ("900", None),
             ("0.5", None),
             (".5", None),
             ("1E2", None),
@@ -650,7 +678,7 @@ mod tests {
             ("-1", Some(164)),
             ("1e-7", Some(164)),
             ("0.0000005", Some(164)),
-            ("300.5", Some(164)),
+            ("900.5", Some(164)),
             ("1e3", Some(164)),
             ("inf", Some(36)),
             ("Infinity", Some(36)),
