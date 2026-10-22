@@ -101,7 +101,7 @@ export type EngineState =
   | { phase: 'ready'; url: string; esUrl: string; flightUrl: string; pid: number }
   | { phase: 'failed'; reason: string; logPath: string };
 export type FactoryAppId =
-  | 'forgejo' | 'zulip' | 'plane' | 'glitchtip' | 'openpanel' | 'matomo' | 'langfuse' | 'openobserve';
+  | 'forgejo' | 'zulip' | 'plane' | 'glitchtip' | 'openpanel' | 'matomo' | 'langfuse' | 'signoz';
 export type FactoryHealth = 'unconfigured' | 'ok' | 'auth_failed' | 'unreachable';
 export interface FactoryAppInfo {
   id: FactoryAppId; label: string; url?: string; health: FactoryHealth;
@@ -430,7 +430,7 @@ Commit `feat(plugins): data studio`.
   - `OpenPanel`;
   - `Matomo`;
   - `Langfuse`;
-  - `OpenObserve` (`hasPanels: false`).
+  - `SigNoz` (`hasPanels: false`; health is probed at `/api/v2/healthz` on the configured origin; Preview: SigNoz on Loams House, D1666).
 
   Credential fields follow each adapter's env names, mapped to config (from the plugins report: Forgejo `token`; Zulip `email` and `apiKey`; ItsAPlan `apiKey`; GlitchTip `token`; OpenPanel `clientId` and `clientSecret`; Matomo `apiToken` and `siteId`; Langfuse `publicKey` and `secretKey`). Task 0 confirms the exact config keys.
 - `ops.ts`: `OPS: Record<FactoryAppId, Record<string, {params: ZodSchema; run(adapter, params) => Promise<unknown>}>>`, per §37 §19.6, plus `health` for every app with an adapter. Read-only methods only; a test asserts the method names against an allowlist regex `^(get|list|search|health|fetch|query)`.
@@ -1065,7 +1065,7 @@ const plugin: PluginModule = {
 | Matomo | `MatomoAdapterService` | `{baseUrl, apiToken, timeoutMs?, defaultRowLimit?, defaultPeriod?, defaultDate?}` | Bearer `token_auth` |
 | Langfuse | `LangfuseAdapterService` | `{baseUrl, publicKey, secretKey, timeoutMs?}` | HTTP Basic; `/api/public` appended |
 
-OpenObserve has no adapter (full UI only), and there is no `plane` adapter: Plane is served through the ItsAPlan adapter (Task 10 maps `plane` to ItsAPlan). A bad config throws in the constructor for some adapters (OpenPanel validates `clientId`). `forgejo.detach()` releases the cache, and the others hold no timers except OpenPanel's throttles. Each adapter also exports `<x>Manifest`, `<x>Loader` and `*_SKILLS`, which the FactoryHost does not use.
+SigNoz has no adapter (full UI only), and there is no `plane` adapter: Plane is served through the ItsAPlan adapter (Task 10 maps `plane` to ItsAPlan). A bad config throws in the constructor for some adapters (OpenPanel validates `clientId`). `forgejo.detach()` releases the cache, and the others hold no timers except OpenPanel's throttles. Each adapter also exports `<x>Manifest`, `<x>Loader` and `*_SKILLS`, which the FactoryHost does not use.
 
 **R0.8. Proposed op -> method mapping for §19.6** (Task 10 fixes it in `ops.ts`; every listed method exists today and is a GET). Defaults noted are the adapter's, and `limit` is clamped to <= 50 for every op:
 - Forgejo

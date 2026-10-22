@@ -14,6 +14,19 @@ All notable changes to this project are documented here. The format follows [Kee
   `SIGN_IN_KIND_AUTHENTIK` and `SIGN_IN_KIND_AUTHENTIK_DEVICE_CODE` are deprecated in favour of
   the new `SIGN_IN_KIND_OIDC` and `SIGN_IN_KIND_OIDC_DEVICE_CODE`; `OIDC_PROVIDER_KIND_ZITADEL`
   is added. The tailnet tag `tag:authentik` is now `tag:zitadel`.
+- **OpenObserve, from the Software Factory** (D1666). SigNoz replaces it as the factory's
+  observability app (see Changed). A stored OpenObserve connection is no longer listed.
+
+### Changed
+- **The Software Factory's observability app is SigNoz on Loams House** (D1666, owner, 2026-10-22).
+  The factory lists **SigNoz** where it listed OpenObserve: full UI only, health checked at
+  `/api/v2/healthz`, and labelled **"Preview: SigNoz on Loams House"** in Studio until SigNoz
+  passes the House gate (D1571). Only SigNoz's MIT community build is used
+  (`signoz/signoz-community` v0.145.0, never `ee/`), with its OTLP collector
+  (`signoz/signoz-otel-collector` v0.144.12, AGPL-3.0, unmodified), both pinned by digest in
+  `deploy/factory/images.lock`. `deploy/factory/signoz/compose.yaml` is an opt-in overlay on the
+  Loams stack that points SigNoz at the install's House (native and HTTP endpoints, user,
+  password); no ClickHouse server is bundled. Idle, SigNoz and its collector use about 85 MiB.
 
 ### Added
 - **The TypeScript SDK runs in Cloudflare Workers**: the default transport sends `redirect: "manual"` in workerd
