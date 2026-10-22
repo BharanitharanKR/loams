@@ -6,20 +6,28 @@ name: Desktop
 # the macOS builds here carry only an ad-hoc signature, which Apple Silicon needs to run the app.
 #
 # What runs (two tiers, owner, 2026-10-13; the org has about 20 concurrent jobs, about 5 macOS):
-# - pull request into dev (fast tier): Linux x64 only, with the Playwright smoke test.
-# - pull request into main (the dev -> main release gate), push to main, a dispatch, and the
-#   nightly run on dev (nightly.yml dispatches this workflow): all five platforms.
+# - pull request into dev (fast tier) that touches the desktop app, the stacks it packages or
+#   the release scripts: Linux x64 only, with the Playwright smoke test. A web-only change does
+#   not run it (the Web job builds and tests the console; the nightly and the release gate
+#   package it into the desktop).
+# - pull request into main (the dev -> main release gate) or a release branch, one labelled
+#   `ci:full`, push to main, a dispatch, and the nightly run on dev (nightly.yml dispatches this
+#   workflow): all five platforms.
 # - a release: desktop-electron-release.yml builds all five itself.
 on:
   pull_request:
     paths:
       - 'apps/desktop-electron/**'
-      - 'web/**'
       - 'plugins/core/**'
       - 'plugins/packages/**'
-      # The stacks (neon, wesql, tikv) are packaged from deploy/.
-      - 'deploy/**'
+      # The stacks the desktop packages (electron-builder.config.cjs `extraResources`).
+      - 'deploy/loams-postgres-dev/**'
+      - 'deploy/wesql/**'
+      - 'deploy/tikv/**'
       - 'scripts/release/**'
+      # The root workspace it installs from (electron and electron-builder among them).
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
       - '.github/workflows/desktop-*.yml'
   push:
     branches: [main]
@@ -42,7 +50,8 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Which platforms this run builds: Linux x64 alone on a pull request into dev, all five otherwise.
+  # Which platforms this run builds: Linux x64 alone on an ordinary pull request, all five on the
+  # full tier and on every other event.
   platforms:
     name: Platforms
     runs-on: ubuntu-24.04
@@ -53,7 +62,7 @@ jobs:
       - name: platforms
         id: platforms
         env:
-          ALL: ${{ github.event_name != 'pull_request' || github.base_ref == 'main' }}
+          ALL: ${{ github.event_name != 'pull_request' || github.base_ref == 'main' || startsWith(github.base_ref, 'release/') || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
           # The runners are repository variables so either pool can be swapped when GitHub's macOS
           # capacity runs short (on 2026-10-13 the arm64 pool queued jobs for hours). A build whose
           # runner is the other architecture is cross-compiled: MACOS_X64_RUNNER=macos-15 builds x64

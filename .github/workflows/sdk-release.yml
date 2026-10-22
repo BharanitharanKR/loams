@@ -129,6 +129,21 @@ jobs:
       go_tag: ${{ steps.spell.outputs.go_tag }}
       gem: ${{ steps.spell.outputs.gem }}
       composer_tag: ${{ steps.spell.outputs.composer_tag }}
+      # On a pull request, which SDKs' packaging its paths touch: each build job
+      # below runs only for those (this workflow and sdk-version.py select all).
+      # A tag push and a dispatch build every SDK.
+      typescript: ${{ steps.sdks.outputs.typescript }}
+      python: ${{ steps.sdks.outputs.python }}
+      rust: ${{ steps.sdks.outputs.rust }}
+      csharp: ${{ steps.sdks.outputs.csharp }}
+      go: ${{ steps.sdks.outputs.go }}
+      swift: ${{ steps.sdks.outputs.swift }}
+      cpp: ${{ steps.sdks.outputs.cpp }}
+      ruby: ${{ steps.sdks.outputs.ruby }}
+      php: ${{ steps.sdks.outputs.php }}
+      dart: ${{ steps.sdks.outputs.dart }}
+      jvm: ${{ steps.sdks.outputs.jvm }}
+      objc: ${{ steps.sdks.outputs.objc }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -136,6 +151,66 @@ jobs:
           fetch-depth: 0
           fetch-tags: true
           persist-credentials: false
+      # Empty token: a local git comparison, so no pull-requests permission.
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: sdks
+        if: github.event_name == 'pull_request'
+        with:
+          token: ''
+          base: ${{ github.event.pull_request.base.sha }}
+          ref: ${{ github.event.pull_request.head.sha }}
+          filters: |
+            all: &all
+              - '.github/workflows/sdk-release.yml'
+              - 'scripts/sdk/sdk-version.py'
+            typescript:
+              - *all
+              - 'sdks/typescript/tools/**'
+              - 'sdks/typescript/packages/*/package.json'
+            python:
+              - *all
+              - 'sdks/python/pyproject.toml'
+            rust:
+              - *all
+              - 'sdks/rust/Cargo.toml'
+              - 'crates/loams-proto/**'
+              - 'crates/loams-live-proto/**'
+            csharp:
+              - *all
+              - 'sdks/csharp/src/Loams/Loams.csproj'
+            go:
+              - *all
+              - 'sdks/go/go.mod'
+            swift:
+              - *all
+              - 'Package.swift'
+              - 'sdks/swift/Package.swift'
+            cpp:
+              - *all
+              - 'sdks/cpp/CMakeLists.txt'
+              - 'sdks/cpp/cmake/**'
+              - 'sdks/cpp/packaging/**'
+            ruby:
+              - *all
+              - 'sdks/ruby/loams.gemspec'
+              - 'sdks/ruby/lib/loams/version.rb'
+            php:
+              - *all
+              - 'sdks/php/composer.json'
+              - 'scripts/sdk/php-split.sh'
+            dart:
+              - *all
+              - 'sdks/dart/pubspec.yaml'
+            jvm:
+              - *all
+              - 'sdks/java/pom.xml'
+              - 'sdks/java/build.sh'
+              - 'sdks/kotlin/pom.xml'
+              - 'sdks/kotlin/build.sh'
+              - 'scripts/sdk/maven-bundle.sh'
+            objc:
+              - *all
+              - 'Loams.podspec'
       - name: the ref, the tag and the gate
         id: plan
         env:
@@ -244,6 +319,7 @@ jobs:
   typescript:
     name: "TypeScript: build and pack"
     needs: plan
+    if: github.event_name != 'pull_request' || needs.plan.outputs.typescript == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -336,6 +412,7 @@ jobs:
   python:
     name: "Python: build and check"
     needs: plan
+    if: github.event_name != 'pull_request' || needs.plan.outputs.python == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -401,6 +478,7 @@ jobs:
   rust:
     name: "Rust: build and package"
     needs: plan
+    if: github.event_name != 'pull_request' || needs.plan.outputs.rust == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
@@ -505,6 +583,7 @@ jobs:
   csharp:
     name: "C#: build and pack"
     needs: plan
+    if: github.event_name != 'pull_request' || needs.plan.outputs.csharp == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     steps:
@@ -582,6 +661,7 @@ jobs:
   go:
     name: "Go: test"
     needs: plan
+    if: github.event_name != 'pull_request' || needs.plan.outputs.go == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -664,6 +744,7 @@ jobs:
   swift:
     name: "Swift: build and test"
     needs: plan
+    if: github.event_name != 'pull_request' || needs.plan.outputs.swift == 'true'
     # Foundation's async URLSession, as ci.yml's sdk-swift job.
     runs-on: macos-latest
     timeout-minutes: 30
@@ -694,6 +775,7 @@ jobs:
   cpp:
     name: "C++: build the archive"
     needs: plan
+    if: github.event_name != 'pull_request' || needs.plan.outputs.cpp == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -787,6 +869,7 @@ jobs:
   ruby:
     name: "Ruby: build the gem"
     needs: plan
+    if: github.event_name != 'pull_request' || needs.plan.outputs.ruby == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -861,6 +944,7 @@ jobs:
   php:
     name: "PHP: test and split"
     needs: plan
+    if: github.event_name != 'pull_request' || needs.plan.outputs.php == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -927,6 +1011,7 @@ jobs:
   dart:
     name: "Dart: test and pub publish --dry-run"
     needs: plan
+    if: github.event_name != 'pull_request' || needs.plan.outputs.dart == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -987,6 +1072,7 @@ jobs:
   jvm:
     name: "Java and Kotlin: build the Maven Central bundles"
     needs: plan
+    if: github.event_name != 'pull_request' || needs.plan.outputs.jvm == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
@@ -1105,6 +1191,7 @@ jobs:
   objc:
     name: "Objective-C: pod lib lint"
     needs: plan
+    if: github.event_name != 'pull_request' || needs.plan.outputs.objc == 'true'
     runs-on: macos-latest
     timeout-minutes: 30
     steps:

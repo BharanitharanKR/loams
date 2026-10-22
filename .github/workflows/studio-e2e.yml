@@ -103,7 +103,7 @@ jobs:
 
   electron:
     name: "Studio e2e: Electron"
-    if: github.event_name != 'pull_request' || github.base_ref == 'main'
+    if: github.event_name != 'pull_request' || github.base_ref == 'main' || startsWith(github.base_ref, 'release/') || contains(github.event.pull_request.labels.*.name, 'ci:full')
     runs-on: ubuntu-24.04
     timeout-minutes: 75
     steps:

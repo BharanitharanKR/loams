@@ -33,8 +33,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     outputs:
-      # 'true' on a pull request into main or a push to main: the full tier.
-      full: ${{ github.base_ref == 'main' || github.ref == 'refs/heads/main' }}
+      # 'true' on a pull request into main or a release branch, one labelled
+      # `ci:full` (then a push), or a push to main: the full tier.
+      full: ${{ github.base_ref == 'main' || startsWith(github.base_ref, 'release/') || contains(github.event.pull_request.labels.*.name, 'ci:full') || github.ref == 'refs/heads/main' }}
       web: ${{ steps.filter.outputs.web }}
       plugins: ${{ steps.filter.outputs.plugins }}
       npm-licences: ${{ steps.filter.outputs.npm-licences }}

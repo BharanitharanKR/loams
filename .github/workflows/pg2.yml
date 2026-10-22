@@ -183,7 +183,7 @@ jobs:
 
   wal-decoder:
     # Full tier: a pull request into main, a dispatch (the nightly), not dev.
-    if: github.event_name == 'workflow_dispatch' || github.base_ref == 'main'
+    if: github.event_name == 'workflow_dispatch' || github.base_ref == 'main' || startsWith(github.base_ref, 'release/') || contains(github.event.pull_request.labels.*.name, 'ci:full')
     name: WAL decoder
     runs-on: ubuntu-24.04
     steps:
@@ -248,7 +248,7 @@ jobs:
 
   pg-control:
     # Full tier: a pull request into main, a dispatch (the nightly), not dev.
-    if: ${{ !inputs.candidate-pins && (github.event_name == 'workflow_dispatch' || github.base_ref == 'main') }}
+    if: ${{ !inputs.candidate-pins && (github.event_name == 'workflow_dispatch' || github.base_ref == 'main' || startsWith(github.base_ref, 'release/') || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     name: pg-control
     runs-on: ubuntu-24.04
     steps:
@@ -275,7 +275,7 @@ jobs:
 
   pg-control-role:
     # Full tier: a pull request into main, a dispatch (the nightly), not dev.
-    if: ${{ !inputs.candidate-pins && (github.event_name == 'workflow_dispatch' || github.base_ref == 'main') }}
+    if: ${{ !inputs.candidate-pins && (github.event_name == 'workflow_dispatch' || github.base_ref == 'main' || startsWith(github.base_ref, 'release/') || contains(github.event.pull_request.labels.*.name, 'ci:full')) }}
     name: Engine with pg-control
     runs-on: ubuntu-24.04
     steps:
