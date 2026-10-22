@@ -6,6 +6,10 @@ jobs, about 5 of them macOS). CI uses GitHub-hosted runners only (owner, 2026-10
 removed). The `RUNNER_HEAVY` and `RUNNER_MAIN` repository variables select the label for the heavy
 Rust jobs and the main-branch jobs, and default to `ubuntu-latest`.
 
+Nx Cloud (D1667) caches the Nx tasks' results: only a push to `dev` in `monorepo.yml` connects
+for now (`NX_CLOUD_CI=on`), and release, package, publish and deploy workflows never use a task
+cache. Nx Agents, allowed for JS tasks only, are off. See [the Nx Cloud guide](../guides/nx-cloud.md).
+
 ## Tiers
 
 | Event | What runs |

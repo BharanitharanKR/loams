@@ -103,6 +103,10 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Shipped artefacts never come from a task cache (docs/guides/nx-cloud.md): no Nx Cloud,
+  # and no cached Nx results, local or remote.
+  NX_NO_CLOUD: 'true'
+  NX_SKIP_NX_CACHE: 'true'
   DOTNET_CLI_TELEMETRY_OPTOUT: '1'
   DOTNET_NOLOGO: '1'
 

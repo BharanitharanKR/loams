@@ -33,6 +33,12 @@ concurrency:
   group: console-deploy
   cancel-in-progress: false
 
+env:
+  # A deployed build never comes from a task cache (docs/guides/nx-cloud.md): no Nx Cloud,
+  # and no cached Nx results, local or remote.
+  NX_NO_CLOUD: 'true'
+  NX_SKIP_NX_CACHE: 'true'
+
 jobs:
   deploy:
     name: Deploy

@@ -97,6 +97,10 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Shipped artefacts never come from a task cache (docs/guides/nx-cloud.md): no Nx Cloud,
+  # and no cached Nx results, local or remote.
+  NX_NO_CLOUD: 'true'
+  NX_SKIP_NX_CACHE: 'true'
   # The server's features: the release image's (deploy/release/Containerfile.loams
   # FEATURES), so `loams dev` from a package serves what the image serves,
   # Durable on 127.0.0.1:8001 included (#925, D262). The Linux job checks the
