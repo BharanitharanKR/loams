@@ -502,6 +502,9 @@ Amendment notes pointing here are in §32, §49, §47 and the HS1 plan, and on t
 ## 18. Licences (D1566)
 
 - **No BSL, GPL or AGPL code is copied** into Loams (D11).
+
+  > **Amended by D1574 (owner, 2026-10-22).** FSL is treated like BSL: FSL code is never copied or ported, and FSL software runs only where BSL software would be allowed (an unmodified container, never redistributed).
+
 - **ClickHouse** and **TiFlash** are Apache-2.0 (§4.2, §49 §19). Code ported from either keeps its copyright header, and NOTICE carries their notices. ClickHouse's stateless tests (`.sql` and `.reference`) are Apache-2.0 and may be vendored with attribution, filtered by a manifest (as D349 already allows).
 - **Databend**: Apache-2.0 for most of the repository, with enterprise features under a separate licence (§4.3). Nothing is reused before a file-by-file audit that names the licence of each file; enterprise directories are never read for porting.
 - **DataFusion, Arrow, iceberg-rust, foyer, sqlparser-rs**: Apache-2.0 (§4.8).
