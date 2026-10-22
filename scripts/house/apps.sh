@@ -3,7 +3,8 @@
 #
 #   scripts/house/apps.sh <app> up      start it (compose up --wait)
 #   scripts/house/apps.sh <app> drive   run its driver against the running stack
-#   scripts/house/apps.sh <app> dump    write query_log.tsv, async_insert_log.tsv,
+#   scripts/house/apps.sh <app> dump    write query_log.tsv (with the settings
+#                                       its logging proxy saw, R1.1), async_insert_log.tsv,
 #                                       part_log.tsv and its migration files
 #                                       under $HE0_OUT/<app>/
 #   scripts/house/apps.sh <app> down    stop it and remove its volumes
@@ -157,6 +158,14 @@ case "$VERB" in
     ch "SYSTEM FLUSH LOGS"
     ch "$QUERY_LOG_SQL" >"$OUT/query_log.tsv"
     ch "$ASYNC_INSERT_LOG_SQL" >"$OUT/async_insert_log.tsv"
+    # The logging proxy's access log (R1.1): the settings each request sent,
+    # defaults included, merged into query_log.tsv by query_id.
+    CHLOG=$(compose config --services | grep -E '^(chlog|op-chlog)$' | head -n1 || true)
+    if [ -n "$CHLOG" ]; then
+      compose cp "$CHLOG:/var/log/chlog/access.log" "$OUT/http_log.json"
+      python3 -I "$ROOT/scripts/house/http_settings.py" \
+        "$OUT/query_log.tsv" "$OUT/async_insert_log.tsv" "$OUT/http_log.json"
+    fi
     ch "$PART_LOG_SQL" >"$OUT/part_log.tsv"
     ch "SELECT version()" >"$OUT/clickhouse_version.txt"
     MIGRATIONS=$(field migrations)

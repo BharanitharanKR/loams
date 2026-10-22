@@ -7,7 +7,7 @@ apps = ["langfuse", "openpanel", "signoz"]
 [[feature]]
 name = "syntax:SELECT"
 apps = ["langfuse", "openpanel", "signoz"]
-frequency = 2390
+frequency = 2391
 reason = "apps>=3"
 
 [[feature]]
@@ -19,7 +19,7 @@ reason = "apps>=3"
 [[feature]]
 name = "setting:max_execution_time"
 apps = ["langfuse", "openpanel", "signoz"]
-frequency = 1580
+frequency = 1582
 reason = "apps>=3"
 
 [[feature]]
@@ -55,13 +55,13 @@ reason = "apps>=3"
 [[feature]]
 name = "setting:database"
 apps = ["langfuse", "openpanel", "signoz"]
-frequency = 771
+frequency = 774
 reason = "apps>=3"
 
 [[feature]]
 name = "syntax:INSERT"
 apps = ["langfuse", "openpanel", "signoz"]
-frequency = 713
+frequency = 715
 reason = "apps>=3"
 
 [[feature]]
@@ -97,13 +97,13 @@ reason = "apps>=3"
 [[feature]]
 name = "syntax:INSERT FORMAT"
 apps = ["langfuse", "openpanel", "signoz"]
-frequency = 418
+frequency = 420
 reason = "apps>=3"
 
 [[feature]]
 name = "setting:input_format_parallel_parsing"
 apps = ["langfuse", "openpanel", "signoz"]
-frequency = 352
+frequency = 357
 reason = "apps>=3"
 
 [[feature]]
@@ -559,7 +559,7 @@ reason = "gate:langfuse"
 [[feature]]
 name = "format:JSONEachRow"
 apps = ["langfuse", "openpanel"]
-frequency = 1405
+frequency = 1407
 reason = "gate:langfuse"
 
 [[feature]]
@@ -623,21 +623,21 @@ frequency = 69
 reason = "gate:openpanel"
 
 [[feature]]
-name = "function:length"
-apps = ["langfuse", "openpanel"]
-frequency = 67
-reason = "gate:langfuse"
-
-[[feature]]
 name = "setting:http_headers_progress_interval_ms"
 apps = ["langfuse", "openpanel"]
-frequency = 66
+frequency = 68
 reason = "gate:langfuse"
 
 [[feature]]
 name = "setting:send_progress_in_http_headers"
 apps = ["langfuse", "openpanel"]
-frequency = 66
+frequency = 68
+reason = "gate:langfuse"
+
+[[feature]]
+name = "function:length"
+apps = ["langfuse", "openpanel"]
+frequency = 67
 reason = "gate:langfuse"
 
 [[feature]]
@@ -1093,13 +1093,19 @@ reason = "gate:signoz"
 [[feature]]
 name = "setting:distributed_product_mode"
 apps = ["openpanel"]
-frequency = 93
+frequency = 96
 reason = "gate:openpanel"
 
 [[feature]]
 name = "setting:query_plan_convert_any_join_to_semi_or_anti_join"
 apps = ["openpanel"]
-frequency = 93
+frequency = 96
+reason = "gate:openpanel"
+
+[[feature]]
+name = "setting:date_time_input_format"
+apps = ["openpanel"]
+frequency = 92
 reason = "gate:openpanel"
 
 [[feature]]
@@ -1107,6 +1113,12 @@ name = "setting:alter_sync"
 apps = ["langfuse"]
 frequency = 89
 reason = "gate:langfuse"
+
+[[feature]]
+name = "format:JSON"
+apps = ["openpanel"]
+frequency = 88
+reason = "gate:openpanel"
 
 [[feature]]
 name = "setting:use_text_index_dictionary_cache"
@@ -1119,12 +1131,6 @@ name = "setting:use_text_index_postings_cache"
 apps = ["langfuse"]
 frequency = 88
 reason = "gate:langfuse"
-
-[[feature]]
-name = "format:JSON"
-apps = ["openpanel"]
-frequency = 87
-reason = "gate:openpanel"
 
 [[feature]]
 name = "setting:enable_full_text_index"
@@ -1191,6 +1197,12 @@ name = "function:notEmpty"
 apps = ["langfuse"]
 frequency = 44
 reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:enable_http_compression"
+apps = ["openpanel"]
+frequency = 44
+reason = "gate:openpanel"
 
 [[feature]]
 name = "setting:type_json_skip_duplicated_paths"
@@ -1517,6 +1529,12 @@ frequency = 8
 reason = "gate:openpanel"
 
 [[feature]]
+name = "setting:max_insert_block_size"
+apps = ["openpanel"]
+frequency = 8
+reason = "gate:openpanel"
+
+[[feature]]
 name = "syntax:IN subquery"
 apps = ["langfuse"]
 frequency = 8
@@ -1590,12 +1608,6 @@ reason = "gate:langfuse"
 
 [[feature]]
 name = "setting:flatten_nested"
-apps = ["openpanel"]
-frequency = 6
-reason = "gate:openpanel"
-
-[[feature]]
-name = "setting:max_insert_block_size"
 apps = ["openpanel"]
 frequency = 6
 reason = "gate:openpanel"
@@ -1752,6 +1764,12 @@ reason = "gate:langfuse"
 
 [[feature]]
 name = "function:windowFunnel"
+apps = ["openpanel"]
+frequency = 4
+reason = "gate:openpanel"
+
+[[feature]]
+name = "setting:max_http_get_redirects"
 apps = ["openpanel"]
 frequency = 4
 reason = "gate:openpanel"

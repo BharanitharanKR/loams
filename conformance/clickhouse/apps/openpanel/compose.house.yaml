@@ -26,6 +26,8 @@ services:
   op-dashboard:
     <<: *house-service
     environment: *house-env
-  # The oracle does not start in a House run.
+  # The oracle and its logging proxy do not start in a House run.
   op-ch:
+    profiles: ["oracle"]
+  op-chlog:
     profiles: ["oracle"]
