@@ -69,6 +69,8 @@ jobs:
         with:
           filters: |
             packaging:
+              - "apps/desktop-electron/package.json"
+              - "apps/desktop-electron/project.json"
               - "apps/desktop-electron/scripts/**"
               - "apps/desktop-electron/electron-builder.config.cjs"
               - "apps/desktop-electron/build/**"

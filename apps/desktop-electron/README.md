@@ -128,8 +128,9 @@ fast tier on Linux x64: the unit tests and typecheck, the console and desktop bu
 no engine build and no package. The full tier builds the engine and the agent daemon, packages the app, checks that the
 daemon is bundled and runs the smoke test on `real` (on Linux). It runs on all five platforms for a push to `main`, a
 dispatch (the nightly on `dev`) and a pull request into `main`, and on Linux x64 for a pull request into `dev` that
-touches the packaging inputs (`scripts/`, `electron-builder.config.cjs`, `build/`, `resources/`, the repository's
-`deploy/` and `scripts/release/`, or a `desktop-*.yml` workflow) or carries the `ci:full` label (add it, then push).
+touches the packaging inputs (`package.json`, `project.json`, `scripts/`, `electron-builder.config.cjs`, `build/`,
+`resources/`, the repository's `deploy/` and `scripts/release/`, or a `desktop-*.yml` workflow) or carries the
+`ci:full` label (add it, then push).
 
 ## Security model
 
