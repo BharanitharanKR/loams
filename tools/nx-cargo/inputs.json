@@ -18,23 +18,56 @@
         "loams-upgrade"
       ],
       "extra": {
-        "loams-agentd-sessions": ["crates/README.md"],
-        "loams-apps-mock": ["conformance/graph/desktop/**"],
-        "loams-collection": ["sdks/fixtures/tokens.json"],
-        "loams-console-mock": ["api/console/openapi.json", "docs/api/route-map.md"],
-        "loams-gateway": ["deploy/pgdog/compose.yaml"],
-        "loams-live": ["docs/api/reasons.md"],
-        "loams-migrate": ["release/upgrade-path.toml"],
-        "loams-sqlrouter": ["scripts/spec/check.sh", "spec/tla/router/**"]
+        "loams-agentd-sessions": [
+          "crates/README.md"
+        ],
+        "loams-apps-mock": [
+          "conformance/graph/desktop/**"
+        ],
+        "loams-collection": [
+          "sdks/fixtures/tokens.json"
+        ],
+        "loams-console-mock": [
+          "api/console/openapi.json",
+          "docs/api/route-map.md"
+        ],
+        "loams-gateway": [
+          "deploy/pgdog/compose.yaml"
+        ],
+        "loams-live": [
+          "docs/api/reasons.md"
+        ],
+        "loams-migrate": [
+          "release/upgrade-path.toml"
+        ],
+        "loams-sqlrouter": [
+          "scripts/spec/check.sh",
+          "spec/tla/router/**"
+        ]
       },
       "tools": {
-        "loams-agentd-harness": ["node --version", "python3 --version"],
-        "loams-agentd-preview": ["python3 --version"],
-        "loams-agentd-sessions": ["git --version"],
-        "loams-agentd-connect": ["git --version"],
-        "loams-git": ["git --version"],
-        "loams-git-remote": ["git --version"],
-        "loams": ["git --version"]
+        "loams-agentd-harness": [
+          "node --version",
+          "python3 --version"
+        ],
+        "loams-agentd-preview": [
+          "python3 --version"
+        ],
+        "loams-agentd-sessions": [
+          "git --version"
+        ],
+        "loams-agentd-connect": [
+          "git --version"
+        ],
+        "loams-git": [
+          "git --version"
+        ],
+        "loams-git-remote": [
+          "git --version"
+        ],
+        "loams": [
+          "git --version"
+        ]
       },
       "noCache": {
         "loams-compat": "runs psql when the machine has it",
@@ -42,7 +75,46 @@
         "loams-sqlgate": "real-gate tests drive podman and curl",
         "loams-upgrade": "the bundle code downloads releases with curl"
       },
-      "scanIgnore": ["crates/loams-safekeeper/src/journal/segments.rs"]
+      "scanIgnore": [
+        "crates/loams-safekeeper/src/journal/segments.rs"
+      ]
+    },
+    "fabric/Cargo.toml": {
+      "comment": "The fabric/ workspace. Its CI runs cargo test, not nextest, so test runs `cargo test -p <crate>`.",
+      "test": "cargo-test",
+      "repoWide": [
+        "loams-connector-http",
+        "loams-connector-kafka",
+        "loams-connector-protocols",
+        "loams-flow",
+        "loams-house",
+        "loams-house-mine"
+      ],
+      "extra": {
+        "loams-connector-analytics": [
+          "conformance/connectors/fixtures/**"
+        ],
+        "loams-connector-objects": [
+          "conformance/connectors/fixtures/cloudflare-r2/**"
+        ],
+        "loams-house-worker": [
+          "conformance/clickhouse/corpus/**",
+          "deploy/house/kind/worker-pods.yaml"
+        ]
+      },
+      "tools": {
+        "loams-fabric": [
+          "readelf --version"
+        ],
+        "loams-flow-conformance": [
+          "python3 --version"
+        ]
+      },
+      "noCache": {
+        "loams-flow": "kube, helm and promtool tests depend on the tools the machine has",
+        "loams-house-worker": "sandbox tests call kubectl when the machine has it"
+      },
+      "scanIgnore": []
     }
   }
 }

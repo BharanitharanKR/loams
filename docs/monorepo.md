@@ -58,7 +58,7 @@ Linux's normal desktop build includes the native browser and needs WebKitGTK 4.1
 
 ## Dependency graph and caching
 
-Nx discovers the JS, mobile and native projects, including existing package script targets, and one project per crate of the root Cargo workspace (tag `cargo-crate`, from `tools/nx-cargo`; see [the Nx Cloud guide](guides/nx-cloud.md#rust)). Use `pnpm nx graph` locally to inspect them. `pnpm affected --base=<base-revision> --head=HEAD` runs affected checks; CI supplies explicit refs and platform scheduling.
+Nx discovers the JS, mobile and native projects, including existing package script targets, and one project per crate of the root and `fabric/` Cargo workspaces (tag `cargo-crate`, from `tools/nx-cargo`; see [the Nx Cloud guide](guides/nx-cloud.md#rust)). Use `pnpm nx graph` locally to inspect them. `pnpm affected --base=<base-revision> --head=HEAD` runs affected checks; CI supplies explicit refs and platform scheduling.
 
 - TypeScript project/package dependencies retain their existing boundaries.
 - Plugins' composite compiler runs once through a shared aggregate target, avoiding concurrent writes from recursive `tsc -b` tasks.
