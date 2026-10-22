@@ -27,6 +27,37 @@ pub fn features(text: &str) -> Features {
     out
 }
 
+/// `text` with each migration-template placeholder `{NAME}` (a brace, one
+/// identifier, a brace: not a `{name:Type}` query parameter) removed, or
+/// `None` if it has none. Langfuse's canonical migrations carry
+/// `{CLICKHOUSE_CLUSTER_CLAUSE}`; removing it gives the unclustered form.
+pub fn strip_template_placeholders(text: &str) -> Option<String> {
+    let spanned = tokens::tokenize(text).ok()?;
+    let solid: Vec<&tokens::Spanned> = spanned
+        .iter()
+        .filter(|t| !matches!(t.token, Token::Whitespace(_)))
+        .collect();
+    let mut cuts = Vec::new();
+    for w in solid.windows(3) {
+        if let (Token::LBrace, Token::Word(_), Token::RBrace) =
+            (&w[0].token, &w[1].token, &w[2].token)
+        {
+            cuts.push(w[0].range.start..w[2].range.end);
+        }
+    }
+    if cuts.is_empty() {
+        return None;
+    }
+    let mut out = String::with_capacity(text.len());
+    let mut at = 0;
+    for c in cuts {
+        out.push_str(&text[at..c.start]);
+        at = c.end;
+    }
+    out.push_str(&text[at..]);
+    Some(out)
+}
+
 /// The name `CREATE [OR REPLACE] FUNCTION [IF NOT EXISTS] <name>` defines.
 pub fn defined_function(text: &str) -> Option<String> {
     let spanned = tokens::tokenize(text).ok()?;

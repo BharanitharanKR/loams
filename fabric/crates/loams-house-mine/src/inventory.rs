@@ -145,7 +145,28 @@ pub struct Options {
 }
 
 /// The features one statement uses and how it was read.
-pub fn read_statement(text: &str, explainer: Option<&mut dyn Explainer>) -> (Features, Path) {
+pub fn read_statement(text: &str, mut explainer: Option<&mut dyn Explainer>) -> (Features, Path) {
+    let first: Option<&mut dyn Explainer> = match explainer.as_mut() {
+        Some(e) => Some(&mut **e),
+        None => None,
+    };
+    let (features, path) = read_one(text, first);
+    if path != Path::Unparsed {
+        return (features, path);
+    }
+    // A migration template: read it with its `{PLACEHOLDER}`s removed
+    // (HE0 Task 2 ruling R2.13).
+    if let Some(stripped) = lexical::strip_template_placeholders(text) {
+        let (mut features, path) = read_one(&stripped, explainer);
+        if path != Path::Unparsed {
+            features.add("syntax", "template placeholder");
+            return (features, path);
+        }
+    }
+    (features, path)
+}
+
+fn read_one(text: &str, explainer: Option<&mut dyn Explainer>) -> (Features, Path) {
     if let Some(mut f) = ast::features(text) {
         f.extend(lexical::features(text));
         return (f, Path::Parsed);
@@ -221,6 +242,15 @@ pub fn build(
     // The application's own SQL functions (`CREATE FUNCTION`): calls to them
     // are not ClickHouse functions (HE0 Task 5 ruling).
     let udfs = defined_functions(sources);
+    // Source ids name one statement each; a repeated id would merge two
+    // statements' counts.
+    debug_assert!(
+        {
+            let mut seen = BTreeSet::new();
+            sources.iter().all(|s| seen.insert(s.id.as_str()))
+        },
+        "source ids repeat"
+    );
     let mut groups: Vec<Group> = Vec::new();
     let mut by_key: HashMap<(String, Vec<String>), usize> = HashMap::new();
     for source in sources {
