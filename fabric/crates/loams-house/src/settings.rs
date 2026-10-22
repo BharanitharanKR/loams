@@ -105,6 +105,8 @@ pub const SATISFIED_SETTINGS: &[&str] = &[
     "parallel_view_processing",
     "enable_full_text_index",
     "flatten_nested",
+    // HE1 R9.16: a TTL applies at read time, at once (R9.12).
+    "materialize_ttl_after_modify",
 ];
 
 /// Whether `name` is one of Loams's settings.
@@ -187,7 +189,9 @@ pub fn is_default(name: &str, value: &str) -> bool {
 
 /// Whether `name` may be set at all.
 pub fn is_allowed(name: &str) -> bool {
-    (is_front_only(name) || loams_house_ipc::policy::on_the_lists(name))
+    // `final` is the front's to read (FINAL on every merging table it reads,
+    // HS1 R11.1) and the worker profile's to leave changeable (HE1 R9.16).
+    (name == "final" || is_front_only(name) || loams_house_ipc::policy::on_the_lists(name))
         && !crate::deny::is_denied_setting(name)
 }
 

@@ -220,6 +220,13 @@ pub enum AlterOp {
         /// The part's name.
         part: String,
     },
+    /// `MATERIALIZE COLUMN [IF EXISTS] c [IN PARTITION p]` (HE1 R9.16): writes
+    /// a column's default into rows stored without it, which a lake table's read
+    /// views already read; it only checks the column.
+    MaterializeColumn {
+        /// The column.
+        name: String,
+    },
     /// Another operation ClickHouse has (`ATTACH PARTITION`, `FREEZE`, …): `48`.
     Other {
         /// Its leading words (`ATTACH PARTITION`).
@@ -480,6 +487,11 @@ fn parse_op(text: &str) -> Result<AlterOp, HouseError> {
             name,
             partition,
         });
+    }
+    if c.eat_all(&["MATERIALIZE", "COLUMN"]) {
+        c.eat_all(&["IF", "EXISTS"]);
+        let name = c.ident()?;
+        return Ok(AlterOp::MaterializeColumn { name });
     }
     if c.eat_all(&["MODIFY", "COLUMN"]) {
         let if_exists = if_exists(&mut c);
@@ -745,6 +757,16 @@ pub async fn execute(
             "ALTER TABLE … {form} is not on the House's surface (HE1 R9.12)"
         )));
     }
+    // A Distributed table reads its local table's columns (R9.13): a column or
+    // metadata ALTER of it, which ClickHouse makes on every node beside the
+    // local table's, has nothing more to change (SigNoz; HE1 R9.16).
+    if let Some(loaded) = lake.load(namespace, &database, &name).await?
+        && ddl::class_of(&loaded.metadata) == ddl::TableClass::View
+        && ddl::distributed_target(&loaded).is_some()
+        && !alter.ops.iter().any(AlterOp::is_mutation)
+    {
+        return Ok(());
+    }
     let table = lake
         .lake_table(namespace, &database, &name, "ALTER TABLE")
         .await?;
@@ -801,6 +823,38 @@ fn mentions(text: &str, column: &str) -> bool {
         (t.word && raw == column)
             || ((raw.starts_with('`') || raw.starts_with('"')) && ddl::unquote(raw) == column)
     })
+}
+
+/// An `Enum`'s `'name' = value` pairs, if `text` is one.
+fn enum_pairs(text: &str) -> Option<Vec<(String, i64)>> {
+    let inner = text
+        .trim()
+        .strip_prefix("Enum8(")
+        .or_else(|| text.trim().strip_prefix("Enum16("))?
+        .strip_suffix(')')?;
+    let mut out = Vec::new();
+    let mut rest = inner.trim();
+    while !rest.is_empty() {
+        let body = rest.strip_prefix('\'')?;
+        let end = body.find('\'')?;
+        let name = body[..end].to_string();
+        let after = body[end + 1..].trim_start().strip_prefix('=')?.trim_start();
+        let number_end = after.find(',').unwrap_or(after.len());
+        let value = after[..number_end].trim().parse().ok()?;
+        out.push((name, value));
+        rest = after[number_end..].trim_start_matches(',').trim_start();
+    }
+    Some(out)
+}
+
+/// Whether `new` is an `Enum` holding every `name = value` of the `Enum` `old`:
+/// a key column may take it (ClickHouse allows it, and the stored strings are
+/// unchanged; SigNoz's `tagType`, HE1 R9.16).
+fn enum_extends(old: &str, new: &str) -> bool {
+    match (enum_pairs(old), enum_pairs(new)) {
+        (Some(old), Some(new)) => old.iter().all(|pair| new.contains(pair)),
+        _ => false,
+    }
 }
 
 /// An `ALTER`'s changes to one table, applied in memory, then committed once.
@@ -1140,6 +1194,10 @@ impl Edit {
                 Ok(())
             }
             AlterOp::MaterializeTtl => Ok(()),
+            AlterOp::MaterializeColumn { name } => match self.column_index(name) {
+                Some(_) => Ok(()),
+                None => Err(no_column(name, "materialize")),
+            },
             AlterOp::ModifyComment(comment) => {
                 self.ch.comment = comment.clone();
                 self.changed = true;
@@ -1375,7 +1433,9 @@ impl Edit {
                 )));
             }
             if column.ch_type != old.ch_type && old.stored() {
-                if self.key_use(&modify.name).is_some() {
+                if self.key_use(&modify.name).is_some()
+                    && !enum_extends(&old.ch_type, &column.ch_type)
+                {
                     return Err(forbidden(format!(
                         "ALTER of key column {} is forbidden",
                         quote_name(&modify.name)
