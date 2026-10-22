@@ -22,7 +22,7 @@ http.workspace = true
 # The Kafka client (CN2 Task 0, spike §1.1, R0.18, R0.19): rdkafka 0.39.0
 # (2026-01-25, MIT) over rdkafka-sys 4.10.0+2.12.1, which builds the bundled
 # librdkafka 2.12.1 (BSD-2-Clause) with `make`. Only this crate compiles it
-# (OR-6, Global Constraints). Features (R9.11): `tokio` for the async producer
+# (OR-6, Global Constraints). Features (R9.1): `tokio` for the async producer
 # and consumer; `libz` and `zstd` so gzip- and zstd-compressed topics can be
 # read (librdkafka has lz4 and snappy built in; zstd-sys is already in the
 # lock through parquet); `ssl-vendored` for TLS (Event Hubs' 9093, any `ssl`

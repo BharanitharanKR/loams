@@ -417,13 +417,19 @@ pub async fn create_pipe(
         || stmt.order_by.is_some()
         || stmt.primary_key.is_some()
         || stmt.inline_primary_key.is_some()
-        || stmt.sample_by
-        || stmt.ttl
+        || stmt.sample_by.is_some()
+        || stmt.ttl.is_some()
     {
         return refuse("A storage clause (PARTITION BY, ORDER BY, PRIMARY KEY, SAMPLE BY, TTL)");
     }
-    if let Some(entry) = &stmt.other_entry {
-        return refuse(&format!("{entry} in the column list"));
+    for (entry, present) in [
+        ("INDEX", !stmt.indexes.is_empty()),
+        ("PROJECTION", !stmt.projections.is_empty()),
+        ("CONSTRAINT", !stmt.constraints.is_empty()),
+    ] {
+        if present {
+            return refuse(&format!("{entry} in the column list"));
+        }
     }
     let feed = if engine == "S3Queue" {
         PipeFeed::Queue(s3queue::QueueSource::parse(
@@ -635,6 +641,56 @@ pub async fn create_materialized_view(
     lake.catalog()
         .commit(
             &source_table.ident,
+            Vec::new(),
+            vec![TableUpdate::SetProperties {
+                updates: HashMap::from([(
+                    format!("{MV_PREFIX}{}", view.id),
+                    serde_json::to_string(&view).map_err(|e| bad(e.to_string()))?,
+                )]),
+            }],
+        )
+        .await?;
+    Ok(())
+}
+
+/// `ALTER TABLE mv MODIFY QUERY SELECT …` (HE1 R9.12): the view's `SELECT`, which
+/// must still read the view's source first (the view lives on its source, and
+/// its cursor counts that source's snapshots). The cursor is kept: the new query
+/// applies to the snapshots committed after it, as in ClickHouse.
+pub async fn modify_materialized_view_query(
+    lake: &Lake,
+    namespace: u64,
+    database: &str,
+    name: &str,
+    select: &str,
+) -> Result<(), HouseError> {
+    let Some((source, mut view)) = find_view(lake, namespace, database, name).await? else {
+        return Err(HouseError::from(ChError::unknown_table(format!(
+            "Table {database}.{name} is not a materialized view: MODIFY QUERY changes one"
+        ))));
+    };
+    let probe = format!("CREATE MATERIALIZED VIEW loams_probe TO loams_probe AS {select}");
+    let parsed = ddl::parse_create_mv(&probe)?;
+    let Some((new_db, new_source)) = parsed.source else {
+        return Err(not_implemented(
+            "A materialized view's SELECT reads its source first: … FROM <table>",
+        ));
+    };
+    let new_db = new_db.unwrap_or_else(|| database.to_string());
+    let same = lake
+        .load(namespace, &new_db, &new_source)
+        .await?
+        .is_some_and(|t| t.ident == source.ident);
+    if !same {
+        return Err(not_implemented(format!(
+            "MODIFY QUERY of {database}.{name} reads {new_db}.{new_source}: a materialized view \
+             keeps its source on the House; drop it and create it again"
+        )));
+    }
+    view.select = parsed.select;
+    lake.catalog()
+        .commit(
+            &source.ident,
             Vec::new(),
             vec![TableUpdate::SetProperties {
                 updates: HashMap::from([(

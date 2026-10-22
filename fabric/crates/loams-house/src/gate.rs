@@ -87,7 +87,7 @@ pub fn required(stmt: &Stmt) -> &'static [crate::identity::Scope] {
         | Stmt::CreatePipe { .. }
         | Stmt::Drop(_)
         | Stmt::Truncate { .. }
-        | Stmt::AlterAddColumns { .. }
+        | Stmt::Alter { .. }
         | Stmt::Rename { .. }
         | Stmt::Undrop { .. } => &[Ddl],
     }
@@ -227,7 +227,7 @@ pub fn catalog_kind(stmt: &Stmt) -> Option<Kind> {
         Stmt::Drop(drop) if !drop.temporary => Kind::Drop,
         Stmt::Undrop { .. } => Kind::Undrop,
         Stmt::Rename { .. } => Kind::Rename,
-        Stmt::AlterAddColumns { .. } => Kind::AlterAdd,
+        Stmt::Alter { .. } => Kind::Alter,
         Stmt::Describe { .. } => Kind::Describe,
         Stmt::Show { .. } => Kind::Show,
         Stmt::Exists { .. } => Kind::Exists,

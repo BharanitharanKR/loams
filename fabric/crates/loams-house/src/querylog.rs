@@ -198,7 +198,7 @@ pub fn clickhouse_kind(kind: &str) -> &'static str {
         | "CreatePipe"
         | "CreateMaterializedView" => "Create",
         "Drop" | "Truncate" => "Drop",
-        "AlterAddColumns" => "Alter",
+        "Alter" => "Alter",
         "Rename" => "Rename",
         "Undrop" => "Undrop",
         "Show" => "Show",
