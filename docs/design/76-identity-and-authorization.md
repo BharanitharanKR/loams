@@ -1,5 +1,7 @@
 # 76 — Identity and Authorization: Zitadel and OpenFGA
 
+> **Proposed amendment (2026-10-23, pending the owner) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). D1615's list of what Ostrium hosts loses `console.loams.dev` (retired, D1705) and gains the Loams Cloud control plane (D1701). Devices are machine users of kind `device` under the user's personal org (D1714, D1725); prod installs keep their own issuer.
+
 Status: **Approved** · 2026-10-21 (written and approved the same day). D1600, the owner's ruling of 2026-10-21 that Loams cuts over from Authentik to Zitadel completely, with no migration path, no compatibility period and no dual running because there are no users, came first. The owner then approved the whole design with every default: D1601–D1621 are approved and Q1200–Q1214 are answered with their defaults.
 
 Source: the owner's draft "Loam Identity & Authorization Plan: Zitadel + OpenFGA" (draft v1, pasted 2026-10-21, kept at `~/Documents/Ostriumlabs/pitch/research/identity-zitadel-openfga-owner-plan.md`), with the instruction "add this". This document carries the draft into the repository's design format and renames "Loam" to "Loams". It also does three more things:
