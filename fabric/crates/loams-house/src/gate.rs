@@ -28,6 +28,7 @@ use crate::session::SessionGuard;
 /// fix round 1).
 pub fn statement_text(sql: &str, user: &str) -> String {
     let sql = deny::rewrite_host_functions(sql, &host_values(user));
+    let sql = crate::system::rewrite_cluster_reads(&sql);
     crate::classify::without_trailer(&sql).to_string()
 }
 

@@ -384,6 +384,17 @@ impl<'a> Cursor<'a> {
         }
     }
 
+    /// `ON CLUSTER <name>`, accepted and ignored (D344); the name, if any.
+    fn on_cluster(&mut self) -> Result<Option<String>, HouseError> {
+        if self.eat_all(&["ON", "CLUSTER"]) {
+            return match self.peek() {
+                Some(t) if self.raw(&t).starts_with('\'') => self.string().map(Some),
+                _ => self.ident().map(Some),
+            };
+        }
+        Ok(None)
+    }
+
     /// `ON CLUSTER <name>`, accepted and ignored (D344).
     pub(crate) fn skip_on_cluster(&mut self) -> Result<(), HouseError> {
         if self.eat_all(&["ON", "CLUSTER"]) {
@@ -1586,6 +1597,40 @@ pub struct OptimizeStmt {
     pub final_: bool,
     /// `DEDUPLICATE`.
     pub deduplicate: bool,
+}
+
+/// The cluster a `CREATE TABLE`, `CREATE VIEW`, `CREATE MATERIALIZED VIEW` or
+/// `CREATE DATABASE` statement names in `ON CLUSTER` (HE1 R9.62), as the House
+/// keeps the statement in `loams.ch.ddl`: the words up to the object's name,
+/// the name, then the clause. `None` when it names none or is another form.
+pub fn on_cluster_of(statement: &str) -> Option<String> {
+    let mut c = Cursor::new(statement);
+    if !c.eat("CREATE") {
+        return None;
+    }
+    let _ = c.eat_all(&["OR", "REPLACE"]);
+    loop {
+        let word = c
+            .peek()
+            .filter(|t| t.word)
+            .map(|t| c.raw(&t).to_ascii_uppercase())?;
+        match word.as_str() {
+            "TEMPORARY" | "MATERIALIZED" | "LIVE" | "WINDOW" | "REFRESHABLE" => {
+                c.at += 1;
+            }
+            "TABLE" | "VIEW" | "DATABASE" => {
+                c.at += 1;
+                break;
+            }
+            _ => return None,
+        }
+    }
+    let _ = c.eat_all(&["IF", "NOT", "EXISTS"]);
+    c.ident().ok()?;
+    if c.eat_symbol(b'.') {
+        c.ident().ok()?;
+    }
+    c.on_cluster().ok().flatten()
 }
 
 /// Reads `OPTIMIZE TABLE [db.]t [ON CLUSTER c] [PARTITION p | PARTITION ID 'p']
@@ -3037,6 +3082,37 @@ async fn catalog_table(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// HE1 R9.62: the cluster a stored `CREATE` names.
+    #[test]
+    fn on_cluster_is_read_from_create_statements() {
+        for (statement, want) in [
+            (
+                "CREATE TABLE IF NOT EXISTS signoz_traces.t ON CLUSTER cluster (a UInt8) ENGINE = MergeTree ORDER BY a",
+                Some("cluster"),
+            ),
+            (
+                "CREATE DATABASE IF NOT EXISTS signoz_logs ON CLUSTER 'c1'",
+                Some("c1"),
+            ),
+            (
+                "CREATE MATERIALIZED VIEW IF NOT EXISTS d.v ON CLUSTER `my c` TO d.t AS SELECT 1",
+                Some("my c"),
+            ),
+            (
+                "create or replace view v on cluster x as select 1",
+                Some("x"),
+            ),
+            (
+                "CREATE TABLE t (a UInt8) ENGINE = MergeTree ORDER BY a",
+                None,
+            ),
+            ("CREATE TABLE t AS SELECT 'ON CLUSTER c'", None),
+            ("ALTER TABLE t ON CLUSTER c ADD COLUMN b UInt8", None),
+        ] {
+            assert_eq!(on_cluster_of(statement).as_deref(), want, "{statement}");
+        }
+    }
 
     #[test]
     fn create_table_reads_every_clause() {

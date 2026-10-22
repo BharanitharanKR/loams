@@ -446,7 +446,7 @@ pub const HOST_FUNCTIONS: &[HostFunction] = &[
 
 /// The `system` tables a statement may read: catalogs of what the engine can do,
 /// the namespace's own objects, and generators. The rest describe the host
-/// (`disks`, `server_settings`, `asynchronous_metrics`, `macros`,
+/// (`disks`, `server_settings`, `asynchronous_metrics`,
 /// `user_directories`, `certificates`, `stack_trace`, …) or the engine's
 /// internals, and are `344` (§49 §13.1). `databases`, `tables`, `columns`,
 /// `parts`, `processes` and `errors` are the House's own ([`crate::system`],
@@ -490,6 +490,12 @@ pub const ALLOWED_SYSTEM_TABLES: &[&str] = &[
     // The namespace's `_house.query_log` (HS1 Task 23): never chDB's own,
     // the front's view answers it.
     "query_log",
+    // A one-node House's cluster (HE1 R9.62): never chDB's own, the front's
+    // views answer them.
+    "clusters",
+    "macros",
+    "mutations",
+    "distributed_ddl_queue",
 ];
 
 /// The database `merge()` may name besides the current one. HS1 Task 11 builds
