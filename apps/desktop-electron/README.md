@@ -12,7 +12,7 @@ Loams Desktop is one window with five things in it, built from plan AP1e
 - **A local engine.** The app supervises `loams dev` on your machine, plus optional local stacks
   (Postgres on Neon, WeSQL, TiKV) with pages for Data, Postgres, WeSQL, Live, Durable, Streams & Links,
   Connectors and Graph.
-- **Software Factory.** Forgejo, Zulip, ItsAPlan (Plane), GlitchTip, OpenPanel, Matomo, Langfuse and OpenObserve,
+- **Software Factory.** Forgejo, Zulip, ItsAPlan (Plane), GlitchTip, OpenPanel, Matomo, Langfuse and SigNoz (Preview: SigNoz on Loams House, full UI only),
   as read-only native panels and as embedded full UIs, under Studio at `/studio/factory` (the old `/factory` paths
   redirect there).
 - **An agent panel**, docked on the right, that works over the same services with approval for every write.
