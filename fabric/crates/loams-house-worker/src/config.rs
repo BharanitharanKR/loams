@@ -359,6 +359,11 @@ fn worker_profile() -> String {
         "        <max_threads><max>{}</max></max_threads>",
         max_threads_cap()
     );
+    // HE1 R9.11: settings a client may send but only switched off (a cached
+    // result could outlive the snapshot its read view pinned).
+    for name in loams_house_ipc::policy::OFF_ONLY_SETTINGS {
+        let _ = writeln!(constraints, "        <{name}><max>0</max></{name}>");
+    }
     // HS1 Task 21: §49 §12's read and result caps, held the same way.
     for (name, cap) in [
         ("max_bytes_to_read", MAX_BYTES_TO_READ),
@@ -621,6 +626,7 @@ mod tests {
         ));
         assert!(users.contains("<max_execution_time>300</max_execution_time>"));
         assert!(users.contains("<max_threads><max>"));
+        assert!(users.contains("<use_query_cache><max>0</max></use_query_cache>"));
         assert!(users.contains("<max_bytes_to_read>1099511627776</max_bytes_to_read>"));
         assert!(users.contains(
             "<max_bytes_to_read><min>1</min><max>1099511627776</max></max_bytes_to_read>"
