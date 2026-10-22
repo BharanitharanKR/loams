@@ -136,7 +136,7 @@ final class SmallTests: XCTestCase {
     }
 
     /// Same algorithm as scripts/proto-hash.sh: ties the app to conformance/proto-ref.lock.
-    func testProtoRefMatchesLock() throws {
+    func test_proto_ref_matches_lock() throws {
         let root = Fixtures.repoRoot
         let lock = try String(contentsOf: root.appendingPathComponent("conformance/proto-ref.lock"), encoding: .utf8)
         let want = lock.split(separator: "\n").first { $0.hasPrefix("tree_sha256=") }.map { String($0.dropFirst("tree_sha256=".count)) }
