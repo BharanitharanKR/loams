@@ -66,7 +66,7 @@ Nx discovers 49 projects, including existing package script targets. Use `pnpm n
 - JS lock/config files and runtime versions participate in cache keys.
 - SDK conformance tests remain noncacheable because they produce required coverage reports outside their package directory.
 - Signing, installation, services, generation/drift, releases, and most native tasks are noncacheable.
-- No Nx Cloud account, paid cache service, or remote data upload is configured.
+- `nx.json` names the Nx Cloud workspace (`nxCloudId`) for the remote cache. CI stays off the cloud (`NX_NO_CLOUD=true`) until the workflows are wired with scoped access tokens. Set `NX_NO_CLOUD=true` locally to run without it.
 
 Vite+ 1.0.0/Vitest 5.0.1 stay scoped to plugins, while the console retains ordinary Vite 8.3.1/Vitest 5.0.3. pnpm reports Vite peer-version warnings because the plugins' compatibility fork identifies as version 1.0.0; actual builds and tests pass. MSW's nonessential postinstall is explicitly disabled. Do not apply a global Vite override.
 
