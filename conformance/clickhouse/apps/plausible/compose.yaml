@@ -22,7 +22,7 @@ services:
       TOTP_VAULT_KEY: aGUwLW5vdC1hLXNlY3JldC1oZTAtbm90LWEtc2VjcmU=
       HTTP_PORT: "8000"
       DATABASE_URL: postgres://postgres:postgres@postgres:5432/plausible_db
-      CLICKHOUSE_DATABASE_URL: http://clickhouse:8123/plausible_events_db
+      CLICKHOUSE_DATABASE_URL: http://chlog:8123/plausible_events_db
       DISABLE_REGISTRATION: "false"
     ports: ["127.0.0.1:${HE0_PLAUSIBLE_PORT:-3400}:8000"]
     volumes: [plausible-data:/var/lib/plausible]
@@ -31,11 +31,25 @@ services:
     depends_on:
       postgres: { condition: service_healthy }
       clickhouse: { condition: service_healthy }
+      chlog: { condition: service_started }
     healthcheck:
       test: ["CMD-SHELL", "wget -q -O - http://127.0.0.1:8000/api/health || exit 1"]
       interval: 5s
       timeout: 5s
       retries: 60
+
+  chlog:
+    image: docker.io/library/caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    labels: { io.loams.licence: "Apache-2.0" }
+    # The logging proxy (HE0 Task 1): records every request's settings,
+    # defaults included, which query_log leaves out.
+    environment:
+      HE0_CH_UPSTREAM: clickhouse:8123
+    volumes:
+      - ../clickhouse/chlog.Caddyfile:/etc/caddy/Caddyfile:ro
+      - chlog:/var/log/chlog
+    depends_on:
+      clickhouse: { condition: service_healthy }
 
   clickhouse:
     image: ${HE0_CLICKHOUSE_IMAGE:-docker.io/clickhouse/clickhouse-server:26.9.2.8@sha256:7b9a0b6e9ab7ef79db5c4f8a9808f880258704eb7b4af9309f9029c16e727a80}
@@ -68,6 +82,7 @@ services:
       retries: 20
 
 volumes:
+  chlog:
   plausible-data:
   plausible-ch-data:
   plausible-db-data:

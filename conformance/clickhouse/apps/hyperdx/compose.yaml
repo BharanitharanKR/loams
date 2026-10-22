@@ -26,7 +26,7 @@ services:
       OTEL_EXPORTER_OTLP_ENDPOINT: http://otel-collector:4318
       OTEL_SERVICE_NAME: he0-hyperdx-app
       USAGE_STATS_ENABLED: "false"
-      DEFAULT_CONNECTIONS: '[{"name":"Local ClickHouse","host":"http://clickhouse:8123","username":"default","password":""}]'
+      DEFAULT_CONNECTIONS: '[{"name":"Local ClickHouse","host":"http://chlog:8123","username":"default","password":""}]'
       DEFAULT_SOURCES: '[{"from": {"databaseName": "default", "tableName": "otel_logs"}, "kind": "log", "timestampValueExpression": "Timestamp", "name": "Logs", "displayedTimestampValueExpression": "Timestamp", "implicitColumnExpression": "Body", "serviceNameExpression": "ServiceName", "bodyExpression": "Body", "eventAttributesExpression": "LogAttributes", "resourceAttributesExpression": "ResourceAttributes", "defaultTableSelectExpression": "Timestamp,ServiceName,SeverityText,Body", "severityTextExpression": "SeverityText", "traceIdExpression": "TraceId", "spanIdExpression": "SpanId", "metadataMaterializedViews": {"keyRollupTable": "otel_logs_key_rollup_15m", "kvRollupTable": "otel_logs_kv_rollup_15m", "granularity": "15 minute"}, "connection": "Local ClickHouse", "traceSourceId": "Traces", "sessionSourceId": "Sessions", "metricSourceId": "Metrics"}, {"from": {"databaseName": "default", "tableName": "otel_traces"}, "kind": "trace", "timestampValueExpression": "Timestamp", "name": "Traces", "displayedTimestampValueExpression": "Timestamp", "implicitColumnExpression": "SpanName", "serviceNameExpression": "ServiceName", "eventAttributesExpression": "SpanAttributes", "resourceAttributesExpression": "ResourceAttributes", "defaultTableSelectExpression": "Timestamp,ServiceName,StatusCode,round(Duration/1e6),SpanName", "traceIdExpression": "TraceId", "spanIdExpression": "SpanId", "durationExpression": "Duration", "durationPrecision": 9, "parentSpanIdExpression": "ParentSpanId", "spanNameExpression": "SpanName", "spanKindExpression": "SpanKind", "statusCodeExpression": "StatusCode", "statusMessageExpression": "StatusMessage", "metadataMaterializedViews": {"keyRollupTable": "otel_traces_key_rollup_15m", "kvRollupTable": "otel_traces_kv_rollup_15m", "granularity": "15 minute"}, "connection": "Local ClickHouse", "logSourceId": "Logs", "sessionSourceId": "Sessions", "metricSourceId": "Metrics"}, {"from": {"databaseName": "default", "tableName": ""}, "kind": "metric", "timestampValueExpression": "TimeUnix", "name": "Metrics", "resourceAttributesExpression": "ResourceAttributes", "metricTables": {"gauge": "otel_metrics_gauge", "histogram": "otel_metrics_histogram", "sum": "otel_metrics_sum", "_id": "682586a8b1f81924e628e808", "id": "682586a8b1f81924e628e808"}, "connection": "Local ClickHouse", "logSourceId": "Logs", "traceSourceId": "Traces", "sessionSourceId": "Sessions"}, {"from": {"databaseName": "default", "tableName": "hyperdx_sessions"}, "kind": "session", "timestampValueExpression": "TimestampTime", "name": "Sessions", "displayedTimestampValueExpression": "Timestamp", "implicitColumnExpression": "Body", "serviceNameExpression": "ServiceName", "bodyExpression": "Body", "eventAttributesExpression": "LogAttributes", "resourceAttributesExpression": "ResourceAttributes", "defaultTableSelectExpression": "Timestamp,ServiceName,SeverityText,Body", "severityTextExpression": "SeverityText", "traceIdExpression": "TraceId", "spanIdExpression": "SpanId", "connection": "Local ClickHouse", "logSourceId": "Logs", "traceSourceId": "Traces", "metricSourceId": "Metrics"}]'
     ports:
       - "127.0.0.1:${HE0_HYPERDX_PORT:-3600}:8000"
@@ -34,6 +34,7 @@ services:
     depends_on:
       db: { condition: service_started }
       clickhouse: { condition: service_healthy }
+      chlog: { condition: service_started }
 
   otel-collector:
     image: docker.io/clickhouse/clickstack-otel-collector:2.40.0@sha256:0e7dc29f8f6074afd106b96d53e5b98f1150e8882d926a20c03c6f680bd929ec
@@ -76,6 +77,19 @@ services:
       timeout: 3s
       retries: 30
 
+  chlog:
+    image: docker.io/library/caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    labels: { io.loams.licence: "Apache-2.0" }
+    # The logging proxy (HE0 Task 1): records every request's settings,
+    # defaults included, which query_log leaves out.
+    environment:
+      HE0_CH_UPSTREAM: clickhouse:8123
+    volumes:
+      - ../clickhouse/chlog.Caddyfile:/etc/caddy/Caddyfile:ro
+      - chlog:/var/log/chlog
+    depends_on:
+      clickhouse: { condition: service_healthy }
+
   clickhouse:
     image: ${HE0_CLICKHOUSE_IMAGE:-docker.io/clickhouse/clickhouse-server:26.9.2.8@sha256:7b9a0b6e9ab7ef79db5c4f8a9808f880258704eb7b4af9309f9029c16e727a80}
     labels: { io.loams.licence: "Apache-2.0" }
@@ -94,5 +108,6 @@ services:
       retries: 30
 
 volumes:
+  chlog:
   hyperdx-db-data:
   hyperdx-ch-data:
