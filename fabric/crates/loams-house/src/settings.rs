@@ -117,6 +117,73 @@ pub fn is_front_only(name: &str) -> bool {
     is_loams(name) || FRONT_SETTINGS.contains(&name) || SATISFIED_SETTINGS.contains(&name)
 }
 
+/// chDB's query-level settings with their defaults (`system.settings`), for
+/// [`is_default`] (HE1 R9.11).
+const CHDB_DEFAULTS: &str = include_str!("chdb_setting_defaults.tsv");
+
+/// TSV's escapes undone.
+fn unescape_tsv(text: &str) -> String {
+    let mut out = String::with_capacity(text.len());
+    let mut chars = text.chars();
+    while let Some(c) = chars.next() {
+        if c != '\\' {
+            out.push(c);
+            continue;
+        }
+        match chars.next() {
+            Some('t') => out.push('\t'),
+            Some('n') => out.push('\n'),
+            Some('r') => out.push('\r'),
+            Some('0') => out.push('\0'),
+            Some(other) => out.push(other),
+            None => out.push('\\'),
+        }
+    }
+    out
+}
+
+/// chDB's default for `name`, if it is one of its settings.
+pub fn chdb_default(name: &str) -> Option<String> {
+    use std::collections::HashMap;
+    use std::sync::OnceLock;
+    static DEFAULTS: OnceLock<HashMap<String, String>> = OnceLock::new();
+    DEFAULTS
+        .get_or_init(|| {
+            CHDB_DEFAULTS
+                .lines()
+                .filter(|l| !l.starts_with('#') && !l.is_empty())
+                .filter_map(|l| l.split_once('\t'))
+                .map(|(n, d)| (unescape_tsv(n), unescape_tsv(d)))
+                .collect()
+        })
+        .get(name)
+        .cloned()
+}
+
+/// Whether `value` is `name`'s default, as ClickHouse would read it: the same
+/// text, or the same boolean (`0`/`false`, `1`/`true`), or the same number
+/// (HE1 R9.11). Clients send settings at their defaults (the query log, which
+/// records only changed settings, never shows them), and asking for the default
+/// changes nothing, so such a setting is accepted whatever list it is on.
+pub fn is_default(name: &str, value: &str) -> bool {
+    let Some(default) = chdb_default(name) else {
+        return false;
+    };
+    let value = value.trim().trim_matches('\'');
+    if value == default {
+        return true;
+    }
+    let boolean = |v: &str| match v.to_ascii_lowercase().as_str() {
+        "0" | "false" => Some(false),
+        "1" | "true" => Some(true),
+        _ => None,
+    };
+    if let (Some(a), Some(b)) = (boolean(value), boolean(&default)) {
+        return a == b;
+    }
+    matches!((value.parse::<f64>(), default.parse::<f64>()), (Ok(a), Ok(b)) if a == b)
+}
+
 /// Whether `name` may be set at all.
 pub fn is_allowed(name: &str) -> bool {
     (is_front_only(name) || loams_house_ipc::policy::on_the_lists(name))
@@ -130,6 +197,17 @@ pub fn check(
     limits: &SessionLimits,
     known: &HashSet<String>,
 ) -> Result<(), HouseError> {
+    // A known setting at its default changes nothing (R9.11). Denied names
+    // stay refused, whatever the value.
+    // The House's own connection settings (`readonly`, `allow_ddl`, …) are not
+    // at their defaults on a worker, so they never count as one.
+    if !is_allowed(name)
+        && !crate::deny::is_denied_setting(name)
+        && !loams_house_ipc::policy::HOUSE_SETTINGS.contains(&name)
+        && is_default(name, value)
+    {
+        return Ok(());
+    }
     if !is_allowed(name) {
         // A denied name is `164` even where the engine has no such setting
         // (`user_files_path` is a server setting): it is refused, not unknown.
@@ -386,6 +464,51 @@ mod tests {
         )
         .expect("prefix");
         check("loams_snapshot_id", "42", &limits, &known).expect("Loams's own");
+    }
+
+    /// HE1 R9.11: a known setting at its default is accepted, whatever list it
+    /// is on (clients send defaults the query log never records); any other
+    /// value of it, and an unknown name, are still refused.
+    #[test]
+    fn settings_at_their_default_are_no_ops() {
+        let limits = SessionLimits::default();
+        let mut known = known();
+        known.extend(
+            [
+                "use_skip_indexes_on_data_read",
+                "use_text_index_header_cache",
+                "max_http_get_redirects",
+            ]
+            .map(String::from),
+        );
+        for (name, value) in [
+            ("use_skip_indexes_on_data_read", "1"),
+            ("use_skip_indexes_on_data_read", "true"),
+            ("use_text_index_header_cache", "1"),
+            ("max_http_get_redirects", "0"),
+            ("max_http_get_redirects", "'0'"),
+        ] {
+            check(name, value, &limits, &known).unwrap_or_else(|e| panic!("{name}={value}: {e}"));
+        }
+        assert_eq!(
+            check("max_http_get_redirects", "5", &limits, &known)
+                .expect_err("not default")
+                .code(),
+            164
+        );
+        assert_eq!(
+            check("use_skip_indexes_on_data_read", "0", &limits, &known)
+                .expect_err("not default")
+                .code(),
+            164
+        );
+        assert_eq!(
+            check("no_such_setting_loams", "0", &limits, &known)
+                .expect_err("unknown")
+                .code(),
+            115
+        );
+        assert!(chdb_default("format_custom_field_delimiter").is_some_and(|d| d.contains('\t')));
     }
 
     /// HE1 R9.11: every setting Langfuse v3 and v4 and OpenPanel 2.3.0 send, with

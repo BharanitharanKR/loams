@@ -455,6 +455,36 @@ async fn gate_application_settings_pass() {
     .await;
     assert_eq!(inline.status, 200, "{}", inline.text());
 
+    // R9.11: a setting at its default is accepted on any list (Langfuse's
+    // `use_skip_indexes_on_data_read`, OpenPanel's `max_http_get_redirects`), and
+    // reaches chDB unchanged; another value of it is refused.
+    let defaults = get(
+        addr,
+        &[
+            (
+                "query",
+                "SELECT getSetting('max_http_get_redirects') FORMAT TSV",
+            ),
+            ("use_skip_indexes_on_data_read", "1"),
+            ("use_text_index_header_cache", "true"),
+            ("max_http_get_redirects", "0"),
+        ],
+    )
+    .await;
+    assert_eq!(defaults.status, 200, "{}", defaults.text());
+    assert_eq!(defaults.text(), "0\n");
+    let changed = get(
+        addr,
+        &[("query", "SELECT 1"), ("max_http_get_redirects", "5")],
+    )
+    .await;
+    assert_eq!(
+        changed.header("X-ClickHouse-Exception-Code"),
+        Some("164"),
+        "{}",
+        changed.text()
+    );
+
     let on = get(addr, &[("query", "SELECT 1"), ("use_query_cache", "1")]).await;
     assert_eq!(
         on.header("X-ClickHouse-Exception-Code"),
