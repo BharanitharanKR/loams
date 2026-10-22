@@ -24,7 +24,9 @@
 //!    __loams_insert … SELECT …` runs the query over the namespace's pinned read
 //!    views (HS1 Task 11), as any query.
 //! 4. **Files.** `SELECT CAST(c, '<the Iceberg type's ClickHouse type>') AS c, …
-//!    FROM __loams_insert ORDER BY <sorting key>` comes back as one `ArrowStream`
+//!    FROM __loams_insert ORDER BY <sorting key>, <insert order>` — merged
+//!    first as ClickHouse merges an inserted block ([`merged_on_insert`]) —
+//!    comes back as one `ArrowStream`
 //!    document, which `loams_house_lake::write::DataWriter` turns into Parquet
 //!    data files with Iceberg field ids and statistics, split by partition and
 //!    size, as it arrives.
@@ -462,8 +464,9 @@ pub fn staging_head(columns: Option<&[String]>) -> String {
 
 /// The `SELECT` that writes the rows out: every field of the table's Iceberg
 /// schema, in order, cast to the ClickHouse type chDB's Iceberg reader gives it
-/// (so its Arrow type is the field's, up to what the lake conforms), sorted by
-/// the table's `ORDER BY`.
+/// (so its Arrow type is the field's, up to what the lake conforms), merged as
+/// ClickHouse merges an inserted block ([`merged_on_insert`]) and sorted by the
+/// table's `ORDER BY`, then by insert order ([`ORDER`]).
 pub fn output_sql(target: &Target) -> Result<String, HouseError> {
     let ch = &target.ch;
     let schema = target.table.metadata.current_schema();
@@ -498,12 +501,118 @@ pub fn output_sql(target: &Target) -> Result<String, HouseError> {
         ));
     }
     let key = expr::key_elements(&ch.order_by).map_err(|why| refusal(ch, &why))?;
-    let mut sql = format!("SELECT {}\nFROM {STAGING}", columns.join(", "));
-    if !key.is_empty() {
-        let elements: Vec<String> = key.into_iter().map(|(element, _)| element).collect();
-        sql.push_str(&format!("\nORDER BY {}", elements.join(", ")));
-    }
-    Ok(sql)
+    let rows = merged_on_insert(ch, &key)?;
+    let mut order: Vec<String> = key.into_iter().map(|(element, _)| element).collect();
+    order.push(ORDER.to_string());
+    Ok(format!(
+        "SELECT {}\nFROM ({rows})\nORDER BY {}",
+        columns.join(", "),
+        order.join(", ")
+    ))
+}
+
+/// The staged rows' position in the `INSERT`: the files are sorted by the
+/// table's key and then by it, as ClickHouse's writer sorts stably, so rows of
+/// one key stay in the order they were inserted (the last of equal versions
+/// wins a `ReplacingMergeTree`, R9.4). It is read with `max_threads = 1`
+/// ([`OUTPUT_SETTINGS`]), so the staging table's blocks come in order.
+const ORDER: &str = "__loams_order";
+
+/// The settings the output `SELECT` runs with beyond [`ARROW_SETTINGS`].
+const OUTPUT_SETTINGS: &[(&str, &str)] = &[("max_threads", "1")];
+
+/// The staged rows, merged within the `INSERT` as ClickHouse merges an
+/// inserted block (`optimize_on_insert`, on by default; measured on the
+/// 26.9.2.8 oracle, R9.4): a `ReplacingMergeTree` keeps per key the row of the
+/// greatest version, the last inserted among equals (and keeps `is_deleted`
+/// rows, which only `FINAL` drops); a `SummingMergeTree` sums per key, keeps
+/// the first row's other columns, and drops a key whose sums are all zero; a
+/// `VersionedCollapsingMergeTree` cancels rows of opposite sign per key and
+/// version as `FINAL` does ([`views`]); a `MergeTree` keeps every row.
+fn merged_on_insert(ch: &ChTable, key: &[(String, Option<String>)]) -> Result<String, HouseError> {
+    // Named, not `*`: `*` leaves out `MATERIALIZED` columns.
+    let staged: Vec<String> = ch
+        .columns
+        .iter()
+        .filter(|c| c.stored())
+        .map(|c| quote_name(&c.name))
+        .collect();
+    let staged = staged.join(", ");
+    let rows = format!("SELECT {staged}, rowNumberInAllBlocks() AS {ORDER} FROM {STAGING}");
+    let elements: Vec<String> = key.iter().map(|(element, _)| element.clone()).collect();
+    let by = if elements.is_empty() {
+        "tuple()".to_string()
+    } else {
+        elements.join(", ")
+    };
+    let engine = ddl::LakeEngine::parse(&ch.engine).unwrap_or(ddl::LakeEngine::MergeTree);
+    Ok(match engine {
+        ddl::LakeEngine::MergeTree => rows,
+        ddl::LakeEngine::Replacing { ver, .. } => {
+            let mut order = Vec::new();
+            if let Some(ver) = ver {
+                order.push(format!("{} DESC", quote_name(&ver)));
+            }
+            order.push(format!("{ORDER} DESC"));
+            format!(
+                "SELECT * FROM ({rows}) ORDER BY {} LIMIT 1 BY {by}",
+                order.join(", ")
+            )
+        }
+        ddl::LakeEngine::Summing { columns: summed } => {
+            let key_columns: Vec<&str> = key.iter().filter_map(|(_, c)| c.as_deref()).collect();
+            let mut select = Vec::new();
+            let mut sums = Vec::new();
+            for column in ch.columns.iter().filter(|c| c.stored()) {
+                let name = quote_name(&column.name);
+                let is_summed = match &summed {
+                    Some(list) => list.iter().any(|s| s == &column.name),
+                    None => {
+                        !key_columns.contains(&column.name.as_str())
+                            && views::is_numeric(&column.ch_type)
+                    }
+                };
+                if key_columns.contains(&column.name.as_str()) {
+                    select.push(name);
+                } else if is_summed {
+                    select.push(format!("sumWithOverflow({name}) AS {name}"));
+                    sums.push(format!("{name} = 0"));
+                } else {
+                    select.push(format!("argMin({name}, __loams_position) AS {name}"));
+                }
+            }
+            // The group's first position, under another name than the rows'
+            // so that no aggregate reads another's alias.
+            select.push(format!("min(__loams_position) AS {ORDER}"));
+            let having = if sums.is_empty() {
+                String::new()
+            } else {
+                format!(" HAVING NOT ({})", sums.join(" AND "))
+            };
+            format!(
+                "SELECT {} FROM (SELECT {staged}, rowNumberInAllBlocks() AS __loams_position \
+                 FROM {STAGING}) GROUP BY {by}{having}",
+                select.join(", ")
+            )
+        }
+        ddl::LakeEngine::VersionedCollapsing { sign, version } => {
+            let sign = quote_name(&sign);
+            let group = if elements.is_empty() {
+                quote_name(&version)
+            } else {
+                format!("{by}, {}", quote_name(&version))
+            };
+            format!(
+                "SELECT * FROM (SELECT *, row_number() OVER (PARTITION BY {group}, \
+                 __loams_balance ORDER BY {ORDER} DESC) AS __loams_rank FROM (SELECT *, \
+                 sum({sign}) OVER (PARTITION BY {group} ORDER BY {ORDER} ROWS BETWEEN \
+                 UNBOUNDED PRECEDING AND CURRENT ROW) AS __loams_balance, sum({sign}) OVER \
+                 (PARTITION BY {group}) AS __loams_total FROM ({rows})) WHERE {sign} = \
+                 sign(__loams_total) AND {sign} * __loams_balance BETWEEN 1 AND \
+                 abs(__loams_total)) WHERE __loams_rank = 1"
+            )
+        }
+    })
 }
 
 /// `497`: the table's catalog properties hold what the House will not run.
@@ -875,6 +984,7 @@ async fn stage(
     let mut out = execute(ctx, session, true, output, "ArrowStream");
     out.settings = ARROW_SETTINGS
         .iter()
+        .chain(OUTPUT_SETTINGS)
         .map(|(k, v)| (k.to_string(), v.to_string()))
         .collect();
     out.output = Output::Document {
