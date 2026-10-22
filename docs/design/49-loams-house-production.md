@@ -305,7 +305,7 @@ Session state (`session_id`: settings, current database, last consistency token)
 | Limit | Default (shared class) | Enforced by | Past it |
 |---|---|---|---|
 | `max_memory_usage` per query | 4 GiB (class may raise to 64 GiB) | chDB setting; the worker's cgroup `memory.max` = the cap + 512 MiB | `241 MEMORY_LIMIT_EXCEEDED` (chDB's, or the front's on a cgroup OOM kill) |
-| `max_execution_time` | 300 s | chDB setting; the front's watchdog kills the worker at the limit + 2 s | `159 TIMEOUT_EXCEEDED` |
+| `max_execution_time` | 900 s (D1573; was 300 s), `[house.limits] max_execution_time_s` | chDB setting, the workers' profile cap passed as `--max-execution-time`; the front's watchdog kills the worker at the limit + 2 s | `159 TIMEOUT_EXCEEDED` |
 | `max_threads` | 8 (class) | chDB setting; cgroup `cpu.max` | — |
 | `max_bytes_to_read` per query | 1 TiB | chDB setting | chDB's code (307 `TOO_MANY_BYTES`, verify) |
 | `max_result_bytes` / `max_result_rows` | 10 GiB / unlimited | chDB settings; the front counts streamed bytes | chDB's code |

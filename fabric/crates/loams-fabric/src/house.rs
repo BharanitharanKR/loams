@@ -607,7 +607,9 @@ fn launcher(
             settings.worker_binary.display()
         )));
     }
-    let mut launcher = ProcessLauncher::new(&settings.worker_binary, workers_dir);
+    // D1571: the workers' profile holds the front's `max_execution_time` cap.
+    let mut launcher = ProcessLauncher::new(&settings.worker_binary, workers_dir)
+        .with_max_execution_time(settings.http.session_limits.max_execution_time_s.ceil() as u64);
     if settings.sandbox != launcher.sandbox() {
         launcher = match settings.sandbox {
             SandboxMode::None => launcher.unsandboxed(),

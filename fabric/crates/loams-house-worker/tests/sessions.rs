@@ -235,7 +235,7 @@ async fn setting_over_cap_is_164() {
         "{}",
         memory.text()
     );
-    let time = in_session(addr, "alice", "s", "SET max_execution_time = 301", &[]).await;
+    let time = in_session(addr, "alice", "s", "SET max_execution_time = 901", &[]).await;
     assert_eq!(code(&time), Some("164"), "{}", time.text());
     let unlimited = in_session(addr, "alice", "s", "SET max_memory_usage = 0", &[]).await;
     assert_eq!(
@@ -244,7 +244,8 @@ async fn setting_over_cap_is_164() {
         "never clamped, never unlimited"
     );
     assert_eq!(
-        in_session(addr, "alice", "s", "SET max_execution_time = 300", &[])
+        // D1571: up to 900 s by default; Langfuse's background jobs ask 605.
+        in_session(addr, "alice", "s", "SET max_execution_time = 605", &[])
             .await
             .status,
         200
@@ -788,7 +789,7 @@ async fn setting_caps_hold_on_every_route() {
         "max_execution_time = 0",
         "max_execution_time = '1e-7'",
         "max_execution_time = -1",
-        "max_execution_time = 301",
+        "max_execution_time = 901",
         "max_threads = 100000",
         "max_memory_usage = 1, max_execution_time = 0",
     ] {
