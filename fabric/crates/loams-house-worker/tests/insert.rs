@@ -1736,3 +1736,70 @@ async fn nanosecond_times_match_the_oracle() {
     )
     .await;
 }
+
+/// HE1 R9.63 (interim; Variant in HE4): a `JSON` column is an Iceberg `string`
+/// of the value's JSON text, cast back to its type on read, so subcolumns
+/// (`resource.\`service.name\``), typed paths (`message String`), dynamic
+/// paths' types, `JSONAllPaths`, a column added by `ALTER` and `FINAL` read
+/// as ClickHouse reads them. The answers were measured on the 26.9.2.8 oracle
+/// (2026-10-22) for SigNoz's column types, before and after `OPTIMIZE … FINAL`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn json_columns_match_the_oracle() {
+    let house = lakehouse("json-oracle").await;
+    let addr = house.addr();
+    ok(addr, "CREATE TABLE logs (ts UInt64, id String, body String, resource JSON(max_dynamic_paths=100)) ENGINE = ReplacingMergeTree ORDER BY (id, ts)").await;
+    ok(addr, "INSERT INTO logs VALUES (1, 'a', 'one', '{\"service.name\":\"checkout\",\"host\":{\"name\":\"h1\"},\"n\":3}'), (2, 'b', 'two', '{\"service.name\":\"cart\",\"flag\":true}')").await;
+    ok(
+        addr,
+        "ALTER TABLE logs ADD COLUMN body_v2 JSON(max_dynamic_paths=0, message String) AFTER body",
+    )
+    .await;
+    inserted(addr, "INSERT INTO logs FORMAT JSONEachRow", "{\"ts\":3,\"id\":\"c\",\"body\":\"three\",\"body_v2\":{\"message\":\"hello\",\"level\":\"warn\"},\"resource\":{\"service\":{\"name\":\"checkout\"},\"tags\":[\"x\",\"y\"]}}".as_bytes(), &[]).await;
+    ok(addr, "INSERT INTO logs VALUES (1, 'a', 'one again', '{\"message\":\"replaced\"}', '{\"service.name\":\"checkout\",\"n\":4}')").await;
+    let logs = metadata(&house, "default", "logs").await;
+    for field in logs.current_schema().as_struct().fields() {
+        if field.name == "resource" || field.name == "body_v2" {
+            assert_eq!(
+                *field.field_type,
+                loams_house_lake::spec::Type::Primitive(
+                    loams_house_lake::spec::PrimitiveType::String
+                ),
+                "{}",
+                field.name
+            );
+        }
+    }
+    let check = |when: &'static str, expected: &'static [(&'static str, &'static str)]| async move {
+        for (read, want) in expected {
+            let got = ok(addr, &format!("{read} FORMAT TSV"))
+                .await
+                .replace('\n', "|");
+            assert_eq!(&got, want, "{when}: {read}");
+        }
+    };
+    check(
+        "as written",
+        &[
+            ("SELECT id, resource.`service.name`, resource.`service.name`::String, resource.host.name, resource.n, body_v2.message, toTypeName(body_v2.message) FROM logs FINAL ORDER BY id", "a\tcheckout\tcheckout\t\\N\t4\treplaced\tString|b\tcart\tcart\t\\N\t\\N\t\tString|c\tcheckout\tcheckout\t\\N\t\\N\thello\tString|"),
+            ("SELECT id FROM logs FINAL WHERE resource.`service.name` IS NOT NULL AND resource.`service.name`::String = 'checkout' ORDER BY id", "a|c|"),
+            ("SELECT resource.`service.name`::String AS s, count() FROM logs GROUP BY s ORDER BY s", "cart\t1|checkout\t3|"),
+            ("SELECT id, arraySort(JSONAllPaths(resource)), toString(resource), toString(body_v2) FROM logs FINAL ORDER BY id", "a\t['n','service.name']\t{\"n\":4,\"service\":{\"name\":\"checkout\"}}\t{\"message\":\"replaced\"}|b\t['flag','service.name']\t{\"flag\":true,\"service\":{\"name\":\"cart\"}}\t{\"message\":\"\"}|c\t['service.name','tags']\t{\"service\":{\"name\":\"checkout\"},\"tags\":[\"x\",\"y\"]}\t{\"level\":\"warn\",\"message\":\"hello\"}|"),
+            ("SELECT id, dynamicType(resource.n), dynamicType(resource.flag), dynamicType(resource.tags), toTypeName(resource) FROM logs FINAL ORDER BY id", "a\tInt64\tNone\tNone\tJSON(max_dynamic_paths=100)|b\tNone\tBool\tNone\tJSON(max_dynamic_paths=100)|c\tNone\tNone\tArray(Nullable(String))\tJSON(max_dynamic_paths=100)|"),
+            ("SELECT toString(multiIf(resource.`service.name` IS NOT NULL, resource.`service.name`::String, NULL)) AS svc, count() FROM logs FINAL GROUP BY svc ORDER BY svc", "cart\t1|checkout\t2|"),
+        ],
+    )
+    .await;
+    ok(addr, "OPTIMIZE TABLE logs FINAL").await;
+    check(
+        "after OPTIMIZE",
+        &[
+            ("SELECT id, resource.`service.name`, resource.`service.name`::String, resource.host.name, resource.n, body_v2.message, toTypeName(body_v2.message) FROM logs FINAL ORDER BY id", "a\tcheckout\tcheckout\t\\N\t4\treplaced\tString|b\tcart\tcart\t\\N\t\\N\t\tString|c\tcheckout\tcheckout\t\\N\t\\N\thello\tString|"),
+            ("SELECT id FROM logs FINAL WHERE resource.`service.name` IS NOT NULL AND resource.`service.name`::String = 'checkout' ORDER BY id", "a|c|"),
+            ("SELECT resource.`service.name`::String AS s, count() FROM logs GROUP BY s ORDER BY s", "cart\t1|checkout\t2|"),
+            ("SELECT id, arraySort(JSONAllPaths(resource)), toString(resource), toString(body_v2) FROM logs FINAL ORDER BY id", "a\t['n','service.name']\t{\"n\":4,\"service\":{\"name\":\"checkout\"}}\t{\"message\":\"replaced\"}|b\t['flag','service.name']\t{\"flag\":true,\"service\":{\"name\":\"cart\"}}\t{\"message\":\"\"}|c\t['service.name','tags']\t{\"service\":{\"name\":\"checkout\"},\"tags\":[\"x\",\"y\"]}\t{\"level\":\"warn\",\"message\":\"hello\"}|"),
+            ("SELECT id, dynamicType(resource.n), dynamicType(resource.flag), dynamicType(resource.tags), toTypeName(resource) FROM logs FINAL ORDER BY id", "a\tInt64\tNone\tNone\tJSON(max_dynamic_paths=100)|b\tNone\tBool\tNone\tJSON(max_dynamic_paths=100)|c\tNone\tNone\tArray(Nullable(String))\tJSON(max_dynamic_paths=100)|"),
+            ("SELECT toString(multiIf(resource.`service.name` IS NOT NULL, resource.`service.name`::String, NULL)) AS svc, count() FROM logs FINAL GROUP BY svc ORDER BY svc", "cart\t1|checkout\t2|"),
+        ],
+    )
+    .await;
+}
