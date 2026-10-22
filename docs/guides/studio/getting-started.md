@@ -18,15 +18,17 @@ The desktop also gives Studio:
 
 ## In a browser
 
-The browser console shows the **Console | Studio** switch in every edition. Without a reachable agentd, Studio's home says **Connect an agentd host**. The hosted console, `https://console.loams.dev`, works against a 0.1.0 `loams-agentd`: threads, runs, approvals and diffs.
+The browser console shows the **Console | Studio** switch in every edition. Without a reachable agentd, Studio's home says **Connect an agentd host**. The console ships with your deployment: your engine serves it at `https://loams.<tailnet>.ts.net/ui/`, and Loams Desktop carries it. The hosted console at `console.loams.dev` is retired (design 78); to try Loams without running anything, see [loams.dev/cloud](https://loams.dev/cloud).
+
+**Which console reaches a remote agentd.** A browser console reaches an agentd host only when its Content-Security-Policy lists that host. The console your engine serves at `/ui/` keeps its build's policy (`connect-src 'self'`), so Studio there cannot reach a remote agentd yet; use Loams Desktop, or a console you deploy yourself with the host in `LOAMS_AGENTD_ORIGINS` (for example the stack's `--profile console` service), whose origin must then be in the engine's `LOAMS_CORS_ORIGINS` ([details](remote-agentd.md#the-consoles-content-security-policy)).
 
 Studio in the browser needs a remote `loams-agentd`:
 
-1. Run `loams-agentd serve --remote` on a machine you control, on your tailnet ([Remote agentd](remote-agentd.md)). For the hosted console it must be a `*.ts.net` name on port 443, with `--allow-origin https://console.loams.dev`.
+1. Run `loams-agentd serve --remote` on a machine you control, on your tailnet ([Remote agentd](remote-agentd.md)), with `--allow-origin` set to your console's origin (for example `https://console.example.com`).
 2. In Studio, open **Settings** (Mod+,) and add the host under **Agentd hosts**, with a pasted access token for now (MT1).
 3. **Add** (beside **Projects**) asks for a git URL (`https://`, `ssh://` or `user@host:path`) and clones it on the remote machine. The daemon checks the URL again and refuses local paths, `file:` and `ext::` URLs, and anything that starts with `-`.
 
-**Not yet:** previews don't render in the hosted console (its `frame-src` is `'self'`), and the agentd token is pasted rather than issued by the console's sign-in. See [the console's Content-Security-Policy](remote-agentd.md#the-consoles-content-security-policy) and [Previews](remote-agentd.md#previews).
+**Not yet:** previews render only in a console whose `frame-src` lists the agentd host (not the console your engine serves at `/ui/`, whose `frame-src` is `'self'`), and the agentd token is pasted rather than issued by the console's sign-in. See [the console's Content-Security-Policy](remote-agentd.md#the-consoles-content-security-policy) and [Previews](remote-agentd.md#previews).
 
 ## Trying Studio without a daemon: the dev preview
 

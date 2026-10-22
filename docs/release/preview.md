@@ -13,15 +13,18 @@ supported: `loams upgrade` moves a stack from one release to the next and keeps 
 more, or be reworked, before they settle. Parts of the security model are not hardened yet (see
 [Security model](#security-model)).
 
-0.1.1 ships one path: **your own Tailscale tailnet plus our hosted console at
-`https://console.loams.dev`**. You run the Loams stack; we host the console and, for the
-optional `oidc` mode, the auth service.
+Loams ships one path: **your own Tailscale tailnet, with the console served by your own
+engine**. You run the Loams stack, and from 0.1.2 the console ships with it: the engine serves
+the console built into its image at `https://loams.<tailnet>.ts.net/ui/`, next to its API, and
+Loams Desktop carries the same console. We host only the auth service, for the optional `oidc`
+mode. The hosted console at `console.loams.dev` is retired (design 78); to try Loams without
+running anything, see [loams.dev/cloud](https://loams.dev/cloud).
 
 | Piece | Who runs it | Where |
 |---|---|---|
 | The engine stack: `loams` on its embedded stores, the House, the Postgres stack, agentd (TiDB, TiKV and PD with the `tikv` profile) | **You** | Docker Compose on your laptop, or on your own VMs (BYOC) with `deploy/release/byoc/install.sh` over SSH |
 | The private network between your devices and the stack | **You** | Your own Tailscale tailnet |
-| The React console (static files) | Ostrium | `https://console.loams.dev` |
+| The React console (static files) | **You**: it ships in the engine image, and in Loams Desktop | `https://loams.<tailnet>.ts.net/ui/`, served by your engine |
 | The auth service (OIDC issuer), only for `oidc` mode | Ostrium | `https://auth.loams.dev` |
 
 The engine is never exposed on the public internet. Your browser reaches it over the tailnet,
@@ -125,7 +128,6 @@ Objective-C stay in the repository (coming soon).
 ```mermaid
 flowchart LR
   subgraph hosted["Hosted by Ostrium"]
-    console["React console at console.loams.dev<br/>static assets"]
     auth["Auth service (oidc mode only)<br/>auth.loams.dev"]
   end
 
@@ -138,7 +140,7 @@ flowchart LR
 
   subgraph stack["Your engine stack: Docker Compose, local or on your VMs (BYOC)"]
     ts["tailscale sidecar<br/>TS_HOSTNAME=loams<br/>tailscale serve"]
-    loams["loams<br/>engine, embedded stores"]
+    loams["loams<br/>engine, embedded stores,<br/>console at /ui/"]
     tidb["tidb (profile tikv)"]
     tikv["tikv (profile tikv)"]
     pd["pd (profile tikv)"]
@@ -147,9 +149,8 @@ flowchart LR
     house["house<br/>own network"]
   end
 
-  browser -- "1. load the console (HTTPS)" --> console
+  browser -- "1. load the console, 3. API calls" --> tsclient
   browser -. "2. sign in (oidc mode only)" .-> auth
-  browser -- "3. API calls" --> tsclient
   tsclient -- "WireGuard, tailnet only" --> ts
   ts -- "127.0.0.1:7781, identity headers" --> loams
   loams -. "oidc mode: verify JWT against JWKS (cached)" .-> auth
@@ -164,8 +165,9 @@ flowchart LR
   ts -.-> coord
 ```
 
-1. The browser loads the console's static files from `console.loams.dev`. The console holds
-   no data and no secrets.
+1. The browser loads the console's static files from your engine, at
+   `https://loams.<tailnet>.ts.net/ui/`, over the tailnet (Loams Desktop has them built in).
+   The console holds no data and no secrets.
 2. In the default `tailscale` mode there is no separate sign-in: the console calls your
    engine and Tailscale tells the engine who you are. In `oidc` mode the console signs you
    in with Authorization Code + PKCE against the auth service; tokens live in memory only,
@@ -203,7 +205,7 @@ flowchart LR
 | Loams Postgres | A fork of Neon whose storage lives on the bucket; the compose stack runs its storage and computes | Available. The compose stack runs its storage and computes; `--profile postgres-control` adds `pg-control` and `pg-runner`, which provision computes and endpoints |
 | Postgres and MySQL wire | SQL over the Postgres and MySQL wire protocols, over collections | Available |
 | Streaming gRPC API | Idempotent produce and streaming subscribe over gRPC | Available |
-| Web console | One console of cordis plugins on Connect, hosted at `console.loams.dev` and in Loams Desktop, with a Studio mode (on in Loams Desktop; in the browser behind the instance feature `studio`, which no Loams server sets yet; [Studio guides](../guides/studio/index.md)); sign-in from your tailnet login, a Loams account or an API key. Your own Vercel or Cloudflare deployment is coming soon | Available. Studio mode is experimental. Some pages still show demonstration data |
+| Web console | One console of cordis plugins on Connect, served by your engine at `/ui/` (from 0.1.2) and in Loams Desktop, with a Studio mode (on in Loams Desktop; in the browser behind the instance feature `studio`, which no Loams server sets yet; [Studio guides](../guides/studio/index.md)); sign-in from your tailnet login, a Loams account or an API key. Your own Vercel or Cloudflare deployment is coming soon | Available. Studio mode is experimental. Some pages still show demonstration data |
 | Engine auth | Tailscale identity (default), OIDC (JWTs checked against the issuer's JWKS), hashed API keys, or loopback-only (`LOAMS_AUTH_MODE`) | Available |
 | Loams Git | Git on the bucket: a WAL, ref log, checkpoints, O(1) forks and GC, and `loams.repos.v1`'s repository catalog (cargo feature `git`) | Experimental. `git-remote-loams` ships with the `loams` CLI packages and pushes and fetches straight to a bucket, and its first push creates a repository (`LOAMS_GIT_CREATE_ON_PUSH=1`; the URL names the namespace by its numeric id, see [packaging](packaging.md#git-push-and-fetch-to-the-bucket)); the engine image serves the repository service (`loams.repos.v1`) on the main port from 0.1.1 (feature `git`) |
 | First-party connectors | Native source and sink connectors (Kafka family, Postgres CDC, object storage, key-value, search, brokers, cloud queues, HTTP APIs) on `loams-connector-sdk` | In progress. Not in the release images |
@@ -554,13 +556,13 @@ local quick start. Nothing on the VM listens on its public address.
 
 **Headscale: coming soon, unsupported in this release.** The `headscale` profile and
 `TS_LOGIN_SERVER` exist in the compose file, but Headscale issues no `*.ts.net` HTTPS
-certificates, so the hosted console (HTTPS) cannot call the engine through it: the browser
-blocks it as mixed content. Use Tailscale for 0.1.1.
+certificates, so the engine is served over plain HTTP there, and a console on another HTTPS
+origin cannot call it: the browser blocks it as mixed content. Use Tailscale.
 
 ## The console on your own Vercel or Cloudflare: coming soon
 
 Hosting the console on your own Vercel or Cloudflare project is not part of 0.1.1.
-Use `https://console.loams.dev`. Likewise not in this release: self-service OIDC clients at
+Use the console your engine serves at `/ui/`, or Loams Desktop. Likewise not in this release: self-service OIDC clients at
 `auth.loams.dev/register` and one-click OAuth deploy.
 
 ## Loams House
@@ -623,7 +625,7 @@ The House's security layers in 0.1.1:
 
 | `LOAMS_AUTH_MODE` | Who it accepts | Settings |
 |---|---|---|
-| `tailscale` (default) | The Tailscale identity that `tailscale serve` adds. The engine trusts it only on the dedicated listener `LOAMS_TAILSCALE_LISTEN` (`127.0.0.1:7781`), which is the sidecar's serve target; every other listener ignores those headers, so a forged one on the main port gets a 401. Browser requests are limited by CORS to `https://console.loams.dev` (or `LOAMS_CORS_ORIGINS`) | `LOAMS_TAILSCALE_LISTEN`, `LOAMS_TAILSCALE_ALLOWED_USERS` (logins; empty admits every user your tailnet policy lets reach the node) |
+| `tailscale` (default) | The Tailscale identity that `tailscale serve` adds. The engine trusts it only on the dedicated listener `LOAMS_TAILSCALE_LISTEN` (`127.0.0.1:7781`), which is the sidecar's serve target; every other listener ignores those headers, so a forged one on the main port gets a 401. Browser requests from any origin but the engine's own (the console it serves at `/ui/`) are refused, unless listed in `LOAMS_CORS_ORIGINS` (none by default) | `LOAMS_TAILSCALE_LISTEN`, `LOAMS_TAILSCALE_ALLOWED_USERS` (logins; empty admits every user your tailnet policy lets reach the node) |
 | `oidc` | Bearer JWTs from the issuer (`https://auth.loams.dev` or your own), RS256 or EdDSA, verified against its JWKS (cached) | `LOAMS_OIDC_ISSUER`, `LOAMS_OIDC_AUDIENCE=loams-console`, and one of `LOAMS_OIDC_ALLOWED_EMAILS`, `_SUBJECTS` or `_GROUPS`: the engine refuses to start without one |
 | `apikey` | API keys for the CLI and SDKs; the file holds only hashes. Create one with `loams auth new-key` | `LOAMS_API_KEYS_FILE` |
 | `off` | Loopback clients only; every other client is refused | none |

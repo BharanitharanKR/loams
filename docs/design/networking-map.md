@@ -35,7 +35,7 @@ How people sign in, and how operators reach machines.
 | Tailnet policy as code, tags, key expiry and approval | [§43](43-private-networking.md) §8 (D585, D589) | Proposed |
 | Hosted console sign-in: the engine identifies the caller from the tailnet (Tailscale WhoIs through the sidecar's `tailscale serve`), with no password | [§44](44-unified-api-and-sdks.md); plan [API2](../plans/2026-10-10-api2-unified-api-sdks.md) ruling S6/7.13; `deploy/release/compose.yaml` (`LOAMS_AUTH_MODE=tailscale`, `LOAMS_TAILSCALE_LISTEN`) | Ships in v0.1.0-preview.2 (owner: "option A", 2026-10-14) |
 | Other sign-in modes: OIDC (any issuer, `auth.loams.dev` by default) and API keys | [§19](19-console-identity-and-agents.md); [§10](10-operations.md) §4 | Ships in the preview |
-| Browser origins allowed to call an engine | `LOAMS_CORS_ORIGINS`, by default `https://console.loams.dev` only | Ships in v0.1.0-preview.2 |
+| Browser origins allowed to call an engine | The engine's own origin (the console it serves at `/ui/`), plus the exact origins in `LOAMS_CORS_ORIGINS`, none by default. Loams Desktop sends the engine's own origin. *Until 0.1.2 the default was `https://console.loams.dev` only (D1705, amended)* | Ships in v0.1.2 (default changed); variable since v0.1.0-preview.2 |
 
 ## 2. Control: hosted control plane to customer deployments
 
