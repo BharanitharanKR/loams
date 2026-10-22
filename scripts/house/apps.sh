@@ -16,6 +16,9 @@
 # Environment:
 #   HE0_OUT               dump directory (default conformance/clickhouse/apps/.out)
 #   HE0_CLICKHOUSE_IMAGE  another pinned clickhouse-server (the 24.3 floor)
+#   HE0_TARGET            clickhouse (default) or house: the app's
+#                         compose.house.yaml points it at a running House
+#                         (scripts/house/app-on-house.sh starts one)
 #   COMPOSE               the compose command (default: docker compose, else
 #                         podman compose)
 set -euo pipefail
@@ -71,7 +74,19 @@ elif command -v docker >/dev/null 2>&1; then
 else
   COMPOSE_CMD=(podman compose)
 fi
-compose() { "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" "$@"; }
+# HE0_TARGET=house (Task 9) layers <app>/compose.house.yaml, which points the
+# application at a running House instead of its clickhouse-server.
+COMPOSE_FILES=(-f "$COMPOSE_FILE")
+case "${HE0_TARGET:-clickhouse}" in
+  clickhouse) ;;
+  house)
+    [ -f "$APPS/$APP/compose.house.yaml" ] || {
+      echo "apps.sh: '$APP' has no compose.house.yaml" >&2; exit 2; }
+    COMPOSE_FILES+=(-f "$APPS/$APP/compose.house.yaml")
+    ;;
+  *) echo "apps.sh: HE0_TARGET is clickhouse or house" >&2; exit 2 ;;
+esac
+compose() { "${COMPOSE_CMD[@]}" "${COMPOSE_FILES[@]}" "$@"; }
 
 # The service running clickhouse-server: `clickhouse` or `op-ch`.
 ch_service() {

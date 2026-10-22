@@ -265,6 +265,22 @@ class Driver:
             time.sleep(3)
         return last
 
+    def wait_profile_property(self, client, profile, prop):
+        """Wait until the profile buffer has flushed an increment, so the reads
+        (and a later replay of them) see the profiles in their final state."""
+        for _ in range(60):
+            qs = urllib.parse.urlencode({"input": json.dumps({"json": {
+                "projectId": client["projectId"], "profileId": profile}})})
+            status, raw = self.request("GET", f"{API}/trpc/profile.byId?{qs}")
+            try:
+                props = json.loads(raw)["result"]["data"]["json"]["properties"]
+            except (KeyError, TypeError, ValueError):
+                props = {}
+            if status == 200 and prop in (props or {}):
+                return
+            time.sleep(2)
+        print(f"driver: {profile} never showed {prop}", flush=True)
+
     def count_events(self, client):
         qs = urllib.parse.urlencode({"input": json.dumps({"json": {
             "projectId": client["projectId"], "chartType": "metric", "interval": "day", "range": "30d",
@@ -372,6 +388,8 @@ def main() -> int:
     for ua, ip, profile in d.increments:
         d.track(client, ua, ip, {"type": "increment", "payload": {
             "profileId": profile, "property": "purchases", "value": 1}})
+    if d.increments:
+        d.wait_profile_property(client, d.increments[-1][2], "purchases")
     d.reads(client)
     summary = {"sent": sent, "visible": visible, "calls": d.calls, "errors": d.errors}
     (OUT / "driver-summary.json").write_text(json.dumps(summary, indent=1))

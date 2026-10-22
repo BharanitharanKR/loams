@@ -196,6 +196,17 @@ def main() -> int:
         "'VersionedCollapsingMergeTree') FORMAT TSV",
         {"param_db": args.database, "log_comment": "he0-harness"}).split())
 
+    merging_tables = oracle.must(
+        "SELECT name FROM system.tables WHERE database = {db:String} AND match(engine, "
+        "'(Replacing|Summing|Collapsing|Aggregating)MergeTree|MaterializedView') FORMAT TSV",
+        {"param_db": args.database, "log_comment": "he0-harness"}).split()
+
+    def merged_answers(text_sql, st, ordered):
+        merged = {**st, "final": "1"}
+        so, to, _ = oracle.post(text_sql, {**merged, "log_comment": "he0-harness"})
+        sh, th, _, _ = run(house, text_sql, merged)
+        return so == 200 and sh == 200 and answer(to, ordered) == answer(th, ordered)
+
     seen = set()
     for row in statements:
         sql = row["query"]
@@ -208,6 +219,7 @@ def main() -> int:
         text_sql = without_format(sql) + "\nFORMAT JSON"
         ordered = re.search(r"\bORDER\s+BY\b", re.sub(r"\([^()]*\)", "", sql), re.I) is not None
         st = {**settings(row), "output_format_json_quote_64bit_integers": "1"}
+        merging = any(re.search(rf"\b{re.escape(t)}\b", sql) for t in merging_tables)
         so, to, _ = oracle.post(text_sql, {**st, "log_comment": "he0-harness"})
         sh, th, hh, refused = run(house, text_sql, st)
         report["refused_settings"].update(refused)
@@ -222,6 +234,11 @@ def main() -> int:
             # The same rows in another order: an ORDER BY with ties (listed,
             # not failed; a wrong order on distinct keys still shows here).
             entry["verdict"] = "order-ties"
+        elif merging and merged_answers(text_sql, st, ordered):
+            # Reads of a merging table (Replacing, Summing, Collapsing,
+            # Aggregating) without FINAL see whatever each server's background
+            # merges have done so far; with `final = 1` on both they must agree.
+            entry["verdict"] = "merge-timing"
         elif not re.search(r"\bFINAL\b", sql, re.I) and any(
                 re.search(rf"\b{re.escape(t)}\b", sql) for t in merging):
             # Listed, not failed: neither engine promises when it merges.

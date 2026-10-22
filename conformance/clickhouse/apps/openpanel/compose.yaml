@@ -72,6 +72,8 @@ services:
       - ../clickhouse/he0-users.xml:/etc/clickhouse-server/users.d/he0-users.xml:ro
       - ./he0-merge-tree.xml:/etc/clickhouse-server/config.d/he0-merge-tree.xml:ro
       - op-ch-data:/var/lib/clickhouse
+    # Loopback only: scripts/house/replay.py reads its query_log (Task 9).
+    ports: ["127.0.0.1:${HE0_OPENPANEL_CH_PORT:-28126}:8123"]
     ulimits:
       nofile: { soft: 262144, hard: 262144 }
     healthcheck:
