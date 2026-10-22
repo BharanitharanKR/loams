@@ -68,6 +68,8 @@ pub const CLIENT_SETTINGS: &[&str] = &[
     "use_text_index_postings_cache",
     "send_progress_in_http_headers",
     "use_query_cache",
+    // SigNoz (HE1 R9.16): how JSON input with a path given twice is read.
+    "type_json_skip_duplicated_paths",
 ];
 
 /// Settings the worker's profile leaves changeable only up to 0: on, they would
