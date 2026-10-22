@@ -11,6 +11,12 @@ publish = false
 [dependencies]
 # `Error`'s `Display`. Apache-2.0 OR MIT.
 thiserror.workspace = true
+# Compressed blocks (R9.48): CityHash v1.0.2's 128-bit hash for the frame
+# checksums (1.0.1 is MIT OR Apache-2.0; 1.0.0 was GPL, never use it), LZ4 block
+# compression (MIT, already in the lock through arrow), ZSTD frames from clients.
+cityhash-rs = "=1.0.1"
+lz4_flex = "0.14"
+zstd.workspace = true
 
 [dev-dependencies]
 proptest.workspace = true

@@ -15,10 +15,11 @@
 //! * the server's `Hello`, `Data`, `Exception`, `Progress`, `ProfileInfo`,
 //!   `Pong` and `EndOfStream` ([`packet`]);
 //! * blocks in the protocol's framing and in the `Native` format's, and the
-//!   column walk that converts between them ([`block`], [`types`]).
+//!   column walk that converts between them ([`block`], [`types`]);
+//! * compressed blocks: LZ4, ZSTD and none read, LZ4 written, with CityHash128
+//!   checksums ([`compress`], R9.48).
 //!
-//! Not here: compression (a query asking for it is refused), chunked packets
-//! (54470), sparse columns, `Dynamic`/`Variant` columns and `JSON` other than
+//! Not here: chunked packets (54470), sparse columns, `Dynamic`/`Variant` columns and `JSON` other than
 //! as strings (`output_format_native_write_json_as_string`), inter-server
 //! queries, and settings in the pre-54429 binary form.
 //!
@@ -27,6 +28,7 @@
 //! pinned clickhouse-server 26.9.2.8; no ClickHouse code is copied.
 
 pub mod block;
+pub mod compress;
 pub mod packet;
 pub mod types;
 pub mod wire;

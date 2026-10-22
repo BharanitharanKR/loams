@@ -188,12 +188,22 @@ pub fn decode_addendum(buf: &[u8], revision: u64) -> Result<(Addendum, usize), E
 
 /// Decodes one client packet after the handshake, at `revision`.
 pub fn decode_packet(buf: &[u8], revision: u64) -> Result<(ClientPacket, usize), Error> {
+    decode_packet_with(buf, revision, false)
+}
+
+/// [`decode_packet`], with `Data` blocks in compressed frames when the running
+/// query asked for compression (R9.48).
+pub fn decode_packet_with(
+    buf: &[u8],
+    revision: u64,
+    compressed: bool,
+) -> Result<(ClientPacket, usize), Error> {
     let mut r = Reader::new(buf);
     let packet = match r.varuint()? {
         client::QUERY => ClientPacket::Query(read_query(&mut r, revision)?),
         client::DATA => {
             let table = r.string()?;
-            let block = Block::read(&mut r, Framing::protocol(revision))?;
+            let block = read_block(&mut r, revision, compressed)?;
             ClientPacket::Data { table, block }
         }
         client::CANCEL => ClientPacket::Cancel,
@@ -204,6 +214,30 @@ pub fn decode_packet(buf: &[u8], revision: u64) -> Result<(ClientPacket, usize),
         other => return Err(Error::Malformed(format!("client packet type {other}"))),
     };
     Ok((packet, r.position()))
+}
+
+/// A block, from compressed frames when `compressed`: frames are read until
+/// their bytes hold exactly one block (clients flush a frame at each block's
+/// end).
+fn read_block(r: &mut Reader<'_>, revision: u64, compressed: bool) -> Result<Block, Error> {
+    if !compressed {
+        return Block::read(r, Framing::protocol(revision));
+    }
+    let mut raw = Vec::new();
+    loop {
+        crate::compress::read_frame(r, &mut raw)?;
+        let mut inner = Reader::new(&raw);
+        match Block::read(&mut inner, Framing::protocol(revision)) {
+            Ok(block) if inner.position() == raw.len() => return Ok(block),
+            Ok(_) => {
+                return Err(Error::Malformed(
+                    "a compressed frame that ends inside the next block".into(),
+                ));
+            }
+            Err(Error::Incomplete) => {}
+            Err(err) => return Err(err),
+        }
+    }
 }
 
 fn read_query(r: &mut Reader<'_>, revision: u64) -> Result<Query, Error> {
@@ -353,9 +387,26 @@ pub fn encode_hello(out: &mut Vec<u8>, hello: &ServerHello, negotiated: u64) {
 
 /// Appends a `Data` packet (or `Totals`, `Extremes` by `kind`) of `block`.
 pub fn encode_data(out: &mut Vec<u8>, kind: u64, block: &Block, revision: u64) {
+    encode_data_with(out, kind, block, revision, false);
+}
+
+/// [`encode_data`], the block in LZ4 frames when `compressed` (R9.48).
+pub fn encode_data_with(
+    out: &mut Vec<u8>,
+    kind: u64,
+    block: &Block,
+    revision: u64,
+    compressed: bool,
+) {
     put_varuint(out, kind);
     put_str(out, "");
-    block.write(out, Framing::protocol(revision));
+    if compressed {
+        let mut raw = Vec::new();
+        block.write(&mut raw, Framing::protocol(revision));
+        crate::compress::write_frames(out, &raw);
+    } else {
+        block.write(out, Framing::protocol(revision));
+    }
 }
 
 /// Appends an `Exception`: `code`, `DB::Exception` and the message as
@@ -558,14 +609,25 @@ pub fn encode_query(out: &mut Vec<u8>, query: &Query, revision: u64) {
         }
         put_str(out, "");
     }
-    encode_client_data(out, &Block::empty(), revision);
+    encode_client_data_with(out, &Block::empty(), revision, query.compression);
 }
 
 /// The client's side: a `Data` packet of the main stream.
 pub fn encode_client_data(out: &mut Vec<u8>, block: &Block, revision: u64) {
+    encode_client_data_with(out, block, revision, false);
+}
+
+/// [`encode_client_data`], the block in LZ4 frames when `compressed`.
+pub fn encode_client_data_with(out: &mut Vec<u8>, block: &Block, revision: u64, compressed: bool) {
     put_varuint(out, client::DATA);
     put_str(out, "");
-    block.write(out, Framing::protocol(revision));
+    if compressed {
+        let mut raw = Vec::new();
+        block.write(&mut raw, Framing::protocol(revision));
+        crate::compress::write_frames(out, &raw);
+    } else {
+        block.write(out, Framing::protocol(revision));
+    }
 }
 
 /// A server packet, for tests and tools.
@@ -605,6 +667,15 @@ pub enum ServerPacket {
 /// Decodes one server packet at `revision` (`Hello` by the client's
 /// `revision`, as a client reads it).
 pub fn decode_server_packet(buf: &[u8], revision: u64) -> Result<(ServerPacket, usize), Error> {
+    decode_server_packet_with(buf, revision, false)
+}
+
+/// [`decode_server_packet`], with `Data` blocks in compressed frames.
+pub fn decode_server_packet_with(
+    buf: &[u8],
+    revision: u64,
+    compressed: bool,
+) -> Result<(ServerPacket, usize), Error> {
     let mut r = Reader::new(buf);
     let packet = match r.varuint()? {
         server::HELLO => {
@@ -631,7 +702,7 @@ pub fn decode_server_packet(buf: &[u8], revision: u64) -> Result<(ServerPacket, 
             r.bytes()?;
             ServerPacket::Data {
                 kind,
-                block: Block::read(&mut r, Framing::protocol(revision))?,
+                block: read_block(&mut r, revision, compressed)?,
             }
         }
         server::EXCEPTION => {

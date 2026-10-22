@@ -80,6 +80,8 @@ struct Client {
     stream: TcpStream,
     buf: Vec<u8>,
     revision: u64,
+    /// The running query's blocks are compressed.
+    compressed: bool,
 }
 
 impl Client {
@@ -95,6 +97,7 @@ impl Client {
             stream,
             buf: Vec::new(),
             revision,
+            compressed: false,
         };
         let mut out = Vec::new();
         packet::encode_client_hello(
@@ -131,7 +134,7 @@ impl Client {
 
     async fn packet(&mut self) -> ServerPacket {
         loop {
-            match packet::decode_server_packet(&self.buf, self.revision) {
+            match packet::decode_server_packet_with(&self.buf, self.revision, self.compressed) {
                 Ok((packet, used)) => {
                     self.buf.drain(..used);
                     return packet;
@@ -371,12 +374,34 @@ async fn native_session_runs_on_the_shared_path() {
         assert_eq!(exception(&answer).map(|e| e.0), want, "{name}: {answer:?}");
     }
 
-    // Compression is refused clearly, and the connection closes (R9.42).
-    client.send_query("SELECT 1", &[], true).await;
+    // Compression (R9.48): a query's blocks both ways in LZ4 frames.
+    client.compressed = true;
+    client
+        .send_query("INSERT INTO t (id, s) FORMAT Native", &[], true)
+        .await;
+    let ServerPacket::Data { .. } = client.packet().await else {
+        panic!("the compressed INSERT's header");
+    };
+    let mut more = rows.clone();
+    more.columns[0].data = [3u64.to_le_bytes(), 4u64.to_le_bytes()].concat();
+    let mut out = Vec::new();
+    packet::encode_client_data_with(&mut out, &more, 54460, true);
+    packet::encode_client_data_with(&mut out, &Block::empty(), 54460, true);
+    client.send(&out).await;
     let answer = client.answer().await;
-    let (code, message) = exception(&answer).expect("refused");
-    assert_eq!(code, 48);
-    assert!(message.contains("compression"), "{message}");
+    assert_eq!(
+        answer.last(),
+        Some(&ServerPacket::EndOfStream),
+        "{answer:?}"
+    );
+    client
+        .send_query("SELECT id, s FROM t WHERE id > 2 ORDER BY id", &[], true)
+        .await;
+    let answer = client.answer().await;
+    client.compressed = false;
+    assert_eq!(blocks(&answer)[1].columns, more.columns, "{answer:?}");
+    let answer = client.query("SELECT count() FROM t").await;
+    assert_eq!(blocks(&answer)[1].columns[0].data, 4u64.to_le_bytes());
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
