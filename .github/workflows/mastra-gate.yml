@@ -19,7 +19,8 @@ permissions:
 
 concurrency:
   group: mastra-gate-${{ github.ref }}
-  cancel-in-progress: true
+  # The nightly runs to completion.
+  cancel-in-progress: false
 
 jobs:
   mastra-gate:

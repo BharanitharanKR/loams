@@ -104,13 +104,14 @@ on:
       - "docs/design/46-loams-postgres-production.md"
       - ".github/workflows/pg2.yml"
 
-# A newer push to the same pull request or branch supersedes the older run
-# (the runner pool is shared by every workflow); main runs to completion.
+# A newer push to the same pull request supersedes the older run (the runner
+# pool is shared by every workflow). dev runs to completion, so its cache save
+# lands; main, a dispatch (the nightly) and a candidate run do too.
 concurrency:
   # A candidate run (workflow_call) is its own group, so it never cancels or
   # waits on the branch's own runs.
-  group: pg2-${{ inputs.candidate-pins && format('candidate-{0}', github.run_id) || github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: pg2-${{ inputs.candidate-pins && format('candidate-{0}', github.run_id) || format('{0}-{1}', github.event_name, github.event.pull_request.number || github.ref) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

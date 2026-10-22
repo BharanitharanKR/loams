@@ -33,10 +33,12 @@ permissions:
 # default, free for this public repository. Blacksmith removed (owner,
 # 2026-10-19): every job runs on GitHub-hosted runners. The RUNNER_HEAVY and
 # RUNNER_MAIN repository variables can still override the labels.
+# Superseded runs of a pull request and of dev are cancelled; a push to main, a tag,
+# a dispatch (the nightly) and a schedule run to completion. The event is in
+# the group, so a push never cancels a dispatch on the same branch.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  # A newer dev head supersedes an older one; main runs to completion.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/dev') }}
 
 env:
   CARGO_TERM_COLOR: always

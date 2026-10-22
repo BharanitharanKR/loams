@@ -9,8 +9,9 @@ on:
       - "deploy/release/**"
       - "deploy/loams-postgres-dev/**"
       - ".github/workflows/release-compose.yml"
+  # Not on dev: the pull request already ran it on the same files.
   push:
-    branches: [main, dev]
+    branches: [main]
     paths:
       - "deploy/release/**"
       - "deploy/loams-postgres-dev/**"
@@ -19,9 +20,10 @@ on:
 permissions:
   contents: read
 
+# A newer push to a pull request supersedes the older run; main runs to completion.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' && github.ref != 'refs/heads/dev' }}
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   compose:

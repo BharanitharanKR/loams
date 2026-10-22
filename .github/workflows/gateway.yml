@@ -25,11 +25,11 @@ on:
       - "deploy/pgdog/compose.yaml"
       - ".github/workflows/gateway.yml"
 
+# A newer push to a pull request supersedes the older run. dev and main run to
+# completion: every dev commit keeps its result and its cache save.
 concurrency:
-  group: gateway-${{ github.event.pull_request.number || github.ref }}
-  # dev and main run to completion: every dev commit keeps its result and
-  # its cache save.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/main' }}
+  group: gateway-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
