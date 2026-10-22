@@ -1,5 +1,7 @@
 # Networking map
 
+> **Amendment (approved 2026-10-23) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). The public endpoints Ostrium runs become `loams.dev` (with `/cloud`), `auth.loams.dev` and the Loams Cloud control plane's API host; `console.loams.dev` is retired and `LOAMS_CORS_ORIGINS` loses it as a default in LC2 (D1705). Devices enrolled in Loams Cloud open no inbound port (D1714).
+
 This is an index, not a new design. It points each kind of network traffic in Loams at the design
 and plan that already own it, so a networking question starts in the right place. It was written on
 2026-10-15, after the owner brought an external "networking planes" proposal. The proposal's access,
