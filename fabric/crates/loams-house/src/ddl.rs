@@ -1465,6 +1465,14 @@ pub enum LakeEngine {
         /// The summed columns.
         columns: Option<Vec<String>>,
     },
+    /// `VersionedCollapsingMergeTree(sign, version)` (D1570): rows of one
+    /// sorting key and version cancel in pairs of opposite sign at `FINAL`.
+    VersionedCollapsing {
+        /// The sign column (`Int8`, 1 or -1).
+        sign: String,
+        /// The version column.
+        version: String,
+    },
 }
 
 impl LakeEngine {
@@ -1495,7 +1503,18 @@ impl LakeEngine {
                         .join(", ")
                 ),
             },
+            Self::VersionedCollapsing { sign, version } => format!(
+                "VersionedCollapsingMergeTree({}, {})",
+                quote_name(sign),
+                quote_name(version)
+            ),
         }
+    }
+
+    /// Whether `FINAL` reads a merge view of this engine rather than the rows
+    /// as stored (and compaction merges as that view does).
+    pub fn merges(&self) -> bool {
+        !matches!(self, Self::MergeTree)
     }
 
     /// The engine a table's `loams.ch.engine` property names (HS1 Task 11's
@@ -1549,12 +1568,21 @@ impl LakeEngine {
                     ),
                 },
             }),
+            "VersionedCollapsingMergeTree" if args.len() == 2 => Ok(Self::VersionedCollapsing {
+                sign: column(args[0])?,
+                version: column(args[1])?,
+            }),
+            "VersionedCollapsingMergeTree" => Err(HouseError::from(ChError::bad_arguments(
+                "VersionedCollapsingMergeTree takes two arguments: the sign column and the \
+                 version column",
+            ))),
             "ReplacingMergeTree" | "SummingMergeTree" => Err(HouseError::from(
                 ChError::bad_arguments(format!("Engine {name} has too many arguments")),
             )),
             _ => Err(HouseError::from(ChError::not_implemented(format!(
                 "Engine {name} is not a lake table engine: lake tables are MergeTree, \
-                 ReplacingMergeTree or SummingMergeTree (§49 §6.2)"
+                 ReplacingMergeTree, SummingMergeTree or VersionedCollapsingMergeTree \
+                 (§49 §6.2, D1570)"
             )))),
         }
     }
@@ -1944,6 +1972,18 @@ pub fn plan_table(
             for column in columns.iter().flatten() {
                 check_column(column, &numeric, "SummingMergeTree's summed column")?;
             }
+        }
+        LakeEngine::VersionedCollapsing { sign, version } => {
+            check_column(
+                sign,
+                &|t| matches!(t, ChType::Simple(s) if s == "Int8"),
+                "VersionedCollapsingMergeTree's sign column",
+            )?;
+            check_column(
+                version,
+                &integer,
+                "VersionedCollapsingMergeTree's version column",
+            )?;
         }
     }
 
@@ -2591,6 +2631,43 @@ mod tests {
                 .ttl
         );
         assert!(parse_create_table("CREATE TABLE t (a UInt8) BANANA").is_err());
+    }
+
+    #[test]
+    fn versioned_collapsing_is_a_lake_engine() {
+        let args = |a: &[&str]| a.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
+        let engine =
+            LakeEngine::from_clause("VersionedCollapsingMergeTree", &args(&["sign", "version"]))
+                .expect("engine");
+        assert_eq!(
+            engine,
+            LakeEngine::VersionedCollapsing {
+                sign: "sign".to_string(),
+                version: "version".to_string(),
+            }
+        );
+        assert!(engine.merges());
+        assert!(!LakeEngine::MergeTree.merges());
+        assert_eq!(
+            engine.render(),
+            "VersionedCollapsingMergeTree(sign, version)"
+        );
+        assert_eq!(LakeEngine::parse(&engine.render()).expect("parse"), engine);
+        // Replicated: the Keeper path and replica name are dropped (D344).
+        assert_eq!(
+            LakeEngine::from_clause(
+                "ReplicatedVersionedCollapsingMergeTree",
+                &args(&["'/t/{shard}'", "'{replica}'", "sign", "version"])
+            )
+            .expect("engine"),
+            engine
+        );
+        let err = LakeEngine::from_clause("VersionedCollapsingMergeTree", &args(&["sign"]))
+            .expect_err("one argument");
+        assert!(err.to_string().contains("two arguments"), "{err}");
+        let err = LakeEngine::from_clause("CollapsingMergeTree", &args(&["sign"]))
+            .expect_err("not a lake engine");
+        assert!(err.to_string().contains("not a lake table engine"), "{err}");
     }
 
     #[test]

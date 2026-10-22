@@ -26,7 +26,9 @@
 //! * `FINAL` (or `final = 1`) on a `ReplacingMergeTree` or `SummingMergeTree`
 //!   table reads a **merge view** (§49 §6.2): Replacing keeps, per sorting key,
 //!   the row with the greatest `(ver, file sequence number, row number)` and
-//!   drops it when its `is_deleted` is 1; Summing groups by the key and sums.
+//!   drops it when its `is_deleted` is 1; Summing groups by the key and sums;
+//!   VersionedCollapsing cancels rows of opposite sign per key and version
+//!   (D1570, [`collapsing`]).
 //!   chDB ignores `FINAL` on a view (measured), so the user's text runs as it is.
 //! * An external table (another writer's) reads as chDB reads Iceberg: no casts.
 //! * A view that reads the bucket names its columns and is `SQL SECURITY NONE`
@@ -133,6 +135,9 @@ pub fn view_ddl(pin: &ReadPin, source: &str, mode: Mode<'_>) -> Result<String, H
             }
             (Mode::Final(_), Some(engine @ LakeEngine::Summing { .. })) => {
                 summing(pin, source, &engine)?
+            }
+            (Mode::Final(files), Some(engine @ LakeEngine::VersionedCollapsing { .. })) => {
+                collapsing(pin, source, &engine, files)?
             }
             _ => format!("SELECT {}\nFROM {source}", casts(pin)?.join(", ")),
         }
@@ -249,10 +254,7 @@ pub fn carries_expressions(pin: &ReadPin, mode: Mode<'_>) -> bool {
         return false;
     }
     let merge = matches!(mode, Mode::Final(_))
-        && matches!(
-            LakeEngine::parse(&pin.table.engine),
-            Ok(LakeEngine::Replacing { .. } | LakeEngine::Summing { .. })
-        );
+        && LakeEngine::parse(&pin.table.engine).is_ok_and(|e| e.merges());
     merge
         || columns(pin).iter().any(|c| {
             !c.default_expression.is_empty()
@@ -382,18 +384,7 @@ fn replacing(
             "not a ReplacingMergeTree table",
         )));
     };
-    let mut inner = casts(pin)?;
-    let names: Vec<String> = files.iter().map(|f| quote_string(file_name(f))).collect();
-    let seqs: Vec<String> = files
-        .iter()
-        .map(|f| f.sequence_number.to_string())
-        .collect();
-    inner.push(format!(
-        "transform(_file, [{}]::Array(String), [{}]::Array(Int64), toInt64(0)) AS {SEQ}",
-        names.join(", "),
-        seqs.join(", ")
-    ));
-    inner.push(format!("ifNull(_row_number, 0) AS {ROW}"));
+    let inner = sequenced(pin, files)?;
     let mut order = Vec::new();
     if let Some(ver) = ver {
         order.push(format!("{} DESC", quote_name(ver)));
@@ -416,6 +407,73 @@ fn replacing(
         outer.join(", "),
         inner.join(", "),
         order.join(", ")
+    ))
+}
+
+/// The inner columns of a merge view that orders rows as they were written:
+/// the casts, the file's sequence number and the row's number in its file.
+fn sequenced(pin: &ReadPin, files: &[LiveFile]) -> Result<Vec<String>, HouseError> {
+    let mut inner = casts(pin)?;
+    let names: Vec<String> = files.iter().map(|f| quote_string(file_name(f))).collect();
+    let seqs: Vec<String> = files
+        .iter()
+        .map(|f| f.sequence_number.to_string())
+        .collect();
+    inner.push(format!(
+        "transform(_file, [{}]::Array(String), [{}]::Array(Int64), toInt64(0)) AS {SEQ}",
+        names.join(", "),
+        seqs.join(", ")
+    ));
+    inner.push(format!("ifNull(_row_number, 0) AS {ROW}"));
+    Ok(inner)
+}
+
+const BALANCE: &str = "__loams_balance";
+const TOTAL: &str = "__loams_total";
+const RANK: &str = "__loams_rank";
+
+/// VersionedCollapsing `FINAL` (D1570), as ClickHouse 26.9's merge does
+/// (measured on the 26.9.2.8 oracle, `collapsing_final_matches_the_oracle`):
+/// rows of one sorting key and version, in the order they were written, go
+/// through a stack; a row of the sign on the stack (or onto an empty one) is
+/// pushed, a row of the other sign cancels the row on top (the most recent, not
+/// the oldest). What stays is the stack at the end.
+///
+/// With the running sum of signs `b` and the group's total `t`, the stack at
+/// the end holds rows of sign `sign(t)` at depths `1 ..= |t|`, and the row at
+/// depth `d` is the last row of that sign whose push made `sign(t) * b = d`
+/// (after it the sum never fell below `d`, or a later push would reach `d`
+/// again). So: keep rows with `sign = sign(t)` and `sign * b` in `1 ..= |t|`,
+/// and of those the last per `(key, version, b)`.
+fn collapsing(
+    pin: &ReadPin,
+    source: &str,
+    engine: &LakeEngine,
+    files: &[LiveFile],
+) -> Result<String, HouseError> {
+    let LakeEngine::VersionedCollapsing { sign, version } = engine else {
+        return Err(HouseError::from(ChError::bad_arguments(
+            "not a VersionedCollapsingMergeTree table",
+        )));
+    };
+    let inner = sequenced(pin, files)?;
+    let mut group: Vec<String> = key(pin)?.into_iter().map(|(text, _)| text).collect();
+    group.push(quote_name(version));
+    let group = group.join(", ");
+    let sign = quote_name(sign);
+    let outer: Vec<String> = columns(pin).iter().map(|c| quote_name(&c.name)).collect();
+    let outer = outer.join(", ");
+    Ok(format!(
+        "SELECT {outer}\nFROM (\n\
+         SELECT {outer}, row_number() OVER (PARTITION BY {group}, {BALANCE} ORDER BY {SEQ} DESC, \
+         {ROW} DESC) AS {RANK}\nFROM (\n\
+         SELECT {outer}, {SEQ}, {ROW}, sum({sign}) OVER (PARTITION BY {group} ORDER BY {SEQ}, {ROW} \
+         ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS {BALANCE}, \
+         sum({sign}) OVER (PARTITION BY {group}) AS {TOTAL}\nFROM (\n\
+         SELECT {}\nFROM {source}\n)\n)\n\
+         WHERE {sign} = sign({TOTAL}) AND {sign} * {BALANCE} BETWEEN 1 AND abs({TOTAL})\n)\n\
+         WHERE {RANK} = 1",
+        inner.join(", ")
     ))
 }
 
@@ -635,6 +693,59 @@ mod tests {
              SELECT k, sumWithOverflow(n) AS n, any(label) AS label"
         ));
         assert!(ddl.contains("GROUP BY `k`\nHAVING NOT (n = 0)"));
+    }
+
+    #[test]
+    fn collapsing_view_cancels_by_key_and_version() {
+        let p = pin(
+            "VersionedCollapsingMergeTree(sign, version)",
+            "(k, toDate(d))",
+            vec![
+                column("k", "String"),
+                column("d", "DateTime"),
+                column("sign", "Int8"),
+                column("version", "UInt64"),
+            ],
+        );
+        let files = [LiveFile {
+            location: "s3://local/x/data/a.parquet".to_string(),
+            record_count: 1,
+            size_bytes: 1,
+            partition: "tuple()".to_string(),
+            sequence_number: 3,
+            data: true,
+        }];
+        assert!(views_carry(&p, &files));
+        let ddl = view_ddl(&p, "SRC", Mode::Final(&files)).expect("view");
+        assert!(ddl.contains("transform(_file, ['a.parquet']::Array(String), [3]::Array(Int64)"));
+        assert!(ddl.contains(
+            "sum(sign) OVER (PARTITION BY `k`, toDate(`d`), version ORDER BY __loams_seq, \
+             __loams_row ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS __loams_balance"
+        ));
+        assert!(
+            ddl.contains(
+                "sum(sign) OVER (PARTITION BY `k`, toDate(`d`), version) AS __loams_total"
+            )
+        );
+        assert!(ddl.contains(
+            "row_number() OVER (PARTITION BY `k`, toDate(`d`), version, __loams_balance ORDER BY \
+             __loams_seq DESC, __loams_row DESC) AS __loams_rank"
+        ));
+        assert!(ddl.contains(
+            "WHERE sign = sign(__loams_total) AND sign * __loams_balance BETWEEN 1 AND \
+             abs(__loams_total)"
+        ));
+        assert!(ddl.ends_with("WHERE __loams_rank = 1\nSETTINGS iceberg_snapshot_id = 42"));
+        // Without FINAL, the rows as stored.
+        assert!(
+            !view_ddl(&p, "SRC", Mode::Plain)
+                .expect("view")
+                .contains("__loams_total")
+        );
+    }
+
+    fn views_carry(p: &ReadPin, files: &[LiveFile]) -> bool {
+        carries_expressions(p, Mode::Final(files)) && !carries_expressions(p, Mode::Plain)
     }
 
     #[test]

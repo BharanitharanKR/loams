@@ -613,9 +613,11 @@ pub async fn plan(
         for (database, name, table, fin) in wanted {
             let pin = pin(&database, &name, ctx.database, &table, &as_of)?;
             let files = match (fin, pin.snapshot_id, LakeEngine::parse(&pin.table.engine)) {
-                (true, Some(id), Ok(LakeEngine::Replacing { .. }))
-                    if pin.table.class != TableClass::External =>
-                {
+                (
+                    true,
+                    Some(id),
+                    Ok(LakeEngine::Replacing { .. } | LakeEngine::VersionedCollapsing { .. }),
+                ) if pin.table.class != TableClass::External => {
                     live_files(lake, &table.metadata, id).await?
                 }
                 _ => Vec::new(),
