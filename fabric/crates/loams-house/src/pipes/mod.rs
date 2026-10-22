@@ -186,6 +186,10 @@ pub struct MaterializedView {
     pub target: String,
     /// Its `SELECT`, as written.
     pub select: String,
+    /// Whether its target is its own inner table, named as the view (HE1
+    /// R9.14): dropping the view drops the table.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub inner: bool,
 }
 
 impl MaterializedView {
@@ -531,6 +535,18 @@ pub async fn create_materialized_view(
     current: &str,
     text: &str,
 ) -> Result<(), HouseError> {
+    create_view_into(lake, namespace, current, text, false).await
+}
+
+/// [`create_materialized_view`], and with `inner` the view of an inner-table
+/// materialized view, whose target is the table named as the view (HE1 R9.14).
+pub async fn create_view_into(
+    lake: &Lake,
+    namespace: u64,
+    current: &str,
+    text: &str,
+    inner: bool,
+) -> Result<(), HouseError> {
     let stmt = ddl::parse_create_mv(text)?;
     if stmt.or_replace {
         return Err(not_implemented(
@@ -564,7 +580,7 @@ pub async fn create_materialized_view(
     let target_database = db_of(to_db);
     ddl::check_new_name("table", &stmt.name)?;
     lake.require_database(namespace, &database).await?;
-    let exists = lake.load(namespace, &database, &stmt.name).await?.is_some()
+    let exists = (!inner && lake.load(namespace, &database, &stmt.name).await?.is_some())
         || find_view(lake, namespace, &database, &stmt.name)
             .await?
             .is_some();
@@ -585,7 +601,19 @@ pub async fn create_materialized_view(
             "Too many materialized views: a namespace holds at most {cap}"
         )));
     }
-    let Some((source_db, source)) = stmt.source.clone() else {
+    // The first name after a FROM that is one of the catalog's tables (HE1
+    // R9.14: ClickHouse's trigger table, inside a subquery too).
+    let mut found = None;
+    for (db, name) in &stmt.candidates {
+        let db = db_of(db.clone());
+        if lake.database_exists(namespace, &db).await?
+            && lake.load(namespace, &db, name).await?.is_some()
+        {
+            found = Some((Some(db), name.clone()));
+            break;
+        }
+    }
+    let Some((source_db, source)) = found.or_else(|| stmt.source.clone()) else {
         return Err(not_implemented(
             "A materialized view's SELECT reads its source first: … FROM <pipe>",
         ));
@@ -631,6 +659,7 @@ pub async fn create_materialized_view(
         target_database,
         target: to,
         select: stmt.select.clone(),
+        inner,
     };
     if source_class == TableClass::Lake {
         // A view over a lake table starts at the source's current snapshot
@@ -713,6 +742,11 @@ pub async fn drop_materialized_view(
     let Some((source, view)) = find_view(lake, namespace, database, name).await? else {
         return Ok(false);
     };
+    // An inner-table view takes its table with it (HE1 R9.14).
+    if view.inner {
+        lake.drop_table(namespace, &view.target_database, &view.target, true)
+            .await?;
+    }
     lake.catalog()
         .commit(
             &source.ident,

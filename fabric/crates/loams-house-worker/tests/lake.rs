@@ -213,13 +213,14 @@ async fn create_each_tier1_engine() {
             .map(String::as_str),
         Some("MergeTree")
     );
-    // Other engines are not lake engines; denied ones stay denied.
-    refused(
+    // AggregatingMergeTree and Null are lake engines (HE1 R9.14); other engines
+    // are not; denied ones stay denied.
+    ok(
         addr,
         "CREATE TABLE ag (a UInt8) ENGINE = AggregatingMergeTree ORDER BY a",
-        "48",
     )
     .await;
+    ok(addr, "CREATE TABLE nl (a UInt8) ENGINE = Null").await;
     refused(addr, "CREATE TABLE lg (a UInt8) ENGINE = Log", "48").await;
     refused(
         addr,
@@ -522,8 +523,6 @@ async fn unsupported_type_is_48() {
         "Int128",
         "UInt256",
         "Decimal(50, 2)",
-        "AggregateFunction(sum, UInt64)",
-        "SimpleAggregateFunction(sum, UInt64)",
         "Nested(a UInt8, b String)",
         "JSON",
         "IntervalDay",

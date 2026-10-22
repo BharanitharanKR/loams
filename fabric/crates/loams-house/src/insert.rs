@@ -627,6 +627,44 @@ fn merged_on_insert(ch: &ChTable, key: &[(String, Option<String>)]) -> Result<St
                 select.join(", ")
             )
         }
+        // HE1 R9.14: a Null table's rows are stored for its materialized views
+        // (reads never see them).
+        ddl::LakeEngine::Null => rows,
+        // HE1 R9.14: an inserted block of an AggregatingMergeTree is merged as
+        // ClickHouse merges it (`optimize_on_insert`): per sorting key, states
+        // with their function's `-MergeState`, simple columns with their
+        // function, the first row's value of the rest.
+        ddl::LakeEngine::Aggregating => {
+            let key_columns: Vec<&str> = key.iter().filter_map(|(_, c)| c.as_deref()).collect();
+            let mut select = Vec::new();
+            for column in ch.columns.iter().filter(|c| c.stored()) {
+                let name = quote_name(&column.name);
+                let refused = || refusal(ch, &format!("the type of column {}", column.name));
+                if key_columns.contains(&column.name.as_str()) {
+                    select.push(name);
+                    continue;
+                }
+                select.push(match crate::types::ChType::parse(&column.ch_type)? {
+                    crate::types::ChType::AggregateState => {
+                        let (function, params) =
+                            views::state_function(&column.ch_type).ok_or_else(refused)?;
+                        format!("{function}MergeState{params}({name}) AS {name}")
+                    }
+                    crate::types::ChType::SimpleAggregate(function, _) => {
+                        let (function, params) =
+                            views::aggregate_function(&function).ok_or_else(refused)?;
+                        format!("{function}{params}({name}) AS {name}")
+                    }
+                    _ => format!("argMin({name}, __loams_position) AS {name}"),
+                });
+            }
+            select.push(format!("min(__loams_position) AS {ORDER}"));
+            format!(
+                "SELECT {} FROM (SELECT {staged}, rowNumberInAllBlocks() AS __loams_position \
+                 FROM {STAGING}) GROUP BY {by}",
+                select.join(", ")
+            )
+        }
         ddl::LakeEngine::VersionedCollapsing { sign, version } => {
             let sign = quote_name(&sign);
             let group = if elements.is_empty() {
@@ -1120,9 +1158,58 @@ pub struct CreateAs {
     pub name: String,
     /// `IF NOT EXISTS`.
     pub if_not_exists: bool,
+    /// An inner-table materialized view (HE1 R9.14): once the table is made,
+    /// the view `name TO name AS <select>` over its source.
+    pub inner_view: bool,
 }
 
 impl CreateAs {
+    /// `CREATE MATERIALIZED VIEW mv [(columns)] ENGINE = … AS SELECT …` with no
+    /// `TO` (HE1 R9.14): ClickHouse makes an inner table and reads the view's
+    /// name as that table. The House makes a lake table named as the view, with
+    /// the `SELECT`'s columns (or the ones written) and the clauses written,
+    /// then the view into it; `POPULATE` is refused as for any view.
+    pub fn inner_view(text: &str, current: &str) -> Result<Self, HouseError> {
+        let mv = ddl::parse_create_mv(text)?;
+        if mv.populate {
+            return Err(HouseError::from(ChError::not_implemented(
+                "POPULATE is not supported (ClickHouse advises against it: rows that arrive while \
+                 it runs are lost); fill the view's table with INSERT … SELECT instead",
+            )));
+        }
+        if mv.or_replace || mv.refresh {
+            return Err(HouseError::from(ChError::not_implemented(
+                "CREATE OR REPLACE and REFRESH materialized views are not on the House's surface",
+            )));
+        }
+        let database = mv.database.clone().unwrap_or_else(|| current.to_string());
+        let head = format!(
+            "CREATE TABLE {}{}.{}",
+            if mv.if_not_exists {
+                "IF NOT EXISTS "
+            } else {
+                ""
+            },
+            quote_name(&database),
+            quote_name(&mv.name)
+        );
+        Ok(Self {
+            statement: text.to_string(),
+            head: match &mv.inner_columns {
+                Some(columns) => format!("{head} {columns}"),
+                None => head,
+            },
+            clauses: mv.inner_clauses.clone(),
+            has_columns: mv.inner_columns.is_some(),
+            select: mv.select.clone(),
+            empty: true,
+            database,
+            name: mv.name,
+            if_not_exists: mv.if_not_exists,
+            inner_view: true,
+        })
+    }
+
     /// Reads a `CREATE TABLE … AS SELECT`; `current` is the request's database.
     pub fn parse(text: &str, current: &str) -> Result<Self, HouseError> {
         let create = ddl::parse_create_table(text)?;
@@ -1147,6 +1234,7 @@ impl CreateAs {
             database: create.database.unwrap_or_else(|| current.to_string()),
             name: create.name,
             if_not_exists: create.if_not_exists,
+            inner_view: false,
         })
     }
 }
@@ -1287,6 +1375,24 @@ pub async fn create_as(
             return Err(HouseError::from(ChError::syntax_error(
                 "the table's CREATE TABLE was not a lake table's",
             )));
+        }
+    }
+    if plan.inner_view {
+        let view = format!(
+            "CREATE MATERIALIZED VIEW {db}.{name} TO {db}.{name} AS {}",
+            plan.select,
+            db = quote_name(&plan.database),
+            name = quote_name(&plan.name),
+        );
+        if let Err(err) =
+            crate::pipes::create_view_into(ctx.lake, ctx.namespace, ctx.database, &view, true).await
+        {
+            // No inner table without its view.
+            let _ = ctx
+                .lake
+                .drop_table(ctx.namespace, &plan.database, &plan.name, true)
+                .await;
+            return Err(err);
         }
     }
     if plan.empty {

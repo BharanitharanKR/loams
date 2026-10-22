@@ -170,7 +170,7 @@ pub fn batch(
     Ok(PipeBatch {
         database: database.to_string(),
         name: name.to_string(),
-        view: views::view_ddl(&pinned, &source_fn, Mode::Plain)?,
+        view: views::view_ddl(&pinned, &source_fn, Mode::Batch)?,
     })
 }
 

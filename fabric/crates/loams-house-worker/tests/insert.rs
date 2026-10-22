@@ -1499,3 +1499,119 @@ async fn catalog_views_and_distributed_tables() {
     ok(addr, "DROP VIEW IF EXISTS nested").await;
     ok(addr, "DROP TABLE s_dist").await;
 }
+
+/// HE1 R9.14: readable `AggregatingMergeTree` and `Null`, against the oracle.
+/// OpenPanel 2.3.0's inner-table materialized views (agent O's pack: states,
+/// `count()` dimensions, `ARRAY JOIN`, and the binding by identity that a
+/// `RENAME TABLE` of the source shows) and Langfuse's `Null` → `AggregatingMergeTree`
+/// views with `SimpleAggregateFunction` columns. Every answer below is what
+/// `clickhouse-server` 26.9.2.8 gave for the same statements (rows joined by `|`),
+/// read with `-Merge`, plain aggregates and `FINAL`, before and after `OPTIMIZE`.
+/// The oracle needs `allow_dimensions_outside_sorting_key = 1` for the property
+/// views (26.7+); the House does not check that rule. `event_property_values_mv`
+/// reads its source inside a FROM subquery, which still makes `events` its trigger;
+/// `direct_amt` checks that one INSERT's equal keys are merged as ClickHouse's
+/// `optimize_on_insert` merges them.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn aggregating_merge_tree_matches_the_oracle() {
+    let house = lakehouse("amt-oracle").await;
+    let addr = house.addr();
+    for statement in [
+        "CREATE TABLE events (project_id String, profile_id String, device_id String, name String, created_at DateTime, duration UInt64, properties Map(String, String)) ENGINE = MergeTree ORDER BY (project_id, created_at)",
+        "CREATE MATERIALIZED VIEW IF NOT EXISTS dau_mv ENGINE = AggregatingMergeTree() PARTITION BY toYYYYMMDD(date) ORDER BY (project_id, date) AS SELECT toDate(created_at) as date, uniqState(profile_id) as profile_id, project_id FROM events GROUP BY date, project_id",
+        "CREATE MATERIALIZED VIEW IF NOT EXISTS cohort_events_mv ENGINE = AggregatingMergeTree() ORDER BY (project_id, name, created_at, profile_id) AS SELECT project_id, name, toDate(created_at) AS created_at, profile_id, COUNT() AS event_count FROM events WHERE profile_id != device_id GROUP BY project_id, name, created_at, profile_id",
+        "CREATE MATERIALIZED VIEW IF NOT EXISTS distinct_event_names_mv ENGINE = AggregatingMergeTree() ORDER BY (project_id, name, created_at) AS SELECT project_id, name, max(created_at) AS created_at, count() AS event_count FROM events GROUP BY project_id, name",
+        "CREATE MATERIALIZED VIEW IF NOT EXISTS event_property_values_mv ENGINE = AggregatingMergeTree() ORDER BY (project_id, name, property_key, property_value) SETTINGS allow_dimensions_outside_sorting_key = 1 AS SELECT project_id, name, key_value.keys AS property_key, key_value.values AS property_value, created_at FROM (SELECT project_id, name, untuple(arrayJoin(properties)) AS key_value, max(created_at) AS created_at FROM events GROUP BY project_id, name, key_value) WHERE property_value != '' AND property_key != '' AND property_key NOT IN ('__duration_from', '__properties_from') GROUP BY project_id, name, property_key, property_value, created_at",
+        "INSERT INTO events VALUES ('p1', 'u1', 'd1', 'sign_up', '2026-10-15 10:00:00', 5, {'a':'1','b':'2'}), ('p1', 'u2', 'd2', 'screen_view', '2026-10-15 11:00:00', 7, {'a':'3'}), ('p1', 'u1', 'd1', 'screen_view', '2026-10-16 09:00:00', 1, {}), ('p1', 'd3', 'd3', 'screen_view', '2026-10-16 09:30:00', 2, {'c':''})",
+        "INSERT INTO events VALUES ('p1', 'u1', 'd1', 'screen_view', '2026-10-16 12:00:00', 4, {'a':'1'}), ('p2', 'u3', 'd4', 'sign_up', '2026-10-17 08:00:00', 9, {'z':'9'}), ('p1', 'u2', 'd2', 'screen_view', '2026-10-15 23:00:00', 3, {'a':'4'})",
+        "RENAME TABLE events TO events_20251123",
+        "CREATE TABLE events (project_id String, profile_id String, device_id String, name String, created_at DateTime, duration UInt64, properties Map(String, String)) ENGINE = MergeTree ORDER BY (project_id, created_at)",
+        "CREATE MATERIALIZED VIEW IF NOT EXISTS profile_event_summary_mv ENGINE = AggregatingMergeTree() PARTITION BY toYYYYMM(event_date) ORDER BY (project_id, profile_id, name, event_date) AS SELECT project_id, profile_id, name, toStartOfDay(created_at) AS event_date, countState() AS event_count, minState(created_at) AS first_event_time, maxState(created_at) AS last_event_time, sumState(duration) AS total_duration FROM events WHERE profile_id != device_id GROUP BY project_id, profile_id, name, event_date",
+        "CREATE MATERIALIZED VIEW IF NOT EXISTS profile_event_property_summary_mv ENGINE = AggregatingMergeTree() PARTITION BY toYYYYMM(event_date) ORDER BY (project_id, profile_id, name, property_key, event_date) SETTINGS allow_dimensions_outside_sorting_key = 1 AS SELECT project_id, profile_id, name, property_key, property_value, toStartOfDay(created_at) AS event_date, countState() AS event_count, minState(created_at) AS first_event_time, maxState(created_at) AS last_event_time FROM events ARRAY JOIN mapKeys(properties) AS property_key, mapValues(properties) AS property_value WHERE profile_id != device_id AND property_key != '' AND property_value != '' GROUP BY project_id, profile_id, name, property_key, property_value, event_date",
+        "INSERT INTO events VALUES ('p1', 'u1', 'd1', 'screen_view', '2026-10-18 10:00:00', 5, {'a':'1','b':'2'}), ('p1', 'u1', 'd1', 'screen_view', '2026-10-18 11:00:00', 6, {'a':'1'}), ('p1', 'd3', 'd3', 'screen_view', '2026-10-18 12:00:00', 2, {'a':'x'})",
+        "INSERT INTO events VALUES ('p1', 'u1', 'd1', 'screen_view', '2026-10-18 15:00:00', 8, {'b':'2'}), ('p1', 'u2', 'd2', 'sign_up', '2026-10-19 10:00:00', 1, {'a':'5','c':''})",
+        "CREATE TABLE traces_null (project_id String, id String, start_time DateTime64(3), name Nullable(String), tags Array(String), input String, event_ts DateTime64(3)) ENGINE = Null()",
+        "CREATE TABLE traces_all_amt (project_id String, id String, start_time SimpleAggregateFunction(min, DateTime64(3)), name SimpleAggregateFunction(anyLast, Nullable(String)), tags SimpleAggregateFunction(groupUniqArrayArray, Array(String)), input AggregateFunction(argMax, String, DateTime64(3))) ENGINE = AggregatingMergeTree() ORDER BY (project_id, id)",
+        "CREATE MATERIALIZED VIEW traces_all_amt_mv TO traces_all_amt AS SELECT tn.project_id AS project_id, tn.id AS id, min(tn.start_time) AS start_time, anyLast(tn.name) AS name, groupUniqArrayArray(tn.tags) AS tags, argMaxState(tn.input, if(tn.input <> '', tn.event_ts, toDateTime64(0, 3))) AS input FROM traces_null tn GROUP BY project_id, id",
+        "INSERT INTO traces_null VALUES ('p', 't1', '2026-10-18 10:00:00.000', 'first', ['a'], 'in-1', '2026-10-18 10:00:00.000'), ('p', 't2', '2026-10-18 10:01:00.000', NULL, ['b'], '', '2026-10-18 10:01:00.000')",
+        "INSERT INTO traces_null VALUES ('p', 't1', '2026-10-18 09:00:00.000', 'first', ['c', 'a'], 'in-2', '2026-10-18 10:05:00.000'), ('p', 't2', '2026-10-18 10:02:00.000', 'second', [], 'late', '2026-10-18 10:03:00.000')",
+        "CREATE TABLE direct_amt (k String, c AggregateFunction(count, UInt64), m SimpleAggregateFunction(max, UInt64)) ENGINE = AggregatingMergeTree ORDER BY k",
+        "INSERT INTO direct_amt SELECT if(number % 2 = 0, 'a', 'b'), initializeAggregation('countState', number), number FROM numbers(6)",
+    ] {
+        ok(addr, statement).await;
+    }
+    let expected: &[(&str, &str)] = &[
+        (
+            "SELECT project_id, profile_id, name, event_date, countMerge(event_count), minMerge(first_event_time), maxMerge(last_event_time), sumMerge(total_duration) FROM profile_event_summary_mv GROUP BY project_id, profile_id, name, event_date ORDER BY ALL",
+            "p1\tu1\tscreen_view\t2026-10-18 00:00:00\t3\t2026-10-18 10:00:00\t2026-10-18 15:00:00\t19|p1\tu2\tsign_up\t2026-10-19 00:00:00\t1\t2026-10-19 10:00:00\t2026-10-19 10:00:00\t1|",
+        ),
+        (
+            "SELECT project_id, profile_id, name, property_key, property_value, event_date, countMerge(event_count), maxMerge(last_event_time) FROM profile_event_property_summary_mv GROUP BY ALL ORDER BY ALL",
+            "p1\tu1\tscreen_view\ta\t1\t2026-10-18 00:00:00\t2\t2026-10-18 11:00:00|p1\tu1\tscreen_view\tb\t2\t2026-10-18 00:00:00\t2\t2026-10-18 15:00:00|p1\tu2\tsign_up\ta\t5\t2026-10-19 00:00:00\t1\t2026-10-19 10:00:00|",
+        ),
+        (
+            "SELECT project_id, profile_id, name, event_date, finalizeAggregation(event_count), finalizeAggregation(total_duration) FROM profile_event_summary_mv FINAL ORDER BY ALL",
+            "p1\tu1\tscreen_view\t2026-10-18 00:00:00\t3\t19|p1\tu2\tsign_up\t2026-10-19 00:00:00\t1\t1|",
+        ),
+        (
+            "SELECT project_id, date, uniqMerge(profile_id) FROM dau_mv GROUP BY project_id, date ORDER BY ALL",
+            "p1\t2026-10-15\t2|p1\t2026-10-16\t2|p2\t2026-10-17\t1|",
+        ),
+        (
+            "SELECT name, sum(event_count) FROM cohort_events_mv WHERE project_id = 'p1' GROUP BY name ORDER BY ALL",
+            "screen_view\t4|sign_up\t1|",
+        ),
+        (
+            "SELECT name, max(created_at), sum(event_count) FROM distinct_event_names_mv WHERE project_id = 'p1' GROUP BY name ORDER BY name",
+            "screen_view\t2026-10-16 12:00:00\t5|sign_up\t2026-10-15 10:00:00\t1|",
+        ),
+        ("SELECT count() FROM events_20251123", "7|"),
+        (
+            "SELECT id, min(start_time), anyLast(name), arraySort(groupUniqArrayArray(tags)), argMaxMerge(input) FROM traces_all_amt GROUP BY project_id, id ORDER BY id",
+            "t1\t2026-10-18 09:00:00.000\tfirst\t['a','c']\tin-2|t2\t2026-10-18 10:01:00.000\tsecond\t['b']\tlate|",
+        ),
+        (
+            "SELECT id, start_time, name, arraySort(tags), finalizeAggregation(input) FROM traces_all_amt FINAL ORDER BY id",
+            "t1\t2026-10-18 09:00:00.000\tfirst\t['a','c']\tin-2|t2\t2026-10-18 10:01:00.000\tsecond\t['b']\tlate|",
+        ),
+        ("SELECT count() FROM traces_null", "0|"),
+        (
+            "SELECT distinct property_key, max(created_at) as created_at FROM event_property_values_mv WHERE project_id = 'p1' GROUP BY property_key ORDER BY created_at DESC, property_key ASC LIMIT 50000",
+            "a\t2026-10-16 12:00:00|b\t2026-10-15 10:00:00|",
+        ),
+        (
+            "SELECT k, finalizeAggregation(c), m FROM direct_amt ORDER BY k",
+            "a\t3\t4|b\t3\t5|",
+        ),
+        ("SELECT count() FROM direct_amt", "2|"),
+    ];
+    let check = |when: &'static str| async move {
+        for (read, want) in expected {
+            let got = ok(addr, &format!("{read} FORMAT TSV"))
+                .await
+                .replace('\n', "|");
+            assert_eq!(&got, want, "{when}: {read}");
+        }
+    };
+    check("before OPTIMIZE").await;
+    ok(addr, "OPTIMIZE TABLE profile_event_summary_mv FINAL").await;
+    ok(addr, "OPTIMIZE TABLE traces_all_amt FINAL").await;
+    check("after OPTIMIZE").await;
+    assert_eq!(
+        ok(
+            addr,
+            "SELECT count() FROM profile_event_summary_mv FORMAT TSV"
+        )
+        .await,
+        "2\n"
+    );
+    // Dropping an inner-table view drops its table.
+    ok(addr, "DROP VIEW dau_mv").await;
+    assert_eq!(ok(addr, "EXISTS TABLE dau_mv FORMAT TSV").await, "0\n");
+    ok(addr, "DROP TABLE profile_event_summary_mv").await;
+    assert_eq!(
+        ok(addr, "EXISTS TABLE profile_event_summary_mv FORMAT TSV").await,
+        "0\n"
+    );
+    refused(addr, "CREATE MATERIALIZED VIEW p ENGINE = AggregatingMergeTree ORDER BY a POPULATE AS SELECT 1 AS a", "48").await;
+}
