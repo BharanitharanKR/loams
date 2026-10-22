@@ -17,7 +17,7 @@ plugins/                      Plugin runtime, adapters, dashboard, BI contracts
 tools/monorepo/                Migration provenance and structural checks
 ```
 
-Use Node 22 or newer and the pinned pnpm version:
+Use Node 22.12 or newer (vite and electron-vite require `^20.19.0 || >=22.12.0`) and the pinned pnpm version:
 
 ```sh
 pnpm install --frozen-lockfile
