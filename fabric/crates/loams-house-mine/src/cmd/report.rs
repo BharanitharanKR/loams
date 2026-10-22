@@ -5,6 +5,7 @@ use std::path::PathBuf;
 
 use anyhow::Context as _;
 
+use crate::matrix::Classes;
 use crate::profile::{self, Profile, Ranking};
 
 /// Arguments of `report`.
@@ -19,6 +20,12 @@ pub struct Args {
     /// Where to write the page.
     #[arg(long, default_value = "docs/house/compat-profile.md")]
     pub doc: PathBuf,
+    /// §75's classes, which the tier proposals are checked against.
+    #[arg(long, default_value = "conformance/clickhouse/matrix/classes.toml")]
+    pub classes: PathBuf,
+    /// The hand-written findings included in the page, if present.
+    #[arg(long, default_value = "conformance/clickhouse/profile/findings.md")]
+    pub findings: PathBuf,
 }
 
 /// Runs `report`.
@@ -30,7 +37,12 @@ pub fn run(args: &Args) -> anyhow::Result<()> {
     let text = std::fs::read_to_string(&args.ranking)
         .with_context(|| format!("reading {}", args.ranking.display()))?;
     let ranking: Ranking = serde_json::from_str(&text)?;
-    let profile = Profile::from_ranking(&ranking);
+    let classes = Classes::parse(
+        &std::fs::read_to_string(&args.classes)
+            .with_context(|| format!("reading {}", args.classes.display()))?,
+    )?;
+    let findings = std::fs::read_to_string(&args.findings).ok();
+    let profile = Profile::from_ranking(&ranking, &classes);
     for path in [&args.profile, &args.doc] {
         if let Some(parent) = path.parent() {
             std::fs::create_dir_all(parent)?;
@@ -42,7 +54,10 @@ pub fn run(args: &Args) -> anyhow::Result<()> {
         format!("{header}{}", toml::to_string(&profile)?),
     )
     .with_context(|| format!("writing {}", args.profile.display()))?;
-    std::fs::write(&args.doc, profile::render_markdown(&ranking))
-        .with_context(|| format!("writing {}", args.doc.display()))?;
+    std::fs::write(
+        &args.doc,
+        profile::render_markdown(&ranking, &classes, findings.as_deref()),
+    )
+    .with_context(|| format!("writing {}", args.doc.display()))?;
     Ok(())
 }
