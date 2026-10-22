@@ -231,10 +231,32 @@ Added 2026-10-22 (HE1 rulings R11.7 and R11.8 in [`he1-rulings/t11.md`](he1-ruli
 
 | Fork PR | Branch | What | State |
 |---|---|---|---|
-| #1 | `dv/serialize` | apache/iceberg-rust#3232 (`DeleteVector::serialize`, by its upstream author) carried unchanged, plus a conflict fix for #3107's `test_utils` move, a rustdoc fix and `public-api.txt` | Open. It is dropped once #3232 merges upstream |
-| #2 | `dv/writer` | `DeletionVectorWriter`: one Puffin file per partition, one `deletion-vector-v1` blob per data file, the `DataFile` entries with `referenced_data_file` / `content_offset` / `content_size_in_bytes`, and `merge_existing` for a file's current DV | Open; stacked on #1 |
-| #3 | `dv/spark-tests` | A Spark-provisioned v3 DV table in `dev/spark/provision.py`, plus integration tests: Spark's DVs re-serialize unchanged, and a merged DV replaces Spark's on read | Open; stacked on #2 |
+| #1 | `dv/serialize` | apache/iceberg-rust#3232 (`DeleteVector::serialize`, by its upstream author) carried unchanged, plus a conflict fix for #3107's `test_utils` move, a rustdoc fix and `public-api.txt` | Merged 2026-10-22. It is dropped once #3232 merges upstream |
+| #2 | `dv/writer` | `DeletionVectorWriter`: one Puffin file per partition, one `deletion-vector-v1` blob per data file, the `DataFile` entries with `referenced_data_file` / `content_offset` / `content_size_in_bytes`, and `merge_existing` for a file's current DV | Merged 2026-10-22 |
+| #3 | `dv/spark-tests` | A Spark-provisioned v3 DV table in `dev/spark/provision.py`, plus integration tests: Spark's DVs re-serialize unchanged, and a merged DV replaces Spark's on read | Merged 2026-10-22 |
 
 **Interop.** The branch `he0-dv-writer-interop` is never merged. Its `spikes/he0-iceberg-v3/dv-writer/` merges Spark-written DVs with new positions through the writer (fork commit `cace1a1`) and commits them with Iceberg Java's RowDelta. Spark 4.0.4 (Iceberg 1.12.0), Trino 483 and iceberg-rust then give Spark's precomputed answer in all six cases: `dv`, `dv_part` and `upgraded`, each with and without a filter.
 
-**What comes later:** G3 (`RowDelta`, apache/iceberg-rust#2203) and G5 (lineage through rewrites).
+`loams/dv-writer` holds all three (`f8cf1a1`).
+
+**Pieces (G3, RowDelta).** These are on the branch `loams/row-delta`, which starts from `loams/dv-writer`. Owner, 2026-10-22: "review and test #2203 rather than rewriting it".
+
+| Fork PR | Branch | What | State |
+|---|---|---|---|
+| #4 | `rd/carry-2203` | apache/iceberg-rust#2203 (`RowDeltaAction`, copy-on-write, by its upstream author). Its six commits are merged unchanged. The merge commit adapts them to `main`'s `SnapshotProducer` (#3253) and stateful `TransactionAction` (#3265) | Merged 2026-10-22 |
+| #5 | `rd/merge-on-read` | Merge-on-read: `add_delete_files` (DVs on v3, position deletes on v2, equality deletes) and `remove_delete_files`, which matches a DV by Puffin path and `content_offset`. Also: format-version checks, at most one live DV per data file, the `BaseRowDelta` operation, and summary counts. It also fixes a bug in #2203: a second rewrite of the same manifest brought deleted files back | Merged 2026-10-22 |
+| #6 | `rd/integration` | Integration tests against Spark-provisioned tables: RowDelta replaces Spark's DVs on v3 and adds position deletes on v2 | Merged 2026-10-22; `loams/row-delta` holds all three (`d078855`) |
+
+**Interop (G3).** The branch `he0-row-delta-interop` is never merged. Its `spikes/he0-iceberg-v3/row-delta/` has iceberg-rust's RowDelta commit two kinds of deletes:
+- DVs to three v3 tables, replacing Spark's DVs;
+- Parquet position deletes to a v2 table.
+
+Spark 4.0.4 (Iceberg 1.12.0), Trino 483, DuckDB 2.0.0 and iceberg-rust then give Spark's precomputed answer in all eight cases.
+
+The same run decoded a Spark-written DV: it uses roaring run containers (cookie `12347`), where `DeleteVector::serialize` writes array containers. Both decode the same.
+
+**Upstream state (2026-10-22):**
+- **#3232.** We asked its author whether we may finish it. If the author agrees, or has not replied by **2026-10-28**, we open our own upstream PR. It carries their commits, credited with `Co-authored-by`, plus Spark-style run optimisation with a test. It links #3232 and #2580 and asks the maintainers to close #3232 in its favour. The writer (G2) and RowDelta (G3) follow as upstream PRs after that.
+- **#2203.** We commented there with these results and offered help. No new upstream PR for RowDelta goes out until its dependencies merge.
+
+**What comes later:** G5 (lineage through rewrites).
