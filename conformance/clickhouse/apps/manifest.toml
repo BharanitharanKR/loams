@@ -22,7 +22,8 @@
 #   suite                its own end-to-end command, if any ("" when none runs
 #                        without its source; ruling R0.7)
 #   runtime_minutes      wall time of up + drive + dump on a GitHub runner
-#   gate                 a gate application of §75 §7.1 (Langfuse, OpenPanel)
+#   gate                 a gate application of §75 §7.1 (Langfuse, OpenPanel,
+#                        SigNoz: D1571)
 
 schema = 1
 
@@ -85,4 +86,21 @@ clickhouse_min = "24.3"
 driver = "openpanel/driver.sh"
 suite = ""
 runtime_minutes = 10
+gate = true
+
+[[app]]
+# SigNoz, the community build: all telemetry in ClickHouse over the native
+# protocol, schema by its collector's migrator on a one-node cluster.
+name = "signoz"
+image = "docker.io/signoz/signoz-community:v0.145.0@sha256:5f9b59276590a5e0e0eb2a7f99e88c9b27f44e4575d18c555aaa07648bca9d0c"
+images = ["docker.io/signoz/signoz-otel-collector:v0.144.12@sha256:deb566a7a3c0ba544ee58ccc92ee1f0e6da827bc40383e52f3c824705e100a3d"]
+licence = "MIT AND AGPL-3.0-only"
+clickhouse_protocol = "native"
+migrations_protocol = "native"
+clickhouse_min = "25.12"
+driver = "signoz/driver.sh"
+suite = ""
+runtime_minutes = 15
+# The third gate application (D1571, owner 2026-10-22; HE1 R9.60): the MIT
+# build only, never the default `signoz/signoz` image, which links ee/.
 gate = true
