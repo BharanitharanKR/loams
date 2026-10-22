@@ -339,7 +339,7 @@ The linker, link arguments and target directories are not inputs, so the owner's
 
 The feature-gated suites (TiKV, the cluster tests, the crash gate, the nightly suites) are not Nx targets, so they never use a cache.
 
-`node tools/nx-cargo/check.cjs` checks two things:
+`node tools/nx-cargo/check.cjs` runs in CI's *Repo: checks* job and checks two things:
 - The crate graph matches `cargo metadata`.
 - Every path a crate's code names outside itself and its dependencies is declared: `"../"` literals, `"/../"` after `CARGO_MANIFEST_DIR`, and `join("..")`. An undeclared read fails the check.
 
@@ -377,3 +377,11 @@ Caching per crate saves the test run of the crates a change does not reach, not 
 With no outputs, an entry is a log of a few KB, far inside any Nx Cloud limit; compiled artefacts are never sent.
 
 The cost is the CIPEs: `ci.yml` runs about 230 times a day. CI therefore keeps the existing workspace commands until the open-source plan or a self-hosted cache is in place. Without a remote cache, a fresh runner gains nothing from per-crate targets and pays the per-invocation overhead.
+
+**Switching the Rust jobs over (not done yet).** Once pull requests get a remote cache (`NX_CLOUD_CI=all` on the open-source plan), the switch is:
+- *Rust: tests* runs `scripts/ci/nx-cloud-run.sh affected -t test --exclude='*,!tag:cargo-workspace:root'` in place of `cargo nextest run --workspace`.
+- *Rust: fmt and clippy* runs the same with `-t fmt clippy`. Its feature-specific clippy, doc and doc-test steps stay as they are.
+
+Both jobs keep their names, so `CI required` and the rulesets still match. They need the web job's Nx Cloud `environment` and `env` block, `pnpm install`, and `scripts/ci/nx-scope.sh`.
+
+Measure the change on the first pull request that has it, against today's 64 and 44 minutes. Do not make the switch before then: on a runner with no remote cache, every per-crate task misses.
