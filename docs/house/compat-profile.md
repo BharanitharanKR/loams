@@ -2,7 +2,7 @@
 
 # The Loams House compatibility profile
 
-The ClickHouse features real applications use, mined from their query logs and migrations (design §75 §7.1, plan HE1 Task 2). A feature is in the profile when 3 or more applications use it, or when a gate application (langfuse, openpanel) does.
+The ClickHouse features real applications use, mined from their query logs and migrations (design §75 §7.1, plan HE1 Task 2). A feature is in the profile when 3 or more applications use it, or when a gate application (langfuse, openpanel, signoz) does.
 
 ## Applications
 
@@ -10,115 +10,135 @@ The ClickHouse features real applications use, mined from their query logs and m
 |---|---|---:|---:|---:|---:|
 | langfuse | v3, v4 | 2340 | 1588 | 752 | 0 |
 | openpanel | 2.3.0 | 178 | 106 | 72 | 0 |
+| signoz | 0.145.0 | 1635 | 1155 | 480 | 0 |
 
 ## `function`
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
-| `equals` | 2 (langfuse, openpanel) | 1457 | yes | gate:langfuse |
-| `and` | 2 (langfuse, openpanel) | 1424 | yes | gate:langfuse |
-| `greaterOrEquals` | 2 (langfuse, openpanel) | 947 | yes | gate:langfuse |
-| `count` | 2 (langfuse, openpanel) | 259 | yes | gate:langfuse |
-| `toDate` | 2 (langfuse, openpanel) | 234 | yes | gate:langfuse |
-| `lessOrEquals` | 2 (langfuse, openpanel) | 222 | yes | gate:langfuse |
-| `tuple` | 2 (langfuse, openpanel) | 215 | yes | gate:langfuse |
-| `in` | 2 (langfuse, openpanel) | 200 | yes | gate:langfuse |
-| `isNotNull` | 2 (langfuse, openpanel) | 194 | yes | gate:langfuse |
-| `notEquals` | 2 (langfuse, openpanel) | 125 | yes | gate:langfuse |
-| `max` | 2 (langfuse, openpanel) | 102 | yes | gate:langfuse |
-| `greater` | 2 (langfuse, openpanel) | 101 | yes | gate:langfuse |
-| `now` | 2 (langfuse, openpanel) | 98 | yes | gate:langfuse |
+| `equals` | 3 (langfuse, openpanel, signoz) | 2062 | yes | apps>=3 |
+| `and` | 3 (langfuse, openpanel, signoz) | 1544 | yes | apps>=3 |
+| `greaterOrEquals` | 3 (langfuse, openpanel, signoz) | 995 | yes | apps>=3 |
+| `notEquals` | 3 (langfuse, openpanel, signoz) | 551 | yes | apps>=3 |
+| `count` | 3 (langfuse, openpanel, signoz) | 319 | yes | apps>=3 |
+| `toDate` | 3 (langfuse, openpanel, signoz) | 279 | yes | apps>=3 |
+| `tuple` | 3 (langfuse, openpanel, signoz) | 265 | yes | apps>=3 |
+| `lessOrEquals` | 3 (langfuse, openpanel, signoz) | 253 | yes | apps>=3 |
+| `in` | 3 (langfuse, openpanel, signoz) | 217 | yes | apps>=3 |
+| `isNotNull` | 3 (langfuse, openpanel, signoz) | 199 | yes | apps>=3 |
+| `max` | 3 (langfuse, openpanel, signoz) | 147 | yes | apps>=3 |
+| `if` | 3 (langfuse, openpanel, signoz) | 138 | yes | apps>=3 |
+| `now` | 3 (langfuse, openpanel, signoz) | 130 | yes | apps>=3 |
+| `greater` | 3 (langfuse, openpanel, signoz) | 109 | yes | apps>=3 |
+| `arrayElement` | 3 (langfuse, openpanel, signoz) | 108 | yes | apps>=3 |
+| `or` | 3 (langfuse, openpanel, signoz) | 107 | yes | apps>=3 |
+| `toDateTime` | 3 (langfuse, openpanel, signoz) | 107 | yes | apps>=3 |
+| `sum` | 3 (langfuse, openpanel, signoz) | 93 | yes | apps>=3 |
+| `min` | 3 (langfuse, openpanel, signoz) | 92 | yes | apps>=3 |
+| `plus` | 3 (langfuse, openpanel, signoz) | 85 | yes | apps>=3 |
+| `minus` | 3 (langfuse, openpanel, signoz) | 82 | yes | apps>=3 |
+| `toIntervalDay` | 3 (langfuse, openpanel, signoz) | 70 | yes | apps>=3 |
+| `multiply` | 3 (langfuse, openpanel, signoz) | 69 | yes | apps>=3 |
+| `divide` | 3 (langfuse, openpanel, signoz) | 67 | yes | apps>=3 |
+| `uniq` | 3 (langfuse, openpanel, signoz) | 67 | yes | apps>=3 |
+| `toYYYYMM` | 3 (langfuse, openpanel, signoz) | 63 | yes | apps>=3 |
+| `any` | 3 (langfuse, openpanel, signoz) | 60 | yes | apps>=3 |
+| `toIntervalHour` | 3 (langfuse, openpanel, signoz) | 55 | yes | apps>=3 |
+| `argMax` | 3 (langfuse, openpanel, signoz) | 53 | yes | apps>=3 |
+| `multiIf` | 3 (langfuse, openpanel, signoz) | 51 | yes | apps>=3 |
+| `notIn` | 3 (langfuse, openpanel, signoz) | 50 | yes | apps>=3 |
+| `mapKeys` | 3 (langfuse, openpanel, signoz) | 44 | yes | apps>=3 |
+| `mapValues` | 3 (langfuse, openpanel, signoz) | 44 | yes | apps>=3 |
+| `countIf` | 3 (langfuse, openpanel, signoz) | 43 | yes | apps>=3 |
+| `less` | 3 (langfuse, openpanel, signoz) | 41 | yes | apps>=3 |
+| `toStartOfMinute` | 3 (langfuse, openpanel, signoz) | 40 | yes | apps>=3 |
+| `toStartOfHour` | 3 (langfuse, openpanel, signoz) | 38 | yes | apps>=3 |
+| `avg` | 3 (langfuse, openpanel, signoz) | 32 | yes | apps>=3 |
+| `toIntervalMinute` | 3 (langfuse, openpanel, signoz) | 29 | yes | apps>=3 |
+| `toUInt64` | 3 (langfuse, openpanel, signoz) | 26 | yes | apps>=3 |
+| `countDistinct` | 3 (langfuse, openpanel, signoz) | 17 | yes | apps>=3 |
+| `array` | 2 (langfuse, signoz) | 186 | yes | gate:langfuse |
 | `groupUniqArray` | 2 (langfuse, openpanel) | 93 | yes | gate:langfuse |
-| `if` | 2 (langfuse, openpanel) | 91 | yes | gate:langfuse |
 | `lambda` | 2 (langfuse, openpanel) | 80 | yes | gate:langfuse |
-| `min` | 2 (langfuse, openpanel) | 78 | yes | gate:langfuse |
-| `sum` | 2 (langfuse, openpanel) | 72 | yes | gate:langfuse |
-| `arrayElement` | 2 (langfuse, openpanel) | 67 | yes | gate:langfuse |
 | `length` | 2 (langfuse, openpanel) | 67 | yes | gate:langfuse |
-| `minus` | 2 (langfuse, openpanel) | 66 | yes | gate:langfuse |
-| `uniq` | 2 (langfuse, openpanel) | 66 | yes | gate:langfuse |
-| `or` | 2 (langfuse, openpanel) | 62 | yes | gate:langfuse |
-| `toIntervalDay` | 2 (langfuse, openpanel) | 61 | yes | gate:langfuse |
-| `toYYYYMM` | 2 (langfuse, openpanel) | 61 | yes | gate:langfuse |
-| `toDateTime` | 2 (langfuse, openpanel) | 58 | yes | gate:langfuse |
 | `dateDiff` | 2 (langfuse, openpanel) | 57 | yes | gate:langfuse |
-| `any` | 2 (langfuse, openpanel) | 54 | yes | gate:langfuse |
-| `toIntervalHour` | 2 (langfuse, openpanel) | 52 | yes | gate:langfuse |
+| `toIntervalSecond` | 2 (langfuse, signoz) | 54 | yes | gate:langfuse |
+| `map` | 2 (langfuse, signoz) | 50 | yes | gate:langfuse |
+| `lower` | 2 (langfuse, signoz) | 48 | yes | gate:langfuse |
 | `nullIf` | 2 (langfuse, openpanel) | 48 | yes | gate:langfuse |
-| `notIn` | 2 (langfuse, openpanel) | 44 | yes | gate:langfuse |
-| `argMax` | 2 (langfuse, openpanel) | 42 | yes | gate:langfuse |
-| `mapKeys` | 2 (langfuse, openpanel) | 39 | yes | gate:langfuse |
-| `mapValues` | 2 (langfuse, openpanel) | 39 | yes | gate:langfuse |
 | `groupArray` | 2 (langfuse, openpanel) | 38 | yes | gate:langfuse |
 | `tupleElement` | 2 (langfuse, openpanel) | 37 | yes | gate:langfuse |
 | `concat` | 2 (langfuse, openpanel) | 36 | yes | gate:langfuse |
-| `toStartOfHour` | 2 (langfuse, openpanel) | 36 | yes | gate:langfuse |
-| `countIf` | 2 (langfuse, openpanel) | 33 | yes | gate:langfuse |
+| `anyLast` | 2 (langfuse, signoz) | 33 | yes | gate:langfuse |
 | `arrayMap` | 2 (langfuse, openpanel) | 32 | yes | gate:langfuse |
-| `toStartOfMinute` | 2 (langfuse, openpanel) | 32 | yes | gate:langfuse |
 | `arrayJoin` | 2 (langfuse, openpanel) | 31 | yes | gate:langfuse |
 | `groupUniqArrayIf` | 2 (langfuse, openpanel) | 31 | yes | gate:langfuse |
-| `multiply` | 2 (langfuse, openpanel) | 31 | yes | gate:langfuse |
-| `plus` | 2 (langfuse, openpanel) | 30 | yes | gate:langfuse |
-| `avg` | 2 (langfuse, openpanel) | 27 | yes | gate:langfuse |
-| `multiIf` | 2 (langfuse, openpanel) | 26 | yes | gate:langfuse |
-| `toUInt64` | 2 (langfuse, openpanel) | 25 | yes | gate:langfuse |
+| `toString` | 2 (langfuse, signoz) | 25 | yes | gate:langfuse |
 | `round` | 2 (langfuse, openpanel) | 23 | yes | gate:langfuse |
+| `CAST` | 2 (langfuse, signoz) | 22 | yes | gate:langfuse |
 | `toDateTime64` | 2 (langfuse, openpanel) | 22 | yes | gate:langfuse |
-| `toIntervalMinute` | 2 (langfuse, openpanel) | 17 | yes | gate:langfuse |
+| `like` | 2 (langfuse, signoz) | 18 | yes | gate:langfuse |
+| `toStartOfInterval` | 2 (langfuse, signoz) | 18 | yes | gate:langfuse |
+| `quantile` | 2 (langfuse, signoz) | 16 | yes | gate:langfuse |
 | `arrayFilter` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
-| `countDistinct` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
-| `divide` | 2 (langfuse, openpanel) | 13 | yes | gate:langfuse |
 | `arrayEnumerate` | 2 (langfuse, openpanel) | 10 | yes | gate:langfuse |
 | `arrayFirstIndex` | 2 (langfuse, openpanel) | 10 | yes | gate:langfuse |
-| `less` | 2 (langfuse, openpanel) | 9 | yes | gate:langfuse |
 | `toBool` | 2 (langfuse, openpanel) | 8 | yes | gate:langfuse |
+| `isNaN` | 2 (openpanel, signoz) | 6 | yes | gate:openpanel |
+| `row_number` | 2 (langfuse, signoz) | 6 | yes | gate:langfuse |
 | `uniqIf` | 2 (langfuse, openpanel) | 6 | yes | gate:langfuse |
 | `arraySlice` | 2 (langfuse, openpanel) | 5 | yes | gate:langfuse |
 | `uniqExact` | 2 (langfuse, openpanel) | 4 | yes | gate:langfuse |
-| `array` | 1 (langfuse) | 173 | yes | gate:langfuse |
+| `toIntervalMonth` | 2 (openpanel, signoz) | 2 | yes | gate:openpanel |
 | `isNull` | 1 (langfuse) | 69 | yes | gate:langfuse |
 | `sumMap` | 1 (langfuse) | 66 | yes | gate:langfuse |
 | `coalesce` | 1 (langfuse) | 54 | yes | gate:langfuse |
+| `cityHash64` | 1 (signoz) | 52 | yes | gate:signoz |
+| `mapContains` | 1 (signoz) | 50 | yes | gate:signoz |
 | `notEmpty` | 1 (langfuse) | 44 | yes | gate:langfuse |
 | `arrayExists` | 1 (langfuse) | 31 | yes | gate:langfuse |
 | `toStartOfDay` | 1 (openpanel) | 28 | yes | gate:openpanel |
 | `arrayReverse` | 1 (langfuse) | 27 | yes | gate:langfuse |
 | `arraySum` | 1 (langfuse) | 27 | yes | gate:langfuse |
 | `mapFromArrays` | 1 (langfuse) | 27 | yes | gate:langfuse |
-| `anyLast` | 1 (langfuse) | 26 | yes | gate:langfuse |
-| `lower` | 1 (langfuse) | 26 | yes | gate:langfuse |
 | `greatest` | 1 (langfuse) | 25 | yes | gate:langfuse |
 | `ifNull` | 1 (langfuse) | 25 | yes | gate:langfuse |
 | `subtractHours` | 1 (langfuse) | 24 | yes | gate:langfuse |
+| `intDiv` | 1 (signoz) | 23 | yes | gate:signoz |
 | `groupUniqArrayArray` | 1 (langfuse) | 21 | yes | gate:langfuse |
 | `mapFilter` | 1 (langfuse) | 21 | yes | gate:langfuse |
 | `positionCaseInsensitive` | 1 (langfuse) | 21 | yes | gate:langfuse |
 | `has` | 1 (langfuse) | 20 | yes | gate:langfuse |
-| `map` | 1 (langfuse) | 20 | yes | gate:langfuse |
 | `leftUTF8` | 1 (langfuse) | 19 | yes | gate:langfuse |
 | `argMaxIf` | 1 (langfuse) | 18 | yes | gate:langfuse |
 | `argMaxState` | 1 (langfuse) | 18 | yes | gate:langfuse |
 | `indexOf` | 1 (langfuse) | 18 | yes | gate:langfuse |
 | `maxMap` | 1 (langfuse) | 18 | yes | gate:langfuse |
-| `CAST` | 1 (langfuse) | 17 | yes | gate:langfuse |
-| `toString` | 1 (langfuse) | 16 | yes | gate:langfuse |
+| `floor` | 1 (signoz) | 17 | yes | gate:signoz |
+| `rand` | 1 (signoz) | 17 | yes | gate:signoz |
 | `groupArrayIf` | 1 (langfuse) | 15 | yes | gate:langfuse |
 | `arrayConcat` | 1 (langfuse) | 14 | yes | gate:langfuse |
 | `negate` | 1 (langfuse) | 14 | yes | gate:langfuse |
 | `toInt64` | 1 (langfuse) | 14 | yes | gate:langfuse |
+| `toUnixTimestamp` | 1 (signoz) | 14 | yes | gate:signoz |
 | `approx_top_kIf` | 1 (langfuse) | 12 | yes | gate:langfuse |
 | `least` | 1 (langfuse) | 12 | yes | gate:langfuse |
 | `lengthUTF8` | 1 (langfuse) | 12 | yes | gate:langfuse |
 | `lowerUTF8` | 1 (langfuse) | 12 | yes | gate:langfuse |
 | `xxHash32` | 1 (langfuse) | 12 | yes | gate:langfuse |
-| `quantile` | 1 (langfuse) | 11 | yes | gate:langfuse |
-| `toStartOfInterval` | 1 (langfuse) | 10 | yes | gate:langfuse |
+| `toFloat64` | 1 (signoz) | 11 | yes | gate:signoz |
+| `globalIn` | 1 (signoz) | 9 | yes | gate:signoz |
+| `quantiles` | 1 (signoz) | 9 | yes | gate:signoz |
+| `simpleJSONExtractString` | 1 (signoz) | 9 | yes | gate:signoz |
 | `generateUUIDv4` | 1 (openpanel) | 8 | yes | gate:openpanel |
+| `bitAnd` | 1 (signoz) | 7 | yes | gate:signoz |
 | `not` | 1 (langfuse) | 7 | yes | gate:langfuse |
+| `quantilesState` | 1 (signoz) | 7 | yes | gate:signoz |
 | `arrayStringConcat` | 1 (langfuse) | 6 | yes | gate:langfuse |
 | `empty` | 1 (langfuse) | 6 | yes | gate:langfuse |
+| `now64` | 1 (signoz) | 6 | yes | gate:signoz |
 | `toNullable` | 1 (langfuse) | 6 | yes | gate:langfuse |
+| `JSONAllPaths` | 1 (signoz) | 4 | yes | gate:signoz |
 | `arrayDistinct` | 1 (langfuse) | 4 | yes | gate:langfuse |
 | `arrayEnumerateUniq` | 1 (openpanel) | 4 | yes | gate:openpanel |
 | `countState` | 1 (openpanel) | 4 | yes | gate:openpanel |
@@ -130,108 +150,128 @@ The ClickHouse features real applications use, mined from their query logs and m
 | `windowFunnel` | 1 (openpanel) | 4 | yes | gate:openpanel |
 | `approx_top_kArray` | 1 (langfuse) | 3 | yes | gate:langfuse |
 | `currentDatabase` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `row_number` | 1 (langfuse) | 3 | yes | gate:langfuse |
+| `lagInFrame` | 1 (signoz) | 3 | yes | gate:signoz |
+| `notLike` | 1 (signoz) | 3 | yes | gate:signoz |
 | `toUnixTimestamp64Milli` | 1 (openpanel) | 3 | yes | gate:openpanel |
 | `COUNTDistinct` | 1 (langfuse) | 2 | yes | gate:langfuse |
+| `JSONExtractString` | 1 (signoz) | 2 | yes | gate:signoz |
 | `avgIf` | 1 (openpanel) | 2 | yes | gate:openpanel |
+| `fromUnixTimestamp64Nano` | 1 (signoz) | 2 | yes | gate:signoz |
 | `hasAll` | 1 (langfuse) | 2 | yes | gate:langfuse |
-| `isNaN` | 1 (openpanel) | 2 | yes | gate:openpanel |
-| `like` | 1 (langfuse) | 2 | yes | gate:langfuse |
 | `minIf` | 1 (langfuse) | 2 | yes | gate:langfuse |
+| `quantilesDD` | 1 (signoz) | 2 | yes | gate:signoz |
 | `range` | 1 (openpanel) | 2 | yes | gate:openpanel |
 | `sumState` | 1 (openpanel) | 2 | yes | gate:openpanel |
-| `toIntervalSecond` | 1 (langfuse) | 2 | yes | gate:langfuse |
+| `toDayOfMonth` | 1 (signoz) | 2 | yes | gate:signoz |
+| `toIntervalYear` | 1 (signoz) | 2 | yes | gate:signoz |
 | `uniqState` | 1 (openpanel) | 2 | yes | gate:openpanel |
 | `untuple` | 1 (openpanel) | 2 | yes | gate:openpanel |
 | `arraySort` | 1 (langfuse) | 1 | yes | gate:langfuse |
 | `arrayZip` | 1 (langfuse) | 1 | yes | gate:langfuse |
 | `exists` | 1 (langfuse) | 1 | yes | gate:langfuse |
+| `match` | 1 (signoz) | 1 | yes | gate:signoz |
 | `maxIf` | 1 (langfuse) | 1 | yes | gate:langfuse |
 | `quantilesExactInclusive` | 1 (openpanel) | 1 | yes | gate:openpanel |
 | `startsWith` | 1 (langfuse) | 1 | yes | gate:langfuse |
 | `sumMapIf` | 1 (langfuse) | 1 | yes | gate:langfuse |
-| `toIntervalMonth` | 1 (openpanel) | 1 | yes | gate:openpanel |
 
 ## `combinator`
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
-| `If` | 2 (langfuse, openpanel) | 46 | yes | gate:langfuse |
-| `State` | 2 (langfuse, openpanel) | 24 | yes | gate:langfuse |
-| `Distinct` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
+| `If` | 3 (langfuse, openpanel, signoz) | 56 | yes | apps>=3 |
+| `State` | 3 (langfuse, openpanel, signoz) | 31 | yes | apps>=3 |
+| `Distinct` | 3 (langfuse, openpanel, signoz) | 17 | yes | apps>=3 |
 | `Array` | 1 (langfuse) | 25 | yes | gate:langfuse |
+
+## `table_function`
+
+| Feature | Applications | Statements | In profile | Why |
+|---|---|---:|---|---|
+| `clusterAllReplicas` | 1 (signoz) | 6 | yes | gate:signoz |
 
 ## `engine`
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
 | `ReplacingMergeTree` | 2 (langfuse, openpanel) | 54 | yes | gate:langfuse |
+| `ReplicatedReplacingMergeTree` | 2 (langfuse, signoz) | 49 | yes | gate:langfuse |
 | `AggregatingMergeTree` | 2 (langfuse, openpanel) | 34 | yes | gate:langfuse |
 | `MergeTree` | 2 (langfuse, openpanel) | 22 | yes | gate:langfuse |
-| `ReplicatedReplacingMergeTree` | 1 (langfuse) | 16 | yes | gate:langfuse |
+| `ReplicatedAggregatingMergeTree` | 2 (langfuse, signoz) | 11 | yes | gate:langfuse |
+| `Distributed` | 1 (signoz) | 59 | yes | gate:signoz |
+| `ReplicatedMergeTree` | 1 (signoz) | 16 | yes | gate:signoz |
 | `Null` | 1 (langfuse) | 6 | yes | gate:langfuse |
 | `VersionedCollapsingMergeTree` | 1 (openpanel) | 4 | yes | gate:openpanel |
-| `ReplicatedAggregatingMergeTree` | 1 (langfuse) | 2 | yes | gate:langfuse |
+| `ReplicatedSummingMergeTree` | 1 (signoz) | 1 | yes | gate:signoz |
 
 ## `type`
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
-| `DateTime64` | 2 (langfuse, openpanel) | 1161 | yes | gate:langfuse |
-| `String` | 2 (langfuse, openpanel) | 469 | yes | gate:langfuse |
-| `Array` | 2 (langfuse, openpanel) | 276 | yes | gate:langfuse |
-| `Nullable` | 2 (langfuse, openpanel) | 116 | yes | gate:langfuse |
-| `LowCardinality` | 2 (langfuse, openpanel) | 109 | yes | gate:langfuse |
-| `Map` | 2 (langfuse, openpanel) | 88 | yes | gate:langfuse |
-| `UInt64` | 2 (langfuse, openpanel) | 78 | yes | gate:langfuse |
+| `DateTime64` | 3 (langfuse, openpanel, signoz) | 1199 | yes | apps>=3 |
+| `String` | 3 (langfuse, openpanel, signoz) | 656 | yes | apps>=3 |
+| `Array` | 3 (langfuse, openpanel, signoz) | 282 | yes | apps>=3 |
+| `LowCardinality` | 3 (langfuse, openpanel, signoz) | 253 | yes | apps>=3 |
+| `UInt64` | 3 (langfuse, openpanel, signoz) | 187 | yes | apps>=3 |
+| `Bool` | 3 (langfuse, openpanel, signoz) | 161 | yes | apps>=3 |
+| `Map` | 3 (langfuse, openpanel, signoz) | 137 | yes | apps>=3 |
+| `Nullable` | 3 (langfuse, openpanel, signoz) | 122 | yes | apps>=3 |
+| `Float64` | 3 (langfuse, openpanel, signoz) | 98 | yes | apps>=3 |
+| `UInt8` | 3 (langfuse, openpanel, signoz) | 51 | yes | apps>=3 |
+| `UInt32` | 3 (langfuse, openpanel, signoz) | 33 | yes | apps>=3 |
+| `UInt16` | 3 (langfuse, openpanel, signoz) | 21 | yes | apps>=3 |
+| `Int64` | 2 (langfuse, signoz) | 92 | yes | gate:langfuse |
 | `Int32` | 2 (langfuse, openpanel) | 73 | yes | gate:langfuse |
-| `Bool` | 2 (langfuse, openpanel) | 52 | yes | gate:langfuse |
-| `UInt8` | 2 (langfuse, openpanel) | 49 | yes | gate:langfuse |
+| `DateTime` | 2 (openpanel, signoz) | 57 | yes | gate:openpanel |
+| `SimpleAggregateFunction` | 2 (langfuse, signoz) | 48 | yes | gate:langfuse |
+| `AggregateFunction` | 2 (langfuse, signoz) | 25 | yes | gate:langfuse |
 | `Float32` | 2 (langfuse, openpanel) | 22 | yes | gate:langfuse |
-| `UInt32` | 2 (langfuse, openpanel) | 19 | yes | gate:langfuse |
-| `UInt16` | 2 (langfuse, openpanel) | 17 | yes | gate:langfuse |
-| `Float64` | 2 (langfuse, openpanel) | 13 | yes | gate:langfuse |
+| `FixedString` | 2 (openpanel, signoz) | 21 | yes | gate:openpanel |
+| `Enum8` | 2 (langfuse, signoz) | 12 | yes | gate:langfuse |
+| `Int8` | 2 (openpanel, signoz) | 11 | yes | gate:openpanel |
 | `Decimal` | 1 (langfuse) | 27 | yes | gate:langfuse |
-| `SimpleAggregateFunction` | 1 (langfuse) | 24 | yes | gate:langfuse |
-| `DateTime` | 1 (openpanel) | 20 | yes | gate:openpanel |
 | `Decimal64` | 1 (langfuse) | 19 | yes | gate:langfuse |
-| `AggregateFunction` | 1 (langfuse) | 18 | yes | gate:langfuse |
-| `FixedString` | 1 (openpanel) | 10 | yes | gate:openpanel |
+| `JSON` | 1 (signoz) | 14 | yes | gate:signoz |
 | `Date` | 1 (openpanel) | 8 | yes | gate:openpanel |
 | `UUID` | 1 (openpanel) | 8 | yes | gate:openpanel |
-| `Enum8` | 1 (langfuse) | 6 | yes | gate:langfuse |
+| `Int16` | 1 (signoz) | 7 | yes | gate:signoz |
 | `Tuple` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `Int8` | 1 (openpanel) | 4 | yes | gate:openpanel |
 | `Boolean` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `Int64` | 1 (langfuse) | 2 | yes | gate:langfuse |
 
 ## `format`
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
 | `JSONEachRow` | 2 (langfuse, openpanel) | 1405 | yes | gate:langfuse |
-| `Native` | 1 (langfuse) | 176 | yes | gate:langfuse |
+| `Native` | 2 (langfuse, signoz) | 248 | yes | gate:langfuse |
+| `Values` | 1 (signoz) | 114 | yes | gate:signoz |
 | `JSON` | 1 (openpanel) | 87 | yes | gate:openpanel |
 
 ## `setting`
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
-| `max_execution_time` | 2 (langfuse, openpanel) | 1398 | yes | gate:langfuse |
-| `database` | 2 (langfuse, openpanel) | 691 | yes | gate:langfuse |
-| `input_format_parallel_parsing` | 2 (langfuse, openpanel) | 204 | yes | gate:langfuse |
+| `max_execution_time` | 3 (langfuse, openpanel, signoz) | 1580 | yes | apps>=3 |
+| `database` | 3 (langfuse, openpanel, signoz) | 771 | yes | apps>=3 |
+| `input_format_parallel_parsing` | 3 (langfuse, openpanel, signoz) | 352 | yes | apps>=3 |
+| `enable_producing_buckets_out_of_order_in_aggregation` | 2 (langfuse, signoz) | 2184 | yes | gate:langfuse |
+| `log_comment` | 2 (langfuse, signoz) | 1511 | yes | gate:langfuse |
+| `index_granularity` | 2 (openpanel, signoz) | 69 | yes | gate:openpanel |
 | `http_headers_progress_interval_ms` | 2 (langfuse, openpanel) | 66 | yes | gate:langfuse |
 | `send_progress_in_http_headers` | 2 (langfuse, openpanel) | 66 | yes | gate:langfuse |
+| `ttl_only_drop_parts` | 2 (langfuse, signoz) | 44 | yes | gate:langfuse |
 | `enable_block_number_column` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
 | `enable_block_offset_column` | 2 (langfuse, openpanel) | 14 | yes | gate:langfuse |
-| `log_comment` | 1 (langfuse) | 1392 | yes | gate:langfuse |
+| `max_threads` | 2 (langfuse, signoz) | 5 | yes | gate:langfuse |
 | `timeout_before_checking_execution_speed` | 1 (langfuse) | 1392 | yes | gate:langfuse |
 | `input_format_json_throw_on_bad_escape_sequence` | 1 (langfuse) | 959 | yes | gate:langfuse |
 | `use_query_cache` | 1 (langfuse) | 710 | yes | gate:langfuse |
 | `query_plan_optimize_lazy_materialization` | 1 (langfuse) | 653 | yes | gate:langfuse |
 | `asterisk_include_alias_columns` | 1 (langfuse) | 625 | yes | gate:langfuse |
 | `asterisk_include_materialized_columns` | 1 (langfuse) | 625 | yes | gate:langfuse |
-| `enable_producing_buckets_out_of_order_in_aggregation` | 1 (langfuse) | 554 | yes | gate:langfuse |
+| `final` | 1 (signoz) | 116 | yes | gate:signoz |
+| `output_format_native_write_json_as_string` | 1 (signoz) | 114 | yes | gate:signoz |
 | `distributed_product_mode` | 1 (openpanel) | 93 | yes | gate:openpanel |
 | `query_plan_convert_any_join_to_semi_or_anti_join` | 1 (openpanel) | 93 | yes | gate:openpanel |
 | `alter_sync` | 1 (langfuse) | 89 | yes | gate:langfuse |
@@ -240,92 +280,109 @@ The ClickHouse features real applications use, mined from their query logs and m
 | `enable_full_text_index` | 1 (langfuse) | 81 | yes | gate:langfuse |
 | `mutations_sync` | 1 (langfuse) | 72 | yes | gate:langfuse |
 | `session_timezone` | 1 (openpanel) | 57 | yes | gate:openpanel |
+| `type_json_skip_duplicated_paths` | 1 (signoz) | 43 | yes | gate:signoz |
 | `date_time_output_format` | 1 (langfuse) | 39 | yes | gate:langfuse |
 | `max_bytes_before_external_group_by` | 1 (langfuse) | 39 | yes | gate:langfuse |
-| `index_granularity` | 1 (openpanel) | 24 | yes | gate:openpanel |
+| `input_format_try_infer_dates` | 1 (signoz) | 21 | yes | gate:signoz |
+| `input_format_try_infer_datetimes` | 1 (signoz) | 21 | yes | gate:signoz |
 | `flatten_nested` | 1 (openpanel) | 6 | yes | gate:openpanel |
 | `max_insert_block_size` | 1 (openpanel) | 6 | yes | gate:openpanel |
 | `prewarm_mark_cache` | 1 (langfuse) | 6 | yes | gate:langfuse |
 | `prewarm_primary_key_cache` | 1 (langfuse) | 6 | yes | gate:langfuse |
+| `allow_ddl` | 1 (signoz) | 5 | yes | gate:signoz |
+| `database_replicated_allow_replicated_engine_arguments` | 1 (signoz) | 5 | yes | gate:signoz |
+| `min_age_to_force_merge_on_partition_only` | 1 (signoz) | 5 | yes | gate:signoz |
+| `min_age_to_force_merge_seconds` | 1 (signoz) | 5 | yes | gate:signoz |
+| `allow_nullable_key` | 1 (signoz) | 3 | yes | gate:signoz |
 | `deduplicate_merge_projection_mode` | 1 (langfuse) | 3 | yes | gate:langfuse |
 | `index_granularity_bytes` | 1 (langfuse) | 3 | yes | gate:langfuse |
 | `lightweight_mutation_projection_mode` | 1 (langfuse) | 3 | yes | gate:langfuse |
+| `materialize_ttl_after_modify` | 1 (signoz) | 3 | yes | gate:signoz |
 | `merge_max_block_size_bytes` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `ttl_only_drop_parts` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `max_threads` | 1 (langfuse) | 2 | yes | gate:langfuse |
 
 ## `syntax`
 
 | Feature | Applications | Statements | In profile | Why |
 |---|---|---:|---|---|
-| `SELECT` | 2 (langfuse, openpanel) | 1440 | yes | gate:langfuse |
-| `ORDER BY` | 2 (langfuse, openpanel) | 1335 | yes | gate:langfuse |
-| `LIMIT` | 2 (langfuse, openpanel) | 1268 | yes | gate:langfuse |
-| `INSERT` | 2 (langfuse, openpanel) | 408 | yes | gate:langfuse |
-| `ALTER TABLE` | 2 (langfuse, openpanel) | 370 | yes | gate:langfuse |
-| `GROUP BY` | 2 (langfuse, openpanel) | 345 | yes | gate:langfuse |
-| `INSERT FORMAT` | 2 (langfuse, openpanel) | 232 | yes | gate:langfuse |
-| `ON CLUSTER` | 2 (langfuse, openpanel) | 196 | yes | gate:langfuse |
-| `ALTER ADD COLUMN` | 2 (langfuse, openpanel) | 164 | yes | gate:langfuse |
-| `table ORDER BY` | 2 (langfuse, openpanel) | 132 | yes | gate:langfuse |
-| `skip index bloom_filter` | 2 (langfuse, openpanel) | 127 | yes | gate:langfuse |
-| `CREATE TABLE` | 2 (langfuse, openpanel) | 126 | yes | gate:langfuse |
-| `ALTER ADD INDEX` | 2 (langfuse, openpanel) | 100 | yes | gate:langfuse |
-| `codec ZSTD` | 2 (langfuse, openpanel) | 98 | yes | gate:langfuse |
-| `column CODEC` | 2 (langfuse, openpanel) | 98 | yes | gate:langfuse |
-| `WITH` | 2 (langfuse, openpanel) | 85 | yes | gate:langfuse |
-| `column DEFAULT` | 2 (langfuse, openpanel) | 82 | yes | gate:langfuse |
-| `FINAL` | 2 (langfuse, openpanel) | 72 | yes | gate:langfuse |
-| `PARTITION BY` | 2 (langfuse, openpanel) | 68 | yes | gate:langfuse |
-| `scalar subquery` | 2 (langfuse, openpanel) | 53 | yes | gate:langfuse |
-| `CREATE MATERIALIZED VIEW` | 2 (langfuse, openpanel) | 51 | yes | gate:langfuse |
-| `parametric function` | 2 (langfuse, openpanel) | 50 | yes | gate:langfuse |
-| `DISTINCT` | 2 (langfuse, openpanel) | 45 | yes | gate:langfuse |
-| `table SETTINGS` | 2 (langfuse, openpanel) | 42 | yes | gate:langfuse |
+| `SELECT` | 3 (langfuse, openpanel, signoz) | 2390 | yes | apps>=3 |
+| `ORDER BY` | 3 (langfuse, openpanel, signoz) | 1398 | yes | apps>=3 |
+| `LIMIT` | 3 (langfuse, openpanel, signoz) | 1307 | yes | apps>=3 |
+| `INSERT` | 3 (langfuse, openpanel, signoz) | 713 | yes | apps>=3 |
+| `ALTER TABLE` | 3 (langfuse, openpanel, signoz) | 515 | yes | apps>=3 |
+| `ON CLUSTER` | 3 (langfuse, openpanel, signoz) | 509 | yes | apps>=3 |
+| `GROUP BY` | 3 (langfuse, openpanel, signoz) | 428 | yes | apps>=3 |
+| `INSERT FORMAT` | 3 (langfuse, openpanel, signoz) | 418 | yes | apps>=3 |
+| `codec ZSTD` | 3 (langfuse, openpanel, signoz) | 352 | yes | apps>=3 |
+| `column CODEC` | 3 (langfuse, openpanel, signoz) | 352 | yes | apps>=3 |
+| `ALTER ADD COLUMN` | 3 (langfuse, openpanel, signoz) | 267 | yes | apps>=3 |
+| `CREATE TABLE` | 3 (langfuse, openpanel, signoz) | 244 | yes | apps>=3 |
+| `table ORDER BY` | 3 (langfuse, openpanel, signoz) | 191 | yes | apps>=3 |
+| `column DEFAULT` | 3 (langfuse, openpanel, signoz) | 155 | yes | apps>=3 |
+| `skip index bloom_filter` | 3 (langfuse, openpanel, signoz) | 134 | yes | apps>=3 |
+| `ALTER ADD INDEX` | 3 (langfuse, openpanel, signoz) | 111 | yes | apps>=3 |
+| `PARTITION BY` | 3 (langfuse, openpanel, signoz) | 111 | yes | apps>=3 |
+| `table SETTINGS` | 3 (langfuse, openpanel, signoz) | 91 | yes | apps>=3 |
+| `WITH` | 3 (langfuse, openpanel, signoz) | 89 | yes | apps>=3 |
+| `CREATE MATERIALIZED VIEW` | 3 (langfuse, openpanel, signoz) | 82 | yes | apps>=3 |
+| `FINAL` | 3 (langfuse, openpanel, signoz) | 78 | yes | apps>=3 |
+| `TTL` | 3 (langfuse, openpanel, signoz) | 68 | yes | apps>=3 |
+| `subquery in FROM` | 3 (langfuse, openpanel, signoz) | 64 | yes | apps>=3 |
+| `scalar subquery` | 3 (langfuse, openpanel, signoz) | 62 | yes | apps>=3 |
+| `DISTINCT` | 3 (langfuse, openpanel, signoz) | 58 | yes | apps>=3 |
+| `parametric function` | 3 (langfuse, openpanel, signoz) | 51 | yes | apps>=3 |
+| `skip index minmax` | 3 (langfuse, openpanel, signoz) | 32 | yes | apps>=3 |
+| `HAVING` | 3 (langfuse, openpanel, signoz) | 24 | yes | apps>=3 |
+| `column ALIAS` | 3 (langfuse, openpanel, signoz) | 13 | yes | apps>=3 |
+| `CREATE DATABASE` | 3 (langfuse, openpanel, signoz) | 11 | yes | apps>=3 |
+| `INNER JOIN` | 3 (langfuse, openpanel, signoz) | 10 | yes | apps>=3 |
+| `INSERT VALUES` | 2 (langfuse, signoz) | 290 | yes | gate:langfuse |
+| `codec DELTA` | 2 (openpanel, signoz) | 93 | yes | gate:openpanel |
+| `MATERIALIZED VIEW TO` | 2 (langfuse, signoz) | 70 | yes | gate:langfuse |
+| `codec DOUBLEDELTA` | 2 (openpanel, signoz) | 55 | yes | gate:openpanel |
+| `codec LZ4` | 2 (openpanel, signoz) | 47 | yes | gate:openpanel |
+| `DROP TABLE` | 2 (langfuse, signoz) | 46 | yes | gate:langfuse |
+| `codec GORILLA` | 2 (openpanel, signoz) | 41 | yes | gate:openpanel |
 | `WITH FILL` | 2 (langfuse, openpanel) | 40 | yes | gate:langfuse |
-| `subquery in FROM` | 2 (langfuse, openpanel) | 35 | yes | gate:langfuse |
-| `skip index minmax` | 2 (langfuse, openpanel) | 25 | yes | gate:langfuse |
+| `table PRIMARY KEY` | 2 (langfuse, signoz) | 40 | yes | gate:langfuse |
+| `skip index ngrambf_v1` | 2 (langfuse, signoz) | 28 | yes | gate:langfuse |
 | `LEFT JOIN` | 2 (langfuse, openpanel) | 22 | yes | gate:langfuse |
-| `TTL` | 2 (langfuse, openpanel) | 19 | yes | gate:langfuse |
-| `HAVING` | 2 (langfuse, openpanel) | 18 | yes | gate:langfuse |
-| `column ALIAS` | 2 (langfuse, openpanel) | 11 | yes | gate:langfuse |
-| `INNER JOIN` | 2 (langfuse, openpanel) | 8 | yes | gate:langfuse |
+| `ALTER MODIFY QUERY` | 2 (langfuse, signoz) | 21 | yes | gate:langfuse |
+| `UNION ALL` | 2 (langfuse, signoz) | 20 | yes | gate:langfuse |
+| `ALTER DROP INDEX` | 2 (langfuse, signoz) | 19 | yes | gate:langfuse |
+| `ALTER MODIFY SETTING` | 2 (langfuse, signoz) | 11 | yes | gate:langfuse |
+| `skip index set` | 2 (openpanel, signoz) | 10 | yes | gate:openpanel |
+| `aggregate DISTINCT` | 2 (openpanel, signoz) | 9 | yes | gate:openpanel |
+| `ALTER MODIFY COLUMN` | 2 (langfuse, signoz) | 8 | yes | gate:langfuse |
+| `ALTER MODIFY TTL` | 2 (openpanel, signoz) | 7 | yes | gate:openpanel |
 | `ARRAY JOIN` | 2 (langfuse, openpanel) | 6 | yes | gate:langfuse |
-| `CREATE DATABASE` | 2 (langfuse, openpanel) | 5 | yes | gate:langfuse |
+| `window function` | 2 (langfuse, signoz) | 6 | yes | gate:langfuse |
+| `PROJECTION` | 2 (langfuse, signoz) | 4 | yes | gate:langfuse |
 | `query parameter` | 1 (langfuse) | 1113 | yes | gate:langfuse |
 | `LIMIT BY` | 1 (langfuse) | 874 | yes | gate:langfuse |
-| `INSERT VALUES` | 1 (langfuse) | 176 | yes | gate:langfuse |
 | `ALTER MATERIALIZE INDEX` | 1 (langfuse) | 69 | yes | gate:langfuse |
 | `DROP VIEW` | 1 (langfuse) | 42 | yes | gate:langfuse |
-| `MATERIALIZED VIEW TO` | 1 (langfuse) | 39 | yes | gate:langfuse |
-| `DROP TABLE` | 1 (langfuse) | 33 | yes | gate:langfuse |
-| `table PRIMARY KEY` | 1 (langfuse) | 33 | yes | gate:langfuse |
 | `CREATE VIEW` | 1 (langfuse) | 24 | yes | gate:langfuse |
 | `BETWEEN` | 1 (openpanel) | 23 | yes | gate:openpanel |
-| `codec LZ4` | 1 (openpanel) | 20 | yes | gate:openpanel |
-| `skip index ngrambf_v1` | 1 (langfuse) | 18 | yes | gate:langfuse |
+| `SHOW CREATE` | 1 (signoz) | 23 | yes | gate:signoz |
+| `codec T64` | 1 (signoz) | 17 | yes | gate:signoz |
 | `SAMPLE` | 1 (langfuse) | 16 | yes | gate:langfuse |
-| `codec DELTA` | 1 (openpanel) | 16 | yes | gate:openpanel |
-| `codec GORILLA` | 1 (openpanel) | 16 | yes | gate:openpanel |
-| `ALTER DROP INDEX` | 1 (langfuse) | 15 | yes | gate:langfuse |
 | `RENAME` | 1 (openpanel) | 12 | yes | gate:openpanel |
-| `codec DOUBLEDELTA` | 1 (openpanel) | 12 | yes | gate:openpanel |
-| `UNION ALL` | 1 (langfuse) | 10 | yes | gate:langfuse |
+| `skip index tokenbf_v1` | 1 (signoz) | 10 | yes | gate:signoz |
 | `column MATERIALIZED` | 1 (langfuse) | 9 | yes | gate:langfuse |
 | `IN subquery` | 1 (langfuse) | 8 | yes | gate:langfuse |
-| `aggregate DISTINCT` | 1 (openpanel) | 7 | yes | gate:openpanel |
-| `ALTER MODIFY COLUMN` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `ALTER MODIFY QUERY` | 1 (langfuse) | 6 | yes | gate:langfuse |
-| `ALTER MODIFY SETTING` | 1 (langfuse) | 6 | yes | gate:langfuse |
+| `PREWHERE` | 1 (signoz) | 6 | yes | gate:signoz |
 | `SAMPLE BY` | 1 (langfuse) | 6 | yes | gate:langfuse |
 | `skip index text` | 1 (langfuse) | 6 | yes | gate:langfuse |
 | `DELETE` | 1 (langfuse) | 5 | yes | gate:langfuse |
-| `ALTER MODIFY TTL` | 1 (openpanel) | 4 | yes | gate:openpanel |
+| `INSERT SELECT` | 1 (signoz) | 5 | yes | gate:signoz |
+| `cast operator ::` | 1 (signoz) | 5 | yes | gate:signoz |
+| `codec DEFAULT` | 1 (signoz) | 5 | yes | gate:signoz |
 | `WITH ROLLUP` | 1 (openpanel) | 4 | yes | gate:openpanel |
-| `skip index set` | 1 (openpanel) | 4 | yes | gate:openpanel |
 | `ANY JOIN` | 1 (openpanel) | 3 | yes | gate:openpanel |
-| `PROJECTION` | 1 (langfuse) | 3 | yes | gate:langfuse |
-| `window function` | 1 (langfuse) | 3 | yes | gate:langfuse |
+| `ALTER MATERIALIZE COLUMN` | 1 (signoz) | 2 | yes | gate:signoz |
 | `FULL JOIN` | 1 (langfuse) | 2 | yes | gate:langfuse |
+| `GLOBAL IN` | 1 (signoz) | 2 | yes | gate:signoz |
+| `INTERSECT` | 1 (signoz) | 2 | yes | gate:signoz |
 | `SHOW TABLES` | 1 (langfuse) | 2 | yes | gate:langfuse |
+| `WINDOW` | 1 (signoz) | 2 | yes | gate:signoz |
 | `EXCEPT` | 1 (langfuse) | 1 | yes | gate:langfuse |
