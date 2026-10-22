@@ -1,6 +1,6 @@
 # 75 — The Loams House Engine: Rust, ClickHouse-Compatible, Iceberg v3, Serverless
 
-Status: **Approved** · 2026-10-21 (written and approved the same day; the owner approved every decision and question with its default, including the amendments in §17, except Q1170, answered as: target the latest ClickHouse 26.x stable release, pinned as the oracle, with supported ClickHouse versions listed per gate application). Source: the owner's draft of 2026-10-21, "Loam House — Plan" (draft v1), which the owner pasted with the instruction "add this". This document carries that draft into the repository's design format, renames "Loam" to "Loams", uses the product names the repository has, reconciles the draft with what is designed and built, and checks the draft's **verify** items where a primary source settles them. Decisions **D1540–D1569** and questions **Q1170–Q1187** are in the [decision log](13-decision-log.md) with status **Approved** (D1570 is used, amending §7.4, §7.5 and §16.1; D1571–D1579 and Q1188–Q1189 are reserved for this document). Plan stub: [HE1](../plans/2026-10-21-he1-loams-house-engine.md). **No code is written by this document, and nothing in it is built.**
+Status: **Approved** · 2026-10-21 (written and approved the same day; the owner approved every decision and question with its default, including the amendments in §17, except Q1170, answered as: target the latest ClickHouse 26.x stable release, pinned as the oracle, with supported ClickHouse versions listed per gate application). Source: the owner's draft of 2026-10-21, "Loam House — Plan" (draft v1), which the owner pasted with the instruction "add this". This document carries that draft into the repository's design format, renames "Loam" to "Loams", uses the product names the repository has, reconciles the draft with what is designed and built, and checks the draft's **verify** items where a primary source settles them. Decisions **D1540–D1569** and questions **Q1170–Q1187** are in the [decision log](13-decision-log.md) with status **Approved** (D1570 is used, amending §7.4, §7.5 and §16.1, and D1571, amending §7.1 and §16.1; D1572–D1579 and Q1188–Q1189 are reserved for this document). Plan stub: [HE1](../plans/2026-10-21-he1-loams-house-engine.md). **No code is written by this document, and nothing in it is built.**
 
 **What it changes.** Loams House today is chDB (ClickHouse as a library) in sealed worker processes behind a Rust front, over Iceberg v2 tables in the bucket ([§32](32-loams-flow-fabric-house.md), [§49](49-loams-house-production.md), HS1). This document proposes to keep that product surface and replace the engine under it: a Rust engine on Apache Arrow and Apache DataFusion that speaks the ClickHouse dialect for the subset real applications use, stores every table as **Iceberg v3**, and runs serverless with a foyer cache. chDB stays as the Phase 0 engine (what ships now) and as the permanent test oracle. §17 lists every earlier decision this supersedes or amends; the main ones are:
 
@@ -56,6 +56,7 @@ Markers, as in §49 and §64–§74:
 | D1568 | **Honest labels**: the House stays **Experimental** on chDB until Phase 2's exit; the Rust engine is described as designed, then as preview, never as shipped before its gate | Approved (owner, 2026-10-21) |
 | D1569 | **Vendor numbers are claims until reproduced**: ClickHouse Cloud, ObsessionDB and Tinybird figures are quoted only as their claims; Loams' own targets are estimates until measured | Approved (owner, 2026-10-21) |
 | D1570 | **Gate-app engines on the chDB House now**: `VersionedCollapsingMergeTree` (read-time collapsing by sign and version, `FINAL` included) and readable `AggregatingMergeTree`, including materialized views with inner tables, move from Tier 2 and Tier 1 into the launch tier for the gate applications on today's chDB House, because OpenPanel needs them (its `sessions` table and six inner-table views, plan HE1 R4.3). The Rust engine gets them in its own later phase (HE4) | Approved (owner, 2026-10-21) |
+| D1571 | **SigNoz is the third gate application** (after Langfuse and OpenPanel) and runs fully on the House, because the Software Factory uses SigNoz on the House for observability. Only SigNoz's MIT build (`signoz/signoz-community`) is used, never the `ee/` code. SigNoz speaks the native protocol and runs a clustered schema, so its gate needs the native listener and the cluster DDL forms on a one-node House (plan HE1 R9.60) | Approved (owner, 2026-10-22) |
 
 ## 2. Goals and non-goals
 
@@ -230,6 +231,8 @@ TiFlash is the columnar analytical component of TiDB, derived from ClickHouse, w
 2. Dump `system.query_log` and collect each application's migration files.
 3. Extract functions, table engines, types, formats, settings and syntax forms with counts.
 4. Rank by the number of applications that use each, then by frequency. **A feature used by 3 or more applications is in the profile.** A feature one gate application (Langfuse or OpenPanel) needs is in the profile regardless.
+
+   > **Amended by D1571 (owner, 2026-10-22).** SigNoz is the third gate application, after Langfuse and OpenPanel, and runs fully on the House (its MIT build only). Its features are in the profile by this rule.
 
 Mining and the oracle harness start in Phase 0 and never stop: each new application version is mined again, and the diff is reviewed.
 
@@ -454,6 +457,8 @@ Suites 1–3 and 6 run per PR; 4 and 7 nightly. All of it runs on GitHub-hosted 
 | **HE3** | The distributed serverless executor; cold-start work; aggregation and join optimisations | Scale to zero and burst scale-out demonstrated; the ClickBench target met (internal) |
 | **HE4** | Tier 1: `AggregatingMergeTree`, `SummingMergeTree`, materialized views, funnel functions, Variant, skip, full-text and vector indexes; `VersionedCollapsingMergeTree` (D1570). On the chDB House, `VersionedCollapsingMergeTree` and readable `AggregatingMergeTree` with inner-table views are built before HE1 for the gate applications (D1570); HE4 brings them to the Rust engine | The Tier 1 suite passes; the product layer in beta |
 | **HE5** | Tier 2 items on demand and, optionally, the native protocol | Driven by user requests |
+
+> **Amended by D1571 (owner, 2026-10-22).** SigNoz joins Langfuse and OpenPanel in the HE0 and HE2 exit criteria: it runs on the Phase 0 House in HE0 and passes fully in HE2. Because SigNoz speaks only the native protocol, the native listener HE5 lists is built for the chDB House in HE0 for this gate application, with the cluster DDL forms (`ON CLUSTER`, `Replicated*`, `Distributed`) a one-node House accepts.
 
 Mining and the oracle harness start in HE0 and never stop.
 

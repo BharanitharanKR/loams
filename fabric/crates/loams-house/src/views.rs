@@ -66,6 +66,18 @@ pub fn drop_ddl(database: &str, name: &str) -> String {
     )
 }
 
+/// A catalog view (HE1 R9.13) in the worker, over the read views of what it
+/// names: `CREATE OR REPLACE VIEW d.v AS\n<select>`, the control connection's
+/// one shape for a view without a column list. It runs with the invoker's
+/// rights, so it reads only what the statement could.
+pub fn user_view_ddl(database: &str, name: &str, select: &str) -> String {
+    format!(
+        "CREATE OR REPLACE VIEW {}.{} AS\n{select}",
+        quote_name(database),
+        quote_name(name)
+    )
+}
+
 /// The table function that reads a pin through the worker's endpoint.
 pub fn source(pin: &ReadPin, endpoint: &str, root: &LakeRoot) -> Result<String, HouseError> {
     let unreadable = |why: &str| {
@@ -104,6 +116,9 @@ pub fn source(pin: &ReadPin, endpoint: &str, root: &LakeRoot) -> Result<String, 
 pub enum Mode<'a> {
     /// The rows as stored.
     Plain,
+    /// The rows one commit added, for the source's materialized views (HS1
+    /// Task 17): as [`Mode::Plain`], and a `Null` table's too (HE1 R9.14).
+    Batch,
     /// `FINAL`: the merge view of a Replacing or Summing table, with the live
     /// files of the pinned snapshot (for their sequence numbers).
     Final(&'a [LiveFile]),
@@ -121,9 +136,12 @@ pub fn view_ddl(pin: &ReadPin, source: &str, mode: Mode<'_>) -> Result<String, H
         .filter(|_| pin.travel)
         .map(|id| format!("\nSETTINGS iceberg_snapshot_id = {id}"))
         .unwrap_or_default();
-    let body = if pin.snapshot_id.is_none() {
+    let null_engine =
+        mode != Mode::Batch && matches!(LakeEngine::parse(&pin.table.engine), Ok(LakeEngine::Null));
+    let body = if pin.snapshot_id.is_none() || null_engine {
         // No snapshot (a new table, or a time before its first): no rows, with
-        // the table's columns.
+        // the table's columns. A `Null` table reads none ever (HE1 R9.14): its
+        // rows are kept only for its materialized views.
         empty(pin)?
     } else if pin.table.class == TableClass::External {
         format!("SELECT * FROM {source}")
@@ -139,12 +157,14 @@ pub fn view_ddl(pin: &ReadPin, source: &str, mode: Mode<'_>) -> Result<String, H
             (Mode::Final(files), Some(engine @ LakeEngine::VersionedCollapsing { .. })) => {
                 collapsing(pin, source, &engine, files)?
             }
+            (Mode::Final(_), Some(LakeEngine::Aggregating)) => aggregating(pin, source)?,
             _ => format!("SELECT {}\nFROM {source}", casts(pin)?.join(", ")),
         }
     };
+    let body = computed(pin, body)?;
     if pin.snapshot_id.is_some() {
         // It reads the bucket: R-ACL.1's form, columns named.
-        let columns: Vec<String> = columns(pin)
+        let columns: Vec<String> = view_columns(pin)
             .iter()
             .map(|c| Ok(format!("{} {}", quote_name(&c.name), column_type(pin, c)?)))
             .collect::<Result<_, HouseError>>()?;
@@ -250,12 +270,17 @@ pub fn safe_type(text: &str) -> bool {
 /// deny list before a worker runs it (HS1 Task 11): another writer of a shared
 /// REST catalog could set those properties.
 pub fn carries_expressions(pin: &ReadPin, mode: Mode<'_>) -> bool {
-    if pin.table.class == TableClass::External || pin.snapshot_id.is_none() {
+    if pin.table.class == TableClass::External {
         return false;
+    }
+    let computes = !aliases(pin).is_empty() || !pin.table.ttl.trim().is_empty();
+    if pin.snapshot_id.is_none() {
+        return computes;
     }
     let merge = matches!(mode, Mode::Final(_))
         && LakeEngine::parse(&pin.table.engine).is_ok_and(|e| e.merges());
     merge
+        || computes
         || columns(pin).iter().any(|c| {
             !c.default_expression.is_empty()
                 && pin.fields.iter().any(|f| f.name == c.name && !f.required)
@@ -271,6 +296,92 @@ pub fn view_body(ddl: &str) -> &str {
 /// never opens, standing in for a view's `icebergS3` source while its body is
 /// checked.
 pub const CHECKED_SOURCE: &str = "null('loams_checked UInt8')";
+
+/// The `ALIAS` columns of a lake table (HE1 R9.12), which a view computes.
+fn aliases(pin: &ReadPin) -> Vec<&ddl::ChColumn> {
+    if pin.table.class == TableClass::External {
+        return Vec::new();
+    }
+    pin.table.columns.iter().filter(|c| !c.stored()).collect()
+}
+
+/// The table `TTL`'s delete rules (HE1 R9.12).
+fn ttl_rules(pin: &ReadPin) -> Result<Vec<ddl::TtlRule>, HouseError> {
+    if pin.table.class == TableClass::External || pin.table.ttl.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    ddl::parse_ttl(&pin.table.ttl).map_err(|err| catalog_refusal(pin, &err.to_string()))
+}
+
+/// The columns a view has, in the table's order: the stored columns the pin
+/// reads, and the `ALIAS` columns.
+fn view_columns(pin: &ReadPin) -> Vec<&ddl::ChColumn> {
+    let stored = columns(pin);
+    pin.table
+        .columns
+        .iter()
+        .filter(|c| {
+            stored.iter().any(|s| s.name == c.name)
+                || (!c.stored() && pin.table.class != TableClass::External)
+        })
+        .collect()
+}
+
+/// The view's body with what a lake table computes at read time (HE1 R9.12):
+/// its `ALIAS` columns, and its `TTL`, whose expired rows a read never sees
+/// (ClickHouse deletes them at its next merge; until then they are read, so the
+/// House answers as ClickHouse does after that merge). Each expression is
+/// catalog text, printed again from its tree (R11.11).
+fn computed(pin: &ReadPin, body: String) -> Result<String, HouseError> {
+    let aliases = aliases(pin);
+    let rules = ttl_rules(pin)?;
+    if aliases.is_empty() && rules.is_empty() {
+        return Ok(body);
+    }
+    let reprint = |text: &str| expr::reprint(text).map_err(|why| catalog_refusal(pin, &why));
+    let stored: Vec<String> = if pin.snapshot_id.is_none() {
+        pin.table
+            .columns
+            .iter()
+            .filter(|c| c.stored())
+            .map(|c| c.name.clone())
+            .collect()
+    } else {
+        columns(pin).iter().map(|c| c.name.clone()).collect()
+    };
+    let mut select = Vec::new();
+    for column in &pin.table.columns {
+        if column.stored() {
+            if stored.contains(&column.name) {
+                select.push(quote_name(&column.name));
+            }
+        } else {
+            select.push(format!(
+                "CAST({}, {}) AS {}",
+                reprint(&column.default_expression)?,
+                quote_string(&column.ch_type),
+                quote_name(&column.name)
+            ));
+        }
+    }
+    let mut filters = Vec::new();
+    for rule in rules {
+        let expired = format!("lessOrEquals({}, now())", reprint(&rule.expression)?);
+        filters.push(match &rule.condition {
+            Some(condition) => format!("not(and({expired}, {}))", reprint(condition)?),
+            None => format!("not({expired})"),
+        });
+    }
+    let filter = if filters.is_empty() {
+        String::new()
+    } else {
+        format!("\nWHERE {}", filters.join(" AND "))
+    };
+    Ok(format!(
+        "SELECT {}\nFROM (\n{body}\n){filter}",
+        select.join(", ")
+    ))
+}
 
 /// The columns a pin reads: the table's stored columns that the pinned
 /// snapshot's schema has (a time-travelled read sees the schema of its time).
@@ -546,6 +657,90 @@ fn summing(pin: &ReadPin, source: &str, engine: &LakeEngine) -> Result<String, H
     ))
 }
 
+/// An aggregate function as a column's type names it (`uniq`, `quantiles(0.5)`):
+/// its name and its parameters, if both are plain (a name; numbers, strings and
+/// commas). Catalog text, so anything else is refused.
+pub(crate) fn aggregate_function(text: &str) -> Option<(String, String)> {
+    let text = text.trim();
+    let (name, params) = match text.split_once('(') {
+        Some((name, rest)) => (name.trim(), format!("({rest}")),
+        None => (text, String::new()),
+    };
+    let plain_name = !name.is_empty()
+        && name
+            .chars()
+            .next()
+            .is_some_and(|c| c.is_ascii_alphabetic() || c == '_')
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_');
+    let plain_params = params
+        .chars()
+        .all(|c| c.is_ascii_alphanumeric() || " ._-+,()'".contains(c))
+        && !params.contains("--");
+    (plain_name && plain_params).then(|| (name.to_string(), params))
+}
+
+/// The function of an `AggregateFunction(f, …)` type's text.
+pub(crate) fn state_function(ty: &str) -> Option<(String, String)> {
+    let inner = ty.trim().strip_prefix("AggregateFunction(")?;
+    let mut depth = 0;
+    let end = inner.char_indices().find_map(|(i, c)| match c {
+        '(' => {
+            depth += 1;
+            None
+        }
+        ')' if depth == 0 => Some(i),
+        ')' => {
+            depth -= 1;
+            None
+        }
+        ',' if depth == 0 => Some(i),
+        _ => None,
+    })?;
+    aggregate_function(&inner[..end])
+}
+
+/// Aggregating `FINAL` (HE1 R9.14): rows grouped by the sorting key; a state
+/// column merged with its function's `-MergeState` (still a state, as
+/// ClickHouse's merge leaves it), a `SimpleAggregateFunction(f, T)` column with
+/// `f`, any value of the others.
+fn aggregating(pin: &ReadPin, source: &str) -> Result<String, HouseError> {
+    let key = key(pin)?;
+    let key_columns: Vec<&str> = key.iter().filter_map(|(_, c)| c.as_deref()).collect();
+    let mut select = Vec::new();
+    for column in columns(pin) {
+        let name = quote_name(&column.name);
+        if key_columns.contains(&column.name.as_str()) {
+            select.push(name);
+            continue;
+        }
+        let refused = || catalog_refusal(pin, &format!("the type of column {}", column.name));
+        select.push(match ChType::parse(&column.ch_type)? {
+            ChType::AggregateState => {
+                let (function, params) = state_function(&column.ch_type).ok_or_else(refused)?;
+                format!("{function}MergeState{params}({name}) AS {name}")
+            }
+            ChType::SimpleAggregate(function, _) => {
+                let (function, params) = aggregate_function(&function).ok_or_else(refused)?;
+                format!("{function}{params}({name}) AS {name}")
+            }
+            _ => format!("any({name}) AS {name}"),
+        });
+    }
+    let group_by = if key.is_empty() {
+        "tuple()".to_string()
+    } else {
+        key.iter()
+            .map(|(text, _)| text.clone())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    Ok(format!(
+        "SELECT {}\nFROM (\nSELECT {}\nFROM {source}\n)\nGROUP BY {group_by}",
+        select.join(", "),
+        casts(pin)?.join(", ")
+    ))
+}
+
 /// A file's name, as chDB's `_file` gives it.
 fn file_name(file: &LiveFile) -> &str {
     file.location
@@ -588,6 +783,7 @@ mod tests {
                 settings: Vec::new(),
                 comment: String::new(),
                 ddl: String::new(),
+                ..ChTable::default()
             },
             location: "s3://local/ns/1/house/db/t-1".to_string(),
             metadata_file: "s3://local/ns/1/house/db/t-1/metadata/00002-x.metadata.json"

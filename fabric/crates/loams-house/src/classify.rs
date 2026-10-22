@@ -32,7 +32,7 @@
 //! ClickHouse's own class ([`decide`]).
 
 use loams_house_ipc::{Classification, QueryClass};
-use sqlparser::ast::{AlterTableOperation, ObjectType, Statement};
+use sqlparser::ast::{ObjectType, Statement};
 use sqlparser::dialect::ClickHouseDialect;
 use sqlparser::parser::Parser;
 
@@ -66,12 +66,18 @@ pub enum Stmt {
     CreatePipe { name: String, engine: String },
     /// `CREATE MATERIALIZED VIEW` (HS1 Task 17).
     CreateMaterializedView { name: String },
+    /// `CREATE [OR REPLACE] VIEW` (HE1 R9.13): a catalog view.
+    CreateView { name: String },
     /// `DROP …`.
     Drop(DropStmt),
     /// `TRUNCATE TABLE`.
     Truncate { name: String },
-    /// `ALTER TABLE … ADD COLUMN …`.
-    AlterAddColumns { table: String, columns: Vec<String> },
+    /// `ALTER TABLE …`, read by the House's own reader (HE1 R9.12): the table
+    /// and each operation's leading words.
+    Alter {
+        table: String,
+        operations: Vec<String>,
+    },
     /// `RENAME TABLE a TO b, …`.
     Rename { pairs: Vec<(String, String)> },
     /// `UNDROP TABLE`.
@@ -186,9 +192,10 @@ impl Stmt {
             Self::CreateTemporaryTable { .. } => "CreateTemporaryTable",
             Self::CreatePipe { .. } => "CreatePipe",
             Self::CreateMaterializedView { .. } => "CreateMaterializedView",
+            Self::CreateView { .. } => "CreateView",
             Self::Drop(_) => "Drop",
             Self::Truncate { .. } => "Truncate",
-            Self::AlterAddColumns { .. } => "AlterAddColumns",
+            Self::Alter { .. } => "Alter",
             Self::Rename { .. } => "Rename",
             Self::Undrop { .. } => "Undrop",
             Self::Show { .. } => "Show",
@@ -745,6 +752,19 @@ pub fn classify(sql: &str) -> Result<Classified, HouseError> {
         }
         // sqlparser reads no `ENGINE` or `POPULATE` in a materialized view; the
         // House's own reader does (HS1 Task 16).
+        // HE1 R9.13: a plain view is the catalog's, read by the House's reader.
+        "CREATE"
+            if second == "VIEW"
+                || (second == "OR"
+                    && toks
+                        .iter()
+                        .filter(|(_, t)| t.word)
+                        .nth(3)
+                        .is_some_and(|(w, _)| w == "VIEW")) =>
+        {
+            let view = crate::ddl::parse_create_view(&text)?;
+            return known(Stmt::CreateView { name: view.name }, None);
+        }
         "CREATE" if second == "MATERIALIZED" => {
             let view = crate::ddl::parse_create_mv(&text)?;
             return known(Stmt::CreateMaterializedView { name: view.name }, None);
@@ -768,6 +788,9 @@ pub fn classify(sql: &str) -> Result<Classified, HouseError> {
                 );
             }
         }
+        // HE1 R9.12: every `ALTER TABLE` is the House's own reader's; sqlparser
+        // 0.63 refuses most of ClickHouse's forms.
+        "ALTER" if second == "TABLE" => return known(alter_stmt(&text)?, None),
         "GRANT" | "REVOKE" | "DETACH" | "CHECK" => {
             return known(
                 Stmt::Unsupported {
@@ -842,8 +865,8 @@ pub fn classify(sql: &str) -> Result<Classified, HouseError> {
         Statement::CreateView(view) if view.materialized => Stmt::CreateMaterializedView {
             name: name(&view.name),
         },
-        Statement::CreateView(_) => Stmt::Unsupported {
-            kind: "CREATE VIEW".to_string(),
+        Statement::CreateView(_) => Stmt::CreateView {
+            name: crate::ddl::parse_create_view(&text)?.name,
         },
         Statement::Drop {
             object_type,
@@ -866,27 +889,7 @@ pub fn classify(sql: &str) -> Result<Classified, HouseError> {
                 .map(|t| t.name.to_string())
                 .unwrap_or_default(),
         },
-        Statement::AlterTable(alter) => {
-            let columns: Option<Vec<String>> = alter
-                .operations
-                .iter()
-                .map(|op| match op {
-                    AlterTableOperation::AddColumn { column_def, .. } => {
-                        Some(column_def.name.to_string())
-                    }
-                    _ => None,
-                })
-                .collect();
-            match columns {
-                Some(columns) if !columns.is_empty() => Stmt::AlterAddColumns {
-                    table: name(&alter.name),
-                    columns,
-                },
-                _ => Stmt::Unsupported {
-                    kind: "ALTER TABLE (other than ADD COLUMN)".to_string(),
-                },
-            }
-        }
+        Statement::AlterTable(_) => alter_stmt(&text)?,
         Statement::RenameTable(renames) => Stmt::Rename {
             pairs: renames
                 .iter()
@@ -944,16 +947,27 @@ fn lake_ddl(text: &str, first: &str, second: &str) -> Result<Option<Stmt>, House
             },
         ));
     }
-    if first == "ALTER" && second == "TABLE" {
-        return Ok(match crate::ddl::parse_alter_add(text) {
-            Ok(((_, table), adds)) => Some(Stmt::AlterAddColumns {
-                table,
-                columns: adds.into_iter().map(|a| a.definition).collect(),
-            }),
-            Err(_) => None,
-        });
-    }
     Ok(None)
+}
+
+/// `ALTER TABLE`, as [`crate::alter::parse_alter`] reads it.
+fn alter_stmt(text: &str) -> Result<Stmt, HouseError> {
+    let alter = crate::alter::parse_alter(text)?;
+    let operations = alter
+        .ops
+        .iter()
+        .map(|op| {
+            format!("{op:?}")
+                .split([' ', '(', '{'])
+                .next()
+                .unwrap_or_default()
+                .to_string()
+        })
+        .collect();
+    Ok(Stmt::Alter {
+        table: alter.table.1,
+        operations,
+    })
 }
 
 fn use_name(used: &sqlparser::ast::Use) -> String {

@@ -88,6 +88,8 @@ const SPDX: &[&str] = &[
     "MPL-2.0",
     "PostgreSQL",
     "curl",
+    // Langfuse's ee/ directories (the image carries them; unused without a key).
+    "LicenseRef-Langfuse-EE",
 ];
 
 /// A licence is an SPDX expression of known identifiers joined by AND/OR.

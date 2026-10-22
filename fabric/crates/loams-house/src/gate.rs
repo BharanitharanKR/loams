@@ -87,7 +87,8 @@ pub fn required(stmt: &Stmt) -> &'static [crate::identity::Scope] {
         | Stmt::CreatePipe { .. }
         | Stmt::Drop(_)
         | Stmt::Truncate { .. }
-        | Stmt::AlterAddColumns { .. }
+        | Stmt::Alter { .. }
+        | Stmt::CreateView { .. }
         | Stmt::Rename { .. }
         | Stmt::Undrop { .. } => &[Ddl],
     }
@@ -227,7 +228,8 @@ pub fn catalog_kind(stmt: &Stmt) -> Option<Kind> {
         Stmt::Drop(drop) if !drop.temporary => Kind::Drop,
         Stmt::Undrop { .. } => Kind::Undrop,
         Stmt::Rename { .. } => Kind::Rename,
-        Stmt::AlterAddColumns { .. } => Kind::AlterAdd,
+        Stmt::Alter { .. } => Kind::Alter,
+        Stmt::CreateView { .. } => Kind::CreateView,
         Stmt::Describe { .. } => Kind::Describe,
         Stmt::Show { .. } => Kind::Show,
         Stmt::Exists { .. } => Kind::Exists,
@@ -304,6 +306,23 @@ pub async fn catalog_answer(
         lake.lake_table(namespace, &plan.database, &plan.name, "OPTIMIZE TABLE")
             .await?;
         return Ok(CatalogOutcome::Optimize(Box::new(plan)));
+    }
+    // HE1 R9.14: an inner-table materialized view makes its table from its
+    // SELECT's columns, as CREATE TABLE … AS SELECT does, then the view.
+    if let Stmt::CreateMaterializedView { .. } = stmt
+        && let Ok(mv) = crate::ddl::parse_create_mv(text)
+        && mv.to.is_none()
+        && mv.inner_table
+    {
+        let plan = crate::insert::CreateAs::inner_view(text, current)?;
+        if !crate::identity::granted(user, &plan.database, &plan.name) {
+            return Err(crate::identity::not_granted(
+                user,
+                &plan.database,
+                &plan.name,
+            ));
+        }
+        return Ok(CatalogOutcome::CreateAs(Box::new(plan)));
     }
     if let Stmt::CreateTableAs { .. } = stmt {
         let plan = crate::insert::CreateAs::parse(text, current)?;

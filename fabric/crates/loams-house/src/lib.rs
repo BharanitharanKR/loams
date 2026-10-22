@@ -78,6 +78,7 @@
 //! Names: Loams, `loams-*` (owner rulings, 2026-10-01).
 
 pub mod admission;
+pub mod alter;
 pub mod api;
 pub mod audit;
 pub mod auth;
@@ -108,6 +109,7 @@ pub mod quota;
 pub mod read;
 pub mod request;
 pub mod retention;
+pub mod sample;
 pub mod sandbox;
 pub mod session;
 pub mod settings;
