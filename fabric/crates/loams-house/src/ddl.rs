@@ -449,6 +449,53 @@ impl<'a> Cursor<'a> {
     }
 }
 
+/// `text` with its `--` and `/* */` comments made spaces; string literals and
+/// quoted names are left alone.
+pub(crate) fn strip_comments(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = String::with_capacity(text.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        match bytes[i] {
+            quote @ (b'\'' | b'"' | b'`') => {
+                let start = i;
+                i += 1;
+                while i < bytes.len() && bytes[i] != quote {
+                    if bytes[i] == b'\\' {
+                        i += 1;
+                    }
+                    i += 1;
+                }
+                i = (i + 1).min(bytes.len());
+                out.push_str(&text[start..i]);
+            }
+            b'-' if bytes.get(i + 1) == Some(&b'-') => {
+                while i < bytes.len() && bytes[i] != b'\n' {
+                    i += 1;
+                }
+                out.push(' ');
+            }
+            b'/' if bytes.get(i + 1) == Some(&b'*') => {
+                i += 2;
+                while i + 1 < bytes.len() && !(bytes[i] == b'*' && bytes[i + 1] == b'/') {
+                    i += 1;
+                }
+                i = (i + 2).min(bytes.len());
+                out.push(' ');
+            }
+            _ => {
+                let start = i;
+                i += 1;
+                while i < bytes.len() && !matches!(bytes[i], b'\'' | b'"' | b'`' | b'-' | b'/') {
+                    i += 1;
+                }
+                out.push_str(&text[start..i]);
+            }
+        }
+    }
+    out
+}
+
 /// `36` for a name the House keeps for itself or chDB's own databases.
 pub fn check_new_name(what: &str, name: &str) -> Result<(), HouseError> {
     let reserved = name.is_empty()
@@ -822,6 +869,10 @@ pub fn parse_create_table(text: &str) -> Result<CreateTable, HouseError> {
             .closing(open)
             .ok_or_else(|| syntax("Unbalanced parentheses in the column list"))?;
         for entry in c.pieces(open, close) {
+            // Comments anywhere in the list are ClickHouse's whitespace (Langfuse's
+            // 0022 has `-- json` after an entry, HE1 R9.18).
+            let stripped = strip_comments(entry);
+            let entry = stripped.trim();
             let mut e = Cursor::new(entry);
             if e.eat_all(&["PRIMARY", "KEY"]) {
                 out.inline_primary_key = Some(e.rest().trim().to_string());
@@ -3151,6 +3202,26 @@ mod tests {
             parse_create_mv("CREATE MATERIALIZED VIEW v TO t AS SELECT number FROM numbers(3)")
                 .expect("parses");
         assert!(mv.candidates.is_empty(), "a table function is no table");
+    }
+
+    /// HE1 R9.18: comments are whitespace; strings and names keep their text.
+    #[test]
+    fn comments_in_a_column_list_are_whitespace() {
+        assert_eq!(
+            strip_comments(
+                "`a` String CODEC(ZSTD(3)), -- json\n    `b` /* x, y */ UInt8 DEFAULT '--not' "
+            ),
+            "`a` String CODEC(ZSTD(3)),  \n    `b`   UInt8 DEFAULT '--not' "
+        );
+        let create = parse_create_table(
+            "CREATE TABLE t (\n  -- ids\n  `id` String,\n  `x` Nullable(String) CODEC(ZSTD(3)), -- json\n  INDEX i id TYPE bloom_filter(0.001) GRANULARITY 1,\n) ENGINE = MergeTree ORDER BY id",
+        )
+        .expect("parses");
+        assert_eq!(
+            create.columns,
+            vec!["`id` String", "`x` Nullable(String) CODEC(ZSTD(3))"]
+        );
+        assert_eq!(create.indexes.len(), 1);
     }
 
     #[test]
