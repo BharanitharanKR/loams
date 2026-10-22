@@ -62,7 +62,7 @@ scripts/  .github/workflows/  NOTICE  deny.toml  README.md
 1. The exact Tauri 2 version and that these exist and behave as §18.14.3 says: `initialization_script_for_all_frames`, `eval_with_callback` (return value and the Windows exception caveat), `data_directory`, `data_store_identifier`, `incognito`, `cookies`, `on_navigation`, `on_new_window`, `on_download`, `with_webview`.
 2. **Isolated worlds** through the native handle on each OS (Q505): can an injected script run in a world the page cannot see (`Page.createIsolatedWorld` through WebView2, `WebKitScriptWorld`, `WKContentWorld`)? Does the script survive navigation?
 3. **In-process CDP on Windows**: `CallDevToolsProtocolMethod` and event receivers reachable from `with_webview`; `Accessibility.getFullAXTree`, `Network.*`, `Runtime.consoleAPICalled`.
-4. **Passkeys and WebAuthn** per OS (Q503), and whether Authentik's login flow completes inside each webview (password and TOTP at least).
+4. **Passkeys and WebAuthn** per OS (Q503), and whether the IdP's login flow (Zitadel, §76 D1600) completes inside each webview (password and TOTP at least).
 5. **Persistence:** a login at the fixture IdP survives an app restart per profile; two profiles do not share cookies; macOS 13 behaviour (ephemeral only) (Q502).
 6. **Form-submit interception** (B6): can a submit be held before it leaves on each engine (a capture-phase `submit` handler with `preventDefault`, then a re-submit), including `fetch` and XHR from page script? What does `on_navigation` see for a POST?
 7. **Hidden or minimised windows**: do pages keep running (timers, network) on each OS?

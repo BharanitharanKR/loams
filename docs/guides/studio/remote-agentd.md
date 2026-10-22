@@ -3,7 +3,7 @@
 Loams Studio in the browser console works against a `loams-agentd` you run on a machine you control: a dev box, a VM, a container or a workspace sandbox (design [§53](../../design/53-studio-ade.md) §6.3, D909). One remote agentd serves one person (D921). The browser reaches it over TLS on your tailnet with your own short-lived access token, and the daemon's own token never leaves the machine. **Never expose it on the public internet.**
 
 > **Status.** The remote listener, its checks, previews through it and the console's Content-Security-Policy setting ([below](#the-consoles-content-security-policy)) ship in 0.1.0 (SD1 Tasks 7, 26 and 30). The hosted console, `https://console.loams.dev`, reaches a 0.1.0 agentd through **Settings › Agentd hosts**: threads, runs, approvals and diffs work. What is **pending**:
-> - a sign-in that issues the agentd token, so for now you paste one (MT1);
+> - a sign-in that issues the agentd token, so for now you paste one (IA1);
 > - **previews in the hosted console.** Its `frame-src` is `'self'`, so the browser refuses to frame any agentd host's preview ([Previews](#previews));
 > - a standalone package for the daemon ([#874](https://github.com/ostrium-labs/loams/issues/874)); for now you take the binary out of the image ([below](#get-the-binary)).
 
@@ -176,16 +176,11 @@ curl -s http://127.0.0.1:8080/realms/loams/protocol/openid-connect/token \
   -d username=you -d password="$PASSWORD" -d scope=openid | jq -r .access_token
 ```
 
-### Authentik (not tested)
+### Zitadel (planned)
 
-- Create an OAuth2/OpenID provider and application for the agentd, for example with the slug `loams-agentd`. Its tokens must carry `aud: loams-agentd`; Authentik puts the provider's client id in `aud`, so name the client `loams-agentd`.
-- The issuer is then `https://auth.example.com/application/o/loams-agentd/`. The daemon reads `/.well-known/openid-configuration` under it, which names the JWKS at `/application/o/loams-agentd/jwks/`.
-- Your subject is the `sub` Authentik puts in your tokens. With the default subject mode, that is a hashed user id; read it from one of your tokens' claims.
-- Keep the signing key RS256 (Authentik's default) or EdDSA.
+Zitadel at `auth.loams.dev` is planned (IA1, [design 76](../../design/76-identity-and-authorization.md); [`zitadel.md`](../../platform/deploy/zitadel.md)). Until a recipe here is tested against it, use any OIDC issuer that meets the rules above, such as the Keycloak recipe.
 
-**Not tested:** these Authentik steps follow Authentik's documented behaviour but were not tried against a live Authentik. Authentik as the console's identity provider is MT1 ([#221](https://github.com/ostrium-labs/loams/issues/221)).
-
-**How the console gets the token.** It will get an access token for the audience `loams-agentd` through its own sign-in (MT1): an RFC 8693 token exchange, or a second client. Until MT1 lands, **Settings › Agentd hosts** asks you to paste a token per host, under a "Development sign-in" warning. The token stays in that tab's memory and is gone when you reload.
+**How the console gets the token.** It will get an access token for the audience `loams-agentd` through its own sign-in at Zitadel once IA1 lands (design 76 §10). Until then, **Settings › Agentd hosts** asks you to paste a token per host, under a "Development sign-in" warning. The token stays in that tab's memory and is gone when you reload.
 
 ## A container recipe
 

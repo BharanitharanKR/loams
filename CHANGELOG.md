@@ -4,6 +4,17 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Removed
+- **Authentik** (IA1 Task 1, D1600). Loams cuts over to Zitadel for identity and OpenFGA for
+  authorization (design 76), with no migration, no compatibility period and no dual running.
+  The Authentik deploy kit (`deploy/authentik/`), the Authentik bundle in `deploy/release/auth/`,
+  its tailnet node and every code and doc reference are gone. Until the Zitadel bundle for
+  `auth.loams.dev` lands, an install signs people in with built-in single-org mode (`tailscale`,
+  console sessions with first-run setup, `lk_` keys) or `oidc` mode against any issuer.
+  `SIGN_IN_KIND_AUTHENTIK` and `SIGN_IN_KIND_AUTHENTIK_DEVICE_CODE` are deprecated in favour of
+  the new `SIGN_IN_KIND_OIDC` and `SIGN_IN_KIND_OIDC_DEVICE_CODE`; `OIDC_PROVIDER_KIND_ZITADEL`
+  is added. The tailnet tag `tag:authentik` is now `tag:zitadel`.
+
 ### Added
 - **The TypeScript SDK runs in Cloudflare Workers**: the default transport sends `redirect: "manual"` in workerd
   (connect-web's `"error"` is rejected there), and `transportOptions.fetch` accepts a custom `fetch`. README

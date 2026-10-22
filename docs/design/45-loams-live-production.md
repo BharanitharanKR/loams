@@ -172,7 +172,7 @@ The unified auth plan (D111, Q30) was narrowed by D451: MT1 is the identity half
 | Piece | Owner | What Live does with it |
 |---|---|---|
 | Token endpoint, sessions, users, API key issuance and revocation, the `ControlStore` records | §19 M2 identity work, MT1 | Consumes: it verifies tokens and keys and subscribes to revocations |
-| Authentik as the identity provider, RFC 8693 exchange, groups mapped to teams and OpenFGA tuples | MT1 (D447–D452) | Nothing directly. People reach Live with exchanged Loams tokens. Authentik is also the documented default issuer for app end users (§5.3) |
+| The identity provider (Zitadel, §76 D1600), RFC 8693 exchange, groups mapped to teams and OpenFGA tuples | MT1 (D447–D452), now IA1 | Nothing directly. People reach Live with exchanged Loams tokens or, under D1606, verified Zitadel JWTs. Zitadel is also the documented default issuer for app end users (§5.3) |
 | `Authorizer` (D66: `AllowAll`, then RBAC, then OpenFGA in M2.x) | M2 | Calls `check(principal, action, resource)` for every admin call and every `_system:*` call |
 | The verifier core in `crates/loams-auth`: Loams JWT verification against the instance JWKS, API key hash lookup, the revocation set | MT1 Task 2 or M2. **If it has not merged by LV1b, LV1b builds only this core** (verification, no issuance), with the interfaces MT1's plan names, so MT1 and M2 extend it rather than duplicate it | Uses it for every request |
 
@@ -194,7 +194,7 @@ The unified auth plan (D111, Q30) was narrowed by D451: MT1 is the identity half
 
 An app's end users are not Loams principals. They sign in to the app's own identity provider.
 
-- **Configuration.** The app's settings (`UpdateApp`) list trusted issuers: `{ issuer, audiences[], jwks_uri? }`. Authentik is the documented and tested default (D447). Any OIDC provider works: discovery through `/.well-known/openid-configuration`, and the JWKS cached for 10 minutes and refreshed on an unknown `kid` at most once per 30 s, MT1 Task 2's rules reused per app.
+- **Configuration.** The app's settings (`UpdateApp`) list trusted issuers: `{ issuer, audiences[], jwks_uri? }`. Zitadel is the documented and tested default (D447, now §76 D1600). Any OIDC provider works: discovery through `/.well-known/openid-configuration`, and the JWKS cached for 10 minutes and refreshed on an unknown `kid` at most once per 30 s, MT1 Task 2's rules reused per app.
 - **The credential.** The same `Authorization: Bearer` header. Live tells the kinds apart by token shape and `iss`: the instance's own issuer means a platform principal, an issuer configured on the addressed app means an end user, a `loams_` prefix means an API key, and anything else is `UNAUTHENTICATED`.
 - **What an end user may do.** Call **public** functions of that app, through `Watch`, `Query` and `Mutate`. Never internal functions, `_system:*` or `LiveAdminService`. Authorization beyond that is the function's own code, using `ctx.auth`. Whether Live should also offer declarative per-table rules for end users is Q631 (default: no; function code is the policy, as in Convex).
 - **Anonymous calls** are allowed to public functions when the app's `allow_anonymous` is true (the default for new apps is `false` in production and `true` in `loams dev`).
@@ -469,7 +469,7 @@ LV1 ships:
   - quickstart (`npx loams-live init`, `loams dev`, a React app);
   - functions and the determinism rules;
   - schema, validators and indexes, with the online backfill behaviour;
-  - auth with Authentik and with any OIDC provider;
+  - auth with Zitadel and with any OIDC provider;
   - pagination;
   - optimistic updates;
   - migrations;

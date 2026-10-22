@@ -160,7 +160,7 @@ Unmodified Airflow 3.3 with only configuration:
 | XComs | `[core] xcom_backend = airflow.providers.common.io.xcom.backend.XComObjectStorageBackend`, `[common.io] xcom_objectstorage_path` | The bucket | An XCom above the threshold round-trips |
 | DAG source | `[dag_processor] dag_bundle_config_list` with `GitDagBundle` | Loams Git over Smart HTTP v2 (D394) | A DAG pushed to Loams Git runs at the recorded commit |
 | Secrets | `[secrets] backend` | Kubernetes or env secrets in OC0; Loams Secrets (§64) in OC1 | — |
-| Auth | `[core] auth_manager` | Simple or Keycloak-style OIDC against Authentik (D447) in OC0 (verify) | — |
+| Auth | `[core] auth_manager` | Simple or Keycloak-style OIDC against Zitadel (§76 D1600, superseding D447) in OC0 (verify) | — |
 
 The recipe is `docs/guides/compute/airflow.md`; the Compose profile `airflow` in `compose.compute.yaml` (§10.1) is the test bed.
 

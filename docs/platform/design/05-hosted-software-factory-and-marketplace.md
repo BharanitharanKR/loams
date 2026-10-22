@@ -18,9 +18,9 @@ Numbering: decisions **PD47–PD60**, questions **Q-SF-1–Q-SF-9** (Q-SF-2 with
 |---|---|---|
 | PD47 | **The marketplace is a catalogue of installable packages**, each a **listing** with plans, versions, an entitlement model and an install saga. It lives in the control plane (this repository); the public pages live in `loam-cloud`. **Beta: first-party listings only**; third-party publishers are a later decision (Q-SF-5) | Proposed |
 | PD48 | **Listing #1 is Loams Software Factory.** Its package is operon's `deploy/factory/` chart and catalog patch (operon D-SF-20), installed unmodified into the tenant; the platform adds only an overlay of values (domain, model route, budgets, quotas) | Proposed |
-| PD49 | **Install flow** (§4): sign in (Authentik) → choose organisation and plan → consent screen → Stripe subscription (14-day trial, card required, Q-SF-1) → entitlement → **install saga** on operon §21 → health check → onboarding checklist. Uninstall is a saga with a 30-day grace and an export | Proposed |
+| PD49 | **Install flow** (§4): sign in (Zitadel, operon §76) → choose organisation and plan → consent screen → Stripe subscription (14-day trial, card required, Q-SF-1) → entitlement → **install saga** on operon §21 → health check → onboarding checklist. Uninstall is a saga with a 30-day grace and an export | Proposed |
 | PD50 | **Hosted tenancy for the factory is one stack per tenant** (§3): a Kubernetes namespace `tenant-<org>-factory` on the k3s cluster (PD29, PD31) running the open chart (Zulip, Plane CE, Forgejo, the factory service, the five agents, Loams Bot's host), because Zulip, Plane and Forgejo are single-tenant apps and AGPL and GPL forbid us nothing but patching. A shared CloudNativePG cluster holds one database and role per app per tenant; one RustFS bucket per tenant (R2 on the Cloudflare path, operon D381). No shared app database rows across tenants | Proposed |
-| PD51 | **Observability apps are per tenant where light, shared where heavy** (§3.3): GlitchTip and OpenObserve (open edition, which has no RBAC and so cannot be shared safely) run **per tenant**; **Langfuse 4** (ClickHouse, Redis, Postgres, S3) runs **once per region** with one Langfuse organisation per tenant and Authentik OIDC, and OpenPanel (needs ClickHouse) is an **add-on** (Q-SF-4). Content capture follows the tenant's policy (operon Q476) | Proposed |
+| PD51 | **Observability apps are per tenant where light, shared where heavy** (§3.3): GlitchTip and OpenObserve (open edition, which has no RBAC and so cannot be shared safely) run **per tenant**; **Langfuse 4** (ClickHouse, Redis, Postgres, S3) runs **once per region** with one Langfuse organisation per tenant and Zitadel OIDC, and OpenPanel (needs ClickHouse) is an **add-on** (Q-SF-4). Content capture follows the tenant's policy (operon Q476) | Proposed |
 | PD52 | **Managed agents and model costs are the product.** The platform runs each tenant's five agents and Loams Bot's harness host (Knative, scale-to-zero between runs) and routes model calls through the AI gateway. Plans include a **token allowance**; overage is metered (§4.4); **bring your own model key** is an option on every plan and waives the model charge | Proposed |
 | PD53 | **Billing hook**: Stripe Billing (PD38). A listing plan is a Stripe Price (flat, monthly or annual); usage items are Stripe meter events fed from `loam-usage` (doc 01), which consumes operon's business CloudEvents (`io.loams.dev.factory.run.completed.v1` with counts) and the AI gateway's token reports; **operon contains no metering** (D403, D444) | Proposed |
 | PD54 | **Entitlements set limits; the engine enforces them.** The platform writes the plan's quotas into the tenant's factory policy defaults (runs per day, concurrent runs, open PRs, budgets, projects, seats) through operon's admin API; the open guard (operon SF4) enforces. A downgrade lowers the defaults, never deletes data | Proposed |
@@ -66,7 +66,7 @@ Numbering: decisions **PD47–PD60**, questions **Q-SF-1–Q-SF-9** (Q-SF-2 with
  │   factory service · 5 agents (Knative, scale-to-zero) · Loams Bot host (Knative)                 │
  │ per region: shared CNPG (db+role per app per tenant) · Langfuse 4 (org per tenant) ·            │
  │             AI gateway (aisix) → model providers (DeepSeek default) · OTel collector            │
- │ identity: Authentik per cluster, one application per tenant app (operon §38)                    │
+ │ identity: Zitadel per cluster, one org per tenant, its apps (operon §76)                        │
  └─────────────────────────────────────────────────────────────────────────────────────────────────┘
         │ S3                         │ metrics, usage events (no content)
         ▼                            ▼
@@ -102,10 +102,10 @@ So a dedicated stack costs real money before the first run. Consequences: no fre
 |---|---|---|
 | Zulip, Plane, Forgejo, GlitchTip, OpenObserve | Per tenant | Single-tenant apps or no RBAC (OpenObserve open edition) |
 | Postgres | Shared CloudNativePG cluster, one database and role per app per tenant, connection limits per role | Cost; row-level mixing is never used |
-| Langfuse 4 | Shared per region, one **Langfuse organisation per tenant**, SSO through Authentik (`AUTH_CUSTOM_*`), `ee/` never enabled | ClickHouse, Redis and S3 are heavy; Langfuse organisations isolate projects and keys. A cross-tenant leak test is a launch gate (§8 risk 2) |
+| Langfuse 4 | Shared per region, one **Langfuse organisation per tenant**, SSO through Zitadel (`AUTH_CUSTOM_*`), `ee/` never enabled | ClickHouse, Redis and S3 are heavy; Langfuse organisations isolate projects and keys. A cross-tenant leak test is a launch gate (§8 risk 2) |
 | OpenPanel | Add-on, per tenant (Q-SF-4) | Needs ClickHouse; AGPL |
 | AI gateway | Shared, per-principal budgets and keys | Operon's gateway is already multi-principal |
-| Authentik | One per cluster, one application and group set per tenant | operon §38 |
+| Zitadel | One per cluster, one org and application set per tenant; teams are Loams' own | operon §76 (D1600, D1605) |
 
 ### 3.4 Operating it
 
@@ -133,12 +133,12 @@ The **manifest** (`marketplace.yaml` in the package, shipped by operon's `deploy
 ### 4.3 The install flow (PD49)
 
 1. **Discover**: `loams.dev/cloud/marketplace` and the listing page (built by `loam-cloud`, §6). "Start free trial" goes to `console.loams.dev/marketplace/install/loams-software-factory`.
-2. **Sign in**: Authentik; a new user creates an organisation (a Loam tenant, operon §19).
+2. **Sign in**: Zitadel; a new user creates an organisation (a Loam tenant, operon §19).
 3. **Choose**: organisation, plan, region (one region in the beta, PD40), custom subdomain, and the model option (managed or bring-your-own-key).
 4. **Consent**: rendered from the manifest: the apps that will be created and their licences, the agents (names, what each may do, which actions need approval), the budgets and default policy (conservative: gates on, auto-fix off), what is sent to the model provider, and the 14-day trial terms.
 5. **Pay**: Stripe Checkout for the subscription, card required for the trial (Q-SF-1); the webhook creates the entitlement `trialing`.
-6. **Install saga** (each step idempotent, compensated on failure): create the namespace and quotas; create databases, roles and the bucket; install the Helm release with the overlay values; create the Authentik applications and groups; run operon's webhook-provisioning saga (operon SF4 Task 10) so apps, agents and principals exist; create the AI gateway route and budgets; seed the demo project (optional, Q-SF-8); health checks of every app and agent; mark `ready`.
-7. **Onboard**: a checklist in the console: connect a repository (mirror from GitHub or push), invite people (Authentik groups), choose the watched projects and metrics, review the default policy, run the demo signal. The Loams Bot desktop and phone apps are offered with a QR pairing (operon §37 D434).
+6. **Install saga** (each step idempotent, compensated on failure): create the namespace and quotas; create databases, roles and the bucket; install the Helm release with the overlay values; create the tenant's Zitadel org and applications; run operon's webhook-provisioning saga (operon SF4 Task 10) so apps, agents and principals exist; create the AI gateway route and budgets; seed the demo project (optional, Q-SF-8); health checks of every app and agent; mark `ready`.
+7. **Onboard**: a checklist in the console: connect a repository (mirror from GitHub or push), invite people (Zitadel org members, Loams teams), choose the watched projects and metrics, review the default policy, run the demo signal. The Loams Bot desktop and phone apps are offered with a QR pairing (operon §37 D434).
 8. **Operate**: upgrades by channel; plan changes (the platform rewrites quota defaults, PD54); cancellation: the entitlement ends at period end, the stack hibernates, data is exportable for 30 days, then deleted by a saga that needs the admin's approval (operon D435) unless the org has been closed.
 
 ### 4.4 Billing hook (PD53)
@@ -294,7 +294,7 @@ The fixed per-tenant floor of §3.2 (6–8 GB) is the cost driver; with hibernat
 
 - operon `docs/design/39-software-factory-and-loams-bot.md` (PR #192): the product, the agents, the loop, the open package; D460–D479.
 - operon `docs/open-core.md` (D220) and D403, D444: the split and no metering in the open repository.
-- This repository: doc 01 (metering and billing; `loam-usage`, Stripe), doc 04 (the hosted cloud on k3s and Cloudflare: PD29–PD41, PD36 BYOC, PD37 Authentik, PD38 Stripe).
+- This repository: doc 01 (metering and billing; `loam-usage`, Stripe), doc 04 (the hosted cloud on k3s and Cloudflare: PD29–PD41, PD36 BYOC, PD37 identity (Zitadel since operon D1600), PD38 Stripe).
 - `loam-cloud`: the marketing pages (§6), PostHog events (§6.5), the console routes.
 
 ## 11. Contradictions, and how they are resolved
