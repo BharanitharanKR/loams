@@ -4,11 +4,11 @@ The monorepo's Nx tasks (web packages, plugins, the desktop app) can share one r
 Nx Cloud between CI and the owner's machine. Workspace: `6ada11220d72175d478305c0` (`nxCloudId` in
 `nx.json`). Nx is 23.2.1.
 
-**Current state (2026-10-22):**
+**Current state (2026-10-23):**
 
 - CI connects only on a **push to `dev`** in the monorepo workflow (`monorepo.yml`, jobs *Web* and
-  *Plugins*), and only when the owner has set the token secret and `NX_CLOUD_CI=on`. The free plan's
-  credits pay for about 3 runs a day, and CI makes over 100 (see [Credits](#credits)).
+  *Plugins*). `NX_CLOUD_CI=on` and both tokens are set. The free plan's credits pay for about 3 runs
+  a day, and CI makes over 100 (see [Credits](#credits)).
 - Pull requests, every other workflow and every release job stay off the cloud.
 - Nx Agents (Workers) are off.
 - The owner is applying for Nx's free open-source plan ([below](#the-open-source-plan)). Once it is
@@ -27,42 +27,57 @@ committed. `neverConnectToCloud: true` turns the cloud off entirely in Nx 23
 | `on` | read-write | off | off |
 | `all` | read-write | read-only | off (no secrets) |
 
-- **Read-write token:** an environment secret of `nx-cloud-write`. The environment may only be used
-  from `dev` and `main`, so a pull request cannot read the token even if it edits the workflow.
-- **Read-only token** (needed only for `all`): a repository secret. Nx Cloud stores a read-only run's
-  results in a cache isolated to that branch, so they never reach the shared cache.
-- Both secrets have the same name, `NX_CLOUD_ACCESS_TOKEN`. A job using the environment gets the
-  environment's value.
+- **Read-write token:** Nx Cloud's "protected branch pipeline" CI token. It is stored as the secret
+  `NX_CLOUD_ACCESS_TOKEN` of the `nx-cloud-write` environment, which may only be used from `dev` and
+  `main`, so a pull request cannot read it even if it edits the workflow.
+- **Read-only token** (used only with `all`): the "unprotected branch pipeline" token, stored as the
+  repository secret `NX_CLOUD_ACCESS_TOKEN`. Nx Cloud keeps a read-only run's results in an isolated
+  cache, so they never reach the shared cache.
+- **Which token a job sees:** both secrets have the same name, and a job that uses the environment
+  gets the environment's value. The jobs put the token in `NX_CLOUD_ACCESS_TOKEN` only when they
+  connect; otherwise the variable is empty. Fork pull requests get no secrets at all.
 - Every other workflow keeps `NX_NO_CLOUD: 'true'`. `desktop-electron.yml` and `studio-e2e.yml`
   still run their tasks through Nx, with the local cache only.
 
-### Owner steps
+### Owner settings (done 2026-10-23)
 
-These are one-time. Run the `!` commands in your Claude Code prompt, or in a terminal without the
-`!`. `gh secret set` asks for the value at a hidden prompt, so the token never appears in chat, in a
-file or in shell history.
+**In Nx Cloud** (workspace settings):
+- Workspace visibility: **organisation members only**.
+- **Default access level: read-only.** This is the level for anyone who runs Nx without logging in,
+  which Nx's docs call the *workspace ID access level*. It defaulted to read-write, and this
+  repository is public.
+- **Logged-in users: read-write.** The owner is the only member; give anyone added later
+  read-only.
+- Workspace data caching: on. This is a Workers feature, unused while Agents are off.
+- **Two CI access tokens:**
+  - "protected branch pipeline", read-write;
+  - "unprotected branch pipeline", read-only.
 
-1. **Nx Cloud, Workspace settings > Access Control:**
-   - Set the **workspace ID access level** to `none`. It defaults to `read-write` for anyone who
-     clones the repository, and this repository is public. A stranger's laptop could otherwise write
-     cache entries.
-   - Leave the **personal access token** level at `read-write`. You are the only member; give anyone
-     you add later `read-only`.
-2. **Same tab, create a CI access token**, for example "github-dev-push", with access `read-write`.
-   Copy it.
-3. Store it in the environment, and paste the token at the prompt:
-   `! gh secret set NX_CLOUD_ACCESS_TOKEN --env nx-cloud-write --repo ostrium-labs/loams`
-4. Turn CI on:
-   `! gh variable set NX_CLOUD_CI --body on --repo ostrium-labs/loams`
-5. **Later, once the open-source plan is granted:** create a second CI access token with access
-   `read-only`, then run:
-   - `! gh secret set NX_CLOUD_ACCESS_TOKEN --repo ostrium-labs/loams` (paste the read-only token)
-   - `! gh variable set NX_CLOUD_CI --body all --repo ostrium-labs/loams`
+**On GitHub:**
+- the protected token: `gh secret set NX_CLOUD_ACCESS_TOKEN --env nx-cloud-write`;
+- the unprotected token: `gh secret set NX_CLOUD_ACCESS_TOKEN` (repository);
+- `gh variable set NX_CLOUD_CI --body on`.
 
-**To switch CI off:** `! gh variable set NX_CLOUD_CI --body off --repo ostrium-labs/loams`
-
-The `nx-cloud-write` environment already exists. Its deployment branches are `dev` and `main`. A
+`gh secret set` reads the value at a hidden prompt, so a token never appears in chat, in a file or in
+shell history. The `nx-cloud-write` environment's deployment branches are `dev` and `main`, and a
 connected dev push shows up as a deployment to it.
+
+**Checked without a token (2026-10-23).** Each run used a throwaway `HOME` and `TMPDIR`, no
+`NX_CLOUD_ACCESS_TOKEN`, a cleared `.nx/`, and a new hash (a one-line comment in
+`@loams/slots`).
+- Anonymous runs connect and are recorded.
+- **Anonymous writes do not reach the cache.** A rerun of the same hash missed, from the same branch
+  (`NX_BRANCH`) and from another.
+- Anonymous reads of entries written by CI are expected under the read-only default. That check runs
+  once the first connected dev push has written entries.
+- One caution for anyone repeating the check: the Nx Cloud client keeps its own copy of downloaded
+  results under `HOME`/`TMPDIR`. A test that reuses them sees false "hits".
+
+**Later, once the open-source plan is granted:**
+`! gh variable set NX_CLOUD_CI --body all --repo ostrium-labs/loams`
+
+**To switch CI off:**
+`! gh variable set NX_CLOUD_CI --body off --repo ostrium-labs/loams`
 
 ### Budget guard
 
