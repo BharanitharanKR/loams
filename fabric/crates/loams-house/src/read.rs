@@ -50,6 +50,9 @@ pub struct PinnedField {
     pub name: String,
     /// Whether it is required (not `NULL` in any row).
     pub required: bool,
+    /// Whether its Iceberg type is `long`: how a column of nanosecond times
+    /// is stored (D1572; HE1 R9.61).
+    pub long: bool,
 }
 
 /// One table of a statement, pinned (§49 §7): the snapshot and the metadata file
@@ -431,6 +434,12 @@ pub fn pin(
             .map(|f| PinnedField {
                 name: f.name.clone(),
                 required: f.required,
+                long: matches!(
+                    *f.field_type,
+                    loams_house_lake::spec::Type::Primitive(
+                        loams_house_lake::spec::PrimitiveType::Long
+                    )
+                ),
             })
             .collect(),
         travel,

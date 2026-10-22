@@ -2256,6 +2256,11 @@ pub fn plan_table(
         ) {
             break;
         }
+        // A nanosecond time is a long of nanoseconds (D1572): no
+        // Iceberg time transform applies to it.
+        if ch.nanos_zone().is_some() && transform != Transform::Identity {
+            break;
+        }
         sort_fields.push(SortField {
             source_id,
             transform,
@@ -2291,6 +2296,14 @@ pub fn plan_table(
         let source_id = field_id(&schema, &column)
             .ok_or_else(|| refused(format!("{column} is an ALIAS column")))?;
         let ch = ChType::parse(&ch_text)?;
+        // A nanosecond time is a long of nanoseconds (D1572; HE1
+        // R9.61): Iceberg's time transforms take no long, and a truncation
+        // wide enough for a day does not fit its width, so the files are not
+        // partitioned by this element (as R9.12 leaves any other), and which
+        // rows a query sees does not change.
+        if ch.nanos_zone().is_some() && transform != Transform::Identity {
+            continue;
+        }
         let base = ch.base();
         let ok = match transform {
             Transform::Identity => {
