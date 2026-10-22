@@ -13,28 +13,31 @@ Every function, table engine and table function of the pinned chDB (chDB 26.9.0,
 
 | List | profile | refused | disabled | unclassified | mined |
 |---|---:|---:|---:|---:|---:|
-| Functions (`system.functions`) | 223 | 145 | 28 | 1489 | 131 |
-| Table engines (`system.table_engines`) | 13 | 12 | 49 | 6 | 10 |
+| Functions (`system.functions`) | 273 | 145 | 28 | 1439 | 180 |
+| Table engines (`system.table_engines`) | 14 | 12 | 49 | 5 | 13 |
 | Table functions (`system.table_functions`) | 0 | 0 | 78 | 15 | 1 |
 
 ## Functions (`system.functions`)
 
 | Name | Class | Why | Mined in |
 |---|---|---|---|
-| `CARDINALITY` | profile | alias of `length`: mined profile |  |
-| `CAST` | profile | mined profile | langfuse, signoz |
-| `CHARACTER_LENGTH` | profile | alias of `lengthUTF8`: mined profile |  |
-| `CHAR_LENGTH` | profile | alias of `lengthUTF8`: mined profile |  |
-| `DATABASE` | profile | alias of `currentDatabase`: mined profile |  |
-| `DATE_DIFF` | profile | alias of `dateDiff`: mined profile |  |
-| `DAY` | profile | alias of `toDayOfMonth`: mined profile |  |
-| `DAYOFMONTH` | profile | alias of `toDayOfMonth`: mined profile |  |
-| `JSONAllPaths` | profile | mined profile | signoz |
-| `JSONExtractString` | profile | mined profile | signoz |
-| `MAP_FROM_ARRAYS` | profile | alias of `mapFromArrays`: mined profile |  |
-| `OCTET_LENGTH` | profile | alias of `length`: mined profile |  |
-| `REGEXP_MATCHES` | profile | alias of `match`: mined profile |  |
-| `SCHEMA` | profile | alias of `currentDatabase`: mined profile |  |
+| `CARDINALITY` | profile | alias of `length`: mined profile, Tier 0 |  |
+| `CAST` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, plausible, signoz |
+| `CHARACTER_LENGTH` | profile | alias of `lengthUTF8`: mined profile, Tier 0 |  |
+| `CHAR_LENGTH` | profile | alias of `lengthUTF8`: mined profile, Tier 0 |  |
+| `DATABASE` | profile | alias of `currentDatabase`: mined profile, Tier 0 |  |
+| `DATE_DIFF` | profile | alias of `dateDiff`: mined profile, Tier 0 |  |
+| `DATE_FORMAT` | profile | alias of `formatDateTime`: mined profile, Tier 1 |  |
+| `DATE_TRUNC` | profile | mined profile, Tier 1 | openlit, umami |
+| `DAY` | profile | alias of `toDayOfMonth`: mined profile, Tier 0 |  |
+| `DAYOFMONTH` | profile | alias of `toDayOfMonth`: mined profile, Tier 0 |  |
+| `JSONAllPaths` | profile | mined profile, Tier 0 | signoz |
+| `JSONExtractString` | profile | mined profile, Tier 0 | signoz |
+| `MAP_FROM_ARRAYS` | profile | alias of `mapFromArrays`: mined profile, Tier 0 |  |
+| `OCTET_LENGTH` | profile | alias of `length`: mined profile, Tier 0 |  |
+| `REGEXP_MATCHES` | profile | alias of `match`: mined profile, Tier 0 |  |
+| `REGEXP_REPLACE` | profile | alias of `replaceRegexpAll`: mined profile, Tier 1 |  |
+| `SCHEMA` | profile | alias of `currentDatabase`: mined profile, Tier 0 |  |
 | `ST_LineFromWKB` | refused | alias of `readWKBLineString`: Tier 2: geo functions (§75 §7.5) |  |
 | `ST_MLineFromWKB` | refused | alias of `readWKBMultiLineString`: Tier 2: geo functions (§75 §7.5) |  |
 | `ST_MPointFromWKB` | refused | alias of `readWKBMultiPoint`: Tier 2: geo functions (§75 §7.5) |  |
@@ -42,57 +45,65 @@ Every function, table engine and table function of the pinned chDB (chDB 26.9.0,
 | `ST_PointFromWKB` | refused | alias of `readWKBPoint`: Tier 2: geo functions (§75 §7.5) |  |
 | `ST_PolyFromWKB` | refused | alias of `readWKBPolygon`: Tier 2: geo functions (§75 §7.5) |  |
 | `SVG` | refused | alias of `svg`: Tier 2: geo functions (§75 §7.5) |  |
-| `TIMESTAMP_DIFF` | profile | alias of `dateDiff`: mined profile |  |
+| `TIMESTAMP_DIFF` | profile | alias of `dateDiff`: mined profile, Tier 0 |  |
 | `WKB` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `WKT` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `addressToLine` | disabled | reads a file, another server, the process's memory or the request's credentials (D1558; the House's deny list) |  |
 | `addressToLineWithInlines` | disabled | reads a file, another server, the process's memory or the request's credentials (D1558; the House's deny list) |  |
 | `addressToSymbol` | disabled | reads a file, another server, the process's memory or the request's credentials (D1558; the House's deny list) |  |
-| `and` | profile | mined profile | langfuse, openpanel, signoz |
-| `any` (aggregate) | profile | mined profile | langfuse, openpanel, signoz |
-| `anyLast` (aggregate) | profile | mined profile | langfuse, signoz |
-| `any_value` (aggregate) | profile | alias of `any`: mined profile |  |
-| `argMax` (aggregate) | profile | mined profile | langfuse, openpanel, signoz |
-| `argMin` (aggregate) | profile | Tier 0 (§75 §7.3; windowFunnel for OpenPanel) |  |
-| `array` | profile | mined profile | langfuse, signoz |
-| `arrayConcat` | profile | mined profile | langfuse |
-| `arrayDistinct` | profile | mined profile | langfuse |
-| `arrayElement` | profile | mined profile | langfuse, openpanel, signoz |
-| `arrayEnumerate` | profile | mined profile | langfuse, openpanel |
-| `arrayEnumerateUniq` | profile | mined profile | openpanel |
-| `arrayExists` | profile | mined profile | langfuse |
-| `arrayFilter` | profile | mined profile | langfuse, openpanel |
-| `arrayFirstIndex` | profile | mined profile | langfuse, openpanel |
-| `arrayJoin` | profile | mined profile | langfuse, openpanel |
-| `arrayMap` | profile | mined profile | langfuse, openpanel |
-| `arrayReverse` | profile | mined profile | langfuse |
-| `arraySlice` | profile | mined profile | langfuse, openpanel |
-| `arraySort` | profile | mined profile | langfuse |
-| `arrayStringConcat` | profile | mined profile | langfuse |
-| `arraySum` | profile | mined profile | langfuse |
-| `arrayZip` | profile | mined profile | langfuse |
-| `array_agg` (aggregate) | profile | alias of `groupArray`: mined profile |  |
-| `array_to_string` | profile | alias of `arrayStringConcat`: mined profile |  |
-| `avg` (aggregate) | profile | mined profile | langfuse, openpanel, signoz |
-| `bitAnd` | profile | mined profile | signoz |
-| `caseWithoutExpr` | profile | alias of `multiIf`: mined profile |  |
-| `caseWithoutExpression` | profile | alias of `multiIf`: mined profile |  |
-| `cityHash64` | profile | mined profile | signoz |
-| `coalesce` | profile | mined profile | langfuse |
-| `concat` | profile | mined profile | langfuse, openpanel |
-| `count` (aggregate) | profile | mined profile | langfuse, openpanel, signoz |
-| `currentDatabase` | profile | mined profile | langfuse |
+| `and` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `any` (aggregate) | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `anyLast` (aggregate) | profile | mined profile, Tier 0 | langfuse, signoz |
+| `any_value` (aggregate) | profile | alias of `any`: mined profile, Tier 0 |  |
+| `argMax` (aggregate) | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, signoz, umami |
+| `argMin` (aggregate) | profile | mined profile, Tier 1 | openlit, umami |
+| `array` | profile | mined profile, Tier 0 | langfuse, plausible, signoz, umami |
+| `arrayAll` | profile | mined profile, Tier 1 | plausible |
+| `arrayConcat` | profile | mined profile, Tier 0 | langfuse |
+| `arrayCumSum` | profile | mined profile, Tier 1 | hyperdx |
+| `arrayDistinct` | profile | mined profile, Tier 0 | langfuse |
+| `arrayElement` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz |
+| `arrayEnumerate` | profile | mined profile, Tier 0 | langfuse, openpanel |
+| `arrayEnumerateUniq` | profile | mined profile, Tier 0 | openpanel |
+| `arrayExists` | profile | mined profile, Tier 0 | hyperdx, langfuse |
+| `arrayFilter` | profile | mined profile, Tier 0 | langfuse, openpanel, umami |
+| `arrayFirst` | profile | mined profile, Tier 1 | umami |
+| `arrayFirstIndex` | profile | mined profile, Tier 0 | hyperdx, langfuse, openpanel |
+| `arrayIntersect` | profile | mined profile, Tier 1 | plausible |
+| `arrayJoin` | profile | mined profile, Tier 0 | langfuse, openlit, openpanel, plausible, umami |
+| `arrayMap` | profile | mined profile, Tier 0 | langfuse, openpanel, plausible |
+| `arrayReverse` | profile | mined profile, Tier 0 | langfuse |
+| `arraySlice` | profile | mined profile, Tier 0 | langfuse, openpanel |
+| `arraySort` | profile | mined profile, Tier 0 | langfuse |
+| `arrayStringConcat` | profile | mined profile, Tier 0 | langfuse |
+| `arraySum` | profile | mined profile, Tier 0 | langfuse |
+| `arrayWithConstant` | profile | mined profile, Tier 1 | hyperdx |
+| `arrayZip` | profile | mined profile, Tier 0 | hyperdx, langfuse |
+| `arrayZipUnaligned` | profile | mined profile, Tier 1 | hyperdx |
+| `array_agg` (aggregate) | profile | mined profile, Tier 1 | openlit |
+| `array_concat_agg` (aggregate) | profile | alias of `groupArrayArray`: mined profile, Tier 1 |  |
+| `array_to_string` | profile | alias of `arrayStringConcat`: mined profile, Tier 0 |  |
+| `ascii` | profile | mined profile, Tier 1 | plausible |
+| `avg` (aggregate) | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, signoz |
+| `bitAnd` | profile | mined profile, Tier 0 | signoz |
+| `caseWithoutExpr` | profile | alias of `multiIf`: mined profile, Tier 0 |  |
+| `caseWithoutExpression` | profile | alias of `multiIf`: mined profile, Tier 0 |  |
+| `cityHash64` | profile | mined profile, Tier 0 | hyperdx, signoz, umami |
+| `coalesce` | profile | mined profile, Tier 0 | langfuse, openlit, umami |
+| `concat` | profile | mined profile, Tier 0 | langfuse, openlit, openpanel, umami |
+| `count` (aggregate) | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `currentDatabase` | profile | mined profile, Tier 0 | langfuse, plausible |
 | `currentProfiles` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
 | `currentRoles` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
-| `current_database` | profile | alias of `currentDatabase`: mined profile |  |
-| `current_timestamp` | profile | alias of `now`: mined profile |  |
-| `dateDiff` | profile | mined profile | langfuse, openpanel |
-| `date_bin` | profile | alias of `toStartOfInterval`: mined profile |  |
-| `date_diff` | profile | alias of `dateDiff`: mined profile |  |
+| `current_database` | profile | alias of `currentDatabase`: mined profile, Tier 0 |  |
+| `current_timestamp` | profile | alias of `now`: mined profile, Tier 0 |  |
+| `dateDiff` | profile | mined profile, Tier 0 | langfuse, openpanel, umami |
+| `date_bin` | profile | alias of `toStartOfInterval`: mined profile, Tier 0 |  |
+| `date_diff` | profile | alias of `dateDiff`: mined profile, Tier 0 |  |
 | `defaultProfiles` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
 | `defaultRoles` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
 | `demangle` | disabled | reads a file, another server, the process's memory or the request's credentials (D1558; the House's deny list) |  |
-| `dictGet` | refused | Tier 2: dictionaries, until an application needs them (§75 §7.5) |  |
+| `dictGet` | refused | Tier 2: dictionaries, until an application needs them (§75 §7.5) | plausible |
 | `dictGetAll` | refused | Tier 2: dictionaries, until an application needs them (§75 §7.5) |  |
 | `dictGetChildren` | refused | Tier 2: dictionaries, until an application needs them (§75 §7.5) |  |
 | `dictGetDate` | refused | Tier 2: dictionaries, until an application needs them (§75 §7.5) |  |
@@ -133,21 +144,25 @@ Every function, table engine and table function of the pinned chDB (chDB 26.9.0,
 | `dictGetUInt8OrDefault` | refused | Tier 2: dictionaries, until an application needs them (§75 §7.5) |  |
 | `dictGetUUID` | refused | Tier 2: dictionaries, until an application needs them (§75 §7.5) |  |
 | `dictGetUUIDOrDefault` | refused | Tier 2: dictionaries, until an application needs them (§75 §7.5) |  |
-| `dictHas` | refused | Tier 2: dictionaries, until an application needs them (§75 §7.5) |  |
+| `dictHas` | refused | Tier 2: dictionaries, until an application needs them (§75 §7.5) | plausible |
 | `dictIsIn` | refused | Tier 2: dictionaries, until an application needs them (§75 §7.5) |  |
-| `divide` | profile | mined profile | langfuse, openpanel, signoz |
-| `empty` | profile | mined profile | langfuse |
+| `divide` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `empty` | profile | mined profile, Tier 0 | langfuse, openlit, plausible |
 | `enabledProfiles` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
 | `enabledRoles` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
-| `equals` | profile | mined profile | langfuse, openpanel, signoz |
+| `endsWith` | profile | mined profile, Tier 1 | plausible |
+| `equals` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `extract` | profile | mined profile, Tier 1 | plausible |
 | `file` | disabled | reads a file, another server, the process's memory or the request's credentials (D1558; the House's deny list) |  |
 | `filesystemAvailable` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
 | `filesystemCapacity` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
 | `filesystemUnreserved` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
-| `first_value` (aggregate) | profile | alias of `any`: mined profile |  |
-| `floor` | profile | mined profile | signoz |
-| `fromUnixTimestamp64Nano` | profile | mined profile | signoz |
-| `generateUUIDv4` | profile | mined profile | openpanel |
+| `first_value` (aggregate) | profile | alias of `any`: mined profile, Tier 0 |  |
+| `floor` | profile | mined profile, Tier 0 | signoz |
+| `formatDateTime` | profile | mined profile, Tier 1 | openlit, umami |
+| `fromUnixTimestamp64Milli` | profile | mined profile, Tier 1 | hyperdx |
+| `fromUnixTimestamp64Nano` | profile | mined profile, Tier 0 | signoz |
+| `generateUUIDv4` | profile | mined profile, Tier 0 | openlit, openpanel |
 | `geoDistance` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `geoToH3` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `geoToMGRS` | refused | Tier 2: geo functions (§75 §7.5) |  |
@@ -163,14 +178,14 @@ Every function, table engine and table function of the pinned chDB (chDB 26.9.0,
 | `getOSKernelVersion` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
 | `getServerPort` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
 | `getServerSetting` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
-| `globalIn` | profile | mined profile | signoz |
+| `globalIn` | profile | mined profile, Tier 0 | signoz |
 | `greatCircleAngle` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `greatCircleDistance` | refused | Tier 2: geo functions (§75 §7.5) |  |
-| `greater` | profile | mined profile | langfuse, openpanel, signoz |
-| `greaterOrEquals` | profile | mined profile | langfuse, openpanel, signoz |
-| `greatest` | profile | mined profile | langfuse |
-| `groupArray` (aggregate) | profile | mined profile | langfuse, openpanel |
-| `groupUniqArray` (aggregate) | profile | mined profile | langfuse, openpanel |
+| `greater` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `greaterOrEquals` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `greatest` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, plausible |
+| `groupArray` (aggregate) | profile | mined profile, Tier 0 | langfuse, openpanel, umami |
+| `groupUniqArray` (aggregate) | profile | mined profile, Tier 0 | langfuse, openpanel |
 | `h3CellAreaM2` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `h3CellAreaRads2` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `h3Distance` | refused | Tier 2: geo functions (§75 §7.5) |  |
@@ -213,42 +228,48 @@ Every function, table engine and table function of the pinned chDB (chDB 26.9.0,
 | `h3ToString` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `h3UnidirectionalEdgeIsValid` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `h3kRing` | refused | Tier 2: geo functions (§75 §7.5) |  |
-| `has` | profile | mined profile | langfuse |
-| `hasAll` | profile | mined profile | langfuse |
+| `has` | profile | mined profile, Tier 0 | langfuse, plausible |
+| `hasAll` | profile | mined profile, Tier 0 | langfuse |
+| `hasAllToken` | profile | alias of `hasAllTokens`: mined profile, Tier 1 |  |
+| `hasAllTokens` | profile | mined profile, Tier 1 | hyperdx |
 | `hasColumnInTable` | disabled | reads a file, another server, the process's memory or the request's credentials (D1558; the House's deny list) |  |
-| `if` | profile | mined profile | langfuse, openpanel, signoz |
-| `ifNull` | profile | mined profile | langfuse |
-| `in` | profile | mined profile | langfuse, openpanel, signoz |
-| `indexOf` | profile | mined profile | langfuse |
-| `instr` | profile | alias of `positionCaseInsensitive`: mined profile |  |
-| `intDiv` | profile | mined profile | signoz |
-| `isNaN` | profile | mined profile | openpanel, signoz |
-| `isNotNull` | profile | mined profile | langfuse, openpanel, signoz |
-| `isNull` | profile | mined profile | langfuse |
-| `lagInFrame` (aggregate) | profile | mined profile | signoz |
-| `last_value` (aggregate) | profile | alias of `anyLast`: mined profile |  |
-| `lcase` | profile | alias of `lower`: mined profile |  |
-| `least` | profile | mined profile | langfuse |
-| `leftUTF8` | profile | mined profile | langfuse |
-| `length` | profile | mined profile | langfuse, openpanel |
-| `lengthUTF8` | profile | mined profile | langfuse |
-| `less` | profile | mined profile | langfuse, openpanel, signoz |
-| `lessOrEquals` | profile | mined profile | langfuse, openpanel, signoz |
-| `like` | profile | mined profile | langfuse, signoz |
-| `localtimestamp` | profile | alias of `now`: mined profile |  |
+| `hasToken` | profile | mined profile, Tier 1 | hyperdx |
+| `if` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `ifNotFinite` | profile | mined profile, Tier 1 | plausible |
+| `ifNull` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, umami |
+| `ilike` | profile | mined profile, Tier 1 | hyperdx, plausible |
+| `in` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `indexOf` | profile | mined profile, Tier 0 | langfuse, plausible |
+| `instr` | profile | alias of `positionCaseInsensitive`: mined profile, Tier 0 |  |
+| `intDiv` | profile | mined profile, Tier 0 | signoz |
+| `isNaN` | profile | mined profile, Tier 0 | openpanel, signoz |
+| `isNotNull` | profile | mined profile, Tier 0 | hyperdx, langfuse, openpanel, signoz |
+| `isNull` | profile | mined profile, Tier 0 | langfuse |
+| `lagInFrame` (aggregate) | profile | mined profile, Tier 0 | hyperdx, signoz |
+| `last_value` (aggregate) | profile | mined profile, Tier 1 | hyperdx |
+| `lcase` | profile | alias of `lower`: mined profile, Tier 0 |  |
+| `least` | profile | mined profile, Tier 0 | langfuse |
+| `left` | profile | mined profile, Tier 1 | umami |
+| `leftUTF8` | profile | mined profile, Tier 0 | langfuse |
+| `length` | profile | mined profile, Tier 0 | hyperdx, langfuse, openpanel, umami |
+| `lengthUTF8` | profile | mined profile, Tier 0 | langfuse |
+| `less` | profile | mined profile, Tier 0 | hyperdx, langfuse, openpanel, signoz |
+| `lessOrEquals` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `like` | profile | mined profile, Tier 0 | langfuse, signoz |
+| `localtimestamp` | profile | alias of `now`: mined profile, Tier 0 |  |
 | `logTrace` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
-| `lower` | profile | mined profile | langfuse, signoz |
-| `lowerUTF8` | profile | mined profile | langfuse |
-| `map` | profile | mined profile | langfuse, signoz |
-| `mapContains` | profile | mined profile | signoz |
-| `mapFilter` | profile | mined profile | langfuse |
-| `mapFromArrays` | profile | mined profile | langfuse |
-| `mapKeys` | profile | mined profile | langfuse, openpanel, signoz |
-| `mapValues` | profile | mined profile | langfuse, openpanel, signoz |
-| `match` | profile | mined profile | signoz |
-| `max` (aggregate) | profile | mined profile | langfuse, openpanel, signoz |
-| `max_by` (aggregate) | profile | alias of `argMax`: mined profile |  |
-| `median` (aggregate) | profile | alias of `quantile`: mined profile |  |
+| `lower` | profile | mined profile, Tier 0 | hyperdx, langfuse, plausible, signoz, umami |
+| `lowerUTF8` | profile | mined profile, Tier 0 | langfuse, openlit |
+| `map` | profile | mined profile, Tier 0 | langfuse, openlit, signoz |
+| `mapContains` | profile | mined profile, Tier 0 | signoz |
+| `mapFilter` | profile | mined profile, Tier 0 | langfuse |
+| `mapFromArrays` | profile | mined profile, Tier 0 | langfuse |
+| `mapKeys` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, signoz |
+| `mapValues` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, signoz |
+| `match` | profile | mined profile, Tier 0 | openlit, plausible, signoz |
+| `max` (aggregate) | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `max_by` (aggregate) | profile | alias of `argMax`: mined profile, Tier 0 |  |
+| `median` (aggregate) | profile | alias of `quantile`: mined profile, Tier 0 |  |
 | `medianBFloat16` (aggregate) | profile | alias of `quantileBFloat16`: Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `medianBFloat16Weighted` (aggregate) | profile | alias of `quantileBFloat16Weighted`: Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `medianDD` (aggregate) | profile | alias of `quantileDD`: Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
@@ -264,23 +285,27 @@ Every function, table engine and table function of the pinned chDB (chDB 26.9.0,
 | `medianTDigestWeighted` (aggregate) | profile | alias of `quantileTDigestWeighted`: Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `medianTiming` (aggregate) | profile | alias of `quantileTiming`: Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `medianTimingWeighted` (aggregate) | profile | alias of `quantileTimingWeighted`: Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
-| `min` (aggregate) | profile | mined profile | langfuse, openpanel, signoz |
-| `min_by` (aggregate) | profile | alias of `argMin`: Tier 0 (§75 §7.3; windowFunnel for OpenPanel) |  |
-| `minus` | profile | mined profile | langfuse, openpanel, signoz |
-| `multiIf` | profile | mined profile | langfuse, openpanel, signoz |
-| `multiply` | profile | mined profile | langfuse, openpanel, signoz |
+| `min` (aggregate) | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `min_by` (aggregate) | profile | alias of `argMin`: mined profile, Tier 1 |  |
+| `minus` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, signoz, umami |
+| `multiIf` | profile | mined profile, Tier 0 | hyperdx, langfuse, openpanel, plausible, signoz, umami |
+| `multiMatchAllIndices` | profile | mined profile, Tier 1 | plausible |
+| `multiSearchAny` | profile | mined profile, Tier 1 | plausible, umami |
+| `multiply` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
 | `naiveBayesClassifier` | disabled | reads a file, another server, the process's memory or the request's credentials (D1558; the House's deny list) |  |
-| `negate` | profile | mined profile | langfuse |
-| `not` | profile | mined profile | langfuse |
-| `notEmpty` | profile | mined profile | langfuse |
-| `notEquals` | profile | mined profile | langfuse, openpanel, signoz |
-| `notIn` | profile | mined profile | langfuse, openpanel, signoz |
-| `notLike` | profile | mined profile | signoz |
-| `now` | profile | mined profile | langfuse, openpanel, signoz |
-| `now64` | profile | mined profile | signoz |
-| `nullIf` | profile | mined profile | langfuse, openpanel |
-| `or` | profile | mined profile | langfuse, openpanel, signoz |
-| `plus` | profile | mined profile | langfuse, openpanel, signoz |
+| `negate` | profile | mined profile, Tier 0 | langfuse |
+| `not` | profile | mined profile, Tier 0 | langfuse, openlit, plausible |
+| `notEmpty` | profile | mined profile, Tier 0 | langfuse, openlit |
+| `notEquals` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `notILike` | profile | mined profile, Tier 1 | hyperdx |
+| `notIn` | profile | mined profile, Tier 0 | langfuse, openlit, openpanel, signoz, umami |
+| `notLike` | profile | mined profile, Tier 0 | signoz |
+| `now` | profile | mined profile, Tier 0 | langfuse, openlit, openpanel, signoz |
+| `now64` | profile | mined profile, Tier 0 | signoz, umami |
+| `nullIf` | profile | mined profile, Tier 0 | langfuse, openlit, openpanel, umami |
+| `or` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `parseDateTimeBestEffort` | profile | mined profile, Tier 1 | openlit, umami |
+| `plus` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
 | `pointInEllipses` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `pointInPolygon` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `polygonAreaCartesian` | refused | Tier 2: geo functions (§75 §7.5) |  |
@@ -301,8 +326,9 @@ Every function, table engine and table function of the pinned chDB (chDB 26.9.0,
 | `polygonsUnionSpherical` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `polygonsWithinCartesian` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `polygonsWithinSpherical` | refused | Tier 2: geo functions (§75 §7.5) |  |
-| `positionCaseInsensitive` | profile | mined profile | langfuse |
-| `quantile` (aggregate) | profile | mined profile | langfuse, signoz |
+| `position` | profile | mined profile, Tier 1 | plausible, umami |
+| `positionCaseInsensitive` | profile | mined profile, Tier 0 | langfuse, umami |
+| `quantile` (aggregate) | profile | mined profile, Tier 0 | hyperdx, langfuse, signoz, umami |
 | `quantileBFloat16` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `quantileBFloat16Weighted` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `quantileDD` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
@@ -321,15 +347,15 @@ Every function, table engine and table function of the pinned chDB (chDB 26.9.0,
 | `quantileTDigestWeighted` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `quantileTiming` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `quantileTimingWeighted` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
-| `quantiles` (aggregate) | profile | mined profile | signoz |
+| `quantiles` (aggregate) | profile | mined profile, Tier 0 | signoz |
 | `quantilesBFloat16` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `quantilesBFloat16Weighted` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
-| `quantilesDD` (aggregate) | profile | mined profile | signoz |
+| `quantilesDD` (aggregate) | profile | mined profile, Tier 0 | signoz |
 | `quantilesDeterministic` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `quantilesExact` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `quantilesExactExclusive` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `quantilesExactHigh` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
-| `quantilesExactInclusive` (aggregate) | profile | mined profile | openpanel |
+| `quantilesExactInclusive` (aggregate) | profile | mined profile, Tier 0 | openpanel |
 | `quantilesExactLow` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `quantilesExactWeighted` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `quantilesExactWeightedInterpolated` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
@@ -340,9 +366,9 @@ Every function, table engine and table function of the pinned chDB (chDB 26.9.0,
 | `quantilesTDigestWeighted` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `quantilesTiming` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `quantilesTimingWeighted` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
-| `rand` | profile | mined profile | signoz |
-| `rand32` | profile | alias of `rand`: mined profile |  |
-| `range` | profile | mined profile | openpanel |
+| `rand` | profile | mined profile, Tier 0 | signoz |
+| `rand32` | profile | alias of `rand`: mined profile, Tier 0 |  |
+| `range` | profile | mined profile, Tier 0 | openpanel |
 | `readWKB` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `readWKBLineString` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `readWKBMultiLineString` | refused | Tier 2: geo functions (§75 §7.5) |  |
@@ -360,71 +386,95 @@ Every function, table engine and table function of the pinned chDB (chDB 26.9.0,
 | `readWKTRing` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `readWkb` | refused | alias of `readWKB`: Tier 2: geo functions (§75 §7.5) |  |
 | `readWkt` | refused | alias of `readWKT`: Tier 2: geo functions (§75 §7.5) |  |
+| `replace` | profile | mined profile, Tier 1 | umami |
+| `replaceAll` | profile | mined profile, Tier 1 | umami |
+| `replaceRegexpAll` | profile | mined profile, Tier 1 | openlit |
+| `replaceRegexpOne` | profile | mined profile, Tier 1 | openlit |
 | `retention` (aggregate) | profile | Tier 1 (§75 §7.4) |  |
-| `round` | profile | mined profile | langfuse, openpanel |
-| `row_number` (aggregate) | profile | mined profile | langfuse, signoz |
+| `round` | profile | mined profile, Tier 0 | hyperdx, langfuse, openpanel, plausible |
+| `row_number` (aggregate) | profile | mined profile, Tier 0 | langfuse, signoz, umami |
 | `sequenceCount` (aggregate) | profile | Tier 1 (§75 §7.4) |  |
 | `sequenceMatch` (aggregate) | profile | Tier 1 (§75 §7.4) |  |
 | `serverUUID` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
 | `showCertificate` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
-| `simpleJSONExtractString` | profile | mined profile | signoz |
-| `startsWith` | profile | mined profile | langfuse |
+| `simpleJSONExtractString` | profile | mined profile, Tier 0 | signoz |
+| `startsWith` | profile | mined profile, Tier 0 | langfuse, openlit |
 | `stochasticLinearRegression` (aggregate) | refused | Tier 2: ML functions (§75 §7.5) |  |
 | `stochasticLogisticRegression` (aggregate) | refused | Tier 2: ML functions (§75 §7.5) |  |
-| `subtractHours` | profile | mined profile | langfuse |
-| `sum` (aggregate) | profile | mined profile | langfuse, openpanel, signoz |
+| `subtractHours` | profile | mined profile, Tier 0 | langfuse |
+| `sum` (aggregate) | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
 | `svg` | refused | Tier 2: geo functions (§75 §7.5) |  |
 | `tcpPort` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
-| `time_bucket` | profile | alias of `toStartOfInterval`: mined profile |  |
-| `timestampDiff` | profile | alias of `dateDiff`: mined profile |  |
-| `timestamp_diff` | profile | alias of `dateDiff`: mined profile |  |
-| `toBool` | profile | mined profile | langfuse, openpanel |
-| `toDate` | profile | mined profile | langfuse, openpanel, signoz |
-| `toDateTime` | profile | mined profile | langfuse, openpanel, signoz |
-| `toDateTime64` | profile | mined profile | langfuse, openpanel |
-| `toDayOfMonth` | profile | mined profile | signoz |
-| `toFloat64` | profile | mined profile | signoz |
-| `toInt64` | profile | mined profile | langfuse |
-| `toIntervalDay` | profile | mined profile | langfuse, openpanel, signoz |
-| `toIntervalHour` | profile | mined profile | langfuse, openpanel, signoz |
-| `toIntervalMinute` | profile | mined profile | langfuse, openpanel, signoz |
-| `toIntervalMonth` | profile | mined profile | openpanel, signoz |
-| `toIntervalSecond` | profile | mined profile | langfuse, signoz |
-| `toIntervalYear` | profile | mined profile | signoz |
-| `toNullable` | profile | mined profile | langfuse |
-| `toStartOfDay` | profile | mined profile | openpanel |
-| `toStartOfHour` | profile | mined profile | langfuse, openpanel, signoz |
-| `toStartOfInterval` | profile | mined profile | langfuse, signoz |
-| `toStartOfMinute` | profile | mined profile | langfuse, openpanel, signoz |
-| `toString` | profile | mined profile | langfuse, signoz |
-| `toUInt64` | profile | mined profile | langfuse, openpanel, signoz |
-| `toUnixTimestamp` | profile | mined profile | signoz |
-| `toUnixTimestamp64Milli` | profile | mined profile | openpanel |
-| `toYYYYMM` | profile | mined profile | langfuse, openpanel, signoz |
-| `toYYYYMMDD` | profile | mined profile | openpanel |
-| `tuple` | profile | mined profile | langfuse, openpanel, signoz |
-| `tupleElement` | profile | mined profile | langfuse, openpanel |
-| `uniq` (aggregate) | profile | mined profile | langfuse, openpanel, signoz |
+| `timeDiff` | profile | mined profile, Tier 1 | plausible |
+| `timeSlots` | profile | mined profile, Tier 1 | plausible |
+| `time_bucket` | profile | alias of `toStartOfInterval`: mined profile, Tier 0 |  |
+| `timestampDiff` | profile | alias of `dateDiff`: mined profile, Tier 0 |  |
+| `timestamp_diff` | profile | alias of `dateDiff`: mined profile, Tier 0 |  |
+| `toBool` | profile | mined profile, Tier 0 | langfuse, openpanel |
+| `toDate` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `toDateTime` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, signoz, umami |
+| `toDateTime64` | profile | mined profile, Tier 0 | langfuse, openpanel |
+| `toDayOfMonth` | profile | mined profile, Tier 0 | signoz |
+| `toDecimal64` | profile | mined profile, Tier 1 | umami |
+| `toFloat64` | profile | mined profile, Tier 0 | signoz |
+| `toFloat64OrDefault` | profile | mined profile, Tier 1 | hyperdx |
+| `toFloat64OrZero` | profile | mined profile, Tier 1 | openlit |
+| `toInt32` | profile | mined profile, Tier 1 | plausible, umami |
+| `toInt32OrZero` | profile | mined profile, Tier 1 | openlit |
+| `toInt64` | profile | mined profile, Tier 0 | hyperdx, langfuse |
+| `toInt64OrZero` | profile | mined profile, Tier 1 | openlit |
+| `toIntervalDay` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, signoz |
+| `toIntervalHour` | profile | mined profile, Tier 0 | langfuse, openlit, openpanel, signoz |
+| `toIntervalMinute` | profile | mined profile, Tier 0 | hyperdx, langfuse, openpanel, signoz, umami |
+| `toIntervalMonth` | profile | mined profile, Tier 0 | openpanel, signoz |
+| `toIntervalSecond` | profile | mined profile, Tier 0 | langfuse, signoz |
+| `toIntervalYear` | profile | mined profile, Tier 0 | signoz |
+| `toNullable` | profile | mined profile, Tier 0 | hyperdx, langfuse |
+| `toStartOfDay` | profile | mined profile, Tier 0 | openpanel, umami |
+| `toStartOfFiveMinute` | profile | alias of `toStartOfFiveMinutes`: mined profile, Tier 1 |  |
+| `toStartOfFiveMinutes` | profile | mined profile, Tier 1 | hyperdx |
+| `toStartOfHour` | profile | mined profile, Tier 0 | langfuse, openpanel, plausible, signoz, umami |
+| `toStartOfInterval` | profile | mined profile, Tier 0 | hyperdx, langfuse, signoz |
+| `toStartOfMinute` | profile | mined profile, Tier 0 | langfuse, openpanel, plausible, signoz |
+| `toStartOfMonth` | profile | mined profile, Tier 1 | plausible |
+| `toString` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, signoz, umami |
+| `toTimeZone` | profile | mined profile, Tier 1 | plausible |
+| `toTimezone` | profile | mined profile, Tier 1 | umami |
+| `toUInt32` | profile | mined profile, Tier 1 | plausible |
+| `toUInt64` | profile | mined profile, Tier 0 | langfuse, openpanel, plausible, signoz |
+| `toUInt8` | profile | mined profile, Tier 1 | plausible, umami |
+| `toUnixTimestamp` | profile | mined profile, Tier 0 | signoz |
+| `toUnixTimestamp64Milli` | profile | mined profile, Tier 0 | openpanel |
+| `toUnixTimestamp64Nano` | profile | mined profile, Tier 1 | hyperdx, openlit |
+| `toYYYYMM` | profile | mined profile, Tier 0 | langfuse, openpanel, plausible, signoz, umami |
+| `toYYYYMMDD` | profile | mined profile, Tier 0 | openpanel |
+| `transform` | profile | mined profile, Tier 1 | plausible |
+| `trim` | profile | mined profile, Tier 1 | openlit |
+| `tuple` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami |
+| `tupleElement` | profile | mined profile, Tier 0 | hyperdx, langfuse, openpanel, plausible |
+| `ucase` | profile | alias of `upper`: mined profile, Tier 1 |  |
+| `uniq` (aggregate) | profile | mined profile, Tier 0 | langfuse, openpanel, plausible, signoz, umami |
 | `uniqCombined` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `uniqCombined64` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
-| `uniqExact` (aggregate) | profile | mined profile | langfuse, openpanel |
+| `uniqExact` (aggregate) | profile | mined profile, Tier 0 | langfuse, openlit, openpanel, umami |
 | `uniqHLL12` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
 | `uniqUpTo` (aggregate) | profile | Tier 0: `uniq*`, `quantile*` (§75 §7.3) |  |
-| `unnest` | profile | alias of `arrayJoin`: mined profile |  |
+| `unnest` | profile | alias of `arrayJoin`: mined profile, Tier 0 |  |
+| `upper` | profile | mined profile, Tier 1 | umami |
 | `uptime` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
-| `version` | profile | mined profile | langfuse |
-| `visitParamExtractString` | profile | alias of `simpleJSONExtractString`: mined profile |  |
-| `windowFunnel` (aggregate) | profile | mined profile | openpanel |
-| `xxHash32` | profile | mined profile | langfuse |
+| `version` | profile | mined profile, Tier 0 | hyperdx, langfuse, plausible |
+| `visitParamExtractString` | profile | alias of `simpleJSONExtractString`: mined profile, Tier 0 |  |
+| `windowFunnel` (aggregate) | profile | mined profile, Tier 0 | openpanel |
+| `xxHash32` | profile | mined profile, Tier 0 | langfuse |
 | `zookeeperSessionUptime` | disabled | describes the host, with no Loams value (D1558; the House's host functions) |  |
 
-Unclassified (1489): `AIClassify`, `AIEmbed`, `AIExtract`, `AIFilter`, `AIGenerate`, `AIRedact`, `AISimilarity`, `AITranslate`, `BIT_AND`, `BIT_OR`, `BIT_XOR`, `COVAR_POP`, `COVAR_SAMP`, `CRC32`, `CRC32IEEE`, `CRC64`, `DATE`, `DATE_FORMAT`, `DATE_TRUNC`, `DAYOFWEEK`, `DAYOFYEAR`, `FORMAT_BYTES`, `FQDN`, `FROM_BASE64`, `FROM_DAYS`, `FROM_UNIXTIME`, `HMAC`, `HOUR`, `INET6_ATON`, `INET6_NTOA`, `INET_ATON`, `INET_NTOA`, `IPv4CIDRToRange`, `IPv4NumToString`, `IPv4NumToStringClassC`, `IPv4StringToNum`, `IPv4StringToNumOrDefault`, `IPv4StringToNumOrNull`, `IPv4ToIPv6`, `IPv6CIDRToRange`, `IPv6NumToString`, `IPv6StringToNum`, `IPv6StringToNumOrDefault`, `IPv6StringToNumOrNull`, `JSONAllPathsWithTypes`, `JSONAllValues`, `JSONArrayLength`, `JSONDynamicPaths`, `JSONDynamicPathsWithTypes`, `JSONExtract`, `JSONExtractArrayRaw`, `JSONExtractArrayRawCaseInsensitive`, `JSONExtractBool`, `JSONExtractBoolCaseInsensitive`, `JSONExtractCaseInsensitive`, `JSONExtractFloat`, `JSONExtractFloatCaseInsensitive`, `JSONExtractInt`, `JSONExtractIntCaseInsensitive`, `JSONExtractKeys`, `JSONExtractKeysAndValues`, `JSONExtractKeysAndValuesCaseInsensitive`, `JSONExtractKeysAndValuesRaw`, `JSONExtractKeysAndValuesRawCaseInsensitive`, `JSONExtractKeysCaseInsensitive`, `JSONExtractRaw`, `JSONExtractRawCaseInsensitive`, `JSONExtractStringCaseInsensitive`, `JSONExtractUInt`, `JSONExtractUIntCaseInsensitive`, `JSONHas`, `JSONKey`, `JSONLength`, `JSONMergePatch`, `JSONSharedDataPaths`, `JSONSharedDataPathsWithTypes`, `JSONType`, `JSON_ARRAY_LENGTH`, `JSON_EXISTS`, `JSON_QUERY`, `JSON_VALUE`, `L1Distance`, `L1Norm`, `L1Normalize`, `L2Distance`, `L2DistanceTransposed`, `L2DistanceTransposedQuantized`, `L2Norm`, `L2Normalize`, `L2SquaredDistance`, `L2SquaredNorm`, `LAST_DAY`, `LinfDistance`, `LinfNorm`, `LinfNormalize`, `LpDistance`, `LpNorm`, `LpNormalize`, `MACNumToString`, `MACStringToNum`, `MACStringToOUI`, `MD4`, `MD5`, `MGRSToGeo`, `MICROSECOND`, `MILLISECOND`, `MINUTE`, `MONTH`, `MVTBoundingBox`, `MVTBoundingBoxMercator`, `MVTEncode`, `MVTEncodeGeom`, `NANOSECOND`, `NATURAL_SORT_KEY`, `QUARTER`, `REGEXP_EXTRACT`, `REGEXP_REPLACE`, `REGEXP_SUBSTR`, `RIPEMD160`, `SECOND`, `SHA1`, `SHA224`, `SHA256`, `SHA384`, `SHA512`, `SHA512_256`, `STD`, `STDDEV`, `STDDEV_POP`, `STDDEV_SAMP`, `ST_AsMVT`, `ST_AsMVTGeom`, `SUBSTRING_INDEX`, `TO_BASE64`, `TO_DAYS`, `TO_UNIXTIME`, `URLHash`, `URLHierarchy`, `URLPathHierarchy`, `UTCTimestamp`, `UTC_timestamp`, `UTMToGeo`, `UUIDNumToString`, `UUIDStringToNum`, `UUIDToNum`, `UUIDv7ToDateTime`, `VAR_POP`, `VAR_SAMP`, `YEAR`, `YYYYMMDDToDate`, `YYYYMMDDToDate32`, `YYYYMMDDhhmmssToDateTime`, `YYYYMMDDhhmmssToDateTime64`, `_CAST`, `__actionName`, `__applyFilter`, `__bitBoolMaskAnd`, `__bitBoolMaskOr`, `__bitSwapLastTwo`, `__bitWrapperFunc`, `__getScalar`, `__groupingForCube`, `__groupingForGroupingSets`, `__groupingForRollup`, `__groupingOrdinary`, `__patchPartitionID`, `__scalarSubqueryResult`, `__toYearCalendarOnly`, `abs`, `accurateCast`, `accurateCastOrDefault`, `accurateCastOrNull`, `acos`, `acosh`, `addDate`, `addDays`, `addHours`, `addInterval`, `addMicroseconds`, `addMilliseconds`, `addMinutes`, `addMonths`, `addNanoseconds`, `addQuarters`, `addSeconds`, `addTupleOfIntervals`, `addWeeks`, `addYears`, `aes_decrypt_mysql`, `aes_encrypt_mysql`, `age`, `aggThrow`, `aiClassify`, `aiEmbed`, `aiExtract`, `aiFilter`, `aiGenerate`, `aiRedact`, `aiSimilarity`, `aiTranslate`, `alphaTokens`, `analysisOfVariance`, `anova`, `anyHeavy`, `anyLastRespectNulls`, `anyLast_respect_nulls`, `anyRespectNulls`, `anyValueRespectNulls`, `any_respect_nulls`, `any_value_respect_nulls`, `appendTrailingCharIfAbsent`, `approx_top_count`, `approx_top_k`, `approx_top_sum`, `areaCartesian`, `areaSpherical`, `argAndMax`, `argAndMin`, `arrayAUC`, `arrayAUCPR`, `arrayAll`, `arrayAutocorrelation`, `arrayAvg`, `arrayBottomK`, `arrayCompact`, `arrayCount`, `arrayCumSum`, `arrayCumSumNonNegative`, `arrayDifference`, `arrayDotProduct`, `arrayElementOrNull`, `arrayEnumerateDense`, `arrayEnumerateDenseRanked`, `arrayEnumerateUniqRanked`, `arrayExcept`, `arrayFill`, `arrayFirst`, `arrayFirstOrNull`, `arrayFlatten`, `arrayFlattenedLength`, `arrayFold`, `arrayIntersect`, `arrayJaccardIndex`, `arrayLast`, `arrayLastIndex`, `arrayLastOrNull`, `arrayLevenshteinDistance`, `arrayLevenshteinDistanceWeighted`, `arrayMax`, `arrayMin`, `arrayNormalizedGini`, `arrayPRAUC`, `arrayPartialReverseSort`, `arrayPartialShuffle`, `arrayPartialSort`, `arrayPopBack`, `arrayPopFront`, `arrayProduct`, `arrayPushBack`, `arrayPushFront`, `arrayROCAUC`, `arrayRandomSample`, `arrayReduce`, `arrayReduceInRanges`, `arrayRemove`, `arrayResize`, `arrayReverseFill`, `arrayReverseSort`, `arrayReverseSplit`, `arrayRotateLeft`, `arrayRotateRight`, `arrayShiftLeft`, `arrayShiftRight`, `arrayShingles`, `arrayShuffle`, `arraySimilarity`, `arraySplit`, `arraySymmetricDifference`, `arrayTopK`, `arrayTranspose`, `arrayUnion`, `arrayUniq`, `arrayWithConstant`, `arrayZipUnaligned`, `array_concat_agg`, `array_remove`, `ascii`, `asin`, `asinh`, `assignCentroid`, `assumeNotNull`, `atan`, `atan2`, `atanh`, `authUser`, `authenticatedUser`, `avg2`, `avgWeighted`, `bar`, `base32Decode`, `base32Encode`, `base58Decode`, `base58Encode`, `base64Decode`, `base64Encode`, `base64URLDecode`, `base64URLEncode`, `basename`, `bin`, `bitCount`, `bitHammingDistance`, `bitNot`, `bitOr`, `bitPositionsToArray`, `bitRotateLeft`, `bitRotateRight`, `bitShiftLeft`, `bitShiftRight`, `bitSlice`, `bitTest`, `bitTestAll`, `bitTestAny`, `bitXor`, `bitmapAnd`, `bitmapAndCardinality`, `bitmapAndnot`, `bitmapAndnotCardinality`, `bitmapBuild`, `bitmapCardinality`, `bitmapContains`, `bitmapHasAll`, `bitmapHasAny`, `bitmapMax`, `bitmapMin`, `bitmapOr`, `bitmapOrCardinality`, `bitmapSubsetInRange`, `bitmapSubsetLimit`, `bitmapToArray`, `bitmapTransform`, `bitmapXor`, `bitmapXorCardinality`, `bitmaskToArray`, `bitmaskToList`, `blockNumber`, `blockSerializedSize`, `blockSize`, `boundingRatio`, `buildId`, `byteHammingDistance`, `byteSize`, `byteSlice`, `byteSwap`, `caseFoldUTF8`, `caseWithExpr`, `caseWithExpression`, `categoricalInformationValue`, `cbrt`, `ceil`, `ceiling`, `changeDay`, `changeHour`, `changeMinute`, `changeMonth`, `changeSecond`, `changeYear`, `char`, `chdb`, `clamp`, `colorOKLABToSRGB`, `colorOKLCHToSRGB`, `colorSRGBToOKLAB`, `colorSRGBToOKLCH`, `compareSubstrings`, `concatAssumeInjective`, `concatWithSeparator`, `concatWithSeparatorAssumeInjective`, `concat_ws`, `connectionId`, `connection_id`, `contingency`, `conv`, `convertCharset`, `corr`, `corrMatrix`, `corrStable`, `cos`, `cosh`, `cosineDistance`, `cosineDistanceTransposed`, `cosineDistanceTransposedQuantized`, `countDigits`, `countEqual`, `countMatches`, `countMatchesCaseInsensitive`, `countSubstrings`, `countSubstringsCaseInsensitive`, `countSubstringsCaseInsensitiveUTF8`, `covarPop`, `covarPopMatrix`, `covarPopStable`, `covarSamp`, `covarSampMatrix`, `covarSampStable`, `cramersV`, `cramersVBiasCorrected`, `cume_dist`, `curdate`, `currentHandler`, `currentQueryID`, `currentRequestURL`, `currentSchemas`, `currentUser`, `current_date`, `current_query_id`, `current_schemas`, `current_user`, `cutFragment`, `cutIPv6`, `cutQueryString`, `cutQueryStringAndFragment`, `cutToFirstSignificantSubdomain`, `cutToFirstSignificantSubdomainCustom`, `cutToFirstSignificantSubdomainCustomRFC`, `cutToFirstSignificantSubdomainCustomWithWWW`, `cutToFirstSignificantSubdomainCustomWithWWWRFC`, `cutToFirstSignificantSubdomainRFC`, `cutToFirstSignificantSubdomainWithWWW`, `cutToFirstSignificantSubdomainWithWWWRFC`, `cutURLParameter`, `cutWWW`, `damerauLevenshteinDistance`, `dateName`, `dateTime64ToSnowflakeID`, `dateTimeToSnowflakeID`, `dateTimeToUUIDv7`, `dateTrunc`, `decodeHTMLComponent`, `decodeURLComponent`, `decodeURLFormComponent`, `decodeXMLComponent`, `decrypt`, `defaultValueOfArgumentType`, `defaultValueOfTypeName`, `degrees`, `deltaSum`, `deltaSumTimestamp`, `denseRank`, `dense_rank`, `dequantizeInt8ToBFloat16`, `digits`, `displayName`, `distanceCosine`, `distanceCosineTransposed`, `distanceL1`, `distanceL2`, `distanceL2Squared`, `distanceL2Transposed`, `distanceLinf`, `distanceLp`, `distinctDynamicTypes`, `distinctJSONPaths`, `distinctJSONPathsAndTypes`, `divideDecimal`, `divideOrNull`, `domain`, `domainRFC`, `domainWithoutWWW`, `domainWithoutWWWRFC`, `dotProduct`, `dotProductTransposed`, `dotProductTransposedQuantized`, `dumpColumnStructure`, `dynamicElement`, `dynamicType`, `e`, `editDistance`, `editDistanceUTF8`, `emptyArrayDate`, `emptyArrayDateTime`, `emptyArrayFloat32`, `emptyArrayFloat64`, `emptyArrayInt16`, `emptyArrayInt32`, `emptyArrayInt64`, `emptyArrayInt8`, `emptyArrayString`, `emptyArrayToSingle`, `emptyArrayUInt16`, `emptyArrayUInt32`, `emptyArrayUInt64`, `emptyArrayUInt8`, `encodeURLComponent`, `encodeURLFormComponent`, `encodeXMLComponent`, `encrypt`, `endsWith`, `endsWithCaseInsensitive`, `endsWithCaseInsensitiveUTF8`, `endsWithUTF8`, `entropy`, `erf`, `erfc`, `errorCodeToName`, `estimateCompressionRatio`, `evalMLMethod`, `exp`, `exp10`, `exp2`, `exponentialMovingAverage`, `exponentialTimeDecayedAvg`, `exponentialTimeDecayedCount`, `exponentialTimeDecayedMax`, `exponentialTimeDecayedSum`, `extract`, `extractAll`, `extractAllGroups`, `extractAllGroupsHorizontal`, `extractAllGroupsVertical`, `extractGroups`, `extractKeyValuePairs`, `extractKeyValuePairsWithEscaping`, `extractTextFromHTML`, `extractURLParameter`, `extractURLParameterNames`, `extractURLParameters`, `factorial`, `farmFingerprint64`, `farmHash64`, `finalizeAggregation`, `financialInternalRateOfReturn`, `financialInternalRateOfReturnExtended`, `financialNetPresentValue`, `financialNetPresentValueExtended`, `firstLine`, `firstNonDefault`, `firstSignificantSubdomain`, `firstSignificantSubdomainCustom`, `firstSignificantSubdomainCustomRFC`, `firstSignificantSubdomainRFC`, `firstValueRespectNulls`, `first_value_respect_nulls`, `flameGraph`, `flatten`, `flattenTuple`, `flipCoordinates`, `format`, `formatDateTime`, `formatDateTimeInJodaSyntax`, `formatQuery`, `formatQueryFromJSON`, `formatQueryOrNull`, `formatQuerySingleLine`, `formatQuerySingleLineOrNull`, `formatReadableDecimalSize`, `formatReadableQuantity`, `formatReadableSize`, `formatReadableTimeDelta`, `formatRow`, `formatRowNoNewline`, `fragment`, `fromDaysSinceYearZero`, `fromDaysSinceYearZero32`, `fromModifiedJulianDay`, `fromModifiedJulianDayOrNull`, `fromUTCTimestamp`, `fromUnixTimestamp`, `fromUnixTimestamp64Micro`, `fromUnixTimestamp64Milli`, `fromUnixTimestamp64Second`, `fromUnixTimestampInJodaSyntax`, `from_utc_timestamp`, `fullHostName`, `fuzzBits`, `fuzzQuery`, `gccMurmurHash`, `gcd`, `generateRandomStructure`, `generateSerialID`, `generateSnowflakeID`, `generateUUIDv7`, `getMaxTableNameLengthForDatabase`, `getSetting`, `getSettingOrDefault`, `getSizeOfEnumType`, `getSubcolumn`, `getTypeSerializationStreams`, `gini`, `globalInIgnoreSet`, `globalNotIn`, `globalNotInIgnoreSet`, `globalNotNullIn`, `globalNotNullInIgnoreSet`, `globalNullIn`, `globalNullInIgnoreSet`, `globalVariable`, `groupArrayInsertAt`, `groupArrayIntersect`, `groupArrayLast`, `groupArrayMovingAvg`, `groupArrayMovingSum`, `groupArraySample`, `groupArraySorted`, `groupBitAnd`, `groupBitOr`, `groupBitXor`, `groupBitmap`, `groupBitmapAnd`, `groupBitmapOr`, `groupBitmapXor`, `groupConcat`, `groupFormat`, `groupNumericIndexedVector`, `group_concat`, `halfMD5`, `hasAllToken`, `hasAllTokens`, `hasAny`, `hasAnyToken`, `hasAnyTokens`, `hasPhrase`, `hasSubsequence`, `hasSubsequenceCaseInsensitive`, `hasSubsequenceCaseInsensitiveUTF8`, `hasSubsequenceUTF8`, `hasSubstr`, `hasThreadFuzzer`, `hasToken`, `hasTokenCaseInsensitive`, `hasTokenCaseInsensitiveOrNull`, `hasTokenOrNull`, `hex`, `hierarchicalKMeans`, `highlight`, `highlightQuery`, `hilbertDecode`, `hilbertEncode`, `histogram`, `hiveHash`, `hop`, `hopEnd`, `hopStart`, `hostName`, `hostname`, `hypot`, `icebergBucket`, `icebergHash`, `icebergTruncate`, `identity`, `ifNotFinite`, `ignore`, `ilike`, `inIgnoreSet`, `indexHint`, `indexOfAssumeSorted`, `initcap`, `initcapUTF8`, `initialQueryID`, `initialQueryStartTime`, `initial_query_id`, `initial_query_start_time`, `initializeAggregation`, `intDivOrNull`, `intDivOrZero`, `intExp10`, `intExp2`, `intHash32`, `intHash64`, `intervalLengthSum`, `isASCII`, `isConstant`, `isDecimalOverflow`, `isDistinctFrom`, `isDynamicElementInSharedData`, `isFinite`, `isIPAddressInRange`, `isIPv4String`, `isIPv6String`, `isInfinite`, `isMergeTreePartCoveredBy`, `isNotDistinctFrom`, `isNullable`, `isPrime`, `isProbablePrime`, `isValidASCII`, `isValidJSON`, `isValidUTF8`, `isZeroOrNull`, `jaroSimilarity`, `jaroWinklerSimilarity`, `javaHash`, `javaHashUTF16LE`, `joinGet`, `joinGetOrNull`, `jsonMergePatch`, `jumpConsistentHash`, `kafkaMurmurHash`, `keccak256`, `kolmogorovSmirnovTest`, `kostikConsistentHash`, `kqlBin`, `kqlBinAt`, `kqlDateTimeBinAt`, `kqlDivide`, `kqlMultiply`, `kqlParameterCast`, `kqlRangeCount`, `kqlToTimespan`, `kurtPop`, `kurtSamp`, `lag`, `largestTriangleThreeBuckets`, `lastValueRespectNulls`, `last_value_respect_nulls`, `lcm`, `lead`, `leadInFrame`, `left`, `leftPad`, `leftPadUTF8`, `levenshteinDistance`, `levenshteinDistanceUTF8`, `lgamma`, `ln`, `localtime`, `locate`, `log`, `log10`, `log1p`, `log2`, `lowCardinalityIndices`, `lowCardinalityKeys`, `lpad`, `ltrim`, `lttb`, `makeDate`, `makeDate32`, `makeDateTime`, `makeDateTime64`, `mannWhitneyUTest`, `mapAdd`, `mapAll`, `mapApply`, `mapConcat`, `mapContainsKey`, `mapContainsKeyLike`, `mapContainsValue`, `mapContainsValueLike`, `mapExists`, `mapExtractKeyLike`, `mapExtractValueLike`, `mapFromString`, `mapPartialReverseSort`, `mapPartialSort`, `mapPopulateSeries`, `mapReverseSort`, `mapSort`, `mapSubtract`, `mapUpdate`, `matchCaseInsensitive`, `matchPhrase`, `materialize`, `max2`, `maxIntersections`, `maxIntersectionsPosition`, `maxMappedArrays`, `meanZTest`, `mergeTreePartInfo`, `mergedJSONPatch`, `metroHash64`, `mid`, `midpoint`, `min2`, `minMappedArrays`, `minSampleSizeContinous`, `minSampleSizeContinuous`, `minSampleSizeConversion`, `mismatches`, `mod`, `modOrNull`, `modulo`, `moduloLegacy`, `moduloOrNull`, `moduloOrZero`, `monthName`, `mortonDecode`, `mortonEncode`, `multiFuzzyMatchAllIndices`, `multiFuzzyMatchAny`, `multiFuzzyMatchAnyIndex`, `multiMatchAllIndices`, `multiMatchAny`, `multiMatchAnyIndex`, `multiSearchAllPositions`, `multiSearchAllPositionsCaseInsensitive`, `multiSearchAllPositionsCaseInsensitiveUTF8`, `multiSearchAllPositionsUTF8`, `multiSearchAny`, `multiSearchAnyCaseInsensitive`, `multiSearchAnyCaseInsensitiveUTF8`, `multiSearchAnyUTF8`, `multiSearchFirstIndex`, `multiSearchFirstIndexCaseInsensitive`, `multiSearchFirstIndexCaseInsensitiveUTF8`, `multiSearchFirstIndexUTF8`, `multiSearchFirstPosition`, `multiSearchFirstPositionCaseInsensitive`, `multiSearchFirstPositionCaseInsensitiveUTF8`, `multiSearchFirstPositionUTF8`, `multiplyDecimal`, `murmurHash2_32`, `murmurHash2_64`, `murmurHash3_128`, `murmurHash3_32`, `murmurHash3_64`, `naiveBayesClassifierWithAllProbs`, `naiveBayesClassifierWithProb`, `naiveBayesNgrams`, `naturalSortKey`, `neighbor`, `nested`, `netloc`, `ngramDistance`, `ngramDistanceCaseInsensitive`, `ngramDistanceCaseInsensitiveUTF8`, `ngramDistanceUTF8`, `ngramMinHash`, `ngramMinHashArg`, `ngramMinHashArgCaseInsensitive`, `ngramMinHashArgCaseInsensitiveUTF8`, `ngramMinHashArgUTF8`, `ngramMinHashCaseInsensitive`, `ngramMinHashCaseInsensitiveUTF8`, `ngramMinHashUTF8`, `ngramSearch`, `ngramSearchCaseInsensitive`, `ngramSearchCaseInsensitiveUTF8`, `ngramSearchUTF8`, `ngramSimHash`, `ngramSimHashCaseInsensitive`, `ngramSimHashCaseInsensitiveUTF8`, `ngramSimHashUTF8`, `ngrams`, `nonNegativeDerivative`, `normL1`, `normL2`, `normL2Squared`, `normLinf`, `normLp`, `normalizeL1`, `normalizeL2`, `normalizeLinf`, `normalizeLp`, `normalizeQuery`, `normalizeQueryKeepNames`, `normalizeUTF8NFC`, `normalizeUTF8NFD`, `normalizeUTF8NFKC`, `normalizeUTF8NFKCCasefold`, `normalizeUTF8NFKD`, `normalizedQueryHash`, `normalizedQueryHashKeepNames`, `notHas`, `notILike`, `notInIgnoreSet`, `notMatch`, `notMatchCaseInsensitive`, `notNullIn`, `notNullInIgnoreSet`, `nothing`, `nothingNull`, `nothingUInt64`, `nowInBlock`, `nowInBlock64`, `nth_value`, `ntile`, `nullIn`, `nullInIgnoreSet`, `numericIndexedVectorAllValueSum`, `numericIndexedVectorBuild`, `numericIndexedVectorCardinality`, `numericIndexedVectorGetValue`, `numericIndexedVectorPointwiseAdd`, `numericIndexedVectorPointwiseDivide`, `numericIndexedVectorPointwiseEqual`, `numericIndexedVectorPointwiseGreater`, `numericIndexedVectorPointwiseGreaterEqual`, `numericIndexedVectorPointwiseLess`, `numericIndexedVectorPointwiseLessEqual`, `numericIndexedVectorPointwiseMultiply`, `numericIndexedVectorPointwiseNotEqual`, `numericIndexedVectorPointwiseSubtract`, `numericIndexedVectorShortDebugString`, `numericIndexedVectorToMap`, `obfuscateQuery`, `obfuscateQueryWithSeed`, `overlay`, `overlayUTF8`, `parseDateTime`, `parseDateTime32BestEffort`, `parseDateTime32BestEffortOrNull`, `parseDateTime32BestEffortOrZero`, `parseDateTime64`, `parseDateTime64BestEffort`, `parseDateTime64BestEffortOrNull`, `parseDateTime64BestEffortOrZero`, `parseDateTime64BestEffortUS`, `parseDateTime64BestEffortUSOrNull`, `parseDateTime64BestEffortUSOrZero`, `parseDateTime64InJodaSyntax`, `parseDateTime64InJodaSyntaxOrNull`, `parseDateTime64InJodaSyntaxOrZero`, `parseDateTime64OrNull`, `parseDateTime64OrZero`, `parseDateTimeBestEffort`, `parseDateTimeBestEffortOrNull`, `parseDateTimeBestEffortOrZero`, `parseDateTimeBestEffortUS`, `parseDateTimeBestEffortUSOrNull`, `parseDateTimeBestEffortUSOrZero`, `parseDateTimeInJodaSyntax`, `parseDateTimeInJodaSyntaxOrNull`, `parseDateTimeInJodaSyntaxOrZero`, `parseDateTimeOrNull`, `parseDateTimeOrZero`, `parseISO8601Duration`, `parseQueryToJSON`, `parseReadableSize`, `parseReadableSizeOrNull`, `parseReadableSizeOrZero`, `parseTimeDelta`, `partitionID`, `partitionId`, `path`, `pathFull`, `percentRank`, `percent_rank`, `perimeterCartesian`, `perimeterSpherical`, `pgGetUserById`, `pgTableIsVisible`, `pg_get_userbyid`, `pg_table_is_visible`, `pi`, `pmod`, `pmodOrNull`, `port`, `portRFC`, `position`, `positionCaseInsensitiveUTF8`, `positionUTF8`, `positiveModulo`, `positiveModuloOrNull`, `positive_modulo`, `positive_modulo_or_null`, `pow`, `power`, `prettyPrintJSON`, `printf`, `proportionsZTest`, `protocol`, `quantizeBFloat16ToInt8`, `queryID`, `queryString`, `queryStringAndFragment`, `query_id`, `radians`, `rand64`, `randBernoulli`, `randBinomial`, `randCanonical`, `randChiSquared`, `randConstant`, `randExponential`, `randFisherF`, `randLogNormal`, `randNegativeBinomial`, `randNormal`, `randPoisson`, `randStudentT`, `randUniform`, `randomFixedString`, `randomHadamardTransform`, `randomPrintableASCII`, `randomString`, `randomStringUTF8`, `rank`, `rankCorr`, `regexpExtract`, `regexpInstr`, `regexpPosition`, `regexpQuoteMeta`, `regexp_instr`, `regionHierarchy`, `regionIn`, `regionToArea`, `regionToCity`, `regionToContinent`, `regionToCountry`, `regionToDistrict`, `regionToName`, `regionToPopulation`, `regionToTopContinent`, `regr_avgx`, `regr_avgy`, `regr_count`, `regr_intercept`, `regr_r2`, `regr_slope`, `regr_sxx`, `regr_sxy`, `regr_syy`, `reinterpret`, `reinterpretAsDate`, `reinterpretAsDateTime`, `reinterpretAsFixedString`, `reinterpretAsFloat32`, `reinterpretAsFloat64`, `reinterpretAsInt128`, `reinterpretAsInt16`, `reinterpretAsInt256`, `reinterpretAsInt32`, `reinterpretAsInt64`, `reinterpretAsInt8`, `reinterpretAsString`, `reinterpretAsUInt128`, `reinterpretAsUInt16`, `reinterpretAsUInt256`, `reinterpretAsUInt32`, `reinterpretAsUInt64`, `reinterpretAsUInt8`, `reinterpretAsUUID`, `removeAccentsUTF8`, `removeDiacriticsUTF8`, `repeat`, `replace`, `replaceAll`, `replaceOne`, `replaceRegexpAll`, `replaceRegexpOne`, `replicate`, `reverse`, `reverseBySeparator`, `reverseUTF8`, `revision`, `right`, `rightPad`, `rightPadUTF8`, `rightUTF8`, `roundAge`, `roundBankers`, `roundDown`, `roundDuration`, `roundToExp2`, `rowNumberInAllBlocks`, `rowNumberInBlock`, `rpad`, `rtrim`, `runningAccumulate`, `runningConcurrency`, `runningDifference`, `runningDifferenceStartingWithFirstValue`, `scalarProduct`, `scalarProductTransposed`, `sequenceMatchEvents`, `sequenceNextNode`, `seriesDecomposeSTL`, `seriesOutliersDetectTukey`, `serverTimeZone`, `serverTimezone`, `session_user`, `shardCount`, `shardNum`, `sigmoid`, `sign`, `simpleJSONExtractBool`, `simpleJSONExtractFloat`, `simpleJSONExtractInt`, `simpleJSONExtractRaw`, `simpleJSONExtractUInt`, `simpleJSONHas`, `simpleLinearRegression`, `sin`, `singleValueOrNull`, `sinh`, `sipHash128`, `sipHash128Keyed`, `sipHash128Reference`, `sipHash128ReferenceKeyed`, `sipHash64`, `sipHash64Keyed`, `skewPop`, `skewSamp`, `sleep`, `sleepEachRow`, `snowflakeIDToDateTime`, `snowflakeIDToDateTime64`, `soundex`, `space`, `sparkBar`, `sparkbar`, `sparseGrams`, `sparseGramsHashes`, `sparseGramsHashesUTF8`, `sparseGramsUTF8`, `splitByAlpha`, `splitByChar`, `splitByNonAlpha`, `splitByRegexp`, `splitByString`, `splitByWhitespace`, `sqid`, `sqidDecode`, `sqidEncode`, `sqr`, `sqrt`, `startsWithCaseInsensitive`, `startsWithCaseInsensitiveUTF8`, `startsWithUTF8`, `stddevPop`, `stddevPopStable`, `stddevSamp`, `stddevSampStable`, `str_to_date`, `str_to_map`, `stringBytesEntropy`, `stringBytesUniq`, `stringJaccardIndex`, `stringJaccardIndexUTF8`, `stringToH3`, `string_agg`, `structureToCapnProtoSchema`, `structureToProtobufSchema`, `studentTTest`, `studentTTestOneSample`, `subBitmap`, `subDate`, `substr`, `substring`, `substringIndex`, `substringIndexUTF8`, `substringUTF8`, `subtractDays`, `subtractInterval`, `subtractMicroseconds`, `subtractMilliseconds`, `subtractMinutes`, `subtractMonths`, `subtractNanoseconds`, `subtractQuarters`, `subtractSeconds`, `subtractTupleOfIntervals`, `subtractWeeks`, `subtractYears`, `sumCount`, `sumKahan`, `sumMapFiltered`, `sumMapFilteredWithOverflow`, `sumMapWithOverflow`, `sumMappedArrays`, `sumWithOverflow`, `tan`, `tanh`, `tgamma`, `theilsU`, `throwIf`, `tid`, `timeDiff`, `timeSeriesAvgToGrid`, `timeSeriesBottomKMasks`, `timeSeriesChangesToGrid`, `timeSeriesCopyTag`, `timeSeriesCopyTags`, `timeSeriesCountToGrid`, `timeSeriesDeltaToGrid`, `timeSeriesDerivToGrid`, `timeSeriesExtractTag`, `timeSeriesFromGrid`, `timeSeriesGroupArray`, `timeSeriesGroupToSamplingKey`, `timeSeriesGroupToTags`, `timeSeriesIdToGroup`, `timeSeriesIdToTags`, `timeSeriesIdToTagsGroup`, `timeSeriesIncreaseToGrid`, `timeSeriesInstantDeltaToGrid`, `timeSeriesInstantRateToGrid`, `timeSeriesJoinTags`, `timeSeriesLastToGrid`, `timeSeriesLastTwoSamples`, `timeSeriesLimitKMasks`, `timeSeriesMaxToGrid`, `timeSeriesMetricTypeToSuffixes`, `timeSeriesMinToGrid`, `timeSeriesPredictLinearToGrid`, `timeSeriesPrometheusValueToString`, `timeSeriesRange`, `timeSeriesRateToGrid`, `timeSeriesRemoveAllTagsExcept`, `timeSeriesRemoveTag`, `timeSeriesRemoveTags`, `timeSeriesReplaceTag`, `timeSeriesResampleToGridWithStaleness`, `timeSeriesResetsToGrid`, `timeSeriesStoreTags`, `timeSeriesSumToGrid`, `timeSeriesTagsGroupToTags`, `timeSeriesTagsToGroup`, `timeSeriesTagsToMap`, `timeSeriesThrowDuplicateSeriesIf`, `timeSeriesTimestampOfMaxToGrid`, `timeSeriesTimestampOfMinToGrid`, `timeSeriesTopKMasks`, `timeSlot`, `timeSlots`, `timeZone`, `timeZoneOf`, `timeZoneOffset`, `timestamp`, `timezone`, `timezoneOf`, `timezoneOffset`, `toBFloat16`, `toBFloat16OrNull`, `toBFloat16OrZero`, `toColumnTypeName`, `toDate32`, `toDate32OrDefault`, `toDate32OrNull`, `toDate32OrZero`, `toDateOrDefault`, `toDateOrNull`, `toDateOrZero`, `toDateTime32`, `toDateTime64OrDefault`, `toDateTime64OrNull`, `toDateTime64OrZero`, `toDateTimeOrDefault`, `toDateTimeOrNull`, `toDateTimeOrZero`, `toDayOfWeek`, `toDayOfYear`, `toDaysInMonth`, `toDaysSinceYearZero`, `toDecimal128`, `toDecimal128OrDefault`, `toDecimal128OrNull`, `toDecimal128OrZero`, `toDecimal256`, `toDecimal256OrDefault`, `toDecimal256OrNull`, `toDecimal256OrZero`, `toDecimal32`, `toDecimal32OrDefault`, `toDecimal32OrNull`, `toDecimal32OrZero`, `toDecimal64`, `toDecimal64OrDefault`, `toDecimal64OrNull`, `toDecimal64OrZero`, `toDecimalString`, `toFixedString`, `toFloat32`, `toFloat32OrDefault`, `toFloat32OrNull`, `toFloat32OrZero`, `toFloat64OrDefault`, `toFloat64OrNull`, `toFloat64OrZero`, `toHour`, `toIPv4`, `toIPv4OrDefault`, `toIPv4OrNull`, `toIPv4OrZero`, `toIPv6`, `toIPv6OrDefault`, `toIPv6OrNull`, `toIPv6OrZero`, `toISOWeek`, `toISOYear`, `toInt128`, `toInt128OrDefault`, `toInt128OrNull`, `toInt128OrZero`, `toInt16`, `toInt16OrDefault`, `toInt16OrNull`, `toInt16OrZero`, `toInt256`, `toInt256OrDefault`, `toInt256OrNull`, `toInt256OrZero`, `toInt32`, `toInt32OrDefault`, `toInt32OrNull`, `toInt32OrZero`, `toInt64OrDefault`, `toInt64OrNull`, `toInt64OrZero`, `toInt8`, `toInt8OrDefault`, `toInt8OrNull`, `toInt8OrZero`, `toInterval`, `toIntervalMicrosecond`, `toIntervalMillisecond`, `toIntervalNanosecond`, `toIntervalQuarter`, `toIntervalWeek`, `toJSONString`, `toLastDayOfMonth`, `toLastDayOfWeek`, `toLowCardinality`, `toMicrosecond`, `toMillisecond`, `toMinute`, `toModifiedJulianDay`, `toModifiedJulianDayOrNull`, `toMonday`, `toMonth`, `toMonthNumSinceEpoch`, `toNanosecond`, `toQuarter`, `toRelativeDayNum`, `toRelativeHourNum`, `toRelativeMinuteNum`, `toRelativeMonthNum`, `toRelativeQuarterNum`, `toRelativeSecondNum`, `toRelativeWeekNum`, `toRelativeYearNum`, `toSecond`, `toStartOfFifteenMinutes`, `toStartOfFiveMinute`, `toStartOfFiveMinutes`, `toStartOfISOYear`, `toStartOfMicrosecond`, `toStartOfMillisecond`, `toStartOfMonth`, `toStartOfNanosecond`, `toStartOfQuarter`, `toStartOfSecond`, `toStartOfTenMinutes`, `toStartOfWeek`, `toStartOfYear`, `toStringCutToZero`, `toTime`, `toTime64`, `toTime64OrNull`, `toTime64OrZero`, `toTimeOrNull`, `toTimeOrZero`, `toTimeWithFixedDate`, `toTimeZone`, `toTimezone`, `toTypeName`, `toUInt128`, `toUInt128OrDefault`, `toUInt128OrNull`, `toUInt128OrZero`, `toUInt16`, `toUInt16OrDefault`, `toUInt16OrNull`, `toUInt16OrZero`, `toUInt256`, `toUInt256OrDefault`, `toUInt256OrNull`, `toUInt256OrZero`, `toUInt32`, `toUInt32OrDefault`, `toUInt32OrNull`, `toUInt32OrZero`, `toUInt64OrDefault`, `toUInt64OrNull`, `toUInt64OrZero`, `toUInt8`, `toUInt8OrDefault`, `toUInt8OrNull`, `toUInt8OrZero`, `toUTCTimestamp`, `toUUID`, `toUUIDOrDefault`, `toUUIDOrNull`, `toUUIDOrZero`, `toUnixTimestamp64Micro`, `toUnixTimestamp64Nano`, `toUnixTimestamp64Second`, `toValidUTF8`, `toWeek`, `toYYYYMMDDhhmmss`, `toYear`, `toYearNumSinceEpoch`, `toYearWeek`, `to_utc_timestamp`, `today`, `tokenizeQuery`, `tokens`, `tokensForLikePattern`, `topK`, `topKWeighted`, `topLevelDomain`, `topLevelDomainRFC`, `transactionID`, `transactionLatestSnapshot`, `transactionOldestSnapshot`, `transform`, `translate`, `translateUTF8`, `trim`, `trimBoth`, `trimLeft`, `trimRight`, `trunc`, `truncate`, `tryBase32Decode`, `tryBase58Decode`, `tryBase64Decode`, `tryBase64URLDecode`, `tryDecrypt`, `tumble`, `tumbleEnd`, `tumbleStart`, `tupleConcat`, `tupleDivide`, `tupleDivideByNumber`, `tupleHammingDistance`, `tupleIntDiv`, `tupleIntDivByNumber`, `tupleIntDivOrZero`, `tupleIntDivOrZeroByNumber`, `tupleMinus`, `tupleModulo`, `tupleModuloByNumber`, `tupleMultiply`, `tupleMultiplyByNumber`, `tupleNames`, `tupleNegate`, `tuplePlus`, `tuplePositiveModuloByNumber`, `tupleToNameValuePairs`, `ucase`, `unbin`, `unhex`, `upper`, `upperUTF8`, `user`, `validateNestedArraySizes`, `varPop`, `varPopStable`, `varSamp`, `varSampStable`, `variantElement`, `variantType`, `vectorDifference`, `vectorSum`, `visibleWidth`, `visitParamExtractBool`, `visitParamExtractFloat`, `visitParamExtractInt`, `visitParamExtractRaw`, `visitParamExtractUInt`, `visitParamHas`, `week`, `welchTTest`, `widthBucket`, `width_bucket`, `wkb`, `wkt`, `wordShingleMinHash`, `wordShingleMinHashArg`, `wordShingleMinHashArgCaseInsensitive`, `wordShingleMinHashArgCaseInsensitiveUTF8`, `wordShingleMinHashArgUTF8`, `wordShingleMinHashCaseInsensitive`, `wordShingleMinHashCaseInsensitiveUTF8`, `wordShingleMinHashUTF8`, `wordShingleSimHash`, `wordShingleSimHashCaseInsensitive`, `wordShingleSimHashCaseInsensitiveUTF8`, `wordShingleSimHashUTF8`, `wyHash64`, `xor`, `xxHash64`, `xxHash64Spark`, `xxh3`, `xxh3_128`, `yandexConsistentHash`, `yearweek`, `yesterday`
+Unclassified (1439): `AIClassify`, `AIEmbed`, `AIExtract`, `AIFilter`, `AIGenerate`, `AIRedact`, `AISimilarity`, `AITranslate`, `BIT_AND`, `BIT_OR`, `BIT_XOR`, `COVAR_POP`, `COVAR_SAMP`, `CRC32`, `CRC32IEEE`, `CRC64`, `DATE`, `DAYOFWEEK`, `DAYOFYEAR`, `FORMAT_BYTES`, `FQDN`, `FROM_BASE64`, `FROM_DAYS`, `FROM_UNIXTIME`, `HMAC`, `HOUR`, `INET6_ATON`, `INET6_NTOA`, `INET_ATON`, `INET_NTOA`, `IPv4CIDRToRange`, `IPv4NumToString`, `IPv4NumToStringClassC`, `IPv4StringToNum`, `IPv4StringToNumOrDefault`, `IPv4StringToNumOrNull`, `IPv4ToIPv6`, `IPv6CIDRToRange`, `IPv6NumToString`, `IPv6StringToNum`, `IPv6StringToNumOrDefault`, `IPv6StringToNumOrNull`, `JSONAllPathsWithTypes`, `JSONAllValues`, `JSONArrayLength`, `JSONDynamicPaths`, `JSONDynamicPathsWithTypes`, `JSONExtract`, `JSONExtractArrayRaw`, `JSONExtractArrayRawCaseInsensitive`, `JSONExtractBool`, `JSONExtractBoolCaseInsensitive`, `JSONExtractCaseInsensitive`, `JSONExtractFloat`, `JSONExtractFloatCaseInsensitive`, `JSONExtractInt`, `JSONExtractIntCaseInsensitive`, `JSONExtractKeys`, `JSONExtractKeysAndValues`, `JSONExtractKeysAndValuesCaseInsensitive`, `JSONExtractKeysAndValuesRaw`, `JSONExtractKeysAndValuesRawCaseInsensitive`, `JSONExtractKeysCaseInsensitive`, `JSONExtractRaw`, `JSONExtractRawCaseInsensitive`, `JSONExtractStringCaseInsensitive`, `JSONExtractUInt`, `JSONExtractUIntCaseInsensitive`, `JSONHas`, `JSONKey`, `JSONLength`, `JSONMergePatch`, `JSONSharedDataPaths`, `JSONSharedDataPathsWithTypes`, `JSONType`, `JSON_ARRAY_LENGTH`, `JSON_EXISTS`, `JSON_QUERY`, `JSON_VALUE`, `L1Distance`, `L1Norm`, `L1Normalize`, `L2Distance`, `L2DistanceTransposed`, `L2DistanceTransposedQuantized`, `L2Norm`, `L2Normalize`, `L2SquaredDistance`, `L2SquaredNorm`, `LAST_DAY`, `LinfDistance`, `LinfNorm`, `LinfNormalize`, `LpDistance`, `LpNorm`, `LpNormalize`, `MACNumToString`, `MACStringToNum`, `MACStringToOUI`, `MD4`, `MD5`, `MGRSToGeo`, `MICROSECOND`, `MILLISECOND`, `MINUTE`, `MONTH`, `MVTBoundingBox`, `MVTBoundingBoxMercator`, `MVTEncode`, `MVTEncodeGeom`, `NANOSECOND`, `NATURAL_SORT_KEY`, `QUARTER`, `REGEXP_EXTRACT`, `REGEXP_SUBSTR`, `RIPEMD160`, `SECOND`, `SHA1`, `SHA224`, `SHA256`, `SHA384`, `SHA512`, `SHA512_256`, `STD`, `STDDEV`, `STDDEV_POP`, `STDDEV_SAMP`, `ST_AsMVT`, `ST_AsMVTGeom`, `SUBSTRING_INDEX`, `TO_BASE64`, `TO_DAYS`, `TO_UNIXTIME`, `URLHash`, `URLHierarchy`, `URLPathHierarchy`, `UTCTimestamp`, `UTC_timestamp`, `UTMToGeo`, `UUIDNumToString`, `UUIDStringToNum`, `UUIDToNum`, `UUIDv7ToDateTime`, `VAR_POP`, `VAR_SAMP`, `YEAR`, `YYYYMMDDToDate`, `YYYYMMDDToDate32`, `YYYYMMDDhhmmssToDateTime`, `YYYYMMDDhhmmssToDateTime64`, `_CAST`, `__actionName`, `__applyFilter`, `__bitBoolMaskAnd`, `__bitBoolMaskOr`, `__bitSwapLastTwo`, `__bitWrapperFunc`, `__getScalar`, `__groupingForCube`, `__groupingForGroupingSets`, `__groupingForRollup`, `__groupingOrdinary`, `__patchPartitionID`, `__scalarSubqueryResult`, `__toYearCalendarOnly`, `abs`, `accurateCast`, `accurateCastOrDefault`, `accurateCastOrNull`, `acos`, `acosh`, `addDate`, `addDays`, `addHours`, `addInterval`, `addMicroseconds`, `addMilliseconds`, `addMinutes`, `addMonths`, `addNanoseconds`, `addQuarters`, `addSeconds`, `addTupleOfIntervals`, `addWeeks`, `addYears`, `aes_decrypt_mysql`, `aes_encrypt_mysql`, `age`, `aggThrow`, `aiClassify`, `aiEmbed`, `aiExtract`, `aiFilter`, `aiGenerate`, `aiRedact`, `aiSimilarity`, `aiTranslate`, `alphaTokens`, `analysisOfVariance`, `anova`, `anyHeavy`, `anyLastRespectNulls`, `anyLast_respect_nulls`, `anyRespectNulls`, `anyValueRespectNulls`, `any_respect_nulls`, `any_value_respect_nulls`, `appendTrailingCharIfAbsent`, `approx_top_count`, `approx_top_k`, `approx_top_sum`, `areaCartesian`, `areaSpherical`, `argAndMax`, `argAndMin`, `arrayAUC`, `arrayAUCPR`, `arrayAutocorrelation`, `arrayAvg`, `arrayBottomK`, `arrayCompact`, `arrayCount`, `arrayCumSumNonNegative`, `arrayDifference`, `arrayDotProduct`, `arrayElementOrNull`, `arrayEnumerateDense`, `arrayEnumerateDenseRanked`, `arrayEnumerateUniqRanked`, `arrayExcept`, `arrayFill`, `arrayFirstOrNull`, `arrayFlatten`, `arrayFlattenedLength`, `arrayFold`, `arrayJaccardIndex`, `arrayLast`, `arrayLastIndex`, `arrayLastOrNull`, `arrayLevenshteinDistance`, `arrayLevenshteinDistanceWeighted`, `arrayMax`, `arrayMin`, `arrayNormalizedGini`, `arrayPRAUC`, `arrayPartialReverseSort`, `arrayPartialShuffle`, `arrayPartialSort`, `arrayPopBack`, `arrayPopFront`, `arrayProduct`, `arrayPushBack`, `arrayPushFront`, `arrayROCAUC`, `arrayRandomSample`, `arrayReduce`, `arrayReduceInRanges`, `arrayRemove`, `arrayResize`, `arrayReverseFill`, `arrayReverseSort`, `arrayReverseSplit`, `arrayRotateLeft`, `arrayRotateRight`, `arrayShiftLeft`, `arrayShiftRight`, `arrayShingles`, `arrayShuffle`, `arraySimilarity`, `arraySplit`, `arraySymmetricDifference`, `arrayTopK`, `arrayTranspose`, `arrayUnion`, `arrayUniq`, `array_remove`, `asin`, `asinh`, `assignCentroid`, `assumeNotNull`, `atan`, `atan2`, `atanh`, `authUser`, `authenticatedUser`, `avg2`, `avgWeighted`, `bar`, `base32Decode`, `base32Encode`, `base58Decode`, `base58Encode`, `base64Decode`, `base64Encode`, `base64URLDecode`, `base64URLEncode`, `basename`, `bin`, `bitCount`, `bitHammingDistance`, `bitNot`, `bitOr`, `bitPositionsToArray`, `bitRotateLeft`, `bitRotateRight`, `bitShiftLeft`, `bitShiftRight`, `bitSlice`, `bitTest`, `bitTestAll`, `bitTestAny`, `bitXor`, `bitmapAnd`, `bitmapAndCardinality`, `bitmapAndnot`, `bitmapAndnotCardinality`, `bitmapBuild`, `bitmapCardinality`, `bitmapContains`, `bitmapHasAll`, `bitmapHasAny`, `bitmapMax`, `bitmapMin`, `bitmapOr`, `bitmapOrCardinality`, `bitmapSubsetInRange`, `bitmapSubsetLimit`, `bitmapToArray`, `bitmapTransform`, `bitmapXor`, `bitmapXorCardinality`, `bitmaskToArray`, `bitmaskToList`, `blockNumber`, `blockSerializedSize`, `blockSize`, `boundingRatio`, `buildId`, `byteHammingDistance`, `byteSize`, `byteSlice`, `byteSwap`, `caseFoldUTF8`, `caseWithExpr`, `caseWithExpression`, `categoricalInformationValue`, `cbrt`, `ceil`, `ceiling`, `changeDay`, `changeHour`, `changeMinute`, `changeMonth`, `changeSecond`, `changeYear`, `char`, `chdb`, `clamp`, `colorOKLABToSRGB`, `colorOKLCHToSRGB`, `colorSRGBToOKLAB`, `colorSRGBToOKLCH`, `compareSubstrings`, `concatAssumeInjective`, `concatWithSeparator`, `concatWithSeparatorAssumeInjective`, `concat_ws`, `connectionId`, `connection_id`, `contingency`, `conv`, `convertCharset`, `corr`, `corrMatrix`, `corrStable`, `cos`, `cosh`, `cosineDistance`, `cosineDistanceTransposed`, `cosineDistanceTransposedQuantized`, `countDigits`, `countEqual`, `countMatches`, `countMatchesCaseInsensitive`, `countSubstrings`, `countSubstringsCaseInsensitive`, `countSubstringsCaseInsensitiveUTF8`, `covarPop`, `covarPopMatrix`, `covarPopStable`, `covarSamp`, `covarSampMatrix`, `covarSampStable`, `cramersV`, `cramersVBiasCorrected`, `cume_dist`, `curdate`, `currentHandler`, `currentQueryID`, `currentRequestURL`, `currentSchemas`, `currentUser`, `current_date`, `current_query_id`, `current_schemas`, `current_user`, `cutFragment`, `cutIPv6`, `cutQueryString`, `cutQueryStringAndFragment`, `cutToFirstSignificantSubdomain`, `cutToFirstSignificantSubdomainCustom`, `cutToFirstSignificantSubdomainCustomRFC`, `cutToFirstSignificantSubdomainCustomWithWWW`, `cutToFirstSignificantSubdomainCustomWithWWWRFC`, `cutToFirstSignificantSubdomainRFC`, `cutToFirstSignificantSubdomainWithWWW`, `cutToFirstSignificantSubdomainWithWWWRFC`, `cutURLParameter`, `cutWWW`, `damerauLevenshteinDistance`, `dateName`, `dateTime64ToSnowflakeID`, `dateTimeToSnowflakeID`, `dateTimeToUUIDv7`, `dateTrunc`, `decodeHTMLComponent`, `decodeURLComponent`, `decodeURLFormComponent`, `decodeXMLComponent`, `decrypt`, `defaultValueOfArgumentType`, `defaultValueOfTypeName`, `degrees`, `deltaSum`, `deltaSumTimestamp`, `denseRank`, `dense_rank`, `dequantizeInt8ToBFloat16`, `digits`, `displayName`, `distanceCosine`, `distanceCosineTransposed`, `distanceL1`, `distanceL2`, `distanceL2Squared`, `distanceL2Transposed`, `distanceLinf`, `distanceLp`, `distinctDynamicTypes`, `distinctJSONPaths`, `distinctJSONPathsAndTypes`, `divideDecimal`, `divideOrNull`, `domain`, `domainRFC`, `domainWithoutWWW`, `domainWithoutWWWRFC`, `dotProduct`, `dotProductTransposed`, `dotProductTransposedQuantized`, `dumpColumnStructure`, `dynamicElement`, `dynamicType`, `e`, `editDistance`, `editDistanceUTF8`, `emptyArrayDate`, `emptyArrayDateTime`, `emptyArrayFloat32`, `emptyArrayFloat64`, `emptyArrayInt16`, `emptyArrayInt32`, `emptyArrayInt64`, `emptyArrayInt8`, `emptyArrayString`, `emptyArrayToSingle`, `emptyArrayUInt16`, `emptyArrayUInt32`, `emptyArrayUInt64`, `emptyArrayUInt8`, `encodeURLComponent`, `encodeURLFormComponent`, `encodeXMLComponent`, `encrypt`, `endsWithCaseInsensitive`, `endsWithCaseInsensitiveUTF8`, `endsWithUTF8`, `entropy`, `erf`, `erfc`, `errorCodeToName`, `estimateCompressionRatio`, `evalMLMethod`, `exp`, `exp10`, `exp2`, `exponentialMovingAverage`, `exponentialTimeDecayedAvg`, `exponentialTimeDecayedCount`, `exponentialTimeDecayedMax`, `exponentialTimeDecayedSum`, `extractAll`, `extractAllGroups`, `extractAllGroupsHorizontal`, `extractAllGroupsVertical`, `extractGroups`, `extractKeyValuePairs`, `extractKeyValuePairsWithEscaping`, `extractTextFromHTML`, `extractURLParameter`, `extractURLParameterNames`, `extractURLParameters`, `factorial`, `farmFingerprint64`, `farmHash64`, `finalizeAggregation`, `financialInternalRateOfReturn`, `financialInternalRateOfReturnExtended`, `financialNetPresentValue`, `financialNetPresentValueExtended`, `firstLine`, `firstNonDefault`, `firstSignificantSubdomain`, `firstSignificantSubdomainCustom`, `firstSignificantSubdomainCustomRFC`, `firstSignificantSubdomainRFC`, `firstValueRespectNulls`, `first_value_respect_nulls`, `flameGraph`, `flatten`, `flattenTuple`, `flipCoordinates`, `format`, `formatDateTimeInJodaSyntax`, `formatQuery`, `formatQueryFromJSON`, `formatQueryOrNull`, `formatQuerySingleLine`, `formatQuerySingleLineOrNull`, `formatReadableDecimalSize`, `formatReadableQuantity`, `formatReadableSize`, `formatReadableTimeDelta`, `formatRow`, `formatRowNoNewline`, `fragment`, `fromDaysSinceYearZero`, `fromDaysSinceYearZero32`, `fromModifiedJulianDay`, `fromModifiedJulianDayOrNull`, `fromUTCTimestamp`, `fromUnixTimestamp`, `fromUnixTimestamp64Micro`, `fromUnixTimestamp64Second`, `fromUnixTimestampInJodaSyntax`, `from_utc_timestamp`, `fullHostName`, `fuzzBits`, `fuzzQuery`, `gccMurmurHash`, `gcd`, `generateRandomStructure`, `generateSerialID`, `generateSnowflakeID`, `generateUUIDv7`, `getMaxTableNameLengthForDatabase`, `getSetting`, `getSettingOrDefault`, `getSizeOfEnumType`, `getSubcolumn`, `getTypeSerializationStreams`, `gini`, `globalInIgnoreSet`, `globalNotIn`, `globalNotInIgnoreSet`, `globalNotNullIn`, `globalNotNullInIgnoreSet`, `globalNullIn`, `globalNullInIgnoreSet`, `globalVariable`, `groupArrayInsertAt`, `groupArrayIntersect`, `groupArrayLast`, `groupArrayMovingAvg`, `groupArrayMovingSum`, `groupArraySample`, `groupArraySorted`, `groupBitAnd`, `groupBitOr`, `groupBitXor`, `groupBitmap`, `groupBitmapAnd`, `groupBitmapOr`, `groupBitmapXor`, `groupConcat`, `groupFormat`, `groupNumericIndexedVector`, `group_concat`, `halfMD5`, `hasAny`, `hasAnyToken`, `hasAnyTokens`, `hasPhrase`, `hasSubsequence`, `hasSubsequenceCaseInsensitive`, `hasSubsequenceCaseInsensitiveUTF8`, `hasSubsequenceUTF8`, `hasSubstr`, `hasThreadFuzzer`, `hasTokenCaseInsensitive`, `hasTokenCaseInsensitiveOrNull`, `hasTokenOrNull`, `hex`, `hierarchicalKMeans`, `highlight`, `highlightQuery`, `hilbertDecode`, `hilbertEncode`, `histogram`, `hiveHash`, `hop`, `hopEnd`, `hopStart`, `hostName`, `hostname`, `hypot`, `icebergBucket`, `icebergHash`, `icebergTruncate`, `identity`, `ignore`, `inIgnoreSet`, `indexHint`, `indexOfAssumeSorted`, `initcap`, `initcapUTF8`, `initialQueryID`, `initialQueryStartTime`, `initial_query_id`, `initial_query_start_time`, `initializeAggregation`, `intDivOrNull`, `intDivOrZero`, `intExp10`, `intExp2`, `intHash32`, `intHash64`, `intervalLengthSum`, `isASCII`, `isConstant`, `isDecimalOverflow`, `isDistinctFrom`, `isDynamicElementInSharedData`, `isFinite`, `isIPAddressInRange`, `isIPv4String`, `isIPv6String`, `isInfinite`, `isMergeTreePartCoveredBy`, `isNotDistinctFrom`, `isNullable`, `isPrime`, `isProbablePrime`, `isValidASCII`, `isValidJSON`, `isValidUTF8`, `isZeroOrNull`, `jaroSimilarity`, `jaroWinklerSimilarity`, `javaHash`, `javaHashUTF16LE`, `joinGet`, `joinGetOrNull`, `jsonMergePatch`, `jumpConsistentHash`, `kafkaMurmurHash`, `keccak256`, `kolmogorovSmirnovTest`, `kostikConsistentHash`, `kqlBin`, `kqlBinAt`, `kqlDateTimeBinAt`, `kqlDivide`, `kqlMultiply`, `kqlParameterCast`, `kqlRangeCount`, `kqlToTimespan`, `kurtPop`, `kurtSamp`, `lag`, `largestTriangleThreeBuckets`, `lastValueRespectNulls`, `last_value_respect_nulls`, `lcm`, `lead`, `leadInFrame`, `leftPad`, `leftPadUTF8`, `levenshteinDistance`, `levenshteinDistanceUTF8`, `lgamma`, `ln`, `localtime`, `locate`, `log`, `log10`, `log1p`, `log2`, `lowCardinalityIndices`, `lowCardinalityKeys`, `lpad`, `ltrim`, `lttb`, `makeDate`, `makeDate32`, `makeDateTime`, `makeDateTime64`, `mannWhitneyUTest`, `mapAdd`, `mapAll`, `mapApply`, `mapConcat`, `mapContainsKey`, `mapContainsKeyLike`, `mapContainsValue`, `mapContainsValueLike`, `mapExists`, `mapExtractKeyLike`, `mapExtractValueLike`, `mapFromString`, `mapPartialReverseSort`, `mapPartialSort`, `mapPopulateSeries`, `mapReverseSort`, `mapSort`, `mapSubtract`, `mapUpdate`, `matchCaseInsensitive`, `matchPhrase`, `materialize`, `max2`, `maxIntersections`, `maxIntersectionsPosition`, `maxMappedArrays`, `meanZTest`, `mergeTreePartInfo`, `mergedJSONPatch`, `metroHash64`, `mid`, `midpoint`, `min2`, `minMappedArrays`, `minSampleSizeContinous`, `minSampleSizeContinuous`, `minSampleSizeConversion`, `mismatches`, `mod`, `modOrNull`, `modulo`, `moduloLegacy`, `moduloOrNull`, `moduloOrZero`, `monthName`, `mortonDecode`, `mortonEncode`, `multiFuzzyMatchAllIndices`, `multiFuzzyMatchAny`, `multiFuzzyMatchAnyIndex`, `multiMatchAny`, `multiMatchAnyIndex`, `multiSearchAllPositions`, `multiSearchAllPositionsCaseInsensitive`, `multiSearchAllPositionsCaseInsensitiveUTF8`, `multiSearchAllPositionsUTF8`, `multiSearchAnyCaseInsensitive`, `multiSearchAnyCaseInsensitiveUTF8`, `multiSearchAnyUTF8`, `multiSearchFirstIndex`, `multiSearchFirstIndexCaseInsensitive`, `multiSearchFirstIndexCaseInsensitiveUTF8`, `multiSearchFirstIndexUTF8`, `multiSearchFirstPosition`, `multiSearchFirstPositionCaseInsensitive`, `multiSearchFirstPositionCaseInsensitiveUTF8`, `multiSearchFirstPositionUTF8`, `multiplyDecimal`, `murmurHash2_32`, `murmurHash2_64`, `murmurHash3_128`, `murmurHash3_32`, `murmurHash3_64`, `naiveBayesClassifierWithAllProbs`, `naiveBayesClassifierWithProb`, `naiveBayesNgrams`, `naturalSortKey`, `neighbor`, `nested`, `netloc`, `ngramDistance`, `ngramDistanceCaseInsensitive`, `ngramDistanceCaseInsensitiveUTF8`, `ngramDistanceUTF8`, `ngramMinHash`, `ngramMinHashArg`, `ngramMinHashArgCaseInsensitive`, `ngramMinHashArgCaseInsensitiveUTF8`, `ngramMinHashArgUTF8`, `ngramMinHashCaseInsensitive`, `ngramMinHashCaseInsensitiveUTF8`, `ngramMinHashUTF8`, `ngramSearch`, `ngramSearchCaseInsensitive`, `ngramSearchCaseInsensitiveUTF8`, `ngramSearchUTF8`, `ngramSimHash`, `ngramSimHashCaseInsensitive`, `ngramSimHashCaseInsensitiveUTF8`, `ngramSimHashUTF8`, `ngrams`, `nonNegativeDerivative`, `normL1`, `normL2`, `normL2Squared`, `normLinf`, `normLp`, `normalizeL1`, `normalizeL2`, `normalizeLinf`, `normalizeLp`, `normalizeQuery`, `normalizeQueryKeepNames`, `normalizeUTF8NFC`, `normalizeUTF8NFD`, `normalizeUTF8NFKC`, `normalizeUTF8NFKCCasefold`, `normalizeUTF8NFKD`, `normalizedQueryHash`, `normalizedQueryHashKeepNames`, `notHas`, `notInIgnoreSet`, `notMatch`, `notMatchCaseInsensitive`, `notNullIn`, `notNullInIgnoreSet`, `nothing`, `nothingNull`, `nothingUInt64`, `nowInBlock`, `nowInBlock64`, `nth_value`, `ntile`, `nullIn`, `nullInIgnoreSet`, `numericIndexedVectorAllValueSum`, `numericIndexedVectorBuild`, `numericIndexedVectorCardinality`, `numericIndexedVectorGetValue`, `numericIndexedVectorPointwiseAdd`, `numericIndexedVectorPointwiseDivide`, `numericIndexedVectorPointwiseEqual`, `numericIndexedVectorPointwiseGreater`, `numericIndexedVectorPointwiseGreaterEqual`, `numericIndexedVectorPointwiseLess`, `numericIndexedVectorPointwiseLessEqual`, `numericIndexedVectorPointwiseMultiply`, `numericIndexedVectorPointwiseNotEqual`, `numericIndexedVectorPointwiseSubtract`, `numericIndexedVectorShortDebugString`, `numericIndexedVectorToMap`, `obfuscateQuery`, `obfuscateQueryWithSeed`, `overlay`, `overlayUTF8`, `parseDateTime`, `parseDateTime32BestEffort`, `parseDateTime32BestEffortOrNull`, `parseDateTime32BestEffortOrZero`, `parseDateTime64`, `parseDateTime64BestEffort`, `parseDateTime64BestEffortOrNull`, `parseDateTime64BestEffortOrZero`, `parseDateTime64BestEffortUS`, `parseDateTime64BestEffortUSOrNull`, `parseDateTime64BestEffortUSOrZero`, `parseDateTime64InJodaSyntax`, `parseDateTime64InJodaSyntaxOrNull`, `parseDateTime64InJodaSyntaxOrZero`, `parseDateTime64OrNull`, `parseDateTime64OrZero`, `parseDateTimeBestEffortOrNull`, `parseDateTimeBestEffortOrZero`, `parseDateTimeBestEffortUS`, `parseDateTimeBestEffortUSOrNull`, `parseDateTimeBestEffortUSOrZero`, `parseDateTimeInJodaSyntax`, `parseDateTimeInJodaSyntaxOrNull`, `parseDateTimeInJodaSyntaxOrZero`, `parseDateTimeOrNull`, `parseDateTimeOrZero`, `parseISO8601Duration`, `parseQueryToJSON`, `parseReadableSize`, `parseReadableSizeOrNull`, `parseReadableSizeOrZero`, `parseTimeDelta`, `partitionID`, `partitionId`, `path`, `pathFull`, `percentRank`, `percent_rank`, `perimeterCartesian`, `perimeterSpherical`, `pgGetUserById`, `pgTableIsVisible`, `pg_get_userbyid`, `pg_table_is_visible`, `pi`, `pmod`, `pmodOrNull`, `port`, `portRFC`, `positionCaseInsensitiveUTF8`, `positionUTF8`, `positiveModulo`, `positiveModuloOrNull`, `positive_modulo`, `positive_modulo_or_null`, `pow`, `power`, `prettyPrintJSON`, `printf`, `proportionsZTest`, `protocol`, `quantizeBFloat16ToInt8`, `queryID`, `queryString`, `queryStringAndFragment`, `query_id`, `radians`, `rand64`, `randBernoulli`, `randBinomial`, `randCanonical`, `randChiSquared`, `randConstant`, `randExponential`, `randFisherF`, `randLogNormal`, `randNegativeBinomial`, `randNormal`, `randPoisson`, `randStudentT`, `randUniform`, `randomFixedString`, `randomHadamardTransform`, `randomPrintableASCII`, `randomString`, `randomStringUTF8`, `rank`, `rankCorr`, `regexpExtract`, `regexpInstr`, `regexpPosition`, `regexpQuoteMeta`, `regexp_instr`, `regionHierarchy`, `regionIn`, `regionToArea`, `regionToCity`, `regionToContinent`, `regionToCountry`, `regionToDistrict`, `regionToName`, `regionToPopulation`, `regionToTopContinent`, `regr_avgx`, `regr_avgy`, `regr_count`, `regr_intercept`, `regr_r2`, `regr_slope`, `regr_sxx`, `regr_sxy`, `regr_syy`, `reinterpret`, `reinterpretAsDate`, `reinterpretAsDateTime`, `reinterpretAsFixedString`, `reinterpretAsFloat32`, `reinterpretAsFloat64`, `reinterpretAsInt128`, `reinterpretAsInt16`, `reinterpretAsInt256`, `reinterpretAsInt32`, `reinterpretAsInt64`, `reinterpretAsInt8`, `reinterpretAsString`, `reinterpretAsUInt128`, `reinterpretAsUInt16`, `reinterpretAsUInt256`, `reinterpretAsUInt32`, `reinterpretAsUInt64`, `reinterpretAsUInt8`, `reinterpretAsUUID`, `removeAccentsUTF8`, `removeDiacriticsUTF8`, `repeat`, `replaceOne`, `replicate`, `reverse`, `reverseBySeparator`, `reverseUTF8`, `revision`, `right`, `rightPad`, `rightPadUTF8`, `rightUTF8`, `roundAge`, `roundBankers`, `roundDown`, `roundDuration`, `roundToExp2`, `rowNumberInAllBlocks`, `rowNumberInBlock`, `rpad`, `rtrim`, `runningAccumulate`, `runningConcurrency`, `runningDifference`, `runningDifferenceStartingWithFirstValue`, `scalarProduct`, `scalarProductTransposed`, `sequenceMatchEvents`, `sequenceNextNode`, `seriesDecomposeSTL`, `seriesOutliersDetectTukey`, `serverTimeZone`, `serverTimezone`, `session_user`, `shardCount`, `shardNum`, `sigmoid`, `sign`, `simpleJSONExtractBool`, `simpleJSONExtractFloat`, `simpleJSONExtractInt`, `simpleJSONExtractRaw`, `simpleJSONExtractUInt`, `simpleJSONHas`, `simpleLinearRegression`, `sin`, `singleValueOrNull`, `sinh`, `sipHash128`, `sipHash128Keyed`, `sipHash128Reference`, `sipHash128ReferenceKeyed`, `sipHash64`, `sipHash64Keyed`, `skewPop`, `skewSamp`, `sleep`, `sleepEachRow`, `snowflakeIDToDateTime`, `snowflakeIDToDateTime64`, `soundex`, `space`, `sparkBar`, `sparkbar`, `sparseGrams`, `sparseGramsHashes`, `sparseGramsHashesUTF8`, `sparseGramsUTF8`, `splitByAlpha`, `splitByChar`, `splitByNonAlpha`, `splitByRegexp`, `splitByString`, `splitByWhitespace`, `sqid`, `sqidDecode`, `sqidEncode`, `sqr`, `sqrt`, `startsWithCaseInsensitive`, `startsWithCaseInsensitiveUTF8`, `startsWithUTF8`, `stddevPop`, `stddevPopStable`, `stddevSamp`, `stddevSampStable`, `str_to_date`, `str_to_map`, `stringBytesEntropy`, `stringBytesUniq`, `stringJaccardIndex`, `stringJaccardIndexUTF8`, `stringToH3`, `string_agg`, `structureToCapnProtoSchema`, `structureToProtobufSchema`, `studentTTest`, `studentTTestOneSample`, `subBitmap`, `subDate`, `substr`, `substring`, `substringIndex`, `substringIndexUTF8`, `substringUTF8`, `subtractDays`, `subtractInterval`, `subtractMicroseconds`, `subtractMilliseconds`, `subtractMinutes`, `subtractMonths`, `subtractNanoseconds`, `subtractQuarters`, `subtractSeconds`, `subtractTupleOfIntervals`, `subtractWeeks`, `subtractYears`, `sumCount`, `sumKahan`, `sumMapFiltered`, `sumMapFilteredWithOverflow`, `sumMapWithOverflow`, `sumMappedArrays`, `sumWithOverflow`, `tan`, `tanh`, `tgamma`, `theilsU`, `throwIf`, `tid`, `timeSeriesAvgToGrid`, `timeSeriesBottomKMasks`, `timeSeriesChangesToGrid`, `timeSeriesCopyTag`, `timeSeriesCopyTags`, `timeSeriesCountToGrid`, `timeSeriesDeltaToGrid`, `timeSeriesDerivToGrid`, `timeSeriesExtractTag`, `timeSeriesFromGrid`, `timeSeriesGroupArray`, `timeSeriesGroupToSamplingKey`, `timeSeriesGroupToTags`, `timeSeriesIdToGroup`, `timeSeriesIdToTags`, `timeSeriesIdToTagsGroup`, `timeSeriesIncreaseToGrid`, `timeSeriesInstantDeltaToGrid`, `timeSeriesInstantRateToGrid`, `timeSeriesJoinTags`, `timeSeriesLastToGrid`, `timeSeriesLastTwoSamples`, `timeSeriesLimitKMasks`, `timeSeriesMaxToGrid`, `timeSeriesMetricTypeToSuffixes`, `timeSeriesMinToGrid`, `timeSeriesPredictLinearToGrid`, `timeSeriesPrometheusValueToString`, `timeSeriesRange`, `timeSeriesRateToGrid`, `timeSeriesRemoveAllTagsExcept`, `timeSeriesRemoveTag`, `timeSeriesRemoveTags`, `timeSeriesReplaceTag`, `timeSeriesResampleToGridWithStaleness`, `timeSeriesResetsToGrid`, `timeSeriesStoreTags`, `timeSeriesSumToGrid`, `timeSeriesTagsGroupToTags`, `timeSeriesTagsToGroup`, `timeSeriesTagsToMap`, `timeSeriesThrowDuplicateSeriesIf`, `timeSeriesTimestampOfMaxToGrid`, `timeSeriesTimestampOfMinToGrid`, `timeSeriesTopKMasks`, `timeSlot`, `timeZone`, `timeZoneOf`, `timeZoneOffset`, `timestamp`, `timezone`, `timezoneOf`, `timezoneOffset`, `toBFloat16`, `toBFloat16OrNull`, `toBFloat16OrZero`, `toColumnTypeName`, `toDate32`, `toDate32OrDefault`, `toDate32OrNull`, `toDate32OrZero`, `toDateOrDefault`, `toDateOrNull`, `toDateOrZero`, `toDateTime32`, `toDateTime64OrDefault`, `toDateTime64OrNull`, `toDateTime64OrZero`, `toDateTimeOrDefault`, `toDateTimeOrNull`, `toDateTimeOrZero`, `toDayOfWeek`, `toDayOfYear`, `toDaysInMonth`, `toDaysSinceYearZero`, `toDecimal128`, `toDecimal128OrDefault`, `toDecimal128OrNull`, `toDecimal128OrZero`, `toDecimal256`, `toDecimal256OrDefault`, `toDecimal256OrNull`, `toDecimal256OrZero`, `toDecimal32`, `toDecimal32OrDefault`, `toDecimal32OrNull`, `toDecimal32OrZero`, `toDecimal64OrDefault`, `toDecimal64OrNull`, `toDecimal64OrZero`, `toDecimalString`, `toFixedString`, `toFloat32`, `toFloat32OrDefault`, `toFloat32OrNull`, `toFloat32OrZero`, `toFloat64OrNull`, `toHour`, `toIPv4`, `toIPv4OrDefault`, `toIPv4OrNull`, `toIPv4OrZero`, `toIPv6`, `toIPv6OrDefault`, `toIPv6OrNull`, `toIPv6OrZero`, `toISOWeek`, `toISOYear`, `toInt128`, `toInt128OrDefault`, `toInt128OrNull`, `toInt128OrZero`, `toInt16`, `toInt16OrDefault`, `toInt16OrNull`, `toInt16OrZero`, `toInt256`, `toInt256OrDefault`, `toInt256OrNull`, `toInt256OrZero`, `toInt32OrDefault`, `toInt32OrNull`, `toInt64OrDefault`, `toInt64OrNull`, `toInt8`, `toInt8OrDefault`, `toInt8OrNull`, `toInt8OrZero`, `toInterval`, `toIntervalMicrosecond`, `toIntervalMillisecond`, `toIntervalNanosecond`, `toIntervalQuarter`, `toIntervalWeek`, `toJSONString`, `toLastDayOfMonth`, `toLastDayOfWeek`, `toLowCardinality`, `toMicrosecond`, `toMillisecond`, `toMinute`, `toModifiedJulianDay`, `toModifiedJulianDayOrNull`, `toMonday`, `toMonth`, `toMonthNumSinceEpoch`, `toNanosecond`, `toQuarter`, `toRelativeDayNum`, `toRelativeHourNum`, `toRelativeMinuteNum`, `toRelativeMonthNum`, `toRelativeQuarterNum`, `toRelativeSecondNum`, `toRelativeWeekNum`, `toRelativeYearNum`, `toSecond`, `toStartOfFifteenMinutes`, `toStartOfISOYear`, `toStartOfMicrosecond`, `toStartOfMillisecond`, `toStartOfNanosecond`, `toStartOfQuarter`, `toStartOfSecond`, `toStartOfTenMinutes`, `toStartOfWeek`, `toStartOfYear`, `toStringCutToZero`, `toTime`, `toTime64`, `toTime64OrNull`, `toTime64OrZero`, `toTimeOrNull`, `toTimeOrZero`, `toTimeWithFixedDate`, `toTypeName`, `toUInt128`, `toUInt128OrDefault`, `toUInt128OrNull`, `toUInt128OrZero`, `toUInt16`, `toUInt16OrDefault`, `toUInt16OrNull`, `toUInt16OrZero`, `toUInt256`, `toUInt256OrDefault`, `toUInt256OrNull`, `toUInt256OrZero`, `toUInt32OrDefault`, `toUInt32OrNull`, `toUInt32OrZero`, `toUInt64OrDefault`, `toUInt64OrNull`, `toUInt64OrZero`, `toUInt8OrDefault`, `toUInt8OrNull`, `toUInt8OrZero`, `toUTCTimestamp`, `toUUID`, `toUUIDOrDefault`, `toUUIDOrNull`, `toUUIDOrZero`, `toUnixTimestamp64Micro`, `toUnixTimestamp64Second`, `toValidUTF8`, `toWeek`, `toYYYYMMDDhhmmss`, `toYear`, `toYearNumSinceEpoch`, `toYearWeek`, `to_utc_timestamp`, `today`, `tokenizeQuery`, `tokens`, `tokensForLikePattern`, `topK`, `topKWeighted`, `topLevelDomain`, `topLevelDomainRFC`, `transactionID`, `transactionLatestSnapshot`, `transactionOldestSnapshot`, `translate`, `translateUTF8`, `trimBoth`, `trimLeft`, `trimRight`, `trunc`, `truncate`, `tryBase32Decode`, `tryBase58Decode`, `tryBase64Decode`, `tryBase64URLDecode`, `tryDecrypt`, `tumble`, `tumbleEnd`, `tumbleStart`, `tupleConcat`, `tupleDivide`, `tupleDivideByNumber`, `tupleHammingDistance`, `tupleIntDiv`, `tupleIntDivByNumber`, `tupleIntDivOrZero`, `tupleIntDivOrZeroByNumber`, `tupleMinus`, `tupleModulo`, `tupleModuloByNumber`, `tupleMultiply`, `tupleMultiplyByNumber`, `tupleNames`, `tupleNegate`, `tuplePlus`, `tuplePositiveModuloByNumber`, `tupleToNameValuePairs`, `unbin`, `unhex`, `upperUTF8`, `user`, `validateNestedArraySizes`, `varPop`, `varPopStable`, `varSamp`, `varSampStable`, `variantElement`, `variantType`, `vectorDifference`, `vectorSum`, `visibleWidth`, `visitParamExtractBool`, `visitParamExtractFloat`, `visitParamExtractInt`, `visitParamExtractRaw`, `visitParamExtractUInt`, `visitParamHas`, `week`, `welchTTest`, `widthBucket`, `width_bucket`, `wkb`, `wkt`, `wordShingleMinHash`, `wordShingleMinHashArg`, `wordShingleMinHashArgCaseInsensitive`, `wordShingleMinHashArgCaseInsensitiveUTF8`, `wordShingleMinHashArgUTF8`, `wordShingleMinHashCaseInsensitive`, `wordShingleMinHashCaseInsensitiveUTF8`, `wordShingleMinHashUTF8`, `wordShingleSimHash`, `wordShingleSimHashCaseInsensitive`, `wordShingleSimHashCaseInsensitiveUTF8`, `wordShingleSimHashUTF8`, `wyHash64`, `xor`, `xxHash64`, `xxHash64Spark`, `xxh3`, `xxh3_128`, `yandexConsistentHash`, `yearweek`, `yesterday`
 
 ## Table engines (`system.table_engines`)
 
 | Name | Class | Why | Mined in |
 |---|---|---|---|
-| `AggregatingMergeTree` | profile | mined profile | langfuse, openpanel |
+| `AggregatingMergeTree` | profile | mined profile, Tier 0 | langfuse, openpanel, umami |
 | `Alias` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `ArrowStream` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `AzureBlobStorage` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
@@ -432,12 +482,13 @@ Unclassified (1489): `AIClassify`, `AIEmbed`, `AIExtract`, `AIFilter`, `AIGenera
 | `BigQuery` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `Buffer` | refused | Tier 2: legacy engines (§75 §7.5) |  |
 | `COSN` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
+| `CollapsingMergeTree` | profile | mined profile, Tier 1 | plausible |
 | `DeltaLake` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `DeltaLakeAzure` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `DeltaLakeLocal` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `DeltaLakeS3` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `Dictionary` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
-| `Distributed` | profile | mined profile | signoz |
+| `Distributed` | profile | mined profile, Tier 0 | signoz |
 | `EmbeddedRocksDB` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `Executable` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `ExecutablePool` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
@@ -464,10 +515,10 @@ Unclassified (1489): `AIClassify`, `AIEmbed`, `AIExtract`, `AIFilter`, `AIGenera
 | `MaterializedView` | profile | Tier 1 (§75 §7.4); the Replicated forms as topology syntax |  |
 | `Memory` | refused | Tier 2: legacy engines (§75 §7.5) |  |
 | `Merge` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
-| `MergeTree` | profile | mined profile | langfuse, openpanel |
+| `MergeTree` | profile | mined profile, Tier 0 | hyperdx, langfuse, openlit, openpanel, plausible, umami |
 | `MongoDB` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `MySQL` | refused | Tier 2: queue and database engines; Loams streams, Postgres and connectors cover them (§75 §7.5) |  |
-| `Null` | profile | mined profile | langfuse |
+| `Null` | profile | mined profile, Tier 0 | langfuse |
 | `ODBC` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `OSS` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `Paimon` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
@@ -480,26 +531,26 @@ Unclassified (1489): `AIClassify`, `AIEmbed`, `AIExtract`, `AIFilter`, `AIGenera
 | `Redis` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `Remote` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `RemoteSecure` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
-| `ReplacingMergeTree` | profile | mined profile | langfuse, openpanel |
-| `ReplicatedAggregatingMergeTree` | profile | mined profile | langfuse, signoz |
+| `ReplacingMergeTree` | profile | mined profile, Tier 0 | langfuse, openlit, openpanel, umami |
+| `ReplicatedAggregatingMergeTree` | profile | mined profile, Tier 0 | langfuse, signoz |
 | `ReplicatedGraphiteMergeTree` | refused | Tier 2: legacy engines (§75 §7.5) |  |
-| `ReplicatedMergeTree` | profile | mined profile | signoz |
-| `ReplicatedReplacingMergeTree` | profile | mined profile | langfuse, signoz |
-| `ReplicatedSummingMergeTree` | profile | mined profile | signoz |
+| `ReplicatedMergeTree` | profile | mined profile, Tier 0 | signoz |
+| `ReplicatedReplacingMergeTree` | profile | mined profile, Tier 0 | langfuse, signoz |
+| `ReplicatedSummingMergeTree` | profile | mined profile, Tier 0 | signoz |
 | `ReplicatedVersionedCollapsingMergeTree` | profile | gate applications on the chDB House (D1570, amending §75 §7.5); the Replicated form as topology syntax |  |
 | `S3` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `S3Queue` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `SQLite` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 | `Set` | refused | Tier 2: legacy engines (§75 §7.5) |  |
 | `StripeLog` | refused | Tier 2: legacy engines (§75 §7.5) |  |
-| `SummingMergeTree` | profile | Tier 1 (§75 §7.4); the Replicated forms as topology syntax |  |
+| `SummingMergeTree` | profile | mined profile, Tier 1 | plausible |
 | `TimeSeries` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
-| `TinyLog` | refused | Tier 2: legacy engines (§75 §7.5) |  |
+| `TinyLog` | refused | Tier 2: legacy engines (§75 §7.5) | plausible |
 | `URL` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
-| `VersionedCollapsingMergeTree` | profile | mined profile | openpanel |
+| `VersionedCollapsingMergeTree` | profile | mined profile, Tier 0 | openpanel, plausible |
 | `YTsaurus` | disabled | reaches the host, the network, another system or another table's data (D1558; the House's deny list) |  |
 
-Unclassified (6): `CoalescingMergeTree`, `CollapsingMergeTree`, `GenerateRandom`, `ReplicatedCoalescingMergeTree`, `ReplicatedCollapsingMergeTree`, `View`
+Unclassified (5): `CoalescingMergeTree`, `GenerateRandom`, `ReplicatedCoalescingMergeTree`, `ReplicatedCollapsingMergeTree`, `View`
 
 ## Table functions (`system.table_functions`)
 
