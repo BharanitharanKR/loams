@@ -129,23 +129,6 @@ driver = "plausible/driver.sh"
 suite = ""
 runtime_minutes = 10
 
-
-[[app]]
-
-[[app]]
-# SigNoz, the community build: all telemetry in ClickHouse over the native
-# protocol, schema by its collector's migrator on a one-node cluster.
-name = "signoz"
-image = "docker.io/signoz/signoz-community:v0.145.0@sha256:5f9b59276590a5e0e0eb2a7f99e88c9b27f44e4575d18c555aaa07648bca9d0c"
-images = ["docker.io/signoz/signoz-otel-collector:v0.144.12@sha256:deb566a7a3c0ba544ee58ccc92ee1f0e6da827bc40383e52f3c824705e100a3d"]
-licence = "MIT AND AGPL-3.0-only"
-clickhouse_protocol = "native"
-migrations_protocol = "native"
-clickhouse_min = "25.12"
-driver = "signoz/driver.sh"
-suite = ""
-runtime_minutes = 15
-
 [[app]]
 # HyperDX (ClickStack): ClickHouse is its only telemetry store; queries over
 # HTTP, the collector's schema and inserts over the native protocol.

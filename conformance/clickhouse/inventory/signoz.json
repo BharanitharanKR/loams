@@ -6501,7 +6501,7 @@
       "executions": 3
     },
     "q:0346edd0-d12e-49e1-9d1e-027e824ddbf0": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.dependency_graph_minutes_v2 ON CLUSTER cluster (src LowCardinality(String) CODEC(ZSTD({p1:Int64})), dest LowCardinality(String) CODEC(ZSTD({p2:Int64})), duration_quantiles_state AggregateFunction(quantiles(0.5, 0.75, 0.9, 0.95, 0.99), Float64) CODEC(Default), error_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p3:Int64})), total_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p4:Int64})), timestamp DateTime CODEC(DoubleDelta, LZ4), deployment_environment LowCardinality(String) CODEC(ZSTD({p5:Int64})), k8s_cluster_name LowCardinality(String) CODEC(ZSTD({p6:Int64})), k8s_namespace_name LowCardinality(String) CODEC(ZSTD({p7:Int64}))) ENGINE = ReplicatedAggregatingMergeTree ORDER BY (timestamp, src, dest, deployment_environment, k8s_cluster_name, k8s_namespace_name) PARTITION BY toDate(timestamp) TTL toDateTime(timestamp) + toIntervalSecond({p8:Int64}) SETTINGS index_granularity = {p9:Int64}",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.dependency_graph_minutes_v2 ON CLUSTER cluster (src LowCardinality(String) CODEC(ZSTD({p1:Int64})), dest LowCardinality(String) CODEC(ZSTD({p2:Int64})), duration_quantiles_state AggregateFunction(quantiles({p3:Float64}, {p4:Float64}, {p5:Float64}, {p6:Float64}, {p7:Float64}), Float64) CODEC(Default), error_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p8:Int64})), total_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p9:Int64})), timestamp DateTime CODEC(DoubleDelta, LZ4), deployment_environment LowCardinality(String) CODEC(ZSTD({p10:Int64})), k8s_cluster_name LowCardinality(String) CODEC(ZSTD({p11:Int64})), k8s_namespace_name LowCardinality(String) CODEC(ZSTD({p12:Int64}))) ENGINE = ReplicatedAggregatingMergeTree ORDER BY (timestamp, src, dest, deployment_environment, k8s_cluster_name, k8s_namespace_name) PARTITION BY toDate(timestamp) TTL toDateTime(timestamp) + toIntervalSecond({p13:Int64}) SETTINGS index_granularity = {p14:Int64}",
       "path": "explained",
       "executions": 1
     },
@@ -6511,7 +6511,7 @@
       "executions": 1
     },
     "q:03d942dd-2ac0-4afb-bc16-0a41664525a0": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_trace_summary ON CLUSTER cluster (trace_id String CODEC(ZSTD({p1:Int64})), start SimpleAggregateFunction(min, DateTime64(9)) CODEC(ZSTD({p2:Int64})), end SimpleAggregateFunction(max, DateTime64(9)) CODEC(ZSTD({p3:Int64})), num_spans SimpleAggregateFunction(sum, UInt64) CODEC(ZSTD({p4:Int64}))) ENGINE = Distributed({p5:String}, signoz_traces, trace_summary, cityHash64(trace_id))",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_trace_summary ON CLUSTER cluster (trace_id String CODEC(ZSTD({p1:Int64})), start SimpleAggregateFunction(min, DateTime64({p2:Int64})) CODEC(ZSTD({p3:Int64})), end SimpleAggregateFunction(max, DateTime64({p4:Int64})) CODEC(ZSTD({p5:Int64})), num_spans SimpleAggregateFunction(sum, UInt64) CODEC(ZSTD({p6:Int64}))) ENGINE = Distributed({p7:String}, signoz_traces, trace_summary, cityHash64(trace_id))",
       "path": "explained",
       "executions": 1
     },
@@ -6556,7 +6556,7 @@
       "executions": 1
     },
     "q:05f16759-552f-4297-bc94-255ebd421398": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_usage_explorer ON CLUSTER cluster (timestamp DateTime64(9) CODEC(DoubleDelta, LZ4), service_name LowCardinality(String) CODEC(ZSTD({p1:Int64})), count UInt64 CODEC(T64, ZSTD({p2:Int64}))) ENGINE = Distributed({p3:String}, signoz_traces, usage_explorer, cityHash64(rand()))",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_usage_explorer ON CLUSTER cluster (timestamp DateTime64({p1:Int64}) CODEC(DoubleDelta, LZ4), service_name LowCardinality(String) CODEC(ZSTD({p2:Int64})), count UInt64 CODEC(T64, ZSTD({p3:Int64}))) ENGINE = Distributed({p4:String}, signoz_traces, usage_explorer, cityHash64(rand()))",
       "path": "explained",
       "executions": 1
     },
@@ -6576,7 +6576,7 @@
       "executions": 1
     },
     "q:08260c14-b65b-46aa-a75e-187dd061f098": {
-      "query": "ALTER TABLE signoz_traces.signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS scope JSON(max_dynamic_paths=0, name String, version String, attributes JSON(max_dynamic_paths=0)) CODEC(ZSTD({p1:Int64}))",
+      "query": "ALTER TABLE signoz_traces.signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS scope JSON(max_dynamic_paths={p1:Int64}, name String, version String, attributes JSON(max_dynamic_paths={p2:Int64})) CODEC(ZSTD({p3:Int64}))",
       "path": "explained",
       "executions": 1
     },
@@ -6596,7 +6596,7 @@
       "executions": 1
     },
     "q:08f572a2-25a8-4f1c-a81c-1cf4e5096880": {
-      "query": "ALTER TABLE signoz_logs.logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS resource JSON(max_dynamic_paths=100) CODEC(ZSTD({p1:Int64}))",
+      "query": "ALTER TABLE signoz_logs.logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS resource JSON(max_dynamic_paths={p1:Int64}) CODEC(ZSTD({p2:Int64}))",
       "path": "explained",
       "executions": 1
     },
@@ -6626,7 +6626,7 @@
       "executions": 9
     },
     "q:0b73d0ab-aacb-4bac-a9c8-be907604984a": {
-      "query": "CREATE MATERIALIZED VIEW IF NOT EXISTS signoz_traces.dependency_graph_minutes_db_calls_mv_v2 ON CLUSTER cluster TO signoz_traces.dependency_graph_minutes_v2 (src LowCardinality(String) CODEC(ZSTD({p1:Int64})), dest LowCardinality(String) CODEC(ZSTD({p2:Int64})), duration_quantiles_state AggregateFunction(quantiles(0.5, 0.75, 0.9, 0.95, 0.99), Float64) CODEC(Default), error_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p3:Int64})), total_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p4:Int64})), timestamp DateTime CODEC(DoubleDelta, LZ4), deployment_environment LowCardinality(String) CODEC(ZSTD({p5:Int64})), k8s_cluster_name LowCardinality(String) CODEC(ZSTD({p6:Int64})), k8s_namespace_name LowCardinality(String) CODEC(ZSTD({p7:Int64}))) AS SELECT\n    serviceName AS src,\n    dbSystem AS dest,\n    quantilesState({p8:Float64}, {p9:Float64}, {p10:Float64}, {p11:Float64}, {p12:Float64})(toFloat64(durationNano)) AS duration_quantiles_state,\n    countIf(statusCode = {p13:Int64}) AS error_count,\n    count(*) AS total_count,\n    toStartOfMinute(timestamp) AS timestamp,\n    resourceTagsMap[{p14:String}] AS deployment_environment,\n    resourceTagsMap[{p15:String}] AS k8s_cluster_name,\n    resourceTagsMap[{p16:String}] AS k8s_namespace_name\nFROM signoz_traces.signoz_index_v2\nWHERE (dest != {p17:String}) AND (kind != {p18:Int64})\nGROUP BY\n    timestamp,\n    src,\n    dest,\n    deployment_environment,\n    k8s_cluster_name,\n    k8s_namespace_name",
+      "query": "CREATE MATERIALIZED VIEW IF NOT EXISTS signoz_traces.dependency_graph_minutes_db_calls_mv_v2 ON CLUSTER cluster TO signoz_traces.dependency_graph_minutes_v2 (src LowCardinality(String) CODEC(ZSTD({p1:Int64})), dest LowCardinality(String) CODEC(ZSTD({p2:Int64})), duration_quantiles_state AggregateFunction(quantiles({p3:Float64}, {p4:Float64}, {p5:Float64}, {p6:Float64}, {p7:Float64}), Float64) CODEC(Default), error_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p8:Int64})), total_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p9:Int64})), timestamp DateTime CODEC(DoubleDelta, LZ4), deployment_environment LowCardinality(String) CODEC(ZSTD({p10:Int64})), k8s_cluster_name LowCardinality(String) CODEC(ZSTD({p11:Int64})), k8s_namespace_name LowCardinality(String) CODEC(ZSTD({p12:Int64}))) AS SELECT\n    serviceName AS src,\n    dbSystem AS dest,\n    quantilesState({p13:Float64}, {p14:Float64}, {p15:Float64}, {p16:Float64}, {p17:Float64})(toFloat64(durationNano)) AS duration_quantiles_state,\n    countIf(statusCode = {p18:Int64}) AS error_count,\n    count(*) AS total_count,\n    toStartOfMinute(timestamp) AS timestamp,\n    resourceTagsMap[{p19:String}] AS deployment_environment,\n    resourceTagsMap[{p20:String}] AS k8s_cluster_name,\n    resourceTagsMap[{p21:String}] AS k8s_namespace_name\nFROM signoz_traces.signoz_index_v2\nWHERE (dest != {p22:String}) AND (kind != {p23:Int64})\nGROUP BY\n    timestamp,\n    src,\n    dest,\n    deployment_environment,\n    k8s_cluster_name,\n    k8s_namespace_name",
       "path": "explained",
       "executions": 1
     },
@@ -6646,7 +6646,7 @@
       "executions": 1
     },
     "q:0cfea69b-2d90-4f27-aebd-37a790a50936": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_signoz_index_v3 ON CLUSTER cluster (ts_bucket_start UInt64 CODEC(DoubleDelta, LZ4), resource_fingerprint String CODEC(ZSTD({p1:Int64})), timestamp DateTime64(9) CODEC(DoubleDelta, LZ4), trace_id FixedString(32) CODEC(ZSTD({p2:Int64})), span_id String CODEC(ZSTD({p3:Int64})), trace_state String CODEC(ZSTD({p4:Int64})), parent_span_id String CODEC(ZSTD({p5:Int64})), flags UInt32 CODEC(T64, ZSTD({p6:Int64})), name LowCardinality(String) CODEC(ZSTD({p7:Int64})), kind Int8 CODEC(T64, ZSTD({p8:Int64})), kind_string String CODEC(ZSTD({p9:Int64})), duration_nano UInt64 CODEC(T64, ZSTD({p10:Int64})), status_code Int16 CODEC(T64, ZSTD({p11:Int64})), status_message String CODEC(ZSTD({p12:Int64})), status_code_string String CODEC(ZSTD({p13:Int64})), attributes_string Map(LowCardinality(String), String) CODEC(ZSTD({p14:Int64})), attributes_number Map(LowCardinality(String), Float64) CODEC(ZSTD({p15:Int64})), attributes_bool Map(LowCardinality(String), Bool) CODEC(ZSTD({p16:Int64})), resources_string Map(LowCardinality(String), String) CODEC(ZSTD({p17:Int64})), events Array(String) CODEC(ZSTD({p18:Int64})), links String CODEC(ZSTD({p19:Int64})), response_status_code LowCardinality(String) CODEC(ZSTD({p20:Int64})), external_http_url LowCardinality(String) CODEC(ZSTD({p21:Int64})), http_url LowCardinality(String) CODEC(ZSTD({p22:Int64})), external_http_method LowCardinality(String) CODEC(ZSTD({p23:Int64})), http_method LowCardinality(String) CODEC(ZSTD({p24:Int64})), http_host LowCardinality(String) CODEC(ZSTD({p25:Int64})), db_name LowCardinality(String) CODEC(ZSTD({p26:Int64})), db_operation LowCardinality(String) CODEC(ZSTD({p27:Int64})), has_error Bool CODEC(T64, ZSTD({p28:Int64})), is_remote LowCardinality(String) CODEC(ZSTD({p29:Int64})), resource_string_service{p30:String}route LowCardinality(String) DEFAULT attributes_string[{p31:String}] CODEC(ZSTD({p32:Int64})), attribute_string_messaging{p33:String}operation LowCardinality(String) DEFAULT attributes_string[{p34:String}] CODEC(ZSTD({p35:Int64})), attribute_string_db{p36:String}system LowCardinality(String) DEFAULT attributes_string[{p37:String}] CODEC(ZSTD({p38:Int64})), attribute_string_rpc{p39:String}method LowCardinality(String) DEFAULT attributes_string[{p40:String}] CODEC(ZSTD({p41:Int64})), attribute_string_peer{p42:String}name, httpRoute LowCardinality(String) ALIAS attribute_string_http{p43:String}system, msgOperation LowCardinality(String) ALIAS attribute_string_messaging{p44:String}system, rpcSystem LowCardinality(String) ALIAS attribute_string_rpc{p45:String}service, rpcMethod LowCardinality(String) ALIAS attribute_string_rpc{p46:String}service) ENGINE = Distributed({p47:String}, signoz_traces, signoz_index_v3, cityHash64(trace_id))",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_signoz_index_v3 ON CLUSTER cluster (ts_bucket_start UInt64 CODEC(DoubleDelta, LZ4), resource_fingerprint String CODEC(ZSTD({p1:Int64})), timestamp DateTime64({p2:Int64}) CODEC(DoubleDelta, LZ4), trace_id FixedString({p3:Int64}) CODEC(ZSTD({p4:Int64})), span_id String CODEC(ZSTD({p5:Int64})), trace_state String CODEC(ZSTD({p6:Int64})), parent_span_id String CODEC(ZSTD({p7:Int64})), flags UInt32 CODEC(T64, ZSTD({p8:Int64})), name LowCardinality(String) CODEC(ZSTD({p9:Int64})), kind Int8 CODEC(T64, ZSTD({p10:Int64})), kind_string String CODEC(ZSTD({p11:Int64})), duration_nano UInt64 CODEC(T64, ZSTD({p12:Int64})), status_code Int16 CODEC(T64, ZSTD({p13:Int64})), status_message String CODEC(ZSTD({p14:Int64})), status_code_string String CODEC(ZSTD({p15:Int64})), attributes_string Map(LowCardinality(String), String) CODEC(ZSTD({p16:Int64})), attributes_number Map(LowCardinality(String), Float64) CODEC(ZSTD({p17:Int64})), attributes_bool Map(LowCardinality(String), Bool) CODEC(ZSTD({p18:Int64})), resources_string Map(LowCardinality(String), String) CODEC(ZSTD({p19:Int64})), events Array(String) CODEC(ZSTD({p20:Int64})), links String CODEC(ZSTD({p21:Int64})), response_status_code LowCardinality(String) CODEC(ZSTD({p22:Int64})), external_http_url LowCardinality(String) CODEC(ZSTD({p23:Int64})), http_url LowCardinality(String) CODEC(ZSTD({p24:Int64})), external_http_method LowCardinality(String) CODEC(ZSTD({p25:Int64})), http_method LowCardinality(String) CODEC(ZSTD({p26:Int64})), http_host LowCardinality(String) CODEC(ZSTD({p27:Int64})), db_name LowCardinality(String) CODEC(ZSTD({p28:Int64})), db_operation LowCardinality(String) CODEC(ZSTD({p29:Int64})), has_error Bool CODEC(T64, ZSTD({p30:Int64})), is_remote LowCardinality(String) CODEC(ZSTD({p31:Int64})), resource_string_service{p32:String}route LowCardinality(String) DEFAULT attributes_string[{p33:String}] CODEC(ZSTD({p34:Int64})), attribute_string_messaging{p35:String}operation LowCardinality(String) DEFAULT attributes_string[{p36:String}] CODEC(ZSTD({p37:Int64})), attribute_string_db{p38:String}system LowCardinality(String) DEFAULT attributes_string[{p39:String}] CODEC(ZSTD({p40:Int64})), attribute_string_rpc{p41:String}method LowCardinality(String) DEFAULT attributes_string[{p42:String}] CODEC(ZSTD({p43:Int64})), attribute_string_peer{p44:String}name, httpRoute LowCardinality(String) ALIAS attribute_string_http{p45:String}system, msgOperation LowCardinality(String) ALIAS attribute_string_messaging{p46:String}system, rpcSystem LowCardinality(String) ALIAS attribute_string_rpc{p47:String}service, rpcMethod LowCardinality(String) ALIAS attribute_string_rpc{p48:String}service) ENGINE = Distributed({p49:String}, signoz_traces, signoz_index_v3, cityHash64(trace_id))",
       "path": "explained",
       "executions": 1
     },
@@ -6741,7 +6741,7 @@
       "executions": 1
     },
     "q:1a113a5d-4e97-47c5-ac8b-84c002d059b0": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_span_attributes ON CLUSTER cluster (timestamp DateTime CODEC(DoubleDelta, ZSTD({p1:Int64})), tagKey LowCardinality(String) CODEC(ZSTD({p2:Int64})), tagType Enum8('tag' = 1, 'resource' = 2) CODEC(ZSTD({p3:Int64})), dataType Enum8('string' = 1, 'bool' = 2, 'float64' = 3) CODEC(ZSTD({p4:Int64})), stringTagValue String CODEC(ZSTD({p5:Int64})), float64TagValue Nullable(Float64) CODEC(ZSTD({p6:Int64})), isColumn Bool CODEC(ZSTD({p7:Int64}))) ENGINE = Distributed({p8:String}, signoz_traces, span_attributes, cityHash64(rand()))",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_span_attributes ON CLUSTER cluster (timestamp DateTime CODEC(DoubleDelta, ZSTD({p1:Int64})), tagKey LowCardinality(String) CODEC(ZSTD({p2:Int64})), tagType Enum8({p3:String} = {p4:Int64}, {p5:String} = {p6:Int64}) CODEC(ZSTD({p7:Int64})), dataType Enum8({p8:String} = {p9:Int64}, {p10:String} = {p11:Int64}, {p12:String} = {p13:Int64}) CODEC(ZSTD({p14:Int64})), stringTagValue String CODEC(ZSTD({p15:Int64})), float64TagValue Nullable(Float64) CODEC(ZSTD({p16:Int64})), isColumn Bool CODEC(ZSTD({p17:Int64}))) ENGINE = Distributed({p18:String}, signoz_traces, span_attributes, cityHash64(rand()))",
       "path": "explained",
       "executions": 1
     },
@@ -6766,7 +6766,7 @@
       "executions": 1
     },
     "q:1c2081ac-67da-46d0-8b0d-32cb1a233808": {
-      "query": "ALTER TABLE signoz_logs.distributed_logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS inserted_at DateTime64(3) CODEC(Delta({p1:Int64}), ZSTD({p2:Int64}))",
+      "query": "ALTER TABLE signoz_logs.distributed_logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS inserted_at DateTime64({p1:Int64}) CODEC(Delta({p2:Int64}), ZSTD({p3:Int64}))",
       "path": "explained",
       "executions": 1
     },
@@ -6776,7 +6776,7 @@
       "executions": 1
     },
     "q:1eac2d12-2466-45c5-b420-1070d46fe4ec": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.signoz_index_v2 ON CLUSTER cluster (timestamp DateTime64(9) CODEC(DoubleDelta, LZ4), traceID FixedString(32) CODEC(ZSTD({p1:Int64})), spanID String CODEC(ZSTD({p2:Int64})), parentSpanID String CODEC(ZSTD({p3:Int64})), serviceName LowCardinality(String) CODEC(ZSTD({p4:Int64})), name LowCardinality(String) CODEC(ZSTD({p5:Int64})), kind Int8 CODEC(T64, ZSTD({p6:Int64})), durationNano UInt64 CODEC(T64, ZSTD({p7:Int64})), statusCode Int16 CODEC(T64, ZSTD({p8:Int64})), externalHttpMethod LowCardinality(String) CODEC(ZSTD({p9:Int64})), externalHttpUrl LowCardinality(String) CODEC(ZSTD({p10:Int64})), dbSystem LowCardinality(String) CODEC(ZSTD({p11:Int64})), dbName LowCardinality(String) CODEC(ZSTD({p12:Int64})), dbOperation LowCardinality(String) CODEC(ZSTD({p13:Int64})), peerService LowCardinality(String) CODEC(ZSTD({p14:Int64})), events Array(String) CODEC(ZSTD({p15:Int64})), httpMethod LowCardinality(String) CODEC(ZSTD({p16:Int64})), httpUrl LowCardinality(String) CODEC(ZSTD({p17:Int64})), httpRoute LowCardinality(String) CODEC(ZSTD({p18:Int64})), httpHost LowCardinality(String) CODEC(ZSTD({p19:Int64})), msgSystem LowCardinality(String) CODEC(ZSTD({p20:Int64})), msgOperation LowCardinality(String) CODEC(ZSTD({p21:Int64})), hasError Bool CODEC(T64, ZSTD({p22:Int64})), rpcSystem LowCardinality(String) CODEC(ZSTD({p23:Int64})), rpcService LowCardinality(String) CODEC(ZSTD({p24:Int64})), rpcMethod LowCardinality(String) CODEC(ZSTD({p25:Int64})), responseStatusCode LowCardinality(String) CODEC(ZSTD({p26:Int64})), stringTagMap Map(String, String) CODEC(ZSTD({p27:Int64})), numberTagMap Map(String, Float64) CODEC(ZSTD({p28:Int64})), boolTagMap Map(String, Bool) CODEC(ZSTD({p29:Int64})), resourceTagsMap Map(LowCardinality(String), String) CODEC(ZSTD({p30:Int64})), isRemote LowCardinality(String) CODEC(ZSTD({p31:Int64})), statusMessage String CODEC(ZSTD({p32:Int64})), statusCodeString String CODEC(ZSTD({p33:Int64})), spanKind String CODEC(ZSTD({p34:Int64})), INDEX idx_service serviceName TYPE bloom_filter GRANULARITY {p35:Int64}, INDEX idx_name name TYPE bloom_filter GRANULARITY {p36:Int64}, INDEX idx_kind kind TYPE minmax GRANULARITY {p37:Int64}, INDEX idx_duration durationNano TYPE minmax GRANULARITY {p38:Int64}, INDEX idx_hasError hasError TYPE set({p39:Int64}) GRANULARITY {p40:Int64}, INDEX idx_httpRoute httpRoute TYPE bloom_filter GRANULARITY {p41:Int64}, INDEX idx_httpUrl httpUrl TYPE bloom_filter GRANULARITY {p42:Int64}, INDEX idx_httpHost httpHost TYPE bloom_filter GRANULARITY {p43:Int64}, INDEX idx_httpMethod httpMethod TYPE bloom_filter GRANULARITY {p44:Int64}, INDEX idx_timestamp timestamp TYPE minmax GRANULARITY {p45:Int64}, INDEX idx_rpcMethod rpcMethod TYPE bloom_filter GRANULARITY {p46:Int64}, INDEX idx_responseStatusCode responseStatusCode TYPE set({p47:Int64}) GRANULARITY {p48:Int64}, INDEX idx_resourceTagsMapKeys mapKeys(resourceTagsMap) TYPE bloom_filter({p49:Float64}) GRANULARITY {p50:Int64}, INDEX idx_resourceTagsMapValues mapValues(resourceTagsMap) TYPE bloom_filter({p51:Float64}) GRANULARITY {p52:Int64}, INDEX idx_statusCodeString statusCodeString TYPE set({p53:Int64}) GRANULARITY {p54:Int64}, INDEX idx_spanKind spanKind TYPE set({p55:Int64}) GRANULARITY {p56:Int64}, INDEX idx_stringTagMapKeys mapKeys(stringTagMap) TYPE tokenbf_v1({p57:Int64}, {p58:Int64}, {p59:Int64}) GRANULARITY {p60:Int64}, INDEX idx_stringTagMapValues mapValues(stringTagMap) TYPE ngrambf_v1({p61:Int64}, {p62:Int64}, {p63:Int64}, {p64:Int64}) GRANULARITY {p65:Int64}, INDEX idx_numberTagMapKeys mapKeys(numberTagMap) TYPE tokenbf_v1({p66:Int64}, {p67:Int64}, {p68:Int64}) GRANULARITY {p69:Int64}, INDEX idx_numberTagMapValues mapValues(numberTagMap) TYPE bloom_filter({p70:Float64}) GRANULARITY {p71:Int64}, INDEX idx_boolTagMapKeys mapKeys(boolTagMap) TYPE tokenbf_v1({p72:Int64}, {p73:Int64}, {p74:Int64}) GRANULARITY {p75:Int64}, INDEX idx_resourceTagMapKeys mapKeys(resourceTagsMap) TYPE tokenbf_v1({p76:Int64}, {p77:Int64}, {p78:Int64}) GRANULARITY {p79:Int64}, INDEX idx_resourceTagMapValues mapValues(resourceTagsMap) TYPE ngrambf_v1({p80:Int64}, {p81:Int64}, {p82:Int64}, {p83:Int64}) GRANULARITY {p84:Int64}, PROJECTION timestampSort (SELECT * ORDER BY timestamp)) ENGINE = ReplicatedMergeTree PRIMARY KEY (serviceName, hasError, toStartOfHour(timestamp), name) ORDER BY (serviceName, hasError, toStartOfHour(timestamp), name, timestamp) PARTITION BY toDate(timestamp) TTL toDateTime(timestamp) + toIntervalSecond({p85:Int64}) SETTINGS index_granularity = {p86:Int64}, ttl_only_drop_parts = {p87:Int64}",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.signoz_index_v2 ON CLUSTER cluster (timestamp DateTime64({p1:Int64}) CODEC(DoubleDelta, LZ4), traceID FixedString({p2:Int64}) CODEC(ZSTD({p3:Int64})), spanID String CODEC(ZSTD({p4:Int64})), parentSpanID String CODEC(ZSTD({p5:Int64})), serviceName LowCardinality(String) CODEC(ZSTD({p6:Int64})), name LowCardinality(String) CODEC(ZSTD({p7:Int64})), kind Int8 CODEC(T64, ZSTD({p8:Int64})), durationNano UInt64 CODEC(T64, ZSTD({p9:Int64})), statusCode Int16 CODEC(T64, ZSTD({p10:Int64})), externalHttpMethod LowCardinality(String) CODEC(ZSTD({p11:Int64})), externalHttpUrl LowCardinality(String) CODEC(ZSTD({p12:Int64})), dbSystem LowCardinality(String) CODEC(ZSTD({p13:Int64})), dbName LowCardinality(String) CODEC(ZSTD({p14:Int64})), dbOperation LowCardinality(String) CODEC(ZSTD({p15:Int64})), peerService LowCardinality(String) CODEC(ZSTD({p16:Int64})), events Array(String) CODEC(ZSTD({p17:Int64})), httpMethod LowCardinality(String) CODEC(ZSTD({p18:Int64})), httpUrl LowCardinality(String) CODEC(ZSTD({p19:Int64})), httpRoute LowCardinality(String) CODEC(ZSTD({p20:Int64})), httpHost LowCardinality(String) CODEC(ZSTD({p21:Int64})), msgSystem LowCardinality(String) CODEC(ZSTD({p22:Int64})), msgOperation LowCardinality(String) CODEC(ZSTD({p23:Int64})), hasError Bool CODEC(T64, ZSTD({p24:Int64})), rpcSystem LowCardinality(String) CODEC(ZSTD({p25:Int64})), rpcService LowCardinality(String) CODEC(ZSTD({p26:Int64})), rpcMethod LowCardinality(String) CODEC(ZSTD({p27:Int64})), responseStatusCode LowCardinality(String) CODEC(ZSTD({p28:Int64})), stringTagMap Map(String, String) CODEC(ZSTD({p29:Int64})), numberTagMap Map(String, Float64) CODEC(ZSTD({p30:Int64})), boolTagMap Map(String, Bool) CODEC(ZSTD({p31:Int64})), resourceTagsMap Map(LowCardinality(String), String) CODEC(ZSTD({p32:Int64})), isRemote LowCardinality(String) CODEC(ZSTD({p33:Int64})), statusMessage String CODEC(ZSTD({p34:Int64})), statusCodeString String CODEC(ZSTD({p35:Int64})), spanKind String CODEC(ZSTD({p36:Int64})), INDEX idx_service serviceName TYPE bloom_filter GRANULARITY {p37:Int64}, INDEX idx_name name TYPE bloom_filter GRANULARITY {p38:Int64}, INDEX idx_kind kind TYPE minmax GRANULARITY {p39:Int64}, INDEX idx_duration durationNano TYPE minmax GRANULARITY {p40:Int64}, INDEX idx_hasError hasError TYPE set({p41:Int64}) GRANULARITY {p42:Int64}, INDEX idx_httpRoute httpRoute TYPE bloom_filter GRANULARITY {p43:Int64}, INDEX idx_httpUrl httpUrl TYPE bloom_filter GRANULARITY {p44:Int64}, INDEX idx_httpHost httpHost TYPE bloom_filter GRANULARITY {p45:Int64}, INDEX idx_httpMethod httpMethod TYPE bloom_filter GRANULARITY {p46:Int64}, INDEX idx_timestamp timestamp TYPE minmax GRANULARITY {p47:Int64}, INDEX idx_rpcMethod rpcMethod TYPE bloom_filter GRANULARITY {p48:Int64}, INDEX idx_responseStatusCode responseStatusCode TYPE set({p49:Int64}) GRANULARITY {p50:Int64}, INDEX idx_resourceTagsMapKeys mapKeys(resourceTagsMap) TYPE bloom_filter({p51:Float64}) GRANULARITY {p52:Int64}, INDEX idx_resourceTagsMapValues mapValues(resourceTagsMap) TYPE bloom_filter({p53:Float64}) GRANULARITY {p54:Int64}, INDEX idx_statusCodeString statusCodeString TYPE set({p55:Int64}) GRANULARITY {p56:Int64}, INDEX idx_spanKind spanKind TYPE set({p57:Int64}) GRANULARITY {p58:Int64}, INDEX idx_stringTagMapKeys mapKeys(stringTagMap) TYPE tokenbf_v1({p59:Int64}, {p60:Int64}, {p61:Int64}) GRANULARITY {p62:Int64}, INDEX idx_stringTagMapValues mapValues(stringTagMap) TYPE ngrambf_v1({p63:Int64}, {p64:Int64}, {p65:Int64}, {p66:Int64}) GRANULARITY {p67:Int64}, INDEX idx_numberTagMapKeys mapKeys(numberTagMap) TYPE tokenbf_v1({p68:Int64}, {p69:Int64}, {p70:Int64}) GRANULARITY {p71:Int64}, INDEX idx_numberTagMapValues mapValues(numberTagMap) TYPE bloom_filter({p72:Float64}) GRANULARITY {p73:Int64}, INDEX idx_boolTagMapKeys mapKeys(boolTagMap) TYPE tokenbf_v1({p74:Int64}, {p75:Int64}, {p76:Int64}) GRANULARITY {p77:Int64}, INDEX idx_resourceTagMapKeys mapKeys(resourceTagsMap) TYPE tokenbf_v1({p78:Int64}, {p79:Int64}, {p80:Int64}) GRANULARITY {p81:Int64}, INDEX idx_resourceTagMapValues mapValues(resourceTagsMap) TYPE ngrambf_v1({p82:Int64}, {p83:Int64}, {p84:Int64}, {p85:Int64}) GRANULARITY {p86:Int64}, PROJECTION timestampSort (SELECT * ORDER BY timestamp)) ENGINE = ReplicatedMergeTree PRIMARY KEY (serviceName, hasError, toStartOfHour(timestamp), name) ORDER BY (serviceName, hasError, toStartOfHour(timestamp), name, timestamp) PARTITION BY toDate(timestamp) TTL toDateTime(timestamp) + toIntervalSecond({p87:Int64}) SETTINGS index_granularity = {p88:Int64}, ttl_only_drop_parts = {p89:Int64}",
       "path": "explained",
       "executions": 1
     },
@@ -6836,7 +6836,7 @@
       "executions": 3
     },
     "q:245f8962-bfb6-40c8-ae50-035554a11658": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_durationSort ON CLUSTER cluster (timestamp DateTime64(9) CODEC(DoubleDelta, LZ4), traceID FixedString(32) CODEC(ZSTD({p1:Int64})), spanID String CODEC(ZSTD({p2:Int64})), parentSpanID String CODEC(ZSTD({p3:Int64})), serviceName LowCardinality(String) CODEC(ZSTD({p4:Int64})), name LowCardinality(String) CODEC(ZSTD({p5:Int64})), kind Int8 CODEC(T64, ZSTD({p6:Int64})), durationNano UInt64 CODEC(T64, ZSTD({p7:Int64})), statusCode Int16 CODEC(T64, ZSTD({p8:Int64})), httpMethod LowCardinality(String) CODEC(ZSTD({p9:Int64})), httpUrl LowCardinality(String) CODEC(ZSTD({p10:Int64})), httpRoute LowCardinality(String) CODEC(ZSTD({p11:Int64})), httpHost LowCardinality(String) CODEC(ZSTD({p12:Int64})), hasError Bool CODEC(T64, ZSTD({p13:Int64})), rpcSystem LowCardinality(String) CODEC(ZSTD({p14:Int64})), rpcService LowCardinality(String) CODEC(ZSTD({p15:Int64})), rpcMethod LowCardinality(String) CODEC(ZSTD({p16:Int64})), responseStatusCode LowCardinality(String) CODEC(ZSTD({p17:Int64})), stringTagMap Map(String, String) CODEC(ZSTD({p18:Int64})), numberTagMap Map(String, Float64) CODEC(ZSTD({p19:Int64})), boolTagMap Map(String, Bool) CODEC(ZSTD({p20:Int64})), isRemote LowCardinality(String) CODEC(ZSTD({p21:Int64})), statusMessage String CODEC(ZSTD({p22:Int64})), statusCodeString String CODEC(ZSTD({p23:Int64})), spanKind String CODEC(ZSTD({p24:Int64}))) ENGINE = Distributed({p25:String}, signoz_traces, durationSort, cityHash64(traceID))",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_durationSort ON CLUSTER cluster (timestamp DateTime64({p1:Int64}) CODEC(DoubleDelta, LZ4), traceID FixedString({p2:Int64}) CODEC(ZSTD({p3:Int64})), spanID String CODEC(ZSTD({p4:Int64})), parentSpanID String CODEC(ZSTD({p5:Int64})), serviceName LowCardinality(String) CODEC(ZSTD({p6:Int64})), name LowCardinality(String) CODEC(ZSTD({p7:Int64})), kind Int8 CODEC(T64, ZSTD({p8:Int64})), durationNano UInt64 CODEC(T64, ZSTD({p9:Int64})), statusCode Int16 CODEC(T64, ZSTD({p10:Int64})), httpMethod LowCardinality(String) CODEC(ZSTD({p11:Int64})), httpUrl LowCardinality(String) CODEC(ZSTD({p12:Int64})), httpRoute LowCardinality(String) CODEC(ZSTD({p13:Int64})), httpHost LowCardinality(String) CODEC(ZSTD({p14:Int64})), hasError Bool CODEC(T64, ZSTD({p15:Int64})), rpcSystem LowCardinality(String) CODEC(ZSTD({p16:Int64})), rpcService LowCardinality(String) CODEC(ZSTD({p17:Int64})), rpcMethod LowCardinality(String) CODEC(ZSTD({p18:Int64})), responseStatusCode LowCardinality(String) CODEC(ZSTD({p19:Int64})), stringTagMap Map(String, String) CODEC(ZSTD({p20:Int64})), numberTagMap Map(String, Float64) CODEC(ZSTD({p21:Int64})), boolTagMap Map(String, Bool) CODEC(ZSTD({p22:Int64})), isRemote LowCardinality(String) CODEC(ZSTD({p23:Int64})), statusMessage String CODEC(ZSTD({p24:Int64})), statusCodeString String CODEC(ZSTD({p25:Int64})), spanKind String CODEC(ZSTD({p26:Int64}))) ENGINE = Distributed({p27:String}, signoz_traces, durationSort, cityHash64(traceID))",
       "path": "explained",
       "executions": 1
     },
@@ -6856,7 +6856,7 @@
       "executions": 1
     },
     "q:24ad5cdf-6ecf-4023-b864-7f71dda530fb": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_signoz_error_index_v2 ON CLUSTER cluster (timestamp DateTime64(9) CODEC(DoubleDelta, LZ4), errorID FixedString(32) CODEC(ZSTD({p1:Int64})), groupID FixedString(32) CODEC(ZSTD({p2:Int64})), traceID FixedString(32) CODEC(ZSTD({p3:Int64})), spanID String CODEC(ZSTD({p4:Int64})), serviceName LowCardinality(String) CODEC(ZSTD({p5:Int64})), exceptionType LowCardinality(String) CODEC(ZSTD({p6:Int64})), exceptionMessage String CODEC(ZSTD({p7:Int64})), exceptionStacktrace String CODEC(ZSTD({p8:Int64})), exceptionEscaped Bool CODEC(T64, ZSTD({p9:Int64})), resourceTagsMap Map(LowCardinality(String), String) CODEC(ZSTD({p10:Int64}))) ENGINE = Distributed({p11:String}, signoz_traces, signoz_error_index_v2, cityHash64(groupID))",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_signoz_error_index_v2 ON CLUSTER cluster (timestamp DateTime64({p1:Int64}) CODEC(DoubleDelta, LZ4), errorID FixedString({p2:Int64}) CODEC(ZSTD({p3:Int64})), groupID FixedString({p4:Int64}) CODEC(ZSTD({p5:Int64})), traceID FixedString({p6:Int64}) CODEC(ZSTD({p7:Int64})), spanID String CODEC(ZSTD({p8:Int64})), serviceName LowCardinality(String) CODEC(ZSTD({p9:Int64})), exceptionType LowCardinality(String) CODEC(ZSTD({p10:Int64})), exceptionMessage String CODEC(ZSTD({p11:Int64})), exceptionStacktrace String CODEC(ZSTD({p12:Int64})), exceptionEscaped Bool CODEC(T64, ZSTD({p13:Int64})), resourceTagsMap Map(LowCardinality(String), String) CODEC(ZSTD({p14:Int64}))) ENGINE = Distributed({p15:String}, signoz_traces, signoz_error_index_v2, cityHash64(groupID))",
       "path": "explained",
       "executions": 1
     },
@@ -6966,7 +6966,7 @@
       "executions": 1
     },
     "q:326a89ab-43a8-4a11-819a-415cbf950ea2": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_logs.distributed_schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64(9), updated_at DateTime64(9)) ENGINE = Distributed({p1:String}, signoz_logs, schema_migrations_v2, rand())",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_logs.distributed_schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64({p1:Int64}), updated_at DateTime64({p2:Int64})) ENGINE = Distributed({p3:String}, signoz_logs, schema_migrations_v2, rand())",
       "path": "explained",
       "executions": 1
     },
@@ -6976,7 +6976,7 @@
       "executions": 2
     },
     "q:33b16071-3770-4389-8fda-4555a55656b0": {
-      "query": "CREATE MATERIALIZED VIEW IF NOT EXISTS signoz_traces.dependency_graph_minutes_service_calls_mv_v2 ON CLUSTER cluster TO signoz_traces.dependency_graph_minutes_v2 (src LowCardinality(String) CODEC(ZSTD({p1:Int64})), dest LowCardinality(String) CODEC(ZSTD({p2:Int64})), duration_quantiles_state AggregateFunction(quantiles(0.5, 0.75, 0.9, 0.95, 0.99), Float64) CODEC(Default), error_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p3:Int64})), total_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p4:Int64})), timestamp DateTime CODEC(DoubleDelta, LZ4), deployment_environment LowCardinality(String) CODEC(ZSTD({p5:Int64})), k8s_cluster_name LowCardinality(String) CODEC(ZSTD({p6:Int64})), k8s_namespace_name LowCardinality(String) CODEC(ZSTD({p7:Int64}))) AS SELECT\n    A.serviceName AS src,\n    B.serviceName AS dest,\n    quantilesState({p8:Float64}, {p9:Float64}, {p10:Float64}, {p11:Float64}, {p12:Float64})(toFloat64(B.durationNano)) AS duration_quantiles_state,\n    countIf(B.statusCode = {p13:Int64}) AS error_count,\n    count(*) AS total_count,\n    toStartOfMinute(B.timestamp) AS timestamp,\n    B.resourceTagsMap[{p14:String}] AS deployment_environment,\n    B.resourceTagsMap[{p15:String}] AS k8s_cluster_name,\n    B.resourceTagsMap[{p16:String}] AS k8s_namespace_name\nFROM signoz_traces.signoz_index_v2 AS A, signoz_traces.signoz_index_v2 AS B\nWHERE (A.serviceName != B.serviceName) AND (A.spanID = B.parentSpanID)\nGROUP BY\n    timestamp,\n    src,\n    dest,\n    deployment_environment,\n    k8s_cluster_name,\n    k8s_namespace_name",
+      "query": "CREATE MATERIALIZED VIEW IF NOT EXISTS signoz_traces.dependency_graph_minutes_service_calls_mv_v2 ON CLUSTER cluster TO signoz_traces.dependency_graph_minutes_v2 (src LowCardinality(String) CODEC(ZSTD({p1:Int64})), dest LowCardinality(String) CODEC(ZSTD({p2:Int64})), duration_quantiles_state AggregateFunction(quantiles({p3:Float64}, {p4:Float64}, {p5:Float64}, {p6:Float64}, {p7:Float64}), Float64) CODEC(Default), error_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p8:Int64})), total_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p9:Int64})), timestamp DateTime CODEC(DoubleDelta, LZ4), deployment_environment LowCardinality(String) CODEC(ZSTD({p10:Int64})), k8s_cluster_name LowCardinality(String) CODEC(ZSTD({p11:Int64})), k8s_namespace_name LowCardinality(String) CODEC(ZSTD({p12:Int64}))) AS SELECT\n    A.serviceName AS src,\n    B.serviceName AS dest,\n    quantilesState({p13:Float64}, {p14:Float64}, {p15:Float64}, {p16:Float64}, {p17:Float64})(toFloat64(B.durationNano)) AS duration_quantiles_state,\n    countIf(B.statusCode = {p18:Int64}) AS error_count,\n    count(*) AS total_count,\n    toStartOfMinute(B.timestamp) AS timestamp,\n    B.resourceTagsMap[{p19:String}] AS deployment_environment,\n    B.resourceTagsMap[{p20:String}] AS k8s_cluster_name,\n    B.resourceTagsMap[{p21:String}] AS k8s_namespace_name\nFROM signoz_traces.signoz_index_v2 AS A, signoz_traces.signoz_index_v2 AS B\nWHERE (A.serviceName != B.serviceName) AND (A.spanID = B.parentSpanID)\nGROUP BY\n    timestamp,\n    src,\n    dest,\n    deployment_environment,\n    k8s_cluster_name,\n    k8s_namespace_name",
       "path": "explained",
       "executions": 1
     },
@@ -7006,7 +7006,7 @@
       "executions": 1
     },
     "q:35165dc9-107d-497e-9471-fd789ab53664": {
-      "query": "ALTER TABLE signoz_logs.logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS body_v2 JSON(max_dynamic_paths=0, message String) CODEC(ZSTD({p1:Int64})) AFTER body",
+      "query": "ALTER TABLE signoz_logs.logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS body_v2 JSON(max_dynamic_paths={p1:Int64}, message String) CODEC(ZSTD({p2:Int64})) AFTER body",
       "path": "explained",
       "executions": 1
     },
@@ -7021,7 +7021,7 @@
       "executions": 1
     },
     "q:36101dba-fe44-4565-a6ed-8e0f0987afaf": {
-      "query": "ALTER TABLE signoz_traces.signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS resource JSON(max_dynamic_paths=100) CODEC(ZSTD({p1:Int64}))",
+      "query": "ALTER TABLE signoz_traces.signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS resource JSON(max_dynamic_paths={p1:Int64}) CODEC(ZSTD({p2:Int64}))",
       "path": "explained",
       "executions": 1
     },
@@ -7041,7 +7041,7 @@
       "executions": 1
     },
     "q:38856266-c8e8-429d-9ba2-1b2e0e612416": {
-      "query": "ALTER TABLE signoz_traces.span_attributes_keys ON CLUSTER cluster MODIFY COLUMN IF EXISTS tagType Enum8('tag' = 1, 'resource' = 2, 'scope' = 3)",
+      "query": "ALTER TABLE signoz_traces.span_attributes_keys ON CLUSTER cluster MODIFY COLUMN IF EXISTS tagType Enum8({p1:String} = {p2:Int64}, {p3:String} = {p4:Int64}, {p5:String} = {p6:Int64})",
       "path": "explained",
       "executions": 1
     },
@@ -7071,7 +7071,7 @@
       "executions": 4
     },
     "q:396ab6dc-2604-4ed1-9455-2b243a98f8d1": {
-      "query": "ALTER TABLE signoz_logs.distributed_logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS body_v2 JSON(max_dynamic_paths=0, message String) CODEC(ZSTD({p1:Int64})) AFTER body",
+      "query": "ALTER TABLE signoz_logs.distributed_logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS body_v2 JSON(max_dynamic_paths={p1:Int64}, message String) CODEC(ZSTD({p2:Int64})) AFTER body",
       "path": "explained",
       "executions": 1
     },
@@ -7116,7 +7116,7 @@
       "executions": 1
     },
     "q:3e522edc-ca43-41a5-a742-8b48711b66d2": {
-      "query": "ALTER TABLE signoz_logs.distributed_logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS created_at DateTime64(3) DEFAULT now64({p1:Int64}) CODEC(Delta({p2:Int64}), ZSTD({p3:Int64}))",
+      "query": "ALTER TABLE signoz_logs.distributed_logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS created_at DateTime64({p1:Int64}) DEFAULT now64({p2:Int64}) CODEC(Delta({p3:Int64}), ZSTD({p4:Int64}))",
       "path": "explained",
       "executions": 1
     },
@@ -7126,7 +7126,7 @@
       "executions": 1
     },
     "q:3f480aba-2306-4af2-a2dd-c9b974a16808": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.signoz_spans ON CLUSTER cluster (timestamp DateTime64(9) CODEC(DoubleDelta, LZ4), traceID FixedString(32) CODEC(ZSTD({p1:Int64})), model String CODEC(ZSTD({p2:Int64}))) ENGINE = ReplicatedMergeTree ORDER BY (traceID) PARTITION BY toDate(timestamp) TTL toDateTime(timestamp) + toIntervalSecond({p3:Int64}) SETTINGS index_granularity = {p4:Int64}, ttl_only_drop_parts = {p5:Int64}",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.signoz_spans ON CLUSTER cluster (timestamp DateTime64({p1:Int64}) CODEC(DoubleDelta, LZ4), traceID FixedString({p2:Int64}) CODEC(ZSTD({p3:Int64})), model String CODEC(ZSTD({p4:Int64}))) ENGINE = ReplicatedMergeTree ORDER BY (traceID) PARTITION BY toDate(timestamp) TTL toDateTime(timestamp) + toIntervalSecond({p5:Int64}) SETTINGS index_granularity = {p6:Int64}, ttl_only_drop_parts = {p7:Int64}",
       "path": "explained",
       "executions": 1
     },
@@ -7161,7 +7161,7 @@
       "executions": 1
     },
     "q:424d145b-a3df-4bff-b382-a682dcbd2a3a": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_metrics.distributed_metric_reduction_rules ON CLUSTER cluster (metric_name LowCardinality(String) CODEC(ZSTD({p1:Int64})), labels Array(LowCardinality(String)) CODEC(ZSTD({p2:Int64})), match_type LowCardinality(String) DEFAULT {p3:String} CODEC(ZSTD({p4:Int64})), effective_from_unix_milli Int64 CODEC(ZSTD({p5:Int64})), deleted Bool DEFAULT {p6:Bool} CODEC(ZSTD({p7:Int64})), updated_at DateTime64(3) DEFAULT now64({p8:Int64}) CODEC(ZSTD({p9:Int64}))) ENGINE = Distributed({p10:String}, signoz_metrics, metric_reduction_rules, cityHash64(metric_name))",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_metrics.distributed_metric_reduction_rules ON CLUSTER cluster (metric_name LowCardinality(String) CODEC(ZSTD({p1:Int64})), labels Array(LowCardinality(String)) CODEC(ZSTD({p2:Int64})), match_type LowCardinality(String) DEFAULT {p3:String} CODEC(ZSTD({p4:Int64})), effective_from_unix_milli Int64 CODEC(ZSTD({p5:Int64})), deleted Bool DEFAULT {p6:Bool} CODEC(ZSTD({p7:Int64})), updated_at DateTime64({p8:Int64}) DEFAULT now64({p9:Int64}) CODEC(ZSTD({p10:Int64}))) ENGINE = Distributed({p11:String}, signoz_metrics, metric_reduction_rules, cityHash64(metric_name))",
       "path": "explained",
       "executions": 1
     },
@@ -7181,7 +7181,7 @@
       "executions": 1
     },
     "q:44ac4e55-d501-4a4f-81be-6f7002c1ec39": {
-      "query": "ALTER TABLE signoz_logs.logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS created_at DateTime64(3) DEFAULT now64({p1:Int64}) CODEC(Delta({p2:Int64}), ZSTD({p3:Int64}))",
+      "query": "ALTER TABLE signoz_logs.logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS created_at DateTime64({p1:Int64}) DEFAULT now64({p2:Int64}) CODEC(Delta({p3:Int64}), ZSTD({p4:Int64}))",
       "path": "explained",
       "executions": 1
     },
@@ -7191,7 +7191,7 @@
       "executions": 1
     },
     "q:4631b491-83cf-4f56-b35a-9c755c27cae7": {
-      "query": "ALTER TABLE signoz_traces.signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS inserted_at DateTime64(3) CODEC(Delta({p1:Int64}), ZSTD({p2:Int64}))",
+      "query": "ALTER TABLE signoz_traces.signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS inserted_at DateTime64({p1:Int64}) CODEC(Delta({p2:Int64}), ZSTD({p3:Int64}))",
       "path": "explained",
       "executions": 1
     },
@@ -7286,7 +7286,7 @@
       "executions": 1
     },
     "q:543c1bff-7dc7-43c9-9fff-d170eab04afd": {
-      "query": "ALTER TABLE signoz_traces.signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS attributes JSON(max_dynamic_paths=0) CODEC(ZSTD({p1:Int64})) AFTER attributes_bool",
+      "query": "ALTER TABLE signoz_traces.signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS attributes JSON(max_dynamic_paths={p1:Int64}) CODEC(ZSTD({p2:Int64})) AFTER attributes_bool",
       "path": "explained",
       "executions": 1
     },
@@ -7351,7 +7351,7 @@
       "executions": 1
     },
     "q:5aa0cbcb-fe7b-436d-8152-ca15a3278334": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_metrics.distributed_schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64(9), updated_at DateTime64(9)) ENGINE = Distributed({p1:String}, signoz_metrics, schema_migrations_v2, rand())",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_metrics.distributed_schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64({p1:Int64}), updated_at DateTime64({p2:Int64})) ENGINE = Distributed({p3:String}, signoz_metrics, schema_migrations_v2, rand())",
       "path": "explained",
       "executions": 1
     },
@@ -7426,7 +7426,7 @@
       "executions": 1
     },
     "q:673820bd-f687-4435-9b49-01c00300e287": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_analytics.distributed_schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64(9), updated_at DateTime64(9)) ENGINE = Distributed({p1:String}, signoz_analytics, schema_migrations_v2, rand())",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_analytics.distributed_schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64({p1:Int64}), updated_at DateTime64({p2:Int64})) ENGINE = Distributed({p3:String}, signoz_analytics, schema_migrations_v2, rand())",
       "path": "explained",
       "executions": 1
     },
@@ -7446,7 +7446,7 @@
       "executions": 1
     },
     "q:695f3b39-fe2d-4177-8b8e-d572dd52d26b": {
-      "query": "CREATE MATERIALIZED VIEW IF NOT EXISTS signoz_traces.dependency_graph_minutes_messaging_calls_mv_v2 ON CLUSTER cluster TO signoz_traces.dependency_graph_minutes_v2 (src LowCardinality(String) CODEC(ZSTD({p1:Int64})), dest LowCardinality(String) CODEC(ZSTD({p2:Int64})), duration_quantiles_state AggregateFunction(quantiles(0.5, 0.75, 0.9, 0.95, 0.99), Float64) CODEC(Default), error_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p3:Int64})), total_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p4:Int64})), timestamp DateTime CODEC(DoubleDelta, LZ4), deployment_environment LowCardinality(String) CODEC(ZSTD({p5:Int64})), k8s_cluster_name LowCardinality(String) CODEC(ZSTD({p6:Int64})), k8s_namespace_name LowCardinality(String) CODEC(ZSTD({p7:Int64}))) AS SELECT\n    serviceName AS src,\n    msgSystem AS dest,\n    quantilesState({p8:Float64}, {p9:Float64}, {p10:Float64}, {p11:Float64}, {p12:Float64})(toFloat64(durationNano)) AS duration_quantiles_state,\n    countIf(statusCode = {p13:Int64}) AS error_count,\n    count(*) AS total_count,\n    toStartOfMinute(timestamp) AS timestamp,\n    resourceTagsMap[{p14:String}] AS deployment_environment,\n    resourceTagsMap[{p15:String}] AS k8s_cluster_name,\n    resourceTagsMap[{p16:String}] AS k8s_namespace_name\nFROM signoz_traces.signoz_index_v2\nWHERE (dest != {p17:String}) AND (kind != {p18:Int64})\nGROUP BY\n    timestamp,\n    src,\n    dest,\n    deployment_environment,\n    k8s_cluster_name,\n    k8s_namespace_name",
+      "query": "CREATE MATERIALIZED VIEW IF NOT EXISTS signoz_traces.dependency_graph_minutes_messaging_calls_mv_v2 ON CLUSTER cluster TO signoz_traces.dependency_graph_minutes_v2 (src LowCardinality(String) CODEC(ZSTD({p1:Int64})), dest LowCardinality(String) CODEC(ZSTD({p2:Int64})), duration_quantiles_state AggregateFunction(quantiles({p3:Float64}, {p4:Float64}, {p5:Float64}, {p6:Float64}, {p7:Float64}), Float64) CODEC(Default), error_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p8:Int64})), total_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p9:Int64})), timestamp DateTime CODEC(DoubleDelta, LZ4), deployment_environment LowCardinality(String) CODEC(ZSTD({p10:Int64})), k8s_cluster_name LowCardinality(String) CODEC(ZSTD({p11:Int64})), k8s_namespace_name LowCardinality(String) CODEC(ZSTD({p12:Int64}))) AS SELECT\n    serviceName AS src,\n    msgSystem AS dest,\n    quantilesState({p13:Float64}, {p14:Float64}, {p15:Float64}, {p16:Float64}, {p17:Float64})(toFloat64(durationNano)) AS duration_quantiles_state,\n    countIf(statusCode = {p18:Int64}) AS error_count,\n    count(*) AS total_count,\n    toStartOfMinute(timestamp) AS timestamp,\n    resourceTagsMap[{p19:String}] AS deployment_environment,\n    resourceTagsMap[{p20:String}] AS k8s_cluster_name,\n    resourceTagsMap[{p21:String}] AS k8s_namespace_name\nFROM signoz_traces.signoz_index_v2\nWHERE (dest != {p22:String}) AND (kind != {p23:Int64})\nGROUP BY\n    timestamp,\n    src,\n    dest,\n    deployment_environment,\n    k8s_cluster_name,\n    k8s_namespace_name",
       "path": "explained",
       "executions": 1
     },
@@ -7461,7 +7461,7 @@
       "executions": 362
     },
     "q:696e3d1a-1c23-4841-8e49-6e83f026b82b": {
-      "query": "ALTER TABLE signoz_traces.distributed_span_attributes_keys ON CLUSTER cluster MODIFY COLUMN IF EXISTS tagType Enum8('tag' = 1, 'resource' = 2, 'scope' = 3)",
+      "query": "ALTER TABLE signoz_traces.distributed_span_attributes_keys ON CLUSTER cluster MODIFY COLUMN IF EXISTS tagType Enum8({p1:String} = {p2:Int64}, {p3:String} = {p4:Int64}, {p5:String} = {p6:Int64})",
       "path": "explained",
       "executions": 1
     },
@@ -7471,7 +7471,7 @@
       "executions": 1
     },
     "q:6a7ef76b-5422-4062-9499-00c90aca5962": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_logs.schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64(9), updated_at DateTime64(9)) ENGINE = ReplicatedReplacingMergeTree PRIMARY KEY migration_id ORDER BY migration_id",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_logs.schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64({p1:Int64}), updated_at DateTime64({p2:Int64})) ENGINE = ReplicatedReplacingMergeTree PRIMARY KEY migration_id ORDER BY migration_id",
       "path": "parsed",
       "executions": 1
     },
@@ -7511,7 +7511,7 @@
       "executions": 1
     },
     "q:6e5c0028-42c9-4de7-81d3-4176605ec4b7": {
-      "query": "ALTER TABLE signoz_traces.distributed_signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS scope JSON(max_dynamic_paths=0, name String, version String, attributes JSON(max_dynamic_paths=0)) CODEC(ZSTD({p1:Int64}))",
+      "query": "ALTER TABLE signoz_traces.distributed_signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS scope JSON(max_dynamic_paths={p1:Int64}, name String, version String, attributes JSON(max_dynamic_paths={p2:Int64})) CODEC(ZSTD({p3:Int64}))",
       "path": "explained",
       "executions": 1
     },
@@ -7526,7 +7526,7 @@
       "executions": 12
     },
     "q:724e9ca5-cf5e-4e95-98f6-3f94c750e438": {
-      "query": "ALTER TABLE signoz_traces.distributed_signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS attributes JSON(max_dynamic_paths=0) CODEC(ZSTD({p1:Int64})) AFTER attributes_bool",
+      "query": "ALTER TABLE signoz_traces.distributed_signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS attributes JSON(max_dynamic_paths={p1:Int64}) CODEC(ZSTD({p2:Int64})) AFTER attributes_bool",
       "path": "explained",
       "executions": 1
     },
@@ -7541,22 +7541,22 @@
       "executions": 1
     },
     "q:7310bfbf-11c6-44f2-8fa2-aa33b40d38ce": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_signoz_spans ON CLUSTER cluster (timestamp DateTime64(9) CODEC(DoubleDelta, LZ4), traceID FixedString(32) CODEC(ZSTD({p1:Int64})), model String CODEC(ZSTD({p2:Int64}))) ENGINE = Distributed({p3:String}, signoz_traces, signoz_spans, cityHash64(traceID))",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_signoz_spans ON CLUSTER cluster (timestamp DateTime64({p1:Int64}) CODEC(DoubleDelta, LZ4), traceID FixedString({p2:Int64}) CODEC(ZSTD({p3:Int64})), model String CODEC(ZSTD({p4:Int64}))) ENGINE = Distributed({p5:String}, signoz_traces, signoz_spans, cityHash64(traceID))",
       "path": "explained",
       "executions": 1
     },
     "q:73e51bb0-8f3f-4425-bae4-38d16f55a051": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_metadata.schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64(9), updated_at DateTime64(9)) ENGINE = ReplicatedReplacingMergeTree PRIMARY KEY migration_id ORDER BY migration_id",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_metadata.schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64({p1:Int64}), updated_at DateTime64({p2:Int64})) ENGINE = ReplicatedReplacingMergeTree PRIMARY KEY migration_id ORDER BY migration_id",
       "path": "parsed",
       "executions": 1
     },
     "q:757f12be-2933-4a20-8402-ec30bc54e56e": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_metrics.schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64(9), updated_at DateTime64(9)) ENGINE = ReplicatedReplacingMergeTree PRIMARY KEY migration_id ORDER BY migration_id",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_metrics.schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64({p1:Int64}), updated_at DateTime64({p2:Int64})) ENGINE = ReplicatedReplacingMergeTree PRIMARY KEY migration_id ORDER BY migration_id",
       "path": "parsed",
       "executions": 1
     },
     "q:7647dd6a-4ded-4be8-9fc7-f87c17451953": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64(9), updated_at DateTime64(9)) ENGINE = Distributed({p1:String}, signoz_traces, schema_migrations_v2, rand())",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64({p1:Int64}), updated_at DateTime64({p2:Int64})) ENGINE = Distributed({p3:String}, signoz_traces, schema_migrations_v2, rand())",
       "path": "explained",
       "executions": 1
     },
@@ -7581,7 +7581,7 @@
       "executions": 1
     },
     "q:79447914-7588-4d2b-9d92-e808cc6c192b": {
-      "query": "ALTER TABLE signoz_traces.distributed_signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS created_at DateTime64(3) DEFAULT now64({p1:Int64}) CODEC(Delta({p2:Int64}), ZSTD({p3:Int64}))",
+      "query": "ALTER TABLE signoz_traces.distributed_signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS created_at DateTime64({p1:Int64}) DEFAULT now64({p2:Int64}) CODEC(Delta({p3:Int64}), ZSTD({p4:Int64}))",
       "path": "explained",
       "executions": 1
     },
@@ -7601,7 +7601,7 @@
       "executions": 1
     },
     "q:7ae3545f-1a0c-457d-837c-158273751420": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.signoz_error_index_v2 ON CLUSTER cluster (timestamp DateTime64(9) CODEC(DoubleDelta, LZ4), errorID FixedString(32) CODEC(ZSTD({p1:Int64})), groupID FixedString(32) CODEC(ZSTD({p2:Int64})), traceID FixedString(32) CODEC(ZSTD({p3:Int64})), spanID String CODEC(ZSTD({p4:Int64})), serviceName LowCardinality(String) CODEC(ZSTD({p5:Int64})), exceptionType LowCardinality(String) CODEC(ZSTD({p6:Int64})), exceptionMessage String CODEC(ZSTD({p7:Int64})), exceptionStacktrace String CODEC(ZSTD({p8:Int64})), exceptionEscaped Bool CODEC(T64, ZSTD({p9:Int64})), resourceTagsMap Map(LowCardinality(String), String) CODEC(ZSTD({p10:Int64})), INDEX idx_error_id errorID TYPE bloom_filter GRANULARITY {p11:Int64}, INDEX idx_resourceTagsMapKeys mapKeys(resourceTagsMap) TYPE bloom_filter({p12:Float64}) GRANULARITY {p13:Int64}, INDEX idx_resourceTagsMapValues mapValues(resourceTagsMap) TYPE bloom_filter({p14:Float64}) GRANULARITY {p15:Int64}) ENGINE = ReplicatedMergeTree ORDER BY (timestamp, groupID) PARTITION BY toDate(timestamp) TTL toDateTime(timestamp) + toIntervalSecond({p16:Int64}) SETTINGS index_granularity = {p17:Int64}, ttl_only_drop_parts = {p18:Int64}",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.signoz_error_index_v2 ON CLUSTER cluster (timestamp DateTime64({p1:Int64}) CODEC(DoubleDelta, LZ4), errorID FixedString({p2:Int64}) CODEC(ZSTD({p3:Int64})), groupID FixedString({p4:Int64}) CODEC(ZSTD({p5:Int64})), traceID FixedString({p6:Int64}) CODEC(ZSTD({p7:Int64})), spanID String CODEC(ZSTD({p8:Int64})), serviceName LowCardinality(String) CODEC(ZSTD({p9:Int64})), exceptionType LowCardinality(String) CODEC(ZSTD({p10:Int64})), exceptionMessage String CODEC(ZSTD({p11:Int64})), exceptionStacktrace String CODEC(ZSTD({p12:Int64})), exceptionEscaped Bool CODEC(T64, ZSTD({p13:Int64})), resourceTagsMap Map(LowCardinality(String), String) CODEC(ZSTD({p14:Int64})), INDEX idx_error_id errorID TYPE bloom_filter GRANULARITY {p15:Int64}, INDEX idx_resourceTagsMapKeys mapKeys(resourceTagsMap) TYPE bloom_filter({p16:Float64}) GRANULARITY {p17:Int64}, INDEX idx_resourceTagsMapValues mapValues(resourceTagsMap) TYPE bloom_filter({p18:Float64}) GRANULARITY {p19:Int64}) ENGINE = ReplicatedMergeTree ORDER BY (timestamp, groupID) PARTITION BY toDate(timestamp) TTL toDateTime(timestamp) + toIntervalSecond({p20:Int64}) SETTINGS index_granularity = {p21:Int64}, ttl_only_drop_parts = {p22:Int64}",
       "path": "explained",
       "executions": 1
     },
@@ -7636,7 +7636,7 @@
       "executions": 2
     },
     "q:7f095e45-2d01-478d-bea2-e8eefddd9132": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_analytics.schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64(9), updated_at DateTime64(9)) ENGINE = ReplicatedReplacingMergeTree PRIMARY KEY migration_id ORDER BY migration_id",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_analytics.schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64({p1:Int64}), updated_at DateTime64({p2:Int64})) ENGINE = ReplicatedReplacingMergeTree PRIMARY KEY migration_id ORDER BY migration_id",
       "path": "parsed",
       "executions": 1
     },
@@ -7651,7 +7651,7 @@
       "executions": 1
     },
     "q:7fc91c5f-1307-4913-8f3e-3b6557afabd3": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.span_attributes ON CLUSTER cluster (timestamp DateTime CODEC(DoubleDelta, ZSTD({p1:Int64})), tagKey LowCardinality(String) CODEC(ZSTD({p2:Int64})), tagType Enum8('tag' = 1, 'resource' = 2) CODEC(ZSTD({p3:Int64})), dataType Enum8('string' = 1, 'bool' = 2, 'float64' = 3) CODEC(ZSTD({p4:Int64})), stringTagValue String CODEC(ZSTD({p5:Int64})), float64TagValue Nullable(Float64) CODEC(ZSTD({p6:Int64})), isColumn Bool CODEC(ZSTD({p7:Int64}))) ENGINE = ReplicatedReplacingMergeTree ORDER BY (tagKey, tagType, dataType, stringTagValue, float64TagValue, isColumn) TTL toDateTime(timestamp) + toIntervalSecond({p8:Int64}) SETTINGS index_granularity = {p9:Int64}, ttl_only_drop_parts = {p10:Int64}, allow_nullable_key = {p11:Int64}",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.span_attributes ON CLUSTER cluster (timestamp DateTime CODEC(DoubleDelta, ZSTD({p1:Int64})), tagKey LowCardinality(String) CODEC(ZSTD({p2:Int64})), tagType Enum8({p3:String} = {p4:Int64}, {p5:String} = {p6:Int64}) CODEC(ZSTD({p7:Int64})), dataType Enum8({p8:String} = {p9:Int64}, {p10:String} = {p11:Int64}, {p12:String} = {p13:Int64}) CODEC(ZSTD({p14:Int64})), stringTagValue String CODEC(ZSTD({p15:Int64})), float64TagValue Nullable(Float64) CODEC(ZSTD({p16:Int64})), isColumn Bool CODEC(ZSTD({p17:Int64}))) ENGINE = ReplicatedReplacingMergeTree ORDER BY (tagKey, tagType, dataType, stringTagValue, float64TagValue, isColumn) TTL toDateTime(timestamp) + toIntervalSecond({p18:Int64}) SETTINGS index_granularity = {p19:Int64}, ttl_only_drop_parts = {p20:Int64}, allow_nullable_key = {p21:Int64}",
       "path": "explained",
       "executions": 1
     },
@@ -7721,7 +7721,7 @@
       "executions": 1
     },
     "q:86733f01-e694-4971-a3e5-a4693400df4b": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_span_attributes_keys ON CLUSTER cluster (tagKey LowCardinality(String) CODEC(ZSTD({p1:Int64})), tagType Enum8('tag' = 1, 'resource' = 2) CODEC(ZSTD({p2:Int64})), dataType Enum8('string' = 1, 'bool' = 2, 'float64' = 3) CODEC(ZSTD({p3:Int64})), isColumn Bool CODEC(ZSTD({p4:Int64}))) ENGINE = Distributed({p5:String}, signoz_traces, span_attributes_keys, cityHash64(rand()))",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_span_attributes_keys ON CLUSTER cluster (tagKey LowCardinality(String) CODEC(ZSTD({p1:Int64})), tagType Enum8({p2:String} = {p3:Int64}, {p4:String} = {p5:Int64}) CODEC(ZSTD({p6:Int64})), dataType Enum8({p7:String} = {p8:Int64}, {p9:String} = {p10:Int64}, {p11:String} = {p12:Int64}) CODEC(ZSTD({p13:Int64})), isColumn Bool CODEC(ZSTD({p14:Int64}))) ENGINE = Distributed({p15:String}, signoz_traces, span_attributes_keys, cityHash64(rand()))",
       "path": "explained",
       "executions": 1
     },
@@ -7771,7 +7771,7 @@
       "executions": 1
     },
     "q:8c2b59fe-fe87-42cd-9f37-8f25596307a4": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_meter.distributed_schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64(9), updated_at DateTime64(9)) ENGINE = Distributed({p1:String}, signoz_meter, schema_migrations_v2, rand())",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_meter.distributed_schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64({p1:Int64}), updated_at DateTime64({p2:Int64})) ENGINE = Distributed({p3:String}, signoz_meter, schema_migrations_v2, rand())",
       "path": "explained",
       "executions": 1
     },
@@ -7796,7 +7796,7 @@
       "executions": 1
     },
     "q:8f7ce863-2da4-4765-ab7a-6208025ab387": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_metadata.distributed_schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64(9), updated_at DateTime64(9)) ENGINE = Distributed({p1:String}, signoz_metadata, schema_migrations_v2, rand())",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_metadata.distributed_schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64({p1:Int64}), updated_at DateTime64({p2:Int64})) ENGINE = Distributed({p3:String}, signoz_metadata, schema_migrations_v2, rand())",
       "path": "explained",
       "executions": 1
     },
@@ -7896,7 +7896,7 @@
       "executions": 1
     },
     "q:981a76e1-63d5-4e25-bbf3-f8a213663b5b": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_metrics.exp_hist ON CLUSTER cluster (env LowCardinality(String) DEFAULT {p1:String}, temporality LowCardinality(String) DEFAULT {p2:String}, metric_name LowCardinality(String), fingerprint UInt64 CODEC(Delta({p3:Int64}), ZSTD({p4:Int64})), unix_milli Int64 CODEC(DoubleDelta, ZSTD({p5:Int64})), count UInt64 CODEC(ZSTD({p6:Int64})), sum Float64 CODEC(Gorilla, ZSTD({p7:Int64})), min Float64 CODEC(Gorilla, ZSTD({p8:Int64})), max Float64 CODEC(Gorilla, ZSTD({p9:Int64})), sketch AggregateFunction(quantilesDD(0.01, 0.5, 0.75, 0.9, 0.95, 0.99), UInt64) CODEC(ZSTD({p10:Int64}))) ENGINE = ReplicatedMergeTree ORDER BY (env, temporality, metric_name, fingerprint, unix_milli) PARTITION BY toDate(unix_milli / {p11:Int64}) TTL toDateTime(unix_milli / {p12:Int64}) + toIntervalSecond({p13:Int64}) SETTINGS index_granularity = {p14:Int64}, ttl_only_drop_parts = {p15:Int64}",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_metrics.exp_hist ON CLUSTER cluster (env LowCardinality(String) DEFAULT {p1:String}, temporality LowCardinality(String) DEFAULT {p2:String}, metric_name LowCardinality(String), fingerprint UInt64 CODEC(Delta({p3:Int64}), ZSTD({p4:Int64})), unix_milli Int64 CODEC(DoubleDelta, ZSTD({p5:Int64})), count UInt64 CODEC(ZSTD({p6:Int64})), sum Float64 CODEC(Gorilla, ZSTD({p7:Int64})), min Float64 CODEC(Gorilla, ZSTD({p8:Int64})), max Float64 CODEC(Gorilla, ZSTD({p9:Int64})), sketch AggregateFunction(quantilesDD({p10:Float64}, {p11:Float64}, {p12:Float64}, {p13:Float64}, {p14:Float64}, {p15:Float64}), UInt64) CODEC(ZSTD({p16:Int64}))) ENGINE = ReplicatedMergeTree ORDER BY (env, temporality, metric_name, fingerprint, unix_milli) PARTITION BY toDate(unix_milli / {p17:Int64}) TTL toDateTime(unix_milli / {p18:Int64}) + toIntervalSecond({p19:Int64}) SETTINGS index_granularity = {p20:Int64}, ttl_only_drop_parts = {p21:Int64}",
       "path": "explained",
       "executions": 1
     },
@@ -8111,7 +8111,7 @@
       "executions": 1
     },
     "q:b455f9a0-2e48-4fd7-81e2-c44f1734e185": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_signoz_index_v2 ON CLUSTER cluster (timestamp DateTime64(9) CODEC(DoubleDelta, LZ4), traceID FixedString(32) CODEC(ZSTD({p1:Int64})), spanID String CODEC(ZSTD({p2:Int64})), parentSpanID String CODEC(ZSTD({p3:Int64})), serviceName LowCardinality(String) CODEC(ZSTD({p4:Int64})), name LowCardinality(String) CODEC(ZSTD({p5:Int64})), kind Int8 CODEC(T64, ZSTD({p6:Int64})), durationNano UInt64 CODEC(T64, ZSTD({p7:Int64})), statusCode Int16 CODEC(T64, ZSTD({p8:Int64})), externalHttpMethod LowCardinality(String) CODEC(ZSTD({p9:Int64})), externalHttpUrl LowCardinality(String) CODEC(ZSTD({p10:Int64})), dbSystem LowCardinality(String) CODEC(ZSTD({p11:Int64})), dbName LowCardinality(String) CODEC(ZSTD({p12:Int64})), dbOperation LowCardinality(String) CODEC(ZSTD({p13:Int64})), peerService LowCardinality(String) CODEC(ZSTD({p14:Int64})), events Array(String) CODEC(ZSTD({p15:Int64})), httpMethod LowCardinality(String) CODEC(ZSTD({p16:Int64})), httpUrl LowCardinality(String) CODEC(ZSTD({p17:Int64})), httpRoute LowCardinality(String) CODEC(ZSTD({p18:Int64})), httpHost LowCardinality(String) CODEC(ZSTD({p19:Int64})), msgSystem LowCardinality(String) CODEC(ZSTD({p20:Int64})), msgOperation LowCardinality(String) CODEC(ZSTD({p21:Int64})), hasError Bool CODEC(T64, ZSTD({p22:Int64})), rpcSystem LowCardinality(String) CODEC(ZSTD({p23:Int64})), rpcService LowCardinality(String) CODEC(ZSTD({p24:Int64})), rpcMethod LowCardinality(String) CODEC(ZSTD({p25:Int64})), responseStatusCode LowCardinality(String) CODEC(ZSTD({p26:Int64})), stringTagMap Map(String, String) CODEC(ZSTD({p27:Int64})), numberTagMap Map(String, Float64) CODEC(ZSTD({p28:Int64})), boolTagMap Map(String, Bool) CODEC(ZSTD({p29:Int64})), resourceTagsMap Map(LowCardinality(String), String) CODEC(ZSTD({p30:Int64})), isRemote LowCardinality(String) CODEC(ZSTD({p31:Int64})), statusMessage String CODEC(ZSTD({p32:Int64})), statusCodeString String CODEC(ZSTD({p33:Int64})), spanKind String CODEC(ZSTD({p34:Int64}))) ENGINE = Distributed({p35:String}, signoz_traces, signoz_index_v2, cityHash64(traceID))",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_signoz_index_v2 ON CLUSTER cluster (timestamp DateTime64({p1:Int64}) CODEC(DoubleDelta, LZ4), traceID FixedString({p2:Int64}) CODEC(ZSTD({p3:Int64})), spanID String CODEC(ZSTD({p4:Int64})), parentSpanID String CODEC(ZSTD({p5:Int64})), serviceName LowCardinality(String) CODEC(ZSTD({p6:Int64})), name LowCardinality(String) CODEC(ZSTD({p7:Int64})), kind Int8 CODEC(T64, ZSTD({p8:Int64})), durationNano UInt64 CODEC(T64, ZSTD({p9:Int64})), statusCode Int16 CODEC(T64, ZSTD({p10:Int64})), externalHttpMethod LowCardinality(String) CODEC(ZSTD({p11:Int64})), externalHttpUrl LowCardinality(String) CODEC(ZSTD({p12:Int64})), dbSystem LowCardinality(String) CODEC(ZSTD({p13:Int64})), dbName LowCardinality(String) CODEC(ZSTD({p14:Int64})), dbOperation LowCardinality(String) CODEC(ZSTD({p15:Int64})), peerService LowCardinality(String) CODEC(ZSTD({p16:Int64})), events Array(String) CODEC(ZSTD({p17:Int64})), httpMethod LowCardinality(String) CODEC(ZSTD({p18:Int64})), httpUrl LowCardinality(String) CODEC(ZSTD({p19:Int64})), httpRoute LowCardinality(String) CODEC(ZSTD({p20:Int64})), httpHost LowCardinality(String) CODEC(ZSTD({p21:Int64})), msgSystem LowCardinality(String) CODEC(ZSTD({p22:Int64})), msgOperation LowCardinality(String) CODEC(ZSTD({p23:Int64})), hasError Bool CODEC(T64, ZSTD({p24:Int64})), rpcSystem LowCardinality(String) CODEC(ZSTD({p25:Int64})), rpcService LowCardinality(String) CODEC(ZSTD({p26:Int64})), rpcMethod LowCardinality(String) CODEC(ZSTD({p27:Int64})), responseStatusCode LowCardinality(String) CODEC(ZSTD({p28:Int64})), stringTagMap Map(String, String) CODEC(ZSTD({p29:Int64})), numberTagMap Map(String, Float64) CODEC(ZSTD({p30:Int64})), boolTagMap Map(String, Bool) CODEC(ZSTD({p31:Int64})), resourceTagsMap Map(LowCardinality(String), String) CODEC(ZSTD({p32:Int64})), isRemote LowCardinality(String) CODEC(ZSTD({p33:Int64})), statusMessage String CODEC(ZSTD({p34:Int64})), statusCodeString String CODEC(ZSTD({p35:Int64})), spanKind String CODEC(ZSTD({p36:Int64}))) ENGINE = Distributed({p37:String}, signoz_traces, signoz_index_v2, cityHash64(traceID))",
       "path": "explained",
       "executions": 1
     },
@@ -8126,7 +8126,7 @@
       "executions": 45
     },
     "q:b551eb7f-7335-490d-97e5-284ba9c16913": {
-      "query": "ALTER TABLE signoz_traces.signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS created_at DateTime64(3) DEFAULT now64({p1:Int64}) CODEC(Delta({p2:Int64}), ZSTD({p3:Int64}))",
+      "query": "ALTER TABLE signoz_traces.signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS created_at DateTime64({p1:Int64}) DEFAULT now64({p2:Int64}) CODEC(Delta({p3:Int64}), ZSTD({p4:Int64}))",
       "path": "explained",
       "executions": 1
     },
@@ -8196,7 +8196,7 @@
       "executions": 1
     },
     "q:bac8ca33-169e-40ed-b172-8288a5a37ead": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.durationSort ON CLUSTER cluster (timestamp DateTime64(9) CODEC(DoubleDelta, LZ4), traceID FixedString(32) CODEC(ZSTD({p1:Int64})), spanID String CODEC(ZSTD({p2:Int64})), parentSpanID String CODEC(ZSTD({p3:Int64})), serviceName LowCardinality(String) CODEC(ZSTD({p4:Int64})), name LowCardinality(String) CODEC(ZSTD({p5:Int64})), kind Int8 CODEC(T64, ZSTD({p6:Int64})), durationNano UInt64 CODEC(T64, ZSTD({p7:Int64})), statusCode Int16 CODEC(T64, ZSTD({p8:Int64})), httpMethod LowCardinality(String) CODEC(ZSTD({p9:Int64})), httpUrl LowCardinality(String) CODEC(ZSTD({p10:Int64})), httpRoute LowCardinality(String) CODEC(ZSTD({p11:Int64})), httpHost LowCardinality(String) CODEC(ZSTD({p12:Int64})), hasError Bool CODEC(T64, ZSTD({p13:Int64})), rpcSystem LowCardinality(String) CODEC(ZSTD({p14:Int64})), rpcService LowCardinality(String) CODEC(ZSTD({p15:Int64})), rpcMethod LowCardinality(String) CODEC(ZSTD({p16:Int64})), responseStatusCode LowCardinality(String) CODEC(ZSTD({p17:Int64})), stringTagMap Map(String, String) CODEC(ZSTD({p18:Int64})), numberTagMap Map(String, Float64) CODEC(ZSTD({p19:Int64})), boolTagMap Map(String, Bool) CODEC(ZSTD({p20:Int64})), isRemote LowCardinality(String) CODEC(ZSTD({p21:Int64})), statusMessage String CODEC(ZSTD({p22:Int64})), statusCodeString String CODEC(ZSTD({p23:Int64})), spanKind String CODEC(ZSTD({p24:Int64})), INDEX idx_service serviceName TYPE bloom_filter GRANULARITY {p25:Int64}, INDEX idx_name name TYPE bloom_filter GRANULARITY {p26:Int64}, INDEX idx_kind kind TYPE minmax GRANULARITY {p27:Int64}, INDEX idx_duration durationNano TYPE minmax GRANULARITY {p28:Int64}, INDEX idx_hasError hasError TYPE set({p29:Int64}) GRANULARITY {p30:Int64}, INDEX idx_httpRoute httpRoute TYPE bloom_filter GRANULARITY {p31:Int64}, INDEX idx_httpUrl httpUrl TYPE bloom_filter GRANULARITY {p32:Int64}, INDEX idx_httpHost httpHost TYPE bloom_filter GRANULARITY {p33:Int64}, INDEX idx_httpMethod httpMethod TYPE bloom_filter GRANULARITY {p34:Int64}, INDEX idx_timestamp timestamp TYPE minmax GRANULARITY {p35:Int64}, INDEX idx_rpcMethod rpcMethod TYPE bloom_filter GRANULARITY {p36:Int64}, INDEX idx_responseStatusCode responseStatusCode TYPE set({p37:Int64}) GRANULARITY {p38:Int64}) ENGINE = ReplicatedMergeTree ORDER BY (durationNano, timestamp) PARTITION BY toDate(timestamp) TTL toDateTime(timestamp) + toIntervalSecond({p39:Int64}) SETTINGS index_granularity = {p40:Int64}, ttl_only_drop_parts = {p41:Int64}",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.durationSort ON CLUSTER cluster (timestamp DateTime64({p1:Int64}) CODEC(DoubleDelta, LZ4), traceID FixedString({p2:Int64}) CODEC(ZSTD({p3:Int64})), spanID String CODEC(ZSTD({p4:Int64})), parentSpanID String CODEC(ZSTD({p5:Int64})), serviceName LowCardinality(String) CODEC(ZSTD({p6:Int64})), name LowCardinality(String) CODEC(ZSTD({p7:Int64})), kind Int8 CODEC(T64, ZSTD({p8:Int64})), durationNano UInt64 CODEC(T64, ZSTD({p9:Int64})), statusCode Int16 CODEC(T64, ZSTD({p10:Int64})), httpMethod LowCardinality(String) CODEC(ZSTD({p11:Int64})), httpUrl LowCardinality(String) CODEC(ZSTD({p12:Int64})), httpRoute LowCardinality(String) CODEC(ZSTD({p13:Int64})), httpHost LowCardinality(String) CODEC(ZSTD({p14:Int64})), hasError Bool CODEC(T64, ZSTD({p15:Int64})), rpcSystem LowCardinality(String) CODEC(ZSTD({p16:Int64})), rpcService LowCardinality(String) CODEC(ZSTD({p17:Int64})), rpcMethod LowCardinality(String) CODEC(ZSTD({p18:Int64})), responseStatusCode LowCardinality(String) CODEC(ZSTD({p19:Int64})), stringTagMap Map(String, String) CODEC(ZSTD({p20:Int64})), numberTagMap Map(String, Float64) CODEC(ZSTD({p21:Int64})), boolTagMap Map(String, Bool) CODEC(ZSTD({p22:Int64})), isRemote LowCardinality(String) CODEC(ZSTD({p23:Int64})), statusMessage String CODEC(ZSTD({p24:Int64})), statusCodeString String CODEC(ZSTD({p25:Int64})), spanKind String CODEC(ZSTD({p26:Int64})), INDEX idx_service serviceName TYPE bloom_filter GRANULARITY {p27:Int64}, INDEX idx_name name TYPE bloom_filter GRANULARITY {p28:Int64}, INDEX idx_kind kind TYPE minmax GRANULARITY {p29:Int64}, INDEX idx_duration durationNano TYPE minmax GRANULARITY {p30:Int64}, INDEX idx_hasError hasError TYPE set({p31:Int64}) GRANULARITY {p32:Int64}, INDEX idx_httpRoute httpRoute TYPE bloom_filter GRANULARITY {p33:Int64}, INDEX idx_httpUrl httpUrl TYPE bloom_filter GRANULARITY {p34:Int64}, INDEX idx_httpHost httpHost TYPE bloom_filter GRANULARITY {p35:Int64}, INDEX idx_httpMethod httpMethod TYPE bloom_filter GRANULARITY {p36:Int64}, INDEX idx_timestamp timestamp TYPE minmax GRANULARITY {p37:Int64}, INDEX idx_rpcMethod rpcMethod TYPE bloom_filter GRANULARITY {p38:Int64}, INDEX idx_responseStatusCode responseStatusCode TYPE set({p39:Int64}) GRANULARITY {p40:Int64}) ENGINE = ReplicatedMergeTree ORDER BY (durationNano, timestamp) PARTITION BY toDate(timestamp) TTL toDateTime(timestamp) + toIntervalSecond({p41:Int64}) SETTINGS index_granularity = {p42:Int64}, ttl_only_drop_parts = {p43:Int64}",
       "path": "explained",
       "executions": 1
     },
@@ -8281,7 +8281,7 @@
       "executions": 1
     },
     "q:c39866f9-dec4-4f89-a21b-0e8be1a8785f": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64(9), updated_at DateTime64(9)) ENGINE = ReplicatedReplacingMergeTree PRIMARY KEY migration_id ORDER BY migration_id",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64({p1:Int64}), updated_at DateTime64({p2:Int64})) ENGINE = ReplicatedReplacingMergeTree PRIMARY KEY migration_id ORDER BY migration_id",
       "path": "parsed",
       "executions": 1
     },
@@ -8291,7 +8291,7 @@
       "executions": 1
     },
     "q:c53729fe-613e-4c44-8ba9-f0ed7d1befa8": {
-      "query": "ALTER TABLE signoz_logs.logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS inserted_at DateTime64(3) CODEC(Delta({p1:Int64}), ZSTD({p2:Int64}))",
+      "query": "ALTER TABLE signoz_logs.logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS inserted_at DateTime64({p1:Int64}) CODEC(Delta({p2:Int64}), ZSTD({p3:Int64}))",
       "path": "explained",
       "executions": 1
     },
@@ -8356,7 +8356,7 @@
       "executions": 1
     },
     "q:cb9c5a72-195c-457f-bb6d-021f0ff4bc3b": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.span_attributes_keys ON CLUSTER cluster (tagKey LowCardinality(String) CODEC(ZSTD({p1:Int64})), tagType Enum8('tag' = 1, 'resource' = 2) CODEC(ZSTD({p2:Int64})), dataType Enum8('string' = 1, 'bool' = 2, 'float64' = 3) CODEC(ZSTD({p3:Int64})), isColumn Bool CODEC(ZSTD({p4:Int64}))) ENGINE = ReplicatedReplacingMergeTree ORDER BY (tagKey, tagType, dataType, isColumn)",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.span_attributes_keys ON CLUSTER cluster (tagKey LowCardinality(String) CODEC(ZSTD({p1:Int64})), tagType Enum8({p2:String} = {p3:Int64}, {p4:String} = {p5:Int64}) CODEC(ZSTD({p6:Int64})), dataType Enum8({p7:String} = {p8:Int64}, {p9:String} = {p10:Int64}, {p11:String} = {p12:Int64}) CODEC(ZSTD({p13:Int64})), isColumn Bool CODEC(ZSTD({p14:Int64}))) ENGINE = ReplicatedReplacingMergeTree ORDER BY (tagKey, tagType, dataType, isColumn)",
       "path": "explained",
       "executions": 1
     },
@@ -8391,7 +8391,7 @@
       "executions": 1
     },
     "q:d0c352ce-853e-4af8-8e4e-68a907373fa2": {
-      "query": "CREATE MATERIALIZED VIEW IF NOT EXISTS signoz_traces.usage_explorer_mv ON CLUSTER cluster TO signoz_traces.usage_explorer (timestamp DateTime64(9) CODEC(DoubleDelta, LZ4), service_name LowCardinality(String) CODEC(ZSTD({p1:Int64})), count UInt64 CODEC(T64, ZSTD({p2:Int64}))) AS SELECT\n    toStartOfHour(timestamp) AS timestamp,\n    serviceName AS service_name,\n    count() AS count\nFROM signoz_traces.signoz_index_v2\nGROUP BY\n    timestamp,\n    serviceName",
+      "query": "CREATE MATERIALIZED VIEW IF NOT EXISTS signoz_traces.usage_explorer_mv ON CLUSTER cluster TO signoz_traces.usage_explorer (timestamp DateTime64({p1:Int64}) CODEC(DoubleDelta, LZ4), service_name LowCardinality(String) CODEC(ZSTD({p2:Int64})), count UInt64 CODEC(T64, ZSTD({p3:Int64}))) AS SELECT\n    toStartOfHour(timestamp) AS timestamp,\n    serviceName AS service_name,\n    count() AS count\nFROM signoz_traces.signoz_index_v2\nGROUP BY\n    timestamp,\n    serviceName",
       "path": "explained",
       "executions": 1
     },
@@ -8411,7 +8411,7 @@
       "executions": 1
     },
     "q:d34ebd7d-1c84-4a49-b17f-8992118350c6": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_dependency_graph_minutes_v2 ON CLUSTER cluster (src LowCardinality(String) CODEC(ZSTD({p1:Int64})), dest LowCardinality(String) CODEC(ZSTD({p2:Int64})), duration_quantiles_state AggregateFunction(quantiles(0.5, 0.75, 0.9, 0.95, 0.99), Float64) CODEC(Default), error_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p3:Int64})), total_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p4:Int64})), timestamp DateTime CODEC(DoubleDelta, LZ4), deployment_environment LowCardinality(String) CODEC(ZSTD({p5:Int64})), k8s_cluster_name LowCardinality(String) CODEC(ZSTD({p6:Int64})), k8s_namespace_name LowCardinality(String) CODEC(ZSTD({p7:Int64}))) ENGINE = Distributed({p8:String}, signoz_traces, dependency_graph_minutes_v2, cityHash64(rand()))",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.distributed_dependency_graph_minutes_v2 ON CLUSTER cluster (src LowCardinality(String) CODEC(ZSTD({p1:Int64})), dest LowCardinality(String) CODEC(ZSTD({p2:Int64})), duration_quantiles_state AggregateFunction(quantiles({p3:Float64}, {p4:Float64}, {p5:Float64}, {p6:Float64}, {p7:Float64}), Float64) CODEC(Default), error_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p8:Int64})), total_count SimpleAggregateFunction(sum, UInt64) CODEC(T64, ZSTD({p9:Int64})), timestamp DateTime CODEC(DoubleDelta, LZ4), deployment_environment LowCardinality(String) CODEC(ZSTD({p10:Int64})), k8s_cluster_name LowCardinality(String) CODEC(ZSTD({p11:Int64})), k8s_namespace_name LowCardinality(String) CODEC(ZSTD({p12:Int64}))) ENGINE = Distributed({p13:String}, signoz_traces, dependency_graph_minutes_v2, cityHash64(rand()))",
       "path": "explained",
       "executions": 1
     },
@@ -8421,7 +8421,7 @@
       "executions": 1
     },
     "q:d4c711d0-65b6-4f67-b284-e85fd0890961": {
-      "query": "ALTER TABLE signoz_logs.distributed_logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS resource JSON(max_dynamic_paths=100) CODEC(ZSTD({p1:Int64}))",
+      "query": "ALTER TABLE signoz_logs.distributed_logs_v2 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS resource JSON(max_dynamic_paths={p1:Int64}) CODEC(ZSTD({p2:Int64}))",
       "path": "explained",
       "executions": 1
     },
@@ -8456,7 +8456,7 @@
       "executions": 1
     },
     "q:dcf8a1b5-c183-4798-b6fd-b22311f1f2d4": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.trace_summary ON CLUSTER cluster (trace_id String CODEC(ZSTD({p1:Int64})), start SimpleAggregateFunction(min, DateTime64(9)) CODEC(ZSTD({p2:Int64})), end SimpleAggregateFunction(max, DateTime64(9)) CODEC(ZSTD({p3:Int64})), num_spans SimpleAggregateFunction(sum, UInt64) CODEC(ZSTD({p4:Int64}))) ENGINE = ReplicatedAggregatingMergeTree ORDER BY (trace_id) PARTITION BY toDate(end) TTL toDateTime(end) + toIntervalSecond({p5:Int64}) SETTINGS index_granularity = {p6:Int64}, ttl_only_drop_parts = {p7:Int64}",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.trace_summary ON CLUSTER cluster (trace_id String CODEC(ZSTD({p1:Int64})), start SimpleAggregateFunction(min, DateTime64({p2:Int64})) CODEC(ZSTD({p3:Int64})), end SimpleAggregateFunction(max, DateTime64({p4:Int64})) CODEC(ZSTD({p5:Int64})), num_spans SimpleAggregateFunction(sum, UInt64) CODEC(ZSTD({p6:Int64}))) ENGINE = ReplicatedAggregatingMergeTree ORDER BY (trace_id) PARTITION BY toDate(end) TTL toDateTime(end) + toIntervalSecond({p7:Int64}) SETTINGS index_granularity = {p8:Int64}, ttl_only_drop_parts = {p9:Int64}",
       "path": "explained",
       "executions": 1
     },
@@ -8526,7 +8526,7 @@
       "executions": 1
     },
     "q:e58d45c1-80cf-42f7-bc7d-999ba693b34d": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.usage_explorer ON CLUSTER cluster (timestamp DateTime64(9) CODEC(DoubleDelta, LZ4), service_name LowCardinality(String) CODEC(ZSTD({p1:Int64})), count UInt64 CODEC(T64, ZSTD({p2:Int64}))) ENGINE = ReplicatedSummingMergeTree ORDER BY (timestamp, service_name) PARTITION BY toDate(timestamp) TTL toDateTime(timestamp) + toIntervalSecond({p3:Int64}) SETTINGS index_granularity = {p4:Int64}, ttl_only_drop_parts = {p5:Int64}",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.usage_explorer ON CLUSTER cluster (timestamp DateTime64({p1:Int64}) CODEC(DoubleDelta, LZ4), service_name LowCardinality(String) CODEC(ZSTD({p2:Int64})), count UInt64 CODEC(T64, ZSTD({p3:Int64}))) ENGINE = ReplicatedSummingMergeTree ORDER BY (timestamp, service_name) PARTITION BY toDate(timestamp) TTL toDateTime(timestamp) + toIntervalSecond({p4:Int64}) SETTINGS index_granularity = {p5:Int64}, ttl_only_drop_parts = {p6:Int64}",
       "path": "explained",
       "executions": 1
     },
@@ -8546,7 +8546,7 @@
       "executions": 2
     },
     "q:e7f49b95-4ae2-47e9-a7c9-b50f01d75cd9": {
-      "query": "ALTER TABLE signoz_traces.distributed_signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS resource JSON(max_dynamic_paths=100) CODEC(ZSTD({p1:Int64}))",
+      "query": "ALTER TABLE signoz_traces.distributed_signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS resource JSON(max_dynamic_paths={p1:Int64}) CODEC(ZSTD({p2:Int64}))",
       "path": "explained",
       "executions": 1
     },
@@ -8576,7 +8576,7 @@
       "executions": 6
     },
     "q:ea7f2ce4-1ded-498d-bac7-1b0af2dbb4a1": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_metrics.distributed_exp_hist ON CLUSTER cluster (env LowCardinality(String) DEFAULT {p1:String}, temporality LowCardinality(String) DEFAULT {p2:String}, metric_name LowCardinality(String), fingerprint UInt64 CODEC(Delta({p3:Int64}), ZSTD({p4:Int64})), unix_milli Int64 CODEC(DoubleDelta, ZSTD({p5:Int64})), count UInt64 CODEC(ZSTD({p6:Int64})), sum Float64 CODEC(Gorilla, ZSTD({p7:Int64})), min Float64 CODEC(Gorilla, ZSTD({p8:Int64})), max Float64 CODEC(Gorilla, ZSTD({p9:Int64})), sketch AggregateFunction(quantilesDD(0.01, 0.5, 0.75, 0.9, 0.95, 0.99), UInt64) CODEC(ZSTD({p10:Int64}))) ENGINE = Distributed({p11:String}, signoz_metrics, exp_hist, cityHash64(env, temporality, metric_name, fingerprint))",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_metrics.distributed_exp_hist ON CLUSTER cluster (env LowCardinality(String) DEFAULT {p1:String}, temporality LowCardinality(String) DEFAULT {p2:String}, metric_name LowCardinality(String), fingerprint UInt64 CODEC(Delta({p3:Int64}), ZSTD({p4:Int64})), unix_milli Int64 CODEC(DoubleDelta, ZSTD({p5:Int64})), count UInt64 CODEC(ZSTD({p6:Int64})), sum Float64 CODEC(Gorilla, ZSTD({p7:Int64})), min Float64 CODEC(Gorilla, ZSTD({p8:Int64})), max Float64 CODEC(Gorilla, ZSTD({p9:Int64})), sketch AggregateFunction(quantilesDD({p10:Float64}, {p11:Float64}, {p12:Float64}, {p13:Float64}, {p14:Float64}, {p15:Float64}), UInt64) CODEC(ZSTD({p16:Int64}))) ENGINE = Distributed({p17:String}, signoz_metrics, exp_hist, cityHash64(env, temporality, metric_name, fingerprint))",
       "path": "explained",
       "executions": 1
     },
@@ -8611,7 +8611,7 @@
       "executions": 1
     },
     "q:ef7bd87a-71c9-4ab6-a35b-fc5e6a305a70": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_meter.schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64(9), updated_at DateTime64(9)) ENGINE = ReplicatedReplacingMergeTree PRIMARY KEY migration_id ORDER BY migration_id",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_meter.schema_migrations_v2 ON CLUSTER cluster (migration_id UInt64, status String, error String, created_at DateTime64({p1:Int64}), updated_at DateTime64({p2:Int64})) ENGINE = ReplicatedReplacingMergeTree PRIMARY KEY migration_id ORDER BY migration_id",
       "path": "parsed",
       "executions": 1
     },
@@ -8621,7 +8621,7 @@
       "executions": 1
     },
     "q:f111f0c1-d646-4499-b088-722ced3bf831": {
-      "query": "ALTER TABLE signoz_traces.distributed_signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS inserted_at DateTime64(3) CODEC(Delta({p1:Int64}), ZSTD({p2:Int64}))",
+      "query": "ALTER TABLE signoz_traces.distributed_signoz_index_v3 ON CLUSTER cluster ADD COLUMN IF NOT EXISTS inserted_at DateTime64({p1:Int64}) CODEC(Delta({p2:Int64}), ZSTD({p3:Int64}))",
       "path": "explained",
       "executions": 1
     },
@@ -8651,7 +8651,7 @@
       "executions": 1
     },
     "q:f4565dd4-157c-45a6-849c-58bc71d2e7aa": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_metrics.metric_reduction_rules ON CLUSTER cluster (metric_name LowCardinality(String) CODEC(ZSTD({p1:Int64})), labels Array(LowCardinality(String)) CODEC(ZSTD({p2:Int64})), match_type LowCardinality(String) DEFAULT {p3:String} CODEC(ZSTD({p4:Int64})), effective_from_unix_milli Int64 CODEC(ZSTD({p5:Int64})), deleted Bool DEFAULT {p6:Bool} CODEC(ZSTD({p7:Int64})), updated_at DateTime64(3) DEFAULT now64({p8:Int64}) CODEC(ZSTD({p9:Int64}))) ENGINE = ReplicatedReplacingMergeTree(updated_at) ORDER BY metric_name",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_metrics.metric_reduction_rules ON CLUSTER cluster (metric_name LowCardinality(String) CODEC(ZSTD({p1:Int64})), labels Array(LowCardinality(String)) CODEC(ZSTD({p2:Int64})), match_type LowCardinality(String) DEFAULT {p3:String} CODEC(ZSTD({p4:Int64})), effective_from_unix_milli Int64 CODEC(ZSTD({p5:Int64})), deleted Bool DEFAULT {p6:Bool} CODEC(ZSTD({p7:Int64})), updated_at DateTime64({p8:Int64}) DEFAULT now64({p9:Int64}) CODEC(ZSTD({p10:Int64}))) ENGINE = ReplicatedReplacingMergeTree(updated_at) ORDER BY metric_name",
       "path": "explained",
       "executions": 1
     },
@@ -8681,7 +8681,7 @@
       "executions": 1
     },
     "q:f78b8066-929c-4d96-914f-bdbeba55aa02": {
-      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.signoz_index_v3 ON CLUSTER cluster (ts_bucket_start UInt64 CODEC(DoubleDelta, LZ4), resource_fingerprint String CODEC(ZSTD({p1:Int64})), timestamp DateTime64(9) CODEC(DoubleDelta, LZ4), trace_id FixedString(32) CODEC(ZSTD({p2:Int64})), span_id String CODEC(ZSTD({p3:Int64})), trace_state String CODEC(ZSTD({p4:Int64})), parent_span_id String CODEC(ZSTD({p5:Int64})), flags UInt32 CODEC(T64, ZSTD({p6:Int64})), name LowCardinality(String) CODEC(ZSTD({p7:Int64})), kind Int8 CODEC(T64, ZSTD({p8:Int64})), kind_string String CODEC(ZSTD({p9:Int64})), duration_nano UInt64 CODEC(T64, ZSTD({p10:Int64})), status_code Int16 CODEC(T64, ZSTD({p11:Int64})), status_message String CODEC(ZSTD({p12:Int64})), status_code_string String CODEC(ZSTD({p13:Int64})), attributes_string Map(LowCardinality(String), String) CODEC(ZSTD({p14:Int64})), attributes_number Map(LowCardinality(String), Float64) CODEC(ZSTD({p15:Int64})), attributes_bool Map(LowCardinality(String), Bool) CODEC(ZSTD({p16:Int64})), resources_string Map(LowCardinality(String), String) CODEC(ZSTD({p17:Int64})), events Array(String) CODEC(ZSTD({p18:Int64})), links String CODEC(ZSTD({p19:Int64})), response_status_code LowCardinality(String) CODEC(ZSTD({p20:Int64})), external_http_url LowCardinality(String) CODEC(ZSTD({p21:Int64})), http_url LowCardinality(String) CODEC(ZSTD({p22:Int64})), external_http_method LowCardinality(String) CODEC(ZSTD({p23:Int64})), http_method LowCardinality(String) CODEC(ZSTD({p24:Int64})), http_host LowCardinality(String) CODEC(ZSTD({p25:Int64})), db_name LowCardinality(String) CODEC(ZSTD({p26:Int64})), db_operation LowCardinality(String) CODEC(ZSTD({p27:Int64})), has_error Bool CODEC(T64, ZSTD({p28:Int64})), is_remote LowCardinality(String) CODEC(ZSTD({p29:Int64})), resource_string_service{p30:String}route LowCardinality(String) DEFAULT attributes_string[{p31:String}] CODEC(ZSTD({p32:Int64})), attribute_string_messaging{p33:String}operation LowCardinality(String) DEFAULT attributes_string[{p34:String}] CODEC(ZSTD({p35:Int64})), attribute_string_db{p36:String}system LowCardinality(String) DEFAULT attributes_string[{p37:String}] CODEC(ZSTD({p38:Int64})), attribute_string_rpc{p39:String}method LowCardinality(String) DEFAULT attributes_string[{p40:String}] CODEC(ZSTD({p41:Int64})), attribute_string_peer{p42:String}name, httpRoute LowCardinality(String) ALIAS attribute_string_http{p43:String}system, msgOperation LowCardinality(String) ALIAS attribute_string_messaging{p44:String}system, rpcSystem LowCardinality(String) ALIAS attribute_string_rpc{p45:String}service, rpcMethod LowCardinality(String) ALIAS attribute_string_rpc{p46:String}service, INDEX idx_trace_id trace_id TYPE tokenbf_v1({p47:Int64}, {p48:Int64},{p49:Int64}) GRANULARITY {p50:Int64}, INDEX idx_span_id span_id TYPE tokenbf_v1({p51:Int64}, {p52:Int64},{p53:Int64}) GRANULARITY {p54:Int64}, INDEX idx_duration duration_nano TYPE minmax GRANULARITY {p55:Int64}, INDEX idx_name name TYPE ngrambf_v1({p56:Int64}, {p57:Int64}, {p58:Int64}, {p59:Int64}) GRANULARITY {p60:Int64}, INDEX idx_kind kind TYPE minmax GRANULARITY {p61:Int64}, INDEX idx_http_route attribute_string_http{p62:String}method TYPE bloom_filter GRANULARITY {p63:Int64}, INDEX idx_response_statusCode response_status_code TYPE set({p64:Int64}) GRANULARITY {p65:Int64}, INDEX idx_status_code_string status_code_string TYPE set({p66:Int64}) GRANULARITY {p67:Int64}, INDEX idx_kind_string kind_string TYPE set({p68:Int64}) GRANULARITY {p69:Int64}, INDEX attributes_string_idx_key mapKeys(attributes_string) TYPE tokenbf_v1({p70:Int64}, {p71:Int64}, {p72:Int64}) GRANULARITY {p73:Int64}, INDEX attributes_string_idx_val mapValues(attributes_string) TYPE ngrambf_v1({p74:Int64}, {p75:Int64}, {p76:Int64}, {p77:Int64}) GRANULARITY {p78:Int64}, INDEX attributes_number_idx_key mapKeys(attributes_number) TYPE tokenbf_v1({p79:Int64}, {p80:Int64}, {p81:Int64}) GRANULARITY {p82:Int64}, INDEX attributes_number_idx_val mapValues(attributes_number) TYPE bloom_filter GRANULARITY {p83:Int64}, INDEX attributes_bool_idx_key mapKeys(attributes_bool) TYPE tokenbf_v1({p84:Int64}, {p85:Int64}, {p86:Int64}) GRANULARITY {p87:Int64}, INDEX resources_string_idx_key mapKeys(resources_string) TYPE tokenbf_v1({p88:Int64}, {p89:Int64}, {p90:Int64}) GRANULARITY {p91:Int64}, INDEX resources_string_idx_val mapValues(resources_string) TYPE ngrambf_v1({p92:Int64}, {p93:Int64}, {p94:Int64}, {p95:Int64}) GRANULARITY {p96:Int64}) ENGINE = ReplicatedMergeTree ORDER BY (ts_bucket_start, resource_fingerprint, has_error, name, timestamp) PARTITION BY toDate(timestamp) TTL toDateTime(timestamp) + toIntervalSecond({p97:Int64}) SETTINGS index_granularity = {p98:Int64}, ttl_only_drop_parts = {p99:Int64}",
+      "query": "CREATE TABLE IF NOT EXISTS signoz_traces.signoz_index_v3 ON CLUSTER cluster (ts_bucket_start UInt64 CODEC(DoubleDelta, LZ4), resource_fingerprint String CODEC(ZSTD({p1:Int64})), timestamp DateTime64({p2:Int64}) CODEC(DoubleDelta, LZ4), trace_id FixedString({p3:Int64}) CODEC(ZSTD({p4:Int64})), span_id String CODEC(ZSTD({p5:Int64})), trace_state String CODEC(ZSTD({p6:Int64})), parent_span_id String CODEC(ZSTD({p7:Int64})), flags UInt32 CODEC(T64, ZSTD({p8:Int64})), name LowCardinality(String) CODEC(ZSTD({p9:Int64})), kind Int8 CODEC(T64, ZSTD({p10:Int64})), kind_string String CODEC(ZSTD({p11:Int64})), duration_nano UInt64 CODEC(T64, ZSTD({p12:Int64})), status_code Int16 CODEC(T64, ZSTD({p13:Int64})), status_message String CODEC(ZSTD({p14:Int64})), status_code_string String CODEC(ZSTD({p15:Int64})), attributes_string Map(LowCardinality(String), String) CODEC(ZSTD({p16:Int64})), attributes_number Map(LowCardinality(String), Float64) CODEC(ZSTD({p17:Int64})), attributes_bool Map(LowCardinality(String), Bool) CODEC(ZSTD({p18:Int64})), resources_string Map(LowCardinality(String), String) CODEC(ZSTD({p19:Int64})), events Array(String) CODEC(ZSTD({p20:Int64})), links String CODEC(ZSTD({p21:Int64})), response_status_code LowCardinality(String) CODEC(ZSTD({p22:Int64})), external_http_url LowCardinality(String) CODEC(ZSTD({p23:Int64})), http_url LowCardinality(String) CODEC(ZSTD({p24:Int64})), external_http_method LowCardinality(String) CODEC(ZSTD({p25:Int64})), http_method LowCardinality(String) CODEC(ZSTD({p26:Int64})), http_host LowCardinality(String) CODEC(ZSTD({p27:Int64})), db_name LowCardinality(String) CODEC(ZSTD({p28:Int64})), db_operation LowCardinality(String) CODEC(ZSTD({p29:Int64})), has_error Bool CODEC(T64, ZSTD({p30:Int64})), is_remote LowCardinality(String) CODEC(ZSTD({p31:Int64})), resource_string_service{p32:String}route LowCardinality(String) DEFAULT attributes_string[{p33:String}] CODEC(ZSTD({p34:Int64})), attribute_string_messaging{p35:String}operation LowCardinality(String) DEFAULT attributes_string[{p36:String}] CODEC(ZSTD({p37:Int64})), attribute_string_db{p38:String}system LowCardinality(String) DEFAULT attributes_string[{p39:String}] CODEC(ZSTD({p40:Int64})), attribute_string_rpc{p41:String}method LowCardinality(String) DEFAULT attributes_string[{p42:String}] CODEC(ZSTD({p43:Int64})), attribute_string_peer{p44:String}name, httpRoute LowCardinality(String) ALIAS attribute_string_http{p45:String}system, msgOperation LowCardinality(String) ALIAS attribute_string_messaging{p46:String}system, rpcSystem LowCardinality(String) ALIAS attribute_string_rpc{p47:String}service, rpcMethod LowCardinality(String) ALIAS attribute_string_rpc{p48:String}service, INDEX idx_trace_id trace_id TYPE tokenbf_v1({p49:Int64}, {p50:Int64},{p51:Int64}) GRANULARITY {p52:Int64}, INDEX idx_span_id span_id TYPE tokenbf_v1({p53:Int64}, {p54:Int64},{p55:Int64}) GRANULARITY {p56:Int64}, INDEX idx_duration duration_nano TYPE minmax GRANULARITY {p57:Int64}, INDEX idx_name name TYPE ngrambf_v1({p58:Int64}, {p59:Int64}, {p60:Int64}, {p61:Int64}) GRANULARITY {p62:Int64}, INDEX idx_kind kind TYPE minmax GRANULARITY {p63:Int64}, INDEX idx_http_route attribute_string_http{p64:String}method TYPE bloom_filter GRANULARITY {p65:Int64}, INDEX idx_response_statusCode response_status_code TYPE set({p66:Int64}) GRANULARITY {p67:Int64}, INDEX idx_status_code_string status_code_string TYPE set({p68:Int64}) GRANULARITY {p69:Int64}, INDEX idx_kind_string kind_string TYPE set({p70:Int64}) GRANULARITY {p71:Int64}, INDEX attributes_string_idx_key mapKeys(attributes_string) TYPE tokenbf_v1({p72:Int64}, {p73:Int64}, {p74:Int64}) GRANULARITY {p75:Int64}, INDEX attributes_string_idx_val mapValues(attributes_string) TYPE ngrambf_v1({p76:Int64}, {p77:Int64}, {p78:Int64}, {p79:Int64}) GRANULARITY {p80:Int64}, INDEX attributes_number_idx_key mapKeys(attributes_number) TYPE tokenbf_v1({p81:Int64}, {p82:Int64}, {p83:Int64}) GRANULARITY {p84:Int64}, INDEX attributes_number_idx_val mapValues(attributes_number) TYPE bloom_filter GRANULARITY {p85:Int64}, INDEX attributes_bool_idx_key mapKeys(attributes_bool) TYPE tokenbf_v1({p86:Int64}, {p87:Int64}, {p88:Int64}) GRANULARITY {p89:Int64}, INDEX resources_string_idx_key mapKeys(resources_string) TYPE tokenbf_v1({p90:Int64}, {p91:Int64}, {p92:Int64}) GRANULARITY {p93:Int64}, INDEX resources_string_idx_val mapValues(resources_string) TYPE ngrambf_v1({p94:Int64}, {p95:Int64}, {p96:Int64}, {p97:Int64}) GRANULARITY {p98:Int64}) ENGINE = ReplicatedMergeTree ORDER BY (ts_bucket_start, resource_fingerprint, has_error, name, timestamp) PARTITION BY toDate(timestamp) TTL toDateTime(timestamp) + toIntervalSecond({p99:Int64}) SETTINGS index_granularity = {p100:Int64}, ttl_only_drop_parts = {p101:Int64}",
       "path": "explained",
       "executions": 1
     },
@@ -8726,7 +8726,7 @@
       "executions": 1
     },
     "q:fd7e003a-2ad6-4b30-ae74-0d7ab6d46dfa": {
-      "query": "CREATE MATERIALIZED VIEW IF NOT EXISTS signoz_traces.durationSortMV ON CLUSTER cluster TO signoz_traces.durationSort (timestamp DateTime64(9) CODEC(DoubleDelta, LZ4), traceID FixedString(32) CODEC(ZSTD({p1:Int64})), spanID String CODEC(ZSTD({p2:Int64})), parentSpanID String CODEC(ZSTD({p3:Int64})), serviceName LowCardinality(String) CODEC(ZSTD({p4:Int64})), name LowCardinality(String) CODEC(ZSTD({p5:Int64})), kind Int8 CODEC(T64, ZSTD({p6:Int64})), durationNano UInt64 CODEC(T64, ZSTD({p7:Int64})), statusCode Int16 CODEC(T64, ZSTD({p8:Int64})), httpMethod LowCardinality(String) CODEC(ZSTD({p9:Int64})), httpUrl LowCardinality(String) CODEC(ZSTD({p10:Int64})), httpRoute LowCardinality(String) CODEC(ZSTD({p11:Int64})), httpHost LowCardinality(String) CODEC(ZSTD({p12:Int64})), hasError Bool CODEC(T64, ZSTD({p13:Int64})), rpcSystem LowCardinality(String) CODEC(ZSTD({p14:Int64})), rpcService LowCardinality(String) CODEC(ZSTD({p15:Int64})), rpcMethod LowCardinality(String) CODEC(ZSTD({p16:Int64})), responseStatusCode LowCardinality(String) CODEC(ZSTD({p17:Int64})), stringTagMap Map(String, String) CODEC(ZSTD({p18:Int64})), numberTagMap Map(String, Float64) CODEC(ZSTD({p19:Int64})), boolTagMap Map(String, Bool) CODEC(ZSTD({p20:Int64})), isRemote LowCardinality(String) CODEC(ZSTD({p21:Int64})), statusMessage String CODEC(ZSTD({p22:Int64})), statusCodeString String CODEC(ZSTD({p23:Int64})), spanKind String CODEC(ZSTD({p24:Int64}))) AS SELECT\n    timestamp,\n    traceID,\n    spanID,\n    parentSpanID,\n    serviceName,\n    name,\n    kind,\n    durationNano,\n    statusCode,\n    httpMethod,\n    httpUrl,\n    httpRoute,\n    httpHost,\n    hasError,\n    rpcSystem,\n    rpcService,\n    rpcMethod,\n    responseStatusCode,\n    stringTagMap,\n    numberTagMap,\n    boolTagMap,\n    isRemote,\n    statusMessage,\n    statusCodeString,\n    spanKind\nFROM signoz_traces.signoz_index_v2\nORDER BY\n    durationNano ASC,\n    timestamp ASC",
+      "query": "CREATE MATERIALIZED VIEW IF NOT EXISTS signoz_traces.durationSortMV ON CLUSTER cluster TO signoz_traces.durationSort (timestamp DateTime64({p1:Int64}) CODEC(DoubleDelta, LZ4), traceID FixedString({p2:Int64}) CODEC(ZSTD({p3:Int64})), spanID String CODEC(ZSTD({p4:Int64})), parentSpanID String CODEC(ZSTD({p5:Int64})), serviceName LowCardinality(String) CODEC(ZSTD({p6:Int64})), name LowCardinality(String) CODEC(ZSTD({p7:Int64})), kind Int8 CODEC(T64, ZSTD({p8:Int64})), durationNano UInt64 CODEC(T64, ZSTD({p9:Int64})), statusCode Int16 CODEC(T64, ZSTD({p10:Int64})), httpMethod LowCardinality(String) CODEC(ZSTD({p11:Int64})), httpUrl LowCardinality(String) CODEC(ZSTD({p12:Int64})), httpRoute LowCardinality(String) CODEC(ZSTD({p13:Int64})), httpHost LowCardinality(String) CODEC(ZSTD({p14:Int64})), hasError Bool CODEC(T64, ZSTD({p15:Int64})), rpcSystem LowCardinality(String) CODEC(ZSTD({p16:Int64})), rpcService LowCardinality(String) CODEC(ZSTD({p17:Int64})), rpcMethod LowCardinality(String) CODEC(ZSTD({p18:Int64})), responseStatusCode LowCardinality(String) CODEC(ZSTD({p19:Int64})), stringTagMap Map(String, String) CODEC(ZSTD({p20:Int64})), numberTagMap Map(String, Float64) CODEC(ZSTD({p21:Int64})), boolTagMap Map(String, Bool) CODEC(ZSTD({p22:Int64})), isRemote LowCardinality(String) CODEC(ZSTD({p23:Int64})), statusMessage String CODEC(ZSTD({p24:Int64})), statusCodeString String CODEC(ZSTD({p25:Int64})), spanKind String CODEC(ZSTD({p26:Int64}))) AS SELECT\n    timestamp,\n    traceID,\n    spanID,\n    parentSpanID,\n    serviceName,\n    name,\n    kind,\n    durationNano,\n    statusCode,\n    httpMethod,\n    httpUrl,\n    httpRoute,\n    httpHost,\n    hasError,\n    rpcSystem,\n    rpcService,\n    rpcMethod,\n    responseStatusCode,\n    stringTagMap,\n    numberTagMap,\n    boolTagMap,\n    isRemote,\n    statusMessage,\n    statusCodeString,\n    spanKind\nFROM signoz_traces.signoz_index_v2\nORDER BY\n    durationNano ASC,\n    timestamp ASC",
       "path": "explained",
       "executions": 1
     },
