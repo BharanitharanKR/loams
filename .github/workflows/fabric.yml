@@ -322,9 +322,9 @@ jobs:
   # this tree (every DDL statement, the oracle's rows, every distinct SELECT
   # compared), then OpenPanel itself on that House (migrations, ingest through
   # its Redis buffers, every page's reads). It runs on the nightly dispatch and
-  # on pull requests that touch the House or the harness. It is not in
-  # `Connectors required` until OpenPanel passes on the House (the inner-table
-  # materialized views, HE1 Task 9). Synthetic traffic only; nothing uploaded.
+  # on pull requests that touch the House or the harness, and is part of
+  # `Connectors required` since OpenPanel passed on the House (HE1 R9.7).
+  # Synthetic traffic only; nothing uploaded.
   openpanel-on-house:
     name: "House apps: OpenPanel on the House"
     needs: changes
@@ -1092,6 +1092,7 @@ jobs:
       - connectors-alerts
       - connectors-kind
       - house-apps-smoke
+      - openpanel-on-house
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
