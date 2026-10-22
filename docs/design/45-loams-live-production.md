@@ -305,7 +305,7 @@ With the `live` feature on, `loams dev` connects to a PD at `127.0.0.1:19379` an
 | Use | Backend |
 |---|---|
 | `loams dev`, Loams Desktop, SDK conformance, CI | **Embedded by default**: `--live-store embedded` (the default), or `--live-store tikv://<pd>/<keyspace>` |
-| `loams standalone` | Embedded allowed and labelled **not for production** in LV1. Whether single-node production on embedded is supported, with mandatory backup (§10), is Q626 |
+| `loams standalone` | Embedded allowed and labelled **not for production** in LV1. Whether single-node production on embedded is supported, with mandatory backup (§10), is Q626, answered 2026-10-22 (D1341): supported for single node, with the limits stated |
 | Production (`cluster`, Loams Cloud, BYOC) | **TiKV only**, per D130 |
 
 - **Features.** `live` = Live plus the embedded store, with no `tikv-client`. It **joins the `standard` and `full` variants and the default feature set**, which reverses owner ruling T8-2 for the embedded part. `live-tikv` = `live` plus the TiKV backend (the git-pinned fork). It joins `full`. Publishing a crate with a git dependency to crates.io is impossible, so how `live-tikv` reaches crates.io builds is Q629. Binaries built from the repository are unaffected.
@@ -521,7 +521,7 @@ If any row fails, Live ships in that release **labelled "preview"** in `GetInsta
 | # | Question | Default if unanswered |
 |---|---|---|
 | Q625 | Include actions (`fetch`) and scheduled functions in LV1, or keep them in R2? | R2 |
-| Q626 | Is the embedded store a supported single-node production backend (with mandatory logical backup), or dev and Desktop only? | Dev and Desktop only |
+| Q626 | ~~Is the embedded store a supported single-node production backend (with mandatory logical backup), or dev and Desktop only?~~ **Answered 2026-10-22 by the owner (D1341):** supported for single-node installs, with the limits stated | ~~Dev and Desktop only~~ |
 | Q627 | On v8.5.8, do BR full backup and log backup (PITR) work for API v2 txn keyspaces, and per keyspace? (Narrows Q37 into a spike) | Logical backup only; BR full backup if it works |
 | Q628 | Is seccomp plus landlock enough for multi-tenant Loams Cloud, or does Live need gVisor or microVM isolation? | Subprocess sandbox for LV1, revisited by the security review |
 | Q629 | crates.io refuses git dependencies: publish the `tikv-client` fork under its own crate name, or keep `live-tikv` binary-only? | Binary-only |
