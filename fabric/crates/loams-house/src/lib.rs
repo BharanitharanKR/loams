@@ -102,6 +102,7 @@ pub mod insert;
 pub mod limits;
 pub mod metrics;
 pub mod mv;
+pub mod native;
 pub mod oplog;
 pub mod pipes;
 pub mod querylog;
