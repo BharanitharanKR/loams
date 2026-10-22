@@ -26,7 +26,7 @@
 - **Worktrees and branches.** `~/Documents/Ostriumlabs/loams-wt/he0-<task>`, one branch and one PR per task into `dev`. CodeRabbit reviews; merge on green. Commit with `git commit -s`.
 - **Light Rust builds.** `cargo build -p loams-house-mine` from `fabric/`; never `--workspace` locally. Build output goes to the shared target in `~/Documents/.cargo/config.toml`; never set `CARGO_TARGET_DIR`, never build in `/tmp`. Stop compose stacks during builds.
 - **No engine code in HE0.** No DataFusion dependency enters a merged crate. The dialect spike (Task 10) is a report; its code stays on a branch that is not merged.
-- **Licences (§75 §18).** Applications run as unmodified containers pinned by digest; AGPL applications (OpenPanel, Plausible) are never linked, vendored or redistributed. No application source is committed. ClickHouse `.sql`/`.reference` test files may be vendored with attribution (Apache-2.0). ClickBench query text is never committed (D414). Every new crate passes `cargo deny` in `fabric/`.
+- **Licences (§75 §18; FSL as BSL, D1574).** Applications run as unmodified containers pinned by digest; AGPL applications (OpenPanel, Plausible) are never linked, vendored or redistributed. No application source is committed. ClickHouse `.sql`/`.reference` test files may be vendored with attribution (Apache-2.0). ClickBench query text is never committed (D414). Every new crate passes `cargo deny` in `fabric/`.
 - **No query text from real users.** Mining runs only on synthetic traffic in CI or local stacks. Dumps are scrubbed of literals before they are committed (`loams-house-mine scrub`).
 - **GitHub-hosted runners only.** Application suites that take more than 30 minutes run nightly, not per PR.
 
@@ -139,11 +139,11 @@ Gate: Tasks 1–11 merged; the report written; §75's open questions that HE0 an
 
 ## Queued gate applications, after SigNoz (Tasks 13–15)
 
-> **Queued by the owner 2026-10-22** ([R13.1](he1-rulings/t13.md), [R14.1](he1-rulings/t14.md), [R15.1](he1-rulings/t15.md)). These are stubs. **None of them starts** until SigNoz's gate (Task 9; the owner's decision of 2026-10-22, PR #1025) is done or the owner says so. They are not part of the HE0 exit (Task 12) unless the owner adds them. Evidence for every licence, protocol and stack fact below is in [`docs/research/clickhouse-apps.md`](../research/clickhouse-apps.md) (checked 2026-10-22). When a task starts, its application becomes a gate application under §75 §7.1's rule, and a decision from the reserved D1572–D1579 records that.
+> **Queued by the owner 2026-10-22** ([R13.1](he1-rulings/t13.md), [R14.1](he1-rulings/t14.md), [R15.1](he1-rulings/t15.md)); Laminar replaces Helicone and the order is fixed (owner, 2026-10-22; [R14.2](he1-rulings/t14.md)). These are stubs. **None of them starts** until SigNoz's gate (Task 9, D1571) is done or the owner says so. They are not part of the HE0 exit (Task 12) unless the owner adds them. Evidence for every licence, protocol and stack fact below is in [`docs/research/clickhouse-apps.md`](../research/clickhouse-apps.md) (checked 2026-10-22). When a task starts, its application becomes a gate application under §75 §7.1's rule, and a decision from the reserved D1572–D1579 records that.
 
 Each task follows Task 9's pattern: a manifest entry and compose stack (Task 1), a driver, a mining run (Tasks 2–5) against the 26.9.2.8 oracle, a replay of the oracle traffic against the House (R9.3), then fixes or rulings per gap, and a nightly `<app>_on_house_smoke` job. Supporting images follow R0.4 (Valkey for Redis, RustFS for MinIO).
 
-**Recommended order** (survey §4): Task 15 (BI tools), then Task 13 (OpenMeter), then Task 14 (the LLM gate). The owner decides.
+**Order after SigNoz (owner, 2026-10-22; R13.2, R14.2, R15.2): Task 15 (BI tools) first, then Task 13 (OpenMeter), then Task 14 (Laminar).** Each starts when the one before it is done, unless the owner says otherwise.
 
 ### Task 13 — Queued gate: OpenMeter
 
@@ -151,7 +151,7 @@ Each task follows Task 9's pattern: a manifest entry and compose stack (Task 1),
 
 **Application.** `openmeterio/openmeter`, Apache-2.0, no `ee/` split; owned by Kong since 2025-09. Releases are weekly `v1.0.0-beta.N` tags (`v1.0.0-beta.236`, 2026-10-09); pin one at least 14 days old, image `ghcr.io/openmeterio/openmeter` by digest (one image, six commands).
 
-**Protocol: native only.** OpenMeter opens ClickHouse with `clickhouse-go` v2 and no protocol option (`app/config/aggregation.go`, default address `127.0.0.1:9000`), for inserts, migrations and queries. So this gate **needs the native listener built for SigNoz** (PR #1025); it is the second native-only gate and reuses that work. Whether an `http://` address is accepted is unknown (verify; the config builds `clickhouse.Options` without `Protocol`).
+**Protocol: native only.** OpenMeter opens ClickHouse with `clickhouse-go` v2 and no protocol option (`app/config/aggregation.go`, default address `127.0.0.1:9000`), for inserts, migrations and queries. So this gate **needs the native listener built for SigNoz** (D1571); it is the second native-only gate and reuses that work. Whether an `http://` address is accepted is unknown (verify; the config builds `clickhouse.Options` without `Protocol`).
 
 **How OpenMeter's use maps onto §63.**
 
@@ -167,27 +167,27 @@ Each task follows Task 9's pattern: a manifest entry and compose stack (Task 1),
 
 **Harness needs.** Kafka (their compose uses `confluentinc/cp-kafka:8.0.3`; use an Apache Kafka image if OpenMeter accepts it, verify), Postgres, Valkey for the Redis dedupe driver, the native port on the House, oracle ClickHouse 26.9.2.8 (OpenMeter pins 25.12.3).
 
-**Expected House gaps** (from the source, to be measured): the native protocol (D1548; SigNoz's listener, PR #1025); the `minmax` skip index in `CREATE TABLE` (skip indexes are stripped in R9.3's discovery runs); `PREWHERE` on the Rust engine (R10.5; chDB is fine); `tumbleStart`/`tumbleEnd`, `JSON_VALUE`, `toDecimal128OrNull` and `ifNotFinite` in the Tier 0 profile (chDB has them); `async_insert` settings when enabled (R4.5); deletes or mutations, if OpenMeter issues any (not seen; verify).
+**Expected House gaps** (from the source, to be measured): the native protocol (D1548, D1571); the `minmax` skip index in `CREATE TABLE` (skip indexes are stripped in R9.3's discovery runs); `PREWHERE` on the Rust engine (R10.5; chDB is fine); `tumbleStart`/`tumbleEnd`, `JSON_VALUE`, `toDecimal128OrNull` and `ifNotFinite` in the Tier 0 profile (chDB has them); `async_insert` settings when enabled (R4.5); deletes or mutations, if OpenMeter issues any (not seen; verify).
 
 Tests: `openmeter_on_house_smoke` (nightly). Commit: `conformance: OpenMeter on the House (HE0 Task 13)`.
 
-### Task 14 — Queued gate: Helicone (LLM and agent observability)
+### Task 14 — Queued gate: Laminar (LLM and agent observability)
 
-> **Recommendation ([R14.1](he1-rulings/t14.md)): swap Helicone for Laminar, with Opik next.** Queued as Helicone because the owner asked; the swap is the owner's call.
+> **Laminar replaces Helicone** (owner, 2026-10-22; [R14.2](he1-rulings/t14.md)), with **Opik** as the next candidate. Helicone was queued first (R14.1) and dropped: its public images and releases stop at 2025-08-21 and its development moved to a private repository. Third in the order after SigNoz.
 
-**Application.** `Helicone/helicone`, Apache-2.0, no split. **Poor fit as found on 2026-10-22:** every public image (`helicone-all-in-one`, `jawn`, `web`) and GitHub release stops at 2025-08-21; the public repository is now synced in bulk from a private one (PRs #5841, #5842, #5844); the production Helm chart is on request; and the site says "Helicone is no longer part of Mintlify. Details to come soon." A gate would run a 14-month-old build or need a source build (R0.7).
+**Application.** `lmnr-ai/lmnr`, Apache-2.0 (`LICENSE.md`), no split in the repository; `frontend-ee` and `app-server-ee` images exist on GHCR from code that is not in the repository (verify), and are never used. Releases `v0.3.2` (2026-10-16), `v0.3.1`, `v0.3.0`; pin one at least 14 days old, `ghcr.io/lmnr-ai/app-server` and `ghcr.io/lmnr-ai/frontend` by digest (their compose uses unpinned tags).
 
-**Protocol: HTTP** (`@clickhouse/client` in jawn and web, `@clickhouse/client-web` in the Cloudflare Workers). Its compose pins ClickHouse 24.3 (the Q1170 floor).
+**Protocol: HTTP only.** The Rust app-server uses the `clickhouse` crate 0.15 (HTTP, with `RowBinary` for inserts and typed reads); the Next.js frontend uses `@clickhouse/client` and runs the migrations (`frontend/lib/clickhouse/migrations/*.sql`, over HTTP; verify). Both use `CLICKHOUSE_URL=http://clickhouse:8123`. So this gate runs on today's House and does not wait for the native listener.
 
-**Scope.** jawn (API and proxy), web, the ClickHouse and Supabase migration runners; the Workers are built locally in their compose (`worker-local`) and are left out unless images exist. Driver: log LLM requests through jawn's logging API, sessions and properties, open the dashboard, requests, sessions and HQL pages.
+**Scope.** app-server and frontend; ingest spans through Laminar's OpenTelemetry endpoint and its SDK's HTTP API (traces, spans, evaluations, events), then open the traces, spans, sessions, evaluations and dashboard pages and the SQL editor (a read-only ClickHouse user, `CLICKHOUSE_RO_USER`).
 
-**Harness needs.** Postgres with Supabase-style migrations, MinIO (swap to RustFS), Redis (swap to Valkey), Mailhog; Kafka and ZooKeeper only behind a profile (left off).
+**Harness needs.** Postgres, Quickwit (full-text search; Apache-2.0 at v0.9.1, verify), and for the full file RabbitMQ and Valkey. Oracle 26.9.2.8 (Laminar pins 26.5).
 
-**Expected House gaps** (from its 81 migration files): **row policies and users**: `CREATE USER hql_user`, `CREATE ROW POLICY … USING organization_id = getSetting('SQL_helicone_organization_id')`, `GRANT`/`REVOKE` (the House classifies `GRANT`/`REVOKE` as unsupported today; custom `SQL_*` settings untested); column TTLs and table TTL (48 today, R0.2); `bloom_filter` and `ngrambf_v1` skip indexes; `VersionedCollapsingMergeTree` and `AggregatingMergeTree` (D1570, built for OpenPanel); materialized views `TO` tables (built); `Map` columns; codecs.
+**Expected House gaps** (from its migrations, to be measured): the `RowBinary` input and output formats over HTTP (chDB has them; the House's HTTP front must pass them through); `ReplacingMergeTree` read with `FINAL` (supported); `tokenbf_v1` skip indexes (stripped in R9.3's discovery runs); a second, read-only user with its own grants (the House classifies `GRANT`/`REVOKE` as unsupported today).
 
-**If swapped to Laminar** (`lmnr-ai/lmnr`, Apache-2.0, v0.3.2 of 2026-10-16): HTTP only (Rust `clickhouse` crate 0.15, so `RowBinary` inserts and reads, and `@clickhouse/client`); 5 services (Postgres, ClickHouse, Quickwit, frontend, app-server); `MergeTree` and `ReplacingMergeTree` with `FINAL`, `tokenbf_v1` indexes, a read-only user for user SQL. **If Opik** (`comet-ml/opik`, Apache-2.0): HTTP only, but a clustered schema (`ON CLUSTER`, `ReplicatedReplacingMergeTree`) needing SigNoz's cluster-DDL work, `Map`, `JSON` and `Time` types, Liquibase migrations over JDBC, and up to 14 services (many behind profiles), with ZooKeeper.
+**Next candidate: Opik** (`comet-ml/opik`, Apache-2.0, releases daily): HTTP only, but a clustered schema (`ON CLUSTER`, `ReplicatedReplacingMergeTree`) that needs D1571's cluster-DDL forms, `Map`, `JSON` and `Time` types, Liquibase migrations over JDBC, and up to 14 services with ZooKeeper. Taken up only if the owner adds it after Laminar.
 
-Tests: `helicone_on_house_smoke` (or `laminar_…`/`opik_…`, nightly). Commit: `conformance: <app> on the House (HE0 Task 14)`.
+Tests: `laminar_on_house_smoke` (nightly). Commit: `conformance: Laminar on the House (HE0 Task 14)`.
 
 ### Task 15 — Queued gate: BI tools (Grafana and Metabase; Superset and Redash optional)
 
@@ -213,7 +213,7 @@ Tests: `helicone_on_house_smoke` (or `laminar_…`/`opik_…`, nightly). Commit:
 - `system.tables.engine` shows lake engines as the House names them; `engine_full` and `comment` may be default values (`system.rs` fills what it knows).
 - The `JSON` type, `JSONAllPaths` and `distinctJSONPathsAndTypes` on lake tables (verify the House's JSON support).
 - `SHOW CREATE TABLE` for lake tables (Metabase parses it for skip indexes); the House's answer must parse.
-- Native protocol for Grafana's default mode (the listener built for SigNoz, PR #1025).
+- Native protocol for Grafana's default mode (D1571's listener).
 
 Tests: `bi_grafana_on_house_smoke` (both protocols) and `bi_metabase_on_house_smoke` (nightly). Commit: `conformance: Grafana and Metabase against the House (HE0 Task 15)`.
 
@@ -267,5 +267,5 @@ Rulings live in one file per task under [`he1-rulings/`](he1-rulings/), so tasks
 | 11. Spike: iceberg-rust v3 | [t11.md](he1-rulings/t11.md) |
 | 12. HE0 exit | [t12.md](he1-rulings/t12.md) |
 | 13. Queued gate: OpenMeter | [t13.md](he1-rulings/t13.md) |
-| 14. Queued gate: Helicone | [t14.md](he1-rulings/t14.md) |
+| 14. Queued gate: Laminar (was Helicone) | [t14.md](he1-rulings/t14.md) |
 | 15. Queued gate: BI tools | [t15.md](he1-rulings/t15.md) |
