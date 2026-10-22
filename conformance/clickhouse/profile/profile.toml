@@ -8,7 +8,7 @@ apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "u
 name = "syntax:SELECT"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 3159
+frequency = 3147
 reason = "apps>=3"
 
 [[feature]]
@@ -22,7 +22,7 @@ reason = "apps>=3"
 name = "setting:database"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 2379
+frequency = 2372
 reason = "apps>=3"
 
 [[feature]]
@@ -71,7 +71,7 @@ reason = "apps>=3"
 name = "syntax:GROUP BY"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 887
+frequency = 888
 reason = "apps>=3"
 
 [[feature]]
@@ -85,14 +85,14 @@ reason = "apps>=3"
 name = "type:String"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 786
+frequency = 789
 reason = "apps>=3"
 
 [[feature]]
 name = "function:notEquals"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 690
+frequency = 691
 reason = "apps>=3"
 
 [[feature]]
@@ -127,14 +127,14 @@ reason = "apps>=3"
 name = "syntax:column CODEC"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 406
+frequency = 409
 reason = "apps>=3"
 
 [[feature]]
 name = "syntax:codec ZSTD"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 403
+frequency = 406
 reason = "apps>=3"
 
 [[feature]]
@@ -148,7 +148,7 @@ reason = "apps>=3"
 name = "function:tuple"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 380
+frequency = 383
 reason = "apps>=3"
 
 [[feature]]
@@ -169,7 +169,7 @@ reason = "apps>=3"
 name = "syntax:CREATE TABLE"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 358
+frequency = 360
 reason = "apps>=3"
 
 [[feature]]
@@ -197,21 +197,21 @@ reason = "apps>=3"
 name = "function:toDate"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 327
+frequency = 330
 reason = "apps>=3"
 
 [[feature]]
 name = "type:LowCardinality"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 294
+frequency = 296
 reason = "apps>=3"
 
 [[feature]]
 name = "syntax:table ORDER BY"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 271
+frequency = 274
 reason = "apps>=3"
 
 [[feature]]
@@ -225,14 +225,14 @@ reason = "apps>=3"
 name = "type:UInt64"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 217
+frequency = 218
 reason = "apps>=3"
 
 [[feature]]
 name = "function:max"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 200
+frequency = 201
 reason = "apps>=3"
 
 [[feature]]
@@ -253,28 +253,28 @@ reason = "apps>=3"
 name = "syntax:PARTITION BY"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 148
+frequency = 151
 reason = "apps>=3"
 
 [[feature]]
 name = "function:min"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 137
+frequency = 138
 reason = "apps>=3"
 
 [[feature]]
 name = "syntax:table SETTINGS"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 132
+frequency = 135
 reason = "apps>=3"
 
 [[feature]]
 name = "function:plus"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 131
+frequency = 134
 reason = "apps>=3"
 
 [[feature]]
@@ -288,14 +288,14 @@ reason = "apps>=3"
 name = "type:UInt8"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 59
+frequency = 60
 reason = "apps>=3"
 
 [[feature]]
 name = "type:DateTime64"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "signoz", "umami"]
-frequency = 1339
+frequency = 1341
 reason = "apps>=3"
 
 [[feature]]
@@ -309,21 +309,21 @@ reason = "apps>=3"
 name = "function:arrayElement"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz"]
-frequency = 210
+frequency = 211
 reason = "apps>=3"
 
 [[feature]]
 name = "syntax:skip index bloom_filter"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "signoz", "umami"]
-frequency = 164
+frequency = 166
 reason = "apps>=3"
 
 [[feature]]
 name = "function:toDateTime"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "signoz", "umami"]
-frequency = 160
+frequency = 163
 reason = "apps>=3"
 
 [[feature]]
@@ -344,7 +344,7 @@ reason = "apps>=3"
 name = "setting:index_granularity"
 tier = 0
 apps = ["hyperdx", "openlit", "openpanel", "plausible", "signoz", "umami"]
-frequency = 109
+frequency = 112
 reason = "apps>=3"
 
 [[feature]]
@@ -365,14 +365,14 @@ reason = "apps>=3"
 name = "syntax:CREATE MATERIALIZED VIEW"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "signoz", "umami"]
-frequency = 89
+frequency = 90
 reason = "apps>=3"
 
 [[feature]]
 name = "engine:MergeTree"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "umami"]
-frequency = 78
+frequency = 81
 reason = "apps>=3"
 
 [[feature]]
@@ -400,7 +400,7 @@ reason = "apps>=3"
 name = "syntax:skip index minmax"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "plausible", "signoz"]
-frequency = 39
+frequency = 40
 reason = "apps>=3"
 
 [[feature]]
@@ -449,7 +449,7 @@ reason = "apps>=3"
 name = "type:Map"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "signoz"]
-frequency = 163
+frequency = 165
 reason = "apps>=3"
 
 [[feature]]
@@ -463,7 +463,7 @@ reason = "apps>=3"
 name = "syntax:codec DELTA"
 tier = 0
 apps = ["hyperdx", "openlit", "openpanel", "plausible", "signoz"]
-frequency = 121
+frequency = 124
 reason = "apps>=3"
 
 [[feature]]
@@ -498,14 +498,14 @@ reason = "apps>=3"
 name = "syntax:TTL"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "signoz"]
-frequency = 99
+frequency = 102
 reason = "apps>=3"
 
 [[feature]]
 name = "function:toIntervalDay"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "signoz"]
-frequency = 85
+frequency = 88
 reason = "apps>=3"
 
 [[feature]]
@@ -519,7 +519,7 @@ reason = "apps>=3"
 name = "syntax:MATERIALIZED VIEW TO"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "signoz", "umami"]
-frequency = 77
+frequency = 78
 reason = "apps>=3"
 
 [[feature]]
@@ -533,7 +533,7 @@ reason = "apps>=3"
 name = "function:mapKeys"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "signoz"]
-frequency = 70
+frequency = 72
 reason = "apps>=3"
 
 [[feature]]
@@ -547,14 +547,14 @@ reason = "apps>=3"
 name = "function:mapValues"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "openpanel", "signoz"]
-frequency = 66
+frequency = 68
 reason = "apps>=3"
 
 [[feature]]
 name = "function:lower"
 tier = 0
 apps = ["hyperdx", "langfuse", "plausible", "signoz", "umami"]
-frequency = 60
+frequency = 61
 reason = "apps>=3"
 
 [[feature]]
@@ -624,7 +624,7 @@ reason = "apps>=3"
 name = "setting:enable_producing_buckets_out_of_order_in_aggregation"
 tier = 0
 apps = ["hyperdx", "langfuse", "openlit", "signoz"]
-frequency = 2229
+frequency = 2233
 reason = "apps>=3"
 
 [[feature]]
@@ -645,7 +645,7 @@ reason = "apps>=3"
 name = "type:Int64"
 tier = 0
 apps = ["hyperdx", "langfuse", "plausible", "signoz"]
-frequency = 459
+frequency = 458
 reason = "apps>=3"
 
 [[feature]]
@@ -733,6 +733,13 @@ frequency = 79
 reason = "apps>=3"
 
 [[feature]]
+name = "setting:ttl_only_drop_parts"
+tier = 0
+apps = ["hyperdx", "langfuse", "openlit", "signoz"]
+frequency = 72
+reason = "apps>=3"
+
+[[feature]]
 name = "engine:ReplacingMergeTree"
 tier = 0
 apps = ["langfuse", "openlit", "openpanel", "umami"]
@@ -744,13 +751,6 @@ name = "function:toIntervalHour"
 tier = 0
 apps = ["langfuse", "openlit", "openpanel", "signoz"]
 frequency = 71
-reason = "apps>=3"
-
-[[feature]]
-name = "setting:ttl_only_drop_parts"
-tier = 0
-apps = ["hyperdx", "langfuse", "openlit", "signoz"]
-frequency = 69
 reason = "apps>=3"
 
 [[feature]]
@@ -978,13 +978,6 @@ frequency = 37
 reason = "apps>=3"
 
 [[feature]]
-name = "function:version"
-tier = 0
-apps = ["hyperdx", "langfuse", "plausible"]
-frequency = 35
-reason = "apps>=3"
-
-[[feature]]
 name = "syntax:ALTER MODIFY COLUMN"
 tier = 0
 apps = ["langfuse", "plausible", "signoz"]
@@ -996,6 +989,13 @@ name = "syntax:ARRAY JOIN"
 tier = 0
 apps = ["langfuse", "openpanel", "plausible"]
 frequency = 32
+reason = "apps>=3"
+
+[[feature]]
+name = "function:version"
+tier = 0
+apps = ["hyperdx", "langfuse", "plausible"]
+frequency = 28
 reason = "apps>=3"
 
 [[feature]]
@@ -1111,10 +1111,17 @@ frequency = 6
 reason = "apps>=3"
 
 [[feature]]
+name = "setting:query_plan_optimize_lazy_materialization"
+tier = 0
+apps = ["hyperdx", "langfuse"]
+frequency = 701
+reason = "gate:langfuse"
+
+[[feature]]
 name = "setting:readonly"
 tier = 1
 apps = ["openlit", "plausible"]
-frequency = 395
+frequency = 392
 reason = "Tier 1 proposal: 2 application(s), below 3"
 
 [[feature]]
@@ -1122,6 +1129,20 @@ name = "syntax:INSERT VALUES"
 tier = 0
 apps = ["langfuse", "signoz"]
 frequency = 290
+reason = "gate:langfuse"
+
+[[feature]]
+name = "setting:output_format_json_quote_64bit_integers"
+tier = 1
+apps = ["hyperdx", "umami"]
+frequency = 176
+reason = "Tier 1 proposal: 2 application(s), below 3"
+
+[[feature]]
+name = "setting:enable_full_text_index"
+tier = 0
+apps = ["hyperdx", "langfuse"]
+frequency = 129
 reason = "gate:langfuse"
 
 [[feature]]
@@ -1398,16 +1419,16 @@ frequency = 14
 reason = "gate:langfuse"
 
 [[feature]]
-name = "syntax:skip index tokenbf_v1"
-tier = 1
-apps = ["openlit", "signoz"]
-frequency = 13
-reason = "Tier 1 proposal: 2 application(s), below 3"
-
-[[feature]]
 name = "type:Nested"
 tier = 1
 apps = ["hyperdx", "openlit"]
+frequency = 14
+reason = "Tier 1 proposal: 2 application(s), below 3"
+
+[[feature]]
+name = "syntax:skip index tokenbf_v1"
+tier = 1
+apps = ["openlit", "signoz"]
 frequency = 13
 reason = "Tier 1 proposal: 2 application(s), below 3"
 
@@ -1419,16 +1440,16 @@ frequency = 12
 reason = "Tier 1 proposal: 2 application(s), below 3"
 
 [[feature]]
-name = "engine:ReplicatedAggregatingMergeTree"
-tier = 0
-apps = ["langfuse", "signoz"]
-frequency = 11
-reason = "gate:langfuse"
-
-[[feature]]
 name = "syntax:column MATERIALIZED"
 tier = 0
 apps = ["hyperdx", "langfuse"]
+frequency = 12
+reason = "gate:langfuse"
+
+[[feature]]
+name = "engine:ReplicatedAggregatingMergeTree"
+tier = 0
+apps = ["langfuse", "signoz"]
 frequency = 11
 reason = "gate:langfuse"
 
@@ -1447,6 +1468,13 @@ frequency = 9
 reason = "gate:openpanel"
 
 [[feature]]
+name = "syntax:skip index text"
+tier = 0
+apps = ["hyperdx", "langfuse"]
+frequency = 9
+reason = "gate:langfuse"
+
+[[feature]]
 name = "function:toBool"
 tier = 0
 apps = ["langfuse", "openpanel"]
@@ -1459,13 +1487,6 @@ tier = 1
 apps = ["hyperdx", "openlit"]
 frequency = 8
 reason = "Tier 1 proposal: 2 application(s), below 3"
-
-[[feature]]
-name = "syntax:skip index text"
-tier = 0
-apps = ["hyperdx", "langfuse"]
-frequency = 8
-reason = "gate:langfuse"
 
 [[feature]]
 name = "function:ilike"
@@ -1653,21 +1674,21 @@ reason = "gate:langfuse"
 name = "setting:input_format_binary_read_json_as_string"
 tier = 1
 apps = ["plausible"]
-frequency = 811
+frequency = 805
 reason = "Tier 1 proposal: 1 application(s), below 3"
 
 [[feature]]
 name = "setting:output_format_binary_write_json_as_string"
 tier = 1
 apps = ["plausible"]
-frequency = 811
+frequency = 805
 reason = "Tier 1 proposal: 1 application(s), below 3"
 
 [[feature]]
 name = "setting:output_format"
 tier = 1
 apps = ["plausible"]
-frequency = 729
+frequency = 716
 reason = "Tier 1 proposal: 1 application(s), below 3"
 
 [[feature]]
@@ -1675,13 +1696,6 @@ name = "setting:use_query_cache"
 tier = 0
 apps = ["langfuse"]
 frequency = 710
-reason = "gate:langfuse"
-
-[[feature]]
-name = "setting:query_plan_optimize_lazy_materialization"
-tier = 0
-apps = ["langfuse"]
-frequency = 653
 reason = "gate:langfuse"
 
 [[feature]]
@@ -1702,14 +1716,14 @@ reason = "gate:langfuse"
 name = "setting:materialized_views_ignore_errors"
 tier = 1
 apps = ["plausible"]
-frequency = 501
+frequency = 491
 reason = "Tier 1 proposal: 1 application(s), below 3"
 
 [[feature]]
 name = "setting:join_algorithm"
 tier = 1
 apps = ["plausible"]
-frequency = 339
+frequency = 336
 reason = "Tier 1 proposal: 1 application(s), below 3"
 
 [[feature]]
@@ -1783,13 +1797,6 @@ frequency = 88
 reason = "gate:langfuse"
 
 [[feature]]
-name = "setting:enable_full_text_index"
-tier = 0
-apps = ["langfuse"]
-frequency = 81
-reason = "gate:langfuse"
-
-[[feature]]
 name = "setting:mutations_sync"
 tier = 0
 apps = ["langfuse"]
@@ -1853,14 +1860,14 @@ frequency = 48
 reason = "Tier 1 proposal: 1 application(s), below 3"
 
 [[feature]]
-name = "setting:cancel_http_readonly_queries_on_client_close"
+name = "setting:allow_experimental_analyzer"
 tier = 1
 apps = ["hyperdx"]
 frequency = 48
 reason = "Tier 1 proposal: 1 application(s), below 3"
 
 [[feature]]
-name = "setting:output_format_json_quote_64bit_integers"
+name = "setting:cancel_http_readonly_queries_on_client_close"
 tier = 1
 apps = ["hyperdx"]
 frequency = 48
@@ -1875,6 +1882,27 @@ reason = "Tier 1 proposal: 1 application(s), below 3"
 
 [[feature]]
 name = "setting:query_plan_max_limit_for_top_k_optimization"
+tier = 1
+apps = ["hyperdx"]
+frequency = 48
+reason = "Tier 1 proposal: 1 application(s), below 3"
+
+[[feature]]
+name = "setting:use_skip_indexes_for_disjunctions"
+tier = 1
+apps = ["hyperdx"]
+frequency = 48
+reason = "Tier 1 proposal: 1 application(s), below 3"
+
+[[feature]]
+name = "setting:use_skip_indexes_for_top_k"
+tier = 1
+apps = ["hyperdx"]
+frequency = 48
+reason = "Tier 1 proposal: 1 application(s), below 3"
+
+[[feature]]
+name = "setting:use_skip_indexes_on_data_read"
 tier = 1
 apps = ["hyperdx"]
 frequency = 48
@@ -2161,6 +2189,13 @@ frequency = 13
 reason = "Tier 1 proposal: 1 application(s), below 3"
 
 [[feature]]
+name = "function:toStartOfFiveMinutes"
+tier = 1
+apps = ["hyperdx"]
+frequency = 13
+reason = "Tier 1 proposal: 1 application(s), below 3"
+
+[[feature]]
 name = "function:trim"
 tier = 1
 apps = ["openlit"]
@@ -2187,13 +2222,6 @@ tier = 0
 apps = ["langfuse"]
 frequency = 12
 reason = "gate:langfuse"
-
-[[feature]]
-name = "function:toStartOfFiveMinutes"
-tier = 1
-apps = ["hyperdx"]
-frequency = 12
-reason = "Tier 1 proposal: 1 application(s), below 3"
 
 [[feature]]
 name = "function:xxHash32"

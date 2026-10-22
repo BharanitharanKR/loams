@@ -8,11 +8,11 @@ The ClickHouse features real applications use, mined from their query logs and m
 
 | Application | Variants | Statements | sqlparser | EXPLAIN AST | Unparsed |
 |---|---|---:|---:|---:|---:|
-| hyperdx | 2.40.0 | 79 | 40 | 39 | 0 |
+| hyperdx | 2.40.0 | 83 | 41 | 42 | 0 |
 | langfuse | v3, v4 | 2340 | 1588 | 752 | 0 |
 | openlit | 2.1.0 | 163 | 130 | 33 | 0 |
 | openpanel | 2.3.0 | 178 | 106 | 72 | 0 |
-| plausible | 3.2.1 | 843 | 448 | 395 | 0 |
+| plausible | 3.2.1 | 830 | 435 | 395 | 0 |
 | signoz | 0.145.0 | 1635 | 1155 | 480 | 0 |
 | umami | 3.4.0 | 606 | 595 | 11 | 0 |
 
@@ -21,7 +21,7 @@ The ClickHouse features real applications use, mined from their query logs and m
 | Proposal | Features |
 |---|---:|
 | Tier 0 | 286 |
-| Tier 1 | 146 |
+| Tier 1 | 150 |
 | Tier 2 (refused) | 4 |
 | disabled | 1 |
 
@@ -78,23 +78,23 @@ Listed for the owner, not resolved (plan HE1 Task 5). "§75" is the placement in
 | `and` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 2123 | Tier 0 | apps>=3 |
 | `greaterOrEquals` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 1541 | Tier 0 | apps>=3 |
 | `lessOrEquals` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 794 | Tier 0 | apps>=3 |
-| `notEquals` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 690 | Tier 0 | apps>=3 |
+| `notEquals` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 691 | Tier 0 | apps>=3 |
 | `count` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 504 | Tier 0 | apps>=3 |
 | `in` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 478 | Tier 0 | apps>=3 |
 | `if` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 431 | Tier 0 | apps>=3 |
 | `greater` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 391 | Tier 0 | apps>=3 |
-| `tuple` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 380 | Tier 0 | apps>=3 |
+| `tuple` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 383 | Tier 0 | apps>=3 |
 | `multiply` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 369 | Tier 0 | apps>=3 |
 | `any` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 368 | Tier 0 | apps>=3 |
 | `divide` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 339 | Tier 0 | apps>=3 |
 | `sum` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 335 | Tier 0 | apps>=3 |
-| `toDate` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 327 | Tier 0 | apps>=3 |
-| `max` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 200 | Tier 0 | apps>=3 |
+| `toDate` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 330 | Tier 0 | apps>=3 |
+| `max` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 201 | Tier 0 | apps>=3 |
 | `or` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 189 | Tier 0 | apps>=3 |
-| `min` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 137 | Tier 0 | apps>=3 |
-| `plus` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 131 | Tier 0 | apps>=3 |
-| `arrayElement` | 6 (hyperdx, langfuse, openlit, openpanel, plausible, signoz) | 210 | Tier 0 | apps>=3 |
-| `toDateTime` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 160 | Tier 0 | apps>=3 |
+| `min` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 138 | Tier 0 | apps>=3 |
+| `plus` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 134 | Tier 0 | apps>=3 |
+| `arrayElement` | 6 (hyperdx, langfuse, openlit, openpanel, plausible, signoz) | 211 | Tier 0 | apps>=3 |
+| `toDateTime` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 163 | Tier 0 | apps>=3 |
 | `minus` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 116 | Tier 0 | apps>=3 |
 | `argMax` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 73 | Tier 0 | apps>=3 |
 | `multiIf` | 6 (hyperdx, langfuse, openpanel, plausible, signoz, umami) | 65 | Tier 0 | apps>=3 |
@@ -102,12 +102,12 @@ Listed for the owner, not resolved (plan HE1 Task 5). "§75" is the placement in
 | `lambda` | 5 (hyperdx, langfuse, openpanel, plausible, umami) | 129 | Tier 0 | apps>=3 |
 | `notIn` | 5 (langfuse, openlit, openpanel, signoz, umami) | 110 | Tier 0 | apps>=3 |
 | `countIf` | 5 (hyperdx, langfuse, openpanel, plausible, signoz) | 105 | Tier 0 | apps>=3 |
-| `toIntervalDay` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 85 | Tier 0 | apps>=3 |
+| `toIntervalDay` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 88 | Tier 0 | apps>=3 |
 | `CAST` | 5 (hyperdx, langfuse, openlit, plausible, signoz) | 82 | Tier 0 | apps>=3 |
 | `toYYYYMM` | 5 (langfuse, openpanel, plausible, signoz, umami) | 75 | Tier 0 | apps>=3 |
-| `mapKeys` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 70 | Tier 0 | apps>=3 |
-| `mapValues` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 66 | Tier 0 | apps>=3 |
-| `lower` | 5 (hyperdx, langfuse, plausible, signoz, umami) | 60 | Tier 0 | apps>=3 |
+| `mapKeys` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 72 | Tier 0 | apps>=3 |
+| `mapValues` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 68 | Tier 0 | apps>=3 |
+| `lower` | 5 (hyperdx, langfuse, plausible, signoz, umami) | 61 | Tier 0 | apps>=3 |
 | `toIntervalMinute` | 5 (hyperdx, langfuse, openpanel, signoz, umami) | 55 | Tier 0 | apps>=3 |
 | `avg` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 50 | Tier 0 | apps>=3 |
 | `toStartOfHour` | 5 (langfuse, openpanel, plausible, signoz, umami) | 50 | Tier 0 | apps>=3 |
@@ -139,7 +139,7 @@ Listed for the owner, not resolved (plan HE1 Task 5). "§75" is the placement in
 | `arrayMap` | 3 (langfuse, openpanel, plausible) | 50 | Tier 0 | apps>=3 |
 | `groupArray` | 3 (langfuse, openpanel, umami) | 44 | Tier 0 | apps>=3 |
 | `toStartOfInterval` | 3 (hyperdx, langfuse, signoz) | 43 | Tier 0 | apps>=3 |
-| `version` | 3 (hyperdx, langfuse, plausible) | 35 | Tier 0 | apps>=3 |
+| `version` | 3 (hyperdx, langfuse, plausible) | 28 | Tier 0 | apps>=3 |
 | `arrayFilter` | 3 (langfuse, openpanel, umami) | 15 | Tier 0 | apps>=3 |
 | `arrayFirstIndex` | 3 (hyperdx, langfuse, openpanel) | 11 | Tier 0 | apps>=3 |
 | `uniqIf` | 3 (langfuse, openpanel, plausible) | 10 | Tier 0 | apps>=3 |
@@ -216,11 +216,11 @@ Listed for the owner, not resolved (plan HE1 Task 5). "§75" is the placement in
 | `negate` | 1 (langfuse) | 14 | Tier 0 | gate:langfuse |
 | `toUnixTimestamp` | 1 (signoz) | 14 | Tier 1 | below threshold |
 | `replaceRegexpAll` | 1 (openlit) | 13 | Tier 1 | below threshold |
+| `toStartOfFiveMinutes` | 1 (hyperdx) | 13 | Tier 1 | below threshold |
 | `trim` | 1 (openlit) | 13 | Tier 1 | below threshold |
 | `approx_top_kIf` | 1 (langfuse) | 12 | Tier 0 | gate:langfuse |
 | `least` | 1 (langfuse) | 12 | Tier 0 | gate:langfuse |
 | `lengthUTF8` | 1 (langfuse) | 12 | Tier 0 | gate:langfuse |
-| `toStartOfFiveMinutes` | 1 (hyperdx) | 12 | Tier 1 | below threshold |
 | `xxHash32` | 1 (langfuse) | 12 | Tier 0 | gate:langfuse |
 | `toFloat64` | 1 (signoz) | 11 | Tier 1 | below threshold |
 | `toFloat64OrDefault` | 1 (hyperdx) | 11 | Tier 1 | below threshold |
@@ -315,14 +315,14 @@ Listed for the owner, not resolved (plan HE1 Task 5). "§75" is the placement in
 
 | Feature | Applications | Statements | Proposed | Why |
 |---|---|---:|---|---|
-| `MergeTree` | 6 (hyperdx, langfuse, openlit, openpanel, plausible, umami) | 78 | Tier 0 | apps>=3 |
+| `MergeTree` | 6 (hyperdx, langfuse, openlit, openpanel, plausible, umami) | 81 | Tier 0 | apps>=3 |
 | `ReplacingMergeTree` | 4 (langfuse, openlit, openpanel, umami) | 71 | Tier 0 | apps>=3 |
 | `AggregatingMergeTree` | 3 (langfuse, openpanel, umami) | 37 | Tier 0 | apps>=3 |
 | `ReplicatedReplacingMergeTree` | 2 (langfuse, signoz) | 49 | Tier 0 | gate:langfuse |
 | `ReplicatedAggregatingMergeTree` | 2 (langfuse, signoz) | 11 | Tier 0 | gate:langfuse |
 | `VersionedCollapsingMergeTree` | 2 (openpanel, plausible) | 5 | Tier 0 | gate:openpanel |
 | `Distributed` | 1 (signoz) | 59 | Tier 1 | below threshold |
-| `TinyLog` | 1 (plausible) | 34 | Tier 2 (refused) | below threshold |
+| `TinyLog` | 1 (plausible) | 33 | Tier 2 (refused) | below threshold |
 | `ReplicatedMergeTree` | 1 (signoz) | 16 | Tier 1 | below threshold |
 | `Null` | 1 (langfuse) | 6 | Tier 0 | gate:langfuse |
 | `CollapsingMergeTree` | 1 (plausible) | 2 | Tier 1 | below threshold |
@@ -333,21 +333,21 @@ Listed for the owner, not resolved (plan HE1 Task 5). "§75" is the placement in
 
 | Feature | Applications | Statements | Proposed | Why |
 |---|---|---:|---|---|
-| `String` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 786 | Tier 0 | apps>=3 |
+| `String` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 789 | Tier 0 | apps>=3 |
 | `Array` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 358 | Tier 0 | apps>=3 |
-| `LowCardinality` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 294 | Tier 0 | apps>=3 |
-| `UInt64` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 217 | Tier 0 | apps>=3 |
+| `LowCardinality` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 296 | Tier 0 | apps>=3 |
+| `UInt64` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 218 | Tier 0 | apps>=3 |
 | `UInt32` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 90 | Tier 0 | apps>=3 |
-| `UInt8` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 59 | Tier 0 | apps>=3 |
-| `DateTime64` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 1339 | Tier 0 | apps>=3 |
+| `UInt8` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 60 | Tier 0 | apps>=3 |
+| `DateTime64` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 1341 | Tier 0 | apps>=3 |
 | `DateTime` | 6 (hyperdx, openlit, openpanel, plausible, signoz, umami) | 436 | Tier 0 | apps>=3 |
 | `Nullable` | 6 (langfuse, openlit, openpanel, plausible, signoz, umami) | 130 | Tier 0 | apps>=3 |
 | `Int32` | 6 (hyperdx, langfuse, openlit, openpanel, plausible, umami) | 93 | Tier 0 | apps>=3 |
 | `Bool` | 5 (langfuse, openlit, openpanel, plausible, signoz) | 280 | Tier 0 | apps>=3 |
-| `Map` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 163 | Tier 0 | apps>=3 |
+| `Map` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 165 | Tier 0 | apps>=3 |
 | `Float64` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 117 | Tier 0 | apps>=3 |
 | `UInt16` | 5 (langfuse, openlit, openpanel, plausible, signoz) | 24 | Tier 0 | apps>=3 |
-| `Int64` | 4 (hyperdx, langfuse, plausible, signoz) | 459 | Tier 0 | apps>=3 |
+| `Int64` | 4 (hyperdx, langfuse, plausible, signoz) | 458 | Tier 0 | apps>=3 |
 | `UUID` | 3 (openlit, openpanel, umami) | 163 | Tier 0 | apps>=3 |
 | `SimpleAggregateFunction` | 3 (langfuse, signoz, umami) | 49 | Tier 0 | apps>=3 |
 | `AggregateFunction` | 3 (langfuse, signoz, umami) | 28 | Tier 0 | apps>=3 |
@@ -358,7 +358,7 @@ Listed for the owner, not resolved (plan HE1 Task 5). "§75" is the placement in
 | `Boolean` | 3 (hyperdx, langfuse, openlit) | 6 | Tier 0 | apps>=3 |
 | `Decimal` | 2 (langfuse, umami) | 31 | Tier 0 | gate:langfuse |
 | `Date` | 2 (openpanel, plausible) | 18 | Tier 0 | gate:openpanel |
-| `Nested` | 2 (hyperdx, openlit) | 13 | Tier 1 | below threshold |
+| `Nested` | 2 (hyperdx, openlit) | 14 | Tier 1 | below threshold |
 | `Tuple` | 2 (langfuse, plausible) | 7 | Tier 0 | gate:langfuse |
 | `INTEGER` | 1 (openlit) | 22 | Tier 1 | below threshold |
 | `Decimal64` | 1 (langfuse) | 19 | Tier 0 | gate:langfuse |
@@ -381,15 +381,18 @@ Listed for the owner, not resolved (plan HE1 Task 5). "§75" is the placement in
 
 | Feature | Applications | Statements | Proposed | Why |
 |---|---|---:|---|---|
-| `database` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 2379 | Tier 0 | apps>=3 |
+| `database` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 2372 | Tier 0 | apps>=3 |
 | `input_format_parallel_parsing` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 645 | Tier 0 | apps>=3 |
-| `index_granularity` | 6 (hyperdx, openlit, openpanel, plausible, signoz, umami) | 109 | Tier 0 | apps>=3 |
+| `index_granularity` | 6 (hyperdx, openlit, openpanel, plausible, signoz, umami) | 112 | Tier 0 | apps>=3 |
 | `max_execution_time` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 1656 | Tier 0 | apps>=3 |
-| `enable_producing_buckets_out_of_order_in_aggregation` | 4 (hyperdx, langfuse, openlit, signoz) | 2229 | Tier 0 | apps>=3 |
-| `ttl_only_drop_parts` | 4 (hyperdx, langfuse, openlit, signoz) | 69 | Tier 0 | apps>=3 |
+| `enable_producing_buckets_out_of_order_in_aggregation` | 4 (hyperdx, langfuse, openlit, signoz) | 2233 | Tier 0 | apps>=3 |
+| `ttl_only_drop_parts` | 4 (hyperdx, langfuse, openlit, signoz) | 72 | Tier 0 | apps>=3 |
 | `log_comment` | 3 (langfuse, plausible, signoz) | 1802 | Tier 0 | apps>=3 |
 | `date_time_output_format` | 3 (hyperdx, langfuse, umami) | 215 | Tier 0 | apps>=3 |
-| `readonly` | 2 (openlit, plausible) | 395 | Tier 1 | below threshold |
+| `query_plan_optimize_lazy_materialization` | 2 (hyperdx, langfuse) | 701 | Tier 0 | gate:langfuse |
+| `readonly` | 2 (openlit, plausible) | 392 | Tier 1 | below threshold |
+| `output_format_json_quote_64bit_integers` | 2 (hyperdx, umami) | 176 | Tier 1 | below threshold |
+| `enable_full_text_index` | 2 (hyperdx, langfuse) | 129 | Tier 0 | gate:langfuse |
 | `alter_sync` | 2 (langfuse, plausible) | 92 | Tier 0 | gate:langfuse |
 | `http_headers_progress_interval_ms` | 2 (langfuse, openpanel) | 66 | Tier 0 | gate:langfuse |
 | `send_progress_in_http_headers` | 2 (langfuse, openpanel) | 66 | Tier 0 | gate:langfuse |
@@ -398,31 +401,32 @@ Listed for the owner, not resolved (plan HE1 Task 5). "§75" is the placement in
 | `max_threads` | 2 (langfuse, signoz) | 5 | Tier 0 | gate:langfuse |
 | `timeout_before_checking_execution_speed` | 1 (langfuse) | 1392 | Tier 0 | gate:langfuse |
 | `input_format_json_throw_on_bad_escape_sequence` | 1 (langfuse) | 959 | Tier 0 | gate:langfuse |
-| `input_format_binary_read_json_as_string` | 1 (plausible) | 811 | Tier 1 | below threshold |
-| `output_format_binary_write_json_as_string` | 1 (plausible) | 811 | Tier 1 | below threshold |
-| `output_format` | 1 (plausible) | 729 | Tier 1 | below threshold |
+| `input_format_binary_read_json_as_string` | 1 (plausible) | 805 | Tier 1 | below threshold |
+| `output_format_binary_write_json_as_string` | 1 (plausible) | 805 | Tier 1 | below threshold |
+| `output_format` | 1 (plausible) | 716 | Tier 1 | below threshold |
 | `use_query_cache` | 1 (langfuse) | 710 | Tier 0 | gate:langfuse |
-| `query_plan_optimize_lazy_materialization` | 1 (langfuse) | 653 | Tier 0 | gate:langfuse |
 | `asterisk_include_alias_columns` | 1 (langfuse) | 625 | Tier 0 | gate:langfuse |
 | `asterisk_include_materialized_columns` | 1 (langfuse) | 625 | Tier 0 | gate:langfuse |
-| `materialized_views_ignore_errors` | 1 (plausible) | 501 | Tier 1 | below threshold |
-| `join_algorithm` | 1 (plausible) | 339 | Tier 1 | below threshold |
+| `materialized_views_ignore_errors` | 1 (plausible) | 491 | Tier 1 | below threshold |
+| `join_algorithm` | 1 (plausible) | 336 | Tier 1 | below threshold |
 | `final` | 1 (signoz) | 116 | Tier 1 | below threshold |
 | `output_format_native_write_json_as_string` | 1 (signoz) | 114 | Tier 1 | below threshold |
 | `distributed_product_mode` | 1 (openpanel) | 93 | Tier 0 | gate:openpanel |
 | `query_plan_convert_any_join_to_semi_or_anti_join` | 1 (openpanel) | 93 | Tier 0 | gate:openpanel |
 | `use_text_index_dictionary_cache` | 1 (langfuse) | 88 | Tier 0 | gate:langfuse |
 | `use_text_index_postings_cache` | 1 (langfuse) | 88 | Tier 0 | gate:langfuse |
-| `enable_full_text_index` | 1 (langfuse) | 81 | Tier 0 | gate:langfuse |
 | `mutations_sync` | 1 (langfuse) | 72 | Tier 0 | gate:langfuse |
 | `session_timezone` | 1 (openpanel) | 57 | Tier 0 | gate:openpanel |
 | `max_result_rows` | 1 (openlit) | 56 | Tier 1 | below threshold |
 | `max_rows_to_read` | 1 (openlit) | 56 | Tier 1 | below threshold |
 | `allow_calculating_subcolumns_sizes_for_merge_tree_reading` | 1 (hyperdx) | 48 | Tier 1 | below threshold |
+| `allow_experimental_analyzer` | 1 (hyperdx) | 48 | Tier 1 | below threshold |
 | `cancel_http_readonly_queries_on_client_close` | 1 (hyperdx) | 48 | Tier 1 | below threshold |
-| `output_format_json_quote_64bit_integers` | 1 (hyperdx) | 48 | Tier 1 | below threshold |
 | `query_plan_max_limit_for_lazy_materialization` | 1 (hyperdx) | 48 | Tier 1 | below threshold |
 | `query_plan_max_limit_for_top_k_optimization` | 1 (hyperdx) | 48 | Tier 1 | below threshold |
+| `use_skip_indexes_for_disjunctions` | 1 (hyperdx) | 48 | Tier 1 | below threshold |
+| `use_skip_indexes_for_top_k` | 1 (hyperdx) | 48 | Tier 1 | below threshold |
+| `use_skip_indexes_on_data_read` | 1 (hyperdx) | 48 | Tier 1 | below threshold |
 | `type_json_skip_duplicated_paths` | 1 (signoz) | 43 | Tier 1 | below threshold |
 | `max_bytes_before_external_group_by` | 1 (langfuse) | 39 | Tier 0 | gate:langfuse |
 | `input_format_try_infer_dates` | 1 (signoz) | 21 | Tier 1 | below threshold |
@@ -450,31 +454,31 @@ Listed for the owner, not resolved (plan HE1 Task 5). "§75" is the placement in
 
 | Feature | Applications | Statements | Proposed | Why |
 |---|---|---:|---|---|
-| `SELECT` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 3159 | Tier 0 | apps>=3 |
+| `SELECT` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 3147 | Tier 0 | apps>=3 |
 | `ORDER BY` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 1848 | Tier 0 | apps>=3 |
 | `LIMIT` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 1687 | Tier 0 | apps>=3 |
 | `INSERT` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 1301 | Tier 0 | apps>=3 |
 | `INSERT FORMAT` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 1004 | Tier 0 | apps>=3 |
-| `GROUP BY` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 887 | Tier 0 | apps>=3 |
-| `column CODEC` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 406 | Tier 0 | apps>=3 |
-| `codec ZSTD` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 403 | Tier 0 | apps>=3 |
-| `CREATE TABLE` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 358 | Tier 0 | apps>=3 |
-| `table ORDER BY` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 271 | Tier 0 | apps>=3 |
+| `GROUP BY` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 888 | Tier 0 | apps>=3 |
+| `column CODEC` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 409 | Tier 0 | apps>=3 |
+| `codec ZSTD` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 406 | Tier 0 | apps>=3 |
+| `CREATE TABLE` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 360 | Tier 0 | apps>=3 |
+| `table ORDER BY` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 274 | Tier 0 | apps>=3 |
 | `subquery in FROM` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 163 | Tier 0 | apps>=3 |
-| `PARTITION BY` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 148 | Tier 0 | apps>=3 |
-| `table SETTINGS` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 132 | Tier 0 | apps>=3 |
-| `skip index bloom_filter` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 164 | Tier 0 | apps>=3 |
+| `PARTITION BY` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 151 | Tier 0 | apps>=3 |
+| `table SETTINGS` | 7 (hyperdx, langfuse, openlit, openpanel, plausible, signoz, umami) | 135 | Tier 0 | apps>=3 |
+| `skip index bloom_filter` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 166 | Tier 0 | apps>=3 |
 | `DISTINCT` | 6 (langfuse, openlit, openpanel, plausible, signoz, umami) | 95 | Tier 0 | apps>=3 |
-| `CREATE MATERIALIZED VIEW` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 89 | Tier 0 | apps>=3 |
+| `CREATE MATERIALIZED VIEW` | 6 (hyperdx, langfuse, openlit, openpanel, signoz, umami) | 90 | Tier 0 | apps>=3 |
 | `INNER JOIN` | 6 (langfuse, openlit, openpanel, plausible, signoz, umami) | 78 | Tier 0 | apps>=3 |
-| `skip index minmax` | 6 (hyperdx, langfuse, openlit, openpanel, plausible, signoz) | 39 | Tier 0 | apps>=3 |
+| `skip index minmax` | 6 (hyperdx, langfuse, openlit, openpanel, plausible, signoz) | 40 | Tier 0 | apps>=3 |
 | `CREATE DATABASE` | 6 (langfuse, openlit, openpanel, plausible, signoz, umami) | 18 | Tier 0 | apps>=3 |
 | `ALTER TABLE` | 5 (langfuse, openpanel, plausible, signoz, umami) | 678 | Tier 0 | apps>=3 |
 | `column DEFAULT` | 5 (langfuse, openlit, openpanel, signoz, umami) | 183 | Tier 0 | apps>=3 |
-| `codec DELTA` | 5 (hyperdx, openlit, openpanel, plausible, signoz) | 121 | Tier 0 | apps>=3 |
+| `codec DELTA` | 5 (hyperdx, openlit, openpanel, plausible, signoz) | 124 | Tier 0 | apps>=3 |
 | `WITH` | 5 (hyperdx, langfuse, openpanel, signoz, umami) | 113 | Tier 0 | apps>=3 |
-| `TTL` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 99 | Tier 0 | apps>=3 |
-| `MATERIALIZED VIEW TO` | 5 (hyperdx, langfuse, openlit, signoz, umami) | 77 | Tier 0 | apps>=3 |
+| `TTL` | 5 (hyperdx, langfuse, openlit, openpanel, signoz) | 102 | Tier 0 | apps>=3 |
+| `MATERIALIZED VIEW TO` | 5 (hyperdx, langfuse, openlit, signoz, umami) | 78 | Tier 0 | apps>=3 |
 | `scalar subquery` | 5 (hyperdx, langfuse, openpanel, signoz, umami) | 69 | Tier 0 | apps>=3 |
 | `table PRIMARY KEY` | 5 (langfuse, openlit, plausible, signoz, umami) | 49 | Tier 0 | apps>=3 |
 | `HAVING` | 5 (langfuse, openlit, openpanel, signoz, umami) | 39 | Tier 0 | apps>=3 |
@@ -505,10 +509,10 @@ Listed for the owner, not resolved (plan HE1 Task 5). "§75" is the placement in
 | `ALTER MODIFY QUERY` | 2 (langfuse, signoz) | 21 | Tier 0 | gate:langfuse |
 | `ALTER DROP INDEX` | 2 (langfuse, signoz) | 19 | Tier 0 | gate:langfuse |
 | `skip index tokenbf_v1` | 2 (openlit, signoz) | 13 | Tier 1 | below threshold |
-| `column MATERIALIZED` | 2 (hyperdx, langfuse) | 11 | Tier 0 | gate:langfuse |
+| `column MATERIALIZED` | 2 (hyperdx, langfuse) | 12 | Tier 0 | gate:langfuse |
 | `aggregate DISTINCT` | 2 (openpanel, signoz) | 9 | Tier 0 | gate:openpanel |
+| `skip index text` | 2 (hyperdx, langfuse) | 9 | Tier 0 | gate:langfuse |
 | `DESCRIBE` | 2 (hyperdx, openlit) | 8 | Tier 1 | below threshold |
-| `skip index text` | 2 (hyperdx, langfuse) | 8 | Tier 0 | gate:langfuse |
 | `ALTER MODIFY TTL` | 2 (openpanel, signoz) | 7 | Tier 0 | gate:openpanel |
 | `INSERT SELECT` | 2 (plausible, signoz) | 7 | Tier 1 | below threshold |
 | `ALTER ADD PROJECTION` | 2 (plausible, umami) | 4 | Tier 1 | below threshold |
