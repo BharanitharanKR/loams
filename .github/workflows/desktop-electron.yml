@@ -126,6 +126,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
           key: desktop-${{ matrix.name }}
+          save-if: ${{ (github.ref == 'refs/heads/dev' && matrix.name == 'linux-x64') || github.base_ref == 'main' || startsWith(github.base_ref, 'release/') }}
 
       # The desktop engine needs durable, live-tikv (Live on the TiKV stack, ruling T23-7) and
       # graph (the Graph page, GR1 Task 8); the default build has live (the embedded store) only.

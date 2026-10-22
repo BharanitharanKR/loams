@@ -41,6 +41,12 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/dev') }}
 
 env:
+  # CI builds are never debugged: no debug info in dev and test builds (smaller
+  # caches, faster links; a panic still names its file and line) and no
+  # incremental artifacts. rust-cache sets CARGO_INCREMENTAL=0 too; this covers
+  # the jobs without it.
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
   CARGO_TERM_COLOR: always
 
 jobs:
@@ -429,7 +435,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: rustfmt
         run: cargo fmt --all --check
       - name: clippy
@@ -522,7 +528,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - uses: taiki-e/install-action@badb8c3638e0b773c6c17a6025c2306a8f1c4303 # nextest, 2026-10-02
       # The loams-agentd-harness tests run `#!/usr/bin/env node` and
       # `#!/usr/bin/env python3` fixtures (harness stand-ins).
@@ -561,7 +567,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       # The loams-agentd-harness tests run `#!/usr/bin/env node` and
       # `#!/usr/bin/env python3` fixtures (harness stand-ins).
       - uses: actions/setup-node@v7
@@ -604,7 +610,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: loams's MySQL wire listener (mysql-wire feature)
         run: 'cargo test -p loams --features mysql-wire --lib --locked mysql_wire::'
       - name: loams's PostgreSQL wire listener (pgwire feature)
@@ -649,7 +655,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: clippy with failpoints
         run: cargo clippy -p loams --all-targets --features failpoints --locked -- -D warnings
       - name: crash gate
@@ -666,7 +672,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: build
         run: cargo build -p loams --locked
       - name: clippy with cluster tests
@@ -686,7 +692,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: build
         run: cargo build -p loams --locked
       - name: start loams dev
@@ -755,7 +761,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: build
         run: cargo build -p loams --locked
       - uses: astral-sh/setup-uv@v7
@@ -833,7 +839,7 @@ jobs:
         run: '! grep -rn --include=*.lean -w sorry LoamsRouter Main.lean PropTest.lean'
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: Rust against the Lean oracle (10 000 cases)
         working-directory: .
         run: cargo test -p loams-sqlrouter --locked --test it lean_oracle -- --nocapture
@@ -859,7 +865,7 @@ jobs:
           key: spec-tools-${{ hashFiles('scripts/spec/tools.lock') }}
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: clippy (server)
         run: cargo clippy -p loams-specview --all-targets --locked -- -D warnings
       - name: tests (the live ones need Java and the pinned tools)
@@ -888,7 +894,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: simulation (32 seeds x 300 steps)
         if: ${{ inputs.nightly != true }}
         run: cargo test -p loams-sim --release --locked
@@ -920,7 +926,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: packages
         id: packages
         # The TiKV crates that exist so far (later R1 tasks add the rest).
@@ -1000,7 +1006,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: the suites, embedded only
         env:
           LOAMS_TEST_PD: ""
@@ -1027,7 +1033,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.paths.outputs.run == 'true'
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: packages
         id: packages
         if: steps.paths.outputs.run == 'true'
@@ -1133,7 +1139,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           key: durable
       - uses: actions/setup-go@v7
         with:
@@ -1175,7 +1181,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler mysql-client
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           key: durable
       - uses: actions/setup-go@v7
         with:
@@ -1346,7 +1352,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - uses: pnpm/action-setup@v6
         with:
           version: 11.27.1
@@ -1459,7 +1465,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       # -j 4: the SDK path-depends on loams-proto and loams-live-proto, and the
       # runners are 4 vCPU.
       - name: the Rust SDK's tests
@@ -1620,7 +1626,7 @@ jobs:
       # node_modules, so it needs both.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - uses: pnpm/action-setup@v6
         with:
           version: 11.27.1
@@ -2051,7 +2057,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       # loams_default_build_has_no_grafeo: `cargo build -p loams` without
       # `graph` must not compile Grafeo.
       - name: loams's default build has no grafeo
@@ -2391,7 +2397,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: deploy/dapr/edge -> target
       - name: rustfmt
         run: cargo fmt --check
@@ -2424,7 +2430,7 @@ jobs:
           nasm: "false"
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: cargo check (the loams binary)
         run: cargo check -p loams --bin loams --locked
 
@@ -2569,7 +2575,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: the upgrade gate
         env:
           GH_TOKEN: ${{ github.token }}
