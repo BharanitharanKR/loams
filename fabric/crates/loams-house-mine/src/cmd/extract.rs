@@ -114,9 +114,19 @@ pub fn migration_sources(dir: &Path) -> anyhow::Result<Vec<Source>> {
             .unwrap_or(&file)
             .to_string_lossy()
             .replace('\\', "/");
+        // Two statements can start on one line; the second is `<line>.2`, so
+        // every id names one statement (HE0 Task 2 ruling R2.13).
+        let mut on_line: std::collections::HashMap<u64, u32> = std::collections::HashMap::new();
         for st in tokens::split_statements(&text) {
+            let n = on_line.entry(st.line).or_insert(0);
+            *n += 1;
+            let id = if *n == 1 {
+                format!("m:{rel}:{}", st.line)
+            } else {
+                format!("m:{rel}:{}.{n}", st.line)
+            };
             out.push(Source {
-                id: format!("m:{rel}:{}", st.line),
+                id,
                 text: st.text,
                 settings: Vec::new(),
             });

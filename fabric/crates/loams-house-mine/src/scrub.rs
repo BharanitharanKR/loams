@@ -57,6 +57,7 @@ pub struct Scrubbed {
 /// The statement could not be tokenized; it must not be kept.
 pub fn scrub(statement: &str) -> Result<Scrubbed, sqlparser::tokenizer::TokenizerError> {
     let tokens = tokens::tokenize(statement)?;
+    let in_type = type_arguments(&tokens);
     let mut out = String::with_capacity(statement.len());
     let mut replaced = 0;
     let mut i = 0;
@@ -87,7 +88,9 @@ pub fn scrub(statement: &str) -> Result<Scrubbed, sqlparser::tokenizer::Tokenize
                 replaced += 1;
                 push_placeholder(&mut out, replaced, "Bool");
             }
-            _ if is_tuple_index(&tokens, i, statement) => out.push_str(&statement[t.range.clone()]),
+            _ if is_tuple_index(&tokens, i, statement) || in_type[i] => {
+                out.push_str(&statement[t.range.clone()]);
+            }
             token if is_literal(token) => {
                 replaced += 1;
                 let source = &statement[t.range.clone()];
@@ -120,6 +123,65 @@ fn push_placeholder(out: &mut String, n: usize, ty: &str) {
     let _ = write!(out, "{{p{n}:{ty}}}");
 }
 
+/// Type families whose arguments are part of the type, not data:
+/// `DateTime64(3, 'UTC')`, `Decimal(18, 4)`, `FixedString(16)`,
+/// `Enum8('a' = 1)`. Families that are also functions (`Date`) are not here.
+const PARAMETERISED_TYPES: [&str; 22] = [
+    "AggregateFunction",
+    "Array",
+    "DateTime",
+    "DateTime64",
+    "Decimal",
+    "Decimal128",
+    "Decimal256",
+    "Decimal32",
+    "Decimal64",
+    "Enum",
+    "Enum16",
+    "Enum8",
+    "FixedString",
+    "JSON",
+    "LowCardinality",
+    "Map",
+    "Nested",
+    "Nullable",
+    "SimpleAggregateFunction",
+    "Time64",
+    "Tuple",
+    "Variant",
+];
+
+/// For each token, whether it lies inside the parentheses of a
+/// [`PARAMETERISED_TYPES`] family: its literals are kept (HE0 Task 2
+/// ruling R2.12). Type arguments are written by the application, not by its
+/// users.
+fn type_arguments(tokens: &[tokens::Spanned]) -> Vec<bool> {
+    let mut out = vec![false; tokens.len()];
+    // For each open parenthesis: whether it opened a type's arguments.
+    let mut stack: Vec<bool> = Vec::new();
+    let mut previous_word: Option<&str> = None;
+    for (i, t) in tokens.iter().enumerate() {
+        match &t.token {
+            Token::LParen => {
+                let opens_type = previous_word.is_some_and(|w| PARAMETERISED_TYPES.contains(&w));
+                let inside = stack.iter().any(|b| *b);
+                stack.push(opens_type || inside);
+            }
+            Token::RParen => {
+                stack.pop();
+            }
+            _ => {}
+        }
+        out[i] = stack.iter().any(|b| *b);
+        match &t.token {
+            Token::Whitespace(_) => {}
+            Token::Word(w) if w.quote_style.is_none() => previous_word = Some(w.value.as_str()),
+            _ => previous_word = None,
+        }
+    }
+    out
+}
+
 /// `t.1`: the tokenizer reads a tuple element index as the number `.1`.
 /// The index is syntax, not data (it can only be digits), so it is kept.
 fn is_tuple_index(tokens: &[tokens::Spanned], i: usize, text: &str) -> bool {
@@ -145,8 +207,9 @@ fn is_tuple_index(tokens: &[tokens::Spanned], i: usize, text: &str) -> bool {
 /// statement passes; text the tokenizer refuses does not.
 pub fn is_literal_free(text: &str) -> bool {
     tokens::tokenize(text).is_ok_and(|tokens| {
+        let in_type = type_arguments(&tokens);
         tokens.iter().enumerate().all(|(i, t)| {
-            (!is_literal(&t.token) || is_tuple_index(&tokens, i, text))
+            (!is_literal(&t.token) || is_tuple_index(&tokens, i, text) || in_type[i])
                 && !matches!(
                     &t.token,
                     Token::Whitespace(Whitespace::SingleLineComment { .. } | Whitespace::MultiLineComment(_))
@@ -181,6 +244,28 @@ mod tests {
         assert_eq!(
             s.text,
             "SELECT {id:String}, t.`a b` FROM db.t SETTINGS max_threads = {p1:Int64}"
+        );
+    }
+
+    #[test]
+    fn keeps_type_arguments() {
+        let s = scrub(
+            "CREATE TABLE t (a DateTime64(3, 'UTC'), b Decimal(18, 4), c Enum8('x' = 1), d Nullable(FixedString(16)), e AggregateFunction(quantiles(0.5), Float64)) ENGINE = MergeTree TTL a + INTERVAL 30 DAY",
+        )
+        .unwrap();
+        assert_eq!(
+            s.text,
+            "CREATE TABLE t (a DateTime64(3, 'UTC'), b Decimal(18, 4), c Enum8('x' = 1), d Nullable(FixedString(16)), e AggregateFunction(quantiles(0.5), Float64)) ENGINE = MergeTree TTL a + INTERVAL {p1:Int64} DAY"
+        );
+        assert!(is_literal_free(&s.text));
+        // A value cast to a type is still data; `DATE '...'` and `Date(x)`
+        // are not type arguments.
+        let s =
+            scrub("SELECT CAST('v' AS DateTime64(3)), toDate('2024-01-01'), Date('2024-01-01')")
+                .unwrap();
+        assert_eq!(
+            s.text,
+            "SELECT CAST({p1:String} AS DateTime64(3)), toDate({p2:String}), Date({p3:String})"
         );
     }
 

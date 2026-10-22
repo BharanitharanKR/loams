@@ -3,9 +3,9 @@
 
 mod common;
 
+use loams_house_mine::explain;
 use loams_house_mine::explain::HttpExplainer;
 use loams_house_mine::inventory::{self, Path, mine_statement};
-use loams_house_mine::{ast, explain};
 
 use common::{inventory, sources, sources_of};
 
@@ -78,6 +78,18 @@ fn table_functions() {
         "syntax:skip index bloom_filter",
         &["m:0001_traces.up.sql:25"],
     );
+}
+
+#[test]
+fn templated_migrations_are_read_with_their_own_ids() {
+    // Two statements on one line get two ids; a `{PLACEHOLDER}` template is
+    // read with the placeholder removed.
+    has(
+        "syntax:template placeholder",
+        &["m:0001_traces.up.sql:27", "m:0001_traces.up.sql:27.2"],
+    );
+    has("syntax:ALTER ADD COLUMN", &["m:0001_traces.up.sql:27.2"]);
+    inventory::check(&inventory()).unwrap();
 }
 
 #[test]
@@ -271,12 +283,19 @@ fn both_paths_are_exercised() {
 fn record_explain_answers() {
     let url = std::env::var("LOAMS_HOUSE_MINE_SERVER").expect("LOAMS_HOUSE_MINE_SERVER");
     let mut http = HttpExplainer::new(&url);
-    let mut recorded = explain::Recorded::default();
-    for s in sources() {
-        if ast::features(&s.text).is_none() {
-            use explain::Explainer as _;
-            recorded.insert(&s.text, http.explain_ast(&s.text));
+    // Record every question the extractor asks, as it asks it.
+    struct Recording<'a>(&'a mut HttpExplainer, explain::Recorded);
+    impl explain::Explainer for Recording<'_> {
+        fn explain_ast(&mut self, statement: &str) -> Option<String> {
+            let answer = self.0.explain_ast(statement);
+            self.1.insert(statement, answer.clone());
+            answer
         }
     }
+    let mut recording = Recording(&mut http, explain::Recorded::default());
+    for s in sources() {
+        let _ = loams_house_mine::inventory::read_statement(&s.text, Some(&mut recording));
+    }
+    let recorded = recording.1;
     std::fs::write(common::fixtures().join("explain.tsv"), recorded.to_tsv()).unwrap();
 }
