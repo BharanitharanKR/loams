@@ -1,6 +1,7 @@
 {
   "strictness": 2,
   "commentTypes": ["logic", "syntax"],
+  "effort": "base",
   "autoReview": ["open"],
   "triggerOnDrafts": false,
   "includeBranches": ["dev", "main"],
