@@ -136,7 +136,6 @@ What limits the damage:
   - `desktop-electron-release.yml`
   - `release-package.yml`
   - `sdk-release.yml`
-  - `console-deploy.yml`
 - The other release workflows run no Node or Nx.
 - Entries are immutable once written.
 - Removing a member revokes their personal token.

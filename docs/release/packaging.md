@@ -92,12 +92,10 @@ at all. It can now.
 Ubuntu, Fedora, RHEL, openSUSE, Arch and CachyOS. Arch and CachyOS also read
 `/etc`, but a unit that came from a package belongs under `/usr`.
 
-**The console is optional and may be absent.** The server binary does not serve
-it: there is no static-file route in the engine, and the console is deployed to
-Cloudflare by `console-deploy.yml`. It is packaged so an operator running their
-own front end has the exact assets the release built, next to the binary they
-installed. When the console build is missing, `build-artifacts.py` ships a
-`README.txt` in its place and warns; in CI the console step is
+**The console is optional and may be absent.** The engine serves it at `/ui/`
+from `/usr/share/loams/console` when that directory holds a build (from 0.1.2;
+`--console-dir` and `--no-console` change that), same-origin with its API.
+When the console build is missing, `build-artifacts.py` ships a `README.txt` in its place and warns; in CI the console step is
 `continue-on-error: true`, so a TypeScript error in the console cannot stop the
 server packages from being produced.
 

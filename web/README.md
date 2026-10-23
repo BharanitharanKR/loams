@@ -130,7 +130,7 @@ The engine must answer CORS for the console's origin, and the issuer must answer
 
 ### Cloudflare
 
-Ostrium deploys console.loams.dev this way. Deploying to your own Cloudflare account (`--env byoc`) is coming soon.
+Ostrium deployed console.loams.dev this way until it was retired (design 78, D1705); its deploy workflow is gone. Deploying to your own Cloudflare account (`--env byoc`) is coming soon.
 
 Workers static assets, configured in [`apps/console/wrangler.jsonc`](apps/console/wrangler.jsonc): assets only, SPA fallback, free plan.
 
@@ -138,12 +138,11 @@ Workers static assets, configured in [`apps/console/wrangler.jsonc`](apps/consol
 pnpm build
 LOAMS_AUTH_CLIENT_ID=loams-console \
   node apps/console/deploy/stage.mjs     # dist/ -> dist-cloudflare/: /, ui/, config.json, _headers, _redirects
-cd apps/console && wrangler deploy        # console.loams.dev
 cd apps/console && wrangler deploy --env byoc   # your account, on workers.dev (coming soon)
-node deploy/smoke.mjs https://console.loams.dev
+node deploy/smoke.mjs https://<your-console>
 ```
 
-`.github/workflows/console-deploy.yml` deploys on every push to `main` that touches `web/` (or the root workspace configuration, or the workflow), and on demand. It needs `LOAMS_AUTH_CLIENT_ID` (variable, `loams-console`; `LOAMS_AUTH_MODE` and `LOAMS_AUTH_ISSUER` default to `tailscale` and `https://auth.loams.dev`) plus `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` in the `production` environment; without the secrets it builds and stages, then skips the deploy.
+No workflow deploys the console any more: it ships with each deployment, served by the engine at `/ui/`, and with Loams Desktop.
 
 ### Vercel (coming soon)
 

@@ -5,6 +5,12 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Removed
+- **The console deploy workflow** (`.github/workflows/console-deploy.yml`; 0.1.2, owner,
+  2026-10-23, D1705). It deployed `web/apps/console` to `console.loams.dev`, which is retired:
+  the console ships with each deployment (the engine serves it at `/ui/`) and with Loams
+  Desktop. `wrangler.jsonc` and `deploy/stage.mjs` stay for a console on your own Cloudflare or
+  Vercel account (coming soon). The GitHub `production` environment, its variables and the
+  Cloudflare Worker and DNS record are left for the owner to remove.
 - **Authentik** (IA1 Task 1, D1600). Loams cuts over to Zitadel for identity and OpenFGA for
   authorization (design 76), with no migration, no compatibility period and no dual running.
   The Authentik deploy kit (`deploy/authentik/`), the Authentik bundle in `deploy/release/auth/`,
