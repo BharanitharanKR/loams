@@ -25,5 +25,5 @@ set -e
   echo "exit: $rc"
   echo "pass: $(grep -c -- '--- PASS' "$out/titan-autotest.log" || true)"
   echo "fail: $(grep -c -- '--- FAIL' "$out/titan-autotest.log" || true)"
-  grep -E '^\s+(auto|abnormal)\.go:[0-9]+:' "$out/titan-autotest.log" | head -40 || true
+  grep -E "Error Trace:|^panic:" "$out/titan-autotest.log" | sort | uniq -c | head -20 || true
 } | tee "$out/titan-autotest.summary"
