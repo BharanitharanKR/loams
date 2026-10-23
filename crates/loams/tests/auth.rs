@@ -631,7 +631,8 @@ async fn the_engine_serves_its_console_beside_the_guarded_api() {
     std::fs::create_dir_all(console.path().join("assets")).unwrap();
     std::fs::write(
         console.path().join("index.html"),
-        "<!doctype html><title>Loams console</title>",
+        "<!doctype html><meta charset=\"utf-8\" /><meta http-equiv=\"Content-Security-Policy\" \
+         content=\"default-src 'self'; connect-src 'self'\" /><title>Loams console</title>",
     )
     .unwrap();
     std::fs::write(console.path().join("config.json"), "{}").unwrap();
@@ -639,6 +640,9 @@ async fn the_engine_serves_its_console_beside_the_guarded_api() {
     let dir = console.path().to_path_buf();
     let running = Running::start(AuthConfig::api_keys(&path), move |config| {
         config.console_dir = Some(dir);
+        config.console = loams::console::ConsoleOptions {
+            agentd_origins: vec!["https://agentd.example.ts.net".into()],
+        };
     })
     .await;
     let get = |path: &'static str| {
@@ -656,7 +660,16 @@ async fn the_engine_serves_its_console_beside_the_guarded_api() {
     };
     let index = get("/ui/").await;
     assert_eq!(index.status(), 200);
-    assert!(index.text().await.unwrap().contains("Loams console"));
+    // The CSP is a header, with the agentd host in connect-src; the page
+    // carries no meta CSP that would keep it out.
+    assert_eq!(
+        index.headers()["content-security-policy"],
+        "default-src 'self'; connect-src 'self' https://agentd.example.ts.net; \
+         frame-ancestors 'self'"
+    );
+    let html = index.text().await.unwrap();
+    assert!(html.contains("Loams console"), "{html}");
+    assert!(!html.contains("Content-Security-Policy"), "{html}");
     assert_eq!(get("/ui/config.json").await.text().await.unwrap(), "{}");
     assert_eq!(get("/ui/assets/app.js").await.status(), 200);
     assert_eq!(get("/ui/projects/p").await.status(), 200);

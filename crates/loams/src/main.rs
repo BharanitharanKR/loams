@@ -1685,6 +1685,13 @@ async fn serve(cli: Cli) -> ExitCode {
             return ExitCode::FAILURE;
         }
     };
+    config.console = match loams::console::ConsoleOptions::from_env() {
+        Ok(console) => console,
+        Err(err) => {
+            eprintln!("loams: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
     config.tls = match loams::tls::TlsConfig::from_env() {
         Ok(tls) => tls,
         Err(err) => {
