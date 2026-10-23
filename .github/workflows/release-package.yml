@@ -309,6 +309,16 @@ jobs:
             echo "::error::git-remote-loams needs libraries the server does not, so release/nfpm.yaml's depends list does not cover it: $extra"
             exit 1
           fi
+          # The libraries release/nfpm.yaml's depends lists cover (#1105: libz.so.1
+          # shipped undeclared in 0.1.1). A new one fails here, not on install:
+          # add its package to every format in nfpm.yaml, then to this list.
+          covered="ld-linux-x86-64.so.2 libc.so.6 libgcc_s.so.1 libm.so.6 libz.so.1"
+          undeclared=$(comm -23 <(grep -o '\[.*\]' "$RUNNER_TEMP/needed.txt" | tr -d '[]' | sort -u) \
+                                <(tr ' ' '\n' <<<"$covered" | sort -u))
+          if [ -n "$undeclared" ]; then
+            echo "::error::the server links libraries release/nfpm.yaml does not declare: $undeclared"
+            exit 1
+          fi
 
       - name: build the three Linux packages
         id: package
