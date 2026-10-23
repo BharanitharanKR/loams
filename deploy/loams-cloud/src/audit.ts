@@ -12,7 +12,7 @@ export type AuditType =
   | "invite.created" | "invite.sent" | "invite.resent" | "invite.revoked" | "invite.expired" | "invite.failed"
   | "invite.redeemed" | "invite.redeem_refused"
   | "account.created" | "account.suspended" | "account.deleted"
-  | "admin.mfa_enrolled" | "admin.step_up" | "admin.denied"
+  | "admin.mfa_enrolled" | "admin.step_up" | "admin.denied" | "admin.waitlist_read"
   | "email.bounced";
 
 export interface AuditEvent {
