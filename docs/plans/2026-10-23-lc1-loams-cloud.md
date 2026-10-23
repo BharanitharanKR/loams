@@ -544,4 +544,35 @@ Agents read them with `set -a; . ~/<file>; set +a` in the one command that needs
 
 ## Rulings made during execution
 
-(none yet)
+### LC0 Task 0: rulings and pins (2026-10-23)
+
+- **R-LC0-1, owner rulings.** The owner answered Q1260–Q1277 on 2026-10-23 with every default. The same day's §25 amendments change three of those answers in effect:
+  - Q1263 and Q1265: the hosted Filesystem cohort is off and D1730's ceiling is $0 until the owner sets a budget (Q1291, D1756).
+  - Q1266: the invite codes are replaced by waitlist email invites (D1749). The providers and the GitHub-age rule stand.
+  - D1714, for the try-out only: device identity is WorkOS CLI Auth plus device keys issued by the control plane (D1755).
+
+  The owner created the no-card LC0 organization (Q1277) and handed over the credentials on 2026-10-23.
+- **R-LC0-2, pins.**
+  - **`ti`:** v0.2.10 (`e6fbd15`, 2026-10-15). It was installed from the release tarball and checked against `ti_checksums.txt`, not by piping `install.sh` to a shell. The script is at `https://github.com/tidbcloud/ti-cli/releases/download/v0.2.10/install.sh` (Apache-2.0).
+  - **The companion `ti-drive9`:** the install script fetches it from `https://releases.drive9.ai/latest/`, which isn't versioned. LC0 ran drive9 build `572cac6`, checked against that directory's `SHA256SUMS`. agentd (LC1) must pin the companion by checksum, because "latest" moves.
+  - **The 14-day rule:** `ti` 0.2.10 was 8 days old. The rule binds the npm driver, and `ti` is a CLI the user installs, so LC1 pins the newest `ti` that is at least 14 days old when it ships.
+  - **`@tidbcloud/serverless`:** 0.3.0 (2026-03-17).
+  - **IA0's pins:** Zitadel `v4.19.4@sha256:90a3045b…` and OpenFGA `v1.22.0@sha256:9cf9a20a…`, from `conformance/identity/compose.yaml`.
+  - **Anonymous telemetry:** `ti` collects it in release builds. LC0 turned it off in `~/.ti/.preferences` (`[telemetry] enabled = false`). agentd sets `TI_TELEMETRY=off`.
+- **R-LC0-3, dependencies.**
+  - **IA2:** Task 1 has landed (the `loams-authz` crate, #993). The rest of IA2, and IA4 (agents as machine users), have not.
+  - **SD1:** remote agentd (D909) is on `dev` (`serve --remote`, SD1 Task 7, #548).
+  - **ME1:** not started (a stub).
+- **R-LC0-4, re-reads (2026-10-23).** No limit changed since the report.
+  - The release notes have no Starter, Filesystem, branching, `ti` or driver entry after 2026-10-15. The newest entry is 2026-10-20 (Essential, Premium and BYOC only).
+  - Starter is still 5 free instances per organization, each with 5 GiB row, 5 GiB columnar and 50M RUs a month. Connections: 400, or 5,000 with a spending limit. Transactions under 30 minutes. The PG preview is still 10 free instances, each with 50 GiB and 500M RUs.
+  - The limitations page no longer states the 100-instance cap or the branch quota; the release notes (2026-06-02) and the branch docs still do.
+  - The Filesystem limits page is unchanged: limits and usage are in the console only.
+  - Two more rows matter to Task 1: `tidb_enable_auto_analyze` is read-only on Starter, and `SLOW_QUERY` and `STATEMENTS_SUMMARY` are console-only.
+- **R-LC0-5, scope (owner, 2026-10-23, through the LC0 lead).**
+  - **Task 5's Zitadel device enrolment is not run in LC0** ("Zitadel isn't needed now"): the try-out uses D1755. Only Task 5's TiDB question ran, whether OpenFGA's MySQL datastore works on Starter, in `spikes/lc0-device/` (PR #1115). The Rust device binary and its three tests wait for the self-hosted path.
+  - **Task 6 (company device)** needs a managed-like macOS or Windows laptop, which agents don't have. The LC0 report gives the runbook for the owner.
+  - **Task 2's macOS leg** needs the owner's Mac.
+  - **Task 4's** one manual Zero creation and claim is the owner's.
+- **R-LC0-6, labels.** `ti db create-db-cluster` has no label flag. LC0 named every instance `lc0-<task>` and added an `lc0` label through the API (`PATCH /v1beta1/clusters/{id}`, `updateMask: labels`), which works with the org key.
+- **R-LC0-7, PRs.** Task 1 and Task 5's OpenFGA check share one PR (#1115). Tasks 4 and 6 are sections of `docs/plans/lc0-report.md`, committed with their own commit messages in the report's PR.
