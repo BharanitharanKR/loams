@@ -639,6 +639,9 @@ services:
     <<: *restart
     profiles: [kafka]
     image: ${IGGY_KAFKA_IMAGE:-ghcr.io/ostrium-labs/iggy@sha256:649c20714dcde257131be46e456ab32bf62d283a047c26b41b3c8c3132cea332}
+    # The guard refuses to start while KAFKA_IGGY_PASSWORD is empty or still
+    # the .env.example placeholder (config/kafka-guard.sh).
+    entrypoint: ["/bin/sh", "/etc/loams/kafka-guard.sh", "IGGY_ROOT_PASSWORD"]
     command: ["/usr/local/bin/iggy-server"]
     cap_add: [SYS_NICE]
     security_opt: ["seccomp:unconfined"]
@@ -648,10 +651,11 @@ services:
         hard: -1
     environment:
       IGGY_NODE_ADVERTISED_ADDRESS: iggy
-      # The gateway signs in as this user. Change the password in .env before
-      # the first start: Iggy keeps it in its data volume.
+      # The gateway signs in as this user. Set the password in .env before
+      # the first start (the guard refuses the placeholder): Iggy keeps it in
+      # its data volume.
       IGGY_ROOT_USERNAME: ${KAFKA_IGGY_USER:-iggy}
-      IGGY_ROOT_PASSWORD: ${KAFKA_IGGY_PASSWORD:-loams-kafka-preview}
+      IGGY_ROOT_PASSWORD: ${KAFKA_IGGY_PASSWORD:-}
       # The gateway reaches the server over the compose network.
       IGGY_TCP_ADDRESS: 0.0.0.0:8090
       IGGY_HTTP_ADDRESS: 0.0.0.0:3000
@@ -659,6 +663,7 @@ services:
       IGGY_WEBSOCKET_ADDRESS: 0.0.0.0:8092
     volumes:
       - iggy-data:/app/local_data
+      - ./config/kafka-guard.sh:/etc/loams/kafka-guard.sh:ro
     # `ping` is unauthenticated and answers once the request loop is up.
     healthcheck:
       test: ["CMD", "/usr/local/bin/iggy", "ping"]
@@ -677,6 +682,7 @@ services:
     <<: *restart
     profiles: [kafka]
     image: ${IGGY_KAFKA_IMAGE:-ghcr.io/ostrium-labs/iggy@sha256:649c20714dcde257131be46e456ab32bf62d283a047c26b41b3c8c3132cea332}
+    entrypoint: ["/bin/sh", "/etc/loams/kafka-guard.sh", "IGGY_KAFKA_IGGY_PASSWORD"]
     command: ["/usr/local/bin/iggy-gateway-kafka"]
     environment:
       RUST_LOG: ${RUST_LOG:-info}
@@ -688,9 +694,11 @@ services:
       IGGY_KAFKA_BRIDGE_ENABLED: "true"
       IGGY_KAFKA_IGGY_ADDR: iggy:8090
       IGGY_KAFKA_IGGY_USERNAME: ${KAFKA_IGGY_USER:-iggy}
-      IGGY_KAFKA_IGGY_PASSWORD: ${KAFKA_IGGY_PASSWORD:-loams-kafka-preview}
+      IGGY_KAFKA_IGGY_PASSWORD: ${KAFKA_IGGY_PASSWORD:-}
       IGGY_KAFKA_SASL_ENABLED: ${KAFKA_SASL_ENABLED:-false}
       IGGY_KAFKA_AUTO_CREATE_TOPICS_ENABLED: ${KAFKA_AUTO_CREATE_TOPICS:-false}
+    volumes:
+      - ./config/kafka-guard.sh:/etc/loams/kafka-guard.sh:ro
     ports:
       - ${KAFKA_BIND:-127.0.0.1}:${KAFKA_PORT:-9093}:9093
     depends_on:

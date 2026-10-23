@@ -91,6 +91,10 @@ jobs:
           # No other service depends on them, and the engine does not share a namespace with them.
           jq -e '[.services | to_entries[] | select(.key != "kafka-gateway") | select((.value.depends_on // {}) | has("iggy") or has("kafka-gateway"))] | length == 0' <<<"$cfg"
           jq -e '[.services[] | select((.network_mode // "") | test("iggy|kafka"))] | length == 0' <<<"$cfg"
+      # The profile refuses to start on .env.example's placeholder password
+      # (config/kafka-guard.sh), and both its services go through the guard.
+      - name: the kafka profile refuses the placeholder password
+        run: deploy/release/ci/kafka-guard-test.sh
       # 0.1.0 blocker: an apostrophe in endpoint-storage's `sh -c` script
       # ("pg-control's key") opened a quote that never closed, and the
       # service restart-looped. Every inline shell script must parse.
@@ -163,7 +167,7 @@ jobs:
                  | (index("--pageserver=http://pageserver:9898") != null)
                    and (index("--safekeeper=http://safekeeper1:7676") != null)' <<<"$cfg"
       - name: shellcheck
-        run: shellcheck deploy/release/ci/kafka-smoke.sh deploy/release/build.sh deploy/release/config/stores.sh deploy/release/byoc/install.sh deploy/release/byoc/uninstall.sh deploy/release/byoc/upgrade.sh deploy/release/byoc/upgrade-test.sh deploy/loams-postgres-dev/bootstrap/pg-bootstrap.sh deploy/loams-postgres-dev/compute/start.sh
+        run: shellcheck deploy/release/ci/kafka-smoke.sh deploy/release/ci/kafka-guard-test.sh deploy/release/config/kafka-guard.sh deploy/release/build.sh deploy/release/config/stores.sh deploy/release/byoc/install.sh deploy/release/byoc/uninstall.sh deploy/release/byoc/upgrade.sh deploy/release/byoc/upgrade-test.sh deploy/loams-postgres-dev/bootstrap/pg-bootstrap.sh deploy/loams-postgres-dev/compute/start.sh
       # UP1 Task 22: upgrade_sh_dry_run_prints_remote_commands.
       - name: byoc upgrade.sh
         run: deploy/release/byoc/upgrade-test.sh

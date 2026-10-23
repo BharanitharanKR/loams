@@ -368,7 +368,8 @@ COMPOSE_PROFILES=tikv,rustfs
   Iggy (`ghcr.io/ostrium-labs/iggy`, pinned by digest in `IGGY_KAFKA_IMAGE`): `iggy` is the
   broker's storage and `kafka-gateway` speaks the Kafka wire. Optional and off by default, so
   the default stack stays light; add about 1 GB of image and some memory. Transactions and
-  exactly-once are not supported. See [Kafka](../guides/kafka.md).
+  exactly-once are not supported. Set `KAFKA_IGGY_PASSWORD` in `.env` first: the profile
+  refuses to start on `.env.example`'s placeholder. See [Kafka](../guides/kafka.md).
 
 Use `COMPOSE_PROFILES` rather than `--profile` on the command line: a `--profile` flag
 replaces the list, and the engine, `migrate` and `loams upgrade` read the list from `.env`.
