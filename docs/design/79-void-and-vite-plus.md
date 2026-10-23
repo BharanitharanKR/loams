@@ -499,7 +499,7 @@ VV1 can start right after the owner approves. It doesn't block 0.1.x work, and i
 | [§73](73-agent-marketplace.md) | JavaScript agent templates (D1458) are Vite+ projects. A listing built on Void's Cloudflare-only APIs shows "Cloudflare only" |
 | [§78](78-loams-cloud-on-tidb-x.md) | §17: `deploy/loams-cloud/` is a Vite+ package. Void for the control plane is a VV0 spike, and LC2a stays on `wrangler` (D1783, Q1304). §13.2: the `cloudflare` column's `apps` slot reads "Workers, deployed by Void". `void-platform` is a Cloudflare sub-target |
 | [`docs/monorepo.md`](../monorepo.md) | "Vite+ stays scoped to plugins" and "Do not apply a global Vite override" are replaced by D1772 when VV1 lands |
-| `ostrium-labs/loams-build` `LOAMS.md` | Vite+ is the recommended toolchain. Plain Vite, Rolldown and Vitest are the fallback (done 2026-10-23 on `loams/main`) |
+| `ostrium-labs/loams-build` `LOAMS.md` | Vite+ is the recommended toolchain. Plain Vite, Rolldown and Vitest are the fallback (done 2026-10-23 on `loams/main`, commit `4ea63e8`) |
 
 ---
 
