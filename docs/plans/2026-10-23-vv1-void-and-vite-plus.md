@@ -2,9 +2,9 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task. Where this plan gives exact names, paths, flags or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end.
 >
-> **Status: Stub.** Track **VV**, design [§79](../design/79-void-and-vite-plus.md).
-> - **D1770 is approved** (owner, 2026-10-23): adopt Vite+ and Void wherever each fits.
-> - **The mapping (D1771–D1789, Q1300–Q1310) is Proposed.** Nothing below starts until the owner approves it.
+> **Status: Approved stub** (owner, 2026-10-23, all defaults). Track **VV**, design [§79](../design/79-void-and-vite-plus.md).
+> - **Approved:** D1770–D1791 and Q1300–Q1310. That includes no Deno support (D1790) and Bun compiled ahead of time for the self-hosted and container targets (D1791).
+> - **Proposed:** the further Bun uses, D1792–D1795 and Q1311–Q1313. Task 8 informs them.
 >
 > **Coverage:** this plan specifies **VV0**, the spikes, task by task. VV0 writes no product code. VV1–VV3 are outlined at milestone level, and each gets full task specifications after the VV0 report.
 
@@ -12,13 +12,14 @@
 - which `@loams/app` and Void seams work on Cloudflare and on Node;
 - how the shims call Void's handlers;
 - whether the monorepo can take one `vite-plus` pin;
-- whether the Loams Cloud control plane is better on Void than on `wrangler`.
+- whether the Loams Cloud control plane is better on Void than on `wrangler`;
+- what Bun's ahead-of-time compile gains over Node for a Void app.
 
 **Exit (VV0):** `docs/plans/vv0-report.md`, with:
 - a go or no-go for each task;
 - the measured numbers (build times against today's, bundle sizes, cold starts on Lambda);
 - the answers to §79's (verify) items;
-- recommended answers for Q1300, Q1304 and Q1308.
+- recommended answers for Q1311 and Q1313, and any change Task 7 suggests to Q1304's answer.
 
 ## Global Constraints
 
@@ -27,7 +28,7 @@
 - **No accounts and no deploys** without the owner.
   - Tasks 2, 3 and 7 deploy only to the owner's Cloudflare Free test account and AWS credit account (§70 §12.2), with scoped tokens the owner provides.
   - Every resource is deleted at the task's end, and the deletion is logged in the report.
-- **Exact pins:** `vite-plus` 1.3.0 and `void` 1.2.1, or the newest release at least 14 days old when the task starts.
+- **Exact pins:** `vite-plus` 1.3.0, `void` 1.2.1 and Bun 1.4.4, or the newest release at least 14 days old when the task starts.
 - **Node 24.21.0 or later** for Void tasks.
 - **Never** use `curl | bash` installers in CI. Never use Void Cloud.
 
@@ -38,14 +39,16 @@
 | 1 | Does the console build, test and lint under Vite+ with no behaviour change? | Branch `web/apps/console` and `@loams/ui` onto `vite-plus` 1.3.0: `vp build`, `vp test`, `vp check`. Diff `dist/`, time each step against Vite 8.3.1, Vitest 5.0.3 and Biome. Draft the Biome-to-Oxlint parity table | The same test results, `dist/` equivalent (hashes may differ), and a parity table with every gap named |
 | 2 | Do `@loams/app` ports on Cloudflare work through Void's bindings? | A portable Void app with an `items` adapter on D1, `blobs` on R2 and `queue` on Queues. A generated `void.config.ts` overlay sets `inference.bindings` and the `cloudflare` binding arrays. Then `void deploy --platform cloudflare`, a second deploy, and `void project rollback`. Check whether a Queues dead-letter queue can be bound explicitly | Void provisions exactly the declared resources, records them in `void.lock.json`, and rolls back. The DLQ answer is recorded |
 | 3 | Can Loams' shims wrap Void's `node` build? | `target: "node"`. Wrap `dist/ssr/app.js` for Lambda behind a Function URL. Call a `crons/` handler from the shim's `scheduled` entry through EventBridge Scheduler. Try calling a `queues/` handler from SQS | HTTP, cron and either a queue handler or a documented no-go, with cold-start numbers |
-| 4 | Does the `node` build run as an OCI image in the light compose stack? | `loams app build --target node --image` (a script in the spike), in the `apps` profile, with ports through `env.native` on the local Postgres and the bucket | The app serves and persists across a restart |
+| 4 | Does the Bun-compiled build (D1791), and the `node` fallback, run as an OCI image in the light compose stack? | `loams app build --target bun --compile --image`, and `--target node --image` (scripts in the spike), in the `apps` profile, with ports through `env.native` on the local Postgres and the bucket | The app serves and persists across a restart |
 | 5 | Can Hyperdrive reach a private Loams Postgres over Cloudflare Tunnel, and TiDB Starter as MySQL? | A Void `database: "pg"` app on Hyperdrive to Loams Postgres behind the owner's Tunnel. A `database: "mysql"` app on TiDB Starter's free instance. Also note what Workers' `connect()` means for §78 §17's HTTP-driver rationale | Both connect, with read-after-write within one request and TLS mode recorded |
 | 6 | Can the whole workspace take one `vite-plus` pin with `vite` aliased? | The catalog entry and override, `pnpm install`, `nx run-many -t build test typecheck`. Check electron-vite 6 (PR #1049) against `vite-plus-core` | No peer warnings left unexplained, and every target green. The desktop's answer is recorded |
 | 7 | Is the Loams Cloud control plane better on Void? | Port LC2a's skeleton (one route, the per-user Durable Object, a cron, a secret, staged deploy) to Void. Compare it with `wrangler` and `@cloudflare/vitest-pool-workers` under `vp test` | A recommendation for Q1304 with the trade-offs. LC2a is not delayed |
+| 8 | How much does Bun's ahead-of-time compile gain? | Build one portable Void app (the notes example's skeleton) three ways: Void `target: "node"` on `node:24-slim`; `target: "bun"` run with `bun run`; and `target: "bun"` compiled with `bun build --compile --bytecode --minify --sourcemap --format=esm --target=bun-linux-x64` on a distroless base. Then try `--bytecode-order`, both `--target=bun-linux-arm64` and `-musl`, and `dist/client/` embedded with `--asset` against shipped beside the binary. Measure cold start to the first 200 (median of 20, on the same machine), RSS at idle, and image size. Note what fails, such as native addons or files read beside the code | The numbers recorded against the targets of §79 §7.6 (cold start at least 1.5x faster, image under 120 MB). The fallbacks named, and the LGPL notice drafted for Q1312 |
 
 ## VV1: the toolchain (milestone)
 
 - **Pins:** the `vite-plus` catalog pin and the `vite` alias; Node 24 in CI and `.nvmrc` (Q1303).
+- **Deno (D1790):** remove any remaining Deno claims from READMEs and docs as they are found. Add no Deno test cells.
 - **Targets:** `vp` in `web/`, `sdks/typescript/` and `plugins/`; `vp test` and `vp check` in the desktop.
 - **Lint and format:** Biome and ESLint to Oxlint and Oxfmt (Q1301), with the formatting commits in `.git-blame-ignore-revs`.
 - **Libraries:** tsup to `vp pack` in `@loams/ui`, and `vp pack` for SDK packages where the output is byte-compatible.
@@ -57,11 +60,13 @@
 
 - **The templates:** the portable and Cloudflare-native Void templates, and `web/examples/app-byoc-notes` as a portable Void app.
 - **The deploy:** the `@loams/app` overlay; `loams app deploy --target cloudflare` through `void deploy` (D1779).
+- **Bun-compiled images** for the self-hosted `apps` profile and Cloud Run (D1791), with the `bun run` and `node` fallbacks; the Bun conformance lane (D1795).
 - **The `node` shims** for AWS (AB0), then Google Cloud, Azure and Vercel (AB1).
 - **The Void conformance lanes** (D1787).
 
 ## VV3: options (milestone)
 
+- **Bun-compiled Loams CLIs** (D1792), starting with the Factory host (Q1313), after counsel (Q1312).
 - **The `void-platform` target** (Q1306).
 - **The control plane on Void** (Q1304).
 - **loams-site on `void deploy`** (Q1305).

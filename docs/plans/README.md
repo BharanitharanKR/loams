@@ -450,11 +450,11 @@ Design reference: [78 Loams Cloud on TiDB X](../design/78-loams-cloud-on-tidb-x.
 
 ## Track VV: Void and Vite+
 
-Design reference: [79 Void and Vite+](../design/79-void-and-vite-plus.md) (D1770 **approved by the owner 2026-10-23**; D1771–D1789 and Q1300–Q1310 proposed).
+Design reference: [79 Void and Vite+](../design/79-void-and-vite-plus.md) (D1770–D1791 and Q1300–Q1310 **approved by the owner 2026-10-23, all defaults**; D1792–D1795 and Q1311–Q1313 proposed).
 
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|
-| [VV1: Void and Vite+](2026-10-23-vv1-void-and-vite-plus.md) (stub; VV0 Tasks 1–7 specified; VV1–VV3 at milestone level) | **VV0** spikes, no product code: the console on Vite+, `@loams/app` ports through Void's Cloudflare bindings, shims around Void's `node` build on Lambda, the `node` image in compose, Hyperdrive to Loams Postgres over Tunnel and to TiDB Starter, one workspace `vite-plus` pin, the control plane on Void; **VV1** the toolchain (Vite+, Node 24, Oxlint and Oxfmt, the fallback lane, loams-site); **VV2** apps on Void inside AB0 and AB1; **VV3** options (`void-platform`, the control plane, the site, workerd) | The owner's approval of the mapping; §71 AB0 for VV2 | Proposed (stub) |
+| [VV1: Void and Vite+](2026-10-23-vv1-void-and-vite-plus.md) (stub; VV0 Tasks 1–8 specified; VV1–VV3 at milestone level) | **VV0** spikes, no product code: one Void app compiled with Bun AOT against Node (startup, size); the console on Vite+, `@loams/app` ports through Void's Cloudflare bindings, shims around Void's `node` build on Lambda, the `node` image in compose, Hyperdrive to Loams Postgres over Tunnel and to TiDB Starter, one workspace `vite-plus` pin, the control plane on Void; **VV1** the toolchain (Vite+, Node 24, Oxlint and Oxfmt, the fallback lane, loams-site); **VV2** apps on Void inside AB0 and AB1; **VV3** options (`void-platform`, the control plane, the site, workerd) | §71 AB0 for VV2 | Approved (stub) |
 
 ## Later milestones
 

@@ -2,7 +2,7 @@
 
 > **Amendment (approved 2026-10-23) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). D1351 and D1378 stand for BYOC; D1701 clarifies their wording, since Loams Cloud is a free try-out control plane and dev-state store, not a data plane. `tidbx` joins the target list as a **state** target, and the deploy order becomes TiDB X → Cloudflare → Vercel → AWS → Google Cloud → Azure, with AWS, Google Cloud and Azure as the production targets (D1706). Target manifests reference this document's tiers instead of repeating them (D1707).
 
-> **Amendment proposed (2026-10-23) by [§79](79-void-and-vite-plus.md)** (Void and Vite+; D1770 approved by the owner, D1771–D1789 proposed). The console in every BYOC tier is built with Vite+ (D1772). Data-plane BYOC is otherwise unchanged: Void deploys only to Cloudflare and never deploys the Loams data plane.
+> **Amendment (approved 2026-10-23) by [§79](79-void-and-vite-plus.md)** (Void and Vite+; D1770–D1791 approved by the owner). The console in every BYOC tier is built with Vite+ (D1772). Data-plane BYOC is otherwise unchanged: Void deploys only to Cloudflare and never deploys the Loams data plane.
 
 Status: **Approved** · 2026-10-21. The owner approved the design with every default on 2026-10-21, after approving the eight Cloudflare defaults of the Cloudflare research earlier the same day (D1366–D1371, the Cloudflare part of D1354, Q1086, Q1087) and making an AWS account with $200 of credits for six months available for BY0's tests and the nightly AWS matrix (§12.2).
 

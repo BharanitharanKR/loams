@@ -1,14 +1,20 @@
 # 79 — Void and Vite+: the JavaScript Toolchain and the App Deployer, on Every Target
 
-Status: **D1770 Approved** (owner, 2026-10-23); **the mapping (D1771–D1789, Q1300–Q1310) is Proposed** and waits for the owner. No code is written by this document.
+Status: **Approved** · 2026-10-23. The owner approved the design with all defaults on 2026-10-23: D1770–D1789, and Q1300–Q1310 at their recommended defaults. The same day the owner made two more rulings, both approved:
+- **Loams does not support Deno** (D1790, §7.7), with a [migration guide from Deno to Bun](../guides/migrate-deno-to-bun.md).
+- **Bun, compiled ahead of time, runs the self-hosted and container targets** and the server output of Void apps, where it works (D1791, §7.6). This amends D1780, D1781 and Q1308's answer. Its further uses (D1792–D1795) and Q1311–Q1313 are Proposed.
 
-Source: the owner's direction of 2026-10-23.
+No code is written by this document.
+
+Source: the owner's directions of 2026-10-23.
 
 > "use Void and Vite+. We can adopt it for every cloud and self-host option."
 
+Later the same day: approve all defaults; drop Deno, and add a guide for Deno users moving to Bun; and "also use Bun AOT".
+
 The owner's notes on Void were treated as unverified. §3 checks each claim against primary sources: the LICENSE files and repository contents through the GitHub API, the npm registry, and Void's own documentation in its repository. No repository was cloned, no account was made, and nothing was deployed.
 
-**Numbering.** This document reserves **D1770–D1799** and **Q1300–Q1319**. It uses D1770–D1789 and Q1300–Q1310 and keeps the rest free.
+**Numbering.** This document reserves **D1770–D1799** and **Q1300–Q1319**. It uses D1770–D1795 and Q1300–Q1313 and keeps the rest free.
 - The highest numbers in use on `dev` (`3b750c6bd`) are §78's second reservation, D1750–D1769 and Q1290–Q1299. The highest declared rows are D1758 and Q1297.
 - No open PR or remote branch uses D1759–D1799 or Q1298–Q1319 (checked on 2026-10-23 across every remote branch).
 - Design number 79 is the next free one, and no open PR takes it.
@@ -42,8 +48,10 @@ Adopt **Vite+** as the JavaScript and TypeScript toolchain, and **Void** for bui
 - **Vite+ is MIT and stable.** 1.0.0 shipped on 2026-09-28, and 1.3.0 on 2026-10-16. It bundles Vite, Rolldown, Vitest, tsdown, Oxlint and Oxfmt, plus a task runner, behind one `vp` command (V).
 - **Void is MIT, and it is young.** Its first open-source release, v1.1.11, came out on 2026-10-15. The third-party claim is right. The LICENSE's copyright holder is Cloudflare, Inc. (V).
 - **Void deploys only to Cloudflare.** It has exactly two deploy targets: your own Cloudflare account, and a Void Platform, which itself runs in a Cloudflare account (V).
-- **Void can build for Node.js, Bun and Deno.** The output is a standalone Hono server. But on those targets, Void's resource APIs fail at compile time: database, KV, storage, auth, AI, sandbox and env. `void deploy` doesn't handle them, and you host the output yourself (V).
+- **Void can build for Node.js, Bun and Deno.** The output is a standalone Hono server. Loams uses the Node and Bun outputs only, since it doesn't support Deno (D1790). On those targets, Void's resource APIs fail at compile time: database, KV, storage, auth, AI, sandbox and env. `void deploy` doesn't handle them, and you host the output yourself (V).
 - **The Void Platform needs Cloudflare, and a paid plan.** It needs Workers for Platforms, R2, Analytics Engine, and an external hosted Postgres (V).
+- **Bun's "AOT" is a single-file executable with precompiled bytecode** (`bun build --compile --bytecode`), not native machine code. It bundles the app with a copy of the Bun runtime and cross-compiles to Linux (glibc and musl), macOS and Windows on x64 and arm64 (V, §3.7).
+- **Deno's team is joining Cloudflare.** The Deno runtime gets one more year of bug-fix releases, then its development ends; Deno Deploy shuts down in about six months (V, §3.8).
 
 ### 1.3 The answer
 
@@ -53,9 +61,9 @@ Adopt **Vite+** as the JavaScript and TypeScript toolchain, and **Void** for bui
 |---|---|---|
 | **Toolchain** | Yes | Vite+ for dev, check (lint, format, types), test, build and pack, everywhere (D1772–D1777) |
 | **App authoring** | Yes | Void's routes, pages and typed client are the authoring layer. §71's ports (`@loams/app`) stay the portable state layer (D1778) |
-| **Deploy** | Cloudflare only | `void deploy` for Cloudflare targets (D1779, D1782). Elsewhere, Void's `node` build output plus §71's shims and §71's deploy (D1780, D1781) |
+| **Deploy** | Cloudflare only | `void deploy` for Cloudflare targets (D1779, D1782). Elsewhere, Void's server build: Bun compiled ahead of time on self-hosted and container targets (D1791), Node on managed function runtimes (D1780), with §71's shims and deploy |
 
-**Plainly:** Void is a Cloudflare deployer. It is not a multi-cloud one. For AWS, Google Cloud, Azure, Vercel and self-hosting, Loams uses Vite+ and Void's Node build, then deploys with the design-70 and design-71 targets that are already approved. Loams does not claim otherwise (D1771).
+**Plainly:** Void is a Cloudflare deployer. It is not a multi-cloud one. For AWS, Google Cloud, Azure, Vercel and self-hosting, Loams uses Vite+ and Void's server build (a compiled Bun binary in containers, Node in managed functions), then deploys with the design-70 and design-71 targets that are already approved. Loams does not claim otherwise (D1771).
 
 ### 1.4 Per target
 
@@ -64,10 +72,10 @@ Adopt **Vite+** as the JavaScript and TypeScript toolchain, and **Void** for bui
 | **Cloudflare, the customer's account** | Vite+ | Void | Void's Cloudflare build (a Worker plus assets) | `void deploy --platform cloudflare`, driven by `loams app deploy` | `@loams/app` ports on D1, R2 and Queues; or Void's own APIs in a Cloudflare-native app |
 | **Cloudflare, a team Void Platform in the customer's account** | Vite+ | Void | Same | `void deploy --platform void` with a project deploy token | As above, on the platform's resources |
 | **AWS** | Vite+ | Void (portable) | Void `target: "node"`, plus Loams' Lambda shim | `loams app deploy` and OpenTofu (D1406) | Ports on DynamoDB, S3 and SQS |
-| **Google Cloud** | Vite+ | Void (portable) | `node`, in a Cloud Run container | `loams app deploy` and OpenTofu | Ports on Firestore, GCS and Cloud Tasks |
+| **Google Cloud** | Vite+ | Void (portable) | `bun`, compiled to one binary in a Cloud Run container (D1791); `node` as the fallback | `loams app deploy` and OpenTofu | Ports on Firestore, GCS and Cloud Tasks |
 | **Azure** | Vite+ | Void (portable) | `node`, plus the Functions Flex shim | `loams app deploy` and OpenTofu | Ports on Cosmos DB, Blob and Queue Storage |
 | **Vercel** | Vite+ | Void (portable) | `node`, plus the Vercel Functions shim (Build Output API) | `loams app deploy` and the Vercel CLI (D1406) | Ports on Marketplace storage, Vercel Blob and Queues |
-| **Self-host (the ground, compose)** | Vite+ | Void (portable) | `node`, in an OCI image | Compose `apps` profile on the user's own device | Ports on the `loams` target (Live, the bucket, Jobs) |
+| **Self-host (the ground, compose)** | Vite+ | Void (portable) | `bun`, compiled to one binary in an OCI image (D1791); `bun run` or `node` as the fallback | Compose `apps` profile on the user's own device | Ports on the `loams` target (Live, the bucket, Jobs) |
 | **A Loams data plane (`loams` target, D1396)** | Vite+ | Void (portable) | Later: Void's Cloudflare build on Loams Functions (workerd) | `loams app deploy --target loams` | Ports on Live, the bucket and Jobs |
 
 Loams' Rust engine, its data-plane BYOC (§70) and the Electron desktop's build are out of Void's reach. §70 is unchanged, except that the console is built with Vite+.
@@ -78,6 +86,9 @@ Loams' Rust engine, its data-plane BYOC (§70) and the Electron desktop's build 
 - **Void's resource APIs off Cloudflare.** These are `void/db`, `void/kv`, `void/storage`, `void/auth`, `void/ai`, `void/sandbox` and `void/env`. Also off: WebSocket route files, inbound email, edge prerendering, and a built-in cron scheduler (V). Portable apps use `@loams/app` ports instead.
 - **A Void Platform anywhere but Cloudflare.** It also needs Workers for Platforms, which is a paid plan (V). It can't run on the free tier, and it can't run on the ground.
 - **Void on Node 22.** Void needs Node 24.21.0 or later (V), but CI runs Node 22. D1775 moves the JavaScript jobs to Node 24.
+- **Bun AOT on managed function runtimes.** Lambda, Azure Functions and Vercel Functions run their own managed Node runtimes, so those targets keep Void's `node` build (D1791). A Bun binary on Lambda needs a custom runtime (Q1311).
+- **Bun AOT with native addons that aren't embedded,** or with code that loads files beside itself at runtime. These fall back to `bun run` or Node (§7.6).
+- **Deno.** Loams doesn't support it as a runtime or target (D1790).
 - **Void's queue dead-letter queues.** "Void-managed queues do not configure a dead-letter queue" (V). §71's `dead_letter = true` needs an explicit Cloudflare binding (verify, VV0 Task 2).
 
 ---
@@ -161,7 +172,7 @@ Loams' Rust engine, its data-plane BYOC (§70) and the Electron desktop's build 
 | `"cloudflare"` (default) | Workers | Yes | Yes |
 | `"node"` | Node.js with `@hono/node-server` | No: "deploy `dist/` using your hosting provider's workflow" | **No:** a compile-time error |
 | `"bun"` | `Bun.serve()` | No | No |
-| `"deno"` | `Deno.serve()` | No | No |
+| `"deno"` | `Deno.serve()` | No | No; and Loams doesn't use this target (D1790) |
 
 **What works on every runtime** (V):
 - file-based routing and middleware;
@@ -190,7 +201,7 @@ The docs add that the app can be embedded in "serverless environments that accep
 **Off-Cloudflare state is only a proposal.** Issue [#454](https://github.com/voidzero-dev/void/issues/454) (2026-10-16, open, no reply) asks for `void/kv` and `void/storage` on `node`, backed by Redis and S3. It is a community request, not a plan.
 
 **Can Void run without Cloudflare?**
-- The SDK can, as a Node, Bun or Deno server, without its Cloudflare resource APIs.
+- The SDK can, as a Node, Bun or Deno server, without its Cloudflare resource APIs. Loams uses Node and Bun.
 - The CLI's deploy cannot.
 - The Platform cannot.
 
@@ -236,6 +247,48 @@ The docs add that the app can be embedded in "serverless environments that accep
 | `vite-plus-discussions` | none | — | Archived |
 
 Vite, Vitest, Rolldown and Oxc live in their own organisations (`vitejs`, `vitest-dev`, `rolldown`, `oxc-project`), all MIT (V). Cloudflare's `vinext`, which loams-site uses, is MIT too (V).
+
+### 3.7 Bun's ahead-of-time compile (read 2026-10-23)
+
+**What exists** (Bun's docs [single-file executable](https://bun.com/docs/bundler/executables) and [bytecode caching](https://bun.com/docs/bundler/bytecode), and the release notes of [1.4.0](https://bun.com/blog/bun-v1.4.0) and [1.4.3](https://bun.com/blog/bun-v1.4.3); latest release 1.4.4, 2026-10-22):
+- **`bun build --compile`** bundles the app and its packages into one executable, "along with a copy of the Bun runtime". "All built-in Bun and Node.js APIs are supported." It is a stable, documented feature, not marked experimental (V).
+- **`--bytecode`** precompiles the bundle to JavaScriptCore bytecode at build time, so startup skips parsing. ESM bytecode needs `--compile` (since 1.3.9). Bytecode builds of ESM and CJS both work with `--compile` (V).
+- **`--bytecode-order`** (1.4.3) is profile-guided: a recorded run lays out the bytecode the app uses first (V).
+- **`--compile-jit-policy <n>`** (1.4.3) keeps startup code in the interpreter longer (V).
+- **`--minify`** and **`--sourcemap`** (an embedded, zstd-compressed sourcemap) are the documented production flags (V).
+- **Assets:** files and directories can be embedded (`--asset`, 1.4.0), and read with `Bun.file()` or `node:fs` (V).
+- **Nothing more "AOT" than this exists.** Bun doesn't compile JavaScript to native machine code ahead of time. The JIT still runs at runtime. No other ahead-of-time compiler feature appears in the docs or the 1.4.x notes (V, searched 2026-10-23).
+
+**Targets and cross-compiling** (V). `--target` builds for another platform from any machine: `bun-linux-x64`, `bun-linux-arm64`, `bun-linux-x64-musl`, `bun-linux-arm64-musl`, `bun-darwin-x64`, `bun-darwin-arm64`, `bun-windows-x64` and `bun-windows-arm64`. Windows-specific flags, except `hideConsole`, can't be used when cross-compiling.
+
+**Limits** (V):
+- **Size:** the executable carries the runtime. Bun 1.4's own binary is 77.0 MB on Linux x64 and 61.2 MB on macOS arm64. The docs say "Bun's binary is still way too big". Bytecode adds size: "2-8x larger files" for the bytecode itself.
+- **Bytecode isn't portable across Bun versions.** On a mismatch, Bun ignores it and parses the source, so it is safe but slower. It is portable across architectures.
+- **Native addons:** `.node` files can be embedded, but they are platform-specific, so a cross-compiled binary needs the target platform's addon. Packages that find their `.node` file indirectly (`@mapbox/node-pre-gyp`) must `require` it directly, or it won't bundle.
+- **Unsupported with `--compile`:** `--outdir`, `--public-path`, `--target=node`, `--target=browser` without HTML entry points, and `--no-bundle`.
+- **Bytecode is not obfuscation;** the source is still needed.
+
+**The documented gains** (V; Bun's own measurements, not Loams'):
+- bytecode startup: "1.5-2x faster" for a small CLI under 100 KB, and "2-4x faster" for an app over 5 MB;
+- `tsc` "starts 2x faster" with bytecode;
+- `--bytecode-order`: "In one large CLI app, cold start went from 1.01s to 0.53s";
+- Bun 1.4's startup for `hello.js` on Linux: 5.1 ms (not specific to compiled executables).
+
+Loams' own numbers come from VV0 Task 8. Until then, every gain below is a **target**, not a measurement.
+
+**Licence** (V). Bun is MIT, but it "statically links JavaScriptCore (and WebKit) which is LGPL-2 licensed". A compiled executable contains the runtime, so a binary that Loams distributes carries the LGPL-2 obligations: users must be able to relink. Bun points to its patched WebKit at `oven-sh/webkit`. D1794 handles this.
+
+### 3.8 Deno (read 2026-10-23)
+
+- **Deno is joining Cloudflare,** announced on 2026-10-09 in [Ryan Dahl's post](https://deno.com/blog/cloudflare) and in a [joint post by Ryan Dahl and Kenton Varda](https://blog.cloudflare.com/deno-joins-cloudflare/) on Cloudflare's blog. Ryan Dahl's post says (V):
+  - "We will support the Deno runtime for another year with monthly releases containing bug fixes and security updates. After that year we will end our development of the Deno runtime."
+  - "Deno Deploy will continue operating for six months before shutting down. We will provide migration support for paying customers moving to Cloudflare Workers."
+  - "JSR will continue operating, with its infrastructure moving to Cloudflare."
+  - "Deno will remain open source, and we welcome others who want to continue its development."
+- **Cloudflare's post adds** that Ryan Dahl and Bert Belder will lead work to make self-hosting workerd "a first-class supported way to build and run apps", merging celld into workerd, with no date (V).
+- **Deno Deploy Classic** (dash.deno.com) and the Subhosting v1 API shut down on 2026-07-20, per [Deno's migration guide](https://docs.deno.com/deploy/migration_guide/) (V).
+- Third-party coverage agrees: [alternativeto.net](https://alternativeto.net/news/2026/10/deno-team-joins-cloudflare-as-runtime-development-winds-down/), [The New Stack](https://thenewstack.io/cloudflare-acquires-deno-ryan-dahl/) and [tech-insider.org](https://tech-insider.org/deno-team-joins-cloudflare-deploy-shutdown-2026/). Some call it an acquisition, and the primary posts don't (unverified either way).
+- **The Rust crates are affected too.** `deno_core` and `rusty_v8`, which §20 lists as V8 options for Functions (Q35), are maintained by the Deno team. Their future after the year is unknown (unverified).
 
 ---
 
@@ -343,7 +396,7 @@ The toolchain must be reversible in a day.
 
 **A Cloudflare-native app** declares `[app.targets] allow = ["cloudflare"]` (or `["cloudflare", "void-platform"]`) and uses Void's APIs freely. This is §71 §6.6's escape hatch, made first-class for Cloudflare. The deploy marks it so.
 
-**Which is the default** for a new Factory or Studio app is Q1300. The default proposed is **portable**, with Cloudflare-native as an explicit choice at creation.
+**The default** for a new Factory or Studio app is **portable**, with Cloudflare-native as an explicit choice at creation (Q1300, answered by the owner on 2026-10-23).
 
 **How `@loams/app` works under Void:**
 - **On Cloudflare,** the ports' Cloudflare adapter reads the bindings that Void provisions. `loams app deploy` writes `inference.bindings` and the `cloudflare` binding arrays into a generated `void.config.ts` overlay, so Void creates D1, R2 and Queues and records them in `void.lock.json` (verify, VV0 Task 2).
@@ -379,10 +432,10 @@ The toolchain must be reversible in a day.
 
 ### 7.3 AWS, Google Cloud, Azure and Vercel (D1780)
 
-- A portable Void app is built with `target: "node"`.
+- A portable Void app is built with `target: "node"` for the managed function runtimes (Lambda, Azure Functions, Vercel Functions), which run Node. Container targets use `target: "bun"` and §7.6's compile step.
 - Loams' entry shim for each target wraps `dist/ssr/app.js` (a Hono app with `fetch`):
   - Lambda behind a Function URL;
-  - a Node container on Cloud Run;
+  - a container on Cloud Run, which runs the Bun-compiled binary (D1791), with Node as the fallback;
   - Azure Functions Flex Consumption;
   - Vercel Functions through the Build Output API.
 
@@ -395,14 +448,14 @@ The toolchain must be reversible in a day.
 ### 7.4 Self-hosting (D1781)
 
 **On the ground** (a user's own laptop or homelab, §78):
-- a portable Void app is built with `target: "node"` into an OCI image (`loams app build --target node --image`);
+- a portable Void app is built with `target: "bun"` and compiled ahead of time into one binary, in an OCI image (`loams app build --target bun --compile --image`, §7.6). `bun run` and `target: "node"` are the fallbacks;
 - it runs in the light compose stack's `apps` profile, beside the Factory's apps (§78 §20, §39);
 - its ports use the `loams` adapters once F1 and JB1 land (D1396). Until then they use the local stack's Postgres and the bucket through `env.native` (verify, VV0 Task 4).
 
 **On a Loams data plane** (the `loams` target):
 - Loams Functions runs the Workers module shape on workerd (§24, D171). A Void app's Cloudflare build is such a Worker.
 - Running it there, with §24's KV and R2 bindings mapped onto Loams, is a later option, after F1 and a spike (Q1308).
-- The default is the `node` image.
+- The default is the compiled Bun image (D1791, amending Q1308's answer of a `node` container).
 
 **No Void Platform off Cloudflare.** §1.5 says why.
 
@@ -413,6 +466,52 @@ Void's `database: "pg"` and `database: "mysql"` connect through Hyperdrive on Cl
 - **TiDB Starter** (§78's `tidbx` state target) as `database: "mysql"` through Hyperdrive (verify that Hyperdrive works with TiDB Starter's TLS, VV0 Task 5).
 
 On `node` targets, the app uses its driver directly with a `DATABASE_URL`, so the `void/db` API isn't available (V). Portable apps use Drizzle directly, or `env.loams`.
+
+### 7.6 Bun, compiled ahead of time (D1791–D1795)
+
+**The rule (D1791, approved).** The self-hosted and container targets, and the server output of Void apps, run on **Bun, compiled ahead of time**, where it works, instead of Node. That covers the ground's compose `apps` profile, Cloud Run, and any other container target.
+- **The build:** Void's `target: "bun"` (V, §3.3), then one binary per app:
+
+  ```
+  bun build ./dist/ssr/index.js --compile --bytecode --minify --sourcemap --format=esm \
+    --target=bun-linux-x64 --outfile dist/app
+  ```
+
+  `dist/client/` is embedded as assets, or shipped beside the binary (verify which works with Void's static middleware, VV0 Task 8).
+- **The target triple** follows the image's libc: `bun-linux-<arch>` for a glibc base, `-musl` for Alpine. One build machine cross-compiles both architectures (V).
+- **The image:** a distroless or minimal base with the binary only. No Node, no `node_modules`.
+- **Bytecode is pinned to the Bun version that built it.** The image builds and runs on that one version, and a Bun upgrade rebuilds every image. A mismatch only costs startup time (V).
+- **Where it can't be used, and the fallback is `bun run dist/ssr/index.js`, or Void's `node` build:**
+  - native addons that can't be embedded for the target platform;
+  - code that reads files next to its own source at runtime. Void's docs already flag such packages (V);
+  - packages that fail under Bun's Node compatibility;
+  - managed function runtimes (Lambda, Azure Functions, Vercel Functions), which keep Node (D1780; Q1311 for Bun on Lambda).
+
+  The deploy records which runtime it used.
+- **The gains are targets until VV0 Task 8 measures them:**
+  - cold start at least 1.5x faster than Node for a Void app (Bun's documented range is 1.5–4x for bytecode);
+  - an image under 120 MB, against Node plus `node_modules`. The Bun runtime alone is about 77 MB on Linux x64 (V).
+
+**Where else it fits** (Proposed; D1792–D1795 and Q1311–Q1313 wait for the owner):
+- **D1792: small Loams TypeScript CLIs and tools ship as Bun-compiled binaries.** The first is the Factory host `bin/factory-acp.js` (§72), so a device runs it without Node. Release artefacts are cross-compiled for the eight targets.
+- **D1793: the images of apps the Factory builds** use the same compiled-binary image. This includes marketplace agents of runtime `binary` (§73).
+- **D1794: the LGPL-2 obligations of a distributed binary.**
+  - Every Bun-compiled binary that Loams distributes ships with a notice for JavaScriptCore and WebKit, a pointer to `oven-sh/webkit` at the pinned version, and the app's own source (Apache-2.0), so a user can rebuild and relink.
+  - Counsel checks this before the first distributed binary (Q1312).
+  - Images built in a customer's own account for its own use aren't distributed by Ostrium.
+- **D1795: a Bun lane in conformance.** The notes example is compiled for `bun-linux-x64`. It runs in compose in PRs, and nightly on Cloud Run. It reports startup time and image size against the `node` build.
+
+### 7.7 Deno is not supported (D1790)
+
+**The rule (approved).** Loams doesn't support Deno as a runtime or a deploy target.
+- **Why:** Deno's own team is ending the runtime's development after one more year of bug-fix releases, and is shutting down Deno Deploy in about six months (§3.8). Support that its maintainers are winding down isn't something Loams can promise to users.
+- **What changes:**
+  - Void's `deno` target is not used;
+  - Deno Deploy is not an edge-reach caller Loams documents (§69);
+  - docs no longer list Deno beside Node and Bun.
+- **What stays:** the TypeScript SDK uses only `fetch` and standard Web APIs on its default transport. It will likely keep working on Deno at no cost to us, but we don't test it there and we don't claim it works.
+- **For users:** the [Deno to Bun guide](../guides/migrate-deno-to-bun.md). It covers config, imports, APIs, tooling, permissions and hosting (Loams self-host or BYOG, or Void on Cloudflare).
+- **For §20's Q35:** `deno_core` and `rusty_v8` lose their maintainers' long-term commitment. Any later V8 choice for Functions must check who maintains them first.
 
 ---
 
@@ -461,7 +560,8 @@ On `node` targets, the app uses its driver directly with a `DATABASE_URL`, so th
   - In PRs, it is built for `cloudflare` and `node` and run on Miniflare and in Node with DynamoDB Local.
   - Nightly, it is deployed with `void deploy` to the Cloudflare Free test account, and with the Lambda shim to the owner's AWS account (§70 §12.2).
 - **A Cloudflare-native example** (`web/examples/void-native-notes`) runs nightly on the Cloudflare account only.
-- **A Void or Vite+ bump PR** must pass both lanes and the fallback lane (D1774).
+- **A Bun lane** (D1795): the notes example compiled with Bun, in compose in PRs and nightly on Cloud Run.
+- **A Void, Vite+ or Bun bump PR** must pass these lanes and the fallback lane (D1774).
 
 ---
 
@@ -469,10 +569,10 @@ On `node` targets, the app uses its driver directly with a `DATABASE_URL`, so th
 
 | Phase | Content | Depends on | Effort (estimate) |
 |---|---|---|---|
-| **VV0: spikes** (no product code) | Seven checks, task by task in [VV1](../plans/2026-10-23-vv1-void-and-vite-plus.md). They are the VV0 report's go or no-go items | — | 4–6 agent-days |
+| **VV0: spikes** (no product code) | Eight checks, task by task in [VV1](../plans/2026-10-23-vv1-void-and-vite-plus.md). They are the VV0 report's go or no-go items | — | 4–6 agent-days |
 | **VV1: the toolchain** | The catalog pin and `vite` alias; Node 24; `vp` targets in `web/`, `sdks/typescript/`, `plugins/` and the desktop's tests; Biome to Oxlint and Oxfmt; tsup to `vp pack`; the fallback lane; loams-site on Vite+ | VV0 Tasks 1, 6 | 6–9 agent-days |
-| **VV2: apps on Void** | The portable and native templates; the `@loams/app` overlay for Void; `loams app deploy --target cloudflare` through `void deploy`; the `node` shims for AWS (AB0), then Google Cloud, Azure and Vercel (AB1); the Void conformance lanes | §71 AB0 (`@loams/app`); VV0 Tasks 2–4 | Part of AB0 and AB1, plus 5–7 agent-days |
-| **VV3: options** | The `void-platform` target (Q1306); the control plane on Void (Q1304); loams-site on Void (Q1305); Void's Cloudflare build on Loams Functions (Q1308) | Each one's question and spike | Per option |
+| **VV2: apps on Void** | The portable and native templates; the `@loams/app` overlay for Void; `loams app deploy --target cloudflare` through `void deploy`; the Bun-compiled images for self-host and Cloud Run (D1791); the `node` shims for AWS (AB0), then Google Cloud, Azure and Vercel (AB1); the Void conformance lanes | §71 AB0 (`@loams/app`); VV0 Tasks 2–4 | Part of AB0 and AB1, plus 5–7 agent-days |
+| **VV3: options** | Bun-compiled Loams CLIs (D1792, after Q1312); the `void-platform` target (Q1306); the control plane on Void (Q1304); loams-site on Void (Q1305); Void's Cloudflare build on Loams Functions (Q1308) | Each one's question and spike | Per option |
 
 VV1 can start right after the owner approves. It doesn't block 0.1.x work, and it lands as one PR per workspace.
 
@@ -486,10 +586,11 @@ VV1 can start right after the owner approves. It doesn't block 0.1.x work, and i
 - `vp run` as the monorepo's task runner in place of Nx, or Vite+'s Cloudflare remote cache in place of Nx Cloud.
 - A Void-only app template as the default.
 - A Void path for the Rust engine, data-plane BYOC (§70) or the native apps.
+- Deno support, Deno tests in CI, or Deno Deploy as a target (D1790).
 
 ---
 
-## 14. Amendments to earlier designs (proposed with this design; D1770 itself is approved)
+## 14. Amendments to earlier designs (approved by the owner, 2026-10-23)
 
 | Design | Amendment |
 |---|---|
@@ -499,52 +600,67 @@ VV1 can start right after the owner approves. It doesn't block 0.1.x work, and i
 | [§73](73-agent-marketplace.md) | JavaScript agent templates (D1458) are Vite+ projects. A listing built on Void's Cloudflare-only APIs shows "Cloudflare only" |
 | [§78](78-loams-cloud-on-tidb-x.md) | §17: `deploy/loams-cloud/` is a Vite+ package. Void for the control plane is a VV0 spike, and LC2a stays on `wrangler` (D1783, Q1304). §13.2: the `cloudflare` column's `apps` slot reads "Workers, deployed by Void". `void-platform` is a Cloudflare sub-target |
 | [`docs/monorepo.md`](../monorepo.md) | "Vite+ stays scoped to plugins" and "Do not apply a global Vite override" are replaced by D1772 when VV1 lands |
-| `ostrium-labs/loams-build` `LOAMS.md` | Vite+ is the recommended toolchain. Plain Vite, Rolldown and Vitest are the fallback (done 2026-10-23 on `loams/main`, commit `4ea63e8`) |
+| [§20](20-reactive-database-on-tikv.md) | Q35: `deno_core` and `rusty_v8` are maintained by the Deno team, whose runtime development ends after a year (§3.8). A V8 choice checks their maintenance first (D1790) |
+| [§44](44-unified-api-and-sdks.md) | The TypeScript SDK's runtimes are browsers, Node and Bun. Deno is no longer claimed or tested (D1790) |
+| [§69](69-edge-reach.md) | Deno Deploy is dropped from the "others with only `fetch`" row; it shuts down in about six months (D1790) |
+| loams-site (`ostrium-labs/loams-site`) | **Follow-up:** link [Moving from Deno to Bun](../guides/migrate-deno-to-bun.md) from the site's docs, in a site PR. The guide lives in this repository at `docs/guides/migrate-deno-to-bun.md` |
+| `ostrium-labs/loams-build` `LOAMS.md` | Vite+ is the recommended toolchain. Plain Vite, Rolldown and Vitest are the fallback (done 2026-10-23 on `loams/main`, commit `4ea63e8`). Bun AOT is the way to package TypeScript outputs (D1791, D1792; commit `d9ee171`) |
 
 ---
 
 ## 15. Decisions and open questions
 
-### 15.1 Decisions (D1770–D1789)
+### 15.1 Decisions (D1770–D1795)
 
 | # | Decision | § | Status |
 |---|---|---|---|
 | D1770 | **Adopt Vite+ as the JavaScript and TypeScript toolchain, and Void for building and deploying apps, wherever each fits, for every cloud and self-host option** (the owner, 2026-10-23: "use Void and Vite+. We can adopt it for every cloud and self-host option.") | 1.1 | **Approved (owner, 2026-10-23)** |
-| D1771 | **Void is read as what it is:** an MIT framework whose deploy targets are only Cloudflare and a Void Platform on Cloudflare. "Every cloud" is met by Vite+ everywhere, Void authoring everywhere, `void deploy` on Cloudflare, and §71's shims and deploy for AWS, Google Cloud, Azure, Vercel and self-hosting. No Loams page claims Void deploys elsewhere | 1.3, 3.3 | Proposed |
-| D1772 | **Vite+ in the monorepo:** each JavaScript package's targets call `vp check`, `vp test`, `vp build` or `vp pack`. Nx stays the orchestrator and Nx Cloud the cache. One exact `vite-plus` pin in the catalog, with `vite` aliased to `vite-plus-core` workspace-wide. Installed through npm, and `setup-vp` pinned by SHA | 5.1 | Proposed |
-| D1773 | **Biome and ESLint give way to `vp check` (Oxlint and Oxfmt)** after a rule-parity table, with one formatting commit per workspace in `.git-blame-ignore-revs` | 5.2 | Proposed |
-| D1774 | **Reversible in a day:** standard tool sections in `vite.config.ts`, and a weekly fallback lane on plain Vite, Rolldown and Vitest. Pin and, if needed, fork the last MIT release if either project is relicensed | 5.3 | Proposed |
-| D1775 | **Node 24 LTS for JavaScript CI and `.nvmrc`** (`engines >=24.11`). Published SDK packages keep a Node 22 runtime floor, tested in one cell | 5.4 | Proposed |
-| D1776 | **The desktop keeps electron-vite for its build** until electron-vite runs on `vite-plus-core`. It uses `vp test` and `vp check` now | 5.5 | Proposed |
-| D1777 | **Everything the Factory, Studio and templates scaffold is a Vite+ project.** Their generated CI runs `vp install --frozen-lockfile`, `vp check`, `vp test` and `vp build`, which the Factory's CI stage waits on | 5.6 | Proposed |
-| D1778 | **Void is the authoring layer for Loams web apps, portable by default:** no Void Cloudflare-only imports, state through `@loams/app` ports and `env.loams`, enforced by lint. A Cloudflare-native app opts in with `[app.targets] allow = ["cloudflare"]` | 6 | Proposed |
-| D1779 | **Cloudflare deploys of Void apps go through `void deploy --platform cloudflare`** into the customer's own account, driven by `loams app deploy`: cost guards first, a generated `void.config.ts` overlay, a `loams.deploy.v1` record, `void project rollback` for rollback. Non-Void apps keep `wrangler` | 7.1 | Proposed |
-| D1780 | **AWS, Google Cloud, Azure and Vercel run Void's `node` build:** Loams' shims wrap `dist/ssr/app.js`, call `crons/` handlers from `scheduled`, and map §71's `queue`. D1406's OpenTofu and the Vercel CLI deploy it. Bundling moves from esbuild to Vite+ (Rolldown) | 7.3 | Proposed |
-| D1781 | **Self-hosting runs Void's `node` build as an OCI image** in the compose `apps` profile on the ground. Void's Cloudflare build on Loams Functions (workerd) is a later option (Q1308) | 7.4 | Proposed |
-| D1782 | **A `void-platform` target:** deploy into a Void Platform that the customer installed in its own Cloudflare account, with a project deploy token in Loams Secrets. Loams never installs, runs or hosts one, and never uses Void Cloud | 7.2 | Proposed |
-| D1783 | **The Loams Cloud control plane is a Vite+ package now. Void for it is a VV0 spike;** LC2a ships on `wrangler` unless the spike passes without delaying it | 8 | Proposed |
-| D1784 | **loams-site moves to Vite+ now, and to `void deploy` only when Void's vinext adapters are no longer experimental** | 9 | Proposed |
-| D1785 | **Cloudflare Void apps reach Loams Postgres, Loams SQL and TiDB Starter through Void's `pg` and `mysql` dialects on Hyperdrive,** over the customer's Tunnel for a private data plane (D1305, D1311) | 7.5 | Proposed |
-| D1786 | **The lock-in rules of §10:** portability lives in Loams' contract, never in Void; no Void Cloud; exact pins with the age rule and green lanes; Cloudflare-only apps are marked | 10 | Proposed |
-| D1787 | **A Void conformance lane:** the notes example as a portable Void app on Miniflare and Node in PRs, nightly on Cloudflare Free and AWS. A native example on Cloudflare. Toolchain bumps must pass these and the fallback lane | 11 | Proposed |
-| D1788 | **Phases VV0–VV3:** spikes; the toolchain; apps on Void within AB0 and AB1; options | 12 | Proposed |
-| D1789 | **Not built:** forks of Void or Vite+; a non-Cloudflare `void deploy` adapter in VV0–VV2; a hosted Void Platform; `vp run` in place of Nx; a Void-only default template; Void for the engine, data plane or native apps | 13 | Proposed |
+| D1771 | **Void is read as what it is:** an MIT framework whose deploy targets are only Cloudflare and a Void Platform on Cloudflare. "Every cloud" is met by Vite+ everywhere, Void authoring everywhere, `void deploy` on Cloudflare, and §71's shims and deploy for AWS, Google Cloud, Azure, Vercel and self-hosting. No Loams page claims Void deploys elsewhere | 1.3, 3.3 | Approved (owner, 2026-10-23) |
+| D1772 | **Vite+ in the monorepo:** each JavaScript package's targets call `vp check`, `vp test`, `vp build` or `vp pack`. Nx stays the orchestrator and Nx Cloud the cache. One exact `vite-plus` pin in the catalog, with `vite` aliased to `vite-plus-core` workspace-wide. Installed through npm, and `setup-vp` pinned by SHA | 5.1 | Approved (owner, 2026-10-23) |
+| D1773 | **Biome and ESLint give way to `vp check` (Oxlint and Oxfmt)** after a rule-parity table, with one formatting commit per workspace in `.git-blame-ignore-revs` | 5.2 | Approved (owner, 2026-10-23) |
+| D1774 | **Reversible in a day:** standard tool sections in `vite.config.ts`, and a weekly fallback lane on plain Vite, Rolldown and Vitest. Pin and, if needed, fork the last MIT release if either project is relicensed | 5.3 | Approved (owner, 2026-10-23) |
+| D1775 | **Node 24 LTS for JavaScript CI and `.nvmrc`** (`engines >=24.11`). Published SDK packages keep a Node 22 runtime floor, tested in one cell | 5.4 | Approved (owner, 2026-10-23) |
+| D1776 | **The desktop keeps electron-vite for its build** until electron-vite runs on `vite-plus-core`. It uses `vp test` and `vp check` now | 5.5 | Approved (owner, 2026-10-23) |
+| D1777 | **Everything the Factory, Studio and templates scaffold is a Vite+ project.** Their generated CI runs `vp install --frozen-lockfile`, `vp check`, `vp test` and `vp build`, which the Factory's CI stage waits on | 5.6 | Approved (owner, 2026-10-23) |
+| D1778 | **Void is the authoring layer for Loams web apps, portable by default:** no Void Cloudflare-only imports, state through `@loams/app` ports and `env.loams`, enforced by lint. A Cloudflare-native app opts in with `[app.targets] allow = ["cloudflare"]` | 6 | Approved (owner, 2026-10-23) |
+| D1779 | **Cloudflare deploys of Void apps go through `void deploy --platform cloudflare`** into the customer's own account, driven by `loams app deploy`: cost guards first, a generated `void.config.ts` overlay, a `loams.deploy.v1` record, `void project rollback` for rollback. Non-Void apps keep `wrangler` | 7.1 | Approved (owner, 2026-10-23) |
+| D1780 | **AWS, Google Cloud, Azure and Vercel run Void's `node` build:** Loams' shims wrap `dist/ssr/app.js`, call `crons/` handlers from `scheduled`, and map §71's `queue`. D1406's OpenTofu and the Vercel CLI deploy it. Bundling moves from esbuild to Vite+ (Rolldown). *Amended the same day by D1791: Cloud Run and other container targets run the Bun-compiled binary; the managed function runtimes keep `node`* | 7.3 | Approved (owner, 2026-10-23) |
+| D1781 | **Self-hosting runs Void's `node` build as an OCI image** in the compose `apps` profile on the ground. Void's Cloudflare build on Loams Functions (workerd) is a later option (Q1308). *Amended the same day by D1791: the image runs the Bun-compiled binary, with `node` as the fallback* | 7.4 | Approved (owner, 2026-10-23) |
+| D1782 | **A `void-platform` target:** deploy into a Void Platform that the customer installed in its own Cloudflare account, with a project deploy token in Loams Secrets. Loams never installs, runs or hosts one, and never uses Void Cloud | 7.2 | Approved (owner, 2026-10-23) |
+| D1783 | **The Loams Cloud control plane is a Vite+ package now. Void for it is a VV0 spike;** LC2a ships on `wrangler` unless the spike passes without delaying it | 8 | Approved (owner, 2026-10-23) |
+| D1784 | **loams-site moves to Vite+ now, and to `void deploy` only when Void's vinext adapters are no longer experimental** | 9 | Approved (owner, 2026-10-23) |
+| D1785 | **Cloudflare Void apps reach Loams Postgres, Loams SQL and TiDB Starter through Void's `pg` and `mysql` dialects on Hyperdrive,** over the customer's Tunnel for a private data plane (D1305, D1311) | 7.5 | Approved (owner, 2026-10-23) |
+| D1786 | **The lock-in rules of §10:** portability lives in Loams' contract, never in Void; no Void Cloud; exact pins with the age rule and green lanes; Cloudflare-only apps are marked | 10 | Approved (owner, 2026-10-23) |
+| D1787 | **A Void conformance lane:** the notes example as a portable Void app on Miniflare and Node in PRs, nightly on Cloudflare Free and AWS. A native example on Cloudflare. Toolchain bumps must pass these and the fallback lane | 11 | Approved (owner, 2026-10-23) |
+| D1788 | **Phases VV0–VV3:** spikes; the toolchain; apps on Void within AB0 and AB1; options | 12 | Approved (owner, 2026-10-23) |
+| D1789 | **Not built:** forks of Void or Vite+; a non-Cloudflare `void deploy` adapter in VV0–VV2; a hosted Void Platform; `vp run` in place of Nx; a Void-only default template; Void for the engine, data plane or native apps | 13 | Approved (owner, 2026-10-23) |
+| D1790 | **Loams doesn't support Deno** as a runtime or deploy target: Void's `deno` target is unused, Deno Deploy isn't documented, and docs no longer list Deno. The SDK may keep working on Deno at no cost, but it isn't tested or claimed. Users get the [Deno to Bun guide](../guides/migrate-deno-to-bun.md). Reason: Deno's team ends runtime development after a year and shuts down Deno Deploy in about six months (§3.8) | 7.7 | **Approved (owner, 2026-10-23)** |
+| D1791 | **Bun, compiled ahead of time, runs the self-hosted and container targets, and the server output of Void apps,** where it works: Void's `target: "bun"`, then `bun build --compile --bytecode --minify --sourcemap --format=esm` for one binary per app, pinned to one Bun version. The fallback is `bun run` or Void's `node` build, for unembeddable native addons, code that reads files beside itself, failed compatibility, and managed function runtimes. Amends D1780, D1781 and Q1308's answer | 7.6 | **Approved (owner, 2026-10-23)** |
+| D1792 | **Small Loams TypeScript CLIs and tools ship as Bun-compiled binaries,** cross-compiled for the eight targets. The Factory host is first | 7.6 | Proposed |
+| D1793 | **The images of apps the Factory builds use the compiled-Bun image,** as do marketplace agents of runtime `binary` | 7.6 | Proposed |
+| D1794 | **Distributed Bun binaries meet LGPL-2:** a JavaScriptCore and WebKit notice, a pointer to `oven-sh/webkit` at the pinned version, and the app's source for rebuilding. Counsel checks before the first release (Q1312) | 7.6 | Proposed |
+| D1795 | **A Bun conformance lane:** the notes example compiled with Bun, in compose in PRs and nightly on Cloud Run, reporting startup and size against the `node` build | 7.6, 11 | Proposed |
 
-### 15.2 Open questions (Q1300–Q1310), each with a recommended default
+### 15.2 Open questions (Q1300–Q1313)
+
+Q1300–Q1310 were answered by the owner on 2026-10-23 with every default. Q1311–Q1313 are open.
 
 | # | Question | Recommended default |
 |---|---|---|
-| Q1300 | New Factory and Studio web apps: portable Void app, or Cloudflare-native Void app? | **Portable** (Void routes and pages, with `@loams/app` ports). Cloudflare-native is a choice at creation |
-| Q1301 | Replace Biome (and ESLint in `plugins/`) with Oxlint and Oxfmt through `vp check`, in the monorepo and loams-site? | **Yes,** after a rule-parity table, with one formatting commit per workspace |
-| Q1302 | Nx or `vp run` as the monorepo task runner? | **Nx,** because the repository is polyglot. `vp` runs inside each package's targets |
-| Q1303 | Node 24 for JavaScript CI and `.nvmrc`? | **Yes, Node 24 LTS.** SDK packages keep a Node 22 runtime floor |
-| Q1304 | The Loams Cloud control plane on Void? | **A VV0 spike. LC2a ships on `wrangler`;** switch only if the spike passes and LC2a isn't delayed |
-| Q1305 | loams-site on Void? | **Vite+ now. Void when its vinext adapters leave experimental** |
-| Q1306 | Offer a `void-platform` target (deploy into a customer's own Void Platform)? | **Yes, in AB2,** as a documented target and recipe. Loams never hosts one |
-| Q1307 | Propose a non-Cloudflare deploy adapter (Node, containers, other clouds) to Void upstream? | **Not now.** Open an upstream discussion after VV2, with the shim findings |
-| Q1308 | The self-host runtime for Void apps: a `node` container, or Void's Cloudflare build on Loams Functions (workerd)? | **A `node` container now.** Try workerd after §24's F1 and a spike |
-| Q1309 | A weekly fallback lane on plain Vite, Rolldown and Vitest? | **Yes,** weekly, for the console and `@loams/ui` only |
-| Q1310 | Vercel: Void's `node` output through Loams' shim and the Build Output API, or Vercel's own framework detection? | **Loams' shim and the Build Output API** (D1406), so every target uses the same artefact |
+| Q1300 | ~~New Factory and Studio web apps: portable Void app, or Cloudflare-native Void app?~~ | ~~**Portable** (Void routes and pages, with `@loams/app` ports). Cloudflare-native is a choice at creation~~ **Answered 2026-10-23 by the owner: the default.** |
+| Q1301 | ~~Replace Biome (and ESLint in `plugins/`) with Oxlint and Oxfmt through `vp check`, in the monorepo and loams-site?~~ | ~~**Yes,** after a rule-parity table, with one formatting commit per workspace~~ **Answered 2026-10-23 by the owner: the default.** |
+| Q1302 | ~~Nx or `vp run` as the monorepo task runner?~~ | ~~**Nx,** because the repository is polyglot. `vp` runs inside each package's targets~~ **Answered 2026-10-23 by the owner: the default.** |
+| Q1303 | ~~Node 24 for JavaScript CI and `.nvmrc`?~~ | ~~**Yes, Node 24 LTS.** SDK packages keep a Node 22 runtime floor~~ **Answered 2026-10-23 by the owner: the default.** |
+| Q1304 | ~~The Loams Cloud control plane on Void?~~ | ~~**A VV0 spike. LC2a ships on `wrangler`;** switch only if the spike passes and LC2a isn't delayed~~ **Answered 2026-10-23 by the owner: the default.** |
+| Q1305 | ~~loams-site on Void?~~ | ~~**Vite+ now. Void when its vinext adapters leave experimental**~~ **Answered 2026-10-23 by the owner: the default.** |
+| Q1306 | ~~Offer a `void-platform` target (deploy into a customer's own Void Platform)?~~ | ~~**Yes, in AB2,** as a documented target and recipe. Loams never hosts one~~ **Answered 2026-10-23 by the owner: the default.** |
+| Q1307 | ~~Propose a non-Cloudflare deploy adapter (Node, containers, other clouds) to Void upstream?~~ | ~~**Not now.** Open an upstream discussion after VV2, with the shim findings~~ **Answered 2026-10-23 by the owner: the default.** |
+| Q1308 | ~~The self-host runtime for Void apps: a `node` container, or Void's Cloudflare build on Loams Functions (workerd)?~~ | ~~**A `node` container now.** Try workerd after §24's F1 and a spike~~ **Answered 2026-10-23 by the owner: the default.** Superseded the same day by D1791: the compiled Bun image is the default, and `node` is the fallback. |
+| Q1309 | ~~A weekly fallback lane on plain Vite, Rolldown and Vitest?~~ | ~~**Yes,** weekly, for the console and `@loams/ui` only~~ **Answered 2026-10-23 by the owner: the default.** |
+| Q1310 | ~~Vercel: Void's `node` output through Loams' shim and the Build Output API, or Vercel's own framework detection?~~ | ~~**Loams' shim and the Build Output API** (D1406), so every target uses the same artefact~~ **Answered 2026-10-23 by the owner: the default.** |
+| Q1311 | AWS: a Bun-compiled binary on a Lambda custom runtime, or Node's managed runtime? | **Node's managed runtime.** Try Bun only if VV0 Task 8 shows a cold-start gain worth a custom runtime |
+| Q1312 | Counsel review of the LGPL-2 obligations (JavaScriptCore) before Loams distributes its first Bun-compiled binary? | **Yes,** before the first release. Images built in a customer's own account aren't distributed by Ostrium |
+| Q1313 | Which Loams CLI is Bun-compiled first? | **The Factory host** (`bin/factory-acp.js`, §72), then any new TypeScript tool. Existing Rust CLIs are unchanged |
 
 ---
 
@@ -590,3 +706,14 @@ VV1 can start right after the owner approves. It doesn't block 0.1.x work, and i
 - designs 70, 71, 72, 73 and 78.
 
 **loams-site, `main`:** `package.json` and `wrangler.jsonc`.
+
+**Bun** (`oven-sh/bun`, read through the GitHub API and bun.com):
+- `docs/bundler/executables.mdx`, `docs/bundler/bytecode.mdx`, `docs/runtime/cron.mdx`, `docs/pm/npmrc.mdx` and `docs/runtime/module-resolution.mdx`;
+- `LICENSE.md` (MIT, with JavaScriptCore and WebKit under LGPL-2);
+- the releases 1.4.0–1.4.4, and the posts [Bun v1.4.0](https://bun.com/blog/bun-v1.4.0) and [Bun v1.4.3](https://bun.com/blog/bun-v1.4.3).
+
+**Deno:**
+- [Deno is joining Cloudflare](https://deno.com/blog/cloudflare) (Ryan Dahl, 2026-10-09);
+- [Cloudflare's post](https://blog.cloudflare.com/deno-joins-cloudflare/) (Ryan Dahl and Kenton Varda, 2026-10-09);
+- [Deno Deploy's migration guide](https://docs.deno.com/deploy/migration_guide/);
+- [JSR: using packages](https://jsr.io/docs/using-packages).
