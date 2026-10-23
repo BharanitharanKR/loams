@@ -26,3 +26,22 @@ Zero stays attractive, because Ostrium would hold no tenant SQL at all. Revisit 
 3. Open `claimInfo.claimUrl`, sign in to the no-card LC0 organization, and click **Claim**. Run the activation instruction it gives.
 4. Confirm the instance shows up as Starter and the row survived. Record whether the host or credentials changed, whether the claim used one of the 5 free slots, and the spending limit it got.
 5. Delete the instance. Optionally, email zero@pingcap.com to ask whether Loams Cloud may create Zero databases for its users and hand them the claim link, and what rate limits apply.
+
+## 7. Task 6: the company-device check
+
+**Not run.** It needs a managed-like macOS or Windows laptop: a user account without admin rights, behind an HTTPS proxy with a re-signing CA. No agent has one. The table is §78 §10's, row by row, with what LC0 could establish without that laptop and the check the owner runs. Every row's verdict waits for that run.
+
+| §10 row | Established without the laptop | The check on the laptop |
+|---|---|---|
+| Admin rights: none, a per-user service (D784) | — | Install Loams Desktop's per-user daemon as the standard user. Pass: no UAC, sudo or Authorization Services prompt, and a LaunchAgent or HKCU Run entry rather than a system service |
+| Network client: outbound 443 only | Task 3: the control plane is a Worker on `workers.dev`, reached over HTTPS and WSS on 443 only | Set `HTTPS_PROXY` to the re-signing proxy (for example mitmproxy, its CA in the OS store). Pass: the daemon's WebSocket and HTTPS calls go through the proxy and succeed |
+| MySQL over TLS on 4000 through the proxy, or the HTTP fallback | Task 1: MySQL/TLS on 4000 needs a raw TCP path. An HTTP proxy carries it only by `CONNECT` to port 4000, which most corporate proxies refuse (they allow 443). Task 3: the HTTP driver (`@tidbcloud/serverless`) works over 443 | Run `mysql --ssl-mode=VERIFY_IDENTITY -h gateway01.us-east-1.prod.aws.tidbcloud.com -P 4000` through the proxy, then the HTTP-driver call. Expected: MySQL fails and HTTP passes. Then the fallback must be automatic |
+| The corporate CA from the OS store | — | With the proxy re-signing, the daemon must trust its CA from the OS store (Keychain, the Windows store) without a flag, and pin only `auth.loams.dev`'s issuer, never a leaf |
+| Inbound: none, except loopback | — | `lsof -iTCP -sTCP:LISTEN` (macOS) or `Get-NetTCPConnection -State Listen` (Windows). Pass: only `127.0.0.1` or `::1` |
+| Existing corporate Tailscale untouched; `tsnet` joins a second tailnet | Report §4.3: a device is on one tailnet at a time (V) | With the system Tailscale client on tailnet A, start a test daemon with `tsnet` on tailnet B (`TS_AUTHKEY` for B). Pass: the system client stays on A, the daemon's node appears in B, and the two reach their own peers only |
+| Data leaving the device: off for `--work` | — | Enrol with `--work`. Pass: no transcript, workspace or SQL upload is attempted (proxy log) |
+| Background activity, telemetry | — | No wake locks; the tray icon shows running agents; no telemetry hosts in the proxy log |
+| Removal | — | `loams cloud device remove`, then uninstall. Pass: the per-user files listed in §50 §5 are gone and the login item is removed |
+| MDM key `CloudSync=off` | — | Deferred to LC2 (§10) |
+
+**What blocks it:** the per-user daemon exists in Loams Desktop (D784), but `loams cloud device add` and the device link are LC2 work. Before LC2 the laptop run can check only the rows that need no control plane: admin rights, the proxy and CA for HTTPS, MySQL versus HTTP through the proxy, the listeners, `tsnet`, and removal. **Recommendation:** run those six on the owner's work-like laptop before LC2's device link is built, and the rest as part of LC2's exit.
