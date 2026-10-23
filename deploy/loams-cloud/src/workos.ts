@@ -20,6 +20,40 @@ export interface WorkOsMfa {
   verify(challengeId: string, code: string): Promise<boolean>;
 }
 
+/**
+ * An application-wide invitation (§25.1: no organisation). We keep only `id`,
+ * `state`, `expires_at` and `accepted_user_id`; WorkOS's `token` and
+ * `accept_invitation_url` are dropped on read and never stored (D1739).
+ */
+export interface Invitation {
+  id: string;
+  state: "pending" | "accepted" | "expired" | "revoked";
+  expiresAt: number;
+  acceptedUserId: string | null;
+}
+
+export interface WorkOsInvitations {
+  createInvitation(email: string, expiresInDays: number): Promise<Invitation>;
+  /** The pending invitation for this address, if one exists: lets a retried create adopt it. */
+  findPendingInvitation(email: string): Promise<Invitation | null>;
+  getInvitation(id: string): Promise<Invitation>;
+  revokeInvitation(id: string): Promise<Invitation>;
+  /** Resends the email; WorkOS keeps the token and the expiry (R-LC2a-5.6). */
+  resendInvitation(id: string): Promise<Invitation>;
+}
+
+interface RawInvitation {
+  id: string;
+  email?: string;
+  state: Invitation["state"];
+  expires_at: string;
+  accepted_user_id?: string | null;
+}
+
+function invitationOf(r: RawInvitation): Invitation {
+  return { id: r.id, state: r.state, expiresAt: Date.parse(r.expires_at), acceptedUserId: r.accepted_user_id ?? null };
+}
+
 export class WorkOsError extends Error {
   readonly status: number;
   readonly code?: string;
@@ -30,7 +64,7 @@ export class WorkOsError extends Error {
   }
 }
 
-export class HttpWorkOs implements WorkOsMfa {
+export class HttpWorkOs implements WorkOsMfa, WorkOsInvitations {
   private readonly apiKey: string;
   private readonly base: string;
   private readonly fetchFn: typeof fetch;
@@ -87,5 +121,27 @@ export class HttpWorkOs implements WorkOsMfa {
       if (e instanceof WorkOsError && (e.status === 400 || e.status === 422)) return false;
       throw e;
     }
+  }
+
+  async createInvitation(email: string, expiresInDays: number): Promise<Invitation> {
+    return invitationOf(await this.request<RawInvitation>("POST", "/user_management/invitations", { email, expires_in_days: expiresInDays }));
+  }
+
+  async findPendingInvitation(email: string): Promise<Invitation | null> {
+    const r = await this.request<{ data: RawInvitation[] }>("GET", `/user_management/invitations?email=${encodeURIComponent(email)}&limit=100`);
+    const pending = r.data.filter((i) => i.state === "pending" && (i.email ?? email).toLowerCase() === email.toLowerCase());
+    return pending.length ? invitationOf(pending[0]) : null;
+  }
+
+  async getInvitation(id: string): Promise<Invitation> {
+    return invitationOf(await this.request<RawInvitation>("GET", `/user_management/invitations/${encodeURIComponent(id)}`));
+  }
+
+  async revokeInvitation(id: string): Promise<Invitation> {
+    return invitationOf(await this.request<RawInvitation>("POST", `/user_management/invitations/${encodeURIComponent(id)}/revoke`, {}));
+  }
+
+  async resendInvitation(id: string): Promise<Invitation> {
+    return invitationOf(await this.request<RawInvitation>("POST", `/user_management/invitations/${encodeURIComponent(id)}/resend`, {}));
   }
 }

@@ -2,7 +2,7 @@
 // token issuer with its own RSA key and JWKS. Nothing here reaches WorkOS.
 
 import { JwtVerifier, type Jwk } from "../../src/jwt.ts";
-import type { TotpEnrolment, WorkOsMfa } from "../../src/workos.ts";
+import { WorkOsError, type Invitation, type TotpEnrolment, type WorkOsInvitations, type WorkOsMfa } from "../../src/workos.ts";
 
 const enc = new TextEncoder();
 
@@ -79,5 +79,76 @@ export class FakeMfa implements WorkOsMfa {
     if (!c || c.used) return false;
     c.used = true;
     return this.codes.get(c.factorId) === code;
+  }
+}
+
+/**
+ * WorkOS's invitations, recorded: application-wide, `pending` until accepted,
+ * revoked or expired; resend keeps the token and expiry (R-LC2a-5.6); revoke and
+ * resend are refused unless pending. `loseNextCreateResponse` creates the
+ * invitation and then throws, as a lost response would.
+ */
+export class FakeInvitations implements WorkOsInvitations {
+  private n = 0;
+  readonly invitations = new Map<string, { id: string; email: string; state: Invitation["state"]; expiresAt: number; acceptedUserId: string | null; resent: number }>();
+  readonly calls: string[] = [];
+  readonly now: () => number;
+  failNextCreate = 0;
+  loseNextCreateResponse = false;
+  constructor(now: () => number) {
+    this.now = now;
+  }
+
+  private view(id: string): Invitation {
+    const i = this.invitations.get(id);
+    if (!i) throw new WorkOsError(404, "WorkOS: 404 entity_not_found", "entity_not_found");
+    if (i.state === "pending" && i.expiresAt <= this.now()) i.state = "expired";
+    return { id: i.id, state: i.state, expiresAt: i.expiresAt, acceptedUserId: i.acceptedUserId };
+  }
+
+  createdFor(email: string): number {
+    return [...this.invitations.values()].filter((i) => i.email === email).length;
+  }
+
+  async createInvitation(email: string, expiresInDays: number): Promise<Invitation> {
+    this.calls.push(`create ${email}`);
+    if (this.failNextCreate > 0) {
+      this.failNextCreate--;
+      throw new WorkOsError(503, "WorkOS POST /user_management/invitations: 503");
+    }
+    const id = `invitation_${String(++this.n).padStart(20, "0")}`;
+    this.invitations.set(id, { id, email, state: "pending", expiresAt: this.now() + expiresInDays * 86_400_000, acceptedUserId: null, resent: 0 });
+    if (this.loseNextCreateResponse) {
+      this.loseNextCreateResponse = false;
+      throw new Error("The operation was aborted due to timeout");
+    }
+    return this.view(id);
+  }
+  async findPendingInvitation(email: string): Promise<Invitation | null> {
+    this.calls.push(`find ${email}`);
+    for (const i of this.invitations.values()) if (i.email === email && this.view(i.id).state === "pending") return this.view(i.id);
+    return null;
+  }
+  async getInvitation(id: string): Promise<Invitation> {
+    this.calls.push(`get ${id}`);
+    return this.view(id);
+  }
+  async revokeInvitation(id: string): Promise<Invitation> {
+    this.calls.push(`revoke ${id}`);
+    if (this.view(id).state !== "pending") throw new WorkOsError(400, "WorkOS: 400 invite_not_pending", "invite_not_pending");
+    this.invitations.get(id)!.state = "revoked";
+    return this.view(id);
+  }
+  async resendInvitation(id: string): Promise<Invitation> {
+    this.calls.push(`resend ${id}`);
+    if (this.view(id).state !== "pending") throw new WorkOsError(400, "WorkOS: 400 invite_not_pending", "invite_not_pending");
+    this.invitations.get(id)!.resent++;
+    return this.view(id);
+  }
+  /** The person accepts in AuthKit. */
+  accept(id: string, userId: string): void {
+    const i = this.invitations.get(id)!;
+    i.state = "accepted";
+    i.acceptedUserId = userId;
   }
 }
