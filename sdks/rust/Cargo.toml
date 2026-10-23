@@ -61,6 +61,8 @@ documentation = "https://docs.rs/loams"
 readme = "README.md"
 keywords = ["loams", "connect", "grpc", "sdk", "client"]
 categories = ["api-bindings", "database"]
+# The test-only RSA key the `machine-key` unit tests sign with stays out of the package.
+exclude = ["tests/data/test-only-rsa-key.pem"]
 # Published by .github/workflows/sdk-release.yml on a release tag, and only when
 # the repository variable SDK_PUBLISH_CRATES is `true` (the owner sets it once
 # the crates.io trusted publisher is configured). The version is the release's,
