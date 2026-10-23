@@ -195,7 +195,7 @@ Commit: `docs(lc0): the LC0 report`.
 > **The first LC phase that users see.** It covers the owner's rulings of 2026-10-23:
 > - invite-only (D1736);
 > - WorkOS AuthKit for the hosted try-out (D1750);
-> - the sign-in policy: Google, GitHub, Microsoft, or a work-email code (D1751; Microsoft added the same day). Sign in with Apple is Proposed and off by default (D1758, Q1297).
+> - the sign-in policy: Google, GitHub, Microsoft, or a work-email code (D1751; Microsoft added the same day). Sign in with Apple is rejected for now (D1758, owner, 2026-10-23).
 >
 > **Status: Approved** (owner, 2026-10-23, all defaults): D1736–D1751 and Q1278–Q1296. The design is [§78 §25](../design/78-loams-cloud-on-tidb-x.md#25-invite-only-access-workos-authkit-and-the-sign-in-policy-d1736d1757-owner-amendments-of-2026-10-23). D1752–D1757 stay **Proposed** until the owner confirms them; the owner's message named D1736–D1751. **No LC2a code starts until the owner hands over the credentials listed under "Owner steps and credentials" below.**
 >
@@ -258,9 +258,8 @@ Commit: `docs(lc0): the LC0 report`.
 | `github_allowed_when_30_days_old` | A GitHub sign-in is allowed when the account is at least 30 days old |
 | `microsoft_personal_account_allowed` | A Microsoft sign-in with an `outlook.com`, `hotmail.com` or `live.com` account is allowed, even though those domains are blocked for email codes |
 | `microsoft_work_account_uses_email_code` | A work or school (Entra) account isn't offered through Microsoft OAuth (WorkOS requires "Personal Microsoft accounts only"); the same person signs in with a work-email code |
-| `apple_disabled_by_default` | With D1758 undecided, `AppleOAuth` is off in AuthKit, and an `AppleOAuth` success is denied by the action, refused at the callback, and suspended by reconciliation |
+| `apple_refused_everywhere` | `AppleOAuth` is off in AuthKit (rejected for now, D1758), and an `AppleOAuth` success is denied by the action, refused at the callback, and suspended by reconciliation |
 | `apple_private_relay_never_valid_for_email_code` | A Magic Auth sign-in at `privaterelay.appleid.com` is refused |
-| `apple_private_relay_accepted_when_enabled` | Behind a test flag standing for D1758 approved: an Apple sign-in with a relay address creates the account, records the relay address and the invite address, and mail to it is addressed through the relay |
 | `github_too_new_refused_without_spending_invite` | Under 30 days: `IDP_ACCOUNT_TOO_NEW`; the waitlist invite stays open, and a fresh WorkOS invitation is sent |
 | `magic_auth_work_domain_allowed` | A work-email code is allowed for a domain on no list, with an MX record |
 | `magic_auth_free_mail_refused` | One case per named family (`gmail.com`, `googlemail.com`, `outlook.com`, `hotmail.com`, `live.com`, `yahoo.co.uk`, `icloud.com`, `me.com`, `proton.me`, `protonmail.com`, `aol.com`, `gmx.de`, `mail.ru`, `yandex.ru`, `qq.com`, `163.com`) is refused at the registration action, the authentication action and the callback |
@@ -271,7 +270,7 @@ Commit: `docs(lc0): the LC0 report`.
 | `passkey_refused_everywhere` | The same for `Passkey` |
 | `sso_refused_everywhere` | The same for `SSO` |
 | `other_social_refused` | GitLab, LinkedIn, Bitbucket or Xero OAuth is refused |
-| `provider_age_rule_is_github_only` | Google, Microsoft (and Apple when enabled) sign-ins are not age-checked; GitHub's is |
+| `provider_age_rule_is_github_only` | Google and Microsoft sign-ins are not age-checked; GitHub's is |
 | `reconciliation_catches_dashboard_mistake` | With the actions endpoint down (fail-open forced in a test double), a `authentication.password_succeeded` event suspends the account and revokes its sessions within one reader cycle |
 | `waitlist_accepts_free_mail_but_not_disposable` | The waitlist rule (D1753) |
 | `waitlist_copy_explains_rule` | A snapshot test of the form copy in §25.4 (in loams-site) |
@@ -282,7 +281,7 @@ Check each item and record the answer in "Rulings made during execution". Where 
 
 - **WorkOS**, in the staging environment the owner creates:
   1. which authentication methods can be switched off on the free tier (password, passkeys, other social providers), and that Microsoft OAuth with our own Entra app ("Personal Microsoft accounts only") has no per-provider charge;
-  1. whether Google, Microsoft or Apple expose any account-age signal through WorkOS (expected: none), and Apple's `idp_id` format;
+  1. whether Google or Microsoft expose any account-age signal through WorkOS (expected: none);
   2. the setting that disables sign-up while invitations still work;
   3. whether the action context names the authentication method or provider;
   4. the `authentication_method` values for Google and GitHub OAuth;
@@ -388,7 +387,7 @@ Commit: `loams-cloud: WorkOS invitations, resend and revoke (LC2a Task 5)`.
 ### Task 6 — WorkOS configuration and the actions
 
 - **The checklist**, `deploy/loams-cloud/workos/CHECKLIST.md`, for the owner to apply in the dashboard:
-  - production: Google OAuth, GitHub OAuth, **Microsoft OAuth** (the owner's own Entra app registration, "Personal Microsoft accounts only"; its client secret's expiry, at most 24 months, goes in the owner's calendar) and Magic Auth **on**; **Apple off** until D1758; everything else **off**; sign-up **disabled**;
+  - production: Google OAuth, GitHub OAuth, **Microsoft OAuth** (the owner's own Entra app registration, "Personal Microsoft accounts only"; its client secret's expiry, at most 24 months, goes in the owner's calendar) and Magic Auth **on**; **Apple off** (rejected for now, D1758); everything else **off**; sign-up **disabled**;
   - AuthKit's MFA **off**;
   - the redirect URI `https://api.loams.dev/cloud/v1/auth/callback`;
   - the actions endpoints, with **fail closed** for both;
