@@ -77,6 +77,7 @@ CREATE TABLE IF NOT EXISTS invites (
   email_hmac            CHAR(64)     NOT NULL,
   workos_invitation_id  VARCHAR(64)  NULL,                         -- set once WorkOS has created it
   state                 VARCHAR(16)  NOT NULL,                     -- queued | pending | accepted | expired | revoked | failed
+  open_key              VARCHAR(40)  NULL,                         -- = waitlist_id while queued, pending or accepted; NULL once closed
   expires_in_days       TINYINT      NOT NULL,                     -- 1..30, default 14
   expires_ms            BIGINT       NULL,                         -- WorkOS's expires_at, once sent
   resend_count          TINYINT      NOT NULL DEFAULT 0,           -- at most 3 (D1747)
@@ -88,6 +89,7 @@ CREATE TABLE IF NOT EXISTS invites (
   updated_ms            BIGINT       NOT NULL,
   UNIQUE KEY uk_invites_workos (workos_invitation_id),
   UNIQUE KEY uk_invites_batch_entry (batch_key, waitlist_id),
+  UNIQUE KEY uk_invites_open (open_key),                           -- at most one open invite per entry (NULLs don't collide)
   KEY k_invites_waitlist (waitlist_id),
   KEY k_invites_email (email_hmac),
   KEY k_invites_state_created (state, created_ms)
@@ -145,6 +147,18 @@ CREATE TABLE IF NOT EXISTS idempotency_keys (
   created_ms     BIGINT       NOT NULL,
   PRIMARY KEY (scope, idem_key),
   KEY k_idem_created (created_ms)
+);
+
+-- The shared daily email budget (D1738, Q1288; R-LC2a-4: Resend Free sends 100 a
+-- day across WorkOS's mail and ours). One row per UTC day and kind, plus a
+-- 'total' row. A send reserves with a guarded increment; a retried increment
+-- over-counts, which errs on the safe side.
+CREATE TABLE IF NOT EXISTS email_budget (
+  day         CHAR(10)    NOT NULL,                               -- YYYY-MM-DD, UTC
+  kind        VARCHAR(16) NOT NULL,                               -- total | invite | waitlist
+  n           INT         NOT NULL DEFAULT 0,
+  updated_ms  BIGINT      NOT NULL,
+  PRIMARY KEY (day, kind)
 );
 
 -- Audit events (D1748): CloudEvents under dev.loams.cloud.*, with ids and HMACs

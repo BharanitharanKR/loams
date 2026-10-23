@@ -6,7 +6,7 @@ import { freshDatabase, loadMigrations, skipNoTidb } from "./harness/tidb.ts";
 
 const TABLES = [
   "schema_migrations", "waitlist", "waitlist_tokens", "waitlist_suppressed", "invites", "accounts",
-  "workos_events_cursor", "admin_mfa_factors", "admin_step_ups", "idempotency_keys", "audit",
+  "workos_events_cursor", "admin_mfa_factors", "admin_step_ups", "idempotency_keys", "email_budget", "audit",
 ];
 
 describe("schema text", () => {
@@ -91,6 +91,17 @@ describe("schema on TiDB", { skip: skipNoTidb }, () => {
     await assert.rejects(sql.execute("UPDATE invites SET workos_invitation_id = 'invitation_1' WHERE id = 'inv_c'"), /Duplicate entry/);
   });
 
+  test("one_open_invite_per_entry", async () => {
+    const ins = "INSERT IGNORE INTO invites (id, waitlist_id, email_hmac, state, open_key, expires_in_days, created_by, batch_key, created_ms, updated_ms) VALUES (?, ?, ?, ?, ?, 14, 'user_admin', ?, ?, ?)";
+    assert.equal((await sql.execute(ins, ["inv_o1", "wl_9", "f".repeat(64), "queued", "wl_9", "k2", now, now])).rowsAffected, 1);
+    // A second open invite for the same entry, from another batch, is refused.
+    assert.equal((await sql.execute(ins, ["inv_o2", "wl_9", "f".repeat(64), "queued", "wl_9", "k3", now, now])).rowsAffected, 0);
+    // Once the first is closed, a new one may open; closed ones don't collide.
+    await sql.execute("UPDATE invites SET state = 'revoked', open_key = NULL WHERE id = 'inv_o1'");
+    assert.equal((await sql.execute(ins, ["inv_o3", "wl_9", "f".repeat(64), "queued", "wl_9", "k4", now, now])).rowsAffected, 1);
+    assert.equal((await sql.execute(ins, ["inv_o4", "wl_9", "f".repeat(64), "revoked", null, "k5", now, now])).rowsAffected, 1);
+  });
+
   test("no_plaintext_email_column_outside_enc", async () => {
     const r = await sql.execute(
       "SELECT table_name AS t, column_name AS c, data_type AS d FROM information_schema.columns WHERE table_schema = DATABASE()",
@@ -108,7 +119,7 @@ describe("schema on TiDB", { skip: skipNoTidb }, () => {
     const text = cols.filter((x) => ["varchar", "text", "mediumtext", "json"].includes(x.d) && !/_(enc|hmac|id|ms)$|^id$/.test(x.c));
     const allowed = new Set([
       "schema_migrations.name", "waitlist.status", "waitlist.build", "waitlist.source", "waitlist.source_other",
-      "waitlist_tokens.kind", "waitlist_suppressed.reason", "invites.state", "invites.created_by", "invites.batch_key",
+      "waitlist_tokens.kind", "waitlist_suppressed.reason", "invites.state", "invites.open_key", "invites.created_by", "invites.batch_key", "email_budget.day", "email_budget.kind",
       "accounts.status", "admin_step_ups.sid", "workos_events_cursor.feed", "workos_events_cursor.after", "idempotency_keys.scope",
       "idempotency_keys.idem_key", "idempotency_keys.response_json", "audit.type", "audit.actor", "audit.subject", "audit.detail",
     ]);
