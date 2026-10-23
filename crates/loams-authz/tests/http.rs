@@ -12,7 +12,7 @@ use axum::http::{Method, StatusCode};
 use axum::middleware::{Next, from_fn, from_fn_with_state};
 use axum::response::Response;
 use axum::routing::{delete, get};
-use loams_authz::http::{DecisionLog, DecisionRecord, Declared, Enforcer, Need, enforce};
+use loams_authz::http::{DecisionLog, DecisionRecord, Declared, Enforcer, Need, enforce, segments};
 use loams_authz::{
     Authorizer, AuthzError, CheckRequest, Consistency, Decision, ObjectRef, RecordingAuthorizer,
     Result, Subject,
@@ -44,7 +44,8 @@ impl Authorizer for Model {
 }
 
 fn routes(m: &Method, path: &str) -> Option<Declared> {
-    let seg: Vec<&str> = path.trim_matches('/').split('/').collect();
+    let seg = segments(path)?;
+    let seg: Vec<&str> = seg.iter().map(String::as_str).collect();
     let dep = |id: &str| ObjectRef::new("deployment", id);
     match (m, seg.as_slice()) {
         (&Method::GET, ["healthz"]) => Some(Declared::Public),
@@ -176,12 +177,20 @@ async fn public_and_authenticated_routes() {
 }
 
 #[tokio::test]
-async fn allow_passes_through_and_deny_is_403() {
+async fn allow_passes_through() {
     let a = app();
     assert_eq!(
         call(&a, Method::GET, "/deployments/dev-web", Some("agent:a1")).await,
         StatusCode::OK
     );
+    let r = a.authz.records();
+    assert_eq!(r.len(), 1);
+    assert!(r[0].decision.as_ref().unwrap().allowed);
+}
+
+#[tokio::test]
+async fn deny_is_403() {
+    let a = app();
     assert_eq!(
         call(&a, Method::GET, "/deployments/prod-web", Some("agent:a1")).await,
         StatusCode::FORBIDDEN
@@ -237,7 +246,7 @@ fn need_rejects_non_can_relation() {
 }
 
 #[tokio::test]
-async fn decision_log_records_allows_and_denials() {
+async fn decision_log_records_denials() {
     let a = app();
     call(&a, Method::GET, "/deployments/dev-web", Some("agent:a1")).await;
     call(&a, Method::GET, "/deployments/prod-web", Some("agent:a1")).await;
@@ -264,4 +273,65 @@ async fn decision_log_records_allows_and_denials() {
         Some("m1")
     );
     assert_eq!(log[1].subject, Subject::agent("a1"));
+}
+
+#[tokio::test]
+async fn percent_encoded_id_is_checked_decoded() {
+    let a = app();
+    // `%2D` is `-`: axum's `Path` hands the handler `dev-web`, so the check must name it too.
+    assert_eq!(
+        call(&a, Method::GET, "/deployments/dev%2Dweb", Some("agent:a1")).await,
+        StatusCode::OK
+    );
+    let r = a.authz.records();
+    assert_eq!(r[0].request.object, ObjectRef::new("deployment", "dev-web"));
+    for path in [
+        "/deployments/%2E%2E",
+        "/deployments/..",
+        "/deployments/%FF",
+        "/deployments/dev-web/",
+        "/deployments/",
+        "/deployments/team%3Ax%23member",
+        "/deployments/a%20b",
+    ] {
+        assert_eq!(
+            call(&a, Method::GET, path, Some("agent:a1")).await,
+            StatusCode::FORBIDDEN,
+            "{path}"
+        );
+    }
+    assert_eq!(
+        a.authz.records().len(),
+        1,
+        "malformed ids never reach the authorizer"
+    );
+}
+
+#[test]
+fn segments_decode_like_axum_path() {
+    assert_eq!(segments("/a/b%2Fc").unwrap(), ["a", "b/c"]);
+    assert_eq!(segments("/a//b").unwrap(), ["a", "", "b"]);
+    assert_eq!(segments("/").unwrap(), [""]);
+    assert!(segments("a/b").is_none(), "not absolute");
+    assert!(segments("/a/%C3").is_none(), "not UTF-8");
+    assert!(segments("/a/.").is_none());
+}
+
+#[test]
+fn need_rejects_malformed_object() {
+    for (ty, id) in [
+        ("deployment", ""),
+        ("", "d"),
+        ("deployment", "x#member"),
+        ("team:x", "member"),
+        ("deployment", "a b"),
+        ("deployment", "a\nb"),
+    ] {
+        assert!(
+            Need::new("can_view", ObjectRef::new(ty, id)).is_err(),
+            "{ty}:{id}"
+        );
+    }
+    assert!(Need::new("can_view", ObjectRef::new("graph", "ns/kg")).is_ok());
+    assert!(Need::new("can_View", ObjectRef::new("graph", "g")).is_err());
 }

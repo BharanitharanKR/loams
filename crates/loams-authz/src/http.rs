@@ -14,10 +14,16 @@
 //! Every check, allowed or denied, goes to a [`DecisionLog`] (D1616); the default writes a
 //! `tracing` event on target `loams_authz::decision`.
 //!
+//! A route table should split the path with [`segments`], which decodes it the way axum's
+//! `Path` extractor does, so the check names the same object the handler acts on.
+//!
 //! ```ignore
-//! let enforcer = Enforcer::new(authz, |m: &Method, p: &str| match (m, p.split('/').collect::<Vec<_>>().as_slice()) {
-//!     (&Method::GET, ["", "deployments", id]) => Need::new("can_view", ObjectRef::new("deployment", *id)).ok().map(Declared::Check),
-//!     _ => None,
+//! let enforcer = Enforcer::new(authz, |m: &Method, p: &str| {
+//!     let seg = segments(p)?;
+//!     match (m, seg.iter().map(String::as_str).collect::<Vec<_>>().as_slice()) {
+//!         (&Method::GET, ["deployments", id]) => Need::new("can_view", ObjectRef::new("deployment", *id)).ok().map(Declared::Check),
+//!         _ => None,
+//!     }
 //! });
 //! let app = Router::new().route(...).layer(axum::middleware::from_fn_with_state(enforcer, enforce));
 //! ```
@@ -40,12 +46,32 @@ pub struct Need {
 }
 
 impl Need {
-    /// `relation` must be a `can_*` relation: code never names a role (D1603).
+    /// `relation` must be a `can_*` relation: code never names a role (D1603). The object's
+    /// type and id must be non-empty, without whitespace or `#`, and the type without `:`, so
+    /// a path segment can never smuggle in a userset (`team:x#member`) or a second object.
     pub fn new(relation: impl Into<String>, object: ObjectRef) -> Result<Self, AuthzError> {
         let relation = relation.into();
-        if !relation.starts_with("can_") || relation.len() == 4 {
+        let well_formed = |r: &str| {
+            r.strip_prefix("can_").is_some_and(|rest| {
+                !rest.is_empty()
+                    && rest
+                        .bytes()
+                        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b == b'_')
+            })
+        };
+        if !well_formed(&relation) {
             return Err(AuthzError::Invalid(format!(
                 "routes check can_* relations only, not {relation:?}"
+            )));
+        }
+        let bad = |s: &str| {
+            s.is_empty()
+                || s.chars()
+                    .any(|c| c == '#' || c.is_whitespace() || c.is_control())
+        };
+        if bad(&object.ty) || object.ty.contains(':') || bad(&object.id) {
+            return Err(AuthzError::Invalid(format!(
+                "{object} is not a checkable object"
             )));
         }
         Ok(Self {
@@ -96,6 +122,24 @@ where
     fn declare(&self, method: &Method, path: &str) -> Option<Declared> {
         self(method, path)
     }
+}
+
+/// The path's segments after the leading `/`, each percent-decoded the way axum's `Path`
+/// extractor decodes a parameter, so a route table checks the object the handler will act on.
+///
+/// `None` (the route is then undeclared, so 403) when a segment does not decode to UTF-8 or is
+/// `.` or `..`. Empty segments are kept (`/a//b` is `["a", "", "b"]`, `/a/` is `["a", ""]`),
+/// so a table that matches exact shapes does not match them.
+pub fn segments(path: &str) -> Option<Vec<String>> {
+    let rest = path.strip_prefix('/')?;
+    rest.split('/')
+        .map(|raw| {
+            let seg = percent_encoding::percent_decode_str(raw)
+                .decode_utf8()
+                .ok()?;
+            (seg != "." && seg != "..").then(|| seg.into_owned())
+        })
+        .collect()
 }
 
 /// One line of the decision log (§11).
