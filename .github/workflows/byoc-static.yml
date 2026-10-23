@@ -16,6 +16,9 @@ on:
       - "docs/release/loams-release-key.asc"
       - "docs/guides/byoc/**"
       - "tests/byoc/**"
+      - "scripts/byoc/**"
+      - ".github/workflows/byoc-aws-nightly.yml"
+      - ".github/workflows/byoc-reaper.yml"
       - ".github/workflows/byoc-static.yml"
 
 concurrency:
