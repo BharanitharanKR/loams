@@ -74,6 +74,12 @@ ignore = [
     # object_store 0.14.
     { id = "RUSTSEC-2026-0194", reason = "quick-xml 0.39 via object_store 0.13.2 (CN2 R0.13, R13.7): parses only the configured object store's responses; fixed by moving to object_store 0.14 with arrow 60" },
     { id = "RUSTSEC-2026-0195", reason = "quick-xml 0.39 via object_store 0.13.2 (CN2 R0.13, R13.7): parses only the configured object store's responses; fixed by moving to object_store 0.14 with arrow 60" },
+    # ctutils < 0.4.4 (as the root deny.toml, #1134): Choice's const-fn mask
+    # generation may compile to a branch, and u128 comparisons branch on 32-bit
+    # targets. The fix, 0.4.4, was published 2026-10-23, under the 14-day rule.
+    # Loams ships only 64-bit targets. Remove with the bump to ctutils >= 0.4.4
+    # on or after 2026-11-06.
+    { id = "RUSTSEC-2026-0385", reason = "ctutils constant-time mask and u128 comparison branches: the fixed 0.4.4 is from 2026-10-23, under the 14-day rule; Loams ships only 64-bit targets; bump on or after 2026-11-06" },
 ]
 
 [sources]
