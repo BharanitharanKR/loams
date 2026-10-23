@@ -23,8 +23,6 @@ and the job passes. When a PR fixes one of these tests, it removes that test's e
 |---|---|---|---|---|
 | `loams-graph::limits` `namespace_concurrency_limit_resource_exhausted` | 10 | 8 | 1 | #1084 |
 | `loams-graph::limits` `idle_namespaces_leave_no_slot_entry` | 9 | 8 | 2 | #1084 |
-| `loams-graph::links` `collection_link::link_apply_exactly_once_under_kill` | 6 | 5 | 2 | #1085 |
-| `loams-graph::links` `stream_link::stream_link_exactly_once_under_kill` | 3 (+1 on #1058) | 3 | 2 | #1085 |
 | `loams-agentd::security` `failed_upgrades_are_slowed` | 5 | 5 | 1 | #1089 |
 | `loams-git::owner` `idle_sequencer_is_evicted_and_reloads` | 3 | 3 | 1 | #1086 |
 | `loams-worker::worker` `an_expired_lease_nobody_took_is_retaken_and_the_task_continues` | 3 | 2 | 2 | #1087 |
@@ -40,6 +38,13 @@ Agentd job runs `cargo test` per crate, so `failed_upgrades_are_slowed` has no r
 |---|---|---|---|---|
 | `loams-agentd-connect::parity` `connect_and_ndjson_agree` | 11 | 9 | 4 | PR #1059 (the fix) |
 | `loams-meta::it` `node::a_node_keeps_serving_through_failed_snapshot_uploads` | 3 | 3 | 3 | #969, PR #1061 |
+
+## Fixed (retry removed)
+
+| Test | Failed | Branches | Re-run passed | Cause and fix |
+|---|---|---|---|---|
+| `loams-graph::links` `collection_link::link_apply_exactly_once_under_kill` | 6 (+1 hang on #1059) | 5 | 2 | #1085: the test harness waited out the dead owner's lease from a deadline it read once, while a renewal sent before the pause could still land and extend the lease. The survivor then found the lease held ("served by node N now; retry"). `wait_out_the_lease` now reads the lease again until no node holds it. Both kill tests also have a hard deadline. |
+| `loams-graph::links` `stream_link::stream_link_exactly_once_under_kill` | 3 (+1 on #1058) | 3 | 2 | #1085, as above. The "Tokio context is being shutdown" panic that followed each failure came from the dead node's pool thread when the runtime shut down after the test had already failed. It was not a separate fault. |
 
 ## Listed only (not nextest, so no retry)
 

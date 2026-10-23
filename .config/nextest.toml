@@ -27,11 +27,6 @@ filter = 'binary_id(loams-graph::limits) & (test(=namespace_concurrency_limit_re
 retries = 1
 
 [[profile.default.overrides]]
-# #1085
-filter = 'binary_id(loams-graph::links) & (test(=collection_link::link_apply_exactly_once_under_kill) | test(=stream_link::stream_link_exactly_once_under_kill))'
-retries = 1
-
-[[profile.default.overrides]]
 # #1086
 filter = 'binary_id(loams-git::owner) & test(=idle_sequencer_is_evicted_and_reloads)'
 retries = 1
