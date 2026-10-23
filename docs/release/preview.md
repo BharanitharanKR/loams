@@ -15,17 +15,18 @@ more, or be reworked, before they settle. Parts of the security model are not ha
 
 Loams ships one path: **your own Tailscale tailnet, with the console served by your own
 engine**. You run the Loams stack, and from 0.1.2 the console ships with it: the engine serves
-the console built into its image at `https://loams.<tailnet>.ts.net/ui/`, next to its API, and
-Loams Desktop carries the same console. We host only the auth service, for the optional `oidc`
-mode. The hosted console at `console.loams.dev` is retired (design 78); to try Loams without
+the console built into its image at `https://loams.<tailnet>.ts.net/ui/`, next to its API
+(merged on `dev`, not in a release yet), and Loams Desktop carries the same console. **In 0.1.1
+the console is Loams Desktop**: the 0.1.1 images do not serve `/ui/`. We host nothing you need to run it: `auth.loams.dev` (Zitadel, for the
+optional `oidc` mode) is planned and does not answer yet. The hosted console at `console.loams.dev` is retired (design 78); to try Loams without
 running anything, see [loams.dev/cloud](https://loams.dev/cloud).
 
 | Piece | Who runs it | Where |
 |---|---|---|
 | The engine stack: `loams` on its embedded stores, the House, the Postgres stack, agentd (TiDB, TiKV and PD with the `tikv` profile) | **You** | Docker Compose on your laptop, or on your own VMs (BYOC) with `deploy/release/byoc/install.sh` over SSH |
 | The private network between your devices and the stack | **You** | Your own Tailscale tailnet |
-| The React console (static files) | **You**: it ships in the engine image, and in Loams Desktop | `https://loams.<tailnet>.ts.net/ui/`, served by your engine |
-| The auth service (OIDC issuer), only for `oidc` mode | Ostrium | `https://auth.loams.dev` |
+| The console | **You**: Loams Desktop in 0.1.1. From 0.1.2 it also ships in the engine image | Loams Desktop on your device; from 0.1.2 also `https://loams.<tailnet>.ts.net/ui/`, served by your engine |
+| An OIDC issuer, only for `oidc` mode | **You** (Zitadel at `auth.loams.dev` is planned, not live) | Your own issuer |
 
 The engine is never exposed on the public internet. Your browser reaches it over the tailnet,
 through the Tailscale client on your own device.
@@ -127,7 +128,7 @@ Objective-C stay in the repository (coming soon).
 
 ```mermaid
 flowchart LR
-  subgraph hosted["Hosted by Ostrium"]
+  subgraph hosted["Planned, not live"]
     auth["Auth service (oidc mode only)<br/>auth.loams.dev"]
   end
 
@@ -240,7 +241,7 @@ rest (see [the profiles](#profiles-tikv-and-rustfs)).
 | `tidb` (profile `tikv`) | `ghcr.io/ostrium-labs/tidb:v8.5.8-loams.1` | Loams SQL (MySQL compatible) |
 | `rustfs`, `create-bucket` (profile `rustfs`) | RustFS | An S3 bucket for the Postgres stack's remote storage |
 | `house-tailscale` (profile `house-tailnet`) | `tailscale/tailscale` | The House's own door: joins the tailnet as `loams-house` and serves its ClickHouse HTTP interface there |
-| `console` (profile `console`, optional) | static console | A local copy of the console, for local trials; the supported console is the hosted one |
+| `console` (profile `console`, optional) | static console | A local copy of the console, for local trials. In 0.1.1 the supported console is Loams Desktop; the engine serves its own from 0.1.2 |
 | `tailscale` | `tailscale/tailscale` | The stack's only door: joins the tailnet as `loams` and serves the engine there |
 | `headscale` (profile `headscale`) | Headscale | Coming soon, unsupported in this release (see [the tailnet](#the-tailnet)) |
 
@@ -254,8 +255,8 @@ host by default.
 
 ## Quick start: fully local
 
-You need Docker with the Compose plugin (v2.20.3 or later, for `include` and optional
-dependencies), about 10 GB of free disk (8 GB of images, and room for data) and 2 GB of free
+You need Docker with the Compose plugin **v2.24.0 or later** (the bundle's `env_file` entries
+use `required: false`, added in 2.24.0; `include` and optional `depends_on` need 2.20), about 10 GB of free disk (8 GB of images, and room for data) and 2 GB of free
 memory for the default stack (it idles near 1 GB), and the Tailscale client on the machine
 whose browser you will use. The `tikv` profile adds about 3 GB of images and 2 GB of memory
 (TiKV alone idles near 1.8 GB), and TiKV refuses writes when its disk is nearly full. Measured on 0.1.0's images with Podman; your numbers will
@@ -315,15 +316,34 @@ The engine's URL is `https://<TS_HOSTNAME>.<tailnet>.ts.net`, by default
 `https://loams.<tailnet>.ts.net`.
 
 Enable **MagicDNS** and **HTTPS certificates** for your tailnet (Tailscale admin console, DNS),
-so the sidecar can serve `https://loams.<tailnet>.ts.net`. Open
-[console.loams.dev](https://console.loams.dev) in a browser on a device that is on the same
-tailnet, and enter that URL as your engine.
+so the sidecar can serve `https://loams.<tailnet>.ts.net`. Install
+[Loams Desktop](#desktop-and-cli) on a device that is on the same tailnet, and enter that URL
+as your engine. (`console.loams.dev` is retired. From 0.1.2 you can instead open
+`https://loams.<tailnet>.ts.net/ui/` in a browser on the tailnet.)
 
 From the CLI or an SDK, set `LOAMS_AUTH_MODE=apikey`, create a key with `loams auth new-key`
 and use the same tailnet URL.
 
 To stop, `docker compose down`. Your data stays in the compose volumes; `docker compose
 down -v` deletes it.
+
+### Cloud VM requirements
+
+For [BYOC](#byoc-your-own-vm-over-ssh) and any cloud host. Items marked (verify) come from
+the providers' documentation and have not been tested against this stack.
+
+- **Linux kernel 6.7 or later** for the House's workers: the `pods` sandbox needs Landlock
+  with TCP rules, and on an older kernel the workers refuse to boot (confirmed in
+  `deploy/release/compose.yaml`). Use **Ubuntu 24.04**. Debian 12 (kernel 6.1) and Amazon
+  Linux 2023's default kernel (6.1) are too old (verify the exact kernel on your image).
+- **AWS EC2, instance role used from a container:** set the instance metadata
+  `HttpPutResponseHopLimit` to **2**. With IMDSv2 and the default hop limit of 1, a container
+  cannot reach the role's credentials (verify).
+- **GCE, Cloud Storage:** the default access scopes give Cloud Storage **read-only**. The
+  engine writes objects, so create the VM with the `storage-rw` scope or the `cloud-platform`
+  scope, or use a service account key (verify).
+- **Docker Compose v2.24.0 or later** (see the quick start). Distribution packages are often
+  older; install the Compose plugin from Docker's repository.
 
 ### Profiles: tikv and rustfs
 
@@ -626,7 +646,7 @@ The House's security layers in 0.1.1:
 | `LOAMS_AUTH_MODE` | Who it accepts | Settings |
 |---|---|---|
 | `tailscale` (default) | The Tailscale identity that `tailscale serve` adds. The engine trusts it only on the dedicated listener `LOAMS_TAILSCALE_LISTEN` (`127.0.0.1:7781`), which is the sidecar's serve target; every other listener ignores those headers, so a forged one on the main port gets a 401. Browser requests from any origin but the engine's own (the console it serves at `/ui/`) are refused, unless listed in `LOAMS_CORS_ORIGINS` (none by default) | `LOAMS_TAILSCALE_LISTEN`, `LOAMS_TAILSCALE_ALLOWED_USERS` (logins; empty admits every user your tailnet policy lets reach the node) |
-| `oidc` | Bearer JWTs from the issuer (`https://auth.loams.dev` or your own), RS256 or EdDSA, verified against its JWKS (cached) | `LOAMS_OIDC_ISSUER`, `LOAMS_OIDC_AUDIENCE=loams-console`, and one of `LOAMS_OIDC_ALLOWED_EMAILS`, `_SUBJECTS` or `_GROUPS`: the engine refuses to start without one |
+| `oidc` | Bearer JWTs from your own issuer (`auth.loams.dev` is planned, not live), RS256 or EdDSA, verified against its JWKS (cached) | `LOAMS_OIDC_ISSUER`, `LOAMS_OIDC_AUDIENCE=loams-console`, and one of `LOAMS_OIDC_ALLOWED_EMAILS`, `_SUBJECTS` or `_GROUPS`: the engine refuses to start without one |
 | `apikey` | API keys for the CLI and SDKs; the file holds only hashes. Create one with `loams auth new-key` | `LOAMS_API_KEYS_FILE` |
 | `off` | Loopback clients only; every other client is refused | none |
 

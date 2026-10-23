@@ -4,13 +4,15 @@ Everything in Loams runs on your machine or on VMs you own, the console
 included: from 0.1.2 the engine serves the console that ships in its image at
 `https://loams.<tailnet>.ts.net/ui/`, next to its API, so the console is
 same-origin with your engine and reachable only on your tailnet. Loams Desktop
-carries the same console and connects to the same URL. Ostrium hosts only the
-optional auth service (`oidc` mode). The hosted console at console.loams.dev is
+carries the same console and connects to the same URL (in 0.1.1 the console is
+Loams Desktop; `/ui/` arrives in 0.1.2). Ostrium hosts nothing you need:
+`auth.loams.dev` for `oidc` mode is planned and does not answer yet, so use an
+issuer of your own. The hosted console at console.loams.dev is
 retired (design 78); to try Loams without running anything, see
 [loams.dev/cloud](https://loams.dev/cloud).
 
 ```
- browser or Loams Desktop ── auth.loams.dev (oidc mode only; OIDC, PKCE)
+ browser or Loams Desktop ── your OIDC issuer (oidc mode only; OIDC, PKCE)
     │
     └─ your device's Tailscale client ══ tailnet ══ tailscale sidecar ─┐
                                     (loams netns: engine + sidecar only)│
@@ -189,7 +191,7 @@ which serves loopback only). The default is `tailscale`: the engine trusts the
 on `LOAMS_TAILSCALE_LISTEN` (`127.0.0.1:7781`) only. That listener is the serve
 target and nothing else, and no container but the sidecar shares the engine's
 network namespace. `oidc` checks JWTs from
-`LOAMS_OIDC_ISSUER` (default `https://auth.loams.dev`) against its JWKS with
+`LOAMS_OIDC_ISSUER` (the default `https://auth.loams.dev` does not answer yet; set your own) against its JWKS with
 audience `LOAMS_OIDC_AUDIENCE`; `apikey` checks hashed keys in
 `LOAMS_API_KEYS_FILE`, which compose points at `secrets/api-keys`. See
 `.env.example`.
