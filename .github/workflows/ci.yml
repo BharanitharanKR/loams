@@ -102,6 +102,7 @@ jobs:
       router: ${{ steps.filter.outputs.router }}
       specview: ${{ steps.filter.outputs.specview }}
       lean: ${{ steps.filter.outputs.lean }}
+      loams-cloud: ${{ steps.filter.outputs.loams-cloud }}
     steps:
       # A push is compared with the previous dev head (github.event.before),
       # which needs the repository; a pull request uses the API.
@@ -396,6 +397,10 @@ jobs:
               - *pnpm-workspace
               - ".github/workflows/ci.yml"
               - "agents/**"
+            # The Loams Cloud control plane Worker (design 78 §25, plan LC1 LC2a).
+            loams-cloud:
+              - ".github/workflows/ci.yml"
+              - "deploy/loams-cloud/**"
             # deploy/dapr/edge is its own crate and lock, outside the
             # workspace; it compiles loams-stream-grpc's stream.proto.
             dapr-edge:
@@ -2330,6 +2335,41 @@ jobs:
       - name: the build stages for Workers static assets
         run: node apps/console/deploy/stage.mjs
 
+  # The Loams Cloud control plane Worker (design 78 §25, plan LC1 LC2a): its
+  # suites on Node, and the control-DB suites on TiDB v8.5.8 (unistore). No npm
+  # dependencies; tsc comes from the root package.
+  loams-cloud:
+    name: "Loams Cloud: control plane"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.loams-cloud == 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.0
+        with:
+          version: 11.27.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: typecheck
+        run: |
+          pnpm install --frozen-lockfile --filter loams-monorepo
+          pnpm exec tsc -p deploy/loams-cloud
+      - uses: actions/cache@v6
+        with:
+          path: ~/.tiup/components
+          key: tiup-components-tidb-v8.5.8-${{ runner.os }}
+      - name: install tiup and tidb v8.5.8
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          "$HOME/.tiup/bin/tiup" install tidb:v8.5.8
+      - name: tests, with the control DB on TiDB
+        working-directory: deploy/loams-cloud
+        run: scripts/test-tidb.sh
+
   # The console's WebMCP feature detection in a real browser (AP1d Task 4;
   # design §42 §5, D635, D638).
   #
@@ -2693,6 +2733,7 @@ jobs:
       - web
       - factory
       - dapr-edge
+      - loams-cloud
       - upgrade-gate
     runs-on: ubuntu-24.04
     steps:
