@@ -18,6 +18,27 @@ All notable changes to this project are documented here. The format follows [Kee
   observability app (see Changed). A stored OpenObserve connection is no longer listed.
 
 ### Changed
+- **The console ships with each deployment, and CORS is deny by default** (0.1.2; owner,
+  2026-10-23; D1705 amended). The hosted console at `console.loams.dev` is retired (design 78),
+  so:
+  - **The engine serves the console** at `/ui/` on its own HTTP listeners (the main port and the
+    `tailscale serve` target), next to its API: in the compose stack at
+    `https://loams.<tailnet>.ts.net/ui/`, reachable only on your tailnet. `/` redirects to `/ui/`.
+    The engine image builds the console from the same commit into `/usr/share/loams/console`
+    (where the Linux packages already put it), and the engine serves that directory when it holds
+    a build. `--console-dir <DIR>` serves another build; `--no-console` serves none. The files are
+    public, like any web app's shell; every call the console makes still goes through the
+    engine's authentication.
+  - **`LOAMS_CORS_ORIGINS` allows no origin by default**, on every listener, with authentication
+    on or off. Only the engine's own origin (same-origin) is answered. The compose default
+    `https://console.loams.dev` is gone, and so is the rule that an empty list allowed **any**
+    origin when authentication was on. Entries must be exact origins (`scheme://host[:port]`);
+    `*`, `null`, paths and credentials are refused at start. Loams Desktop needs no entry: its main
+    process sends the engine's own origin. **Upgrading:** remove
+    `LOAMS_CORS_ORIGINS=https://console.loams.dev` from `.env`, and list the origin of any console
+    you serve elsewhere (`--profile console`, a Cloudflare or Vercel deploy).
+  - Docs and guides point at the console your engine serves, Loams Desktop, and
+    `loams.dev/cloud` for the try-out.
 - **The Software Factory's observability app is SigNoz on Loams House** (D1666, owner, 2026-10-22).
   The factory lists **SigNoz** where it listed OpenObserve: full UI only, health checked at
   `/api/v2/healthz`, and labelled **"Preview: SigNoz on Loams House"** in Studio until SigNoz
