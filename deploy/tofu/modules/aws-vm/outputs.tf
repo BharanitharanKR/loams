@@ -27,3 +27,8 @@ output "estimated_monthly_usd" {
   description = "A rough monthly cost in USD (us-east-1 prices of 2026-10-21; excludes data transfer)."
   value       = local.estimated_monthly_usd
 }
+
+output "tailnet_authkey_secret_arn" {
+  description = "The secret the VM reads the Tailscale auth key from (it must exist before apply; its value is never in this configuration)."
+  value       = data.aws_secretsmanager_secret.tailnet_authkey.arn
+}
