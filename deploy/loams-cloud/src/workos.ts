@@ -54,6 +54,11 @@ function invitationOf(r: RawInvitation): Invitation {
   return { id: r.id, state: r.state, expiresAt: Date.parse(r.expires_at), acceptedUserId: r.accepted_user_id ?? null };
 }
 
+export interface WorkOsUsers {
+  /** Deletes a WorkOS user permanently (D1731, D1757). Already gone is not an error. */
+  deleteUser(id: string): Promise<void>;
+}
+
 export class WorkOsError extends Error {
   readonly status: number;
   readonly code?: string;
@@ -64,7 +69,7 @@ export class WorkOsError extends Error {
   }
 }
 
-export class HttpWorkOs implements WorkOsMfa, WorkOsInvitations {
+export class HttpWorkOs implements WorkOsMfa, WorkOsInvitations, WorkOsUsers {
   private readonly apiKey: string;
   private readonly base: string;
   private readonly fetchFn: typeof fetch;
@@ -143,5 +148,14 @@ export class HttpWorkOs implements WorkOsMfa, WorkOsInvitations {
 
   async resendInvitation(id: string): Promise<Invitation> {
     return invitationOf(await this.request<RawInvitation>("POST", `/user_management/invitations/${encodeURIComponent(id)}/resend`, {}));
+  }
+
+  async deleteUser(id: string): Promise<void> {
+    try {
+      await this.request<unknown>("DELETE", `/user_management/users/${encodeURIComponent(id)}`);
+    } catch (e) {
+      if (e instanceof WorkOsError && e.status === 404) return;
+      throw e;
+    }
   }
 }

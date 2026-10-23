@@ -274,6 +274,30 @@ export class Invites {
     return (await this.byId(inv.id))!;
   }
 
+  /**
+   * The hourly sweep (LC2a Task 9): WorkOS emits no invitation.expired event
+   * (R-LC2a-5.6), so pending invites past their expiry are read back from WorkOS
+   * and mirrored. Returns how many changed state.
+   */
+  async sweep(max = 200): Promise<number> {
+    const r = await this.d.sql.execute(
+      `SELECT ${COLS} FROM invites WHERE state = 'pending' AND expires_ms <= ? ORDER BY expires_ms LIMIT ${max}`,
+      [this.d.clock.now()],
+    );
+    let changed = 0;
+    for (const raw of r.rows) {
+      const inv = rowOf(raw);
+      if (!inv.workos_invitation_id) continue;
+      try {
+        const after = await this.mirror(inv, await this.d.workos.getInvitation(inv.workos_invitation_id));
+        if (after.state !== inv.state) changed++;
+      } catch (e) {
+        this.d.logger.log("invites.sweep_failed", { invite_id: inv.id, error: String(e) });
+      }
+    }
+    return changed;
+  }
+
   /** POST /admin/invites/{id}/revoke. */
   async revoke(id: string, admin: string): Promise<InviteRow> {
     const inv = await this.byId(id);

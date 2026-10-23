@@ -8,10 +8,10 @@ import type { Sql } from "./sql.ts";
 
 export type AuditType =
   | "waitlist.joined" | "waitlist.confirmed" | "waitlist.rejected" | "waitlist.removed" | "waitlist.deleted"
-  | "waitlist.confirm_sent" | "waitlist.already_listed_sent" | "waitlist.removal_sent"
+  | "waitlist.confirm_sent" | "waitlist.already_listed_sent" | "waitlist.removal_sent" | "waitlist.reminder_sent" | "waitlist.purged"
   | "invite.created" | "invite.sent" | "invite.resent" | "invite.revoked" | "invite.expired" | "invite.failed"
   | "invite.redeemed" | "invite.redeem_refused"
-  | "account.created" | "account.suspended" | "account.deleted"
+  | "account.created" | "account.suspended" | "account.deletion_scheduled" | "account.deleted"
   | "admin.mfa_enrolled" | "admin.step_up" | "admin.denied" | "admin.waitlist_read"
   | "email.bounced";
 

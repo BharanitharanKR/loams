@@ -21,6 +21,7 @@ The Worker behind the free, invite-only Loams Cloud try-out (design [§78 §25](
 | `src/jwt.ts` | AuthKit access tokens, RS256 against WorkOS's JWKS |
 | `src/workos.ts` | The WorkOS REST client: MFA and invitations |
 | `src/invites.ts` | Admin invites: the queue, WorkOS create, resend, extend and revoke (LC2a Task 5) |
+| `src/lifecycle.ts` | `DELETE /me`, the deletion job, the retention jobs of §25.6 (LC2a Task 9) |
 | `src/budget.ts` | The shared daily email budget: 100 a day, at most 60 invitations (D1738) |
 | `src/ports.ts` | The outside world as interfaces: Turnstile, rate limits, mail, the clock, logs |
 | `test/` | `node --test` suites; `test/harness/tidb.ts` reaches TiDB through the mysql client |
