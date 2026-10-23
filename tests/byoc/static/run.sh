@@ -93,10 +93,24 @@ t "aws_trust_policy_is_ec2_only" jq -e '.Statement | length == 1 and .[0].Princi
 # the secrets fetcher against mocks of IMDS, Secrets Manager, the metadata server, Key Vault
 t "secrets_fetch_all_clouds" "$here/test_secrets.sh"
 
+# install.sh --cloud (BY0 Task 6): the env it would write, against golden files
+inst="$repo/deploy/release/byoc/install.sh"
+g="$here/golden"
+t "install_cloud_aws_renders_bucket_and_region" bash -c "diff <('$inst' --render-env-only --cloud aws --bucket s3://my-bkt/loams --region us-east-1) '$g/install_aws.golden'"
+t "install_cloud_gcp_renders_bucket" bash -c "diff <('$inst' --render-env-only --cloud gcp --bucket gs://my-bkt/loams --project my-project) '$g/install_gcp.golden'"
+t "install_cloud_azure_renders_account" bash -c "diff <('$inst' --render-env-only --cloud azure --bucket az://loams/loams --storage-account myacct --vault my-vault --client-id 11111111-2222-3333-4444-555555555555 --profiles tikv --dir prod) '$g/install_azure.golden'"
+t "install_cloud_env_has_no_cloud_key" bash -c "! cat '$g'/install_*.golden | grep -E 'AWS_ACCESS_KEY_ID|AWS_SECRET_ACCESS_KEY|GOOGLE_SERVICE_ACCOUNT_KEY|AZURE_STORAGE_ACCOUNT_KEY|AZURE_STORAGE_SAS'"
+t "install_cloud_refuses_a_mismatched_or_unsafe_bucket" bash -c "
+  ! '$inst' --render-env-only --cloud aws --bucket gs://b --region us-east-1 &&
+  ! '$inst' --render-env-only --cloud aws --bucket 's3://b;id' --region us-east-1 &&
+  ! '$inst' --render-env-only --cloud aws --bucket s3://b &&
+  ! '$inst' --render-env-only --cloud azure --bucket az://c/loams --vault v &&
+  ! '$inst' --render-env-only --bucket s3://b --region us-east-1"
+
 # the linter
 sc="${SHELLCHECK:-$(command -v shellcheck || true)}"
 if [[ -n "$sc" ]]; then
-  t "shellcheck" "$sc" -x "$byoc/render.sh" "$byoc/gen-cloud-init.sh" "$byoc/lib/loams-byoc-bootstrap" "$byoc/lib/loams-byoc-secrets" "$here/run.sh" "$here/test_secrets.sh"
+  t "shellcheck" "$sc" -x "$byoc/render.sh" "$byoc/gen-cloud-init.sh" "$byoc/lib/loams-byoc-bootstrap" "$byoc/lib/loams-byoc-secrets" "$inst" "$here/run.sh" "$here/test_secrets.sh"
 else
   echo "skip shellcheck (not installed)"
 fi
