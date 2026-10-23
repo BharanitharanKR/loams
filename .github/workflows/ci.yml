@@ -2398,6 +2398,13 @@ jobs:
       - name: tests, with the control DB on TiDB
         working-directory: deploy/loams-cloud
         run: scripts/test-tidb.sh
+      # src/worker.ts against @cloudflare/workers-types, and wrangler's bundle
+      # (--dry-run: nothing is deployed, and no Cloudflare credential exists here).
+      - name: the Worker typechecks and bundles
+        working-directory: deploy/loams-cloud
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check:worker
 
   # The console's WebMCP feature detection in a real browser (AP1d Task 4;
   # design §42 §5, D635, D638).
