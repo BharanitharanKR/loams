@@ -544,4 +544,117 @@ Agents read them with `set -a; . ~/<file>; set +a` in the one command that needs
 
 ## Rulings made during execution
 
-(none yet)
+### LC0 Task 0: rulings and pins (2026-10-23)
+
+- **R-LC0-1, owner rulings.** The owner answered Q1260–Q1277 on 2026-10-23 with every default. The same day's §25 amendments change three of those answers in effect:
+  - Q1263 and Q1265: the hosted Filesystem cohort is off and D1730's ceiling is $0 until the owner sets a budget (Q1291, D1756).
+  - Q1266: the invite codes are replaced by waitlist email invites (D1749). The providers and the GitHub-age rule stand.
+  - D1714, for the try-out only: device identity is WorkOS CLI Auth plus device keys issued by the control plane (D1755).
+
+  The owner created the no-card LC0 organization (Q1277) and handed over the credentials on 2026-10-23.
+- **R-LC0-2, pins.**
+  - **`ti`:** v0.2.10 (`e6fbd15`, 2026-10-15). It was installed from the release tarball and checked against `ti_checksums.txt`, not by piping `install.sh` to a shell. The script is at `https://github.com/tidbcloud/ti-cli/releases/download/v0.2.10/install.sh` (Apache-2.0).
+  - **The companion `ti-drive9`:** the install script fetches it from `https://releases.drive9.ai/latest/`, which isn't versioned. LC0 ran drive9 build `572cac6`, checked against that directory's `SHA256SUMS`. agentd (LC1) must pin the companion by checksum, because "latest" moves.
+  - **The 14-day rule:** `ti` 0.2.10 was 8 days old. The rule binds the npm driver, and `ti` is a CLI the user installs, so LC1 pins the newest `ti` that is at least 14 days old when it ships.
+  - **`@tidbcloud/serverless`:** 0.3.0 (2026-03-17).
+  - **IA0's pins:** Zitadel `v4.19.4@sha256:90a3045b…` and OpenFGA `v1.22.0@sha256:9cf9a20a…`, from `conformance/identity/compose.yaml`.
+  - **Anonymous telemetry:** `ti` collects it in release builds. LC0 turned it off in `~/.ti/.preferences` (`[telemetry] enabled = false`). agentd sets `TI_TELEMETRY=off`.
+- **R-LC0-3, dependencies.**
+  - **IA2:** Task 1 has landed (the `loams-authz` crate, #993). The rest of IA2, and IA4 (agents as machine users), have not.
+  - **SD1:** remote agentd (D909) is on `dev` (`serve --remote`, SD1 Task 7, #548).
+  - **ME1:** not started (a stub).
+- **R-LC0-4, re-reads (2026-10-23).** No limit changed since the report.
+  - The release notes have no Starter, Filesystem, branching, `ti` or driver entry after 2026-10-15. The newest entry is 2026-10-20 (Essential, Premium and BYOC only).
+  - Starter is still 5 free instances per organization, each with 5 GiB row, 5 GiB columnar and 50M RUs a month. Connections: 400, or 5,000 with a spending limit. Transactions under 30 minutes. The PG preview is still 10 free instances, each with 50 GiB and 500M RUs.
+  - The limitations page no longer states the 100-instance cap or the branch quota; the release notes (2026-06-02) and the branch docs still do.
+  - The Filesystem limits page is unchanged: limits and usage are in the console only.
+  - Two more rows matter to Task 1: `tidb_enable_auto_analyze` is read-only on Starter, and `SLOW_QUERY` and `STATEMENTS_SUMMARY` are console-only.
+- **R-LC0-5, scope (owner, 2026-10-23, through the LC0 lead).**
+  - **Task 5's Zitadel device enrolment is not run in LC0** ("Zitadel isn't needed now"): the try-out uses D1755. Only Task 5's TiDB question ran, whether OpenFGA's MySQL datastore works on Starter, in `spikes/lc0-device/` (PR #1115). The Rust device binary and its three tests wait for the self-hosted path.
+  - **Task 6 (company device)** needs a managed-like macOS or Windows laptop, which agents don't have. The LC0 report gives the runbook for the owner.
+  - **Task 2's macOS leg** needs the owner's Mac.
+  - **Task 4's** one manual Zero creation and claim is the owner's.
+- **R-LC0-6, labels.** `ti db create-db-cluster` has no label flag. LC0 named every instance `lc0-<task>` and added an `lc0` label through the API (`PATCH /v1beta1/clusters/{id}`, `updateMask: labels`), which works with the org key.
+- **R-LC0-7, PRs.** Task 1 and Task 5's OpenFGA check share one PR (#1115). Tasks 4 and 6 are sections of `docs/plans/lc0-report.md`, committed with their own commit messages in the report's PR.
+
+### LC2a Task 0: rulings, pins and the (verify) items (2026-10-23)
+
+Checked against WorkOS's docs, its Node SDK (`workos-node@b9ffc7e`) and read-only calls on the **staging** environment. Resend was checked against its docs, a read-only API call and public DNS; Cloudflare against its docs. Nothing was changed in either dashboard.
+
+On WorkOS staging, LC0 created two things, and neither sent any email (Resend's log shows 0 emails):
+- one test user (`lc0-test-1@example.net`), which was deleted;
+- one invitation (`lc0-resend-probe@example.com`), which was revoked, since WorkOS has no delete for invitations.
+
+Items marked **owner** need the owner before LC2a code starts.
+
+- **R-LC2a-1, the sender (owner ruling, 2026-10-23).** Loams Cloud sends from **`cloud@loams.dev`**, the root domain. The owner verified it in Resend. **Amends Q1278 and D1738** (`cloud@mail.loams.dev`) and the plan's "`mail.loams.dev` must be verified".
+  - `mail.loams.dev` is already Brevo's: a CNAME to `mail-loams-dev.brand.brevosend.com`, its own SPF and MX.
+  - The root also carries Brevo's verification and DKIM, and Cloudflare Email Routing's MX, SPF and DKIM.
+  - So §25.2's "one sending domain, one reputation" isn't true: Resend, Brevo and Cloudflare share loams.dev.
+  - **The root DMARC** is `p=none` with `rua=mailto:rua@dmarc.brevo.com`. It stays at `p=none` until Resend, Brevo and Email Routing are each confirmed aligned and `rua` points at a mailbox Ostrium reads. Then `quarantine` for 30 days, then `reject`, as in Q1278. **Owner.**
+- **R-LC2a-2, Resend keys (owner).** The key in `~/resend.env` has **full access**, not sending only: `GET /domains`, `/api-keys`, `/emails`, `/webhooks` and `/audiences` all return 200. The account has one key. The owner creates a sending-only key restricted to loams.dev for the Worker and for agents. The full-access key stays only in WorkOS's custom-provider settings, which require one (V, [custom email providers](https://workos.com/docs/authkit/custom-email-providers)).
+- **R-LC2a-3, Resend settings (owner).**
+  - **Tracking:** the loams.dev domain has **open and click tracking on**. Click tracking rewrites links through `links.loams.dev`, which would put confirm and removal tokens in Resend's click logs, against §25.6. Turn both off.
+  - **Region:** the domain sends from **`ap-northeast-1`**, while account data stays in the US (V, [regions](https://resend.com/docs/dashboard/domains/regions)). Moving it to `us-east-1` means deleting and re-adding the domain. That is the owner's choice.
+- **R-LC2a-4, bounces and complaints. Amends §25.9.**
+  - WorkOS "does not receive delivery results from a custom email provider", and Resend isn't supported for WorkOS's suppression management (V, [email](https://workos.com/docs/email)).
+  - So **Resend is the only source of delivery results**, for WorkOS's mail and the Worker's alike. They arrive through one webhook to `POST /internal/resend/webhook`, signed by Svix (`svix-id`, `svix-timestamp`, `svix-signature`).
+  - `email.bounced`, `email.complained` and `suppression.added` write `waitlist_suppressed`.
+  - Resend Free allows **one** webhook endpoint, 100 emails a day and 3,000 a month. Over the limit it returns `429` with `daily_quota_exceeded`, and the `x-resend-daily-quota` header reports usage (V, [pricing](https://resend.com/pricing), [rate limit](https://resend.com/docs/api-reference/rate-limit)). Commercial use on Free isn't restricted (ToS §6, updated 2026-08-27).
+- **R-LC2a-5, WorkOS (verify) items:**
+  1. **Methods:**
+     - Every method is a per-environment toggle, and no tier gates any of them. Social login has no per-provider charge, so Microsoft through our own Entra app costs $0 (V, [pricing](https://workos.com/pricing)).
+     - Whether the dashboard insists on at least one method isn't checked (dashboard only).
+     - **Account age:** Google and Microsoft expose no age signal. An identity has only `idp_id`, `type` and `provider` (V, staging and the [identity reference](https://workos.com/docs/reference/authkit/identity)).
+  2. **Sign-up off, invitations on:** the environment's Sign-up toggle. "When a valid invitation code is present … registration is opened up" (V, [invite-only sign-up](https://workos.com/docs/authkit/invite-only-signup)).
+  3. **The action context names the method:**
+     - Both contexts carry an optional `authentication_method`, plus `ip_address` and `user_agent`.
+     - The registration context also carries the **`invitation`** object, so the registration action matches `context.invitation.id` against `invites.workos_invitation_id` and falls back to the email.
+     - When `authentication_method` is absent, the action reads the user's identities (V, SDK `action.interface.ts` and its fixture).
+  4. **The `authentication_method` values:**
+     - The policy's four: `GoogleOAuth`, `GitHubOAuth`, `MicrosoftOAuth`, `MagicAuth`.
+     - The union also has `Password`, `Passkey`, `SSO`, `AppleOAuth`, the other social providers, and **`CrossAppAuth`, `ExternalAuth`, `MigratedSession` and `Impersonation`**. So the policy is an **allow-list** of those four. Everything else is refused at every layer.
+     - The identity `provider` can read `GithubOAuth`, so compare case-insensitively (V, SDK).
+  5. **GitHub `idp_id`** is GitHub's numeric user id. The SDK fixture's `108872335` resolves with `GET /user/108872335`. LC2a Task 11 confirms it on a live sign-in.
+  6. **Resend keeps the token, the accept URL and `expires_at` (measured on staging).**
+     - The test: create (`expires_in_days: 1`), wait 65 s, `resend`. The token's hash, the URL's hash and `expires_at` were unchanged; only `updated_at` moved.
+     - Events `invitation.created`, `invitation.resent` and `invitation.revoked` were all emitted.
+     - So `--extend` stays "revoke and send a new one" (D1747), and a resend never extends.
+     - **There is no `invitation.expired` event,** so expiry is mirrored only by the hourly sweep (LC2a Task 9), not the events reader.
+  7. **The MFA API is free:** MFA is inside AuthKit's free tier, with no separate line. Use AuthKit's user-scoped factors API (`/user_management/users/{id}/auth_factors`, which returned 200 on staging) for the TOTP step-up (V, [pricing](https://workos.com/pricing), [AuthKit MFA](https://workos.com/docs/reference/authkit/mfa)).
+  8. **Branding is free:** logo, colours, display name and CSS have no tier gate. Only a custom domain costs $99 (V, [branding](https://workos.com/docs/authkit/branding)).
+  9. **Data location:** the USA. The DPA covers EEA, UK and CH transfers with SCCs, and there is no selectable region (V, [DPA](https://workos.com/legal/data-processing-addendum)). The current subprocessor list is on trust.workos.com, which renders only with JavaScript, so the last list read is still the one dated 2024-12-11.
+  10. **Commercial use of the free tier:** not banned. The terms (2026-08-04) say the free tier is "free of charge" and may be changed or ended "at any time, without notice" (§3(d)). Use is for "internal business purposes" (§2(a)), and §5 bars "service bureau" use. **For counsel (Q1276).**
+- **R-LC2a-6, what `check-workos` can read.**
+  - **With the API key:** redirect URIs, CORS origins, webhook endpoints, roles, SSO connections and organizations.
+  - **With a widget token for the Ostrium admin**, through the Widgets GraphQL API: `passwordAuthEnabled`, `passkeyAuthEnabled`, `mfaEnabled`, `mfaRequired` and the branding display name.
+  - **Not readable at all:** the social providers, Magic Auth, the Sign-up toggle, the custom email provider, the Actions endpoints and their failure mode, and impersonation. So `check-workos` automates the first two groups, and `email_provider_is_resend` is a **manual owner tick** (LC2a Tasks 2 and 6).
+  - Add **"impersonation off"** to Task 6's checklist. It is off by default; a dashboard admin can turn it on.
+- **R-LC2a-7, WorkOS tests.**
+  - Automated tests use addresses at `example.com`, `example.net`, `example.org` or `.test`. WorkOS drops those sends before the email provider (V, [email](https://workos.com/docs/email)). LC0's invitation probe sent nothing.
+  - `@workos/emulate` (MIT, v0.16.0) is a candidate offline double for the Miniflare tests (Tasks 5–8).
+  - Staging has **no redirect URIs** yet. Adding the Miniflare and staging callbacks is an owner step, or an agent step through the API with the owner's permission.
+  - CLI Auth works on staging: `POST /user_management/authorize/device` returns a device code, a user code, `expires_in: 300` and `interval: 5` (D1755).
+- **R-LC2a-8, privacy notice (§25.6).**
+  - Resend: account data in the US; sends from the domain's region; 22 subprocessors, all in the USA (list dated 2026-08-27).
+  - **WorkOS events keep a deleted user's email for up to 90 days.** `user.deleted` carries `email` and `external_id`, as seen on staging. The notice says so, and Review Focus 5's test accepts it.
+- **R-LC2a-9, Cloudflare Workers Free (docs; measured in LC0 Task 3).**
+  1. **Durable Objects on Free:**
+     - 100,000 requests a day, "includ[ing] … WebSocket messages", 13,000 GB-s, 5M rows read and 100,000 written, and 5 GB stored. Operations fail past a limit until 00:00 UTC. SQLite-backed objects only.
+     - The page calls the 20:1 WebSocket ratio "for compute requests billing", and doesn't say how the Free daily limit counts messages. LC0 Task 3 measures it.
+  2. **Cron Triggers:** 5 per account on Free, shared with the site Worker's crons, with 10 ms of CPU per invocation.
+  3. **The rate-limiting binding:** GA, with no plan restriction listed. Counts are per location over a 10 s or 60 s period, so a strict global limit needs a Durable Object.
+  4. **Turnstile Siteverify:** single use (a replay returns `timeout-or-duplicate`); tokens are valid for 300 s; `idempotency_key` allows safe retries.
+
+  Also: Tunnel is on all plans, with no price. Zero Trust Free covers 50 users, but onboarding asks for payment details, so **Access isn't used at $0**.
+- **R-LC2a-10, domain lists (D1753).**
+  - **The pins:**
+    - `Kikobeats/free-email-domains` at `18d04cbaa077cca754e129a417fbdf780dea332a` (2026-10-23, release 1.15.12, MIT);
+    - `disposable-email-domains/disposable-email-domains` at `8c05972cf08375d540d50b96b15b7db360fb0a29` (2026-10-22, CC0-1.0).
+  - **The sources of `free-email-domains`:**
+    - Its only free-mail source is **HubSpot's CSV, which has no licence** (`scripts/sources.mjs`). Its other sources are disposable lists: MIT, CC0, BSD-3-Clause (7c/fakefilter, notice kept) and CC-BY-4.0 (GeroldSetz, through groundcat; attribution needed).
+    - **For counsel (Q1276):** accept the HubSpot entries, or build our own free-mail set from the `block` families plus an MIT list. The second option changes D1753's wording.
+  - **Vendoring:** the lists are vendored with a `NOTICE` that lists every licence.
+- **R-LC2a-11, the TiDB items read for §25 and §17.**
+  - The `tidbcloud/tidbcloud` Terraform provider 0.4.11 is listed on the OpenTofu registry (Q1273).
+  - The billing API works with the LC0 org key. It gives monthly totals by project and service (`GET /v1beta1/bills/{month}`, $0 so far), daily rows per cluster (`/billsDetails`) and a cost explorer. It is per cluster at best, so it can't meter tenants inside a cell.
