@@ -6,7 +6,7 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo="$(cd "$here/../../.." && pwd)"
 script="$repo/deploy/byoc/lib/loams-byoc-secrets"
 tmp="$(mktemp -d "${TMPDIR:-/var/tmp}/byoc-secrets.XXXXXX")"
-trap 'kill "${srv:-0}" 2>/dev/null || true; rm -rf "$tmp"' EXIT
+trap '[[ -z "${srv:-}" ]] || kill "$srv" 2>/dev/null || true; rm -rf "$tmp"' EXIT
 fail=0
 ok() { echo "ok   $*"; }
 bad() { echo "FAIL $*"; fail=1; }
