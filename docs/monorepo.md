@@ -70,6 +70,8 @@ Nx discovers 49 projects, including existing package script targets. Use `pnpm n
 
 Vite+ 1.0.0/Vitest 5.0.1 stay scoped to plugins, while the console retains ordinary Vite 8.3.1/Vitest 5.0.3. pnpm reports Vite peer-version warnings because the plugins' compatibility fork identifies as version 1.0.0; actual builds and tests pass. MSW's nonessential postinstall is explicitly disabled. Do not apply a global Vite override.
 
+> **Direction (owner, 2026-10-23, D1770):** Vite+ becomes the JavaScript toolchain workspace-wide. [Design 79](design/79-void-and-vite-plus.md) sets the mapping, approved by the owner on 2026-10-23 (D1772: one `vite-plus` catalog pin with `vite` aliased to `vite-plus-core`, `vp` in each package's targets, Nx kept as the orchestrator). Until VV1 lands, the rule above stands.
+
 ## Desktop fork cleanup and policy
 
 The shipping executable and internal packages are Loams Desktop-branded. Product presentation, application identity, service/data names, installer paths, and bot executable discovery are coordinated. Unused inherited mobile/client/text components and upstream release/deployment automation were omitted. Original repository files were not changed.
