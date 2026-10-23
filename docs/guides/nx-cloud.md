@@ -68,8 +68,9 @@ connected dev push shows up as a deployment to it.
 - Anonymous runs connect and are recorded.
 - **Anonymous writes do not reach the cache.** A rerun of the same hash missed, from the same branch
   (`NX_BRANCH`) and from another.
-- Anonymous reads of entries written by CI are expected under the read-only default. That check runs
-  once the first connected dev push has written entries.
+- **Anonymous reads work.** After the first connected dev push (`4825182`) wrote its entries, a
+  tokenless run on this machine (Node 26) at the same commit read 8 of 8 build and typecheck tasks
+  from the remote cache. The machine and CI therefore share keys, as intended.
 - One caution for anyone repeating the check: the Nx Cloud client keeps its own copy of downloaded
   results under `HOME`/`TMPDIR`. A test that reuses them sees false "hits".
 
@@ -95,6 +96,17 @@ with an invalid token, through the wrapper, fell back and passed.
 I have not seen the exact wording Nx Cloud prints when the credits run out. The wrapper matches
 "disabled", "exceeded", "out of credits", "usage limit" and similar. If a run fails on a message it
 misses, add the message to `cloud_error` in the script.
+
+### Measured in CI
+
+These are the dev push of #1057's merge, `4825182`, run 39856110743. Attempt 1 was cancelled by a newer push, so I re-ran the run twice.
+
+| Attempt | Web job | Plugins job |
+|---|---|---|
+| 2 (cold, writes) | 551 s; 1/111 hits | 47 s; 4/4 hits, from attempt 1's writes |
+| 3 (warm) | **55 s; 110/111 hits** | 40 s; 4/4 hits |
+
+The one miss in attempt 3 is `@loams/client:test`, which is `cache: false` by design: it writes the conformance report that CI then checks. That makes 100% of the cacheable tasks hits.
 
 ## Affected
 
