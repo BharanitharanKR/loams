@@ -294,8 +294,11 @@ jobs:
           python3 scripts/connectors/crate_licences.py
       # CN2 Task 7: every profile under connectors/profiles/ and every manifest's
       # runtime.profile (the same rules as loams-flow's `profile` module).
+      # The self-test first: no refusal it prints carries a credential (#1105).
       - name: connector profiles
-        run: python3 scripts/connectors/profiles.py --check
+        run: |
+          python3 scripts/connectors/profiles.py --self-test
+          python3 scripts/connectors/profiles.py --check
 
   # HE1 owns this job (plan 2026-10-21-he1-loams-house-engine, Task 1): the
   # mined-applications harness brings Langfuse v4 up against the pinned

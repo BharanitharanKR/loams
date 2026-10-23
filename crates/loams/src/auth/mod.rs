@@ -1000,4 +1000,51 @@ mod tests {
                 .is_ok()
         );
     }
+
+    /// A credential's `Debug`, which a panic or a `?` log prints (CodeQL
+    /// rust/cleartext-logging, #1105), names its kind and never its value.
+    #[test]
+    fn a_credential_debug_never_shows_the_secret() {
+        let (key, _) = api_key::generate();
+        let session = directory::new_session_token();
+        let jwt = "eyJhbGciOiJSUzI1NiJ9.eyJzdWIiOiJhIn0.c2lnbmF0dXJl".to_owned();
+        let csrf = "csrf-0123456789abcdef".to_owned();
+        let cases = [
+            (
+                Credential::ApiKey(key.clone()),
+                key.as_str(),
+                "ApiKey([redacted])",
+            ),
+            (
+                Credential::Jwt(jwt.clone()),
+                jwt.as_str(),
+                "Jwt([redacted])",
+            ),
+            (
+                Credential::Session(SessionCredential {
+                    token: session.clone(),
+                    csrf: Some(csrf.clone()),
+                }),
+                session.as_str(),
+                "Session([redacted])",
+            ),
+        ];
+        for (credential, secret, shown) in cases {
+            let debug = format!("{credential:?} {credential:#?}");
+            assert!(
+                !debug.contains(secret),
+                "{shown}: the secret is in the Debug output"
+            );
+            assert!(
+                !debug.contains(&csrf),
+                "{shown}: the CSRF token is in the Debug output"
+            );
+            assert_eq!(format!("{credential:?}"), shown);
+        }
+        let s = SessionCredential {
+            token: session.clone(),
+            csrf: Some(csrf.clone()),
+        };
+        assert_eq!(format!("{s:?}"), "SessionCredential([redacted])");
+    }
 }
