@@ -10,7 +10,8 @@
 //! (Ruling 3). [`TxnOptions`], [`TxnError`] and [`Committed`] are the
 //! runner's options, error classes and result; [`FaultPlan`] its fault hooks;
 //! [`GcBarrier`] holds GC below a timestamp. [`tuple`](mod@tuple) is the
-//! order-preserving tuple codec. [`testing`] yields the stores a test runs
+//! order-preserving tuple codec and [`key`](mod@key) its untagged
+//! sibling. [`testing`] yields the stores a test runs
 //! on, and [`conformance`] holds every backend to the same semantics
 //! ([`kv_conformance!`]).
 
@@ -27,7 +28,7 @@ mod tikv;
 mod ts;
 mod txn;
 
-pub use codec::{CodecError, tuple};
+pub use codec::{CodecError, key, tuple};
 pub use faults::{Fault, FaultPlan, FaultPoint};
 pub use gc::GcBarrier;
 pub use runner::{CommitMode, Committed, Mode, TxnError, TxnOptions};
