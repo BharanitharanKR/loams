@@ -1537,6 +1537,7 @@ impl RpcService for EngineRpc {
                 let changed = self
                     .doc_host
                     .update_queued_message(&p.chat_id, &p.id, &p.text)
+                    .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
                 reply::<calls::UpdateQueuedMessage, _>(&ChangedReply { changed })
             }
@@ -1585,6 +1586,7 @@ impl RpcService for EngineRpc {
                 let changed = self
                     .doc_host
                     .move_queued_message(&p.chat_id, &p.id, p.to_index)
+                    .await
                     .map_err(|e| RpcError::Failed(e.to_string()))?;
                 reply::<calls::MoveQueuedMessage, _>(&ChangedReply { changed })
             }
