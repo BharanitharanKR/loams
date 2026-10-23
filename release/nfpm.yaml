@@ -110,11 +110,9 @@ contents:
     file_info:
       mode: 0755
 
-  # The built web console (web/apps/console/dist, the `pnpm build` output). The
-  # server binary does not serve it: no static-file route exists in the engine
-  # today, and the console is deployed to Cloudflare by console-deploy.yml. It
-  # is packaged so an operator running their own front end has the exact assets
-  # the release built, byte for byte, next to the binary they installed.
+  # The built web console (web/apps/console/dist, the `pnpm build` output),
+  # which the engine serves at /ui/ from here (from 0.1.2), same-origin with
+  # its API: the assets the release built, byte for byte.
   - src: staging/usr/share/loams/console
     dst: /usr/share/loams/console
     file_info:
