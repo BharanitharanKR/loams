@@ -536,6 +536,13 @@ AZURE_STORAGE_ACCOUNT_NAME=myaccount
 AZURE_STORAGE_ACCOUNT_KEY=...
 ```
 
+On an Azure VM with a managed identity, use no key: set `AZURE_CREDENTIAL_TYPE=managed_identity`
+(and `AZURE_STORAGE_CLIENT_ID` for a user-assigned identity) and give the identity
+`Storage Blob Data Contributor` on the container. The engine then asks the instance metadata
+service for a token. `loams-store`'s unit tests check that this builds without a key; it has
+not yet been run against a real storage account. `deploy/byoc/azure/` sets it up (see
+`docs/guides/byoc/azure.md`).
+
 If writes fail with `Error performing PUT http://169.254.169.254`, the engine found no
 credentials and asked the cloud metadata service, which answers only on a cloud VM. Check
 that `secrets/engine.env` exists and sets `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`.
