@@ -3,8 +3,14 @@
 > **For agentic workers:** REQUIRED SUB-SKILL: use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans. Work task by task. Where this plan gives exact names, paths, flags or tests, use them verbatim. Record any deviation in "Rulings made during execution" at the end.
 >
 > **Status: Approved stub** (owner, 2026-10-23, all defaults). Track **VV**, design [§79](../design/79-void-and-vite-plus.md).
-> - **Approved:** D1770–D1791 and Q1300–Q1310. That includes no Deno support (D1790) and Bun compiled ahead of time for the self-hosted and container targets (D1791).
-> - **Proposed:** the further Bun uses, D1792–D1795 and Q1311–Q1313. Task 8 informs them.
+> - **Approved:** D1770–D1795 and Q1300–Q1313. That includes:
+>   - no Deno support (D1790);
+>   - Bun compiled ahead of time for the self-hosted and container targets (D1791);
+>   - Bun-compiled Loams CLIs, with the Factory host first (D1792, Q1313);
+>   - the Factory's app images on the compiled-Bun image (D1793);
+>   - the LGPL-2 obligations of distributed binaries, with counsel review before the first one ships (D1794, Q1312);
+>   - the Bun conformance lane (D1795);
+>   - Node's managed runtime on Lambda (Q1311).
 >
 > **Coverage:** this plan specifies **VV0**, the spikes, task by task. VV0 writes no product code. VV1–VV3 are outlined at milestone level, and each gets full task specifications after the VV0 report.
 
@@ -19,7 +25,7 @@
 - a go or no-go for each task;
 - the measured numbers (build times against today's, bundle sizes, cold starts on Lambda);
 - the answers to §79's (verify) items;
-- recommended answers for Q1311 and Q1313, and any change Task 7 suggests to Q1304's answer.
+- any change that Task 8's numbers suggest to Q1311's answer (Node on Lambda), or Task 7's to Q1304's.
 
 ## Global Constraints
 
@@ -66,7 +72,7 @@
 
 ## VV3: options (milestone)
 
-- **Bun-compiled Loams CLIs** (D1792), starting with the Factory host (Q1313), after counsel (Q1312).
+- **Bun-compiled Loams CLIs** (D1792), starting with the Factory host (Q1313). No Bun binary ships before counsel has reviewed the LGPL-2 obligations (D1794, Q1312). This is an owner action before the first release.
 - **The `void-platform` target** (Q1306).
 - **The control plane on Void** (Q1304).
 - **loams-site on `void deploy`** (Q1305).

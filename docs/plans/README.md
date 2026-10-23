@@ -450,7 +450,7 @@ Design reference: [78 Loams Cloud on TiDB X](../design/78-loams-cloud-on-tidb-x.
 
 ## Track VV: Void and Vite+
 
-Design reference: [79 Void and Vite+](../design/79-void-and-vite-plus.md) (D1770–D1791 and Q1300–Q1310 **approved by the owner 2026-10-23, all defaults**; D1792–D1795 and Q1311–Q1313 proposed).
+Design reference: [79 Void and Vite+](../design/79-void-and-vite-plus.md) (D1770–D1795 and Q1300–Q1313 **approved by the owner 2026-10-23, all defaults**).
 
 | Plan | Scope | Depends on | Status |
 |---|---|---|---|
