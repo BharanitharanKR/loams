@@ -70,7 +70,7 @@ run "bucket_is_private_versioned_and_encrypted" {
     error_message = "versioning is on"
   }
   assert {
-    condition     = aws_s3_bucket_server_side_encryption_configuration.this[0].rule[0].apply_server_side_encryption_by_default[0].sse_algorithm == "aws:kms"
+    condition     = contains([for r in aws_s3_bucket_server_side_encryption_configuration.this[0].rule : one(r.apply_server_side_encryption_by_default).sse_algorithm], "aws:kms")
     error_message = "the bucket's default encryption is KMS"
   }
   assert {
