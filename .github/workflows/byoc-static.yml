@@ -1,0 +1,56 @@
+# BY0 Tasks 3-5 (docs/plans/2026-10-21-by1-byoc-clouds.md, design 70): the static
+# checks of deploy/byoc. No cloud account and no key: the cloud-init schema, the
+# generated files, the policies, the "no inbound rule" and "no static key" checks,
+# and the secrets fetcher against a local mock of IMDS, Secrets Manager, the GCE
+# metadata server and Key Vault. Not part of CI required (a separate workflow, as
+# identity.yml).
+name: BYOC static
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - "deploy/byoc/**"
+      - "deploy/tofu/**"
+      - "deploy/release/compose.yaml"
+      - "docs/release/loams-release-key.asc"
+      - "docs/guides/byoc/**"
+      - "tests/byoc/**"
+      - ".github/workflows/byoc-static.yml"
+
+concurrency:
+  group: byoc-static-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+permissions:
+  contents: read
+
+env:
+  # cloud-init 26.2, from its release tag (it is not on PyPI); the archive is checked by hash.
+  CLOUD_INIT_VERSION: "26.2"
+  CLOUD_INIT_SHA256: "16274a4102426871cad84ad07db41f82aa8f4d43d95e5947a62e199c2df775c6"
+
+jobs:
+  static:
+    name: "BYOC: static checks"
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: cloud-init (source tree, checked by hash) and PyYAML
+        run: |
+          set -euo pipefail
+          dir="$RUNNER_TEMP/cloud-init"
+          mkdir -p "$dir"
+          curl --proto '=https' --tlsv1.2 -fsSL --retry 3 \
+            "https://github.com/canonical/cloud-init/archive/refs/tags/$CLOUD_INIT_VERSION.tar.gz" -o "$RUNNER_TEMP/cloud-init.tar.gz"
+          echo "$CLOUD_INIT_SHA256  $RUNNER_TEMP/cloud-init.tar.gz" | sha256sum -c -
+          tar -xzf "$RUNNER_TEMP/cloud-init.tar.gz" -C "$dir" --strip-components=1
+          python3 -m venv "$RUNNER_TEMP/venv"
+          "$RUNNER_TEMP/venv/bin/pip" install --quiet pyyaml jinja2 jsonschema requests configobj oauthlib jsonpatch
+          echo "CLOUD_INIT_SRC=$dir" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/venv/bin" >> "$GITHUB_PATH"
+      - name: static tests
+        run: tests/byoc/static/run.sh
