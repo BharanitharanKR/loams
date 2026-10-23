@@ -197,7 +197,7 @@ Commit: `docs(lc0): the LC0 report`.
 > - WorkOS AuthKit for the hosted try-out (D1750);
 > - the sign-in policy: Google, GitHub, Microsoft, or a work-email code (D1751; Microsoft added the same day). Sign in with Apple is rejected for now (D1758, owner, 2026-10-23).
 >
-> **Status: Approved** (owner, 2026-10-23, all defaults): D1736–D1751 and Q1278–Q1296. The design is [§78 §25](../design/78-loams-cloud-on-tidb-x.md#25-invite-only-access-workos-authkit-and-the-sign-in-policy-d1736d1757-owner-amendments-of-2026-10-23). D1752–D1757 stay **Proposed** until the owner confirms them; the owner's message named D1736–D1751. **No LC2a code starts until the owner hands over the credentials listed under "Owner steps and credentials" below.**
+> **Status: Approved** (owner, 2026-10-23, all defaults): D1736–D1751 and Q1278–Q1296. The design is [§78 §25](../design/78-loams-cloud-on-tidb-x.md#25-invite-only-access-workos-authkit-and-the-sign-in-policy-d1736d1757-owner-amendments-of-2026-10-23). D1752–D1757 were approved by the owner later the same day. **No LC2a code starts until the owner hands over the credentials listed under "Owner steps and credentials" below.**
 >
 > **Prerequisites:**
 > - §25's API plan: approved (owner, 2026-10-23);
