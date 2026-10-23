@@ -120,7 +120,7 @@ Runtime config is written at deploy time from the environment by `apps/console/d
 | `LOAMS_AUTH_ISSUER` | the issuer, default `https://auth.loams.dev`. Your own IdP is accepted here but not offered in the UI yet (coming soon). |
 | `LOAMS_AUTH_SCOPE` | optional, default `openid profile email offline_access`. |
 | `LOAMS_ENGINE_URL` | optional: fixes the engine (skips the connect screen and adds its origin to the CSP). |
-| `LOAMS_AGENTD_ORIGINS` | optional: the origins of the remote agentd hosts Studio may use (`loams-agentd serve --remote`), separated by spaces or commas, each an exact `https://host[:port]`. They join the CSP's `connect-src` (the Connect calls) and `frame-src` (the previews). Each host must also list this console in its `--allow-origin`. Unset, Studio in the browser can reach no agentd host; the engine-embedded console never can (its CSP is the build's). |
+| `LOAMS_AGENTD_ORIGINS` | optional: the origins of the remote agentd hosts Studio may use (`loams-agentd serve --remote`), separated by spaces or commas, each an exact `https://host[:port]`. They join the CSP's `connect-src` (the Connect calls) and `frame-src` (the previews). Each host must also list this console in its `--allow-origin`. Unset, Studio in the browser can reach no agentd host. The engine-served console reads the same variable from the engine's environment: the engine takes the build's meta CSP out of the page it serves, sends it as a header, and adds these origins to `connect-src` only (not `frame-src`, so previews stay off there). |
 
 `config.json` keys: `hosted`, `engineUrl`, `authMode`, `authIssuer`, `authClientId`, `authScope`. The engine-embedded console keeps serving `{}` (same origin, cookie session).
 

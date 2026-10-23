@@ -305,6 +305,9 @@ pub struct ServerConfig {
     /// `--console-dir`, else to [`crate::console::DEFAULT_DIR`] when that
     /// holds a build, unless `--no-console`.
     pub console_dir: Option<PathBuf>,
+    /// How the console is served: the agentd hosts its CSP header lets
+    /// Studio call (`LOAMS_AGENTD_ORIGINS`, [`crate::console`]).
+    pub console: crate::console::ConsoleOptions,
 }
 
 /// Loams Git's server settings (GT1 Task 13).
@@ -495,6 +498,7 @@ impl ServerConfig {
             auth: crate::auth::AuthConfig::off(),
             tls: crate::tls::TlsConfig::off(),
             console_dir: None,
+            console: crate::console::ConsoleOptions::default(),
         }
     }
 
@@ -3145,7 +3149,7 @@ impl Server {
                 // authentication layer (its files are public; its calls are
                 // not), so it is always same-origin with its engine.
                 let console = config.console_dir.as_deref().and_then(|dir| {
-                    let router = crate::console::router(dir);
+                    let router = crate::console::router(dir, &config.console);
                     match &router {
                         Some(_) => {
                             tracing::info!(path = %dir.display(), "the console is served at /ui/")

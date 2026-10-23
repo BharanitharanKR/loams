@@ -18,6 +18,16 @@ All notable changes to this project are documented here. The format follows [Kee
   observability app (see Changed). A stored OpenObserve connection is no longer listed.
 
 ### Changed
+- **The engine sends the console's Content-Security-Policy as a header, and Studio there can
+  reach a remote agentd** (0.1.2; owner, 2026-10-23). On `/ui/` the engine takes the build's
+  `<meta>` CSP out of `index.html` and `cordis.html` (a header cannot loosen a meta policy) and
+  sends the same policy as the `Content-Security-Policy` header, with the origins in
+  `LOAMS_AGENTD_ORIGINS` added to `connect-src`. Every other directive stays the build's; empty
+  means `connect-src 'self'`, as before. Entries follow `LOAMS_CORS_ORIGINS`'s exact-origin rules,
+  and `*`, `null`, paths or credentials stop the engine at start. The compose stack passes the
+  variable through. Statically hosted builds keep their meta tag. `frame-ancestors` on the
+  console's responses is now `'self'` (it was `'none'`, which also blocked the console's own
+  plugin sandbox frame).
 - **The console ships with each deployment, and CORS is deny by default** (0.1.2; owner,
   2026-10-23; D1705 amended). The hosted console at `console.loams.dev` is retired (design 78),
   so:
