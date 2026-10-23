@@ -5,7 +5,8 @@
 //   Cargo's target directory and the CI Rust caches.
 // - `test` runs `cargo nextest run --workspace -E 'package(=<crate>)'`: the workspace build, with
 //   the workspace's feature unification, so per-crate runs share one set of compiled artefacts,
-//   and only the crate's tests run.
+//   and only the crate's tests run. A workspace whose CI runs `cargo test` (inputs.json
+//   `"test": "cargo-test"`, fabric/) gets `cargo test -p <crate>` instead.
 // - `clippy` runs `cargo clippy -p <crate> --all-targets`; `fmt` runs `cargo fmt -p <crate> --check`.
 // - The inputs: the crate's files, its path dependencies' files (transitively, through the Nx
 //   project graph), the workspace's manifests, lockfile and toolchain files, proto/, the compile
@@ -41,6 +42,8 @@ function projectsFor(manifest, workspaceRoot) {
   const { root, crates } = readWorkspace(workspaceRoot, manifest);
   const repoWide = new Set(ws.repoWide ?? []);
   const globals = workspaceGlobals(root);
+  // `nextest` (the default) or `cargo-test`, as the workspace's CI runs its tests.
+  const nextest = (ws.test ?? 'nextest') === 'nextest';
   const projects = {};
   for (const c of crates) {
     const extra = (ws.extra?.[c.name] ?? []).map((g) => `{workspaceRoot}/${g.endsWith('**') ? `${g}/*` : g}`);
@@ -56,19 +59,28 @@ function projectsFor(manifest, workspaceRoot) {
       tags: ['language:rust', 'cargo-crate', `cargo-workspace:${root === '.' ? 'root' : root}`],
       namedInputs: { cargoCrate: ['{projectRoot}/**/*', '!{projectRoot}/target/**/*'] },
       targets: {
-        test: {
-          executor: 'nx:run-commands',
-          cache,
-          inputs: [
-            ...compileInputs,
-            `{workspaceRoot}/${root === '.' ? '' : `${root}/`}.config/nextest.toml`,
-            { runtime: 'cargo nextest --version' },
-            ...tools,
-          ],
-          outputs: [],
-          options: run(`cargo nextest run --workspace --locked --no-tests=pass -E 'package(=${c.name})'`),
-          metadata: { description: `${c.name}'s tests (nextest), in the workspace build` },
-        },
+        test: nextest
+          ? {
+              executor: 'nx:run-commands',
+              cache,
+              inputs: [
+                ...compileInputs,
+                `{workspaceRoot}/${root === '.' ? '' : `${root}/`}.config/nextest.toml`,
+                { runtime: 'cargo nextest --version' },
+                ...tools,
+              ],
+              outputs: [],
+              options: run(`cargo nextest run --workspace --locked --no-tests=pass -E 'package(=${c.name})'`),
+              metadata: { description: `${c.name}'s tests (nextest), in the workspace build` },
+            }
+          : {
+              executor: 'nx:run-commands',
+              cache,
+              inputs: [...compileInputs, ...tools],
+              outputs: [],
+              options: run(`cargo test -p ${c.name} --locked --no-fail-fast`),
+              metadata: { description: `${c.name}'s tests (cargo test)` },
+            },
         clippy: {
           executor: 'nx:run-commands',
           cache: true,

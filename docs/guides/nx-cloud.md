@@ -68,8 +68,9 @@ connected dev push shows up as a deployment to it.
 - Anonymous runs connect and are recorded.
 - **Anonymous writes do not reach the cache.** A rerun of the same hash missed, from the same branch
   (`NX_BRANCH`) and from another.
-- Anonymous reads of entries written by CI are expected under the read-only default. That check runs
-  once the first connected dev push has written entries.
+- **Anonymous reads work.** After the first connected dev push (`4825182`) wrote its entries, a
+  tokenless run on this machine (Node 26) at the same commit read 8 of 8 build and typecheck tasks
+  from the remote cache. The machine and CI therefore share keys, as intended.
 - One caution for anyone repeating the check: the Nx Cloud client keeps its own copy of downloaded
   results under `HOME`/`TMPDIR`. A test that reuses them sees false "hits".
 
@@ -95,6 +96,17 @@ with an invalid token, through the wrapper, fell back and passed.
 I have not seen the exact wording Nx Cloud prints when the credits run out. The wrapper matches
 "disabled", "exceeded", "out of credits", "usage limit" and similar. If a run fails on a message it
 misses, add the message to `cloud_error` in the script.
+
+### Measured in CI
+
+These are the dev push of #1057's merge, `4825182`, run 39856110743. Attempt 1 was cancelled by a newer push, so I re-ran the run twice.
+
+| Attempt | Web job | Plugins job |
+|---|---|---|
+| 2 (cold, writes) | 551 s; 1/111 hits | 47 s; 4/4 hits, from attempt 1's writes |
+| 3 (warm) | **55 s; 110/111 hits** | 40 s; 4/4 hits |
+
+The one miss in attempt 3 is `@loams/client:test`, which is `cache: false` by design: it writes the conformance report that CI then checks. That makes 100% of the cacheable tasks hits.
 
 ## Affected
 
@@ -299,7 +311,7 @@ and console e2e. They are not enabled while the cloud is limited to dev pushes.
 
 ## Rust
 
-Each crate of the root Cargo workspace is an Nx project (65), tagged `cargo-crate` and `language:rust`. A local plugin, `tools/nx-cargo`, builds the projects from the Cargo manifests; it does not run Cargo, so JS-only jobs need no toolchain.
+Each crate of the root Cargo workspace (65) and of `fabric/` (28) is an Nx project, tagged `cargo-crate`, `language:rust` and `cargo-workspace:root` or `cargo-workspace:fabric`. A local plugin, `tools/nx-cargo`, builds the projects from the Cargo manifests; it does not run Cargo, so JS-only jobs need no toolchain.
 
 Each crate has three targets. None has `outputs`, so Nx caches only the result and the log; compilation stays in Cargo's `target/` and the CI Rust caches.
 
@@ -308,6 +320,8 @@ Each crate has three targets. None has `outputs`, so Nx caches only the result a
 | `test` | `cargo nextest run --workspace --locked --no-tests=pass -E 'package(=<crate>)'` | Uses the workspace build and its feature unification, the same artefacts as today's workspace job, and runs only this crate's tests |
 | `clippy` | `cargo clippy -p <crate> --all-targets --locked -- -D warnings` | |
 | `fmt` | `cargo fmt -p <crate> --check` | |
+
+`fabric/`'s CI runs `cargo test`, not nextest, so a fabric crate's `test` runs `cargo test -p <crate> --locked --no-fail-fast` (`"test": "cargo-test"` in `inputs.json`).
 
 Usage:
 - run them all: `pnpm nx run-many -t fmt clippy test --exclude='*,!tag:cargo-crate'`;
@@ -331,10 +345,10 @@ The linker, link arguments and target directories are not inputs, so the owner's
 
 | Field | Meaning | Crates |
 |---|---|---|
-| `repoWide` | Code walks the repository (licence and source scans, compose files, `docs/`), so every file is an input | 13, including `loams` |
+| `repoWide` | Code walks the repository (licence and source scans, compose files, `docs/`), so every file is an input | 13 in the root workspace, including `loams`; 6 in `fabric/` |
 | `extra` | Files outside the crate that it reads | for example `conformance/graph/desktop/**` and `release/upgrade-path.toml` |
 | `tools` | The version of a tool its tests run | `git`, `node`, `python3` |
-| `noCache` | `cache: false`, because the tests depend on what the machine has | `loams-compat` (psql), `loams-sqldb` and `loams-sqlgate` (services, podman), `loams-upgrade` (downloads) |
+| `noCache` | `cache: false`, because the tests depend on what the machine has | root: `loams-compat` (psql), `loams-sqldb` and `loams-sqlgate` (services, podman), `loams-upgrade` (downloads); fabric: `loams-flow` (kubectl, helm, promtool), `loams-house-worker` (kubectl) |
 
 The feature-gated suites (TiKV, the cluster tests, the crash gate, the nightly suites) are not Nx targets, so they never use a cache.
 
@@ -347,6 +361,7 @@ The feature-gated suites (TiKV, the cluster tests, the crash gate, the nightly s
 | Target | Tasks | First run (miss) | Second run (hit) |
 |---|---|---|---|
 | `fmt` | 65 | 7 s | 1 s, 65/65 hits |
+| `fmt` (`fabric/`) | 28 | 3 s | 1 s, 28/28 hits |
 | `clippy` (`loams-common`, `loams-tuple`, `loams-store`) | 3 | 52 s | 1 s, 3/3 hits |
 
 Invalidation, checked on the same targets:

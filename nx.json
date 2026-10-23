@@ -3,7 +3,7 @@
   "defaultBase": "dev",
   "nxCloudId": "6ada11220d72175d478305c0",
   "parallel": 2,
-  "plugins": [{"plugin": "./tools/nx-cargo/index.cjs", "options": {"workspaces": ["Cargo.toml"]}}],
+  "plugins": [{"plugin": "./tools/nx-cargo/index.cjs", "options": {"workspaces": ["Cargo.toml", "fabric/Cargo.toml"]}}],
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "!{projectRoot}/node_modules/**/*", "!{projectRoot}/dist/**/*", "!{projectRoot}/lib/**/*", "!{projectRoot}/out/**/*", "!{projectRoot}/target/**/*", "!{projectRoot}/coverage/**/*", "!{projectRoot}/test-results/**/*", "!{projectRoot}/playwright-report/**/*", "!{projectRoot}/**/*.tsbuildinfo", "sharedGlobals"],
     "sharedGlobals": ["{workspaceRoot}/package.json", "{workspaceRoot}/pnpm-lock.yaml", "{workspaceRoot}/pnpm-workspace.yaml", "{workspaceRoot}/nx.json", "{workspaceRoot}/web/tsconfig.base.json", {"runtime": "pnpm --version"}],
