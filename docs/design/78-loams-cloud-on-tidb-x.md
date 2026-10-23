@@ -1,5 +1,7 @@
 # 78 — Loams Cloud on TiDB X: Dev on Your Own Devices, Prod in Your Own Cloud
 
+> **Owner amendments (2026-10-23): Loams Cloud is invite-only (D1736), uses WorkOS AuthKit for the hosted try-out's identity (D1750, amending §76's Q1201 default for the try-out only), and allows only Google, GitHub, Microsoft or a work-email code (D1751; Microsoft added the same day; Apple proposed in D1758).** All three approved. People join a waitlist on `loams.dev/cloud` with double opt-in; an admin invites batches; WorkOS emails the invitation; sign-in runs through AuthKit with server-side policy checks. Details, the API and the $0 cost plan are in [§25](#25-invite-only-access-workos-authkit-and-the-sign-in-policy-d1736d1757-owner-amendments-of-2026-10-23) (D1736–D1751 and Q1278–Q1296 approved by the owner on 2026-10-23 with all defaults, Microsoft added to D1751 the same day; D1752–D1758 and Q1297 (Apple) Proposed).
+
 Status: **Approved** · 2026-10-23. The owner approved the design with all defaults on 2026-10-23: every decision (D1700–D1735), including D1701's amendment of D1323 and the wording updates to D1351, D1378 and D1615, and every question (Q1260–Q1277) at its recommended default. The owner's next actions are a no-card TiDB Cloud org for LC0 (Q1277) and counsel review before the public try-out (Q1276).
 
 Source: the owner's directions of 2026-10-23.
@@ -12,7 +14,7 @@ Source: the owner's directions of 2026-10-23.
 
 The owner's notes on TiDB X were treated as unverified. The research report checks each claim against primary sources: [`docs/research/tidb-x-and-hcp.md`](../research/tidb-x-and-hcp.md) ("the report" below). §4 lists the corrections.
 
-**Numbering.** Decisions **D1700–D1735** and questions **Q1260–Q1277** are declared in the [decision log](13-decision-log.md), approved by the owner on 2026-10-23. This document reserves **D1700–D1749** and **Q1260–Q1289**.
+**Numbering.** Decisions **D1700–D1735** and questions **Q1260–Q1277** are declared in the [decision log](13-decision-log.md), approved by the owner on 2026-10-23. The invite-only and WorkOS amendments (§25) add **D1736–D1757** (D1736–D1751 approved by the owner on 2026-10-23; D1752–D1757 Proposed) and **Q1278–Q1296** (answered by the owner on 2026-10-23: every default). D1750–D1769 and Q1290–Q1299 are a second reservation for this document. This document reserves **D1700–D1749** and **Q1260–Q1289**.
 - The highest numbers in use on `dev` (`7e83717d9`) sit in §77's blocks D1640–D1679 and Q1220–Q1244.
 - Open PRs use D1119 (#1082), D1552 and D1570 (#1055), D1603–D1616 (#1009) and one number in §77's free block D1666–D1679 (#1057), all below this block.
 - Design number 78 is the next free one; no open PR takes it.
@@ -126,7 +128,8 @@ Three earlier rulings stand in the way as worded, so this document proposes amen
 - **Phases:**
   - **LC0:** spikes and reports, no product code.
   - **LC1:** TiDB X BYOG and multi-device dev.
-  - **LC2:** the hosted try-out, invite-only first.
+  - **LC2a:** invite-only access (waitlist, email invites; D1736, §25), the first phase users see.
+  - **LC2:** the hosted try-out, invite-only throughout (D1736).
   - **LC3:** Cloudflare.
   - **LC4:** Vercel.
   - **LC5:** AWS, Google Cloud and Azure as production targets, with `loams promote`.
@@ -137,7 +140,7 @@ Three earlier rulings stand in the way as worded, so this document proposes amen
 |---|---|---|---|---|
 | **LC0** | Spikes: Starter tenant cells, Filesystem handoff and cost, the HTTP driver from a Worker, Zero's terms, device enrolment on IA0's stack, a company-device check; the LC0 report | Nothing new | IA0, SD1 | 2–3 engineer-weeks |
 | **LC1** | The target model; the `tidbx` target (the user's own TiDB Cloud org): SQL backend, workspaces on Filesystem, handoff between the user's own devices over their tailnet; `loams target`, `loams env` | Nothing new | §53, §47, LC0 | 5–7 engineer-weeks |
-| **LC2** | The hosted try-out: `loams.dev/cloud` sign-up and account pages, the control plane Worker, device enrolment, presence and leases, cells on Ostrium's TiDB org, quotas through the Meter, abuse controls; invite-only, then open | **Yes** (D1701) | IA2/IA4, ME1, LC1 | 6–8 engineer-weeks |
+| **LC2** | The hosted try-out: `loams.dev/cloud` sign-up and account pages, the control plane Worker, device enrolment, presence and leases, cells on Ostrium's TiDB org, quotas through the Meter, abuse controls; invite-only throughout (D1736), with LC2a's waitlist and email invites (§25) as its first, user-facing slice | **Yes** (D1701) | IA2/IA4, ME1, LC1 | 6–8 engineer-weeks |
 | **LC3** | The Cloudflare target: the user's own Cloudflare account as ground for edge, apps and a checkpointed node; Tunnel for device-to-device | Nothing new | BY0 Cloudflare (§70 §7), AB0 (§71), ER0 | Mostly §70's and §71's own estimates; 2 weeks for the target glue |
 | **LC4** | The Vercel target: apps and agents on the user's or company's Vercel team | Nothing new | AB1 (§71 §7.5), §70 §8 | 1–2 weeks of glue |
 | **LC5** | AWS, then Google Cloud, then Azure as production targets; `loams promote` dev → prod; the company org mapping | Nothing new | BY0/BY1 (§70), AB0/AB1 (§71) | 4–6 weeks of glue on top of BY1 |
@@ -254,7 +257,7 @@ The same picture with BYOG state (LC1) replaces Ostrium's TiDB org with the user
 | | Hosted by Ostrium | Free? | Limits (defaults, Q1265) |
 |---|---|---|---|
 | Sign-up, account, devices and projects pages (`loams.dev/cloud`) | Yes | Yes | — |
-| Identity (`auth.loams.dev`, Zitadel) | Yes (already, D1615) | Yes | GitHub or Google sign-in (Q1266) |
+| Identity (`auth.loams.dev`, Zitadel) | Yes (already, D1615) | Yes | GitHub or Google sign-in (Q1266). *For the try-out, amended by D1750 and D1751:* WorkOS AuthKit, with Google, GitHub, Microsoft or a work-email code (§25) |
 | Control plane: devices, presence, leases, run index, quotas, audit | Yes | Yes | 5 devices per user; 60 API calls a minute per device |
 | Session transcripts and run metadata | Yes, on opt-in (on by default for personal devices, off for work devices) | Yes | Counted in the user's SQL storage quota |
 | Try-out SQL databases (Loams SQL dev, MySQL wire) | Yes, in shared cells; or on TiDB Cloud Zero if LC0 allows it (Q1264) | Yes | 2 databases, 100 MiB in total, 1M RUs a month |
@@ -298,10 +301,10 @@ The same picture with BYOG state (LC1) replaces Ostrium's TiDB org with the user
 
 The owner is removing `console.loams.dev` (memory `loams-branding`). What remains is cleaner.
 
-- **Sign-up and account pages:** `loams.dev/cloud/*` on the existing loams-site Worker.
+- **Sign-up and account pages:** `loams.dev/cloud/*` on the existing loams-site Worker. **Sign-up is invite-only** (D1736): the public page is a waitlist, and accounts are created only by redeeming an emailed WorkOS invitation; the try-out signs in with WorkOS AuthKit (D1750) under the sign-in policy of D1751 (§25).
   - That Worker already serves `(auth)/sign-in`, `(auth)/sign-up` and a `(console)/console` preview with keys, usage, billing and settings pages, behind `run_worker_first` (loams-site `wrangler.jsonc`).
   - The `(console)` group becomes `cloud`, with pages for devices, projects and environments, quotas, data export and account deletion. "Billing" is removed.
-  - Sign-in moves to Zitadel at `auth.loams.dev` as §76 already plans for the site.
+  - Sign-in moves to Zitadel at `auth.loams.dev` as §76 already plans for the site. *Amended for the hosted try-out by D1750:* the try-out's sign-in is WorkOS AuthKit (§25.12).
   - **No product console is hosted.**
 - **The product console** (Console and Studio modes) runs where it already ships:
   - bundled with each plot's compose bundle (#1064), served by the engine on loopback or the tailnet;
@@ -760,7 +763,7 @@ App-port allowances are in §71 §7, read 2026-10-21, and are not repeated. Thes
   - GitHub or Google through Zitadel only; no password accounts in the try-out (Q1266).
   - Cloudflare Turnstile on the sign-up page.
   - One personal org per identity.
-  - An invite code for the first 200 users.
+  - ~~An invite code for the first 200 users.~~ Replaced by the waitlist and email invites (D1736, D1749, §25).
   - A GitHub account at least 30 days old (Q1266).
 - **Nothing public:** users get no public endpoints on Loams Cloud. It serves no content, hosts no sites and runs no code, so phishing, hosting and mining abuse have no surface.
 - **Storage abuse:** caught by the quotas (§15.3) and the cells' hard limits. Large files are refused by the per-file-system size limit (500 MiB, V).
@@ -800,7 +803,7 @@ The owner's plan said "for loams cloud i have hashicorp free tier". The findings
   - It reaches TiDB with `@tidbcloud/serverless` over HTTP (beta, V), since Workers can't open TCP.
   - Interactive transactions are experimental (V), so the API uses single-statement writes and idempotency keys.
 - **Presence and leases:** one Durable Object per user, holding presence, leases and the live run index with **hibernating WebSockets**. It writes durable records to the control DB.
-- **The plan:** Workers Paid ($5 a month). Free's 100,000 requests a day and 10 ms of CPU don't fit device links beyond a few dozen devices (estimate).
+- **The plan:** Workers Paid ($5 a month). *D1756 (proposed) runs the try-out on Workers Free instead, with Durable Objects on the free plan, and makes Workers Paid a trigger-based owner decision (§25.13).* Free's 100,000 requests a day and 10 ms of CPU don't fit device links beyond a few dozen devices (estimate).
 - **Zitadel:** unchanged. It runs on its own host with its own Postgres (§76 §12.3) and is backed up nightly.
   - Zitadel needs Postgres 14–18, so it can't use Starter.
   - The PG preview has no SLA, so it isn't used for identity.
@@ -949,3 +952,415 @@ All vendor facts are in the [research report](../research/tidb-x-and-hcp.md) wit
 - the decision log rows cited above;
 - loams-site's `wrangler.jsonc` and `app/(auth)`, `app/(console)` (read at `0f8577b`, 2026-10-23);
 - memory notes `loams-preview-release-model`, `loams-fully-oss`, `loams-product-focus`, `loams-branding`, `loams-edge-reach`, `loams-identity-zitadel`, `loams-light-compose` and `company-formation`.
+
+
+## 25. Invite-only access, WorkOS AuthKit and the sign-in policy (D1736–D1757; owner amendments of 2026-10-23)
+
+> The owner, 2026-10-23:
+> - "Make it invite only and collect email, then we send invite link to the mail, plan for that apis…"
+> - Then: "go with WorkOS for Loams Cloud."
+> - Then: sign-in is limited to Google, GitHub or a company email.
+> - Then: "add Microsoft and Apple sign-in … if they're free." Microsoft is free and approved; Apple is not free (D1758).
+
+**Status:**
+- **Approved by the owner on 2026-10-23, with all defaults:** D1736–D1751, including D1736 (invite-only), D1750 (WorkOS AuthKit for the hosted try-out, amending §76's Q1201 default for the try-out only) and D1751 (the sign-in policy, with **Microsoft added by the owner the same day**), and every question Q1278–Q1296 at its recommended default.
+- **Still Proposed:** D1758 (Sign in with Apple, off by default, because it needs a paid Apple Developer membership; Q1297 is open), and D1752–D1757. The owner's approval message of 2026-10-23 named D1736–D1751 and Q1278–Q1296, so D1752–D1757 stay Proposed until the owner confirms them. Their content matches the approved answers (Q1291, Q1292, Q1294, Q1295).
+
+**What this amends:**
+- §8: sign-up becomes a waitlist, and sign-in moves to WorkOS AuthKit.
+- §9.1 and D1714, for the try-out only: a person's CLI login goes through WorkOS, and device keys are issued by the control plane (D1755).
+- §15.4 and D1720: email invites replace the invite codes for the first 200 (D1749).
+- Q1266's answer, invite-code clause only. The providers and the GitHub-age rule stay.
+- §17 and D1730: the try-out's running cost becomes $0 (D1756).
+- §76's Q1201 default and D1615, **for the hosted try-out only** (D1750).
+
+**What stays the same:** self-hosted and company installs keep Zitadel and OpenFGA (§76), or the built-in single-org mode.
+
+**Sources:** WorkOS facts come from WorkOS's current docs and pricing page, read 2026-10-23, and are listed in §25.11. Anything those pages don't settle is marked (verify), and LC2a Task 0 checks it first. No sign-ups or account actions were made.
+
+### 25.1 The rule and the flow (D1736, D1737)
+
+**Loams Cloud is invite-only** (D1736). Nobody gets a Loams Cloud account without a valid WorkOS invitation, sent to a waitlist address whose owner confirmed it.
+
+1. **Join the waitlist** on `loams.dev/cloud`: the person gives an email address and passes Turnstile. Two optional fields ask "what will you build" and the source. A short privacy notice sits beside the form (§25.6).
+   - The address is checked against the disposable-domain list. Free-mail addresses are allowed here, with the explanation in §25.4.
+   - The API answers the same way whatever the address (§25.7).
+   - Our Worker sends a **confirm link** (double opt-in) through Resend (§25.2). The entry counts only once confirmed. WorkOS can't email a person who isn't a WorkOS user or invitee yet, and we don't create either before an admin chooses (§25.2).
+2. **An admin selects invitees** with the admin API or `loams cloud admin`, protected by §25.8.
+3. **The invitation:** the control plane calls WorkOS's `POST /user_management/invitations` for each chosen address.
+   - It is an **application-wide** invitation, with no organisation.
+   - It sets `expires_in_days: 14`. WorkOS allows 1–30 and defaults to 7 (V).
+   - **WorkOS sends the invitation email** (V), through the custom email provider of §25.2.
+4. **Redemption:** the email's link opens AuthKit's invitation sign-up. The person signs in with Google, GitHub, or a company email's magic code (D1751).
+   - The environment's **sign-up is disabled**. A valid invitation token is the only way in: "when a valid invitation token is specified, the user is able to sign up even if it is disabled in the environment" (V).
+   - WorkOS calls our **registration** and **authentication** actions, which allow or deny (§25.5).
+   - AuthKit redirects to `GET /auth/callback`. The Worker exchanges the code, re-checks the sign-in policy and the invitation, then creates the Loams Cloud account: the records, the per-user Durable Object (D1727), and the WorkOS user's `external_id` set to our account id.
+5. **Lifecycle:**
+   - Resend and revoke go through WorkOS's endpoints (V), and expiry is WorkOS's own.
+   - Anyone may remove themselves from the waitlist.
+   - Accounts are deleted on request (D1731).
+   - Every step has an audit event (§25.9).
+
+### 25.2 Who sends the email (D1738)
+
+**Recommendation:**
+- **WorkOS sends its own emails:** invitations, magic-auth codes, email verification and admin notices.
+- **WorkOS uses Resend as its custom email provider,** sending from our domain.
+- **The Worker sends the waitlist's confirm and removal emails** through the same Resend account.
+- **One sending domain, one reputation, $0.**
+
+| Option | Facts (2026-10-23) | Verdict |
+|---|---|---|
+| **WorkOS built-in emails, through a custom email provider** | WorkOS sends invitation, magic-code and verification emails by default (V). Without a custom domain, production emails come from **`workos-mail.com`**. Its reputation is shared, so delivery is "best-effort and cannot be guaranteed" (V, [email domain](https://workos.com/docs/custom-domains/email)). A **custom email provider** sends "all transactional emails … AuthKit invitations and magic codes" through our own provider. The sending domain is then configured there, not in WorkOS, and **no WorkOS custom email domain is needed** (V, [custom email providers](https://workos.com/docs/authkit/custom-email-providers)). Supported: Amazon SES, Cloudflare, Mailgun, Postmark, **Resend** and SendGrid (V) | **Recommended**, with Resend |
+| WorkOS custom email domain | $99 a month (V, [pricing](https://workos.com/pricing)) | Not needed: the custom provider gives the same "from our domain" result at $0 |
+| **Resend** (free plan) | **3,000 emails a month, 100 a day**, 3 domains, 30-day log retention (V, [pricing](https://resend.com/pricing)). Whether commercial use is allowed on Free isn't on the page (verify) | **Recommended:** free, supported by WorkOS, and callable from a Worker on Workers Free over `fetch` |
+| Cloudflare Email Service | Needs **Workers Paid** ($5 a month), with 3,000 emails included (V) | Rejected: it costs $5 a month just for email. The owner has no budget |
+| WorkOS's own waitlist feature | AuthKit has a waitlist that collects an email; approving an entry creates an invitation; there is a Waitlist API and events `waitlist_user.created`, `.approved` and `.denied` (V, [waitlist](https://workos.com/docs/authkit/waitlist)). It sends a **receipt**, not a confirm link, and keeps unconfirmed entries (V: the page describes no confirmation) | Not used. It has no double opt-in, and no place for the privacy notice or the free-mail explanation. Q1295 keeps it as the fallback |
+
+**The domain** (Q1278): send from **`cloud@mail.loams.dev`**. `mail.loams.dev` is verified in Resend, with SPF, DKIM and a DMARC record at `p=quarantine` plus aggregate reports, moving to `p=reject` after 30 clean days.
+- `ostriumlabs.org` is never used for automated mail.
+- **Branding:** WorkOS emails carry our display name, logo and colours from AuthKit branding (V that branding exists; whether it is free isn't stated, so verify).
+
+**The daily cap** (Q1288, revised): Resend Free allows **100 emails a day across both senders**.
+- The Worker keeps **at most 60 invitations a day**. Confirmations, magic codes and resends get the rest.
+- Invitations go out paced, through the batch queue.
+- Moving past 100 a day means Resend's paid plan, or WorkOS's `workos-mail.com` for its own emails (best effort, $0). That is an owner decision (Q1290).
+
+### 25.3 Where the waitlist and account mapping live (D1739)
+
+The waitlist stays **in the control DB** (D1717's Starter instance), for the reasons in the first draft:
+- no user exists yet, so there is no per-user Durable Object;
+- the admin view is a query;
+- one store for personal data.
+
+The tables change for WorkOS:
+
+| Table | Columns (main) | Notes |
+|---|---|---|
+| `waitlist` | `id`, `email_hmac` (unique), `email_enc`, `status` (`pending`, `confirmed`, `invited`), `build?`, `source?`, `created_at`, `confirmed_at`, `ip_prefix_hmac` | As before |
+| `waitlist_tokens` | `token_hash`, `waitlist_id`, `kind` (`confirm`, `remove`), `expires_at`, `used_at` | Our own confirm and removal links |
+| `waitlist_suppressed` | `email_hmac`, `reason`, `created_at` | As before |
+| `invites` | `id`, `waitlist_id`, `email_hmac`, **`workos_invitation_id`**, `state` (mirrors WorkOS: `pending`, `accepted`, `expired`, `revoked`), `expires_at`, `resend_count`, `created_by` | **No invite token is stored by us.** WorkOS holds it (V: the invitation object has `token` and `accept_invitation_url`) |
+| `accounts` | `id` (`acct_`), **`workos_user_id`** (unique), `contact_email_enc`, `contact_email_hmac`, `invite_id`, `status`, `created_at` | `workos_user_id` is the `sub` of WorkOS access tokens (V). WorkOS's `external_id` holds `acct_…` (V, the user object) |
+| `workos_events_cursor` | `after` (last processed event id), `updated_at` | §25.5 |
+| `audit` | As before | §25.9 |
+
+How addresses are stored (HMAC plus AES-GCM, deletion keeps only a suppression HMAC) doesn't change.
+
+### 25.4 The sign-in policy (D1751, approved; D1752, D1753)
+
+**Allowed:**
+
+| Method | AuthKit method | Rule |
+|---|---|---|
+| Google | Google OAuth (social login) | Any Google account, including personal Gmail and Google Workspace |
+| GitHub | GitHub OAuth (social login) | Any GitHub account **at least 30 days old**, checked at redemption (Q1266, D1749) |
+| Microsoft | Microsoft OAuth (social login) | **Personal Microsoft accounts** (`outlook.com`, `hotmail.com`, `live.com` and the like). They come in through Microsoft sign-in the way personal Gmail comes in through Google. Added by the owner on 2026-10-23 |
+| A company email | Magic Auth (a 6-digit code by email, valid 10 minutes, V) | **Only work domains.** The domain must not be on the free-mail list, the disposable list or the override block list (below), and must have an MX record |
+| Apple | Sign in with Apple (`AppleOAuth`) | **Proposed, off by default** (D1758). It is switched on only once Ostrium has an Apple Developer Program membership ($99 a year), which the owner decides (Q1297) |
+
+**Not allowed:**
+- email and password;
+- passkeys (including passkey-only accounts);
+- phone or SMS;
+- other social providers (GitLab, LinkedIn, Bitbucket, Xero and the rest); Apple until D1758 is decided;
+- **enterprise SSO** (SAML or OIDC connections). WorkOS bills SSO at $125 per connection per month for 1–15 connections (V), so it's out for now. It is a future option for a company that wants its employees on Loams Cloud through its IdP (Q1293).
+
+**The domain lists** (D1753):
+- **Free-mail and consumer domains:** [`Kikobeats/free-email-domains`](https://github.com/Kikobeats/free-email-domains), MIT (checked with the GitHub API on 2026-10-23). It is a daily-updated JSON list of more than 30,000 free and disposable domains merged from six sources. Its sources' own licences need checking before pinning (verify, LC2a Task 0).
+- **Disposable domains:** [`disposable-email-domains/disposable-email-domains`](https://github.com/disposable-email-domains/disposable-email-domains), CC0-1.0 (its `LICENSE.txt`, read 2026-10-23).
+- **Both are pinned by revision** and vendored as generated data under `deploy/loams-cloud/policy/`. A monthly PR bumps them.
+- **Our own override file**, `deploy/loams-cloud/policy/email-domains.toml`, holds `block`, a list that always includes the owner's named families, and `allow`, for work domains a list wrongly includes.
+  - The owner's named families: `gmail.com`, `googlemail.com`, `outlook.com`, `hotmail.com`, `live.com`, `yahoo.*`, `icloud.com`, `me.com`, `proton.me`, `protonmail.com`, `aol.com`, `gmx.*`, `mail.ru`, `yandex.*`, `qq.com` and `163.com`.
+  - Wildcards (`yahoo.*`, `gmx.*`, `yandex.*`) match any public suffix.
+  - Also `privaterelay.appleid.com`: Apple's relay addresses are only valid through Sign in with Apple, never for an email code.
+  - **Only the email-code path checks these lists.** Google, GitHub and Microsoft sign-ins are accepted whatever the account's email domain, since the provider has already proved the account.
+
+**Where the policy is enforced: four layers, so one mistake can't open a hole** (D1752):
+
+1. **AuthKit configuration:** only Google OAuth, GitHub OAuth and Magic Auth are switched on in the production environment. Sign-up is disabled.
+   - The dashboard lists the methods individually and needs at least one; disabling password and passkeys on the free tier needs confirming (verify, LC2a Task 0).
+   - AuthKit's own MFA stays off, because "Required" would apply to every user (V, [MFA](https://workos.com/docs/authkit/mfa)). Admin MFA is §25.8's step-up.
+2. **WorkOS Actions** (synchronous, signed, **fail-closed by default**, V, [actions](https://workos.com/docs/authkit/actions)):
+   - The **user registration action** runs "before they are provisioned". It **denies** unless all of these hold:
+     - the method is allowed;
+     - for Magic Auth, the email's domain passes the lists;
+     - the email or invitation matches a pending invite in our `invites` table.
+   - The **authentication action** runs on every sign-in, "before they are redirected to your application". It denies a disallowed method, and a Magic Auth sign-in from a listed domain. It also denies a user with no active Loams Cloud account, or a suspended one.
+   - The context gives the user's profile, organisation and IP (V). Whether it names the method or provider directly needs checking (verify). If not, the action reads the user's identities: `GET /user_management/users/{id}/identities` returns `idp_id`, `type` and `provider` (V).
+   - Our response is signed, as the docs require (V).
+3. **The callback re-check:** `GET /auth/callback` receives the authenticate response's `authentication_method` (for example `MagicAuth`; social values need checking, verify) and the user's identities. It applies the same policy again, and refuses (and revokes the session) on any mismatch.
+4. **Reconciliation:** the events reader (§25.5) watches `authentication.oauth_succeeded`, `authentication.magic_auth_succeeded`, `authentication.password_succeeded`, `authentication.passkey_succeeded`, `authentication.sso_succeeded` and `user.created` (V, [events](https://workos.com/docs/events)).
+   - Any success by a disallowed method, or any user we didn't create from an invite, suspends the account. It also revokes the user's sessions and raises an admin alert.
+   - That catches a method switched on by mistake in the dashboard together with an action outage.
+
+**Waitlist addresses** (D1753):
+- The waitlist accepts **any non-disposable address**, free-mail included, because a person may later sign in with Google or GitHub under that or another address.
+- The company-domain rule applies **at sign-in and at redemption**, not at waitlist time.
+- **The copy on the form:** "Use the email address you'll sign in with. You can sign in with Google, GitHub or Microsoft, which works with personal addresses too: personal Gmail through Google, and Outlook, Hotmail or Live through Microsoft. If you'd rather sign in with an email code, use your **work** email: personal addresses (Gmail, Outlook, iCloud, Yahoo and the like) can't use email codes. Disposable addresses can't join."
+
+**Interaction with invitations:**
+- WorkOS application-wide invitations can be accepted with **any** email address (V, [invitations](https://workos.com/docs/authkit/invitations)). So someone invited at a Hotmail address may redeem with GitHub. D1742's default (redeem, record both addresses) is WorkOS's own behaviour.
+- The registration action still applies the policy to the address actually used.
+
+### 25.5 Redemption and keeping in step with WorkOS (D1743, D1754)
+
+**Redemption, step by step:**
+
+1. **The link:** the invitation email's link is WorkOS's `accept_invitation_url` (V), which opens AuthKit's invitation sign-up on our AuthKit domain (Q1296).
+2. **Sign-in:** the person picks Google, GitHub or an email code. WorkOS runs the **registration action**, then the **authentication action**. Both are our Worker's signed endpoints at `POST /internal/workos/actions/registration` and `POST /internal/workos/actions/authentication`.
+3. **The callback:** AuthKit redirects to `GET /auth/callback?code=…&state=…`. The Worker calls `authenticate` with the code (and the PKCE verifier from the state cookie). Then, in one control-DB transaction:
+   1. it re-checks the sign-in policy (§25.4, layer 3);
+   2. it reads the invitation by its `workos_invitation_id` and requires `state = accepted` and `accepted_user_id = user.id` (V: both fields exist on the invitation object). If the acceptance hasn't landed yet, it reads the invitation once more after a short wait;
+   3. it runs the account checks: no existing account for this `workos_user_id`; the **GitHub-age rule**, reading the GitHub identity's `idp_id` with a GitHub App token (`GET /user/{id}` → `created_at`; whether `idp_id` is GitHub's numeric id needs verifying) and refusing an account under 30 days old; and D1756's free-tier ceilings;
+   4. it creates `accounts` and the personal org records, and sets WorkOS `external_id = acct_…` (`PUT /user_management/users/{id}`, V);
+   5. it writes the audit events;
+   6. it creates the user's Durable Object by first contact.
+4. **On refusal** (GitHub too new, ceiling reached, policy mismatch): the Worker deletes the just-created WorkOS user (`DELETE /user_management/users/{id}`, V, permanent). That counts as a WorkOS MAU for the month. It leaves our invite open where the reason allows it: for a GitHub account that is too new, the person may come back with Google. A fresh WorkOS invitation is sent, since the old one is now accepted.
+5. **Sessions:** the account uses AuthKit sessions. Access tokens are JWTs verified against `https://api.workos.com/sso/jwks/{client_id}`, with `sub`, `sid`, `org_id`, `role`, `roles` and `permissions` claims (V, [session tokens](https://workos.com/docs/reference/authkit/session-tokens)).
+
+**Keeping in step** (D1754):
+- **The feed:** WorkOS's **events API** (`GET /events` with an `after` cursor, a 90-day history, and up to 30 days per query, V) is the feed. A Cron Trigger every minute reads from the stored cursor. Webhooks wake it early. This is the WorkOS form of D1622's rule.
+- **Why webhooks are only a wake-up:** WorkOS signs webhooks with `WorkOS-Signature` (`t=…, v1=…`, HMAC-SHA256 over `timestamp.body`), retries up to 6 times over 3 days, and does not guarantee order (V, [webhooks](https://workos.com/docs/events/data-syncing/webhooks)). The webhook endpoint `POST /internal/workos/webhook` verifies the signature and a 5-minute tolerance, and only wakes the reader. WorkOS's fixed source IPs are allow-listed.
+- **Events used:**
+  - `invitation.accepted`, `invitation.revoked`, `invitation.resent`;
+  - `user.created`, `user.updated`, `user.deleted`;
+  - `session.created`;
+  - the `authentication.*_succeeded` family (§25.4, layer 4).
+- **What a deleted WorkOS user does:** it suspends the account and schedules deletion (D1731).
+
+### 25.6 Privacy at the point of collection (D1744)
+
+As in the first draft (address only, plus two optional fields; a four-line notice linking counsel's policy; no analytics on `/cloud/*`; IP prefixes as HMACs for 7 days; the same retention table), with one addition:
+
+- **The notice names the processors:**
+  - **WorkOS** for sign-in. Its subprocessor list names AWS (USA) for hosting (V, [subprocessors](https://workos.com/legal/subprocessors), dated 2024-12-11).
+  - **Resend** for email. Its region and subprocessors need checking (verify).
+  - **Cloudflare** and **TiDB Cloud** for our own records.
+- **Counsel's policy** (Q1276) covers them, with data processing agreements where they're offered.
+
+**Portability and leaving** (D1757):
+- **WorkOS holds identity only:** email, name, avatar and provider links. It holds **no passwords**, because none are allowed.
+- **There is no bulk export endpoint** in WorkOS's user reference (V). Paged `GET /user_management/users` and `…/identities` give us everything we would need to move, and our own records hold the rest.
+- **A user who leaves:** `DELETE /me` exports their state first (`loams cloud export`), then deletes our records and their WorkOS user (V).
+- **If Loams Cloud leaves WorkOS:** users are re-linked by Google and GitHub subject (`idp_id`) in the next IdP, and company-email users by a fresh email code. Nobody loses a password, because there are none.
+
+### 25.7 Abuse and enumeration (D1745)
+
+As in the first draft:
+- Turnstile with single-use, server-verified tokens;
+- per-prefix, per-address and global rate limits;
+- disposable and no-MX domains silently refused at the waitlist;
+- identical responses whatever an address's state;
+- at most one "already on the list" email a day.
+
+WorkOS adds its own limits, which sit behind ours (V, [rate limits](https://workos.com/docs/reference/rate-limits)):
+
+| WorkOS limit | Value |
+|---|---|
+| Per API key | 6,000 requests a minute |
+| User Management writes | 500 per 10 seconds |
+| `authenticate` | 10 a minute per email or challenge |
+| Magic Auth code requests | 3 a minute per IP and email |
+| Hosted email sign-ins | 10 a minute per email and IP |
+
+**Interaction with D1720 and Q1266:** the waitlist batches replace the invite codes for the first 200 (D1749). The 30-day GitHub-age rule runs at redemption (§25.5) and lets the person retry with Google or Microsoft.
+
+**The account-age rule with more providers:**
+- **The rule stays GitHub-only.** GitHub exposes an account's `created_at`; Google, Microsoft and Apple give WorkOS no age signal (verify in LC2a Task 0).
+- **New accounts are still cheap to make on any provider.** The control that matters is that the try-out is **invite-only, and each invitation creates at most one account**.
+- **What a throwaway account can get:** someone with a fresh Microsoft or Google account still needs a confirmed waitlist address and an admin's invitation. All it can get is one quota-limited account.
+- **No new rule is proposed.** If the abuse drill (LC2a Task 11) shows invitation resale or farming, the response is a per-invitation-batch review, not a provider-age rule the providers can't support.
+
+### 25.8 Admin authorisation (D1746)
+
+- **The role:** an Ostrium admin is a WorkOS user who is a member of one WorkOS **organisation, "Ostrium"**, with the role **`cloud_admin`**. WorkOS roles are assigned through organisation memberships, and the access token carries `org_id` and `role` (V, [roles](https://workos.com/docs/authkit/roles-and-permissions)).
+- **What the control plane requires** on every `/admin/*` call:
+  1. a valid AuthKit access token with `org_id` = Ostrium's and `role` = `cloud_admin`;
+  2. the user's id in the control plane's own **admin allow-list**, a config value changed only by a reviewed PR;
+  3. a **TOTP step-up** within the last 15 minutes, using WorkOS's MFA API (enrol a TOTP factor, challenge it, verify it, V, [MFA API](https://workos.com/docs/mfa)). The verification time is recorded against the session's `sid` in the control DB. Whether the standalone MFA API is included in the free tier isn't on the pricing page (verify).
+- **The authorizer:** `loams-authz` checks `platform:loams-cloud#cloud_admin` as before. Agents and service accounts can never hold it.
+- **Why not AuthKit's MFA "Required":** it would apply to every try-out user (V).
+- **The CLI:** `loams cloud admin …` as listed before, plus `loams cloud admin mfa enroll|verify`. It logs in with WorkOS **CLI Auth** (the OAuth 2.0 device authorization flow at `/user_management/authorize/device`, V, [CLI auth](https://workos.com/docs/authkit/cli-auth)).
+
+### 25.9 Lifecycle and audit (D1747, D1748)
+
+| Event | What happens |
+|---|---|
+| Resend | `POST /user_management/invitations/{id}/resend` (pending only, V); at most 3 resends. `--extend` revokes the invitation and sends a new one for 14 days from now (verify whether resend changes the expiry) |
+| Revoke | `POST /user_management/invitations/{id}/revoke` (V); the waitlist row returns to `confirmed` |
+| Expiry | WorkOS marks invitations `expired` (V: a state); the events reader mirrors it, or the hourly sweep reads the invitation |
+| Remove me, deletion on request, bounces | As in the first draft. Bounces on WorkOS-sent mail appear in WorkOS's Emails → Events and suppressions (V); Resend's own suppressions apply to the Worker's mail |
+
+Audit events are unchanged (CloudEvents under `dev.loams.cloud.*`), with `workos_user_id` and `workos_invitation_id` as subjects and no plaintext address.
+
+### 25.10 The API (D1741; under `api.loams.dev/cloud/v1`, Q1262)
+
+**Conventions** are as in the first draft.
+
+**Auth labels:**
+- *Public* means Turnstile plus rate limits.
+- *Token* means our confirm or removal token.
+- *Admin* means an AuthKit access token with `org_id` = Ostrium and `role` = `cloud_admin`, an allow-listed user, and TOTP verified within 15 minutes.
+- *User* means an AuthKit access token for an active account.
+- *WorkOS* means a valid `WorkOS-Signature`, plus WorkOS's source IPs.
+
+| Method and path | Auth | Request | Response | Errors |
+|---|---|---|---|---|
+| `POST /waitlist` | Public, Turnstile | `{email, turnstile_token, build?, source?, source_other?}` | `202 {status:"check_your_email"}` always | `400 INVALID_REQUEST`, `403 TURNSTILE_FAILED`, `429 RATE_LIMITED` |
+| `POST /waitlist/confirm` | Token | `{token}` | `200 {status:"confirmed"}` | `410 TOKEN_UNUSABLE`, `429` |
+| `DELETE /waitlist` | Token, or public with Turnstile | `{token}` or `{email, turnstile_token}` | `204`, or `202 {status:"check_your_email"}` | `403`, `410`, `429` |
+| `GET /auth/login` | Public | Query `screen_hint?`, `return_to?` | `302` to AuthKit (`provider=authkit`, PKCE, `state`) | `429` |
+| `GET /auth/callback` | OAuth code and state | Query `code`, `state` | `302` to `loams.dev/cloud/welcome` (new account) or `/cloud` (returning), or to `/cloud/invite/error?code=…` | Error-page codes: `NOT_INVITED`, `METHOD_NOT_ALLOWED`, `EMAIL_DOMAIN_NOT_ALLOWED`, `IDP_ACCOUNT_TOO_NEW`, `ALREADY_HAS_ACCOUNT`, `TRYOUT_FULL`, `SIGN_IN_FAILED` |
+| `POST /auth/logout` | User | — | `204`; the WorkOS session is revoked | `401` |
+| `GET /me` | User | — | `200 {account_id, contact_email, created_at, quotas}` | `401` |
+| `DELETE /me` | User | — | `202 {status:"deletion_scheduled", by}` | `401` |
+| `GET /admin/waitlist` | Admin | Query `status`, `since`, `source`, `cursor`, `limit` | `200 {items:[…], next_cursor}` | `401 UNAUTHENTICATED`, `403 PERMISSION_DENIED`, `403 STEP_UP_REQUIRED`, `429` |
+| `DELETE /admin/waitlist/{id}` | Admin | — | `204` | `401`, `403`, `404` |
+| `POST /admin/invites` | Admin | `{waitlist_ids:[…] (1–50), expires_in_days? (1–30, default 14)}`, plus `Idempotency-Key` | `202 {invites:[{id, waitlist_id, state:"queued"}], skipped:[…]}`; the queue calls WorkOS `POST /user_management/invitations` | `400`, `401`, `403`, `409 DAILY_SEND_CAP` |
+| `GET /admin/invites` | Admin | Query `state`, `cursor`, `limit` | `200 {items:[{id, waitlist_id, workos_invitation_id, state, expires_at, resend_count}], next_cursor}` | `401`, `403` |
+| `POST /admin/invites/{id}/revoke` | Admin | — | `200 {id, state:"revoked"}`; calls WorkOS revoke | `401`, `403`, `404`, `409 INVITE_NOT_REVOCABLE` |
+| `POST /admin/invites/{id}/resend` | Admin | `{extend?: boolean}` | `200 {id, state:"pending", expires_at, resend_count}`; calls WorkOS resend (or revoke and send for `extend`) | `401`, `403`, `404`, `409 INVITE_NOT_RESENDABLE`, `409 RESEND_LIMIT`, `409 DAILY_SEND_CAP` |
+| `POST /admin/mfa/enroll` | AuthKit token with the admin role and allow-list (no step-up yet) | — | `200 {factor_id, qr_code, secret}` once per admin | `401`, `403`, `409 ALREADY_ENROLLED` |
+| `POST /admin/mfa/verify` | The same | `{code}` | `200 {step_up_until}` | `401`, `403`, `422 CODE_INVALID` |
+| `GET /admin/audit` | Admin | Query `subject`, `type`, `since`, `cursor` | `200 {items:[…], next_cursor}` | `401`, `403` |
+| `POST /internal/workos/actions/registration` | WorkOS | WorkOS's `user_registration_action_context` | A signed `{type:"user_registration", verdict:"Allow"\|"Deny", error_message?}` | A bad signature gets `401`, and WorkOS then denies (fail-closed, V) |
+| `POST /internal/workos/actions/authentication` | WorkOS | The authentication action context | A signed `{type:"authentication", verdict, error_message?}` | The same |
+| `POST /internal/workos/webhook` | WorkOS | A WorkOS event | `200`, which wakes the events reader | `401 BAD_SIGNATURE` |
+
+**Changed from the first draft:**
+- **Removed:**
+  - `GET /invites/{token}` and `POST /invites/{token}/redeem` (WorkOS's invitation page and token do this job);
+  - `GET /redeem/callback` (replaced by `GET /auth/callback`);
+  - `POST /internal/zitadel/notify` and `/internal/zitadel/wake`.
+- **Added:**
+  - `GET /auth/login` and `POST /auth/logout`;
+  - `GET /me`;
+  - `POST /admin/mfa/enroll` and `/verify`;
+  - the two WorkOS action endpoints and the WorkOS webhook.
+- **Unchanged:** the waitlist endpoints.
+- **Rebacked by WorkOS:** the admin invite endpoints.
+
+### 25.11 WorkOS facts checked (2026-10-23, docs and pricing; no account used)
+
+| Fact | Status | Source |
+|---|---|---|
+| AuthKit free for the first 1M MAU (production); listed: email and password, social login, passkeys, MFA, Magic Auth, enterprise SSO; staging free | V | [Pricing](https://workos.com/pricing) |
+| Custom domain $99 a month; SSO $125 per connection (1–15); Radar's first 1,000 checks free | V | Pricing |
+| Commercial use on free | Production use is priced at $0 up to 1M MAU; the terms of service were not reviewed (verify; counsel, Q1276) | Pricing |
+| Invitations: application-wide or per organisation; WorkOS sends the email; `expires_in_days` 1–30, default 7; states pending, accepted, expired, revoked; `token`, `accept_invitation_url`, `accepted_user_id`; get, find by token, list, revoke, resend (pending only), accept | V | [Invitations](https://workos.com/docs/authkit/invitations), [reference](https://workos.com/docs/reference/user-management/invitation) |
+| Binding: application-wide invitations accept any email; organisation invitations need the exact address on consumer domains, or the same domain on corporate ones | V | Invitations |
+| Sign-up disabled except with a valid invitation token | V | Invitations; [authenticate](https://workos.com/docs/reference/authkit/authentication) |
+| Email verification always on, for OAuth too; accepting an invitation within 10 minutes counts as verified | V | [Email verification](https://workos.com/docs/authkit/email-verification) |
+| Magic Auth: a 6-digit code, 10 minutes | V | [Magic Auth](https://workos.com/docs/authkit/magic-auth) |
+| Actions: registration and authentication, Allow or Deny, signed responses, fail-closed by default | V; whether the context names the method (verify) | [Actions](https://workos.com/docs/authkit/actions) |
+| Events: `user.*`, `invitation.*`, `authentication.*_succeeded` and `_failed`, `session.created`; events API with 90 days of history | V | [Events](https://workos.com/docs/events), [events API](https://workos.com/docs/events/data-syncing/events-api) |
+| Webhooks: `WorkOS-Signature` HMAC-SHA256; 6 retries over 3 days; no ordering; fixed IPs | V | [Webhooks](https://workos.com/docs/events/data-syncing/webhooks) |
+| Roles through organisation memberships; JWT claims `sub`, `sid`, `org_id`, `role`, `roles`, `permissions`; JWKS URL | V | [Roles](https://workos.com/docs/authkit/roles-and-permissions), [session tokens](https://workos.com/docs/reference/authkit/session-tokens) |
+| AuthKit MFA is TOTP; "Required" applies to all users except SSO users; the MFA API offers TOTP enrol, challenge and verify | V; MFA API pricing (verify) | [AuthKit MFA](https://workos.com/docs/authkit/mfa), [MFA API](https://workos.com/docs/mfa) |
+| Default sender `workos-mail.com` (best effort); custom email providers (Resend among them) with no WorkOS email domain needed | V | [Email domain](https://workos.com/docs/custom-domains/email), [custom providers](https://workos.com/docs/authkit/custom-email-providers) |
+| The default AuthKit domain is a random phrase on `authkit.app`; a custom AuthKit domain is billed | V | [AuthKit domain](https://workos.com/docs/custom-domains/authkit) |
+| Rate limits (§25.7) | V | [Rate limits](https://workos.com/docs/reference/rate-limits) |
+| No bulk user export; paged list users and identities | V | [User](https://workos.com/docs/reference/authkit/user), [identity](https://workos.com/docs/reference/authkit/identity) |
+| Data location: AWS (USA) and Postmark (USA) as subprocessors; no customer-selectable region found | V (list dated 2024-12-11); current region (verify) | [Subprocessors](https://workos.com/legal/subprocessors) |
+| CLI Auth (device authorization flow) | V | [CLI auth](https://workos.com/docs/authkit/cli-auth) |
+| Social login (Google, Microsoft, GitHub, Apple) is part of AuthKit; "social login" is in the free tier's feature list, with no per-provider charge listed | V | [Social login](https://workos.com/docs/authkit/social-login), [pricing](https://workos.com/pricing) |
+| Microsoft OAuth: production needs our own Entra app registration (a client ID and secret; staging can use WorkOS's default credentials); WorkOS requires **"Personal Microsoft accounts only"** as the supported account types, so work and school (Entra) accounts can't use it and sign in with an email code instead; client secrets expire after at most 24 months and need rotating; `provider=MicrosoftOAuth` | V | [Microsoft OAuth](https://workos.com/docs/integrations/microsoft-oauth) |
+| Sign in with Apple: production needs our own Apple Team ID, Services ID, private key and key ID from the Apple Developer program; staging can use WorkOS's default credentials; users may hide their address, so Private Email Relay must be configured with WorkOS's outbound email domains | V | [Apple](https://workos.com/docs/integrations/apple) |
+| The Apple Developer Program costs $99 a year; an organisation needs a D-U-N-S number (individuals don't) | V | [Apple enrolment](https://developer.apple.com/support/enrollment/) |
+| Identities: `GET /user_management/users/{id}/identities` returns `idp_id`, `type` (`OAuth`) and `provider` (for example `MicrosoftOAuth`, `GoogleOAuth`); `AppleOAuth` is a provider value. The `idp_id` for Microsoft is the account's stable id (a GUID in the example); for Apple it is expected to be Apple's `sub` (verify) | V; Apple's `idp_id` (verify) | [Identity](https://workos.com/docs/reference/authkit/identity), [authorization URL](https://workos.com/docs/reference/authkit/authentication/get-authorization-url) |
+| Whether relay mail sent through our custom provider (Resend, from `mail.loams.dev`) needs `mail.loams.dev` registered with Apple as an email source, in addition to WorkOS's outbound domains | (verify, if D1758 is ever approved) | — |
+| Waitlist feature, API and events | V | [Waitlist](https://workos.com/docs/authkit/waitlist) |
+
+### 25.12 `auth.loams.dev` and the try-out (D1750)
+
+**Recommendation: `auth.loams.dev` is not used for the try-out.**
+- **The cost:** pointing it at AuthKit needs a WorkOS custom AuthKit domain, which is billed ($99 a month, V). The owner has no budget.
+- **What sign-in shows instead:** the try-out's sign-in shows the AuthKit domain WorkOS assigns (a random phrase on `authkit.app`, V), with our branding and display name "Loams Cloud".
+- **Where it starts:** sign-in always begins on `loams.dev/cloud` (`GET /auth/login`), so people see our domain first.
+- **`auth.loams.dev` keeps its §76 role:** Zitadel, for self-hosted installs that choose it as their issuer (D1615 for everything except the try-out).
+- **Revisit:** if a budget appears, a custom AuthKit domain at `signin.loams.dev` is the cleaner name (Q1296).
+
+### 25.13 Cost: $0 a month (D1756)
+
+| Service | Plan | Cost | The limit that bites first |
+|---|---|---|---|
+| WorkOS AuthKit | Free (≤ 1M MAU), no custom domain | $0 | — |
+| Resend | Free | $0 | **100 emails a day**, 3,000 a month (§25.2) |
+| Cloudflare Workers | **Free** | $0 | 100,000 requests a day across the account, **shared with the loams.dev site Worker's dynamic routes**; 10 ms CPU per request (I/O wait not counted) |
+| Durable Objects | **Free** (SQLite-backed only, V) | $0 | 100,000 requests, 13,000 GB-s, 5M rows read and 100,000 written a day; 5 GB stored. Incoming WebSocket messages are billed at 20:1 (V). One device pinging every 60 s is 1,440 messages a day, so about 72 billed requests (estimate). That fits several hundred online devices under the daily limit, if the free limit counts messages at the same ratio (verify) |
+| Cron Triggers | Free | $0 | 5 per account (verify on Free): the events reader, the invite sweep, the retention jobs |
+| Turnstile | Free | $0 | — |
+| TiDB Cloud Starter | Free, **no card** | $0 | 5 free instances: 1 control DB plus at most 4 cells. No card means no spending limit above zero, so free quota only |
+| TiDB Cloud Filesystem | — | $0 | **The hosted cohort is off** at $0 (it needs a card, and Filesystem has no spending cap with one, V). Workspaces are BYOG only (Q1291) |
+
+**Total: $0 a month.**
+- **Workers Paid is no longer needed for email.** Durable Objects run on Workers Free (V).
+- **The one cost that may come back is Workers Paid ($5 a month),** and only when traffic outgrows Free: about 70,000 requests a day for three days running, or CPU-heavy routes hitting the 10 ms limit (Q1292). The free alternative before paying: lengthen device pings to 120 s and batch the run index, which halves the DO messages.
+- **The other paid steps** are owner decisions, never automatic:
+  - Resend's paid plan past 100 emails a day;
+  - a TiDB card for more cells;
+  - a WorkOS custom domain.
+- **D1730's ceiling** becomes **$0** until the owner sets a budget (Q1291).
+
+### 25.14 Device identity on the try-out (D1755)
+
+§9.1 (D1714) used Zitadel's device flow and Zitadel machine users. On the try-out, Zitadel isn't in the path, so the try-out does it differently:
+- **The person's CLI login** uses WorkOS **CLI Auth** (the device authorization flow, V).
+- **The device's key pair** is registered with **our control plane** (Ed25519, private key in the OS keychain).
+- **The control plane mints the device's 15-minute tokens itself,** signed with a key in Worker secrets. They carry `acct_…`, the device id and its scopes.
+- **What the device link keeps:** a closed command set, outbound only, and deactivation that denies the next token (D1714).
+- **Self-hosted and company control planes** (D1726) keep D1714 as written, on Zitadel.
+
+### 25.15 Decisions (D1736–D1758)
+
+| # | Decision | § | Status |
+|---|---|---|---|
+| D1736 | **Loams Cloud is invite-only:** no account without a valid WorkOS invitation sent to a confirmed waitlist address | 25.1 | **Approved (owner, 2026-10-23)** |
+| D1737 | **The flow:** waitlist (Turnstile, double opt-in, our Worker) → an admin invites batches → a WorkOS application-wide invitation (14 days), emailed by WorkOS → AuthKit sign-up with sign-up otherwise disabled → our actions and callback → the Loams Cloud account | 25.1 | **Approved (owner, 2026-10-23)** |
+| D1738 | **Email:** WorkOS's built-in emails (invitations, magic codes, verification) through **Resend** as WorkOS's custom email provider; the Worker's confirm and removal emails through the same Resend account; from `cloud@mail.loams.dev`; DMARC quarantine then reject; no Cloudflare Email Service, no WorkOS custom email domain; at most 60 invitations a day inside Resend Free's 100 a day | 25.2 | **Approved (owner, 2026-10-23)** |
+| D1739 | **The waitlist and account mapping live in the control DB;** addresses as HMAC plus AES-GCM; our invite rows hold only `workos_invitation_id`; `accounts.workos_user_id` is the token `sub`, and WorkOS `external_id` holds `acct_…` | 25.3 | **Approved (owner, 2026-10-23)** |
+| D1740 | **Tokens:** our confirm (48 h) and removal (90 days) tokens, 256-bit, stored as SHA-256, in URL fragments; invitation tokens are WorkOS's and never stored by us | 25.3 | **Approved (owner, 2026-10-23)** |
+| D1741 | **The API surface** of §25.10 under `api.loams.dev/cloud/v1` | 25.10 | **Approved (owner, 2026-10-23)** |
+| D1742 | **Different sign-in email:** an application-wide WorkOS invitation is accepted with any address (WorkOS's own rule); the registration action applies the sign-in policy to the address used; both addresses are recorded | 25.4 | **Approved (owner, 2026-10-23)** |
+| D1743 | **Redemption:** AuthKit invitation sign-up → `GET /auth/callback` exchanges the code, requires the invitation `accepted` by this user, re-checks the policy and the GitHub age, creates the account, and sets `external_id`; on refusal the new WorkOS user is deleted | 25.5 | **Approved (owner, 2026-10-23)** |
+| D1744 | **Privacy at collection** as in the first draft, with WorkOS, Resend, Cloudflare and TiDB Cloud named as processors | 25.6 | **Approved (owner, 2026-10-23)** |
+| D1745 | **Abuse and enumeration** as in the first draft, with WorkOS's own rate limits behind ours | 25.7 | **Approved (owner, 2026-10-23)** |
+| D1746 | **Admin authorisation:** WorkOS org "Ostrium" with role `cloud_admin`, **and** our allow-list, **and** a TOTP step-up through WorkOS's MFA API within 15 minutes; `platform:loams-cloud#cloud_admin` in `loams-authz`; the CLI on WorkOS CLI Auth | 25.8 | **Approved (owner, 2026-10-23)** |
+| D1747 | **Lifecycle** through WorkOS's resend and revoke and its expiry; at most 3 resends; `--extend` revokes and re-sends | 25.9 | **Approved (owner, 2026-10-23)** |
+| D1748 | **Audit events** as CloudEvents under `dev.loams.cloud.*`, with WorkOS ids as subjects and no plaintext addresses | 25.9 | **Approved (owner, 2026-10-23)** |
+| D1749 | **Email invites replace the invite codes for the first 200** (amends D1720 and that clause of Q1266's answer); the GitHub-age rule runs at redemption | 25.7 | **Approved (owner, 2026-10-23)** |
+| D1750 | **WorkOS AuthKit is the hosted try-out's identity:** sign-up, sign-in, email verification, magic codes and invitations on WorkOS's free tier. **Amends §76's Q1201 default** ("self-hosted Zitadel at `auth.loams.dev`, not Clerk or WorkOS") **and D1615 for the hosted try-out only**; self-hosted and company installs keep Zitadel and OpenFGA (§76) or the built-in single-org mode; `auth.loams.dev` is not used for the try-out | 25, 25.12 | **Approved (owner, 2026-10-23)** |
+| D1751 | **The sign-in policy:** Google OAuth, GitHub OAuth (accounts at least 30 days old), **Microsoft OAuth (personal Microsoft accounts)**, and Magic Auth for **work-domain** emails only (free-mail, consumer, disposable and Apple-relay domains blocked by maintained open-source lists plus our override file). Apple is proposed separately (D1758), off by default. **Not allowed:** passwords, passkeys, phone or SMS, other social providers, enterprise SSO (a future option). Enforced in AuthKit's configuration **and** server-side. *Microsoft added by the owner on 2026-10-23* | 25.4 | **Approved (owner, 2026-10-23)** |
+| D1752 | **Four enforcement layers:** AuthKit configuration; the registration and authentication actions (fail-closed); the callback re-check; event reconciliation that suspends and revokes on any disallowed success | 25.4 | Proposed |
+| D1753 | **Domain lists:** `Kikobeats/free-email-domains` (MIT) and `disposable-email-domains` (CC0-1.0), pinned, plus `deploy/loams-cloud/policy/email-domains.toml`; the waitlist accepts free-mail but not disposable addresses, the rule applies at sign-in and redemption, and the form copy of §25.4 explains it | 25.4 | Proposed |
+| D1754 | **The WorkOS events API is the sync feed,** read from a stored cursor every minute; webhooks (signed, IP-allow-listed) only wake it | 25.5 | Proposed |
+| D1755 | **Device identity on the try-out:** WorkOS CLI Auth for the person; control-plane-issued device keys and 15-minute tokens (amends D1714 for the try-out only) | 25.14 | Proposed |
+| D1756 | **$0 a month:** WorkOS Free, Resend Free, Workers Free with Durable Objects, Turnstile, Starter with no card; the hosted Filesystem cohort off; D1730's ceiling $0 until the owner sets a budget; Workers Paid only on Q1292's trigger | 25.13 | Proposed |
+| D1757 | **Portability:** WorkOS holds identity only, with no passwords; users leave through `DELETE /me` after export; Loams Cloud can leave WorkOS by re-linking provider subjects | 25.6 | Proposed |
+| D1758 | **Sign in with Apple, off by default:** WorkOS supports it (`AppleOAuth`), but production needs Ostrium's own Apple Team ID, Services ID and private key, which come only with an **Apple Developer Program membership ($99 a year)**. It is enabled only after the owner buys one (Q1297). When it is on: Apple's private relay addresses are accepted as the account's address; mail to them goes through Apple's Private Email Relay, with `mail.loams.dev` registered as an email source; the relay domain is never valid for an email code | 25.4 | Proposed |
+
+### 25.16 Open questions (Q1278–Q1297): Q1278–Q1296 answered by the owner on 2026-10-23 (every default); Q1297 open
+
+| # | Question | Default (approved) |
+|---|---|---|
+| Q1278 | The sending domain? | **`cloud@mail.loams.dev`**, verified in Resend |
+| Q1279 | WorkOS's own emails: through Resend, or WorkOS's default `workos-mail.com`? | **Through Resend** (our domain and reputation) |
+| Q1280 | A sign-in email that differs from the invite email? | **Allowed** (WorkOS application-wide invitations already allow it); the policy applies to the address used |
+| Q1281 | Lifetimes? | **Invitations 14 days** (WorkOS 1–30); confirm 48 hours; removal 90 days; at most 3 resends |
+| Q1282 | The optional waitlist fields? | "What will you build" and source, both optional |
+| Q1283 | Retention? | The first draft's table |
+| Q1284 | Organisations for try-out users? | **No WorkOS organisation for try-out users** (application-wide invitations); personal orgs are Loams Cloud records; one WorkOS org, "Ostrium", only for admins |
+| Q1285 | Admin MFA? | **A TOTP step-up through WorkOS's MFA API within 15 minutes** plus the allow-list; AuthKit's MFA stays off |
+| Q1286 | Disposable and plus addresses? | Refuse disposable and no-MX domains silently; keep plus addresses |
+| Q1287 | "Already on the list" email? | At most once a day, to the inbox only |
+| Q1288 | Pacing? | **At most 50 per batch and 60 invitations a day,** inside Resend Free's 100 a day |
+| Q1289 | Show a queue position? | No |
+| Q1290 | Past 100 emails a day? | **Owner decision when it happens:** Resend's paid plan, or WorkOS's default sender for WorkOS mail |
+| Q1291 | The $0 budget: D1730's ceiling and the hosted Filesystem cohort? | **The ceiling is $0 and the cohort is off** until the owner sets a budget (amends the Q1263 and Q1265 answers in effect, not in text) |
+| Q1292 | When to move to Workers Paid ($5 a month)? | **Only on the owner's go,** proposed when requests pass 70,000 a day for three days or CPU limits are hit; lengthen pings first |
+| Q1293 | Enterprise SSO for companies? | **Not now** ($125 per connection a month); revisit when a company asks, possibly billed to that company's own WorkOS setup |
+| Q1294 | Actions failure mode? | **Fail closed for both actions** (WorkOS's default) |
+| Q1295 | Our own waitlist, or WorkOS's waitlist feature? | **Our own** (double opt-in, privacy notice, the free-mail explanation); WorkOS's waitlist is the fallback if ours slips |
+| Q1296 | `auth.loams.dev` for the try-out? | **No** (it needs the $99 custom domain); `signin.loams.dev` on a custom AuthKit domain if a budget appears |
+| Q1297 | Sign in with Apple: buy the Apple Developer Program membership ($99 a year) and turn it on? | **Not now.** The owner has no budget, and Google, GitHub, Microsoft and work email cover the try-out. Revisit when an Apple membership exists for other reasons (the Loams Desktop and mobile apps, Q420) |
