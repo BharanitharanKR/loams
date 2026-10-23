@@ -3,6 +3,7 @@
   "defaultBase": "dev",
   "nxCloudId": "6ada11220d72175d478305c0",
   "parallel": 2,
+  "plugins": [{"plugin": "./tools/nx-cargo/index.cjs", "options": {"workspaces": ["Cargo.toml"]}}],
   "namedInputs": {
     "default": ["{projectRoot}/**/*", "!{projectRoot}/node_modules/**/*", "!{projectRoot}/dist/**/*", "!{projectRoot}/lib/**/*", "!{projectRoot}/out/**/*", "!{projectRoot}/target/**/*", "!{projectRoot}/coverage/**/*", "!{projectRoot}/test-results/**/*", "!{projectRoot}/playwright-report/**/*", "!{projectRoot}/**/*.tsbuildinfo", "sharedGlobals"],
     "sharedGlobals": ["{workspaceRoot}/package.json", "{workspaceRoot}/pnpm-lock.yaml", "{workspaceRoot}/pnpm-workspace.yaml", "{workspaceRoot}/nx.json", "{workspaceRoot}/web/tsconfig.base.json", {"runtime": "pnpm --version"}],
@@ -16,7 +17,7 @@
   },
   "targetDefaults": {
     "build": {"cache": true, "dependsOn": ["^build"], "inputs": ["production", "^production"], "outputs": ["{projectRoot}/dist", "{projectRoot}/lib"]},
-    "test": {"cache": true, "inputs": ["default", "^default", "testRuntime"], "outputs": []},
+    "test": [{"filter": {"projects": ["*", "!tag:cargo-crate"]}, "cache": true, "inputs": ["default", "^default", "testRuntime"], "outputs": []}],
     "typecheck": {"cache": true, "dependsOn": ["^build"], "inputs": ["code", "^code"], "outputs": []},
     "lint": {"cache": true, "inputs": ["default", "^default"], "outputs": []},
     "dev": {"cache": false},

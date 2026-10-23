@@ -299,25 +299,88 @@ and console e2e. They are not enabled while the cloud is limited to dev pushes.
 
 ## Rust
 
-**The recommendation, being built:**
-- Each crate in the root workspace and in `fabric/` becomes an Nx project (a local plugin reading
-  `cargo metadata`), with `test`, `clippy` and `fmt` targets.
-- The targets have no `outputs`, so only results and logs are cached; compilation stays in Cargo's
-  `target/` and the existing Rust caches.
-- Inputs are the crate's sources, its path dependencies (transitively), `Cargo.lock`, the
-  toolchain, the `.cargo` config, `RUSTFLAGS`, and the fixtures each crate's tests read.
-- Tests that touch external services or are non-deterministic are `cache: false`: TiKV, the cluster
-  tests, the nightly suites and the crash gate.
-- Like the JS wiring, the targets work without the cloud.
+Each crate of the root Cargo workspace is an Nx project (65), tagged `cargo-crate` and `language:rust`. A local plugin, `tools/nx-cargo`, builds the projects from the Cargo manifests; it does not run Cargo, so JS-only jobs need no toolchain.
 
-**`@monodon/rust` is not a fit:**
-- version 3.0.0 has had one release in 14 months;
-- it depends on `@nx/devkit` ^22 while we are on Nx 23;
-- the GitHub repository shows no licence file (npm says MIT);
-- its targets assume Cargo outputs in Nx's cache.
+Each crate has three targets. None has `outputs`, so Nx caches only the result and the log; compilation stays in Cargo's `target/` and the CI Rust caches.
 
-**Artefact sizes:** without outputs, an entry is a task log of a few KB, far inside any Nx Cloud
-limit. Compiled artefacts (gigabytes in `target/`) are never sent.
+| Target | Command | Notes |
+|---|---|---|
+| `test` | `cargo nextest run --workspace --locked --no-tests=pass -E 'package(=<crate>)'` | Uses the workspace build and its feature unification, the same artefacts as today's workspace job, and runs only this crate's tests |
+| `clippy` | `cargo clippy -p <crate> --all-targets --locked -- -D warnings` | |
+| `fmt` | `cargo fmt -p <crate> --check` | |
 
-**Credits:** the cost is not the cache but the CIPEs. `ci.yml` runs about 230 times a day, so
-connecting Rust is only viable on the open-source plan or a self-hosted cache.
+Usage:
+- run them all: `pnpm nx run-many -t fmt clippy test --exclude='*,!tag:cargo-crate'`;
+- only what a change reaches: `pnpm affected:rust`.
+
+### Inputs
+
+A false hit is worse than a miss. Each crate's inputs are:
+- all files in the crate's directory;
+- the files of its path dependencies (normal, dev and build, transitively);
+- the workspace's `Cargo.toml`, `Cargo.lock` and `rust-toolchain.toml`, plus `proto/`, `clippy.toml` and `rustfmt.toml`;
+- the compile settings printed by `tools/nx-cargo/rust-env.cjs`:
+  - `rustc -vV`;
+  - the `--cfg`, `opt-level`, `debug-assertions`, `overflow-checks`, `panic`, `target-cpu` and `target-feature` flags, from `RUSTFLAGS`, `CARGO_ENCODED_RUSTFLAGS` and Cargo config files;
+  - the profile settings with the same effect, the build target and the host.
+- for `test`, also `.config/nextest.toml` and `cargo nextest --version`.
+
+The linker, link arguments and target directories are not inputs, so the owner's machine (`lld` through `~/.cargo/config.toml`) and CI share entries.
+
+`tools/nx-cargo/inputs.json` declares the rest:
+
+| Field | Meaning | Crates |
+|---|---|---|
+| `repoWide` | Code walks the repository (licence and source scans, compose files, `docs/`), so every file is an input | 13, including `loams` |
+| `extra` | Files outside the crate that it reads | for example `conformance/graph/desktop/**` and `release/upgrade-path.toml` |
+| `tools` | The version of a tool its tests run | `git`, `node`, `python3` |
+| `noCache` | `cache: false`, because the tests depend on what the machine has | `loams-compat` (psql), `loams-sqldb` and `loams-sqlgate` (services, podman), `loams-upgrade` (downloads) |
+
+The feature-gated suites (TiKV, the cluster tests, the crash gate, the nightly suites) are not Nx targets, so they never use a cache.
+
+`node tools/nx-cargo/check.cjs` runs in CI's *Repo: checks* job and checks two things:
+- The crate graph matches `cargo metadata`.
+- Every path a crate's code names outside itself and its dependencies is declared: `"../"` literals, `"/../"` after `CARGO_MANIFEST_DIR`, and `join("..")`. An undeclared read fails the check.
+
+### Measured locally (2026-10-22, local cache)
+
+| Target | Tasks | First run (miss) | Second run (hit) |
+|---|---|---|---|
+| `fmt` | 65 | 7 s | 1 s, 65/65 hits |
+| `clippy` (`loams-common`, `loams-tuple`, `loams-store`) | 3 | 52 s | 1 s, 3/3 hits |
+
+Invalidation, checked on the same targets:
+- Editing `loams-store` reran `loams-store` and its dependant `loams-cache`; `loams-common` stayed a hit.
+- `RUSTFLAGS="--cfg x"` is a miss.
+- `RUSTFLAGS="-C link-arg=-s"` is a hit.
+
+A local `test` run needs the whole workspace's test build (about 30 minutes, and more disk than this machine has free), so it is measured in CI.
+
+### Where the time goes in CI (run of 2026-10-22)
+
+- *Rust: tests* took 64 minutes: 30 minutes compiling, then 30.5 minutes running 6,695 tests.
+- `loams-hot` is 2,440 s of the 6,860 s of test CPU time, then `loams` 811 s and `loams-query` 655 s.
+- *Rust: fmt and clippy* took 44 minutes: clippy over the workspace 10.5 minutes, doc tests 13.5.
+
+Caching per crate saves the test run of the crates a change does not reach, not the compile.
+
+### Why not `@monodon/rust`
+
+- Version 3.0.0 has had one release in 14 months.
+- It depends on `@nx/devkit` ^22, and we are on Nx 23.
+- Its GitHub repository shows no licence file (npm says MIT).
+- Its targets cache Cargo outputs in Nx.
+
+### Artefact sizes and credits
+
+With no outputs, an entry is a log of a few KB, far inside any Nx Cloud limit; compiled artefacts are never sent.
+
+The cost is the CIPEs: `ci.yml` runs about 230 times a day. CI therefore keeps the existing workspace commands until the open-source plan or a self-hosted cache is in place. Without a remote cache, a fresh runner gains nothing from per-crate targets and pays the per-invocation overhead.
+
+**Switching the Rust jobs over (not done yet).** Once pull requests get a remote cache (`NX_CLOUD_CI=all` on the open-source plan), the switch is:
+- *Rust: tests* runs `scripts/ci/nx-cloud-run.sh affected -t test --exclude='*,!tag:cargo-workspace:root'` in place of `cargo nextest run --workspace`.
+- *Rust: fmt and clippy* runs the same with `-t fmt clippy`. Its feature-specific clippy, doc and doc-test steps stay as they are.
+
+Both jobs keep their names, so `CI required` and the rulesets still match. They need the web job's Nx Cloud `environment` and `env` block, `pnpm install`, and `scripts/ci/nx-scope.sh`.
+
+Measure the change on the first pull request that has it, against today's 64 and 44 minutes. Do not make the switch before then: on a runner with no remote cache, every per-crate task misses.
