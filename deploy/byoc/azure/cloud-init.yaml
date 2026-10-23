@@ -67,6 +67,11 @@ write_files:
       #   loams-byoc-bootstrap --render-env-only  print the .env and engine.env it
       #                                           would write (secrets as placeholders)
       #                                           and touch nothing (for tests)
+      #   LOAMS_BYOC_SKIP_SYSTEM=1                download, verify and unpack the bundle and
+      #                                           write .env and secrets/engine.env under
+      #                                           LOAMS_BYOC_ROOT, but skip the root check,
+      #                                           kernel, disk, Docker and systemd steps
+      #                                           (for tests, not for a VM)
       set -euo pipefail
       umask 022
 
@@ -82,6 +87,7 @@ write_files:
       # The release signing key (docs/release/loams-release-key.asc); the bundle's
       # SHA256SUMS.asc must verify against this fingerprint.
       fpr="333AC94599D5A1EB2A416D1E83DC134D8CAF895D"
+      proto='=https'
       keyfile="${LOAMS_BYOC_KEY:-/etc/loams-byoc/loams-release-key.asc}"
       docker_fpr="9DC858229FC7DD38854AE2D88D81803C0EBFCD88"
 
@@ -126,16 +132,22 @@ write_files:
         exit 0
       fi
 
-      [[ "$(id -u)" -eq 0 ]] || die "run as root"
+      skip_system="${LOAMS_BYOC_SKIP_SYSTEM:-0}"
+      [[ "$skip_system" == 1 || "$(id -u)" -eq 0 ]] || die "run as root"
+      if [[ "$skip_system" == 1 ]]; then
+        # Test hooks, only without the system steps: a local release, signed by a test key.
+        proto='=http,https'
+        fpr="${LOAMS_BYOC_TEST_KEY_FPR:-$fpr}"
+      fi
 
       # --- kernel (House's workers need Linux 6.7 or newer) ------------------------
       kv="$(uname -r)"; maj="${kv%%.*}"; rest="${kv#*.}"; min="${rest%%[!0-9]*}"
-      if ((maj < 6 || (maj == 6 && min < 7))); then
+      if [[ "$skip_system" != 1 ]] && ((maj < 6 || (maj == 6 && min < 7))); then
         die "Linux $kv is too old: the House needs 6.7 or newer (Ubuntu 24.04's 6.8 or later)"
       fi
 
       # --- the data disk, if one is attached ----------------------------------------
-      if [[ -n "${DATA_DEVICE:-}" ]]; then
+      if [[ "$skip_system" != 1 && -n "${DATA_DEVICE:-}" ]]; then
         for _ in $(seq 30); do [[ -b "$DATA_DEVICE" ]] && break; sleep 2; done
         [[ -b "$DATA_DEVICE" ]] || die "data disk $DATA_DEVICE did not appear"
         if ! blkid "$DATA_DEVICE" >/dev/null 2>&1; then
@@ -149,7 +161,7 @@ write_files:
       fi
 
       # --- Docker (the vendor's apt repository, key checked by fingerprint) ----------
-      if ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; then
+      if [[ "$skip_system" != 1 ]] && { ! command -v docker >/dev/null 2>&1 || ! docker compose version >/dev/null 2>&1; }; then
         say "installing Docker"
         export DEBIAN_FRONTEND=noninteractive
         apt-get update -qq
@@ -164,7 +176,9 @@ write_files:
         apt-get install -y -qq docker-ce docker-ce-cli containerd.io docker-compose-plugin
         systemctl enable --now docker
       fi
-      command -v jq >/dev/null 2>&1 || { apt-get update -qq; apt-get install -y -qq jq gnupg curl; }
+      if [[ "$skip_system" != 1 ]]; then
+        command -v jq >/dev/null 2>&1 || { apt-get update -qq; apt-get install -y -qq jq gnupg curl; }
+      fi
 
       # --- the bundle: signature, checksum, unpack -----------------------------------
       marker="$root/.bundle-version"
@@ -175,7 +189,7 @@ write_files:
         base="$repo/v$LOAMS_VERSION"
         bundle="loams-compose-$LOAMS_VERSION.tar.gz"
         for f in "$bundle" SHA256SUMS SHA256SUMS.asc; do
-          curl --proto '=https' --tlsv1.2 -fsSL --retry 3 "$base/$f" -o "$dl/$f"
+          curl --proto "$proto" --tlsv1.2 -fsSL --retry 3 "$base/$f" -o "$dl/$f"
         done
         gnupghome="$dl/gnupg"; mkdir -m 700 "$gnupghome"
         GNUPGHOME="$gnupghome" gpg --batch --quiet --import "$keyfile"
@@ -213,6 +227,11 @@ write_files:
       touch "$stack/secrets/api-keys"; chmod 600 "$stack/secrets/api-keys"
       # The engine reads secrets/api-keys as uid 10001 (release/README.md).
       chown 10001 "$stack/secrets/api-keys" 2>/dev/null || true
+
+      if [[ "$skip_system" == 1 ]]; then
+        say "done (no system steps): $stack"
+        exit 0
+      fi
 
       # --- the service -------------------------------------------------------------------
       systemctl daemon-reload
