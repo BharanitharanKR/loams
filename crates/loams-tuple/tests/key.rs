@@ -92,7 +92,13 @@ fn get(buf: &[u8], like: &Val, descending: bool) -> (Val, usize) {
 /// Bytes biased towards the escape's interesting values.
 fn bytes() -> impl Strategy<Value = Vec<u8>> {
     prop::collection::vec(
-        prop_oneof![Just(0x00u8), Just(0xFF), Just(0x01), Just(0xFE), any::<u8>()],
+        prop_oneof![
+            Just(0x00u8),
+            Just(0xFF),
+            Just(0x01),
+            Just(0xFE),
+            any::<u8>()
+        ],
         0..12,
     )
 }
@@ -120,8 +126,12 @@ fn small_i64() -> impl Strategy<Value = i64> {
 
 fn val(kind: u8) -> BoxedStrategy<Val> {
     match kind {
-        0 => prop_oneof![any::<u16>(), 0u16..3].prop_map(Val::U16).boxed(),
-        1 => prop_oneof![any::<u32>(), 0u32..3].prop_map(Val::U32).boxed(),
+        0 => prop_oneof![any::<u16>(), 0u16..3]
+            .prop_map(Val::U16)
+            .boxed(),
+        1 => prop_oneof![any::<u32>(), 0u32..3]
+            .prop_map(Val::U32)
+            .boxed(),
         2 => prop_oneof![any::<u64>(), 0u64..3, Just(u64::MAX)]
             .prop_map(Val::U64)
             .boxed(),

@@ -200,8 +200,14 @@ mod tests {
         assert_eq!(enc(|o| put_u16(o, 0x0102)), [1, 2]);
         assert_eq!(enc(|o| put_u32(o, 1)), [0, 0, 0, 1]);
         assert_eq!(enc(|o| put_i64(o, 0)), [0x80, 0, 0, 0, 0, 0, 0, 0]);
-        assert_eq!(enc(|o| put_i64(o, -1)), [0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
-        assert_eq!(enc(|o| put_bytes(o, b"a\0b")), [b'a', 0x00, 0xFF, b'b', 0x00, 0x00]);
+        assert_eq!(
+            enc(|o| put_i64(o, -1)),
+            [0x7f, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]
+        );
+        assert_eq!(
+            enc(|o| put_bytes(o, b"a\0b")),
+            [b'a', 0x00, 0xFF, b'b', 0x00, 0x00]
+        );
         assert_eq!(enc(|o| put_bytes(o, b"")), [0x00, 0x00]);
         assert_eq!(enc(|o| put_f64(o, -0.0)), enc(|o| put_f64(o, 0.0)));
         // The tuple codec's float bytes, without the tag.
@@ -215,9 +221,18 @@ mod tests {
         assert_eq!(get_u16(&[1]).unwrap_err(), CodecError::Truncated(1));
         assert_eq!(get_u64(&[]).unwrap_err(), CodecError::Truncated(0));
         assert_eq!(get_bytes(b"ab").unwrap_err(), CodecError::Truncated(2));
-        assert_eq!(get_bytes(&[b'a', 0x00]).unwrap_err(), CodecError::Truncated(2));
-        assert_eq!(get_bytes(&[b'a', 0x00, 0x01]).unwrap_err(), CodecError::BadEscape(1));
-        assert_eq!(get_bytes_desc(&[0xFF, 0x00]).unwrap_err(), CodecError::BadEscape(0));
+        assert_eq!(
+            get_bytes(&[b'a', 0x00]).unwrap_err(),
+            CodecError::Truncated(2)
+        );
+        assert_eq!(
+            get_bytes(&[b'a', 0x00, 0x01]).unwrap_err(),
+            CodecError::BadEscape(1)
+        );
+        assert_eq!(
+            get_bytes_desc(&[0xFF, 0xFE]).unwrap_err(),
+            CodecError::BadEscape(0)
+        );
     }
 
     #[test]
