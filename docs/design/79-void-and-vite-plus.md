@@ -2,7 +2,7 @@
 
 Status: **Approved** · 2026-10-23. The owner approved the design with all defaults on 2026-10-23: D1770–D1789, and Q1300–Q1310 at their recommended defaults. The same day the owner made two more rulings, both approved:
 - **Loams does not support Deno** (D1790, §7.7), with a [migration guide from Deno to Bun](../guides/migrate-deno-to-bun.md).
-- **Bun, compiled ahead of time, runs the self-hosted and container targets** and the server output of Void apps, where it works (D1791, §7.6). This amends D1780, D1781 and Q1308's answer. Its further uses (D1792–D1795) and Q1311–Q1313 are Proposed.
+- **Bun, compiled ahead of time, runs the self-hosted and container targets** and the server output of Void apps, where it works (D1791, §7.6). This amends D1780, D1781 and Q1308's answer. Its further uses (D1792–D1795) were approved the same day, and Q1311–Q1313 were answered with their defaults.
 
 No code is written by this document.
 
@@ -492,7 +492,7 @@ On `node` targets, the app uses its driver directly with a `DATABASE_URL`, so th
   - cold start at least 1.5x faster than Node for a Void app (Bun's documented range is 1.5–4x for bytecode);
   - an image under 120 MB, against Node plus `node_modules`. The Bun runtime alone is about 77 MB on Linux x64 (V).
 
-**Where else it fits** (Proposed; D1792–D1795 and Q1311–Q1313 wait for the owner):
+**Where else it fits** (approved by the owner on 2026-10-23, with Q1311–Q1313 at their defaults):
 - **D1792: small Loams TypeScript CLIs and tools ship as Bun-compiled binaries.** The first is the Factory host `bin/factory-acp.js` (§72), so a device runs it without Node. Release artefacts are cross-compiled for the eight targets.
 - **D1793: the images of apps the Factory builds** use the same compiled-binary image. This includes marketplace agents of runtime `binary` (§73).
 - **D1794: the LGPL-2 obligations of a distributed binary.**
@@ -636,14 +636,14 @@ VV1 can start right after the owner approves. It doesn't block 0.1.x work, and i
 | D1789 | **Not built:** forks of Void or Vite+; a non-Cloudflare `void deploy` adapter in VV0–VV2; a hosted Void Platform; `vp run` in place of Nx; a Void-only default template; Void for the engine, data plane or native apps | 13 | Approved (owner, 2026-10-23) |
 | D1790 | **Loams doesn't support Deno** as a runtime or deploy target: Void's `deno` target is unused, Deno Deploy isn't documented, and docs no longer list Deno. The SDK may keep working on Deno at no cost, but it isn't tested or claimed. Users get the [Deno to Bun guide](../guides/migrate-deno-to-bun.md). Reason: Deno's team ends runtime development after a year and shuts down Deno Deploy in about six months (§3.8) | 7.7 | **Approved (owner, 2026-10-23)** |
 | D1791 | **Bun, compiled ahead of time, runs the self-hosted and container targets, and the server output of Void apps,** where it works: Void's `target: "bun"`, then `bun build --compile --bytecode --minify --sourcemap --format=esm` for one binary per app, pinned to one Bun version. The fallback is `bun run` or Void's `node` build, for unembeddable native addons, code that reads files beside itself, failed compatibility, and managed function runtimes. Amends D1780, D1781 and Q1308's answer | 7.6 | **Approved (owner, 2026-10-23)** |
-| D1792 | **Small Loams TypeScript CLIs and tools ship as Bun-compiled binaries,** cross-compiled for the eight targets. The Factory host is first | 7.6 | Proposed |
-| D1793 | **The images of apps the Factory builds use the compiled-Bun image,** as do marketplace agents of runtime `binary` | 7.6 | Proposed |
-| D1794 | **Distributed Bun binaries meet LGPL-2:** a JavaScriptCore and WebKit notice, a pointer to `oven-sh/webkit` at the pinned version, and the app's source for rebuilding. Counsel checks before the first release (Q1312) | 7.6 | Proposed |
-| D1795 | **A Bun conformance lane:** the notes example compiled with Bun, in compose in PRs and nightly on Cloud Run, reporting startup and size against the `node` build | 7.6, 11 | Proposed |
+| D1792 | **Small Loams TypeScript CLIs and tools ship as Bun-compiled binaries,** cross-compiled for the eight targets. The Factory host is first | 7.6 | Approved (owner, 2026-10-23) |
+| D1793 | **The images of apps the Factory builds use the compiled-Bun image,** as do marketplace agents of runtime `binary` | 7.6 | Approved (owner, 2026-10-23) |
+| D1794 | **Distributed Bun binaries meet LGPL-2:** a JavaScriptCore and WebKit notice, a pointer to `oven-sh/webkit` at the pinned version, and the app's source for rebuilding. Counsel checks before the first release (Q1312) | 7.6 | Approved (owner, 2026-10-23) |
+| D1795 | **A Bun conformance lane:** the notes example compiled with Bun, in compose in PRs and nightly on Cloud Run, reporting startup and size against the `node` build | 7.6, 11 | Approved (owner, 2026-10-23) |
 
 ### 15.2 Open questions (Q1300–Q1313)
 
-Q1300–Q1310 were answered by the owner on 2026-10-23 with every default. Q1311–Q1313 are open.
+Q1300–Q1313 were answered by the owner on 2026-10-23 with every default.
 
 | # | Question | Recommended default |
 |---|---|---|
@@ -658,9 +658,9 @@ Q1300–Q1310 were answered by the owner on 2026-10-23 with every default. Q1311
 | Q1308 | ~~The self-host runtime for Void apps: a `node` container, or Void's Cloudflare build on Loams Functions (workerd)?~~ | ~~**A `node` container now.** Try workerd after §24's F1 and a spike~~ **Answered 2026-10-23 by the owner: the default.** Superseded the same day by D1791: the compiled Bun image is the default, and `node` is the fallback. |
 | Q1309 | ~~A weekly fallback lane on plain Vite, Rolldown and Vitest?~~ | ~~**Yes,** weekly, for the console and `@loams/ui` only~~ **Answered 2026-10-23 by the owner: the default.** |
 | Q1310 | ~~Vercel: Void's `node` output through Loams' shim and the Build Output API, or Vercel's own framework detection?~~ | ~~**Loams' shim and the Build Output API** (D1406), so every target uses the same artefact~~ **Answered 2026-10-23 by the owner: the default.** |
-| Q1311 | AWS: a Bun-compiled binary on a Lambda custom runtime, or Node's managed runtime? | **Node's managed runtime.** Try Bun only if VV0 Task 8 shows a cold-start gain worth a custom runtime |
-| Q1312 | Counsel review of the LGPL-2 obligations (JavaScriptCore) before Loams distributes its first Bun-compiled binary? | **Yes,** before the first release. Images built in a customer's own account aren't distributed by Ostrium |
-| Q1313 | Which Loams CLI is Bun-compiled first? | **The Factory host** (`bin/factory-acp.js`, §72), then any new TypeScript tool. Existing Rust CLIs are unchanged |
+| Q1311 | ~~AWS: a Bun-compiled binary on a Lambda custom runtime, or Node's managed runtime?~~ | ~~**Node's managed runtime.** Try Bun only if VV0 Task 8 shows a cold-start gain worth a custom runtime~~ **Answered 2026-10-23 by the owner: the default.** |
+| Q1312 | ~~Counsel review of the LGPL-2 obligations (JavaScriptCore) before Loams distributes its first Bun-compiled binary?~~ | ~~**Yes,** before the first release. Images built in a customer's own account aren't distributed by Ostrium~~ **Answered 2026-10-23 by the owner: the default.** |
+| Q1313 | ~~Which Loams CLI is Bun-compiled first?~~ | ~~**The Factory host** (`bin/factory-acp.js`, §72), then any new TypeScript tool. Existing Rust CLIs are unchanged~~ **Answered 2026-10-23 by the owner: the default.** |
 
 ---
 
