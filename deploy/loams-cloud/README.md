@@ -17,6 +17,9 @@ The Worker behind the free, invite-only Loams Cloud try-out (design [§78 §25](
 | `src/domains.ts`, `policy/` | The domain lists (pins in `policy/PINS.md`) and the DNS-over-HTTPS MX check |
 | `src/turnstile.ts` | Turnstile Siteverify, single use, with an idempotency key |
 | `src/log.ts` | Log redaction: no token, address or bearer value is ever written |
+| `src/admin.ts`, `config/admins.toml` | Admin authorisation: the Ostrium org's `cloud_admin` role, the allow-list, and a TOTP step-up within 15 minutes (LC2a Task 4) |
+| `src/jwt.ts` | AuthKit access tokens, RS256 against WorkOS's JWKS |
+| `src/workos.ts` | The WorkOS REST client (MFA so far) |
 | `src/ports.ts` | The outside world as interfaces: Turnstile, rate limits, mail, the clock, logs |
 | `test/` | `node --test` suites; `test/harness/tidb.ts` reaches TiDB through the mysql client |
 
