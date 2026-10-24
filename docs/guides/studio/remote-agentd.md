@@ -5,7 +5,7 @@ Loams Studio in the browser console works against a `loams-agentd` you run on a 
 > **Status.** The remote listener, its checks, previews through it and the console's Content-Security-Policy setting ([below](#the-consoles-content-security-policy)) ship in 0.1.0 (SD1 Tasks 7, 26 and 30). The hosted console, `https://console.loams.dev`, reaches a 0.1.0 agentd through **Settings › Agentd hosts**: threads, runs, approvals and diffs work. What is **pending**:
 > - a sign-in that issues the agentd token, so for now you paste one (IA1);
 > - **previews in the hosted console.** Its `frame-src` is `'self'`, so the browser refuses to frame any agentd host's preview ([Previews](#previews));
-> - a standalone package for the daemon ([#874](https://github.com/ostrium-labs/loams/issues/874)); for now you take the binary out of the image ([below](#get-the-binary)).
+> - a `.deb`, `.rpm` or pacman package for the daemon, or `cargo install` ([#874](https://github.com/ostrium-labs/loams/issues/874)); until then, use the release tarball ([below](#get-the-binary)).
 
 ## The short version
 
@@ -19,7 +19,23 @@ For the hosted console, the host must be a `*.ts.net` name on **port 443**: its 
 
 ## Get the binary
 
-`loams-agentd` is not in the `loams` CLI packages (`.deb`, `.rpm`, pacman), and the release's `loams-agentd-<version>.spdx.json` asset is its SBOM, not the binary. Take it out of the published image, `ghcr.io/ostrium-labs/loams-agentd` (amd64 and arm64), where it is `/usr/local/bin/loams-agentd`:
+Each release attaches `loams-agentd` for Linux as one tarball per architecture, `loams-agentd-<version>-linux-x86_64.tar.gz` and `loams-agentd-<version>-linux-aarch64.tar.gz`. It is not in the `loams` CLI packages (`.deb`, `.rpm`, pacman), and the `loams-agentd-<version>.spdx.json` asset is its SBOM, not the binary. Download the tarball for your machine (`uname -m`) with the release's `SHA256SUMS` and `SHA256SUMS.asc`, check them with the release key ([`signing.md`](../../release/signing.md)), and unpack it:
+
+```sh
+v=X.Y.Z                                # the release, without the leading v
+t=loams-agentd-$v-linux-$(uname -m)    # x86_64 or aarch64
+base=https://github.com/ostrium-labs/loams/releases/download/v$v
+curl -fL -O "$base/$t.tar.gz" -O "$base/SHA256SUMS" -O "$base/SHA256SUMS.asc"
+gpg --verify SHA256SUMS.asc SHA256SUMS # with the release key imported (signing.md)
+sha256sum -c --ignore-missing SHA256SUMS
+tar -xzf "$t.tar.gz"
+install -D -m 0755 "$t/loams-agentd" ~/.local/bin/loams-agentd
+loams-agentd version                   # loams-agentd X.Y.Z
+```
+
+The unpacked directory holds `loams-agentd`, `loams`, `SHA256SUMS`, `VERSION` and the licence files. That is the layout `loams-agentd install-runtime --from` reads, the same as Loams Desktop's `resources/bin/`, so the directory can also install the runtime of the [per-user service](#run-it-as-a-service); `loams` is in it because `install-runtime` copies it too. Both binaries are built on Ubuntu 24.04 (glibc 2.39), so they run on Debian 13, Ubuntu 24.04, Fedora 40 and newer.
+
+A release without the tarballs (0.1.0 has none) leaves the published image, `ghcr.io/ostrium-labs/loams-agentd` (amd64 and arm64), where the binary is `/usr/local/bin/loams-agentd`:
 
 ```sh
 podman create --name loams-agentd-copy ghcr.io/ostrium-labs/loams-agentd:0.1.1
@@ -28,7 +44,7 @@ podman rm loams-agentd-copy
 loams-agentd version        # loams-agentd 0.1.1
 ```
 
-(`docker create` and `docker cp` work the same way.) The binary is linked against glibc 2.39 and nothing else of note, so it runs on Debian 13, Ubuntu 24.04, Fedora 40 and newer.
+(`docker create` and `docker cp` work the same way.) The image's binary is linked against glibc 2.39 and nothing else of note, so it runs on the same distributions.
 
 Loams Desktop also bundles it (Linux, and macOS and Windows since 0.1.0), in the app's `resources/bin/`, for example `/opt/Loams Desktop/resources/bin/loams-agentd` on Linux and `/Applications/Loams Desktop.app/Contents/Resources/bin/loams-agentd` on macOS. You can also build it from source: `cargo build --release -p loams-agentd`.
 
@@ -151,7 +167,7 @@ loams-agentd status --config ~/.config/loams-agentd/config.toml
 
 The unit is named `loams-agentd-remote` so it doesn't collide with the one Loams Desktop installs. If tailscaled isn't up yet at boot, the bind fails and systemd retries.
 
-**`loams-agentd service`** (`install`, `uninstall`, `start`, `stop`, `status`, `enable-linger`, `disable-linger`) is how Loams Desktop installs its per-user service: on Linux it writes `~/.config/systemd/user/loams-agentd.service`, which runs `<daemon dir>/runtime/current/loams-agentd run --service --config <config>`, so `[remote]` in that `config.toml` applies to it too. It needs that runtime first: `loams-agentd install-runtime --from <dir> --to <daemon dir>/runtime` copies `loams-agentd` and `loams` from `<dir>` and checks them against the `SHA256SUMS` and `VERSION` beside them, which is the layout of Loams Desktop's `resources/bin/`. On a headless host without Desktop, the unit above is simpler. If you do use `service install`, run `setcap` on `runtime/current/loams-agentd`, and again after each `install-runtime`.
+**`loams-agentd service`** (`install`, `uninstall`, `start`, `stop`, `status`, `enable-linger`, `disable-linger`) is how Loams Desktop installs its per-user service: on Linux it writes `~/.config/systemd/user/loams-agentd.service`, which runs `<daemon dir>/runtime/current/loams-agentd run --service --config <config>`, so `[remote]` in that `config.toml` applies to it too. It needs that runtime first: `loams-agentd install-runtime --from <dir> --to <daemon dir>/runtime` copies `loams-agentd` and `loams` from `<dir>` and checks them against the `SHA256SUMS` and `VERSION` beside them, which is the layout of Loams Desktop's `resources/bin/` and of the [release tarball](#get-the-binary): `"$t/loams-agentd" install-runtime --from "$t" --to ~/.config/loams-agentd/runtime`. On a headless host without Desktop, the unit above is simpler. If you do use `service install`, run `setcap` on `runtime/current/loams-agentd`, and again after each `install-runtime`.
 
 ## An issuer
 
@@ -220,7 +236,7 @@ Without a host, or without a token for the selected host, Studio's home shows **
 
 ## The console's Content-Security-Policy
 
-The browser console only fetches from and frames the origins its Content-Security-Policy names. A deployment lists its agentd hosts in **`LOAMS_AGENTD_ORIGINS`** (SD1 Task 30, ruling T30-3): origins separated by spaces or commas, each an exact `https://host[:port]` (`http://` only on `localhost`), with no wildcard, path or credentials. `deploy/stage.mjs` adds them to both `connect-src` (the Connect calls) and `frame-src` (the previews), and the console deploy workflow reads the repository variable of the same name. Each host must also name the console in its `--allow-origin`.
+The browser console only fetches from and frames the origins its Content-Security-Policy names. A deployment lists its agentd hosts in **`LOAMS_AGENTD_ORIGINS`** (SD1 Task 30, ruling T30-3): origins separated by spaces or commas, each an exact `https://host[:port]` (`http://` only on `localhost`), with no wildcard, path or credentials. The engine-served console (`/ui/`) and `deploy/stage.mjs` add them to both `connect-src` (the Connect calls) and `frame-src` (the previews), and the console deploy workflow reads the repository variable of the same name. Each host must also name the console in its `--allow-origin`.
 
 ```sh
 LOAMS_AGENTD_ORIGINS="https://devbox.example.com:8443 https://vm.example.com" \
