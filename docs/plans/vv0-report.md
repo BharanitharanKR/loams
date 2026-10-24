@@ -14,7 +14,7 @@
 | 3 | Loams' shims around Void's `node` build | pending |
 | 4 | Bun-compiled and `node` images in the light compose stack | pending |
 | 5 | Hyperdrive to Loams Postgres over Tunnel, and TiDB Starter | pending |
-| 6 | One `vite-plus` pin for the workspace | pending |
+| 6 | One `vite-plus` pin for the workspace | **Go.** 171 build, test and typecheck tasks in 75 projects pass on one `vite-plus` 1.3.0 pin. The peer warnings clear only with `peerDependencyRules.allowedVersions.vite`. electron-vite 6.0.0 runs on `vite-plus-core`. By the 14-day rule, the first pin is 1.1.0, with the desktop following on 2026-10-28 |
 | 7 | The Loams Cloud control plane on Void | pending |
 | 8 | Bun's ahead-of-time compile against Node | **Go** on cold start (5.5x faster than Node 24 for the process, 1.5x for the container); the image is 138 MB on distroless glibc and 118 MB on Alpine musl, so the under-120 MB target is met only on musl. Embedding `dist/client/` needs a one-line rewrite of Void's client root |
 
@@ -40,7 +40,44 @@ Pending.
 
 ## Task 6
 
-Pending.
+**Question.** Can the whole workspace take one `vite-plus` pin, with `vite` aliased?
+
+**Verdict: go.** Every JavaScript target is green on one pin. The design's "the peer warnings disappear" holds only with one more pnpm setting. The desktop builds on `vite-plus-core` through electron-vite 6.0.0, with the same bundle as PR #1049.
+
+**The change tried (2026-10-24, `vite-plus` 1.3.0):**
+- **`pnpm-workspace.yaml`:**
+  - catalog entries `vite-plus: 1.3.0`, `vite: npm:@voidzero-dev/vite-plus-core@1.3.0` and `vitest: 5.0.5`;
+  - the four `vite-plus@1.0.0>…` and `vitest@5.0.1>…` scoped overrides replaced by two global ones, `vite: npm:@voidzero-dev/vite-plus-core@1.3.0` and `vitest: 5.0.5`.
+- **Every `package.json`** that named `vite`, `vitest` or `vite-plus` now says `catalog:`. That is 51 packages, plus `vite-plus` added to the console, `@loams/ui`, the desktop and `web/`.
+- **Two version bumps:** `@vitest/coverage-v8` 5.0.3 to 5.0.5 in `plugins/`, and electron-vite 5.0.0 to 6.0.0 in the desktop.
+- **Task 1's script changes** for the console and `@loams/ui`.
+
+### Results
+
+| Check | Result |
+|---|---|
+| `pnpm install` | Clean. The lockfile is 689 lines shorter (15,419 to 14,730). Before: `vite` 7.3.7 and 8.3.1, `vite-plus-core` 1.0.0, `vitest` 5.0.1 and 5.0.3, and `esbuild` 0.25.12. After: one `vite-plus-core` 1.3.0 (which reports Vite 8.3.4 in `bundledVersions`), one `vitest` 5.0.5, and no `esbuild` 0.25 |
+| Peer warnings, without a rule | **4 unmet `vite` peers**, all for the same reason. `@voidzero-dev/vite-plus-core` identifies as its own version, 1.3.0, so ranges such as `^8.0.0` fail. The packages asking are `vitest` 5.0.5, `@vitest/mocker` 5.0.5, `@vitejs/plugin-react` 6.1.2, `@tailwindcss/vite` 4.3.3 and electron-vite 6.0.0. `dev` today has 5 unmet peers of its own: 3 for `vite` (the plugins' fork, which identifies as 1.0.0), one for `@vitest/coverage-v8` and one for `@vitest/browser-preview` |
+| Peer warnings, with `peerDependencyRules.allowedVersions: { vite: 1.3.0 }` | `pnpm peers check`: "No peer dependency issues found". This rule moves with the pin, so a bump changes it in the same line |
+| `nx run-many --targets=build,test,typecheck --projects='@loams/*,plugins*,loams-desktop-electron' --parallel=2 --skip-nx-cache` | **171 tasks in 75 projects, all green**, in 6 min 22 s, with `NX_NO_CLOUD=true` so nothing reached the remote cache |
+| The desktop's `electron-vite build` (6.0.0 on `vite-plus-core` 1.3.0) | Green in 9 s. `out/main/index.js` is 2,065,819 bytes, with no `getElectronPath`: the same as #1049's 2,066.14 kB with plain Vite 8.3.4. So electron-vite 6 runs on `vite-plus-core`, and §79 §5.5's "until electron-vite runs on `vite-plus-core`" is already true. The desktop's unit tests passed in the run-many above. Its Playwright smoke wasn't run here, because it opens Electron windows on the shared machine's display. The VV1 PR runs it in CI |
+| Nx | Unchanged. The targets keep their names, and `vp` runs inside them (Q1302) |
+
+### Inputs to VV1
+
+- **The 14-day rule decides which pin lands first.**
+  - `vite-plus` 1.3.0 was published on 2026-10-16, so it is eligible on 2026-10-30. 1.2.0 (2026-10-14) is eligible on 2026-10-28.
+  - **1.1.0** (2026-10-07) is eligible now. It bundles Vite 8.3.3, Rolldown 1.2.12 and tsdown 0.23.0, and it depends on Vitest 5.0.3, the version the workspace already uses.
+  - electron-vite 6.0.0 (2026-10-14) is eligible on 2026-10-28. Until then, the desktop can't take the global `vite` alias: electron-vite 5 on Vite 8 inlines Electron's launcher, as #1049 found.
+  - So the first VV1 pin is `vite-plus` 1.1.0 through the catalog for every package except the desktop, without a global `vite` override. The desktop keeps Vite 7.3.7 and electron-vite 5.0.0 until 2026-10-28, and then takes #1049's electron-vite 6.0.0 and the global alias.
+- **The `vite` binary goes away.** Every script that runs `vite` becomes `vp` in the same PR (see Task 1).
+- **`docs/monorepo.md`'s "Do not apply a global Vite override"** is replaced in that PR by the catalog entry and the `peerDependencyRules` line.
+
+**Reproduce.** In a worktree off `dev`:
+1. Apply the catalog entries, the overrides and the `peerDependencyRules` above, and Task 1's script changes.
+2. Run `pnpm install --no-frozen-lockfile` and `pnpm peers check`.
+3. Run `NX_NO_CLOUD=true NX_DAEMON=false pnpm exec nx run-many --targets=build,test,typecheck --projects='@loams/*,plugins*,loams-desktop-electron' --parallel=2 --skip-nx-cache`.
+4. Run `pnpm --filter loams-desktop-electron run build`.
 
 ## Task 7
 
