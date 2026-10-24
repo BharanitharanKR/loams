@@ -2,7 +2,7 @@
 
 > **Status: planned (IA1).** Nothing on this page is deployed yet, and there is no deploy bundle to run. The design is [§76](../../design/76-identity-and-authorization.md) (D1600–D1621) and the work is plan [IA1](../../plans/2026-10-21-ia1-identity-authz.md). This page says what will run and what to use until it does. Commands arrive with the bundle.
 
-Owner runbook, to be. On 2026-10-21 the owner ruled a full cutover to Zitadel from the previous identity provider (D1600): no migration, no compatibility period and no dual running, because there are no users. Zitadel will be the identity provider for `console.loams.dev` and for any install that chooses `auth.loams.dev` as its issuer (D1615). OpenFGA answers authorization (D1603); Zitadel only says who someone is (D1601).
+Owner runbook, to be. On 2026-10-21 the owner ruled a full cutover to Zitadel from the previous identity provider (D1600): no migration, no compatibility period and no dual running, because there are no users. Zitadel will be the identity provider for any install that chooses `auth.loams.dev` as its issuer (D1615; `console.loams.dev`, which D1615 also named, is retired by D1705). OpenFGA answers authorization (D1603); Zitadel only says who someone is (D1601).
 
 ## 1. What auth.loams.dev will run
 
