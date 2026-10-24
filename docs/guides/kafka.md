@@ -26,11 +26,18 @@ Set the profile in `.env` before the first start (with the others, comma-separat
 
 ```sh
 COMPOSE_PROFILES=kafka
-KAFKA_IGGY_PASSWORD=<a password of your own>   # Iggy keeps it in its volume
+KAFKA_IGGY_PASSWORD=<a password of your own>   # e.g. openssl rand -hex 24; Iggy keeps it in its volume
 docker compose up -d
 ```
 
-On a remote machine: `deploy/release/byoc/install.sh --profiles kafka`.
+The profile refuses to start while `KAFKA_IGGY_PASSWORD` is empty, still `.env.example`'s
+placeholder (`change-me`) or shorter than 12 characters: `iggy` and `kafka-gateway` exit with
+`kafka profile: KAFKA_IGGY_PASSWORD is still the .env.example placeholder; refusing to start.`
+(`deploy/release/config/kafka-guard.sh`). Set it before the first start: Iggy writes its root
+user to the `iggy-data` volume then, and changing `.env` afterwards does not change it.
+
+On a remote machine: `deploy/release/byoc/install.sh --profiles kafka` (it writes a random
+password into the new `.env`).
 
 Try it with kcat:
 
@@ -52,7 +59,7 @@ All in `.env` (see `.env.example`):
 | `KAFKA_ADVERTISED_HOST` | `127.0.0.1` | The host clients are told to reconnect to. A client on another machine needs a name it can reach, for example the stack's tailnet name |
 | `KAFKA_SASL_ENABLED` | `false` | SASL/PLAIN against Iggy users |
 | `KAFKA_AUTO_CREATE_TOPICS` | `false` | Create a topic on first use |
-| `KAFKA_IGGY_USER`, `KAFKA_IGGY_PASSWORD` | `iggy`, a placeholder | Iggy's root user, which the gateway signs in as |
+| `KAFKA_IGGY_USER`, `KAFKA_IGGY_PASSWORD` | `iggy`, the placeholder `change-me` (refused) | Iggy's root user, which the gateway signs in as. Required: at least 12 characters |
 
 ## What to know
 

@@ -21,7 +21,7 @@ export KAFKA_PORT="${KAFKA_SMOKE_PORT:-29093}"
 # The smoke creates its topic by producing to it.
 export KAFKA_AUTO_CREATE_TOPICS=true
 export LOAMS_POSTGRES_COMPOSE=./postgres-off.yaml
-unset COMPOSE_PROFILES
+unset COMPOSE_PROFILES KAFKA_IGGY_PASSWORD
 
 compose() { docker compose --env-file .env.example "$@"; }
 
@@ -45,6 +45,20 @@ with_profile="$(COMPOSE_PROFILES=kafka compose config --services | sort | tr '\n
 for s in iggy kafka-gateway; do
   case " $with_profile" in *" $s "*) ;; *) echo "profile kafka lacks $s: $with_profile"; exit 1 ;; esac
 done
+
+echo "== the placeholder password is refused before Iggy starts"
+set +e
+refusal="$(COMPOSE_PROFILES=kafka compose run --rm --no-deps -T iggy 2>&1)"
+refused=$?
+set -e
+[[ $refused == 78 && "$refusal" == *"still the .env.example placeholder; refusing to start"* ]] \
+  || { printf 'iggy with the placeholder password: exit %s\n%s\n' "$refused" "$refusal"; exit 1; }
+# Nothing was written: the refused run never reached the server.
+COMPOSE_PROFILES=kafka compose down -v --remove-orphans >/dev/null 2>&1 || true
+
+# A password of the smoke's own from here on.
+KAFKA_IGGY_PASSWORD="smoke-$(od -An -N12 -tx1 /dev/urandom | tr -d ' \n')"
+export KAFKA_IGGY_PASSWORD
 
 echo "== starting the kafka profile (iggy, kafka-gateway)"
 COMPOSE_PROFILES=kafka compose up -d --wait --wait-timeout 240 iggy kafka-gateway

@@ -10,6 +10,9 @@ All notable changes to this project are documented here. The format follows [Kee
   by the fork's CI) as `iggy` and `kafka-gateway`, with the Kafka wire on `127.0.0.1:9093`. Off in
   the default stack. Every Kafka API except transactions and exactly-once. Not wired to the engine
   yet. `release-compose` gains a smoke that starts the profile and runs kcat through it.
+  The profile refuses to start while `KAFKA_IGGY_PASSWORD` is empty, `.env.example`'s
+  placeholder (`change-me`) or shorter than 12 characters (`config/kafka-guard.sh`, with a
+  self-test in `release-compose`); `byoc/install.sh` writes a random one into a new `.env`.
 
 ### Removed
 - **The console deploy workflow** (`.github/workflows/console-deploy.yml`; 0.1.2, owner,

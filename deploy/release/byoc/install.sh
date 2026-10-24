@@ -247,6 +247,10 @@ else
   # First-run setup with auth on needs a setup token (docs/release/preview.md,
   # "First-run setup"). It stays in the host's .env, mode 0600, and is not printed.
   [[ -n "$cloud" ]] || setkv LOAMS_SETUP_TOKEN "$(od -An -N32 -tx1 /dev/urandom | tr -d ' \n')"
+  # The `kafka` profile refuses .env.example's placeholder for Iggy's root
+  # password (config/kafka-guard.sh), so a new .env gets one of its own,
+  # whichever profiles it starts with. Also never printed.
+  setkv KAFKA_IGGY_PASSWORD "$(od -An -N24 -tx1 /dev/urandom | tr -d ' \n')"
   if [[ -n "$headscale" ]]; then
     setkv HEADSCALE_SERVER_URL "$headscale"
     setkv HEADSCALE_BIND "0.0.0.0"
