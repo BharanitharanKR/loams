@@ -687,3 +687,15 @@ Tasks 1, 3, 4 and 5 were built before the owner's pending steps (the sending-onl
   - **The daily cap.** `POST /admin/invites` refuses a batch larger than today's remaining invitation budget less what is already queued (`409 DAILY_SEND_CAP`). A resend takes budget too. Sends are counted in the control DB's `email_budget` (Task 1), which is also the pacer Task 2's Worker mail will use. A failed create attempt still takes budget, because a lost response can't be told from a refusal; that only ever sends less. WorkOS's magic codes go through Resend uncounted, so the cap of 100 is a ceiling on what we cause.
   - **Revoke** mirrors WorkOS: an invitation already accepted or expired there is refused with `409 INVITE_NOT_REVOCABLE`, and our row takes WorkOS's state. Removing a waitlist entry revokes its open invitation at WorkOS.
   - **Resend** reads WorkOS first (there is no `invitation.expired` event, R-LC2a-5.6), counts the resend before sending, and keeps the expiry. `extend` revokes and creates a new invitation for the invite's full term from now, on the same invite row.
+
+### Owner approvals (2026-10-24)
+
+The owner approved the pending decisions below on 2026-10-24 ("approve all with your recommendations").
+
+- **R-LC0-8, T3-1: device pings use Durable Object WebSocket auto-response.** Presence and lease renewal come from the auto-response timestamp (`getWebSocketAutoResponseTimestamp`), never from "socket open". A ping writes no rows. **Approved (owner, 2026-10-24).** (Design 78 §9.2, §17; LC0 report §4.)
+- **R-LC0-9, T3-2: the per-user Durable Object does the TiDB writes.** It is created with a `locationHint` near the control DB's region (19–25 ms from the DO against 270–290 ms from a distant edge colo). The edge Worker doesn't write TiDB on hot paths. **Approved (owner, 2026-10-24).**
+- **R-LC0-10, D1756 stays on Workers Free.** "On Workers Paid" is dropped from D1727. Workers Paid remains Q1292's trigger-based owner decision. **Approved (owner, 2026-10-24).**
+- **R-LC0-11, D1713 amended.** Drain at handoff and at approval, plus every 5 minutes only when the mount is dirty, and never on a timer for Git-workspace mounts (LC0 Task 2: a timed drain on a Git workspace costs 14 writes for nothing). **Approved (owner, 2026-10-24).**
+- **R-LC0-12, D1718 amended.** Per-filesystem limits need a card, and there is no per-filesystem write counter, so the write budget can't be enforced by the provider. The hosted cohort stays off (§25.13, Q1291). **Approved (owner, 2026-10-24).**
+
+The decision log rows D1713, D1718 and D1727 and design 78 §9.2, §9.4, §14.5, §15.2 and §17 carry the same text.

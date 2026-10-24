@@ -81,3 +81,9 @@
 ## Rulings made during execution
 
 None yet.
+
+### Owner approvals (2026-10-24)
+
+The owner approved the pending decisions below on 2026-10-24 ("approve all with your recommendations").
+
+- **Pin `vite-plus` 1.3.0 directly once it is 14 days old (2026-10-30)**, not 1.1.0 now. The desktop and electron-vite 6 step stays on 2026-10-28. **Approved (owner, 2026-10-24).**

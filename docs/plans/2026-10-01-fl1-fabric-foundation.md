@@ -366,3 +366,10 @@ One PR per group, stacked; each builds and passes CI on its own.
 | # | Ruling | Why | Cost if wrong |
 |---|---|---|---|
 | — | (Task 0 fills this table) | | |
+
+### Owner approvals (2026-10-24)
+
+The owner approved the pending decisions below on 2026-10-24 ("approve all with your recommendations").
+
+- **Ruling E1: the Iggy sink runs inside the engine.** Confirmed. **Approved (owner, 2026-10-24).**
+- **The kcat to Loams smoke builds the engine image in CI** rather than waiting for a release. **Approved (owner, 2026-10-24).**
