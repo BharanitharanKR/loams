@@ -2587,6 +2587,14 @@ jobs:
         run: |
           scripts/ci/pgdog-licence.sh --self-test
           scripts/ci/pgdog-licence.sh
+      # OC1 OC0 Task 1 and DX1 DX0 Task 1: the compute conformance harness
+      # (expected-failure and licence gates on fixtures, the pins' licences
+      # offline, and the shape of deploy/release/compose.compute.yaml through
+      # `compose config`). No product runs and no image is pulled here; the
+      # suites run nightly.
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: the compute conformance harness self-test (OC0, DX0)
+        run: conformance/compute/selftest.sh
       - if: ${{ !cancelled() }} # report every check, not only the first failure
         name: PyYAML
         run: python3 -m pip install --quiet --disable-pip-version-check PyYAML
