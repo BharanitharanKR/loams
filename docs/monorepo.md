@@ -17,7 +17,7 @@ plugins/                      Plugin runtime, adapters, dashboard, BI contracts
 tools/monorepo/                Migration provenance and structural checks
 ```
 
-Use Node 22 or newer and the pinned pnpm version:
+Use Node 24 (`.nvmrc`; the toolchain needs 24.11 or newer, design 79 D1775) and the pinned pnpm version. Published packages such as `@loams/client` keep Node 22 as their runtime floor, which CI tests in one cell:
 
 ```sh
 pnpm install --frozen-lockfile
