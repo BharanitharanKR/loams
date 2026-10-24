@@ -242,7 +242,7 @@ Verified 2026-10-02: gRPC's [languages page](https://grpc.io/docs/languages/) li
 
 | # | Language | Client protocol | Library | `buf` plugins (remote) | Package | Registry | v1 status |
 |---|---|---|---|---|---|---|---|
-| 1 | TypeScript / JavaScript (Node, browsers, Deno, Bun) | **Connect** | `@connectrpc/connect` 2.x (`connect-es`), protobuf-es | `buf.build/bufbuild/es` | `@loams/client` (facade), `@loams/proto` (generated), `@loams/live` (kept, re-exports) | npm | **First** |
+| 1 | TypeScript / JavaScript (Node, browsers, Bun; Deno dropped by D1790, [§79](79-void-and-vite-plus.md)) | **Connect** | `@connectrpc/connect` 2.x (`connect-es`), protobuf-es | `buf.build/bufbuild/es` | `@loams/client` (facade), `@loams/proto` (generated), `@loams/live` (kept, re-exports) | npm | **First** |
 | 2 | Python | **Connect** | `connect-python` (beta), protobuf | `buf.build/protocolbuffers/python`, `buf.build/connectrpc/python` | `loams` | PyPI | **First** |
 | 3 | Go | **Connect** | `connect-go` | `buf.build/protocolbuffers/go`, `buf.build/connectrpc/go` | module `loams.dev/go` (mirror repo `ostrium-labs/loams-go`) | Go module proxy | **First** |
 | 4 | Rust | **Connect** | `connectrpc` crate (`connect-rust`) with buffa, the server's stack (D128) | `connectrpc-build` in `build.rs` (no buf remote) | `loams` | crates.io | **First** |
