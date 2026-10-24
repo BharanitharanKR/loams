@@ -80,7 +80,16 @@
 
 ## Rulings made during execution
 
-None yet.
+- **VV-R1 (2026-10-24): VV1 starts before VV0's report is complete.** VV1 is the toolchain milestone, and it depends only on Tasks 1 and 6, which have both reported a go ([vv0-report.md](vv0-report.md)). Tasks 2, 3, 5 and 7 cover VV2 and VV3. They wait on the owner's test accounts and tokens, so they don't hold VV1 back. VV1 lands one PR per item:
+  1. Node 24 (this ruling's PR);
+  2. the `vite-plus` pin;
+  3. Oxlint and Oxfmt;
+  4. `vp pack`;
+  5. the fallback lane;
+  6. the docs.
+- **VV-R2 (2026-10-24): Node 24 comes from `.nvmrc`.** The file holds `24`, and every `actions/setup-node` step reads it through `node-version-file`. The one exception is `sdk-release.yml`'s `publish-npm`, which has no checkout, so it names `24` directly. The root's and `web/`'s `engines` become `>=24.11`.
+  - `@loams/client` and `agents/factory` keep their runtime `engines` (`>=22` and `>=22.13`).
+  - The `SDK: TypeScript` job runs the SDK's suite once more on Node 22, as its last step (D1775).
 
 ### Owner approvals (2026-10-24)
 

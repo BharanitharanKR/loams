@@ -48,7 +48,7 @@ not from hiding it.
 | Go 1.24 (optional) | Only for the durable-execution conformance checker in `scripts/durable` | [go.dev](https://go.dev/dl/) |
 | [uv](https://docs.astral.sh/uv/) (optional) | Only for the Python client suites (`qdrant-client`, `elasticsearch-py`) | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
 | [tiup](https://docs.pingcap.com/tidb/stable/tiup-overview) (optional) | Only for the TiKV suites: a local PD + TiKV playground | see [`scripts/tikv/playground.sh`](scripts/tikv/playground.sh) |
-| Node 22 and pnpm (optional) | Only for the web console in [`web`](web/README.md) and the SDKs in [`sdks`](sdks) | [pnpm.io](https://pnpm.io/installation) |
+| Node 24 (`.nvmrc`) and pnpm (optional) | Only for the web console in [`web`](web/README.md) and the SDKs in [`sdks`](sdks) | [pnpm.io](https://pnpm.io/installation) |
 
 ### Build without running out of memory
 
