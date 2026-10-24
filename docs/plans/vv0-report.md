@@ -9,7 +9,7 @@
 
 | Task | Question | Verdict |
 |---|---|---|
-| 1 | The console and `@loams/ui` under Vite+ | pending |
+| 1 | The console and `@loams/ui` under Vite+ | **Go.** Tests, `dist/` and `@loams/ui`'s exports are unchanged. VV1 must switch the scripts to `vp`, set `fixedExtension: false` and `tabWidth: 2`, and rewrite 107 `biome-ignore` comments. Lint parity: 169 of 223 rules mapped, 5 covered by tsc, 14 lost, 25 CSS rules lost |
 | 2 | `@loams/app` ports through Void's Cloudflare bindings | pending |
 | 3 | Loams' shims around Void's `node` build | pending |
 | 4 | Bun-compiled and `node` images in the light compose stack | pending |
@@ -20,7 +20,299 @@
 
 ## Task 1
 
-Pending.
+**Question.** Does the console build, test and lint under Vite+ with no behaviour change?
+
+**Verdict: go**, with four changes that VV1 must make on purpose (listed under "What VV1 must do"). Tests, `dist/` and the `@loams/ui` package surface are unchanged. Lint and format are not a drop-in swap: the parity table below names every gap.
+
+**Set-up (2026-10-24).** `vite-plus` 1.3.0, which bundles Vite 8.3.4, Rolldown 1.2.14, Vitest 5.0.5, tsdown 0.23.1, Oxlint 1.88.0 and Oxfmt 0.73.0. The baseline is `dev` at `710f470`: Vite 8.3.1, Vitest 5.0.3, tsup 8.5.1 and Biome 2.5.15. Node 26.8.2 and pnpm 11.27.1 on the shared 14-core build machine. Every timed command ran inside a `buildslot.sh` slot, while other agents' cargo builds held the other slots (load average 7 to 11). So the wall times are noisy. Read them as "no regression", not as a speed-up claim.
+
+### Results
+
+| Step | Baseline | Vite+ | Same result? |
+|---|---|---|---|
+| Console build | `vite build`, median 4.4 s of 5 (Vite's own figure 1.68 s) | `vp build`, median 2.6 s of 5 (1.48 s) | Yes: the same 982 files; JS −3.9 KB (−0.02%), CSS and HTML byte-identical |
+| Console tests | `vitest run`, median 7.1 s of 3 | `vp test run`, median 4.3 s of 3 | Yes: 17 files and 150 tests passed in both |
+| `@loams/ui` build | `tsup`, median 3.6 s of 3 | `vp pack`, median 2.4 s of 3 | Yes, with `fixedExtension: false`: the same 281 runtime exports, the same 331 declaration exports, and the same external imports. JS is 4.7% smaller (229.9 KB against 241.2 KB) |
+| `@loams/ui` tests | `vitest run`, median 3.4 s of 3 | `vp test run`, median 3.5 s of 3 | Yes: 15 files and 266 tests passed in both |
+| `web/` lint and format | `biome check`, median 0.73 s of 3 | `vp check`, median 0.78 s of 3 (`vp lint` 0.42 s, `vp fmt --check` 0.60 s) | No. See the parity table and "Lint" below |
+
+`dist/` was compared file by file after removing the content hashes from the names: 873 names on both sides, and 392 files are byte-identical even with the hashes left inside them. The rest differ only in hashed chunk references and source-map offsets. Totals per type are the same within 0.02%.
+
+### What VV1 must do
+
+1. **Scripts call `vp`, not `vite`.** With `vite` aliased to `@voidzero-dev/vite-plus-core`, `node_modules/.bin/vite` no longer exists. The console's `dev`, `build` and `preview` scripts (`vite`, `vite build`, `vite preview`) fail until they become `vp dev`, `vp build` and `vp preview`. `vitest` still has a binary, since Vite+ 1.3.0 depends on the real Vitest 5.0.5.
+2. **`vp pack` needs `fixedExtension: false` in `@loams/ui`.** tsdown 0.23 writes `index.mjs` and `index.d.mts` by default. `@loams/ui`'s `publishConfig.exports` names `dist/index.js` and `dist/index.d.ts`, so the published package would break silently. With the option set, the output matches. tsup's `external: ['react', 'react/jsx-runtime']` needs no counterpart: tsdown keeps peer dependencies, and their subpaths, external.
+3. **Oxfmt reads `.editorconfig`.** The root `.editorconfig` says `indent_size = 4`, and Biome ignored it because `biome.json` sets 2. Without an explicit `tabWidth: 2`, Oxfmt would reindent 874 of 995 files. With `singleQuote`, `printWidth: 100`, `tabWidth: 2` and Biome's two double-quote overrides, 72 files change:
+   - 10 TypeScript files (260 lines), mostly where Oxfmt keeps a typed arrow callback's argument on one line;
+   - 62 files Biome didn't format: 46 JSON, 1 JSONC, 6 Markdown, 6 CSS, 2 HTML and 1 `.mjs`.
+
+   That is one formatting commit, listed in `.git-blame-ignore-revs` (D1773).
+4. **107 `biome-ignore` comments need rewriting** as `oxlint-disable-next-line` comments, because Oxlint doesn't read them. The 77 lint suppressions are: `useExhaustiveDependencies` 48, `noArrayIndexKey` 21, `noControlCharactersInRegex` 3, and one each of `noTemplateCurlyInString`, `noDescendingSpecificity`, `noDangerouslySetInnerHtml`, `useYield` and `useHookAtTopLevel`. Without the rewrite, those warnings come back.
+
+### Lint
+
+Biome's effective rule set for `web/` is its `recommended` preset plus the React domain's recommended rules: 223 rules. The table maps each one to an Oxlint 1.88.0 rule, or names the gap.
+
+| Class | Rules | Meaning |
+|---|---|---|
+| Mapped | 169 | An Oxlint rule with the same intent: 67 matched by name, and 102 mapped by hand (each checked to exist in Oxlint 1.88.0; a reviewer should spot-check intent) |
+| Covered by tsc or strict mode | 5 | `noDuplicateParameters`, `noOctalEscape`, `noVoidTypeReturn`, `noImplicitAnyLet` and `noRedundantUseStrict`. `tsc` with `strict`, or ES module parsing, already rejects these, and every package type-checks |
+| Lost: no Oxlint rule | 14 | `noApproximativeNumericConstant`, `noConstantMathMinMaxClamp`, `noDynamicNamespaceImportAccess`, `noEmptyTypeParameters`, `noFlatMapIdentity`, `noMisrefactoredShorthandAssign`, `noStringCaseMismatch`, `noSuspiciousSemicolonInJsx`, `noSvgWithoutTitle`, `noThisInStatic`, `noUselessContinue`, `noUselessStringRaw`, `noUselessUndefinedInitialization` and `useSimpleNumberKeys`. None fires on `web/` today |
+| Lost: CSS | 25 | Oxlint lints only JavaScript and TypeScript. Biome's CSS rules go, including `noDescendingSpecificity`, which has 6 warnings in `console.css` today. Oxfmt still formats CSS. Getting CSS lint back means adding Stylelint, which this report doesn't recommend |
+| Not applicable | 10 | 7 GraphQL rules (no GraphQL in `web/`), and 3 Biome-only rules about Biome's own suppression comments |
+
+The same code, with the mapped rules all set to `warn`:
+- Biome reports **68 warnings and 6 infos**.
+- Oxlint reports **697 warnings**.
+
+The difference is semantic, not missing rules:
+- **`no-use-before-define`, 331 warnings.** Biome's `noInvalidUseBeforeDeclaration` flags only temporal-dead-zone errors. ESLint's rule also flags hoisted functions. VV1 sets it to `{ functions: false, classes: false, variables: false, typedefs: false, ignoreTypeReferences: true }`.
+- **`jsx-a11y/prefer-tag-over-role`, 89 warnings.** Biome's `useSemanticElements` is narrower. Each one is a real a11y suggestion (for example, `role="status"` should be `<output>`). Keep it as a warning and fix it over time.
+- **`no-non-null-assertion`, 110 warnings against Biome's 44.** The spike config left out `biome.json`'s per-file overrides. VV1 carries them over into `lint.overrides`.
+- **`exhaustive-deps` and `no-array-index-key`, 49 warnings.** These are the `biome-ignore` comments from item 4 above.
+
+### Reproduce
+
+Run these in a worktree off `dev`:
+1. Apply Task 6's catalog pin and override.
+2. Switch the console's and `@loams/ui`'s scripts to `vp`.
+3. Add `web/packages/ui/vite.config.ts` with `pack: { entry: ['src/index.ts'], format: ['esm'], dts: true, clean: true, fixedExtension: false }`.
+4. Add `web/vite.config.ts` with the `lint` rules from the mapping, and `fmt: { singleQuote: true, printWidth: 100, useTabs: false, tabWidth: 2 }`.
+5. Run `vp build` and `vp test run` in `web/apps/console`, `vp pack` and `vp test run` in `web/packages/ui`, and `vp check` in `web/`.
+
+The rule mapping is generated from two lists:
+- `biome explain <rule>` for every rule in Biome's configuration schema, which gives "recommended" and the recommended domains;
+- `oxlint --rules --format=json`.
+
+<details><summary>The full parity table (223 rules)</summary>
+
+| Biome rule | Oxlint rule | Class |
+|---|---|---|
+| `a11y/noAccessKey` | `jsx_a11y/no-access-key` | mapped (by name) |
+| `a11y/noAmbiguousAnchorText` | `jsx_a11y/anchor-ambiguous-text` | mapped (by hand) |
+| `a11y/noAriaHiddenOnFocusable` | `jsx_a11y/no-aria-hidden-on-focusable` | mapped (by name) |
+| `a11y/noAriaUnsupportedElements` | `jsx_a11y/aria-unsupported-elements` | mapped (by hand) |
+| `a11y/noAutofocus` | `jsx_a11y/no-autofocus` | mapped (by name) |
+| `a11y/noDistractingElements` | `jsx_a11y/no-distracting-elements` | mapped (by name) |
+| `a11y/noHeaderScope` | `jsx_a11y/scope` | mapped (by hand) |
+| `a11y/noInteractiveElementToNoninteractiveRole` | `jsx_a11y/no-interactive-element-to-noninteractive-role` | mapped (by name) |
+| `a11y/noLabelWithoutControl` | `jsx_a11y/label-has-associated-control` | mapped (by hand) |
+| `a11y/noNoninteractiveElementToInteractiveRole` | `jsx_a11y/no-noninteractive-element-to-interactive-role` | mapped (by name) |
+| `a11y/noNoninteractiveTabindex` | `jsx_a11y/no-noninteractive-tabindex` | mapped (by name) |
+| `a11y/noPositiveTabindex` | `jsx_a11y/tabindex-no-positive` | mapped (by hand) |
+| `a11y/noRedundantAlt` | `jsx_a11y/img-redundant-alt` | mapped (by hand) |
+| `a11y/noRedundantRoles` | `jsx_a11y/no-redundant-roles` | mapped (by name) |
+| `a11y/noStaticElementInteractions` | `jsx_a11y/no-static-element-interactions` | mapped (by name) |
+| `a11y/useAltText` | `jsx_a11y/alt-text` | mapped (by name) |
+| `a11y/useAnchorContent` | `jsx_a11y/anchor-has-content` | mapped (by hand) |
+| `a11y/useAriaActivedescendantWithTabindex` | `jsx_a11y/aria-activedescendant-has-tabindex` | mapped (by hand) |
+| `a11y/useAriaPropsForRole` | `jsx_a11y/role-has-required-aria-props` | mapped (by hand) |
+| `a11y/useAriaPropsSupportedByRole` | `jsx_a11y/role-supports-aria-props` | mapped (by hand) |
+| `a11y/useButtonType` | `react/button-has-type` | mapped (by hand) |
+| `a11y/useFocusableInteractive` | `jsx_a11y/interactive-supports-focus` | mapped (by hand) |
+| `a11y/useHeadingContent` | `jsx_a11y/heading-has-content` | mapped (by hand) |
+| `a11y/useHtmlLang` | `jsx_a11y/html-has-lang` | mapped (by hand) |
+| `a11y/useIframeTitle` | `jsx_a11y/iframe-has-title` | mapped (by hand) |
+| `a11y/useKeyWithClickEvents` | `jsx_a11y/click-events-have-key-events` | mapped (by hand) |
+| `a11y/useKeyWithMouseEvents` | `jsx_a11y/mouse-events-have-key-events` | mapped (by hand) |
+| `a11y/useMediaCaption` | `jsx_a11y/media-has-caption` | mapped (by hand) |
+| `a11y/useSemanticElements` | `jsx_a11y/prefer-tag-over-role` | mapped (by hand) |
+| `a11y/useValidAnchor` | `jsx_a11y/anchor-is-valid` | mapped (by hand) |
+| `a11y/useValidAriaProps` | `jsx_a11y/aria-props` | mapped (by hand) |
+| `a11y/useValidAriaRole` | `jsx_a11y/aria-role` | mapped (by hand) |
+| `a11y/useValidAriaValues` | `jsx_a11y/aria-proptypes` | mapped (by hand) |
+| `a11y/useValidAutocomplete` | `jsx_a11y/autocomplete-valid` | mapped (by hand) |
+| `a11y/useValidLang` | `jsx_a11y/lang` | mapped (by hand) |
+| `complexity/noAdjacentSpacesInRegex` | `eslint/no-regex-spaces` | mapped (by hand) |
+| `complexity/noArguments` | `eslint/prefer-rest-params` | mapped (by hand) |
+| `complexity/noBannedTypes` | `typescript/no-unsafe-function-type` | mapped (by hand) |
+| `complexity/noCommaOperator` | `eslint/no-sequences` | mapped (by hand) |
+| `complexity/noExtraBooleanCast` | `eslint/no-extra-boolean-cast` | mapped (by name) |
+| `complexity/noStaticOnlyClass` | `unicorn/no-static-only-class` | mapped (by name) |
+| `complexity/noUselessCatch` | `eslint/no-useless-catch` | mapped (by name) |
+| `complexity/noUselessConstructor` | `eslint/no-useless-constructor` | mapped (by name) |
+| `complexity/noUselessEmptyExport` | `typescript/no-useless-empty-export` | mapped (by name) |
+| `complexity/noUselessEscapeInRegex` | `eslint/no-useless-escape` | mapped (by hand) |
+| `complexity/noUselessFragments` | `react/jsx-no-useless-fragment` | mapped (by hand) |
+| `complexity/noUselessLabel` | `eslint/no-extra-label` | mapped (by hand) |
+| `complexity/noUselessLoneBlockStatements` | `eslint/no-lone-blocks` | mapped (by hand) |
+| `complexity/noUselessRename` | `eslint/no-useless-rename` | mapped (by name) |
+| `complexity/noUselessSwitchCase` | `unicorn/no-useless-switch-case` | mapped (by name) |
+| `complexity/noUselessTernary` | `eslint/no-unneeded-ternary` | mapped (by hand) |
+| `complexity/noUselessThisAlias` | `typescript/no-this-alias` | mapped (by hand) |
+| `complexity/noUselessTypeConstraint` | `typescript/no-unnecessary-type-constraint` | mapped (by hand) |
+| `complexity/useArrowFunction` | `eslint/prefer-arrow-callback` | mapped (by hand) |
+| `complexity/useDateNow` | `unicorn/prefer-date-now` | mapped (by hand) |
+| `complexity/useFlatMap` | `unicorn/prefer-array-flat-map` | mapped (by hand) |
+| `complexity/useIndexOf` | `unicorn/prefer-array-index-of` | mapped (by hand) |
+| `complexity/useLiteralKeys` | `typescript/dot-notation` | mapped (by hand) |
+| `complexity/useNumericLiterals` | `eslint/prefer-numeric-literals` | mapped (by hand) |
+| `complexity/useOptionalChain` | `typescript/prefer-optional-chain` | mapped (by hand) |
+| `complexity/useRegexLiterals` | `eslint/prefer-regex-literals` | mapped (by hand) |
+| `correctness/noChildrenProp` | `react/no-children-prop` | mapped (by name) |
+| `correctness/noConstAssign` | `eslint/no-const-assign` | mapped (by name) |
+| `correctness/noConstantCondition` | `eslint/no-constant-condition` | mapped (by name) |
+| `correctness/noConstructorReturn` | `eslint/no-constructor-return` | mapped (by name) |
+| `correctness/noDuplicateEnumValueNames` | `typescript/no-duplicate-enum-values` | mapped (by hand) |
+| `correctness/noEmptyCharacterClassInRegex` | `eslint/no-empty-character-class` | mapped (by hand) |
+| `correctness/noEmptyPattern` | `eslint/no-empty-pattern` | mapped (by name) |
+| `correctness/noGlobalObjectCalls` | `eslint/no-obj-calls` | mapped (by hand) |
+| `correctness/noInnerDeclarations` | `eslint/no-inner-declarations` | mapped (by name) |
+| `correctness/noInvalidBuiltinInstantiation` | `eslint/no-new-native-nonconstructor` | mapped (by hand) |
+| `correctness/noInvalidConstructorSuper` | `eslint/constructor-super` | mapped (by hand) |
+| `correctness/noInvalidUseBeforeDeclaration` | `eslint/no-use-before-define` | mapped (by hand) |
+| `correctness/noNonoctalDecimalEscape` | `eslint/no-nonoctal-decimal-escape` | mapped (by name) |
+| `correctness/noPrecisionLoss` | `eslint/no-loss-of-precision` | mapped (by hand) |
+| `correctness/noRenderReturnValue` | `react/no-render-return-value` | mapped (by name) |
+| `correctness/noSelfAssign` | `eslint/no-self-assign` | mapped (by name) |
+| `correctness/noSetterReturn` | `eslint/no-setter-return` | mapped (by name) |
+| `correctness/noSwitchDeclarations` | `eslint/no-case-declarations` | mapped (by hand) |
+| `correctness/noUnknownProperty` | `react/no-unknown-property` | mapped (by name) |
+| `correctness/noUnreachable` | `eslint/no-unreachable` | mapped (by name) |
+| `correctness/noUnreachableSuper` | `eslint/no-this-before-super` | mapped (by hand) |
+| `correctness/noUnsafeFinally` | `eslint/no-unsafe-finally` | mapped (by name) |
+| `correctness/noUnsafeOptionalChaining` | `eslint/no-unsafe-optional-chaining` | mapped (by name) |
+| `correctness/noUnusedFunctionParameters` | `eslint/no-unused-vars` | mapped (by hand) |
+| `correctness/noUnusedImports` | `eslint/no-unused-vars` | mapped (by hand) |
+| `correctness/noUnusedLabels` | `eslint/no-unused-labels` | mapped (by name) |
+| `correctness/noUnusedPrivateClassMembers` | `eslint/no-unused-private-class-members` | mapped (by name) |
+| `correctness/noUnusedVariables` | `eslint/no-unused-vars` | mapped (by hand) |
+| `correctness/noVoidElementsWithChildren` | `react/void-dom-elements-no-children` | mapped (by hand) |
+| `correctness/useExhaustiveDependencies` | `react/exhaustive-deps` | mapped (by hand) |
+| `correctness/useHookAtTopLevel` | `react/rules-of-hooks` | mapped (by hand) |
+| `correctness/useIsNan` | `eslint/use-isnan` | mapped (by hand) |
+| `correctness/useJsxKeyInIterable` | `react/jsx-key` | mapped (by hand) |
+| `correctness/useParseIntRadix` | `eslint/radix` | mapped (by hand) |
+| `correctness/useValidForDirection` | `eslint/for-direction` | mapped (by hand) |
+| `correctness/useValidTypeof` | `eslint/valid-typeof` | mapped (by name) |
+| `correctness/useYield` | `eslint/require-yield` | mapped (by hand) |
+| `performance/noAccumulatingSpread` | `oxc/no-accumulating-spread` | mapped (by name) |
+| `security/noBlankTarget` | `react/jsx-no-target-blank` | mapped (by hand) |
+| `security/noDangerouslySetInnerHtml` | `react/no-danger` | mapped (by hand) |
+| `security/noDangerouslySetInnerHtmlWithChildren` | `react/no-danger-with-children` | mapped (by hand) |
+| `security/noGlobalEval` | `eslint/no-eval` | mapped (by hand) |
+| `security/noScriptUrl` | `eslint/no-script-url` | mapped (by name) |
+| `style/noNonNullAssertion` | `typescript/no-non-null-assertion` | mapped (by name) |
+| `style/useArrayLiterals` | `eslint/no-array-constructor` | mapped (by hand) |
+| `style/useConst` | `eslint/prefer-const` | mapped (by hand) |
+| `style/useExponentiationOperator` | `eslint/prefer-exponentiation-operator` | mapped (by hand) |
+| `style/useExportType` | `typescript/consistent-type-exports` | mapped (by hand) |
+| `style/useImportType` | `typescript/consistent-type-imports` | mapped (by hand) |
+| `style/useLiteralEnumMembers` | `typescript/prefer-literal-enum-member` | mapped (by hand) |
+| `style/useNodejsImportProtocol` | `unicorn/prefer-node-protocol` | mapped (by hand) |
+| `style/useShorthandFunctionType` | `typescript/prefer-function-type` | mapped (by hand) |
+| `style/useTemplate` | `eslint/prefer-template` | mapped (by hand) |
+| `suspicious/noArrayIndexKey` | `react/no-array-index-key` | mapped (by name) |
+| `suspicious/noAssignInExpressions` | `eslint/no-cond-assign` | mapped (by hand) |
+| `suspicious/noAsyncPromiseExecutor` | `eslint/no-async-promise-executor` | mapped (by name) |
+| `suspicious/noCatchAssign` | `eslint/no-ex-assign` | mapped (by hand) |
+| `suspicious/noClassAssign` | `eslint/no-class-assign` | mapped (by name) |
+| `suspicious/noCommentText` | `react/jsx-no-comment-textnodes` | mapped (by hand) |
+| `suspicious/noCompareNegZero` | `eslint/no-compare-neg-zero` | mapped (by name) |
+| `suspicious/noConfusingLabels` | `eslint/no-labels` | mapped (by hand) |
+| `suspicious/noConfusingVoidType` | `typescript/no-invalid-void-type` | mapped (by hand) |
+| `suspicious/noConstEnum` | `oxc/no-const-enum` | mapped (by name) |
+| `suspicious/noControlCharactersInRegex` | `eslint/no-control-regex` | mapped (by hand) |
+| `suspicious/noDebugger` | `eslint/no-debugger` | mapped (by name) |
+| `suspicious/noDocumentCookie` | `unicorn/no-document-cookie` | mapped (by name) |
+| `suspicious/noDoubleEquals` | `eslint/eqeqeq` | mapped (by hand) |
+| `suspicious/noDuplicateCase` | `eslint/no-duplicate-case` | mapped (by name) |
+| `suspicious/noDuplicateClassMembers` | `eslint/no-dupe-class-members` | mapped (by hand) |
+| `suspicious/noDuplicateElseIf` | `eslint/no-dupe-else-if` | mapped (by hand) |
+| `suspicious/noDuplicateEnumValues` | `typescript/no-duplicate-enum-values` | mapped (by name) |
+| `suspicious/noDuplicateJsxProps` | `react/jsx-no-duplicate-props` | mapped (by hand) |
+| `suspicious/noDuplicateObjectKeys` | `eslint/no-dupe-keys` | mapped (by hand) |
+| `suspicious/noEmptyInterface` | `typescript/no-empty-interface` | mapped (by name) |
+| `suspicious/noExplicitAny` | `typescript/no-explicit-any` | mapped (by name) |
+| `suspicious/noExtraNonNullAssertion` | `typescript/no-extra-non-null-assertion` | mapped (by name) |
+| `suspicious/noFallthroughSwitchClause` | `eslint/no-fallthrough` | mapped (by hand) |
+| `suspicious/noFunctionAssign` | `eslint/no-func-assign` | mapped (by hand) |
+| `suspicious/noGlobalAssign` | `eslint/no-global-assign` | mapped (by name) |
+| `suspicious/noGlobalIsFinite` | `unicorn/prefer-number-properties` | mapped (by hand) |
+| `suspicious/noGlobalIsNan` | `unicorn/prefer-number-properties` | mapped (by hand) |
+| `suspicious/noImportAssign` | `eslint/no-import-assign` | mapped (by name) |
+| `suspicious/noIrregularWhitespace` | `eslint/no-irregular-whitespace` | mapped (by name) |
+| `suspicious/noLabelVar` | `eslint/no-label-var` | mapped (by name) |
+| `suspicious/noMisleadingCharacterClass` | `eslint/no-misleading-character-class` | mapped (by name) |
+| `suspicious/noMisleadingInstantiator` | `typescript/no-misused-new` | mapped (by hand) |
+| `suspicious/noNonNullAssertedOptionalChain` | `typescript/no-non-null-asserted-optional-chain` | mapped (by name) |
+| `suspicious/noProto` | `eslint/no-proto` | mapped (by name) |
+| `suspicious/noPrototypeBuiltins` | `eslint/no-prototype-builtins` | mapped (by name) |
+| `suspicious/noRedeclare` | `eslint/no-redeclare` | mapped (by name) |
+| `suspicious/noSelfCompare` | `eslint/no-self-compare` | mapped (by name) |
+| `suspicious/noShadowRestrictedNames` | `eslint/no-shadow-restricted-names` | mapped (by name) |
+| `suspicious/noSparseArray` | `eslint/no-sparse-arrays` | mapped (by hand) |
+| `suspicious/noTemplateCurlyInString` | `eslint/no-template-curly-in-string` | mapped (by name) |
+| `suspicious/noThenProperty` | `unicorn/no-thenable` | mapped (by hand) |
+| `suspicious/noTsIgnore` | `typescript/ban-ts-comment` | mapped (by hand) |
+| `suspicious/noUnsafeDeclarationMerging` | `typescript/no-unsafe-declaration-merging` | mapped (by name) |
+| `suspicious/noUnsafeNegation` | `eslint/no-unsafe-negation` | mapped (by name) |
+| `suspicious/noUselessEscapeInString` | `eslint/no-useless-escape` | mapped (by hand) |
+| `suspicious/noUselessRegexBackrefs` | `eslint/no-useless-backreference` | mapped (by hand) |
+| `suspicious/noWith` | `eslint/no-with` | mapped (by name) |
+| `suspicious/useAdjacentOverloadSignatures` | `typescript/adjacent-overload-signatures` | mapped (by name) |
+| `suspicious/useDefaultSwitchClauseLast` | `eslint/default-case-last` | mapped (by hand) |
+| `suspicious/useGetterReturn` | `eslint/getter-return` | mapped (by name) |
+| `suspicious/useGoogleFontDisplay` | `nextjs/google-font-display` | mapped (by name) |
+| `suspicious/useIsArray` | `unicorn/no-instanceof-array` | mapped (by hand) |
+| `suspicious/useIterableCallbackReturn` | `eslint/array-callback-return` | mapped (by hand) |
+| `suspicious/useNamespaceKeyword` | `typescript/prefer-namespace-keyword` | mapped (by hand) |
+| `correctness/noVoidTypeReturn` | — | covered by tsc / ES module strict mode |
+| `suspicious/noDuplicateParameters` | — | covered by tsc / ES module strict mode |
+| `suspicious/noImplicitAnyLet` | — | covered by tsc / ES module strict mode |
+| `suspicious/noOctalEscape` | — | covered by tsc / ES module strict mode |
+| `suspicious/noRedundantUseStrict` | — | covered by tsc / ES module strict mode |
+| `a11y/noSvgWithoutTitle` | — | loss (no Oxlint rule) |
+| `complexity/noEmptyTypeParameters` | — | loss (no Oxlint rule) |
+| `complexity/noFlatMapIdentity` | — | loss (no Oxlint rule) |
+| `complexity/noThisInStatic` | — | loss (no Oxlint rule) |
+| `complexity/noUselessContinue` | — | loss (no Oxlint rule) |
+| `complexity/noUselessStringRaw` | — | loss (no Oxlint rule) |
+| `complexity/noUselessUndefinedInitialization` | — | loss (no Oxlint rule) |
+| `complexity/useSimpleNumberKeys` | — | loss (no Oxlint rule) |
+| `correctness/noConstantMathMinMaxClamp` | — | loss (no Oxlint rule) |
+| `correctness/noStringCaseMismatch` | — | loss (no Oxlint rule) |
+| `performance/noDynamicNamespaceImportAccess` | — | loss (no Oxlint rule) |
+| `suspicious/noApproximativeNumericConstant` | — | loss (no Oxlint rule) |
+| `suspicious/noMisrefactoredShorthandAssign` | — | loss (no Oxlint rule) |
+| `suspicious/noSuspiciousSemicolonInJsx` | — | loss (no Oxlint rule) |
+| `a11y/useGenericFontNames` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `complexity/noImportantStyles` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `correctness/noDuplicateAttributes` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `correctness/noInvalidDirectionInLinearGradient` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `correctness/noInvalidGridAreas` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `correctness/noInvalidPositionAtImportRule` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `correctness/noMissingVarFunction` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `correctness/noUnknownFunction` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `correctness/noUnknownMediaFeatureName` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `correctness/noUnknownPseudoClass` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `correctness/noUnknownPseudoElement` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `correctness/noUnknownTypeSelector` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `correctness/noUnknownUnit` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `correctness/noUnmatchableAnbSelector` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `style/noDescendingSpecificity` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `suspicious/noDeprecatedMediaType` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `suspicious/noDuplicateAtImportRules` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `suspicious/noDuplicateCustomProperties` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `suspicious/noDuplicateFontNames` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `suspicious/noDuplicateProperties` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `suspicious/noDuplicateSelectorsKeyframeBlock` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `suspicious/noEmptyBlock` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `suspicious/noImportantInKeyframe` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `suspicious/noShorthandPropertyOverrides` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `suspicious/noUnknownAtRules` | — | loss (CSS/HTML: Oxlint lints JS/TS only) |
+| `correctness/noDuplicateArgumentNames` | — | n/a (GraphQL, unused here) |
+| `correctness/noDuplicateInputFieldNames` | — | n/a (GraphQL, unused here) |
+| `correctness/noDuplicateVariableNames` | — | n/a (GraphQL, unused here) |
+| `correctness/useGraphqlNamedOperations` | — | n/a (GraphQL, unused here) |
+| `correctness/useLoneAnonymousOperation` | — | n/a (GraphQL, unused here) |
+| `style/useDeprecatedReason` | — | n/a (GraphQL, unused here) |
+| `suspicious/noDuplicateFields` | — | n/a (GraphQL, unused here) |
+| `suspicious/noBiomeFirstException` | — | n/a (Biome meta) |
+| `suspicious/noQuickfixBiome` | — | n/a (Biome meta) |
+| `suspicious/useBiomeIgnoreFolder` | — | n/a (Biome meta) |
+
+</details>
 
 ## Task 2
 
