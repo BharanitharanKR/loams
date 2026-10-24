@@ -454,12 +454,16 @@ mod tests {
             env(&[
                 ("AZURE_STORAGE_ACCOUNT_NAME", "acct"),
                 ("AZURE_CREDENTIAL_TYPE", "managed_identity"),
-                ("AZURE_STORAGE_CLIENT_ID", "11111111-2222-3333-4444-555555555555"),
+                (
+                    "AZURE_STORAGE_CLIENT_ID",
+                    "11111111-2222-3333-4444-555555555555",
+                ),
             ]),
             NONE,
         );
         assert_eq!(
-            b.get_config_value(&AzureConfigKey::CredentialType).as_deref(),
+            b.get_config_value(&AzureConfigKey::CredentialType)
+                .as_deref(),
             Some("managed_identity")
         );
         assert_eq!(
@@ -477,7 +481,10 @@ mod tests {
     #[test]
     fn gcs_builds_without_a_key_for_the_metadata_server() {
         let b = gcs_builder("gs://bucket/loams", env(&[("AWS_REGION", "ignored")]), NONE);
-        assert!(b.get_config_value(&GoogleConfigKey::ServiceAccountKey).is_none());
+        assert!(
+            b.get_config_value(&GoogleConfigKey::ServiceAccountKey)
+                .is_none()
+        );
         b.build().unwrap();
     }
 
@@ -485,9 +492,19 @@ mod tests {
     /// is set; only the region is a setting.
     #[test]
     fn s3_builds_without_a_key_for_the_instance_role() {
-        let b = s3_builder("s3://bucket/loams", env(&[("AWS_REGION", "us-east-1")]), NONE);
-        assert!(b.get_config_value(&AmazonS3ConfigKey::AccessKeyId).is_none());
-        assert!(b.get_config_value(&AmazonS3ConfigKey::SecretAccessKey).is_none());
+        let b = s3_builder(
+            "s3://bucket/loams",
+            env(&[("AWS_REGION", "us-east-1")]),
+            NONE,
+        );
+        assert!(
+            b.get_config_value(&AmazonS3ConfigKey::AccessKeyId)
+                .is_none()
+        );
+        assert!(
+            b.get_config_value(&AmazonS3ConfigKey::SecretAccessKey)
+                .is_none()
+        );
         b.build().unwrap();
     }
 
