@@ -11,7 +11,7 @@
 |---|---|---|
 | 1 | The console and `@loams/ui` under Vite+ | **Go.** Tests, `dist/` and `@loams/ui`'s exports are unchanged. VV1 must switch the scripts to `vp`, set `fixedExtension: false` and `tabWidth: 2`, and rewrite 107 `biome-ignore` comments. Lint parity: 169 of 223 rules mapped, 5 covered by tsc, 14 lost, 25 CSS rules lost |
 | 2 | `@loams/app` ports through Void's Cloudflare bindings | pending |
-| 3 | Loams' shims around Void's `node` build | pending |
+| 3 | Loams' shims around Void's `node` build | **Go locally** for HTTP, cron and queue through one Lambda handler (unit tests and the Lambda emulator). `node` exports only the Hono app, so crons and queues are called through the build manifest. Real Lambda cold starts are blocked on the owner's AWS account |
 | 4 | Bun-compiled and `node` images in the light compose stack | pending |
 | 5 | Hyperdrive to Loams Postgres over Tunnel, and TiDB Starter | pending |
 | 6 | One `vite-plus` pin for the workspace | **Go.** 171 build, test and typecheck tasks in 75 projects pass on one `vite-plus` 1.3.0 pin. The peer warnings clear only with `peerDependencyRules.allowedVersions.vite`. electron-vite 6.0.0 runs on `vite-plus-core`. By the 14-day rule, the first pin is 1.1.0, with the desktop following on 2026-10-28 |
@@ -320,7 +320,59 @@ Pending.
 
 ## Task 3
 
-Pending.
+**Verdict: go locally for HTTP, cron and queue; the Lambda part is blocked** (it needs the owner's test account and tokens, §70 §12.2). Run on 2026-10-24 with `void` 1.2.1, `vite` 8.3.4, `@hono/node-server` 1.x and Node 24.21.0 (the `node` npm package). Nothing was deployed.
+
+**The app.** A portable Void app with `target: "node"`, one route (`routes/api/hello.ts`, `GET` and `POST`), one cron (`crons/tick.ts`, `cron = '*/5 * * * *'`) and one queue (`queues/jobs.ts`; it acks `n >= 0` and retries `n < 0`). `vite build` takes 52 ms and writes `dist/ssr/app.js` (88.7 kB, 25.6 kB gzip), `dist/ssr/index.js` and one chunk per route, cron and queue.
+
+**The export shapes (§79 §8's verify item).**
+- `dist/ssr/app.js` has one public export: the Hono app as `default`, with `fetch(request, env, ctx)`. The other exports (`defineHandler`, `defineQueue`, `defineScheduled`) are single-letter minified aliases. They are internal.
+- **No `scheduled` or `queue` handler is exported** on the `node` target. Void compiles both into `app.js` as internal functions, and reaches them only through two HTTP routes on the same app: `POST /__void/scheduled` (`{cron, scheduledTime}`) and `POST /__void/queue` (`{queue, messages: [{id, timestamp, body, attempts}]}`, which returns `{ok, decisions: {<id>: {action: "ack" | "retry", delaySeconds?}}}`).
+- **Each cron chunk** exports `cron` (a string or an array) and the handler as `default`, called as `default(controller, env, ctx)` with `controller = {cron, scheduledTime, noRetry()}`. **Each queue chunk** exports the handler as `default`, called as `default(batch, env)`. The chunk file names are hashed. `dist/ssr/.vite/manifest.json` maps each source path (`crons/tick.ts`, `queues/jobs.ts`) to its chunk.
+- **The trigger routes' guard on `node`.** They accept the header `x-void-internal` only when it equals `__VOID_PROXY_TOKEN` from the raw environment. The `node` build never fills that store (`AsyncLocalStorage` with no `run`), so the token falls back to `__VOID_BUILD_KEY`. That is a random UUID, new on every build, and stored as plain text in `app.js`. `CRON_SECRET` is not read on this target.
+- **`POST /__void/scheduled` is broken on `node`.** Under `@hono/node-server` it reads `c.executionCtx`, which throws "This context has no ExecutionContext", so it answers 500. `POST /__void/queue` works with the build key.
+- **`dist/ssr` is not self-contained.** `app.js` imports `@hono/node-server/serve-static` and leaves it external, and that package's peer `hono` has to sit beside it too. The deploy artefact therefore carries `node_modules/@hono/node-server` and `node_modules/hono` (3.4 MB in all, the build included).
+
+**The shim (spike, `spikes/vv0/task3/shim/lambda.mjs`, 140 lines).** One `handler(event, context)` takes three event shapes:
+- **A Function URL event** (payload 2.0). It becomes a `Request`: path, query, headers, cookies, and a base64 or text body. `app.fetch(request, process.env, ctx)` answers it, and the `Response` maps back to `{statusCode, headers, cookies, body, isBase64Encoded}`. The shim answers `/__void/*` itself with 404, because the `node` build mounts the trigger routes on the public app.
+- **An EventBridge Scheduler invocation** whose custom input is `{"loams": "schedule", "cron": "<expr>", "time": "<ISO>"}`. The shim imports every `crons/` chunk listed in the manifest, runs those whose `cron` export includes the expression, and throws an `AggregateError` if any fails. That is the same rule as Void's Workers `scheduled`. So the §71 `schedule` port provisions one Scheduler schedule per expression, with that input.
+- **An SQS batch.** The queue name is the last part of `eventSourceARN`, matched to a `queues/` chunk by exact name, or else by the longest `-<name>` suffix that is unambiguous (Void's own rule, so a prefixed physical queue still resolves). The shim builds Void's batch (`messages[].ack()` and `retry()`, `ackAll()`, `retryAll()`) and returns `{batchItemFailures}`. It lists each message that was retried, or that had no decision when the handler threw. Records for an unknown queue all fail. **One loss:** `retry({delaySeconds})` becomes a plain redelivery after the visibility timeout; honouring the delay would need `ChangeMessageVisibility`.
+- **The shim calls the chunks directly, not the trigger routes.** On `node` the routes are broken (crons) or guarded by a per-build key read out of the bundle (queues), and they are public.
+
+**Tests.**
+- `node --test shim/lambda.test.mjs` on Node 24.21.0: **7 passed.** They cover GET; a POST with a base64 body; the app's 404; the blocked `/__void/scheduled`; a cron that runs by its expression (and an unmatched one, which runs nothing); an SQS batch of `[ack, retry, ack]`, which reports `batchItemFailures: [b]`; and a prefixed queue name, plus an unknown one.
+- **The AWS Lambda Runtime Interface Emulator** (the public image `public.ecr.aws/lambda/nodejs:24`, 439 MB, pulled without an account). `/var/task` mounts `app/dist`, the shim and the two packages, with the handler `shim/lambda.handler`. The HTTP event answers 200 with the JSON body, the Scheduler input answers `{"ran":1}` and logs the tick, and the SQS batch answers `{"batchItemFailures":[{"itemIdentifier":"b"}]}`.
+
+**Cold start, local only (not Lambda; load average 7 to 14 from other agents' builds).**
+
+| Measure | Median | Runs |
+|---|---|---|
+| A fresh Node 24 process that imports the shim and answers one Function URL event | 72.8 ms (an empty `node -e ''` takes 24.7 ms) | 20 |
+| RIE: `INIT REPORT` for a fresh container | 68 ms | 7 |
+| RIE: first invoke, from the client | 122 ms | 7 |
+| RIE: the first container ever, with a cold disk cache | 1.6 s init | 1 |
+| RIE: a warm invoke | 2 to 4 ms | — |
+
+Real Lambda cold starts (Init Duration behind a Function URL) are **blocked**, and so are the EventBridge Scheduler and SQS event-source mappings: they need the owner's AWS credit account and a scoped token. Nothing here changes Q1311's answer (Node on Lambda) yet.
+
+**Upstream notes** (not filed; no upstream posts without consent):
+- `node`'s `/__void/scheduled` crashes on the missing `executionCtx`.
+- The trigger key falls back to a per-build constant kept in the bundle.
+- An exported `scheduled` and `queue` on the `node` target would let shims skip the manifest.
+
+**Reproduce.**
+
+```sh
+cd spikes/vv0/task3
+npm install -D void@1.2.1 vite@8.3.4 node@24.21.0 @hono/node-server@1
+npm install-scripts approve node workerd esbuild better-sqlite3 && npm rebuild
+(cd app && PATH=$PWD/../node_modules/.bin:$PATH node ../node_modules/vite/bin/vite.js build)
+node_modules/.bin/node --test shim/lambda.test.mjs
+node_modules/.bin/node cold.mjs
+podman run --rm -p 39123:8080 -v $PWD/task:/var/task:ro,Z public.ecr.aws/lambda/nodejs:24 shim/lambda.handler
+curl -XPOST localhost:39123/2015-03-31/functions/function/invocations -d '<event>'
+```
+
+npm 11 blocks install scripts by default, which is why the approve step is there. Without it the `node` package has no binary and `workerd` isn't fetched.
 
 ## Task 4
 
