@@ -15,7 +15,8 @@
 //! invisible, first committer wins, a locked read conflicts with a later
 //! write, a committed lock makes later committers of the key conflict, inserts of present keys fail), scans, root isolation, and the
 //! runner: its retries, attempt budget, deadline, fault points and commit
-//! tokens, GC barriers, and the paged [`Scanner`](crate::Scanner).
+//! tokens, GC barriers, the paged [`Scanner`](crate::Scanner), and the
+//! one-shot operations of [`ops`](crate::ops).
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -54,7 +55,11 @@ macro_rules! kv_conformance {
                 scanner_pages_forward,
                 scanner_pages_reverse,
                 scanner_sees_own_writes,
-                scanner_bounds
+                scanner_bounds,
+                one_shot_put_get_delete,
+                one_shot_insert_existing_fails,
+                compare_and_put_matches_and_mismatches,
+                compare_and_put_absent_and_delete
             );
         }
     };
@@ -1227,4 +1232,153 @@ pub async fn scanner_bounds(factory: Factory) {
             .concat(),
         want
     );
+}
+
+/// The one-shot `put`, `get` and `delete` (KV0 Task 2): each commits on its
+/// own, later commits at later timestamps, and a delete of an absent key
+/// commits too.
+pub async fn one_shot_put_get_delete(factory: Factory) {
+    let Some(store) = factory.store(Spec::fresh()).await else {
+        return;
+    };
+    assert_eq!(store.get(b"k").await.expect("get"), None);
+    let first = store.put(b"k", b"v1".to_vec()).await.expect("put");
+    assert_eq!(store.get(b"k").await.expect("get"), Some(b"v1".to_vec()));
+    let second = store.put(b"k", b"v2".to_vec()).await.expect("put");
+    assert!(second > first, "a later put commits later");
+    assert_eq!(store.get(b"k").await.expect("get"), Some(b"v2".to_vec()));
+    // The one-shot writes are ordinary commits: a snapshot between them sees
+    // the first.
+    let mut snap = store.snapshot(first).await.expect("a snapshot");
+    assert_eq!(snap.get(b"k").await.expect("get"), Some(b"v1".to_vec()));
+    let deleted = store.delete(b"k").await.expect("delete");
+    assert!(deleted > second);
+    assert_eq!(store.get(b"k").await.expect("get"), None);
+    store
+        .delete(b"absent")
+        .await
+        .expect("deleting an absent key commits");
+    // Values over 2 MiB are refused, as in a transaction.
+    let err = store
+        .put(b"big", vec![0u8; crate::MAX_VALUE_BYTES + 1])
+        .await
+        .expect_err("too big");
+    assert!(matches!(err, TxnError::Fatal(_)), "{err:?}");
+}
+
+/// A one-shot insert of a present key fails with `AlreadyExists` and leaves
+/// the value; of an absent or deleted key it commits.
+pub async fn one_shot_insert_existing_fails(factory: Factory) {
+    let Some(store) = factory.store(Spec::fresh()).await else {
+        return;
+    };
+    store
+        .insert(b"k", b"first".to_vec())
+        .await
+        .expect("an absent key inserts");
+    let err = store
+        .insert(b"k", b"second".to_vec())
+        .await
+        .expect_err("the key exists");
+    assert!(matches!(err, TxnError::AlreadyExists(_)), "{err:?}");
+    assert_eq!(store.get(b"k").await.expect("get"), Some(b"first".to_vec()));
+    store.delete(b"k").await.expect("delete");
+    store
+        .insert(b"k", b"again".to_vec())
+        .await
+        .expect("a deleted key inserts");
+    assert_eq!(store.get(b"k").await.expect("get"), Some(b"again".to_vec()));
+}
+
+/// `compare_and_put` writes when the value matches and reports the current
+/// value, writing nothing, when it does not.
+pub async fn compare_and_put_matches_and_mismatches(factory: Factory) {
+    let Some(store) = factory.store(Spec::fresh()).await else {
+        return;
+    };
+    let put = store.put(b"k", b"a".to_vec()).await.expect("put");
+    let swapped = store
+        .compare_and_put(b"k", Some(b"a"), Some(b"b"))
+        .await
+        .expect("a cas")
+        .expect("the value matched");
+    assert!(swapped > put);
+    assert_eq!(
+        store
+            .compare_and_put(b"k", Some(b"a"), Some(b"c"))
+            .await
+            .expect("a cas"),
+        Err(Some(b"b".to_vec())),
+        "a stale expectation reports the current value"
+    );
+    assert_eq!(
+        store
+            .compare_and_put(b"k", None, Some(b"c"))
+            .await
+            .expect("a cas"),
+        Err(Some(b"b".to_vec())),
+        "expecting absence of a present key mismatches"
+    );
+    assert_eq!(store.get(b"k").await.expect("get"), Some(b"b".to_vec()));
+    // A mismatch wrote nothing: no commit after the swap changed the key.
+    let mut snap = store
+        .snapshot(store.now().await.expect("now"))
+        .await
+        .expect("snap");
+    assert_eq!(snap.get(b"k").await.expect("get"), Some(b"b".to_vec()));
+    // An empty value is a value, not absence.
+    store.put(b"e", Vec::new()).await.expect("put");
+    assert_eq!(
+        store
+            .compare_and_put(b"e", None, Some(b"x"))
+            .await
+            .expect("a cas"),
+        Err(Some(Vec::new()))
+    );
+    store
+        .compare_and_put(b"e", Some(b""), Some(b"x"))
+        .await
+        .expect("a cas")
+        .expect("the empty value matched");
+    assert_eq!(store.get(b"e").await.expect("get"), Some(b"x".to_vec()));
+}
+
+/// `compare_and_put` with `expected: None` creates an absent key once, and
+/// with `new: None` deletes a matching key.
+pub async fn compare_and_put_absent_and_delete(factory: Factory) {
+    let Some(store) = factory.store(Spec::fresh()).await else {
+        return;
+    };
+    store
+        .compare_and_put(b"k", None, Some(b"x"))
+        .await
+        .expect("a cas")
+        .expect("absent matched");
+    assert_eq!(
+        store
+            .compare_and_put(b"k", None, Some(b"y"))
+            .await
+            .expect("a cas"),
+        Err(Some(b"x".to_vec()))
+    );
+    store
+        .compare_and_put(b"k", Some(b"x"), None)
+        .await
+        .expect("a cas")
+        .expect("matched, deleted");
+    assert_eq!(store.get(b"k").await.expect("get"), None);
+    assert_eq!(
+        store
+            .compare_and_put(b"k", Some(b"x"), Some(b"z"))
+            .await
+            .expect("a cas"),
+        Err(None),
+        "a deleted key reports absence"
+    );
+    store
+        .compare_and_put(b"never", None, None)
+        .await
+        .expect("a cas")
+        .expect("absent matched absent");
+    assert_eq!(store.get(b"never").await.expect("get"), None);
 }
