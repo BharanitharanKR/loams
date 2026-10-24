@@ -1,5 +1,7 @@
 # 39 — Loams Software Factory and Loams Bot: Embedded Collaboration Apps, A2A Agents and the Closed Loop
 
+> **Amendment (approved 2026-10-23) by [§78](78-loams-cloud-on-tidb-x.md)** (Loams Cloud on TiDB X; D1700–D1735). The Factory's apps (Forgejo, Plane, Zulip, SigNoz) run on the user's always-on device in dev (§78 §9.2) and in the company's own cloud account in prod (§78 §11); Loams Cloud never hosts them (D1703).
+
 > **Amendment (approved 2026-10-22) by [D1666](13-decision-log.md): the observability app is SigNoz on Loams House.** The owner's decision of 2026-10-22: "use signoz in software factory". SigNoz's MIT community build (`signoz/signoz-community`, never the enterprise image or `ee/`) with its OTLP collector (AGPL-3.0, unmodified) takes the place the earlier observability app had in the loop, the embed rules, the licences, SSO and tracing (§2, §3, §4, §9); its ClickHouse is the install's Loams House, set by configuration, with no ClickHouse server of its own (§9.4). It is opt-in, and a **preview** until SigNoz passes the House gate ([D1571](13-decision-log.md)). The decision rows below keep their text with amendment notes.
 
 > **Amendment (approved 2026-10-21) by [§76](76-identity-and-authorization.md): superseded in part by D1600** (owner: full cutover from Authentik to Zitadel, with no migration path, no compatibility period and no dual running, because there are no users). D-SF-4's SSO goes through Zitadel; apps without free OIDC lose Authentik's proxy outpost and keep their own sign-in.

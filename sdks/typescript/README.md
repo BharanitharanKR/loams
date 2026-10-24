@@ -53,8 +53,13 @@ try {
 ```
 
 One port serves the Connect protocol, gRPC and gRPC-Web (D600), so the same
-object works in a browser, in Node, in Deno and in Bun. The default transport is
-Connect over `fetch`. For HTTP/2 gRPC on a server:
+object works in a browser, in Node and in Bun. The default transport is
+Connect over `fetch`.
+
+Deno is not supported (design 79, D1790): Deno's team is ending the runtime's
+development. The default `fetch` transport uses only standard Web APIs, so the
+SDK may still run on Deno, but we don't test it there or promise it works.
+Moving off Deno? See [Moving from Deno to Bun](../../docs/guides/migrate-deno-to-bun.md). For HTTP/2 gRPC on a server:
 
 ```ts
 import { Loams, createNodeTransport } from '@loams/client/node';
