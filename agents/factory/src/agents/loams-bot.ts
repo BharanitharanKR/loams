@@ -24,14 +24,20 @@ export interface LoamsBotOptions {
    * pass `createMockModel`). No model is bundled (Q1114).
    */
   model: MastraModelConfig;
+  /**
+   * The roles Loams Bot delegates to through Mastra's supervisor (D1425): planner,
+   * reviewer, forgejo, github. A sub-agent's approval surfaces at the supervisor.
+   */
+  agents?: Record<string, Agent>;
 }
 
-export function createLoamsBot({ model }: LoamsBotOptions): Agent {
+export function createLoamsBot({ model, agents }: LoamsBotOptions): Agent {
   return new Agent({
     id: LOAMS_BOT_ID,
     name: 'Loams Bot',
     description: 'The Software Factory supervisor: starts and steers runs and explains approvals.',
     instructions: LOAMS_BOT_INSTRUCTIONS,
     model,
+    ...(agents && Object.keys(agents).length > 0 ? { agents } : {}),
   });
 }

@@ -8,9 +8,17 @@ import './no-telemetry.js';
 import type { MastraModelConfig } from '@mastra/core/llm';
 import { Mastra } from '@mastra/core/mastra';
 import type { MastraCompositeStore } from '@mastra/core/storage';
+import type { ToolAction } from '@mastra/core/tools';
 import { PostgresStore } from '@mastra/pg';
 
+import { createCodeHostAgent } from './agents/code-host.js';
 import { createLoamsBot } from './agents/loams-bot.js';
+import { createPlanner } from './agents/planner.js';
+import { createReviewer } from './agents/reviewer.js';
+import { DEFAULT_POLICY, type FactoryPolicy } from './policy.js';
+
+// biome-ignore lint/suspicious/noExplicitAny: Mastra's tool type is generic over its schemas.
+type AnyTool = ToolAction<any, any, any, any, any, any>;
 
 /** The environment the factory host reads, and nothing else (Task 3 builds it). */
 export interface FactoryEnv {
@@ -28,6 +36,10 @@ export interface FactoryOptions {
   storage?: MastraCompositeStore;
   /** Loams Postgres; required when no `storage` is given. */
   pgUrl?: string;
+  /** agentd's tools (from `createAgentdMcp(...).listTools()`); gated per agent. */
+  agentdTools?: Record<string, AnyTool>;
+  /** The run's policy (`.loams/factory.toml`); the D1431 defaults when omitted. */
+  policy?: FactoryPolicy;
   /** Workflows to register (Task 7 passes `factory.run`, built on the Resonate engine). */
   workflows?: NonNullable<ConstructorParameters<typeof Mastra>[0]>['workflows'];
 }
@@ -62,9 +74,18 @@ export function createFactoryMastra(options: FactoryOptions): Mastra {
         throw new FactoryConfigError('createFactoryMastra needs pgUrl or storage');
       return new PostgresStore({ id: 'loams-factory', connectionString: options.pgUrl });
     })();
-  const loamsBot = createLoamsBot({ model: options.model });
+  const policy = options.policy ?? DEFAULT_POLICY;
+  const tools = options.agentdTools ?? {};
+  const planner = createPlanner(options.model);
+  const reviewer = createReviewer(options.model);
+  const forgejo = createCodeHostAgent('forgejo', options.model, tools, policy);
+  const github = createCodeHostAgent('github', options.model, tools, policy);
+  const loamsBot = createLoamsBot({
+    model: options.model,
+    agents: { planner, reviewer, forgejo, github },
+  });
   return new Mastra({
-    agents: { loamsBot },
+    agents: { loamsBot, planner, reviewer, forgejo, github },
     storage,
     ...(options.workflows ? { workflows: options.workflows } : {}),
     // The factory reports through its own exporters (MA2's LoamsExporter, Langfuse),
