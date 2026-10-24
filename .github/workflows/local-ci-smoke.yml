@@ -1,0 +1,29 @@
+name: Local CI smoke (temporary)
+on:
+  pull_request:
+    paths: [".github/workflows/local-ci-smoke.yml", "deploy/ci-hosts/**"]
+permissions:
+  contents: read
+jobs:
+  smoke:
+    name: "Local CI: smoke"
+    if: github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: [self-hosted, loams-local]
+    services:
+      registry:
+        image: docker.io/library/registry@sha256:6c5666b861f3505b116bb9aa9b25175e71210414bd010d92035ff64018f9457e
+        ports:
+          - 5000:5000
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - run: cat /etc/os-release | head -2; id; ulimit -l; nproc; df -h .
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq tcl >/dev/null && tclsh <<< 'puts ok'
+      - run: curl -fsS http://localhost:5000/v2/ && echo registry-ok
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - run: node --version
+      - run: rustup show active-toolchain || rustup toolchain install; cargo --version; $RUSTC_WRAPPER --show-stats | head -3
+      - run: docker run --rm docker.io/library/alpine:3.20 echo sibling-ok
