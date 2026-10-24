@@ -1480,12 +1480,15 @@ jobs:
       # runners are 4 vCPU.
       - name: the Rust SDK's tests
         working-directory: sdks/rust
-        run: cargo test -j 4 --locked
+        run: |
+          cargo test -j 4 --locked
+          cargo test -j 4 --locked --features machine-key machine_key
       - name: lint the Rust SDK
         working-directory: sdks/rust
         run: |
           cargo fmt -- --check
           cargo clippy -j 4 --all-targets -- -D warnings
+          cargo clippy -j 4 --all-targets --features machine-key -- -D warnings
       # `scripts/sdk/gen.sh` resolves buf from web's node_modules, so the
       # drift check below cannot run without this. sdk-rust had no pnpm setup at
       # all, so the step died before checking anything:
