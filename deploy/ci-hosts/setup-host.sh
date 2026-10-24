@@ -11,7 +11,7 @@
 # Options:
 #   --role primary|worker      default: primary
 #   --only LIST                comma-separated components (default: all):
-#                              tailscale,toolchain,nativelink,sccache,podman,runner
+#                              tailscale,toolchain,nativelink,sccache,podman,runner,monitor
 #   --primary ADDR             worker role: the primary's Tailscale address (default:
 #                              the one in the bundle)
 #   --bundle FILE              worker role: credentials from the primary (--issue-bundle)
@@ -58,6 +58,8 @@ cd /
 . "$HERE/lib/bundle.sh"
 # shellcheck source=deploy/ci-hosts/lib/tailscale.sh
 . "$HERE/lib/tailscale.sh"
+# shellcheck source=deploy/ci-hosts/lib/monitor.sh
+. "$HERE/lib/monitor.sh"
 
 ROLE=primary
 ONLY=all
@@ -149,5 +151,6 @@ want nativelink && setup_nativelink
 want sccache && setup_sccache
 if want podman || want runner; then setup_podman; fi
 want runner && setup_runners
+want monitor && setup_monitor
 
-log "done ($ROLE). Check with: deploy/ci-hosts/status.sh"
+log "done ($ROLE). Check with: /opt/loams-ci/bin/loams-ci-status"
