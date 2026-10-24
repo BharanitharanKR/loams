@@ -18,6 +18,9 @@
 #   OC_ENV_FILE   the stack's .env (default: deploy/release/.env, else .env.example)
 #   OC_NETWORK    the stack's network (default: loams_default)
 #   OC_COMPOSE    the compose command (default: docker compose, else docker-compose, else podman compose)
+#   OC_PROJECT    a compose project name other than the stack's (`loams`), for a
+#                 second stack beside a running one; set OC_NETWORK to <name>_default
+#   OC_COMPOSE_EXTRA  colon-separated extra compose files, last (local overrides)
 #   LOAMS_PG_DIRECT_URL  the direct endpoint as an admin URL (default: compute1's cloud_admin)
 # shellcheck shell=bash
 
@@ -82,7 +85,15 @@ oc_compose() {
     shift
     files+=(-f "$OC_DIR/pgdog-txn.yaml")
   fi
-  "${cmd[@]}" --project-directory "$OC_RELEASE" --env-file "$(oc_env_file)" --env-file "$OC_PINS" \
+  local extra
+  if [ -n "${OC_COMPOSE_EXTRA:-}" ]; then
+    local -a extras
+    IFS=: read -r -a extras <<<"$OC_COMPOSE_EXTRA"
+    for extra in "${extras[@]}"; do files+=(-f "$extra"); done
+  fi
+  local -a project=()
+  [ -n "${OC_PROJECT:-}" ] && project=(-p "$OC_PROJECT")
+  "${cmd[@]}" "${project[@]}" --project-directory "$OC_RELEASE" --env-file "$(oc_env_file)" --env-file "$OC_PINS" \
     "${files[@]}" "$@"
 }
 

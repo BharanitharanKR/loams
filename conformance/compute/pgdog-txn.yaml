@@ -12,7 +12,8 @@ services:
     image: ${PGDOG_IMAGE:?pass conformance/compute/pins.env with --env-file}
     command: ["pgdog", "--config", "/etc/pgdog/pgdog.toml", "--users", "/etc/pgdog/users.toml"]
     volumes:
-      - ./pgdog:/etc/pgdog:ro
+      # Relative to the project directory, deploy/release (lib.sh passes it).
+      - ../../conformance/compute/pgdog:/etc/pgdog:ro
     cap_drop: [ALL]
     security_opt:
       - no-new-privileges:true
