@@ -18,7 +18,12 @@ import { fileURLToPath } from 'node:url';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = resolve(HERE, '..', '..');
-export const DEFAULT_PROJECTS = ['@loams/console', '@loams/desktop', '@loams/studio-ui'];
+export const DEFAULT_PROJECTS = [
+  '@loams/console',
+  '@loams/desktop',
+  '@loams/studio-ui',
+  '@loams/factory',
+];
 const DEFAULT_EXCEPTIONS = join(HERE, 'npm-licences.exceptions.json');
 
 // Never allowed, not even by an exception (CONTRIBUTING rule 3: no AGPL, GPL, LGPL, BSL (Business

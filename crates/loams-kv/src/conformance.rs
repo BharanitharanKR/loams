@@ -15,7 +15,8 @@
 //! invisible, first committer wins, a locked read conflicts with a later
 //! write, a committed lock makes later committers of the key conflict, inserts of present keys fail), scans, root isolation, and the
 //! runner: its retries, attempt budget, deadline, fault points and commit
-//! tokens, and GC barriers.
+//! tokens, GC barriers, the paged [`Scanner`](crate::Scanner), and the
+//! one-shot operations of [`ops`](crate::ops).
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, Ordering};
@@ -50,7 +51,15 @@ macro_rules! kv_conformance {
                 runner_deadline_passes,
                 pessimistic_mode_is_refused,
                 fault_points_and_commit_tokens,
-                barrier_holds_old_snapshots_and_refuses_below_safe_point
+                barrier_holds_old_snapshots_and_refuses_below_safe_point,
+                scanner_pages_forward,
+                scanner_pages_reverse,
+                scanner_sees_own_writes,
+                scanner_bounds,
+                one_shot_put_get_delete,
+                one_shot_insert_existing_fails,
+                compare_and_put_matches_and_mismatches,
+                compare_and_put_absent_and_delete
             );
         }
     };
@@ -1007,4 +1016,369 @@ pub async fn barrier_holds_old_snapshots_and_refuses_below_safe_point(factory: F
             panic!("a barrier at ts 1 was accepted");
         }
     }
+}
+
+/// Writes `pairs` in one transaction.
+async fn put_all(store: &Store, pairs: Vec<(Vec<u8>, Vec<u8>)>) {
+    store
+        .run(TxnOptions::new("kv.conformance.put_all"), move |txn| {
+            let pairs = pairs.clone();
+            Box::pin(async move {
+                for (k, v) in pairs {
+                    txn.put(&k, v).await?;
+                }
+                Ok(())
+            })
+        })
+        .await
+        .expect("written");
+}
+
+fn numbered(n: usize) -> Vec<(Vec<u8>, Vec<u8>)> {
+    (0..n)
+        .map(|i| {
+            (
+                format!("k{i:02}").into_bytes(),
+                format!("v{i}").into_bytes(),
+            )
+        })
+        .collect()
+}
+
+/// Every page of `scanner`, until it is exhausted, and a check that it
+/// stays exhausted.
+async fn pages(mut scanner: crate::Scanner<'_>) -> Vec<Vec<(Vec<u8>, Vec<u8>)>> {
+    let mut out = Vec::new();
+    while let Some(page) = scanner.next_page().await.expect("a page") {
+        assert!(
+            page.len() <= scanner.page_size(),
+            "a page over the page size"
+        );
+        out.push(page);
+    }
+    assert_eq!(scanner.next_page().await.expect("a page"), None);
+    assert_eq!(scanner.next().await.expect("a pair"), None);
+    out
+}
+
+/// Every pair of `scanner` through `next`, which holds at most one page.
+async fn pairs(mut scanner: crate::Scanner<'_>) -> Vec<(Vec<u8>, Vec<u8>)> {
+    let mut out = Vec::new();
+    while let Some(pair) = scanner.next().await.expect("a pair") {
+        assert!(scanner.buffered() < scanner.page_size());
+        out.push(pair);
+    }
+    out
+}
+
+fn sizes(pages: &[Vec<(Vec<u8>, Vec<u8>)>]) -> Vec<usize> {
+    pages.iter().map(Vec::len).collect()
+}
+
+/// A forward scanner returns the range in key order, in full pages and a
+/// short last one, with no empty page when the range divides evenly.
+pub async fn scanner_pages_forward(factory: Factory) {
+    let Some(store) = factory.store(Spec::fresh()).await else {
+        return;
+    };
+    let all = numbered(25);
+    put_all(&store, all.clone()).await;
+    let mut snap = store
+        .snapshot(store.now().await.expect("now"))
+        .await
+        .expect("a snapshot");
+    let got = pages(snap.scanner(b"", None, 10)).await;
+    assert_eq!(sizes(&got), [10, 10, 5]);
+    assert_eq!(got.concat(), all);
+    let got = pages(snap.scanner(b"k05", Some(b"k25"), 10)).await;
+    assert_eq!(
+        sizes(&got),
+        [10, 10],
+        "an even range has no empty last page"
+    );
+    assert_eq!(got.concat(), all[5..]);
+    assert_eq!(
+        pairs(snap.scanner(b"k03", Some(b"k17"), 4)).await,
+        all[3..17]
+    );
+    // A page size of 0 is read as 1.
+    let got = pages(snap.scanner(b"k20", None, 0)).await;
+    assert_eq!(sizes(&got), [1, 1, 1, 1, 1]);
+}
+
+/// A reverse scanner returns the range in descending key order, paged.
+pub async fn scanner_pages_reverse(factory: Factory) {
+    let Some(store) = factory.store(Spec::fresh()).await else {
+        return;
+    };
+    let all = numbered(25);
+    put_all(&store, all.clone()).await;
+    let mut snap = store
+        .snapshot(store.now().await.expect("now"))
+        .await
+        .expect("a snapshot");
+    let reversed: Vec<_> = all.iter().rev().cloned().collect();
+    let got = pages(snap.scanner_reverse(b"", None, 10)).await;
+    assert_eq!(sizes(&got), [10, 10, 5]);
+    assert_eq!(got.concat(), reversed);
+    let got = pages(snap.scanner_reverse(b"k05", Some(b"k25"), 10)).await;
+    assert_eq!(sizes(&got), [10, 10]);
+    assert_eq!(got.concat(), reversed[..20]);
+    let want: Vec<_> = all[3..17].iter().rev().cloned().collect();
+    assert_eq!(
+        pairs(snap.scanner_reverse(b"k03", Some(b"k17"), 4)).await,
+        want
+    );
+}
+
+/// In a transaction, a scanner sees the transaction's own writes and
+/// deletes on every page, forward and reverse.
+pub async fn scanner_sees_own_writes(factory: Factory) {
+    let Some(store) = factory.store(Spec::fresh()).await else {
+        return;
+    };
+    put_all(&store, numbered(12)).await;
+    let (fwd, rev, want) = store
+        .run(TxnOptions::new("kv.conformance.scanner"), |txn| {
+            Box::pin(async move {
+                txn.delete(b"k00").await?;
+                txn.delete(b"k05").await?;
+                txn.delete(b"k06").await?;
+                txn.put(b"k05a", b"new".to_vec()).await?;
+                txn.put(b"k99", b"last".to_vec()).await?;
+                txn.put(b"k03", b"changed".to_vec()).await?;
+                let want = txn.scan(b"", None, 100).await?;
+                let mut fwd = Vec::new();
+                {
+                    let mut scanner = txn.scanner(b"", None, 3);
+                    while let Some(page) = scanner.next_page().await? {
+                        fwd.extend(page);
+                    }
+                }
+                let mut rev = Vec::new();
+                {
+                    let mut scanner = txn.scanner_reverse(b"", None, 2);
+                    while let Some(pair) = scanner.next().await? {
+                        rev.push(pair);
+                    }
+                }
+                Ok((fwd, rev, want))
+            })
+        })
+        .await
+        .expect("a scan")
+        .value;
+    assert_eq!(want.len(), 11, "12 keys, 3 deleted, 2 new");
+    assert_eq!(want.first(), Some(&kv("k01", "v1")));
+    assert!(want.contains(&kv("k03", "changed")));
+    assert!(want.contains(&kv("k05a", "new")));
+    assert_eq!(fwd, want);
+    let reversed: Vec<_> = want.iter().rev().cloned().collect();
+    assert_eq!(rev, reversed);
+}
+
+/// Scanner bounds: an empty range, a range of one key, an exclusive end on
+/// a key, and page boundaries on keys that are prefixes of the next ones.
+pub async fn scanner_bounds(factory: Factory) {
+    let Some(store) = factory.store(Spec::fresh()).await else {
+        return;
+    };
+    let keys: Vec<(Vec<u8>, Vec<u8>)> =
+        [&b"a"[..], b"a\x00", b"a\x00\x00", b"a\x01", b"b", b"b\xff"]
+            .iter()
+            .enumerate()
+            .map(|(i, k)| (k.to_vec(), vec![b'0' + u8::try_from(i).expect("small")]))
+            .collect();
+    put_all(&store, keys.clone()).await;
+    let mut snap = store
+        .snapshot(store.now().await.expect("now"))
+        .await
+        .expect("a snapshot");
+    // Empty: nothing in the range, and start == end.
+    assert!(pages(snap.scanner(b"c", None, 2)).await.is_empty());
+    assert!(pages(snap.scanner(b"a", Some(b"a"), 2)).await.is_empty());
+    assert!(
+        pages(snap.scanner_reverse(b"a", Some(b"a"), 2))
+            .await
+            .is_empty()
+    );
+    assert!(
+        pages(snap.scanner_reverse(b"", Some(b"a"), 2))
+            .await
+            .is_empty()
+    );
+    // One key.
+    assert_eq!(
+        pages(snap.scanner(b"b", Some(b"b\x00"), 2)).await,
+        [vec![keys[4].clone()]]
+    );
+    assert_eq!(
+        pages(snap.scanner_reverse(b"b", Some(b"b\x00"), 2)).await,
+        [vec![keys[4].clone()]]
+    );
+    // The end is exclusive, a page boundary falls on every key, and a key
+    // that is a prefix of the next is not skipped or repeated.
+    assert_eq!(pairs(snap.scanner(b"a", Some(b"b"), 1)).await, keys[..4]);
+    let want: Vec<_> = keys[..4].iter().rev().cloned().collect();
+    assert_eq!(pairs(snap.scanner_reverse(b"a", Some(b"b"), 1)).await, want);
+    assert_eq!(
+        pages(snap.scanner(b"a\x00", None, 2)).await.concat(),
+        keys[1..]
+    );
+    let want: Vec<_> = keys[1..].iter().rev().cloned().collect();
+    assert_eq!(
+        pages(snap.scanner_reverse(b"a\x00", None, 2))
+            .await
+            .concat(),
+        want
+    );
+}
+
+/// The one-shot `put`, `get` and `delete` (KV0 Task 2): each commits on its
+/// own, later commits at later timestamps, and a delete of an absent key
+/// commits too.
+pub async fn one_shot_put_get_delete(factory: Factory) {
+    let Some(store) = factory.store(Spec::fresh()).await else {
+        return;
+    };
+    assert_eq!(store.get(b"k").await.expect("get"), None);
+    let first = store.put(b"k", b"v1".to_vec()).await.expect("put");
+    assert_eq!(store.get(b"k").await.expect("get"), Some(b"v1".to_vec()));
+    let second = store.put(b"k", b"v2".to_vec()).await.expect("put");
+    assert!(second > first, "a later put commits later");
+    assert_eq!(store.get(b"k").await.expect("get"), Some(b"v2".to_vec()));
+    // The one-shot writes are ordinary commits: a snapshot between them sees
+    // the first.
+    let mut snap = store.snapshot(first).await.expect("a snapshot");
+    assert_eq!(snap.get(b"k").await.expect("get"), Some(b"v1".to_vec()));
+    let deleted = store.delete(b"k").await.expect("delete");
+    assert!(deleted > second);
+    assert_eq!(store.get(b"k").await.expect("get"), None);
+    store
+        .delete(b"absent")
+        .await
+        .expect("deleting an absent key commits");
+    // Values over 2 MiB are refused, as in a transaction.
+    let err = store
+        .put(b"big", vec![0u8; crate::MAX_VALUE_BYTES + 1])
+        .await
+        .expect_err("too big");
+    assert!(matches!(err, TxnError::Fatal(_)), "{err:?}");
+}
+
+/// A one-shot insert of a present key fails with `AlreadyExists` and leaves
+/// the value; of an absent or deleted key it commits.
+pub async fn one_shot_insert_existing_fails(factory: Factory) {
+    let Some(store) = factory.store(Spec::fresh()).await else {
+        return;
+    };
+    store
+        .insert(b"k", b"first".to_vec())
+        .await
+        .expect("an absent key inserts");
+    let err = store
+        .insert(b"k", b"second".to_vec())
+        .await
+        .expect_err("the key exists");
+    assert!(matches!(err, TxnError::AlreadyExists(_)), "{err:?}");
+    assert_eq!(store.get(b"k").await.expect("get"), Some(b"first".to_vec()));
+    store.delete(b"k").await.expect("delete");
+    store
+        .insert(b"k", b"again".to_vec())
+        .await
+        .expect("a deleted key inserts");
+    assert_eq!(store.get(b"k").await.expect("get"), Some(b"again".to_vec()));
+}
+
+/// `compare_and_put` writes when the value matches and reports the current
+/// value, writing nothing, when it does not.
+pub async fn compare_and_put_matches_and_mismatches(factory: Factory) {
+    let Some(store) = factory.store(Spec::fresh()).await else {
+        return;
+    };
+    let put = store.put(b"k", b"a".to_vec()).await.expect("put");
+    let swapped = store
+        .compare_and_put(b"k", Some(b"a"), Some(b"b"))
+        .await
+        .expect("a cas")
+        .expect("the value matched");
+    assert!(swapped > put);
+    assert_eq!(
+        store
+            .compare_and_put(b"k", Some(b"a"), Some(b"c"))
+            .await
+            .expect("a cas"),
+        Err(Some(b"b".to_vec())),
+        "a stale expectation reports the current value"
+    );
+    assert_eq!(
+        store
+            .compare_and_put(b"k", None, Some(b"c"))
+            .await
+            .expect("a cas"),
+        Err(Some(b"b".to_vec())),
+        "expecting absence of a present key mismatches"
+    );
+    assert_eq!(store.get(b"k").await.expect("get"), Some(b"b".to_vec()));
+    // A mismatch wrote nothing: no commit after the swap changed the key.
+    let mut snap = store
+        .snapshot(store.now().await.expect("now"))
+        .await
+        .expect("snap");
+    assert_eq!(snap.get(b"k").await.expect("get"), Some(b"b".to_vec()));
+    // An empty value is a value, not absence.
+    store.put(b"e", Vec::new()).await.expect("put");
+    assert_eq!(
+        store
+            .compare_and_put(b"e", None, Some(b"x"))
+            .await
+            .expect("a cas"),
+        Err(Some(Vec::new()))
+    );
+    store
+        .compare_and_put(b"e", Some(b""), Some(b"x"))
+        .await
+        .expect("a cas")
+        .expect("the empty value matched");
+    assert_eq!(store.get(b"e").await.expect("get"), Some(b"x".to_vec()));
+}
+
+/// `compare_and_put` with `expected: None` creates an absent key once, and
+/// with `new: None` deletes a matching key.
+pub async fn compare_and_put_absent_and_delete(factory: Factory) {
+    let Some(store) = factory.store(Spec::fresh()).await else {
+        return;
+    };
+    store
+        .compare_and_put(b"k", None, Some(b"x"))
+        .await
+        .expect("a cas")
+        .expect("absent matched");
+    assert_eq!(
+        store
+            .compare_and_put(b"k", None, Some(b"y"))
+            .await
+            .expect("a cas"),
+        Err(Some(b"x".to_vec()))
+    );
+    store
+        .compare_and_put(b"k", Some(b"x"), None)
+        .await
+        .expect("a cas")
+        .expect("matched, deleted");
+    assert_eq!(store.get(b"k").await.expect("get"), None);
+    assert_eq!(
+        store
+            .compare_and_put(b"k", Some(b"x"), Some(b"z"))
+            .await
+            .expect("a cas"),
+        Err(None),
+        "a deleted key reports absence"
+    );
+    store
+        .compare_and_put(b"never", None, None)
+        .await
+        .expect("a cas")
+        .expect("absent matched absent");
+    assert_eq!(store.get(b"never").await.expect("get"), None);
 }

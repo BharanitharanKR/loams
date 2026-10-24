@@ -7913,6 +7913,7 @@ dependencies = [
  "jsonwebtoken",
  "loams-apps-mock",
  "loams-cache",
+ "loams-cloud-admin",
  "loams-cloudevents",
  "loams-collection",
  "loams-common",
@@ -7968,6 +7969,7 @@ dependencies = [
  "toml 0.8.23",
  "tonic 0.14.6",
  "tower 0.5.3",
+ "tower-http 0.7.1",
  "tracing",
  "tracing-subscriber",
  "ulid 3.0.0",
@@ -8025,6 +8027,7 @@ dependencies = [
  "hyper",
  "hyper-util",
  "jsonwebtoken",
+ "loams-agentd-doc",
  "loams-agentd-proto",
  "loams-agentd-rpc",
  "loams-agentd-sessions",
@@ -8280,13 +8283,18 @@ name = "loams-authz"
 version = "0.1.1"
 dependencies = [
  "async-trait",
+ "axum 0.8.9",
  "futures",
  "moka",
  "openfga-client",
+ "percent-encoding",
  "serde",
  "serde_json",
+ "serde_yaml_ng",
  "thiserror 2.0.21",
+ "time",
  "tokio",
+ "tower 0.5.3",
  "tracing",
 ]
 
@@ -8305,6 +8313,23 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+]
+
+[[package]]
+name = "loams-cloud-admin"
+version = "0.1.1"
+dependencies = [
+ "axum 0.8.9",
+ "base64 0.23.1",
+ "clap",
+ "keyring",
+ "reqwest 0.13.5",
+ "rustls",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "ulid 3.0.0",
 ]
 
 [[package]]
@@ -8694,6 +8719,7 @@ version = "0.1.1"
 dependencies = [
  "futures",
  "loams-kv",
+ "loams-meta-conformance",
  "loams-tikv",
  "loams-tuple",
  "proptest",
@@ -9351,6 +9377,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "loams-temporal-proto"
+version = "0.1.1"
+dependencies = [
+ "bytes",
+ "hex",
+ "prost 0.14.4",
+ "prost-types",
+ "sha2 0.11.0",
+ "tonic 0.14.6",
+ "tonic-prost",
+ "tonic-prost-build",
+]
+
+[[package]]
 name = "loams-text"
 version = "0.1.1"
 dependencies = [
@@ -9398,6 +9438,7 @@ dependencies = [
 name = "loams-tuple"
 version = "0.1.1"
 dependencies = [
+ "proptest",
  "thiserror 2.0.21",
 ]
 
@@ -9451,6 +9492,25 @@ dependencies = [
  "tokio",
  "tokio-util",
  "tracing",
+]
+
+[[package]]
+name = "loams-zitadel"
+version = "0.1.1"
+dependencies = [
+ "async-trait",
+ "axum 0.8.9",
+ "base64 0.23.1",
+ "jsonwebtoken",
+ "loams-authz",
+ "reqwest 0.13.5",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "time",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]
