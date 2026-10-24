@@ -60,12 +60,28 @@ tests:
       - user: user:adam
         object: org:acme
         assertions: {billing_admin: false, billing_viewer: false}
+      # Option 2 (T4.R2, owner 2026-10-24): an org member sees only the projects they are granted.
       - user: user:mona
         object: deployment:dev-web
-        assertions: {can_view: true, can_operate: false, can_destroy: false}
+        assertions: {can_view: false, can_operate: false, can_destroy: false}
       - user: user:mona
         object: database:dev-db
-        assertions: {can_read: true, can_connect: true, can_write: false, can_admin: false}
+        assertions: {can_read: false, can_connect: false, can_write: false, can_admin: false}
+      - user: user:mona
+        object: project:p1
+        assertions: {viewer: false, editor: false, admin: false}
+
+  - name: org_member_sees_only_granted_projects
+    check:
+      - user: user:tess
+        object: project:p1
+        assertions: {viewer: true, editor: true, admin: false}
+      - user: user:mona
+        object: project:p1
+        assertions: {viewer: false}
+      - user: user:adam
+        object: project:p1
+        assertions: {viewer: true, editor: true, admin: true}
 
   - name: project_and_team_roles
     check:
