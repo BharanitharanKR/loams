@@ -15,7 +15,7 @@ export interface RateLimiter {
   hit(key: string, limit: number, windowMs: number): Promise<{ ok: boolean; retryAfterMs: number }>;
 }
 
-export type Template = "confirm" | "already_listed" | "removal";
+export type Template = "confirm" | "already_listed" | "removal" | "still_interested";
 
 export interface OutgoingMail {
   template: Template;
