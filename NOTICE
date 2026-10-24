@@ -407,3 +407,11 @@ TiKV migration (https://github.com/tikv/migration), Apache License 2.0,
 Copyright TiKV Project Authors. loams-tikv's CDC consumer (KV1) ports the
 ChangeData/EventFeed consumer of TiKV-CDC (its cdc/cdc/kv package) at the
 revision its file headers record (design 77 section 11.2, D1652).
+
+
+disposable-email-domains
+(https://github.com/disposable-email-domains/disposable-email-domains),
+CC0-1.0. deploy/loams-cloud/policy/disposable_email_blocklist.conf is that
+project's list at the revision recorded in deploy/loams-cloud/policy/PINS.md,
+unmodified; the dedication is in
+deploy/loams-cloud/policy/LICENSE-disposable-email-domains.txt.
