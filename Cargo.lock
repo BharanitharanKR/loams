@@ -7913,6 +7913,7 @@ dependencies = [
  "jsonwebtoken",
  "loams-apps-mock",
  "loams-cache",
+ "loams-cloud-admin",
  "loams-cloudevents",
  "loams-collection",
  "loams-common",
@@ -8312,6 +8313,23 @@ dependencies = [
  "tempfile",
  "thiserror 2.0.21",
  "tokio",
+]
+
+[[package]]
+name = "loams-cloud-admin"
+version = "0.1.1"
+dependencies = [
+ "axum 0.8.9",
+ "base64 0.23.1",
+ "clap",
+ "keyring",
+ "reqwest 0.13.5",
+ "rustls",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+ "tokio",
+ "ulid 3.0.0",
 ]
 
 [[package]]
