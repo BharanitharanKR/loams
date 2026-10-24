@@ -76,6 +76,11 @@ All notable changes to this project are documented here. The format follows [Kee
   password); no ClickHouse server is bundled. Idle, SigNoz and its collector use about 85 MiB.
 
 ### Added
+- **`loams-agentd` as release tarballs for Linux** (#874). `release-package.yml` attaches
+  `loams-agentd-<version>-linux-x86_64.tar.gz` and `-linux-aarch64.tar.gz`, each holding
+  `loams-agentd`, `loams`, `SHA256SUMS` and `VERSION`: the layout `loams-agentd install-runtime --from`
+  reads, so a headless host no longer takes the binary out of the image. "Get the binary" in
+  `docs/guides/studio/remote-agentd.md` downloads them.
 - **The TypeScript SDK runs in Cloudflare Workers**: the default transport sends `redirect: "manual"` in workerd
   (connect-web's `"error"` is rejected there), and `transportOptions.fetch` accepts a custom `fetch`. README
   has a Cloudflare Workers section.
