@@ -248,10 +248,11 @@ async fn a_failed_step_removes_the_half_made_agent() {
     fake.lock().unwrap().fail_add_key = true;
     let a = agents(z.clone());
     assert!(a.create(&new_agent()).await.is_err());
-    let f = fake.lock().unwrap();
-    assert!(f.calls.iter().any(|c| c.0 == "DELETE"), "{:?}", f.calls);
-    assert!(f.users.is_empty());
-    drop(f);
+    {
+        let f = fake.lock().unwrap();
+        assert!(f.calls.iter().any(|c| c.0 == "DELETE"), "{:?}", f.calls);
+        assert!(f.users.is_empty());
+    }
     // A tuple write that fails after the link: the user is removed and the link disabled.
     fake.lock().unwrap().fail_add_key = false;
     *a.tuples().fail.lock().unwrap() = true;
