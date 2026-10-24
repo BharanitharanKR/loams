@@ -180,6 +180,7 @@ openraft = { version = "=0.10.0-alpha.34", default-features = false, features = 
 opensrv-mysql = { version = "0.7", default-features = false }
 # Bulk import (D1 Task 8): Parquet over object_store, on the workspace's arrow 58.
 parquet = { version = "58", default-features = false, features = ["arrow", "async", "object_store", "snap", "zstd", "lz4"] }
+percent-encoding = "2"
 postcard = { version = "1", default-features = false, features = ["use-std"] }
 proptest = "1"
 prost = "0.14"
@@ -328,6 +329,7 @@ loams-meta-conformance = { path = "crates/loams-meta-conformance", version = "0.
 loams-meta-tikv = { path = "crates/loams-meta-tikv", version = "0.1.1" }
 loams-migrate = { path = "crates/loams-migrate", version = "0.1.1" }
 loams-upgrade = { path = "crates/loams-upgrade", version = "0.1.1" }
+loams-cloud-admin = { path = "crates/loams-cloud-admin", version = "0.1.1" }
 loams-stream-grpc = { path = "crates/loams-stream-grpc", version = "0.1.1" }
 loams-pk = { path = "crates/loams-pk", version = "0.1.1" }
 loams-qdrant = { path = "crates/loams-qdrant", version = "0.1.1" }

@@ -6,11 +6,12 @@
 //! `loams-tikv`'s handle. [`Store::run`] runs a body in a transaction with
 //! the runner's retries; [`Store::snapshot`] reads at a [`Ts`]. [`Txn`] and
 //! [`Snap`] are the transaction and the read-only view, every key relative
-//! to the store's root. [`Ts`] is a timestamp in TSO layout on both backends
+//! to the store's root; a [`Scanner`] pages through a range of either. [`Ts`] is a timestamp in TSO layout on both backends
 //! (Ruling 3). [`TxnOptions`], [`TxnError`] and [`Committed`] are the
 //! runner's options, error classes and result; [`FaultPlan`] its fault hooks;
 //! [`GcBarrier`] holds GC below a timestamp. [`tuple`](mod@tuple) is the
-//! order-preserving tuple codec. [`testing`] yields the stores a test runs
+//! order-preserving tuple codec and [`key`](mod@key) its untagged
+//! sibling. [`testing`] yields the stores a test runs
 //! on, and [`conformance`] holds every backend to the same semantics
 //! ([`kv_conformance!`]).
 
@@ -20,6 +21,7 @@ pub mod embedded;
 mod faults;
 mod gc;
 mod runner;
+mod scan;
 mod store;
 pub mod testing;
 #[cfg(feature = "tikv")]
@@ -27,10 +29,11 @@ mod tikv;
 mod ts;
 mod txn;
 
-pub use codec::{CodecError, tuple};
+pub use codec::{CodecError, key, tuple};
 pub use faults::{Fault, FaultPlan, FaultPoint};
 pub use gc::GcBarrier;
 pub use runner::{CommitMode, Committed, Mode, TxnError, TxnOptions};
+pub use scan::Scanner;
 pub use store::{
     Backend, EmbeddedConfig, KeyspaceState, KvError, PESSIMISTIC_REFUSED, Store, StoreConfig,
 };

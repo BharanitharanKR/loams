@@ -6,26 +6,33 @@ name: Desktop
 # the macOS builds here carry only an ad-hoc signature, which Apple Silicon needs to run the app.
 #
 # What runs (two tiers, owner, 2026-10-13; the org has about 20 concurrent jobs, about 5 macOS):
-# - pull request into dev (fast tier, issue #1050): Linux x64 only. The unit tests and typecheck,
-#   the console and desktop builds, then the Playwright smoke test on the fake engine
+# - pull request into dev (fast tier, issue #1050) that touches the desktop app, the stacks it
+#   packages or the release scripts: Linux x64 only. The unit tests and typecheck, the console and
+#   desktop builds, then the Playwright smoke test on the fake engine
 #   (test/fixtures/fake-engine.mjs): no engine, no agent daemon, no package. A pull request into
-#   dev that touches the packaging inputs (the `packaging` filter in the platforms job) or carries
-#   the `ci:full` label (add it, then push) runs the full job instead, still on Linux x64 only.
-# - pull request into main (the dev -> main release gate), push to main, a dispatch, and the
-#   nightly run on dev (nightly.yml dispatches this workflow): the full job on all five platforms,
-#   which builds the engine and the agent daemon, packages, checks the daemon is bundled and (on
-#   Linux) runs the smoke test on the real engine.
+#   dev that touches the packaging inputs (the `packaging` filter in the platforms job) runs the
+#   full job instead, still on Linux x64 only. A web-only change does not run this workflow (the
+#   Web job builds and tests the console; the nightly and the release gate package it into the
+#   desktop).
+# - pull request into main (the dev -> main release gate) or a release branch, one labelled
+#   `ci:full`, push to main, a dispatch, and the nightly run on dev (nightly.yml dispatches this
+#   workflow): the full job on all five platforms, which builds the engine and the agent daemon,
+#   packages, checks the daemon is bundled and (on Linux) runs the smoke test on the real engine.
 # - a release: desktop-electron-release.yml builds all five itself.
 on:
   pull_request:
     paths:
       - 'apps/desktop-electron/**'
-      - 'web/**'
       - 'plugins/core/**'
       - 'plugins/packages/**'
-      # The stacks (neon, wesql, tikv) are packaged from deploy/.
-      - 'deploy/**'
+      # The stacks the desktop packages (electron-builder.config.cjs `extraResources`).
+      - 'deploy/loams-postgres-dev/**'
+      - 'deploy/wesql/**'
+      - 'deploy/tikv/**'
       - 'scripts/release/**'
+      # The root workspace it installs from (electron and electron-builder among them).
+      - 'pnpm-lock.yaml'
+      - 'pnpm-workspace.yaml'
       - '.github/workflows/desktop-*.yml'
   push:
     branches: [main]
@@ -34,10 +41,12 @@ on:
 permissions:
   contents: read
 
+# Superseded runs of a pull request are cancelled; a push to main, a tag,
+# a dispatch (the nightly) and a schedule run to completion. The event is in
+# the group, so a push never cancels a dispatch on the same branch.
 concurrency:
-  group: desktop-${{ github.event.pull_request.number || github.ref }}
-  # A newer push supersedes an older one; main runs to completion.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: desktop-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
   CI: 'true'
@@ -46,10 +55,11 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # Which platforms this run builds: Linux x64 alone on a pull request into dev, all five otherwise.
-  # And which tier: `full` is 'false' (the fast tier) only on a pull request into dev that leaves
-  # the packaging inputs alone and lacks the `ci:full` label. dorny/paths-filter is MIT-licensed;
-  # pinned to v4.0.3, as in ci.yml (on a pull request it lists the files through the API).
+  # Which platforms this run builds: Linux x64 alone on an ordinary pull request, all five on the
+  # full tier and on every other event. And which tier: `full` is 'false' (the fast tier) only on
+  # a pull request into dev that leaves the packaging inputs alone and lacks the `ci:full` label.
+  # dorny/paths-filter is MIT-licensed; pinned to v4.0.3, as in ci.yml (on a pull request it
+  # lists the files through the API).
   platforms:
     name: Platforms
     runs-on: ubuntu-24.04
@@ -81,7 +91,7 @@ jobs:
       - name: tier
         id: tier
         env:
-          FULL: ${{ github.event_name != 'pull_request' || github.base_ref == 'main' || contains(github.event.pull_request.labels.*.name, 'ci:full') || steps.changes.outputs.packaging == 'true' }}
+          FULL: ${{ github.event_name != 'pull_request' || github.base_ref == 'main' || startsWith(github.base_ref, 'release/') || contains(github.event.pull_request.labels.*.name, 'ci:full') || steps.changes.outputs.packaging == 'true' }}
         run: |
           set -euo pipefail
           echo "full=$FULL" >> "$GITHUB_OUTPUT"
@@ -93,7 +103,7 @@ jobs:
       - name: platforms
         id: platforms
         env:
-          ALL: ${{ github.event_name != 'pull_request' || github.base_ref == 'main' }}
+          ALL: ${{ github.event_name != 'pull_request' || github.base_ref == 'main' || startsWith(github.base_ref, 'release/') || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
           # The runners are repository variables so either pool can be swapped when GitHub's macOS
           # capacity runs short (on 2026-10-13 the arm64 pool queued jobs for hours). A build whose
           # runner is the other architecture is cross-compiled: MACOS_X64_RUNNER=macos-15 builds x64
@@ -140,7 +150,7 @@ jobs:
       - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.0
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
@@ -180,6 +190,7 @@ jobs:
         if: needs.platforms.outputs.full == 'true'
         with:
           key: desktop-${{ matrix.name }}
+          save-if: ${{ (github.ref == 'refs/heads/dev' && matrix.name == 'linux-x64') || github.base_ref == 'main' || startsWith(github.base_ref, 'release/') }}
 
       # The desktop engine needs durable, live-tikv (Live on the TiKV stack, ruling T23-7) and
       # graph (the Graph page, GR1 Task 8); the default build has live (the embedded store) only.

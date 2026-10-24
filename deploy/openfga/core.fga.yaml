@@ -27,6 +27,8 @@ tuples:
   - {user: user:vic, relation: viewer, object: environment:prod}
   - {user: user:bill, relation: billing_viewer, object: org:acme}
   - {user: user:opal, relation: operator, object: platform:default}
+  # Loams Cloud's one admin object (design 78 §25.8): cora is cloud_admin.
+  - {user: user:cora, relation: cloud_admin, object: platform:loams-cloud}
 
   # agent-1 is owned by pia (a project admin) and has one explicit grant: editor on dev.
   - {user: user:pia, relation: owner, object: agent:agent-1}
@@ -166,6 +168,18 @@ tests:
       - user: user:opal
         object: platform:default
         assertions: {operator: true, meter_admin: false}
+      - user: user:cora
+        object: platform:loams-cloud
+        assertions: {cloud_admin: true, operator: false}
+      - user: user:opal
+        object: platform:loams-cloud
+        assertions: {cloud_admin: false}
+      - user: agent:agent-1
+        object: platform:loams-cloud
+        assertions: {cloud_admin: false}
+      - user: service_account:ci
+        object: platform:loams-cloud
+        assertions: {cloud_admin: false}
       - user: user:bill
         object: org:acme
         assertions: {billing_viewer: true, billing_admin: false, member: false}

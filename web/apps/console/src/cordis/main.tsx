@@ -51,8 +51,9 @@ if (root) {
       // The Electron shell exposes `loamsDesktop` (preload); everything else is the web path.
       if (globalThis.loamsDesktop) return startDesktop(globalThis.loamsDesktop, root);
 
-      // A console that is not served by the engine (console.loams.dev, a Vercel or
-      // Cloudflare deploy, the Compose console): sign in, connect an engine, then boot.
+      // A console that is not served by the engine (a Vercel or Cloudflare deploy, the
+      // Compose console; the hosted console.loams.dev is retired): sign in, connect an
+      // engine, then boot.
       if (config.hosted && !demo && !appsUrl) return startHosted(config, root, startConsole);
 
       const platform = createWebPlatform(

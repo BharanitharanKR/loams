@@ -49,12 +49,20 @@ on:
 permissions:
   contents: read
 
+# Superseded runs of a pull request and of dev are cancelled; a push to main, a tag,
+# a dispatch (the nightly) and a schedule run to completion. The event is in
+# the group, so a push never cancels a dispatch on the same branch.
 concurrency:
-  group: fabric-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  # A newer dev head supersedes an older one; main runs to completion.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: fabric-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/dev') }}
 
 env:
+  # CI builds are never debugged: no debug info in dev and test builds (smaller
+  # caches, faster links; a panic still names its file and line) and no
+  # incremental artifacts. rust-cache sets CARGO_INCREMENTAL=0 too; this covers
+  # the jobs without it.
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
   CARGO_TERM_COLOR: always
 
 jobs:
@@ -73,8 +81,9 @@ jobs:
       pull-requests: read
     outputs:
       heavy: ${{ github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
-      # 'true' on a pull request into main: the full tier.
-      full: ${{ github.base_ref == 'main' }}
+      # 'true' on a pull request into main or a release branch, or one
+      # labelled `ci:full` (then a push): the full tier.
+      full: ${{ github.base_ref == 'main' || startsWith(github.base_ref, 'release/') || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
       fabric: ${{ steps.filter.outputs.fabric }}
       drift: ${{ steps.filter.outputs.drift }}
       connect-routes: ${{ steps.filter.outputs.connect-routes }}
@@ -244,7 +253,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
       - name: rustfmt
         working-directory: fabric
@@ -285,8 +294,11 @@ jobs:
           python3 scripts/connectors/crate_licences.py
       # CN2 Task 7: every profile under connectors/profiles/ and every manifest's
       # runtime.profile (the same rules as loams-flow's `profile` module).
+      # The self-test first: no refusal it prints carries a credential (#1105).
       - name: connector profiles
-        run: python3 scripts/connectors/profiles.py --check
+        run: |
+          python3 scripts/connectors/profiles.py --self-test
+          python3 scripts/connectors/profiles.py --check
 
   # HE1 owns this job (plan 2026-10-21-he1-loams-house-engine, Task 1): the
   # mined-applications harness brings Langfuse v4 up against the pinned
@@ -322,9 +334,9 @@ jobs:
   # this tree (every DDL statement, the oracle's rows, every distinct SELECT
   # compared), then OpenPanel itself on that House (migrations, ingest through
   # its Redis buffers, every page's reads). It runs on the nightly dispatch and
-  # on pull requests that touch the House or the harness. It is not in
-  # `Connectors required` until OpenPanel passes on the House (the inner-table
-  # materialized views, HE1 Task 9). Synthetic traffic only; nothing uploaded.
+  # on pull requests that touch the House or the harness, and is part of
+  # `Connectors required` since OpenPanel passed on the House (HE1 R9.7).
+  # Synthetic traffic only; nothing uploaded.
   openpanel-on-house:
     name: "House apps: OpenPanel on the House"
     needs: changes
@@ -337,7 +349,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
           key: openpanel-on-house
       - name: build the House
@@ -374,7 +386,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
           key: sdk-unit
       - name: rustfmt
@@ -402,7 +414,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
           key: conformance-kit
       - name: rustfmt
@@ -459,7 +471,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.plan.outputs.run == 'true'
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
           key: connectors-${{ matrix.family }}
       - name: build the family crate's tests
@@ -514,6 +526,13 @@ jobs:
     needs: changes
     if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && (needs.changes.outputs.families != '[]'))) && needs.changes.outputs.heavy != 'false' }}
     runs-on: ubuntu-24.04
+    # MongoDB's own start-up check refuses Linux 6.19 and newer (SERVER-121912),
+    # and misreads Ubuntu's patched kernels, which some ubuntu-24.04 runners now
+    # report (SERVER-136848, no fix version yet): mongod exits before a suite
+    # runs. Until MongoDB fixes the check or the job pins a runner kernel, the
+    # mongodb leg still runs but does not fail `Connectors required` (owner,
+    # 2026-10-22; tracking issue #1053).
+    continue-on-error: ${{ matrix.family == 'mongodb' }}
     strategy:
       fail-fast: false
       matrix:
@@ -543,7 +562,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.plan.outputs.run == 'true'
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
           key: connectors-${{ matrix.family }}
       - name: build the family crate's tests
@@ -700,7 +719,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.plan.outputs.run == 'true'
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
           key: connectors-${{ matrix.family }}
       - name: up
@@ -762,7 +781,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: fabric -> target
           key: connectors-alerts
       - name: metrics and activity tests
@@ -810,6 +829,7 @@ jobs:
         with:
           workspaces: fabric -> target
           key: connectors-kind
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: chart golden, KubeRuntime golden and lease tests
         working-directory: fabric
         run: cargo test -p loams-flow --test kube --locked
@@ -859,6 +879,7 @@ jobs:
         with:
           workspaces: fabric -> target
           key: connectors-bench
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: build the bench tool (release)
         working-directory: fabric
         run: cargo build --release --locked -p loams-flow-conformance --bin loams-connectors-bench
@@ -1085,6 +1106,7 @@ jobs:
       - connectors-alerts
       - connectors-kind
       - house-apps-smoke
+      - openpanel-on-house
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
