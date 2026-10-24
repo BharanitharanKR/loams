@@ -672,3 +672,15 @@ Built against local doubles only (an in-memory or throwaway TiDB v8.5.8, fake Wo
   - `lc2a-worker`: the Worker entry, Durable Objects, crons and `wrangler.toml` (not deployed; CI runs a `--dry-run`).
   - `lc2a-threat-model`: Task 12's draft threat model and go-live checklist.
 - **Blocked on the owner:** Task 2 (the sending-only Resend key, R-LC2a-2, and tracking off, R-LC2a-3); Task 6 (the WorkOS actions secret and staging settings); Task 7 (staging redirect URIs, and a GitHub App token for the age check); Task 8 (the webhook secret); Task 10 (loams-site pages, after Task 7); Task 11 (all of the above, plus the Turnstile test key); counsel on the free-mail list (R-LC2a-10, Q1276).
+
+### Owner approvals (2026-10-24)
+
+The owner approved the pending decisions below on 2026-10-24 ("approve all with your recommendations").
+
+- **R-LC0-8, T3-1: device pings use Durable Object WebSocket auto-response.** Presence and lease renewal come from the auto-response timestamp (`getWebSocketAutoResponseTimestamp`), never from "socket open". A ping writes no rows. **Approved (owner, 2026-10-24).** (Design 78 §9.2, §17; LC0 report §4.)
+- **R-LC0-9, T3-2: the per-user Durable Object does the TiDB writes.** It is created with a `locationHint` near the control DB's region (19–25 ms from the DO against 270–290 ms from a distant edge colo). The edge Worker doesn't write TiDB on hot paths. **Approved (owner, 2026-10-24).**
+- **R-LC0-10, D1756 stays on Workers Free.** "On Workers Paid" is dropped from D1727. Workers Paid remains Q1292's trigger-based owner decision. **Approved (owner, 2026-10-24).**
+- **R-LC0-11, D1713 amended.** Drain at handoff and at approval, plus every 5 minutes only when the mount is dirty, and never on a timer for Git-workspace mounts (LC0 Task 2: a timed drain on a Git workspace costs 14 writes for nothing). **Approved (owner, 2026-10-24).**
+- **R-LC0-12, D1718 amended.** Per-filesystem limits need a card, and there is no per-filesystem write counter, so the write budget can't be enforced by the provider. The hosted cohort stays off (§25.13, Q1291). **Approved (owner, 2026-10-24).**
+
+The decision log rows D1713, D1718 and D1727 and design 78 §9.2, §9.4, §14.5, §15.2 and §17 carry the same text.

@@ -1065,3 +1065,15 @@ Rulings live in one file per task under [`he1-rulings/`](he1-rulings/), so tasks
 | 75. The fresh tier | [t75.md](he1-rulings/t75.md) |
 | 76. The NDJSON ingest API | [t76.md](he1-rulings/t76.md) |
 | 77. Endpoint pipes | [t77.md](he1-rulings/t77.md) |
+
+### Owner approvals (2026-10-24)
+
+The owner approved the pending decisions below on 2026-10-24 ("approve all with your recommendations").
+
+- **D1576 / Q1188:** DataFusion **55.2** (Arrow 59, the iceberg-rust fork) replaces DataFusion 54.1. **Approved (owner, 2026-10-24).** R12.2 stands as written.
+- **D1577, D1579, D1800, D1801:** **Approved (owner, 2026-10-24).**
+- **Q1189:** `prefer-rust` (a fall back to chDB on a planner refusal) is **not** offered to users, only to tests, gates and the owner's dogfooding. **Approved (owner, 2026-10-24).**
+- **Q1320:** HE2's filtered stateless pass rate is **70 %**. **Approved (owner, 2026-10-24).**
+- **Q1321:** sqlparser and DataFusion gaps are **worked around** in `loams-house-sql` for now, with no fork. A later fork still needs the owner's consent. **Approved (owner, 2026-10-24).**
+- **Q1322:** after the switch, a namespace may go back to `engine = chdb` until HE3's exit, for tables without deletion vectors. **Approved (owner, 2026-10-24).**
+- **R9.67, and the SigNoz equivalent in #1176:** SigNoz and the Factory skip certificate verification on the internal network for the House's self-signed certificate (`skip_verify=true` on the `house-signoz` network), and the native TLS listener on 9440 is reachable on the tailnet with a password. **Accepted (owner, 2026-10-24).** R9.67 is in #1176's copy of `he1-rulings/t9.md`; mark it "Approved (owner, 2026-10-24)" there.
