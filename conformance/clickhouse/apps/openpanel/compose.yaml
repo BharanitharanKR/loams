@@ -14,7 +14,8 @@ x-openpanel-env: &openpanel-env
   ALLOW_REGISTRATION: "true"
   ALLOW_INVITATION: "true"
   REDIS_URL: redis://op-kv:6379
-  CLICKHOUSE_URL: http://op-ch:8123/openpanel
+  # Through the logging proxy, which records every request's settings.
+  CLICKHOUSE_URL: http://op-chlog:8123/openpanel
   DATABASE_URL: postgresql://postgres:postgres@op-db:5432/postgres?schema=public
   DATABASE_URL_DIRECT: postgresql://postgres:postgres@op-db:5432/postgres?schema=public
   DASHBOARD_URL: http://localhost:${HE0_OPENPANEL_PORT:-3200}
@@ -40,6 +41,7 @@ services:
     depends_on:
       op-db: { condition: service_healthy }
       op-ch: { condition: service_healthy }
+      op-chlog: { condition: service_started }
       op-kv: { condition: service_healthy }
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:3000/healthcheck || exit 1"]
@@ -61,6 +63,17 @@ services:
     depends_on:
       op-api: { condition: service_healthy }
 
+  op-chlog:
+    image: docker.io/library/caddy:2.10.2-alpine@sha256:4c6e91c6ed0e2fa03efd5b44747b625fec79bc9cd06ac5235a779726618e530d
+    labels: { io.loams.licence: "Apache-2.0" }
+    environment:
+      HE0_CH_UPSTREAM: op-ch:8123
+    volumes:
+      - ../clickhouse/chlog.Caddyfile:/etc/caddy/Caddyfile:ro
+      - op-chlog:/var/log/chlog
+    depends_on:
+      op-ch: { condition: service_healthy }
+
   op-ch:
     image: ${HE0_CLICKHOUSE_IMAGE:-docker.io/clickhouse/clickhouse-server:26.9.2.8@sha256:7b9a0b6e9ab7ef79db5c4f8a9808f880258704eb7b4af9309f9029c16e727a80}
     labels: { io.loams.licence: "Apache-2.0" }
@@ -72,6 +85,8 @@ services:
       - ../clickhouse/he0-users.xml:/etc/clickhouse-server/users.d/he0-users.xml:ro
       - ./he0-merge-tree.xml:/etc/clickhouse-server/config.d/he0-merge-tree.xml:ro
       - op-ch-data:/var/lib/clickhouse
+    # Loopback only: scripts/house/replay.py reads its query_log (Task 9).
+    ports: ["127.0.0.1:${HE0_OPENPANEL_CH_PORT:-28126}:8123"]
     ulimits:
       nofile: { soft: 262144, hard: 262144 }
     healthcheck:
@@ -105,5 +120,6 @@ services:
       retries: 20
 
 volumes:
+  op-chlog:
   op-ch-data:
   op-db-data:

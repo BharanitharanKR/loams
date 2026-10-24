@@ -104,3 +104,54 @@ runtime_minutes = 15
 # The third gate application (D1571, owner 2026-10-22; HE1 R9.60): the MIT
 # build only, never the default `signoz/signoz` image, which links ee/.
 gate = true
+
+[[app]]
+# ClickHouse is Umami's optional store (Postgres always runs); its schema is
+# applied from db/clickhouse/schema.sql at the release commit (compose.yaml).
+name = "umami"
+image = "ghcr.io/umami-software/umami:3.4.0@sha256:85909afc45bdcda1917394594a087421fdbb05610fded0fa9f6fb861abb2f367"
+licence = "MIT"
+clickhouse_protocol = "http"
+clickhouse_min = "25.8"
+driver = "umami/driver.sh"
+suite = ""
+runtime_minutes = 8
+
+[[app]]
+# Plausible CE: events in ClickHouse over HTTP (Elixir `ch`/`ecto_ch`),
+# migrations over HTTP too, run by the release's `db migrate` (in query_log).
+name = "plausible"
+image = "ghcr.io/plausible/community-edition:v3.2.1@sha256:33e60bfb40f2df5da00f8753b76fad04f67dba3abe6d73eb516e440e3fb62985"
+licence = "AGPL-3.0-only"
+clickhouse_protocol = "http"
+clickhouse_min = "24.12"
+driver = "plausible/driver.sh"
+suite = ""
+runtime_minutes = 10
+
+[[app]]
+# HyperDX (ClickStack): ClickHouse is its only telemetry store; queries over
+# HTTP, the collector's schema and inserts over the native protocol.
+name = "hyperdx"
+image = "docker.io/hyperdx/hyperdx:2.40.0@sha256:2fcba6813f5c935f6a3e04123ffe62ab3baf0c1cd53f279b1ec9e300343ddf60"
+images = ["docker.io/clickhouse/clickstack-otel-collector:2.40.0@sha256:0e7dc29f8f6074afd106b96d53e5b98f1150e8882d926a20c03c6f680bd929ec"]
+licence = "MIT"
+clickhouse_protocol = "http"
+migrations_protocol = "native"
+clickhouse_min = "26.8"
+driver = "hyperdx/driver.sh"
+suite = ""
+runtime_minutes = 10
+
+[[app]]
+# OpenLIT (Q1185's "one more" in place of PostHog, ruling R5.1): LLM
+# telemetry in ClickHouse, queries over HTTP from its Next.js server.
+name = "openlit"
+image = "ghcr.io/openlit/openlit:2.1.0@sha256:94552ccd09379b5e2fec3c51c4fec1b41d88d6b56b0a5ccc895c116673884fa8"
+licence = "Apache-2.0"
+clickhouse_protocol = "http"
+migrations_protocol = "native"
+clickhouse_min = "24.4"
+driver = "openlit/driver.sh"
+suite = ""
+runtime_minutes = 8

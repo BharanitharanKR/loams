@@ -84,6 +84,21 @@ token is used only for collection and SQL reads: a graph's token names one
 graph (SDKP-17). Durable workflows use the Resonate SDK pointed at
 `LOAMS_ENDPOINT/durable/` (SDKP-1).
 
+## Agents: a machine key (feature `machine-key`)
+
+An agent registered at the identity provider (a Zitadel machine user, design 76 §10) signs in
+with its private-key JWT key. `MachineKey` reads the key file, trades a 5-minute RFC 7523
+assertion for an access token whose audience is the Loams project, caches it, and trades again
+a minute before it expires:
+
+```rust,ignore
+// LOAMS_AGENT_KEY_FILE, LOAMS_AGENT_ISSUER, LOAMS_AGENT_PROJECT; `poster` is your FormPoster.
+let source = loams::machine_key::MachineKey::from_env(poster)?;
+```
+
+The feature is off by default because it adds a pure-Rust RSA signer. A sandboxed agent holds no
+key: agentd vends it a 15-minute token file instead.
+
 ## Building
 
 The generated message and client code comes from `loams-proto` and

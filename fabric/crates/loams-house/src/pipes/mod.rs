@@ -570,9 +570,11 @@ pub async fn create_view_into(
              VIEW … TO <table> AS SELECT …",
         ));
     };
-    if stmt.inner_table {
+    // A column list beside `TO` only names the target's columns (SigNoz,
+    // HE1 R9.16); an `ENGINE` there is an inner table's, which `TO` excludes.
+    if stmt.inner_table && (!inner && !stmt.inner_clauses.is_empty()) {
         return Err(not_implemented(
-            "A materialized view with TO takes no column list or ENGINE",
+            "A materialized view with TO takes no ENGINE: its rows go to the TO table",
         ));
     }
     let db_of = |db: Option<String>| db.unwrap_or_else(|| current.to_string());
@@ -700,32 +702,81 @@ pub async fn modify_materialized_view_query(
     };
     let probe = format!("CREATE MATERIALIZED VIEW loams_probe TO loams_probe AS {select}");
     let parsed = ddl::parse_create_mv(&probe)?;
-    let Some((new_db, new_source)) = parsed.source else {
+    // The new SELECT's source, as CREATE picks one: the first FROM name that
+    // is a catalog table.
+    let mut new_source = None;
+    for (db, table) in &parsed.candidates {
+        let db = db.clone().unwrap_or_else(|| view.database.clone());
+        if lake.database_exists(namespace, &db).await?
+            && let Some(loaded) = lake.load(namespace, &db, table).await?
+        {
+            new_source = Some(loaded);
+            break;
+        }
+    }
+    let Some(new_source) = new_source else {
         return Err(not_implemented(
             "A materialized view's SELECT reads its source first: … FROM <table>",
         ));
     };
-    let new_db = new_db.unwrap_or_else(|| database.to_string());
-    let same = lake
-        .load(namespace, &new_db, &new_source)
-        .await?
-        .is_some_and(|t| t.ident == source.ident);
-    if !same {
-        return Err(not_implemented(format!(
-            "MODIFY QUERY of {database}.{name} reads {new_db}.{new_source}: a materialized view \
-             keeps its source on the House; drop it and create it again"
+    view.select = parsed.select;
+    let record = serde_json::to_string(&view).map_err(|e| bad(e.to_string()))?;
+    let key = format!("{MV_PREFIX}{}", view.id);
+    if new_source.ident == source.ident {
+        lake.catalog()
+            .commit(
+                &source.ident,
+                Vec::new(),
+                vec![TableUpdate::SetProperties {
+                    updates: HashMap::from([(key, record)]),
+                }],
+            )
+            .await?;
+        return Ok(());
+    }
+    // A new source (SigNoz's `time_series_v4_1day_mv`, HE1 R9.16): the view
+    // moves to it and reads from its current snapshot on, as ClickHouse's
+    // `MODIFY QUERY` makes the new table the trigger.
+    if !matches!(
+        ddl::class_of(&new_source.metadata),
+        TableClass::Pipe | TableClass::Lake
+    ) {
+        return Err(not_implemented(
+            "A materialized view reads a pipe or a lake table the House writes",
+        ));
+    }
+    let target = lake
+        .lake_table(
+            namespace,
+            &view.target_database,
+            &view.target,
+            "MODIFY QUERY … TO",
+        )
+        .await?;
+    if target.ident == new_source.ident {
+        return Err(bad(format!(
+            "Materialized view {database}.{name} would read and write {}.{}",
+            view.target_database, view.target
         )));
     }
-    view.select = parsed.select;
+    if ddl::class_of(&new_source.metadata) == TableClass::Lake {
+        crate::mv::start_cursor(lake, &target, &view, &new_source).await?;
+    }
+    lake.catalog()
+        .commit(
+            &new_source.ident,
+            Vec::new(),
+            vec![TableUpdate::SetProperties {
+                updates: HashMap::from([(key.clone(), record)]),
+            }],
+        )
+        .await?;
     lake.catalog()
         .commit(
             &source.ident,
             Vec::new(),
-            vec![TableUpdate::SetProperties {
-                updates: HashMap::from([(
-                    format!("{MV_PREFIX}{}", view.id),
-                    serde_json::to_string(&view).map_err(|e| bad(e.to_string()))?,
-                )]),
+            vec![TableUpdate::RemoveProperties {
+                removals: vec![key],
             }],
         )
         .await?;

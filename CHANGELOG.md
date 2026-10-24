@@ -4,7 +4,23 @@ All notable changes to this project are documented here. The format follows [Kee
 
 ## [Unreleased]
 
+### Added
+- **The `kafka` compose profile (preview; KW-L2, D1798).** `COMPOSE_PROFILES=kafka` runs Ostrium's
+  fork of Apache Iggy (`ghcr.io/ostrium-labs/iggy`, one image pinned by digest, built and attested
+  by the fork's CI) as `iggy` and `kafka-gateway`, with the Kafka wire on `127.0.0.1:9093`. Off in
+  the default stack. Every Kafka API except transactions and exactly-once. Not wired to the engine
+  yet. `release-compose` gains a smoke that starts the profile and runs kcat through it.
+  The profile refuses to start while `KAFKA_IGGY_PASSWORD` is empty, `.env.example`'s
+  placeholder (`change-me`) or shorter than 12 characters (`config/kafka-guard.sh`, with a
+  self-test in `release-compose`); `byoc/install.sh` writes a random one into a new `.env`.
+
 ### Removed
+- **The console deploy workflow** (`.github/workflows/console-deploy.yml`; 0.1.2, owner,
+  2026-10-23, D1705). It deployed `web/apps/console` to `console.loams.dev`, which is retired:
+  the console ships with each deployment (the engine serves it at `/ui/`) and with Loams
+  Desktop. `wrangler.jsonc` and `deploy/stage.mjs` stay for a console on your own Cloudflare or
+  Vercel account (coming soon). The GitHub `production` environment, its variables and the
+  Cloudflare Worker and DNS record are left for the owner to remove.
 - **Authentik** (IA1 Task 1, D1600). Loams cuts over to Zitadel for identity and OpenFGA for
   authorization (design 76), with no migration, no compatibility period and no dual running.
   The Authentik deploy kit (`deploy/authentik/`), the Authentik bundle in `deploy/release/auth/`,
@@ -18,6 +34,37 @@ All notable changes to this project are documented here. The format follows [Kee
   observability app (see Changed). A stored OpenObserve connection is no longer listed.
 
 ### Changed
+- **The engine sends the console's Content-Security-Policy as a header, and Studio there can
+  reach a remote agentd** (0.1.2; owner, 2026-10-23). On `/ui/` the engine takes the build's
+  `<meta>` CSP out of `index.html` and `cordis.html` (a header cannot loosen a meta policy) and
+  sends the same policy as the `Content-Security-Policy` header, with the origins in
+  `LOAMS_AGENTD_ORIGINS` added to `connect-src`. Every other directive stays the build's; empty
+  means `connect-src 'self'`, as before. Entries follow `LOAMS_CORS_ORIGINS`'s exact-origin rules,
+  and `*`, `null`, paths or credentials stop the engine at start. The compose stack passes the
+  variable through. Statically hosted builds keep their meta tag. `frame-ancestors` on the
+  console's responses is now `'self'` (it was `'none'`, which also blocked the console's own
+  plugin sandbox frame).
+- **The console ships with each deployment, and CORS is deny by default** (0.1.2; owner,
+  2026-10-23; D1705 amended). The hosted console at `console.loams.dev` is retired (design 78),
+  so:
+  - **The engine serves the console** at `/ui/` on its own HTTP listeners (the main port and the
+    `tailscale serve` target), next to its API: in the compose stack at
+    `https://loams.<tailnet>.ts.net/ui/`, reachable only on your tailnet. `/` redirects to `/ui/`.
+    The engine image builds the console from the same commit into `/usr/share/loams/console`
+    (where the Linux packages already put it), and the engine serves that directory when it holds
+    a build. `--console-dir <DIR>` serves another build; `--no-console` serves none. The files are
+    public, like any web app's shell; every call the console makes still goes through the
+    engine's authentication.
+  - **`LOAMS_CORS_ORIGINS` allows no origin by default**, on every listener, with authentication
+    on or off. Only the engine's own origin (same-origin) is answered. The compose default
+    `https://console.loams.dev` is gone, and so is the rule that an empty list allowed **any**
+    origin when authentication was on. Entries must be exact origins (`scheme://host[:port]`);
+    `*`, `null`, paths and credentials are refused at start. Loams Desktop needs no entry: its main
+    process sends the engine's own origin. **Upgrading:** remove
+    `LOAMS_CORS_ORIGINS=https://console.loams.dev` from `.env`, and list the origin of any console
+    you serve elsewhere (`--profile console`, a Cloudflare or Vercel deploy).
+  - Docs and guides point at the console your engine serves, Loams Desktop, and
+    `loams.dev/cloud` for the try-out.
 - **The Software Factory's observability app is SigNoz on Loams House** (D1666, owner, 2026-10-22).
   The factory lists **SigNoz** where it listed OpenObserve: full UI only, health checked at
   `/api/v2/healthz`, and labelled **"Preview: SigNoz on Loams House"** in Studio until SigNoz

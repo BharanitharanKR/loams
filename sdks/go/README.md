@@ -221,6 +221,20 @@ is used only for collection and SQL reads: a graph's token names one graph
 `sdks/fixtures/facade-index.json` by `go_facade_matches_index`. Durable
 workflows use the Resonate SDK pointed at `LOAMS_ENDPOINT/durable/` (SDKP-1).
 
+## Agents: a machine key
+
+An agent registered at the identity provider (a Zitadel machine user, design 76 §10) signs in
+with its private-key JWT key. `MachineKeyFromEnv` reads `LOAMS_AGENT_KEY_FILE`,
+`LOAMS_AGENT_ISSUER` and `LOAMS_AGENT_PROJECT`. It trades a 5-minute RFC 7523 assertion for an
+access token whose audience is the Loams project, caches the token, and trades again a minute
+before it expires. It uses only the standard library:
+
+```go
+source, err := loams.MachineKeyFromEnv(nil) // nil: http.DefaultClient
+```
+
+A sandboxed agent holds no key: agentd vends it a 15-minute token file instead.
+
 ## Not here, and why
 
 Two things design §44 §7.5 and §7.6 ask for are deliberately absent because

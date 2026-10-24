@@ -1385,7 +1385,8 @@ async fn lake_tables_take_langfuse_ddl() {
     refused(
         addr,
         "ALTER TABLE core_mv MODIFY QUERY SELECT project_id, trace_id, input FROM core",
-        "48",
+        // R9.16: a new source is taken, but not the view's own target.
+        "36",
     )
     .await;
 }
@@ -1735,4 +1736,169 @@ async fn nanosecond_times_match_the_oracle() {
         ],
     )
     .await;
+}
+
+/// HE1 R9.16: the DDL SigNoz's migrations send beside Langfuse's: `ON CLUSTER`
+/// everywhere, Distributed tables altered with their local ones, views `TO` a
+/// table with its column list, `MODIFY QUERY` onto another source, a key
+/// `Enum8` extended, `MATERIALIZE COLUMN`, partitions Iceberg cannot take, and
+/// `final` as a request setting.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn signoz_ddl_on_lake_tables() {
+    let house = lakehouse("signoz-ddl").await;
+    let addr = house.addr();
+    ok(addr, "CREATE TABLE keys ON CLUSTER cluster (name String, tagType Enum8('tag' = 1, 'resource' = 2), seen Int64, ver UInt64) ENGINE = ReplacingMergeTree(ver) PARTITION BY toDate(seen) ORDER BY (name, tagType)").await;
+    ok(addr, "CREATE TABLE dist_keys ON CLUSTER cluster AS keys ENGINE = Distributed(cluster, default, keys, rand())").await;
+    ok(addr, "ALTER TABLE keys ON CLUSTER cluster MODIFY COLUMN IF EXISTS tagType Enum8('tag' = 1, 'resource' = 2, 'scope' = 3)").await;
+    ok(addr, "ALTER TABLE dist_keys ON CLUSTER cluster MODIFY COLUMN IF EXISTS tagType Enum8('tag' = 1, 'resource' = 2, 'scope' = 3)").await;
+    refused(
+        addr,
+        "ALTER TABLE keys MODIFY COLUMN tagType Enum8('tag' = 1)",
+        "524",
+    )
+    .await;
+    ok(addr, "ALTER TABLE keys ON CLUSTER cluster ADD COLUMN IF NOT EXISTS flags UInt32 DEFAULT 0 CODEC(ZSTD(1))").await;
+    ok(addr, "ALTER TABLE dist_keys ON CLUSTER cluster ADD COLUMN IF NOT EXISTS flags UInt32 DEFAULT 0 CODEC(ZSTD(1))").await;
+    ok(
+        addr,
+        "ALTER TABLE keys ON CLUSTER cluster MATERIALIZE COLUMN flags",
+    )
+    .await;
+    ok(addr, "ALTER TABLE keys ON CLUSTER cluster MODIFY TTL toDateTime(seen) + INTERVAL 15 DAY SETTINGS materialize_ttl_after_modify = 0").await;
+    ok(addr, "INSERT INTO keys (name, tagType, seen, ver) SELECT 'a', 'scope', toUnixTimestamp(now()), 1").await;
+    ok(addr, "INSERT INTO keys (name, tagType, seen, ver) SELECT 'a', 'scope', toUnixTimestamp(now()), 2").await;
+    // `final` on the request reads the merge view.
+    let response = insert(
+        addr,
+        "SELECT count(), max(ver) FROM dist_keys FORMAT TSV",
+        b"",
+        &[("final", "1")],
+    )
+    .await;
+    assert_eq!(response.status, 200, "{}", response.text());
+    assert_eq!(response.text(), "1\t2\n");
+    assert_eq!(ok(addr, "SELECT count() FROM keys FORMAT TSV").await, "2\n");
+    // A view TO a table, with its column list; MODIFY QUERY onto another source.
+    ok(
+        addr,
+        "CREATE TABLE names (name String) ENGINE = MergeTree ORDER BY name",
+    )
+    .await;
+    ok(
+        addr,
+        "CREATE TABLE keys_v2 (name String, tagType String) ENGINE = MergeTree ORDER BY name",
+    )
+    .await;
+    ok(addr, "CREATE MATERIALIZED VIEW names_mv ON CLUSTER cluster TO names (name String CODEC(ZSTD(1))) AS SELECT name FROM keys").await;
+    ok(addr, "ALTER TABLE names_mv ON CLUSTER cluster MODIFY QUERY SELECT upper(name) AS name FROM keys_v2").await;
+    ok(
+        addr,
+        "INSERT INTO keys (name, tagType, seen, ver) SELECT 'old', 'tag', toUnixTimestamp(now()), 1",
+    )
+    .await;
+    ok(addr, "INSERT INTO keys_v2 VALUES ('new', 'tag')").await;
+    assert_eq!(
+        ok(addr, "SELECT name FROM names ORDER BY name FORMAT TSV").await,
+        "NEW\n"
+    );
+    ok(
+        addr,
+        "DROP TABLE IF EXISTS names_mv ON CLUSTER cluster SYNC",
+    )
+    .await;
+    ok(addr, "DROP TABLE IF EXISTS dist_keys ON CLUSTER cluster").await;
+    assert_eq!(ok(addr, "EXISTS TABLE dist_keys FORMAT TSV").await, "0\n");
+}
+
+/// HE1 R9.63 (interim; Variant in HE4): a `JSON` column is an Iceberg `string`
+/// of the value's JSON text, cast back to its type on read, so subcolumns
+/// (`resource.\`service.name\``), typed paths (`message String`), dynamic
+/// paths' types, `JSONAllPaths`, a column added by `ALTER` and `FINAL` read
+/// as ClickHouse reads them. The answers were measured on the 26.9.2.8 oracle
+/// (2026-10-22) for SigNoz's column types, before and after `OPTIMIZE … FINAL`.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn json_columns_match_the_oracle() {
+    let house = lakehouse("json-oracle").await;
+    let addr = house.addr();
+    ok(addr, "CREATE TABLE logs (ts UInt64, id String, body String, resource JSON(max_dynamic_paths=100)) ENGINE = ReplacingMergeTree ORDER BY (id, ts)").await;
+    ok(addr, "INSERT INTO logs VALUES (1, 'a', 'one', '{\"service.name\":\"checkout\",\"host\":{\"name\":\"h1\"},\"n\":3}'), (2, 'b', 'two', '{\"service.name\":\"cart\",\"flag\":true}')").await;
+    ok(
+        addr,
+        "ALTER TABLE logs ADD COLUMN body_v2 JSON(max_dynamic_paths=0, message String) AFTER body",
+    )
+    .await;
+    inserted(addr, "INSERT INTO logs FORMAT JSONEachRow", "{\"ts\":3,\"id\":\"c\",\"body\":\"three\",\"body_v2\":{\"message\":\"hello\",\"level\":\"warn\"},\"resource\":{\"service\":{\"name\":\"checkout\"},\"tags\":[\"x\",\"y\"]}}".as_bytes(), &[]).await;
+    ok(addr, "INSERT INTO logs VALUES (1, 'a', 'one again', '{\"message\":\"replaced\"}', '{\"service.name\":\"checkout\",\"n\":4}')").await;
+    let logs = metadata(&house, "default", "logs").await;
+    for field in logs.current_schema().as_struct().fields() {
+        if field.name == "resource" || field.name == "body_v2" {
+            assert_eq!(
+                *field.field_type,
+                loams_house_lake::spec::Type::Primitive(
+                    loams_house_lake::spec::PrimitiveType::String
+                ),
+                "{}",
+                field.name
+            );
+        }
+    }
+    let check = |when: &'static str, expected: &'static [(&'static str, &'static str)]| async move {
+        for (read, want) in expected {
+            let got = ok(addr, &format!("{read} FORMAT TSV"))
+                .await
+                .replace('\n', "|");
+            assert_eq!(&got, want, "{when}: {read}");
+        }
+    };
+    check(
+        "as written",
+        &[
+            ("SELECT id, resource.`service.name`, resource.`service.name`::String, resource.host.name, resource.n, body_v2.message, toTypeName(body_v2.message) FROM logs FINAL ORDER BY id", "a\tcheckout\tcheckout\t\\N\t4\treplaced\tString|b\tcart\tcart\t\\N\t\\N\t\tString|c\tcheckout\tcheckout\t\\N\t\\N\thello\tString|"),
+            ("SELECT id FROM logs FINAL WHERE resource.`service.name` IS NOT NULL AND resource.`service.name`::String = 'checkout' ORDER BY id", "a|c|"),
+            ("SELECT resource.`service.name`::String AS s, count() FROM logs GROUP BY s ORDER BY s", "cart\t1|checkout\t3|"),
+            ("SELECT id, arraySort(JSONAllPaths(resource)), toString(resource), toString(body_v2) FROM logs FINAL ORDER BY id", "a\t['n','service.name']\t{\"n\":4,\"service\":{\"name\":\"checkout\"}}\t{\"message\":\"replaced\"}|b\t['flag','service.name']\t{\"flag\":true,\"service\":{\"name\":\"cart\"}}\t{\"message\":\"\"}|c\t['service.name','tags']\t{\"service\":{\"name\":\"checkout\"},\"tags\":[\"x\",\"y\"]}\t{\"level\":\"warn\",\"message\":\"hello\"}|"),
+            ("SELECT id, dynamicType(resource.n), dynamicType(resource.flag), dynamicType(resource.tags), toTypeName(resource) FROM logs FINAL ORDER BY id", "a\tInt64\tNone\tNone\tJSON(max_dynamic_paths=100)|b\tNone\tBool\tNone\tJSON(max_dynamic_paths=100)|c\tNone\tNone\tArray(Nullable(String))\tJSON(max_dynamic_paths=100)|"),
+            ("SELECT toString(multiIf(resource.`service.name` IS NOT NULL, resource.`service.name`::String, NULL)) AS svc, count() FROM logs FINAL GROUP BY svc ORDER BY svc", "cart\t1|checkout\t2|"),
+        ],
+    )
+    .await;
+    ok(addr, "OPTIMIZE TABLE logs FINAL").await;
+    check(
+        "after OPTIMIZE",
+        &[
+            ("SELECT id, resource.`service.name`, resource.`service.name`::String, resource.host.name, resource.n, body_v2.message, toTypeName(body_v2.message) FROM logs FINAL ORDER BY id", "a\tcheckout\tcheckout\t\\N\t4\treplaced\tString|b\tcart\tcart\t\\N\t\\N\t\tString|c\tcheckout\tcheckout\t\\N\t\\N\thello\tString|"),
+            ("SELECT id FROM logs FINAL WHERE resource.`service.name` IS NOT NULL AND resource.`service.name`::String = 'checkout' ORDER BY id", "a|c|"),
+            ("SELECT resource.`service.name`::String AS s, count() FROM logs GROUP BY s ORDER BY s", "cart\t1|checkout\t2|"),
+            ("SELECT id, arraySort(JSONAllPaths(resource)), toString(resource), toString(body_v2) FROM logs FINAL ORDER BY id", "a\t['n','service.name']\t{\"n\":4,\"service\":{\"name\":\"checkout\"}}\t{\"message\":\"replaced\"}|b\t['flag','service.name']\t{\"flag\":true,\"service\":{\"name\":\"cart\"}}\t{\"message\":\"\"}|c\t['service.name','tags']\t{\"service\":{\"name\":\"checkout\"},\"tags\":[\"x\",\"y\"]}\t{\"level\":\"warn\",\"message\":\"hello\"}|"),
+            ("SELECT id, dynamicType(resource.n), dynamicType(resource.flag), dynamicType(resource.tags), toTypeName(resource) FROM logs FINAL ORDER BY id", "a\tInt64\tNone\tNone\tJSON(max_dynamic_paths=100)|b\tNone\tBool\tNone\tJSON(max_dynamic_paths=100)|c\tNone\tNone\tArray(Nullable(String))\tJSON(max_dynamic_paths=100)|"),
+            ("SELECT toString(multiIf(resource.`service.name` IS NOT NULL, resource.`service.name`::String, NULL)) AS svc, count() FROM logs FINAL GROUP BY svc ORDER BY svc", "cart\t1|checkout\t2|"),
+        ],
+    )
+    .await;
+}
+
+/// HE1 R9.18: a column list with `--` and `/* */` comments between and after its
+/// entries and a comma after its last `INDEX`, the shape of Langfuse v4's
+/// migration 0022 (written here, not copied: no application source is
+/// vendored). The House makes the table ClickHouse 26.9.2.8 makes: `DESCRIBE`'s
+/// names, types and default kinds as the oracle answered them.
+#[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+async fn comments_and_trailing_commas_in_create_table() {
+    let house = lakehouse("ddl-comments").await;
+    let addr = house.addr();
+    ok(addr, "CREATE TABLE runs (\n    -- identifiers\n    `id` String,\n    `run_id` String,\n\n    -- an error\n    `error` Nullable(String),\n     /* times */\n    `created_at` DateTime64(3) DEFAULT now(),\n    `input` Nullable(String) CODEC(ZSTD(3)), -- json\n    `meta` Map(LowCardinality(String), String),\n    `event_ts` DateTime64(3),\n    `is_deleted` UInt8,\n\n    -- lookups\n    INDEX idx_run run_id TYPE bloom_filter(0.001) GRANULARITY 1,\n) ENGINE = ReplacingMergeTree(event_ts, is_deleted)\nORDER BY (run_id, id)").await;
+    let described = ok(addr, "DESCRIBE runs FORMAT TSV").await;
+    let got: Vec<String> = described
+        .lines()
+        .map(|l| l.split('\t').take(3).collect::<Vec<_>>().join("\t"))
+        .collect();
+    assert_eq!(
+        got.join("|"),
+        "id\tString\t|run_id\tString\t|error\tNullable(String)\t|created_at\tDateTime64(3)\tDEFAULT|input\tNullable(String)\t|meta\tMap(LowCardinality(String), String)\t|event_ts\tDateTime64(3)\t|is_deleted\tUInt8\t"
+    );
+    assert!(
+        ok(addr, "SHOW CREATE TABLE runs FORMAT TSVRaw")
+            .await
+            .contains("INDEX idx_run")
+    );
 }

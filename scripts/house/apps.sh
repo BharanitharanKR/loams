@@ -3,7 +3,8 @@
 #
 #   scripts/house/apps.sh <app> up      start it (compose up --wait)
 #   scripts/house/apps.sh <app> drive   run its driver against the running stack
-#   scripts/house/apps.sh <app> dump    write query_log.tsv, async_insert_log.tsv,
+#   scripts/house/apps.sh <app> dump    write query_log.tsv (with the settings
+#                                       its logging proxy saw, R1.1), async_insert_log.tsv,
 #                                       part_log.tsv and its migration files
 #                                       under $HE0_OUT/<app>/
 #   scripts/house/apps.sh <app> down    stop it and remove its volumes
@@ -16,6 +17,9 @@
 # Environment:
 #   HE0_OUT               dump directory (default conformance/clickhouse/apps/.out)
 #   HE0_CLICKHOUSE_IMAGE  another pinned clickhouse-server (the 24.3 floor)
+#   HE0_TARGET            clickhouse (default) or house: the app's
+#                         compose.house.yaml points it at a running House
+#                         (scripts/house/app-on-house.sh starts one)
 #   COMPOSE               the compose command (default: docker compose, else
 #                         podman compose)
 set -euo pipefail
@@ -71,7 +75,19 @@ elif command -v docker >/dev/null 2>&1; then
 else
   COMPOSE_CMD=(podman compose)
 fi
-compose() { "${COMPOSE_CMD[@]}" -f "$COMPOSE_FILE" "$@"; }
+# HE0_TARGET=house (Task 9) layers <app>/compose.house.yaml, which points the
+# application at a running House instead of its clickhouse-server.
+COMPOSE_FILES=(-f "$COMPOSE_FILE")
+case "${HE0_TARGET:-clickhouse}" in
+  clickhouse) ;;
+  house)
+    [ -f "$APPS/$APP/compose.house.yaml" ] || {
+      echo "apps.sh: '$APP' has no compose.house.yaml" >&2; exit 2; }
+    COMPOSE_FILES+=(-f "$APPS/$APP/compose.house.yaml")
+    ;;
+  *) echo "apps.sh: HE0_TARGET is clickhouse or house" >&2; exit 2 ;;
+esac
+compose() { "${COMPOSE_CMD[@]}" "${COMPOSE_FILES[@]}" "$@"; }
 
 # The service running clickhouse-server: `clickhouse` or `op-ch`.
 ch_service() {
@@ -142,6 +158,14 @@ case "$VERB" in
     ch "SYSTEM FLUSH LOGS"
     ch "$QUERY_LOG_SQL" >"$OUT/query_log.tsv"
     ch "$ASYNC_INSERT_LOG_SQL" >"$OUT/async_insert_log.tsv"
+    # The logging proxy's access log (R1.1): the settings each request sent,
+    # defaults included, merged into query_log.tsv by query_id.
+    CHLOG=$(compose config --services | grep -E '^(chlog|op-chlog)$' | head -n1 || true)
+    if [ -n "$CHLOG" ]; then
+      compose cp "$CHLOG:/var/log/chlog/access.log" "$OUT/http_log.json"
+      python3 -I "$ROOT/scripts/house/http_settings.py" \
+        "$OUT/query_log.tsv" "$OUT/async_insert_log.tsv" "$OUT/http_log.json"
+    fi
     ch "$PART_LOG_SQL" >"$OUT/part_log.tsv"
     ch "SELECT version()" >"$OUT/clickhouse_version.txt"
     MIGRATIONS=$(field migrations)

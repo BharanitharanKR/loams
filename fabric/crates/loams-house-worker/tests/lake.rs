@@ -507,18 +507,26 @@ async fn partition_by_other_is_36() {
         let shown = ok(addr, &format!("SHOW CREATE TABLE p{i} FORMAT TSVRaw")).await;
         assert!(shown.contains(&format!("PARTITION BY {by}")), "{shown}");
     }
-    // A transform of the wrong type is still 36.
-    for by in ["toStartOfHour(d)", "toYYYYMM(region)", "arr"] {
-        let text = refused(
+    // R9.16: a transform of a type Iceberg cannot partition by leaves the files
+    // unpartitioned by it too (SigNoz's `toDate(<Int64>)`).
+    for (i, by) in ["toStartOfHour(d)", "toYYYYMM(region)", "arr", "toDate(n)"]
+        .into_iter()
+        .enumerate()
+    {
+        ok(
             addr,
             &format!(
-                "CREATE TABLE t (ts DateTime, d Date, region String, n UInt32, arr Array(UInt8)) \
+                "CREATE TABLE w{i} (ts DateTime, d Date, region String, n UInt32, arr Array(UInt8)) \
                  ENGINE = MergeTree PARTITION BY {by} ORDER BY n"
             ),
-            "36",
         )
         .await;
-        assert!(text.contains("toYYYYMM"), "names the transforms: {text}");
+        let t = table(&house, "default", &format!("w{i}")).await;
+        assert_eq!(
+            t.metadata.default_partition_spec().fields().len(),
+            0,
+            "{by}"
+        );
     }
     refused(
         addr,
@@ -537,7 +545,9 @@ async fn unsupported_type_is_48() {
         "UInt256",
         "Decimal(50, 2)",
         "Nested(a UInt8, b String)",
-        "JSON",
+        // `JSON` is stored as its text (HE1 R9.63); inside a container it is not.
+        "Array(JSON)",
+        "Dynamic",
         "IntervalDay",
     ] {
         refused(

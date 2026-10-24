@@ -30,9 +30,11 @@ on:
       - "deploy/tailnet/**"
       - ".github/workflows/platform.yml"
 
+# A newer push to a pull request supersedes the older run; dev runs to
+# completion, so its cache save lands.
 concurrency:
-  group: platform-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/dev' && github.ref != 'refs/heads/main' }}
+  group: platform-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read

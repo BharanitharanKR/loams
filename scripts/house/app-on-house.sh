@@ -1,0 +1,138 @@
+#!/usr/bin/env bash
+# HE0 Task 9 (plan HE1, ruling R9.6): one mined application on the chDB House,
+# checked against the pinned clickhouse-server. The CI job
+# `openpanel_on_house_smoke` runs `scripts/house/app-on-house.sh openpanel`.
+#
+#   1. The oracle: `apps.sh <app> up` and `drive` on clickhouse-server.
+#   2. A House on this machine (`loams-fabric house --single-node`), its TLS
+#      listener on HE0_HOUSE_TLS_PORT for the application's containers.
+#   3. The replay: the oracle's query_log against the House
+#      (scripts/house/replay.py): every DDL statement, the oracle's rows, and
+#      every distinct SELECT compared. A difference fails the run.
+#   4. The House emptied, then the application itself on it
+#      (`HE0_TARGET=house apps.sh <app> up` and `drive`, its own project), so
+#      its migrations, its ingest and its pages run on the House. A failed
+#      migration, a lost event or a page that errs fails the run.
+#   5. Everything stopped; the House's data and the dumps stay under $HE0_OUT.
+#
+# Environment:
+#   HE0_HOUSE_BIN   the directory holding loams-fabric and loams-house-worker
+#                   (default: the fabric workspace's target/debug)
+#   HE0_OUT         where dumps, reports and the House's data go
+#                   (default conformance/clickhouse/apps/.out)
+#   HE0_HOUSE_SANDBOX  the workers' sandbox (default netns)
+#   HE0_KEEP=1      leave the stacks and the House running
+set -euo pipefail
+
+APP=${1:?usage: app-on-house.sh <app>}
+ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
+APPS="$ROOT/conformance/clickhouse/apps"
+OUT_ROOT=${HE0_OUT:-$APPS/.out}
+WORK="$OUT_ROOT/$APP-on-house"
+# A driver keeps its sign-up and ingest state per stack: each run starts clean.
+rm -rf "$WORK/oracle" "$WORK/app"
+mkdir -p "$WORK"
+
+case "$APP" in
+  openpanel)
+    DATABASE=openpanel
+    ORACLE_HTTP_PORT=${HE0_OPENPANEL_CH_PORT:-28126}
+    HOUSE_APP_PORT=3201
+    ;;
+  *) echo "app-on-house.sh: no House recipe for '$APP'" >&2; exit 2 ;;
+esac
+
+if [ -z "${HE0_HOUSE_BIN:-}" ]; then
+  HE0_HOUSE_BIN="$(cd "$ROOT/fabric" && cargo metadata --format-version 1 --no-deps \
+    | python3 -I -c 'import json,sys; print(json.load(sys.stdin)["target_directory"])')/debug"
+fi
+for bin in loams-fabric loams-house-worker; do
+  [ -x "$HE0_HOUSE_BIN/$bin" ] || { echo "app-on-house.sh: no $HE0_HOUSE_BIN/$bin (cargo build -p $bin)" >&2; exit 2; }
+done
+
+HOUSE_HTTP=127.0.0.1:${HE0_HOUSE_HTTP_PORT:-28124}
+HOUSE_TLS_PORT=${HE0_HOUSE_TLS_PORT:-28443}
+HOUSE_DATA="$WORK/house"
+HOUSE_USER=$APP
+HOUSE_PASSWORD=$(python3 -I -c 'import secrets; print(secrets.token_hex(16))')
+HOUSE_PID=""
+
+house_start() {
+  rm -rf "$HOUSE_DATA"
+  mkdir -p "$HOUSE_DATA"
+  local hash
+  hash=$(printf '%s' "$HOUSE_PASSWORD" | sha256sum | cut -d' ' -f1)
+  printf '[[house.users]]\nuser = "%s"\npassword_sha256 = "%s"\nnamespace = 1\n' \
+    "$HOUSE_USER" "$hash" >"$WORK/house.toml"
+  "$HE0_HOUSE_BIN/loams-fabric" house --single-node --config "$WORK/house.toml" \
+    --data-dir "$HOUSE_DATA" --house-listen "$HOUSE_HTTP" \
+    --house-tls-listen "0.0.0.0:$HOUSE_TLS_PORT" --admin-listen 127.0.0.1:28125 \
+    --native-listen 127.0.0.1:29000 --worker-binary "$HE0_HOUSE_BIN/loams-house-worker" \
+    --sandbox "${HE0_HOUSE_SANDBOX:-netns}" >"$WORK/house.log" 2>&1 &
+  HOUSE_PID=$!
+  for _ in $(seq 1 120); do
+    curl -fsS "http://$HOUSE_HTTP/ping" >/dev/null 2>&1 && break
+    kill -0 "$HOUSE_PID" 2>/dev/null || { cat "$WORK/house.log" >&2; exit 1; }
+    sleep 1
+  done
+  curl -fsS -u "$HOUSE_USER:$HOUSE_PASSWORD" "http://$HOUSE_HTTP/" \
+    --data-binary "CREATE DATABASE IF NOT EXISTS $DATABASE" >/dev/null
+}
+
+house_stop() {
+  if [ -n "$HOUSE_PID" ]; then
+    kill "$HOUSE_PID" 2>/dev/null || true
+    wait "$HOUSE_PID" 2>/dev/null || true
+    HOUSE_PID=""
+  fi
+}
+
+house_app() {
+  HE0_TARGET=house COMPOSE_PROJECT_NAME="he0-$APP-house" HE0_OPENPANEL_PORT=$HOUSE_APP_PORT \
+    HE0_HOUSE_USER=$HOUSE_USER HE0_HOUSE_PASSWORD=$HOUSE_PASSWORD \
+    HE0_HOUSE_TLS_PORT=$HOUSE_TLS_PORT HE0_HOUSE_TLS_DIR="$HOUSE_DATA/tls" \
+    HE0_OUT="$WORK/app" "$ROOT/scripts/house/apps.sh" "$APP" "$1"
+}
+
+cleanup() {
+  if [ "${HE0_KEEP:-0}" != 1 ]; then
+    house_app down >/dev/null 2>&1 || true
+    HE0_OUT="$WORK/oracle" "$ROOT/scripts/house/apps.sh" "$APP" down >/dev/null 2>&1 || true
+    house_stop
+  fi
+}
+trap cleanup EXIT
+
+echo "app-on-house: 1. the oracle"
+HE0_OUT="$WORK/oracle" "$ROOT/scripts/house/apps.sh" "$APP" up
+HE0_OUT="$WORK/oracle" "$ROOT/scripts/house/apps.sh" "$APP" drive
+
+echo "app-on-house: 2. the House"
+house_start
+
+echo "app-on-house: 3. the replay"
+status=0
+HE0_HOUSE_PASSWORD=$HOUSE_PASSWORD python3 -I "$ROOT/scripts/house/replay.py" \
+  --oracle "http://127.0.0.1:$ORACLE_HTTP_PORT" --house "http://$HOUSE_HTTP" \
+  --house-user "$HOUSE_USER" --database "$DATABASE" --out "$WORK/replay.json" || status=1
+
+echo "app-on-house: 4. $APP on the House"
+house_stop
+house_start
+if house_app up; then
+  house_app drive || status=1
+else
+  echo "app-on-house: $APP did not start on the House" >&2
+  HE0_TARGET=house COMPOSE_PROJECT_NAME="he0-$APP-house" HE0_HOUSE_USER=$HOUSE_USER \
+    HE0_HOUSE_PASSWORD=$HOUSE_PASSWORD HE0_HOUSE_TLS_DIR="$HOUSE_DATA/tls" \
+    docker compose -f "$APPS/$APP/compose.yaml" -f "$APPS/$APP/compose.house.yaml" \
+    logs --tail 80 2>/dev/null | grep -v "Applying migration" | tail -60 || true
+  status=1
+fi
+
+if [ "$status" = 0 ]; then
+  echo "app-on-house: $APP runs on the House and answers as the oracle"
+else
+  echo "app-on-house: $APP on the House FAILED (see $WORK)" >&2
+fi
+exit "$status"
