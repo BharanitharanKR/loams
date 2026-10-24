@@ -201,9 +201,11 @@ creates the org and its owner) needs `LOAMS_SETUP_TOKEN` in `.env` or in
 `secrets/engine.env` (`openssl rand -hex 32`); without it setup is refused. Setup runs once. See
 "First-run setup" in [docs/release/preview.md](../../docs/release/preview.md#first-run-setup).
 
-`console/dist` holds a placeholder page, in a clone and in the compose bundle.
-For `--profile console`, build the console (`cd web && pnpm build`) and set
-`LOAMS_CONSOLE_DIR` to `web/apps/console/dist`.
+In the compose bundle, `console/dist` is the console built from the release's
+commit, which `--profile console` serves. In a clone (and in older bundles) it
+holds a placeholder page: build the console for the root path
+(`cd web && LOAMS_UI_BASE=/ pnpm build`) and set `LOAMS_CONSOLE_DIR` to
+`web/apps/console/dist`.
 
 ### Headscale (coming soon, unsupported in 0.1.1)
 
