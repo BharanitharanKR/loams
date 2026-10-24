@@ -110,3 +110,18 @@ write_file() {
 }
 
 gib() { echo $(($1 * 1024 * 1024 * 1024)); }
+
+# write_unit NAME < content: installs a systemd system unit when it changed,
+# reloads systemd and sets UNITS_CHANGED=1.
+# shellcheck disable=SC2034 # read by the component scripts
+UNITS_CHANGED=0
+write_unit() {
+  local path=/etc/systemd/system/$1 new
+  new=$(cat)
+  if [[ ! -f $path ]] || [[ $(cat "$path") != "$new" ]]; then
+    printf '%s\n' "$new" | write_file "$path" 644 root:root
+    systemctl daemon-reload
+    # shellcheck disable=SC2034 # read by the component scripts
+    UNITS_CHANGED=1
+  fi
+}

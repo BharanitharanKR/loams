@@ -11,10 +11,11 @@
 # Options:
 #   --role primary|worker      default: primary
 #   --only LIST                comma-separated components (default: all):
-#                              nativelink
+#                              nativelink,sccache
 #   --primary ADDR             worker role: the primary's Tailscale address
 #   --data-root DIR            caches and work directories (default /mnt/Projects/ci)
 #   --nl-gb N                  NativeLink disk cap in GiB (default 30 primary, 80 worker)
+#   --sccache-gb N             sccache store cap in GiB (primary only; default 10)
 #   --jobs N                   concurrent NativeLink actions (default 4 primary, 8 worker)
 #   --owner USER               the host's owner, who gets the client certificate
 #                              (default: $SUDO_USER)
@@ -31,6 +32,8 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$HERE/lib/tls.sh"
 # shellcheck source=deploy/ci-hosts/lib/nativelink.sh
 . "$HERE/lib/nativelink.sh"
+# shellcheck source=deploy/ci-hosts/lib/sccache.sh
+. "$HERE/lib/sccache.sh"
 
 ROLE=primary
 ONLY=all
@@ -38,6 +41,7 @@ PRIMARY=
 DATA_ROOT=/mnt/Projects/ci
 NL_GB=
 NL_JOBS=
+SCCACHE_GB=10
 OWNER_USER=${SUDO_USER:-}
 
 while (($#)); do
@@ -48,6 +52,7 @@ while (($#)); do
     --data-root) DATA_ROOT=$2; shift 2 ;;
     --nl-gb) NL_GB=$2; shift 2 ;;
     --jobs) NL_JOBS=$2; shift 2 ;;
+    --sccache-gb) SCCACHE_GB=$2; shift 2 ;;
     --owner) OWNER_USER=$2; shift 2 ;;
     -h | --help) sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//;/^set -euo/d'; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
@@ -75,5 +80,6 @@ ensure_ci_user
 ensure_data_root
 
 want nativelink && setup_nativelink
+want sccache && setup_sccache
 
 log "done ($ROLE). Check with: deploy/ci-hosts/status.sh"
