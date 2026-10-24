@@ -291,7 +291,7 @@ Commit: one PR per numbered group where it keeps PRs small (for example, 1–4 d
 
 ## IA2 and IA4 — the agent path first (Tasks specified after IA0)
 
-IA0 reported **go** ([report](ia0-spike-report.md)). The owner put agent authentication first (2026-10-21: "current agent auth is too complex and friction"), so these tasks run in this order: IA2 Tasks 1–3, then IA4 Tasks 1–3, then the rest of IA2. One branch and one PR per task, each green before merge. F1 and F3 of the report change IA3 only and wait for the owner.
+IA0 reported **go** ([report](ia0-spike-report.md)). The owner put agent authentication first (2026-10-21: "current agent auth is too complex and friction"), so these tasks run in this order: IA2 Tasks 1–3, IA2 Task 4 and IA4 Tasks 1–3 (IA4 Task 1 by a clean-room agent), then the rest of IA2. One branch and one PR per task, each green before merge. F1 and F3 of the report change IA3 only and wait for the owner.
 
 ### IA2 Task 1 — `crates/loams-authz`: the trait and four implementations
 
@@ -329,6 +329,19 @@ Commit: `authz: the deny-by-default middleware (IA2 Task 2, D1611)`.
 **Tests:** `builtin_matches_openfga` runs every check and list in `deploy/openfga/core.fga.yaml` against `BuiltinAuthorizer` (always) and against OpenFGA (when `LOAMS_AUTHZ_OPENFGA_GRPC` is set), and both must match the file's assertions. `builtin_refuses_agent_billing_admin`.
 
 Commit: `authz: BuiltinAuthorizer, with the differential test against OpenFGA (IA2 Task 3, D1613)`.
+
+### IA2 Task 4 — the engine enforces through `loams-authz` (agent-facing surfaces first)
+
+**What to write** (D1605, D1610, D1611; report F5, F7):
+
+- **Subjects.** `crates/loams/src/auth` maps every admitted principal to a `loams_authz::Subject` and puts it in the request's extensions:
+  - an OIDC JWT: the principal store's link `(iss, sub) → (kind, status)` (a new `PrincipalLink` record in `directory.rs`; no link means `user`). A `disabled` link is refused with `token_revoked` on every request, whatever the JWT's `exp`;
+  - a session: `user:<user id>`; an `lk_` key: `service_account:<id>`; a tailnet user: their linked user; `LOAMS_AUTH_MODE=off`: no subject, and `AllowAllAuthorizer`.
+- **Selection.** `LOAMS_AUTHZ` = `builtin` (default, D1613) | `openfga` (`LOAMS_AUTHZ_OPENFGA_GRPC`, `_STORE`, `_MODEL`, optional `_KEY`). Either is wrapped in `CachedAuthorizer` (5 s); `off` is accepted only with `LOAMS_AUTH_MODE=off` on loopback. In `builtin` mode the principal store is the tuple source.
+- **Model.** `environment` gains `can_read: viewer`, `can_write: editor` and `can_admin: deployer`, for data-plane calls scoped to one namespace (collections, KV, Live, Durable), with model tests.
+- **First surfaces.** `namespace_reach.rs`, `graph_auth.rs` and `durable.rs` ask `can_read`/`can_write`/`can_admin` on `environment:<namespace id>` (Graph on `graph:<ns>/<name>`) through the trait; the admin RPCs keep `OrgRoleAuthorizer` until IA2 Task 5 declares a `can_*` per RPC.
+
+**Tests:** `agent_jwt_reaches_only_granted_namespace`, `disabled_link_refuses_live_jwt`, `session_maps_to_user`, `lk_key_maps_to_service_account`, `builtin_is_the_default`, `authz_off_refused_off_loopback`, and the existing auth tests unchanged.
 
 ### IA4 Task 1 — agents as Zitadel machine users
 
@@ -397,3 +410,5 @@ Outlined; specified after IA4 Task 1 lands.
 | T1.R7 | Plan paths for Zitadel that IA1 has not fixed yet (MT3's `deploy/zitadel/values.yaml`, NET1's `deploy/zitadel/apps/loams-headscale.yaml`) are provisional and are settled by the IA1 task that writes them | IA1 Task 1 |
 | IA4.R5 | The Rust SDK's `MachineKey` is behind the feature `machine-key` (jsonwebtoken on its pure-Rust RSA backend), off by default so the SDK's default build gains no crypto; it takes the SDK's `FormPoster` for the token call, as `OidcExchange` does. The Go SDK's `MachineKey` uses the standard library only. The tests sign with the repository's existing test-only RSA key (Rust) or a key generated per test (Go). The TypeScript source (`machineKey`, WebCrypto, PKCS #1 or #8 keys) is in the same PR; so is Python's (`loams.runtime.machine_key`, sync and async), behind a new `agent` extra that adds `cryptography` 50.0.2 (pycparser held below 3.12 by the 14-day rule) | IA4 Task 2 |
 | T2.R1 | `loams_authz::http::segments` percent-decodes a path the way axum's `Path` extractor does, so a route table checks the object the handler acts on, and a segment that is not UTF-8, `.` or `..` makes the route undeclared (403). `Need::new` also refuses an object with an empty type or id, whitespace, `#`, or `:` in the type, so a path segment cannot name a userset | IA2 Task 2 |
+| T3.R1 | One condition context for both backends: `CheckRequest::effective_context` sets `session_id` from the authenticated subject's session (over the caller's) and `now` from the server's clock when the caller gave none. A subject with a session is not cacheable (the cache key carries neither session nor time). A tuple may not store `session_id` or `now` (`Tuple::check_condition`): a stored value wins in OpenFGA, so it would unbind or never expire an `agent_session` grant. `BuiltinAuthorizer` refuses tuples that are not `type:id`, and wildcards, which model v1 does not declare | IA2 Task 3 |
+| S.2026-10-24 | **Status, 2026-10-24.**<br>**Merged:** IA2 Task 2 (#1009); IA4 Task 2 (#1145: `MachineKey` in the Rust, Go, TypeScript and Python SDKs).<br>**Open, green or stacked:**<br>• IA2 Task 3: #1143, on `dev`.<br>• IA2 Task 4: #1154, draft, stacked on #1143.<br>• IA2 Task 5: #1169, draft, stacked on #1154.<br>• IA4 Task 1: #1155, every check green, including the live Zitadel job; it was re-running `CI required` after it was marked ready.<br>**Owner decision pending:** T4.R2.<br>**Blocked:** IA4 Task 3. Agentd's rotating token file (D1453) and a Loams token endpoint do not exist yet.<br>**Still to do:**<br>• `RemoveMember` should revoke the person's keys (T5.R1).<br>• IA2's `authz` compose profile and Helm values, with OpenFGA's caches off (D1625) and SQLite for one user (D1626).<br>• Lakekeeper's own store (D1604).<br>• Moving `loams-graph`, `loams-pg-control`, `/durable/` and Loams Git onto `loams-authz`.<br>• IA3, the sync bridge, which `LOAMS_AUTHZ=openfga` needs for its tuples.<br>• The engine wiring of `loams-zitadel`'s `LinkStore` and the agent RPCs.<br>**Review:** Greptile did not review any of the `review:greptile` PRs, probably because its credits ran out. The PRs were self-reviewed | status |
