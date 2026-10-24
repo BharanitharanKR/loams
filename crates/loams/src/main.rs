@@ -341,6 +341,14 @@ struct Native {
     /// Serve no Elasticsearch API.
     #[arg(long)]
     no_es: bool,
+    /// The built console to serve at /ui/ on the HTTP listeners, same-origin
+    /// with the API [default: /usr/share/loams/console, where the images and
+    /// the packages install it, when it holds a build].
+    #[arg(long, conflicts_with = "no_console")]
+    console_dir: Option<PathBuf>,
+    /// Serve no console at /ui/.
+    #[arg(long)]
+    no_console: bool,
     /// How long a CloudEvent's `source` + `id` is remembered, so a retry does
     /// not append it again, in seconds [default: 3600, at most 86400].
     #[arg(long)]
@@ -646,6 +654,13 @@ impl Native {
             .house_key_file
             .clone()
             .or_else(|| env_value("LOAMS_HOUSE_KEY_FILE").map(PathBuf::from));
+        config.console_dir = match (self.no_console, &self.console_dir) {
+            (true, _) => None,
+            // An explicit directory is kept even without a build, so the
+            // server says why /ui/ is not served.
+            (false, Some(dir)) => Some(dir.clone()),
+            (false, None) => loams::console::resolve(None),
+        };
         config.flight_sql = if self.no_flight_sql {
             None
         } else {
@@ -1665,6 +1680,13 @@ async fn serve(cli: Cli) -> ExitCode {
     let mut config = config(cli.command);
     config.auth = match loams::auth::AuthConfig::from_env() {
         Ok(auth) => auth,
+        Err(err) => {
+            eprintln!("loams: {err}");
+            return ExitCode::FAILURE;
+        }
+    };
+    config.console = match loams::console::ConsoleOptions::from_env() {
+        Ok(console) => console,
         Err(err) => {
             eprintln!("loams: {err}");
             return ExitCode::FAILURE;

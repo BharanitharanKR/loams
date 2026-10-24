@@ -104,6 +104,10 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # Shipped artefacts never come from a task cache (docs/guides/nx-cloud.md): no Nx Cloud,
+  # and no cached Nx results, local or remote.
+  NX_NO_CLOUD: 'true'
+  NX_SKIP_NX_CACHE: 'true'
   # The server's features: the release image's (deploy/release/Containerfile.loams
   # FEATURES), so `loams dev` from a package serves what the image serves,
   # Durable on 127.0.0.1:8001 included (#925, D262). The Linux job checks the
@@ -258,11 +262,11 @@ jobs:
           python3 scripts/release/build-artifacts.py --self-test
           python3 scripts/release/make-repo.py --self-test
 
-      # The console is a separate pnpm workspace. Its build is deliberately
-      # non-fatal: the server binary does not serve it, and a TypeScript error in
-      # the console must not stop the .deb, the .rpm and the pacman package from
-      # being produced. The packaging script then ships the packages without the
-      # console and says so on stderr.
+      # The console is a separate pnpm workspace. The engine serves it at /ui/
+      # from /usr/share/loams/console. Its build is deliberately non-fatal: a
+      # TypeScript error in the console must not stop the .deb, the .rpm and
+      # the pacman package from being produced. The packaging script then
+      # ships the packages without the console and says so on stderr.
       - name: the web console (non-fatal)
         id: console
         continue-on-error: true
@@ -310,6 +314,16 @@ jobs:
                            <(grep -o '\[.*\]' "$RUNNER_TEMP/needed-git-remote.txt" | sort -u))
           if [ -n "$extra" ]; then
             echo "::error::git-remote-loams needs libraries the server does not, so release/nfpm.yaml's depends list does not cover it: $extra"
+            exit 1
+          fi
+          # The libraries release/nfpm.yaml's depends lists cover (#1105: libz.so.1
+          # shipped undeclared in 0.1.1). A new one fails here, not on install:
+          # add its package to every format in nfpm.yaml, then to this list.
+          covered="ld-linux-x86-64.so.2 libc.so.6 libgcc_s.so.1 libm.so.6 libz.so.1"
+          undeclared=$(comm -23 <(grep -o '\[.*\]' "$RUNNER_TEMP/needed.txt" | tr -d '[]' | sort -u) \
+                                <(tr ' ' '\n' <<<"$covered" | sort -u))
+          if [ -n "$undeclared" ]; then
+            echo "::error::the server links libraries release/nfpm.yaml does not declare: $undeclared"
             exit 1
           fi
 

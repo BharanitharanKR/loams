@@ -5,7 +5,8 @@ name: CI
 #   changed among DCO, repository checks, fmt and clippy, the Rust tests, the
 #   console, cargo-deny, the protos and the seven supported SDKs. A draft skips
 #   the heavy ones of those (label `ci:full`, then a push, runs them).
-# - full tier, a pull request into main (the dev -> main release gate): also
+# - full tier, a pull request into main (the dev -> main release gate) or a
+#   release branch, or one labelled `ci:full` (then a push): also
 #   the engine, TiKV, Live, durable, Graph, fuzzing, specs, browser, Dapr and
 #   the wave 2 and 3 SDKs, by path.
 # - push to main, a manual dispatch and the nightly on dev (nightly.yml):
@@ -33,12 +34,20 @@ permissions:
 # default, free for this public repository. Blacksmith removed (owner,
 # 2026-10-19): every job runs on GitHub-hosted runners. The RUNNER_HEAVY and
 # RUNNER_MAIN repository variables can still override the labels.
+# Superseded runs of a pull request and of dev are cancelled; a push to main, a tag,
+# a dispatch (the nightly) and a schedule run to completion. The event is in
+# the group, so a push never cancels a dispatch on the same branch.
 concurrency:
-  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  # A newer dev head supersedes an older one; main runs to completion.
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
+  group: ci-${{ github.workflow }}-${{ github.event_name }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || (github.event_name == 'push' && github.ref == 'refs/heads/dev') }}
 
 env:
+  # CI builds are never debugged: no debug info in dev and test builds (smaller
+  # caches, faster links; a panic still names its file and line) and no
+  # incremental artifacts. rust-cache sets CARGO_INCREMENTAL=0 too; this covers
+  # the jobs without it.
+  CARGO_INCREMENTAL: 0
+  CARGO_PROFILE_DEV_DEBUG: 0
   CARGO_TERM_COLOR: always
 
 jobs:
@@ -57,8 +66,9 @@ jobs:
       # 'false' on a draft pull request without the `ci:full` label: the heavy
       # jobs (heavy Rust and macOS) wait until it is ready for review.
       heavy: ${{ github.event.pull_request.draft != true || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
-      # 'true' on a pull request into main: the full tier.
-      full: ${{ github.base_ref == 'main' }}
+      # 'true' on a pull request into main or a release branch, or one
+      # labelled `ci:full` (then a push): the full tier.
+      full: ${{ github.base_ref == 'main' || startsWith(github.base_ref, 'release/') || contains(github.event.pull_request.labels.*.name, 'ci:full') }}
       rust: ${{ steps.filter.outputs.rust }}
       engine: ${{ steps.filter.outputs.engine }}
       es: ${{ steps.filter.outputs.es }}
@@ -86,11 +96,13 @@ jobs:
       sdk-dart: ${{ steps.filter.outputs.sdk-dart }}
       sdk-objc: ${{ steps.filter.outputs.sdk-objc }}
       web: ${{ steps.filter.outputs.web }}
+      factory: ${{ steps.filter.outputs.factory }}
       dapr-edge: ${{ steps.filter.outputs.dapr-edge }}
       spec: ${{ steps.filter.outputs.spec }}
       router: ${{ steps.filter.outputs.router }}
       specview: ${{ steps.filter.outputs.specview }}
       lean: ${{ steps.filter.outputs.lean }}
+      loams-cloud: ${{ steps.filter.outputs.loams-cloud }}
     steps:
       # A push is compared with the previous dev head (github.event.before),
       # which needs the repository; a pull request uses the API.
@@ -120,6 +132,8 @@ jobs:
               - "api/**"
               - "clippy.toml"
               - "rustfmt.toml"
+              # nextest's profile and per-test retries (Rust: tests).
+              - ".config/nextest.toml"
             # The crates in loams's default build (no tikv, no durable):
             # the crash gate, the cluster tests and the client suites.
             # A new crate the binary depends on must be added here.
@@ -213,6 +227,14 @@ jobs:
               - *toolchain
               - "crates/*/Cargo.toml"
               - "deny.toml"
+              # The ported-code header check (docs/licences/ported-code.md,
+              # KV1 plan KV0 Task 9).
+              - "NOTICE"
+              - "docs/licences/**"
+              - "scripts/licences/**"
+              - "crates/loams-resp/**"
+              - "crates/loams-cql/**"
+              - "crates/loams-tikv/src/cdc/**"
             # The desktop agent daemon (design §50, DD1 Task 4): the headless
             # guard (D782) and the loams-agentd* clippy and test suites. The
             # TypeScript contract package is here too: loams-agentd-proto's
@@ -378,6 +400,15 @@ jobs:
               - ".github/workflows/ci.yml"
               - "web/**"
               - "api/**"
+            # The factory host, @loams/factory (plan FT1, FT0 Task 1).
+            factory:
+              - *pnpm-workspace
+              - ".github/workflows/ci.yml"
+              - "agents/**"
+            # The Loams Cloud control plane Worker (design 78 §25, plan LC1 LC2a).
+            loams-cloud:
+              - ".github/workflows/ci.yml"
+              - "deploy/loams-cloud/**"
             # deploy/dapr/edge is its own crate and lock, outside the
             # workspace; it compiles loams-stream-grpc's stream.proto.
             dapr-edge:
@@ -427,7 +458,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: rustfmt
         run: cargo fmt --all --check
       - name: clippy
@@ -520,13 +551,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - uses: taiki-e/install-action@badb8c3638e0b773c6c17a6025c2306a8f1c4303 # nextest, 2026-10-02
       # The loams-agentd-harness tests run `#!/usr/bin/env node` and
       # `#!/usr/bin/env python3` fixtures (harness stand-ins).
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - name: workspace tests
         run: cargo nextest run --workspace --locked
 
@@ -559,12 +590,12 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       # The loams-agentd-harness tests run `#!/usr/bin/env node` and
       # `#!/usr/bin/env python3` fixtures (harness stand-ins).
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - name: headless guard self-test
         run: bash scripts/ci/agentd-deps.test.sh
       - name: headless guard (D782)
@@ -602,7 +633,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: loams's MySQL wire listener (mysql-wire feature)
         run: 'cargo test -p loams --features mysql-wire --lib --locked mysql_wire::'
       - name: loams's PostgreSQL wire listener (pgwire feature)
@@ -639,7 +670,7 @@ jobs:
   crash-gate:
     name: "Engine: crash gate"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (github.base_ref == 'main' && needs.changes.outputs.engine == 'true')) }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && needs.changes.outputs.engine == 'true')) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -647,7 +678,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: clippy with failpoints
         run: cargo clippy -p loams --all-targets --features failpoints --locked -- -D warnings
       - name: crash gate
@@ -656,7 +687,7 @@ jobs:
   cluster:
     name: "Engine: cluster tests"
     needs: changes
-    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (github.base_ref == 'main' && needs.changes.outputs.engine == 'true')) }}
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || (needs.changes.outputs.full == 'true' && needs.changes.outputs.engine == 'true')) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -664,7 +695,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: build
         run: cargo build -p loams --locked
       - name: clippy with cluster tests
@@ -684,7 +715,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: build
         run: cargo build -p loams --locked
       - name: start loams dev
@@ -714,7 +745,7 @@ jobs:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - name: qdrant-js 1.18.0
         run: |
           crates/loams-qdrant/tests/js/run.sh 1.18.0 | tee "$RUNNER_TEMP/js-1.18.log"
@@ -753,7 +784,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: build
         run: cargo build -p loams --locked
       - uses: astral-sh/setup-uv@v7
@@ -831,7 +862,7 @@ jobs:
         run: '! grep -rn --include=*.lean -w sorry LoamsRouter Main.lean PropTest.lean'
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: Rust against the Lean oracle (10 000 cases)
         working-directory: .
         run: cargo test -p loams-sqlrouter --locked --test it lean_oracle -- --nocapture
@@ -857,7 +888,7 @@ jobs:
           key: spec-tools-${{ hashFiles('scripts/spec/tools.lock') }}
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: clippy (server)
         run: cargo clippy -p loams-specview --all-targets --locked -- -D warnings
       - name: tests (the live ones need Java and the pinned tools)
@@ -886,7 +917,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: simulation (32 seeds x 300 steps)
         if: ${{ inputs.nightly != true }}
         run: cargo test -p loams-sim --release --locked
@@ -910,7 +941,7 @@ jobs:
   tikv:
     name: "TiKV: suites"
     needs: changes
-    if: ${{ !cancelled() && inputs.nightly != true && (needs.changes.result == 'skipped' || ((github.base_ref == 'main' || contains(github.event.pull_request.labels.*.name, 'ci:tikv')) && needs.changes.outputs.tikv == 'true')) }}
+    if: ${{ !cancelled() && inputs.nightly != true && (needs.changes.result == 'skipped' || ((needs.changes.outputs.full == 'true' || contains(github.event.pull_request.labels.*.name, 'ci:tikv')) && needs.changes.outputs.tikv == 'true')) }}
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v7
@@ -918,7 +949,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: packages
         id: packages
         # The TiKV crates that exist so far (later R1 tasks add the rest).
@@ -998,7 +1029,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: the suites, embedded only
         env:
           LOAMS_TEST_PD: ""
@@ -1025,7 +1056,7 @@ jobs:
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         if: steps.paths.outputs.run == 'true'
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: packages
         id: packages
         if: steps.paths.outputs.run == 'true'
@@ -1131,7 +1162,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           key: durable
       - uses: actions/setup-go@v7
         with:
@@ -1173,7 +1204,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler mysql-client
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           key: durable
       - uses: actions/setup-go@v7
         with:
@@ -1238,7 +1269,7 @@ jobs:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           # The TypeScript SDK is a root workspace package (design §44
           # §10.2), so its pinned buf and protoc-gen-es install with the root
@@ -1279,7 +1310,7 @@ jobs:
           package_json_file: package.json
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: install
@@ -1344,13 +1375,13 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - uses: pnpm/action-setup@v6
         with:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: install
@@ -1431,6 +1462,18 @@ jobs:
             }
           done
           sdks/typescript/packages/client/node_modules/.bin/buf --version
+      # D1775: the toolchain runs on Node 24 (.nvmrc), but @loams/client keeps
+      # Node 22 as its runtime floor (`engines` >=22). This cell runs the SDK's
+      # suite once more on Node 22, last, so the report checked above is the
+      # Node 24 one.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: the SDK suite on Node 22 (its runtime floor)
+        working-directory: web
+        run: |
+          node --version
+          pnpm --filter @loams/client test
 
   # SDK2 Task 3: the Rust SDK (design section 44 row 4). sdks/rust is its own
   # cargo workspace, so the server's Rust jobs never touch it -- PR #340 merged
@@ -1457,17 +1500,20 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       # -j 4: the SDK path-depends on loams-proto and loams-live-proto, and the
       # runners are 4 vCPU.
       - name: the Rust SDK's tests
         working-directory: sdks/rust
-        run: cargo test -j 4 --locked
+        run: |
+          cargo test -j 4 --locked
+          cargo test -j 4 --locked --features machine-key machine_key
       - name: lint the Rust SDK
         working-directory: sdks/rust
         run: |
           cargo fmt -- --check
           cargo clippy -j 4 --all-targets -- -D warnings
+          cargo clippy -j 4 --all-targets --features machine-key -- -D warnings
       # `scripts/sdk/gen.sh` resolves buf from web's node_modules, so the
       # drift check below cannot run without this. sdk-rust had no pnpm setup at
       # all, so the step died before checking anything:
@@ -1478,7 +1524,7 @@ jobs:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: install
@@ -1618,13 +1664,13 @@ jobs:
       # node_modules, so it needs both.
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - uses: pnpm/action-setup@v6
         with:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: install
@@ -1738,7 +1784,7 @@ jobs:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: install
@@ -1802,7 +1848,7 @@ jobs:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: install
@@ -2049,7 +2095,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       # loams_default_build_has_no_grafeo: `cargo build -p loams` without
       # `graph` must not compile Grafeo.
       - name: loams's default build has no grafeo
@@ -2251,6 +2297,39 @@ jobs:
           tool: cargo-deny
       - name: advisories, bans, licenses, sources
         run: cargo deny --locked check
+      # Ported files keep their origin's header (D1649).
+      - name: ported-code headers
+        run: |
+          scripts/licences/check-ported-headers.sh --self-test
+          scripts/licences/check-ported-headers.sh
+
+  # The Software Factory host (plan FT1, FT0 Task 1; design §72, D1428): typecheck and
+  # unit tests. No job needs a model key: tests use Mastra's createMockModel.
+  factory:
+    name: "Factory: host"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.factory == 'true') }}
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: agents/factory
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+        with:
+          package_json_file: package.json
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile --filter @loams/factory...
+        working-directory: .
+      - run: pnpm lint
+      - run: pnpm typecheck
+      - run: pnpm test
 
   web:
     name: "Console: build and tests"
@@ -2267,7 +2346,7 @@ jobs:
           package_json_file: package.json
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
@@ -2283,6 +2362,41 @@ jobs:
       - run: pnpm build
       - name: the build stages for Workers static assets
         run: node apps/console/deploy/stage.mjs
+
+  # The Loams Cloud control plane Worker (design 78 §25, plan LC1 LC2a): its
+  # suites on Node, and the control-DB suites on TiDB v8.5.8 (unistore). No npm
+  # dependencies; tsc comes from the root package.
+  loams-cloud:
+    name: "Loams Cloud: control plane"
+    needs: changes
+    if: ${{ !cancelled() && (needs.changes.result == 'skipped' || needs.changes.outputs.loams-cloud == 'true') }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.0
+        with:
+          version: 11.27.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - name: typecheck
+        run: |
+          pnpm install --frozen-lockfile --filter loams-monorepo
+          pnpm exec tsc -p deploy/loams-cloud
+      - uses: actions/cache@v6
+        with:
+          path: ~/.tiup/components
+          key: tiup-components-tidb-v8.5.8-${{ runner.os }}
+      - name: install tiup and tidb v8.5.8
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://tiup-mirrors.pingcap.com/install.sh | sh
+          "$HOME/.tiup/bin/tiup" install tidb:v8.5.8
+      - name: tests, with the control DB on TiDB
+        working-directory: deploy/loams-cloud
+        run: scripts/test-tidb.sh
 
   # The console's WebMCP feature detection in a real browser (AP1d Task 4;
   # design §42 §5, D635, D638).
@@ -2338,7 +2452,7 @@ jobs:
           package_json_file: package.json
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       # A browser job that finds no browser must fail, not skip, so the browser
@@ -2389,7 +2503,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
           workspaces: deploy/dapr/edge -> target
       - name: rustfmt
         run: cargo fmt --check
@@ -2422,7 +2536,7 @@ jobs:
           nasm: "false"
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: cargo check (the loams binary)
         run: cargo check -p loams --bin loams --locked
 
@@ -2451,6 +2565,20 @@ jobs:
             echo "::error::.superpowers/ is local working state (in .gitignore); untrack it with git rm --cached"
             exit 1
           fi
+      # The Nx crate projects (tools/nx-cargo, docs/guides/nx-cloud.md#rust): the crate graph
+      # read from the manifests equals cargo metadata's, and every file a crate's code reads
+      # outside itself is a declared cache input. A false cache hit is worse than a miss.
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6.0.0
+        with:
+          version: 11.27.1
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: Nx crate projects match the Cargo manifests and declare their inputs
+        run: |
+          pnpm install --frozen-lockfile --filter loams-monorepo
+          node tools/nx-cargo/check.cjs
       - if: ${{ !cancelled() }} # report every check, not only the first failure
         name: Decision ID checker self-test
         run: scripts/docs/check-decision-ids.sh --self-test
@@ -2527,6 +2655,14 @@ jobs:
         run: |
           scripts/ci/pgdog-licence.sh --self-test
           scripts/ci/pgdog-licence.sh
+      # OC1 OC0 Task 1 and DX1 DX0 Task 1: the compute conformance harness
+      # (expected-failure and licence gates on fixtures, the pins' licences
+      # offline, and the shape of deploy/release/compose.compute.yaml through
+      # `compose config`). No product runs and no image is pulled here; the
+      # suites run nightly.
+      - if: ${{ !cancelled() }} # report every check, not only the first failure
+        name: the compute conformance harness self-test (OC0, DX0)
+        run: conformance/compute/selftest.sh
       - if: ${{ !cancelled() }} # report every check, not only the first failure
         name: PyYAML
         run: python3 -m pip install --quiet --disable-pip-version-check PyYAML
@@ -2567,7 +2703,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y protobuf-compiler libprotobuf-dev
       - uses: Swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6 # v2.9.2
         with:
-          save-if: ${{ github.event_name != 'pull_request' }}
+          save-if: ${{ github.ref == 'refs/heads/dev' }}
       - name: the upgrade gate
         env:
           GH_TOKEN: ${{ github.token }}
@@ -2623,7 +2759,9 @@ jobs:
       - agentd-connect-fuzz
       - deny
       - web
+      - factory
       - dapr-edge
+      - loams-cloud
       - upgrade-gate
     runs-on: ubuntu-24.04
     steps:

@@ -167,7 +167,8 @@ def build_stage(stage: Path, binary: Path, console: Path | None, git_remote: Pat
         )
         (console_dest / "README.txt").write_text(
             "The web console was not included in this package build.\n"
-            "The console is published at https://console.loams.dev.\n",
+            "Build it (cd web && pnpm build) and pass the engine\n"
+            "--console-dir web/apps/console/dist to serve it at /ui/.\n",
             encoding="utf-8",
         )
     else:
@@ -334,6 +335,87 @@ def deb_payload_modes(path: Path) -> dict[str, int]:
                 return {m.name: stat.S_IMODE(m.mode) for m in payload.getmembers() if m.isfile()}
         offset += 60 + size + (size % 2)
     return {}
+
+
+def nfpm_depends(fmt: str) -> list[str]:
+    """The dependency list release/nfpm.yaml gives a format: its `overrides`
+    entry when it has one, else the top-level `depends` (nFPM's own rule)."""
+    import yaml  # PyYAML; the CI image has it
+
+    config = yaml.safe_load(NFPM_CONFIG.read_text(encoding="utf-8"))
+    override = ((config.get("overrides") or {}).get(fmt) or {}).get("depends")
+    return list(override if override is not None else config.get("depends") or [])
+
+
+def deb_depends(path: Path) -> list[str]:
+    """The `Depends:` field of a .deb's control file, one entry per package."""
+    data = path.read_bytes()
+    offset = 8
+    while offset + 60 <= len(data):
+        name = data[offset : offset + 16].strip(b" ").rstrip(b"/")
+        size = int(data[offset + 48 : offset + 58].strip() or b"0")
+        body = data[offset + 60 : offset + 60 + size]
+        if name.startswith(b"control.tar"):
+            with tarfile.open(fileobj=io.BytesIO(body)) as control:
+                member = control.extractfile("./control") or control.extractfile("control")
+                text = member.read().decode("utf-8") if member else ""
+            for line in text.splitlines():
+                if line.startswith("Depends:"):
+                    return [d.strip() for d in line.split(":", 1)[1].split(",") if d.strip()]
+            return []
+        offset += 60 + size + (size % 2)
+    return []
+
+
+RPMTAG_REQUIRENAME = 1049
+
+
+def rpm_requires(path: Path) -> list[str]:
+    """An RPM's REQUIRENAME list, minus the `rpmlib(...)` features rpm adds.
+
+    After the 96-byte lead come two headers, the signature header (padded to
+    8 bytes) and the main one. Each is a 16-byte preamble (magic, version,
+    four reserved bytes, the index count and the store size), the index
+    entries (tag, type, offset, count; 16 bytes each) and the store.
+    """
+    data = path.read_bytes()
+
+    def header(at: int) -> tuple[dict[int, tuple[int, int, int]], bytes, int]:
+        if data[at : at + 3] != b"\x8e\xad\xe8":
+            raise ValueError(f"{path.name}: no RPM header at {at}")
+        count, store_size = struct.unpack(">II", data[at + 8 : at + 16])
+        index = {}
+        for i in range(count):
+            tag, kind, offset, n = struct.unpack(">IIII", data[at + 16 + 16 * i : at + 32 + 16 * i])
+            index[tag] = (kind, offset, n)
+        store_at = at + 16 + 16 * count
+        return index, data[store_at : store_at + store_size], store_at + store_size
+
+    _, _, end = header(96)
+    end += (8 - end % 8) % 8
+    index, store, _ = header(end)
+    if RPMTAG_REQUIRENAME not in index:
+        return []
+    _, offset, n = index[RPMTAG_REQUIRENAME]
+    names = store[offset:].split(b"\0")[:n]
+    return [s.decode("utf-8") for s in names if not s.startswith(b"rpmlib(")]
+
+
+def archlinux_depends(path: Path) -> list[str] | None:
+    """The `depend` lines of a .pkg.tar.zst's .PKGINFO, or None when nothing
+    here can read zstd (Python before 3.14 and no `zstd` on PATH)."""
+    try:
+        from compression import zstd  # Python 3.14+
+
+        raw = zstd.decompress(path.read_bytes())
+    except ImportError:
+        if shutil.which("zstd") is None:
+            return None
+        raw = subprocess.run(["zstd", "-dc", str(path)], check=True, capture_output=True).stdout
+    with tarfile.open(fileobj=io.BytesIO(raw)) as package:
+        member = package.extractfile(".PKGINFO")
+        text = member.read().decode("utf-8") if member else ""
+    return [line.split("=", 1)[1].strip() for line in text.splitlines() if line.startswith("depend =")]
 
 
 def rpm_is_signed(path: Path) -> bool:
@@ -983,6 +1065,27 @@ def self_test(gpg_key: str | None = None) -> int:
                     failures.append("signing: deb_is_signed disagrees with the key being present")
                 if rpm_is_signed(root / "pkg" / package_name("rpm", "9.9.9", "x86_64")):
                     failures.append("signing: the .rpm claims a signature this script never makes")
+                # Each package declares what nfpm.yaml gives its format, in that
+                # format's own names (nFPM writes `depends` as is; #1105), and
+                # zlib among them: the packaged server links libz.so.1.
+                built = {
+                    "deb": deb_depends(root / "pkg" / package_name("deb", "9.9.9", "amd64")),
+                    "rpm": rpm_requires(root / "pkg" / package_name("rpm", "9.9.9", "x86_64")),
+                    "archlinux": archlinux_depends(
+                        root / "pkg" / package_name("archlinux", "9.9.9", "x86_64")
+                    ),
+                }
+                zlib = {"deb": "zlib1g", "rpm": "libz.so.1()(64bit)", "archlinux": "zlib"}
+                for fmt, depends in built.items():
+                    if depends is None:
+                        skipped.append(f"the {fmt} package's dependencies (no zstd reader)")
+                        continue
+                    if depends != nfpm_depends(fmt):
+                        failures.append(f"{fmt}: depends {depends}, nfpm.yaml gives {nfpm_depends(fmt)}")
+                    if zlib[fmt] not in depends:
+                        failures.append(f"{fmt}: does not depend on {zlib[fmt]}")
+                if nfpm_depends("rpm") == nfpm_depends("deb") or nfpm_depends("archlinux") == nfpm_depends("deb"):
+                    failures.append("nfpm.yaml: the .rpm or the Arch package has Debian's dependency names")
 
     for failure in failures:
         print(failure, file=sys.stderr)
