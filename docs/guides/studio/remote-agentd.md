@@ -220,7 +220,7 @@ Without a host, or without a token for the selected host, Studio's home shows **
 
 ## The console's Content-Security-Policy
 
-The browser console only fetches from and frames the origins its Content-Security-Policy names. A deployment lists its agentd hosts in **`LOAMS_AGENTD_ORIGINS`** (SD1 Task 30, ruling T30-3): origins separated by spaces or commas, each an exact `https://host[:port]` (`http://` only on `localhost`), with no wildcard, path or credentials. `deploy/stage.mjs` adds them to both `connect-src` (the Connect calls) and `frame-src` (the previews), and the console deploy workflow reads the repository variable of the same name. Each host must also name the console in its `--allow-origin`.
+The browser console only fetches from and frames the origins its Content-Security-Policy names. A deployment lists its agentd hosts in **`LOAMS_AGENTD_ORIGINS`** (SD1 Task 30, ruling T30-3): origins separated by spaces or commas, each an exact `https://host[:port]` (`http://` only on `localhost`), with no wildcard, path or credentials. The engine-served console (`/ui/`) and `deploy/stage.mjs` add them to both `connect-src` (the Connect calls) and `frame-src` (the previews), and the console deploy workflow reads the repository variable of the same name. Each host must also name the console in its `--allow-origin`.
 
 ```sh
 LOAMS_AGENTD_ORIGINS="https://devbox.example.com:8443 https://vm.example.com" \
