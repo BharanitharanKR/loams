@@ -260,7 +260,7 @@ export class Waitlist {
   }
 
   /** The address, for sending and the admin list only. */
-  decryptEmail(row: WaitlistRow): Promise<string> {
+  decryptEmail(row: Pick<WaitlistRow, "email_enc">): Promise<string> {
     return decrypt(this.d.keys, row.email_enc);
   }
 }
