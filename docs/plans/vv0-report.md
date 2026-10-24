@@ -10,7 +10,7 @@
 | Task | Question | Verdict |
 |---|---|---|
 | 1 | The console and `@loams/ui` under Vite+ | **Go.** Tests, `dist/` and `@loams/ui`'s exports are unchanged. VV1 must switch the scripts to `vp`, set `fixedExtension: false` and `tabWidth: 2`, and rewrite 107 `biome-ignore` comments. Lint parity: 169 of 223 rules mapped, 5 covered by tsc, 14 lost, 25 CSS rules lost |
-| 2 | `@loams/app` ports through Void's Cloudflare bindings | pending |
+| 2 | `@loams/app` ports through Void's Cloudflare bindings | **Go locally** (Miniflare) for the D1, R2 and Queues bindings through a generated overlay. A DLQ can be bound explicitly, but Void appends a second consumer, so the overlay must replace the inferred one. Provisioning, the lock file and rollback are blocked on the owner's account |
 | 3 | Loams' shims around Void's `node` build | **Go locally** for HTTP, cron and queue through one Lambda handler (unit tests and the Lambda emulator). `node` exports only the Hono app, so crons and queues are called through the build manifest. Real Lambda cold starts are blocked on the owner's AWS account |
 | 4 | Bun-compiled and `node` images in the light compose stack | pending |
 | 5 | Hyperdrive to Loams Postgres over Tunnel, and TiDB Starter | pending |
@@ -316,7 +316,51 @@ The rule mapping is generated from two lists:
 
 ## Task 2
 
-Pending.
+**Verdict: the overlay works for D1 and R2, and the ports work locally on Miniflare. An explicit DLQ binding duplicates the queue consumer, so the overlay must replace Void's inferred consumer, not add one. Provisioning, `void.lock.json` and rollback are blocked:** they need the owner's test account and tokens (§70 §12.2). Run on 2026-10-24 with `void` 1.2.1, `vite` 8.3.4 and Node 24.21.0. Nothing was deployed.
+
+**The app.**
+- A portable Void app (`target: "cloudflare"`) declares three ports in `loams.app.json`: `items` (SQL), `blobs`, and `queue` (`events`, `dead_letter: true`).
+- A stand-in for the `@loams/app` Cloudflare adapter reads the bindings `LOAMS_ITEMS` (D1), `LOAMS_BLOBS` (R2) and `LOAMS_QUEUE` (a Queues producer).
+- The adapter sits outside Void's scan directories, as it would in `node_modules`.
+- `POST /api/items` writes an item, a blob and a message. `GET /api/items` reads the item and the blob back. The `queues/events.ts` consumer records the ids it sees.
+
+**What Void infers without the overlay.**
+- No D1 and no R2 binding. Inference reads only the scanned directories, so the adapter's `env[...]` reads are invisible to it.
+- `void info --json` lists no resources.
+- The `queues/` directory alone yields the producer `QUEUE_EVENTS` and a consumer for `events`.
+
+**With the generated overlay** (`gen-overlay.mjs`, which stands in for `loams app deploy --target cloudflare`, D1779), `void.config.ts` imports the author's `void.config.base.ts` and layers on:
+- `inference.bindings: { db: "LOAMS_ITEMS", storage: "LOAMS_BLOBS" }`;
+- `cloudflare.queues: { producers: [{ queue: "events", binding: "LOAMS_QUEUE" }], consumers: [{ queue: "events", dead_letter_queue: "events-dlq" }] }`.
+
+What happens:
+- **D1 and R2 work.** The generated `dist/ssr/wrangler.json` carries `d1_databases: [{binding: "LOAMS_ITEMS", database_name: "default", database_id: "local"}]` and `r2_buckets: [{binding: "LOAMS_BLOBS", bucket_name: "default"}]`.
+- **Queues are appended, not merged.** The result has two producers (`QUEUE_EVENTS`, which Void inferred, and `LOAMS_QUEUE`) and **two consumers for `events`**: Void's `{queue: "events"}` and ours with the DLQ. A Cloudflare queue takes one consumer. The extra producer is harmless.
+  - **The fix for D1779:** the overlay names the port's queue with a different consumer file, or `loams app deploy` makes the consumer's settings Void's. The other option is that Void's inferred consumer reads `maxRetries` and the like from named exports (it already does for retries). Void has no `deadLetterQueue` export.
+  - **To verify on a real deploy:** what Cloudflare does with the duplicate, and the merge rule this sets.
+- **`void info --json` still lists no resources before a deploy.** `void.lock.json` is written only by `void deploy`, so no lock exists locally.
+- **`vite dev` (Miniflare) passes:**
+  - `POST /api/items` returns `{"ok":true}`;
+  - `GET /api/items?id=a` returns `{"item":{"x":1},"blob":"{\"x\":1}"}`;
+  - `GET /api/seen` returns `{"seen":["a"]}`, so the message sent through `LOAMS_QUEUE` reached the `events` consumer.
+
+**The DLQ answer** (from Void's source and docs in `node_modules`):
+- Void-managed queues configure no dead-letter queue (docs, `guide/queues.md`).
+- `cloudflare.queues.consumers[].dead_letter_queue` is in Void's config type. It is validated as a string, passed through to the generated Wrangler config, and compared on redeploy (`matchesQueueConsumer` in `platform-lifecycle`).
+- `@void/deploy-cloudflare` has no code that creates the DLQ queue itself. So a DLQ **can be bound explicitly**.
+- **Unproven without an account:** whether Cloudflare creates `events-dlq` on deploy, or the port's provisioning must create it first. §71's `dead_letter = true` should assume the second and create it.
+
+**Blocked** (needs the owner's Cloudflare Free test account and a scoped token): `void deploy --platform cloudflare`, a second deploy, `void project rollback`, checking that Void provisions exactly the declared resources and records them in `void.lock.json`, and the duplicate-consumer behaviour on Cloudflare.
+
+**Reproduce.**
+
+```sh
+cd spikes/vv0/task2   # node_modules: void@1.2.1, vite@8.3.4, node@24.21.0 (as Task 3)
+node gen-overlay.mjs app
+cd app && node node_modules/vite/bin/vite.js build    # see dist/ssr/wrangler.json
+node node_modules/void/dist/cli/cli.mjs info --json
+node node_modules/vite/bin/vite.js dev --port 38522    # then POST/GET /api/items, GET /api/seen
+```
 
 ## Task 3
 
