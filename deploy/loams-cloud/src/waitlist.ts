@@ -151,9 +151,10 @@ export class Waitlist {
   private async sendWithTokens(row: WaitlistRow, email: string, template: Template): Promise<void> {
     const { sql, clock } = this.d;
     const now = clock.now();
+    const withConfirm = template === "confirm" || template === "still_interested";
     if (template !== "already_listed") {
       // The per-address limit, counted from the tokens themselves.
-      const kind = template === "confirm" ? "confirm" : "remove";
+      const kind = withConfirm ? "confirm" : "remove";
       const c = await sql.execute(
         "SELECT COUNT(*) AS n FROM waitlist_tokens WHERE waitlist_id = ? AND kind = ? AND created_ms > ?",
         [row.id, kind, now - DAY_MS],
@@ -164,7 +165,7 @@ export class Waitlist {
       }
     }
     let confirmUrl: string | undefined;
-    if (template === "confirm") {
+    if (withConfirm) {
       // A second confirm email invalidates the first (D1740).
       await sql.execute(
         "UPDATE waitlist_tokens SET expires_ms = ? WHERE waitlist_id = ? AND kind = 'confirm' AND used_ms IS NULL AND expires_ms > ?",
@@ -179,7 +180,7 @@ export class Waitlist {
     const removeUrl = `${this.d.siteUrl}/cloud/leave#${r}`;
     try {
       await this.d.mailer.send({ template, to: email, confirmUrl, removeUrl });
-      const type = template === "confirm" ? "waitlist.confirm_sent" : template === "already_listed" ? "waitlist.already_listed_sent" : "waitlist.removal_sent";
+      const type = ({ confirm: "waitlist.confirm_sent", already_listed: "waitlist.already_listed_sent", removal: "waitlist.removal_sent", still_interested: "waitlist.reminder_sent" } as const)[template];
       await this.d.audit.write({ type, actor: "system", subject: row.id });
     } catch (e) {
       this.d.logger.log("waitlist.send_failed", { waitlist_id: row.id, template, error: String(e) });
@@ -221,7 +222,33 @@ export class Waitlist {
       await this.d.audit.write({ type: "waitlist.confirmed", actor: "public", subject: id });
       return true;
     }
+    // A "still interested?" link: the entry stays, for another 12 months (§25.6).
+    const renew = await this.d.sql.execute(
+      "UPDATE waitlist SET confirmed_ms = ?, reminder_sent_ms = NULL, updated_ms = ? WHERE id = ? AND status = 'confirmed' AND reminder_sent_ms IS NOT NULL",
+      [now, now, id],
+    );
+    if (renew.rowsAffected === 1) await this.d.audit.write({ type: "waitlist.confirmed", actor: "public", subject: id, detail: { renewed: true } });
     return (await this.byId(id)) !== null;
+  }
+
+  /** The 12-month "still interested?" email, with a fresh confirm link (§25.6). */
+  async remind(row: WaitlistRow): Promise<void> {
+    const now = this.d.clock.now();
+    const u = await this.d.sql.execute(
+      "UPDATE waitlist SET reminder_sent_ms = ?, updated_ms = ? WHERE id = ? AND status = 'confirmed' AND reminder_sent_ms IS NULL",
+      [now, now, row.id],
+    );
+    if (u.rowsAffected === 1) await this.sendWithTokens(row, await this.decryptEmail(row), "still_interested");
+  }
+
+  /**
+   * Deletes an entry by retention, without suppressing its address: the person
+   * may join again. Tokens first, then the row; both safe to repeat.
+   */
+  async purge(id: string, reason: string): Promise<void> {
+    await this.d.sql.execute("DELETE FROM waitlist_tokens WHERE waitlist_id = ?", [id]);
+    const d = await this.d.sql.execute("DELETE FROM waitlist WHERE id = ?", [id]);
+    if (d.rowsAffected === 1) await this.d.audit.write({ type: "waitlist.purged", actor: "system", subject: id, detail: { reason } });
   }
 
   /** DELETE /waitlist with a removal token. False means 410 TOKEN_UNUSABLE. */
@@ -260,7 +287,7 @@ export class Waitlist {
   }
 
   /** The address, for sending and the admin list only. */
-  decryptEmail(row: WaitlistRow): Promise<string> {
+  decryptEmail(row: Pick<WaitlistRow, "email_enc">): Promise<string> {
     return decrypt(this.d.keys, row.email_enc);
   }
 }

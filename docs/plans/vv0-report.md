@@ -10,9 +10,9 @@
 | Task | Question | Verdict |
 |---|---|---|
 | 1 | The console and `@loams/ui` under Vite+ | **Go.** Tests, `dist/` and `@loams/ui`'s exports are unchanged. VV1 must switch the scripts to `vp`, set `fixedExtension: false` and `tabWidth: 2`, and rewrite 107 `biome-ignore` comments. Lint parity: 169 of 223 rules mapped, 5 covered by tsc, 14 lost, 25 CSS rules lost |
-| 2 | `@loams/app` ports through Void's Cloudflare bindings | pending |
+| 2 | `@loams/app` ports through Void's Cloudflare bindings | **Go locally** (Miniflare) for the D1, R2 and Queues bindings through a generated overlay. A DLQ can be bound explicitly, but Void appends a second consumer, so the overlay must replace the inferred one. Provisioning, the lock file and rollback are blocked on the owner's account |
 | 3 | Loams' shims around Void's `node` build | **Go locally** for HTTP, cron and queue through one Lambda handler (unit tests and the Lambda emulator). `node` exports only the Hono app, so crons and queues are called through the build manifest. Real Lambda cold starts are blocked on the owner's AWS account |
-| 4 | Bun-compiled and `node` images in the light compose stack | pending |
+| 4 | Bun-compiled and `node` images in the light compose stack | **Go**: both images serve, hydrate and persist (Postgres row and bucket body) across app and stack restarts, through `env.native`. Ran in a spike compose with an `apps` profile, because the release compose has none yet. Postgres 17 stood in for Loams Postgres |
 | 5 | Hyperdrive to Loams Postgres over Tunnel, and TiDB Starter | pending |
 | 6 | One `vite-plus` pin for the workspace | **Go.** 171 build, test and typecheck tasks in 75 projects pass on one `vite-plus` 1.3.0 pin. The peer warnings clear only with `peerDependencyRules.allowedVersions.vite`. electron-vite 6.0.0 runs on `vite-plus-core`. By the 14-day rule, the first pin is 1.1.0, with the desktop following on 2026-10-28 |
 | 7 | The Loams Cloud control plane on Void | pending |
@@ -316,7 +316,51 @@ The rule mapping is generated from two lists:
 
 ## Task 2
 
-Pending.
+**Verdict: the overlay works for D1 and R2, and the ports work locally on Miniflare. An explicit DLQ binding duplicates the queue consumer, so the overlay must replace Void's inferred consumer, not add one. Provisioning, `void.lock.json` and rollback are blocked:** they need the owner's test account and tokens (§70 §12.2). Run on 2026-10-24 with `void` 1.2.1, `vite` 8.3.4 and Node 24.21.0. Nothing was deployed.
+
+**The app.**
+- A portable Void app (`target: "cloudflare"`) declares three ports in `loams.app.json`: `items` (SQL), `blobs`, and `queue` (`events`, `dead_letter: true`).
+- A stand-in for the `@loams/app` Cloudflare adapter reads the bindings `LOAMS_ITEMS` (D1), `LOAMS_BLOBS` (R2) and `LOAMS_QUEUE` (a Queues producer).
+- The adapter sits outside Void's scan directories, as it would in `node_modules`.
+- `POST /api/items` writes an item, a blob and a message. `GET /api/items` reads the item and the blob back. The `queues/events.ts` consumer records the ids it sees.
+
+**What Void infers without the overlay.**
+- No D1 and no R2 binding. Inference reads only the scanned directories, so the adapter's `env[...]` reads are invisible to it.
+- `void info --json` lists no resources.
+- The `queues/` directory alone yields the producer `QUEUE_EVENTS` and a consumer for `events`.
+
+**With the generated overlay** (`gen-overlay.mjs`, which stands in for `loams app deploy --target cloudflare`, D1779), `void.config.ts` imports the author's `void.config.base.ts` and layers on:
+- `inference.bindings: { db: "LOAMS_ITEMS", storage: "LOAMS_BLOBS" }`;
+- `cloudflare.queues: { producers: [{ queue: "events", binding: "LOAMS_QUEUE" }], consumers: [{ queue: "events", dead_letter_queue: "events-dlq" }] }`.
+
+What happens:
+- **D1 and R2 work.** The generated `dist/ssr/wrangler.json` carries `d1_databases: [{binding: "LOAMS_ITEMS", database_name: "default", database_id: "local"}]` and `r2_buckets: [{binding: "LOAMS_BLOBS", bucket_name: "default"}]`.
+- **Queues are appended, not merged.** The result has two producers (`QUEUE_EVENTS`, which Void inferred, and `LOAMS_QUEUE`) and **two consumers for `events`**: Void's `{queue: "events"}` and ours with the DLQ. A Cloudflare queue takes one consumer. The extra producer is harmless.
+  - **The fix for D1779:** the overlay names the port's queue with a different consumer file, or `loams app deploy` makes the consumer's settings Void's. The other option is that Void's inferred consumer reads `maxRetries` and the like from named exports (it already does for retries). Void has no `deadLetterQueue` export.
+  - **To verify on a real deploy:** what Cloudflare does with the duplicate, and the merge rule this sets.
+- **`void info --json` still lists no resources before a deploy.** `void.lock.json` is written only by `void deploy`, so no lock exists locally.
+- **`vite dev` (Miniflare) passes:**
+  - `POST /api/items` returns `{"ok":true}`;
+  - `GET /api/items?id=a` returns `{"item":{"x":1},"blob":"{\"x\":1}"}`;
+  - `GET /api/seen` returns `{"seen":["a"]}`, so the message sent through `LOAMS_QUEUE` reached the `events` consumer.
+
+**The DLQ answer** (from Void's source and docs in `node_modules`):
+- Void-managed queues configure no dead-letter queue (docs, `guide/queues.md`).
+- `cloudflare.queues.consumers[].dead_letter_queue` is in Void's config type. It is validated as a string, passed through to the generated Wrangler config, and compared on redeploy (`matchesQueueConsumer` in `platform-lifecycle`).
+- `@void/deploy-cloudflare` has no code that creates the DLQ queue itself. So a DLQ **can be bound explicitly**.
+- **Unproven without an account:** whether Cloudflare creates `events-dlq` on deploy, or the port's provisioning must create it first. §71's `dead_letter = true` should assume the second and create it.
+
+**Blocked** (needs the owner's Cloudflare Free test account and a scoped token): `void deploy --platform cloudflare`, a second deploy, `void project rollback`, checking that Void provisions exactly the declared resources and records them in `void.lock.json`, and the duplicate-consumer behaviour on Cloudflare.
+
+**Reproduce.**
+
+```sh
+cd spikes/vv0/task2   # node_modules: void@1.2.1, vite@8.3.4, node@24.21.0 (as Task 3)
+node gen-overlay.mjs app
+cd app && node node_modules/vite/bin/vite.js build    # see dist/ssr/wrangler.json
+node node_modules/void/dist/cli/cli.mjs info --json
+node node_modules/vite/bin/vite.js dev --port 38522    # then POST/GET /api/items, GET /api/seen
+```
 
 ## Task 3
 
@@ -376,7 +420,97 @@ npm 11 blocks install scripts by default, which is why the approve step is there
 
 ## Task 4
 
-Pending.
+**Verdict: go.** The same portable Void app was built two ways and ran side by side in a compose stack, on Postgres and an S3 bucket through `env.native`. It served pages, hydrated and kept its data across both an app restart and a whole-stack restart. The two builds were the Bun-compiled binary on distroless (138.9 MB) and the `node` fallback on `node:24-slim` (247.3 MB). `pg` and an S3 client (`aws4fetch`) ran unchanged under the compiled binary.
+
+### What is missing, so what was used instead
+
+- **`loams app build` doesn't exist yet** (AB0). `spikes/vv0/task4/build.sh <bun-compile|node> <app> <tag>` emulates `loams app build --target bun --compile --image` and `--target node --image`.
+- **`deploy/release/compose.yaml` has no `apps` profile yet.** The spike's own `compose.yaml` (project `vv0task4`) gives the two app services `profiles: [apps]`, beside two data services:
+  - `postgres:17`, standing in for Loams Postgres (the same wire protocol; Loams Postgres's storage stack was not started);
+  - `rustfs/rustfs:1.0.0`, the image of the light stack's `rustfs` profile (pinned by digest, as in `deploy/fabric/compose.yaml`).
+
+  Host ports are bound on loopback only, at 25532, 29100, 23101 and 23102.
+- **`@loams/app` doesn't exist yet.** The app's `lib/env.ts` stands in for its ports:
+  - `env.items` on Postgres through `pg` 8.16.3;
+  - `env.blobs` on the bucket through `aws4fetch` 1.0.20 (MIT);
+  - the clients themselves on `env.native.pg` and `env.native.s3`, as D1393 describes.
+
+  The configuration comes from `LOAMS_NATIVE_PG_URL` and `LOAMS_NATIVE_S3_{ENDPOINT,BUCKET,ACCESS_KEY,SECRET_KEY}`. These names are the spike's proposal for what the `apps` profile injects. The real contract is AB0's to define.
+
+### The app
+
+The Task 8 notes skeleton, with state:
+- `POST /api/notes` writes the body to the bucket (`notes/<uuid>.txt`) and a row to Postgres (`notes(id, text, blob_key)`);
+- `GET /api/notes/:id` reads the row and the body back;
+- `GET /` is an SSR page that lists the notes;
+- `GET /api/health` reports the runtime.
+
+The pins are the same as in Task 8: `void` 1.2.1, Bun 1.4.4, `vite` 8.3.5.
+
+### The builds (emulating `loams app build`)
+
+- **`bun-compile`:**
+  1. `VOID_TARGET=bun vite build`;
+  2. copy `dist/` into `<app>/.loams-build/`, inside the app, so that `bun build` resolves the app's `node_modules`. Compiling from a directory outside the app fails with `Could not resolve: "react"`, because Void leaves `react`, `react-dom`, `hono`, `pg` and `aws4fetch` as bare imports;
+  3. rewrite Void's client root (Task 8), and **fail the build if the pattern isn't found**;
+  4. append a SIGTERM handler;
+  5. `bun build ./ssr/index.js --asset=./client --compile --bytecode --minify --sourcemap --format=esm --target=bun-linux-x64`;
+  6. `FROM gcr.io/distroless/cc-debian12:nonroot@sha256:9dac0a79…`, `COPY app /app`, with the label `io.loams.app.runtime="bun-compiled 1.4.4"`.
+
+  The image is **138.9 MB**.
+- **`node`:**
+  1. `VOID_TARGET=node vite build`;
+  2. the SIGTERM handler;
+  3. `npm ci --omit=dev` (the production `node_modules`);
+  4. `FROM node:24-slim@sha256:55fb5f5a…`, running as `USER node`, with the label `io.loams.app.runtime="node 24"`.
+
+  The image is **247.3 MB**.
+
+The `io.loams.app.runtime` label is how "the deploy records which runtime it used" (§79 §7.6) could be read back from the image.
+
+### Results
+
+| Check | Bun compiled | Node |
+|---|---|---|
+| `GET /api/health` | `{"ok":true,"runtime":"bun 1.4.4"}` | `{"ok":true,"runtime":"node v24.22.1"}` |
+| `POST /api/notes`, then the SSR page lists it | yes | yes |
+| `<script src="/assets/pages-client-….js">` in the page, and the asset served with a 200 | yes (embedded) | yes |
+| `compose restart` of the app, then the row and the bucket body read back | **persisted** | **persisted** |
+| Time from `compose restart` to the first 200 | 273 ms | 379 ms |
+| `compose stop` of the whole stack, then `up -d`, then the row and the body read back | **persisted** | **persisted** |
+| Memory at idle after one request (cgroup, `podman stats`) | 13.0 MB | 39.9 MB |
+
+Both apps shared one Postgres (databases `notes_bun` and `notes_node`) and one RustFS (buckets `notes-bun` and `notes-node`, created by the app on first use). Postgres was reached through the compose network (`postgres:5432`), and RustFS as `http://rustfs:9000` with path-style requests.
+
+### Findings for AB0 and VV2
+
+- **`loams app build --target bun --compile` must compile inside the app directory,** or give `bun build` the app's `node_modules`. Void's `dist/ssr` isn't self-contained: it leaves the app's `dependencies` as bare imports. The same fact is why the `node` and `bun run` images need `node_modules` and the compiled image doesn't.
+- **The client-root rewrite needs a guard,** because a Void upgrade can move the pattern. Without the rewrite the failure is silent: the page renders with no client script (Task 8). The guard has to stay until Void has an option for the client root.
+- **PID 1 and SIGTERM.** Neither Void entry handles SIGTERM. Without the appended handler, `compose stop` waits out its timeout and then kills the app. The build adds the handler, or the image runs with an init process.
+- **`env.native` covers what this task needs.** Passing the native clients' configuration as environment, and building the clients inside the app, works on both runtimes with no Bun-specific code. Bun's own `Bun.sql` and `Bun.s3` were deliberately not used, so the `node` fallback stays the same code.
+- **Not covered here:**
+  - the engine's own bucket (`file:///var/lib/loams/bucket`) and Loams Postgres itself;
+  - the tailnet exposure of an app in the real stack;
+  - adding an `apps` profile to `deploy/release/compose.yaml`.
+
+  These belong to AB0 and VV2, and the profile change is a release-compose PR.
+
+### Reproduce
+
+Spike code: `spikes/vv0/task4/` (`app/`, `build.sh`, `compose.yaml`, `initdb/01.sql`, `test.sh`), not committed.
+
+```sh
+cd spikes/vv0/task4/app && npm i && (cd node_modules/bun && node install.js) && npx void prepare && cd ..
+./build.sh bun-compile app localhost/vv0-task4-notes:bun-compiled
+./build.sh node        app localhost/vv0-task4-notes:node
+podman compose -f compose.yaml --profile apps up -d
+./test.sh                    # serve, write, restart each app, read back
+podman compose -f compose.yaml --profile apps stop && podman compose -f compose.yaml --profile apps up -d
+curl -s 127.0.0.1:23101/api/notes/1; curl -s 127.0.0.1:23102/api/notes/1
+podman compose -f compose.yaml --profile apps down -v
+```
+
+**Cleanup:** `podman compose down -v` removed the spike's containers, network and both volumes (`vv0task4_pg` and `vv0task4_bucket`). The two app images were removed with `podman rmi`, and the build stages and the app's `node_modules` were deleted. The base images (`postgres:17`, `rustfs:1.0.0`, `node:24-slim` and `distroless/cc-debian12:nonroot`) are kept: the first two were already present for other stacks.
 
 ## Task 5
 

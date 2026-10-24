@@ -66,6 +66,7 @@ const MODEL: &[(&str, &str, &[Rule])] = &[
         &[Direct(&[Type("user"), Type("service_account")])],
     ),
     ("platform", "meter_admin", &[Direct(&[Type("user")])]),
+    ("platform", "cloud_admin", &[Direct(&[Type("user")])]),
     ("org", "platform", &[Direct(&[Type("platform")])]),
     ("org", "owner", &[Direct(&[Type("user")])]),
     (

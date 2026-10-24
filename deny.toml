@@ -23,6 +23,11 @@ allow = [
     # BSD Zero Clause (tslib, via echarts in the console). Owner, 2026-10-13
     # (SD1 ruling T2-6): allowed everywhere, for crates and npm alike.
     "0BSD",
+    # BlueOak Model License 1.0.0, a permissive OSI-approved licence (lru-cache and
+    # @isaacs/ttlcache, which @mastra/core needs for @loams/factory). Owner, 2026-10-24
+    # (FT1 ruling FT0-1-1 superseded; SD1 ruling T2-2 overridden for this licence only):
+    # allowed everywhere, for crates and npm alike.
+    "BlueOak-1.0.0",
 ]
 confidence-threshold = 0.9
 unused-allowed-license = "allow"

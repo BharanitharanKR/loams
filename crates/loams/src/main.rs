@@ -1263,6 +1263,9 @@ enum Command {
     /// Upgrade a self-hosted compose stack one release at a time, with a
     /// snapshot first (design §54 §10): `check`, `status`, `snapshots`.
     Upgrade(loams_upgrade::UpgradeArgs),
+    /// Loams Cloud, the hosted try-out (design §78 §25): `cloud admin …` for
+    /// allow-listed Ostrium admins (waitlist, invites, audit, the TOTP step-up).
+    Cloud(loams_cloud_admin::CloudArgs),
     /// Engine authentication (LOAMS_AUTH_MODE): API keys.
     Auth {
         #[command(subcommand)]
@@ -1422,6 +1425,7 @@ fn config(command: Command) -> ServerConfig {
         Command::Auth { .. } => unreachable!("loams auth starts no server"),
         Command::Migrate { .. } => unreachable!("loams migrate starts no server"),
         Command::Upgrade(_) => unreachable!("loams upgrade starts no server"),
+        Command::Cloud(_) => unreachable!("loams cloud starts no server"),
         #[cfg(feature = "live")]
         Command::LiveWorker => unreachable!("loams live-worker starts no server"),
         #[cfg(feature = "postgres")]
@@ -1629,6 +1633,10 @@ fn main() -> ExitCode {
     // stores, and needs no async runtime.
     if let Command::Upgrade(args) = &cli.command {
         return loams_upgrade::run(args);
+    }
+    // A client too (LC2a Tasks 4 and 5): its own runtime, no stores.
+    if let Command::Cloud(args) = &cli.command {
+        return loams_cloud_admin::run(args);
     }
     serve(cli)
 }

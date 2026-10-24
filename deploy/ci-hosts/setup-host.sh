@@ -11,17 +11,26 @@
 # Options:
 #   --role primary|worker      default: primary
 #   --only LIST                comma-separated components (default: all):
-#                              nativelink,sccache
+#                              nativelink,sccache,podman,runner
 #   --primary ADDR             worker role: the primary's Tailscale address
 #   --data-root DIR            caches and work directories (default /mnt/Projects/ci)
 #   --nl-gb N                  NativeLink disk cap in GiB (default 30 primary, 80 worker)
 #   --sccache-gb N             sccache store cap in GiB (primary only; default 10)
 #   --jobs N                   concurrent NativeLink actions (default 4 primary, 8 worker)
+#   --runner REPO              register a runner for REPO (repeatable; default
+#                              ostrium-labs/loams and ostrium-labs/iggy on the primary,
+#                              ostrium-labs/loams on a worker)
+#   --gh-token-file FILE       a GitHub token that may mint runner registration tokens
+#   --reg-token REPO=FILE      a registration token minted elsewhere (valid 1 hour)
+#   --runner-memory SIZE       memory cap per runner container (default 10g primary, 12g worker)
+#   --runner-jobs N            CARGO_BUILD_JOBS in jobs (default 6 primary, 10 worker)
+#   --min-free-gb N            a job refuses to start below this much free disk (default 20)
 #   --owner USER               the host's owner, who gets the client certificate
 #                              (default: $SUDO_USER)
 set -euo pipefail
 
 HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+cd /
 # shellcheck source=deploy/ci-hosts/versions.env
 . "$HERE/versions.env"
 # shellcheck source=deploy/ci-hosts/lib/common.sh
@@ -34,6 +43,10 @@ HERE=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 . "$HERE/lib/nativelink.sh"
 # shellcheck source=deploy/ci-hosts/lib/sccache.sh
 . "$HERE/lib/sccache.sh"
+# shellcheck source=deploy/ci-hosts/lib/podman.sh
+. "$HERE/lib/podman.sh"
+# shellcheck source=deploy/ci-hosts/lib/runner.sh
+. "$HERE/lib/runner.sh"
 
 ROLE=primary
 ONLY=all
@@ -42,6 +55,12 @@ DATA_ROOT=/mnt/Projects/ci
 NL_GB=
 NL_JOBS=
 SCCACHE_GB=10
+RUNNER_REPOS=()
+REG_TOKENS=()
+GH_TOKEN_FILE=
+RUNNER_MEMORY=
+RUNNER_JOBS=
+RUNNER_MIN_FREE_GB=20
 OWNER_USER=${SUDO_USER:-}
 
 while (($#)); do
@@ -53,6 +72,12 @@ while (($#)); do
     --nl-gb) NL_GB=$2; shift 2 ;;
     --jobs) NL_JOBS=$2; shift 2 ;;
     --sccache-gb) SCCACHE_GB=$2; shift 2 ;;
+    --runner) RUNNER_REPOS+=("$2"); shift 2 ;;
+    --gh-token-file) GH_TOKEN_FILE=$2; shift 2 ;;
+    --reg-token) REG_TOKENS+=("$2"); shift 2 ;;
+    --runner-memory) RUNNER_MEMORY=$2; shift 2 ;;
+    --runner-jobs) RUNNER_JOBS=$2; shift 2 ;;
+    --min-free-gb) RUNNER_MIN_FREE_GB=$2; shift 2 ;;
     --owner) OWNER_USER=$2; shift 2 ;;
     -h | --help) sed -n '2,/^set -euo/p' "$0" | sed 's/^# \{0,1\}//;/^set -euo/d'; exit 0 ;;
     *) die "unknown option: $1 (see --help)" ;;
@@ -68,9 +93,13 @@ OWNER_HOME=$(getent passwd "$OWNER_USER" | cut -d: -f6)
 if [[ $ROLE == primary ]]; then
   : "${NL_GB:=30}" "${NL_JOBS:=4}"
   NL_MEMORY_HIGH=${NL_MEMORY_HIGH:-6G} NL_MEMORY_MAX=${NL_MEMORY_MAX:-8G}
+  : "${RUNNER_MEMORY:=10g}" "${RUNNER_JOBS:=6}"
+  ((${#RUNNER_REPOS[@]})) || RUNNER_REPOS=(ostrium-labs/loams ostrium-labs/iggy)
 else
   : "${NL_GB:=80}" "${NL_JOBS:=8}"
   NL_MEMORY_HIGH=${NL_MEMORY_HIGH:-9G} NL_MEMORY_MAX=${NL_MEMORY_MAX:-11G}
+  : "${RUNNER_MEMORY:=12g}" "${RUNNER_JOBS:=10}"
+  ((${#RUNNER_REPOS[@]})) || RUNNER_REPOS=(ostrium-labs/loams)
 fi
 
 want() { [[ $ONLY == all || ,$ONLY, == *",$1,"* ]]; }
@@ -81,5 +110,7 @@ ensure_data_root
 
 want nativelink && setup_nativelink
 want sccache && setup_sccache
+if want podman || want runner; then setup_podman; fi
+want runner && setup_runners
 
 log "done ($ROLE). Check with: deploy/ci-hosts/status.sh"

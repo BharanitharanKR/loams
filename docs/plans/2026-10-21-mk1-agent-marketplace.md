@@ -178,3 +178,9 @@ Read on 2026-10-23 at `origin/dev` `710f47078`.
    - Forgejo's and Sentry's servers are not checked here and stay out of MK0.
 9. **Node for the `node` runtime** (Q1122). agentd already resolves `node` for npm harness adapters (`adapter_install.rs`, `executable::find_on_paths` with the node-version-manager scan). The `node` installer reuses that resolution and refuses a Node older than the listing's `runtime.version` (default `>=22.13`). Installing a pinned Node archive when none is found is left to Task 6's ruling.
 10. **The `agents/*` workspace** (FT0 Task 1) is not on `dev` yet. If it has not merged when Task 2 starts, Task 2 adds the one `agents/*` line to `pnpm-workspace.yaml` itself, so the FT1 work only has to rebase.
+
+### Owner approvals (2026-10-24)
+
+The owner approved the pending decisions below on 2026-10-24 ("approve all with your recommendations").
+
+- **The official index stays on GitHub Pages for now.** D1461's move to `loams.dev/marketplace` comes later. **Approved (owner, 2026-10-24).**

@@ -80,4 +80,34 @@
 
 ## Rulings made during execution
 
-None yet.
+- **VV-R1 (2026-10-24): VV1 starts before VV0's report is complete.** VV1 is the toolchain milestone, and it depends only on Tasks 1 and 6, which have both reported a go ([vv0-report.md](vv0-report.md)). Tasks 2, 3, 5 and 7 cover VV2 and VV3. They wait on the owner's test accounts and tokens, so they don't hold VV1 back. VV1 lands one PR per item:
+  1. Node 24 (this ruling's PR);
+  2. the `vite-plus` pin;
+  3. Oxlint and Oxfmt;
+  4. `vp pack`;
+  5. the fallback lane;
+  6. the docs.
+- **VV-R2 (2026-10-24): Node 24 comes from `.nvmrc`.** The file holds `24`, and every `actions/setup-node` step reads it through `node-version-file`. The one exception is `sdk-release.yml`'s `publish-npm`, which has no checkout, so it names `24` directly. The root's and `web/`'s `engines` become `>=24.11`.
+  - `@loams/client` and `agents/factory` keep their runtime `engines` (`>=22` and `>=22.13`).
+  - The `SDK: TypeScript` job runs the SDK's suite once more on Node 22, as its last step (D1775).
+- **Status (2026-10-24, when this work stopped):**
+  - **VV0.** Tasks 1, 6 and 8 have reported (#1162, #1170, and Task 8's PR). Tasks 2, 3 and 7 have a separate agent working on their local parts. Their deploy parts, and all of Task 5, wait on the owner's Cloudflare and AWS test accounts and scoped tokens. Task 4 is not reported yet.
+  - **VV1, done.** Item 1, Node 24, is this PR.
+  - **VV1, left: the pin.** Item 2 lands in two steps:
+    1. now: `vite-plus` 1.1.0, the newest release at least 14 days old, through the catalog for every package except the desktop, with `peerDependencyRules.allowedVersions.vite`;
+    2. from 2026-10-28: the global `vite` alias, and the desktop on electron-vite 6.0.0, folding in #1049 (Bharani, with a `Co-authored-by` credit) and Dependabot's #1069 (vite 8.3.4). `vite-plus` 1.3.0 is eligible from 2026-10-30.
+
+    Scripts move from `vite` to `vp` in the same PR (Task 1).
+  - **VV1, left: the other items.**
+    - Item 3: Oxlint and Oxfmt, using Task 1's parity table, `tabWidth: 2`, and the 107 `biome-ignore` rewrites.
+    - Item 4: `vp pack` with `fixedExtension: false`.
+    - Item 5: the fallback lane.
+    - Item 6: the docs, and Deno claims as they are found. A sweep on 2026-10-24 found none in READMEs or guides.
+    - loams-site, in its own PR.
+  - **Dependabot.** #1070 (msw 3), #1071 (js-yaml 5, red) and #1072 (zod 4) are not toolchain changes, so they are left for their own review.
+
+### Owner approvals (2026-10-24)
+
+The owner approved the pending decisions below on 2026-10-24 ("approve all with your recommendations").
+
+- **Pin `vite-plus` 1.3.0 directly once it is 14 days old (2026-10-30)**, not 1.1.0 now. The desktop and electron-vite 6 step stays on 2026-10-28. **Approved (owner, 2026-10-24).**

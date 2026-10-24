@@ -140,6 +140,7 @@ jobs:
             engine: &engine
               - *toolchain
               - "crates/loams/**"
+              - "crates/loams-cloud-admin/**"
               - "crates/loams-cache/**"
               - "crates/loams-collection/**"
               - "crates/loams-common/**"
@@ -557,7 +558,7 @@ jobs:
       # `#!/usr/bin/env python3` fixtures (harness stand-ins).
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - name: workspace tests
         run: cargo nextest run --workspace --locked
 
@@ -595,7 +596,7 @@ jobs:
       # `#!/usr/bin/env python3` fixtures (harness stand-ins).
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - name: headless guard self-test
         run: bash scripts/ci/agentd-deps.test.sh
       - name: headless guard (D782)
@@ -745,7 +746,7 @@ jobs:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - name: qdrant-js 1.18.0
         run: |
           crates/loams-qdrant/tests/js/run.sh 1.18.0 | tee "$RUNNER_TEMP/js-1.18.log"
@@ -1269,7 +1270,7 @@ jobs:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           # The TypeScript SDK is a root workspace package (design §44
           # §10.2), so its pinned buf and protoc-gen-es install with the root
@@ -1310,7 +1311,7 @@ jobs:
           package_json_file: package.json
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: install
@@ -1381,7 +1382,7 @@ jobs:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: install
@@ -1462,6 +1463,18 @@ jobs:
             }
           done
           sdks/typescript/packages/client/node_modules/.bin/buf --version
+      # D1775: the toolchain runs on Node 24 (.nvmrc), but @loams/client keeps
+      # Node 22 as its runtime floor (`engines` >=22). This cell runs the SDK's
+      # suite once more on Node 22, last, so the report checked above is the
+      # Node 24 one.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+      - name: the SDK suite on Node 22 (its runtime floor)
+        working-directory: web
+        run: |
+          node --version
+          pnpm --filter @loams/client test
 
   # SDK2 Task 3: the Rust SDK (design section 44 row 4). sdks/rust is its own
   # cargo workspace, so the server's Rust jobs never touch it -- PR #340 merged
@@ -1512,7 +1525,7 @@ jobs:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: install
@@ -1658,7 +1671,7 @@ jobs:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: install
@@ -1772,7 +1785,7 @@ jobs:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: install
@@ -1836,7 +1849,7 @@ jobs:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - name: install
@@ -2310,7 +2323,7 @@ jobs:
           package_json_file: package.json
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile --filter @loams/factory...
@@ -2334,7 +2347,7 @@ jobs:
           package_json_file: package.json
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
@@ -2369,7 +2382,7 @@ jobs:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - name: typecheck
         run: |
           pnpm install --frozen-lockfile --filter loams-monorepo
@@ -2385,6 +2398,13 @@ jobs:
       - name: tests, with the control DB on TiDB
         working-directory: deploy/loams-cloud
         run: scripts/test-tidb.sh
+      # src/worker.ts against @cloudflare/workers-types, and wrangler's bundle
+      # (--dry-run: nothing is deployed, and no Cloudflare credential exists here).
+      - name: the Worker typechecks and bundles
+        working-directory: deploy/loams-cloud
+        run: |
+          npm ci --ignore-scripts --no-audit --no-fund
+          npm run check:worker
 
   # The console's WebMCP feature detection in a real browser (AP1d Task 4;
   # design §42 §5, D635, D638).
@@ -2440,7 +2460,7 @@ jobs:
           package_json_file: package.json
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       # A browser job that finds no browser must fail, not skip, so the browser
@@ -2561,7 +2581,7 @@ jobs:
           version: 11.27.1
       - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version-file: .nvmrc
       - if: ${{ !cancelled() }} # report every check, not only the first failure
         name: Nx crate projects match the Cargo manifests and declare their inputs
         run: |
