@@ -28,7 +28,7 @@ Studio in the browser needs a remote `loams-agentd`:
 2. In Studio, open **Settings** (Mod+,) and add the host under **Agentd hosts**, with a pasted access token for now (MT1).
 3. **Add** (beside **Projects**) asks for a git URL (`https://`, `ssh://` or `user@host:path`) and clones it on the remote machine. The daemon checks the URL again and refuses local paths, `file:` and `ext::` URLs, and anything that starts with `-`.
 
-**Not yet:** previews render only in a console whose `frame-src` lists the agentd host (not the console your engine serves at `/ui/`, whose `frame-src` is `'self'`), and the agentd token is pasted rather than issued by the console's sign-in. See [the console's Content-Security-Policy](remote-agentd.md#the-consoles-content-security-policy) and [Previews](remote-agentd.md#previews).
+**Not yet:** previews render when the console's `frame-src` lists the agentd host (the console your engine serves at `/ui/` adds the hosts in `LOAMS_AGENTD_ORIGINS` to `frame-src` as well as `connect-src`), and the agentd token is pasted rather than issued by the console's sign-in. See [the console's Content-Security-Policy](remote-agentd.md#the-consoles-content-security-policy) and [Previews](remote-agentd.md#previews).
 
 ## Trying Studio without a daemon: the dev preview
 

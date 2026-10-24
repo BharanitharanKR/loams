@@ -5,6 +5,9 @@ All notable changes to this project are documented here. The format follows [Kee
 ## [Unreleased]
 
 ### Added
+- **The engine-served console frames your agentd hosts.** `LOAMS_AGENTD_ORIGINS` origins now join
+  the console's `frame-src` as well as `connect-src` (same validation; `*` is still refused), so
+  Studio previews render in the console at `/ui/`.
 - **The `kafka` compose profile (preview; KW-L2, D1798).** `COMPOSE_PROFILES=kafka` runs Ostrium's
   fork of Apache Iggy (`ghcr.io/ostrium-labs/iggy`, one image pinned by digest, built and attested
   by the fork's CI) as `iggy` and `kafka-gateway`, with the Kafka wire on `127.0.0.1:9093`. Off in
@@ -15,6 +18,8 @@ All notable changes to this project are documented here. The format follows [Kee
   self-test in `release-compose`); `byoc/install.sh` writes a random one into a new `.env`.
 
 ### Removed
+- **The `console.loams.dev` custom-domain route** is gone from `web/apps/console/wrangler.jsonc`
+  (Ostrium runs no hosted console; a deploy in your own account stays on workers.dev).
 - **The console deploy workflow** (`.github/workflows/console-deploy.yml`; 0.1.2, owner,
   2026-10-23, D1705). It deployed `web/apps/console` to `console.loams.dev`, which is retired:
   the console ships with each deployment (the engine serves it at `/ui/`) and with Loams
